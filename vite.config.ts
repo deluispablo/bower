@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath } from 'node:url';
 import { identityPlugin } from './e2e/port.ts';
+import { OPTIMIZED_DEPS, WARMUP_FILES } from './vite.deps.ts';
 
 export default defineConfig({
   plugins: [
@@ -38,7 +39,8 @@ export default defineConfig({
     }),
   ],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
-  server: { port: 5190, strictPort: true },
+  optimizeDeps: { include: OPTIMIZED_DEPS },
+  server: { port: 5190, strictPort: true, warmup: { clientFiles: WARMUP_FILES } },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test-setup.ts', './harness/timer-gate-setup.ts'],

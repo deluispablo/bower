@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module, checked by these tests
-import { apiTests, doneArgs, REAL_TIMER_CEILING, slowReport, timerListProblems, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs, redKind, runnerTests } from '../scripts/harness-rules.mjs';
+import { apiTests, doneArgs, REAL_TIMER_CEILING, cpuReport, slowReport, timerListProblems, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs, redKind, runnerTests } from '../scripts/harness-rules.mjs';
 
 type Entry = { id: string; task: string | number; steps?: string[]; verify: string; passes: boolean };
 const S = ['Open Home.', 'See it.'];
@@ -330,6 +330,9 @@ describe('the harness', () => {
     expect(timerListProblems(names, ['a', 'b'], 1)).toEqual([expect.stringContaining('may only shrink')]);
     const list = JSON.parse(readFileSync(join(process.cwd(), 'harness/real-timers.json'), 'utf8')) as { tests: string[] };
     expect(list.tests.length).toBeLessThanOrEqual(REAL_TIMER_CEILING);
+    // The target is reached (c4-test-timers): no unit test waits on the real clock, so the list is empty and stays so.
+    expect(list.tests).toEqual([]);
+    expect(REAL_TIMER_CEILING).toBe(0);
     expect(new Set(list.tests).size).toBe(list.tests.length);
   });
 
@@ -342,6 +345,13 @@ describe('the harness', () => {
     const source = readFileSync(join(process.cwd(), 'scripts/check-harness.mjs'), 'utf8');
     expect(source).toContain('slowReport(unit)');
     expect(source).not.toMatch(/bad\.push\([^)]*slowReport/);
+  });
+  it('CPU time is reported, never failed', () => {
+    const rows = [{ name: 'quick', ms: 40 }, { name: 'heavy', ms: 2600 }, { name: 'middling', ms: 900 }];
+    expect(cpuReport(rows, 2)).toEqual(['2600 ms CPU (52% of the timeout)  heavy', '900 ms CPU (18% of the timeout)  middling']);
+    const source = readFileSync(join(process.cwd(), 'scripts/check-harness.mjs'), 'utf8');
+    expect(source).toContain('cpuReport(cpuRows)');
+    expect(source).not.toMatch(/bad\.push\([^)]*cpuReport/);
   });
   // harness/with-lock.sh is the one lock done.sh and integrate.sh share around the heavy runs.
   const lockScript = join(process.cwd(), 'harness/with-lock.sh');
@@ -378,6 +388,64 @@ describe('the harness', () => {
     await first;
     expect(second.status).toBe(0);
     expect(second.out).toMatch(/waiting.*pid \d+.*sleep 0\.6.*started \d{4}-\d\d-\d\d \d\d:\d\d:\d\d/i);
+  });
+
+  // TL-P4-22 addendum 13 (2): every heavy entry point goes through the one lock, and a nested call inside a run that
+  // holds it passes through (HARNESS_LOCK_HELD), so wrapping everything cannot deadlock.
+  const root = process.cwd();
+  const locked = /^(?:\w+=\S+ )*bash (?:\.\/)?harness\/with-lock\.sh /;
+  it('a second heavy run waits for the first', async () => {
+    const dir = fixtureDir();
+    const lock = join(dir, 'lock');
+    const release = join(dir, 'release');
+    const ran = join(dir, 'ran');
+    // The first run holds the lock until the test says so; a fake pnpm stands for the heavy command.
+    mkdirSync(join(dir, 'bin'));
+    writeFileSync(join(dir, 'bin/pnpm'), `#!/usr/bin/env bash\necho "$@" >> ${ran}\n`, { mode: 0o755 });
+    const holding = spawn('bash', [lockScript, 'bash', '-c', `echo held; until [ -e ${release} ]; do sleep 0.05; done`], { env: { ...process.env, HARNESS_LOCK: lock } });
+    const first = new Promise<void>((r) => { holding.on('close', () => { r(); }); });
+    await new Promise<void>((r) => { holding.stdout.on('data', () => { r(); }); });
+    const env: NodeJS.ProcessEnv = { ...process.env, HARNESS_LOCK: lock, PATH: `${join(dir, 'bin')}:${process.env.PATH ?? ''}` };
+    delete env.HARNESS_LOCK_HELD;
+    // The real entry point of `pnpm e2e:both`-style runs; it either prints that it waits or ends (the red).
+    const second = spawn('bash', [join(root, 'scripts/e2e-both.sh'), 'e2e/x.spec.ts'], { env });
+    let out = '';
+    const settled = new Promise<void>((resolve) => {
+      const see = (d: Buffer): void => { out += d.toString(); if (/waiting/i.test(out)) resolve(); };
+      second.stdout.on('data', see);
+      second.stderr.on('data', see);
+      second.on('close', () => { resolve(); });
+    });
+    await settled;
+    const startedBeforeRelease = existsSync(ran);
+    writeFileSync(release, '');
+    await first;
+    await new Promise<void>((r) => { second.on('close', () => { r(); }); if (second.exitCode !== null) r(); });
+    expect(out).toMatch(/waiting.*pid \d+/i);
+    expect(startedBeforeRelease).toBe(false);
+    expect(readFileSync(ran, 'utf8').trim().split('\n')).toHaveLength(2);
+  });
+
+  it('a nested heavy call inside a run that holds the lock passes through', async () => {
+    const dir = fixtureDir();
+    // Each inner call is given a short while in the shell (not in this test) and is cut off if it waits.
+    const inner = (what: string): string =>
+      `${what} & p=$!; for i in $(seq 16); do kill -0 $p 2>/dev/null || break; sleep 0.05; done; kill $p 2>/dev/null; wait $p`;
+    const run = await runLocked(join(dir, 'lock'), `${inner(`bash ${lockScript} echo inner`)}; ${inner(`bash ${lockScript} bash ${lockScript} echo deeper`)}`);
+    expect(run.out).not.toMatch(/waiting/i);
+    expect(run.out).toContain('inner');
+    expect(run.out).toContain('deeper');
+    expect(existsSync(join(dir, 'lock'))).toBe(false);
+  });
+
+  it('pnpm check, every e2e script and done.sh go through the lock', () => {
+    const scripts = (JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { scripts: Record<string, string> }).scripts;
+    for (const name of ['check', 'e2e', 'e2e:fake', 'e2e:pwa']) expect(scripts[name], name).toMatch(locked);
+    expect(readFileSync(join(root, 'scripts/e2e-both.sh'), 'utf8')).toMatch(/with-lock\.sh/);
+    const done = readFileSync(join(root, 'harness/done.sh'), 'utf8').split('\n');
+    const runs = done.filter((l) => /bash -c "\$verify"/.test(l));
+    expect(runs.length).toBeGreaterThanOrEqual(2);
+    for (const line of runs) expect(line, line).toMatch(/with-lock\.sh/);
   });
 
   it('a lock whose holder is gone is taken over with a printed line', async () => {

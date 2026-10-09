@@ -148,7 +148,10 @@ describe('a sheet opened from a menu sheet', () => {
 });
 
 describe('focusRouteHeading', () => {
-  const wait = (ms: number): Promise<unknown> => new Promise((r) => setTimeout(r, ms));
+  // The checks run on timers: fake time moves them, so no test waits on the clock.
+  const wait = async (ms: number): Promise<void> => { await vi.advanceTimersByTimeAsync(ms); };
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
 
   it('moves the keyboard to the new heading when the control that navigated went away', async () => {
     document.body.innerHTML = '<main><button id="b">Go</button></main>';

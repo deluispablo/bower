@@ -1162,7 +1162,15 @@ describe('LiveSession', () => {
     const s = await open('first');
     expect(await s.session.folderState()).toBe('missing');
     const steps: string[] = [];
-    await s.session.createFolder((r) => steps.push(r));
+    // Each root lands 300 ms after the last, on the welcome screen: fake time moves it.
+    vi.useFakeTimers();
+    try {
+      const made = s.session.createFolder((r) => steps.push(r));
+      await vi.advanceTimersByTimeAsync(5 * 300);
+      await made;
+    } finally {
+      vi.useRealTimers();
+    }
     expect(steps).toEqual(['Inbox', 'Projects', 'Areas', 'Resources', 'Archive']);
     expect(await s.session.folderState()).toBe('ready');
     expect((await s.vault.tree()).map((n) => n.name)).toContain('Projects');
@@ -1194,7 +1202,8 @@ describe('asking the Worker', () => {
     const phases: string[] = [];
     s.runs.subscribe(() => void s.runs.current().then((r) => r && phases.push(r.phase)));
     await s.runs.current();
-    await new Promise((r) => setTimeout(r, 400));
+    // Followed from going to done within the fast pace's window: wait for the event, not for a stretch of the clock.
+    await vi.waitFor(() => expect(phases).toContain('done'));
     s.dispose();
     // Admitted on load on the B path (TL-P2-38), and followed from going to done within the fast pace's window.
     expect(phases[0]).not.toBe('done');

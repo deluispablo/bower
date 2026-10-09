@@ -4296,32 +4296,33 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
     // note-edit-consumer-limits (TL-P2-29 (1), corrected): at most 8 edit-text per run in code-point path order, then
     // fewer from the end of that order until the manifest fits the guard's 8 MiB; the rest wait for the next run.
-    it('note edits past the size cap wait for the next run', async () => {
-      /** Code-point order, the same everywhere (not the locale's). */
-      const byCodePoint = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
-      /** A world with these hub notes to bring up to date, each with these bytes. */
-      async function hubs(names: string[], text: string) {
-        const updates = names.map((n) => ({ path: `Projects/${n}/${n}.md`, what: `${n} brought up to date.` }));
-        const w = await bWorld({ updates });
-        const files = new Map<string, DriveFile>();
-        for (const u of updates) files.set(u.path, await hub(w, u.path, text));
-        const sorted = updates.map((u) => u.path).sort(byCodePoint);
-        return { w, sorted, idOf: (path: string): string => files.get(path)?.id ?? '', whatOf: (path: string): string => updates.find((u) => u.path === path)?.what ?? '' };
+    /** Code-point order, the same everywhere (not the locale's). */
+    const byCodePoint = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+    /** A world with these hub notes to bring up to date, each with these bytes. */
+    async function hubs(names: string[], text: string) {
+      const updates = names.map((n) => ({ path: `Projects/${n}/${n}.md`, what: `${n} brought up to date.` }));
+      const w = await bWorld({ updates });
+      const files = new Map<string, DriveFile>();
+      for (const u of updates) files.set(u.path, await hub(w, u.path, text));
+      const sorted = updates.map((u) => u.path).sort(byCodePoint);
+      return { w, sorted, idOf: (path: string): string => files.get(path)?.id ?? '', whatOf: (path: string): string => updates.find((u) => u.path === path)?.what ?? '' };
+    }
+    /** One more full tidy-up, with a pile to take: done on the B path, its v2 manifest's edit paths. */
+    async function tidy(w: World, n: number): Promise<{ manifest: ManifestV2 | undefined; paths: string[] }> {
+      if (n) {
+        await w.uploader.addPile({ text: '', items: [pdf(`third ${n}.pdf`), pdf(`fourth ${n}.pdf`)] });
+        await w.uploader.settled();
       }
-      /** One more full tidy-up, with a pile to take: done on the B path, its v2 manifest's edit paths. */
-      async function tidy(w: World, n: number): Promise<{ manifest: ManifestV2 | undefined; paths: string[] }> {
-        if (n) {
-          await w.uploader.addPile({ text: '', items: [pdf(`third ${n}.pdf`), pdf(`fourth ${n}.pdf`)] });
-          await w.uploader.settled();
-        }
-        const admitted = (await w.worker.process('all')).run;
-        await w.runs.settled();
-        expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
-        const manifest = (await manifestsV2(w)).find((m) => m.runId === admitted.id);
-        expect(manifest, 'the run took the B path').toBeDefined();
-        return { manifest, paths: editsOf(manifest).map((o) => o.effect.path) };
-      }
+      const admitted = (await w.worker.process('all')).run;
+      await w.runs.settled();
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
+      const manifest = (await manifestsV2(w)).find((m) => m.runId === admitted.id);
+      expect(manifest, 'the run took the B path').toBeDefined();
+      return { manifest, paths: editsOf(manifest).map((o) => o.effect.path) };
+    }
 
+
+    it('note edits past the size cap wait for the next run', async () => {
       // Ten small notes: exactly the first 8 in code-point path order ('Hub B' before 'Hub a').
       const names = ['Hub d', 'Hub 03', 'Hub a', 'Hub 01', 'Hub c', 'Hub 05', 'Hub 02', 'Hub B', 'Hub 04', 'Hub 06'];
       const { w, sorted, idOf, whatOf } = await hubs(names, FLAT_BEFORE);
@@ -4348,32 +4349,49 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         expect(textAt(w, path)?.split(whatOf(path))).toHaveLength(2);
       }
       expect(viewOf(w)?.run.report?.updated).toMatchObject(rest.map((path) => ({ path, what: whatOf(path) })));
+    });
 
-      // Ten notes just under 1 MiB, full of quotes and backslashes that JSON escapes: 8 would pass the guard's 8 MiB,
-      // so each run takes fewer, from the start of the path order, stays on the B path, and later runs converge.
-      const filler = 'She wrote "keep C:\\notes\\flats" and \\"quoted\\" it twice.\n';
-      const personal = filler.repeat(Math.floor((EDIT_FILE_LIMIT - FLAT_BEFORE.length - 1024) / filler.length));
-      const big = FLAT_BEFORE.replace('Your own words about the flats.\n', `Your own words about the flats.\n${personal}`);
-      expect(new TextEncoder().encode(big).byteLength).toBeLessThan(EDIT_FILE_LIMIT);
-      expect(new TextEncoder().encode(big).byteLength).toBeGreaterThan(EDIT_FILE_LIMIT - 2048);
-      const large = await hubs(['Big 07', 'Big 02', 'Big 10', 'Big 05', 'Big 01', 'Big 09', 'Big 04', 'Big 08', 'Big 03', 'Big 06'], big);
-      const done: string[] = [];
-      for (let n = 0; done.length < large.sorted.length && n < 10; n++) {
-        const run = await tidy(large.w, n);
-        expect(run.manifest?.v).toBe(2);
-        expect(run.paths.length).toBeGreaterThan(0);
-        expect(run.paths.length).toBeLessThan(8);
-        expect(run.paths).toEqual(large.sorted.filter((p) => !done.includes(p)).slice(0, run.paths.length));
-        expect(new TextEncoder().encode(JSON.stringify(run.manifest)).byteLength).toBeLessThanOrEqual(MANIFEST_V2_LIMIT);
-        done.push(...run.paths);
-        for (const path of large.sorted.filter((p) => !done.includes(p))) expect(writesTo(large.w.calls, large.idOf(path))).toEqual([]);
+    // The ten notes just under 1 MiB are the heaviest run in the suite. Its time bound is a bound on the work that took
+    // the time, so a busy machine cannot move it (CPU seconds did: 9.5 alone, 15.8 inside the full run): the characters
+    // handed to the UTF-8 encoder. Measured here with no load, the run encoded 5.96 billion characters (11.4 s of wall
+    // time) when every span of a note re-encoded its prefix, and 1.51 billion (6.8 s) with one byte table per note.
+    const ENCODE_BOUND = 3_000_000_000;
+    it('the size-cap run fits its time bound with no load', async () => {
+      let encoded = 0;
+      const encode = TextEncoder.prototype.encode;
+      TextEncoder.prototype.encode = function (this: TextEncoder, input?: string): Uint8Array<ArrayBuffer> {
+        encoded += input?.length ?? 0;
+        return encode.call(this, input);
+      };
+      try {
+        // Ten notes just under 1 MiB, full of quotes and backslashes that JSON escapes: 8 would pass the guard's 8 MiB,
+        // so each run takes fewer, from the start of the path order, stays on the B path, and later runs converge.
+        const filler = 'She wrote "keep C:\\notes\\flats" and \\"quoted\\" it twice.\n';
+        const personal = filler.repeat(Math.floor((EDIT_FILE_LIMIT - FLAT_BEFORE.length - 1024) / filler.length));
+        const big = FLAT_BEFORE.replace('Your own words about the flats.\n', `Your own words about the flats.\n${personal}`);
+        expect(new TextEncoder().encode(big).byteLength).toBeLessThan(EDIT_FILE_LIMIT);
+        expect(new TextEncoder().encode(big).byteLength).toBeGreaterThan(EDIT_FILE_LIMIT - 2048);
+        const large = await hubs(['Big 07', 'Big 02', 'Big 10', 'Big 05', 'Big 01', 'Big 09', 'Big 04', 'Big 08', 'Big 03', 'Big 06'], big);
+        const done: string[] = [];
+        for (let n = 0; done.length < large.sorted.length && n < 10; n++) {
+          const run = await tidy(large.w, n);
+          expect(run.manifest?.v).toBe(2);
+          expect(run.paths.length).toBeGreaterThan(0);
+          expect(run.paths.length).toBeLessThan(8);
+          expect(run.paths).toEqual(large.sorted.filter((p) => !done.includes(p)).slice(0, run.paths.length));
+          expect(new TextEncoder().encode(JSON.stringify(run.manifest)).byteLength).toBeLessThanOrEqual(MANIFEST_V2_LIMIT);
+          done.push(...run.paths);
+          for (const path of large.sorted.filter((p) => !done.includes(p))) expect(writesTo(large.w.calls, large.idOf(path))).toEqual([]);
+        }
+        expect(done).toEqual(large.sorted);
+        for (const path of large.sorted) {
+          expect(writesTo(large.w.calls, large.idOf(path))).toHaveLength(1);
+          expect(textAt(large.w, path)?.split(large.whatOf(path))).toHaveLength(2);
+        }
+      } finally {
+        TextEncoder.prototype.encode = encode;
       }
-      expect(done).toEqual(large.sorted);
-      for (const path of large.sorted) {
-        expect(writesTo(large.w.calls, large.idOf(path))).toHaveLength(1);
-        expect(textAt(large.w, path)?.split(large.whatOf(path))).toHaveLength(2);
-      }
-      // Several runs over ten notes of about 1 MiB, each manifest near 8 MiB: hashing takes seconds.
+      expect(encoded).toBeLessThan(ENCODE_BOUND);
     }, 30_000);
 
     // TL-P2-20 R3-7 m9: a build that reads manifest versions names a later one plainly, and leaves the run saving;

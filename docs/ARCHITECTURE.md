@@ -95,7 +95,7 @@ Each mechanism has one home in the code ([TL-P4-15](harness/2026-10-08-tl-p4-15-
 | Current state bounds (strict on write, lenient on read) | `src/data/contracts/note-edit.ts` | Done: Bower writes at most 8 × 200 and reads up to 20 × 400; every stored manifest still parses (`c3-reply-schema`) |
 | Model input fingerprint and section hashes | `runner/src/claude.ts` | Done: canonical JSON per RFC 8785 (JCS); input= values before `c3-fingerprint` do not compare (`c3-fingerprint`) |
 | Question subject and identity | `src/data/contracts/` | Done: one subject; a yes to "Write it" applies the stored shown text with no model call (`c3-subject`) |
-| Note sections (Current state, Timeline, Bower's sections) | `src/data/contracts/ownership-format.ts` | Target: three or four parsers (`c3-note-sections`) |
+| Note sections (Current state, Timeline, Bower's sections) | `src/data/contracts/ownership-format.ts` | Done (`c3-note-sections`); one byte table per note (`c4-test-timers`) |
 | Pile readiness accounting (declarations, dispositions, which pile a record belongs to) | `src/data/pile-readiness.ts` | Done: records stamped with their pile id, read for the Inbox's piles only (`c2-pile-records`) |
 | Planning: capture, decide, build operations | `src/data/spine/` | In progress: part 1 done (report rows by op id, one record→operations map, no fixture on the model path, enforced by dependency-cruiser); part 2 splits capture, decide and build (`c3-planner-split`) |
 | Worker deadlines (alarms) | `api/src` deadlines table | Done: one deadlines table; only the alarm dispatches (`c1-worker-deadlines`, `c2-worker-dispatch`) |
@@ -105,4 +105,5 @@ Each mechanism has one home in the code ([TL-P4-15](harness/2026-10-08-tl-p4-15-
 | Focus return after a menu, sheet, toast or palette closes | `src/ui/focus.ts` | Done: `closeFocus` (Radix `onCloseAutoFocus`) and `returnFocusTo`, no timers; `Sheet` records its opener; the tree menu returns to the tree at once. The route-heading rule keeps its polling until `c4-test-timers` (`c4-focus-return`) |
 | UI actions (busy, error, double press) | `src/ui/` `useAction` | Target: hand-written per screen (`c4-use-action`) |
 | Run status words | `src/features/tidy/run-words.ts` | Six surfaces decide alone (`c4-run-view`) |
+| Heavy-run lock and timer gate | `harness/with-lock.sh` (re-entrant through `HARNESS_LOCK_HELD`; around `pnpm check`, every e2e script and done.sh; the unlocked bodies are `check:run` and `e2e:pwa:run`, called only through the lock), `harness/timer-gate*.ts` with `real-timers.json` (empty) | Done (`c4-test-timers`); CPU report in check-harness, report only |
 | App copy | one copy file keyed by id | Target (`c4-copy`) |

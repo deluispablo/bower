@@ -1,10 +1,10 @@
 import { env as testEnv, runInDurableObject } from 'cloudflare:test';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { encrypt, importEncryptionKey } from '../src/crypto.js';
 import type { Env } from '../src/env.js';
 import { createApp } from '../src/index.js';
-import { dispatchTidy } from '../src/github.js';
+import { backoffPace, dispatchTidy } from '../src/github.js';
 import type { Person } from '../src/person.js';
 import { QUEUED_STALE_MS, STALE_FAILURE } from '../src/process.js';
 import type { RunReply } from '../src/process.js';
@@ -24,6 +24,9 @@ const API = 'https://api.example.com';
 /** The GitHub every alarm of this file reaches: presses admit at the wall clock, and the runtime fires the alarm. */
 const gh = pretendGitHubForFile(env);
 
+// The 200 and 400 ms waits between tries are pinned through dispatchTidy's own `sleep`; here they take no time.
+beforeEach(() => { backoffPace.scale = 0; });
+afterEach(() => { backoffPace.scale = 1; });
 beforeEach(async () => {
   for (const { name } of (await kv.list()).keys) await kv.delete(name);
   gh.script = {};

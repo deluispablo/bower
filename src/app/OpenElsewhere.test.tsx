@@ -204,10 +204,18 @@ describe('Bower is open in another window', () => {
   });
 
   it('the demo panel stays while this page is blocked', async () => {
-    const p = placeOf('elsewhere');
-    app({ session: sessionOf(p.calls, ALEX), place: p.place }, true);
-    expect(await screen.findByRole('heading', { level: 1, name: OPEN_ELSEWHERE_TEXT })).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'Demo situations' })).toBeInTheDocument();
+    // React holds a revealed lazy chunk back for up to 300 ms (Suspense throttling): fake time moves it, no real wait.
+    await import('@/data/demo/DemoPanel');
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const p = placeOf('elsewhere');
+      app({ session: sessionOf(p.calls, ALEX), place: p.place }, true);
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+      expect(screen.getByRole('heading', { level: 1, name: OPEN_ELSEWHERE_TEXT })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Demo situations' })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('a source without a place opens as before', async () => {
