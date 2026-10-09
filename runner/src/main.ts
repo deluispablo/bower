@@ -35,6 +35,7 @@
  * default) and the real Drive effects (`driveEffects` over this adapter), so a run there really changes the folder. Injected effects
  * are for tests only.
  */
+import { createOwnershipContext, type OwnershipContext } from '../../src/data/contracts/ownership-format';
 import type { Pacing } from '../../src/data/drive/transport';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
@@ -76,9 +77,9 @@ export interface TidyOptions {
   /** How many independent operations are in flight together; `POOL` when not given (`spine/schedule.ts`). */
   concurrency?: number;
   /** What plans a new run from what it took, read through this runner's adapter in the folder (`rootId`). */
-  provider(drive: RunnerDrive, rootId: string): RunProvider;
+  provider(drive: RunnerDrive, rootId: string, context: OwnershipContext): RunProvider;
   /** How operations reach Drive through this runner's adapter. */
-  effects(drive: RunnerDrive): Effects;
+  effects(drive: RunnerDrive, context: OwnershipContext): Effects;
   clock?: () => number;
   newId?: () => string;
   /** Sees the adapter before the run starts (tests set its fault hook). */
@@ -256,7 +257,8 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   if (resumed.kind === 'run') seen.total ??= resumed.manifest.capture.members.length;
   else await status.post('reading', totalOf(seen.total));
   await status.post('writing', totalOf(seen.total));
-  const plan = admittedPlan(token, drive, opts.provider(drive, rootId));
+  const context = createOwnershipContext();
+  const plan = admittedPlan(token, drive, opts.provider(drive, rootId, context));
   const end = await timing.time('apply', () => runOperations({
     rootId,
     runId: opts.runId,
@@ -264,7 +266,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
     records,
     batch: () => drive.batch(),
     fenced: () => drive.fencedWrites(),
-    effects: opts.effects(drive),
+    effects: opts.effects(drive, context),
     concurrency: opts.concurrency ?? POOL,
     // The old template's Rules.md is repaired first, so the planner sees a file Bower may word (`rules-repair.ts`).
     plan: () =>
@@ -378,7 +380,7 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
       attempt,
       ...(opts.fetch ? { fetch: opts.fetch } : {}),
       ...(opts.pacing ? { pacing: opts.pacing } : {}),
-      provider: (drive, rootId) => providerFor(name, drive, { rootId, runId, allowWeb }, { env, timing, ...(opts.claude ? { spawn: opts.claude } : {}) }),
+      provider: (drive, rootId, context) => providerFor(name, drive, { rootId, runId, allowWeb, context }, { env, timing, ...(opts.claude ? { spawn: opts.claude } : {}) }),
       timing,
       effects: driveEffects,
     });

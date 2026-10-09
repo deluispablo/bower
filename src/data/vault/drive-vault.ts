@@ -29,6 +29,7 @@ import {
   type Suggestion,
   type TreeNode,
 } from '../types';
+import type { OwnershipContext } from '../contracts/ownership-format';
 import type { Content, Declaration, DeclarationResult } from '../contracts/pile-declaration';
 import type { DispositionResult } from '../contracts/pile-disposition';
 import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, declarationCopies, declarationRecord, declaredName, findDeclaration, findLooseDeclarations, journalValues, looseSetAside, checkable, memberAsNote, recordablePile, recordedNote, sameText, setAsideOf, shownName, writable, type Blocked, type DeclarationLookup, type Digest } from '../pile-readiness';
@@ -579,7 +580,7 @@ export class DriveVault implements VaultSource {
     return out.sort((a, b) => b.createdAt - a.createdAt);
   }
 
-  async piles(): Promise<Pile[]> {
+  async piles(context?: OwnershipContext): Promise<Pile[]> {
     // What a reload left on its way goes on, from where Drive stopped.
     this.startQueue().catch((e: unknown) => {
       // Signed out: nothing to resume, and nothing to say.
@@ -617,7 +618,7 @@ export class DriveVault implements VaultSource {
       let unread = false;
       let refused: SetAside | null = null;
       try {
-        parsed = note ? await this.parsed(note, `${path}/${PILE_NOTE}`) : null;
+        parsed = note ? await this.parsed(note, `${path}/${PILE_NOTE}`, false, context) : null;
       } catch (e) {
         // A note Drive cannot give back now holds only its own pile (TL-P2-08 (a)): logged once for this pile and
         // listing, never kept, so the next listing reads it again. Signed out, or a session that changed, stops all.
@@ -664,7 +665,7 @@ export class DriveVault implements VaultSource {
       // The note a run records, when it is not the first one, is refused the same way (its format, or damage).
       if (refused === null && raw !== null && recorded && recorded !== note) {
         try {
-          parseNote(`${path}/${PILE_NOTE}`, raw);
+          parseNote(`${path}/${PILE_NOTE}`, raw, context ? { fileId: recorded.id, context } : undefined);
         } catch (e) {
           const format = noteRefusal(e);
           if (!format || !(e instanceof BowerError)) throw e;
@@ -1807,16 +1808,16 @@ export class DriveVault implements VaultSource {
     return text;
   }
 
-  protected parsed(f: DriveFile, path: string): Promise<ParsedNote>;
-  protected parsed(f: DriveFile, path: string, skipUnreadable: true): Promise<ParsedNote | null>;
-  protected async parsed(f: DriveFile, path: string, skipUnreadable = false): Promise<ParsedNote | null> {
+  protected parsed(f: DriveFile, path: string, skipUnreadable?: false, context?: OwnershipContext): Promise<ParsedNote>;
+  protected parsed(f: DriveFile, path: string, skipUnreadable: true, context?: OwnershipContext): Promise<ParsedNote | null>;
+  protected async parsed(f: DriveFile, path: string, skipUnreadable = false, context?: OwnershipContext): Promise<ParsedNote | null> {
     const cached = this.notes.get(f.id);
     if (cached && cached.modified === f.modifiedTime) return { ...cached.note, path, title: displayName(nameOf(path)) };
     // Read/session failures still reject the operation; only a note's parse refusal is isolated.
     const text = await this.text(f);
     let note: ParsedNote;
     try {
-      note = parseNote(path, text);
+      note = parseNote(path, text, context ? { fileId: f.id, context } : undefined);
     } catch (e) {
       if (!skipUnreadable || !(e instanceof BowerError)) throw e;
       console.error(e);

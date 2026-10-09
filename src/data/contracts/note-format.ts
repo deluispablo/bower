@@ -21,7 +21,7 @@
  */
 import { BowerError, type Note, type Property, type SourceKind, type TimelineEntry } from './types';
 import { timelineLine, parseTimelineLine } from './timeline-line';
-import { parseOwnership, togglePersonalTask, type ByteSpan } from './ownership-format';
+import { parseOwnership, togglePersonalTask, type ByteSpan, type FetchedOwnership } from './ownership-format';
 
 /** Frontmatter keys that are not properties. */
 export const BOWER_KEYS = ['summary', 'status', 'tags', 'by', 'original', 'bower_source', 'bower_state'] as const;
@@ -73,10 +73,10 @@ function ownershipError(reason: string): BowerError {
   return new BowerError('unknown', NOTE_REFUSED[refusal], undefined, { cause });
 }
 
-function ownershipOf(raw: string) {
+function ownershipOf(raw: string, fetched?: FetchedOwnership) {
   // This validates the available string, not the original fetched byte encoding.
   const bytes = encoder.encode(raw);
-  const ownership = parseOwnership(bytes);
+  const ownership = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
   if (ownership.status === 'invalid') throw ownershipError(ownership.reason);
   // Do not silently replace unpaired surrogates when editing a declared v2 note.
   if (ownership.status === 'v2' && decoder.decode(bytes) !== raw) throw ownershipError('text-cannot-round-trip');
@@ -129,9 +129,9 @@ function timelineOf(block: string): TimelineEntry[] {
  * The `- ` lines of a note's Timeline section as the one parser frames it (the last `## Timeline` of a legacy note,
  * the framed payload of a v2 one); none for a note without one or that cannot be read.
  */
-export function timelineBullets(raw: string): string[] {
+export function timelineBullets(raw: string, fetched?: FetchedOwnership): string[] {
   const bytes = encoder.encode(raw);
-  const own = parseOwnership(bytes);
+  const own = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
   if (own.status === 'invalid' || !own.layout.timeline) return [];
   return payloadDisplay(bytes, own.layout.timeline, TIMELINE).split('\n').filter((l) => l.startsWith('- '));
 }
@@ -145,8 +145,8 @@ function linksIn(text: string): string[] {
   return out;
 }
 
-export function parseNote(path: string, raw: string): ParsedNote {
-  const { bytes, ownership } = ownershipOf(raw);
+export function parseNote(path: string, raw: string, fetched?: FetchedOwnership): ParsedNote {
+  const { bytes, ownership } = ownershipOf(raw, fetched);
   const text = raw.replace(/\r\n/g, '\n');
   const title = nameOf(path);
   const { layout } = ownership;
