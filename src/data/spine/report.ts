@@ -50,19 +50,18 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
     report.filed.push(...c.value.filed);
     report.created.push(...c.value.created);
     report.updated.push(...c.value.updated);
-    const moves = c.when === 'rejected' && c.requires.every((id) => ops.get(id)?.effect.kind === 'move');
-    if (!moves) report.setAside.push(...c.value.setAside);
-    // Each row by its own move's outcome, by op id: row i is the row of the contribution's i-th move when there is one
-    // row per move; otherwise every row is every move's. Never by the name a row carries (two things may share one).
-    const paired = c.value.setAside.length === c.requires.length;
-    for (const [i, row] of (moves ? c.value.setAside : []).entries()) {
-      const own = (paired ? [c.requires[i] ?? ''] : c.requires).map((id) => byId.get(id));
-      const moved = own.every((o) => o?.state === 'rejected' && o.failure.code === 'conflict' && o.failure.message === SOURCE_NOT_AS_SEEN);
-      const unsure = own.map((o) => (o?.state === 'rejected' && o.failure.code === 'unknown' ? o.failure.message : null));
-      const why = unsure[0];
+    // A set-aside row is its contribution's one move's (`grounded`): by op id, never by the name a row carries (two
+    // things may share one) nor by position.
+    const own = c.when === 'rejected' && c.requires.length === 1 ? byId.get(c.requires[0] ?? '') : undefined;
+    if (own?.state !== 'rejected' || ops.get(own.operationId)?.effect.kind !== 'move') report.setAside.push(...c.value.setAside);
+    else {
+      const moved = own.failure.code === 'conflict' && own.failure.message === SOURCE_NOT_AS_SEEN;
+      const why = own.failure.code === 'unknown' ? own.failure.message : null;
       // A thing Bower couldn't confirm is on its own line, never counted as set aside (TL-P4-14 addendum 8).
-      if (why && UNCONFIRMED.includes(why) && unsure.every((m) => m === why)) report.unconfirmed = [...(report.unconfirmed ?? []), { ...row, why }];
-      else report.setAside.push({ ...row, why: moved ? MOVED_AWAY : NOT_FILED });
+      for (const row of c.value.setAside) {
+        if (why && UNCONFIRMED.includes(why)) report.unconfirmed = [...(report.unconfirmed ?? []), { ...row, why }];
+        else report.setAside.push({ ...row, why: moved ? MOVED_AWAY : NOT_FILED });
+      }
     }
     report.questions.push(...c.value.questions);
     if (c.value.requests) report.requests = [...(report.requests ?? []), ...c.value.requests];
@@ -76,6 +75,14 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
   // its report says nothing was ready yet, rather than that everything has its place.
   if (manifest.runScope === 'all' && !manifest.capture.piles.length && !manifest.capture.journal.length) report.nothingReady = true;
   return { v: 1, kind: 'run-report', scope: { rootId: manifest.scope.rootId }, runId: manifest.runId, captureId: manifest.captureId, manifestHash, report };
+}
+
+/**
+ * The notes a run's rows name, once each, in report order (P4-45 m4): a note with N new Timeline lines has N rows
+ * and is one note. The one count of distinct paths, for Home, Replay, the run links and the corpus scorer.
+ */
+export function distinctPaths(rows: readonly { path: string }[]): string[] {
+  return [...new Set(rows.flatMap((r) => (r.path ? [r.path] : [])))];
 }
 
 /** A filing move: a captured member going to another place (a cleared "new" mark stays where it is). */

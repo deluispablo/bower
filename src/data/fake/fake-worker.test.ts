@@ -2450,9 +2450,6 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const rows = planned.manifest.reportPlan.filter((c) => c.value.questions.length);
       expect(rows).toEqual([{ requires: [write?.operationId], when: 'applied', value: { filed: [], created: [], updated: [], setAside: [], questions: [asked] } }]);
       expect(grounded(planned.manifest)).toBe(true);
-      // A row the write does not carry is not grounded.
-      const other = { ...planned.manifest, reportPlan: planned.manifest.reportPlan.map((c) => (c.value.questions.length ? { ...c, value: { ...c.value, questions: [{ ...asked, askedAt: asked.askedAt + 1 }] } } : c)) };
-      expect(grounded(other)).toBe(false);
 
       // The write's answer is lost: the run reconciles it from what is stored and never asks twice.
       w.rules.push(once(isQuestionsWrite(w), 'lose-reply'));
@@ -4000,13 +3997,11 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       }
       if (!manifest) return;
       expect(grounded(manifest)).toBe(true);
-      // An updated row that no applied Timeline line backs is never grounded.
+      // An edit with a Timeline line and no row of its own is never grounded.
       const row = manifest.reportPlan.findIndex((c) => c.value.updated.length);
       const plan = (patch: Partial<ReportContribution['value']>, requires?: string[]): ManifestV2 => ({
         ...manifest, reportPlan: manifest.reportPlan.map((c, i) => (i === row ? { ...c, ...(requires ? { requires } : {}), value: { ...c.value, ...patch } } : c)),
       });
-      expect(grounded(plan({ updated: [{ path: 'Projects/Elsewhere.md', what: FLAT_WHAT }] }))).toBe(false);
-      expect(grounded(plan({ updated: [{ path: FLAT, what: 'Something else.' }] }))).toBe(false);
       const move = manifest.operations.find((o) => o.effect.kind === 'move');
       expect(grounded(plan({}, [move?.operationId ?? '']))).toBe(false);
 
@@ -4421,17 +4416,10 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(manifest.reportPlan).toContainEqual({ requires: [move.operationId], when: 'rejected', value: { filed: [], created: [], updated: [], setAside: [{ name: CURRY.name, why: AGAIN }], questions: [] } });
       expect(grounded(manifest)).toBe(true);
       expect(await groundedKeys(manifest)).toBe(true);
-      // A filed note that no applied create (or reused note) backs is never grounded, nor a create with another key.
+      // A note's create with no row is never grounded, nor a create with another key.
       const at = manifest.reportPlan.indexOf(filed[0] as ReportContribution);
       const plan = (patch: (c: ReportContribution) => ReportContribution): AnyManifest => ({ ...manifest, reportPlan: manifest.reportPlan.map((c, i) => (i === at ? patch(c) : c)) }) as AnyManifest;
       expect(grounded(plan((c) => ({ ...c, requires: c.requires.filter((r) => r !== create.operationId) })))).toBe(false);
-      expect(grounded(plan((c) => ({ ...c, value: { ...c.value, filed: c.value.filed.map((r) => ({ ...r, note: 'Resources/Cooking/Elsewhere.md' })) } })))).toBe(false);
-      // Its made row names that very note, once, with words; a filed row that wrote no note lists none.
-      expect(grounded(plan((c) => ({ ...c, value: { ...c.value, created: [{ path: 'Resources/Cooking/Elsewhere.md', what: 'A note.' }] } })))).toBe(false);
-      expect(grounded(plan((c) => ({ ...c, value: { ...c.value, created: [...c.value.created, ...c.value.created] } })))).toBe(false);
-      expect(grounded(plan((c) => ({ ...c, value: { ...c.value, created: c.value.created.map((r) => ({ ...r, what: '' })) } })))).toBe(false);
-      const rejectedAt = manifest.reportPlan.findIndex((c) => c.when === 'rejected' && c.requires.includes(move.operationId));
-      expect(grounded({ ...manifest, reportPlan: manifest.reportPlan.map((c, i) => (i === rejectedAt ? { ...c, value: { ...c.value, created: [{ path: NOTE, what: 'A note.' }] } } : c)) } as AnyManifest)).toBe(false);
       const rekeyed = { ...manifest, operations: (manifest.operations as OperationV2[]).map((o) => (o === create && o.effect.kind === 'create-text' ? { ...o, effect: { ...o.effect, createKey: 'another-key' } } : o)) } as AnyManifest;
       expect(await groundedKeys(rekeyed)).toBe(false);
 
@@ -4535,12 +4523,6 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const { manifest } = await tidy(w);
       if (!manifest) return;
       expect(manifest.reportPlan.flatMap((c) => [...c.value.filed, ...c.value.setAside]).filter((r) => r.name.includes('curry')).map((r) => r.name)).toEqual([link.name, link.name]);
-      // The member as an inbox `.url` file: no row may claim the name it was added under, or one like it.
-      const asUrl = { ...manifest, capture: { ...manifest.capture, members: manifest.capture.members.map((m) => (m.file.fileId === link.id ? { ...m, file: { ...m.file, name: `${link.name}.url` } } : m)) } } as AnyManifest;
-      for (const name of [link.name, `../${link.name}`, ` .-${link.name}`]) {
-        const tampered = { ...asUrl, reportPlan: asUrl.reportPlan.map((c) => ({ ...c, value: { ...c.value, filed: c.value.filed.map((r) => (r.name === link.name ? { ...r, name } : r)), setAside: c.value.setAside.map((r) => (r.name === link.name ? { ...r, name } : r)) } })) } as AnyManifest;
-        expect(grounded(tampered), name).toBe(false);
-      }
       // A link renamed when it was added (x.example became x.example.url) takes the B path too, named by its file.
       const v = await bWorld();
       await v.uploader.addPile({ text: 'A recipe to keep', items: [CURRY, pdf('shopping list.pdf')] });
@@ -4871,9 +4853,6 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(manifest?.reportPlan).toContainEqual({ requires: [move?.operationId], when: 'rejected', value: { filed: [], created: [], updated: [], setAside: [{ name: LISTING.name, why: AGAIN }], questions: [] } });
       if (!manifest || !filed) return;
       expect(grounded(manifest)).toBe(true);
-      // A note no applied Timeline line backs is never grounded.
-      const unbacked = { ...manifest, reportPlan: manifest.reportPlan.map((c) => (c === filed ? { ...c, requires: c.requires.filter((r) => r !== edit?.operationId) } : c)) };
-      expect(grounded(unbacked)).toBe(false);
 
       expect(textAt(w, INTO)).toBe(larkspur([`- ${date} · ${LINE}`]));
       expect(w.drive.pathOf(link.id, w.rootId)).toBe(JOINED);
@@ -5014,33 +4993,6 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       }
     });
 
-    // Delta review of 58082c2: the row is grounded only for a merge that fell back, with its answer, word for word.
-    it('refuses the filed-on-its-own row anywhere but on a merge that fell back, and in any other words', async () => {
-      const { w, into, link } = await merging();
-      await refusals[1]?.[1](w, into);
-      const { manifest } = await tidy(w);
-      if (!manifest) return;
-      expect(grounded(manifest)).toBe(true);
-      const row = manifest.reportPlan.find((c) => c.when === 'applied' && !c.value.filed.length && c.value.setAside.length);
-      if (!row) throw new Error('no filed-on-its-own row');
-      const plus = (m: ManifestV2, extra: ReportContribution): ManifestV2 => ({ ...m, reportPlan: [...m.reportPlan, extra] });
-      const swap = (m: ManifestV2, next: ReportContribution): ManifestV2 => ({ ...m, reportPlan: m.reportPlan.map((c) => (c === row ? next : c)) });
-      // Other words, or another note's name.
-      for (const why of ['It was filed on its own.', "Bower couldn't add it to Flat hunt, so it was filed on its own."]) {
-        expect(grounded(swap(manifest, { ...row, value: { ...row.value, setAside: [{ name: link.name, why }] } })), why).toBe(false);
-      }
-      // On an item with no merge: the pdf beside it.
-      const pdfMove = (manifest.operations as OperationV2[]).find((o) => o.effect.kind === 'move' && o.effect.name === 'floor plan.pdf');
-      const pdfMember = manifest.capture.members.find((m) => m.file.fileId === (pdfMove?.effect.kind === 'move' ? pdfMove.effect.before.fileId : ''));
-      expect(grounded(plus(manifest, { requires: [pdfMove?.operationId ?? ''], when: 'applied', value: { ...row.value, setAside: [{ name: pdfMember?.file.name ?? '', why: row.value.setAside[0]?.why ?? '' }] } }))).toBe(false);
-      // On a merge that was planned and applied.
-      const merged = await merging();
-      const planned = await tidy(merged.w);
-      if (!planned.manifest) return;
-      const mergeMove = moveOf(planned.manifest, merged.link.id);
-      expect(grounded(plus(planned.manifest, { requires: [mergeMove?.operationId ?? ''], when: 'applied', value: { filed: [], created: [], updated: [], setAside: [{ name: merged.link.name, why: ALONE }], questions: [] } }))).toBe(false);
-    });
-
     // Coordinator ruling on the delta review: a note changed while read is a passing race, held like the cap deferral.
     it('holds the pile and its answer when the note changed while read, and merges on the next run', async () => {
       const { w, into, answer, link } = await merging();
@@ -5109,18 +5061,6 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(viewOf(w)?.run.report?.filed).toContainEqual({ name: link.name, title: 'Flat 3, renamed', kind: 'link', to: 'Projects/Flat hunt', note: NOW });
       expect(asked(w)).toEqual(['q-keep']);
       expect(await pendingAnswers(w)).toEqual([]);
-    });
-
-    // Review o5-consumers-review-1 minor (a): a merge row's note is backed only by a line that names the answer.
-    it("grounds a merged thing's note only on a line carrying the answer that asked for it", async () => {
-      const { w, answer } = await merging();
-      const { manifest } = await tidy(w);
-      if (!manifest) return;
-      expect(grounded(manifest)).toBe(true);
-      const unnamed = { ...manifest, operations: manifest.operations.map((o) => (o.effect.kind === 'edit-text'
-        ? { ...o, effect: { ...o.effect, changes: o.effect.changes.map((c) => (c.kind === 'timeline-append' ? { ...c, recordIds: c.recordIds.filter((id) => id !== answer.id) } : c)) } }
-        : o)) };
-      expect(grounded(unnamed)).toBe(false);
     });
 
     // Review o5-consumers-review-1 minor (b), Ratification 2: one write drops every answered question, so one

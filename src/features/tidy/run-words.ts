@@ -2,6 +2,7 @@ import { clock, elapsed, plural } from '@/app/words';
 import type { Pose } from '@/bird/Bower';
 import { RUN_STEPS, type RunPhase, type RunReport, type RunState } from '@/data/types';
 import { thingName } from '@/data/tree';
+import { distinctPaths } from '@/data/spine/report';
 
 /**
  * Every word a run shows comes from here, so the sheet, the chip, Home and
@@ -179,18 +180,15 @@ export type RunLinkRow = { path: string; what: string };
 
 /** How many notes a run brought up to date: one per note, however many of its lines the report lists. */
 export function notesUpdated(report: Pick<RunReport, 'updated'>): number {
-  return new Set(report.updated.map((r) => r.path)).size;
+  return distinctPaths(report.updated).length;
 }
 
 /** The notes a run made and brought up to date, in report order; a note listed as new is not listed again. */
 export function runLinkRows(report: Pick<RunReport, 'created' | 'updated'>): { made: RunLinkRow[]; updated: RunLinkRow[] } {
-  const seen = new Set<string>();
-  const once = (rows: RunLinkRow[]): RunLinkRow[] =>
-    rows.filter((r) => {
-      if (!r.path || seen.has(r.path)) return false;
-      seen.add(r.path);
-      return true;
-    });
-  const made = once(report.created);
-  return { made, updated: once(report.updated) };
+  const first = (rows: RunLinkRow[], path: string): RunLinkRow[] => rows.filter((r) => r.path === path).slice(0, 1);
+  const made = distinctPaths(report.created);
+  return {
+    made: made.flatMap((p) => first(report.created, p)),
+    updated: distinctPaths(report.updated).filter((p) => !made.includes(p)).flatMap((p) => first(report.updated, p)),
+  };
 }

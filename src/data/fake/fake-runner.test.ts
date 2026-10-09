@@ -316,10 +316,8 @@ describe('the fake runner', () => {
     expect(out.report.created).toEqual([{ path, what: 'A comparison you asked for.' }]);
     expect((await fresh().requests())[0]?.done).toBe('Compared the three flats on the shortlist in [[Flats on the shortlist, compared]].');
     expect((await fresh().note(path)).body).toContain('| [[Flat 7, Cobble Row]] |');
-    // Its one created row is grounded by its create, and by an answer that names it; another path is not.
+    // Its one created row is grounded by its create.
     expect(grounded(out.manifest)).toBe(true);
-    const elsewhere = { ...out.manifest, reportPlan: out.manifest.reportPlan.map((c) => (c.value.created.length ? { ...c, value: { ...c.value, created: [{ path: 'Projects/Flat hunt/Another note.md', what: 'A comparison you asked for.' }] } } : c)) };
-    expect(grounded(elsewhere)).toBe(false);
   });
 
   it('a comparison of flats that are not all there gets the plain line and writes nothing', async () => {

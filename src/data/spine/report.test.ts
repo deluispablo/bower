@@ -9,6 +9,7 @@ import type { RunManifest } from './records';
 import { runDetail } from '@/features/tidy/run-words';
 import { itemDispositions, materialize, NOT_FILED, reportContradictions, UNCONFIRMED_GONE } from './report';
 import { scriptedProvider } from '../demo/script';
+import { grounded } from './grounded';
 
 const AT = Date.UTC(2026, 9, 7, 9);
 const RUN = 'run-report';
@@ -83,14 +84,13 @@ describe('dispositions and the report', () => {
     const admission = await planAdmission(fakeRead(drive), root, { scope: 'all', clock: () => AT, newId: () => 'request-report' });
     if (admission.kind !== 'manifest') throw new Error(`nothing admitted: ${admission.cause}`);
     const planned = await scriptedProvider(fakeScripted(drive), { rootId: root, runId: RUN, allowWeb: false })({ taken: admission.manifest, deferred: [] });
-    // Two filing moves set aside together by one contribution: one refused as it is (confirmed), the other's answer
+    // Two filing moves set aside, each by its own contribution: one refused as it is (confirmed), the other's answer
     // lost and its thing then emptied from the Bin before Bower read it back (unconfirmed).
     const asides = planned.reportPlan.filter((c) => c.when === 'rejected' && c.requires.length === 1
       && planned.operations.some((o) => o.operationId === c.requires[0] && o.effect.kind === 'move'));
     const [a, b] = asides;
     if (!a || !b) throw new Error('two filing moves needed');
-    const together = { requires: [...a.requires, ...b.requires], when: 'rejected' as const, value: { ...a.value, setAside: [...a.value.setAside, ...b.value.setAside] } };
-    const manifest: RunManifest = { ...planned, reportPlan: [...planned.reportPlan.filter((c) => c !== a && c !== b), together] };
+    const manifest: RunManifest = planned;
     const [gone, kept] = [a.requires[0] ?? '', b.requires[0] ?? ''];
     const outcomes = settle(manifest, new Set([gone, kept])).map((o): Outcome => (o.operationId === gone
       ? { operationId: o.operationId, state: 'rejected', failure: { code: 'unknown', message: UNCONFIRMED_GONE } }
@@ -116,20 +116,46 @@ describe('dispositions and the report', () => {
     const [a, b] = asides;
     if (!a || !b) throw new Error('two filing moves needed');
     const [gone, kept] = [a.requires[0] ?? '', b.requires[0] ?? ''];
-    // Two things added under one name, each moved by its own operation, set aside together by one contribution.
+    // Two things added under one name, each moved by its own operation and set aside by a row naming that operation.
     const SAME = 'Scan.pdf';
     const operations = planned.operations.map((o) => (o.operationId === gone || o.operationId === kept) && o.effect.kind === 'move'
       ? { ...o, effect: { ...o.effect, before: { ...o.effect.before, name: SAME } } }
       : o);
-    const together = { requires: [gone, kept], when: 'rejected' as const, value: { ...a.value, setAside: [{ name: SAME, why: NOT_FILED }, { name: SAME, why: NOT_FILED }] } };
-    const manifest = { ...planned, operations, reportPlan: [...planned.reportPlan.filter((c) => c !== a && c !== b), together] } as RunManifest;
+    const named = (c: typeof a): typeof a => ({ ...c, value: { ...c.value, setAside: [{ name: SAME, why: NOT_FILED }] } });
+    const manifest = { ...planned, operations, reportPlan: planned.reportPlan.map((c) => (c === a || c === b ? named(c) : c)) } as RunManifest;
     const outcomes = settle(manifest, new Set([gone, kept])).map((o): Outcome => (o.operationId === gone
       ? { operationId: o.operationId, state: 'rejected', failure: { code: 'unknown', message: UNCONFIRMED_GONE } }
       : o));
     const report = materialize(manifest, 'a'.repeat(64), outcomes)?.report;
     if (!report) throw new Error('no report');
-    // The first row is its own move's: unconfirmed. The second is the other move's: set aside.
+    // Each row by its own move: the first unconfirmed, the other set aside.
     expect(report.unconfirmed).toEqual([{ name: SAME, why: UNCONFIRMED_GONE }]);
     expect(report.setAside.filter((r) => r.name === SAME)).toEqual([{ name: SAME, why: NOT_FILED }]);
+  });
+
+  // c3-planner-split part 2 (P4-45 m2): a set-aside row is its one operation's, never paired with one by position.
+  it('a set-aside row names its op', async () => {
+    const drive = new FakeDrive({ clock: () => 0 });
+    const root = (await seedFakeDrive(drive, 'default', AT)) ?? '';
+    const admission = await planAdmission(fakeRead(drive), root, { scope: 'all', clock: () => AT, newId: () => 'request-report' });
+    if (admission.kind !== 'manifest') throw new Error(`nothing admitted: ${admission.cause}`);
+    const planned = await scriptedProvider(fakeScripted(drive), { rootId: root, runId: RUN, allowWeb: false })({ taken: admission.manifest, deferred: [] });
+    const asides = planned.reportPlan.filter((c) => c.when === 'rejected' && c.requires.length === 1
+      && planned.operations.some((o) => o.operationId === c.requires[0] && o.effect.kind === 'move'));
+    const [a, b] = asides;
+    if (!a || !b) throw new Error('two filing moves needed');
+    // Two moves set aside by one contribution, its rows listed in the other order: no row carries its own operation.
+    const swapped = { requires: [...a.requires, ...b.requires], when: 'rejected' as const, value: { ...a.value, setAside: [...b.value.setAside, ...a.value.setAside] } };
+    const manifest: RunManifest = { ...planned, reportPlan: [...planned.reportPlan.filter((c) => c !== a && c !== b), swapped] };
+    const [gone, kept] = [a.requires[0] ?? '', b.requires[0] ?? ''];
+    const outcomes = settle(manifest, new Set([gone, kept])).map((o): Outcome => (o.operationId === gone
+      ? { operationId: o.operationId, state: 'rejected', failure: { code: 'unknown', message: UNCONFIRMED_GONE } }
+      : o));
+    const report = materialize(manifest, 'a'.repeat(64), outcomes)?.report;
+    if (!report) throw new Error('no report');
+    // No row is said to be what another row's operation did.
+    expect(report.unconfirmed ?? []).toEqual([]);
+    // And a plan whose set-aside row does not name its one operation is not grounded.
+    expect(grounded(manifest)).toBe(false);
   });
 });
