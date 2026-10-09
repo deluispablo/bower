@@ -6341,7 +6341,8 @@
       "The 2 reproduced cases and the reconcile guard pass; the fast-check property gains create intents."
     ],
     "verify": "",
-    "note": "TL-P4-24 addendum 10 (main 4dfe148a); defect pile-note-lost-create-moved (diagnosis docs/harness/defects/2026-10-09-pile-note-lost-create-moved.md). Folds c4-reconcile-guard (addendum 9 (1)). Escalated, Opus plus a Codex pass, after c4-undo-withdraw merges (that entry is parked; the lead said to run the queue, so this starts from claude/p3). Packet to write."
+    "note": "TL-P4-24 addendum 10 (main 4dfe148a); defect pile-note-lost-create-moved (diagnosis docs/harness/defects/2026-10-09-pile-note-lost-create-moved.md). Folds c4-reconcile-guard (addendum 9 (1)). Escalated, Opus plus a Codex pass, after c4-undo-withdraw merges (that entry is parked; the lead said to run the queue, so this starts from claude/p3). Packet to write.",
+    "review": "P4-61b PASS"
   },
   {
     "id": "v2-still-marks",
