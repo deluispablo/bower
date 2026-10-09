@@ -39,3 +39,9 @@ Reviewers are read-only. They never move the main checkout in any form.
 - Red: `the write it card shows every line of Bower's update`. Today the card text lacks the shown lines. It is accepted when the card contains each one and axe passes (WCAG 2.2, target-size) in the e2e.
 - A yes may apply only text that was shown. Assert this in a test.
 - Point (2), the Timeline line written while the ask is open, is by design (TL-P4-10). No change.
+
+## Added: every Timeline line cites its source (TL-P4-19 addendum 18, main 81f1acbf)
+
+- The write-it fake scenario gets a source: add `cites` to WRITE_IT_STATES.
+- The one home that checks a planned Timeline line refuses a news line with no citation. That home is the note-edit contract or the zod reply schema; find which one does it today. If the check already exists, only the fixture changes; say which home did it on your card.
+- Red, only if the check is new: `a timeline news line with no source is refused`.
