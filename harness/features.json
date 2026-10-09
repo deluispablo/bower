@@ -6428,6 +6428,7 @@
       "A playwright, e2e-both.sh or pnpm e2e* verify is still e2e."
     ],
     "verify": "pnpm exec vitest run src/harness.test.ts -t \"a test name that mentions e2e does not make a vitest verify an e2e one|a playwright verify is still e2e\"",
-    "note": "Lead ruling 2026-10-09 (message; DEFECT_LOG done-precheck-matches-words): detect the runner from the command, never from a test name. Codex, then a Claude review. Packet 2026-10-09-c4-precheck-runner-packet.md."
+    "note": "Lead ruling 2026-10-09 (message; DEFECT_LOG done-precheck-matches-words): detect the runner from the command, never from a test name. Codex, then a Claude review. Packet 2026-10-09-c4-precheck-runner-packet.md.",
+    "review": "P4-63 PASS"
   }
 ]
