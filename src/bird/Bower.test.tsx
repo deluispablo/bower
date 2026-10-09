@@ -394,3 +394,133 @@ it('Bower is aria-hidden and out of the tab order', () => {
   expect(b.box).not.toHaveAttribute('tabindex');
   expect(b.box.querySelectorAll('a, button, input, [tabindex]')).toHaveLength(0);
 });
+
+// ---------- d-v2-07 fix round (P4-58 and the Codex pass) ----------
+
+it('a keydown with nothing focused wakes a dozing bird and postpones sleep', () => {
+  const b = perched('idle');
+  const eyes = (seconds: number): number => {
+    const seen: number[] = [];
+    b.run(seconds, (r) => seen.push(r.eye));
+    return Math.max(...seen);
+  };
+  b.run(58);
+  // Arrow keys scrolling the page: focus stays on body.
+  expect(document.activeElement).toBe(document.body);
+  act(() => void fireEvent.keyDown(document.body, { key: 'ArrowDown' }));
+  b.run(30);
+  // 88 s after mount, 30 s after the key: still awake.
+  expect(eyes(1)).toBeGreaterThan(0.5);
+  b.run(31);
+  expect(eyes(1)).toBeCloseTo(0.08, 2);
+  act(() => void fireEvent.keyDown(document.body, { key: 'ArrowDown' }));
+  const woke: Array<Record<PartKey, number>> = [];
+  b.run(0.6, (r) => woke.push(r));
+  expect(Math.max(...woke.map((r) => r.eye))).toBeGreaterThan(0.9);
+  expect(Math.max(...woke.map((r) => r.tuft))).toBeGreaterThan(16);
+});
+
+it('the focus gaze ends when focus leaves the control', () => {
+  const b = perched('idle', { acts: false }, <button type="button">Tidy up</button>);
+  const button = b.view.getByRole('button', { name: 'Tidy up' });
+  const rect = (left: number, top: number, size: number): DOMRect =>
+    ({ left, top, width: size, height: size, right: left + size, bottom: top + size, x: left, y: top, toJSON: () => ({}) }) as DOMRect;
+  const at = vi.spyOn(button, 'getBoundingClientRect').mockReturnValue(rect(280, 280, 40));
+  vi.spyOn(b.box, 'getBoundingClientRect').mockReturnValue(rect(0, 0, Z));
+  const irisY = (): number => nums(b.box.querySelector('.b-iris')?.getAttribute('transform'))[1] ?? 0;
+  b.run(1);
+  act(() => button.focus());
+  b.run(0.3);
+  expect(irisY()).toBeGreaterThan(0.8);
+  // Focus leaves to the page: the gaze ends, with no pointer input.
+  act(() => button.blur());
+  b.run(0.5);
+  expect(Math.abs(irisY())).toBeLessThan(0.2);
+  // Focus back, then the page scrolls: the control is now above Bower, and the gaze follows it, not the rect
+  // it first read.
+  act(() => button.focus());
+  b.run(0.3);
+  expect(irisY()).toBeGreaterThan(0.8);
+  at.mockReturnValue(rect(280, -320, 40));
+  act(() => void document.dispatchEvent(new Event('scroll')));
+  b.run(0.3);
+  expect(irisY()).toBeLessThan(-0.8);
+});
+
+it('a layer tap during a flight plays when the flight lands, before the next wait', () => {
+  const chirps = vi.spyOn(BirdEngine.prototype, 'chirp');
+  const frames = fakeFrames(5);
+  const ref = createRef<BowerController>();
+  const { getByRole } = render(
+    <div style={{ position: 'relative' }}>
+      <BowerLayer ref={ref} home={() => ({ x: 50, y: 80 })} engineOptions={{ ...frames.options, acts: false }} />
+    </div>,
+  );
+  const run = (seconds: number): void => act(() => frames.run(Math.round(seconds * FPS)));
+  run(0.5);
+  act(() => void ref.current?.flyTo(() => ({ x: 50, y: 80, perch: true })).wait(10));
+  run(0.2);
+  const flyer = getByRole('button', { name: 'Bower', hidden: true });
+  fireEvent.click(flyer);
+  run(0.3);
+  expect(chirps).not.toHaveBeenCalled();
+  // The flight lands well within 2.5 s; the wait after it runs to 10 s.
+  run(2.5);
+  expect(chirps).toHaveBeenCalledTimes(1);
+  expect(ref.current?.moving).toBe(true);
+  run(10);
+  // Carrying at home with nothing queued: the tap plays at once.
+  act(() => void ref.current?.holding(true));
+  run(0.5);
+  fireEvent.click(flyer);
+  run(0.2);
+  expect(chirps).toHaveBeenCalledTimes(2);
+});
+
+it('a tap during carry or write cuts the pose cycle and the loop resumes', () => {
+  // carry (1.3 s): its tail is pinned at 0 until 0.58 of the cycle, then flicks to -16.
+  const carry = perched('carry');
+  carry.run(1.3 + 0.15);
+  pointer('pointerdown', 50, 50, carry.box);
+  const tails: number[] = [];
+  carry.run(0.15, (r) => tails.push(Math.abs(r.tail)));
+  // The tap's tail kick shows: the cycle no longer pins the tail.
+  expect(Math.max(...tails)).toBeGreaterThan(3);
+  // The next cycle plays the loop again, flick and all.
+  const next: number[] = [];
+  carry.run(2, (r) => next.push(r.tail));
+  expect(Math.min(...next)).toBeLessThan(-12);
+  carry.view.unmount();
+
+  // write (2.8 s): the head nods 16 -> 22 every 1.4 s.
+  const write = perched('write');
+  write.run(2.8 + 0.05);
+  pointer('pointerdown', 50, 50, write.box);
+  const heads: number[] = [];
+  write.run(0.3, (r) => heads.push(r.head));
+  expect(Math.max(...heads)).toBeLessThan(19);
+  const again: number[] = [];
+  write.run(2.8, (r) => again.push(r.head));
+  expect(Math.max(...again)).toBeGreaterThan(20);
+});
+
+it('input during a preen or snap ends it', () => {
+  const b = perched('idle', { acts: false });
+  b.run(0.5);
+  act(() => b.handle().act('preen'));
+  b.run(0.2);
+  expect(b.read().head).toBeGreaterThan(30);
+  // A pointer level with the eye, in front: no tap, and the gaze asks for no head turn.
+  pointer('pointermove', 400, 34);
+  b.run(0.3);
+  expect(b.read().head).toBeLessThan(25);
+
+  b.run(3);
+  act(() => b.handle().act('snap'));
+  b.run(0.15);
+  const snapped = Math.abs(b.read().head);
+  expect(snapped).toBeGreaterThan(5);
+  pointer('pointermove', 400, 34);
+  b.run(0.35);
+  expect(Math.abs(b.read().head)).toBeLessThan(snapped / 2);
+});
