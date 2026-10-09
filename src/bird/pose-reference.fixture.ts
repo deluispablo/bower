@@ -330,8 +330,12 @@ export function unreferencedMembers(
   for (const [member, kind] of Object.entries(members)) {
     if (kind === 'script' || kind === 'control') {
       if (!exempt.has(member)) missing.push(`${member}: not referenced and not on the allowlist`);
-    } else if (kind === 'acts') missing.push(...ACT_NAMES.filter((n) => !(n in ACT_REFERENCE)).map((n) => `${member}('${n}')`));
-    else if (kind === 'poses') missing.push(...POSE_NAMES.filter((n) => !(n in POSE_REFERENCE)).map((n) => `${member}('${n}')`));
+    } else if (kind === 'acts' || kind === 'poses') {
+      // Only the one dispatcher of a table reaches its rows (act(name), setPose(name)); any other member needs its own.
+      const [dispatcher, names, rows] = kind === 'acts' ? (['act', ACT_NAMES, ACT_REFERENCE] as const) : (['setPose', POSE_NAMES, POSE_REFERENCE] as const);
+      if (member !== dispatcher) missing.push(`${member}: ${kind}, but not the ${kind === 'acts' ? 'act' : 'pose'} dispatcher, so no reference row`);
+      else missing.push(...names.filter((n) => !Object.hasOwn(rows, n)).map((n) => `${member}('${n}')`));
+    }
     else if (typeof kind === 'object' && !ACTION_REFERENCE[kind.action]) missing.push(`${member}: ${kind.action}`);
   }
   return missing;
