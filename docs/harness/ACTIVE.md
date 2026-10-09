@@ -400,3 +400,4 @@ P3-9 is closed.
 - c2-one-engine round 3 merged (red bd5fe99d, fix 70585d02; unconfirmed summary line; cannot-read fence stops for recovery; check green, e2e:fake 256). P4-35c check dispatched.
 - P4-35c BLOCK (c2-one-engine round 3): the attempt-route fence (runner/src/drive.ts:388 stillCurrent) is not wrapped in seen.read, so its no-answer still ends done/offline. Round 4 (escalated) dispatched.
 - c2-one-engine round 4 merged (red 54e6c5d6, fix 7fa1bcb7; every fence read through one cannot-read path; per-move counts; check green, e2e:fake 256). headless-offline-lost-write logged. P4-35d check dispatched.
+- c2-one-engine closed (b0d56509, P4-35d PASS). 421/426. c2-write-once (escalated) dispatched; last of stage 2.
