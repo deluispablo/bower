@@ -11,7 +11,7 @@
  * The fence of both apply engine adapters (`RunnerDrive` on Google Drive,
  * `FakeRunDrive` on the pretend one), so both refuse the same writes.
  */
-import { notAsSeen, notAsSeenError, notReadError } from '../contracts/still-as-seen';
+import { notAsSeenError, readForFence, refuseUnlessAsSeen } from '../contracts/still-as-seen';
 import type { DriveFile, FencedCall, FencedDrive } from './drive-api';
 import { isNoAnswer } from './transport';
 
@@ -72,14 +72,13 @@ export class SeenFiles {
       throw notAsSeenError('gone', NOT_AS_SEEN, target.part === 'destination' ? 'not-found' : 'conflict');
     }
     const seen = this.seen.get(target.id);
+    if (!seen) {
+      console.error(`Refused a write to ${target.part} ${target.id}: never-read`);
+      throw notAsSeenError('never-read', NOT_AS_SEEN);
+    }
     // A folder's own modifiedTime is no version of what is in it; a move or a Bin keeps it '' (`expectPlace`).
-    const withTime = target.part === 'target' && seen?.modifiedTime !== '';
-    const reason = seen
-      ? notAsSeen({ id: seen.id, name: seen.name, parents: seen.parents, ...(withTime ? { modifiedTime: seen.modifiedTime } : {}) }, now && { ...now.file, trashed: now.trashed })
-      : 'never-read';
-    if (reason === null) return;
-    console.error(`Refused a write to ${target.part} ${target.id}: ${reason}`);
-    throw notAsSeenError(reason, NOT_AS_SEEN);
+    const withTime = seen.modifiedTime !== '';
+    refuseUnlessAsSeen({ id: seen.id, name: seen.name, parents: seen.parents, ...(withTime ? { modifiedTime: seen.modifiedTime } : {}) }, now && { ...now.file, trashed: now.trashed }, NOT_AS_SEEN, 'conflict', `${target.part} ${target.id}`);
   }
 
   /**
@@ -87,12 +86,8 @@ export class SeenFiles {
    * read (`notReadError`), never as a refusal nor as a lost write's answer to read back; the attempt stops for recovery.
    * Any other error (a revoked token, a newer attempt) is thrown as it is.
    */
-  async read<T>(reading: Promise<T>): Promise<T> {
-    try {
-      return await reading;
-    } catch (e) {
-      throw isNoAnswer(e) ? notReadError(e) : e;
-    }
+  read<T>(reading: Promise<T>): Promise<T> {
+    return readForFence(reading, isNoAnswer);
   }
 
   /** The same writes, keeping what each answer says, and forgetting a file put in the Bin. */

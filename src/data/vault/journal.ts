@@ -10,8 +10,9 @@ import type { DriveApi, DriveFile } from '../drive/drive-api';
 import { ReadCache } from '../drive/read-cache';
 import type { ChangeKind } from '../types';
 import { BowerError } from '../types';
-import { Intended, makeOnce, makeText, reserveFor, updateByStamp, type Holder } from '../spine/write-once';
-import { afterNotFound, type FailureKind } from '../drive/transport';
+import { byId, holds, Intended, makeOnce, makeText, reserveFor, updateByStamp, type Holder } from '../spine/write-once';
+import { afterNotFound, isNoAnswer, type FailureKind } from '../drive/transport';
+import { checkStillAsSeen } from '../contracts/still-as-seen';
 import type { FailedChange } from '../sources';
 
 export type { JournalExtra, JournalRecord } from '../contracts/journal-record';
@@ -501,8 +502,11 @@ export class Journal {
     if (!this.filesOf.has(id)) await this.list();
     for (const file of this.filesOf.get(id) ?? []) {
       this.checkCurrent();
-      // Sent once with its stamp: a lost answer is found again by reading the file by its id.
-      await updateByStamp(this.drive, file, 'bin', (op) => this.drive.trash(file.id, op));
+      // Still as listed (the one fence, `checkStillAsSeen`): moved, renamed or binned elsewhere, nothing is sent; already
+      // in the Bin by this very Undo (its answer lost), it landed. Then sent once with its stamp: a lost answer is found
+      // again by reading the file by its id.
+      const landed = await checkStillAsSeen({ id: file.id, name: file.name, parents: file.parents }, () => byId(this.drive, file.id), 'This changed somewhere else. Look again and try once more.', { unanswered: isNoAnswer, landed: (now) => holds(file, 'bin', now) });
+      if (!landed) await updateByStamp(this.drive, file, 'bin', (op) => this.drive.trash(file.id, op));
       this.place.removed?.(file.id);
     }
     this.filesOf.delete(id);
