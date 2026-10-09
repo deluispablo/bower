@@ -424,3 +424,5 @@ P3-9 is closed.
 - c2-create-by-id round 3 merged (red da4624ed, fix 700ce9f9; 4xx releases the id with "Your change was made, but Bower couldn't make a note of it."; pile note keyed by pile id; check green). Open: a background flush only logs a refused line (lead asked). P4-37c check dispatched.
 - Background-refused journal line → side panel "what failed" once (lead); follow-up round after P4-37c.
 - P4-37c BLOCK (c2-create-by-id round 3): a 429/403 rate limit is classed permanent and the line dropped (journal.ts:46); a refused rule/request/answer says "Your change was made"; start/online flushes only log; the pile-note retry fence uses the version just read and overwrites an edit made between tries (drive-vault.ts:1092). Round 4 on bower-escalated with the background "what failed" ruling.
+- Retention round 2 blocked on numbers (C04 76→78 through the fence, 25-run variant +7); options (a)–(d) to the lead. Not merged.
+- Retention (a) ruled (main 5733eb8): pin C04 78 and 25-runs 85; mechanical golden round, then review, then merge.

@@ -19,3 +19,8 @@ A promised behaviour proved by calling a helper directly instead of through the 
 - "Finished" is known without reading: at done the run folder is stamped in appProperties, so the listing the runner already has is enough.
 - Bin only the oldest beyond 20, at most 3 per run (a backlog drains over time); no re-verification of kept chains.
 - Target: at most +3 calls past run 20, pinned by a C04 golden variant with 25 earlier runs.
+
+## Ruling, round 2 numbers (lead, DECISIONS main 5733eb8): option (a)
+- Up to 3 Bins per run only while there is a backlog; in steady state each run adds one folder and bins one (+2 on top of the stamp).
+- C04 = 78 is a recorded exception (it wires a P3 promise). No fence exception for record folders (that would be a second rule).
+- Goldens pinned: C04 = 78, and the 25-earlier-runs case = 85. Merge after review.
