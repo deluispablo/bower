@@ -24,8 +24,15 @@
 8. **Inner wrapper.** The engine owns an inner wrapper. The caller's `className` and `style` stay on the outer div. List any caller transform in the notes.
 9. **Turn and handle API.** `useBirdTurn(priority, { minor })` returns `{ turn, setHandle }`, and its callers in src/bird are updated. Presence exports `activeHandle()` for d-v2-24's `react()`.
 10. **The engine hook.** `useBirdEngine(parts, home, size, moves, look)` is extracted from `BowerLayer` (`Bower.tsx:85-153`). BowerLayer keeps its behaviour. PoseBower uses it with a fixed home, `{x: size/2, y: 0.92*size}`. Only the bird holding the turn mounts the engine.
-11. **Deferred to d-v2-07:** preen, sleep, startle, gaze and the blink bounds (TL-P4-21).
-12. **Second-way risk:** no second animation system.
+11. **All nine poses through the engine (TL-P4-22 addendum 8, main 7f07fe39).** The engine plays each pose under addendum 7's criteria:
+    - read, write, carry, proud, idle;
+    - wait: look plus tuft;
+    - sleep: eyes closed plus the breathe loop, and no blink;
+    - alarm: the startle;
+    - land: its landing loop.
+12. **Blink.** Use the engine's random blink (TL-P4-21 addendum 1). Its bounds belong to d-v2-07. Gaze stays off on the perched bird.
+13. **Deferred to d-v2-07:** preen, gaze, and the blink bounds.
+14. **Second-way risk:** no second animation system.
 
 ## What the person sees (TL-P4-22; signed off by the designer with addendum 7's answers)
 
@@ -40,17 +47,21 @@
 ## Red
 
 - `a minor bird never takes the turn from the page's Bower`: with the page Bower and the run chip mounted, the chip bird has the `still` class and the page bird has the turn.
-- `a minor bird steps out of sight under an overlay bird`: with an overlay Bower mounted, the minor bird is hidden, the same as a page bird.
-- `a perched Bower with the turn idles through the engine and stays on its perch`: after N fake frames (seeded), the transform is not empty and translates to (x−Z/2, y−0.92Z) within the hop and bob.
+- Guard (passes today, presence.ts:50-59; it must keep passing): `a minor bird steps out of sight under an overlay bird`.
+- `a perched Bower with the turn idles through the engine and stays on its perch`: after N fake frames from the injected scheduler (seeded), the transform is not empty and translates to (x−Z/2, y−0.92Z) within the hop and bob. **This red must fail today.**
 
 ## Verify (exact names and numbers)
 
-- The three reds.
+- The reds and the guard.
 - New unit tests:
   - presence: `minor entries are ignored`, `the handle is set for the active bird, null for a still bird, and cleared on unmount`;
   - Rig: `the carry group exists, is hidden and reaches onPart`;
-  - engine: `each pose loop matches its CSS reference`. For each of read, write, carry, proud and idle, the period is within ±10% of the CSS loop, the peaks within ±20% (or 2 px), and the rest frame within 1 px. No pose borrows another's act. Exact easing is not required.
-  - `no CSS animation runs on a bird part while the engine runs`: getAnimations is empty.
+  - engine: `each pose loop matches its CSS reference`, for each of the nine poses.
+    - The reference is a test-only constants fixture, `src/bird/pose-reference.ts`, copied from `poses.css` before the animations are deleted: for each pose, the period, then each part's peak angle or offset and its rest values.
+    - Checks: the period is within ±10%, each peak within ±20% (or 2 px), the rest frame within 1 px, and no pose borrows another's act. A peak is the largest excursion of a part's angle or offset from rest over one period.
+    - Exact easing is not required.
+- Name the test files: `src/bird/presence.test.ts`, `src/bird/Rig.test.tsx` and `src/bird/engine.test.ts`. All run on fake frames from the injected scheduler and a seeded random source.
+- e2e: `no CSS animation runs on a bird part while the engine runs` (getAnimations is empty), on phone and desktop. jsdom runs no CSS, so this cannot be a unit test.
 - e2e qa6 and qa27 keep passing, on phone and desktop, with axe.
 - `pnpm check` must be green.
 - At the design check, the designer records 12 s per pose at 375, old against new.

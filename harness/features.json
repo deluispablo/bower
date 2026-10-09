@@ -6148,8 +6148,8 @@
       "With the page Bower and the run chip mounted, the page Bower moves.",
       "A perched Bower with the turn idles through the engine and stays on its perch."
     ],
-    "verify": "pnpm vitest run src/bird -t \"a minor bird never takes the turn from the page|a minor bird steps out of sight under an overlay bird|a perched Bower with the turn idles through the engine and stays on its perch|minor entries are ignored|the carry group exists, is hidden and reaches onPart|each pose loop matches its CSS reference|no CSS animation runs on a bird part while the engine runs\"",
-    "note": "TL-P4-21 ruling 2 (Opus, escalated); impact findings 5-6. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-v2-perched-bower-packet.md. Contract per TL-P4-22 addenda 6-7."
+    "verify": "pnpm vitest run src/bird -t \"a minor bird never takes the turn from the page|a minor bird steps out of sight under an overlay bird|a perched Bower with the turn idles through the engine and stays on its perch|minor entries are ignored|the carry group exists, is hidden and reaches onPart|each pose loop matches its CSS reference\" && bash scripts/e2e-both.sh -g \"no CSS animation runs on a bird part while the engine runs\"",
+    "note": "TL-P4-21 ruling 2 (Opus, escalated); impact findings 5-6. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-v2-perched-bower-packet.md. Contract per TL-P4-22 addenda 6-7. Addendum 8: nine poses through the engine; random blink."
   },
   {
     "id": "v2-targets",
@@ -6162,8 +6162,8 @@
       "At 1440 the tab close box is at least 24x24 and axe target-size passes.",
       "At 375 every listed control is at least 44 px; a tap on a switch row toggles it."
     ],
-    "verify": "pnpm vitest run -t \"one segmented control serves settings and tell bower\" && bash scripts/e2e-both.sh e2e/v2-targets.spec.ts -g \"the desktop tab close button is at least 24 square|every listed phone control is at least 44 px|a tap on a switch row toggles it|desktop control sizes stay at least 24\"",
-    "note": "TL-P4-21 order 3; spec d-v2-05, d-v2-10. Starting model bower-implementer. Packet 2026-10-09-v2-targets-packet.md; e2e file may differ."
+    "verify": "pnpm vitest run src/ui/segmented.test.tsx -t \"one segmented control serves settings and tell bower\" && bash scripts/e2e-both.sh e2e/v2-targets.spec.ts -g \"the desktop tab close button is at least 24 square|every listed phone control is at least 44 px|a tap on a switch row toggles it|desktop control sizes stay at least 24\"",
+    "note": "TL-P4-21 order 3; spec d-v2-05, d-v2-10. Starting model bower-implementer. Packet 2026-10-09-v2-targets-packet.md; e2e file may differ. Red cbb0e7bf, fix a4aaa42c."
   },
   {
     "id": "v2-name-sheet",

@@ -116,3 +116,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `c1e57875` | v2-field | none: markup and styles only (fields, switch, task box); no stored format, route or data changes. |
 | `956c5419` | v2-dock | none: one bottom dock for messages and the run chip; only the Bin message words change ("is in your Drive's Bin."). No stored data, route or format changes. |
 | `a4aaa42c` | v2-targets | none: styles and markup only (tab close, phone target sizes, one segmented control, switch rows as labels); no stored data, route, format or string changes. |
+| `51978d36` | v2-name-sheet | none: the name sheet is styled by the field rule and FolderScreen's New note opens it; two new lines ("Links to this note keep working.", "Links to this file keep working."). No stored data, route or format changes. |
