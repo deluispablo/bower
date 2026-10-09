@@ -5842,5 +5842,19 @@
     ],
     "verify": "pnpm -C runner exec vitest run -t \"every validation refusal is retried once with its reason|the reply schema takes its state limits from note-edit|a write the two runner lists judged differently is judged once by RUNNER_WRITES|a Claude reply that targets a thing not admitted is refused and writes nothing\" && pnpm vitest run src/data/contracts -t \"the manifest takes the runner-writable files as a parameter\"",
     "note": "TL-P4-14 stage 3 row and addendum 20 (main debd33f6); defects state-line-limits-disagree, runner-paths-disagree. Mapping: runner/src/claude.ts REFUSALS :562-605, intentOf :760-892, AUTHORED :156; note-edit.ts :88-89, :288; run-manifest.ts :36, :191, :482, :488, parse at :526 (callers claude.ts:1098, engine.ts:133, records.ts:189/219, scripted.ts:1512/1534); admitted.ts :29, :127; layout.ts :21-34. Starting model: bower-escalated (contract)."
+  },
+  {
+    "id": "c3-subject",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "One Subject type (pile, thing, note state or folder, with id and content hash), one key function and one open-questions function shared by the reader and the planner; one question type replaces Question, ReportQuestion and CorpusQuestion. A refused Bin keeps its question open; an answer whose subject left is settled.",
+    "steps": [
+      "The engine refuses a saved copy's Bin: its question stays open.",
+      "A yes whose thing already left the inbox settles its answer line.",
+      "Old questions.json (p2 fixtures, ids like q1, no subject) still reads."
+    ],
+    "verify": "pnpm vitest run -t \"one key and one open-questions function serve the reader and the planner|old questions without a subject still read\" && pnpm -C runner exec vitest run -t \"a refused Bin keeps its question open|an answer whose subject left is settled|a binned duplicate.s open question closes|leaving the inbox closes its question\"",
+    "note": "TL-P4-14 stage 3 row; carry-over P4-17 (refused Bin closes the hash-keyed question; deciding line scripted.ts:1428-1432, questions write does not wait on the saved copy's bin op) and P4-15b (answer pending after its thing left; scripted.ts:253 matches by id prefix, not q.subject). Mapping: types.ts:122, run-manifest.ts:74, runner/src/corpus.ts:24, claude.ts:425-462; subjectOf x4 (answer-loop.ts:37, scripted.ts:541, drive-vault.ts:1347, claude.ts:510); STATE_Q x3; reader drive-vault.ts:1335-1349. Starting model: bower-escalated (the P4-17 fix orders a write behind a Bin)."
   }
 ]
