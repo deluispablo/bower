@@ -146,6 +146,8 @@ P3-9 is closed.
 
 - 2026-10-09 later: closed c3-test-tamper, c3-hooks (no Stop gate, addendum 3), c3-flaky-policy (batch switch E2E_BATCH=1: use it for the stage-end e2e suites). Open: c3-pair-ask round 3 part 2 (addendum 14) running; c3-state-mark round 3 (addenda 12-13, P4-47 BLOCK fold-in) after pair-ask merges; c3-permissions running; then c3-agent-defs, c3-stop-gate (serial: both edit implementer frontmatter). Load flakes logged: size-cap-test-timeout-under-load, per-thing-ask-timeout-under-load. The typescript-lsp tsserver holds worktrees open, so integrate.sh keeps them: remove by hand after checking the tree is clean.
 
+- 2026-10-09: the lead approved a coordinator restart after c3-state-mark closes and before the four suites. After the restart: re-run the live dirty-tree stop check first (agent-defs-not-live-mid-session), then the suites with E2E_BATCH=1, main, backup (the live push hook check), the SHA to the lead, and the smoke.
+
 ## P4 ([TL-P4-01](2026-10-07-tl-p4-01-p4-start.md), [P4_PLAN](../P4_PLAN.md))
 
 - Owner authorized P4 (main fb33b21). HANDOFF restored to the docs-test headings (0dc5fde).
