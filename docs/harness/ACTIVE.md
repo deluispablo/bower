@@ -411,3 +411,4 @@ P3-9 is closed.
 - c2-write-once closed (f77a1282, P4-36b PASS). 422/427. c2-create-by-id (escalated) dispatched with the unstamped list and the P4-36b minors.
 - c2-create-by-id merged (red 01afad9d, fix 9a07ce00; 17 named tests; prod -8; C04 76; check green on merged tree; e2e:fake 256). Lead asked: app creates cost one generateIds each; a person retry after a double failure makes a new file; fake Worker still makes its template without ids; journal line key stays. P4-37 review dispatched.
 - c2-create-by-id rulings (main 921d957): fix round after P4-37 (id per intended create kept with the pending action; fake Worker through the helper; batch reservation).
+- P4-37 PASS (c2-create-by-id); fix round dispatched with the lead rulings (main 921d957) and P4-37 minors (holds() checks trashed state, generateIds chunked by 1000, remaining unstamped runner/Worker writes).
