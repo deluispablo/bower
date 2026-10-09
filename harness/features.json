@@ -6148,8 +6148,8 @@
       "With the page Bower and the run chip mounted, the page Bower moves.",
       "A perched Bower with the turn idles through the engine and stays on its perch."
     ],
-    "verify": "pnpm vitest run src/bird -t \"a minor bird never takes the turn from the page|a minor bird steps out of sight under an overlay bird|a perched Bower with the turn idles through the engine and stays on its perch|minor entries are ignored|the carry group exists, is hidden and reaches onPart|each pose loop matches its CSS reference|no CSS animation runs on a bird part while the engine runs\"",
-    "note": "TL-P4-21 ruling 2 (Opus, escalated); impact findings 5-6. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-v2-perched-bower-packet.md. Contract per TL-P4-22 addenda 6-7."
+    "verify": "pnpm vitest run src/bird -t \"a minor bird never takes the turn from the page|a minor bird steps out of sight under an overlay bird|a perched Bower with the turn idles through the engine and stays on its perch|minor entries are ignored|the carry group exists, is hidden and reaches onPart|each pose loop matches its CSS reference\" && bash scripts/e2e-both.sh -g \"no CSS animation runs on a bird part while the engine runs\"",
+    "note": "TL-P4-21 ruling 2 (Opus, escalated); impact findings 5-6. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-v2-perched-bower-packet.md. Contract per TL-P4-22 addenda 6-7. Addendum 8: nine poses through the engine; random blink."
   },
   {
     "id": "v2-targets",
