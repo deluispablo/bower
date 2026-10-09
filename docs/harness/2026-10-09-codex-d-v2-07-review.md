@@ -54,3 +54,13 @@ findings: 2
 2. **Important — `src/bird/pose-reference.fixture.ts:333`: a new public action can bypass reference coverage by being tagged `acts`.** Add `stretch()` and register `stretch: 'acts'` in `ENGINE_MEMBERS`, without a reference row. `unreferencedMembers` returns `[]`: it checks existing `ACT_NAMES`, ignoring the new member’s name, and the allowlist growth check also passes. **Violated home:** the reference meta-test’s requirement that every exposed act or action have a row.
 
 findings: 2
+
+## Round 5 pass (motion profile, TL-P4-25 addendum 7; scope 66bf6930..f7e2c413 -- src/bird)
+
+Read-only, medium effort, after P4-58g PASS. Tokens: input 417809 (cached 361344), output 3203.
+
+1. **Important — `src/bird/engine.ts:98–100`: both caps grow with frame duration.** After 30 idle frames, call `act('snap')` with random returning 0.5, then deliver a 33.33 ms animation frame. The head moves from 0° to 7° in that frame, exceeding 6°/frame. Separately, `look({x:200,y:-100}, 'focus')` followed by 30 fps frames produces head speeds −5.80, −6.00, −0.20°/frame: the first speed change is 5.80°, exceeding 1.5°. Reproduced through the engine’s frame callback. This breaks contract item 3 and addendum 7. The 0.02 rounding margin is conservative at 60 fps, but does not protect these bounds when `dt` increases.
+
+2. **Important — `src/bird/engine.test.ts:374`: the property exempts gaze from its acceleration assertion.** `snap = rising || gazing` means ordinary focus, pointer and touch gaze frames never reach the ≤1.5°/frame speed-change check at line 378. Concrete scenario: focus at `(200,−100)` after 30 idle frames; a faulty gaze implementation could move 0→−5.98° on the next frame and pass this property’s checks. Its speed is below 6°, its angle is inside the permitted range, and its acceleration assertion is skipped. Contract item 3 and addendum 7 explicitly classify gaze as acceleration-capped. The property also uses only fixed 60 fps callbacks, leaving finding 1 undetected.
+
+findings: 2
