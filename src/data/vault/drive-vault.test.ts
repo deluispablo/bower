@@ -3050,7 +3050,7 @@ describe('c2-create-by-id: an app write whose answer was lost is found again by 
   });
 
   // c2-create-by-id's verify names this test: since TL-P4-24 addendum 10 the retry is refused first, then made again.
-  it('a pile note binned elsewhere after a double failure is made again with the new words', async () => {
+  it('a pile note binned elsewhere after a double failure is refused first, then made with the new words', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const { pile, folder, note } = await lostPileNote('Job offer papers');
     // Alex bins the landed note in Drive before this page lists the folder again: it stays in the Bin, untouched.
@@ -3909,6 +3909,23 @@ describe('c4-create-landed: an app create found by its reserved id counts only a
     expect(drive.pathOf(thing, root)?.startsWith('Inbox/')).toBe(true);
     expect((await drive.get(thing)).parents).not.toEqual([made]);
   });
+  // Fix round 1 (TL-P4-24 addendum 16): a retry resends the intent kept with the reserved id, never a name picked anew.
+  it('a create whose answer and recovery read were lost is made once after a refresh and a retry', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await vault.tree();
+    const cooking = await idOf('Resources/Cooking');
+    const untitled = async (): Promise<string[]> => (await drive.listAll(cooking)).filter((f) => !f.trashed && f.name.startsWith('Untitled')).map((f) => f.name);
+    expect(await untitled()).toEqual([]);
+    const lost = loseCreate('createText', (a) => a[1] === 'Untitled.md');
+    await expect(vault.create('Resources/Cooking', 'note')).rejects.toMatchObject({ code: 'offline' });
+    expect(lost.lost()).toBe(1);
+    // The folder is listed again: the landed note is in it, under the name it was sent with.
+    await vault.refresh();
+    await expect(vault.create('Resources/Cooking', 'note')).resolves.toBe('Resources/Cooking/Untitled.md');
+    // One file, the one the first press made: not a second copy under the next free name.
+    expect({ names: await untitled(), path: drive.pathOf(lost.id() ?? '', root) }).toEqual({ names: ['Untitled.md'], path: 'Resources/Cooking/Untitled.md' });
+  });
+
   it('a change line whose create landed and then moved is refused, never made again, and stays where it was put', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await vault.tree();
@@ -3931,7 +3948,7 @@ describe('c4-create-landed: an app create found by its reserved id counts only a
    * The fast-check trial gains the creates (TL-P4-24 addendum 10): every app create kept on its reserved id (a note, a
    * folder, a pile folder, a pile note tried again with the same words or new ones, a link), its answer lost, with a
    * move, a rename or a Bin in Drive at each moment: before the write (no file yet, so nothing to change), between the
-   * lost answer and the read that looks for it, and between the press and its retry. On every press: success only when
+   * lost answer and the read that looks for it, between the press and its retry, and after the folder is listed again before the retry (fix round 1). On every press: success only when
    * the file is at the name and place it was sent with, out of the Bin, with its bytes, and the path reported is where
    * it is; a file changed elsewhere is never written to, nor anything moved into it; a refused press makes nothing.
    */
@@ -3940,7 +3957,7 @@ describe('c4-create-landed: an app create found by its reserved id counts only a
     const kinds = ['note', 'folder', 'pile folder', 'pile note', 'pile note, new words', 'link'] as const;
     type Kind = (typeof kinds)[number];
     type Change = 'none' | 'move' | 'rename' | 'bin';
-    type When = 'before the write' | 'before the recovery read' | 'before the retry';
+    type When = 'before the write' | 'before the recovery read' | 'before the retry' | 'after a refresh, before the retry';
     interface Press {
       /** Which create call is this press's own. */
       mine: (k: Made, a: unknown[]) => boolean;
@@ -4013,7 +4030,7 @@ describe('c4-create-landed: an app create found by its reserved id counts only a
       fc.asyncProperty(
         fc.constantFrom(...kinds),
         fc.constantFrom<Change>('none', 'move', 'rename', 'bin'),
-        fc.constantFrom<When>('before the write', 'before the recovery read', 'before the retry'),
+        fc.constantFrom<When>('before the write', 'before the recovery read', 'before the retry', 'after a refresh, before the retry'),
         async (kind, change, when) => {
           met.add([kind, change, when].join(' / '));
           localStorage.clear();
@@ -4081,13 +4098,18 @@ describe('c4-create-landed: an app create found by its reserved id counts only a
           const first = await tryOnce(0);
           if (first !== 'failed') return;
           if (when === 'before the retry') await elsewhere(raw, change, target.id());
+          // The folder listed again first (fix round 1): the retry still resends the name it was first sent with.
+          if (when === 'after a refresh, before the retry') {
+            await vault.refresh();
+            await elsewhere(raw, change, target.id());
+          }
           const retried = await tryOnce(1);
           if (change === 'none' || when === 'before the write') expect(retried).toBe('done');
         },
       ),
       { seed: 20261009, numRuns: 800 },
     );
-    expect(met.size).toBe(72);
+    expect(met.size).toBe(96);
   }, 60_000);
 });
 
