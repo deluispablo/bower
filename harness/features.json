@@ -6362,7 +6362,7 @@
     "id": "v2-boot-states",
     "task": "p4-consolidation",
     "category": "ui",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "d-v2-12: the boot says Still opening after 3 s (read pose), drops the 8 s step, keeps offline, and a failed boot says Bower could not open with a primary Try again of at least 160 px.",
     "steps": [
