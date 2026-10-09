@@ -109,3 +109,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `d305b537` | c3-state-mark | Stricter on write (TL-P4-19 addendum 20): a Timeline news line ("New: ...") with no source is refused by note-edit and the reply check (`lineUncited`). Fake seed only: write-it adds the car renewal pile. Stored manifests with such a line no longer pass the guard (see notes, left open). |
 | `d147b321` | c3-state-mark | none: test fixture only (`runner/test/ask-answer-loop.test.ts`) |
 | `1d893137` | c3-state-mark | none: fake seed signature only (an optional keys map) |
+| `a802a1a2` | c3-state-mark | none: red tests only (`src/data/contracts/note-edit.test.ts`, `runner/test/ask-answer-loop.test.ts`) |
+| `54291695` | c3-state-mark | Lenient on read (TL-P4-19 addendum 22): a stored manifest with a sourceless news line parses again; writes and plans still refuse one. A non-clash refusal of a granted write (addendum 21) adds one answered row (`refused`, existing shape) and keeps the answer; nothing stored changes shape. |
