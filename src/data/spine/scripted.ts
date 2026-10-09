@@ -8,7 +8,7 @@
  * ready piles in the inbox, their things filed where the demo would (the
  * fixture's plan, else a guess from the pile's words), the rules you typed,
  * your requests, answered questions and the journal. The run service
- * (`fake-run-service.ts`) or the runner (`runner/src/spine/run.ts`) applies it, recoverably. Given the admitted set
+ * (`fake-run-service.ts`) or the runner applies it, recoverably, through the one engine (`engine.ts`). Given the admitted set
  * a run took (`taken`), it plans only those piles, those things and those journal lines.
  */
 import type { DriveFile } from '../drive/drive-api';
@@ -29,7 +29,9 @@ import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote, type ParsedNote } from '../vault/note-format';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
-import { NOT_FILED, canonical, grounded, groundedKeys, seen } from '../fake/fake-run-records';
+import { grounded, groundedKeys, seen } from './grounded';
+import { canonical } from './records';
+import { NOT_FILED } from './report';
 import { SET_ASIDE, capturePiles, listedPiles, pileShape } from './plan';
 import { duplicatesOf, type Duplicate } from './duplicates';
 import type { AdmissionManifest } from './admission';

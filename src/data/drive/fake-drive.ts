@@ -493,15 +493,15 @@ export class FakeDrive implements DriveApi, ResumableDrive {
    * Writes whose `check` runs right before the change, with nothing awaited in
    * between, and refuses it by throwing: the service's authority and
    * still-as-seen checks and the change they permit are one step. `check` may
-   * look at what is stored at that instant. The fault hook sees each call first.
+   * look at what is stored at that instant, and is told which write it guards. The fault hook sees each call first.
    */
-  fenced(check: (peek: Peek) => void): FencedDrive {
+  fenced(check: (peek: Peek, call: FencedCall) => void): FencedDrive {
     const run = async <T>(call: FencedCall, apply: () => T): Promise<T> => {
       await this.gate();
       const action = this.fault?.before?.(call) ?? 'pass';
       // A run's write with no answer, worded as the runner's transport words it: never offline (`transport.ts`).
       if (action === 'refuse') throw runNoAnswer();
-      check((id) => this.peek(id));
+      check((id) => this.peek(id), call);
       const out = apply();
       this.fault?.applied?.(call);
       if (action === 'lose-reply') throw runNoAnswer();
@@ -517,17 +517,10 @@ export class FakeDrive implements DriveApi, ResumableDrive {
     };
   }
 
-  /**
-   * What is stored for an id right now, with its live children: for a fenced
-   * check. Children are counted by their first parent only, as everywhere in
-   * this fake (its files have one parent); a real multi-parent Drive file would
-   * need every parent checked.
-   */
+  /** What is stored for an id right now: for a fenced check. */
   private peek(id: string): PeekedFile | null {
     const f = this.files.get(id);
-    if (!f) return null;
-    const children = [...this.files.values()].filter((c) => !c.trashed && c.meta.parents[0] === id).map((c) => c.meta.id);
-    return { file: this.copy(f.meta), trashed: f.trashed, children };
+    return f ? { file: this.copy(f.meta), trashed: f.trashed } : null;
   }
 
   /** `update` after its gate, with nothing awaited: shared by `update` and fenced writes. */
@@ -587,6 +580,15 @@ export class FakeDrive implements DriveApi, ResumableDrive {
     return { snapshot: await twin.snapshot(), alongside: kept };
   }
 
+  /**
+   * The files that carry `key` = `value` in their appProperties, wherever they are and in the Bin or not: Drive's
+   * `appProperties has { key=... and value=... }` query, as the runner sends it (`RunnerDrive.stamped`).
+   */
+  async stamped(key: string, value: string): Promise<Array<{ file: DriveFile; trashed: boolean }>> {
+    await this.gate();
+    return [...this.files.values()].filter((f) => f.meta.appProperties?.[key] === value).map((f) => ({ file: this.copy(f.meta), trashed: f.trashed }));
+  }
+
   /** What is stored for an id, in the Bin or not: its metadata, its own Bin flag and its bytes' size and SHA-256 (fake-stored). */
   async evidence(id: string): Promise<StoredEvidence | null> {
     await this.gate();
@@ -601,8 +603,6 @@ export class FakeDrive implements DriveApi, ResumableDrive {
 export interface PeekedFile {
   file: DriveFile;
   trashed: boolean;
-  /** Its live children's ids. */
-  children: string[];
 }
 export type Peek = (id: string) => PeekedFile | null;
 

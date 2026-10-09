@@ -1,17 +1,9 @@
 /**
- * A B run's records in the Bower folder, as contract B lays them out:
- * `.bower/runs/<runId>/manifest-<hash>.json`, `checkpoint-<revision>-<hash>.json`,
- * `report-<hash>.json`, and consumed dispositions in `.bower/piles/`. Every
- * folder is found by its real name and parents, duplicates included; a record
- * is written once, read back and compared byte for byte, and a reply lost
- * after it landed is reconciled by its exact body, never written again.
- * Also the pure parts: report grounding and effect evidence. The report, its
- * record and the consumed dispositions are shared with the runner
- * (`spine/report.ts`, `spine/records.ts`). The pure record guards live in `contracts/`.
+ * A plan's report grounding (contract B): every row the report will say is backed by the operations that make it
+ * true (`grounded`, `groundedKeys`). The run records live in `records.ts`, the report in `report.ts`, and the pure
+ * record guards in `contracts/`.
  */
 import type { DriveFile } from '../drive/drive-api';
-import type { StoredEvidence } from '../drive/fake-drive';
-import type { EffectEvidence } from '../contracts/run-checkpoint';
 import type { Effect, OperationV2, ReportContribution, SeenFile, Target } from '../contracts/run-manifest';
 import { KEEP_CHANGED, STATE_UPDATED, keptLine, savedLinkKey } from '../contracts/note-edit';
 import { displayName, join, nameOf, parentOf, thingName } from '../tree';
@@ -19,10 +11,7 @@ import { PARA_ROOTS, type Question } from '../types';
 import { sha256 } from '../vault/hashes';
 import { SYSTEM, isRunnerFile } from '../vault/layout';
 import { parseRules } from '../vault/rules-format';
-import type { RunManifest } from '../spine/records';
-
-// The record names, writing and chain reading are shared with the runner (TL-P3-21 point 2).
-export { RUNS_NAME, canonical, checkpointName, dispositionName, manifestName, reportName, type RunManifest, type Where } from '../spine/records';
+import type { RunManifest } from './records';
 
 /** The runner files a run may make again when they are missing (TL-P2-33 §2a). */
 const RUNNER_MADE: readonly string[] = [SYSTEM.requests, SYSTEM.hashes, SYSTEM.questions];
@@ -37,38 +26,6 @@ export async function textHash(text: string): Promise<string> {
 /** A Drive file as contract B observes it. */
 export function seen(f: DriveFile): SeenFile {
   return { fileId: f.id, name: f.name, parents: [...f.parents], folder: f.folder, modifiedTime: f.modifiedTime };
-}
-
-/** Stored evidence in the record shape: fake-stored, the bytes observed at this modified time. */
-export function toEvidence(ev: StoredEvidence, encoding: 'utf8' | 'blob' = 'blob'): EffectEvidence {
-  return {
-    file: seen(ev.file),
-    trashed: ev.trashed,
-    content: ev.content ? { encoding, size: ev.content.size, sha256: ev.content.sha256, provenance: 'fake-stored', observedModifiedTime: ev.file.modifiedTime } : null,
-    provenance: 'fake-stored',
-  };
-}
-
-/** Whether stored evidence shows exactly this effect applied under `parentId` (null when the effect has no parent). */
-export function shows(effect: Effect, ev: StoredEvidence, parentId: string | null): boolean {
-  const f = ev.file;
-  switch (effect.kind) {
-    case 'move':
-      return !ev.trashed && f.parents.length === 1 && f.parents[0] === parentId && f.name === effect.name
-        && Object.entries(effect.properties).every(([key, value]) => (value === null ? f.appProperties?.[key] === undefined : f.appProperties?.[key] === value));
-    case 'create-folder':
-      return !ev.trashed && f.folder && f.parents.length === 1 && f.parents[0] === parentId && f.name === effect.name && f.appProperties?.bowerItem === effect.createKey;
-    case 'bin':
-      return ev.trashed;
-    case 'write-runner-json':
-      return !ev.trashed && ev.content?.size === effect.content.size && ev.content.sha256 === effect.content.sha256;
-    case 'create-text':
-      // A made file, a generated note or a runner file (TL-P2-17, TL-P2-33 §2a): its create key, place, name and exact
-      // bytes. The "new" mark is not evidence: it may be cleared (the note opened) between a lost reply and recovery.
-      return !ev.trashed && !f.folder && f.parents.length === 1 && f.parents[0] === parentId
-        && f.name === effect.name && ev.content?.size === effect.content.size && ev.content.sha256 === effect.content.sha256
-        && f.appProperties?.bowerItem === effect.createKey;
-  }
 }
 
 /**
@@ -546,22 +503,6 @@ function placePath(manifest: RunManifest, t: Target): string | null {
   return parent === null ? null : join(parent, op.effect.name);
 }
 
-/**
- * The note a filing move files beside without creating it (TL-P2-20 R4-2): the captured place its applied row
- * names when no create-text in that row writes it. The move's dispatch checks it again, in the same step.
- */
-export function reusedNoteOf(manifest: RunManifest, op: OperationV2): { file: SeenFile; path: string } | null {
-  if (op.effect.kind !== 'move') return null;
-  const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
-  for (const c of manifest.reportPlan) {
-    if (c.when !== 'applied' || !c.requires.includes(op.operationId)) continue;
-    const note = c.value.filed[0]?.note;
-    if (note === undefined || c.requires.some((id) => ops.get(id)?.effect.kind === 'create-text')) continue;
-    if (c.requires.some((id) => ops.get(id)?.effect.kind === 'edit-text')) continue;
-    return manifest.capture.places.find((p) => p.path === note) ?? null;
-  }
-  return null;
-}
 
 /**
  * The keys grounding cannot check without hashing (TL-P2-20 Ratification 6): the create key of every saved-link
@@ -631,5 +572,3 @@ function sameQuestion(a: Question, b: Question): boolean {
 }
 
 // The report, its record and the consumed dispositions are shared with the runner (TL-P3-22).
-export { RunRecords } from '../spine/records';
-export { MOVED_AWAY, NOT_FILED, SOURCE_NOT_AS_SEEN, dispositionsFor, filingMove, materialize } from '../spine/report';

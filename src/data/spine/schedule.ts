@@ -13,7 +13,7 @@
  * and under the six connections a browser opens per host, the usual size of a small pool; the writes themselves still
  * go through the adapter's queue one at a time, which also keeps sustained writes near the rate Google advises.
  */
-import type { OperationV2 } from '../../../src/data/contracts/run-manifest';
+import type { OperationV2 } from '../contracts/run-manifest';
 
 export const POOL = 4;
 

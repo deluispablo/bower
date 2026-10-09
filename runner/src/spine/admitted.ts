@@ -15,6 +15,7 @@ import type { AdmissionManifest, AdmittedFile, AdmittedPile } from '../../../src
 import { READ_AHEAD, limiter } from '../../../src/data/spine/read';
 import type { Admitted, Deferred } from '../../../src/data/spine/provider';
 import type { RunManifest } from '../../../src/data/spine/records';
+import type { RunnerToken } from '../token';
 import { SYSTEM } from '../../../src/data/vault/layout';
 
 export type { Admitted, Deferred };
@@ -142,4 +143,27 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
     }
   }
   return null;
+}
+
+/**
+ * The plan of a new run from what it was admitted to take (TL-P3-21 point 1): the token route's manifest, each
+ * item read again (`takeAdmitted`), then planned by `plan`. Asked only for a run whose folder holds no manifest.
+ */
+export function admittedPlan(token: Pick<RunnerToken, 'grant'>, drive: AdmittedReader, plan: (taken: Admitted) => Promise<RunManifest>): (alongside?: () => Promise<void>) => Promise<RunManifest> {
+  // `alongside` (the runner's repair of an old Rules.md) is independent of the items' re-read, so they go together;
+  // the plan, which reads what it repaired, starts after both.
+  return async (alongside) => {
+    const [taken] = await Promise.all([
+      (async () => {
+        const grant = await token.grant();
+        if (!grant.manifest) {
+          console.error('The token route gave no admission manifest for a new run');
+          throw new BowerError('unknown', "Bower's server didn't say what to tidy. Try again.");
+        }
+        return takeAdmitted(grant.manifest, drive);
+      })(),
+      alongside?.(),
+    ]);
+    return plan(taken);
+  };
 }

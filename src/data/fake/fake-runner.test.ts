@@ -5,7 +5,7 @@ import { DriveVault } from '../vault/drive-vault';
 import { thingsIn } from '../piles';
 import { seedFakeDrive } from './seed';
 import { OWN_FILES, planRun } from './fake-runner';
-import { grounded } from './fake-run-records';
+import { grounded } from '../spine/grounded';
 import { B_FAILURE, type FakeRunServiceOptions } from './fake-run-service';
 import { tidyUp, type TidyUpResult } from '@/testing/tidy-up';
 import { SET_ASIDE_TEXT } from '../pile-readiness';

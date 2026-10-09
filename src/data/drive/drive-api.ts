@@ -207,3 +207,36 @@ export interface StoredEvidence {
   trashed: boolean;
   content: { size: number; sha256: string } | null;
 }
+
+/**
+ * The apply engine's port (`spine/engine.ts`, ports and adapters): what one run's operations read of a Drive besides
+ * its fenced writes. `RunnerDrive` adapts Google Drive for the runner; `FakeRunDrive` adapts the pretend Drive for the
+ * fake run service. The answer methods are the runner's (it keeps what each write's answer said); an adapter without
+ * them leaves the engine to read the effect from Drive.
+ */
+export interface RunDrive {
+  /** Where the evidence it gives comes from, as a checkpoint records it. */
+  readonly provenance: 'fake-stored' | 'adapter-read';
+  /** A file as it is now for a check, read from Drive; null when it is gone or in the Bin. */
+  recheck(id: string): Promise<DriveFile | null>;
+  /** The folder a move goes into, for its check (it may be one this attempt made or read); null when gone or in the Bin. */
+  folder(id: string): Promise<DriveFile | null>;
+  /** What Drive stores for a file now, in the Bin or not; null when it is gone. */
+  evidence(id: string): Promise<StoredEvidence | null>;
+  readBytes(id: string): Promise<Uint8Array>;
+  /** A folder's live children. */
+  list(parentId: string): Promise<DriveFile[]>;
+  /** The files that carry `key` = `value` in their appProperties, anywhere, in the Bin or not. */
+  stamped(key: string, value: string): Promise<Array<{ file: DriveFile; trashed: boolean }>>;
+  /**
+   * What the plan saw of a file an effect changes, as the fence must find it right before the send: its name and place
+   * and, with `withTime`, its modifiedTime too (a content write, which carries it).
+   */
+  expectSeen(seen: { fileId: string; name: string; parents: string[]; folder: boolean; modifiedTime: string }, withTime?: boolean): void;
+  /** What the answer to this run's own write to `id` shows as stored evidence; null when it cannot. */
+  fromAnswer?(id: string): StoredEvidence | null;
+  /** Whether the answer to this run's own write to `id` confirms exactly these bytes. */
+  confirmsBytes?(id: string, bytes: Uint8Array): Promise<boolean>;
+  /** The file this run's own write answered, as it was then. */
+  answeredFile?(id: string): DriveFile | null;
+}

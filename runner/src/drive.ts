@@ -36,7 +36,7 @@
  * `lose-reply`: the write lands, then its answer is lost).
  */
 import { BowerError } from '../../src/data/types';
-import type { DriveFile, DrivePatch, FaultAction, FaultHook, FencedCall, FencedDrive, StoredEvidence } from '../../src/data/drive/drive-api';
+import type { DriveFile, DrivePatch, FaultAction, FaultHook, FencedCall, FencedDrive, RunDrive, StoredEvidence } from '../../src/data/drive/drive-api';
 import type { Pacing } from '../../src/data/drive/transport';
 import { DriveHttp, FIELDS, quote, toFile, type WireFile } from '../../src/data/drive/drive-http';
 import type { SpineRead } from '../../src/data/spine/plan';
@@ -44,7 +44,7 @@ import type { AdmissionScope } from '../../src/data/spine/admission';
 import { admissionRead } from '../../src/data/spine/read';
 import { md5Hex, sha256, sha256Hex } from '../../src/data/contracts/hashes';
 import { ReadCache } from '../../src/data/drive/read-cache';
-import { SeenFiles, targetOf, type StoredNow } from './still-as-seen';
+import { SeenFiles, targetOf, type StoredNow } from '../../src/data/drive/seen-files';
 import { staleAttempt, type RunnerToken } from './token';
 
 export interface RunnerDriveOptions {
@@ -63,17 +63,12 @@ const CHECKSUMS = 'md5Checksum,sha256Checksum';
 const RECORD = /^(?:(?:checkpoint-\d+|manifest|report|disposition)-[0-9a-f]{64}\.json|dispositions\.json)$/;
 /** The report files the barrier brings up to date: confirmed by the md5 of their write's answer, never by kept text. */
 const REPORT_FILE = /^(?:questions|suggestions|requests|hashes)\.json$/;
-/**
- * How long a folder this run made stands for the read the fence would make before a create into it (`heldNow`): the
- * records go into the run's own folders, and each effect that makes something in a folder it just made. Nothing else is
- * kept: the read that checks a move, an edit or a Bin is taken right before its send (`fenced`), never from before.
- */
-const HOLD_MS = 3000;
 
 /** What one of this run's own writes did to a folder listing: the file as Drive answered, or the file put in the Bin. */
 export type Change = { file: DriveFile } | { gone: string };
 
-export class RunnerDrive {
+export class RunnerDrive implements RunDrive {
+  readonly provenance = 'adapter-read';
   /** Sees, and may refuse or lose the reply of, every fenced write. */
   fault: FaultHook | null = null;
   private readonly http: DriveHttp;
@@ -93,8 +88,6 @@ export class RunnerDrive {
   private readonly answered = new Map<string, string>();
   /** Whether a fenced write's request is out now. */
   private writing = false;
-  /** Folders this run made, by id, for `HOLD_MS` (`heldNow`). */
-  private readonly held = new Map<string, { file: DriveFile; trashed: boolean; at: number; own: boolean }>();
   /** The file each fenced write answered, by id, for `fromAnswer` and `answeredFile`: the effect read from its answer. */
   private readonly answers = new Map<string, { file: DriveFile; trashed: boolean }>();
   /** The target of the fenced write in flight, as its fence saw it: a content write compares it instead of reading again. */
@@ -105,6 +98,8 @@ export class RunnerDrive {
   private readonly ended: Array<{ end: number; change: Change | null }> = [];
   /** What the plan read of each file, by id and the modifiedTime its listing gave (the one read cache, `read-cache.ts`). */
   private readonly reads = new ReadCache();
+  /** The record folders this run made (`ownFolder`). */
+  private readonly records = new Set<string>();
 
   constructor(opts: RunnerDriveOptions) {
     this.token = opts.token;
@@ -169,27 +164,38 @@ export class RunnerDrive {
 
   // --- Evidence reads: each file read is what later writes are checked against. ---
 
-  private hold(file: DriveFile, trashed: boolean, own: boolean): void {
-    this.held.set(file.id, { file, trashed, at: Date.now(), own });
-  }
-
-  /** A read kept for this file, or a folder this run made when `parent` (a create's target is its folder). */
-  private heldNow(id: string, reads: boolean): StoredNow | null {
-    const h = this.held.get(id);
-    return h && (h.own || reads) && Date.now() - h.at < HOLD_MS ? { file: h.file, trashed: h.trashed } : null;
+  /** A folder as this runner last made or read it, kept in the one read cache by id and modifiedTime (`read-cache.ts`). */
+  private kept(id: string): Promise<DriveFile> | undefined {
+    return this.reads.keptFile<DriveFile>({ id, modifiedTime: this.seen.version(id) });
   }
 
   /**
-   * A file as it is now for an effect's check: read now, or for the folder an effect goes into (`parent`) the one this
-   * run made or read for another effect within the last `HOLD_MS`. Null when it is gone or in the Bin. The fence then does not read it a second time (`fenced`).
+   * One of this run's own record folders (`.bower/runs`, the run's folder), as its create answered: it stands for the
+   * read the fence would make before a record goes into it, since only Bower writes there. Every other folder a create
+   * goes into, one this run made for the person's things too, is read from Drive right before the write.
    */
-  async recheck(id: string, parent = false): Promise<DriveFile | null> {
-    const h = parent ? this.heldNow(id, true) : null;
-    if (h) return h.trashed ? null : this.seen.note(h.file);
+  private async ownFolder(id: string): Promise<StoredNow | null> {
+    const kept = this.records.has(id) ? this.kept(id) : undefined;
+    return kept ? { file: await kept, trashed: false } : null;
+  }
+
+  /**
+   * The folder a move goes into, for its check: as this runner made or last read it while that is still the latest
+   * version it saw (no clock: a read that shows it changed replaces it), otherwise read from Drive. Null when it is gone
+   * or in the Bin. The move's own fence reads the thing moved.
+   */
+  async folder(id: string): Promise<DriveFile | null> {
+    const kept = this.kept(id);
+    if (kept) return kept;
+    const file = await this.recheck(id);
+    if (file?.folder) this.reads.keep(file);
+    return file;
+  }
+
+  /** A file as it is now for an effect's check, read from Drive; null when it is gone or in the Bin. */
+  async recheck(id: string): Promise<DriveFile | null> {
     try {
-      const file = await this.get(id);
-      if (parent) this.hold(file, false, false);
-      return file;
+      return await this.get(id);
     } catch (e) {
       if (e instanceof BowerError && e.code === 'not-found') return null;
       throw e;
@@ -386,14 +392,13 @@ export class RunnerDrive {
         this.confirmed.delete(call.id);
         this.answered.delete(call.id);
       }
-      // Read now, right before the send, never from a kept read; only a folder this run made, which a create goes
-      // into, is held (see `HOLD_MS`).
-      const held = target.part === 'parent' ? this.heldNow(target.id, false) : null;
-      const [, now] = await Promise.all([this.stillCurrent(), held ?? this.peek(target.id)]);
+      // Read now, right before the send, never from an earlier read; only a record going into one of this run's own
+      // record folders takes that folder as its create answered (`ownFolder`).
+      const own = target.part === 'parent' ? await this.ownFolder(target.id) : null;
+      const [, now] = await Promise.all([this.stillCurrent(), own ?? this.peek(target.id)]);
       this.seen.assert(target, now);
       this.peeked = now?.file ?? null;
       if ('id' in call) {
-        this.held.delete(call.id);
         this.answers.delete(call.id);
         this.sums.delete(call.id);
       }
@@ -411,7 +416,11 @@ export class RunnerDrive {
           // Noted here too, before the next queued write asks: the wrap notes it only after this promise has resolved.
           const file = this.seen.note(answer as DriveFile);
           this.answers.set(file.id, { file, trashed: false });
-          if (file.folder) this.hold(file, false, true);
+          // A folder this run made, kept by the version its create answered; with no operation's stamp, a record folder.
+          if (call.op === 'create-folder') {
+            this.reads.keep(file);
+            if (call.appProperties?.bowerOp === undefined) this.records.add(file.id);
+          }
         }
         return answer;
       } finally {

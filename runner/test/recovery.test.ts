@@ -14,10 +14,9 @@ import { fakeRead } from '../../src/data/spine/read';
 import { RunRecords } from '../../src/data/spine/records';
 import { MOVED_AWAY } from '../../src/data/spine/report';
 import { SYSTEM } from '../../src/data/vault/layout';
-import { STAMP, driveEffects, stampOf } from '../src/effects';
 import { runTidy, type TidyEnd } from '../src/main';
 import { providerFor } from '../src/provider';
-import type { Effects } from '../src/spine/run';
+import { STAMP, driveEffects, stampOf, type Effects } from '../../src/data/spine/engine';
 import { RunnerToken, isStaleAttempt } from '../src/token';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 

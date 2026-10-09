@@ -9,7 +9,7 @@ import { RunRecords, canonical, checkpointName, firstCheckpoint, manifestName, n
 import { RunnerDrive } from '../src/drive';
 import { runnerReads } from '../src/spine/records';
 import { keepFinished } from '../src/spine/retention';
-import { runOperations, type Effects, type ReadBack, type RunEnd } from '../src/spine/run';
+import { runOperations, type Effects, type ReadBack, type RunEnd } from '../../src/data/spine/engine';
 import { RunnerToken } from '../src/token';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 
