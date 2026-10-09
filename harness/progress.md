@@ -272,3 +272,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: v2-boot-states passes — The boot says still opening at 3 s and could not open on failure (d-v2-12; designer verified)
 - 2026-10-09: c3-timer-gate passes — harness: c3-timer-gate re-proved after c4-lockf renamed its lock test
 - 2026-10-09: c4-lockf passes — harness: c4-lockf passes (P4-62 PASS)
+- 2026-10-09: c2-create-by-id passes — harness: c2-create-by-id re-proved after its Bin test was retitled
