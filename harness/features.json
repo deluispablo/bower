@@ -5710,7 +5710,7 @@
       "dependency-cruiser runs only in pnpm check."
     ],
     "verify": "pnpm exec vitest run src/harness.test.ts src/dependency-rules.test.ts src/data/upload-queue-real.test.ts -t \"a unit test over 1000 ms not on the slow list fails the harness check|the slow list may only shrink|the rule list names every forbidden import|lost bytes ask to choose the file again\"",
-    "note": "TL-P4-17 entry 3 (main e1bbf010). Closes dependency-rules-timeout (ruled here) and the lost-bytes-slow class (docs/harness/defects/2026-10-09-lost-bytes-slow.md). qa10 stays with c4-focus-return. Baseline: the tests over 1000 ms in test-results/unit.json today (16 at 0cc1247a), each sped up or listed. Starting model: bower-implementer."
+    "note": "TL-P4-17 entry 3 (main e1bbf010). Closes dependency-rules-timeout (ruled here) and the lost-bytes-slow class (docs/harness/defects/2026-10-09-lost-bytes-slow.md). qa10 stays with c4-focus-return. Baseline: the tests over 1000 ms in test-results/unit.json today (16 at 0cc1247a), each sped up or listed. Starting model: bower-implementer. TL-P4-17 addendum 4 (main bed5503b): reservation-rule-test-slow folds in; syntax rules have one home, ESLint (no-restricted-syntax / no-restricted-imports with per-file overrides for allowed sites); the generateIds rule and dependency-rules keep only a fast fixture test of the rule, never a repo scan inside vitest; red: current timings on the slow list, then gone."
   },
   {
     "id": "c3-reviewer-guard",
