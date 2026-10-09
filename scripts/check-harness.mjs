@@ -5,9 +5,15 @@ import { existsSync, readFileSync } from 'node:fs';
 import { relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { e2eTitles } from './harness-tests.mjs';
-import { apiTests, hashOf, LEGACY_HASH, nextProblems, problems, readProofs, runnerTests } from './harness-rules.mjs';
+import { apiTests, conflictMarkers, hashOf, LEGACY_HASH, nextProblems, problems, readProofs, runnerTests } from './harness-rules.mjs';
 
 const root = new URL('..', import.meta.url);
+// Before anything slow: a committed conflict marker breaks the build in ways that read as something else.
+const markers = conflictMarkers(fileURLToPath(root));
+if (markers.length) {
+  console.error(`The harness is not honest yet:\n  ${markers.join('\n  ')}`);
+  process.exit(1);
+}
 const features = JSON.parse(readFileSync(new URL('harness/features.json', root), 'utf8'));
 const proofFile = new URL('harness/proof.log', root);
 const proofs = readProofs(existsSync(proofFile) ? readFileSync(proofFile, 'utf8') : '');

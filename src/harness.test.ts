@@ -285,7 +285,7 @@ describe('the harness', () => {
     expect(check(escalated({ review: 'P4-37f PASS' }))).toEqual([]);
     expect(check(escalated({ passes: false }))).toEqual([]);
     expect(check(escalated({ note: 'Starting model: bower-implementer.' }))).toEqual([]);
-    expect(check(escalated({ task: 'p3-x', steps: undefined }))).toEqual([]);
+    expect(check(escalated({ task: 7 }))).toEqual([]);
   });
 
   it('done.sh refuses to close an escalated entry with no review PASS', () => {
