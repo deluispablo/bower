@@ -76,3 +76,9 @@ or into a later entry. `upload-queue.ts` stays until c3-reservation-upload.
 Gates: pnpm check pass (/tmp/c3res-check2.log; goldens C04 78 / 25 runs 88 pass, duplication 22 = baseline);
 e2e:fake phone `a journal line refused in the background shows once in what failed on a phone` pass (/tmp/c3res-e2e2.log).
 Source: TypeScript compiler API, https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API
+
+TL-P4-17 addendum 3 (received mid-round): the rule matches no map field name and no regex. It parses the syntax and
+fails on what the code does: a call reaching `generateIds`/`reserveId` outside write-once, an id slot written by hand,
+or a kept Map whose values are an intended create's holder or line (by type, whatever the field is called). Behaviour
+(one reservation per intent across a retry) stays asserted by the kept verify tests and the two new drive-vault tests.
+api/src/vault.ts stays on ALLOWED (5 sites); ALLOWED is a ratchet, so it can only shrink.
