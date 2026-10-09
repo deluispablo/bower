@@ -5999,7 +5999,7 @@
     "id": "c3-test-tamper",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "A branch that modifies or deletes an existing test needs a tests-changed line per file in its notes, checked by one rule that integrate.sh and check-harness share; playwright forbids only; a focused or skipped unit test fails the check.",
     "steps": [
       "A fixture branch editing a test without a line fails integration.",
