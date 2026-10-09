@@ -8,3 +8,4 @@
 - **Run.** `E2E_SOURCE=fake playwright test e2e/home-errors.spec.ts --project=desktop` passed on port 5564 while 5191 belonged to another worker.
 - **Load flake.** `pnpm check` hit a 30 s timeout in `fake-worker.test.ts` "note edits past the size cap wait for the next run" at load average 17; the file passes alone.
 - tests changed: none (one new file, src/e2e-port.test.ts; tsconfig.node.json gains allowImportingTsExtensions for the `.ts` import in serve.ts and vite.config.ts).
+- tests changed: none; harness/unused-production-baseline.json drops two lines the gate says are no longer unused (the configs no longer call the vite binary).
