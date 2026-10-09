@@ -109,7 +109,7 @@ export function useFileActions() {
           follow(path, null);
           const marks = useUi.getState().bookmarks;
           useUi.getState().relocate(path, null);
-          toast(path.startsWith('Inbox/') ? 'The pile is in the Bin of your Drive' : `${label(path)} is in the Bin of your Drive`, {
+          toast(path.startsWith('Inbox/') ? "The pile is in your Drive's Bin." : `${label(path)} is in your Drive's Bin.`, {
             label: 'Undo',
             run: () =>
               void vault.restore(path).then(() => {

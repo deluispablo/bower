@@ -12,7 +12,6 @@
   --shadow-pop: 0 18px 40px rgba(0, 0, 0, 0.5);
   --inbox: #f4a28c;
   --tab-h: 72px;
-  --toast-bottom: calc(var(--tab-h) + 70px);
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 @media (prefers-color-scheme: light) {
@@ -112,8 +111,10 @@ button {
   }
 }
 
-@media (min-width: 900px) {
-  :root {
-    --toast-bottom: 44px;
+/* A control focused by keyboard is never left under the tab bar or the dock (WCAG 2.4.11; technique C43).
+   One rule on the scrolling element; `--dock-h` is published by ui/Dock.tsx. */
+@media (max-width: 899.98px) {
+  html {
+    scroll-padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 16px + var(--dock-h, 0px));
   }
 }

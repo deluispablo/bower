@@ -78,6 +78,6 @@ test('file names agree in search messages and the change list', async ({ page, i
   await page.getByRole('tablist', { name: 'Side panel' }).getByRole('tab', { name: 'Files', exact: true }).click();
   await page.getByRole('tree', { name: 'Your Bower folder' }).getByRole('treeitem', { name: /Lease draft/ }).click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Move to Bin', exact: true }).click();
-  await expect(page.getByRole('status').getByText('Lease draft is in the Bin of your Drive')).toBeVisible();
+  await expect(page.getByRole('status').getByText('Lease draft is in your Drive\'s Bin.')).toBeVisible();
   await expect(page.getByRole('main').getByText('Put Lease draft in the Bin', { exact: true })).toBeVisible();
 });

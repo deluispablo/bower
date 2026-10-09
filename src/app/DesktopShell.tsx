@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as RKeyboardEvent, type PointerEvent as RPointerEvent } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { Icon, BowerHead, BowerMark } from '@/ui/Icon';
+import { Dock } from '@/ui/Dock';
 import { IconButton } from '@/ui/Button';
 import { usePrefs } from './prefs';
 import { useUi } from './ui-store';
@@ -177,6 +178,7 @@ export function DesktopShell() {
         <main className={s.view} id="main" tabIndex={-1}>
           <Outlet />
         </main>
+        <Dock />
       </div>
 
       {rightOpen && (

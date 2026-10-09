@@ -5,6 +5,7 @@ import { IconButton } from '@/ui/Button';
 import { useUi } from './ui-store';
 import { Explorer } from '@/features/files/Explorer';
 import { RunChip } from '@/features/tidy/RunChip';
+import { Dock } from '@/ui/Dock';
 import { useBackCloses } from '@/ui/back';
 import s from './shell.module.css';
 
@@ -34,7 +35,9 @@ export function PhoneShell() {
       <main id="main" tabIndex={-1} style={{ outline: 'none' }}>
         <Outlet />
       </main>
-      <RunChip />
+      <Dock>
+        <RunChip />
+      </Dock>
       <nav className={s.tabbar} aria-label="Main">
         <NavLink to="/" end className={s.tb}>
           <Icon name="home" size={24} />

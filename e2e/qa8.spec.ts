@@ -41,7 +41,7 @@ test('after Delete the tree keeps its place, and Undo brings the row back to the
   await page.keyboard.press('Escape');
   await expect(tree).toBeFocused();
   await page.keyboard.press('Delete');
-  await expect(page.getByRole('status').getByText(/Lease draft(\.pdf)? is in the Bin/)).toBeVisible();
+  await expect(page.getByRole('status').getByText(/Lease draft(\.pdf)? is in your Drive's Bin/)).toBeVisible();
   await expect(tree).toHaveAttribute('aria-activedescendant', /^row-Projects%2FFlat%20hunt%2F/);
   await page.getByRole('status').getByRole('button', { name: 'Undo' }).click();
   await expect(page.getByRole('status').getByText(/Lease draft(\.pdf)? is back/)).toBeVisible();
