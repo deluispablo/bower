@@ -430,3 +430,6 @@ P3-9 is closed.
 - c2-create-by-id round 4 merged (red 14983272, fix 9b8bf954; rate limit keeps the id; honest refusal sentences; background refusal in what failed; pile-note fence on the last confirmed version; check green). Open: phone has no side panel, so a background refusal is desktop-only (lead asked). P4-37d check dispatched.
 - Rulings main e1c4a22: phone "what failed" in the side sheet; retention covers every terminal run (spine-operations-checkpoints reopened). One round (escalated: it bins) after P4-37d. 421/427.
 - P4-37d BLOCK (create-by-id round 4): quota/daily-limit/408 treated as refused (line lost); refused move/rename has no applied path; failed-in-memory survives sign-out when storage refuses. Round 5 (escalated, app) and retention terminal-runs round (escalated, runner) dispatched in parallel.
+- Lead (main ea058a7): one Drive failure table in the transport (retry / wait-for-the-person / permanent); forwarded to round 5.
+- Retention terminal-run round merged (red 21806fbf, fix fdea3310; check green). Open: runs failed by the Worker stale deadline never stamped (no runner); failure path +11 calls in the fake (stale listing pages). P4-38b check dispatched.
+- Retention ruling (main 38f0370): unstamped folders over 24 h old count as terminal; failure path reuses the listing if P4-38b confirms +11. Round after P4-38b.

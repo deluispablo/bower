@@ -137,6 +137,26 @@ const runFolder = async (wire: DriveV3, root: string): Promise<DriveFile | undef
 const writes = (wire: DriveV3): number => wire.requests.filter((r) => r.method !== 'GET').length;
 const appliedIn = (c: Checkpoint | undefined): number => c?.outcomes.filter((o) => o.state === 'applied').length ?? 0;
 
+/**
+ * Run folders in `.bower/runs` as listed (each with its stamp, if any); then this run (`RUN_ID`) ends at `at`. Gives the
+ * names of the folders it put in the Bin, as it said and as Drive holds them.
+ */
+async function keptAt(folders: { name: string; props?: Record<string, string> }[], at: number): Promise<{ binned: string[]; trashed: string[] }> {
+  const drive = fixedDrive();
+  const root = (await drive.createFolder('root', 'Bower')).id;
+  const sys = (await drive.createFolder(root, '.bower')).id;
+  const runs = (await drive.createFolder(sys, 'runs')).id;
+  const made: DriveFile[] = [];
+  for (const f of folders) made.push(await drive.createFolder(runs, f.name, f.props));
+  const wire = driveV3(drive);
+  const token = new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: wire.fetch, now: () => wire.now });
+  const adapter = new RunnerDrive({ token, attempt: 1, fetch: wire.fetch });
+  const ids = await keepFinishedAtEnd(adapter, new RunRecords(runnerReads(adapter, RUN_ID), root), RUN_ID, at);
+  const trashed: string[] = [];
+  for (const f of made) if ((await drive.evidence(f.id))?.trashed) trashed.push(f.name);
+  return { binned: made.filter((f) => ids.includes(f.id)).map((f) => f.name), trashed };
+}
+
 describe('runner checkpoints', () => {
   it('a restarted runner resumes after its last checkpoint', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -334,6 +354,37 @@ describe('runner checkpoints', () => {
     expect(binned.sort()).toEqual(oldest.sort());
     expect(folders.map((f) => f.name).sort()).toEqual(Array.from({ length: 25 }, (_, i) => `run-${String(i).padStart(2, '0')}`).filter((n) => !oldest.includes(n)).sort());
     expect(writes(wire)).toBe(3);
+  });
+
+  it('an old redispatch never bins one of the 20 newest', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // 20 other runs ended after this one: a redispatch of this older run is not the newest, so all 20 are the newest.
+    const others = Array.from({ length: 20 }, (_, i) => ({ name: `run-${String(i).padStart(2, '0')}`, props: endedStamp(`run-${String(i).padStart(2, '0')}`, AT + 100 + i) }));
+    const { binned, trashed } = await keptAt([...others, { name: RUN_ID }], AT);
+    expect(binned).toEqual([]);
+    expect(trashed).toEqual([]);
+  });
+
+  it('stamped duplicates of one run id count once', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // 19 other runs, the newest of them in two folders, and this run: 20 runs, so nothing goes to the Bin.
+    const others = Array.from({ length: 19 }, (_, i) => ({ name: `run-${String(i).padStart(2, '0')}`, props: endedStamp(`run-${String(i).padStart(2, '0')}`, AT + 100 + i) }));
+    const twin = { name: 'run-18', props: endedStamp('run-18', AT + 118) };
+    const { binned, trashed } = await keptAt([...others, twin, { name: RUN_ID }], AT + 5000);
+    expect(binned).toEqual([]);
+    expect(trashed).toEqual([]);
+  });
+
+  it('an unstamped or wrongly stamped oldest folder is never counted nor binned', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // The two oldest folders: one with no stamp, one whose stamp names another run. 20 stamped runs and this run follow.
+    const unstamped = { name: 'run-a' };
+    const wrong = { name: 'run-b', props: endedStamp('run-c', AT) };
+    const others = Array.from({ length: 20 }, (_, i) => ({ name: `run-${String(i).padStart(2, '0')}`, props: endedStamp(`run-${String(i).padStart(2, '0')}`, AT + 100 + i) }));
+    const { binned, trashed } = await keptAt([unstamped, wrong, ...others, { name: RUN_ID }], AT + 5000);
+    // 21 runs counted: only run-00, the oldest stamped one, goes; the other two are kept.
+    expect(binned).toEqual(['run-00']);
+    expect(trashed).toEqual(['run-00']);
   });
 
   it('a run folder let go of whose Bin answer was lost is resolved by its stamp', async () => {

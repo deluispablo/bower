@@ -38,7 +38,7 @@ describe('the accepted app files, read by the runner', () => {
     // Its folder carries no ended stamp (it is from before it): never counted nor let go of by a later run.
     const runFolders = await new RunRecords(runnerReads(drive, runId), rootId).runFolders();
     expect(runFolders.map((f) => f.name)).toEqual([runId]);
-    expect(toBin(runFolders, 'a-later-run', 0)).toEqual([]);
+    expect(toBin(runFolders, 'a-later-run', Date.now(), 0)).toEqual([]);
 
     const report = await parseRunReport(recordBytes(only('run-report').content), { rootId, runId, captureId: found.manifest.captureId, manifestHash: found.manifestHash });
     expect(report.ok && report.value).toEqual(only('run-report').content);
