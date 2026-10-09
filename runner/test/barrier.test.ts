@@ -213,7 +213,7 @@ describe('the report barrier', () => {
     expect((view?.value as { run: { report: { filed: unknown[] } } }).run.report.filed).toHaveLength(2);
   });
 
-  it('last-run.json is written last and confirmed by its answer before done', async () => {
+  it('last-run.json is written last and read back before done', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const { wire, root } = await demo();
     const writes: Write[] = [];
