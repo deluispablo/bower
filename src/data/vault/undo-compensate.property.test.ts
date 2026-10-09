@@ -190,6 +190,7 @@ async function undo(m: Model, r: Real, index: number, tab: number, api: boolean)
   if (c.undone && r.dropped.has(c.line.id)) return;
   const before = new Set(r.observed.keys());
   const decisionCount = r.decisions.length;
+  let thrown: BowerError | undefined;
   try {
   if (api && c.undo && !c.undone && !r.refused.has(c.line.id)) {
     await c.undo();
@@ -205,17 +206,25 @@ async function undo(m: Model, r: Real, index: number, tab: number, api: boolean)
     }
   }
   } catch (e) {
-    // Addendum 2(6), 4(5): an inverse whose send was refused/waits has not resolved its Undo.
     if (!(e instanceof BowerError)) throw e;
     expect(['offline', 'auth', 'unknown']).toContain(e.code);
-    await observe(r);
-    return;
+    thrown = e;
   }
   await observe(r);
+  const added = [...r.observed.values()].filter((line) => !before.has(line.id));
+  if (thrown) {
+    // Addendum 6: a kept inverse is pending until flush; only a refusal leaves Undo unresolved.
+    const waiting = JSON.parse(localStorage.getItem(outboxKey(r.root)) ?? '[]') as
+      Array<{ line: JournalRecord }>;
+    const failed = await tabAt(r, tab).port().failed();
+    const kept = added.some((line) => line.undoes === c.line.id &&
+      waiting.some((w) => w.line.id === line.id) && !failed.some((f) => f.id === line.id));
+    expect(/\blater\b/.test(thrown.message)).toBe(kept);
+    if (!kept) return;
+  }
   const decision = r.decisions.slice(decisionCount).find((d) => d.id === c.line.id);
   // TL-P4-27 addendum 4(3): every production Undo uses retract, never remove or a separate decision.
   expect(decision, `Undo bypassed retract for ${c.kind}`).toBeDefined();
-  const added = [...r.observed.values()].filter((line) => !before.has(line.id));
   // TL-P4-27 addendum 4(3),(5): a resolved Undo drops and records nothing, or records exactly one inverse.
   if (decision?.result === 'dropped') expect(added).toEqual([]);
   else {
@@ -382,7 +391,7 @@ it('TL-P4-28(2): compensating Undo preserves FIFO and the Drive-only person-stat
     fc.record({ op: fc.constant('send' as const), outcome: fc.constantFrom<Outcome>('landed', 'refused', 'unknown',
       'offline', 'signin', 'permission'), tab: fc.integer({ min: 0, max: 1 }) }),
   ).map((action) => new Command(action));
-  await fc.assert(fc.asyncProperty(fc.commands([command], { maxCommands: 24 }), fc.boolean(), async (commands, undoAll) => {
+  const property = fc.asyncProperty(fc.commands([command], { maxCommands: 24 }), fc.boolean(), async (commands, undoAll) => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     let r: Real | undefined;
     try {
@@ -423,5 +432,7 @@ it('TL-P4-28(2): compensating Undo preserves FIFO and the Drive-only person-stat
       vi.restoreAllMocks();
       vi.unstubAllGlobals();
     }
-  }), { seed: 427285, numRuns: 30, endOnFailure: true });
+  });
+  await fc.assert(property, { seed: 427285, numRuns: 30, endOnFailure: true });
+  await fc.assert(property, { numRuns: 300, endOnFailure: true });
 });
