@@ -388,17 +388,21 @@ describe('the report barrier', () => {
     const { wire, root } = await demo();
     const projects = (await wire.drive.listAll(root)).find((f) => f.folder && f.name === 'Projects');
     if (!projects) throw new Error('no Projects');
-    // The real effects, whose fence right before each move into Projects cannot read that folder: nothing is sent, the
-    // move is read back by its stamp (not there), and it stays as it was, as any write refused before Drive.
+    // The real effects, whose fence right before each move into Projects cannot read that folder: nothing is sent and
+    // nothing is refused. The attempt stops (left in saving) for recovery; no Google Drive "offline" outside a browser.
     const end = await tidy(wire, root, 1, new StubEffects(), [], () => false, {
       effects: driveEffects,
       fetch: noDrive(wire, (url, method) => method === 'GET' && url.pathname.endsWith(`/files/${projects.id}`)),
     });
-    const last = (await chainOf(wire, root)).at(-1);
-    expect(last?.outcomes.map((o) => o.state)).not.toContain('possible-effect');
-    expect(end.phase).toBe('done');
-    expect(last?.outcomes.filter((o) => o.state === 'rejected' && o.failure.code === 'offline').length).toBeGreaterThan(0);
+    expect(end.phase).toBe('saving');
+    const stopped = (await chainOf(wire, root)).at(-1);
+    expect(stopped?.outcomes.some((o) => o.state === 'applied' || o.state === 'rejected')).toBe(false);
     expect((await wire.drive.listAll(projects.id)).filter((f) => f.parents[0] === projects.id)).toEqual([]);
+    // Recovery: the next attempt, Drive answering, reads each back by its stamp and files them; nothing is lost.
+    const again = await tidy(wire, root, 2, new StubEffects(), [], () => false, { effects: driveEffects });
+    expect(again.phase).toBe('done');
+    expect((await chainOf(wire, root)).at(-1)?.outcomes.map((o) => o.state)).not.toContain('possible-effect');
+    expect((await wire.drive.listAll(projects.id)).filter((f) => f.parents[0] === projects.id).length).toBeGreaterThan(0);
   });
 
   it("a restarted runner's done reaches the Worker", async () => {

@@ -148,6 +148,18 @@ function tidy(w: World, attempt: number, opts: Attempt = {}): Promise<TidyEnd> {
   });
 }
 
+/** The folder a move goes into: its own, or the one a create of this run made (found by its create key). */
+async function destinationFolder(w: World, op: OperationV2): Promise<string | undefined> {
+  const e = op.effect;
+  if (e.kind !== 'move') return undefined;
+  if ('fileId' in e.parent) return e.parent.fileId;
+  const by = 'createdBy' in e.parent ? e.parent.createdBy : '';
+  const found = await new RunRecords(w.wire.drive, w.root).found(RUN_ID);
+  const made = found.kind === 'run' ? found.manifest.operations.find((o) => o.operationId === by) : undefined;
+  const key = made?.effect.kind === 'create-folder' ? made.effect.createKey : '';
+  return (await w.wire.drive.listAll(w.root)).find((f) => f.folder && f.appProperties?.bowerItem === key)?.id;
+}
+
 const isCheckpoint = (call: FencedCall): boolean => call.op === 'create-text' && call.name.startsWith('checkpoint-');
 
 async function chainOf(wire: DriveV3, root: string): Promise<Checkpoint[]> {
@@ -612,6 +624,72 @@ describe('recovery without the browser', () => {
     const thing = await w.wire.drive.evidence(b?.thing ?? '');
     expect(thing?.trashed).toBe(false);
     expect(thing?.file.parents).toEqual(b?.from);
+  });
+
+  it('a fence that cannot read stops the attempt for recovery', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const w = await world();
+    // Right before the first move into another folder is sent, Drive stops answering reads of that folder: the fence
+    // cannot read it. Nothing is sent, nothing is refused: the attempt stops, and the next one reads it back and goes on.
+    let failing: { folder: string; thing: string; from: string[]; op: string } | null = null;
+    let down = true;
+    const first = await tidy(w, 1, {
+      afterIntent: async (op) => {
+        const e = op.effect;
+        if (failing !== null || e.kind !== 'move' || e.before.name === RENAMED) return;
+        const folder = await destinationFolder(w, op);
+        if (folder === undefined || e.before.parents.includes(folder)) return;
+        failing = { folder, thing: e.before.fileId, from: [...e.before.parents], op: op.operationId };
+      },
+      failRead: (url) => down && failing !== null && url.pathname.endsWith(`/files/${failing.folder}`),
+    });
+    const f = failing as { folder: string; thing: string; from: string[]; op: string } | null;
+    if (!f) throw new Error('no move into another folder');
+    expect(first.phase).toBe('saving');
+    const stopped = (await chainOf(w.wire, w.root)).at(-1);
+    expect(stopped?.outcomes.find((o) => o.operationId === f.op)?.state).toBe('possible-effect');
+    expect(stopped?.outcomes.some((o) => o.state === 'rejected' && o.failure.code === 'offline')).toBe(false);
+    expect(w.sends.get(f.op)).toBeUndefined();
+    expect((await w.wire.drive.evidence(f.thing))?.file.parents).toEqual(f.from);
+
+    // Recovery: the next attempt reads it back by its stamp (not there), sends it once, and the run ends done.
+    down = false;
+    const second = await tidy(w, 2);
+    expect(second.phase).toBe('done');
+    const last = (await chainOf(w.wire, w.root)).at(-1);
+    expect(last?.outcomes.map((o) => o.state)).not.toContain('possible-effect');
+    expect(last?.outcomes.find((o) => o.operationId === f.op)?.state).toBe('applied');
+    expect(w.sends.get(f.op)).toBe(1);
+    expect((await w.wire.drive.evidence(f.thing))?.file.parents).toEqual([f.folder]);
+  });
+
+  it('a fence that reads a real change sets the operation aside', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const w = await world();
+    // Right before the first filing move is sent (its checks done), the person renames the thing: the fence reads it.
+    let renamed: { thing: string; name: string; from: string[]; op: string } | null = null;
+    const end = await tidy(w, 1, {
+      afterIntent: async (op) => {
+        const e = op.effect;
+        if (renamed !== null || e.kind !== 'move' || e.before.name === RENAMED) return;
+        const found = await new RunRecords(w.wire.drive, w.root).found(RUN_ID);
+        const filing = found.kind === 'run' && found.manifest.capture.members.some((m) => m.file.fileId === e.before.fileId);
+        if (!filing) return;
+        renamed = { thing: e.before.fileId, name: e.before.name, from: [...e.before.parents], op: op.operationId };
+        await w.wire.drive.update(e.before.fileId, { name: 'Renamed by Alex.pdf' });
+      },
+    });
+    const r = renamed as { thing: string; name: string; from: string[]; op: string } | null;
+    if (!r) throw new Error('no move');
+    expect(end.phase).toBe('done');
+    const outcome = (await chainOf(w.wire, w.root)).at(-1)?.outcomes.find((o) => o.operationId === r.op);
+    expect(outcome?.state === 'rejected' ? outcome.failure.code : outcome?.state).toBe('conflict');
+    expect(w.sends.get(r.op)).toBeUndefined();
+    const thing = await w.wire.drive.evidence(r.thing);
+    expect(thing?.file.name).toBe('Renamed by Alex.pdf');
+    expect(thing?.file.parents).toEqual(r.from);
+    const { view } = await endOf(w);
+    expect((view as { run: { report: { setAside: { name: string }[] } } }).run.report.setAside.map((a) => a.name)).toContain(r.name);
   });
 
   it('a landed move later purged is reported as applied', async () => {
