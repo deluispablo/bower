@@ -5894,8 +5894,8 @@
       "The same wait under fake timers passes.",
       "A slow compute-bound test is reported, not failed."
     ],
-    "verify": "pnpm exec vitest run src/harness.test.ts src/timer-gate.test.ts -t \"a real wait of 100 ms or more fails the unit run|a wait under fake timers passes the timer gate|the timer allowlist may only shrink|wall-clock times are reported, never failed\"",
-    "note": "TL-P4-17 addendum 9 (main 925d3fbb); defect slow-ratchet-alone-under-load. Starting model: bower-implementer."
+    "verify": "pnpm exec vitest run src/harness.test.ts src/timer-gate.test.ts -t \"a real wait of 100 ms or more fails the unit run|a wait under fake timers passes the timer gate|the timer allowlist may only shrink|wall-clock times are reported, never failed|two checks started together run one after the other\"",
+    "note": "TL-P4-17 addendum 9 (main 925d3fbb); defect slow-ratchet-alone-under-load. Starting model: bower-implementer. TL-P4-17 addendum 10 (main 56dd8d86): a timer counts when it fires (a cleared timer never waited); fix round: done.sh and integrate.sh share one mkdir-based lock around pnpm check and the e2e suites, a second caller waits and prints who holds it (red: two checks started together run one after the other); the 22-name allowlist goes to c4-test-timers in stage 4."
   },
   {
     "id": "c3-planner-split",
@@ -5910,5 +5910,17 @@
     ],
     "verify": "pnpm vitest run -t \"two moves with the same name get their own rows by op id|every Timeline line a run writes has its own report row|the live path imports no demo fixture|the claude provider path cannot reach the fixture modules|one map from records to the operations they need\" && pnpm -C runner exec vitest run -t \"answers reach the model path|the C04 run makes the golden number of Drive calls per step\" && bash scripts/e2e-both.sh e2e/capabilities.spec.ts -g \"C05: a tidy-up brings a project note up to date\"",
     "note": "TL-P4-14 stage 3 row (escalated); carry-overs report rows by op id (report.ts:58-61) and report-misses-hub-line (TL-P4-17 addendum 2; scripted.ts:936/:1354). Coordinator mapping: docs/harness/2026-10-09-c3-planner-split-map.md. Starting model: bower-escalated. Goldens C04 78, 25-runs 88 never rise. TL-P4-14 addendum 23 (main a0564115): the model path never reads fixtures and there is no demo gate or flag; the scripted provider owns the fixtures and returns the same reply shape as the model; the planner core only reads a reply; a live behaviour that changes is logged as live-uses-fixtures with evidence and the work carries on (rule wording on the live path comes from the model reply or is not done); class check: a dependency-cruiser rule that the claude provider path cannot reach fixture modules; 600-line staged stop approved."
+  },
+  {
+    "id": "c4-test-timers",
+    "task": "p4-consolidation",
+    "category": "test",
+    "passes": false,
+    "what": "The 22 unit tests on harness/real-timers.json move to fake timers or event waits, so the real-timer allowlist reaches its empty target.",
+    "steps": [
+      "harness/real-timers.json is empty and the ceiling is 0."
+    ],
+    "verify": "pnpm exec vitest run src/timer-gate.test.ts -t \"the timer allowlist may only shrink\"",
+    "note": "TL-P4-17 addendum 10 (main 56dd8d86); stage 4. Starting model: bower-implementer."
   }
 ]
