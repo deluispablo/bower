@@ -63,3 +63,11 @@ Then a Claude delta review, a Codex pass on the delta, and the designer's re-che
 This replaces both 3 and 6. In `engine.test.ts:285`, test by move class:
 - **Returns** (a step's head easing back, the gaze settling after a step) are ease-in-out. Speed starts and ends near 0, changes by at most 1.5°/frame between frames, and never goes over 6°/frame.
 - **Snaps and the startle rise** are exempt from the ramp. They stay at or below 6°/frame and land with no overshoot past 2°.
+
+## Follow-up (the Codex "Own-property and bound pass": 2 Important; gaps against addenda 5 and 21, no new ruling)
+
+1. **Gaze return when focus disappears** (`engine.ts:1139`). If the focus target becomes null during the return, the return keeps easing toward the target it captured, then hands back to the spring with a speed jump from 0 to 3°/frame. The return must re-target, or ease out from where it is, so the addendum 5 bounds hold: speed changes ≤1.5°/frame and stays ≤6°/frame.
+   - Red: `a gaze return keeps its speed bounds when focus disappears mid-return`. Use the Codex scenario: wake at (200,−100), then set `target = null` after 80 frames.
+2. **The meta-test** (`pose-reference.fixture.ts:333`). A new member tagged `acts` without a row passes, because `unreferencedMembers` checks the existing `ACT_NAMES`, not each `ENGINE_MEMBERS` key.
+   - The check runs over every key of `ENGINE_MEMBERS`. Each one needs a reference row (act, pose, reaction) or an entry on the closed allowlist.
+   - Red: `a new member tagged acts without a row fails the meta-test`.

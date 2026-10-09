@@ -266,3 +266,7 @@ c4-undo-withdraw add.13-14 review,reviewer,codex,codex,medium,4,591512,587677,0,
 d-v2-07 allowlist+head,implementer,claude,bower-escalated,,5,83812,,,,,,23,4.6,delivered,2026-10-09
 d-v2-07 P4-58e,reviewer,claude,bower-reviewer,,5,33883,,,,,,6,0.3,PASS (5 minor),2026-10-09
 d-v2-07 allowlist review,reviewer,codex,codex,medium,5,405312,402484,0,354304,2828,,,,2 Important,2026-10-09
+c4-undo-compensate contract,reviewer,claude,bower-reviewer,,1,128658,,,,,,32,5.3,CHANGES (26),2026-10-09
+d-v2-07 own-property+bound,implementer,claude,bower-escalated,,6,96249,,,,,,35,8.8,delivered,2026-10-09
+d-v2-07 P4-58f,reviewer,claude,bower-reviewer,,6,34809,,,,,,7,0.4,PASS (2 minor),2026-10-09
+d-v2-07 own-property review,reviewer,codex,codex,medium,6,583362,579508,0,529536,3854,,,,2 Important,2026-10-09

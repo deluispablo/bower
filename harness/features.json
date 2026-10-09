@@ -6252,7 +6252,7 @@
       "Every create outcome x withdrawal: reserved id 404 or trashed, or the holder kept."
     ],
     "verify": "pnpm vitest run src/data/spine/write-once.test.ts src/ui/toast.test.ts -t \"a withdrawn intended create never leaves a live file|toast replace keeps the item and restarts its timer\"",
-    "note": "TL-P4-24 finding 3 (a); defect undo-drops-reserved-create. Escalated + Codex review pass; refusal sentence from the designer. Packet 2026-10-09-c4-undo-withdraw-packet.md. TL-P4-24 addenda 1 and 3; after c4-app-fence; removePile sentence from the designer. Rounds 2-3 (addenda 11-14). PARKED by the lead after the addenda 13-14 Codex pass (5 Important): re-plan via a Plan-agent design note, (A) one-lifecycle lock with retention vs (B) append-only compensating line. Branch c4-undo-withdraw at 70a2b0da kept as is; do not merge."
+    "note": "TL-P4-24 finding 3 (a); defect undo-drops-reserved-create. Escalated + Codex review pass; refusal sentence from the designer. Packet 2026-10-09-c4-undo-withdraw-packet.md. TL-P4-24 addenda 1 and 3; after c4-app-fence; removePile sentence from the designer. Rounds 2-3 (addenda 11-14). PARKED by the lead after the addenda 13-14 Codex pass (5 Important): re-plan via a Plan-agent design note, (A) one-lifecycle lock with retention vs (B) append-only compensating line. Branch c4-undo-withdraw at 70a2b0da kept as is; do not merge. Superseded by c4-undo-compensate (TL-P4-27)."
   },
   {
     "task": "p4-consolidation",
@@ -6387,5 +6387,19 @@
     ],
     "verify": "",
     "note": "TL-P4-21 ruling 4 (24a, Opus, escalated); spec d-v2-24; bower-map.md. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-d-v2-24a-packet.md."
+  },
+  {
+    "id": "c4-undo-compensate",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "ui": true,
+    "what": "Undo is the inverse forward change (TL-P4-27 addendum 2): under the outbox lock an unreserved line drops locally, otherwise the inverse forward line is recorded; the lock covers storing the reserved id before any send; sends go in order per folder; no journal file is ever deleted; no new kind, no fold, no tooLate.",
+    "steps": [
+      "fold is idempotent, order-independent and inert on a missing target.",
+      "No run applies X while it can see undo(X); every late undo has a report row."
+    ],
+    "verify": "",
+    "note": "TL-P4-27 (main 802ac116); replaces c4-undo-withdraw (parked at 70a2b0da) and closes TL-P4-24 #3. Escalated, Opus plus a Codex pass; contract sign-off trial; designer copy pending. Packet 2026-10-09-c4-undo-compensate-packet.md. Re-planned by TL-P4-27 addendum 2 (main c7a6556c): design (B) and tooLate withdrawn."
   }
 ]
