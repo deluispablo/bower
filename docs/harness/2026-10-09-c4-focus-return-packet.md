@@ -44,6 +44,8 @@ No new or changed strings. Only where focus lands changes. Every case is checked
 
 The focus ring is the standard `:focus-visible` ring. No visual change otherwise.
 
+**Signed off** by the designer on 2026-10-09 (ff649f4f). Not in this entry: after a Bin, moving focus to the next row is a later idea (APG).
+
 ## Red
 
 - d-v2-04: press Enter on Home's "Tidy up 15 things", then Escape. `document.activeElement` must be that button; today it is `MAIN#main`.

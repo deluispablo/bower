@@ -48,11 +48,15 @@ There are no new strings. Existing placeholders and error messages keep their wo
 | Tell Bower's box (Bower) | same edge on the box (no separate composer ring) | same | — | `--text-muted` |
 | Rename, New note, New folder input (NameSheet) | same edge only; width and layout belong to d-v2-09 | same | same (today's slash and name messages) | `--text-muted` |
 | Move's "Find a folder" (MovePicker) | same, radius 14 | same | — | `--text-muted` |
-| Search on Home (a button that opens the palette) and in the side panel | same edge, radius 999 | same | — | `--text-muted` |
+| Search on Home (a button that opens the palette) and in the side panel | same edge, radius 999, at least 48 px tall | same | — | `--text-muted` |
 | Switch, off (Settings) | 1.5 px `control-line` inset ring | standard ring | — | — |
 | Switch, on (Settings) | unchanged | standard ring | — | — |
 | Unticked task box (note) | custom box 24 × 24, radius 7, 2 px `control-line` inset ring; same keyboard (Space) and the same accessible name and checked state | standard ring | — | — |
 | Ticked task box (note) | unchanged look of the ticked state | standard ring | — | — |
+
+**Errors, for every field that has one:** the field gets `aria-invalid="true"` and is linked to its message with `aria-describedby`. Both live in the one field rule, not per screen. Today's wording stays.
+
+**Signed off** by the designer on 2026-10-09 (ff649f4f, with the two additions above). At the design check, the designer measures each edge at 3:1 or more on bg, bg-alt and surface, in both themes, at 375 and 1440.
 
 ## Red
 
