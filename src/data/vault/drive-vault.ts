@@ -46,6 +46,7 @@ import { VaultIndex } from './vault-index';
 import { NOT_SENT_TEXT, PERSIST_REFUSED_TEXT, UNREADABLE_TEXT, createUploadQueue, stoppedText, type QueueItem, type UploadQueue } from '../upload-queue';
 import { memoryUploadStore } from '../upload-store';
 import { notAsSeen, notAsSeenError, type SeenExpectation } from '../contracts/still-as-seen';
+import { openQuestions } from '../contracts/questions';
 
 export interface DriveVaultOptions {
   driveLinks?: boolean;
@@ -1339,13 +1340,12 @@ export class DriveVault implements VaultSource {
     const [lines, inbox] = await Promise.all([this.journal.list(), this.pilesListed()]);
     const answered = new Set(lines.filter((r) => r.kind === 'answer').map((r) => r.questionId));
     // A question about a thing that is no longer in the inbox is closed, even when no tidy-up can run (an empty inbox
-    // has nothing to tidy): its subject is the thing's or pile's id (older ones carry it in their id).
+    // has nothing to tidy): its subject is the thing's or pile's id (`contracts/questions.ts`, as the planner reads it).
     const here = new Set(inbox.flatMap((p) => [p.id, ...p.items.map((i) => i.id)]));
     // Things still on their way from here have no file to list yet; their questions stay open.
     for (const [id, u] of this.uploads) for (const e of u.entries) here.add(id).add(e.item.id);
     for (const item of this.queuedItems()) here.add(item.pileId).add(item.memberKey);
-    const subject = (q: Question): string | undefined => q.subject ?? (q.id.startsWith('q-ask-') ? q.id.slice('q-ask-'.length) : undefined);
-    return all.filter((q) => !answered.has(q.id) && (subject(q) === undefined || here.has(subject(q) ?? '')));
+    return openQuestions(all, answered, { ids: here });
   }
 
   /**

@@ -1,3 +1,4 @@
+import { askId, stateQuestionId } from '../contracts/questions';
 import { DriveVault } from '../vault/drive-vault';
 import type { FakeDrive } from '../drive/fake-drive';
 import { PROP } from '../vault/layout';
@@ -33,8 +34,8 @@ export async function liveShape(drive: FakeDrive, root: string, opts: { earlier?
   }
   for (let i = 0; i < 12; i++) await vault.addRequest(`Tidy shelf ${i}`);
   const things = (await vault.piles()).find((p) => p.id === pile.id)?.items ?? [];
-  const asks = things.slice(0, 3).map((t, i) => ({ id: `q-ask-${t.id}`, text: `Is it from the viewing ${i}?`, yes: 'Yes', no: 'No', subject: t.id, askedAt: i }));
-  const state = { id: 'q-state-1', text: 'Should Bower keep the flat notes together?', yes: 'Yes', no: 'No', askedAt: 9 };
+  const asks = things.slice(0, 3).map((t, i) => ({ id: askId(t.id), text: `Is it from the viewing ${i}?`, yes: 'Yes', no: 'No', subject: t.id, askedAt: i }));
+  const state = { id: stateQuestionId('1'), text: 'Should Bower keep the flat notes together?', yes: 'Yes', no: 'No', askedAt: 9 };
   const bower = await folderAt('.bower');
   const q = (await drive.listAll(root)).find((f) => drive.pathOf(f.id, root) === '.bower/questions.json');
   const text = JSON.stringify({ v: 1, questions: [...asks, state] });

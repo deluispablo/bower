@@ -3,9 +3,9 @@
  *
  * The answer is stored with its question once (`VaultSource.answer`: a journal line keyed by the question), and a yes
  * the run can act on starts a small tidy-up scoped to what it is about, at once:
- * - a thing or pile asked about (`q-ask-…`, its `subject`): a run that takes only that pile, and your changes;
+ * - a thing or pile asked about (its subject, `contracts/questions.ts`): a run that takes only that pile, and your changes;
  * - keeping one note (a question naming its two notes as [[links]]): a run of your changes only, no pile;
- * - writing Bower's update over a Current state you edited ("Write it", `q-state-<note's file id>`): a run of your
+ * - writing Bower's update over a Current state you edited ("Write it", by the note's file id): a run of your
  *   changes only, in which the model computes the update and the yes grants that one write, while the section still
  *   reads as asked about (`state-yes-writes`); "Keep mine" starts none and closes the question.
  * Every other answer starts none and waits for the next tidy-up: a no, or a choice that changes nothing, closes its
@@ -20,6 +20,7 @@
  * the daily quota, one run at a time (a run going is answered with `waits`, and the answer's run starts at its end).
  */
 import { sha256Hex } from './contracts/hashes';
+import { subjectOf } from './contracts/questions';
 import type { RunSource, VaultSource } from './sources';
 import type { Question, RunState } from './types';
 
@@ -28,22 +29,15 @@ export type AnswerRun = { scope: 'all'; subject: string } | { scope: 'instructio
 
 /** A question about keeping one note: the corpus' and the runner's wording (`runner/src/claude.ts`, `mergesOf`). */
 const KEEP_ONE = /\bkeep one note\b/i;
-/** A question about a Current state you edited, by its note's file id. */
-const STATE_Q = 'q-state-';
 /** A subject the Worker takes: a Drive file id or a pile id. */
 const SUBJECT = /^[A-Za-z0-9_-]{1,128}$/;
-
-/** The thing or pile a question is about: its subject, or the id in an older `q-ask-` question's id. */
-export function subjectOf(q: Pick<Question, 'id' | 'subject'>): string | undefined {
-  return q.subject ?? (q.id.startsWith('q-ask-') ? q.id.slice('q-ask-'.length) : undefined);
-}
 
 /** The run a yes starts at once, or null: a no, and a choice no run acts on, start none. */
 export function answerRun(q: Question, yes: boolean): AnswerRun | null {
   if (!yes) return null;
-  if (q.id.startsWith(STATE_Q)) return { scope: 'instructions' };
-  const subject = subjectOf(q);
-  if (subject !== undefined) return SUBJECT.test(subject) ? { scope: 'all', subject } : null;
+  const about = subjectOf(q);
+  if (about.kind === 'state') return { scope: 'instructions' };
+  if (about.kind === 'inbox') return SUBJECT.test(about.id) ? { scope: 'all', subject: about.id } : null;
   const notes = new Set((q.text.match(/\[\[[^\]]+\]\]/g) ?? []).map((l) => l.toLowerCase()));
   return KEEP_ONE.test(q.text) && notes.size === 2 ? { scope: 'instructions' } : null;
 }

@@ -1,6 +1,7 @@
 // One home for an intended create (ARCHITECTURE, mechanism map; c2-create-by-id, c3-reservation-home): only the
 // write-once home reserves a Drive id. A syntax rule has one home, ESLint, which already parses every file
-// (TL-P4-17 addendum 4); this module is that rule, shared by the app's, the Worker's and the runner's configs.
+// (TL-P4-17 addendum 4); this module is that rule, shared by the app's, the Worker's and the runner's configs through
+// scripts/eslint-syntax.mjs, which joins it with the other syntax rules.
 // Its test (src/reservation-rule.test.ts) feeds it sample source; it never scans the repo inside vitest.
 
 // The rule names the primitive: the call that reserves an id (`generateIds`, write-once's `reserveId`) and the create that
@@ -20,7 +21,7 @@ export const SELECTORS = [
 ];
 
 /** Test files, test helpers' fixtures and e2e are not production code. */
-const NOT_PRODUCTION = ['**/*.test.{ts,tsx}', '**/*.spec.{ts,tsx}', 'test/**'];
+export const NOT_PRODUCTION = ['**/*.test.{ts,tsx}', '**/*.spec.{ts,tsx}', 'test/**'];
 
 /**
  * Who may reserve outside the home, per package (paths from that package's own root). This list may only shrink:
