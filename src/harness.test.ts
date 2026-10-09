@@ -1,10 +1,11 @@
 /// <reference types="node" />
 /** The harness's own rules (scripts/harness-rules.mjs): what makes the feature list dishonest. */
 import { spawn, spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { lockTestEnv } from './harness-lock-test-env';
 // @ts-expect-error plain JS module, checked by these tests
 import { apiTests, doneArgs, REAL_TIMER_CEILING, cpuReport, slowReport, timerListProblems, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs, redKind, runnerTests } from '../scripts/harness-rules.mjs';
 
@@ -358,7 +359,7 @@ describe('the harness', () => {
   const stamp = "node -e 'console.log(Date.now())'";
   const runLocked = (lock: string, command: string): Promise<{ status: number | null; out: string }> =>
     new Promise((resolve) => {
-      const child = spawn('bash', [lockScript, 'bash', '-c', command], { env: { ...process.env, HARNESS_LOCK: lock } });
+      const child = spawn('bash', [lockScript, 'bash', '-c', command], { env: lockTestEnv({ HARNESS_LOCK: lock }) });
       let out = '';
       child.stdout.on('data', (d: Buffer) => { out += d.toString(); });
       child.stderr.on('data', (d: Buffer) => { out += d.toString(); });
@@ -377,13 +378,16 @@ describe('the harness', () => {
     const t = lines.map((l) => Number(l.split(' ')[1]));
     // The second run starts only after the first ended.
     expect(t[2] ?? 0).toBeGreaterThanOrEqual(t[1] ?? Infinity);
-    expect(existsSync(join(dir, 'lock'))).toBe(false);
+    expect(existsSync(join(dir, 'lock'))).toBe(true);
+    expect(spawnSync('/usr/bin/lockf', ['-k', '-t', '0', join(dir, 'lock'), 'true']).status).toBe(0);
   });
 
   it('a second check waits and prints who holds the lock', async () => {
     const dir = fixtureDir();
     const first = runLocked(join(dir, 'lock'), 'sleep 0.6');
-    for (let i = 0; i < 50 && !existsSync(join(dir, 'lock')); i += 1) await new Promise<void>((r) => { setImmediate(r); });
+    while (!existsSync(join(dir, 'lock.holder')) || !readFileSync(join(dir, 'lock.holder'), 'utf8').includes('sleep 0.6')) {
+      await new Promise<void>((r) => { setImmediate(r); });
+    }
     const second = await runLocked(join(dir, 'lock'), 'true');
     await first;
     expect(second.status).toBe(0);
@@ -402,11 +406,10 @@ describe('the harness', () => {
     // The first run holds the lock until the test says so; a fake pnpm stands for the heavy command.
     mkdirSync(join(dir, 'bin'));
     writeFileSync(join(dir, 'bin/pnpm'), `#!/usr/bin/env bash\necho "$@" >> ${ran}\n`, { mode: 0o755 });
-    const holding = spawn('bash', [lockScript, 'bash', '-c', `echo held; until [ -e ${release} ]; do sleep 0.05; done`], { env: { ...process.env, HARNESS_LOCK: lock } });
+    const holding = spawn('bash', [lockScript, 'bash', '-c', `echo held; until [ -e ${release} ]; do sleep 0.05; done`], { env: lockTestEnv({ HARNESS_LOCK: lock }) });
     const first = new Promise<void>((r) => { holding.on('close', () => { r(); }); });
     await new Promise<void>((r) => { holding.stdout.on('data', () => { r(); }); });
-    const env: NodeJS.ProcessEnv = { ...process.env, HARNESS_LOCK: lock, PATH: `${join(dir, 'bin')}:${process.env.PATH ?? ''}` };
-    delete env.HARNESS_LOCK_HELD;
+    const env = lockTestEnv({ HARNESS_LOCK: lock, PATH: `${join(dir, 'bin')}:${process.env.PATH ?? ''}` });
     // The real entry point of `pnpm e2e:both`-style runs; it either prints that it waits or ends (the red).
     const second = spawn('bash', [join(root, 'scripts/e2e-both.sh'), 'e2e/x.spec.ts'], { env });
     let out = '';
@@ -435,7 +438,8 @@ describe('the harness', () => {
     expect(run.out).not.toMatch(/waiting/i);
     expect(run.out).toContain('inner');
     expect(run.out).toContain('deeper');
-    expect(existsSync(join(dir, 'lock'))).toBe(false);
+    expect(existsSync(join(dir, 'lock'))).toBe(true);
+    expect(spawnSync('/usr/bin/lockf', ['-k', '-t', '0', join(dir, 'lock'), 'true']).status).toBe(0);
   });
 
   it('pnpm check, every e2e script and done.sh go through the lock', () => {
@@ -448,14 +452,118 @@ describe('the harness', () => {
     for (const line of runs) expect(line, line).toMatch(/with-lock\.sh/);
   });
 
-  it('a lock whose holder is gone is taken over with a printed line', async () => {
+  it('a lock whose holder is gone is released by the kernel', async () => {
     const dir = fixtureDir();
-    mkdirSync(join(dir, 'lock'));
-    writeFileSync(join(dir, 'lock/holder'), '999999\n2026-01-01 00:00:00\nold check\n');
+    writeFileSync(join(dir, 'lock'), '');
+    writeFileSync(join(dir, 'lock.holder'), '999999\n2026-01-01 00:00:00\nold check\n');
     const run = await runLocked(join(dir, 'lock'), 'echo ran');
     expect(run.status).toBe(0);
-    expect(run.out).toMatch(/stale.*pid 999999.*taking it over/i);
+    expect(run.out).not.toMatch(/stale|taking it over/i);
     expect(run.out).toContain('ran');
+    expect(existsSync(join(dir, 'lock'))).toBe(true);
+  });
+
+  // A descriptor lock survives the short lockf acquisition command, as documented in man lockf.
+  // Its shell owns the only descriptor: killing that shell releases it without leaving a sleeping child.
+  const kernelHolder = async (lock: string) => {
+    const child = spawn('bash', ['-c', 'exec 9>"$1"; /usr/bin/lockf -k 9; echo held; read -r release', 'holder', lock], {
+      env: lockTestEnv(),
+    });
+    const closed = new Promise<number | null>((resolve) => { child.on('close', resolve); });
+    await new Promise<void>((resolve) => { child.stdout.once('data', () => { resolve(); }); });
+    return { child, closed };
+  };
+  const observeCaller = (lock: string) => {
+    const child = spawn('bash', [lockScript, 'echo', 'ran'], { env: lockTestEnv({ HARNESS_LOCK: lock }) });
+    let out = '';
+    const closed = new Promise<number | null>((resolve) => { child.on('close', resolve); });
+    const observed = new Promise<void>((resolve) => {
+      const see = (data: Buffer): void => { out += data.toString(); if (/waiting|ran/i.test(out)) resolve(); };
+      child.stdout.on('data', see);
+      child.stderr.on('data', see);
+      child.on('close', () => { resolve(); });
+    });
+    return { child, closed, observed, output: () => out };
+  };
+
+  it('an empty holder file and a second caller: the second waits', async () => {
+    const lock = join(fixtureDir(), 'lock');
+    const holder = await kernelHolder(lock);
+    writeFileSync(`${lock}.holder`, '');
+    const caller = observeCaller(lock);
+    try {
+      await caller.observed;
+      expect(caller.output()).toMatch(/Waiting: another heavy run holds the lock/);
+      expect(caller.output()).not.toContain('ran');
+      expect(caller.child.exitCode).toBeNull();
+    } finally {
+      holder.child.stdin.end('release\n');
+      await holder.closed;
+      await caller.closed;
+    }
+    expect(caller.output()).toContain('ran');
+  });
+
+  it('a held lockf blocks the caller and a killed holder frees it', async () => {
+    const lock = join(fixtureDir(), 'lock');
+    const holder = await kernelHolder(lock);
+    writeFileSync(`${lock}.holder`, `${holder.child.pid}\n2026-01-01 00:00:00\nheld command\n`);
+    const caller = observeCaller(lock);
+    try {
+      await caller.observed;
+      expect(caller.output()).toMatch(/waiting.*pid \d+.*held command.*started 2026-01-01/i);
+      expect(caller.output()).not.toContain('ran');
+      expect(caller.child.exitCode).toBeNull();
+    } finally {
+      holder.child.kill('SIGKILL');
+      await holder.closed;
+      await caller.closed;
+    }
+    expect(caller.child.exitCode).toBe(0);
+    expect(caller.output()).toContain('ran');
+    expect(existsSync(lock)).toBe(true);
+  });
+
+  it("six callers started together alternate strictly, and no exit removes another's lock", async () => {
+    const dir = fixtureDir();
+    const lock = join(dir, 'lock');
+    const lines = join(dir, 'lines');
+    writeFileSync(lock, '');
+    const inode = statSync(lock).ino;
+    const runs = await Promise.all(Array.from({ length: 6 }, (_, id) => runLocked(lock,
+      `echo start-${id} >> ${lines}; sleep 0.05; echo end-${id} >> ${lines}`)));
+    expect(runs.map((r) => r.status)).toEqual([0, 0, 0, 0, 0, 0]);
+    const events = readFileSync(lines, 'utf8').trim().split('\n');
+    expect(events).toHaveLength(12);
+    for (let i = 0; i < events.length; i += 2) {
+      expect(events[i]).toMatch(/^start-\d$/);
+      expect(events[i + 1]).toBe(events[i]?.replace('start-', 'end-'));
+    }
+    expect(new Set(events.filter((_, i) => i % 2 === 0)).size).toBe(6);
+    expect(statSync(lock).ino).toBe(inode);
+    expect(spawnSync('/usr/bin/lockf', ['-k', '-t', '0', lock, 'true']).status).toBe(0);
+  });
+
+  it('a failed command is run once and keeps its exit status', async () => {
+    const dir = fixtureDir();
+    const calls = join(dir, 'calls');
+    for (const status of [1, 75]) {
+      const run = await runLocked(join(dir, 'lock'), `echo call >> ${calls}; echo output; echo error >&2; exit ${status}`);
+      expect(run.status).toBe(status);
+      expect(run.out).toContain('output');
+      expect(run.out).toContain('error');
+      expect(run.out).not.toMatch(/waiting/i);
+    }
+    expect(readFileSync(calls, 'utf8').trim().split('\n')).toEqual(['call', 'call']);
+  });
+
+  it('e2e-both uses the same re-entry rule as with-lock', () => {
+    const source = readFileSync(join(root, 'scripts/e2e-both.sh'), 'utf8');
+    expect(source).toMatch(/lock=\$\{HARNESS_LOCK:-\/tmp\/bower-heavy\.lock\}/);
+    const rule = '[ "${HARNESS_LOCK_HELD:-}" = "$lock" ]';
+    expect(source).toContain(rule);
+    expect(readFileSync(lockScript, 'utf8')).toContain(rule);
+    expect(source).not.toMatch(/-n "\$\{HARNESS_LOCK_HELD/);
   });
 
   // A focused or skipped unit test is linted in the three packages (the vitest plugin's no-focused-tests and no-disabled-tests).

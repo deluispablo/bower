@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { lockTestEnv } from './harness-lock-test-env';
 // @ts-expect-error plain JS module, checked by these tests
 import { codeInCommit, codeInWorktree, commitsSince, historyTips, protectedReason, statusPaths, undoCommit } from '../scripts/harness-git.mjs';
 
@@ -100,7 +101,7 @@ describe('the harness and git', () => {
     git('add -A && git commit -qm "worker change"');
     git('checkout -q main');
     if (dirtyFirst) writeFileSync(join(dir, 'a.txt'), 'edited\n');
-    const run = spawnSync('bash', [join(process.cwd(), 'harness/integrate.sh'), 'worker'], { cwd: dir, encoding: 'utf8', env: { ...process.env, INTEGRATE_CHECK: checkCmd, HARNESS_LOCK: join(dir, '.git/heavy.lock') } });
+    const run = spawnSync('bash', [join(process.cwd(), 'harness/integrate.sh'), 'worker'], { cwd: dir, encoding: 'utf8', env: lockTestEnv({ INTEGRATE_CHECK: checkCmd, HARNESS_LOCK: join(dir, '.git/heavy.lock') }) });
     return { dir, git, run, out: run.stdout + run.stderr };
   };
 
@@ -148,7 +149,7 @@ describe('the harness and git', () => {
     }
     git('add -A && git commit -qm "worker change"');
     git('checkout -q main');
-    const run = spawnSync('bash', [join(process.cwd(), 'harness/integrate.sh'), 'worker'], { cwd: dir, encoding: 'utf8', env: { ...process.env, INTEGRATE_CHECK: 'true', HARNESS_LOCK: join(dir, '.git/heavy.lock') } });
+    const run = spawnSync('bash', [join(process.cwd(), 'harness/integrate.sh'), 'worker'], { cwd: dir, encoding: 'utf8', env: lockTestEnv({ INTEGRATE_CHECK: 'true', HARNESS_LOCK: join(dir, '.git/heavy.lock') }) });
     return { dir, git, run, out: run.stdout + run.stderr };
   };
 
@@ -208,7 +209,7 @@ describe('the harness and git', () => {
     writeFileSync(join(wt, 'b.txt'), 'two\n');
     execSync('git add -A && git commit -qm "worker change"', { cwd: wt });
     const run = () => {
-      const r = spawnSync('bash', [join(process.cwd(), 'harness/integrate.sh'), branch], { cwd: dir, encoding: 'utf8', env: { ...process.env, INTEGRATE_CHECK: 'true', HARNESS_LOCK: join(dir, '.git/heavy.lock') } });
+      const r = spawnSync('bash', [join(process.cwd(), 'harness/integrate.sh'), branch], { cwd: dir, encoding: 'utf8', env: lockTestEnv({ INTEGRATE_CHECK: 'true', HARNESS_LOCK: join(dir, '.git/heavy.lock') }) });
       return r.stdout + r.stderr;
     };
     return { dir, git, wt, run };
