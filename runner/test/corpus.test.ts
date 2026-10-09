@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CORPUS_CAPABILITIES, loadCorpus, score } from '../src/corpus';
+import { CORPUS_CAPABILITIES, loadCorpus, score, timelineOf } from '../src/corpus';
 import { groundsOf, ungrounded } from '../src/claude';
 import { runScripted } from './corpus-run';
 
@@ -182,5 +182,20 @@ describe('the corpus expectations are grounded', () => {
       }
     }
     expect(bad).toEqual([]);
+  });
+
+  it('the corpus reads a note Timeline through the one parser', () => {
+    // Legacy: the person's own "## Timeline" heading in the body is theirs; the last one is Bower's (as every reader reads it).
+    const legacy = "---\nsummary: S\nby: bower\n---\n\n## Timeline\n- mine · not Bower's\n\nwords\n\n## Timeline\n- 1 Oct · one\n- 2 Oct · two · [[Source]]\n\n## Bower's note\n- not a Timeline line\n";
+    expect(timelineOf(legacy)).toEqual(['- 1 Oct · one', '- 2 Oct · two · [[Source]]']);
+    expect(timelineOf(legacy.replace(/\n/g, '\r\n'))).toEqual(['- 1 Oct · one', '- 2 Oct · two · [[Source]]']);
+    // v2: a heading inside the person's text is theirs; the framed Timeline is Bower's.
+    const mark = (kind: string, owner: string): string => `<!-- bower:ownership/2 ${kind} ${owner} -->\n`;
+    const v2 = `---\nbower_format: ownership/2\n---\n${mark('begin', 'current')}${mark('end', 'current')}${mark('begin', 'personal')}## Timeline\n- mine · not Bower's\n${mark('end', 'personal')}`
+      + `${mark('begin', 'timeline')}## Timeline\n- 3 Oct · three\n${mark('end', 'timeline')}${mark('begin', 'bower-note')}${mark('end', 'bower-note')}`;
+    expect(timelineOf(v2)).toEqual(['- 3 Oct · three']);
+    // No Timeline, a plain note and a note that cannot be read have no lines.
+    expect(timelineOf('---\nsummary: S\n---\nwords\n')).toEqual([]);
+    expect(timelineOf('## Timeline\n- 1 Oct · plain\n')).toEqual([]);
   });
 });
