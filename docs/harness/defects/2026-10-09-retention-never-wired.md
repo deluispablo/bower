@@ -31,3 +31,6 @@ A promised behaviour proved by calling a helper directly instead of through the 
 - Retention, including the done stamps and the 24 h rule, only ever touches folders that carry it. Unstamped folders are never binned, whatever their age. Unstamped legacy staging folders are left alone (accepted).
 - Tests: the "Alex notes" repro is kept (never binned), and a stamped 2-day-old run beyond 20 is binned.
 - Class for the lead's stage-end review: "Bower acts only on what carries Bower's mark".
+
+## Ruling, round 6 (lead, after P4-38d)
+- A person's folder moved inside a marked run folder would be binned with it (same data-safety class). Bin a marked run folder only if every item inside it, known from the listing the runner already holds, also carries Bower's mark; otherwise skip that folder and log it, with no extra call.

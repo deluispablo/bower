@@ -141,7 +141,7 @@ const appliedIn = (c: Checkpoint | undefined): number => c?.outcomes.filter((o) 
  * Run folders in `.bower/runs` as listed (each with its stamp, if any, made at `created`, else at `at`); then this run (`RUN_ID`) ends at `at`. Gives the
  * names of the folders it put in the Bin, as it said and as Drive holds them.
  */
-async function keptAt(folders: { name: string; props?: Record<string, string>; created?: number }[], at: number): Promise<{ binned: string[]; trashed: string[] }> {
+async function keptAt(folders: { name: string; props?: Record<string, string>; created?: number; files?: string[] }[], at: number): Promise<{ binned: string[]; trashed: string[] }> {
   const drive = fixedDrive();
   const root = (await drive.createFolder('root', 'Bower')).id;
   const sys = (await drive.createFolder(root, '.bower')).id;
@@ -151,6 +151,7 @@ async function keptAt(folders: { name: string; props?: Record<string, string>; c
     const folder = await drive.createFolder(runs, f.name, f.props);
     drive.setTimes(folder.id, f.created ?? at, f.created ?? at);
     made.push(folder);
+    for (const name of f.files ?? []) made.push(await drive.createText(folder.id, name, `${name} by Alex`));
   }
   const wire = driveV3(drive);
   const token = new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: wire.fetch, now: () => wire.now });
@@ -396,36 +397,61 @@ describe('runner checkpoints', () => {
     expect(trashed).toEqual(['run-00']);
   });
 
-  it('an unstamped run folder two days old beyond 20 is binned', async () => {
+  it('a marked run folder two days old beyond 20 is binned', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    // A run that never stamped its folder (failed by the stale deadline, gone, or ended elsewhere), made two days ago,
-    // then 19 stamped runs and this run: 21 ended runs, so the unstamped one, the oldest, goes to the Bin.
-    const unstamped = { name: 'run-p2', created: AT - 2 * 24 * 3_600_000 };
+    // A run that carries Bower's mark from its create but never stamped its end (failed by the stale deadline, gone,
+    // or ended elsewhere), made two days ago, then 19 stamped runs and this run: 21 ended runs, so the oldest goes.
+    const marked = { name: 'run-old', props: { bowerRun: 'run-old' }, created: AT - 2 * 24 * 3_600_000 };
     const others = Array.from({ length: 19 }, (_, i) => ({ name: `run-${String(i).padStart(2, '0')}`, props: endedStamp(`run-${String(i).padStart(2, '0')}`, AT + 100 + i) }));
-    const { binned, trashed } = await keptAt([unstamped, ...others, { name: RUN_ID }], AT + 5000);
-    expect(binned).toEqual(['run-p2']);
-    expect(trashed).toEqual(['run-p2']);
+    const { binned, trashed } = await keptAt([marked, ...others, { name: RUN_ID }], AT + 5000);
+    expect(binned).toEqual(['run-old']);
+    expect(trashed).toEqual(['run-old']);
+  });
+
+  it('a folder the person made in .bower/runs is never binned', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // P4-38c: a folder Alex made there two days ago, with a note in it and no mark of Bower's, then 20 stamped runs
+    // and this run. Only the oldest stamped run goes; Alex's folder and its note stay where they are, whatever their age.
+    const person = { name: 'Alex notes', created: AT - 2 * 24 * 3_600_000, files: ['Ideas.md'] };
+    const others = Array.from({ length: 20 }, (_, i) => ({ name: `run-${String(i).padStart(2, '0')}`, props: endedStamp(`run-${String(i).padStart(2, '0')}`, AT + 100 + i) }));
+    const { binned, trashed } = await keptAt([person, ...others, { name: RUN_ID }], AT + 5000);
+    expect(binned).toEqual(['run-00']);
+    expect(trashed).toEqual(['run-00']);
+  });
+
+  it('an ended stamp with no mark, or a broken one, is never counted', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // Two days old: one folder with only the ended stamp (no mark naming it), one marked with an ended stamp that is no
+    // time. Neither is counted, so of 20 stamped runs and this run only the oldest stamped one goes.
+    const old = AT - 2 * 24 * 3_600_000;
+    const unmarked = { name: 'run-x', props: { bowerRunEnded: String(old) }, created: old };
+    const broken = { name: 'run-y', props: { bowerRun: 'run-y', bowerRunEnded: 'soon' }, created: old };
+    const others = Array.from({ length: 20 }, (_, i) => ({ name: `run-${String(i).padStart(2, '0')}`, props: endedStamp(`run-${String(i).padStart(2, '0')}`, AT + 100 + i) }));
+    const { binned, trashed } = await keptAt([unmarked, broken, ...others, { name: RUN_ID }], AT + 5000);
+    expect(binned).toEqual(['run-00']);
+    expect(trashed).toEqual(['run-00']);
   });
 
   it('an unstamped run folder an hour old is kept', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     // An unstamped folder made an hour before this run ends may be a run still going: it is not counted, so of 20
     // stamped runs and this run only the oldest stamped one goes.
-    const young = { name: 'run-young', created: AT + 5000 - 3_600_000 };
+    const young = { name: 'run-young', props: { bowerRun: 'run-young' }, created: AT + 5000 - 3_600_000 };
     const others = Array.from({ length: 20 }, (_, i) => ({ name: `run-${String(i).padStart(2, '0')}`, props: endedStamp(`run-${String(i).padStart(2, '0')}`, AT + 100 + i) }));
     const { binned, trashed } = await keptAt([young, ...others, { name: RUN_ID }], AT + 5000);
     expect(binned).toEqual(['run-00']);
     expect(trashed).toEqual(['run-00']);
   });
 
-  it('the Bin cap counts runs, not folders', async () => {
+  it('the Bin cap counts folders, duplicates of one run included', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    // 24 stamped runs, the oldest in two folders, and this run: the 3 oldest runs go whole, its two folders included.
+    // 24 stamped runs, the oldest in two folders, and this run: at most 3 folders go, oldest first, so the oldest run's
+    // two folders and the next run's one; the third run waits for the next run.
     const others = Array.from({ length: 24 }, (_, i) => ({ name: `run-${String(i).padStart(2, '0')}`, props: endedStamp(`run-${String(i).padStart(2, '0')}`, AT + 100 + i) }));
     const twin = { name: 'run-00', props: endedStamp('run-00', AT + 100) };
     const { binned, trashed } = await keptAt([twin, ...others, { name: RUN_ID }], AT + 5000);
-    expect(binned).toEqual(['run-00', 'run-00', 'run-01', 'run-02']);
-    expect(trashed).toEqual(['run-00', 'run-00', 'run-01', 'run-02']);
+    expect(binned).toEqual(['run-00', 'run-00', 'run-01']);
+    expect(trashed).toEqual(['run-00', 'run-00', 'run-01']);
   });
 
   it('a run folder let go of whose Bin answer was lost is resolved by its stamp', async () => {
