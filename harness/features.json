@@ -6291,8 +6291,8 @@
       "One src/ui home for the pill look; the three module copies are gone.",
       "No visual change on the three screens (designer check)."
     ],
-    "verify": "",
-    "note": "TL-P4-22 addendum 16 (main b8b21a8b); defect new-pill-three-copies. UI-only, so the pruning trial applies (no re-review). Codex after v2-move-here merges, and it folds that entry use in. Packet to write."
+    "verify": "bash scripts/e2e-both.sh e2e/c4-new-pill-one.spec.ts -g \"the new pill has one look everywhere\"",
+    "note": "TL-P4-22 addendum 16 (main b8b21a8b); defect new-pill-three-copies. UI-only, so the pruning trial applies (no re-review). Codex after v2-move-here merges, and it folds that entry use in. Packet 2026-10-09-c4-new-pill-one-packet.md (designer signed off with the .newtag shape). implementer: codex."
   },
   {
     "id": "c4-parse-once",
