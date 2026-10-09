@@ -13,6 +13,7 @@ import type { DemoWorld } from './demo/world';
 import type { Scenario, TimeScale } from './demo/scenario';
 import { makeLiveSources, uploadAccount } from './live';
 import { BowerError } from './types';
+import { PROP } from './vault/layout';
 import { fenceDoors, leavingLetsGo } from './session';
 import type { Sources } from './sources';
 import { WorkerHttp } from './worker/worker-http';
@@ -111,6 +112,25 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
     drive.createText = async (...a: Parameters<typeof drive.createText>) => {
       if (!/^\d{4}-\d{2}-\d{2}T[\d-]+\.\d{3}Z-[a-z0-9]{6}\.json$/.test(a[1])) return create(...a);
       throw refuses ? driveFailure('unknown', 'permanent') : driveError('offline');
+    };
+  }
+  // c4-undo-withdraw's named trigger (`window.__unreachDrive`): from then on, the notes of changes and the things of a pile
+  // find no network when sent, and the reads by the ids reserved for them find none either; everything else answers.
+  if (scenario === 'withdraw-unreached') {
+    let unreached = false;
+    const reserved = new Set<string>();
+    (window as unknown as { __unreachDrive: () => void }).__unreachDrive = () => { unreached = true; };
+    const line = /^\d{4}-\d{2}-\d{2}T[\d-]+\.\d{3}Z-[a-z0-9]{6}\.json$/;
+    const create = drive.createText.bind(drive);
+    drive.createText = async (...a: Parameters<typeof drive.createText>) => {
+      if (!unreached || !(line.test(a[1]) || a[3]?.[PROP.asAdded] !== undefined)) return create(...a);
+      if (a[4]) reserved.add(a[4]);
+      throw driveError('offline');
+    };
+    const get = drive.get.bind(drive);
+    drive.get = async (...a: Parameters<typeof drive.get>) => {
+      if (unreached && reserved.has(a[0])) throw driveError('offline');
+      return get(...a);
     };
   }
   const sources = makeLiveSources({ worker, drive, runningPiles: () => worker.runningPiles(), pollMs: 300, declarePiles: true, place: { world } });

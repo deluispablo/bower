@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { openDrive, report } from '@/ui/report';
+import { openDrive, report, undoToast } from '@/ui/report';
 import { useLocation, useNavigate } from 'react-router';
 import { useSources } from '@/data/provider';
 import { crumbs, decodeSplat, folderRoute, routeFor } from '@/app/paths';
@@ -109,14 +109,10 @@ export function useFileActions() {
           follow(path, null);
           const marks = useUi.getState().bookmarks;
           useUi.getState().relocate(path, null);
-          toast(path.startsWith('Inbox/') ? "The pile is in your Drive's Bin." : `${label(path)} is in your Drive's Bin.`, {
-            label: 'Undo',
-            run: () =>
-              void vault.restore(path).then(() => {
-                useUi.getState().setRestored(path);
-                toast(path.startsWith('Inbox/') ? 'The pile is back in the inbox' : `${label(path)} is back`);
-                marks.filter((b) => b === path || b.startsWith(`${path}/`)).forEach((b) => !useUi.getState().bookmarks.includes(b) && useUi.getState().toggleBookmark(b));
-              }, (e: unknown) => report(e, 'That did not work. Try again.')),
+          undoToast(path.startsWith('Inbox/') ? "The pile is in your Drive's Bin." : `${label(path)} is in your Drive's Bin.`, () => vault.restore(path), () => {
+            useUi.getState().setRestored(path);
+            toast(path.startsWith('Inbox/') ? 'The pile is back in the inbox' : `${label(path)} is back`);
+            marks.filter((b) => b === path || b.startsWith(`${path}/`)).forEach((b) => !useUi.getState().bookmarks.includes(b) && useUi.getState().toggleBookmark(b));
           });
         } catch (e) {
           if (e instanceof BowerError && e.applied?.path === null) {

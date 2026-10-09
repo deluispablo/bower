@@ -1742,6 +1742,35 @@ describe('uploads survive a reload, through the vault', () => {
     await expect(vault.retryPile(pile.id)).rejects.toThrow('Choose scan.pdf again on this device to send it.');
   });
 
+  /**
+   * c4-undo-withdraw round 2 (P4-56 minor, contract): the upload record is a keeper of write-once's withdraw, through
+   * removePile's `withdrawPile`. Its last chunk lands with its reply lost while the removal holds it back; the file under
+   * the reserved id goes to the Bin when it holds the bytes sent (`getUploaded`'s SHA-256), and stays where it is when not.
+   */
+  it.each(['the bytes sent', 'other bytes'] as const)('a pile removed after its upload landed with its reply lost: %s', async (held) => {
+    const { d, idb } = await fresh();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    d.beforeChunk = (call) => {
+      if (call.start === 8) d.loseNextReply();
+    };
+    const tab = page(d, idb);
+    const pile = await tab.vault.addPile({ text: '', items: [scan()] });
+    await tab.vault.settled();
+    await tab.queue.idle();
+    d.beforeChunk = null;
+    const [fileId = ''] = await scans(d);
+    expect(tab.queue.items()[0]).toMatchObject({ fileId });
+    expect(tab.queue.items()[0]?.state).not.toBe('done');
+    const uploaded = d.getUploaded.bind(d);
+    vi.spyOn(d, 'getUploaded').mockImplementation(async (id) => {
+      const f = await uploaded(id);
+      return held === 'other bytes' ? { ...f, sha256: '0'.repeat(64) } : f;
+    });
+    await expect(tab.vault.removePile(pile.id)).resolves.toBeUndefined();
+    expect((await d.get(fileId, { binned: true })).trashed === true).toBe(held === 'the bytes sent');
+    expect(await indexedDbUploadStore(idb).list(ACCOUNT_A, root)).toEqual([]);
+  });
+
   it('a thing filed elsewhere after a lost answer is not sent again when its binned pile comes back', async () => {
     const { d, tab, pileId, fileId, projects } = await arrivedAndMoved();
     const pile = (await tab.vault.piles()).find((p) => p.id === pileId);

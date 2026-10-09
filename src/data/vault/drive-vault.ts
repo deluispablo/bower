@@ -8,7 +8,7 @@
 import { driveError, type DriveApi, type DriveFile, type Fence } from '../drive/drive-api';
 import { ReadCache, type Version } from '../drive/read-cache';
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
-import { Intended, STAMP, byId, confirms, landing, makeFolder, makeOnce, makeText, unbins, updateByStamp, type Holder, type Intent } from '../spine/write-once';
+import { Intended, STAMP, byId, confirms, heldAs, landing, makeFolder, makeOnce, makeText, unbins, updateByStamp, withdraw, type Holder, type Intent, type Withdrawn } from '../spine/write-once';
 import type { FailedChange, Unsubscribe, VaultSource } from '../sources';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName } from '../piles';
 import { buildTree, checkCreationName, displayName, thingName, freeName, join, kindOf, moveEntry, nameOf, parentOf, removeEntry, renameEntry } from '../tree';
@@ -388,8 +388,13 @@ export class DriveVault implements VaultSource {
       const declarations = await this.declarationCopiesOf(pileKey, f);
       const pending = this.uploads.get(pileKey);
       this.uploads.delete(pileKey);
-      const held = await this.haltQueued(pileKey);
-      const binned: DriveFile[] = [];
+      const held = await this.withdrawPile(pileKey, pending, f.folder ? f.id : undefined).catch((e: unknown) => {
+        if (pending && this.current()) this.uploads.set(pileKey, pending);
+        throw e;
+      });
+      // What landed though its answer was lost is in the Bin already, and comes back with the pile on Undo.
+      const binned: DriveFile[] = [...held.binned];
+      for (const made of held.binned) ix.drop(made.id);
       let pileFile: DriveFile;
       try {
         // Its declaration goes with it, so no device lists it again; Undo brings both back. The copies go first:
@@ -397,11 +402,6 @@ export class DriveVault implements VaultSource {
         await this.binDeclarations(pileKey, declarations);
         pileFile = await this.toBin(f);
         ix.drop(f.id);
-        for (const made of held.made) {
-          if (made.id === f.id || made.parents.includes(f.id)) continue;
-          binned.push(await this.toBin(made));
-          ix.drop(made.id);
-        }
       } catch (e) {
         if (pending && this.current()) this.uploads.set(pileKey, pending);
         this.resumeQueued(held.ids);
@@ -1016,7 +1016,13 @@ export class DriveVault implements VaultSource {
     const declarations = await this.declarationCopiesOf(id, f);
     const u = this.uploads.get(id);
     this.uploads.delete(id);
-    const held = await this.haltQueued(id);
+    // A thing whose answer was lost may be in Drive already, where it was sent: it goes to the Bin first (`withdraw`).
+    // Drive not answering whether it landed, nothing is removed and the pile stays as it was.
+    const held = await this.withdrawPile(id, u, f?.folder ? f.id : undefined).catch((e: unknown) => {
+      if (u && this.current()) this.uploads.set(id, u);
+      throw e;
+    });
+    for (const made of held.binned) ix.drop(made.id);
     let binned: DriveFile | null = null;
     try {
       // The copies first: stopped halfway, the pile is still listed, and Remove again finishes the job.
@@ -1024,12 +1030,6 @@ export class DriveVault implements VaultSource {
       if (f) {
         binned = await this.toBin(f);
         ix.drop(f.id);
-      }
-      // A thing whose answer was lost may be in Drive already, where it was sent: it goes to the Bin too.
-      for (const made of held.made) {
-        if (made.id === f?.id || (f && made.parents.includes(f.id))) continue;
-        await this.toBin(made);
-        ix.drop(made.id);
       }
     } catch (e) {
       // Nothing was removed for good: the pile keeps its things, and they go on.
@@ -1533,6 +1533,8 @@ export class DriveVault implements VaultSource {
       if (this.uploads.get(pileId) !== u) return;
       try {
         const ix = await this.index();
+        // Removed while the folder was listed: nothing is sent for it (its removal withdrew the holder already).
+        if (!this.current() || this.uploads.get(pileId) !== u) return;
         const parentPath = ix.pathOf(u.parent) ?? 'Inbox';
         const name = freeName(ix.entries(), parentPath, safeInboxName(e.item));
         // The session fence (live/index.ts) recognises a pile's thing by PROP.asAdded: it waits for Use here.
@@ -1542,8 +1544,10 @@ export class DriveVault implements VaultSource {
         const made = e.body ? await this.sendQueued(pileId, u, e, e.body, name, props) : await makeOnce(e, this.addedDrive, (id) => makeText(this.addedDrive, this.addedDrive, { parent: u.parent, name, props, id }, e.url ? shortcut(e.url) : ''));
         if (!this.current()) return;
         if (this.uploads.get(pileId) !== u) {
-          // The pile was removed while this was on its way: it follows the pile to the Bin,
-          // and comes back with it on Undo.
+          // The pile was removed while this was on its way. A link or an empty thing: its removal waited for this create
+          // to settle (`withdraw`, one operation per holder) and decides on it, binning what landed; never twice.
+          if (!e.body) return;
+          // A queued thing: it follows the pile to the Bin, and comes back with it on Undo.
           const binned = await this.toBin(made).catch(async (err: unknown) => {
             console.error(err);
             return this.toBin(made);
@@ -1667,51 +1671,52 @@ export class DriveVault implements VaultSource {
   }
 
   /**
-   * Holds a pile's queued things back, each once its send settled, and finds
-   * the files a lost answer already made where they were sent, as sent.
+   * Withdraws every create a pile still holds (`withdraw`, write-once's one exit): its queued things (their upload
+   * records, each held back once its send settled), the links and empty things this page sends (`Sending`), and its
+   * intended folder and note (`Intended`). A file that landed though its answer was lost goes to the Bin where it was
+   * sent; one filed elsewhere, holding other bytes, or inside `folder` (which goes to the Bin with its things) stays,
+   * and only what holds the bytes sent counts as arrived. Drive not answering: refused (`unreached`), the queue goes on
+   * and the pile keeps every id.
    */
-  private async haltQueued(pileId: string): Promise<{ ids: string[]; made: DriveFile[]; arrived: Set<string> }> {
+  private async withdrawPile(pileId: string, u: Upload | undefined, folder: string | undefined): Promise<{ ids: string[]; binned: DriveFile[]; arrived: Set<string> }> {
     const queue = this.queued.queue;
     const arrived = new Set<string>();
     const ids: string[] = [];
-    const made: DriveFile[] = [];
-    for (const it of queue.items()) {
-      if (it.pileId !== pileId || it.state === 'done') continue;
-      // M4, accepted: a last chunk already on the wire may still land after this settles; it then shows in the inbox.
-      const item = await queue.halt(it.id);
-      if (!item) continue;
-      ids.push(item.id);
-      const found = item.fileId ? await this.reservedFile(item) : null;
-      if (!found) continue;
-      // Arrived, wherever it is now: never sent again. Binned only where it was sent.
-      arrived.add(item.memberKey);
-      if (found.inPlace) made.push(found.file);
-    }
-    return { ids, made, arrived };
-  }
-
-  /**
-   * The file made under a thing's reserved id with its bytes: it arrived. It is
-   * `inPlace` only while still where it was sent; filed elsewhere, it stays.
-   */
-  private async reservedFile(item: QueueItem): Promise<{ file: DriveFile; inPlace: boolean } | null> {
-    if (!item.fileId) return null;
-    let file: DriveFile;
+    const binned: DriveFile[] = [];
+    const inFolder = (f: DriveFile): boolean => folder !== undefined && f.parents.includes(folder);
+    const took = (w: Withdrawn, key: string): void => {
+      if (w) arrived.add(key);
+      if (w?.binned) binned.push(w.file);
+    };
     try {
-      file = await this.drive.getUploaded(item.fileId);
-    } catch (err) {
-      // Not made: nothing to bin. Unknown: it stays, where the person sees it.
-      if (!(err instanceof BowerError && err.code === 'not-found')) console.error(err);
-      return null;
+      for (const it of queue.items()) {
+        if (it.pileId !== pileId || it.state === 'done') continue;
+        // M4, accepted: a last chunk already on the wire may still land after this settles; it then shows in the inbox.
+        const item = await queue.halt(it.id);
+        if (!item) continue;
+        ids.push(item.id);
+        let ours = true;
+        const w = await withdraw(heldAs(item.fileId, async () => undefined), this.drive, async (f) => {
+          const sent = await this.drive.getUploaded(f.id);
+          ours = sent.size === item.size && sent.sha256 === item.sha256;
+          if (!ours) console.error('A reserved upload holds other bytes; it stays where it is');
+          // Still where it was sent (`notAsSeen`, the one check, on its place): binned there; filed elsewhere, it stays.
+          const there = notAsSeen({ id: f.id, name: f.name, parents: [item.parentId] }, f) === null;
+          if (ours && !there) console.error('A reserved upload was filed elsewhere; it stays where it is');
+          return !ours || !there || inFolder(f);
+        });
+        if (ours) took(w, item.memberKey);
+      }
+      for (const e of u?.entries ?? []) if (!e.queued) took(await withdraw(e, this.drive, inFolder), e.key);
+      for (const key of [`pile-folder:${pileId}`, `pile-note:${pileId}`]) {
+        took(await this.intended.withdraw(key, this.drive, inFolder), key);
+        this.pileNoteSent.delete(key);
+      }
+    } catch (e) {
+      this.resumeQueued(ids);
+      throw e;
     }
-    if (file.size !== item.size || file.sha256 !== item.sha256) {
-      console.error('A reserved upload holds other bytes; it stays where it is');
-      return null;
-    }
-    // Still where it was sent (`notAsSeen`, the one check, on its place): binned there; filed elsewhere, it stays.
-    if (notAsSeen({ id: item.fileId, name: file.name, parents: [item.parentId] }, file) === null) return { file, inPlace: true };
-    console.error('A reserved upload was filed elsewhere; it stays where it is');
-    return { file, inPlace: false };
+    return { ids, binned, arrived };
   }
 
   private resumeQueued(ids: readonly string[]): void {
