@@ -6048,8 +6048,8 @@
       "Fixture inputs: only the exact backup push is allowed.",
       "A forced or other-ref push is refused."
     ],
-    "verify": "pnpm exec vitest run src/harness.test.ts -t \"only the backup push of main is allowed|a forced or other-ref push is refused|settings deny edits to the landing export and reads of env files\"",
-    "note": "TL-P4-20 row 4. Owner authorized the config changes in the coordinator chat 2026-10-09. The coordinator checks the live backup push once after merge. Packet 2026-10-09-c3-permissions-packet.md."
+    "verify": "pnpm exec vitest run src/guard-push.test.ts -t \"only the backup push of main is allowed|a forced or other-ref push is refused|settings deny edits to the landing export and reads of env files\"",
+    "note": "TL-P4-20 row 4. Owner authorized the config changes in the coordinator chat 2026-10-09. The coordinator checks the live backup push once after merge. Packet 2026-10-09-c3-permissions-packet.md. Red d36e52d9, fix 387af2de, merged cbbc3c8c. Pushes are refused by the hook only (a deny rule would beat the hook allow). Live backup checked at the stage 3 end."
   },
   {
     "id": "c3-agent-defs",
