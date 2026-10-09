@@ -216,13 +216,13 @@ test('a refused merge shows as an answered row on the note that stays and under 
   await sheet.getByRole('list', { name: 'Brought up to date' }).getByRole('link', { name: 'Flat hunt', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Flat hunt' })).toBeVisible();
   await page.getByRole('main').getByRole('link', { name: 'Projects / Flat hunt', exact: true }).click();
-  await page.getByRole('main').getByRole('link', { name: STAYS, exact: true }).first().click();
+  await page.getByRole('main').getByRole('link', { name: new RegExp(`^${STAYS} Changed`) }).click();
   await expect(page.getByRole('heading', { level: 1, name: STAYS })).toBeVisible();
   await expect(page.getByRole('main').getByText(PAIR, { exact: true })).toBeVisible();
   await expect(page.getByRole('main').getByText(ASKED, { exact: true })).toHaveCount(0);
   // Home's result lists all three, in one list, and counts none of them as set aside.
   await home(page);
-  const card = page.getByRole('region', { name: /filed/ });
+  const card = page.getByRole('region', { name: /things? filed/ });
   for (const row of [PAIR, ASKED, STATE]) await expect(card.getByText(row, { exact: true })).toBeVisible();
   await expect(card).not.toContainText('set aside');
 });

@@ -28,6 +28,8 @@ export async function pretendDrive(scenario: Scenario): Promise<{ drive: FakeDri
     rootId = await seedFakeDrive(drive, scenario, Date.now());
     // The live folder's shape, for the situation that measures Home on it.
     if (scenario === 'slow-report' && rootId) await (await import('./live-shape')).liveShape(drive, rootId);
+    // Answers whose subjects went since (TL-P4-19 addendum 10), for the rows a tidy-up gives them.
+    if (scenario === 'gone-answers' && rootId) await (await import('./gone-answers')).goneAnswers(drive, rootId);
   }
   const d = drive;
   const saver = new Saver(scenario, d);

@@ -5,7 +5,8 @@
  * Names that differ only by case are told apart the same way.
  */
 import type { DriveFile } from '../drive/drive-api';
-import { extOf, kindOf, type Entries, type Entry } from '../tree';
+import type { NotesSeen } from '../contracts/questions';
+import { displayName, extOf, kindOf, nameOf, type Entries, type Entry } from '../tree';
 import { isHidden, PROP } from './layout';
 import { seenNow } from './seen';
 
@@ -85,6 +86,21 @@ export class VaultIndex {
       out.set(path, e);
     }
     return out;
+  }
+
+  /**
+   * The folder's notes as listed (the Bin left out): every file's id, and each visible note's name without ".md" in
+   * lower case. The one place both readers of a question's subject, the app's and the planner's, take them from.
+   */
+  notesSeen(): NotesSeen {
+    const ids = new Set<string>();
+    const names = new Set<string>();
+    for (const [id, path] of this.paths) {
+      if (this.files.get(id)?.folder !== false) continue;
+      ids.add(id);
+      if (path.endsWith('.md') && !isHidden(path)) names.add(displayName(nameOf(path)).toLowerCase());
+    }
+    return { ids, names };
   }
 
   /** Adds a file or takes in its new name and parent. */

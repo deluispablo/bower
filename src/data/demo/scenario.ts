@@ -16,6 +16,7 @@ export const SCENARIOS = {
   'slow-report': 'The last tidy-up and the questions answer slowly',
   'inbox-read-fails': 'The full read of the inbox fails after the listing (heals when the page says so)',
   'journal-refused': 'Notes of your changes wait, then Drive refuses them when the page says so',
+  'gone-answers': 'Answers wait whose notes or things went to the Bin since (pretend Drive)',
   offline: 'Offline',
 } as const;
 export type Scenario = keyof typeof SCENARIOS;

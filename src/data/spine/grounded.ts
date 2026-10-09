@@ -56,11 +56,14 @@ export function grounded(manifest: RunManifest): boolean {
   };
   const applied = new Map<string, ReportContribution[]>();
   const rejected = new Map<string, number>();
+  const lines = new Set(manifest.capture.journal.flatMap((j) => j.fileIds));
   for (const c of manifest.reportPlan) {
     if (!c.requires.length || new Set(c.requires).size !== c.requires.length || !c.requires.every((id) => ops.has(id))) return false;
     if (c.when === 'rejected' && (c.requires.length !== 1 || c.value.setAside.length !== 1)) return false;
     // An updated row names the operation that wrote it: its contribution's first (TL-P4-19 addendum 3).
     if (c.value.updated.some((r) => r.op !== c.requires[0])) return false;
+    // An answered row is said once its answer's line is archived (TL-P4-19 addendum 10): on that move, applied.
+    if (c.value.answered?.length && (c.when !== 'applied' || !c.requires.some((id) => { const e = ops.get(id)?.effect; return e?.kind === 'move' && lines.has(e.before.fileId); }))) return false;
     for (const id of c.requires) {
       if (c.when === 'rejected') rejected.set(id, (rejected.get(id) ?? 0) + 1);
       else applied.set(id, [...(applied.get(id) ?? []), c]);
@@ -83,7 +86,6 @@ export function grounded(manifest: RunManifest): boolean {
   const rows = (o: OperationV2): ReportContribution[] => applied.get(o.operationId) ?? [];
   /** How many set-aside rows each operation must have: none but the ones counted below. */
   const asides = new Map<string, number>();
-  const lines = new Set(manifest.capture.journal.flatMap((j) => j.fileIds));
   /** Each captured thing's outcomes with a row: filed or saved, and set aside (by its move or Bin, not a cleared mark). */
   const told = { applied: new Set<string>(), rejected: new Set<string>() };
   for (const o of manifest.operations) {

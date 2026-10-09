@@ -10,6 +10,8 @@
  * wire stays as the accepted app wrote it (P2's `q1` with no subject still reads, as the folder's own question).
  */
 import type { Question } from './types';
+import { keepAlreadyBinned } from './note-edit';
+import { displayName, nameOf, thingName } from './tree';
 
 /** The id prefixes Bower's questions carry, spelled here alone. */
 const ASK = 'q-ask-';
@@ -126,6 +128,60 @@ export function subjectLeft(q: Asked, inbox: InboxSeen | null, notes: NotesSeen 
 /** The questions still open: not answered, and not about a subject that is gone. */
 export function openQuestions<Q extends Asked>(all: readonly Q[], answered: ReadonlySet<string | undefined>, inbox: InboxSeen | null, notes: NotesSeen | null = null): Q[] {
   return all.filter((q) => !answered.has(q.id) && !subjectLeft(q, inbox, notes));
+}
+
+/**
+ * What became of an answer that settled with no effect (TL-P4-19 addendum 10), the report's `answered` rows. Not a
+ * thing set aside, and never counted as one. `subject-gone`: what the question was about had gone (left the inbox,
+ * or a note in the Bin) before Bower's run, so nothing was done.
+ */
+export const ANSWERED_OUTCOMES = ['subject-gone'] as const;
+export type AnsweredOutcome = (typeof ANSWERED_OUTCOMES)[number];
+/** Which kind of question a row answers: a pair of notes, a thing or pile in the inbox, a note's Current state. */
+export const ANSWERED_KINDS = ['pair', 'ask', 'state'] as const;
+export type AnsweredKind = (typeof ANSWERED_KINDS)[number];
+/**
+ * One answered row: the question it answered, by id; its kind; what came of it; the sentence the person reads; and,
+ * for a pair, the path of the note that stays, where the row shows too.
+ */
+export type AnsweredRow = { questionId: string; kind: AnsweredKind; outcome: AnsweredOutcome; why: string; note?: string };
+
+/** A yes about a thing or pile whose thing had gone, by the thing's name when the question says it. */
+export const ASK_GONE = 'Not done: what the question was about had moved or gone to the Bin.';
+export const askGone = (thing: string | null): string => (thing === null ? ASK_GONE : `Not done: ${thing} had moved or gone to the Bin before Bower got to it.`);
+/** A "Write it" whose note had gone, by the note's name when the question says it. */
+export const STATE_GONE = 'Not written: the note had moved or gone to the Bin.';
+export const stateGone = (note: string | null): string => (note === null ? STATE_GONE : `Not written: ${note} had moved or gone to the Bin before Bower got to it.`);
+
+/**
+ * The answered row of an answer whose subject is gone, or null when its subject is there (or has no kind of its own):
+ * the one writer of the row, for every kind (TL-P4-19 addenda 8 and 10). Names are display names: a thing's or a
+ * note's from the path the question was asked about, never a file name or extension; a pair's other note by the
+ * name an older question links it by. `at` gives the path now of the pair note that stays (a file id, or an older
+ * question's name).
+ */
+export function answeredGone(q: Asked & Partial<Pick<Question, 'about'>>, inbox: InboxSeen | null, notes: NotesSeen | null, at: (note: string) => string | undefined): AnsweredRow | null {
+  if (!subjectLeft(q, inbox, notes)) return null;
+  const s = subjectOf(q);
+  const about = q.about === undefined ? null : nameOf(q.about);
+  const row = { questionId: q.id, outcome: 'subject-gone' as const };
+  if (s.kind === 'inbox') return { ...row, kind: 'ask', why: askGone(about === null ? null : thingName(about)) };
+  if (s.kind === 'state') return { ...row, kind: 'state', why: stateGone(about === null ? null : displayName(about)) };
+  if (s.kind !== 'pair') return null;
+  const gone = notesGone(q, notes);
+  const stays = gone.length === 1 ? s.notes.find((n) => !gone.includes(n)) : undefined;
+  const note = stays === undefined ? undefined : at(stays);
+  return { ...row, kind: 'pair', why: keepAlreadyBinned(s.by === 'name' && gone.length === 1 ? (gone[0] ?? null) : null), ...(note !== undefined ? { note } : {}) };
+}
+
+/** An answered row as the wire holds it, the one validator of it (manifest, checkpoint and the run's view). */
+export function isAnsweredRow(row: unknown): row is AnsweredRow {
+  if (typeof row !== 'object' || row === null || Array.isArray(row)) return false;
+  const r = row as Record<string, unknown>;
+  const text = (v: unknown): boolean => typeof v === 'string' && v.length > 0;
+  return Object.keys(r).every((k) => ['questionId', 'kind', 'outcome', 'why', 'note'].includes(k))
+    && text(r.questionId) && ANSWERED_KINDS.some((k) => k === r.kind) && ANSWERED_OUTCOMES.some((o) => o === r.outcome)
+    && text(r.why) && (r.note === undefined || text(r.note));
 }
 
 /** A question as a run's report row has it: what the person reads, never its subject, hash or mark. */
