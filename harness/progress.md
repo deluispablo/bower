@@ -236,3 +236,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: c3-reply-schema passes — One zod reply declaration; note-edit write/read bounds; RUNNER_WRITES (TL-P4-14 add. 20, 22)
 - 2026-10-09: c3-fingerprint passes — The input fingerprint hashes a JCS-normalized object; model input proven unchanged by a raw golden (TL-P4-14 add. 21)
 - 2026-10-09: fingerprint-normalised passes — Re-proved under the renamed fingerprint test (c3-fingerprint)
+- 2026-10-09: c3-timer-gate passes — Real timers of 100 ms or more fail unit tests; wall clock is a report; one check lock (TL-P4-17 add. 9, 10)
