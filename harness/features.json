@@ -6222,5 +6222,42 @@
     ],
     "verify": "pnpm vitest run src/bird -t \"the perched Bower follows the pointer|a focused control turns the gaze|after 60 s with no input the bird sleeps|with reduced motion or moves off no transform changes over 5 s|preen and snap never run while input is recent|the run chip bird only blinks|a sleeping bird does not blink|Bower is aria-hidden and out of the tab order\"",
     "note": "TL-P4-21 order 4 (Opus, after v2-perched-bower). Contract sign-off trial and designer sign-off before dispatch. Packet 2026-10-09-d-v2-07-packet.md."
+  },
+  {
+    "task": "p4-consolidation",
+    "passes": false,
+    "id": "c4-retry-fence",
+    "category": "fix",
+    "what": "A resend of a write to an existing file runs the caller's fence first (one retry home, drive-http.ts:461); unfenced existing-file writes fail retry-kind; reserved-id creates keep their resend.",
+    "steps": [
+      "Each resendable refusal then a changed target: the resend is refused, Drive unchanged."
+    ],
+    "verify": "pnpm vitest run -t \"a resent write to an existing file runs its fence first|creates by reserved id are still resent after a rate limit\"",
+    "note": "TL-P4-24 finding 1 (a); defect transport-retry-skips-fence. Escalated + Codex review pass. Packet 2026-10-09-c4-retry-fence-packet.md."
+  },
+  {
+    "task": "p4-consolidation",
+    "passes": false,
+    "id": "c4-undo-withdraw",
+    "category": "fix",
+    "ui": true,
+    "what": "write-once withdraw on the Holder port (404 lets go, found is binned, unknown refuses) runs under acrossTabs before a journal line drops; Sending and reservedFile use it.",
+    "steps": [
+      "Every create outcome x withdrawal: reserved id 404 or trashed, or the holder kept."
+    ],
+    "verify": "pnpm vitest run -t \"a withdrawn intended create never leaves a live file\"",
+    "note": "TL-P4-24 finding 3 (a); defect undo-drops-reserved-create. Escalated + Codex review pass; refusal sentence from the designer. Packet 2026-10-09-c4-undo-withdraw-packet.md."
+  },
+  {
+    "task": "p4-consolidation",
+    "passes": false,
+    "id": "c4-app-fence",
+    "category": "fix",
+    "what": "DriveVault.once checks every send (the Bin too) through one read-then-notAsSeen helper in contracts/still-as-seen.ts; stillAsSeen and the hand checks fold in.",
+    "steps": [
+      "Each app write with its target changed elsewhere is refused, Drive unchanged."
+    ],
+    "verify": "pnpm vitest run -t \"every app write of an existing file refuses one that changed name or place elsewhere\"",
+    "note": "TL-P4-24 finding 2 (a); defect app-bin-skips-read-check; after c4-undo-withdraw. Escalated + Codex review pass. Packet 2026-10-09-c4-app-fence-packet.md."
   }
 ]
