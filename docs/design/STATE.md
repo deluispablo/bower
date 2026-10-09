@@ -14,4 +14,5 @@ Updated 2026-10-09.
 - 2026-10-09: answered the lead's c3-pair-ask copy consult; it was adopted as TL-P4-19 addendum 9. Under TL-P4-18 addendum 3, the coordinator may consult me, and I check every built UI change; c3-pair-ask is the first.
 - 2026-10-09: my design check of c3-pair-ask at claude/p3 bdc08775 returned "not as specified". The "Not merged" sentence went into report.setAside: it was counted as "1 thing set aside" and shown on no screen. The lines-already-in copy is verified. The fix round adopted an `answered` row (TL-P4-19 addendum 10), and I gave its q-ask and q-state copy. I check the fix when the coordinator sends it.
 - 2026-10-09: the owner signed in to claude.ai in the browser pane, and the canvas renders, Bower included. The companion demo has not yet been tried with the pointer.
-- Waits on the owner: OK on V2 (phase 3), then the spec for the lead. Waits on the lead: nothing.
+- 2026-10-09: the owner approved V2 and asked for the spec to be written together with the lead, for the build to match the design exactly (I supervise it and give the OK), and for the code to be well engineered (DRY, one home per mechanism). Spec: specs/2026-10-09-v2.md.
+- Waits on the lead: the spec review, the impact note and the plan for my fidelity check.
