@@ -5749,7 +5749,8 @@
       "upload-queue.ts is no longer on the reservation allowlist."
     ],
     "verify": "pnpm vitest run -t \"an upload reserves its file id through the write-once home and keeps it on the device|an upload whose reply was lost is found again by its kept id after a reload|lost bytes ask to choose the file again|an upload refused for good releases its id from the device record\" && pnpm e2e:fake -g \"a file added again after a reload is not doubled\"",
-    "note": "TL-P4-17 addendum 1 (main e1bbf010): upload-queue.ts:431 follows c3-reservation-home, same home and port; the allowlist shrinks by one. Starting model: bower-escalated (write-once, data safety). Goldens never rise. P4-40 PASS (second way? no). Minors to P2_POLISH; refused upload keeps its record id (heldAs per try) asked of the lead. TL-P4-17 addendum 7 (main e451eb84): option (a): a permanent 4xx releases the id and the release reaches the device record through the keeper port (the record is the keeper, not a per-try holder); one release rule for every keeper; fix round, red: a 4xx upload leaves the record with no fileId; review again."
+    "note": "TL-P4-17 addendum 1 (main e1bbf010): upload-queue.ts:431 follows c3-reservation-home, same home and port; the allowlist shrinks by one. Starting model: bower-escalated (write-once, data safety). Goldens never rise. P4-40 PASS (second way? no). Minors to P2_POLISH; refused upload keeps its record id (heldAs per try) asked of the lead. TL-P4-17 addendum 7 (main e451eb84): option (a): a permanent 4xx releases the id and the release reaches the device record through the keeper port (the record is the keeper, not a per-try holder); one release rule for every keeper; fix round, red: a 4xx upload leaves the record with no fileId; review again. Fix round (red f515f213, fix 80548be1): a 4xx releases the record id through the keeper; P4-40b PASS, second way? no.",
+    "review": "P4-40b PASS"
   },
   {
     "id": "c3-unused-production",
