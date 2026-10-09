@@ -6122,5 +6122,17 @@
     ],
     "verify": "pnpm vitest run -t \"the dock stacks three messages at most, oldest first\" && bash scripts/e2e-both.sh e2e/v2-dock.spec.ts -g \"a message spans the phone width above the tab bar|a message is at most 520 wide and centred in main on desktop|the last result row ends above the run chip at full scroll|keyboard focus is never hidden behind the tab bar\"",
     "note": "TL-P4-21 order 2; spec d-v2-01, d-v2-03. Starting model bower-implementer. Packet 2026-10-09-v2-dock-packet.md; e2e file may differ (worker names it)."
+  },
+  {
+    "id": "c4-runner-region",
+    "task": "p4-consolidation",
+    "category": "perf",
+    "passes": false,
+    "what": "runner/workflows/tidy.yml records BOWER_RUNNER_REGION from Azure IMDS compute/location before the runner step; any failure leaves it unset (line says unknown) and never fails the job.",
+    "steps": [
+      "The workflow test finds the step before the runner, with -m 2 and Metadata:true, unable to fail the job."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"the workflow records the runner region and never fails on it\"",
+    "note": "TL-P4-22 addendum 4 (main fc4a6dec); follow-up to c4-run-counts. Starting model bower-mechanical. Packet 2026-10-09-c4-runner-region-packet.md. Shipped by the lead with the next runner deploy."
   }
 ]
