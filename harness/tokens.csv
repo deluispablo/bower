@@ -299,3 +299,15 @@ c4-undo-compensate,implementer,claude,bower-escalated,,1,350765,,,,,,8,10.0,deli
 d-v2-07,reviewer,codex,gpt-5-codex,medium,6,367616,364182,,320128,3434,,,,2 Important,2026-10-09
 c4-undo-compensate,implementer,codex,gpt-5-codex,medium,2,860365,855398,,787712,4967,,,,merge resolved,2026-10-09
 c4-parse-once,property-red,codex,gpt-5-codex,medium,1,1745363,1733288,,1648128,12075,,,,red written,2026-10-09
+c4-undo-compensate,property-red,codex,gpt-5-codex,medium,2,327658,325314,,294272,2344,,,,amended (addendum 6),2026-10-09
+c4-parse-once,implementer,codex,gpt-5-codex,medium,1,525214,522255,,451840,2959,,,,blocked on red shape,2026-10-09
+c4-undo-compensate,property-red,codex,gpt-5-codex,low,3,135881,134930,,121984,951,,,,split; new counterexample,2026-10-09
+c4-parse-once,property-red,codex,gpt-5-codex,low,2,158439,157418,,137600,1021,,,,amended (addendum 26),2026-10-09
+c4-undo-compensate,diagnosis,codex,gpt-5-codex,medium,1,586717,582483,,519552,4234,,,,model wrong,2026-10-09
+d-v2-07,implementer,codex,gpt-5-codex,medium,7,823923,817524,,764672,6399,,,,done (round 7),2026-10-09
+p4-corpus-driver,implementer,codex,gpt-5-codex,medium,2,2189226,2170150,,2069760,19076,,,,blocked on case 6,2026-10-09
+c4-parse-once,implementer,codex,gpt-5-codex,medium,2,303318,300592,,253696,2726,,,,blocked: script.ts not owned,2026-10-09
+d-v2-07,reviewer,codex,gpt-5-codex,medium,7,368379,364616,,322048,3763,,,,1 Important (stop rule),2026-10-09
+c4-undo-compensate,property-red,codex,gpt-5-codex,medium,4,523129,518169,,481664,4960,,,,amended (addendum 7),2026-10-09
+c4-parse-once,implementer,codex,gpt-5-codex,medium,3,1247053,1237534,,1154688,9519,,,,done,2026-10-09
+p4-corpus-driver,implementer,codex,gpt-5-codex,low,3,248061,245037,,210432,3024,,,,case 6 deferred,2026-10-09

@@ -44,7 +44,7 @@
 
 - `src/data/contracts/ownership-format.ts` (the context), `note-edit.ts`, `note-format.ts`, `hashes.ts` (read only);
 - `src/data/spine/engine.ts`, `src/data/spine/scripted.ts`;
-- `runner/src/main.ts`, plus the runner's read and plan adapters that the threading needs (name each one in the notes);
+- `runner/src/main.ts`, plus the runner's read and plan adapters that the threading needs (name each one in the notes), including `runner/src/claude.ts` (:1165 builds PlanOptions) and the scripted planning adapter `src/data/demo/script.ts` (:79-85 builds PlanOptions for planScripted; added 2026-10-09 after implementation session 2 stopped on it);
 - `src/data/fake/fake-worker.ts`, `src/data/fake/fake-run-service.ts`;
 - tests: `src/data/contracts/*.test.ts`, `src/data/fake/fake-worker.test.ts`, `runner/test/*`;
 - `docs/ARCHITECTURE.md` and the notes.
