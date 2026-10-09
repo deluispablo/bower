@@ -406,3 +406,4 @@ P3-9 is closed.
 - c2-write-once merged (red ce4ae5e8, fix b1bceabf; prod -214; C04 82→76; check green on merged tree; e2e:fake 256). Rulings asked: `ended` patch log kept (removing costs 76→126); journal outbox recovery kept (by name + field, archive move overwrites bowerOp); barrier test title kept but body changed. P4-36 review dispatched.
 - c2-write-once rulings (main dd77054): keep ended; journal line key + barrier rename in the fix round after P4-36.
 - P4-36 BLOCK (c2-write-once): once() accepts a stamp match without checking md5 (drive-vault.ts:1679): a retry after a change elsewhere says saved and the cache can later overwrite the person's edit. Round 2 (escalated) with the lead rulings (journal key, barrier rename) and the P4-36 minors on app writes without bowerOp and engine answered() name check.
+- c2-create-by-id registered (escalated; main 9ffa36e): last stage 2 entry, after the c2-write-once round 2. 421/427.
