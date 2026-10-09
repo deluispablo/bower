@@ -18,9 +18,10 @@
  * Adapted from the original Bower app (github.com/deluispablo/bower,
  * app/src/upload-queue.ts, the queue part; FSL-1.1-MIT, owner's copyright).
  */
-import { driveError, type DriveFile } from './drive/drive-api';
+import { type DriveFile } from './drive/drive-api';
 import { arrivedFile, RESUMABLE_CHUNK_BYTES, sendResumable, type ResumableClient } from './drive/resumable-upload';
 import { isOpenElsewhere, OPEN_ELSEWHERE_TEXT } from './session';
+import { heldAs, makeOnce } from './spine/write-once';
 import { BowerError } from './types';
 import { uploadId, type PendingUpload, type UploadStore } from './upload-store';
 import { sha256 } from './vault/hashes';
@@ -127,8 +128,8 @@ export interface QueueItem {
   note?: string;
   /** Drive's file once it is in. */
   file?: DriveFile;
-  /** The file id reserved for it, once there is one: a lost answer may have made that file. */
-  reserved: string | null;
+  /** The file id its record keeps, once one was reserved: a lost answer may have made that file. */
+  fileId: string | null;
   /** What it carries into Drive (how it was added, its kind, where from). */
   appProperties: Record<string, string>;
   /** ISO time it was added. */
@@ -225,7 +226,7 @@ function itemOf(record: PendingUpload, durable: boolean): QueueItem {
     sent: record.confirmed,
     durable,
     state: 'waiting',
-    reserved: record.fileId,
+    fileId: record.fileId,
     appProperties: { ...record.appProperties },
     addedAt: record.addedAt,
     ...(durable ? {} : { note: KEEP_OPEN_TEXT }),
@@ -283,7 +284,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
         // Another tab may have sent more of it: carry on from where it stands.
         entry.record = record;
         entry.item.sent = record.confirmed;
-        entry.item.reserved = record.fileId;
+        entry.item.fileId = record.fileId;
       }
     }
     const finished: Entry[] = [];
@@ -427,33 +428,39 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
         // Kept in memory while it is sent, so a storage failure on the way does not stop it.
         entry.body = body;
       }
-      if (record.fileId === null) {
-        // The file's identity is reserved and kept before anything is created.
-        const [id] = await fenced.generateIds(1, controller.signal);
-        if (id === undefined) throw driveError('unknown');
-        if (item.durable && gen === generation) await keepFileId(id);
-        record.fileId = id;
-        item.reserved = id;
-      }
-      const file = await sendResumable(
+      // The file's identity is reserved through write-once and kept on the device before anything is created.
+      const file = await makeOnce(
+        heldAs(record.fileId),
         fenced,
-        { id: record.fileId, parentId: record.parentId, name: record.name, type: record.type, size: record.size, sha256: record.sha256, appProperties: record.appProperties, body, session: record.session },
-        {
-          onSession: async (session) => {
-            record.session = session;
-            await save();
-          },
-          onConfirmed: async (bytes) => {
-            record.confirmed = bytes;
-            await save();
-          },
-          onProgress: (sent) => {
-            item.sent = sent;
-            notify();
-          },
-          signal: controller.signal,
+        async (id) => {
+          if (record.fileId === null) {
+            if (item.durable && gen === generation) await keepFileId(id);
+            record.fileId = id;
+            item.fileId = id;
+          }
+          return sendResumable(
+            fenced,
+            { id, parentId: record.parentId, name: record.name, type: record.type, size: record.size, sha256: record.sha256, appProperties: record.appProperties, body, session: record.session },
+            {
+              onSession: async (session) => {
+                record.session = session;
+                await save();
+              },
+              onConfirmed: async (bytes) => {
+                record.confirmed = bytes;
+                await save();
+              },
+              onProgress: (sent) => {
+                item.sent = sent;
+                notify();
+              },
+              signal: controller.signal,
+            },
+            chunkSize,
+          );
         },
-        chunkSize,
+        undefined,
+        controller.signal,
       );
       await finish(file);
     } catch (error) {

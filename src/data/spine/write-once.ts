@@ -116,18 +116,24 @@ export const makeText = async (w: Makes, reads: Gets, at: Place, text: string): 
 
 /**
  * The port: where one intended create keeps the id reserved for it, the home keeping no store of its own. Its outbox
- * line on the device (the journal: it survives a reload), a thing on its way (`Sending`), or this page's memory
- * (`Intended`).
+ * line on the device (the journal: it survives a reload), its upload record on the device (the upload queue keeps the
+ * id there before the first byte is sent, `heldAs`), a thing on its way (`Sending`), or this page's memory (`Intended`).
  */
 export interface Holder {
   reserved?: string;
 }
 
+/**
+ * The holder of an id a keeper stores in its own shape (an upload record's `fileId`, null until one is reserved): the
+ * home reserves it once (`makeOnce`), and the keeper keeps it in its create, before anything is sent with it.
+ */
+export const heldAs = (id: string | null): Holder => (id === null ? {} : { reserved: id });
+
 /** Ids for every holder that has none yet, in one request (`files.generateIds`), each set on its holder. */
-export async function reserveFor(w: Pick<Makes, 'generateIds'>, holders: readonly Holder[]): Promise<void> {
+export async function reserveFor(w: Pick<Makes, 'generateIds'>, holders: readonly Holder[], signal?: AbortSignal): Promise<void> {
   const bare = holders.filter((h) => h.reserved === undefined);
   if (!bare.length) return;
-  const ids = await w.generateIds(bare.length);
+  const ids = await w.generateIds(bare.length, signal);
   if (ids.length < bare.length) throw driveError('unknown');
   bare.forEach((h, i) => (h.reserved = ids[i]));
 }
@@ -142,10 +148,11 @@ const releases = (e: unknown, kind: FailureKind): boolean => kind === 'permanent
 /**
  * One intended create, sent with the id its holder keeps (reserved now when it has none) and found again by it: the id
  * stays on the holder until the create is confirmed, so a try after a lost answer and a failed read-back is that same
- * file; a refusal lets it go. `kindOf` tells a failure's kind when the caller's own table refines it (a 404 listed anew).
+ * file; a refusal lets it go. `kindOf` tells a failure's kind when the caller's own table refines it (a 404 listed anew);
+ * `signal` stops the reservation with the send it is for.
  */
-export async function makeOnce(h: Holder, w: Pick<Makes, 'generateIds'>, create: (id: string) => Promise<DriveFile>, kindOf: (e: unknown) => FailureKind = failureKind): Promise<DriveFile> {
-  await reserveFor(w, [h]);
+export async function makeOnce(h: Holder, w: Pick<Makes, 'generateIds'>, create: (id: string) => Promise<DriveFile>, kindOf: (e: unknown) => FailureKind = failureKind, signal?: AbortSignal): Promise<DriveFile> {
+  await reserveFor(w, [h], signal);
   const id = h.reserved;
   if (id === undefined) throw driveError('unknown');
   try {
