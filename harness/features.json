@@ -6180,5 +6180,18 @@
     "verify": "bash scripts/e2e-both.sh e2e/v2-name-sheet.spec.ts -g \"the rename field spans the sheet and selects the name|new note from a folder uses the name sheet\"",
     "note": "TL-P4-21 order 3; spec d-v2-09 (after v2-field). Starting model bower-implementer. Packet 2026-10-09-v2-name-sheet-packet.md; e2e file may differ. Red 332410b1, fix 51978d36. Designer verified a764e350.",
     "design": "verified"
+  },
+  {
+    "id": "c4-e2e-port",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": false,
+    "what": "Each worktree runs e2e on its own port (one helper, derived from the worktree root); an already-running server is reused only if it serves this worktree, else the run fails with one line.",
+    "steps": [
+      "Two worktrees resolve different ports.",
+      "A server from another worktree is refused for reuse."
+    ],
+    "verify": "pnpm vitest run -t \"two worktrees run e2e at once, each on its own server|a server from another worktree is never reused\"",
+    "note": "TL-P4-22 addendum 10 (c), gate integrity; defect e2e-port-shared-across-worktrees. Starting model bower-implementer. Packet 2026-10-09-c4-e2e-port-packet.md. After merge: rerun the closed stage 4 entries e2e once on claude/p3 under the lock."
   }
 ]
