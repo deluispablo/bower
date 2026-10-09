@@ -146,3 +146,17 @@ Stage 1 on 9265d860, for comparison: garden 57 s, offer-and-flat 75 s (attempt 2
 **Home on an empty Inbox:** the Inbox showed in 4.1 s, with 15 Drive calls (2 media). After 25 s it had made 17 calls (4 media), the last ending at 4.8 s. `.bower` was unchanged before and after (no history growth); `.bower/runs` holds 71 folders.
 
 Fingerprint change (c3-fingerprint, df2bfc88): input= and sections= hashes from before df2bfc88 do not compare with later ones; the model input itself is unchanged (raw golden model-input-c04.raw.golden.txt).
+
+## Planner-split smoke on `a0a0c1a7` (2026-10-09)
+
+Staging a0a0c1a7 (version b2b8627d), bower-home 7cea21a, Claude Sonnet 5.5. Each run was reset first. Fixtures are now off the live path (TL-P4-14 addendum 23). Note: input= and section hashes from before c3-fingerprint do not compare with these.
+
+| Case | Run | Press → done | reads | model (in/out) | apply | report (s) | Result |
+| --- | --- | --- | ---: | ---: | ---: | ---: | --- |
+| garden | `D3waCJ2E` (37914066517) | 0:51 | 11.1 | 6.3 (7307 / 746) | 8.4 | 8.6 | pass; 5 dates, fee and shed code; no question |
+| offer-and-flat | `Yh5z_hOk` (37914369657) | 1:01 | 11.2 | 16.2 (7431 / 1889) | 13.8 | 6.1 | pass; offer and payslip renamed, Money area, photo asked; Flat hunt 2 lines = 2 rows (op id, line 0/1); New mark on both lines, not on older ones |
+| c05-hub-lines | `eQtprzk5` (37914723982) | 0:55 | 10.4 | 11.8 (7277 / 1479) | 13.7 | 6.0 | pass; hand edit kept, open q-state not asked again; Flat hunt 2 lines = 2 rows |
+
+**Home on an empty Inbox:** the Inbox showed in 4.5 s, with 15 Drive calls (2 media). After 25 s there were 17 calls in all, the last ending at 5.1 s. `.bower` was unchanged. `.bower/runs` holds 74 folders: 6 carry the Bower mark and are ended; the older unmarked ones are kept by the ruling.
+
+Stage 2 smoke on c9d20a67, for comparison: garden 0:55, offer-and-flat 1:21, c05 1:12; Home 4.1 s with 15 calls.
