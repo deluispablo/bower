@@ -38,15 +38,6 @@ describe('one digest module serves app, runner and Worker', () => {
     }
   });
 
-  it('the runner and the fake check a report with the same sum, the one Drive gives as md5Checksum', async () => {
-    expect(typeof digest.checksumOf).toBe('function');
-    const bytes = enc('{"v":1}');
-    expect(await digest.checksumOf(bytes)).toBe(createHash('md5').update(bytes).digest('hex'));
-    for (const file of ['runner/src/main.ts', 'src/data/fake/fake-run-service.ts']) {
-      expect(readFileSync(join(ROOT, file), 'utf8'), file).toContain('checksumOf');
-    }
-  });
-
   it('no file outside hashes.ts calls a hash primitive or spells an empty-file constant', () => {
     const PRIMITIVE = /createHash|createHmac|subtle\s*\.\s*digest|0x67452301|d41d8cd98f00b204e9800998ecf8427e|e3b0c44298fc1c14/;
     const offenders = ALL.filter((p) => PRIMITIVE.test(readFileSync(p, 'utf8'))).map((p) => relative(ROOT, p));

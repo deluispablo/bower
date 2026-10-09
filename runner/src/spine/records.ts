@@ -13,6 +13,7 @@ export interface RunnerReads {
   get(id: string): Promise<DriveFile>;
   list(parentId: string): Promise<DriveFile[]>;
   readText(id: string): Promise<string>;
+  stamped(key: string, value: string): Promise<Array<{ file: DriveFile; trashed: boolean }>>;
   /** Rises with every write the adapter sends; a listing read at one value is current while it stays (`drive.ts`). */
   generation?: number;
   /** What the adapter's own writes did since a listing taken at a generation (`drive.ts`); null when that is not known. */
@@ -50,6 +51,7 @@ export function runnerReads(drive: RunnerReads, runId?: string): RecordReads {
     },
     // Records are canonical JSON written as UTF-8 text, so their text gives their exact bytes back.
     readBytes: async (id) => new TextEncoder().encode(await drive.readText(id)),
+    stamped: (key, value) => drive.stamped(key, value),
   };
 }
 

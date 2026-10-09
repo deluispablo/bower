@@ -34,7 +34,6 @@ import { firstCheckpoint, nextCheckpoint, type CheckpointPatch } from '../spine/
 import { driveEffects, runOperations, type Effects } from '../spine/engine';
 import { FakeRunDrive } from './fake-run-drive';
 import { finishRun, fixedReport, lastRunText, sameView, saveReport } from '../spine/barrier';
-import { checksumOf, md5Hex } from '../contracts/hashes';
 import { PHASE_RANK, isRunPhase } from '../contracts/run-phases';
 import { B_FAILURE } from '../spine/scripted';
 
@@ -402,7 +401,7 @@ export class FakeRunService {
 
   /**
    * The report barrier the runner ends a run with (`finishRun`): the report record, the dispositions, the report
-   * files and the view, each read back, then done in the chain. The view replaces only one this service may replace.
+   * files and the view, each confirmed by its answer, then done in the chain. The view replaces only one this service may replace.
    */
   private async finish(attempt: Attempt, manifest: RunManifest): Promise<void> {
     const row = this.row(attempt.key);
@@ -413,7 +412,6 @@ export class FakeRunService {
       attempt: attempt.epoch,
       records: this.records(attempt.key),
       reads: this.drive,
-      checksum: { stored: async (id) => md5Hex(await this.drive.readBytes(id)), of: checksumOf },
       batch: async () => this.fence(attempt),
       admission: null,
       clock: this.clock,
@@ -510,7 +508,7 @@ export class FakeRunService {
 
   /**
    * The report barrier (`spine/barrier.ts`, shared with the runner): the report files the run changes, then the v1
-   * view, each with the modified time it read and read back. It replaces only the view the folder showed at
+   * view, each with the modified time it read, confirmed by its answer. It replaces only the view the folder showed at
    * admission; another run's view is never written over, and a mismatch is never taken as confirmation.
    */
   private async publish(attempt: Attempt): Promise<void> {
@@ -520,7 +518,6 @@ export class FakeRunService {
     await saveReport({
       rootId: row.binding.rootId,
       reads: this.drive,
-      checksum: { stored: async (id) => md5Hex(await this.drive.readBytes(id)), of: checksumOf },
       batch: async () => this.fence(attempt),
       report,
       view: text,

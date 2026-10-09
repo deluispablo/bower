@@ -5,7 +5,7 @@ import type { ChangeEntry } from './types';
 import { parseNote } from '../vault/note-format';
 import { parseOwnership, type Owner } from '../vault/ownership-format';
 import { parseRules } from '../vault/rules-format';
-import { applyChanges, applyChangesUsing, EDIT_FILE_LIMIT, readBackEdit, recheckEdit, renamesFor, savedLinkKey, timelineDate } from './note-edit';
+import { applyChanges, applyChangesUsing, EDIT_FILE_LIMIT, recheckEdit, renamesFor, savedLinkKey, timelineDate } from './note-edit';
 import {
   MANIFEST_V2_LIMIT, parseRunManifest, parseRunManifestV2,
   type Change, type Content, type EditEntry, type EditGuardRule, type EditText, type EffectV2, type Manifest, type ManifestV2, type ManifestV2Refusal,
@@ -722,18 +722,6 @@ describe('note edits change only what the contract allows', () => {
       expect(await recheckEdit({ ...effect, text: `${NOTE_AFTER} `, content: raw(`${NOTE_AFTER} `) }, enc(NOTE_BEFORE))).toBe('conflict');
       expect(await recheckEdit({ ...effect, content: raw(NOTE_BEFORE) }, enc(NOTE_BEFORE))).toBe('conflict');
       expect(await recheckEdit({ ...effect, beforeContent: { ...effect.beforeContent, sha256: digest('0') } }, enc(NOTE_BEFORE))).toBe('conflict');
-    });
-
-    it('reads back a lost reply as applied, as before, or as other', async () => {
-      const effect = editOf('Areas/Home/Lease.md', noteSeen(), NOTE_BEFORE, NOTE_AFTER, NOTE_CHANGES());
-      const at = { fileId: 'note-lease', name: 'Lease.md', parents: ['areas-home'], trashed: false };
-      expect(await readBackEdit(effect, { ...at, bytes: enc(NOTE_AFTER) })).toBe('applied');
-      expect(await readBackEdit(effect, { ...at, bytes: enc(NOTE_BEFORE) })).toBe('possible-effect');
-      expect(await readBackEdit(effect, { ...at, bytes: enc(`${NOTE_AFTER}x`) })).toBe('unresolved');
-      expect(await readBackEdit(effect, { ...at, trashed: true, bytes: enc(NOTE_AFTER) })).toBe('unresolved');
-      expect(await readBackEdit(effect, { ...at, name: 'Lease 2.md', bytes: enc(NOTE_AFTER) })).toBe('unresolved');
-      expect(await readBackEdit(effect, { ...at, parents: ['areas-work'], bytes: enc(NOTE_AFTER) })).toBe('unresolved');
-      expect(await readBackEdit(effect, { ...at, fileId: 'note-other', bytes: enc(NOTE_AFTER) })).toBe('unresolved');
     });
 
     it('derives the saved link note key as SHA-256 of <fileId>:saved-link-note (m-f)', async () => {

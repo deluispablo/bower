@@ -33,6 +33,7 @@ export class FakeRunDrive implements RunDrive {
     return {
       listAll: async (rootId) => (await this.drive.listAll(rootId)).map((f) => this.seen.note(f)),
       readBytes: (id) => this.drive.readBytes(id),
+      stamped: (key, value) => this.drive.stamped(key, value),
     };
   }
 

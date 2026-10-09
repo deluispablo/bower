@@ -27,31 +27,30 @@
  * - The write goes through the adapter's fenced writes, which read the target (or a create's folder) again right
  *   before it and send it only for this attempt (a fencing token: https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html);
  *   a content write carries the modifiedTime it read.
- * - After it, the answer to the write shows the effect when it can (a move's or a made folder's metadata, a text's
- *   checksum); otherwise stored evidence read from Drive decides (`shows`, `readBackEdit`). A write sent that shows no
- *   effect stops the run unresolved; it is never sent again blindly (TL-P2-16).
+ * - After it, the answer to the write shows the effect (its metadata, its stamp and the stored bytes' checksum,
+ *   `write-once.ts`), with no read after it. A write sent whose answer shows no effect stops the run unresolved; it is
+ *   never sent again blindly (TL-P2-16).
  * - A write whose answer never came (a network error, or a 5xx) is read back by its stamp (`reconcile`, TL-P3-28):
- *   landed, it counts as applied; no stamp, it is not done and settles rejected with what stays as it was;
- *   unreadable, the run stops unresolved, for a redispatch to read back.
- * - Every write carries the run's stamp in the same request (TL-P4-05 addendum): one `appProperties` key, `bowerOp`,
- *   overwritten by the next write, never one key per run. Only Bower's OAuth client sees it, and a person's edits in
- *   Drive keep it (https://developers.google.com/workspace/drive/api/guides/properties).
+ *   landed, it counts as applied; no stamp, it is not done and settles rejected, in the words of an outcome Bower
+ *   could not confirm (never offline: a run's network is not the person's); unreadable, the run stops unresolved.
+ * - Every write carries the run's stamp in the same request (`write-once.ts`, TL-P4-05 addendum).
  *
  * Drive v3 offers no compare-and-swap on files: these are prechecks with a short window, not a lock (ARCHITECTURE,
  * "Safety at the actual storage boundary").
  */
 import { BowerError } from '../types';
-import { sha256Hex, sha256Sync } from '../contracts/hashes';
+import { sha256Hex } from '../contracts/hashes';
 import type { Checkpoint, EffectEvidence, Failure, Outcome } from '../contracts/run-checkpoint';
-import { readBackEdit, recheckEdit, savedLinkKey } from '../contracts/note-edit';
-import { parseRunManifestV2, type EditText, type Effect as ManifestEffect, type OperationV2, type SeenFile } from '../contracts/run-manifest';
+import { recheckEdit, savedLinkKey } from '../contracts/note-edit';
+import { parseRunManifestV2, type Effect as ManifestEffect, type OperationV2, type SeenFile } from '../contracts/run-manifest';
 import { notAsSeen, notAsSeenReason, notRead } from '../contracts/still-as-seen';
-import type { DriveFile, FencedDrive, RunDrive, StoredEvidence } from '../drive/drive-api';
+import { UNCONFIRMED_WRITE_MESSAGE, type DriveFile, type FencedDrive, type RunDrive, type StoredEvidence } from '../drive/drive-api';
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
 import { savedTwins } from './duplicates';
 import { canonical, checkpointName, firstCheckpoint, manifestName, nextCheckpoint, type AttemptMark, type CheckpointPatch, type RunManifest, type RunRecords } from './records';
 import { SOURCE_NOT_AS_SEEN, UNCONFIRMED_GONE, materialize } from './report';
 import { conflicts, needsOf } from './schedule';
+import { STAMP, confirms, stampOf } from './write-once';
 /**
  * How one operation ended once sent: `rejected` only when its precondition refused it before anything was sent, or
  * when a send whose answer was lost reads back as not landed (the folder still as the plan saw it).
@@ -73,8 +72,6 @@ export interface Effects {
    * settles without it was refused before anything was sent.
    */
   apply(op: OperationV2, head: Checkpoint, w: FencedDrive, manifest: RunManifest, sending: () => Promise<void>): Promise<Settled>;
-  /** Stored evidence that the operation's effect landed; null when none is found. */
-  observe(op: OperationV2, head: Checkpoint): Promise<EffectEvidence | null>;
   /** An operation possibly sent by an earlier runner, read back: landed, not landed, or unreadable. */
   readBack(op: OperationV2, head: Checkpoint, manifest: RunManifest): Promise<ReadBack>;
 }
@@ -313,17 +310,6 @@ const ARRIVED = 'Something new arrived in it, so it stays in your inbox.';
 const NOT_SAVED = 'It changed, or the copy Bower found was moved, so it stays in your inbox for now.';
 const LIST_CHANGED = "Bower's list of your files changed meanwhile.";
 const UNRESOLVED = 'Bower could not check one of the things it moved. It will look again later.';
-const NOT_REACHED = "Bower couldn't reach Google Drive, so it stayed as it was.";
-
-/** The run's stamp on every effect it sends (TL-P4-05 addendum). */
-export const STAMP = 'bowerOp';
-
-/**
- * The stamp of one operation of one run: the first 32 hex characters of SHA-256(`<run_id>:<operation id>`), 128 bits
- * (TL-P4-05 addendum 2). Written out, a run id (87 characters) and an operation id (64) are more than the 124 bytes Drive keeps for one property's
- * key and value (https://developers.google.com/workspace/drive/api/guides/properties).
- */
-export const stampOf = (runId: string, operationId: string): string => sha256Sync(`${runId}:${operationId}`).slice(0, 32);
 
 type Effect = OperationV2['effect'];
 
@@ -424,36 +410,6 @@ function stampSays(found: string | undefined, runId: string, op: OperationV2, ma
 export function driveEffects(drive: RunDrive): Effects {
   const toEvidence = (ev: StoredEvidence, encoding: 'utf8' | 'blob' = 'blob'): EffectEvidence => asEvidence(ev, encoding, drive.provenance);
 
-  /** An edit read back (TL-P2-20 rule 5): the same file, out of the Bin, with exactly the edit's text. */
-  const readBack = async (e: EditText): Promise<EffectEvidence | null> => {
-    const ev = await drive.evidence(e.before.fileId);
-    if (!ev) return null;
-    const bytes = ev.trashed ? new Uint8Array() : await drive.readBytes(e.before.fileId);
-    const read = await readBackEdit(e, { fileId: ev.file.id, name: ev.file.name, parents: ev.file.parents, trashed: ev.trashed, bytes });
-    if (read === 'applied' && ev.content?.size === e.content.size && ev.content.sha256 === e.content.sha256) return toEvidence(ev, 'utf8');
-    console.error(`The edit of file ${e.before.fileId} reads back as ${read === 'applied' ? 'unresolved' : read}`);
-    return null;
-  };
-
-  /** Stored evidence that this very effect applied, or null. A lookalike without the create key never counts. */
-  const observe = async (op: OperationV2, head: Checkpoint): Promise<EffectEvidence | null> => {
-    const e = op.effect;
-    const parentId = parentOf(head, e);
-    if (e.kind === 'create-folder' || e.kind === 'create-text') {
-      if (!parentId) return null;
-      const folder = e.kind === 'create-folder';
-      const made = (await drive.list(parentId)).filter((f) => f.folder === folder && f.name === e.name && f.appProperties?.bowerItem === e.createKey);
-      const [only, ...more] = made;
-      if (!only || more.length) return null;
-      const ev = await drive.evidence(only.id);
-      return ev && shows(e, ev, parentId) ? toEvidence(ev, folder ? 'blob' : 'utf8') : null;
-    }
-    if (e.kind === 'edit-text') return readBack(e);
-    const ev = await drive.evidence(e.before.fileId);
-    if (!ev || !shows(e, ev, parentId)) return null;
-    return toEvidence(ev, e.kind === 'write-runner-json' ? 'utf8' : 'blob');
-  };
-
   /**
    * Whether the operation may be sent: its parent there, its source as the plan saw it, and for a content write the
    * stored bytes it was planned on. Gives the modifiedTime a content write must carry, or why it is refused.
@@ -527,7 +483,7 @@ export function driveEffects(drive: RunDrive): Effects {
   };
 
   /** Sends the effect once through the fenced writes. */
-  const send = async (e: Effect, w: FencedDrive, parentId: string, modifiedTime: string | null, stamp: string): Promise<DriveFile | null> => {
+  const send = async (e: Effect, w: FencedDrive, parentId: string, modifiedTime: string | null, stamp: string): Promise<DriveFile> => {
     const op = { [STAMP]: stamp };
     switch (e.kind) {
       case 'move': {
@@ -541,8 +497,7 @@ export function driveEffects(drive: RunDrive): Effects {
       case 'create-folder':
         return w.createFolder(parentId, e.name, { bowerItem: e.createKey, ...op });
       case 'bin':
-        await w.trash(e.before.fileId, op);
-        return null;
+        return w.trash(e.before.fileId, op);
       case 'write-runner-json':
       case 'edit-text':
         if (modifiedTime === null) throw new BowerError('unknown', UNRESOLVED);
@@ -555,32 +510,22 @@ export function driveEffects(drive: RunDrive): Effects {
   };
 
   /**
-   * The effect read from the answer of its own write, which Drive gave with the stored checksums: the file as stored
-   * (name, place, properties) and, for text, the very bytes sent. Null when the answer cannot show it; the caller then
-   * reads it from Drive as before (`observe`).
+   * The effect read from the answer of its own write (`write-once.ts`): the file as stored (name, place, properties and
+   * the stamp sent) and, for text, the checksum of the very bytes sent. Null when the answer does not show it.
    */
-  const shownByAnswer = async (op: OperationV2, parentId: string, answer: DriveFile | null): Promise<EffectEvidence | null> => {
+  const answered = async (op: OperationV2, parentId: string, answer: DriveFile, stamp: string): Promise<EffectEvidence | null> => {
     const e = op.effect;
-    if (e.kind === 'bin') {
-      const ev = drive.fromAnswer?.(e.before.fileId) ?? null;
-      return ev && shows(e, ev, null) ? toEvidence(ev, 'blob') : null;
-    }
-    if (!answer) return null;
-    if (e.kind === 'create-folder' || e.kind === 'move') {
-      // The answer's own metadata shows a move or a made folder (name, place, properties); a move changes no bytes, so
-      // with no checksum given its evidence has no content rather than a read that could find it gone since.
-      const ev = drive.fromAnswer?.(answer.id) ?? { file: answer, trashed: false, content: null };
-      return shows(e, ev, parentId) ? toEvidence(ev, 'blob') : null;
+    if (answer.appProperties?.[STAMP] !== stamp) return null;
+    if (e.kind === 'bin' || e.kind === 'create-folder' || e.kind === 'move') {
+      // A move or a Bin changes no bytes: the checksum the answer gives, if any, is the content's evidence.
+      const content = !answer.folder && answer.sha256 !== undefined && answer.size !== undefined ? { size: answer.size, sha256: answer.sha256 } : null;
+      const ev: StoredEvidence = { file: answer, trashed: e.kind === 'bin', content };
+      return shows(e, ev, e.kind === 'bin' ? null : parentId) ? toEvidence(ev, 'blob') : null;
     }
     const bytes = new TextEncoder().encode(e.text);
-    if (!(await drive.confirmsBytes?.(answer.id, bytes))) return null;
-    const stored = drive.answeredFile?.(answer.id);
-    if (!stored) return null;
-    const ev: StoredEvidence = { file: stored, trashed: false, content: { size: bytes.byteLength, sha256: await sha256Hex(bytes) } };
-    if (e.kind === 'edit-text') {
-      const read = await readBackEdit(e, { fileId: stored.id, name: stored.name, parents: stored.parents, trashed: false, bytes });
-      return read === 'applied' && ev.content?.size === e.content.size && ev.content.sha256 === e.content.sha256 ? toEvidence(ev, 'utf8') : null;
-    }
+    if (!confirms(answer, bytes)) return null;
+    const ev: StoredEvidence = { file: answer, trashed: false, content: { size: bytes.byteLength, sha256: await sha256Hex(bytes) } };
+    if (e.kind === 'edit-text') return answer.id === e.before.fileId && ev.content?.size === e.content.size && ev.content.sha256 === e.content.sha256 ? toEvidence(ev, 'utf8') : null;
     return shows(e, ev, e.kind === 'create-text' ? parentId : null) ? toEvidence(ev, 'utf8') : null;
   };
 
@@ -631,7 +576,6 @@ export function driveEffects(drive: RunDrive): Effects {
   };
 
   return {
-    observe,
     readBack: reconcile,
     async apply(op, head, w, manifest, sending) {
       const stamp = stampOf(head.runId, op.operationId);
@@ -639,7 +583,7 @@ export function driveEffects(drive: RunDrive): Effects {
       if ('refused' in ok) return ok.refused;
       // Possibly sent from here on: everything before it only read.
       await sending();
-      let answer: DriveFile | null;
+      let answer: DriveFile;
       try {
         answer = await send(op.effect, w, ok.parentId, ok.modifiedTime, stamp);
       } catch (e) {
@@ -659,14 +603,14 @@ export function driveEffects(drive: RunDrive): Effects {
           console.error(e);
           const back = await reconcile(op, head, manifest);
           if (back.state === 'landed') return { state: 'applied', evidence: back.evidence };
-          if (back.state === 'not-landed') return refused('offline', NOT_REACHED);
+          if (back.state === 'not-landed') return refused('unknown', UNCONFIRMED_WRITE_MESSAGE);
           if (back.state === 'gone') return refused('unknown', UNCONFIRMED_GONE);
           console.error(back.why);
         }
         throw e;
       }
-      // The answer to the write shows the effect; read from Drive only when it cannot (no checksum, or another one).
-      const seen = (await shownByAnswer(op, ok.parentId, answer)) ?? (await observe(op, head));
+      // The answer to the write shows the effect: no read follows it.
+      const seen = await answered(op, ok.parentId, answer, stamp);
       if (!seen) {
         console.error(`Operation ${op.ordinal} was sent and shows no effect`);
         throw new BowerError('unknown', UNRESOLVED);

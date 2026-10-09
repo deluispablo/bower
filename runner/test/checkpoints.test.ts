@@ -255,20 +255,14 @@ describe('runner checkpoints', () => {
       const readBacks = wire.requests.filter((r) => r.url.searchParams.get('alt') === 'media' && written.has(decodeURIComponent(r.url.pathname.split('/').at(-1) ?? ''))).length;
       return { requests: wire.requests.length - from, checkpoints: chain.length - 1, ops: manifest.operations.length, readBacks };
     };
-    // A create whose answer carries no checksum is read back, as before: two Drive requests per checkpoint.
-    const before = await cost(false);
-    expect(before.readBacks).toBe(before.checkpoints + 1);
-    expect(before.requests).toBe(2 * before.checkpoints + 1);
-    // Drive's answer carries the stored bytes' checksum: the create, nothing more.
+    // Drive's answer carries the stored bytes' checksum: the create, nothing more (two requests per checkpoint before).
     const after = await cost(true);
-    expect(after.checkpoints).toBe(before.checkpoints);
+    expect(after.checkpoints).toBeGreaterThan(0);
     expect(after.readBacks).toBe(0);
     expect(after.requests).toBe(after.checkpoints);
-    console.log(`checkpoint cost: before=${(before.requests / before.ops).toFixed(2)} after=${(after.requests / after.ops).toFixed(2)} Drive requests per operation`);
-    expect(after.requests / after.ops).toBeLessThan(before.requests / before.ops);
   });
 
-  it('a checkpoint Drive stored with other bytes than were sent is read back and refused', async () => {
+  it('a checkpoint Drive stored with other bytes than were sent is refused from its answer', async () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { wire, root, manifest } = await seeded();
     // Drive answers the second checkpoint's create with 200, but what it stored (and its checksums) are other bytes.
@@ -292,10 +286,8 @@ describe('runner checkpoints', () => {
     await expect(start(wire, root, manifest, 1, effects).end).rejects.toMatchObject({ code: 'unknown' });
 
     expect(changed).not.toBe('');
-    expect(errors.mock.calls.some((c) => String(c[0]).includes('Drive stored other bytes'))).toBe(true);
-    // The checkpoint read back from Drive, never taken as written: the chain stops before it, and nothing after it was sent.
-    const reads = wire.requests.filter((r) => r.url.searchParams.get('alt') === 'media' && decodeURIComponent(r.url.pathname.split('/').at(-1) ?? '') === changed);
-    expect(reads.length).toBeGreaterThan(0);
+    expect(errors.mock.calls.some((c) => String(c[0]).includes('Drive did not confirm the bytes'))).toBe(true);
+    // The checkpoint never taken as written, from its answer alone: the chain stops before it, and nothing after it was sent.
     expect(effects.sent.size).toBeLessThanOrEqual(1);
   });
 

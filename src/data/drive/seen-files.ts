@@ -102,8 +102,9 @@ export class SeenFiles {
       createText: async (parentId, name, text, appProperties) => this.note(await writes.createText(parentId, name, text, appProperties)),
       update: async (id, patch) => this.note(await writes.update(id, patch)),
       trash: async (id, appProperties) => {
-        await writes.trash(id, appProperties);
+        const binned = await writes.trash(id, appProperties);
         this.forget(id);
+        return binned;
       },
       writeText: async (id, text, ifModified, appProperties) => this.note(await writes.writeText(id, text, ifModified, appProperties)),
     };

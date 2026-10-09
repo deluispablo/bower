@@ -208,7 +208,6 @@ describe('runner drive adapter', () => {
     expect(lost).toEqual(['Lost.md']);
     const lostId = (await fake.listAll('root')).find((f) => f.name === 'Lost.md')?.id ?? '';
     expect(await adapter.readText(lostId)).toBe('Lost words.');
-    expect(await adapter.md5(lostId)).toBe(createHash('md5').update('Lost words.').digest('hex'));
   });
 
   it('lists every page of a folder', async () => {

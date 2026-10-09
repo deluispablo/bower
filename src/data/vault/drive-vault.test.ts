@@ -13,7 +13,7 @@ import { SET_ASIDE_TEXT } from '../pile-readiness';
 import { FakeRunService } from '../fake/fake-run-service';
 import { parsePileDeclaration } from '../contracts/pile-declaration';
 import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
-import { driveError } from '../drive/drive-api';
+import { driveError, unconfirmedWriteError, UNCONFIRMED_WRITE_MESSAGE } from '../drive/drive-api';
 import { IDBFactory } from 'fake-indexeddb';
 import { createUploadQueue, type StorageLike, type UploadQueue } from '../upload-queue';
 import { indexedDbUploadStore, memoryUploadStore } from '../upload-store';
@@ -455,6 +455,66 @@ describe('a lost reply to a write', () => {
     };
     await expect(vault.toggleTask(PASSPORT, 4)).rejects.toMatchObject({ name: 'BowerError', message: "Bower isn't sure that saved. Check again when you're back online." });
     expect(seen.writes()).toBe(1);
+  });
+});
+
+describe('an app write is found again by its stamp', () => {
+  it('an app write with an unknown outcome is resolved by its stamp', async () => {
+    await vault.tree();
+    const writeText = drive.writeText.bind(drive);
+    const readText = drive.readText.bind(drive);
+    let written = false;
+    let readAfter = 0;
+    // Drive stores the toggle and then answers 5xx: the outcome is unknown.
+    drive.writeText = async (...a) => {
+      await writeText(...a);
+      written = true;
+      drive.writeText = writeText;
+      throw unconfirmedWriteError();
+    };
+    drive.readText = async (id) => {
+      if (written) readAfter++;
+      return readText(id);
+    };
+    await vault.toggleTask(PASSPORT, 4);
+    expect(drive.dump(root).get(PASSPORT)).toContain('- [x] Photo form signed by a witness');
+    expect((await drive.get(await idOf(PASSPORT))).appProperties?.bowerOp).toEqual(expect.stringMatching(/^[0-9a-f]{32}$/));
+    // Resolved by the stamp on the file, not by reading its text back.
+    expect(readAfter).toBe(0);
+  });
+
+  it('a retry after my own unknown write is not called a change elsewhere', async () => {
+    await vault.tree();
+    const writeText = drive.writeText.bind(drive);
+    const get = drive.get.bind(drive);
+    // The toggle lands, Drive answers 5xx, and the read that would resolve it gets no answer either.
+    drive.writeText = async (...a) => {
+      await writeText(...a);
+      drive.writeText = writeText;
+      drive.get = async () => {
+        drive.get = get;
+        throw driveError('offline');
+      };
+      throw unconfirmedWriteError();
+    };
+    await expect(vault.toggleTask(PASSPORT, 4)).rejects.toMatchObject({ code: 'unknown', message: UNCONFIRMED_WRITE_MESSAGE });
+    // Alex taps it again: their own write is recognised by its stamp, not reported as changed somewhere else.
+    await expect(vault.toggleTask(PASSPORT, 4)).resolves.toBeUndefined();
+    expect(drive.dump(root).get(PASSPORT)).toContain('- [x] Photo form signed by a witness');
+    expect((await vault.changes()).filter((r) => r.what === 'Ticked "Photo form signed by a witness" in Passport renewal')).toHaveLength(1);
+  });
+
+  it('a toggle after the note changed elsewhere between the read and the write is refused', async () => {
+    await vault.tree();
+    const writeText = drive.writeText.bind(drive);
+    // Another device saves the note right after Bower read it and before its write.
+    drive.writeText = async (id, ...rest) => {
+      drive.writeText = writeText;
+      drive.touch(id);
+      return writeText(id, ...rest);
+    };
+    await expect(vault.toggleTask(PASSPORT, 4)).rejects.toMatchObject({ code: 'conflict' });
+    expect(drive.dump(root).get(PASSPORT)).toContain('- [ ] Photo form signed by a witness');
   });
 });
 

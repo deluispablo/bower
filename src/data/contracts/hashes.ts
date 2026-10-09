@@ -1,7 +1,7 @@
 /**
  * The one place a digest is worked out: the app, the runner and the Worker all come here (TL-P4-14, c1-digest).
  * SHA-256 tells a file you already have apart (against `.bower/hashes.json`, which the runner keeps: hash → path);
- * MD5 is what Drive gives as a file's `md5Checksum`, so it is the sum a report is checked with.
+ * MD5 is what Drive gives as a file's `md5Checksum`, so it is the sum a write's answer is confirmed with.
  * SHA-256 is Web Crypto's `SubtleCrypto.digest` (https://developer.mozilla.org/docs/Web/API/SubtleCrypto/digest),
  * there in browsers, Workers and Node 20+ as `crypto.subtle` (https://nodejs.org/api/webcrypto.html).
  * Synchronous SHA-256 and MD5 use @noble/hashes (https://github.com/paulmillr/noble-hashes).
@@ -52,6 +52,3 @@ export function sha256Sync(data: Uint8Array | string): string {
 export function md5Hex(bytes: Uint8Array): string {
   return hex(noblemd5(bytes));
 }
-
-/** The sum a report is checked with, here and in the runner: the MD5 Drive gives as `md5Checksum` for the stored bytes. */
-export const checksumOf = async (bytes: Uint8Array): Promise<string> => md5Hex(bytes);

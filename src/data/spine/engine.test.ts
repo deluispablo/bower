@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Checkpoint } from '../contracts/run-checkpoint';
 import { sha256Sync } from '../contracts/hashes';
 import { FakeDrive, type FencedCall } from '../drive/fake-drive';
-import type { FaultAction } from '../drive/drive-api';
+import type { DriveFile, FaultAction } from '../drive/drive-api';
 import { SYSTEM } from '../vault/layout';
 import { planRun } from '../fake/fake-runner';
 import { FakeRunService } from '../fake/fake-run-service';
@@ -34,9 +34,31 @@ const stampOfCall = (call: FencedCall): string | undefined =>
   (call.op === 'update' ? call.patch.appProperties : call.appProperties)?.bowerOp ?? undefined;
 
 /** Alex's default folder on the fake, its run planned and admitted, and every fenced write the run sends. */
-async function applied(fault?: (call: FencedCall, drive: FakeDrive) => FaultAction, landed?: (call: FencedCall, drive: FakeDrive) => void): Promise<{ drive: FakeDrive; root: string; manifest: RunManifest; calls: FencedCall[]; chain: Checkpoint[]; view: string }> {
+async function applied(fault?: (call: FencedCall, drive: FakeDrive) => FaultAction, landed?: (call: FencedCall, drive: FakeDrive) => void): Promise<{ drive: FakeDrive; root: string; manifest: RunManifest; calls: FencedCall[]; chain: Checkpoint[]; view: string; readBacks: string[] }> {
   const drive = new FakeDrive({ clock: () => 0 });
   const root = (await seedFakeDrive(drive, 'default', AT)) ?? '';
+  // A read of a file right after its own write was answered, with nothing sent between: a read-back the answer's checksum would have done.
+  let just: string | null = null;
+  const readBacks: string[] = [];
+  const fenced = drive.fenced.bind(drive);
+  drive.fenced = (check) => {
+    const w = fenced(check);
+    const noted = async (made: Promise<DriveFile>): Promise<DriveFile> => {
+      just = null;
+      const f = await made;
+      just = f.id;
+      return f;
+    };
+    return { ...w, createText: (...a) => noted(w.createText(...a)), writeText: (...a) => noted(w.writeText(...a)) };
+  };
+  for (const read of ['readBytes', 'readText'] as const) {
+    const real = drive[read].bind(drive) as (id: string) => Promise<never>;
+    drive[read] = (id: string) => {
+      if (id === just) readBacks.push(id);
+      just = null;
+      return real(id);
+    };
+  }
   const runs = new FakeRunService({ drive, clock: () => AT, scale: 'instant' });
   const plan = await planRun(drive, root, { scope: 'all', allowWeb: false, runId: RUN_ID, requestId: 'request-alex-1', requestedAt: AT });
   const calls: FencedCall[] = [];
@@ -60,7 +82,7 @@ async function applied(fault?: (call: FencedCall, drive: FakeDrive) => FaultActi
   const sys = files.find((f) => f.folder && f.name === SYSTEM.dir && f.parents[0] === root);
   const last = files.find((f) => f.name === 'last-run.json' && f.parents[0] === sys?.id);
   const view = last ? await drive.readText(last.id) : '';
-  return { drive, root, manifest: plan.manifest, calls, chain: found.kind === 'run' ? found.chain : [], view };
+  return { drive, root, manifest: plan.manifest, calls, chain: found.kind === 'run' ? found.chain : [], view, readBacks };
 }
 
 describe('the runner and the fake run the same engine', () => {
@@ -189,3 +211,45 @@ describe('the runner and the fake run the same engine', () => {
     expect(report.setAside.map((r) => r.name)).toContain(op.effect.before.name);
   });
 });
+
+describe('write once by the bowerOp stamp', () => {
+  const what = (c: FencedCall): string => (c.op === 'create-folder' || c.op === 'create-text' ? `${c.op} ${c.name}` : `${c.op} ${c.id}`);
+
+  it('every write reconciles by its bowerOp stamp', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // Operations, run records and report files alike: each write carries a stamp, and its answer confirms it.
+    const clean = await applied();
+    expect(clean.chain.at(-1)?.phase).toBe('done');
+    expect(clean.calls.filter((c) => stampOfCall(c) === undefined).map(what)).toEqual([]);
+    expect(clean.readBacks).toEqual([]);
+    // Every answer lost once: each write is found again by its stamp, never written twice nor taken by its name or text.
+    const lost = new Set<string>();
+    const blind = await applied((call) => {
+      const key = JSON.stringify(call);
+      if (lost.has(key)) return 'pass';
+      lost.add(key);
+      return 'lose-reply';
+    });
+    expect(blind.chain.at(-1)?.phase).toBe('done');
+    const stamps = blind.calls.map(stampOfCall);
+    expect(stamps.filter((s) => s === undefined).length).toBe(0);
+    for (const s of new Set(stamps)) expect((await blind.drive.stamped('bowerOp', s ?? '')).length, s).toBeLessThanOrEqual(1);
+    expect(blind.calls.length).toBe(new Set(stamps).size);
+  });
+
+  it('a lost write that reads back as not landed is never called offline headless', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    let target: string | null = null;
+    const { manifest, chain, view } = await applied((call) => {
+      if (target !== null || call.op !== 'update') return 'pass';
+      target = call.id;
+      return 'refuse';
+    });
+    const op = manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === target);
+    const outcome = chain.at(-1)?.outcomes.find((o) => o.operationId === op?.operationId);
+    expect(outcome?.state).toBe('rejected');
+    expect(outcome?.state === 'rejected' ? outcome.failure.code : null).not.toBe('offline');
+    expect(view).not.toContain("couldn't reach Google Drive");
+  });
+});
+

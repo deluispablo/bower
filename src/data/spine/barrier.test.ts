@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { DriveHttp } from '../drive/drive-http';
 import { FakeDrive } from '../drive/fake-drive';
 import type { Question, RunReport } from '../types';
-import { sha256 } from '../vault/hashes';
 import { SYSTEM, type LastRunFile } from '../vault/layout';
 import { API, RUN_ID, TICKET, driveV3 } from '../../../runner/test/drive-v3';
 import { lastRunText, olderView, saveReport, type ReportSave } from './barrier';
@@ -25,15 +24,14 @@ async function folder(drive: FakeDrive): Promise<string> {
 const report: RunReport = { filed: [{ name: 'receipt.pdf', title: 'Receipt', kind: 'pdf', to: 'Projects' }], created: [], updated: [], setAside: [], questions: [asked('q2', 2000)] };
 const run = { id: 'run-2', requestedAt: 2000 };
 const view = lastRunText({ v: 1, run: { id: run.id, scope: 'all', phase: 'done', requestedAt: run.requestedAt, phaseAt: 3000, total: 1, finishedAt: 3000, report } });
-const digest = (bytes: Uint8Array): Promise<string> => sha256(new Blob([bytes.slice()]));
 
-type Io = Pick<ReportSave, 'rootId' | 'reads' | 'checksum' | 'batch'>;
+type Io = Pick<ReportSave, 'rootId' | 'reads' | 'batch'>;
 
 /** The pretend Drive as the fake run service writes to it. */
 async function onFake(): Promise<{ io: Io; drive: FakeDrive }> {
   const drive = new FakeDrive({ clock: () => 0 });
   const rootId = await folder(drive);
-  const io: Io = { rootId, reads: drive, checksum: { stored: async (id) => digest(await drive.readBytes(id)), of: digest }, batch: async () => drive.fenced(() => {}) };
+  const io: Io = { rootId, reads: drive, batch: async () => drive.fenced(() => {}) };
   return { io, drive };
 }
 
@@ -44,7 +42,7 @@ async function onDrive(): Promise<{ io: Io; drive: FakeDrive }> {
   const wire = driveV3(drive);
   const grant = (await (await wire.fetch(`${API}/runner/runs/${RUN_ID}/token`, { headers: { authorization: `Bearer ${TICKET}` } })).json()) as { accessToken: string };
   const http = new DriveHttp({ token: async () => grant.accessToken, fetch: wire.fetch });
-  const io: Io = { rootId, reads: http, checksum: { stored: async (id) => digest(await http.readBytes(id)), of: digest }, batch: async () => http };
+  const io: Io = { rootId, reads: http, batch: async () => http };
   return { io, drive };
 }
 

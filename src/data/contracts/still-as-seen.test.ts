@@ -50,7 +50,7 @@ const SCENARIOS: Array<{ name: string; seen?: (f: DriveFile) => DriveFile; chang
   { name: 'its second folder replaced', change: async (x) => void (await x.drive.update(x.id, { removeParent: x.p2, addParent: x.p3 })), reason: 'parents' },
   { name: 'its first folder replaced', change: async (x) => void (await x.drive.update(x.id, { removeParent: x.p1, addParent: x.p3 })), reason: 'parents' },
   { name: 'renamed', change: async (x) => void (await x.drive.update(x.id, { name: 'Lease 2.pdf' })), reason: 'name' },
-  { name: 'put in the Bin', change: (x) => x.drive.trash(x.id), reason: 'gone' },
+  { name: 'put in the Bin', change: async (x) => void (await x.drive.trash(x.id)), reason: 'gone' },
 ];
 
 interface Verdict {

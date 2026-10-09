@@ -5,13 +5,14 @@
  * written. Shared by the fake run service and the runner (TL-P3-21 point 2:
  * extracted, not ported): the reads come through a small interface, the writes through a `FencedDrive`, and time and
  * ids are handed in. Every folder is found by its real name and parents, duplicates included; a record is written
- * once, read back and compared byte for byte, and a reply lost after it landed is reconciled by its exact body,
- * never written again. The pure record guards live in `contracts/`.
+ * once by its stamp and confirmed by its answer's checksum (`write-once.ts`), and a reply lost after it landed is
+ * found again by that stamp, never written again. The pure record guards live in `contracts/`.
  */
 import type { DriveFile, FencedDrive } from '../drive/drive-api';
+import { makeFolder, makeText, type StampSearch } from './write-once';
 import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
 import { parsePileDisposition, type Disposition } from '../contracts/pile-disposition';
-import { parseRunCheckpoint, parseRunReport, verifyCheckpointChain, type Checkpoint, type Outcome, type ReportRecord } from '../contracts/run-checkpoint';
+import { parseRunCheckpoint, verifyCheckpointChain, type Checkpoint, type Outcome } from '../contracts/run-checkpoint';
 import { parseRunManifestV2, type Manifest, type OperationV2 } from '../contracts/run-manifest';
 import { BowerError } from '../types';
 import { sha256 } from '../vault/hashes';
@@ -38,8 +39,8 @@ export type RunManifest = Omit<Manifest, 'v' | 'operations'> & { v: 1 | 2; opera
 /** Where a record lives: one run's folder, or the pile records. */
 export type Where = { runId: string } | 'piles';
 
-/** What the records read: everything under a folder that is not in the Bin, and a file's stored bytes. */
-export interface RecordReads {
+/** What the records read: everything under a folder that is not in the Bin, a file's stored bytes, and a stamp search. */
+export interface RecordReads extends StampSearch {
   listAll(rootId: string): Promise<DriveFile[]>;
   readBytes(id: string): Promise<Uint8Array>;
 }
@@ -152,71 +153,34 @@ export class RunRecords {
     return found;
   }
 
-  /**
-   * Writes an immutable record once: already there with these bytes is done;
-   * other bytes refuse. A failed create whose record landed anyway (a lost
-   * reply) is reconciled by its exact body. Confirmed by reading it back.
-   */
+  /** Writes an immutable record once: already there with these bytes is done; other bytes refuse. */
   async put(w: FencedDrive, where: Where, name: string, text: string, stamp?: Record<string, string>): Promise<void> {
-    const bytes = new TextEncoder().encode(text);
-    /** Whether the record is there with these bytes, from a listing (one is taken when none is given). */
-    const there = async (found: Folders | null = null): Promise<boolean> => {
-      const stored = await this.readIn(found ?? (await this.folders(where)), name);
-      if (stored && !same(stored, bytes)) {
-        console.error(`Run record ${name} is there with other bytes`);
-        throw new BowerError('conflict', SAVE_FAILED);
-      }
-      return stored !== null;
-    };
-    // One listing answers both whether it is there already and where it goes.
     const found = await this.folders(where);
-    if (await there(found)) return;
+    const stored = await this.readIn(found, name);
+    if (stored && !same(stored, new TextEncoder().encode(text))) {
+      console.error(`Run record ${name} is there with other bytes`);
+      throw new BowerError('conflict', SAVE_FAILED);
+    }
+    if (stored) return;
     const parent = await this.ensure(w, where, found);
     this.placed.set(this.placeOf(where), parent);
-    let made: DriveFile;
-    try {
-      made = await w.createText(parent, name, text, stamp);
-    } catch (e) {
-      if (!(await there())) throw e;
-      // The record landed and only its answer was lost: it is the same record, not a second one.
-      console.error(e);
-      return;
-    }
-    // Confirmed by reading back the very file written.
-    if (!same(await this.reads.readBytes(made.id), bytes)) {
-      console.error(`Run record ${name} could not be read back`);
-      throw new BowerError('unknown', SAVE_FAILED);
-    }
+    await makeText(w, this.reads, parent, name, text, stamp);
   }
 
   /**
    * Writes a record whose name no earlier write can have used: a checkpoint names its revision and its own hash, and
    * its body names the attempt that writes it. So it is written into the folder its run's records were last written
-   * to, with no listing first; confirmed by reading it back. With no folder known yet it goes through `put`; a write
-   * that fails is done only if the record landed with these bytes (a lost reply), and is never written twice.
+   * to, with no listing first. With no folder known yet it goes through `put`.
    */
   async putNew(w: FencedDrive, where: Where, name: string, text: string): Promise<void> {
     const parent = this.placed.get(this.placeOf(where));
     if (!parent) return this.put(w, where, name, text);
-    let made: DriveFile;
     try {
-      made = await w.createText(parent, name, text);
+      await makeText(w, this.reads, parent, name, text);
     } catch (e) {
-      // The next write looks for its folder again; this one is done only if the record landed with these bytes.
+      // The next write looks for its folder again.
       this.placed.delete(this.placeOf(where));
-      const landed = await this.read(where, name);
-      if (!landed) throw e;
-      if (!same(landed, new TextEncoder().encode(text))) {
-        console.error(`Run record ${name} is there with other bytes`);
-        throw new BowerError('conflict', SAVE_FAILED);
-      }
-      // The record landed and only its answer was lost: it is the same record, not a second one.
-      console.error(e);
-      return;
-    }
-    if (!same(await this.reads.readBytes(made.id), new TextEncoder().encode(text))) {
-      console.error(`Run record ${name} could not be read back`);
-      throw new BowerError('unknown', SAVE_FAILED);
+      throw e;
     }
   }
 
@@ -314,17 +278,6 @@ export class RunRecords {
     return out;
   }
 
-  /** The published report record, read back and bound to this run. */
-  async report(manifest: RunManifest, manifestHash: string, hash: string): Promise<ReportRecord> {
-    const bytes = await this.read({ runId: manifest.runId }, reportName(hash));
-    const parsed = bytes ? await parseRunReport(bytes, { rootId: this.rootId, runId: manifest.runId, captureId: manifest.captureId, manifestHash }) : null;
-    if (!parsed?.ok || parsed.sha256 !== hash) {
-      console.error(`The report of run ${manifest.runId} is ${parsed ? (parsed.ok ? 'another report' : parsed.reason) : 'missing'}`);
-      throw new BowerError('unknown', READ_FAILED);
-    }
-    return parsed.value;
-  }
-
   /** Writes a consumed disposition after checking it against its pile's full key set. */
   async putDisposition(w: FencedDrive, value: Disposition): Promise<void> {
     const c = await canonical(value);
@@ -336,23 +289,12 @@ export class RunRecords {
     await this.put(w, 'piles', dispositionName(c.hash), c.text, recordStamp(value.pileId));
   }
 
-  /** The record folder, made (with `.bower/runs`) when missing; a lost reply finds the folder that landed. */
+  /** The record folder, made (with `.bower/runs`) when missing; a lost reply finds the folder that landed by its stamp. */
   private async ensure(w: FencedDrive, where: Where, { bower, ns, run }: Folders): Promise<string> {
     if (run[0]) return run[0].id;
-    const sys = bower[0]?.id ?? (await this.folder(w, this.rootId, SYSTEM.dir));
-    const space = ns[0]?.id ?? (await this.folder(w, sys, where === 'piles' ? PILES_NAME : RUNS_NAME));
-    return where === 'piles' ? space : this.folder(w, space, where.runId);
-  }
-
-  private async folder(w: FencedDrive, parent: string, name: string): Promise<string> {
-    try {
-      return (await w.createFolder(parent, name)).id;
-    } catch (e) {
-      const landed = (await this.reads.listAll(parent)).find((f) => f.folder && f.name === name && f.parents[0] === parent);
-      if (!landed) throw e;
-      console.error(e);
-      return landed.id;
-    }
+    const sys = bower[0]?.id ?? (await makeFolder(w, this.reads, this.rootId, SYSTEM.dir));
+    const space = ns[0]?.id ?? (await makeFolder(w, this.reads, sys, where === 'piles' ? PILES_NAME : RUNS_NAME));
+    return where === 'piles' ? space : makeFolder(w, this.reads, space, where.runId);
   }
 }
 

@@ -3,6 +3,7 @@ import { driveEffects } from '../../src/data/spine/engine';
 import type { RunnerDrive } from '../src/drive';
 import type { Checkpoint } from '../../src/data/contracts/run-checkpoint';
 import type { OperationV2 } from '../../src/data/contracts/run-manifest';
+import type { RunManifest } from '../../src/data/spine/records';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -17,8 +18,9 @@ describe('a log holds no folder content', () => {
     vi.spyOn(console, 'warn').mockImplementation(log);
     const file = { id: 'FILE_1', name: 'Trip.md', folder: false, parents: ['FOLDER_ID'], modifiedTime: '2026-10-07T09:00:00.000Z', createdTime: '2026-10-07T09:00:00.000Z' };
     const drive = {
-      evidence: async () => ({ file, trashed: false, content: { size: 3, sha256: 'x' } }),
-      readBytes: async () => new TextEncoder().encode('other'),
+      evidence: async () => {
+        throw new Error(`Drive did not answer for file ${file.id}`);
+      },
     } as unknown as RunnerDrive;
     const op = {
       operationId: 'a'.repeat(64),
@@ -34,8 +36,8 @@ describe('a log holds no folder content', () => {
         content: { encoding: 'utf8', size: 8, sha256: 'z' },
       },
     } as unknown as OperationV2;
-    const head = { operations: [] } as unknown as Checkpoint;
-    expect(await driveEffects(drive).observe(op, head)).toBeNull();
+    const head = { runId: 'run-1', outcomes: [] } as unknown as Checkpoint;
+    expect((await driveEffects(drive).readBack(op, head, { operations: [op] } as unknown as RunManifest)).state).toBe('unreadable');
     expect(lines.length).toBeGreaterThan(0);
     const all = lines.join('\n');
     expect(all).not.toContain('Secret plan');

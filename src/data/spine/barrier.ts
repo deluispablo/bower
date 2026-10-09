@@ -3,9 +3,9 @@
  * shared by the fake run service and the runner (TL-P3-21 point 2: extracted, not ported). After a run's last
  * operation checkpoint, the report files the worker contract lists are brought up to date in `.bower`:
  * `questions.json`, `suggestions.json`, `requests.json` and `hashes.json` (shapes in `vault/layout.ts`), then
- * `last-run.json` last. Each write passes the modifiedTime it read; each file written is read back and its stored
- * checksum compared with the checksum of the bytes meant to be there (on Drive, `md5Checksum`). Only then may the
- * caller say `done`. A reply lost after a write landed is reconciled by the exact body, never written twice.
+ * `last-run.json` last. Each write passes the modifiedTime it read, carries its stamp and is confirmed by the checksum
+ * its answer gives (`write-once.ts`). Only then may the caller say `done`. A reply lost after a write landed is found
+ * again by its stamp, never written twice.
  *
  * - A report file is written only when it is missing or the run changes it (a question it asks); one already up to
  *   date is not written again, so saving twice (a redispatch) writes nothing.
@@ -21,18 +21,13 @@ import { SYSTEM, isRunnerFile, type LastRunFile, type RunnerFiles } from '../vau
 import type { Checkpoint } from '../contracts/run-checkpoint';
 import type { AdmissionManifest } from './admission';
 import { canonical, checkpointName, nextCheckpoint, reportName, type AttemptMark, type CheckpointPatch, type RecordReads, type RunManifest, type RunRecords } from './records';
+import { byStamp, confirmed, makeFolder, makeText, stampOf, writeOnce } from './write-once';
+import { sha256Sync } from '../contracts/hashes';
 import { dispositionsFor, itemDispositions, materialize, reportContradictions, type ItemDisposition } from './report';
-
-/** A file's checksum as stored, and the same checksum of the bytes meant to be there. */
-export interface Checksum {
-  stored(id: string): Promise<string>;
-  of(bytes: Uint8Array): Promise<string>;
-}
 
 export interface ReportSave {
   rootId: string;
   reads: RecordReads;
-  checksum: Checksum;
   /** The fenced writes of the next write. */
   batch(): Promise<FencedDrive>;
   /** The run's report; null for a run that ended failed, which changes no report file. */
@@ -51,7 +46,6 @@ export const REPORT_FILES: readonly ReportFile[] = [SYSTEM.questions, SYSTEM.sug
 const SAVE_FAILED = 'Bower could not save what it did. Try again later.';
 
 const nameIn = (path: string): string => path.slice(SYSTEM.dir.length + 1);
-const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
 const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
 
 /** A runner file's text, as the runner writes it. */
@@ -76,25 +70,18 @@ export async function saveReport(save: ReportSave): Promise<string[]> {
       const found = before.get(path) ?? null;
       const text = nextText(path, found ? found.text : null, save.report);
       if (text === null) continue;
-      await write(save, path, found, text, (n) => n === text);
+      await write(save, path, found, text);
       written.push(path);
     }
   }
   const view = before.get(SYSTEM.lastRun) ?? null;
-  if (view && sameView(view.text, save.view)) {
-    // Already there (a restarted run): read back by its checksum all the same before anyone says done.
-    const [now, read] = await Promise.all([save.checksum.stored(view.file.id), save.checksum.of(encode(view.text))]);
-    if (now !== read) {
-      console.error(`${SYSTEM.lastRun} could not be read back as it is stored`);
-      throw new BowerError('unknown', SAVE_FAILED);
-    }
-    return written;
-  }
+  // Already there (a restarted run): nothing more to write.
+  if (view && sameView(view.text, save.view)) return written;
   if (!(await save.mayReplace(view ? view.text : null))) {
     console.error(`${SYSTEM.lastRun} shows another run; it is not saved over`);
     throw new BowerError('conflict', SAVE_FAILED);
   }
-  await write(save, SYSTEM.lastRun, view, save.view, (now) => sameView(now, save.view));
+  await write(save, SYSTEM.lastRun, view, save.view);
   written.push(SYSTEM.lastRun);
   return written;
 }
@@ -197,44 +184,23 @@ async function stored(save: Pick<ReportSave, 'rootId' | 'reads'>, path: string):
 }
 
 /**
- * Writes one file with the modifiedTime it read (or makes it), then reads it back: the stored checksum must be the
- * checksum of these bytes. A write whose answer was lost is done when `landed` holds for what is there.
+ * Writes one file with the modifiedTime it read (or makes it), stamped by its place, the version it replaces and its
+ * bytes, and confirmed by its answer's checksum (`write-once.ts`).
  */
-async function write(save: ReportSave, path: string, found: Stored | null, text: string, landed: (now: string) => boolean): Promise<void> {
+async function write(save: ReportSave, path: string, found: Stored | null, text: string): Promise<void> {
   const w = await save.batch();
-  try {
-    if (found) await w.writeText(found.file.id, text, found.file.modifiedTime);
-    else await w.createText(await system(save, w), nameIn(path), text);
-  } catch (e) {
-    const now = await stored(save, path);
-    if (!now || !landed(now.text)) throw e;
-    // It landed and only its answer was lost: the same file, not a second one.
-    console.error(e);
+  if (!found) {
+    await makeText(w, save.reads, await system(save, w), nameIn(path), text);
+    return;
   }
-  const { file } = await where(save, path);
-  if (!file) {
-    console.error(`${path} is not there after it was written`);
-    throw new BowerError('unknown', SAVE_FAILED);
-  }
-  const [now, meant] = await Promise.all([save.checksum.stored(file.id), save.checksum.of(encode(text))]);
-  if (now !== meant && !landed(decode(await save.reads.readBytes(file.id)))) {
-    console.error(`${path} could not be read back as it was written`);
-    throw new BowerError('unknown', SAVE_FAILED);
-  }
+  const stamp = stampOf(found.file.id, `${found.file.modifiedTime}:${sha256Sync(text)}`);
+  confirmed(await writeOnce(stamp, (op) => w.writeText(found.file.id, text, found.file.modifiedTime, op), (s) => byStamp(save.reads, s)), text);
 }
 
-/** The `.bower` folder, made when missing; a lost reply finds the folder that landed. */
+/** The `.bower` folder, made when missing; a lost reply finds the folder that landed by its stamp. */
 async function system(save: ReportSave, w: FencedDrive): Promise<string> {
   const { sys } = await where(save, SYSTEM.dir);
-  if (sys) return sys.id;
-  try {
-    return (await w.createFolder(save.rootId, SYSTEM.dir)).id;
-  } catch (e) {
-    const landed = (await where(save, SYSTEM.dir)).sys;
-    if (!landed) throw e;
-    console.error(e);
-    return landed.id;
-  }
+  return sys ? sys.id : makeFolder(w, save.reads, save.rootId, SYSTEM.dir);
 }
 
 /** A runner file's value; undefined, said once in the log, when it is not JSON. */
@@ -256,11 +222,11 @@ function parsed(text: string): unknown {
  *    done, report pending". From here a run that stops stays in `saving`, and a redispatch resumes here: every
  *    operation is settled, so no effect is applied again.
  * 2. The report is checked against where every admitted item ended (`reportContradictions`): one that contradicts
- *    them stops the run here, in `saving`, with nothing more written. The report record goes in the run's folder, read back, and each declared pile filed whole gets its consumed
+ *    them stops the run here, in `saving`, with nothing more written. The report record goes in the run's folder, confirmed by its answer, and each declared pile filed whole gets its consumed
  *    disposition in `.bower/piles`. Then `dispositions.json` in the run's folder: one line for every admitted item,
  *    journal lines included, filed, set aside or waiting (`itemDispositions`); one already there is left as it is.
  * 3. The report files, then `.bower/last-run.json` last, through the shared barrier (`src/data/spine/barrier.ts`),
- *    each read back by its checksum.
+ *    each confirmed by its answer's checksum.
  * 4. Only then is the report published and the run done in the chain; the caller reports `done` after this.
  *
  * Every write is the same on a second try: a record already there with these bytes, or a file that already says
@@ -273,7 +239,6 @@ export interface BarrierRun {
   records: RunRecords;
   /** Reads of `.bower` (the report files) and the run's records. */
   reads: RecordReads;
-  checksum: Checksum;
   /** The fenced writes of the next batch (the adapter's `batch()`, which checks the attempt first). */
   batch(): Promise<FencedDrive>;
   /**
@@ -311,7 +276,7 @@ export interface Finished {
 
 const UNRESOLVED = 'Bower could not check one of the things it moved. It will look again later.';
 
-/** Ends a settled run: the report saved and read back, then done in the chain. Throws, leaving it in `saving`, when it cannot. */
+/** Ends a settled run: the report saved and confirmed, then done in the chain. Throws, leaving it in `saving`, when it cannot. */
 export async function finishRun(run: BarrierRun, manifest: RunManifest, manifestHash: string, settled: Checkpoint[]): Promise<Finished> {
   let chain = settled;
   let at = chain.at(-1);
@@ -362,17 +327,16 @@ export async function finishRun(run: BarrierRun, manifest: RunManifest, manifest
     return run.batch();
   };
 
-  // 2. The report record, read back, and the consumed dispositions.
+  // 2. The report record, confirmed by its answer, and the consumed dispositions.
   await run.records.put(await writes(), where, reportName(r.hash), r.text);
-  await run.records.report(manifest, manifestHash, r.hash);
   for (const d of dispositionsFor(manifest, at.outcomes, r.hash)) await run.records.putDisposition(await writes(), d);
   if ((await run.records.read(where, DISPOSITIONS)) === null) {
     const file: DispositionsFile = { v: 1, runId: run.runId, items: dispositions(at.outcomes) };
-    // A fenced create, read back byte for byte; a reply lost after it landed is not a second file.
+    // A fenced create, confirmed by its answer; a reply lost after it landed is not a second file.
     await run.records.put(await writes(), where, DISPOSITIONS, jsonText(file));
   }
 
-  // 3. The report files, then last-run.json last, each read back. The view's times are those of the pending report.
+  // 3. The report files, then last-run.json last, each confirmed. The view's times are those of the pending report.
   const finishedAt = pending.phaseAt;
   const report = fixedReport(body.report);
   const view = lastRunText({
@@ -382,7 +346,6 @@ export async function finishRun(run: BarrierRun, manifest: RunManifest, manifest
   const written = await saveReport({
     rootId: run.rootId,
     reads: run.reads,
-    checksum: run.checksum,
     batch: writes,
     report,
     view,

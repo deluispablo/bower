@@ -90,8 +90,10 @@ describe('the C04 run makes the golden number of Drive calls per step', () => {
     // (106 reads + 28 writes). Updated on purpose; the cut is pinned at 40 percent in the next describe.
     // 82 since c2-one-engine's fix round: each move's fence reads the folder it goes into right before the send (4 moves),
     // where a kept read stood for it before (+2); lead to weigh (no kept-read window, per the lead's constraint).
+    // 76 since c2-write-once: every write is confirmed by its own answer's checksum, so no read follows a made note
+    // (2), the report record (1), last-run.json (1) or another write (2).
     const totalDriveCalls = calls.filter((c) => c.kind === 'read' || c.kind === 'write').length;
-    expect(totalDriveCalls).toBe(82);
+    expect(totalDriveCalls).toBe(76);
 
     const count = analyzeCalls(calls);
 
@@ -101,7 +103,7 @@ describe('the C04 run makes the golden number of Drive calls per step', () => {
     expect(count.model).toBe(2);
     expect(count.apply).toBe(19);
     expect(count.checkpoints).toBe(4);
-    expect(count.report).toBe(42);
+    expect(count.report).toBe(40);
     expect(count.status).toBe(4);
   });
 });

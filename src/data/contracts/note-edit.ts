@@ -17,7 +17,6 @@ import { parseNote } from './note-format';
 import { parseOwnership, type ByteSpan, type OwnershipFailure } from './ownership-format';
 import { parseRules } from './rules-format';
 import type { Change, EditEntry, EditText, Rename, RuleAdd, RuleRemove } from './run-manifest';
-import { notAsSeen } from './still-as-seen';
 
 /** Files larger than 1 MiB are never edited (TL-P2-20 rule 6). */
 export const EDIT_FILE_LIMIT = 1024 * 1024;
@@ -36,8 +35,6 @@ export type EditRefusal = OwnershipFailure | 'too-large' | 'not-bower' | 'unsupp
 export type EditResult = { ok: true; text: string; bytes: Uint8Array } | { ok: false; reason: EditRefusal };
 /** The low-level splice, replaceable only so a test can inject a faulty one (R4-3 m-g). */
 export type Authors = { splice: (text: string, at: number, insert: string) => string };
-export type ReadBack = 'applied' | 'possible-effect' | 'unresolved';
-export type Observed = { fileId: string; name: string; parents: string[]; trashed: boolean; bytes: Uint8Array };
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
@@ -828,18 +825,6 @@ export async function recheckEdit(effect: EditText, bytes: Uint8Array): Promise<
   const { content } = effect;
   if (content.encoding !== 'utf8' || content.size !== result.bytes.byteLength || content.sha256 !== await digest(result.bytes)) return 'conflict';
   return 'ok';
-}
-
-/** Rule 5: after a lost reply, the same file not in the Bin reads as `text` (applied), as before, or as other. */
-export async function readBackEdit(effect: EditText, observed: Observed): Promise<ReadBack> {
-  const { before } = effect;
-  // The same file by the name and place it was read with (`notAsSeen`, the one check), out of the Bin.
-  const now = { id: observed.fileId, name: observed.name, parents: observed.parents, modifiedTime: '', trashed: observed.trashed };
-  if (notAsSeen({ id: before.fileId, name: before.name, parents: before.parents }, now) !== null) return 'unresolved';
-  const text = encoder.encode(effect.text);
-  if (observed.bytes.length === text.length && observed.bytes.every((byte, i) => byte === text[i])) return 'applied';
-  if (observed.bytes.byteLength === effect.beforeContent.size && await digest(observed.bytes) === effect.beforeContent.sha256) return 'possible-effect';
-  return 'unresolved';
 }
 
 /**

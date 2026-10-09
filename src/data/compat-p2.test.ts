@@ -48,7 +48,7 @@ describe('the accepted app files, kept from the P2 freeze', () => {
     const rootId = (manifestFile.content as { scope: { rootId: string } }).scope.rootId;
     const runId = (manifestFile.content as { runId: string }).runId;
     const tree = folderOf(rootId, ['run-manifest', 'run-checkpoint', 'run-report', 'pile-declaration', 'pile-disposition']);
-    const records = new RunRecords({ listAll: async () => tree.files, readBytes: async (id) => new TextEncoder().encode(tree.text.get(id) ?? '') }, rootId);
+    const records = new RunRecords({ listAll: async () => tree.files, readBytes: async (id) => new TextEncoder().encode(tree.text.get(id) ?? ''), stamped: async () => [] }, rootId);
     const found = await records.found(runId);
     expect(found.kind).toBe('run');
     if (found.kind !== 'run') return;
