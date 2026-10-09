@@ -5618,7 +5618,7 @@
     "steps": [
       "Queue only."
     ],
-    "verify": "pnpm vitest run -t \"every upload goes through the queue\"",
+    "verify": "pnpm vitest run -t \"every upload goes through the queue|a file that lands after its pile is gone goes to the Bin|a file that lands during a halt is not uploaded again on Undo\"",
     "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-implementer. Lead ruling 2026-10-09: the serial queue is accepted (live already used it); parallel uploads are a post-P4 feature. The late-file Bin-retry branch in DriveVault.sendAll needs its test before closing (or is deleted if unreachable): goes in the P4-34 fix round or a short round."
   },
   {
