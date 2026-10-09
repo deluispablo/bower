@@ -600,7 +600,9 @@ describe("the engine's named actions", () => {
         let inputAt = 0;
         let snapFrom = head;
         let snapTarget: number | null = null;
+        let snapStartedAt = 0;
         const startSnap = (target: number) => {
+          if (snapTarget !== target) snapStartedAt = time;
           snapFrom = head;
           snapTarget = target;
         };
@@ -624,6 +626,9 @@ describe("the engine's named actions", () => {
             const acceleration = (v - speed) / dt;
             if (!snap && !asleep && Math.abs(acceleration) > 5400) problems.push(`frame ${frame}: return acceleration ${acceleration.toFixed(2)} deg/s^2`);
             if (snapTarget !== null && Math.abs(now - snapTarget) <= 2 && Math.abs(v) < 1e-6) snapTarget = null;
+            if (snapTarget !== null && time - snapStartedAt >= 0.2 - 1e-10) {
+              problems.push(`frame ${frame}: snap did not settle within 0.2 s at ${snapTarget}°`);
+            }
             head = now;
             speed = v;
           }
