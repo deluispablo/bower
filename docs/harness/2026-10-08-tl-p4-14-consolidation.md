@@ -75,6 +75,7 @@
 
 | Entry | What |
 | --- | --- |
+| `c4-focus-return` | One focus-return helper on the components' own close-focus hooks (Radix `onCloseAutoFocus`), no timers, used by all 7 sites; tests wait for focus, not time (qa10-toast-flake, TL-P4-16 addendum 10 in DECISIONS) |
 | `c4-query-store` | One shared store per data type, with one request in flight, one error and one reload, through `useSyncExternalStore`. `useRun` and `usePiles` stop multiplying `/status` calls and pile calculations. |
 | `c4-resource` | Hooks return `loading`, `error` or `ready`. A `<Resource>` component renders the loading and the error-with-retry itself, and a lint rule bans reading data without it. The 8 screens that can stick or show something false are fixed by construction. |
 | `c4-use-action` | `useAction(fn, {failure, success})` gives a busy guard, safety after unmount and reporting, plus `useStartRun()`. Every double press and hand-written busy pattern goes. |

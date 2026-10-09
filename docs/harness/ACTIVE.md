@@ -393,3 +393,4 @@ P3-9 is closed.
 - c2-one-engine rulings (main fe2b3c8): lost-answer move purged → outcome-unknown kind (fix round after P4-35, findings joined); strict edit-text rule kept in both.
 - My slip: a main merge conflicted (docs/ARCHITECTURE.md) and my chained commit -am recorded the conflict markers (5cfcb689); resolved with the lead's rows in 022194da minutes later. Rule for me: merge main with && and stop on a conflict.
 - P4-35 BLOCK (c2-one-engine): a move destination kept for the whole attempt (runner/src/drive.ts:187) does not see a destination binned mid-run; the answer says trashed:false, so it is reported applied. Fresh escalated fix round with the lead ruling (lost-answer purged move → unconfirmed) and the honesty minors.
+- qa10-toast-flake ruled (b) (main 7a708aa): c4-focus-return registered (opens stage 4). Until then rerun qa10 alone when it fails; never loosen it. 420/426.
