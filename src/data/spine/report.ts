@@ -52,11 +52,10 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
     report.updated.push(...c.value.updated);
     const moves = c.when === 'rejected' && c.requires.every((id) => ops.get(id)?.effect.kind === 'move');
     if (!moves) report.setAside.push(...c.value.setAside);
-    // Each row by its own move's outcome, by op id: row i is the row of the contribution's i-th move when there is one
-    // row per move; otherwise every row is every move's. Never by the name a row carries (two things may share one).
-    const paired = c.value.setAside.length === c.requires.length;
-    for (const [i, row] of (moves ? c.value.setAside : []).entries()) {
-      const own = (paired ? [c.requires[i] ?? ''] : c.requires).map((id) => byId.get(id));
+    // A set-aside row is its contribution's one move's (`grounded`): by op id, never by the name a row carries (two
+    // things may share one) nor by position. Rows naming several moves are every move's.
+    for (const row of moves ? c.value.setAside : []) {
+      const own = c.requires.map((id) => byId.get(id));
       const moved = own.every((o) => o?.state === 'rejected' && o.failure.code === 'conflict' && o.failure.message === SOURCE_NOT_AS_SEEN);
       const unsure = own.map((o) => (o?.state === 'rejected' && o.failure.code === 'unknown' ? o.failure.message : null));
       const why = unsure[0];
