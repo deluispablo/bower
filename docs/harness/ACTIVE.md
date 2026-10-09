@@ -398,3 +398,4 @@ P3-9 is closed.
 - c2-one-engine rulings (main 19609e7): 82 accepted; round 3 (after P4-35b) adds the "couldn't confirm N" summary line and fence-cannot-read → stopped (barrier test ends stopped).
 - P4-35b BLOCK (c2-one-engine): matches the lead rulings 2 and 3 (unconfirmed row counted as set aside; failed fence read ends done with code offline headless). Round 3 (escalated) dispatched.
 - c2-one-engine round 3 merged (red bd5fe99d, fix 70585d02; unconfirmed summary line; cannot-read fence stops for recovery; check green, e2e:fake 256). P4-35c check dispatched.
+- P4-35c BLOCK (c2-one-engine round 3): the attempt-route fence (runner/src/drive.ts:388 stillCurrent) is not wrapped in seen.read, so its no-answer still ends done/offline. Round 4 (escalated) dispatched.
