@@ -30,7 +30,12 @@
     - sleep: eyes closed plus the breathe loop, and no blink;
     - alarm: the startle;
     - land: its landing loop.
-12. **Blink.** Use the engine's random blink (TL-P4-21 addendum 1). Its bounds belong to d-v2-07. Gaze stays off on the perched bird.
+12. **Blink.** The perched bird uses the engine's random blink (TL-P4-21 addendum 1), and d-v2-07 owns its bounds. Blink is left out of the period check. In sleep, the eyes stay closed through the blink spring, in the one apply (engine.ts:~679).
+12a. **Pose scripts (TL-P4-22 addendum 9, main bd16cf97).**
+   - Each pose runs a fixed script. A perched bird never calls the random `idle()`, `look()` or `turn()`; gaze arrives with d-v2-07.
+   - The existing actions take options: `peck` gets depth and angles, and `showOff` gets no turn, no chirp and no sparkle. No new loop action is added.
+   - `land` plays its whole loop (it starts off the perch at translate(-120,-150), poses.css:65). It is exempt from the perch bounds, but its rest frame stays within 1 px.
+12b. **When the engine mounts.** It mounts only while both the turn and "Bower moves" hold, and reduced motion is off. Otherwise the bird shows its still frame.
 13. **Deferred to d-v2-07:** preen, gaze, and the blink bounds.
 14. **Second-way risk:** no second animation system.
 
@@ -47,6 +52,7 @@
 ## Red
 
 - `a minor bird never takes the turn from the page's Bower`: with the page Bower and the run chip mounted, the chip bird has the `still` class and the page bird has the turn.
+- `with Bower moves off or reduced motion, the bird with the turn shows its still frame and mounts no engine` (in `src/bird/Bower.test.tsx`).
 - Guard (passes today, presence.ts:50-59; it must keep passing): `a minor bird steps out of sight under an overlay bird`.
 - `a perched Bower with the turn idles through the engine and stays on its perch`: after N fake frames from the injected scheduler (seeded), the transform is not empty and translates to (x−Z/2, y−0.92Z) within the hop and bob. **This red must fail today.**
 
@@ -58,9 +64,22 @@
   - Rig: `the carry group exists, is hidden and reaches onPart`;
   - engine: `each pose loop matches its CSS reference`, for each of the nine poses.
     - The reference is a test-only constants fixture, `src/bird/pose-reference.ts`, copied from `poses.css` before the animations are deleted: for each pose, the period, then each part's peak angle or offset and its rest values.
-    - Checks: the period is within ±10%, each peak within ±20% (or 2 px), the rest frame within 1 px, and no pose borrows another's act. A peak is the largest excursion of a part's angle or offset from rest over one period.
+    - Checks:
+      - the period is within ±10%, with blink left out;
+      - each peak is within ±20%, or 2 px for offsets. For scale parts (proud, breathe, wing, legs, eye), the peak is the scale factor's excursion from 1, and the tolerance is ±20% of that excursion;
+      - the rest frame is within 1 px, or 0.02 for scale;
+      - no pose borrows another's act.
+    - A peak is the largest excursion of a part's angle, offset or scale from rest over one period.
+    - land is exempt from the perch bounds only.
     - Exact easing is not required.
-- Name the test files: `src/bird/presence.test.ts`, `src/bird/Rig.test.tsx` and `src/bird/engine.test.ts`. All run on fake frames from the injected scheduler and a seeded random source.
+- Test files:
+  - the reds and the motion guard in `src/bird/Bower.test.tsx`;
+  - presence in `src/bird/presence.test.ts`;
+  - Rig in `src/bird/Rig.test.tsx`;
+  - engine in `src/bird/engine.test.ts`;
+  - the e2e in `e2e/bird-engine.spec.ts`.
+- Tests inject the frame scheduler and the random source through an optional `engineOptions` prop on PoseBower and BowerLayer. It is test-only, and it defaults to requestAnimationFrame and Math.random. Fake frames come from the injected scheduler.
+- `minor entries are ignored` asserts both activeId and topPriority.
 - e2e: `no CSS animation runs on a bird part while the engine runs` (getAnimations is empty), on phone and desktop. jsdom runs no CSS, so this cannot be a unit test.
 - e2e qa6 and qa27 keep passing, on phone and desktop, with axe.
 - `pnpm check` must be green.
@@ -71,3 +90,7 @@
 The red (tests only), then the fix, then the notes in their own commit (`docs/harness/2026-10-09-v2-perched-bower-notes.md`), with `tests changed:` lines. The card carries `worktree:`.
 
 Reviewers are read-only. They never move the main checkout in any form.
+
+## Contract sign-off trial (TL-P4-20)
+
+The contract took 3 passes: 7, 6 and 7 changes, ruled in TL-P4-22 addenda 6–9. The lead dispatched it without a 4th pass.
