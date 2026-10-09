@@ -267,3 +267,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: c4-app-fence passes — Every app write of an existing file is fenced on a fresh read; one landed definition in write-once
 - 2026-10-09: c4-new-pill-one passes — The fresh pill's look lives once in src/ui (designer verified)
 - 2026-10-09: v2-still-marks passes — The tidy-up's live dot and current step are still; dead CSS goes (d-v2-13 CSS; designer verified)
+- 2026-10-09: c4-retry-fence passes — A resend of an existing-file write runs its fence first; Undo's Bin passes its fence

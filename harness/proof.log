@@ -512,3 +512,4 @@ v2-perched-bower	7ca4c0f9e0c76816	2026-10-09	known-green: reds 26b4b60d (perched
 c4-app-fence	aa5a7486c8e28ba5	2026-10-09	known-green: reds 992f9458 (round 1 table: trash, removePile, restore, Undo not refused), 76f37dfc, 0edf5b3f (fast-check counterexample text/bin), a6c39106 (change before the recovery read); fixes c9c9bf11, b829a69a, f0409898, a0d246ef across four rounds, so one revert cannot restore every red; logs /tmp/c4-fence-*.log, /tmp/c4r3-*.log, /tmp/c4r4-*.log
 c4-new-pill-one	697c1bcd22c3ad42	2026-10-09	red (fixed in 01fc4694)
 v2-still-marks	782b15af993bc435	2026-10-09	red (fixed in 0be6c48d)
+c4-retry-fence	fe957584e016a036	2026-10-09	known-green: reds a6ea6210 (drive-http: resent write ran no fence, expected null to be modified|name|parents) and de8a7c82 (journal Undo after a 429: no fence, rejected); fixes 9d193972 and 6fafcc84 across two rounds, so one revert cannot restore both reds; logs /tmp/c4r-*.log, /tmp/c4rf-*.log
