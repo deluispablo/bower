@@ -477,3 +477,4 @@ c3-reservation-upload	050c7cdfbca36938	2026-10-09	red (fixed in 80548be1)
 c3-retention-race	b45aeedf170bf389	2026-10-09	red (fixed in 8301b03e)
 c3-reservation-worker	f15c904f6dbf4c83	2026-10-09	known-green: red at 104707e3: DO keeper test fails (/tmp/c3wrk-handred.log); green at fee39196
 c3-subject	f318fd1dce8e4eec	2026-10-09	known-green: red at 856cde1e: 2 carry-over tests fail (/tmp/c3subj-handred.log); green at 0a8d7228
+c3-alone-margin	ef54b709d2bf7721	2026-10-09	red (fixed in 2263d7ba)
