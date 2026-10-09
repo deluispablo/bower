@@ -25,6 +25,8 @@ export const LISTED_FIELDS = `${UPLOADED_FIELDS},md5Checksum`;
 /** The only session addresses that get the person's token. */
 const UPLOAD_SESSIONS = 'https://www.googleapis.com/upload/';
 export const FOLDER = 'application/vnd.google-apps.folder';
+/** The most ids one `files.generateIds` gives (https://developers.google.com/workspace/drive/api/reference/rest/v3/files/generateIds). */
+const MAX_IDS = 1000;
 const BATCH = SEARCH_FOLDERS;
 /** How many folders up a binned file's place is looked for. */
 const BIN_DEPTH = 8;
@@ -68,6 +70,7 @@ export const toFile = (w: WireFile): DriveFile => ({
   ...(w.appProperties ? { appProperties: w.appProperties } : {}),
   ...(w.sha256Checksum ? { sha256: w.sha256Checksum } : {}),
   ...(w.md5Checksum ? { md5Checksum: w.md5Checksum } : {}),
+  ...(w.trashed ? { trashed: true as const } : {}),
 });
 
 export const quote = (s: string): string => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
@@ -259,15 +262,21 @@ export class DriveHttp implements DriveApi {
     return [...hits.values()];
   }
 
+  /** `count` ids for creates to come, asked at most `MAX_IDS` a request (Drive's limit for one `files.generateIds`). */
   async generateIds(count: number, signal?: AbortSignal): Promise<string[]> {
-    const q = new URLSearchParams({ count: String(count), space: 'drive', type: 'files' });
-    const body = (await (await this.call(`${API}/files/generateIds?${q}`, signal ? { signal } : {})).json()) as { ids?: unknown };
-    const ids = Array.isArray(body.ids) ? body.ids.filter((id): id is string => typeof id === 'string') : [];
-    if (ids.length !== count) {
-      console.error(`Drive generated ${ids.length} of ${count} ids`);
-      throw driveError('unknown');
+    const out: string[] = [];
+    for (let left = count; left > 0; left -= MAX_IDS) {
+      const n = Math.min(left, MAX_IDS);
+      const q = new URLSearchParams({ count: String(n), space: 'drive', type: 'files' });
+      const body = (await (await this.call(`${API}/files/generateIds?${q}`, signal ? { signal } : {})).json()) as { ids?: unknown };
+      const ids = Array.isArray(body.ids) ? body.ids.filter((id): id is string => typeof id === 'string') : [];
+      if (ids.length !== n) {
+        console.error(`Drive generated ${ids.length} of ${n} ids`);
+        throw driveError('unknown');
+      }
+      out.push(...ids);
     }
-    return ids;
+    return out;
   }
 
   async openResumable(target: ResumableTarget): Promise<string> {

@@ -680,11 +680,24 @@ describe('what the code review found', () => {
       const b = open();
       await Promise.all([a.tree(), b.tree()]);
       const create = fresh.createText.bind(fresh);
+      const get = fresh.get.bind(fresh);
       let lost = 2;
-      fresh.createText = async (parent, name, text, props) => {
-        const made = await create(parent, name, text, props);
-        if (name.endsWith('.json') && lost-- > 0) throw new TypeError('The write answer was lost');
+      let blind = 0;
+      // Each line lands and its answer is lost; the read by its id that follows gets no answer either, so it waits.
+      fresh.createText = async (...a: Parameters<FakeDrive['createText']>) => {
+        const made = await create(...a);
+        if (a[1].endsWith('.json') && lost-- > 0) {
+          blind++;
+          throw driveError('offline');
+        }
         return made;
+      };
+      fresh.get = async (...a: Parameters<FakeDrive['get']>) => {
+        if (blind > 0 && a[1]?.binned) {
+          blind--;
+          throw driveError('offline');
+        }
+        return get(...a);
       };
       await Promise.all([a.addRule('Keep receipts together'), b.addRule('Keep original files')]);
       const before = await fresh.listAll(r);
@@ -731,12 +744,18 @@ describe('the outbox over the folder itself', () => {
   it('outbox over the folder itself: a line whose answer was lost is not written twice', async () => {
     await vault.tree();
     const real = drive.createText.bind(drive);
+    const get = drive.get.bind(drive);
     let lose = true;
-    drive.createText = async (parent, name, text, props) => {
-      const f = await real(parent, name, text, props);
-      if (lose && name.endsWith('.json') && text.includes('"kind":"rule"')) {
+    // The line lands and its answer is lost; the read by its id that follows gets no answer either, so it waits.
+    drive.createText = async (...a: Parameters<FakeDrive['createText']>) => {
+      const f = await real(...a);
+      if (lose && a[1].endsWith('.json') && a[2].includes('"kind":"rule"')) {
         lose = false;
-        throw new TypeError('Failed to fetch');
+        drive.get = async () => {
+          drive.get = get;
+          throw driveError('offline');
+        };
+        throw driveError('offline');
       }
       return f;
     };

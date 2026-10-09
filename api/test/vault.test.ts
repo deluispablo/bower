@@ -110,7 +110,7 @@ class FakeGoogle {
     if (url.pathname.startsWith('/upload/drive/v3/files/') && method === 'PATCH') {
       const item = this.items.get(decodeURIComponent(url.pathname.split('/').pop() ?? ''));
       if (item === undefined) return Response.json({ error: { code: 404 } }, { status: 404 });
-      const { metadata, content } = parseMultipart(String(init?.body));
+      const { metadata, content } = parseMultipart(typeof init?.body === 'string' ? init.body : await new Response(init?.body).text());
       item.content = content;
       item.appProperties = { ...item.appProperties, ...metadata.appProperties };
       item.modifiedTime = this.tick();
@@ -132,7 +132,7 @@ class FakeGoogle {
       return Response.json(item);
     }
     if (url.pathname === '/upload/drive/v3/files' && method === 'POST') {
-      const { metadata, content } = parseMultipart(String(init?.body));
+      const { metadata, content } = parseMultipart(typeof init?.body === 'string' ? init.body : await new Response(init?.body).text());
       if (this.stallUploadNamed !== null && metadata.name === this.stallUploadNamed) {
         this.stallUploadNamed = null;
         await new Promise<void>((resolve) => {
@@ -217,7 +217,7 @@ const answered = (item: Item): Item & { md5Checksum?: string } => (item.content 
 
 /** The metadata and the text of a Drive multipart upload. */
 function parseMultipart(raw: string): { metadata: Partial<Item>; content: string } {
-  const [meta, media] = `\r\n${raw}`.split(/\r\n--bower-[0-9a-f-]{36}(?:--)?(?:\r\n)?/).filter((p) => p.trim() !== '');
+  const [meta, media] = `\r\n${raw}`.split(/\r\n--bower[-0-9a-z]*(?:\r\n)?/).filter((p) => p.trim() !== '');
   const metadata = JSON.parse((meta ?? '').split('\r\n\r\n')[1] ?? '{}') as Partial<Item>;
   const text = media ?? '';
   const content = text.slice(text.indexOf('\r\n\r\n') + 4).replace(/\r\n$/, '');
@@ -275,7 +275,8 @@ describe('POST /vault', () => {
     const others = snapshot();
     await post(g, cookie);
     expect(rules.content).toBe(RULES_TEMPLATE.text);
-    expect(rules.appProperties).toEqual({ by: 'bower' });
+    // With the stamp it was sent with (`write-once.ts`).
+    expect(rules.appProperties).toEqual({ by: 'bower', bowerOp: expect.any(String) });
     expect(patches()).toBe(1);
     expect(snapshot()).toBe(others);
     // Once: the second check sends no write.

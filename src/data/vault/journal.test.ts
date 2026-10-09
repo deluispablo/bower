@@ -54,9 +54,11 @@ describe('the change journal', () => {
 });
 
 describe('when Drive does not answer', () => {
+  // Named in journal-ack-content's verify: the line's key is now the id reserved for its file, kept with it in the outbox.
   it.each(['direct', 'archive'])("a waiting change is acknowledged by its line key, never by a lookalike's name or contents (%s)", async (location) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
     const archive = (await drive.createFolder(changes, 'archive')).id;
-    const files = vi.fn(async (_fresh?: boolean, archived?: boolean) => (await drive.listAll(changes)).filter((f) => !f.folder && (archived || f.parents.includes(changes))));
+    const files = vi.fn(async () => (await drive.listAll(changes)).filter((f) => !f.folder));
     journal = new Journal(drive, { owner: async () => root, folder: async () => changes, files }, 'device-a');
     const create = vi.spyOn(drive, 'createText').mockRejectedValueOnce(new TypeError('Failed to fetch'));
     const rec = await journal.record('rule', 'Keep receipts together', {
@@ -64,22 +66,25 @@ describe('when Drive does not answer', () => {
     });
     const key = `bower:outbox:${root}`;
     const waiting = localStorage.getItem(key);
-    // A file with the line's name and fields but not its key is not the line: it is never taken by its name or contents.
+    const reserved = create.mock.calls[0]?.[4];
+    expect(reserved).toBeDefined();
+    // A file with the line's name and fields but not its id is not the line: it is never taken by its name or contents.
     const lookalike = await drive.createText(location === 'direct' ? changes : archive, `${rec.id}.json`, JSON.stringify(rec));
     create.mockClear();
     const read = vi.spyOn(drive, 'readText');
     await expect(journal.flush()).resolves.toBeUndefined();
-    expect(files).toHaveBeenLastCalledWith(true, true);
+    expect(files).not.toHaveBeenCalled();
     expect(create).toHaveBeenCalledTimes(1);
     expect(localStorage.getItem(key)).toBeNull();
     const sent = (await drive.listAll(changes)).filter((f) => !f.folder && f.id !== lookalike.id);
-    expect(sent.map((f) => f.appProperties?.bowerLine)).toEqual([rec.id]);
-    // A copy that carries the line's key, wherever it is, is the line: acknowledged without a read and never sent again.
+    expect(sent.map((f) => f.id)).toEqual([reserved]);
+    // The line itself, wherever it is now, is found by its id: acknowledged without a read and never made twice.
     localStorage.setItem(key, waiting ?? '');
     await drive.update(sent[0]?.id ?? '', location === 'direct' ? {} : { addParent: archive, removeParent: changes });
     create.mockClear();
     await expect(journal.flush()).resolves.toBeUndefined();
-    expect(create).not.toHaveBeenCalled();
+    expect(create.mock.calls.map((c) => c[4])).toEqual([reserved]);
+    expect((await drive.listAll(changes)).filter((f) => !f.folder && f.id !== lookalike.id)).toHaveLength(1);
     expect(read).not.toHaveBeenCalled();
     expect(localStorage.getItem(key)).toBeNull();
   });
@@ -158,13 +163,18 @@ describe('when Drive does not answer', () => {
     const archive = (await drive.createFolder(changes, 'archive')).id;
     journal = new Journal(drive, { owner: async () => root, folder: async () => changes, files: async () => (await drive.listAll(changes)).filter((f) => !f.folder) }, 'device-a');
     const real = drive.createText.bind(drive);
+    const get = drive.get.bind(drive);
     let lose = true;
-    // The line lands and its answer is lost: it waits in the outbox.
-    drive.createText = async (parent, name, text, props) => {
-      const f = await real(parent, name, text, props);
+    // The line lands and its answer is lost, and so is the read by its id that follows: it waits in the outbox.
+    drive.createText = async (...a: Parameters<FakeDrive['createText']>) => {
+      const f = await real(...a);
       if (lose) {
         lose = false;
-        throw new TypeError('Failed to fetch');
+        drive.get = async () => {
+          drive.get = get;
+          throw driveError('offline');
+        };
+        throw driveError('offline');
       }
       return f;
     };
@@ -178,10 +188,10 @@ describe('when Drive does not answer', () => {
     await drive.update(line.id, { addParent: archive, removeParent: changes, appProperties: { bowerOp: 'RUN_STAMP' } });
     const read = vi.spyOn(drive, 'readText');
     await journal.record('move', 'two');
-    // Found by its own key, which the archive move kept: never sent again, nor read back by its name and fields.
+    // Found by the id reserved for it, which the archive move keeps: never made again, nor read back by its name and fields.
     const lines = (await drive.listAll(changes)).filter((f) => !f.folder);
-    expect((await drive.get(line.id)).appProperties).toMatchObject({ bowerLine: one.id, bowerOp: 'RUN_STAMP' });
-    expect(lines.filter((f) => f.appProperties?.bowerLine === one.id)).toHaveLength(1);
+    expect((await drive.get(line.id)).appProperties).toMatchObject({ bowerOp: 'RUN_STAMP' });
+    expect(lines.filter((f) => f.name === `${one.id}.json`)).toHaveLength(1);
     expect(lines).toHaveLength(2);
     expect(read).not.toHaveBeenCalled();
     expect(localStorage.getItem(`bower:outbox:${root}`)).toBeNull();
@@ -190,8 +200,8 @@ describe('when Drive does not answer', () => {
   it('outbox: a line whose answer was lost is not sent twice', async () => {
     const real = drive.createText.bind(drive);
     let lose = true;
-    drive.createText = async (parent, name, text, props) => {
-      const f = await real(parent, name, text, props);
+    drive.createText = async (...a: Parameters<FakeDrive['createText']>) => {
+      const f = await real(...a);
       if (lose) {
         lose = false;
         throw new TypeError('Failed to fetch');

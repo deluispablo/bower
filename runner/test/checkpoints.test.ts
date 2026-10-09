@@ -316,7 +316,7 @@ describe('runner checkpoints', () => {
     const wire = driveV3(drive);
     const token = new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: wire.fetch, now: () => wire.now });
     const adapter = new RunnerDrive({ token, attempt: 1, fetch: wire.fetch });
-    const trashed = await keepFinished(new RunRecords(runnerReads(adapter), root), await adapter.batch());
+    const trashed = await keepFinished(new RunRecords(runnerReads(adapter), root), await adapter.batch(), adapter);
 
     const folders = (await drive.listAll(root)).filter((f) => f.folder && f.name.startsWith('run-'));
     const finishedAt = (i: number): number => (i * 7) % 25;

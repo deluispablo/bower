@@ -69,19 +69,21 @@ describe('the fake Worker', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const { drive, worker } = await world('first');
     const reserve = vi.spyOn(drive, 'generateIds');
-    const folders = vi.spyOn(drive, 'createFolder');
-    const texts = vi.spyOn(drive, 'createText');
+    const create = drive.createFolder.bind(drive);
     // The Bower folder lands and its answer is lost: found again by the id reserved for it, never made twice.
-    drive.loseNextReply();
+    const folders = vi.spyOn(drive, 'createFolder').mockImplementationOnce(async (...a) => {
+      drive.loseNextReply();
+      return create(...a);
+    });
+    const texts = vi.spyOn(drive, 'createText');
     await expect(worker.createFolder()).resolves.toMatchObject({ found: false });
     const id = (await worker.me())?.folderId ?? '';
     // One call reserves the folder's id and one per template folder and file.
     expect(reserve).toHaveBeenCalledTimes(1);
     expect(folders.mock.calls.every((a) => typeof a[3] === 'string')).toBe(true);
     expect(texts.mock.calls.every((a) => typeof a[4] === 'string')).toBe(true);
-    expect(folders.mock.calls.filter((a) => a[1] === BOWER_FOLDER)).toHaveLength(2);
-    expect(folders.mock.calls[1]?.[3]).toBe(folders.mock.calls[0]?.[3]);
     expect(id).toBe(folders.mock.calls[0]?.[3]);
+    expect((await drive.listAll('root')).filter((f) => f.name === BOWER_FOLDER && f.parents[0] === 'root')).toHaveLength(1);
     const names = (await drive.listAll(id)).filter((f) => f.parents[0] === id).map((f) => f.name).sort();
     expect(names).toEqual(['.bower', 'About me.md', 'Archive', 'Areas', 'Inbox', 'Projects', 'Resources', 'Rules.md']);
   });

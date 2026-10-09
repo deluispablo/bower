@@ -48,7 +48,7 @@ import { UNCONFIRMED_WRITE_MESSAGE, type DriveFile, type FencedDrive, type RunDr
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
 import { savedTwins } from './duplicates';
 import { canonical, checkpointName, firstCheckpoint, manifestName, nextCheckpoint, type AttemptMark, type CheckpointPatch, type RunManifest, type RunRecords } from './records';
-import { SOURCE_NOT_AS_SEEN, UNCONFIRMED_GONE, materialize } from './report';
+import { SOURCE_NOT_AS_SEEN, UNCONFIRMED_CHANGED, UNCONFIRMED_GONE, materialize } from './report';
 import { conflicts, needsOf } from './schedule';
 import { STAMP, confirms, createById, reserveId, stampOf } from './write-once';
 /**
@@ -62,7 +62,8 @@ export type Settled = { state: 'applied'; evidence: EffectEvidence } | { state: 
  * does): it landed (with its stored evidence), it did not (the folder still shows what the plan saw), or neither can
  * be told (a read failed, or the folder shows something else).
  */
-export type ReadBack = { state: 'landed'; evidence: EffectEvidence } | { state: 'not-landed' } | { state: 'gone' } | { state: 'unreadable'; why: string };
+/** `unconfirmed`: nothing Drive keeps tells whether it landed (`message` says why, on the report's own line). */
+export type ReadBack = { state: 'landed'; evidence: EffectEvidence } | { state: 'not-landed' } | { state: 'unconfirmed'; message: string } | { state: 'unreadable'; why: string };
 
 /** The effects of operations on the folder: the adapter's sends and evidence reads. */
 export interface Effects {
@@ -216,8 +217,8 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
         settle({ operationId, state: 'applied', evidence: back.evidence });
         return;
       }
-      if (back.state === 'gone') {
-        settle({ operationId, state: 'rejected', failure: { code: 'unknown', message: UNCONFIRMED_GONE } });
+      if (back.state === 'unconfirmed') {
+        settle({ operationId, state: 'rejected', failure: { code: 'unknown', message: back.message } });
         return;
       }
       if (back.state === 'unreadable') {
@@ -392,6 +393,9 @@ function parentOf(head: Checkpoint, e: Effect): string | null {
   return made?.state === 'applied' ? made.evidence.file.fileId : null;
 }
 
+/** Still out of the Bin, by the name, place and version the plan read: nothing has written to it since. */
+const asSeen = (ev: StoredEvidence, seen: SeenFile): boolean => !ev.trashed && ev.file.modifiedTime === seen.modifiedTime && inPlace(ev.file, seen);
+
 /** A file as it is now, for a check; null when it is gone or in the Bin (`RunDrive.recheck`). */
 const now = (drive: RunDrive, id: string): Promise<DriveFile | null> => drive.recheck(id);
 
@@ -412,12 +416,13 @@ function waitsOn(manifest: RunManifest, from: string, to: string): boolean {
 /**
  * What a stamp found on a thing says of `op`. `landed`: it is `op`'s own, or that of an operation of the same run
  * waiting on `op`, which is only ever sent once `op` applied (the note an edit changes and then moves carries the
- * move's stamp). `not-landed`: none, another run's, or that of an operation `op` waits on (sent before it).
- * `unknown`: another operation of this run, unrelated to it.
+ * move's stamp). `not-landed`: none, or that of an operation `op` waits on (sent before it). `foreign`: another
+ * writer's (the app's, another run's). `unknown`: another operation of this run, unrelated to it.
  */
-function stampSays(found: string | undefined, runId: string, op: OperationV2, manifest: RunManifest): 'landed' | 'not-landed' | 'unknown' {
-  const id = found === undefined ? undefined : manifest.operations.find((o) => stampOf(runId, o.operationId) === found)?.operationId;
-  if (id === undefined) return 'not-landed';
+function stampSays(found: string | undefined, runId: string, op: OperationV2, manifest: RunManifest): 'landed' | 'not-landed' | 'foreign' | 'unknown' {
+  if (found === undefined) return 'not-landed';
+  const id = manifest.operations.find((o) => stampOf(runId, o.operationId) === found)?.operationId;
+  if (id === undefined) return 'foreign';
   if (id === op.operationId || waitsOn(manifest, id, op.operationId)) return 'landed';
   return waitsOn(manifest, op.operationId, id) ? 'not-landed' : 'unknown';
 }
@@ -568,10 +573,13 @@ export function driveEffects(drive: RunDrive): Effects {
       }
       // Gone from Drive (the person emptied the Bin): no stamp to read, and nothing left to send to.
       const ev = await drive.evidence(e.before.fileId);
-      if (!ev) return { state: 'gone' };
+      if (!ev) return { state: 'unconfirmed', message: UNCONFIRMED_GONE };
       const says = stampSays(ev.file.appProperties?.[STAMP], head.runId, op, manifest);
       if (says === 'landed') return { state: 'landed', evidence: toEvidence(ev, encoding) };
-      return says === 'unknown' ? { state: 'unreadable', why: `Operation ${op.ordinal} shows another operation's stamp` } : { state: 'not-landed' };
+      if (says === 'unknown') return { state: 'unreadable', why: `Operation ${op.ordinal} shows another operation's stamp` };
+      // Another writer's stamp (the app's Bin or restore, another run) on a thing changed since the plan read it: that
+      // write may have come after this one or instead of it, so whether this one landed is not known.
+      return says === 'foreign' && !asSeen(ev, e.before) ? { state: 'unconfirmed', message: UNCONFIRMED_CHANGED } : { state: 'not-landed' };
     } catch (err) {
       console.error(err);
       return { state: 'unreadable', why: `Operation ${op.ordinal} could not be read back` };
@@ -615,7 +623,7 @@ export function driveEffects(drive: RunDrive): Effects {
           const read: ReadBack = back ?? (await reconcile(op, head, manifest, reserved));
           if (read.state === 'landed') return { state: 'applied', evidence: read.evidence };
           if (read.state === 'not-landed') return refused('unknown', UNCONFIRMED_WRITE_MESSAGE);
-          if (read.state === 'gone') return refused('unknown', UNCONFIRMED_GONE);
+          if (read.state === 'unconfirmed') return refused('unknown', read.message);
           console.error(read.why);
         }
         throw e;

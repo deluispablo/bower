@@ -89,8 +89,9 @@ export class RunnerDrive implements RunDrive {
     // Headless: a request with no answer is never worded as offline; a lost write's answer is still read back (`isNoAnswer`).
     this.http = new DriveHttp({ token: (fresh) => this.token.token(fresh), fetch: (url, init) => this.hooked(url, init), context: 'headless', ...(opts.pacing ? { pacing: opts.pacing } : {}) });
     this.writes = {
-      // One `files.generateIds` (up to 1000 ids) reserves the run's create ids, records and things alike, after the
-      // attempt is read again (a fenced write); an id left unused names nothing.
+      // One reservation for this attempt's creates, records and things alike, after the attempt is read again (a fenced
+      // write); the transport asks Drive at most 1000 ids a request (`DriveHttp.generateIds`). An id left unused names
+      // nothing, and none outlives the attempt.
       generateIds: async (count) => {
         if (this.ids.length < count) {
           await this.seen.read(this.stillCurrent());

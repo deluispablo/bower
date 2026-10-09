@@ -8,7 +8,7 @@
 import { type DriveApi, type DriveFile } from '../drive/drive-api';
 import { ReadCache, type Version } from '../drive/read-cache';
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
-import { holds, makeFolder, makeText, reserveId, updateByStamp, type Intent } from '../spine/write-once';
+import { Intended, holds, makeFolder, makeText, reserveId, updateByStamp, type Intent } from '../spine/write-once';
 import type { Unsubscribe, VaultSource } from '../sources';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName } from '../piles';
 import { buildTree, checkCreationName, displayName, thingName, freeName, join, kindOf, moveEntry, nameOf, parentOf, removeEntry, renameEntry } from '../tree';
@@ -109,6 +109,8 @@ export class DriveVault implements VaultSource {
   protected readonly rootId: () => Promise<string>;
   protected readonly runningPiles: () => ReadonlySet<string>;
   protected readonly journal: Journal;
+  /** The ids reserved for the creates a person means to make, until each is confirmed (`write-once.ts`). */
+  private readonly intended = new Intended();
   private readonly declarePiles: boolean;
   /** Declarations never change: each copy is read once, by file id and modified time. */
   private declarationCache = new Map<string, DeclarationResult>();
@@ -175,13 +177,7 @@ export class DriveVault implements VaultSource {
         folder: () => this.systemFolder(SYSTEM.changes),
         owner: journalOwner,
         reads: this.reads,
-        files: async (fresh, archived) => {
-          if (fresh) {
-            const root = await this.rootId();
-            return VaultIndex.build(root, await this.drive.listAll(root)).journalFiles(archived);
-          }
-          return (await this.index()).journalFiles(archived);
-        },
+        files: async () => (await this.index()).journalFiles(),
         wrote: (f) => { if (this.current()) void this.ix?.then((ix) => { if (this.current()) ix.put(f); }); },
         removed: (id) => { if (this.current()) void this.ix?.then((ix) => { if (this.current()) ix.drop(id); }); },
         waiting: () => this.emit(),
@@ -342,10 +338,13 @@ export class DriveVault implements VaultSource {
     if (!parent) throw new BowerError('not-found', 'That folder is no longer there.');
     const base = name ?? (type === 'folder' ? 'New folder' : 'Untitled.md');
     checkCreationName(base, type);
-    const path = join(folder, freeName(ix.entries(), folder, base));
-    refuseReserved(path);
-    const at = { parent, name: nameOf(path) };
-    const made = type === 'folder' ? await makeFolder(this.drive, this.drive, at) : await makeText(this.drive, this.drive, at, '');
+    refuseReserved(join(folder, freeName(ix.entries(), folder, base)));
+    // One intended note or folder, one id: tried again after a lost answer, it is found by that id, not made twice.
+    const made = await this.intended.make(`create:${parent}:${type}:${base}`, this.drive, (id) => {
+      const at = { parent, name: freeName(ix.entries(), folder, base), id };
+      return type === 'folder' ? makeFolder(this.drive, this.drive, at) : makeText(this.drive, this.drive, at, '');
+    });
+    const path = join(folder, made.name);
     ix.put(made);
     await this.journal.record('create', `New ${type} "${(type === 'folder' ? nameOf(path) : thingName(nameOf(path)))}" in ${where(folder)}`, { path, fileId: made.id });
     this.emit();
@@ -1060,7 +1059,9 @@ export class DriveVault implements VaultSource {
         ix.drop(copy.id);
       }
       folderPath = join('Inbox', freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text })));
-      const folder = await makeFolder(this.drive, this.drive, { parent: f.parents[0] ?? (await this.rootId()), name: nameOf(folderPath), props: { [PROP.pile]: id } });
+      const parent = f.parents[0] ?? (await this.rootId());
+      const folder = await this.intended.make(`pile-folder:${id}`, this.drive, (made) => makeFolder(this.drive, this.drive, { parent, name: nameOf(folderPath), props: { [PROP.pile]: id }, id: made }));
+      folderPath = join('Inbox', folder.name);
       ix.put(folder);
       ix.put(await this.once(f, `move:${folder.id}`, (op) => this.drive.update(f.id, { addParent: folder.id, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}), appProperties: op })));
     } else if (text) {
@@ -1079,7 +1080,9 @@ export class DriveVault implements VaultSource {
     else if (note) {
       await this.toBin(note);
       ix.drop(note.id);
-    } else if (text && folderId) ix.put(await makeText(this.drive, this.drive, { parent: folderId, name: PILE_NOTE, ...(contextKey ? { props: { [PROP.item]: contextKey } } : {}) }, text));
+    } else if (text && folderId) {
+      ix.put(await this.intended.make(`pile-note:${folderId}`, this.drive, (made) => makeText(this.drive, this.drive, { parent: folderId, name: PILE_NOTE, ...(contextKey ? { props: { [PROP.item]: contextKey } } : {}), id: made }, text)));
+    }
     this.emit();
     return this.pile(id);
   }

@@ -18,6 +18,8 @@ export interface DriveFile {
   createdTime: string;
   size?: number;
   appProperties?: Record<string, string>;
+  /** In the Bin: only a read that asks for a file there (`binned`), a listing of the Bin, or the answer to a Bin says so. */
+  trashed?: true;
   /** SHA-256 of the content, hex; only from `ResumableDrive.getUploaded`, or a listing that asks for it. */
   sha256?: string;
   /**
