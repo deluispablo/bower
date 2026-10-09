@@ -49,3 +49,15 @@ export function codeInCommit(sha, cwd = process.cwd()) {
   const out = execFileSync('git', ['diff', '--name-only', `${sha}^`, sha, '--', ...CODE_PATHS], { cwd, encoding: 'utf8' });
   return selectCode(out.split('\n').filter(Boolean));
 }
+
+/** The tips a history check judges: HEAD only (stub, red). */
+export function historyTips(cwd = process.cwd()) {
+  void cwd;
+  return ['HEAD'];
+}
+
+/** Short shas of the non-merge commits in the judged tips since `base`, touching `paths`. */
+export function commitsSince(base, paths, cwd = process.cwd()) {
+  const out = execFileSync('git', ['log', '--no-merges', '--format=%h', ...historyTips(cwd), `^${base}`, '--', ...paths], { cwd, encoding: 'utf8' });
+  return out.split('\n').filter(Boolean);
+}

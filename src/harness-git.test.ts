@@ -1,12 +1,12 @@
 /// <reference types="node" />
 /** done.sh's git steps (scripts/harness-git.mjs), on a throwaway repository. */
 import { execSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module, checked by these tests
-import { codeInCommit, codeInWorktree, statusPaths, undoCommit } from '../scripts/harness-git.mjs';
+import { codeInCommit, codeInWorktree, commitsSince, historyTips, statusPaths, undoCommit } from '../scripts/harness-git.mjs';
 
 const repo = (): { dir: string; git: (c: string) => string } => {
   const dir = mkdtempSync(join(tmpdir(), 'harness-'));
@@ -104,5 +104,38 @@ describe('the harness and git', () => {
     expect(out).toContain('The tree has changes');
     expect(existsSync(join(dir, 'good.txt'))).toBe(false);
     expect(git('log --oneline').trim().split('\n')).toHaveLength(1);
+  });
+
+  it('a branch commit with no compatibility row fails the check under a no-commit merge', () => {
+    const { dir, git } = repo();
+    mkdirSync(join(dir, 'src/features'), { recursive: true });
+    writeFileSync(join(dir, 'list.md'), '| sha | entry | what |\n');
+    git('add -A && git commit -qm base');
+    const base = git('rev-parse --short HEAD').trim();
+    git('checkout -q -b branch');
+    writeFileSync(join(dir, 'src/features/a.ts'), 'export const a = 1;\n');
+    git('add -A && git commit -qm "branch change"');
+    const branchSha = git('rev-parse --short HEAD').trim();
+    git('checkout -q -');
+    writeFileSync(join(dir, 'other.txt'), 'main moved\n');
+    git('add -A && git commit -qm main-moved');
+    expect(commitsSince(base, ['src/features'], dir)).toEqual([]);
+    git('merge -q --no-ff --no-commit branch');
+    expect(historyTips(dir)).toEqual(['HEAD', 'MERGE_HEAD']);
+    expect(commitsSince(base, ['src/features'], dir)).toEqual([branchSha]);
+    git('commit -qm merged');
+    expect(historyTips(dir)).toEqual(['HEAD']);
+    expect(commitsSince(base, ['src/features'], dir)).toEqual([branchSha]);
+  });
+
+  it('every history reader takes its tips from the one helper', () => {
+    const root = join(__dirname, '..');
+    const files = [
+      ...readdirSync(join(root, 'src')).filter((f) => f.endsWith('.test.ts')).map((f) => join('src', f)),
+      ...readdirSync(join(root, 'scripts')).filter((f) => f.endsWith('.mjs')).map((f) => join('scripts', f)),
+    ];
+    const walks = /\.\.\.?HEAD|'(log|rev-list)'|git (log|rev-list)/;
+    const bad = files.filter((f) => f !== 'scripts/harness-git.mjs' && f !== 'src/harness-git.test.ts' && walks.test(readFileSync(join(root, f), 'utf8')) && !/commitsSince|historyTips/.test(readFileSync(join(root, f), 'utf8')));
+    expect(bad).toEqual([]);
   });
 });
