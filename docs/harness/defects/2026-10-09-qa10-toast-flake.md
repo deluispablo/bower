@@ -48,3 +48,7 @@ Test side: only `qa10.spec.ts:160-161` presses a key right after closing a layer
 ## Regression test (class)
 
 One e2e test per layer: the tree menu, the Bin dialog, Move to…, a sheet and the palette. Each one opens the layer, presses Escape, and at once (no focus wait) presses a key with a visible effect on the opener, then asserts the effect. Run it with `--repeat-each=20 --workers=5`; the bug fails about 60% of runs at that setting today. Add a check that no `.focus()` inside a `setTimeout` exists outside `src/ui/focus.ts`.
+
+## Ruling (lead, DECISIONS main 7a708aa): option (b)
+- New entry c4-focus-return, which opens stage 4: one helper in src/ui/focus.ts, built on the components' close-focus hooks (Radix onCloseAutoFocus). No timers. All 7 same-class sites use it. Tests wait for focus, never for time. The mechanism map gets a row.
+- Until it lands, the flake is known: when qa10 fails, rerun it alone. Never loosen the test to hide it.
