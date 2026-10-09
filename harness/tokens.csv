@@ -258,3 +258,4 @@ c4-undo-withdraw round 3,implementer,claude,bower-escalated,,3,163343,,,,,,41,12
 c4-undo-withdraw round3 review,reviewer,codex,codex,medium,3,267815,266570,0,220800,1245,,,,2 Important,2026-10-09
 c4-undo-withdraw P4-56c,reviewer,claude,bower-reviewer,,3,55966,,,,,,13,1.1,PASS (4 minor),2026-10-09
 d-v2-07 startle round,implementer,claude,bower-escalated,,4,116778,,,,,,29,9.5,delivered,2026-10-09
+d-v2-07 P4-58d,reviewer,claude,bower-reviewer,,4,32401,,,,,,5,0.3,PASS (3 minor; open labels),2026-10-09
