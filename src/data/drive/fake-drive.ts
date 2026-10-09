@@ -5,7 +5,7 @@
  */
 import { BowerError, type ErrorCode } from '../types';
 import { sha256 } from '../vault/hashes';
-import { driveError, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type FaultHook, type FencedCall, type FencedDrive, type ResumableDrive, type ResumableTarget, type SessionStatus, type StoredEvidence } from './drive-api';
+import { driveError, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type FaultHook, type FencedCall, type FencedDrive, type ResumableTarget, type SessionStatus, type StoredEvidence } from './drive-api';
 /** The fence's types live with the Drive ports; kept here for the tests that import them from the fake. */
 export type { FaultAction, FaultHook, FencedCall, FencedDrive, StoredEvidence } from './drive-api';
 
@@ -49,7 +49,7 @@ interface FakeSession {
 /** The words of a text: runs of letters and digits, lower case. */
 const words = (text: string): string[] => text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
 
-export class FakeDrive implements DriveApi, ResumableDrive {
+export class FakeDrive implements DriveApi {
   private files = new Map<string, Stored>();
   private seq = 0;
   private last = 0;

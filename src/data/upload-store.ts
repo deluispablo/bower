@@ -246,3 +246,20 @@ export function indexedDbUploadStore(factory: IDBFactory | null = typeof indexed
     clear: (account, folder) => clearWhere(folder === undefined ? [account] : [account, folder]),
   };
 }
+
+/**
+ * The store in this page's memory: for tests, and for a browser with no IndexedDB at all.
+ * Nothing survives a reload; the queue still resumes, reserves and checks as with the device's store.
+ */
+export function memoryUploadStore(): UploadStore {
+  const held = new Map<string, { record: PendingUpload; body: Blob }>();
+  const mine = (r: PendingUpload, account: string, folder?: string): boolean => r.account === account && (folder === undefined || r.folder === folder);
+  return {
+    list: async (account, folder) => [...held.values()].map((h) => ({ ...h.record, appProperties: { ...h.record.appProperties } })).filter((r) => mine(r, account, folder)).sort((a, b) => a.addedAt.localeCompare(b.addedAt)),
+    add: async (record, body) => { held.set(uploadId(record), { record: { ...record, appProperties: { ...record.appProperties } }, body }); },
+    save: async (record) => { const h = held.get(uploadId(record)); if (h) h.record = { ...record, appProperties: { ...record.appProperties } }; },
+    body: async (record) => held.get(uploadId(record))?.body ?? null,
+    remove: async (record) => { held.delete(uploadId(record)); },
+    clear: async (account, folder) => { for (const [k, h] of held) if (mine(h.record, account, folder)) held.delete(k); },
+  };
+}

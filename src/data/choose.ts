@@ -77,7 +77,7 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
     // The real Worker answers POST /session and fences its own writes (TL-P3-14): this tab holds a place,
     // and its Worker calls carry the place and epoch. Each new pile is declared first, through the same fenced
     // Drive client, since the Worker's admission and the runner read declarations as the fake does (P3-15).
-    return { sources: makeLiveSources({ worker, driveLinks: true, declarePiles: true, drive: new DriveHttp({ token: (fresh) => worker.driveToken(fresh) }), uploadQueue: true, place: { world: 'real' } }) };
+    return { sources: makeLiveSources({ worker, driveLinks: true, declarePiles: true, drive: new DriveHttp({ token: (fresh) => worker.driveToken(fresh) }), place: { world: 'real' } }) };
   }
   const [{ pretendDrive, pretendRuns }, { FakeWorker }, { FakeLease, leaseKey }, { ALEX }] = await Promise.all([import('./fake/pretend'), import('./fake/fake-worker'), import('./fake/fake-lease'), import('./demo/fixture')]);
   const { drive, rootId, fresh } = await pretendDrive(scenario);
@@ -96,7 +96,7 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
   const world = `fake:${scenario}`;
   const lease = new FakeLease({ key: leaseKey(world, await uploadAccount(ALEX.email)) });
   const worker = new FakeWorker({ drive, scenario, rootId, fresh, offline: scenario === 'offline', runs, lease });
-  const sources = makeLiveSources({ worker, drive, runningPiles: () => worker.runningPiles(), pollMs: 300, declarePiles: true, uploadQueue: true, place: { world } });
+  const sources = makeLiveSources({ worker, drive, runningPiles: () => worker.runningPiles(), pollMs: 300, declarePiles: true, place: { world } });
   // The full read of the piles fails after the listing answered, until the page heals it (the test's hook).
   if (scenario === 'inbox-read-fails') {
     let heals = false;

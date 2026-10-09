@@ -10,6 +10,7 @@ import { BowerError, type RunReport, type RunState } from '../types';
 import type { Me, RunReply, RunWire, StatusReply } from '../worker/worker-api';
 import { WorkerHttp } from '../worker/worker-http';
 import { makeLiveSources, type LiveSources } from './index';
+import { holdChunks } from '@/testing/upload-hook';
 
 let live: LiveSources | null = null;
 /** The Worker's answers in the order it gave them: each helper call is a newer revision, unless one is named. */
@@ -360,10 +361,11 @@ describe('session and folder isolation', () => {
 
   it('reused sources isolate account and folder changes (late upload cannot trash or continue after transition)', async () => {
     const { s, drive, a, switchToB } = await pair(false);
-    const upload = drive.upload.bind(drive);
     const entered = deferred<undefined>();
     const release = deferred<undefined>();
-    const sending = vi.spyOn(drive, 'upload').mockImplementationOnce(async (...args) => { const value = await upload(...args); entered.resolve(undefined); await release.promise; return value; });
+    // The first file arrives in Drive, its answer is held.
+    holdChunks(drive, release.promise, true, () => entered.resolve(undefined));
+    const sending = vi.spyOn(drive, 'openResumable');
     const trash = vi.spyOn(drive, 'trash');
     await s.vault.addPile({ text: 'Two A files', items: ['first.pdf', 'second.pdf'].map((name) => ({ name, kind: 'pdf', origin: 'Picked', body: new Blob([name]) })) });
     await entered.promise;
@@ -384,7 +386,7 @@ describe('session and folder isolation', () => {
     const entered = deferred<undefined>();
     const release = deferred<undefined>();
     vi.spyOn(drive, 'createFolder').mockImplementationOnce(async (...args) => { const value = await create(...args); entered.resolve(undefined); await release.promise; return value; });
-    const upload = vi.spyOn(drive, 'upload');
+    const upload = vi.spyOn(drive, 'openResumable');
     const old = outcome(s.vault.addPile({ text: 'A file', items: [{ name: 'first.pdf', kind: 'pdf', origin: 'Picked', body: new Blob(['A bytes']) }] }));
     await entered.promise;
     await switchToB();
@@ -1293,10 +1295,11 @@ describe('foreground discovery', () => {
       readBytes: (id) => backend.readBytes(id),
       createFolder: (parent, name, props) => backend.createFolder(parent, name, props),
       createText: (parent, name, text, props) => backend.createText(parent, name, text, props),
-      upload: (parent, name, body, progress, props) => backend.upload(parent, name, body, progress, props),
       writeText: (id, text, version) => backend.writeText(id, text, version), update: (id, patch) => backend.update(id, patch),
       trash: (id) => backend.trash(id), untrash: (id) => backend.untrash(id), fullText: (root, query) => backend.fullText(root, query),
       storedDigest: (id, known) => backend.storedDigest(id, known), binnedByItem: (root, keys) => backend.binnedByItem(root, keys),
+      generateIds: (count) => backend.generateIds(count), openResumable: (target) => backend.openResumable(target), putChunk: (session, start, chunk, size, signal) => backend.putChunk(session, start, chunk, size, signal),
+      sessionStatus: (session, size) => backend.sessionStatus(session, size), getUploaded: (id) => backend.getUploaded(id),
     };
   }
 
@@ -1408,9 +1411,9 @@ describe('foreground discovery', () => {
     const key = `bower:outbox:${root}`;
     const waiting = localStorage.getItem(key);
     expect(waiting).not.toBeNull();
-    const upload = a.drive.upload.bind(a.drive);
+    const open = a.drive.openResumable.bind(a.drive);
     const release = deferred<undefined>();
-    vi.spyOn(a.drive, 'upload').mockImplementationOnce(async (...args) => { await release.promise; return upload(...args); });
+    vi.spyOn(a.drive, 'openResumable').mockImplementationOnce(async (...args) => { await release.promise; return open(...args); });
     const pile = await a.vault.addPile({ text: '', items: [{ name: 'New image.png', kind: 'image', origin: 'computer', body: new Blob(['synthetic image']) }] });
     await b.drive.createText(root, 'Remote.md', 'A new remote note.');
     listing.mockClear();
