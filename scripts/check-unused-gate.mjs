@@ -9,6 +9,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { compare, findingsOf } from './unused-gate-rules.mjs';
 
 const args = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -46,21 +47,8 @@ for (const pass of passes) {
     process.exit(1);
   }
 
-  // One line per finding: "<kind> <file> <name>" (a file finding has no name).
-  const found = new Set();
-  for (const issue of report.issues ?? []) {
-    for (const [kind, list] of Object.entries(issue)) {
-      if (!Array.isArray(list)) continue;
-      for (const item of list) {
-        // A duplicate is a list of names for one value.
-        const name = Array.isArray(item) ? item.map((i) => i.name).join('=') : item?.name;
-        found.add([kind, issue.file, name].filter(Boolean).join(' '));
-      }
-    }
-  }
-
-  const fresh = [...found].filter((f) => !baseline.has(f)).sort();
-  const stale = [...baseline].filter((f) => !found.has(f)).sort();
+  const found = findingsOf(report);
+  const { fresh, stale } = compare(found, baseline);
 
   console.log(`${pass.label} gate check:`);
   console.log(`  Baseline findings: ${baseline.size}`);
