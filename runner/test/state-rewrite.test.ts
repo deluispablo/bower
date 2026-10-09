@@ -16,6 +16,7 @@ import { parseNote } from '../../src/data/vault/note-format';
 import type { ClaudeSpawn } from '../src/claude';
 import { loadCorpus, type LoadedCase } from '../src/corpus';
 import { runWithClaude } from './corpus-run';
+import { stateWrittenBefore } from './earlier-runs';
 
 const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
 const HUB = 'Projects/Job hunt/Job hunt.md';
@@ -59,7 +60,8 @@ async function hubCase(): Promise<LoadedCase> {
 }
 
 const manifestOf = (after: Record<string, string>): ManifestV2 => {
-  const [path] = Object.keys(after).filter((p) => /^\.bower\/runs\/[^/]+\/manifest-[0-9a-f]{64}\.json$/.test(p));
+  // This run's: an earlier run's (`stateWrittenBefore`) is there too in some cases.
+  const [path] = Object.keys(after).filter((p) => /^\.bower\/runs\/[^/]+\/manifest-[0-9a-f]{64}\.json$/.test(p) && !p.startsWith('.bower/runs/run-state/'));
   return JSON.parse(after[path ?? ''] ?? 'null') as ManifestV2;
 };
 const editOf = (m: ManifestV2, path: string): Change[] => m.operations.flatMap((o) => (o.effect.kind === 'edit-text' && o.effect.path === path ? o.effect.changes : []));
@@ -67,6 +69,8 @@ const hubEdit = (m: ManifestV2): Change[] => editOf(m, HUB);
 const questionsOf = (after: Record<string, string>): Array<{ id: string; text: string; about?: string }> =>
   (JSON.parse(after['.bower/questions.json'] ?? '{}') as { questions?: Array<{ id: string; text: string; about?: string }> }).questions ?? [];
 const bytes = (text: string): Uint8Array => new TextEncoder().encode(text);
+/** An earlier run of the folder wrote `lines` as the hub's Current state (its manifest's state change). */
+const wroteBefore = (lines: string[]) => (drive: Parameters<typeof stateWrittenBefore>[0], root: string): Promise<void> => stateWrittenBefore(drive, root, HUB, lines);
 
 describe('a change kind of its own for Current state (C05)', () => {
   it('a Bower-owned Current state is rewritten and undo restores it', async () => {
@@ -108,7 +112,7 @@ describe('a change kind of its own for Current state (C05)', () => {
     const edited = was
       .replace('by: bower\n', `by: bower\nbower_state: ${stateMark(['One application open.'])}\n`)
       .replace('- One application open.', '- Two applications open, one interview on Friday.');
-    const run = await runWithClaude({ ...c, folder: { ...c.folder, [HUB]: edited } }, proposing);
+    const run = await runWithClaude({ ...c, folder: { ...c.folder, [HUB]: edited } }, proposing, undefined, wroteBefore(['One application open.']));
 
     expect(run.code).toBe(0);
     const note = parseNote(HUB, run.after[HUB] ?? '');
@@ -164,9 +168,36 @@ describe('a change kind of its own for Current state (C05)', () => {
     const edited = (c.folder[HUB] ?? '')
       .replace('by: bower\n', `by: bower\nbower_state: ${stateMark(['One application open.'])}\n`)
       .replace('- One application open.', '- Two applications open, one interview on Friday.');
-    const run = await runWithClaude({ ...c, folder: { ...c.folder, [HUB]: edited } }, proposing);
+    const run = await runWithClaude({ ...c, folder: { ...c.folder, [HUB]: edited } }, proposing, undefined, wroteBefore(['One application open.']));
     const news = parseNote(HUB, run.after[HUB] ?? '').timeline.filter((t) => t.text.startsWith('New: ')).map((t) => t.text);
     expect(news).toEqual(['New: an offer from Ferrowick to answer.']);
+  });
+
+  it("Bower's last state is read from the previous state change, not searched", async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const c = await hubCase();
+    // Bower last wrote two lines; the model keeps the first and drops the second, so no part of its proposal carries
+    // that mark. The earlier run's state change says what Bower wrote: the first line is not news.
+    const last = ['One application open.', 'Two flats seen this week.'];
+    const edited = (c.folder[HUB] ?? '')
+      .replace('by: bower\n', `by: bower\nbower_state: ${stateMark(last)}\n`)
+      .replace('- One application open.', '- Two applications open, one interview on Friday.');
+    const run = await runWithClaude({ ...c, folder: { ...c.folder, [HUB]: edited } }, proposing, undefined, wroteBefore(last));
+    const news = parseNote(HUB, run.after[HUB] ?? '').timeline.filter((t) => t.text.startsWith('New: ')).map((t) => t.text);
+    expect(news).toEqual(['New: an offer from Ferrowick to answer.']);
+  });
+
+  it('with no previous state change to read, every line the section lacks is news', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const c = await hubCase();
+    // The mark is there but no run record says which lines it is of (binned by retention, or older than manifests):
+    // nothing is guessed from the mark, so the line names all that the person's section does not hold.
+    const edited = (c.folder[HUB] ?? '')
+      .replace('by: bower\n', `by: bower\nbower_state: ${stateMark(['One application open.'])}\n`)
+      .replace('- One application open.', '- Two applications open, one interview on Friday.');
+    const run = await runWithClaude({ ...c, folder: { ...c.folder, [HUB]: edited } }, proposing);
+    const news = parseNote(HUB, run.after[HUB] ?? '').timeline.filter((t) => t.text.startsWith('New: ')).map((t) => t.text);
+    expect(news).toEqual(['New: One application open, an offer from Ferrowick to answer.']);
   });
 
   it('after a Bower append the next run only adds a line', async () => {
