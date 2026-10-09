@@ -16,6 +16,14 @@
     "filed": 0,
     "created": [],
     "updated": [],
-    "questionsAtMost": 1
+    "questionsAtMost": 1,
+    "questionsExactly": 1,
+    "pairSubject": {
+      "kind": "pair",
+      "notes": [
+        "Projects/Flat hunt/Larkspur Lane flat.md",
+        "Projects/Flat hunt/Larkspur Lane flat, second listing.md"
+      ]
+    }
   }
 }

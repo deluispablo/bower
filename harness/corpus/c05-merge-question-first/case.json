@@ -2,8 +2,8 @@
   "id": "c05-merge-question-first",
   "capability": "C05",
   "title": "Ask before combining two notes about the same flat",
-  "covers": "model",
-  "source": "new (TL-P4-28 ruling 4: C05 preparation; scripted proposal pending lead review)",
+  "covers": "scripted",
+  "source": "new (C05 preservation through scripted intent replies and the existing planner)",
   "scope": "all",
   "allowWeb": false,
   "inbox": [

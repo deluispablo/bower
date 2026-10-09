@@ -32,6 +32,7 @@
     "updated": [
       "Areas/Home/Garden plot.md"
     ],
-    "questionsAtMost": 1
+    "questionsAtMost": 1,
+    "questionsExactly": 1
   }
 }

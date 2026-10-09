@@ -2,11 +2,17 @@
   "id": "c05-person-edited-between-runs",
   "capability": "C05",
   "title": "A later personal edit survives the next semantic update",
-  "covers": "model",
-  "source": "new (TL-P4-28 ruling 4: C05 preparation; scripted proposal pending lead review)",
+  "covers": "scripted",
+  "source": "new (C05 preservation through scripted intent replies and the existing planner)",
   "scope": "all",
   "allowWeb": false,
   "inbox": [
+    {
+      "line": "Update the garden plot from the committee notice.",
+      "files": [
+        "Committee notice.txt"
+      ]
+    },
     {
       "line": "Update the garden plot from this committee letter.",
       "files": [
@@ -18,5 +24,12 @@
   "questions": [],
   "bowerOwned": [
     "Areas/Home/Garden plot.md"
+  ],
+  "between": [
+    {
+      "kind": "edit",
+      "path": "Areas/Home/Garden plot.md",
+      "text": "---\nsummary: Alex's plot at the Larkspur Lane community garden.\nby: bower\nbower_state: ad0d49f0788bfc33\n---\n\n## Current state\n- Alex will keep the shared water butt until the replacement arrives.\n\n## My plans\nAlex wants to paint the water butt amber.\n\n## Timeline\n- 2026-09-12 \u00b7 Planted garlic.\n- 2026-10-07 \u00b7 The committee will replace the shared water butt. \u00b7 [[Committee notice.txt]]\n"
+    }
   ]
 }
