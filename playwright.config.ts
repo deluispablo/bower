@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 import { batchOptions } from './e2e/batch';
+import { e2eServer } from './e2e/port';
+
+const { baseURL, webServer } = e2eServer('dev');
 
 // Uses the Chrome already on the machine (no browser download).
 export default defineConfig({
@@ -12,8 +15,9 @@ export default defineConfig({
   fullyParallel: true,
   // E2E_BATCH=1: batch and freeze runs retry once and fail what passes only on retry (e2e/batch.ts).
   ...batchOptions(),
-  use: { baseURL: 'http://localhost:5191', channel: 'chrome' },
-  webServer: { command: 'pnpm exec vite --port 5191 --strictPort', port: 5191, reuseExistingServer: true },
+  // One port per worktree and a server reused only if it is this worktree's (e2e/port.ts).
+  use: { baseURL, channel: 'chrome' },
+  webServer,
   projects: [
     { name: 'phone', use: { ...devices['Pixel 7'], channel: 'chrome' } },
     { name: 'desktop', use: { viewport: { width: 1440, height: 900 }, channel: 'chrome' } },

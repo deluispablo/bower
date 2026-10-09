@@ -2,8 +2,6 @@
   "date": "2026-10-09",
   "note": "Known unused production code (knip --production: tests are not entries). The list may only shrink: remove a line when the code is used or deleted. See docs/harness/2026-10-09-c3-unused-production-notes.md.",
   "findings": [
-    "binaries e2e/pwa.config.ts vite",
-    "binaries playwright.config.ts vite",
     "duplicates src/data/contracts/run-phases.ts RUN_STEPS=ACTIVE_PHASES",
     "exports api/src/env.ts OPTIONAL_SECRETS",
     "exports api/src/github.ts dispatchTidy",

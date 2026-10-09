@@ -1,5 +1,8 @@
 import { defineConfig } from '@playwright/test';
 import { batchOptions } from './batch';
+import { e2eServer } from './port';
+
+const { baseURL, webServer } = e2eServer('preview');
 
 // The installable app exists only in a production build, so this runs on `vite preview`.
 export default defineConfig({
@@ -10,6 +13,6 @@ export default defineConfig({
   forbidOnly: true,
   // E2E_BATCH=1: batch and freeze runs retry once and fail what passes only on retry (e2e/batch.ts).
   ...batchOptions(),
-  use: { baseURL: 'http://localhost:5192', channel: 'chrome' },
-  webServer: { command: 'pnpm exec vite preview --port 5192 --strictPort', cwd: '..', port: 5192, reuseExistingServer: true },
+  use: { baseURL, channel: 'chrome' },
+  webServer,
 });
