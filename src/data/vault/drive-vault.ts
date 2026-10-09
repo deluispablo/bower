@@ -428,7 +428,7 @@ export class DriveVault implements VaultSource {
       try {
         change = (await this.journal.record('trash', `Put ${(f.folder ? nameOf(path) : thingName(nameOf(path)))} in the Bin`, { path, fileId: f.id })).id;
       } catch (e) {
-        if (e instanceof BowerError && e.applied) this.bin.set(path, { file: binned, change: e.applied.changeId });
+        if (e instanceof BowerError && e.applied) this.bin.set(path, { file: binned, change: e.applied.changeId ?? null });
         throw e;
       }
     }

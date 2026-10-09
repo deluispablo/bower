@@ -257,8 +257,11 @@ export class BowerError extends Error {
   constructor(
     public readonly code: ErrorCode,
     message: string,
-    /** A Drive change succeeded, but its journal could only be kept on this page. */
-    public readonly applied?: { path: string | null; changeId: string },
+    /**
+     * A Drive change succeeded, but its line was not simply written: where the thing is now (`path`, null once in the
+     * Bin), and the line's id when one was kept (on this page, or waiting on the person) to take back with it.
+     */
+    public readonly applied?: { path: string | null; changeId?: string },
     /** `cause`: a typed marker for code to tell this error by, never its words (ES2022 Error cause). */
     options?: ErrorOptions,
   ) {

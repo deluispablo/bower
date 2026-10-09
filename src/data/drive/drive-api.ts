@@ -6,7 +6,7 @@
  */
 import { BowerError, type ErrorCode } from '../types';
 import type { Digest } from '../pile-readiness';
-import { RATE_LIMITED, REFUSED, UNCONFIRMED_WRITE } from './transport';
+import { marked, UNCONFIRMED_WRITE, type FailureKind } from './transport';
 
 export interface DriveFile {
   id: string;
@@ -153,11 +153,15 @@ export const driveError = (code: ErrorCode): BowerError => new BowerError(code, 
 export const UNCONFIRMED_WRITE_MESSAGE = "Bower couldn't confirm that change. Refresh to check.";
 export const unconfirmedWriteError = (): BowerError => new BowerError('unknown', UNCONFIRMED_WRITE_MESSAGE, undefined, { cause: UNCONFIRMED_WRITE });
 
-/** A request still rate limited after the retries: it did not land; tell it by `isRateLimit`. */
-export const rateLimitedError = (): BowerError => new BowerError('unknown', DRIVE_MESSAGES.unknown, undefined, { cause: RATE_LIMITED });
+/** Where the person has to act, what is in the way, by Drive's reason (`transport.ts`, kind `wait`). */
+export const WAIT_MESSAGES: Readonly<Record<string, string>> = {
+  storageQuotaExceeded: 'Your Google Drive is full.',
+  dailyLimitExceeded: 'Google Drive is not taking more from Bower today.',
+};
 
-/** A 4xx Drive will answer to every try of this request; tell it by `isRefused`. */
-export const refusedError = (): BowerError => new BowerError('unknown', DRIVE_MESSAGES.unknown, undefined, { cause: REFUSED });
+/** A `code` error marked with the kind its answer has in the transport's table; tell it by `failureKind`. */
+export const driveFailure = (code: ErrorCode, kind: FailureKind, reasons: readonly string[] = []): BowerError =>
+  new BowerError(code, (kind === 'wait' && reasons.map((r) => WAIT_MESSAGES[r]).find((m) => m !== undefined)) || DRIVE_MESSAGES[code], undefined, marked(kind));
 
 /**
  * Every Drive method, read or write, in one place. The lease guard fences the writes (fail closed: a method

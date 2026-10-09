@@ -434,3 +434,4 @@ P3-9 is closed.
 - Retention terminal-run round merged (red 21806fbf, fix fdea3310; check green). Open: runs failed by the Worker stale deadline never stamped (no runner); failure path +11 calls in the fake (stale listing pages). P4-38b check dispatched.
 - Retention ruling (main 38f0370): unstamped folders over 24 h old count as terminal; failure path reuses the listing if P4-38b confirms +11. Round after P4-38b.
 - P4-38b PASS (retention terminal); real runner pays +7 on the failure path (re-walk), so ruling 2 applies. Round 4 of retention dispatched (24 h rule, failure path reuses the listing, P4-38b minors).
+- c2-create-by-id round 5 merged (red 3e0f19fe, fix 2992ce6e; one Drive failure table; prod -80; phone what-failed on the Bower tab; check green). Deviations asked: authError=wait, notFound=retry. runner/src/drive.ts:359 classification left for after the retention round. P4-37e check dispatched.
