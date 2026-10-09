@@ -5927,7 +5927,7 @@
       "harness/real-timers.json is empty and the ceiling is 0."
     ],
     "verify": "pnpm vitest run -t \"the size-cap run fits its time bound with no load|a second heavy run waits for the first\" && pnpm exec vitest run src/timer-gate.test.ts -t \"the timer allowlist may only shrink\" && bash scripts/e2e-both.sh -g \"axe runs after the sheet.s animations end\"",
-    "note": "TL-P4-17 addendum 10 (main 56dd8d86); stage 4. Starting model: bower-implementer. TL-P4-22 addenda 11 and 13 (main f01eda6c) widen the scope; part 1 gets an escalated review. Packet 2026-10-09-c4-test-timers-packet.md. Goes after the Codex-finding fixes."
+    "note": "TL-P4-17 addendum 10 (main 56dd8d86); stage 4. Starting model: bower-implementer. TL-P4-22 addenda 11 and 13 (main f01eda6c) widen the scope; part 1 gets an escalated review. Packet 2026-10-09-c4-test-timers-packet.md. Goes after the Codex-finding fixes. P4-52 BLOCK only on b1 (parse once); split released by TL-P4-22 addendum 18 (main 5083a711): b1 is c4-parse-once. Part 1 byte table passed review."
   },
   {
     "id": "c3-done-harness-paths",
@@ -6292,5 +6292,19 @@
     ],
     "verify": "",
     "note": "TL-P4-22 addendum 16 (main b8b21a8b); defect new-pill-three-copies. UI-only, so the pruning trial applies (no re-review). Codex after v2-move-here merges, and it folds that entry use in. Packet to write."
+  },
+  {
+    "id": "c4-parse-once",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "ui": null,
+    "what": "One ownership parse per note per run through the existing parse home: a per-run memo keyed by file id plus the md5 that was read, so a changed note is parsed again.",
+    "steps": [
+      "A run parses each unchanged note at most once.",
+      "A note whose md5 changed is parsed again."
+    ],
+    "verify": "",
+    "note": "TL-P4-22 addendum 18 (main 5083a711); split from c4-test-timers (P4-52 BLOCK b1; load-timeouts diagnosis b1, 13 parseOwnership call sites, ~850 parses in the size-cap run). Escalated. After the TL-P4-24 entries. Red: a spy counting at most one parse per unchanged note per run. Packet to write."
   }
 ]
