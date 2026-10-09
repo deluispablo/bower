@@ -6421,7 +6421,7 @@
     "id": "c4-precheck-runner",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "done.sh precheck detects the e2e runner from the command words, never from text in a test name (defect done-precheck-matches-words).",
     "steps": [
       "A vitest verify whose -t names mention e2e is read as unit.",
