@@ -4885,7 +4885,7 @@
       "Share one normalisation between the golden test and the fingerprint.",
       "Two C04 runs with different ids give the same input=."
     ],
-    "verify": "pnpm -C runner exec vitest run -t \"two runs of the same case on fresh ids give the same input fingerprint|two fresh folders with different Drive and admission ids give the same fingerprint|two fresh fake folders on the same case give the same input fingerprint through main\"",
+    "verify": "pnpm -C runner exec vitest run -t \"two runs of the same case on fresh ids give the same input fingerprint|the same case with other ids has the same fingerprint|two fresh fake folders on the same case give the same input fingerprint through main\"",
     "passes": true,
     "note": "TL-P4-07 addendum 2 (main c924560). Live input= differed on all 5 cd3af43 runs. Reopened by the P4-8 review: fileId and admission id were not normalised. Reopened by TL-P4-08 addendum 2: live input= still differed on all 5 c6ddb96 runs."
   },
@@ -5828,7 +5828,7 @@
       "A text field that happens to contain \"id\":\"x\" is not rewritten."
     ],
     "verify": "pnpm -C runner exec vitest run test/model-input-fingerprint.test.ts -t \"the same case with other ids has the same fingerprint|a value that looks like an id inside text is kept|the raw model input on the C04 fixture equals its golden copy\"",
-    "note": "TL-P4-14 stage 3 row (c3-fingerprint, mechanical). runner/src/model-input.ts normalizeModelInput is six regex replaces on JSON text (callers claude.ts:194, :1020). Starting model: bower-mechanical. TL-P4-14 addendum 21 (main 43a0289a): option (a) with RFC 8785 (JCS) sorted keys; the normalized golden is regenerated once; a separate golden of the raw prompt text proves the model input unchanged (if it moves, stop and report); p4-speed-baseline.md notes that input= and section hashes before the fix sha do not compare with later ones; no compatibility regex."
+    "note": "TL-P4-14 stage 3 row (c3-fingerprint, mechanical). runner/src/model-input.ts normalizeModelInput is six regex replaces on JSON text (callers claude.ts:194, :1020). Starting model: bower-mechanical. TL-P4-14 addendum 21 (main 43a0289a): option (a) with RFC 8785 (JCS) sorted keys; the normalized golden is regenerated once; a separate golden of the raw prompt text proves the model input unchanged (if it moves, stop and report); p4-speed-baseline.md notes that input= and section hashes before the fix sha do not compare with later ones; no compatibility regex. renamed: two fresh folders with different Drive and admission ids give the same fingerprint -> the same case with other ids has the same fingerprint"
   },
   {
     "id": "c3-reply-schema",

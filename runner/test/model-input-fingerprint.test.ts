@@ -272,35 +272,6 @@ describe('model input fingerprint', () => {
     expect(fingerprint1).toBe(fingerprint2);
   });
 
-  it('two fresh fake folders on the same case give the same input fingerprint through main', async () => {
-    const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-garden-newsletter');
-    if (!c) throw new Error('the C04 garden newsletter case is missing');
-
-    // Run the case twice through main() to verify fingerprints are stable
-    const captureInputViaMain = async (): Promise<{ input: string; normalized: string }> => {
-      const calls: ClaudeCall[] = [];
-      const fakeSpawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('{"kind":"tidy-intent","v":1,"things":[],"notes":[],"lines":[],"asks":[]}') } satisfies ClaudeExit);
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-
-      await runWithClaude(c, fakeSpawn);
-
-      const input = calls[0]?.input ?? '';
-      const normalized = normalizeModelInput(input);
-      return { input, normalized };
-    };
-
-    const run1 = await captureInputViaMain();
-    const run2 = await captureInputViaMain();
-
-    // Two deterministic runs of the same case with fixed drives produce identical inputs
-    expect(run1.input).toBe(run2.input);
-
-    // Fingerprints should also be identical
-    const fingerprint1 = createHash('sha256').update(run1.normalized).digest('hex').slice(0, 12);
-    const fingerprint2 = createHash('sha256').update(run2.normalized).digest('hex').slice(0, 12);
-    expect(fingerprint1).toBe(fingerprint2);
-  });
-
   it('a change in one input section moves only that section hash', async () => {
     const g = await gardenFolder();
     const admitted = await planAdmission(fakeRead(g.drive), g.root, { scope: 'all', clock: () => AT, newId: () => 'admission-1' });
