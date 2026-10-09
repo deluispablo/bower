@@ -6267,7 +6267,7 @@
     "id": "v2-move-here",
     "task": "p4-consolidation",
     "category": "ui",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "The Move sheet shows the current folder in place, dimmed with a \"Now here\" pill, not choosable (aria-disabled, skipped by tap, Enter and arrows); 52 px rows; a full-width ghost Cancel (d-v2-18).",
     "steps": [
