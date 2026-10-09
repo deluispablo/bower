@@ -46,3 +46,11 @@ The class gap: the reference fixture let proud pass because it had no scale peak
 3. A notes addendum in its own commit (`docs/harness/2026-10-09-v2-perched-bower-notes.md`), with `tests changed:` lines.
 
 The card carries `worktree:`. Reviewers are read-only. They never move the main checkout in any form.
+
+## Addendum 17 (main 63566a5a): fix all four in this round
+
+Option (a), agreed with the designer. The bound stays as it is.
+- **Tails:** idle, carry and land get the same treatment as proud: an eased return with no spring overshoot past the part's range by more than 2°.
+- **Sleep:** its scale matches 1.035 wide by 0.97 tall.
+- **Carry legs:** they hold at 0.55 through 22–48%. Add this hold to the reference fixture, as a red row in its own commit before the fix.
+- Then the designer re-records all nine poses against the 21648ecc baseline.
