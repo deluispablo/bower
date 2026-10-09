@@ -184,3 +184,5 @@ v2-targets,implementer,claude,bower-implementer,,1,107234,,,,,,36,15.8,delivered
 c4-e2e-port,implementer,claude,bower-implementer,,1,96433,,,,,,30,11.0,delivered,2026-10-09
 v2-perched-bower,implementer,claude,bower-escalated,,1,192430,,,,,,59,25.5,delivered,2026-10-09
 TL-P3-16 Codex review,reviewer,codex,codex-cli 0.160.1,medium,1,3031754,3026234,,2827264,5520,,,,3 important,2026-10-09
+load-timeouts,diagnoser,claude,bower-diagnoser,,1,135700,,,,,,68,12.1,diagnosed (hit cap once),2026-10-09
+c4-segmented-one red,implementer,codex,codex-cli 0.160.1,medium,1,194825,191938,,164992,2887,,,,blocked on git index (sandbox),2026-10-09
