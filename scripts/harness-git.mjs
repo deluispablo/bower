@@ -1,6 +1,6 @@
 // done.sh's git steps, kept here so they are tested (src/harness-git.test.ts).
 import { execFileSync, spawnSync } from 'node:child_process';
-import { realpathSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 /** Paths from `git status --porcelain`; a rename ("R  old -> new") is its new name. */
@@ -131,6 +131,6 @@ export function cleanupMerged(branch, cwd = process.cwd()) {
 }
 
 // integrate.sh: node scripts/harness-git.mjs cleanup <branch>
-if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)) && process.argv[2] === 'cleanup') {
+if (process.argv[1] && existsSync(process.argv[1]) && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)) && process.argv[2] === 'cleanup') {
   for (const line of cleanupMerged(process.argv[3] ?? '')) console.log(line);
 }

@@ -228,4 +228,13 @@ describe('the harness and git', () => {
     const bad = files.filter((f) => f !== 'scripts/harness-git.mjs' && f !== 'src/harness-git.test.ts' && walks.test(readFileSync(join(root, f), 'utf8')) && !/commitsSince|historyTips/.test(readFileSync(join(root, f), 'utf8')));
     expect(bad).toEqual([]);
   });
+  it('harness-git imported under node -e with a sha argument does not run the cleanup', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'harness-git-import-'));
+    const copy = join(dir, 'harness-git.mjs');
+    writeFileSync(copy, readFileSync(join(process.cwd(), 'scripts/harness-git.mjs'), 'utf8'));
+    const run = spawnSync('node', ['-e', `import('${copy}')`, '24323495'], { cwd: dir, encoding: 'utf8' });
+    expect(run.stderr).toBe('');
+    expect(run.stdout).toBe('');
+    expect(run.status).toBe(0);
+  });
 });
