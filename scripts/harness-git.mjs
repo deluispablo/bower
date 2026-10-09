@@ -49,3 +49,24 @@ export function codeInCommit(sha, cwd = process.cwd()) {
   const out = execFileSync('git', ['diff', '--name-only', `${sha}^`, sha, '--', ...CODE_PATHS], { cwd, encoding: 'utf8' });
   return selectCode(out.split('\n').filter(Boolean));
 }
+
+/**
+ * The tips a history check judges: HEAD, plus MERGE_HEAD while a merge is
+ * uncommitted, since HEAD does not move during `git merge --no-commit`
+ * (https://git-scm.com/docs/git-merge, "MERGE_HEAD").
+ */
+export function historyTips(cwd = process.cwd()) {
+  try {
+    execFileSync('git', ['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { cwd, stdio: 'pipe' });
+    return ['HEAD', 'MERGE_HEAD'];
+  } catch {
+    // expected: no merge in progress (rev-parse exits 1 when MERGE_HEAD is absent).
+    return ['HEAD'];
+  }
+}
+
+/** Short shas of the non-merge commits in the judged tips since `base`, touching `paths`. */
+export function commitsSince(base, paths, cwd = process.cwd()) {
+  const out = execFileSync('git', ['log', '--no-merges', '--format=%h', ...historyTips(cwd), `^${base}`, '--', ...paths], { cwd, encoding: 'utf8' });
+  return out.split('\n').filter(Boolean);
+}
