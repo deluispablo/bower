@@ -8,7 +8,7 @@ import {
   ACTION_REFERENCE,
   ACT_REFERENCE,
   ENGINE_MEMBERS,
-  EXEMPT_MEMBERS,
+  EXEMPT_NAMES,
   FPS,
   NEUTRAL,
   PART_KIND,
@@ -259,7 +259,7 @@ describe("the engine's named actions", () => {
       'speed', 'start', 'stop', 'release', 'setSize', 'setHome', 'snapHome', 'look', 'busy', 'settled', 'interrupt',
       'then', 'wait', 'chirp', 'flyTo', 'hopTo', 'peck', 'face', 'study', 'scribble', 'holding', 'showOff', 'poke',
     ];
-    const listed = Object.keys(EXEMPT_MEMBERS);
+    const listed = [...EXEMPT_NAMES];
     expect(listed.filter((n) => !atAddendum21.includes(n)), 'names added to the allowlist').toEqual([]);
     const labelled = Object.entries(ENGINE_MEMBERS).filter(([, k]) => k === 'script' || k === 'control').map(([n]) => n);
     expect(listed.filter((n) => !labelled.includes(n)), 'allowlisted names that have a reference').toEqual([]);

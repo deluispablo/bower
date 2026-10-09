@@ -318,15 +318,18 @@ export const EXEMPT_MEMBERS: Readonly<Partial<Record<keyof BirdEngine, string>>>
   poke: 'script: pre-V2 layer step, no reference',
 };
 
+/** The allowlist's exact names, own keys only, so an inherited name such as `toString` is never listed. */
+export const EXEMPT_NAMES: ReadonlySet<string> = new Set(Object.keys(EXEMPT_MEMBERS));
+
 /** Every engine member whose motion has no reference row, named as `member('name')` or `member: action`. */
 export function unreferencedMembers(
   members: Readonly<Record<string, EngineMember>>,
-  exempt: Readonly<Record<string, string | undefined>> = EXEMPT_MEMBERS,
+  exempt: ReadonlySet<string> = EXEMPT_NAMES,
 ): string[] {
   const missing: string[] = [];
   for (const [member, kind] of Object.entries(members)) {
     if (kind === 'script' || kind === 'control') {
-      if (!exempt[member]) missing.push(`${member}: not referenced and not on the allowlist`);
+      if (!exempt.has(member)) missing.push(`${member}: not referenced and not on the allowlist`);
     } else if (kind === 'acts') missing.push(...ACT_NAMES.filter((n) => !(n in ACT_REFERENCE)).map((n) => `${member}('${n}')`));
     else if (kind === 'poses') missing.push(...POSE_NAMES.filter((n) => !(n in POSE_REFERENCE)).map((n) => `${member}('${n}')`));
     else if (typeof kind === 'object' && !ACTION_REFERENCE[kind.action]) missing.push(`${member}: ${kind.action}`);
