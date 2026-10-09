@@ -414,6 +414,7 @@ describe("the engine's named actions", () => {
           { pose: 'idle' as const, act: true, seconds: 0.75 * phase },
           { pose: 'idle' as const, act: true, seconds: 0.6 }, // The round-7 witness: preen at 42°.
           { pose: 'idle' as const, act: false, seconds: 0.2, doze: true },
+          ...(['error', 'offline'] as const).map((reaction) => ({ pose: 'sleep' as const, act: false, seconds: 0.2, reaction })),
         ];
         for (const schedule of schedules) for (const entry of cases) {
           cleanup();
@@ -425,7 +426,7 @@ describe("the engine's named actions", () => {
             cancelFrame: () => { callback = undefined; },
           });
           const internals = engine as unknown as ProfileProbe;
-          const startling = internals.heard() && internals.minded();
+          const startling = 'reaction' in entry || (internals.heard() && internals.minded());
           let time = 1;
           let frame = offset;
           callback?.(time * 1000); // Prime the clock: the first animation frame has zero elapsed time.
@@ -546,7 +547,10 @@ describe("the engine's named actions", () => {
             head = now;
           };
           try {
-            engine.nudge();
+            if ('reaction' in entry) {
+              const port = engine as unknown as { play?: (kind: 'error' | 'offline') => void };
+              port.play?.(entry.reaction);
+            } else engine.nudge();
             // Sample the deadlines exactly; other frames retain the selected cadence (including its jitter).
             advance(0.15, sample);
             advance(Math.max(...schedule.dt), sample);
