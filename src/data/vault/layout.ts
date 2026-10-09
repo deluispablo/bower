@@ -80,6 +80,9 @@ export const PROP = {
   recordPile: 'bowerRecordPile',
   /** On a declaration in `.bower/piles`: `loose` or `folder`, the layout its pile was declared with. */
   recordAnchor: 'bowerRecordAnchor',
+  /** On a run's folder in `.bower/runs`, set at done: its run id, and when it ended in ms (`runner/src/spine/retention.ts`). */
+  run: 'bowerRun',
+  runEnded: 'bowerRunEnded',
 } as const;
 
 /** The stamps a new record carries: its pile, and for a declaration the layout it was declared with. */

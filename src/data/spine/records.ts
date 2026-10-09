@@ -62,12 +62,6 @@ export type Found =
   | { kind: 'run'; manifest: RunManifest; manifestHash: string; chain: Checkpoint[]; head: string | null }
   | { kind: 'broken'; why: string };
 
-/** A run folder whose verified head is terminal, and when it ended (its `phaseAt`). */
-export interface Finished {
-  folder: DriveFile;
-  at: number;
-}
-
 const SAVE_FAILED = 'Bower could not save what it did. Try again later.';
 const READ_FAILED = 'Bower could not read what it did. Try again later.';
 /** A manifest version later than this build reads (TL-P2-20 R3-7 m9): the run stays saving. */
@@ -102,6 +96,9 @@ export function nextCheckpoint(head: Checkpoint, previous: string, mark: Attempt
 /** The folders a record can be in, and the listing they were found in. */
 type Folders = { listing: DriveFile[]; bower: DriveFile[]; ns: DriveFile[]; run: DriveFile[] };
 type Walk = { ok: true; chain: Checkpoint[] } | { ok: false; why: string };
+
+/** The folders in `.bower/runs` (any of its duplicates) of a listing. */
+const runFoldersIn = (listing: readonly DriveFile[], ns: readonly DriveFile[]): DriveFile[] => listing.filter((f) => f.folder && f.parents.some((p) => ns.some((n) => n.id === p)));
 
 /** One run's records, scoped to one root. */
 export class RunRecords {
@@ -263,19 +260,10 @@ export class RunRecords {
     return { ok: true, chain: out };
   }
 
-  /**
-   * The run folders in `.bower/runs` whose verified chain ends done or failed, each by its own folder (a duplicate
-   * name is its own folder). Anything that cannot be verified is not finished, so it is never let go of.
-   */
-  async finished(): Promise<Finished[]> {
+  /** The folders in `.bower/runs`, finished or not, as the listing these reads give shows them (no record read). */
+  async runFolders(): Promise<DriveFile[]> {
     const { listing, ns } = await this.folders({ runId: '' });
-    const out: Finished[] = [];
-    for (const folder of listing.filter((f) => f.folder && f.parents.some((p) => ns.some((n) => n.id === p)))) {
-      const found = await this.foundIn({ listing, run: [folder] }, folder.name);
-      const head = found.kind === 'run' ? found.chain.at(-1) : undefined;
-      if (head && (head.phase === 'done' || head.phase === 'failed')) out.push({ folder, at: head.phaseAt });
-    }
-    return out;
+    return runFoldersIn(listing, ns);
   }
 
   /** Writes a consumed disposition after checking it against its pile's full key set. */
