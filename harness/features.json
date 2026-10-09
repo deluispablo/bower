@@ -6006,8 +6006,8 @@
       "A line per file passes.",
       "A .only or .skip fails pnpm check."
     ],
-    "verify": "pnpm exec vitest run src/harness.test.ts -t \"a branch that changes an existing test without a tests-changed line fails integration|a tests-changed line for each changed test lets the branch pass|a deleted test needs its own tests-changed line|a focused or skipped unit test fails the check|both playwright configs forbid only\"",
-    "note": "TL-P4-20 row 1. Packet 2026-10-09-c3-test-tamper-packet.md. Starting model bower-implementer. The test file may move; the worker names it."
+    "verify": "pnpm exec vitest run src/harness-git.test.ts src/harness.test.ts -t \"a branch that changes an existing test without a tests-changed line fails integration|a tests-changed line for each changed test lets the branch pass|a deleted test needs its own tests-changed line|a focused or skipped unit test fails the check|both playwright configs forbid only\"",
+    "note": "TL-P4-20 row 1. Packet 2026-10-09-c3-test-tamper-packet.md. Starting model bower-implementer. The test file may move; the worker names it. Red 3e9b95f6, fix 95e7f290, notes 6a65533e. Adds @vitest/eslint-plugin (no-focused-tests, no-disabled-tests)."
   },
   {
     "id": "c3-flaky-policy",
