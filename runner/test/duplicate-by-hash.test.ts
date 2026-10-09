@@ -215,6 +215,27 @@ describe('a thing already saved (duplicate-by-hash)', () => {
     expect((JSON.parse(run.after['.bower/questions.json'] ?? '{}') as { questions: unknown[] }).questions).toEqual([]);
   });
 
+  it('a refused Bin keeps its question open', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const c = await offerFiled();
+    const hash = createHash('md5').update(offerBytes(c)).digest('hex');
+    // Asked about an earlier upload of the same offer; this upload of it is saved already, so its Bin would close it.
+    const question = { id: 'q-ask-earlier', text: 'Is this the signed offer?', yes: 'Yes', no: 'No', subject: 'earlier-upload', hash, askedAt: 1 };
+    let at: { drive: FakeDrive; root: string } | null = null;
+    // While the model works, the person saves other words over the inbox copy: the engine refuses its Bin.
+    const copyChanges = async (): Promise<void> => {
+      const f = at ? (await byPath(at.drive, at.root)).get(`Inbox/${OFFER}`) : undefined;
+      if (!at || !f) throw new Error('no inbox offer');
+      await at.drive.writeText(f.id, 'A different signed offer.', f.modifiedTime);
+    };
+    const run = await runWithClaude({ ...c, questions: [question] as never, inbox: [{ line: '', files: [OFFER] }, { line: '', files: ['Payslip_Aug.pdf'] }] }, during(copyChanges), undefined, async (drive, root) => { at = { drive, root }; });
+    expect(run.code).toBe(0);
+    expect(reportOf(run).alreadySaved ?? []).toEqual([]);
+    expect(run.after[`Inbox/${OFFER}`]).toBe('A different signed offer.');
+    // The thing stayed in the inbox, so its question stays open.
+    expect((JSON.parse(run.after['.bower/questions.json'] ?? '{}') as { questions: Array<{ id: string }> }).questions.map((q) => q.id)).toEqual(['q-ask-earlier']);
+  });
+
   it('a Google Doc, a saved link, an empty file and a file in the inbox or Bower\'s own files are never saved copies', () => {
     const at = '2026-10-07T09:00:00.000Z';
     const file = (id: string, name: string, parent: string, more: Partial<DriveFile> = {}): DriveFile => ({ id, name, parents: [parent], folder: false, modifiedTime: at, createdTime: at, ...more });

@@ -58,9 +58,3 @@ export function useOutranked(priority = 0): boolean {
   );
   return top > priority;
 }
-
-/** For tests. */
-export function resetBirdPresence(): void {
-  entries = [];
-  emit();
-}

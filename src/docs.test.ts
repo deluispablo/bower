@@ -1,11 +1,12 @@
 /// <reference types="node" />
 /** Things the repository promises its agents and its pages, checked. */
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+// @ts-expect-error plain JS module, tested in harness-git.test.ts
+import { commitsSince } from '../scripts/harness-git.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p: string): string => readFileSync(join(ROOT, p), 'utf8');
@@ -125,13 +126,12 @@ describe('what the repository promises', () => {
     const doc = 'docs/harness/2026-10-07-p3-compatibility.md';
     expect(existsSync(join(ROOT, doc)), `${doc} exists`).toBe(true);
     const list = read(doc);
-    const log = execFileSync('git', ['log', '--no-merges', '--format=%h', '00ec9a5..HEAD', '--', 'src/features', 'src/data/contracts'], { cwd: ROOT, encoding: 'utf8' });
-    const commits = log.split('\n').filter(Boolean);
+    const commits = commitsSince('00ec9a5', ['src/features', 'src/data/contracts'], ROOT);
     expect(commits.length).toBeGreaterThan(0);
     // One row per commit: `| sha | entry | what it changes for the accepted app's files |`, never an empty cell.
     const rows = new Map([...list.matchAll(/^\|\s*`?([0-9a-f]{7,40})`?\s*\|\s*([^|\s][^|]*?)\s*\|\s*([^|\s][^|]*?)\s*\|\s*$/gm)].map((m) => [m[1] ?? '', m[2] ?? '']));
     const listed = (sha: string): boolean => [...rows.keys()].some((k) => k.startsWith(sha) || sha.startsWith(k));
-    expect(commits.filter((sha) => !listed(sha)), 'commits missing from the list').toEqual([]);
+    expect(commits.filter((sha: string) => !listed(sha)), 'commits missing from the list').toEqual([]);
     for (const entry of rows.values()) expect(entry).toMatch(/^[a-z][a-z0-9-]+$/);
   });
   it('the P3 security review is recorded', () => {

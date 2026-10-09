@@ -50,22 +50,18 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
     report.filed.push(...c.value.filed);
     report.created.push(...c.value.created);
     report.updated.push(...c.value.updated);
-    const moves = c.when === 'rejected' && c.requires.every((id) => ops.get(id)?.effect.kind === 'move');
-    if (!moves) report.setAside.push(...c.value.setAside);
-    for (const row of moves ? c.value.setAside : []) {
-      // Each row by its own move's outcome: the move of the thing it names (rows carry only the captured name, as the
-      // grounding ties them); every move of the contribution when none names it.
-      const named = c.requires.filter((id) => {
-        const e = ops.get(id)?.effect;
-        return e?.kind === 'move' && e.before.name === row.name;
-      });
-      const own = (named.length ? named : c.requires).map((id) => byId.get(id));
-      const moved = own.every((o) => o?.state === 'rejected' && o.failure.code === 'conflict' && o.failure.message === SOURCE_NOT_AS_SEEN);
-      const unsure = own.map((o) => (o?.state === 'rejected' && o.failure.code === 'unknown' ? o.failure.message : null));
-      const why = unsure[0];
+    // A set-aside row is its contribution's one move's (`grounded`): by op id, never by the name a row carries (two
+    // things may share one) nor by position.
+    const own = c.when === 'rejected' && c.requires.length === 1 ? byId.get(c.requires[0] ?? '') : undefined;
+    if (own?.state !== 'rejected' || ops.get(own.operationId)?.effect.kind !== 'move') report.setAside.push(...c.value.setAside);
+    else {
+      const moved = own.failure.code === 'conflict' && own.failure.message === SOURCE_NOT_AS_SEEN;
+      const why = own.failure.code === 'unknown' ? own.failure.message : null;
       // A thing Bower couldn't confirm is on its own line, never counted as set aside (TL-P4-14 addendum 8).
-      if (why && UNCONFIRMED.includes(why) && unsure.every((m) => m === why)) report.unconfirmed = [...(report.unconfirmed ?? []), { ...row, why }];
-      else report.setAside.push({ ...row, why: moved ? MOVED_AWAY : NOT_FILED });
+      for (const row of c.value.setAside) {
+        if (why && UNCONFIRMED.includes(why)) report.unconfirmed = [...(report.unconfirmed ?? []), { ...row, why }];
+        else report.setAside.push({ ...row, why: moved ? MOVED_AWAY : NOT_FILED });
+      }
     }
     report.questions.push(...c.value.questions);
     if (c.value.requests) report.requests = [...(report.requests ?? []), ...c.value.requests];
@@ -79,6 +75,14 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
   // its report says nothing was ready yet, rather than that everything has its place.
   if (manifest.runScope === 'all' && !manifest.capture.piles.length && !manifest.capture.journal.length) report.nothingReady = true;
   return { v: 1, kind: 'run-report', scope: { rootId: manifest.scope.rootId }, runId: manifest.runId, captureId: manifest.captureId, manifestHash, report };
+}
+
+/**
+ * The notes a run's rows name, once each, in report order (P4-45 m4): a note with N new Timeline lines has N rows
+ * and is one note. The one count of distinct paths, for Home, Replay, the run links and the corpus scorer.
+ */
+export function distinctPaths(rows: readonly { path: string }[]): string[] {
+  return [...new Set(rows.flatMap((r) => (r.path ? [r.path] : [])))];
 }
 
 /** A filing move: a captured member going to another place (a cleared "new" mark stays where it is). */
@@ -195,7 +199,7 @@ function wordsNotes(manifest: RunManifest, pileId: string): string[] {
  * a pile such a row names; a filed thing is one a filed row names (a pile note, its pile); a waiting item is named
  * by no row. Journal lines have no rows: the report only counts them.
  */
-export function reportContradictions(admission: AdmissionManifest, manifest: RunManifest, outcomes: readonly Outcome[], report: RunReport, items: readonly ItemDisposition[]): string[] {
+export function reportContradictions(admission: AdmissionManifest, manifest: RunManifest, outcomes: readonly Outcome[], items: readonly ItemDisposition[]): string[] {
   const state = new Map(outcomes.map((o) => [o.operationId, o.state]));
   const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
   const members = new Set(manifest.capture.members.map((m) => m.file.fileId));
@@ -227,23 +231,17 @@ export function reportContradictions(admission: AdmissionManifest, manifest: Run
       if (!d || !allowed.includes(d)) wrong.push(`The report row ${row} names ${fileId}, whose disposition is ${d ?? 'missing'}`);
     }
   };
-  for (const row of report.filed) {
-    const from = given.filter((c) => c.value.filed.some((f) => f.name === row.name && f.to === row.to && f.title === row.title && f.kind === row.kind && f.note === row.note));
-    trace(`filed ${row.name}`, from, ['filed'], named.filed);
-  }
-  for (const row of report.alreadySaved ?? []) {
-    const from = given.filter((c) => c.value.alreadySaved?.some((a) => a.name === row.name && a.as === row.as));
-    trace(`already saved ${row.name}`, from, ['filed'], named.filed);
-  }
   // A keep's other note that stayed (C05) is a note of the folder, not an item the run took: its row names no item.
   const keptBin = (id: string): boolean => {
     const e = ops.get(id)?.effect;
     return e?.kind === 'bin' && !e.before.folder && !members.has(e.before.fileId) && manifest.capture.places.some((p) => p.file.fileId === e.before.fileId);
   };
-  for (const row of [...report.setAside, ...(report.unconfirmed ?? [])]) {
-    const from = given.filter((c) => c.value.setAside.some((a) => a.name === row.name));
-    if (from.length && from.every((c) => c.requires.every(keptBin))) continue;
-    trace(`set aside ${row.name}`, from, ['filed', 'set-aside'], named.setAside);
+  // Each row through the contribution that gave it, by its operations: never by the name or fields it carries.
+  for (const c of given) {
+    for (const row of c.value.filed) trace(`filed ${row.name}`, [c], ['filed'], named.filed);
+    for (const row of c.value.alreadySaved ?? []) trace(`already saved ${row.name}`, [c], ['filed'], named.filed);
+    if (c.requires.every(keptBin)) continue;
+    for (const row of c.value.setAside) trace(`set aside ${row.name}`, [c], ['filed', 'set-aside'], named.setAside);
   }
   const pileNamed = (set: ReadonlySet<string>, pileId: string | null): boolean => pileId !== null && (pileItems.get(pileId) ?? []).some((f) => set.has(f));
   for (const item of items) {

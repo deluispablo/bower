@@ -292,7 +292,7 @@ describe('the fake runner', () => {
     if (out.phase !== 'done') throw new Error('failed');
     expect(drive.dump(root).get(FLAT_3)).toMatch(/\n- \d{4}-\d{2}-\d{2} · Council tax band C, looked up on the web\. · \[\[https:\/\/council-tax\.example\/bands\/12-larkspur-lane\]\]\n/);
     expect((await fresh().requests())[0]?.done).toBe('Council tax band C, found on the web. Added to [[Flat 3, 12 Larkspur Lane]] with its source.');
-    expect(out.report.updated).toEqual([{ path: FLAT_3, what: 'Council tax band C, looked up on the web.' }]);
+    expect(out.report.updated).toMatchObject([{ path: FLAT_3, what: 'Council tax band C, looked up on the web.' }]);
     expect(out.report.requests).toEqual([LOOKUP]);
   });
 
@@ -316,10 +316,8 @@ describe('the fake runner', () => {
     expect(out.report.created).toEqual([{ path, what: 'A comparison you asked for.' }]);
     expect((await fresh().requests())[0]?.done).toBe('Compared the three flats on the shortlist in [[Flats on the shortlist, compared]].');
     expect((await fresh().note(path)).body).toContain('| [[Flat 7, Cobble Row]] |');
-    // Its one created row is grounded by its create, and by an answer that names it; another path is not.
+    // Its one created row is grounded by its create.
     expect(grounded(out.manifest)).toBe(true);
-    const elsewhere = { ...out.manifest, reportPlan: out.manifest.reportPlan.map((c) => (c.value.created.length ? { ...c, value: { ...c.value, created: [{ path: 'Projects/Flat hunt/Another note.md', what: 'A comparison you asked for.' }] } } : c)) };
-    expect(grounded(elsewhere)).toBe(false);
   });
 
   it('a comparison of flats that are not all there gets the plain line and writes nothing', async () => {

@@ -27,6 +27,14 @@ args=$(node --input-type=module -e '
 get() { node -e 'process.stdout.write(String(JSON.parse(process.argv[1])[process.argv[2]] ?? ""))' "$args" "$1"; }
 id=$(get id); msg=$(get msg); mode=$(get mode); sha=$(get sha); reason=$(get reason)
 
+# 0. An escalated entry closes only after its reviewer's PASS (the one rule, harness-rules.mjs reviewProblem).
+unreviewed=$(node --input-type=module -e '
+  const { reviewProblem } = await import(process.env.HARNESS_RULES);
+  import { readFileSync } from "node:fs";
+  const entry = JSON.parse(readFileSync("harness/features.json", "utf8")).find((x) => x.id === process.argv[1]);
+  console.log((entry && reviewProblem(entry)) ?? "");' "$id")
+[ -n "$unreviewed" ] && { echo "$unreviewed"; echo "$id stays open: no review PASS yet"; exit 1; }
+
 verify=$(node -e 'const f=require("./harness/features.json").find(x=>x.id===process.argv[1]); if(!f){console.error("no entry "+process.argv[1]);process.exit(2)} process.stdout.write(f.verify)' "$id")
 log=$(mktemp)
 
@@ -96,7 +104,7 @@ case "$mode" in
 esac
 
 # 3. Gates.
-echo "check…"; pnpm check >"$log" 2>&1 || { tail -40 "$log"; echo "pnpm check failed: $id stays open"; exit 1; }
+echo "check…"; bash harness/with-lock.sh bash -c 'pnpm check >"$1" 2>&1' _ "$log" || { tail -40 "$log"; echo "pnpm check failed: $id stays open"; exit 1; }
 echo "verify: $verify"; bash -c "$verify" >"$log" 2>&1 || { tail -40 "$log"; echo "verify failed: $id stays open"; exit 1; }
 if grep -qE "No test files? found|No tests found|Tests +0 passed|^ +0 passed" "$log" || ! grep -qE "[1-9][0-9]* passed" "$log"; then
   tail -20 "$log"; echo "verify ran no test: $id stays open"; exit 1

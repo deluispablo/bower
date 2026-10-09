@@ -4,7 +4,7 @@ import { report } from '@/ui/report';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { usePiles, useSources, useTree } from '@/data/provider';
 import { folderCount } from '@/data/piles';
-import { isRoot, thingName, findNode, parentOf, sortNodes, type SortOrder } from '@/data/tree';
+import { isRoot, thingName, findNode, parentOf, sortNodes } from '@/data/tree';
 import type { Note, TreeNode } from '@/data/types';
 import { crumbs, decodeSplat, folderRoute, paraColor, routeFor } from '@/app/paths';
 import { useUi } from '@/app/ui-store';
@@ -342,5 +342,3 @@ function FolderTable({ items }: { items: TreeNode[] }) {
     </div>
   );
 }
-
-export type { SortOrder };

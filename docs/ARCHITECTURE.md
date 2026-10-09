@@ -87,14 +87,17 @@ Each mechanism has one home in the code ([TL-P4-15](harness/2026-10-08-tl-p4-15-
 | Drive read cache, keyed by id and modifiedTime | `src/data/drive/` | Done: one `ReadCache`; the runner's listing patch log is its listing part (`c2-read-cache`, `c2-write-once`) |
 | Drive ports (what a Drive can do, read or write) | `src/data/drive/drive-api.ts` | Done: both Drives offer the same ports, classed read or write (`c2-fake-parity`, `c1-drive-ops-table`) |
 | "Still as seen" fence before an act | `src/data/contracts/` | Done (`c1-still-as-seen`) |
-| Write-once: creates by Drive-reserved id, updates and moves by the `bowerOp` stamp plus checksum | `src/data/spine/` | Target: six methods (`c2-write-once`) |
+| Write-once: creates by Drive-reserved id, updates and moves by the `bowerOp` stamp plus checksum; one reservation per intended create, kept until confirmed, released on a permanent refusal | `src/data/spine/write-once.ts` | Done: one rule with a keeper port: the outbox line (journal), memory (app sends), the device record (uploads) and Durable Object storage (the Worker template). An ESLint rule allows `generateIds` and reserve/create calls only there and at the ruled batch sites (`c2-write-once`, `c3-reservation-home`, `c3-reservation-upload`, `c3-reservation-worker`) |
 | Applying a run's operations (check, send, observe, read back) | `src/data/spine/` engine | Done: one engine; the fake is a Drive adapter (`c2-one-engine`) |
 | Digests (size, SHA-256, MD5) | `src/data/contracts/hashes.ts` | Done, on `@noble/hashes` (`c1-digest`, `c1-digest-library`) |
-| Model reply validation and refusal kinds | one declarative schema, runner | Target: 33 hand refusals (`c3-reply-schema`) |
-| Question subject and identity | `src/data/contracts/` | Target: four id styles (`c3-subject`) |
+| Model reply validation and refusal kinds | `runner/src/claude.ts`, one zod 4 declaration | Done: 37 named refusal kinds, retry text unchanged. Giving the CLI the JSON schema waits for `p4-structured-output` (`c3-reply-schema`) |
+| Files the runner may write in `.bower/` | `src/data/vault/layout.ts` `RUNNER_WRITES` | Done: questions, requests and hashes, imported by the manifest and the admitted check (`c3-reply-schema`) |
+| Current state bounds (strict on write, lenient on read) | `src/data/contracts/note-edit.ts` | Done: Bower writes at most 8 × 200 and reads up to 20 × 400; every stored manifest still parses (`c3-reply-schema`) |
+| Model input fingerprint and section hashes | `runner/src/claude.ts` | Done: canonical JSON per RFC 8785 (JCS); input= values before `c3-fingerprint` do not compare (`c3-fingerprint`) |
+| Question subject and identity | `src/data/contracts/` | Done: one subject; a yes to "Write it" applies the stored shown text with no model call (`c3-subject`) |
 | Note sections (Current state, Timeline, Bower's sections) | `src/data/contracts/ownership-format.ts` | Target: three or four parsers (`c3-note-sections`) |
 | Pile readiness accounting (declarations, dispositions, which pile a record belongs to) | `src/data/pile-readiness.ts` | Done: records stamped with their pile id, read for the Inbox's piles only (`c2-pile-records`) |
-| Planning: capture, decide, build operations | `src/data/spine/` | Target: one 1,100-line function (`c3-planner-split`) |
+| Planning: capture, decide, build operations | `src/data/spine/` | In progress: part 1 done (report rows by op id, one record→operations map, no fixture on the model path, enforced by dependency-cruiser); part 2 splits capture, decide and build (`c3-planner-split`) |
 | Worker deadlines (alarms) | `api/src` deadlines table | Done: one deadlines table; only the alarm dispatches (`c1-worker-deadlines`, `c2-worker-dispatch`) |
 | Worker route helpers (person RPC, errors, JSON body) | `api/src` middleware | Done (`c1-worker-routes`) |
 | Contracts shared by app, Worker and runner (wire, phases, lease, template) | `src/data/contracts/` | Done (`c1-shared-contracts`) |

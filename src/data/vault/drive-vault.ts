@@ -8,7 +8,7 @@
 import { driveError, type DriveApi, type DriveFile } from '../drive/drive-api';
 import { ReadCache, type Version } from '../drive/read-cache';
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
-import { Intended, byId, confirms, holds, makeFolder, makeText, reserveId, updateByStamp, type Intent } from '../spine/write-once';
+import { Intended, STAMP, byId, confirms, holds, makeFolder, makeOnce, makeText, updateByStamp, type Holder, type Intent } from '../spine/write-once';
 import type { FailedChange, Unsubscribe, VaultSource } from '../sources';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName } from '../piles';
 import { buildTree, checkCreationName, displayName, thingName, freeName, join, kindOf, moveEntry, nameOf, parentOf, removeEntry, renameEntry } from '../tree';
@@ -37,7 +37,7 @@ import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
 import { ADOPT_STATES_ID, ADOPT_STATES_RULE } from '../contracts/note-edit';
 import { HIDDEN_AT_ROOT, PROP, SYSTEM, isRunnerFile, recordStamp, type RunnerFiles, type LastRunFile } from './layout';
-import { sha256 } from './hashes';
+import { md5Hex, sha256 } from './hashes';
 import { placeOf, plainSnippet, plainText, savedLinkAddress, savedLinkUrl, searchLines } from '../search-text';
 import { noteRefusal, parseNote, toggleTaskInText, type ParsedNote } from './note-format';
 import { parseRules } from './rules-format';
@@ -46,6 +46,7 @@ import { VaultIndex } from './vault-index';
 import { NOT_SENT_TEXT, PERSIST_REFUSED_TEXT, UNREADABLE_TEXT, createUploadQueue, stoppedText, type QueueItem, type UploadQueue } from '../upload-queue';
 import { memoryUploadStore } from '../upload-store';
 import { notAsSeen, notAsSeenError, type SeenExpectation } from '../contracts/still-as-seen';
+import { openQuestions } from '../contracts/questions';
 
 export interface DriveVaultOptions {
   driveLinks?: boolean;
@@ -296,7 +297,12 @@ export class DriveVault implements VaultSource {
       return note?.links.some((l) => wanted.has(linkTarget(l))) ? p : null;
     });
     const backlinks = linking.filter((p): p is string => !!p);
-    return { ...parsed, path, links: [...new Set(links)], backlinks };
+    // The file as read, for the New mark (TL-P4-19 addendum 5): its stamp from the listing (which asks for
+    // appProperties), and the MD5 of the very bytes this read holds, which is Drive's md5Checksum of them.
+    const read = this.notes.get(f.id);
+    const stamp = f.appProperties?.[STAMP];
+    const file = read?.modified === f.modifiedTime ? { md5: md5Hex(new TextEncoder().encode(read.text)), ...(stamp === undefined ? {} : { stamp }) } : undefined;
+    return { ...parsed, path, links: [...new Set(links)], backlinks, ...(file ? { file } : {}) };
   }
 
   async driveLink(path = ''): Promise<string | null> {
@@ -595,7 +601,7 @@ export class DriveVault implements VaultSource {
       const path = ix.pathOf(f.id);
       if (!path) return null;
       const id = f.appProperties?.[PROP.pile] ?? f.id;
-      const queued = this.queuedItems(id).filter((i) => !listed(i.reserved));
+      const queued = this.queuedItems(id).filter((i) => !listed(i.fileId));
       const sending = [...(this.uploads.get(id)?.entries ?? []).filter((e) => !listed(this.reservedFor(e))).map((e) => e.item), ...queued.map(queuedRow)];
       if (!f.folder) {
         // A declared loose file waits for the run's reason, by the rule the run shares (TL-P2-21, TL-P2-29).
@@ -678,7 +684,7 @@ export class DriveVault implements VaultSource {
     for (const [id, u] of this.uploads) if (u.lone && !out.some((p) => p.id === id)) out.push({ id, text: '', createdAt: u.createdAt, items: u.entries.map((e) => e.item) });
     // A lone thing a reload left on its way: the upload queue still holds it.
     for (const item of this.queuedItems()) {
-      if (listed(item.reserved)) continue;
+      if (listed(item.fileId)) continue;
       const pile = out.find((p) => p.id === item.pileId);
       if (pile) {
         if (!pile.path && !pile.items.some((i) => i.id === item.memberKey)) pile.items.push(queuedRow(item));
@@ -1339,13 +1345,12 @@ export class DriveVault implements VaultSource {
     const [lines, inbox] = await Promise.all([this.journal.list(), this.pilesListed()]);
     const answered = new Set(lines.filter((r) => r.kind === 'answer').map((r) => r.questionId));
     // A question about a thing that is no longer in the inbox is closed, even when no tidy-up can run (an empty inbox
-    // has nothing to tidy): its subject is the thing's or pile's id (older ones carry it in their id).
+    // has nothing to tidy): its subject is the thing's or pile's id (`contracts/questions.ts`, as the planner reads it).
     const here = new Set(inbox.flatMap((p) => [p.id, ...p.items.map((i) => i.id)]));
     // Things still on their way from here have no file to list yet; their questions stay open.
     for (const [id, u] of this.uploads) for (const e of u.entries) here.add(id).add(e.item.id);
     for (const item of this.queuedItems()) here.add(item.pileId).add(item.memberKey);
-    const subject = (q: Question): string | undefined => q.subject ?? (q.id.startsWith('q-ask-') ? q.id.slice('q-ask-'.length) : undefined);
-    return all.filter((q) => !answered.has(q.id) && (subject(q) === undefined || here.has(subject(q) ?? '')));
+    return openQuestions(all, answered, { ids: here });
   }
 
   /**
@@ -1528,9 +1533,8 @@ export class DriveVault implements VaultSource {
         // The session fence (live/index.ts) recognises a pile's thing by PROP.asAdded: it waits for Use here.
         const props: Record<string, string> = { [PROP.asAdded]: e.item.name, [PROP.origin]: e.item.origin, [PROP.kind]: e.item.kind, [PROP.item]: e.key, ...(u.lone ? { [PROP.pile]: pileId } : {}), ...(u.declaration ? { [PROP.declaration]: u.declaration } : {}) };
         e.item.upload = 0;
-        // A link or an empty thing keeps the id reserved for it: a try after a lost answer is that same file.
-        if (!e.body) e.reserved ??= await reserveId(this.addedDrive);
-        const made = e.body ? await this.sendQueued(pileId, u, e, e.body, name, props) : await makeText(this.addedDrive, this.addedDrive, { parent: u.parent, name, props, ...(e.reserved ? { id: e.reserved } : {}) }, e.url ? shortcut(e.url) : '');
+        // A link or an empty thing keeps the id reserved for it (`write-once.ts`): a try after a lost answer is that same file.
+        const made = e.body ? await this.sendQueued(pileId, u, e, e.body, name, props) : await makeOnce(e, this.addedDrive, (id) => makeText(this.addedDrive, this.addedDrive, { parent: u.parent, name, props, id }, e.url ? shortcut(e.url) : ''));
         if (!this.current()) return;
         if (this.uploads.get(pileId) !== u) {
           // The pile was removed while this was on its way: it follows the pile to the Bin,
@@ -1654,7 +1658,7 @@ export class DriveVault implements VaultSource {
 
   /** The file id reserved for a thing this page is sending, once the queue has one. */
   private reservedFor(e: Sending): string | null {
-    return e.queued ? (this.queued.queue.items().find((i) => i.id === e.queued)?.reserved ?? null) : null;
+    return e.queued ? (this.queued.queue.items().find((i) => i.id === e.queued)?.fileId ?? null) : null;
   }
 
   /**
@@ -1672,7 +1676,7 @@ export class DriveVault implements VaultSource {
       const item = await queue.halt(it.id);
       if (!item) continue;
       ids.push(item.id);
-      const found = item.reserved ? await this.reservedFile(item) : null;
+      const found = item.fileId ? await this.reservedFile(item) : null;
       if (!found) continue;
       // Arrived, wherever it is now: never sent again. Binned only where it was sent.
       arrived.add(item.memberKey);
@@ -1686,10 +1690,10 @@ export class DriveVault implements VaultSource {
    * `inPlace` only while still where it was sent; filed elsewhere, it stays.
    */
   private async reservedFile(item: QueueItem): Promise<{ file: DriveFile; inPlace: boolean } | null> {
-    if (!item.reserved) return null;
+    if (!item.fileId) return null;
     let file: DriveFile;
     try {
-      file = await this.drive.getUploaded(item.reserved);
+      file = await this.drive.getUploaded(item.fileId);
     } catch (err) {
       // Not made: nothing to bin. Unknown: it stays, where the person sees it.
       if (!(err instanceof BowerError && err.code === 'not-found')) console.error(err);
@@ -1813,7 +1817,7 @@ export class DriveVault implements VaultSource {
   }
 }
 
-interface Sending {
+interface Sending extends Holder {
   /** Set on the file as appProperties.bowerItem: the thing as the pile declares it. */
   key: string;
   /** A link's or an empty thing's id, reserved for its create (`spine/write-once.ts`): every try makes that one file. */

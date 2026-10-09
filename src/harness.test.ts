@@ -1,12 +1,12 @@
 /// <reference types="node" />
 /** The harness's own rules (scripts/harness-rules.mjs): what makes the feature list dishonest. */
-import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module, checked by these tests
-import { apiTests, doneArgs, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs, redKind, runnerTests } from '../scripts/harness-rules.mjs';
+import { apiTests, doneArgs, REAL_TIMER_CEILING, slowReport, timerListProblems, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs, redKind, runnerTests } from '../scripts/harness-rules.mjs';
 
 type Entry = { id: string; task: string | number; steps?: string[]; verify: string; passes: boolean };
 const S = ['Open Home.', 'See it.'];
@@ -240,5 +240,128 @@ describe('the harness', () => {
     expect(wrong.status).toBe(1);
     expect(wrong.stderr).toContain('"an api test that exists" matches no test (unit');
     expect(wrong.stderr).toContain('"a src test that exists" matches no test (api');
+  });
+
+  // The marker lines are built here, so this file holds none itself.
+  const marker = (c: string, tail = ''): string => c.repeat(7) + tail;
+  const scratch = (files: Record<string, string>): string => {
+    const dir = mkdtempSync(join(tmpdir(), 'harness-gate-'));
+    const git = (...a: string[]): void => void spawnSync('git', a, { cwd: dir });
+    git('init', '-q');
+    git('config', 'user.email', 'you@example.com');
+    git('config', 'user.name', 'Alex');
+    mkdirSync(join(dir, 'scripts'));
+    mkdirSync(join(dir, 'harness'));
+    for (const f of ['harness-rules.mjs', 'harness-tests.mjs', 'check-harness.mjs']) copyFileSync(join(process.cwd(), 'scripts', f), join(dir, 'scripts', f));
+    copyFileSync(join(process.cwd(), 'harness/done.sh'), join(dir, 'harness/done.sh'));
+    writeFileSync(join(dir, 'harness/features.json'), '[]\n');
+    writeFileSync(join(dir, 'harness/proof-legacy.txt'), readFileSync(join(process.cwd(), 'harness/proof-legacy.txt')));
+    writeFileSync(join(dir, 'harness/progress.md'), '## Next\n- x\n');
+    for (const [f, c] of Object.entries(files)) {
+      mkdirSync(join(dir, f, '..'), { recursive: true });
+      writeFileSync(join(dir, f), c);
+    }
+    git('add', '-A');
+    git('commit', '-qm', 'base');
+    return dir;
+  };
+
+  it('the harness check fails on a conflict-marker line and names file and line', () => {
+    const dir = scratch({ 'src/a.ts': `one\n${marker('<', ' HEAD')}\ntwo\n${marker('=')}\nthree\n${marker('>', ' branch')}\n`, 'src/ok.ts': 'a == b\n// =======x\n' });
+    const run = spawnSync('node', ['scripts/check-harness.mjs'], { cwd: dir, encoding: 'utf8' });
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain('src/a.ts:2: conflict marker');
+    expect(run.stderr).toContain('src/a.ts:4: conflict marker');
+    expect(run.stderr).toContain('src/a.ts:6: conflict marker');
+    expect(run.stderr).not.toContain('src/ok.ts');
+  });
+
+  const escalated = (over: Record<string, unknown> = {}): Record<string, unknown> => ({ id: 'e1', task: 'p4-consolidation', steps: S, verify: V, passes: true, note: 'Rules. Starting model: bower-escalated. More.', ...over });
+
+  it('an escalated consolidation entry cannot pass without a review PASS', () => {
+    const check = (e: Record<string, unknown>): string[] => problems([e], readProofs(`e1\t${hashOf(V)}\t2026-10-09\tred\n`), undefined, new Set()) as string[];
+    expect(check(escalated())).toEqual([expect.stringContaining('e1: escalated, passes without a review PASS')]);
+    expect(check(escalated({ review: 'P4-37 BLOCK' }))).toHaveLength(1);
+    expect(check(escalated({ review: 'P4-37f PASS' }))).toEqual([]);
+    expect(check(escalated({ passes: false }))).toEqual([]);
+    expect(check(escalated({ note: 'Starting model: bower-implementer.' }))).toEqual([]);
+    expect(check(escalated({ task: 7 }))).toEqual([]);
+  });
+
+  it('done.sh refuses to close an escalated entry with no review PASS', () => {
+    const entry = escalated({ passes: false });
+    const dir = scratch({ 'harness/features.json': JSON.stringify([entry]), 'scripts/harness-rules.mjs': readFileSync(join(process.cwd(), 'scripts/harness-rules.mjs'), 'utf8') });
+    const run = spawnSync('bash', ['harness/done.sh', 'e1', 'close e1'], { cwd: dir, encoding: 'utf8' });
+    expect(run.status).toBe(1);
+    expect(run.stderr + run.stdout).toContain('e1: escalated, passes without a review PASS');
+    expect(run.stderr + run.stdout).toContain('e1 stays open');
+  });
+  it('the timer allowlist may only shrink', () => {
+    const names = ['a', 'b'];
+    expect(timerListProblems(names, ['a', 'b'], 2)).toEqual([]);
+    // A line that matches no test is stale: it goes.
+    expect(timerListProblems(names, ['a', 'gone'], 2)).toEqual([expect.stringContaining('"gone"')]);
+    // A name added beyond the recorded size fails, even for a test that exists.
+    expect(timerListProblems(names, ['a', 'b'], 1)).toEqual([expect.stringContaining('may only shrink')]);
+    const list = JSON.parse(readFileSync(join(process.cwd(), 'harness/real-timers.json'), 'utf8')) as { tests: string[] };
+    expect(list.tests.length).toBeLessThanOrEqual(REAL_TIMER_CEILING);
+    expect(new Set(list.tests).size).toBe(list.tests.length);
+  });
+
+  it('wall-clock times are reported, never failed', () => {
+    const tests = [{ name: 'quick', duration: 40 }, { name: 'very slow', duration: 9000 }, { name: 'slow', duration: 2600.4 }];
+    // The slowest come first, with their time; a test far over any old limit adds no problem to the check.
+    expect(slowReport(tests, 2)).toEqual(['9000 ms  very slow', '2600 ms  slow']);
+    expect(timerListProblems(tests.map((t) => t.name), [], 0)).toEqual([]);
+    // The report never fails the check: check-harness.mjs prints it and takes its exit status from the problems alone.
+    const source = readFileSync(join(process.cwd(), 'scripts/check-harness.mjs'), 'utf8');
+    expect(source).toContain('slowReport(unit)');
+    expect(source).not.toMatch(/bad\.push\([^)]*slowReport/);
+  });
+  // harness/with-lock.sh is the one lock done.sh and integrate.sh share around the heavy runs.
+  const lockScript = join(process.cwd(), 'harness/with-lock.sh');
+  const stamp = "node -e 'console.log(Date.now())'";
+  const runLocked = (lock: string, command: string): Promise<{ status: number | null; out: string }> =>
+    new Promise((resolve) => {
+      const child = spawn('bash', [lockScript, 'bash', '-c', command], { env: { ...process.env, HARNESS_LOCK: lock } });
+      let out = '';
+      child.stdout.on('data', (d: Buffer) => { out += d.toString(); });
+      child.stderr.on('data', (d: Buffer) => { out += d.toString(); });
+      child.on('close', (status) => resolve({ status, out }));
+    });
+  const fixtureDir = () => mkdtempSync(join(tmpdir(), 'lock-'));
+
+  it('two checks started together run one after the other', async () => {
+    const dir = fixtureDir();
+    const times = join(dir, 'times.txt');
+    const stub = `echo "start $(${stamp})" >> ${times}; sleep 0.5; echo "end $(${stamp})" >> ${times}`;
+    const [a, b] = await Promise.all([runLocked(join(dir, 'lock'), stub), runLocked(join(dir, 'lock'), stub)]);
+    expect([a.status, b.status]).toEqual([0, 0]);
+    const lines = existsSync(times) ? readFileSync(times, 'utf8').trim().split('\n') : [];
+    expect(lines.map((l) => l.split(' ')[0])).toEqual(['start', 'end', 'start', 'end']);
+    const t = lines.map((l) => Number(l.split(' ')[1]));
+    // The second run starts only after the first ended.
+    expect(t[2] ?? 0).toBeGreaterThanOrEqual(t[1] ?? Infinity);
+    expect(existsSync(join(dir, 'lock'))).toBe(false);
+  });
+
+  it('a second check waits and prints who holds the lock', async () => {
+    const dir = fixtureDir();
+    const first = runLocked(join(dir, 'lock'), 'sleep 0.6');
+    for (let i = 0; i < 50 && !existsSync(join(dir, 'lock')); i += 1) await new Promise<void>((r) => { setImmediate(r); });
+    const second = await runLocked(join(dir, 'lock'), 'true');
+    await first;
+    expect(second.status).toBe(0);
+    expect(second.out).toMatch(/waiting.*pid \d+.*sleep 0\.6.*started \d{4}-\d\d-\d\d \d\d:\d\d:\d\d/i);
+  });
+
+  it('a lock whose holder is gone is taken over with a printed line', async () => {
+    const dir = fixtureDir();
+    mkdirSync(join(dir, 'lock'));
+    writeFileSync(join(dir, 'lock/holder'), '999999\n2026-01-01 00:00:00\nold check\n');
+    const run = await runLocked(join(dir, 'lock'), 'echo ran');
+    expect(run.status).toBe(0);
+    expect(run.out).toMatch(/stale.*pid 999999.*taking it over/i);
+    expect(run.out).toContain('ran');
   });
 });

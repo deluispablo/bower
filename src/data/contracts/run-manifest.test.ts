@@ -1,7 +1,8 @@
+import { RUNNER_WRITES } from '../vault/layout';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { parseRunManifest, type Content, type Manifest, type ManifestRefusal, type Operation, type ReportContribution, type SeenFile, type VerifiedContent } from './run-manifest';
+import { parseRunManifest, parseRunManifestV2, type Content, type Manifest, type ManifestRefusal, type Operation, type ReportContribution, type SeenFile, type VerifiedContent } from './run-manifest';
 
 const dir = 'docs/harness/evidence/2026-10-05-local-prerequisites/run-recovery-contract/';
 const fixture = (file: string): Record<string, unknown> => JSON.parse(readFileSync(dir + file, 'utf8')) as Record<string, unknown>;
@@ -129,7 +130,7 @@ function set(value: unknown, path: Path, next: unknown): void {
 }
 async function refuse(source: Uint8Array, reason: ManifestRefusal, root = 'fake-root'): Promise<void> {
   const before = source.slice();
-  const result = await parseRunManifest(source, root);
+  const result = await parseRunManifest(source, root, RUNNER_WRITES);
   expect(result).toEqual({ ok: false, reason });
   expect(result).not.toHaveProperty('value');
   expect(result).not.toHaveProperty('sha256');
@@ -138,7 +139,7 @@ async function refuse(source: Uint8Array, reason: ManifestRefusal, root = 'fake-
 async function accept(value: Manifest, root = value.scope.rootId): Promise<void> {
   const source = bytes(value);
   const before = source.slice();
-  expect(await parseRunManifest(source, root)).toEqual({ ok: true, value, sha256: H(value) });
+  expect(await parseRunManifest(source, root, RUNNER_WRITES)).toEqual({ ok: true, value, sha256: H(value) });
   expect(source).toEqual(before);
 }
 
@@ -206,7 +207,7 @@ describe('run manifests fix capture and operation identity', () => {
     const portion = take();
     const source = utf8(` \r\n${JSON.stringify(portion, null, 2)}\t`);
     const before = source.slice();
-    const result = await parseRunManifest(source, 'fake-root');
+    const result = await parseRunManifest(source, 'fake-root', RUNNER_WRITES);
     expect(result).toEqual({ ok: true, value: portion, sha256: hash });
     if (result.ok) {
       expect(result.value.captureId).toBe(captureId);
@@ -236,7 +237,7 @@ describe('run manifests fix capture and operation identity', () => {
   it('accepts a synthetic manifest with every effect, target and report field, preserving text bytes', async () => {
     const value = rich();
     await accept(value);
-    const result = await parseRunManifest(bytes(value), 'fake-root');
+    const result = await parseRunManifest(bytes(value), 'fake-root', RUNNER_WRITES);
     if (!result.ok) throw new Error('Synthetic manifest must parse');
     const text = result.value.operations[2]?.effect;
     expect(text).toMatchObject({ kind: 'create-text', text: 'Receipts\r\n é ' });
@@ -415,7 +416,16 @@ describe('run manifests fix capture and operation identity', () => {
   it.each(['2026-10-05T10-00-00.000Z-abc123', 'legacy id: a/b c.é', '😀', '\u0080\u009f', 'x'.repeat(1024), 'é'.repeat(512), '😀'.repeat(256)])('keeps opaque legacy journal record ID %j up to 1024 UTF-8 bytes', async (recordId) => {
     await accept(variant((value) => { set(value, ['capture', 'journal', 0, 'recordId'], recordId); }));
   });
-  it.each(['', 'a\n', '\u0000', 'a\u007f', 'x'.repeat(1025), 'é'.repeat(512) + 'x', '😀'.repeat(256) + 'x', 'x'.repeat(1024 * 1024)])('refuses empty, control or over-1024-byte journal record ID %j', async (recordId) => {
+  it.each([
+    ['empty', ''],
+    ['a newline', 'a\n'],
+    ['a null', '\u0000'],
+    ['a delete character', 'a\u007f'],
+    ['1025 ASCII bytes', 'x'.repeat(1025)],
+    ['1025 bytes of two-byte letters', 'é'.repeat(512) + 'x'],
+    ['1025 bytes of four-byte emoji', '😀'.repeat(256) + 'x'],
+    ['a megabyte', 'x'.repeat(1024 * 1024)],
+  ])('refuses empty, control or over-1024-byte journal record ID: %s', async (_what, recordId) => {
     await refuse(bytes(variant((value) => { set(value, ['capture', 'journal', 0, 'recordId'], recordId); })), 'shape');
   });
 
@@ -555,20 +565,20 @@ describe('run manifests fix capture and operation identity', () => {
     const source = bytes(rich());
     const all = Uint8Array.from([0xff, ...source, 0xff]);
     const before = all.slice();
-    const one = await parseRunManifest(all.subarray(1, -1), 'fake-root');
-    const two = await parseRunManifest(all.subarray(1, -1), 'fake-root');
+    const one = await parseRunManifest(all.subarray(1, -1), 'fake-root', RUNNER_WRITES);
+    const two = await parseRunManifest(all.subarray(1, -1), 'fake-root', RUNNER_WRITES);
     if (!one.ok || !two.ok) throw new Error('Synthetic manifest must parse');
     one.value.runId = 'changed';
     one.value.capture.piles.length = 0;
     expect(two.value).toEqual(rich());
     expect(all).toEqual(before);
-    expect(await parseRunManifest(source, 'fake-root')).toEqual(two);
+    expect(await parseRunManifest(source, 'fake-root', RUNNER_WRITES)).toEqual(two);
   });
   it('propagates unexpected platform hash errors and leaves source bytes intact', async () => {
     const source = bytes(rich()); const before = source.slice();
     const failure = new Error('Synthetic platform hash failure');
     const spy = vi.spyOn(crypto.subtle, 'digest').mockRejectedValueOnce(failure);
-    try { await expect(parseRunManifest(source, 'fake-root')).rejects.toBe(failure); }
+    try { await expect(parseRunManifest(source, 'fake-root', RUNNER_WRITES)).rejects.toBe(failure); }
     finally { spy.mockRestore(); }
     expect(source).toEqual(before);
   });
@@ -634,7 +644,7 @@ describe('run manifests keep captured and written text consistent', () => {
       `accepts ${site.label} text %j with the exact UTF-8 size and raw digest, preserving its bytes`, async (text) => {
         const value = variant((change) => { write(change, site, text); });
         await accept(value);
-        const result = await parseRunManifest(bytes(value), 'fake-root');
+        const result = await parseRunManifest(bytes(value), 'fake-root', RUNNER_WRITES);
         expect(result.ok && at(result.value, site.text)).toBe(text);
       });
   }
@@ -743,5 +753,22 @@ describe('run manifests keep captured and written text consistent', () => {
     const value = rich();
     op(value, 0).effect = { ...op(value, 0).effect, parent: { createdBy: op(value, 1).operationId } } as Operation['effect'];
     await refuse(bytes(seal(value)), 'order');
+  });
+});
+
+describe('runner-writable files (runner-paths-disagree, TL-P4-14 addendum 20)', () => {
+  const writes = ['.bower/questions.json', '.bower/requests.json', '.bower/hashes.json'] as const;
+  const writing = (path: string): Manifest => variant((value) => { set(value, ['operations', 3, 'effect', 'path'], path); });
+  it('the manifest takes the runner-writable files as a parameter', async () => {
+    // The list it is given decides, for both versions' reader: a path outside it is refused, one inside it admitted.
+    const suggestions = writing('.bower/suggestions.json');
+    expect(await parseRunManifestV2(bytes(suggestions), 'fake-root', writes)).toEqual({ ok: false, reason: 'shape' });
+    // The list is typed by the contract's `RunnerWrite`, so no caller can name another file; the list given still decides.
+    // @ts-expect-error suggestions.json is not a runner-writable file
+    expect(await parseRunManifestV2(bytes(suggestions), 'fake-root', [...writes, '.bower/suggestions.json'])).toMatchObject({ ok: true });
+    const questions = rich();
+    expect(await parseRunManifestV2(bytes(questions), 'fake-root', writes)).toMatchObject({ ok: true });
+    expect(await parseRunManifestV2(bytes(questions), 'fake-root', ['.bower/requests.json'])).toEqual({ ok: false, reason: 'shape' });
+    expect(await parseRunManifest(bytes(questions), 'fake-root', ['.bower/hashes.json'])).toEqual({ ok: false, reason: 'shape' });
   });
 });

@@ -5,7 +5,10 @@ import { parsePileDeclaration } from './contracts/pile-declaration';
 import { parsePileDisposition } from './contracts/pile-disposition';
 import { parseRunReport } from './contracts/run-checkpoint';
 import { P2_SOURCE, SHAPES, fixture, folderOf, missingFixtures, only, recordBytes, type Shape } from './compat-p2-fixtures';
+import { FakeDrive } from './drive/fake-drive';
 import { RunRecords } from './spine/records';
+import type { Question } from './types';
+import { DriveVault } from './vault/drive-vault';
 import { SYSTEM, isRunnerFile } from './vault/layout';
 
 const JOURNAL = SHAPES.filter((s) => s.startsWith('journal-'));
@@ -80,5 +83,20 @@ describe('the accepted app files, kept from the P2 freeze', () => {
       expect(parsed.value.action).toBe('consumed');
       expect(parsed.value.declaration?.sha256).toBe(declarations.get(parsed.value.declaration?.declarationId ?? ''));
     }
+  });
+
+  it('old questions without a subject still read', async () => {
+    // The accepted app's questions (ids like `q1`, no subject) and an older ask that carries its thing in its id only.
+    const drive = new FakeDrive();
+    const root = (await drive.createFolder('root', 'Bower')).id;
+    const inbox = await drive.createFolder(root, 'Inbox');
+    const sys = await drive.createFolder(root, '.bower');
+    const photo = await drive.createText(inbox.id, 'kitchen.txt', 'A kitchen photo.');
+    const p2 = (only('questions').content as { questions: Question[] }).questions;
+    const older = (id: string): Question => ({ id: `q-ask-${id}`, text: 'Is this from the viewing?', yes: 'Yes', no: 'No', askedAt: 2 });
+    await drive.createText(sys.id, 'questions.json', JSON.stringify({ v: 1, questions: [...p2, older(photo.id), older('left-long-ago')] }));
+    const vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    // Every p2 question reads as it was written; the older ask stays while its thing is in the inbox, and closes once it left.
+    expect(await vault.questions()).toEqual([...p2, older(photo.id)]);
   });
 });

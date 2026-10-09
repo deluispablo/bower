@@ -1,5 +1,7 @@
 /** Immutable run manifest validation only; no claim, dispatch, readiness or permission authority. */
 import { sha256 } from './hashes';
+import type { ReportQuestion } from './questions';
+import type { UpdatedRow } from './types';
 import { EDIT_FILE_LIMIT, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 
@@ -33,8 +35,14 @@ export type Effect =
   | { kind: 'create-text'; parent: Target; name: string; createKey: string; text: string; content: Content;
     purpose: 'generated' | 'runner-json' }
   | { kind: 'write-runner-json'; before: SeenFile; beforeContent: VerifiedContent;
-    path: '.bower/questions.json' | '.bower/requests.json' | '.bower/hashes.json'; text: string; content: Content }
+    /** One of the runner-writable files the reader is given (`RUNNER_WRITES` in `vault/layout.ts`). */
+    path: RunnerWrite; text: string; content: Content }
   | { kind: 'bin'; before: SeenFile; capturedChildIds: string[] };
+/**
+ * The type of a runner-writable file (TL-P4-14 addendum 20): `RUNNER_WRITES` in `vault/layout.ts` is the one list and
+ * is typed by it; the contracts cannot import the layout (architecture.test.ts), so the path's type lives here.
+ */
+export type RunnerWrite = '.bower/questions.json' | '.bower/requests.json' | '.bower/hashes.json';
 export type Operation = { operationId: string; ordinal: number; dependsOn: string[]; effect: Effect };
 /** One Timeline line: `- <date> · <text>` plus ` · [[<source>]]` when there is a source (TL-P2-20). */
 export type EditEntry = { date: string; text: string; source: string | null };
@@ -71,10 +79,9 @@ export type EditText = {
 export type EffectV2 = Effect | EditText;
 export type OperationV2 = { operationId: string; ordinal: number; dependsOn: string[]; effect: EffectV2 };
 export type ReportFiled = { name: string; title: string; kind: FileKind; to: string; note?: string; area?: string };
-export type ReportQuestion = { id: string; text: string; yes: string; no: string; askedAt: number; about?: string };
 /** The existing RunReport shape in the stricter closed form used inside new records. */
 export type ManifestRunReport = {
-  filed: ReportFiled[]; created: { path: string; what: string }[]; updated: { path: string; what: string }[];
+  filed: ReportFiled[]; created: { path: string; what: string }[]; updated: UpdatedRow[];
   setAside: { name: string; why: string }[]; questions: ReportQuestion[];
   yourChanges?: number; requests?: string[]; rulesWorded?: number;
   /** A thing whose content was already filed, binned (TL-P4-10 addendum 2): its name and the saved file's name. */
@@ -188,7 +195,6 @@ function rfc3339(value: unknown): value is string {
 }
 
 const fileKinds = ['note', 'pdf', 'image', 'link', 'doc', 'sheet', 'audio', 'other'] as const;
-const runnerPaths = ['.bower/questions.json', '.bower/requests.json', '.bower/hashes.json'] as const;
 
 function content(value: unknown): value is Content {
   return closed(value, ['encoding', 'size', 'sha256']) && oneOf(value.encoding, ['utf8', 'blob']) && integer(value.size) && hash(value.sha256);
@@ -277,7 +283,7 @@ function effect(value: unknown): value is Effect {
       && target(value.parent) && name(value.name) && id(value.createKey) && text(value.text) && content(value.content)
       && oneOf(value.purpose, ['generated', 'runner-json']);
     case 'write-runner-json': return closed(value, ['kind', 'before', 'beforeContent', 'path', 'text', 'content'])
-      && seenFile(value.before) && verifiedContent(value.beforeContent) && oneOf(value.path, runnerPaths)
+      && seenFile(value.before) && verifiedContent(value.beforeContent) && text(value.path)
       && text(value.text) && content(value.content);
     case 'bin': return closed(value, ['kind', 'before', 'capturedChildIds'])
       && seenFile(value.before) && list(value.capturedChildIds, driveId) && unique(value.capturedChildIds);
@@ -346,11 +352,23 @@ function operationV2(value: unknown): value is OperationV2 {
 
 const rows = (value: unknown, keys: string[], optional: string[] = []): boolean =>
   list(value, (row) => closed(row, keys, optional) && Object.values(row).every(text));
+const hex32 = (value: unknown): value is string => typeof value === 'string' && value.length === 32 && !/[^0-9a-f]/.test(value);
+const has = (row: Fields, key: string): boolean => Object.hasOwn(row, key);
+/**
+ * An updated row, the one validator of it for the manifest and the checkpoint (P4-45d): `op` optional; `line` (an
+ * ordinal) only with its op; `lines`, `md5` and `stamp` only with a line, and the line below `lines` (TL-P4-19 addenda
+ * 3 to 5). A row from before any of them still reads.
+ */
+export const isUpdatedRow = (row: unknown): row is UpdatedRow => closed(row, ['path', 'what'], ['op', 'line', 'lines', 'md5', 'stamp'])
+  && text(row.path) && text(row.what) && (!has(row, 'op') || hash(row.op)) && (!has(row, 'line') || (has(row, 'op') && integer(row.line)))
+  && ['lines', 'md5', 'stamp'].every((k) => !has(row, k) || has(row, 'line'))
+  && (!has(row, 'lines') || (integer(row.lines) && (row.line as number) < row.lines))
+  && (!has(row, 'md5') || hex32(row.md5)) && (!has(row, 'stamp') || hex32(row.stamp));
 function runReport(value: unknown): value is ManifestRunReport {
   if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded', 'alreadySaved'])) return false;
   return list(value.filed, (row) => closed(row, ['name', 'title', 'kind', 'to'], ['note', 'area']) && text(row.name) && text(row.title)
       && oneOf(row.kind, fileKinds) && text(row.to) && (!Object.hasOwn(row, 'note') || text(row.note)) && (!Object.hasOwn(row, 'area') || text(row.area)))
-    && rows(value.created, ['path', 'what']) && rows(value.updated, ['path', 'what']) && rows(value.setAside, ['name', 'why'])
+    && rows(value.created, ['path', 'what']) && list(value.updated, isUpdatedRow) && rows(value.setAside, ['name', 'why'])
     && list(value.questions, (row) => closed(row, ['id', 'text', 'yes', 'no', 'askedAt'], ['about'])
       && text(row.id) && text(row.text) && text(row.yes) && text(row.no) && integer(row.askedAt)
       && (!Object.hasOwn(row, 'about') || text(row.about)))
@@ -401,18 +419,22 @@ async function digest(value: unknown): Promise<string> {
   return result.value;
 }
 
-/** Compare independently supplied scope; a matching root or digest grants no access or dispatch. */
-export async function parseRunManifest(bytes: Uint8Array, expectedRootId: string): Promise<ManifestResult> {
+/**
+ * Compare independently supplied scope; a matching root or digest grants no access or dispatch. `writes` is the list of
+ * Bower's files a `write-runner-json` may name (`RUNNER_WRITES` in `vault/layout.ts`); any other path is refused as `shape`.
+ */
+export async function parseRunManifest(bytes: Uint8Array, expectedRootId: string, writes: readonly RunnerWrite[]): Promise<ManifestResult> {
   const parsed = parseRecordJson(bytes);
   if (!parsed.ok) return parsed;
-  return admit(parsed.value, expectedRootId, manifest);
+  return admit(parsed.value, expectedRootId, manifest, writes);
 }
 
 /** The guards every manifest version shares, in the v1 order; identities are computed as in v1. */
 async function admit<M extends Manifest | ManifestV2>(
-  parsed: unknown, expectedRootId: string, guard: (value: unknown) => value is M,
+  parsed: unknown, expectedRootId: string, guard: (value: unknown) => value is M, writes: readonly RunnerWrite[],
 ): Promise<{ ok: true; value: M; sha256: string } | { ok: false; reason: ManifestRefusal }> {
   if (!guard(parsed)) return { ok: false, reason: 'shape' };
+  if (parsed.operations.some(({ effect: e }) => e.kind === 'write-runner-json' && !writes.includes(e.path))) return { ok: false, reason: 'shape' };
   const value = parsed;
   if (!driveId(expectedRootId) || expectedRootId !== value.scope.rootId) return { ok: false, reason: 'scope' };
   for (const item of texts(value)) {
@@ -523,14 +545,14 @@ function edits(value: ManifestV2): EditGuardRule | null {
  * Reads v1 exactly as `parseRunManifest` (same path, digests and identities) and v2: v1's guards plus `edit-text`.
  * A later version refuses as `version`, so a build that reads v2 can say it needs a newer Bower (R3-7 m9).
  */
-export async function parseRunManifestV2(bytes: Uint8Array, expectedRootId: string): Promise<ManifestV2Result> {
+export async function parseRunManifestV2(bytes: Uint8Array, expectedRootId: string, writes: readonly RunnerWrite[]): Promise<ManifestV2Result> {
   const parsed = parseRecordJson(bytes);
   if (!parsed.ok) return parsed;
   const v = record(parsed.value) ? parsed.value.v : undefined;
-  if (v === 1) return parseRunManifest(bytes, expectedRootId);
+  if (v === 1) return parseRunManifest(bytes, expectedRootId, writes);
   if (integer(v) && v > 2) return { ok: false, reason: 'version' };
   if (v === 2 && bytes.byteLength > MANIFEST_V2_LIMIT) return { ok: false, reason: 'edit', rule: 'size' };
-  const admitted = await admit(parsed.value, expectedRootId, manifestV2);
+  const admitted = await admit(parsed.value, expectedRootId, manifestV2, writes);
   if (!admitted.ok) return admitted;
   const broken = edits(admitted.value);
   return broken === null ? admitted : { ok: false, reason: 'edit', rule: broken };

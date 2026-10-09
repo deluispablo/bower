@@ -1,11 +1,11 @@
 You plan one Bower tidy-up. You have no tools: never try to read, write or run anything.
 Reply with one JSON object and nothing else, of exactly this shape:
-{"kind":"tidy-intent","v":1,"things":[{"fileId":"FILE_ID","to":"<folder path>","name":"<new name>",
+{"kind":"tidy-intent","v":1,"things":[{"fileId":"<a thing's fileId>","to":"<folder path>","name":"<new name>",
   "basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>","note":{"name":"<note name>.md","summary":"<one line>","body":"<Markdown>"}}],
- "notes":[{"pileId":"PILE_ID","to":"<folder path>","name":"<note name>.md","basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>"}],
+ "notes":[{"pileId":"<a pile of words only>","to":"<folder path>","name":"<note name>.md","basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>"}],
  "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing's fileId>"}],
  "states":[{"note":"<the path of a note below>","lines":["<one line>"],"cites":"<a thing's fileId>"}],
- "asks":[{"fileId":"FILE_ID","text":"<one yes-or-no question>","yes":"<short answer>","no":"<short answer>"}],
+ "asks":[{"fileId":"<a thing you do not file>","text":"<one yes-or-no question>","yes":"<short answer>","no":"<short answer>"}],
  "keep":[{"kept":"<the path of a note below>","other":"<the path of a note below>"}]}
 Every key but "things" is optional. A folder path starts with one of Projects, Areas, Resources, Archive. A thing keeps its extension
 (a saved link may become a ".md" note). "rules" below are the person's rules and win; a list that ends "[cut here: ..." goes on.
@@ -80,4 +80,4 @@ A note's [[link]] names a file or note in the folder or one you file; a web addr
 Name only the things, piles and notes below. Never add ids, hashes or other keys: Bower computes them, checks your
 reply, and refuses the whole reply if it names anything else; then nothing changes.
 
-{"runId":"RUN_ID","admission":"ADMISSION_ID","piles":[{"pileId":"PILE_ID","words":"","things":[{"fileId":"FILE_ID","name":"Community garden newsletter, autumn.pdf","kind":"pdf","text":"Larkspur Lane Community Garden - Autumn Newsletter\nWelcome to the autumn issue. This season we planted forty bulbs,\nfixed the compost bays and welcomed six new members.\nDates for your diary\n- Saturday 18 October: bulb planting, 10:00 to 12:00.\n- Saturday 8 November: leaf collection and soup lunch.\n- Sunday 7 December: winter social at the Example Cafe.\nPlot fees for 2027 stay at 25 a year, due by 31 January.\nThe tool shed code changes on 1 November; ask a coordinator.","cut":0}]}],"notes":[{"path":"Areas/Home/Garden plot.md","text":"---\nsummary: Alex's plot at the Larkspur Lane community garden.\nby: bower\n---\n\n## Current state\n- Plot 14, shared water butt.\n\n## Timeline\n- 2026-09-12 · Planted garlic.\n","cut":0}],"folders":["Archive","Areas","Areas/Home","Projects","Resources"]}
+{"admission":"ADMISSION_ID","folders":["Archive","Areas","Areas/Home","Projects","Resources"],"notes":[{"cut":0,"path":"Areas/Home/Garden plot.md","text":"---\nsummary: Alex's plot at the Larkspur Lane community garden.\nby: bower\n---\n\n## Current state\n- Plot 14, shared water butt.\n\n## Timeline\n- 2026-09-12 · Planted garlic.\n"}],"piles":[{"pileId":"PILE_ID","things":[{"cut":0,"fileId":"FILE_ID","kind":"pdf","name":"Community garden newsletter, autumn.pdf","text":"Larkspur Lane Community Garden - Autumn Newsletter\nWelcome to the autumn issue. This season we planted forty bulbs,\nfixed the compost bays and welcomed six new members.\nDates for your diary\n- Saturday 18 October: bulb planting, 10:00 to 12:00.\n- Saturday 8 November: leaf collection and soup lunch.\n- Sunday 7 December: winter social at the Example Cafe.\nPlot fees for 2027 stay at 25 a year, due by 31 January.\nThe tool shed code changes on 1 November; ask a coordinator."}],"words":""}],"runId":"RUN_ID"}

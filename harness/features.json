@@ -4377,7 +4377,7 @@
     "id": "deploy-staging-production-check",
     "task": "p3-f",
     "category": "fix",
-    "what": "deploy-staging.sh judges production only by wrangler's \"Uploaded <name>\" line and by the config's \"name\" field, never by any mention of bower-api elsewhere (the staging URL holds the account subdomain bower-api.workers.dev), so a staging deploy is not stopped by a false production alarm, while an upload named bower-api still fails loudly.",
+    "what": "deploy-staging.sh judges production only by wrangler's \"Uploaded <name>\" line and by the config's \"name\" field, never by any mention of bower-api elsewhere (the staging URL holds the account subdomain <account>.workers.dev), so a staging deploy is not stopped by a false production alarm, while an upload named bower-api still fails loudly.",
     "steps": [
       "The post-deploy check reads the Uploaded line's Worker name: bower-staging passes, bower-api or anything else fails.",
       "The config check reads the parsed \"name\" field, not a grep of the whole file.",
@@ -4885,9 +4885,9 @@
       "Share one normalisation between the golden test and the fingerprint.",
       "Two C04 runs with different ids give the same input=."
     ],
-    "verify": "pnpm -C runner exec vitest run -t \"two runs of the same case on fresh ids give the same input fingerprint|two fresh folders with different Drive and admission ids give the same fingerprint|two fresh fake folders on the same case give the same input fingerprint through main\"",
+    "verify": "pnpm -C runner exec vitest run -t \"two runs of the same case on fresh ids give the same input fingerprint|the same case with other ids has the same fingerprint|two fresh fake folders on the same case give the same input fingerprint through main\"",
     "passes": true,
-    "note": "TL-P4-07 addendum 2 (main c924560). Live input= differed on all 5 cd3af43 runs. Reopened by the P4-8 review: fileId and admission id were not normalised. Reopened by TL-P4-08 addendum 2: live input= still differed on all 5 c6ddb96 runs."
+    "note": "TL-P4-07 addendum 2 (main c924560). Live input= differed on all 5 cd3af43 runs. Reopened by the P4-8 review: fileId and admission id were not normalised. Reopened by TL-P4-08 addendum 2: live input= still differed on all 5 c6ddb96 runs. Re-proved 2026-10-09 after c3-fingerprint renamed its verify test (two fresh folders with different Drive and admission ids give the same fingerprint -> the same case with other ids has the same fingerprint)."
   },
   {
     "id": "drive-calls-golden",
@@ -5375,7 +5375,8 @@
       "Card: removed: <lines>; goldens equal or lower."
     ],
     "verify": "pnpm -C api exec vitest run -t \"one deadline table rearms the alarm|a handler that always throws stops after 6 attempts and its run ends failed\"",
-    "note": "TL-P4-14 stage 1 (main 2b7a6bb); rules: behaviour unchanged, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Reopened by TL-P4-14 addendum 2 (main dbf3b49): a throwing handler retried every minute forever; exponential backoff up to 6 attempts, then the deadline is marked failed, console.error, and its run or ticket ends failed with its sentence."
+    "note": "TL-P4-14 stage 1 (main 2b7a6bb); rules: behaviour unchanged, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Reopened by TL-P4-14 addendum 2 (main dbf3b49): a throwing handler retried every minute forever; exponential backoff up to 6 attempts, then the deadline is marked failed, console.error, and its run or ticket ends failed with its sentence.",
+    "review": "P4-22 PASS"
   },
   {
     "id": "c1-admit-once",
@@ -5516,7 +5517,8 @@
       "Remove the dependency-rules exceptions it owns."
     ],
     "verify": "pnpm vitest run -t \"one Drive transport retries a stalled read inside its budget|a runner Drive error is never called offline|a 4 MiB upload on a slow link is not cut at 60 s\" && pnpm -C api exec vitest run -t \"a repair PATCH that landed and answered 503 is not sent again\"",
-    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Defect smoke-runner-offline (TL-P4-16 addendum 4). Reopened by P4-25 (BLOCK): the 60 s total budget cuts slow uploads (a 4 MiB upload answered at 90 s gives offline); the Worker Rules repair PATCH is resent on 5xx without a modifiedTime check and can overwrite a newer edit."
+    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Defect smoke-runner-offline (TL-P4-16 addendum 4). Reopened by P4-25 (BLOCK): the 60 s total budget cuts slow uploads (a 4 MiB upload answered at 90 s gives offline); the Worker Rules repair PATCH is resent on 5xx without a modifiedTime check and can overwrite a newer edit.",
+    "review": "P4-25b PASS"
   },
   {
     "id": "c2-runner-exit",
@@ -5530,7 +5532,8 @@
       "Every exit, including an uncaught error, reaches the Worker or is recovered within 60 s."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"every runner exit reaches the Worker or is recovered within 60 s\"",
-    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Defect smoke-runner-silent-stop (TL-P4-16 addendum 4)."
+    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Defect smoke-runner-silent-stop (TL-P4-16 addendum 4).",
+    "review": "P4-24 PASS"
   },
   {
     "id": "c2-transport-outcome-kind",
@@ -5556,7 +5559,8 @@
       "Remove the other caches."
     ],
     "verify": "pnpm vitest run -t \"one read cache serves app and runner|bytes read for a digest are not kept once the digest is\"",
-    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. After c2-drive-transport."
+    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. After c2-drive-transport.",
+    "review": "P4-28a PASS"
   },
   {
     "id": "c2-fake-parity",
@@ -5595,7 +5599,8 @@
       "Fake becomes a Drive adapter."
     ],
     "verify": "pnpm vitest run -t \"the runner and the fake run the same engine|a landed move later purged is reported as applied|a lost-answer move purged before the read-back is reported as unconfirmed|a move into a folder binned since the run read it is refused|a run summary counts unconfirmed things on their own line, never as set aside|a fence that reads a real change sets the operation aside|a run with confirmed and unconfirmed moves counts each on its own line|a fence read that gets no answer is thrown as not read, never as a refusal\" && pnpm -C runner exec vitest run -t \"a create into a folder binned since the run read it is refused|a move into a folder binned since the run read it is refused|a lost-answer move purged before the read-back is reported as unconfirmed|a landed move later purged is reported as applied|a fence that cannot read stops the attempt for recovery|a fence whose attempt check cannot read stops the attempt for recovery|a fence that reads a real change sets the operation aside\"",
-    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Carry-over: a landed move later purged is reported as applied (safety-polish #7). c2-read-cache ruling (main 9366148): the runner HOLD_MS fence hold for a create's parent folder moves here (named item). Lead rulings (main fe2b3c8): a move whose answer was lost, then purged before the read-back, is reported with the outcome-unknown kind (\"Bower couldn't confirm this; the file is gone\"), neither set aside nor applied; fix round with a named test \"a lost-answer move purged before the read-back is reported as unconfirmed\". The strict edit-text rule stays in both fake and runner. Rulings (main 19609e7): C04 82 accepted as a recorded exception (fence read per move); unconfirmed rows get their own summary line (\"Bower couldn't confirm N\"), never counted in set aside; a fence that cannot read (transport failure) stops the attempt for recovery, a fence that reads a real change sets the operation aside; the barrier test ends stopped, not done; tests for both."
+    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Carry-over: a landed move later purged is reported as applied (safety-polish #7). c2-read-cache ruling (main 9366148): the runner HOLD_MS fence hold for a create's parent folder moves here (named item). Lead rulings (main fe2b3c8): a move whose answer was lost, then purged before the read-back, is reported with the outcome-unknown kind (\"Bower couldn't confirm this; the file is gone\"), neither set aside nor applied; fix round with a named test \"a lost-answer move purged before the read-back is reported as unconfirmed\". The strict edit-text rule stays in both fake and runner. Rulings (main 19609e7): C04 82 accepted as a recorded exception (fence read per move); unconfirmed rows get their own summary line (\"Bower couldn't confirm N\"), never counted in set aside; a fence that cannot read (transport failure) stops the attempt for recovery, a fence that reads a real change sets the operation aside; the barrier test ends stopped, not done; tests for both.",
+    "review": "P4-35d PASS"
   },
   {
     "id": "c2-write-once",
@@ -5608,7 +5613,8 @@
       "Remove the six recovery methods."
     ],
     "verify": "pnpm vitest run -t \"every write reconciles by its bowerOp stamp|an app write with an unknown outcome is resolved by its stamp|a retry after my own unknown write is not called a change elsewhere|a lost write that reads back as not landed is never called offline headless|a retry after a change elsewhere is a conflict, not saved|an archived journal line is still recovered exactly once\"",
-    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. After c2-one-engine. Lead ruling 2026-10-08 (after P4-25): the transport accepts unknown write outcomes; c2-write-once owns them: named test \"an app write with an unknown outcome is resolved by its stamp\". Addendum 6: also named test \"a retry after my own unknown write is not called a change elsewhere\" (own write recognised by its stamp). c2-read-cache ruling (main 9366148): the runner write-answer maps (confirmed, answered, answers, sums, ended) move here (named item). Lead (main 19609e7): win Drive calls back by confirming from answers (C04 rose 80→82 in c2-one-engine). Lead (headless-offline-lost-write): named test \"a lost write that reads back as not landed is never called offline headless\" (retried, or reported in the outcome-unknown words). Rulings (main dd77054): keep `ended` (listing part of the read-cache home); fix round: the journal outbox line gets its own stable key (a separate appProperty the archive move does not overwrite), recovery matches by that id, test \"an archived journal line is still recovered exactly once\"; rename the barrier test to what it asserts and update spine-report-barrier-dispositions' verify. Accepted residual (lead): a journal line pending on a device across the bowerLine upgrade with a lost answer can be admitted twice if a run archives the old copy first; dev/staging only, no device with the old format exists in production."
+    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. After c2-one-engine. Lead ruling 2026-10-08 (after P4-25): the transport accepts unknown write outcomes; c2-write-once owns them: named test \"an app write with an unknown outcome is resolved by its stamp\". Addendum 6: also named test \"a retry after my own unknown write is not called a change elsewhere\" (own write recognised by its stamp). c2-read-cache ruling (main 9366148): the runner write-answer maps (confirmed, answered, answers, sums, ended) move here (named item). Lead (main 19609e7): win Drive calls back by confirming from answers (C04 rose 80→82 in c2-one-engine). Lead (headless-offline-lost-write): named test \"a lost write that reads back as not landed is never called offline headless\" (retried, or reported in the outcome-unknown words). Rulings (main dd77054): keep `ended` (listing part of the read-cache home); fix round: the journal outbox line gets its own stable key (a separate appProperty the archive move does not overwrite), recovery matches by that id, test \"an archived journal line is still recovered exactly once\"; rename the barrier test to what it asserts and update spine-report-barrier-dispositions' verify. Accepted residual (lead): a journal line pending on a device across the bowerLine upgrade with a lost answer can be admitted twice if a run archives the old copy first; dev/staging only, no device with the old format exists in production.",
+    "review": "P4-36b PASS"
   },
   {
     "id": "c2-create-by-id",
@@ -5621,7 +5627,8 @@
       "An update retried after a lost answer is resolved by its stamp and checksum."
     ],
     "verify": "pnpm vitest run -t \"a create retried after a lost answer makes one file by its reserved id|the app, runner and Worker write through one create-by-id and update-by-stamp helper|a create whose answer is lost and that never landed never takes an older file of that name|a Bin whose answer was lost is resolved by its stamp|a Bin of something renamed elsewhere since it was read, whose answer was lost, is a change elsewhere|a restore whose answer was lost is resolved by its stamp|a restore under a free name whose rename answer was lost is resolved by its stamp|a lone thing given a note is made into its pile folder once, every answer lost|a pile renamed for its new words, its answer lost, is resolved by its stamp|a declared pile whose folder and note answers were lost is made once by their reserved ids|a missing pile note written again, its answer lost, is made once by its reserved id|a link and an empty thing sent with lost answers arrive once by their reserved ids, with no second try|a system folder made with a lost answer is found by its reserved id|taking a change back whose Bin answer was lost is resolved by its stamp|a run.s create whose answer was lost is read back by its reserved id, though a search misses it|a person.s retry after a double failure makes one file|a journal line keeps its reserved id until confirmed and needs no key lookup|the fake Worker makes its template by reserved ids, as the Worker|a Bin after a restore in Drive is not taken as landed from its stamp alone|a run move with a lost answer, then binned by the person, is reported as unconfirmed|a journal line refused for good releases its id and says so once|a pile note retried with new words after a double failure is one note with the new words|a journal line refused by a rate limit keeps its id and is sent later|a refused rule, request or answer says what happened to it|a journal line refused in the background shows once in what failed|the side panel shows a change Bower could not note until it is put away|a pile note retried after a double failure never overwrites an edit made between tries|a pile note binned elsewhere after a double failure is made again with the new words|a journal line whose changes folder is gone waits and is sent once the folder is found again|a journal line refused for a full Drive keeps its id and is sent once space is free|a move whose line is refused for good follows the thing to where it went|sign-out forgets a failed change kept in memory when storage refuses|a journal line answered 409 whose read-back holds other bytes ends as failed once|every documented Drive error reason maps to one kind|the right panel turns to Bower once when a change could not be noted|a second not-found ends the line for good|an expired sign-in waits only after the token refresh fails|one request resent after a wait makes one line, under its reserved id|a request sent again after a wait goes as the same request|the right panel turns to Bower once per failure and marks it seen, so a reload does not turn it again|a turn to Bower moves focus from the panel that closes to the Bower tab, never to the page\" && pnpm -C runner exec vitest run -t \"an edit.s answer showing another name or place is not taken as the edit|last-run.json whose answer shows other bytes than those sent is not confirmed, and done is never reported|a batch of more than 1000 creates reserves its ids in chunks of 1000|the runner.s Rules.md repair whose answers were lost is resolved by its stamp|a run folder let go of whose Bin answer was lost is resolved by its stamp|the runner classifies Drive failures through the one table\" && pnpm -C api exec vitest run -t \"the Worker.s Rules.md repair whose answer was lost is resolved by its stamp\" && pnpm e2e:fake -g \"a journal line refused in the background shows once in what failed on a phone\" --project phone",
-    "note": "Lead ruling (DECISIONS main 9ffa36e; mechanism map updated): the Worker generateIds+409 path and the stamp path become one write-once rule with two documented cases. Last stage 2 entry, after the c2-write-once fix round. Starting model: bower-escalated. Report production-only lines; C04 must not rise from 76. Acceptance (lead): each still-unstamped app write gets the helper and a named test: trash, untrash, update, keyed pile-note creates, upload shortcuts, the system folder. Also from P4-36b: engine inPlace (engine.ts:529) gets a test that fails if it checks id only; app creates stamped by place+name (drive-vault.ts:343,1077) move to reserved ids; the barrier test gains an md5-mismatch case so \"confirmed by its answer\" is proven. Rulings (main 921d957), fix round after P4-37: an id is reserved per intended create (not per try) and kept with the pending action (outbox or journal line) until confirmed, so a person retry after a double failure makes one file and the journal line-key lookup retires (tests for both); the fake Worker applies its template through the same helper with reserved ids; a batch of creates reserves its ids in one call, no long-lived pool; goldens never rise. Lead ruling: a read-back that finds another writer's stamp is an unknown outcome, reported as unconfirmed, never set aside or applied; test \"a run move with a lost answer, then binned by the person, is reported as unconfirmed\"; no namespaced stamp keys for now. Lead: keepFinished (retention, no production caller) is removed at the stage end; run-record retention (how long .bower/runs keeps finished runs) is an open product question for after P4, not built. One reservation per runner attempt accepted. Reopened 2026-10-09 (main cb4f7c8): journal-4xx-waits-forever and pile-note-retry-second-note; tests \"a journal line refused for good releases its id and says so once\" and \"a pile note retried with new words after a double failure is one note with the new words\". Lead: a line refused during a background flush is kept as a failed item and shown once in the side panel's existing \"what failed\" list with the same sentence, then marked seen; test \"a journal line refused in the background shows once in what failed\" (follow-up after P4-37c, before the suites). Lead (main e1c4a22): on the phone the same \"what failed\" component renders in the phone side sheet (one component for both layouts), e2e at phone size; test \"a journal line refused in the background shows once in what failed on a phone\". Lead (main ea058a7): one failure table in the transport from Drive's documented reasons to retry / wait-for-the-person / permanent; callers use only the kind; table test \"every documented Drive error reason maps to one kind\". Lead: deviations accepted with reasons in the table: 401 → wait after the transport's own token refresh fails (sign-in sentence); 404 → retry once after re-resolving from a fresh listing, a second 404 is permanent (test \"a second not-found ends the line for good\"). runner/src/drive.ts:359 goes on the table in this entry before it closes (one classifier, no exceptions)."
+    "note": "Lead ruling (DECISIONS main 9ffa36e; mechanism map updated): the Worker generateIds+409 path and the stamp path become one write-once rule with two documented cases. Last stage 2 entry, after the c2-write-once fix round. Starting model: bower-escalated. Report production-only lines; C04 must not rise from 76. Acceptance (lead): each still-unstamped app write gets the helper and a named test: trash, untrash, update, keyed pile-note creates, upload shortcuts, the system folder. Also from P4-36b: engine inPlace (engine.ts:529) gets a test that fails if it checks id only; app creates stamped by place+name (drive-vault.ts:343,1077) move to reserved ids; the barrier test gains an md5-mismatch case so \"confirmed by its answer\" is proven. Rulings (main 921d957), fix round after P4-37: an id is reserved per intended create (not per try) and kept with the pending action (outbox or journal line) until confirmed, so a person retry after a double failure makes one file and the journal line-key lookup retires (tests for both); the fake Worker applies its template through the same helper with reserved ids; a batch of creates reserves its ids in one call, no long-lived pool; goldens never rise. Lead ruling: a read-back that finds another writer's stamp is an unknown outcome, reported as unconfirmed, never set aside or applied; test \"a run move with a lost answer, then binned by the person, is reported as unconfirmed\"; no namespaced stamp keys for now. Lead: keepFinished (retention, no production caller) is removed at the stage end; run-record retention (how long .bower/runs keeps finished runs) is an open product question for after P4, not built. One reservation per runner attempt accepted. Reopened 2026-10-09 (main cb4f7c8): journal-4xx-waits-forever and pile-note-retry-second-note; tests \"a journal line refused for good releases its id and says so once\" and \"a pile note retried with new words after a double failure is one note with the new words\". Lead: a line refused during a background flush is kept as a failed item and shown once in the side panel's existing \"what failed\" list with the same sentence, then marked seen; test \"a journal line refused in the background shows once in what failed\" (follow-up after P4-37c, before the suites). Lead (main e1c4a22): on the phone the same \"what failed\" component renders in the phone side sheet (one component for both layouts), e2e at phone size; test \"a journal line refused in the background shows once in what failed on a phone\". Lead (main ea058a7): one failure table in the transport from Drive's documented reasons to retry / wait-for-the-person / permanent; callers use only the kind; table test \"every documented Drive error reason maps to one kind\". Lead: deviations accepted with reasons in the table: 401 → wait after the transport's own token refresh fails (sign-in sentence); 404 → retry once after re-resolving from a fresh listing, a second 404 is permanent (test \"a second not-found ends the line for good\"). runner/src/drive.ts:359 goes on the table in this entry before it closes (one classifier, no exceptions).",
+    "review": "P4-37f PASS"
   },
   {
     "id": "c2-upload-queue-only",
@@ -5647,7 +5654,8 @@
       "Table classification test for Delete me."
     ],
     "verify": "pnpm -C api exec vitest run -t \"only the alarm dispatches|Delete me classes every table|a failed run-end start says so, and a retry does not claim it waits|a press during a recovery look-up is dispatched at once|a Delete me during the alarm's admission reads admits no run|a Delete me during a press's admission reads admits no run|a sign-out during admission still admits the waiting answers|a Delete me during admission still refuses\"",
-    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Carry-over: a failed run-end start says so, and a retry does not claim it waits (safety-polish #4). Integrated at 76933a3f (red 67e59d04, fix d155dcab) but reopened: closed before its Opus review (close-before-review); closes again only after P4-27 PASS; a P4-27 fix round lands before anything builds on it. Reopened 2026-10-09 for sign-out-refuses-answers (main ada1e12): admission compares account identity, never the session generation; tests \"a sign-out during admission still admits the waiting answers\" and \"a Delete me during admission still refuses\"."
+    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Carry-over: a failed run-end start says so, and a retry does not claim it waits (safety-polish #4). Integrated at 76933a3f (red 67e59d04, fix d155dcab) but reopened: closed before its Opus review (close-before-review); closes again only after P4-27 PASS; a P4-27 fix round lands before anything builds on it. Reopened 2026-10-09 for sign-out-refuses-answers (main ada1e12): admission compares account identity, never the session generation; tests \"a sign-out during admission still admits the waiting answers\" and \"a Delete me during admission still refuses\".",
+    "review": "P4-30 PASS"
   },
   {
     "id": "c4-focus-return",
@@ -5661,5 +5669,299 @@
     ],
     "verify": "pnpm vitest run -t \"focus returns on close with no timer\" && pnpm e2e:fake -g \"Delete on a folder asks before the Bin\"",
     "note": "Defect qa10-toast-flake, ruling (b) (main 7a708aa); docs/harness/defects/2026-10-09-qa10-toast-flake.md. Opens stage 4. Sites: Explorer.tsx:125,130,532-547; focus.ts:5,80; Sheet.tsx:30; toast.tsx:73; Palette.tsx:107; Replay.tsx:146. Tests wait for focus, never for time; the mechanism map gets a row. Starting model: bower-implementer."
+  },
+  {
+    "id": "c3-reservation-home",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": true,
+    "what": "One home for \"reserve an id per intended create, keep it until confirmed\": write-once Intended, with a port for where the id is kept (outbox line, memory). The journal and drive-vault links and empty things use it; no second intent map.",
+    "steps": [
+      "A person retries a journal line after a double failure: one file, by the id kept on the outbox line.",
+      "A link or empty thing sent with lost answers arrives once, its id kept through the same home."
+    ],
+    "verify": "pnpm vitest run -t \"only the write-once home and the ruled batch sites reserve Drive ids|a renamed intent map, an id set or stored by hand, or the call for ids by another name is found by what it does|a journal line keeps its reserved id until confirmed and needs no key lookup|a person.s retry after a double failure makes one file|a journal line refused for good releases its id and says so once|a journal line refused by a rate limit keeps its id and is sent later|a journal line kept on the device is sent after a reload under the id the home kept|a link and an empty thing sent with lost answers arrive once by their reserved ids, with no second try|a pile note retried with new words after a double failure is one note with the new words\" && pnpm e2e:fake -g \"a journal line refused in the background shows once in what failed on a phone\" --project phone",
+    "note": "TL-P4-14 addendum 19; TL-P4-17 and addendum 1 (main e1bbf010). Packet docs/harness/2026-10-09-c3-reservation-home-packet.md. Scope: journal.ts intent map :166, record :231-272, raw generateIds :396; drive-vault.ts:1532 Sending.reserved. upload-queue.ts:431 follows as c3-reservation-upload and stays on the rule-test allowlist (may only shrink). Batch sites engine.ts:193, runner pool, fake-worker stay. Starting model: bower-escalated. Goldens C04 78, 25-runs 88 never rise. P4-39 BLOCK (rule test passed a renamed map); fix round 89bd9cfb/21789886; P4-39b PASS, second way? no. Minors to P2_POLISH. Red proved by hand at 89bd9cfb (tests only on f162b5c7): both rule tests fail (/tmp/c3res-handred.log); done.sh cannot revert 21789886 (notes file touched since).",
+    "review": "P4-39b PASS"
+  },
+  {
+    "id": "c3-integrate-gate",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": true,
+    "what": "Process checks get one home each: harness/integrate.sh merges a worker branch only on a green pnpm check; check-harness fails on conflict-marker lines in tracked files; an escalated p4-consolidation entry cannot pass without a review PASS (features.json review field), in harness-rules and done.sh.",
+    "steps": [
+      "integrate.sh on a branch whose merged tree fails pnpm check aborts the merge and prints the failures.",
+      "A tracked file with a conflict-marker line fails the harness check with file:line.",
+      "done.sh refuses to close an escalated entry with no review PASS."
+    ],
+    "verify": "pnpm exec vitest run src/harness.test.ts src/harness-git.test.ts -t \"the harness check fails on a conflict-marker line and names file and line|an escalated consolidation entry cannot pass without a review PASS|done.sh refuses to close an escalated entry with no review PASS|integrate.sh aborts a merge whose tree fails the check\"",
+    "note": "TL-P4-17 entry 1 (main e1bbf010); docs/harness/2026-10-09-tl-p4-17-stage-2-pattern-review.md. Closes merge-before-check, close-before-review, conflict markers committed. Red: three fixtures failing today. Starting model: bower-implementer (Sonnet). Harness code: production net does not count it; the card reports removed lines."
+  },
+  {
+    "id": "c3-test-time",
+    "task": "p4-consolidation",
+    "category": "test",
+    "passes": true,
+    "what": "Unit tests never wait on real time: backoff, deadlines and toasts use the injected clock, transport options or fake timers; dependency-cruiser runs once (scripts/check-dependencies.mjs in pnpm check), not inside vitest; check-harness fails any unit test over 1000 ms that is not in harness/slow-tests.json, a list that may only shrink.",
+    "steps": [
+      "A unit test over 1000 ms not in harness/slow-tests.json fails the harness check.",
+      "harness/slow-tests.json may only shrink.",
+      "dependency-cruiser runs only in pnpm check."
+    ],
+    "verify": "pnpm exec vitest run src/harness.test.ts src/dependency-rules.test.ts src/unused-gate.test.ts src/data/spine/write-once.test.ts src/data/upload-queue-real.test.ts -t \"the timer allowlist may only shrink|wall-clock times are reported, never failed|the rule list names every forbidden import|a new unused export fails the unused-code gate|the rule targets the primitive, not the names of what holds an id|lost bytes ask to choose the file again\"",
+    "note": "TL-P4-17 entry 3 (main e1bbf010). Closes dependency-rules-timeout (ruled here) and the lost-bytes-slow class (docs/harness/defects/2026-10-09-lost-bytes-slow.md). qa10 stays with c4-focus-return. Baseline: the tests over 1000 ms in test-results/unit.json today (16 at 0cc1247a), each sped up or listed. Starting model: bower-implementer. TL-P4-17 addendum 4 (main bed5503b): reservation-rule-test-slow folds in; syntax rules have one home, ESLint (no-restricted-syntax / no-restricted-imports with per-file overrides for allowed sites); the generateIds rule and dependency-rules keep only a fast fixture test of the rule, never a repo scan inside vitest; red: current timings on the slow list, then gone. TL-P4-17 addendum 6 (main 7f5fa754): a test over 1000 ms in the full run is rerun alone and only its alone time counts; the list is rebuilt from alone times; the knip gate test keeps a fixture only; the ESLint reservation rule targets the primitive (generateIds and write-once reserve/create calls outside the allowed files), never holder names. Re-proved 2026-10-09 after c3-timer-gate replaced the slow list and the alone margin (TL-P4-17 add. 10); verify re-pointed."
+  },
+  {
+    "id": "c3-reviewer-guard",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": true,
+    "what": "A PreToolUse Bash hook script, scripts/guard-main-checkout.mjs, beside quiet-gates.mjs: inside a subagent it refuses git checkout|switch|reset|rebase|merge|stash run in the main checkout and points to git show, git diff or a scratch worktree; the coordinator session is not refused.",
+    "steps": [
+      "A reviewer subagent running git checkout in the main checkout is refused with the pointer sentence.",
+      "The same command from the coordinator session, or in a scratch worktree, passes."
+    ],
+    "verify": "pnpm exec vitest run src/guard-main-checkout.test.ts -t \"a subagent.s git checkout in the main checkout is refused|the coordinator.s own git checkout in the main checkout is allowed|a subagent.s git checkout in a scratch worktree is allowed\"",
+    "note": "TL-P4-17 entry 2 (main e1bbf010); closes reviewer-checkout-main. Wiring the hook into .claude/settings.json or agent frontmatter is Claude Code config: the coordinator does not change it on a peer ruling; the owner wires it (one line, given on the card). Starting model: bower-implementer. Red at 1f2a4979: the script is a new file, so the red is its missing module (/tmp/c3g-red.log); done.sh cannot load a revert of a new file. Wiring (owner): PreToolUse matcher Bash, command node \"$CLAUDE_PROJECT_DIR/scripts/guard-main-checkout.mjs\"; subagent field agent_id."
+  },
+  {
+    "id": "c3-unused-code",
+    "task": "p4-consolidation",
+    "category": "tooling",
+    "passes": true,
+    "what": "knip (the standard detector of unused files, exports and dependencies) runs in pnpm check across the app, api and runner workspaces against harness/unused-baseline.json, a list that may only shrink (same pattern as check-duplication-gate.mjs); what it finds dead is removed in this entry or listed under left out.",
+    "steps": [
+      "A new unused export fails pnpm check.",
+      "The unused baseline may only shrink."
+    ],
+    "verify": "pnpm exec vitest run src/unused-gate.test.ts -t \"a new unused export fails the unused-code gate|the unused baseline may only shrink\"",
+    "note": "TL-P4-17 entry 4 (main e1bbf010): class C (promised but never wired: keepFinished had no production caller). Research: https://knip.dev. Harness code: production net does not count it, but removed dead code is reported as removed lines. Starting model: bower-implementer."
+  },
+  {
+    "id": "c3-reservation-upload",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": true,
+    "what": "The upload queue reserves and keeps its file id through the write-once home (Holder/port: the id kept with the device upload record), so no module but write-once asks Drive for an id; upload-queue leaves the reservation allowlist.",
+    "steps": [
+      "An upload whose reply was lost, after a reload, is sent under the id kept on the device and makes one file.",
+      "upload-queue.ts is no longer on the reservation allowlist."
+    ],
+    "verify": "pnpm vitest run -t \"an upload reserves its file id through the write-once home and keeps it on the device|an upload whose reply was lost is found again by its kept id after a reload|lost bytes ask to choose the file again|an upload refused for good releases its id from the device record\" && pnpm e2e:fake -g \"a file added again after a reload is not doubled\"",
+    "note": "TL-P4-17 addendum 1 (main e1bbf010): upload-queue.ts:431 follows c3-reservation-home, same home and port; the allowlist shrinks by one. Starting model: bower-escalated (write-once, data safety). Goldens never rise. P4-40 PASS (second way? no). Minors to P2_POLISH; refused upload keeps its record id (heldAs per try) asked of the lead. TL-P4-17 addendum 7 (main e451eb84): option (a): a permanent 4xx releases the id and the release reaches the device record through the keeper port (the record is the keeper, not a per-try holder); one release rule for every keeper; fix round, red: a 4xx upload leaves the record with no fileId; review again. Fix round (red f515f213, fix 80548be1): a 4xx releases the record id through the keeper; P4-40b PASS, second way? no.",
+    "review": "P4-40b PASS"
+  },
+  {
+    "id": "c3-unused-production",
+    "task": "p4-consolidation",
+    "category": "tooling",
+    "passes": true,
+    "what": "knip also runs a --production pass (tests are not entries) in pnpm check with its own shrink-only baseline, so a helper only tests call is caught (the keepFinished case); isStale in api/src/process.ts is removed (ownDeadline is the one home of that rule).",
+    "steps": [
+      "A production export that only a test calls fails the production gate.",
+      "The production baseline may only shrink."
+    ],
+    "verify": "pnpm exec vitest run src/unused-gate.test.ts -t \"an export only tests call fails the production unused-code gate|the production unused baseline may only shrink\"",
+    "note": "TL-P4-17 addendum 6 points 3 and 5 (main 7f5fa754). rateLimit, genericRateLimit, COOKIE_ROUTES stay in the baselines until p4-rate-limits. Starting model: bower-implementer. Red at 2bb1d9a0: both tests fail (/tmp/c3p-red.log); after the merge round (743c9620) they are fixture tests of the rules module; done.sh cannot revert 894f700a (merge touched the same lines). No promised-but-dead finding among the 35."
+  },
+  {
+    "id": "p4-rate-limits",
+    "task": "p4-consolidation",
+    "category": "feature",
+    "passes": false,
+    "what": "The Worker mounts the rate limits it already has (api/src/security.ts rateLimit, genericRateLimit, COOKIE_ROUTES), owed by the security review V2.4.1; they leave the knip baselines.",
+    "steps": [
+      "Requests over the limit on a limited route are refused with the documented status."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"a route over its rate limit is refused\"",
+    "note": "TL-P4-17 addendum 6 point 4 (main 7f5fa754): an owed P4 promise, not dead code. After stage 3. Starting model: bower-escalated."
+  },
+  {
+    "id": "c3-integrate-history",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": true,
+    "what": "A history check judges the tree that will be committed: HEAD, plus MERGE_HEAD while a merge is uncommitted. One helper in scripts/harness-git.mjs returns the tips to judge; src/docs.test.ts and every other history reader use it; integrate.sh is unchanged.",
+    "steps": [
+      "Under a no-commit merge, a branch commit with no compatibility row fails the docs check."
+    ],
+    "verify": "pnpm exec vitest run src/harness-git.test.ts src/docs.test.ts -t \"a branch commit with no compatibility row fails the check under a no-commit merge|every history reader takes its tips from the one helper\"",
+    "note": "TL-P4-17 addendum 8 (main 96f1fafc); defect integrate-misses-branch-commits. Red: a fixture repo whose branch commit lacks its compatibility row, under a no-commit merge. Starting model: bower-implementer."
+  },
+  {
+    "id": "c3-retention-race",
+    "task": "p4-consolidation",
+    "category": "data",
+    "passes": true,
+    "what": "Retention lists each picked run folder just before its own Bin, not all three first, so a person moving an item into a picked folder in between is seen on the closest listing; no extra Drive call.",
+    "steps": [
+      "A folder whose child loses its mark between picks is kept.",
+      "The 25-run golden stays 88 calls."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"each run folder is listed just before its own Bin|a picked folder that gains an unmarked child before its turn is kept\"",
+    "note": "Stage 3 carry-over (docs/harness/2026-10-09-stage3-carryover.md; P4-38e minor; lead 2026-10-09: touches data, not polish). runner/src/spine/retention.ts:126 clean() lists all picks before any Bin. Starting model: bower-escalated (it bins). Goldens: C04 78, 25-runs 88 never rise. P4-41 PASS (second way? no).",
+    "review": "P4-41 PASS"
+  },
+  {
+    "id": "c3-reservation-worker",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": true,
+    "what": "The Worker template reserves and keeps its ids through the write-once home, with Durable Object storage as a third keeper behind the write-once port; api/src/vault.ts leaves the reservation allowlist.",
+    "steps": [
+      "The Worker template retried after a lost answer makes one file per intent.",
+      "api/src/vault.ts is no longer on the reservation allowlist."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"the Worker template retried after a lost answer makes one file per intent|the Worker keeps reserved ids in Durable Object storage through the write-once port\"",
+    "note": "TL-P4-17 addendum 3 (main 35989307): api/src/vault.ts:388,408 keeps ids across requests; same rule, not a batch site. After c3-reservation-upload. Starting model: bower-escalated. Subrequest budget (TL-P4-11) must hold. P4-42 PASS (second way? no); notices (root parent, text/plain .json, md5 confirm) judged harmless alignment with the app. Red proved by hand at 104707e3: the Durable Object keeper test fails (/tmp/c3wrk-handred.log); done.sh cannot revert 53f92201 (its notes file changed later).",
+    "review": "P4-42 PASS"
+  },
+  {
+    "id": "c3-fingerprint",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": true,
+    "what": "The input fingerprint hashes a normalized object (run-dependent fields set to fixed values by key, at any depth), not regex-edited JSON text.",
+    "steps": [
+      "The same case run twice with different ids gives the same fingerprint.",
+      "A text field that happens to contain \"id\":\"x\" is not rewritten."
+    ],
+    "verify": "pnpm -C runner exec vitest run test/model-input-fingerprint.test.ts -t \"the same case with other ids has the same fingerprint|a value that looks like an id inside text is kept|the raw model input on the C04 fixture equals its golden copy\"",
+    "note": "TL-P4-14 stage 3 row (c3-fingerprint, mechanical). runner/src/model-input.ts normalizeModelInput is six regex replaces on JSON text (callers claude.ts:194, :1020). Starting model: bower-mechanical. TL-P4-14 addendum 21 (main 43a0289a): option (a) with RFC 8785 (JCS) sorted keys; the normalized golden is regenerated once; a separate golden of the raw prompt text proves the model input unchanged (if it moves, stop and report); p4-speed-baseline.md notes that input= and section hashes before the fix sha do not compare with later ones; no compatibility regex. renamed: two fresh folders with different Drive and admission ids give the same fingerprint -> the same case with other ids has the same fingerprint"
+  },
+  {
+    "id": "c3-reply-schema",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": true,
+    "what": "One declarative zod 4 schema (runner only) for the model reply; each rule is a named issue whose id is its refusal kind, with unchanged retry text; state and line limits come from note-edit.ts (8 x 200); Bower's runner-writable files are one list, layout.ts RUNNER_WRITES (questions, requests, hashes), imported by run-manifest.ts and admitted.ts.",
+    "steps": [
+      "A reply over the note-edit state limits is refused with the same kind and retry text as today.",
+      "A reply that one admitted list passed and the other refused is judged once, by RUNNER_WRITES."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"every validation refusal is retried once with its reason|the reply schema takes its state limits from note-edit|a write the two runner lists judged differently is judged once by RUNNER_WRITES|a Claude reply that targets a thing not admitted is refused and writes nothing\" && pnpm vitest run src/data/contracts -t \"the manifest takes the runner-writable files as a parameter|a stored v2 manifest over the write bound still parses\"",
+    "note": "TL-P4-14 stage 3 row and addendum 20 (main debd33f6); defects state-line-limits-disagree, runner-paths-disagree. Mapping: runner/src/claude.ts REFUSALS :562-605, intentOf :760-892, AUTHORED :156; note-edit.ts :88-89, :288; run-manifest.ts :36, :191, :482, :488, parse at :526 (callers claude.ts:1098, engine.ts:133, records.ts:189/219, scripted.ts:1512/1534); admitted.ts :29, :127; layout.ts :21-34. Starting model: bower-escalated (contract). TL-P4-14 addendum 22 (main b2a790cc): strict on write, lenient on read: note-edit.ts names a write bound (8x200, next) and a read bound (20x400: previous, a person's state, stored manifests); every stored v2 manifest still parses (test on a v2 fixture over 8x200); --json-schema stays off the CLI in this entry (our retry stays; p4-structured-output after a live A/B); first-kind order accepted. Fix round, then P4-44; the card reports the new net and where the lines went. P4-44 BLOCK; fix round (red 358476d4, fix 8dd8a5dc) per addendum 22; P4-44b PASS, second way? no; net +288/-168, claude.ts +97 is the zod declaration replacing hand checks. Red proved by hand at 358476d4: state-limit and stored-v2 tests fail (/tmp/c3rs-handred-runner.log, /tmp/c3rs-handred-app.log); done.sh cannot revert 8dd8a5dc (compat doc touched since).",
+    "review": "P4-44b PASS"
+  },
+  {
+    "id": "c3-subject",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": true,
+    "what": "One Subject type (pile, thing, note state or folder, with id and content hash), one key function and one open-questions function shared by the reader and the planner; one question type replaces Question, ReportQuestion and CorpusQuestion. A refused Bin keeps its question open; an answer whose subject left is settled.",
+    "steps": [
+      "The engine refuses a saved copy's Bin: its question stays open.",
+      "A yes whose thing already left the inbox settles its answer line.",
+      "Old questions.json (p2 fixtures, ids like q1, no subject) still reads."
+    ],
+    "verify": "pnpm vitest run -t \"one key and one open-questions function serve the reader and the planner|old questions without a subject still read\" && pnpm -C runner exec vitest run -t \"a refused Bin keeps its question open|an answer whose subject left is settled|a binned duplicate.s open question closes|a thing that leaves the inbox closes its question\"",
+    "note": "TL-P4-14 stage 3 row; carry-over P4-17 (refused Bin closes the hash-keyed question; deciding line scripted.ts:1428-1432, questions write does not wait on the saved copy's bin op) and P4-15b (answer pending after its thing left; scripted.ts:253 matches by id prefix, not q.subject). Mapping: types.ts:122, run-manifest.ts:74, runner/src/corpus.ts:24, claude.ts:425-462; subjectOf x4 (answer-loop.ts:37, scripted.ts:541, drive-vault.ts:1347, claude.ts:510); STATE_Q x3; reader drive-vault.ts:1335-1349. Starting model: bower-escalated (the P4-17 fix orders a write behind a Bin). P4-43 PASS; fix round (red 7a7895ed, fix 0378e601: question-key rule to ESLint, saved-Bin match reuses related/sameContent); P4-43b PASS, second way? no. Red proved by hand at 856cde1e: both carry-over tests fail (/tmp/c3subj-handred.log); done.sh cannot revert dc49bbd3 (fix round touched the same lines).",
+    "review": "P4-43b PASS"
+  },
+  {
+    "id": "p4-structured-output",
+    "task": "p4-consolidation",
+    "category": "perf",
+    "passes": false,
+    "what": "The runner passes the zod reply declaration to the claude CLI as --json-schema (z.toJSONSchema) and reads structured_output, adopted only after a live A/B on the C04 cases shows it no worse.",
+    "steps": [
+      "A live A/B on the C04 cases with and without --json-schema is recorded in p4-speed-baseline.md."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"the reply schema reaches the CLI as its JSON schema\"",
+    "note": "TL-P4-14 addendum 22 point 2 (main b2a790cc). From c3-reply-schema; after a live A/B. Starting model: bower-escalated."
+  },
+  {
+    "id": "c3-alone-margin",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": true,
+    "what": "Temporary (TL-P4-17 addendum 9): a unit test over 1000 ms in the full run fails the slow ratchet only if its alone rerun takes over 2000 ms; lifted by c3-timer-gate.",
+    "steps": [
+      "A test 1500 ms alone passes; 2500 ms alone fails."
+    ],
+    "verify": "pnpm exec vitest run src/harness.test.ts -t \"wall-clock times are reported, never failed\"",
+    "note": "TL-P4-17 addendum 9 (main 925d3fbb). scripts/harness-rules.mjs:272 compares the alone time with SLOW_MS; a separate ALONE_MS = 2000 with a comment naming c3-timer-gate. Starting model: bower-mechanical. Retired by c3-timer-gate: the alone margin and its tests are gone; the verify names the report test. Re-proved 2026-10-09 after c3-timer-gate replaced the slow list and the alone margin (TL-P4-17 add. 10); its temporary rule is retired."
+  },
+  {
+    "id": "c3-timer-gate",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": true,
+    "what": "A vitest setup file fails any unit test that schedules a real setTimeout or setInterval of 100 ms or more outside fake timers; its allowlist only shrinks (target empty) and replaces harness/slow-tests.json; wall-clock times become a check-harness report, never a failure; the 5000 ms test timeout stays as the backstop; the temporary 2000 ms alone margin (c3-alone-margin) is removed.",
+    "steps": [
+      "A fixture test with a real 150 ms wait fails.",
+      "The same wait under fake timers passes.",
+      "A slow compute-bound test is reported, not failed."
+    ],
+    "verify": "pnpm exec vitest run src/harness.test.ts src/timer-gate.test.ts -t \"a real wait of 100 ms or more fails the unit run|a wait under fake timers passes the timer gate|the timer allowlist may only shrink|wall-clock times are reported, never failed|two checks started together run one after the other|a second check waits and prints who holds the lock|a lock whose holder is gone is taken over with a printed line\"",
+    "note": "TL-P4-17 addendum 9 (main 925d3fbb); defect slow-ratchet-alone-under-load. Starting model: bower-implementer. TL-P4-17 addendum 10 (main 56dd8d86): a timer counts when it fires (a cleared timer never waited); fix round: done.sh and integrate.sh share one mkdir-based lock around pnpm check and the e2e suites, a second caller waits and prints who holds it (red: two checks started together run one after the other); the 22-name allowlist goes to c4-test-timers in stage 4. Red proved by hand: b6e01216 timer gate test fails (/tmp/c3timer-handred0.log); ff34204c lock test fails (/tmp/c3timer-handred.log). done.sh sees no code in 2bec3895 (harness/*.sh is outside CODE_PATHS)."
+  },
+  {
+    "id": "c3-planner-split",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": true,
+    "what": "planScripted is split into capture, decisions (from the script or the model) and building operations; the live path imports no demo fixture; answers reach the model path; one record-to-operations map replaces the five waits-for-the-next-run filters; report rows are generated from operation metadata and keyed by op id, so grounded() keeps only a structural check.",
+    "steps": [
+      "Two moves with the same name get their own rows by op id.",
+      "Two Timeline lines on one hub give two report rows.",
+      "The runner's model path loads no demo fixture."
+    ],
+    "verify": "pnpm vitest run -t \"two moves with the same name get their own rows by op id|the live path imports no demo fixture|the claude provider path cannot reach the fixture modules|one map from records to the operations they need\" && pnpm -C runner exec vitest run -t \"answers reach the model path|every Timeline line a run writes has its own report row|the C04 run makes the golden number of Drive calls per step\" && bash scripts/e2e-both.sh e2e/capabilities.spec.ts -g \"C05: a tidy-up brings a project note up to date\"",
+    "note": "TL-P4-14 stage 3 row (escalated); carry-overs report rows by op id (report.ts:58-61) and report-misses-hub-line (TL-P4-17 addendum 2; scripted.ts:936/:1354). Coordinator mapping: docs/harness/2026-10-09-c3-planner-split-map.md. Starting model: bower-escalated. Goldens C04 78, 25-runs 88 never rise. TL-P4-14 addendum 23 (main a0564115): the model path never reads fixtures and there is no demo gate or flag; the scripted provider owns the fixtures and returns the same reply shape as the model; the planner core only reads a reply; a live behaviour that changes is logged as live-uses-fixtures with evidence and the work carries on (rule wording on the live path comes from the model reply or is not done); class check: a dependency-cruiser rule that the claude provider path cannot reach fixture modules; 600-line staged stop approved. Part 1 merged (3ad08b03; red f9b658c6/c1de99be, fix 053e710c/f13e9b70/9c6068c4); P4-45 PASS part 1, second way? no. Part 2: capture/decide/build split, grounded() structural only (updated rows still by what text, grounded.ts:398), NoteScreen text tie, rules.held folded into needs (scripted.ts:1550), set-aside rows by op id not position (report.ts:500), one distinct-path count. TL-P4-19 addendum 3 point 2 (main 65bea5f5), for part 3: RunReport.updated gets an optional op id; rows tie by id, never by words; additive wire change (an old report without the field still reads, fixture test); app and runner deploy together. Part 2 (red a189e639/91e7663f; fix 09d0127d..167297dc, 7037f139): P4-45b BLOCK (grounded multiplicity), fix round, P4-45c PASS part 2, second way? no; part 2 net -381. TL-P4-19 addendum 4 (main 49fb0270): op id + line accepted; line is the 0-based ordinal among the lines that op wrote, never a note position or line text; entry net -140 accepted; stage 3 smoke needs app + runner deployed together. TL-P4-19 addendum 5 (main f41e0a6c): option 2: the New mark shows only while the file bowerOp stamp is the op and its md5 matches the row; the op lines are its last k and the ordinal picks one; after a person edit the mark drops, never moves, the row stays; reuse write-once stamp-plus-checksum comparison, no new helper. Part 3 (red 44135607/f68c6d49/0ae7cd5f; fix 33c7c0eb/bced533f/0549a761/4ad40aff): P4-45d PASS entry; fix rounds for addenda 4-5; P4-45e PASS, second way? no; entry net -109. Red proved by hand: at f9b658c6 the live-path, op-id-rows and claude-path tests fail (/tmp/c3plan-handred2.log); at c1de99be the one-map test fails (/tmp/c3plan-handred.log); later rounds have their own reds in the notes; done.sh cannot revert across three merged parts.",
+    "review": "P4-45e PASS"
+  },
+  {
+    "id": "c4-test-timers",
+    "task": "p4-consolidation",
+    "category": "test",
+    "passes": false,
+    "what": "The 22 unit tests on harness/real-timers.json move to fake timers or event waits, so the real-timer allowlist reaches its empty target.",
+    "steps": [
+      "harness/real-timers.json is empty and the ceiling is 0."
+    ],
+    "verify": "pnpm exec vitest run src/timer-gate.test.ts -t \"the timer allowlist may only shrink\"",
+    "note": "TL-P4-17 addendum 10 (main 56dd8d86); stage 4. Starting model: bower-implementer."
+  },
+  {
+    "id": "c3-done-harness-paths",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": true,
+    "what": "done.sh treats harness/ scripts (*.sh, *.mjs, *.ts) as code, so a fix there is proved like code; harness/*.json and docs stay data.",
+    "steps": [
+      "A commit that only changes harness/with-lock.sh is code to done.sh.",
+      "A commit that only changes harness/features.json is not."
+    ],
+    "verify": "pnpm exec vitest run src/harness-git.test.ts -t \"done.sh sees a change under harness scripts as code|done.sh sees harness data as no code\"",
+    "note": "TL-P4-17 addendum 11 (main); defect done-sh-misses-harness-dir; scripts/harness-git.mjs CODE_PATHS. Starting model: bower-mechanical."
+  },
+  {
+    "id": "c3-branch-cleanup",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": true,
+    "what": "After a green merge, harness/integrate.sh removes the merged branch's worktree (git worktree remove, never --force) and deletes the branch (git branch -d). Protected by name, not merge state: main, claude/p3, claude/tl-planning, claude/design, archive/*, codex/*, the deploy worktree, and any worktree with a running process (lsof +D) or another session in it.",
+    "steps": [
+      "A merged fixture branch and its clean worktree are gone after integrate.",
+      "A merged claude/design worktree survives integrate.",
+      "A worktree with a running process survives integrate."
+    ],
+    "verify": "pnpm exec vitest run src/harness-git.test.ts -t \"integrate removes a merged branch and its clean worktree|a merged claude/design worktree survives integrate|a worktree with a running process survives integrate|harness-git imported under node -e with a sha argument does not run the cleanup\"",
+    "note": "TL-P4-19 and addendum 2 (main df9e3476); defect cleanup-removed-active-worktrees. Tests use fixture repos in temp dirs. Starting model: bower-implementer. Fix round (red fe4ef462, fix c8f43681): defect harness-git-cli-on-import (the CLI check threw on import under done.sh)."
+  },
+  {
+    "id": "c3-note-sections",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "One section parser (ownership-format) gives every section's position (frontmatter, Current state, Timeline, Bower's note), old notes included; note-format and note-edit read it instead of their own legacy copies; the Timeline-line pattern exists once.",
+    "steps": [
+      "A legacy note, a v2 note and a plain note give every section's position from parseOwnership.",
+      "A Timeline line is parsed by one pattern everywhere."
+    ],
+    "verify": "pnpm vitest run -t \"one parser gives every section position, old notes included|the Timeline-line pattern exists once|round-trips every demo note\" && pnpm -C runner exec vitest run -t \"the corpus reads a note Timeline through the one parser\"",
+    "note": "TL-P4-14 stage 3 row. Coordinator map in docs/harness/2026-10-09-c3-note-sections-packet.md. Starting model: bower-implementer (Sonnet; parsing only, no write path change)."
   }
 ]

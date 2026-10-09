@@ -146,4 +146,12 @@ Prefer parallel ready deliverables with independent review when ownership and de
 
 ## Branch and worktree cleanup (TL-P4-19)
 
-A worker's branch and worktree end with its integration, as with "delete branch on merge" on a forge. After a green merge, `harness/integrate.sh` runs `git worktree remove <worktree>` and `git branch -d <branch>`. Both refuse a dirty worktree or an unmerged branch, so nothing unmerged is lost ([git-branch -d](https://git-scm.com/docs/git-branch#Documentation/git-branch.txt--d), [git-worktree remove](https://git-scm.com/docs/git-worktree#_commands)). A branch that is superseded and never merged, such as an earlier fix round, is deleted only with the owner's OK, from a list the lead reviews. `main`, `claude/p3`, `archive/*` and `codex/*` are never touched by cleanup.
+A worker's branch and worktree end with its integration, as with "delete branch on merge" on a forge. After a green merge, `harness/integrate.sh` runs `git worktree remove <worktree>` and `git branch -d <branch>`. Both refuse a dirty worktree or an unmerged branch, so nothing unmerged is lost ([git-branch -d](https://git-scm.com/docs/git-branch#Documentation/git-branch.txt--d), [git-worktree remove](https://git-scm.com/docs/git-worktree#_commands)). A branch that is superseded and never merged, such as an earlier fix round, is deleted only with the owner's OK, from a list the lead reviews. Cleanup never touches `main`, `claude/p3`, `claude/tl-planning` (the lead's), `claude/design` (the designer's), `archive/*` or `codex/*`. It never touches the deploy worktree, or a worktree that another session or a running process uses. "Merged" is not enough reason to remove a session's own worktree, because merging `main` makes those branches look merged (2026-10-09).
+
+## Sessions, the main checkout and messages
+
+- **The main checkout** (`/Users/deluisp/Projects/bower-app`) is the coordinator's integration checkout, on `claude/p3`.
+  - No other session switches its branch. The lead works in `/private/tmp/bower-tl-planning`, and the designer in `/private/tmp/bower-design`.
+  - When the owner opens a new session in this project, they leave the branch as it is, or choose a worktree. Opening a session on `main` once moved the checkout off `claude/p3` (2026-10-09).
+- **Permission modes.** Sessions that message each other run in the same permission mode (currently bypass). Otherwise the app holds each message until the owner approves it.
+- **Message budget.** After 10 sends with no owner message, a session's sends pause. The coordinator then writes its questions in `docs/harness/LEAD_QUESTIONS.md` on `claude/p3`, and the lead answers in `DECISIONS.md` on `main`. The coordinator reads DECISIONS after each merge of `main`.

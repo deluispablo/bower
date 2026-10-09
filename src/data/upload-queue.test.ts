@@ -831,7 +831,7 @@ describe('uploads survive a reload without a second file', () => {
     const again = await second.queue.add(await member(env));
     await second.queue.idle();
     expect(second.queue.items()).toHaveLength(1);
-    expect(second.queue.items()[0]).toMatchObject({ id: again.id, state: 'done', reserved });
+    expect(second.queue.items()[0]).toMatchObject({ id: again.id, state: 'done', fileId: reserved });
     expect(second.queue.items()[0]?.gone).toBeUndefined();
     expect((await files(env)).map((f) => f.id)).toEqual([reserved]);
     expect([...(await env.drive.readBytes(reserved ?? ''))]).toEqual([...BYTES]);

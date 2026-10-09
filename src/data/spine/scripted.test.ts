@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
+import { DriveVault } from '../vault/drive-vault';
 import { fakeScripted, planRun } from '../fake/fake-runner';
 import { seedFakeDrive } from '../fake/seed';
 import type { AdmissionManifest } from './admission';
 import { planAdmission } from './plan';
 import { fakeRead } from './read';
-import { runKeys, scriptedProvider } from './scripted';
+import { scriptedDecisions, scriptedProvider } from '../demo/script';
+import * as planner from './scripted';
+import { runKeys, type Decisions, type PlanOptions, type RunPlan } from './scripted';
 
 const AT = Date.UTC(2026, 9, 7, 9);
 const RUN = 'run-scripted';
@@ -43,5 +46,92 @@ describe('the scripted provider', () => {
     const moved = new Set(planned.operations.flatMap((o) => (o.effect.kind === 'move' ? [o.effect.before.fileId] : [])));
     expect(waits.items.filter((i) => moved.has(i.fileId))).toEqual([]);
     expect(planned.capture.piles.length).toBe(rest.length);
+  });
+
+  // c3-planner-split: what each of your changes waits for is one map, record by record, and its archive follows it.
+  it('one map from records to the operations they need', async () => {
+    const { drive, root, admitted } = await seeded();
+    // Your changes: a rule, a lookup request and an answer, each waiting on a write of its own.
+    const vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    await vault.addRule('anything from the dentist goes in health');
+    await vault.addRequest('What council tax band is Flat 3?');
+    await vault.answer('q1', true);
+    const plan = await planRun(drive, root, { scope: 'all', allowWeb: true, runId: RUN, requestId: admitted.id, requestedAt: admitted.at, mintKey: await runKeys(RUN) });
+    const m = plan.manifest;
+    const ids = m.capture.journal.map((j) => j.recordId).sort();
+    expect(ids.length).toBeGreaterThan(0);
+    expect(Object.keys(plan)).toContain('needs');
+    // One entry per record the run takes, none for anything else.
+    expect([...plan.needs.keys()].sort()).toEqual(ids);
+    // Some change waits on a write (a rule worded, a request answered, an answer's question dropped).
+    expect([...plan.needs.values()].some((ops) => ops.length > 0)).toBe(true);
+    for (const j of m.capture.journal) {
+      const archive = m.operations.filter((o) => o.effect.kind === 'move' && j.fileIds.includes(o.effect.before.fileId));
+      expect(archive.length).toBe(j.fileIds.length);
+      // Each archive move waits for exactly what its record needs.
+      for (const o of archive) expect([...o.dependsOn].sort()).toEqual([...(plan.needs.get(j.recordId) ?? [])].sort());
+    }
+  });
+
+  // P4-45 m1: a rule waits for the Rules.md this run makes through the same one map, not a list of its own.
+  it('a rule waits in the one map for the Rules.md it makes', async () => {
+    const { drive, root, admitted } = await seeded();
+    const rules = (await drive.listAll(root)).find((f) => !f.folder && f.name === 'Rules.md' && f.parents[0] === root);
+    if (rules) await drive.trash(rules.id);
+    const vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    await vault.addRule('anything from the dentist goes in health');
+    const plan = await planRun(drive, root, { scope: 'all', allowWeb: false, runId: RUN, requestId: admitted.id, requestedAt: admitted.at, mintKey: await runKeys(RUN) });
+    const m = plan.manifest;
+    const made = m.operations.find((o) => o.effect.kind === 'create-text' && o.effect.name === 'Rules.md');
+    expect(made).toBeDefined();
+    const rule = m.capture.journal.find((j) => m.reportPlan.some((c) => c.value.rulesWorded === 1 && c.requires.some((id) => m.operations.some((o) => o.operationId === id && o.effect.kind === 'move' && j.fileIds.includes(o.effect.before.fileId)))));
+    expect(rule).toBeDefined();
+    expect(plan.needs.get(rule?.recordId ?? '')).toContain(made?.operationId);
+  });
+
+  // c3-planner-split part 3 (contract 1): the plan is three steps. Capture reads the folder and never the reply;
+  // decide reads the reply (one decisions type) and what it names; build makes the operations and the report from
+  // what was decided, reading neither Drive nor the reply.
+  it('the planner runs capture, decide and build as three steps', async () => {
+    type Steps = {
+      capture?: (drive: unknown, rootId: string, opts: PlanOptions) => Promise<unknown>;
+      decide?: (drive: unknown, captured: unknown, opts: PlanOptions) => Promise<{ kind: string }>;
+      build?: (decided: unknown) => Promise<{ kind: string; plan?: RunPlan }>;
+    };
+    const steps = planner as unknown as Steps;
+    expect([typeof steps.capture, typeof steps.decide, typeof steps.build]).toEqual(['function', 'function', 'function']);
+    const { capture, decide, build } = steps;
+    if (!capture || !decide || !build) return;
+    const { drive, root, admitted } = await seeded();
+    const base = { scope: 'all' as const, allowWeb: false, runId: RUN, requestId: admitted.id, requestedAt: admitted.at, taken: admitted, mintKey: await runKeys(RUN) };
+    // Every use of the reply, by the step that made it.
+    let step = 'capture';
+    const used: string[] = [];
+    const reply = scriptedDecisions();
+    const watched = new Proxy(reply, {
+      get(target, key, receiver) {
+        used.push(`${step}:${String(key)}`);
+        return Reflect.get(target, key, receiver) as unknown;
+      },
+    }) as Decisions;
+    const opts: PlanOptions = { ...base, decisions: watched };
+    let reads = 0;
+    const read = fakeScripted(drive);
+    const counted = Object.fromEntries(Object.entries(read).map(([k, v]) => [k, typeof v === 'function' ? (...a: unknown[]) => { reads += 1; return (v as (...x: unknown[]) => unknown)(...a); } : v])) as typeof read;
+    const captured = await capture(counted, root, opts);
+    expect(reads).toBeGreaterThan(0);
+    step = 'decide';
+    const decided = await decide(counted, captured, opts);
+    expect(decided.kind).toBe('decided');
+    step = 'build';
+    const before = reads;
+    const built = await build(decided);
+    expect(reads).toBe(before);
+    expect(used.filter((u) => !u.startsWith('decide:'))).toEqual([]);
+    expect(used.length).toBeGreaterThan(0);
+    // The three steps give the very plan the planner gives.
+    const whole = await planner.planScripted(fakeScripted(drive), root, { ...base, decisions: scriptedDecisions() });
+    expect(built.kind).toBe('plan');
+    expect(built.plan?.manifest).toEqual(whole.manifest);
   });
 });

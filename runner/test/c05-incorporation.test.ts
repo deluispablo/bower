@@ -68,4 +68,28 @@ describe('the C05 slice through the Claude provider', () => {
     }
     expect(results).toEqual(Object.fromEntries(cases.map((c) => [c.id, { code: 0, pass: true, unmet: [] }])));
   });
+
+  // report-misses-hub-line (live run CbTN5Md_): the model wrote two Timeline lines on Flat hunt; the report said one.
+  it('every Timeline line a run writes has its own report row', async () => {
+    const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c05-hub-lines');
+    if (!c) throw new Error('no c05-hub-lines case');
+    const OFFER_LINE = 'The Ferrowick offer is fully remote, so the commute only matters for the flat.';
+    const LISTING_LINE = 'New flat listing saved from a link (listing-88213).';
+    const run = await runWithClaude(c, answering((id) => ({
+      kind: 'tidy-intent', v: 1,
+      things: [offerThing(id), { fileId: id(LISTING), to: 'Projects/Flat hunt', name: 'Flat 9, Wrenfield Road.md' }],
+      lines: [{ note: FLAT, text: OFFER_LINE, cites: id(OFFER) }, { note: FLAT, text: LISTING_LINE, cites: id(LISTING) }],
+    })));
+    expect(run.code).toBe(0);
+    // Both lines are on the note...
+    expect(run.after[FLAT]).toContain(OFFER_LINE);
+    expect(run.after[FLAT]).toContain(LISTING_LINE);
+    // ...and each has its own row.
+    const report = (run.lastRun as { run: { report: { updated: Array<{ path: string; what: string; op?: string; line?: number }> } } }).run.report;
+    // ...each naming its edit and its line's ordinal among that edit's lines, with the note as the run left it
+    // (TL-P4-19 addenda 4 and 5).
+    const op = expect.any(String) as unknown as string;
+    const left = { lines: 2, md5: expect.stringMatching(/^[0-9a-f]{32}$/) as unknown as string, stamp: expect.stringMatching(/^[0-9a-f]{32}$/) as unknown as string };
+    expect(report.updated.filter((r) => r.path === FLAT)).toEqual([{ path: FLAT, what: OFFER_LINE, op, line: 0, ...left }, { path: FLAT, what: LISTING_LINE, op, line: 1, ...left }]);
+  });
 });

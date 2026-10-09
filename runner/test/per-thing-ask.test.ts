@@ -6,6 +6,7 @@
  */
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as noteEdit from '../../src/data/contracts/note-edit';
 import { REFUSALS, type ClaudeCall, type ClaudeSpawn, type RefusalKind } from '../src/claude';
 import { loadCorpus, type LoadedCase } from '../src/corpus';
 import { runWithClaude } from './corpus-run';
@@ -94,6 +95,36 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
     expect((JSON.parse(again.after['.bower/questions.json'] ?? '{}') as { questions: unknown[] }).questions).toHaveLength(1);
   });
 
+  it('the reply schema takes its state limits from note-edit', async () => {
+    // Two bounds, one home (TL-P4-14 addenda 20 and 22): Bower writes the method's short state, 8 lines of 200, and
+    // reads (a person's state, a stored manifest) up to 20 lines of 400.
+    const bounds = noteEdit as unknown as Record<string, { lines: number; line: number } | undefined>;
+    expect({ write: bounds.STATE_WRITE, read: bounds.STATE_READ }).toEqual({ write: { lines: 8, line: 200 }, read: { lines: 20, line: 400 } });
+    const write = bounds.STATE_WRITE ?? { lines: 0, line: 0 };
+    const read = bounds.STATE_READ ?? { lines: 0, line: 0 };
+    const c = await offerAndFlat();
+    const long = (n: number, size: number): string[] => Array.from({ length: n }, (_, k) => `${'Offer to answer, '.repeat(30)}${'abcdefghijklmnopqrstu'[k] ?? 'z'}`.slice(0, size - 1) + 'x');
+    const stated = (lines: string[]) => intentReply((_ctx, id) => ({ ...filed(id), states: [{ note: 'Projects/Job hunt/Job hunt.md', lines, cites: id('Offer_letter_final(2).pdf') }] }));
+    // The manifest contract reads up to the read bound; the reply is held to the write bound.
+    expect(noteEdit.stateLinesOk(long(read.lines, read.line), long(read.lines, read.line))).toBe(true);
+    expect(noteEdit.stateLinesOk([], long(read.lines + 1, read.line))).toBe(false);
+    expect(noteEdit.stateLinesOk(long(1, read.line + 1), long(1, write.line))).toBe(false);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const calls: ClaudeCall[] = [];
+    const ok = await runWithClaude(c, answering([stated(long(write.lines, write.line))], calls));
+    expect({ code: ok.code, calls: calls.length }).toEqual({ code: 0, calls: 1 });
+    // The prompt prints the limits it checks.
+    expect(calls[0]?.input).toContain(`at most ${write.lines} lines of at most`);
+    expect(calls[0]?.input).toContain(`  ${write.line} characters with no link, only for a note below whose state`);
+    for (const over of [long(write.lines + 1, write.line), long(1, write.line + 1)]) {
+      const asked: ClaudeCall[] = [];
+      const run = await runWithClaude(c, answering([stated(over), intentReply((_ctx, id) => filed(id))], asked));
+      // Refused as a state, asked again with today's words, and the second reply files the pile.
+      expect({ calls: asked.length, code: run.code }).toEqual({ calls: 2, code: 0 });
+      expect(asked[1]?.input).toContain(`Your reply was refused: ${REFUSALS.stateText}. Reply again`);
+    }
+  });
+
   it('every validation refusal is retried once with its reason', async () => {
     const c = await offerAndFlat();
     const offer = (i: Intent): Thing => i.things[0] as Thing;
@@ -164,5 +195,13 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
       expect({ kind, code: run.code, filed: 'Projects/Flat hunt/Wrenfield Road, kitchen.jpg' in run.after }).toEqual({ kind, code: 0, filed: true });
       errors.mockRestore();
     }
+    // The reply is read from the result text only (TL-P4-14 addendum 22): claude gets no --json-schema, and a
+    // structured_output beside a bad result is not taken as the reply; the result is refused and asked again.
+    const calls: ClaudeCall[] = [];
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const structured = (_ctx: Context, id: Id): string => JSON.stringify({ ...(JSON.parse(envelope('Here is my plan.')) as object), structured_output: filed(id) });
+    const run = await runWithClaude(c, answering([structured, good], calls));
+    expect({ calls: calls.length, code: run.code, schema: calls.some((call) => call.args.includes('--json-schema')) }).toEqual({ calls: 2, code: 0, schema: false });
+    expect(calls[1]?.input).toContain(`Your reply was refused: ${REFUSALS.notJson}. Reply again`);
   });
 });

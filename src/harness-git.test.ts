@@ -1,12 +1,12 @@
 /// <reference types="node" />
 /** done.sh's git steps (scripts/harness-git.mjs), on a throwaway repository. */
-import { execSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { execSync, spawn, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module, checked by these tests
-import { codeInCommit, codeInWorktree, statusPaths, undoCommit } from '../scripts/harness-git.mjs';
+import { codeInCommit, codeInWorktree, commitsSince, historyTips, protectedReason, statusPaths, undoCommit } from '../scripts/harness-git.mjs';
 
 const repo = (): { dir: string; git: (c: string) => string } => {
   const dir = mkdtempSync(join(tmpdir(), 'harness-'));
@@ -63,5 +63,178 @@ describe('the harness and git', () => {
     expect(codeInWorktree(dir)).toEqual(['runner/src/x.ts']);
     git('commit -qam change');
     expect(codeInCommit('HEAD', dir)).toEqual(['runner/src/x.ts']);
+  });
+
+  it('done.sh sees a change under harness scripts as code', () => {
+    const { dir, git } = repo();
+    mkdirSync(join(dir, 'harness'), { recursive: true });
+    writeFileSync(join(dir, 'harness/with-lock.sh'), 'echo one\n');
+    git('add -A && git commit -qm base');
+    writeFileSync(join(dir, 'harness/with-lock.sh'), 'echo two\n');
+    expect(codeInWorktree(dir)).toEqual(['harness/with-lock.sh']);
+    git('commit -qam change');
+    expect(codeInCommit('HEAD', dir)).toEqual(['harness/with-lock.sh']);
+  });
+
+  it('done.sh sees harness data as no code', () => {
+    const { dir, git } = repo();
+    mkdirSync(join(dir, 'harness'), { recursive: true });
+    writeFileSync(join(dir, 'harness/features.json'), '[]\n');
+    writeFileSync(join(dir, 'harness/notes.md'), 'old\n');
+    git('add -A && git commit -qm base');
+    writeFileSync(join(dir, 'harness/features.json'), '[{}]\n');
+    writeFileSync(join(dir, 'harness/notes.md'), 'new\n');
+    expect(codeInWorktree(dir)).toEqual([]);
+    git('commit -qam change');
+    expect(codeInCommit('HEAD', dir)).toEqual([]);
+  });
+
+  // integrate.sh runs in the repository it is started in; these fixtures make their own.
+  const integrate = (checkCmd: string, branchFiles: Record<string, string>, dirtyFirst = false) => {
+    const { dir, git } = repo();
+    writeFileSync(join(dir, 'a.txt'), 'one\n');
+    git('add -A && git commit -qm base');
+    git('branch -M main');
+    git('checkout -qb worker');
+    for (const [f, c] of Object.entries(branchFiles)) writeFileSync(join(dir, f), c);
+    git('add -A && git commit -qm "worker change"');
+    git('checkout -q main');
+    if (dirtyFirst) writeFileSync(join(dir, 'a.txt'), 'edited\n');
+    const run = spawnSync('bash', [join(process.cwd(), 'harness/integrate.sh'), 'worker'], { cwd: dir, encoding: 'utf8', env: { ...process.env, INTEGRATE_CHECK: checkCmd, HARNESS_LOCK: join(dir, '.git/heavy.lock') } });
+    return { dir, git, run, out: run.stdout + run.stderr };
+  };
+
+  it('integrate.sh aborts a merge whose tree fails the check', () => {
+    const { dir, git, run, out } = integrate('if [ -e bad.txt ]; then echo "FAIL bad.txt should not exist"; exit 1; fi', { 'bad.txt': 'x\n' });
+    expect(run.status).toBe(1);
+    expect(out).toContain('FAIL bad.txt should not exist');
+    expect(out).toContain('check failed: worker is not merged');
+    expect(existsSync(join(dir, 'bad.txt'))).toBe(false);
+    expect(existsSync(join(dir, '.git/MERGE_HEAD'))).toBe(false);
+    expect(git('log --oneline').trim().split('\n')).toHaveLength(1);
+    expect(git('status --porcelain')).toBe('');
+  });
+
+  it('integrate.sh commits a merge whose tree passes the check', () => {
+    const { git, run } = integrate('true', { 'good.txt': 'x\n' });
+    expect(run.status).toBe(0);
+    expect(git('log -1 --format=%s').trim()).toBe("Merge branch 'worker'");
+    expect(git('log -1 --format=%p').trim().split(' ')).toHaveLength(2);
+  });
+
+  it('integrate.sh refuses to start on a dirty tree', () => {
+    const { dir, git, run, out } = integrate('true', { 'good.txt': 'x\n' }, true);
+    expect(run.status).toBe(1);
+    expect(out).toContain('The tree has changes');
+    expect(existsSync(join(dir, 'good.txt'))).toBe(false);
+    expect(git('log --oneline').trim().split('\n')).toHaveLength(1);
+  });
+
+  // A fixture repo with a worker branch checked out in its own worktree (never the real repositories).
+  const cleanupFixture = (branch: string) => {
+    const { dir, git } = repo();
+    writeFileSync(join(dir, 'a.txt'), 'one\n');
+    git('add -A && git commit -qm base');
+    git('branch -M main');
+    const wt = join(realpathSync(mkdtempSync(join(tmpdir(), 'harness-wt-'))), 'wt');
+    git(`worktree add -q -b ${branch} ${wt}`);
+    writeFileSync(join(wt, 'b.txt'), 'two\n');
+    execSync('git add -A && git commit -qm "worker change"', { cwd: wt });
+    const run = () => {
+      const r = spawnSync('bash', [join(process.cwd(), 'harness/integrate.sh'), branch], { cwd: dir, encoding: 'utf8', env: { ...process.env, INTEGRATE_CHECK: 'true', HARNESS_LOCK: join(dir, '.git/heavy.lock') } });
+      return r.stdout + r.stderr;
+    };
+    return { dir, git, wt, run };
+  };
+
+  it('integrate removes a merged branch and its clean worktree', () => {
+    const { dir, git, wt, run } = cleanupFixture('worker');
+    const out = run();
+    expect(git('log -1 --format=%s').trim()).toBe("Merge branch 'worker'");
+    expect(existsSync(wt)).toBe(false);
+    expect(git('branch --list worker').trim()).toBe('');
+    expect(git('worktree list --porcelain')).not.toContain('worker');
+    expect(out).toContain('Removed worktree and branch worker.');
+    expect(existsSync(dir)).toBe(true);
+  });
+
+  it('a dirty worktree is kept with its branch and a printed line', () => {
+    const { git, wt, run } = cleanupFixture('worker');
+    writeFileSync(join(wt, 'b.txt'), 'edited\n');
+    const out = run();
+    expect(existsSync(wt)).toBe(true);
+    expect(git('branch --list worker').trim()).toContain('worker');
+    expect(out).toContain('Kept worker: its worktree has changes.');
+  });
+
+  it('a merged claude/design worktree survives integrate', () => {
+    const { git, wt, run } = cleanupFixture('claude/design');
+    const out = run();
+    expect(git('log -1 --format=%s').trim()).toBe("Merge branch 'claude/design'");
+    expect(existsSync(wt)).toBe(true);
+    expect(git('branch --list claude/design').trim()).toContain('claude/design');
+    expect(out).toContain('Kept claude/design: it is a protected branch.');
+  });
+
+  it('protected names and the deploy worktree are kept, whatever the merge state', () => {
+    for (const b of ['main', 'claude/p3', 'claude/tl-planning', 'claude/design', 'archive/old', 'codex/x']) expect(protectedReason(b, '/tmp/x')).not.toBeNull();
+    expect(protectedReason('worker', '/private/tmp/bower-deploy')).not.toBeNull();
+    expect(protectedReason('worker', '/tmp/x')).toBeNull();
+  });
+
+  it('a worktree with a running process survives integrate', async () => {
+    const { git, wt, run } = cleanupFixture('worker');
+    const child = spawn('sleep', ['30'], { cwd: wt, stdio: 'ignore' });
+    try {
+      await new Promise<void>((resolve) => child.once('spawn', () => resolve()));
+      const out = run();
+      expect(existsSync(wt)).toBe(true);
+      expect(git('branch --list worker').trim()).toContain('worker');
+      expect(out).toContain('Kept worker: a process is running in its worktree.');
+    } finally {
+      child.kill();
+    }
+  });
+
+  it('a branch commit with no compatibility row fails the check under a no-commit merge', () => {
+    const { dir, git } = repo();
+    mkdirSync(join(dir, 'src/features'), { recursive: true });
+    writeFileSync(join(dir, 'list.md'), '| sha | entry | what |\n');
+    git('add -A && git commit -qm base');
+    const base = git('rev-parse --short HEAD').trim();
+    git('checkout -q -b branch');
+    writeFileSync(join(dir, 'src/features/a.ts'), 'export const a = 1;\n');
+    git('add -A && git commit -qm "branch change"');
+    const branchSha = git('rev-parse --short HEAD').trim();
+    git('checkout -q -');
+    writeFileSync(join(dir, 'other.txt'), 'main moved\n');
+    git('add -A && git commit -qm main-moved');
+    expect(commitsSince(base, ['src/features'], dir)).toEqual([]);
+    git('merge -q --no-ff --no-commit branch');
+    expect(historyTips(dir)).toEqual(['HEAD', 'MERGE_HEAD']);
+    expect(commitsSince(base, ['src/features'], dir)).toEqual([branchSha]);
+    git('commit -qm merged');
+    expect(historyTips(dir)).toEqual(['HEAD']);
+    expect(commitsSince(base, ['src/features'], dir)).toEqual([branchSha]);
+  });
+
+  it('every history reader takes its tips from the one helper', () => {
+    const root = join(__dirname, '..');
+    const files = [
+      ...readdirSync(join(root, 'src')).filter((f) => f.endsWith('.test.ts')).map((f) => join('src', f)),
+      ...readdirSync(join(root, 'scripts')).filter((f) => f.endsWith('.mjs')).map((f) => join('scripts', f)),
+    ];
+    const walks = /\.\.\.?HEAD|'(log|rev-list)'|git (log|rev-list)/;
+    const bad = files.filter((f) => f !== 'scripts/harness-git.mjs' && f !== 'src/harness-git.test.ts' && walks.test(readFileSync(join(root, f), 'utf8')) && !/commitsSince|historyTips/.test(readFileSync(join(root, f), 'utf8')));
+    expect(bad).toEqual([]);
+  });
+  it('harness-git imported under node -e with a sha argument does not run the cleanup', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'harness-git-import-'));
+    const copy = join(dir, 'harness-git.mjs');
+    writeFileSync(copy, readFileSync(join(process.cwd(), 'scripts/harness-git.mjs'), 'utf8'));
+    const run = spawnSync('node', ['-e', `import('${copy}')`, '24323495'], { cwd: dir, encoding: 'utf8' });
+    expect(run.stderr).toBe('');
+    expect(run.stdout).toBe('');
+    expect(run.status).toBe(0);
   });
 });

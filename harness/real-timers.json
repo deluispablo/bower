@@ -1,0 +1,27 @@
+{
+  "note": "Unit tests allowed to schedule a real timer of 100 ms or more (harness/timer-gate.ts). The list may only shrink, with an empty target (REAL_TIMER_CEILING in scripts/harness-rules.mjs is its size).",
+  "tests": [
+    "Bower is open in another window the demo panel stays while this page is blocked",
+    "Home on the latency fake Home is complete within 35% of the call minimum on the latency fake",
+    "Home on the latency fake Home reads each file of the live-shaped folder once in one load (golden)",
+    "Home on the latency fake a report refresh does not restart the inbox reads",
+    "Home reads only the records of the piles in the inbox (TL-P4-16 b) the questions do not wait for the full read of the piles",
+    "LiveSession createFolder reports each root once and the folder is ready",
+    "POST /vault after a lapsed claim a call whose claim lapsed before reserving makes no second folder",
+    "admission reads admission reads finish under the budget with modelled Drive latency",
+    "asking the Worker a run already going when the app opens is followed at the fast pace",
+    "dispatch from the alarm (TL-P4-14 stage 2) a failed dispatch leaves the run queued",
+    "dispatch retries a dispatch that keeps failing arms the alarm at 60 seconds",
+    "dispatch retries a lost dispatch's early look-up leaves a run that has reported alone",
+    "dispatch retries an early look-up that GitHub cannot answer waits and rechecks",
+    "focusRouteHeading leaves a control that navigated and stays on screen (a top-bar link)",
+    "focusRouteHeading moves the keyboard to the new heading when the control that navigated went away",
+    "focusRouteHeading never moves focus while a menu or dialog is open",
+    "focusRouteHeading never takes a field the new view focused itself",
+    "focusRouteHeading stops once focus is placed after the change, even when a menu closes between checks",
+    "one read cache serves app and runner a refresh during a read in flight never reads one file at one modifiedTime twice (C05 findings 4)",
+    "runner wire after the last ticket expires no gone row is kept",
+    "the palette says when search fails, instead of looking forever",
+    "the tidy-up sheet and Home focus focus never drops to body after a question is answered"
+  ]
+}

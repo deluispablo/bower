@@ -42,6 +42,7 @@ import { BowerError } from '../types';
 import { sha256Hex } from '../contracts/hashes';
 import type { Checkpoint, EffectEvidence, Failure, Outcome } from '../contracts/run-checkpoint';
 import { recheckEdit, savedLinkKey } from '../contracts/note-edit';
+import { RUNNER_WRITES } from '../vault/layout';
 import { parseRunManifestV2, type Effect as ManifestEffect, type OperationV2, type SeenFile } from '../contracts/run-manifest';
 import { notAsSeen, notAsSeenReason, notRead } from '../contracts/still-as-seen';
 import { UNCONFIRMED_WRITE_MESSAGE, type DriveFile, type FencedDrive, type RunDrive, type StoredEvidence } from '../drive/drive-api';
@@ -130,7 +131,7 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
     run.onChain?.([]);
     manifest = await run.plan();
     const m = await canonical(manifest);
-    const parsed = await parseRunManifestV2(m.bytes, run.rootId);
+    const parsed = await parseRunManifestV2(m.bytes, run.rootId, RUNNER_WRITES);
     if (!parsed.ok || manifest.runId !== run.runId) {
       const why = `The manifest planned for run ${run.runId} is refused (${parsed.ok ? 'another run' : parsed.reason})`;
       console.error(why);

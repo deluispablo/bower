@@ -37,16 +37,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { normalizeModelInput } from './model-input';
 import { MANIFEST_V2_LIMIT, parseRunManifestV2, recordableName } from '../../src/data/contracts/run-manifest';
-import { AUTHORED_LINE_MAX } from '../../src/data/contracts/note-edit';
+import { z } from 'zod';
+import { AUTHORED_LINE_MAX, STATE_WRITE } from '../../src/data/contracts/note-edit';
 import { PILE_NOTE } from '../../src/data/piles';
 import type { Admitted, RunProvider } from '../../src/data/spine/provider';
 import type { ScriptedRead } from '../../src/data/spine/read';
 import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
-import { planScripted, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
+import { subjectKey, subjectOf } from '../../src/data/contracts/questions';
+import type { Question } from '../../src/data/contracts/types';
+import { modelDecisions, planScripted, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
 import { MAX_NAME } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
-import { SYSTEM } from '../../src/data/vault/layout';
+import { RUNNER_WRITES, SYSTEM } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import type { DriveFile } from '../../src/data/drive/drive-api';
 import { extract, readable } from './extract';
@@ -152,8 +155,11 @@ export function claudeArgs(model: string, maxTurns: number): string[] {
  * saying how much was left out; one past the run's budget is not shown, and says so.
  */
 export const CONTEXT_BOUNDS = { perThing: 12_000, perRun: 48_000, perNote: 4_000, notes: 12, notesPerRun: 24_000 } as const;
-/** What the model may write: a note's summary and body, a Timeline line, and how many lines one reply may add. */
-const AUTHORED = { summary: 200, body: 8_000, line: AUTHORED_LINE_MAX, lines: 20, stateLines: 8 } as const;
+/**
+ * What the model may write: a note's summary and body, a Timeline line, and how many lines one reply may add. A Current
+ * state's limits have one home, the manifest contract's write bound (`STATE_WRITE` in note-edit.ts).
+ */
+const AUTHORED = { summary: 200, body: 8_000, line: AUTHORED_LINE_MAX, lines: 20 } as const;
 /** A question's bounds: its text and each answer, one short line with no link (TL-P4-08 point 1). */
 const ASK = { text: 200, answer: 40 } as const;
 const CUT = (left: number): string => `\n[cut here: ${left} more characters not shown]`;
@@ -263,8 +269,8 @@ function promptInstructions(): string {
     '  thing for what it changes in a note below, a status, a date, a deadline or an amount, and add a line to that note too.',
     '  When a thing disagrees with a note, never change it silently: the line gives both figures, the note\'s and the',
     '  thing\'s, and cites the thing.',
-    `- "states" (optional): a note's whole "## Current state" as it should read now, at most ${AUTHORED.stateLines} lines of at most`,
-    `  ${AUTHORED.line} characters with no link, only for a note below whose state the thing changes (a status, a count, a date),`,
+    `- "states" (optional): a note's whole "## Current state" as it should read now, at most ${STATE_WRITE.lines} lines of at most`,
+    `  ${STATE_WRITE.line} characters with no link, only for a note below whose state the thing changes (a status, a count, a date),`,
     '  at most one per note, citing the thing; add a Timeline line saying what changed too. Bower rewrites it only if the',
     '  person has not edited it; otherwise it asks them.',
     '- Every summary, line and question is one short plain line, the outcome first.',
@@ -416,9 +422,6 @@ async function notesShown(read: ScriptedRead, listing: readonly DriveFile[], ix:
   return notes;
 }
 
-/** A question about a Current state the person edited, by its note's file id (`planScripted`'s id). */
-const STATE_Q = 'q-state-';
-
 /** A question about keeping one note: the person is asked whether two notes are one (the fake's and the corpus' wording). */
 const KEEP_ONE = /\bkeep one note\b/i;
 
@@ -427,8 +430,8 @@ interface TakenAnswer {
   /** The answer's journal record id. */
   id: string;
   yes: boolean;
-  question: { id: string; text: string; yes: string; no: string; subject?: string };
-  /** For "Write it" (`q-state-<file id>`): the note it is about, by that id: its file id and its path now. */
+  question: Pick<Question, 'id' | 'text' | 'yes' | 'no' | 'subject'>;
+  /** For "Write it" (a question about a note's Current state): the note it is about, by that id: its file id and its path now. */
   note?: { fileId: string; path: string };
 }
 
@@ -466,7 +469,8 @@ async function answersTaken(read: ScriptedRead, run: ScriptedRun, took: Admitted
     const before = out.findIndex((a) => a.answer.question.id === q.id);
     if (before >= 0 && (out[before]?.at ?? 0) >= at) continue;
     // A question about a Current state you edited names its note by file id, never by name (it may have moved since).
-    const noteId = q.id.startsWith(STATE_Q) ? q.id.slice(STATE_Q.length) : undefined;
+    const about = subjectOf({ id: q.id });
+    const noteId = about.kind === 'state' ? about.id : undefined;
     const notePath = noteId === undefined ? undefined : ix.pathOf(noteId);
     const answer: TakenAnswer = {
       id: rec.id, yes: rec.text === 'yes', question: { id: q.id, text: q.text, yes: text(q.yes), no: text(q.no), ...(typeof q.subject === 'string' ? { subject: q.subject } : {}) },
@@ -507,7 +511,7 @@ function answersShown(answers: readonly TakenAnswer[], piles: Shown['piles']): N
   const things = new Set(piles.flatMap((p) => p.things.map((t) => t.fileId)));
   const pileIds = new Set(piles.map((p) => p.pileId));
   return answers.slice(0, AUTHORED.lines).map((a) => {
-    const subject = a.question.subject ?? (a.question.id.startsWith('q-ask-') ? a.question.id.slice('q-ask-'.length) : undefined);
+    const subject = subjectKey(a.question);
     const about = subject === undefined ? {} : things.has(subject) ? { fileId: subject } : pileIds.has(subject) ? { pileId: subject } : {};
     return { question: a.question.text.slice(0, ASK.text), answer: (a.yes ? a.question.yes : a.question.no).slice(0, ASK.answer) || (a.yes ? 'Yes' : 'No'), ...about, ...(a.note ? { note: a.note.path } : {}) };
   });
@@ -550,10 +554,6 @@ const placeOk = (to: unknown): to is string =>
 /** A new name a model may give: one such part, its extension not counted (as the app counts it, `contracts/tree.ts`). */
 const nameOk = (name: unknown): name is string => typeof name === 'string' && partOk(name.replace(/\.[A-Za-z0-9]{1,5}$/, '')) && partOk(name);
 
-const exactly = (value: unknown, keys: readonly string[], optional: readonly string[] = []): value is Record<string, unknown> =>
-  !!value && typeof value === 'object' && !Array.isArray(value)
-  && keys.every((k) => k in value) && Object.keys(value).every((k) => keys.includes(k) || optional.includes(k));
-
 /**
  * Every reason Bower refuses a model's reply, by kind (TL-P4-08 addendum 4). Each one asks the model once more with
  * its reason (validate, then ask again with the error: Instructor, retrying,
@@ -591,7 +591,7 @@ export const REFUSALS = {
   stateKeys: 'a state with keys outside the intent',
   stateNote: 'a state for a note it was not shown',
   stateTwice: 'two states for one note',
-  stateText: 'a state that is not 1 to 8 short lines',
+  stateText: `a state that is not 1 to ${STATE_WRITE.lines} short lines`,
   stateCites: 'a state citing a thing it does not file',
   askKeys: 'a question with keys outside the intent: give it a "fileId" or a "pileId", not both',
   askNotAdmitted: 'a question about a thing or pile it was not admitted to take',
@@ -621,23 +621,6 @@ const CONTROL = { test: (text: string): boolean => [...text].some((c) => {
 const lineOk = (text: unknown, max: number): text is string =>
   typeof text === 'string' && text.trim() !== '' && text.length <= max && !/[\r\n\t]/.test(text) && !CONTROL.test(text) && !HIDDEN_CHARS.test(text);
 
-/** A thing's own note as the model wrote it, or why it is refused. */
-function authoredOf(n: unknown): AuthoredNote | RefusalKind {
-  if (!exactly(n, ['name', 'summary', 'body'])) return 'noteKeys';
-  if (!nameOk(n.name) || extensionOf(n.name) !== '.md') return 'noteName';
-  if (!lineOk(n.summary, AUTHORED.summary)) return 'noteSummary';
-  const body = typeof n.body === 'string' ? n.body.replace(/\r\n?/g, '\n') : null;
-  if (body === null || body.length > AUTHORED.body || CONTROL.test(body) || HIDDEN_CHARS.test(body)) return 'noteBody';
-  if (OWN_SECTION.test(body)) return 'noteSections';
-  return { name: n.name, summary: n.summary.trim(), body: body.trim() };
-}
-
-/**
- * The model's intent, checked against what the run took: only admitted things and piles, only places under a main
- * folder, names that keep their thing's kind, notes and lines within their bounds, lines only on the notes it was
- * shown (`notes`), and no other key (no id, hash or digest of its own). Anything else refuses the whole reply. A pile
- * with a thing left out waits whole for the next run.
- */
 /** What the model was shown that its reply is checked against: the notes it may update, and (for links) the folder's
  * file paths and names and each thing's text. */
 export interface Seen {
@@ -757,138 +740,252 @@ function newPlace(to: string, basis: unknown, responsibility: unknown, seen: See
 /** The longest responsibility phrase a model may give for a new Area. */
 const RESPONSIBILITY_MAX = 60;
 
-export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: new Set() }): Intent {
+/**
+ * The model's reply, declared once with zod 4 (https://zod.dev, the standard TypeScript runtime schema; TL-P4-14
+ * addendum 20): each part's shape, then its rules in the order they are checked. Every issue is named by its refusal
+ * kind: its message is the kind (`REFUSALS`), and `params.why` words it more closely when a rule does (zod's error
+ * customization, https://zod.dev/error-customization, and refinements, https://zod.dev/api#refinements). The first
+ * issue refuses the reply with that kind and reason. `claude` gets no `--json-schema` yet (TL-P4-14 addendum 22): a
+ * reply it gave up on would end the run without this retry; p4-structured-output may adopt it after a live A/B.
+ */
+/** A field's issue: `keys` when it is missing, `kind` when it is there but not what it should be. */
+const named = (kind: RefusalKind, keys: RefusalKind = kind): { error: (issue: { input?: unknown }) => RefusalKind } => ({
+  error: (issue) => (issue.input === undefined ? keys : kind),
+});
+/** One rule of a part: null while it holds, else its refusal. */
+type Rule<T> = (value: T) => Refused | null;
+/** A rule refused as `kind`: `ok` gives true, false (the kind's own reason) or a reason worded for this reply. */
+const rule = <T>(kind: RefusalKind, ok: (value: T) => boolean | string): Rule<T> => (value) => {
+  const held = ok(value);
+  return held === true ? null : no(kind, held === false ? REFUSALS[kind] : held);
+};
+/** A part's rules in order: the first broken one is its issue; when all hold, `then` keeps what passed. */
+const inOrder = <T>(rules: ReadonlyArray<Rule<T>>, then: (value: T) => void = () => {}) => (value: T, ctx: z.RefinementCtx): void => {
+  for (const check of rules) {
+    const broken = check(value);
+    if (broken) return ctx.addIssue({ code: 'custom', message: broken.kind, params: { why: broken.why }, input: value });
+  }
+  then(value);
+};
+
+const intentIssue = named('notIntent');
+const section = z.array(z.unknown(), intentIssue).optional();
+/** The reply as a whole: a tidy-up intent, v1, with only these lists. */
+const Envelope = z.strictObject({
+  kind: z.literal('tidy-intent', intentIssue), v: z.literal(1, intentIssue), things: z.array(z.unknown(), intentIssue),
+  notes: section, lines: section, states: section, asks: section, keep: section,
+}, intentIssue);
+const NoteShape = z.strictObject({
+  name: z.string(named('noteName', 'noteKeys')), summary: z.string(named('noteSummary', 'noteKeys')), body: z.string(named('noteBody', 'noteKeys')),
+}, named('noteKeys'));
+const ThingShape = z.strictObject({
+  fileId: z.string(named('thingNotAdmitted', 'thingKeys')), to: z.string(named('placeOutside', 'thingKeys')), name: z.string(named('nameChangesKind', 'thingKeys')),
+  note: NoteShape.optional(), basis: z.unknown().optional(), responsibility: z.unknown().optional(),
+}, named('thingKeys'));
+const WordsShape = z.strictObject({
+  pileId: z.string(named('pileNotAdmitted', 'noteKeys')), to: z.string(named('placeOutside', 'noteKeys')), name: z.string(named('noteName', 'noteKeys')),
+  basis: z.unknown().optional(), responsibility: z.unknown().optional(),
+}, named('noteKeys'));
+const LineShape = z.strictObject({
+  note: z.string(named('lineNote', 'lineKeys')), text: z.string(named('lineText', 'lineKeys')), cites: z.string(named('lineCites')).optional(),
+}, named('lineKeys'));
+const StateShape = z.strictObject({
+  note: z.string(named('stateNote', 'stateKeys')),
+  lines: z.array(z.string(named('stateText')), named('stateText', 'stateKeys')).min(1, named('stateText')).max(STATE_WRITE.lines, named('stateText')),
+  cites: z.string(named('stateCites')).optional(),
+}, named('stateKeys'));
+const AskShape = z.strictObject({
+  text: z.string(named('askText', 'askKeys')), yes: z.string(named('askText', 'askKeys')), no: z.string(named('askText', 'askKeys')),
+  pileId: z.string(named('askNotAdmitted')).optional(), fileId: z.string(named('askNotAdmitted')).optional(),
+}, named('askKeys'));
+const KeepShape = z.strictObject({ kept: z.string(named('keepNote', 'keepKeys')), other: z.string(named('keepNote', 'keepKeys')) }, named('keepKeys'));
+type ThingIn = z.output<typeof ThingShape>;
+type NoteIn = z.output<typeof NoteShape>;
+
+/** No link, middle dot or web address: a Timeline or Current state line Bower links itself. */
+const unlinked = (text: string): boolean => !/\[\[|\]\]|·|\]\(/.test(text) && !new RegExp(WEB.source, 'i').test(text);
+/** A note body as written, its line breaks made `\n`. */
+const bodyOf = (n: NoteIn): string => n.body.replace(/\r\n?/g, '\n');
+
+/**
+ * The reply's declaration, checked against what the run took (`piles`) and what the model was shown (`seen`): only
+ * admitted things and piles, only places under a main folder, names that keep their thing's kind, notes and lines
+ * within their bounds, lines only on the notes it was shown, and no other key (no id, hash or digest of its own). Its
+ * `intent` is what the reply asked for, once the schema passed it.
+ */
+function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z.ZodType; intent: () => Extract<Intent, { ok: true }> } {
   const { notes } = seen;
-  if (!exactly(value, ['kind', 'v', 'things'], ['notes', 'lines', 'asks', 'states', 'keep']) || value.kind !== 'tidy-intent' || value.v !== 1) return no('notIntent');
-  const { things, notes: worded = [], lines = [], asks = [], states = [], keep = [] } = value;
-  if (!Array.isArray(things) || !Array.isArray(worded) || !Array.isArray(lines) || !Array.isArray(asks) || !Array.isArray(states) || !Array.isArray(keep)) return no('notIntent');
-  const piles = new Map(took.taken.piles.map((p) => [p.pileId, p]));
-  const admitted = new Map(took.taken.piles.flatMap((p) => thingsOf(p).map((i) => [i.fileId, { pileId: p.pileId, name: i.name }] as const)));
+  const byPile = new Map(piles.map((p) => [p.pileId, p]));
+  const admitted = new Map(piles.flatMap((p) => thingsOf(p).map((i) => [i.fileId, { pileId: p.pileId, name: i.name }] as const)));
   const areas = new Map<string, string>();
   // The numbers a thing's note or a line citing it may hold: its text, the admitted things' names, the piles' words, the notes shown.
   const names = [...admitted.values()].map((a) => a.name).join('\n');
   const common = seen.words === undefined ? null : groundsOf(`${names}\n${seen.words}\n${seen.shownNotes ?? ''}\n${seen.rules ?? ''}`);
-  const grounded = (fileId: string | undefined, texts: readonly string[]): string | null => {
-    if (!common) return null;
+  const grounded = (fileId: string | undefined, texts: readonly string[], where: string): true | string => {
+    if (!common) return true;
     const own = fileId === undefined ? null : groundsOf(seen.texts?.get(fileId) ?? '');
     for (const text of texts) {
       const n = ungrounded(text, own ? new Set([...common, ...own]) : common);
-      if (n) return `a number that is in none of its sources: "${n}" in {where} "${admitted.get(fileId ?? '')?.name ?? 'a note'}"; write only figures from the thing's text, the pile's words or the notes shown, or leave the figure out`;
+      if (n) return `a number that is in none of its sources: "${n}" in ${where} "${admitted.get(fileId ?? '')?.name ?? 'a note'}"; write only figures from the thing's text, the pile's words or the notes shown, or leave the figure out`;
     }
-    return null;
+    return true;
   };
   const placed = new Map<string, Placement>();
   const authored = new Map<string, AuthoredNote>();
-  for (const t of things as unknown[]) {
-    if (!exactly(t, ['fileId', 'to', 'name'], ['note', 'basis', 'responsibility'])) return no('thingKeys');
-    const thing = typeof t.fileId === 'string' ? admitted.get(t.fileId) : undefined;
-    if (!thing || typeof t.fileId !== 'string') return no('thingNotAdmitted');
-    if (placed.has(t.fileId)) return no('thingTwice');
-    if (!placeOk(t.to)) return no('placeOutside');
-    const was = extensionOf(thing.name);
-    if (!nameOk(t.name) || !(extensionOf(t.name) === was || (was === '.url' && extensionOf(t.name) === '.md'))) return no('nameChangesKind');
-    if (RAW_NAME.test(t.name.replace(/\.[A-Za-z0-9]{1,5}$/, ''))) return no('rawName', `a name that says nothing: "${t.name}" has underscores, a copy number, "final" at the end or a camera or scanner id; give it a plain name from what the thing is or says, or ask about it`);
-    const fresh = newPlace(t.to, t.basis, t.responsibility, seen, areas);
-    if (fresh) return no('newFolder', fresh);
-    placed.set(t.fileId, { to: t.to, name: t.name });
-    if ('note' in t) {
-      // A saved link filed as a note is that note: it takes no second one.
-      if (extensionOf(t.name) === '.md') return no('noteForNote');
-      const note = authoredOf(t.note);
-      if (typeof note === 'string') return no(note);
-      authored.set(t.fileId, note);
-      const bad = grounded(t.fileId, [note.summary, note.body]);
-      if (bad) return no('numbers', bad.replace('{where}', 'the note for'));
-    }
-  }
   const words = new Map<string, Placement>();
-  for (const n of worded as unknown[]) {
-    if (!exactly(n, ['pileId', 'to', 'name'], ['basis', 'responsibility'])) return no('noteKeys');
-    if (typeof n.pileId !== 'string' || !piles.has(n.pileId)) return no('pileNotAdmitted');
-    if (words.has(n.pileId)) return no('pileTwice');
-    if (!placeOk(n.to)) return no('placeOutside');
-    if (!nameOk(n.name) || extensionOf(n.name) !== '.md') return no('noteName');
-    const fresh = newPlace(n.to, n.basis, n.responsibility, seen, areas);
-    if (fresh) return no('newFolder', fresh);
-    words.set(n.pileId, { to: n.to, name: n.name });
-  }
-  if (lines.length > AUTHORED.lines) return no('tooManyLines');
   const timeline: AuthoredLine[] = [];
-  for (const l of lines as unknown[]) {
-    if (!exactly(l, ['note', 'text'], ['cites'])) return no('lineKeys');
-    if (typeof l.note !== 'string' || !notes.has(l.note)) return no('lineNote');
-    if (!lineOk(l.text, AUTHORED.line) || /\[\[|\]\]|·|\]\(/.test(l.text) || new RegExp(WEB.source, 'i').test(l.text)) return no('lineText');
-    if ('cites' in l && (typeof l.cites !== 'string' || !placed.has(l.cites))) return no('lineCites');
-    const bad = grounded(typeof l.cites === 'string' ? l.cites : undefined, [l.text]);
-    if (bad) return no('numbers', bad.replace('{where}', 'the Timeline line on'));
-    timeline.push({ path: l.note, text: l.text.trim(), cites: typeof l.cites === 'string' ? l.cites : null });
-  }
-  // A note's Current state as it should read now (C05): only on a note it was shown, one per note; Bower decides
-  // whether it may rewrite it (only while the person has not edited it), never the model.
   const current: AuthoredState[] = [];
-  for (const st of states as unknown[]) {
-    if (!exactly(st, ['note', 'lines'], ['cites'])) return no('stateKeys');
-    if (typeof st.note !== 'string' || !notes.has(st.note)) return no('stateNote');
-    if (current.some((x) => x.path === st.note)) return no('stateTwice');
-    const stateLines = st.lines;
-    if (!Array.isArray(stateLines) || !stateLines.length || stateLines.length > AUTHORED.stateLines
-      || !stateLines.every((x: unknown) => lineOk(x, AUTHORED.line) && !/\[\[|\]\]|·|\]\(/.test(x) && !new RegExp(WEB.source, 'i').test(x))) return no('stateText');
-    if ('cites' in st && (typeof st.cites !== 'string' || !placed.has(st.cites))) return no('stateCites');
-    const bad = grounded(typeof st.cites === 'string' ? st.cites : undefined, stateLines as string[]);
-    if (bad) return no('numbers', bad.replace('{where}', 'the Current state of'));
-    current.push({ path: st.note, lines: (stateLines as string[]).map((x) => x.trim()), cites: typeof st.cites === 'string' ? st.cites : null });
-  }
-  // A thing with prepared text gets its note, unless a Timeline line on an existing note cites it (TL-P4-08 addendum 2).
-  const cited = new Set(timeline.flatMap((l) => (l.cites === null ? [] : [l.cites])));
-  for (const [id, place] of placed) {
-    if (!seen.texts?.has(id) || authored.has(id) || cited.has(id) || ['.md', '.url'].includes(extensionOf(place.name))) continue;
-    return no('noNote', `a thing with text and no note: "${place.name}" needs a "note", or a Timeline line citing it on a note below that it only confirms`);
-  }
-  // A question about one thing, or a whole pile, it does not file: what is asked about stays in the inbox untouched,
-  // with the pile's words, and the rest of the pile is filed (TL-P4-08 point 1, addendum 4). A loose thing is its pile.
   const asked = new Map<string, Ask>();
   const askedThings = new Map<string, Ask>();
-  const plain = (text: unknown, max: number): text is string => lineOk(text, max) && !/\[\[|\]\]|\]\(/.test(text) && !new RegExp(WEB.source, 'i').test(text);
-  for (const a of asks as unknown[]) {
-    if (!exactly(a, ['text', 'yes', 'no'], ['pileId', 'fileId']) || ('pileId' in a) === ('fileId' in a)) return no('askKeys');
-    const thing = typeof a.fileId === 'string' ? admitted.get(a.fileId) : undefined;
-    const pile = piles.get(thing ? thing.pileId : typeof a.pileId === 'string' ? a.pileId : '');
-    if (!pile) return no('askNotAdmitted');
-    const whole = !thing || !pile.anchor;
-    const fileId = typeof a.fileId === 'string' ? a.fileId : '';
-    if (asked.has(pile.pileId) || (whole ? thingsOf(pile).some((i) => askedThings.has(i.fileId)) : askedThings.has(fileId))) return no('askTwice');
-    if (whole ? words.has(pile.pileId) || thingsOf(pile).some((i) => placed.has(i.fileId)) : placed.has(fileId)) {
-      return no('askAlsoFiles', !thing && pile.anchor
-        ? 'a question about a pile it also files: to ask about one thing of a pile, give that thing\'s "fileId" and file the rest'
-        : REFUSALS.askAlsoFiles);
-    }
-    if (!plain(a.text, ASK.text) || !plain(a.yes, ASK.answer) || !plain(a.no, ASK.answer)) return no('askText');
-    (whole ? asked : askedThings).set(whole ? pile.pileId : fileId, { text: a.text.trim(), yes: a.yes.trim(), no: a.no.trim() });
-  }
-  // Notes kept as one (C05, `keep-one-note-merge`): two different notes it was shown, each in one pair only, the other
-  // given no line or state (it goes to the Bin), and only a pair the person said yes to keeping as one.
   const kept: KeepOne[] = [];
   const inPairs = new Set<string>();
-  for (const k of keep as unknown[]) {
-    if (!exactly(k, ['kept', 'other'])) return no('keepKeys');
-    const { kept: into, other } = k;
-    if (typeof into !== 'string' || typeof other !== 'string' || into === other || !notes.has(into) || !notes.has(other)) return no('keepNote');
-    if (inPairs.has(into) || inPairs.has(other) || timeline.some((l) => l.path === other) || current.some((x) => x.path === other)) return no('keepNote');
-    const pair = seen.merges?.find((m) => m.notes.includes(into) && m.notes.includes(other));
-    if (!pair) return no('keepNotAsked');
-    inPairs.add(into).add(other);
-    kept.push({ kept: into, other, answer: pair.answer });
-  }
-  // A pile with a thing neither placed nor asked about waits whole for the next run.
-  const held = new Set(took.taken.piles.filter((p) => thingsOf(p).some((i) => !placed.has(i.fileId) && !askedThings.has(i.fileId))).map((p) => p.pileId));
+  const plain = (text: string, max: number): boolean => lineOk(text, max) && !/\[\[|\]\]|\]\(/.test(text) && !new RegExp(WEB.source, 'i').test(text);
+
+  const Thing = ThingShape.superRefine(inOrder<ThingIn>([
+    rule('thingNotAdmitted', (t) => admitted.has(t.fileId)),
+    rule('thingTwice', (t) => !placed.has(t.fileId)),
+    rule('placeOutside', (t) => placeOk(t.to)),
+    rule('nameChangesKind', (t) => {
+      const was = extensionOf(admitted.get(t.fileId)?.name ?? '');
+      return nameOk(t.name) && (extensionOf(t.name) === was || (was === '.url' && extensionOf(t.name) === '.md'));
+    }),
+    rule('rawName', (t) => !RAW_NAME.test(t.name.replace(/\.[A-Za-z0-9]{1,5}$/, '')) || `a name that says nothing: "${t.name}" has underscores, a copy number, "final" at the end or a camera or scanner id; give it a plain name from what the thing is or says, or ask about it`),
+    rule('newFolder', (t) => newPlace(t.to, t.basis, t.responsibility, seen, areas) ?? true),
+    // A saved link filed as a note is that note: it takes no second one.
+    rule('noteForNote', (t) => t.note === undefined || extensionOf(t.name) !== '.md'),
+    // Its own note: a plain note name, a one-line summary, a body within its bound with none of Bower's sections.
+    rule('noteName', (t) => t.note === undefined || (nameOk(t.note.name) && extensionOf(t.note.name) === '.md')),
+    rule('noteSummary', (t) => t.note === undefined || lineOk(t.note.summary, AUTHORED.summary)),
+    rule('noteBody', (t) => {
+      if (t.note === undefined) return true;
+      const body = bodyOf(t.note);
+      return body.length <= AUTHORED.body && !CONTROL.test(body) && !HIDDEN_CHARS.test(body);
+    }),
+    rule('noteSections', (t) => t.note === undefined || !OWN_SECTION.test(bodyOf(t.note))),
+    rule('numbers', (t) => t.note === undefined || grounded(t.fileId, [t.note.summary, bodyOf(t.note)], 'the note for')),
+  ], (t) => {
+    placed.set(t.fileId, { to: t.to, name: t.name });
+    if (t.note) authored.set(t.fileId, { name: t.note.name, summary: t.note.summary.trim(), body: bodyOf(t.note).trim() });
+  }));
+  const Words = WordsShape.superRefine(inOrder<z.output<typeof WordsShape>>([
+    rule('pileNotAdmitted', (n) => byPile.has(n.pileId)),
+    rule('pileTwice', (n) => !words.has(n.pileId)),
+    rule('placeOutside', (n) => placeOk(n.to)),
+    rule('noteName', (n) => nameOk(n.name) && extensionOf(n.name) === '.md'),
+    rule('newFolder', (n) => newPlace(n.to, n.basis, n.responsibility, seen, areas) ?? true),
+  ], (n) => words.set(n.pileId, { to: n.to, name: n.name })));
+  const Line = LineShape.superRefine(inOrder<z.output<typeof LineShape>>([
+    rule('lineNote', (l) => notes.has(l.note)),
+    rule('lineText', (l) => lineOk(l.text, AUTHORED.line) && unlinked(l.text)),
+    rule('lineCites', (l) => l.cites === undefined || placed.has(l.cites)),
+    rule('numbers', (l) => grounded(l.cites, [l.text], 'the Timeline line on')),
+  ], (l) => timeline.push({ path: l.note, text: l.text.trim(), cites: l.cites ?? null })));
+  // A note's Current state as it should read now (C05): only on a note it was shown, one per note, within note-edit's
+  // limits; Bower decides whether it may rewrite it (only while the person has not edited it), never the model.
+  const State = StateShape.superRefine(inOrder<z.output<typeof StateShape>>([
+    rule('stateNote', (st) => notes.has(st.note)),
+    rule('stateTwice', (st) => !current.some((x) => x.path === st.note)),
+    rule('stateText', (st) => st.lines.every((x) => lineOk(x, STATE_WRITE.line) && unlinked(x))),
+    rule('stateCites', (st) => st.cites === undefined || placed.has(st.cites)),
+    rule('numbers', (st) => grounded(st.cites, st.lines, 'the Current state of')),
+  ], (st) => current.push({ path: st.note, lines: st.lines.map((x) => x.trim()), cites: st.cites ?? null })));
+  // A question about one thing, or a whole pile, it does not file: what is asked about stays in the inbox untouched,
+  // with the pile's words, and the rest of the pile is filed (TL-P4-08 point 1, addendum 4). A loose thing is its pile.
+  type AskIn = z.output<typeof AskShape>;
+  const about = (a: AskIn): { thing: { pileId: string } | undefined; pile: Admitted['taken']['piles'][number] | undefined; whole: boolean } => {
+    const thing = a.fileId === undefined ? undefined : admitted.get(a.fileId);
+    const pile = byPile.get(thing ? thing.pileId : a.pileId ?? '');
+    return { thing, pile, whole: !thing || !pile?.anchor };
+  };
+  const Asked = AskShape.superRefine(inOrder<AskIn>([
+    rule('askKeys', (a) => (a.pileId === undefined) !== (a.fileId === undefined)),
+    rule('askNotAdmitted', (a) => about(a).pile !== undefined),
+    rule('askTwice', (a) => {
+      const { pile, whole } = about(a);
+      if (!pile) return true;
+      return !(asked.has(pile.pileId) || (whole ? thingsOf(pile).some((i) => askedThings.has(i.fileId)) : askedThings.has(a.fileId ?? '')));
+    }),
+    rule('askAlsoFiles', (a) => {
+      const { thing, pile, whole } = about(a);
+      if (!pile) return true;
+      const files = whole ? words.has(pile.pileId) || thingsOf(pile).some((i) => placed.has(i.fileId)) : placed.has(a.fileId ?? '');
+      if (!files) return true;
+      return !thing && pile.anchor ? 'a question about a pile it also files: to ask about one thing of a pile, give that thing\'s "fileId" and file the rest' : false;
+    }),
+    rule('askText', (a) => plain(a.text, ASK.text) && plain(a.yes, ASK.answer) && plain(a.no, ASK.answer)),
+  ], (a) => {
+    const { pile, whole } = about(a);
+    (whole ? asked : askedThings).set(whole ? pile?.pileId ?? '' : a.fileId ?? '', { text: a.text.trim(), yes: a.yes.trim(), no: a.no.trim() });
+  }));
+  // Notes kept as one (C05, `keep-one-note-merge`): two different notes it was shown, each in one pair only, the other
+  // given no line or state (it goes to the Bin), and only a pair the person said yes to keeping as one.
+  type KeepIn = z.output<typeof KeepShape>;
+  const pairOf = (k: KeepIn) => seen.merges?.find((m) => m.notes.includes(k.kept) && m.notes.includes(k.other));
+  const Keep = KeepShape.superRefine(inOrder<KeepIn>([
+    rule('keepNote', (k) => k.kept !== k.other && notes.has(k.kept) && notes.has(k.other)),
+    rule('keepNote', (k) => !(inPairs.has(k.kept) || inPairs.has(k.other) || timeline.some((l) => l.path === k.other) || current.some((x) => x.path === k.other))),
+    rule('keepNotAsked', (k) => pairOf(k) !== undefined),
+  ], (k) => {
+    inPairs.add(k.kept).add(k.other);
+    kept.push({ kept: k.kept, other: k.other, answer: pairOf(k)?.answer ?? '' });
+  }));
   // Links in each note body: only to what is in the folder or what this reply files or writes (P4-3 review).
-  const made = new Set([...placed.values(), ...words.values()].flatMap((p) => [p.name, `${p.to}/${p.name}`]).concat([...authored.entries()].flatMap(([id, n]) => [n.name, `${placed.get(id)?.to ?? ''}/${n.name}`])));
-  const named = (target: string): boolean => [target, `${target}.md`].some((t) => made.has(t) || (seen.names?.has(t) ?? false));
-  for (const [id, n] of authored) {
-    const why = bodyLinks(n.body, seen.texts?.get(id) ?? '', named);
-    if (why) return no(why);
+  const linked = (target: string): boolean => {
+    const made = new Set([...placed.values(), ...words.values()].flatMap((p) => [p.name, `${p.to}/${p.name}`]).concat([...authored.entries()].flatMap(([id, n]) => [n.name, `${placed.get(id)?.to ?? ''}/${n.name}`])));
+    return [target, `${target}.md`].some((t) => made.has(t) || (seen.names?.has(t) ?? false));
+  };
+  const whole: Array<Rule<unknown>> = [
+    // A thing with prepared text gets its note, unless a Timeline line on an existing note cites it (TL-P4-08 addendum 2).
+    rule('noNote', () => {
+      const cited = new Set(timeline.flatMap((l) => (l.cites === null ? [] : [l.cites])));
+      for (const [id, place] of placed) {
+        if (!seen.texts?.has(id) || authored.has(id) || cited.has(id) || ['.md', '.url'].includes(extensionOf(place.name))) continue;
+        return `a thing with text and no note: "${place.name}" needs a "note", or a Timeline line citing it on a note below that it only confirms`;
+      }
+      return true;
+    }),
+    () => {
+      for (const [id, n] of authored) {
+        const why = bodyLinks(n.body, seen.texts?.get(id) ?? '', linked);
+        if (why) return no(why);
+      }
+      return null;
+    },
+  ];
+  const Body = z.object({
+    kind: z.literal('tidy-intent'), v: z.literal(1), things: z.array(Thing),
+    notes: z.array(Words).optional(),
+    lines: z.array(Line).max(AUTHORED.lines, named('tooManyLines')).optional(),
+    states: z.array(State).optional(), asks: z.array(Asked).optional(), keep: z.array(Keep).optional(),
+  }).superRefine(inOrder(whole));
+  const schema = Envelope.pipe(Body);
+  return {
+    schema,
+    intent: () => {
+      // A pile with a thing neither placed nor asked about waits whole for the next run.
+      const held = new Set(piles.filter((p) => thingsOf(p).some((i) => !placed.has(i.fileId) && !askedThings.has(i.fileId))).map((p) => p.pileId));
+      return { ok: true, held, filing: { thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, states: current, areas, asks: asked, thingAsks: askedThings, ...(kept.length ? { keep: kept } : {}) } };
+    },
+  };
+}
+
+/**
+ * The model's intent, checked against what the run took by the reply's declaration (`replySchema`). Anything else
+ * refuses the whole reply, by its first issue. A pile with a thing left out waits whole for the next run.
+ */
+export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: new Set() }): Intent {
+  const reply = replySchema(took.taken.piles, seen);
+  const parsed = reply.schema.safeParse(value);
+  if (parsed.success) return reply.intent();
+  const [first] = parsed.error.issues;
+  if (!first || !Object.hasOwn(REFUSALS, first.message)) {
+    // Every part of the declaration names its issues; one that is not named is refused as not an intent, and said.
+    console.error(`A reply issue with no refusal kind: ${first ? `${first.code} at ${first.path.join('.')}` : 'none'}`);
+    return no('notIntent');
   }
-  return { ok: true, held, filing: { thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, states: current, areas, asks: asked, thingAsks: askedThings, ...(kept.length ? { keep: kept } : {}) } };
+  const kind = first.message as RefusalKind;
+  const why = first.code === 'custom' && typeof first.params?.why === 'string' ? first.params.why : REFUSALS[kind];
+  return no(kind, why);
 }
 
 /** The runner's environment cut down to the allow-list, with a home of the run's own. */
@@ -941,7 +1038,7 @@ export const spawnClaude: ClaudeSpawn = (call) =>
 /** The reply's JSON, or why there is none: a refusal of the model's answer (asked once more), or a run that went wrong. */
 type Read = { ok: true; value: unknown } | Refused | { ok: false; kind: null; why: string };
 
-/** The manifest JSON out of `claude -p --output-format json`'s result, or why there is none. */
+/** The reply's JSON out of `claude -p --output-format json`'s result, or why there is none. */
 function replyOf(exit: ClaudeExit, maxTurns: number): Read {
   if (exit.cut) return { ok: false, kind: null, why: `stopped at its ${exit.cut} cap` };
   let envelope: unknown;
@@ -1093,9 +1190,9 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const intent = checked.intent;
     // The runner builds the manifest, every id, hash and digest its own, exactly as the scripted provider does.
     const t = took.taken;
-    const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), filing: intent.filing, updates: [] }, undefined, intent.held);
+    const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), decisions: modelDecisions(intent.filing) }, undefined, intent.held);
     const manifest: RunManifest = plan.manifest;
-    const parsed = await parseRunManifestV2((await canonical(manifest)).bytes, run.rootId);
+    const parsed = await parseRunManifestV2((await canonical(manifest)).bytes, run.rootId, RUNNER_WRITES);
     if (!parsed.ok) return refuse(`outside the run manifest contract (${parsed.reason})`);
     const stray = outsideAdmitted(manifest, took, shown.own, new Set((intent.filing.keep ?? []).map((k) => k.other)));
     if (stray) return refuse(stray);

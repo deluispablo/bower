@@ -466,3 +466,24 @@ spine-operations-checkpoints	39e50b51806edb92	2026-10-09	known-green: Red proved
 spine-operations-checkpoints	6b4f35b2e1398409	2026-10-09	known-green: Reds proved by workers at tests-only commits 7550a442, 8765e835, 21806fbf, 2d6e4480 and a7a59d7c (each by assertion); the fix spans several rounds, so no single revert. P4-38d PASS.
 c2-create-by-id	b014988743adde7e	2026-10-09	known-green: Reds proved by workers at tests-only commits 01afad9d, 0709119f, da4624ed, 14983272, 3e0f19fe and aa756edd (each by assertion); the fix spans six rounds, so no single revert. P4-37f PASS.
 spine-operations-checkpoints	5b5592be17435bc3	2026-10-09	known-green: Reds proved by workers at tests-only commits 7550a442, 8765e835, 21806fbf, 2d6e4480, a7a59d7c and 831cc251 (each by assertion); the fix spans six rounds, so no single revert. P4-38e PASS.
+c3-integrate-gate	5384e7d6a929f842	2026-10-09	red (fixed in cea01d57)
+c3-reservation-home	c361357357ec7ab1	2026-10-09	known-green: red at 89bd9cfb: 2 rule tests fail (/tmp/c3res-handred.log); green at fdf9736a
+c3-reviewer-guard	71314d312da68a1e	2026-10-09	known-green: red at 1f2a4979: module missing, 3 tests fail (/tmp/c3g-red.log); green at 2ae8516d
+c3-unused-code	8ae4530977b86ce1	2026-10-09	red (fixed in 35bb972a)
+c3-test-time	29bd6bc4329b8011	2026-10-09	red (fixed in 62bb8258)
+c3-unused-production	8d883a47a16f4eed	2026-10-09	known-green: red at 2bb1d9a0: both tests fail (/tmp/c3p-red.log); green at 2fbf3feb
+c3-integrate-history	a259c056fe9f95e1	2026-10-09	red (fixed in ec26ac56)
+c3-reservation-upload	050c7cdfbca36938	2026-10-09	red (fixed in 80548be1)
+c3-retention-race	b45aeedf170bf389	2026-10-09	red (fixed in 8301b03e)
+c3-reservation-worker	f15c904f6dbf4c83	2026-10-09	known-green: red at 104707e3: DO keeper test fails (/tmp/c3wrk-handred.log); green at fee39196
+c3-subject	f318fd1dce8e4eec	2026-10-09	known-green: red at 856cde1e: 2 carry-over tests fail (/tmp/c3subj-handred.log); green at 0a8d7228
+c3-alone-margin	ef54b709d2bf7721	2026-10-09	red (fixed in 2263d7ba)
+c3-reply-schema	bc41f2db4250e155	2026-10-09	known-green: red at 358476d4: 2 tests fail (/tmp/c3rs-handred-*.log); green at 29891386
+c3-fingerprint	a894a70a61a4344d	2026-10-09	red (fixed in df2bfc88)
+fingerprint-normalised	d9421e6532f8bc06	2026-10-09	known-green: verify passes at 7c370372 under the renamed test; behaviour unchanged
+c3-timer-gate	4f947bdd521d20a2	2026-10-09	known-green: red at b6e01216 and ff34204c (/tmp/c3timer-handred*.log); green at baadeb7d
+c3-test-time	103288c755edf8b5	2026-10-09	known-green: verify passes at 0110ebab after c3-timer-gate
+c3-alone-margin	09e27ecc04e4bb7e	2026-10-09	known-green: verify passes at 0110ebab after c3-timer-gate
+c3-done-harness-paths	2c906fd88093e0d5	2026-10-09	red (fixed in b2222dd5)
+c3-branch-cleanup	d4a1350c7af72e3d	2026-10-09	red (fixed in c8f43681)
+c3-planner-split	fc8aa32a0e6ea2d2	2026-10-09	known-green: red at f9b658c6/c1de99be (/tmp/c3plan-handred*.log); green at a5719afb

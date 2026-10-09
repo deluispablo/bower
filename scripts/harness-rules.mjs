@@ -1,6 +1,7 @@
 // The harness's rules, pure, so they are tested (src/harness.test.ts) and used by
 // scripts/check-harness.mjs and harness/done.sh alike.
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
@@ -114,10 +115,38 @@ function selectedTests(command, kind, tests) {
 /** The hash of harness/proof-legacy.txt: the entries proved before the proof rule. Frozen; growing it means changing this line. */
 export const LEGACY_HASH = '837283d24771c394';
 
+/** The review a closed escalated consolidation entry must name: "P4-NN PASS". */
+const REVIEW_PASS = /^P4-\S+ PASS$/;
+
+/** One sentence when an escalated p4-consolidation entry passes (or is about to) with no review PASS, else null. */
+export function reviewProblem(f) {
+  const escalated = f.task === 'p4-consolidation' && /Starting model: bower-escalated/.test(f.note ?? '');
+  if (!escalated || REVIEW_PASS.test(f.review ?? '')) return null;
+  return `${f.id}: escalated, passes without a review PASS (set "review": "P4-NN PASS" after the reviewer's PASS)`;
+}
+
+/** Tracked files with a line that is only a conflict marker, as "file:line: conflict marker" (git grep: tracked files only). */
+export function conflictMarkers(root) {
+  let out = '';
+  try {
+    out = execFileSync('git', ['grep', '-nIE', '^(<{7} |={7}$|>{7} )'], { cwd: root, encoding: 'utf8' });
+  } catch (e) {
+    if (e.status !== 1) throw e; // 1 = no match
+  }
+  return out.split('\n').filter(Boolean).map((l) => {
+    const [file, line] = l.split(':');
+    return `${file}:${line}: conflict marker`;
+  });
+}
+
 export function problems(features, proofs, tests, legacy = new Set(), checkOpen = false) {
   const bad = [];
   for (const f of features) {
     const proof = proofs.get(f.id);
+    if (f.passes) {
+      const r = reviewProblem(f);
+      if (r) bad.push(r);
+    }
     if (f.passes && proof?.hash !== hashOf(f.verify)) bad.push(`${f.id}: passes without a proof for its current verify (close it with harness/done.sh)`);
     if (f.passes && proof?.how === 'reproved' && typeof f.task !== 'number' && !legacy.has(f.id)) bad.push(`${f.id}: a "reproved" proof is only for the entries before the proof rule; close it with harness/done.sh`);
     if (typeof f.task !== 'string') continue;
@@ -222,4 +251,29 @@ export function redKind(output) {
   if (assertion && (unitFailed || browserFailed)) return 'assert';
   if (!unitFailed && /^\s*Test Files\s+[1-9]\d* failed/m.test(plain)) return 'load';
   return 'none';
+}
+
+/** The size of harness/real-timers.json today. The list may only shrink, to empty: lower this when a line goes, never raise it. */
+export const REAL_TIMER_CEILING = 22;
+/**
+ * The timer allowlist (harness/real-timers.json, enforced while tests run by harness/timer-gate.ts): a list longer than the
+ * ceiling, and lines that match no test. `names` are the full names of every unit test of the app, api and runner.
+ */
+export function timerListProblems(names, list, ceiling = REAL_TIMER_CEILING) {
+  const bad = [];
+  if (list.length > ceiling) bad.push(`harness/real-timers.json has ${list.length} lines, over the ${ceiling} it may keep: the timer list may only shrink`);
+  const known = new Set(names);
+  for (const name of list) if (!known.has(name)) bad.push(`harness/real-timers.json names "${name}", which matches no test: delete the line and lower REAL_TIMER_CEILING`);
+  return bad;
+}
+
+/**
+ * The slowest unit tests by wall-clock time, one line each: a report only, never a failure (TL-P4-17 addendum 9). Time
+ * measures the machine under load; the timer gate judges the test, and vitest's 5000 ms timeout stays as the backstop.
+ */
+export function slowReport(tests, count = 5) {
+  return [...tests]
+    .sort((a, b) => b.duration - a.duration)
+    .slice(0, count)
+    .map((t) => `${Math.round(t.duration)} ms  ${t.name}`);
 }

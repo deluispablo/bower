@@ -124,7 +124,7 @@ export function fixedReport(r: RunReport): RunReport {
   const out: RunReport = {
     filed: r.filed.map((f) => ({ name: f.name, title: f.title, kind: f.kind, to: f.to, ...(f.note !== undefined ? { note: f.note } : {}), ...(f.area !== undefined ? { area: f.area } : {}) })),
     created: r.created.map((c) => ({ path: c.path, what: c.what })),
-    updated: r.updated.map((u) => ({ path: u.path, what: u.what })),
+    updated: r.updated.map((u) => ({ path: u.path, what: u.what, ...(['op', 'line', 'lines', 'md5', 'stamp'] as const).reduce((o, k) => (u[k] === undefined ? o : { ...o, [k]: u[k] }), {}) })),
     setAside: r.setAside.map((a) => ({ name: a.name, why: a.why })),
     questions: r.questions.map(fixedQuestion),
   };
@@ -308,7 +308,7 @@ export async function finishRun(run: BarrierRun, manifest: RunManifest, manifest
   const r = await canonical(body);
   if (r.hash !== pending.report.reportHash) throw new BowerError('unknown', SAVE_FAILED);
   // Never a summary that contradicts where the items ended (TL-P3-24 point 1): the run stops here, in `saving`.
-  const wrong = run.admission ? reportContradictions(run.admission, manifest, at.outcomes, body.report, dispositions(at.outcomes)) : [];
+  const wrong = run.admission ? reportContradictions(run.admission, manifest, at.outcomes, dispositions(at.outcomes)) : [];
   if (wrong.length) {
     console.error(`Run ${run.runId}: its dispositions contradict its report`, wrong);
     throw new BowerError('unknown', SAVE_FAILED);

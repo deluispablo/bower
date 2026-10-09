@@ -97,3 +97,15 @@ describe('the notes a finished run links', () => {
     expect(runLinkRows({ created: [], updated: [] })).toEqual({ made: [], updated: [] });
   });
 });
+
+describe('how many notes a run brought up to date', () => {
+  // P4-45 m4: one distinct-path count, shared by Home, Replay, the run links and the corpus scorer.
+  it('one distinct-path count', async () => {
+    const at = '@/data/spine/report';
+    const mod = (await import(/* @vite-ignore */ at)) as { distinctPaths?: (rows: readonly { path: string }[]) => string[] };
+    expect(typeof mod.distinctPaths).toBe('function');
+    const updated = [{ path: 'Projects/Flat hunt/Flat hunt.md', what: 'One.' }, { path: 'Projects/Flat hunt/Flat hunt.md', what: 'Two.' }, { path: 'Areas/Health/Health.md', what: 'Three.' }];
+    expect(mod.distinctPaths?.(updated)).toEqual(['Projects/Flat hunt/Flat hunt.md', 'Areas/Health/Health.md']);
+    expect(runLinkRows({ created: [], updated }).updated.map((r) => r.path)).toEqual(mod.distinctPaths?.(updated));
+  });
+});

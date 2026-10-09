@@ -9,6 +9,8 @@
  */
 import { readFile, readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
+import type { Question } from '../../src/data/contracts/types';
+import { distinctPaths } from '../../src/data/spine/report';
 
 /** The capabilities the corpus covers, by the ids of `docs/P2_ACCEPTANCE.md`. */
 export const CORPUS_CAPABILITIES = ['C04', 'C05', 'C06', 'C07', 'C08', 'C09', 'C10', 'C11', 'C13', 'C15'] as const;
@@ -21,14 +23,8 @@ export interface CorpusPile {
   files: string[];
 }
 
-export interface CorpusQuestion {
-  id: string;
-  text: string;
-  yes: string;
-  no: string;
-  about?: string;
-  askedAt: number;
-}
+/** A question a case starts with: Bower's one question type, as the accepted app wrote it (no subject). */
+export type CorpusQuestion = Pick<Question, 'id' | 'text' | 'yes' | 'no' | 'about' | 'askedAt'>;
 
 export interface CorpusJournalLine {
   kind: 'request' | 'rule' | 'answer';
@@ -210,7 +206,8 @@ function reportOf(lastRun: unknown): Record<string, unknown> | null {
 }
 
 const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
-const paths = (v: unknown): string[] => list(v).flatMap((x) => (x && typeof x === 'object' && typeof (x as { path?: unknown }).path === 'string' ? [(x as { path: string }).path] : []));
+/** The rows of a report list that name a path. */
+const paths = (v: unknown): Array<{ path: string }> => list(v).flatMap((x) => (x && typeof x === 'object' && typeof (x as { path?: unknown }).path === 'string' ? [{ path: (x as { path: string }).path }] : []));
 
 /** The paths of the folder a pattern matches: an exact path, or a pattern with `*` for any run of characters. */
 function matching(after: Readonly<Record<string, string>>, pattern: string): string[] {
@@ -288,12 +285,14 @@ export function score(input: ScoreInput): Score {
       if (want.filedAtLeast !== undefined && list(report.filed).length < want.filedAtLeast) unmet.push(`report.filed: ${list(report.filed).length}, expected at least ${want.filedAtLeast}`);
       if (want.setAside !== undefined && list(report.setAside).length !== want.setAside) unmet.push(`report.setAside: ${list(report.setAside).length}, expected ${want.setAside}`);
       for (const key of ['created', 'updated'] as const) {
-        const got = paths(report[key]);
+        // The notes a run made or brought up to date, once each: a note with two new lines has two rows.
+        const got = distinctPaths(paths(report[key]));
         const wanted = want[key];
         if (wanted && JSON.stringify([...got].sort()) !== JSON.stringify([...wanted].sort())) unmet.push(`report.${key}: [${got.join(', ')}], expected [${wanted.join(', ')}]`);
       }
       if (want.createdAtLeast !== undefined && paths(report.created).length < want.createdAtLeast) unmet.push(`report.created: ${paths(report.created).length}, expected at least ${want.createdAtLeast}`);
-      if (want.updatedAtLeast !== undefined && paths(report.updated).length < want.updatedAtLeast) unmet.push(`report.updated: ${paths(report.updated).length}, expected at least ${want.updatedAtLeast}`);
+      const updated = distinctPaths(paths(report.updated)).length;
+      if (want.updatedAtLeast !== undefined && updated < want.updatedAtLeast) unmet.push(`report.updated: ${updated}, expected at least ${want.updatedAtLeast}`);
       if (want.questionsAtMost !== undefined && list(report.questions).length > want.questionsAtMost) unmet.push(`report.questions: ${list(report.questions).length}, expected at most ${want.questionsAtMost}`);
       if (want.questions) {
         const got = list(report.questions).flatMap((q) => (q && typeof q === 'object' && typeof (q as { id?: unknown }).id === 'string' ? [(q as { id: string }).id] : []));
