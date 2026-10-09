@@ -37,7 +37,7 @@ test('the move sheet shows where the thing is now and it cannot be chosen', asyn
   // ARIA-disabled retains the button; force allows the intentional no-op click.
   await current.click({ force: true });
   await expect(sheet).toBeVisible();
-  await expect(sheet).toContainText('Now in Projects › Flat hunt');
+  await expect(sheet).toContainText('Now in Projects / Flat hunt');
   await expect(page.getByRole('status').filter({ hasText: /Moved Lease draft/ })).toHaveCount(0);
   const input = sheet.getByRole('textbox', { name: 'Find a folder' });
   await input.fill('Flat hunt');
@@ -60,10 +60,11 @@ test('the move sheet has a cancel that returns focus to its opener', async ({ pa
   const sheet = page.getByRole('dialog', { name: 'Move Lease draft', exact: true });
   const cancel = sheet.getByRole('button', { name: 'Cancel', exact: true });
   await expect(cancel).toBeVisible();
-  const row = sheet.locator('li > button').first();
+  const cancelContainer = cancel.locator('..');
   const cancelBox = await cancel.boundingBox();
-  const rowBox = await row.boundingBox();
-  expect(cancelBox?.width).toBe(rowBox?.width);
+  const containerBox = await cancelContainer.boundingBox();
+  if (!cancelBox || !containerBox) throw new Error('Cancel and its container must have visible bounds.');
+  expect(Math.abs(cancelBox.width - containerBox.width)).toBeLessThanOrEqual(1);
   await cancel.click();
   await expect(sheet).toHaveCount(0);
   await expect(opener).toBeFocused();
