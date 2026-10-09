@@ -65,6 +65,15 @@ describe('close focus (one home, no timer)', () => {
     timers.mockRestore();
   });
 
+  it('leaves a field that the next sheet already took', () => {
+    document.body.innerHTML = '<main id="main" tabindex="-1"><h1>Home</h1><button id="o">More</button><input id="f" aria-label="Name"></main>';
+    document.getElementById('f')?.focus();
+    const event = closing();
+    closeFocus(event, document.getElementById('o'));
+    expect(event.defaultPrevented).toBe(true);
+    expect(document.activeElement?.id).toBe('f');
+  });
+
   it('falls to the heading when the opener left before the close, and when there was none', () => {
     document.body.innerHTML = '<main id="main" tabindex="-1"><h1>Home</h1></main>';
     expect(openerNow()).toBeNull();

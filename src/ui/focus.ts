@@ -69,10 +69,13 @@ export function returnFocusTo(opener: HTMLElement | null): void {
 
 /**
  * The close-focus hook for a layer (Radix `onCloseAutoFocus`): the library's own guess is
- * stopped, and focus goes back to what opened the layer through `returnFocusTo`.
+ * stopped, and focus goes back to what opened the layer through `returnFocusTo`. Only when focus
+ * has fallen to nothing: a field in the next sheet this one made room for keeps the keyboard.
  */
 export function closeFocus(e: Event, opener: HTMLElement | null): void {
   e.preventDefault();
+  const at = document.activeElement;
+  if (at && at !== document.body && at.isConnected) return;
   returnFocusTo(opener);
 }
 

@@ -523,9 +523,8 @@ export function Explorer({ variant }: Props) {
             if (o) return;
             setMenuNode(null);
             // The keyboard goes back to the tree at once, so a key pressed right after Escape reaches it.
-            // A name box or a sheet the menu opened takes it from the tree when it mounts, and gives it
-            // back to the tree when it closes (Sheet remembers its opener).
-            treeRef.current?.focus();
+            // A name box the menu opened keeps it; a sheet takes it from the tree and gives it back (Sheet remembers its opener).
+            if (!useUi.getState().renaming) treeRef.current?.focus();
           }}
         >
           <ContextMenu.Trigger asChild>{treeEl}</ContextMenu.Trigger>
