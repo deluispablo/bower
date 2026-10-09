@@ -4,9 +4,14 @@
  * Worker's run history. Finished means a verified chain whose head is done or failed; a folder that cannot be
  * verified, or a run still going, is never let go of. Newest is by when the run ended (the terminal checkpoint's
  * `phaseAt`), then by folder name, so the choice is the same on every runner.
+ *
+ * It runs once, at the end of a run, after the report barrier and before `done` (`main.ts`; retention-never-wired).
+ * A Bin that fails is logged and never fails the run, nor changes its report: the next run tries again.
  */
 import type { FencedDrive } from '../../../src/data/drive/drive-api';
-import type { RunRecords } from '../../../src/data/spine/records';
+import { RunRecords } from '../../../src/data/spine/records';
+import type { RunnerDrive } from '../drive';
+import { runnerReads } from './records';
 import { updateByStamp, type Gets } from '../../../src/data/spine/write-once';
 
 export const KEEP_FINISHED = 20;
@@ -21,4 +26,19 @@ export async function keepFinished(records: RunRecords, w: FencedDrive, reads: G
   const old = finished.slice(keep).map((f) => f.folder);
   for (const folder of old) await updateByStamp(reads, folder, 'bin', (op) => w.trash(folder.id, op));
   return old.map((f) => f.id);
+}
+
+/**
+ * At a run's end: with more than `keep` folders in `.bower/runs` (counted from the run's own listing, `own`, with no
+ * Drive call of its own), every run's records are read and the finished ones beyond the newest `keep` go to the Bin
+ * through the run's fenced writes (`keepFinished`). Gives their ids; on any failure, logs it and gives none.
+ */
+export async function keepFinishedAtEnd(drive: RunnerDrive, rootId: string, own: RunRecords, keep = KEEP_FINISHED): Promise<string[]> {
+  try {
+    if ((await own.runFolders()).length <= keep) return [];
+    return await keepFinished(new RunRecords(runnerReads(drive), rootId), await drive.batch(), drive, keep);
+  } catch (e) {
+    console.error('Old run records could not go to the Bin; the next run tries again.', e);
+    return [];
+  }
 }

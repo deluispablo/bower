@@ -103,6 +103,9 @@ export function nextCheckpoint(head: Checkpoint, previous: string, mark: Attempt
 type Folders = { listing: DriveFile[]; bower: DriveFile[]; ns: DriveFile[]; run: DriveFile[] };
 type Walk = { ok: true; chain: Checkpoint[] } | { ok: false; why: string };
 
+/** The folders in `.bower/runs` (any of its duplicates) of a listing. */
+const runFoldersIn = (listing: readonly DriveFile[], ns: readonly DriveFile[]): DriveFile[] => listing.filter((f) => f.folder && f.parents.some((p) => ns.some((n) => n.id === p)));
+
 /** One run's records, scoped to one root. */
 export class RunRecords {
   /**
@@ -263,6 +266,12 @@ export class RunRecords {
     return { ok: true, chain: out };
   }
 
+  /** The folders in `.bower/runs`, finished or not, as the listing these reads give shows them (no record read). */
+  async runFolders(): Promise<DriveFile[]> {
+    const { listing, ns } = await this.folders({ runId: '' });
+    return runFoldersIn(listing, ns);
+  }
+
   /**
    * The run folders in `.bower/runs` whose verified chain ends done or failed, each by its own folder (a duplicate
    * name is its own folder). Anything that cannot be verified is not finished, so it is never let go of.
@@ -270,7 +279,7 @@ export class RunRecords {
   async finished(): Promise<Finished[]> {
     const { listing, ns } = await this.folders({ runId: '' });
     const out: Finished[] = [];
-    for (const folder of listing.filter((f) => f.folder && f.parents.some((p) => ns.some((n) => n.id === p)))) {
+    for (const folder of runFoldersIn(listing, ns)) {
       const found = await this.foundIn({ listing, run: [folder] }, folder.name);
       const head = found.kind === 'run' ? found.chain.at(-1) : undefined;
       if (head && (head.phase === 'done' || head.phase === 'failed')) out.push({ folder, at: head.phaseAt });
