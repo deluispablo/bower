@@ -445,3 +445,4 @@ P3-9 is closed.
 - Retention round 6 blocked: the runner listing has no children of other run folders and Bower records carry no mark; options A (stamp records at create + list ≤3 candidates) / C to the lead.
 - c2-create-by-id round 6 merged (red aa756edd, fix 9ad453a9/82efcbfc; 404 once then permanent; 401 wait after refresh; runner on the one table; panel focus; one request one line; prod -52; check green on the second run, dependency-rules-timeout logged). P4-37f check dispatched.
 - Retention round 6 merged (red 831cc251, fix 5d54a7ea; records carry bowerRun; ≤3 candidates listed; 25-run golden 88; check green). Left out: a person moving an item in between the child listing and the Bin (Drive has no conditional trash). P4-38e check dispatched.
+- c2-create-by-id closed (P4-37f PASS). 422/427. Waiting: P4-38e (retention round 6), then the stage 2 suites.
