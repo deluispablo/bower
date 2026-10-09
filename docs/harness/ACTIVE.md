@@ -440,3 +440,4 @@ P3-9 is closed.
 - P4-38c BLOCK (retention round 4): the 24 h rule can bin a person-made folder in .bower/runs (no run-id or Bower mark check, records.ts:101). Lead asked: (a) bowerRun stamped at create, (b) run-id name shape.
 - P4-37e PASS (create round 5). Round 6 dispatched: 404 once then permanent, 401 wait after refresh, runner drive.ts:359 onto the table, plus the P4-37e minors (panel turn focus, request resend makes a second line).
 - Retention round 5 merged (red a7a59d7c, fix 74ff0aa0; bowerRun at create; only marked folders binned; prod -24; check green). P4-38d check dispatched.
+- spine-operations-checkpoints closed (retention complete, P4-38d PASS). 422/427. Waiting: c2-create-by-id round 6, then the stage 2 suites.
