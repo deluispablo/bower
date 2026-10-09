@@ -2,44 +2,33 @@
 
 Coordinator: the Claude Code session named "Orquestador". It integrates in `/Users/deluisp/Projects/bower-app` on branch `claude/p3`; P4 continues on it. Lead: the Planificador session ([DECISIONS.md](DECISIONS.md)). Output rule: [TL-P3-29](2026-10-07-tl-p3-29-output-rule-survives-compaction.md), in AGENTS.md. Minors: [P2_POLISH.md](P2_POLISH.md). Earlier handoffs: git history of this file.
 
-## Resume after the restart (2026-10-09, plugins load)
+## Resume after the restart (2026-10-09, second: make the stop gate and agent caps live)
 
-Read this first. Stage 3 (TL-P4-14) has two entries left (c3-pair-ask and c3-state-mark), and TL-P4-20 (method refinements) applies to every next dispatch.
+Read this first. **Every stage 3 entry is closed** (c3-pair-ask, c3-state-mark, c3-test-tamper, c3-hooks, c3-flaky-policy, c3-permissions, c3-agent-defs, c3-stop-gate). No worker is running and no worktree is open except the role worktrees.
 
-- **Open entries:**
-  - `c3-pair-ask` (ui: true, escalated). Merged at bdc08775 with review P4-46b PASS. The designer did not verify it (DEFECT_LOG `not-merged-never-shown`; TL-P4-19 addendum 10: an `answered` report row).
-    - Round 2 was **stopped mid-fix** at the restart. Worktree `/private/tmp/bower-c3-pair2`, branch `c3-pair-ask`.
-    - Red committed at c29a2862, with the fix uncommitted in the tree. Progress note: `/private/tmp/bower-c3-pair2-progress.md`. Packet: `2026-10-09-c3-pair-ask-round2-packet.md`, with the designer's copy for all three kinds.
-    - Resume:
-      1. Dispatch bower-escalated on the same worktree, with the progress note.
-      2. Review it.
-      3. Run `integrate.sh c3-pair-ask`.
-      4. Send the designer a design check.
-      5. Close only on "verified", with `--known-green` (reds bcfdaacf, 09f64090, c29a2862).
-  - `c3-state-mark` (ui: true, escalated). **Stopped mid-fix.** Worktree `/private/tmp/bower-c3-state`, branch `c3-state-mark`.
-    - Red committed at 1299ca14, with the fix uncommitted. Progress note: `/private/tmp/bower-c3-state-progress.md`.
-    - It must use pair-ask's `answered` row for a no-effect yes. The q-state copy is in the round 2 packet. Any other no-effect case has no approved copy: keep it on a seam and ask the designer.
-    - It integrates **after** pair-ask: merge claude/p3 into its branch first.
-    - Then review it, send the design check and close it. Both reds must be green: the state mark and write-it-silent.
-- **Stage 3 end:** after both entries close:
-  1. Run the four suites under with-lock.
-  2. Move main and push the backup.
-  3. Send the SHA to the lead.
-  4. Run a staging smoke (procedure in [p4-speed-baseline.md](p4-speed-baseline.md)).
-- **Queued (TL-P4-20, all on Sonnet):**
-  - `c3-test-tamper` and `c3-flaky-policy` can go.
-  - `c3-hooks`, `c3-agent-defs` and `c3-permissions` touch settings, hooks and agent frontmatter. Dispatch them only after the owner authorizes it in the coordinator's own chat (asked of the lead).
-  - Then p4-rate-limits, then stage 4.
-- **TL-P4-20 rules, from the next dispatch on:**
-  - before a batch's first dispatch, run `harness/init.sh` plus a fast e2e smoke;
-  - fill a tokens.csv row for every agent run;
-  - in trial: an escalated entry's reviewer signs off its acceptance contract before implementation;
-  - WORKER notes carry `tests changed:` lines.
-- **Sessions:**
-  - the lead, Planificador;
-  - the Designer, in worktree `/private/tmp/bower-design`;
-  - the lead's planning worktree, `/private/tmp/bower-tl-planning`.
-  Never remove a role's worktree.
+Order after the restart (lead, TL-P4-20 addendum 3 and its message):
+1. **Live stop-gate check first** (DEFECT_LOG `agent-defs-not-live-mid-session`).
+   - Create a scratch detached worktree of claude/p3 and run pnpm install.
+   - Dispatch a bower-implementer that creates an untracked file there and tries to stop with `status: done` + `worktree: <path>`.
+   - It must be refused. Record the outcome, then remove the worktree.
+   - If it is still not refused, log it and diagnose before the suites.
+2. **The four suites** under `bash harness/with-lock.sh`, on an idle machine, with logs to /tmp:
+   - check;
+   - e2e, e2e:fake and e2e:pwa, all with `E2E_BATCH=1` (c3-flaky-policy).
+   - A retry-passed test enters the defect flow.
+3. **Main:** `git fetch -q . claude/p3:main`. Then the secret and personal-data scan. Then the backup per BACKUP.md, with Bash outside the sandbox: `git push backup refs/heads/main:refs/heads/main`, then verify the remote SHA. This is also the live check of the c3-permissions push hook.
+4. **The SHA to the lead.** Then the staging smoke after the lead deploys (procedure in [p4-speed-baseline.md](p4-speed-baseline.md)).
+5. **Then stage 4** in TL-P4-21 order: c4-focus-return (with d-v2-04) ∥ v2-field first. Carry-overs are in [2026-10-09-stage4-packet-notes.md](2026-10-09-stage4-packet-notes.md); d-v2-02 carries the c3-state-mark copy and the answer-only Home card. Then p4-rate-limits, and the open entries report-kept-your-change and type-proposals.
+
+Rules now live:
+- WORKER cards carry `worktree: <absolute path>`.
+- `pnpm check` writes the green mark.
+- integrate.sh needs `tests changed:` lines.
+- Agents have maxTurns (80 for implementers) and `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2`.
+- The push hook allows only the backup push, and it also refuses prose that mentions the push command (`push-guard-matches-quoted-text`, minor).
+- The typescript-lsp tsserver keeps worktrees "in use", so integrate.sh keeps them. Remove them by hand after checking the tree is clean.
+
+Open defects (stage-end list): size-cap-test-timeout-under-load, per-thing-ask-timeout-under-load (load flakes, to diagnose), agent-defs-not-live-mid-session.
 
 ## Where things stand
 

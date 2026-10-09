@@ -148,6 +148,8 @@ P3-9 is closed.
 
 - 2026-10-09: the lead approved a coordinator restart after c3-state-mark closes and before the four suites. After the restart: re-run the live dirty-tree stop check first (agent-defs-not-live-mid-session), then the suites with E2E_BATCH=1, main, backup (the live push hook check), the SHA to the lead, and the smoke.
 
+- 2026-10-09: stage 3 entries all closed (c3-state-mark 5795b39b last). Ready for the coordinator restart; resume order in HANDOFF.
+
 ## P4 ([TL-P4-01](2026-10-07-tl-p4-01-p4-start.md), [P4_PLAN](../P4_PLAN.md))
 
 - Owner authorized P4 (main fb33b21). HANDOFF restored to the docs-test headings (0dc5fde).
