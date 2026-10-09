@@ -31,6 +31,13 @@ export const SYSTEM = {
   piles: '.bower/piles',
 } as const;
 
+/**
+ * The files of Bower's own that a run's manifest may write (`write-runner-json`), the one list (TL-P4-14 addendum 20):
+ * the manifest contract (`parseRunManifestV2`, given it by every caller) and the runner's admitted check both judge by
+ * it. `suggestions.json` and `last-run.json` are written by the barrier after the run, never through the manifest.
+ */
+export const RUNNER_WRITES = [SYSTEM.questions, SYSTEM.requests, SYSTEM.hashes] as const;
+
 export const HIDDEN_AT_ROOT = ['index.md', 'hot.md', 'log.md'] as const;
 
 /** Bower's bookkeeping and any dot file stay out of the explorer. */

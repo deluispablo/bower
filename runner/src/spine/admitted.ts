@@ -16,7 +16,7 @@ import { READ_AHEAD, limiter } from '../../../src/data/spine/read';
 import type { Admitted, Deferred } from '../../../src/data/spine/provider';
 import type { RunManifest } from '../../../src/data/spine/records';
 import type { RunnerToken } from '../token';
-import { SYSTEM } from '../../../src/data/vault/layout';
+import { RUNNER_WRITES, SYSTEM } from '../../../src/data/vault/layout';
 
 export type { Admitted };
 
@@ -98,7 +98,7 @@ export async function takeAdmitted(manifest: AdmissionManifest, drive: AdmittedR
  * - a Bin's subject is a pile folder or a pile's note the run took (a pile of words, once its note is written), or a
  *   thing it took that is already saved (`duplicates.ts`, planned by the runner, never named by the model); or the
  *   other note of two the person said yes to keeping as one (`kept`, the paths the checked intent names), as captured;
- * - a runner-JSON write's subject is one of Bower's own files in `.bower`;
+ * - a runner-JSON write's subject is one of Bower's own files in `.bower` the run may write (`RUNNER_WRITES`);
  * - a note edit carries only what the runner authors from your changes and its fixed hub list (`applyChanges`): a
  *   Timeline line or a link rewrite on a note, and on `Rules.md` your typed rules (`rules-wording`) or a link
  *   rewrite, never a Timeline line. That is how the rule-wording and hub-line exceptions stay inside the contract:
@@ -115,7 +115,6 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
   const anchors = new Set(t.piles.flatMap((p) => (p.anchor ? [p.anchor.fileId] : [])));
   const taken = new Set([...anchors, ...t.piles.flatMap((p) => p.items.map((i) => i.fileId)), ...t.journal.map((j) => j.fileId)]);
   const edited = new Set(m.operations.flatMap((o) => (o.effect.kind === 'edit-text' ? [o.effect.before.fileId] : [])));
-  const runnerFiles = new Set<string>([SYSTEM.questions, SYSTEM.suggestions, SYSTEM.requests, SYSTEM.lastRun, SYSTEM.hashes]);
   for (const { effect: e } of m.operations) {
     switch (e.kind) {
       case 'move': {
@@ -129,7 +128,7 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
         if (!taken.has(e.before.fileId) && !keptOther(e.before.fileId)) return 'a Bin of a thing it was not admitted to take';
         break;
       case 'write-runner-json':
-        if (own === undefined || !sameParents([own], e.before.parents) || !runnerFiles.has(`${SYSTEM.dir}/${e.before.name}`)) return "a write to a file that is not Bower's own";
+        if (own === undefined || !sameParents([own], e.before.parents) || !(RUNNER_WRITES as readonly string[]).includes(`${SYSTEM.dir}/${e.before.name}`)) return "a write to a file that is not Bower's own";
         break;
       case 'edit-text': {
         const kinds = new Set(e.changes.map((c) => c.kind));

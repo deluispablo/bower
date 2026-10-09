@@ -84,9 +84,12 @@ export function ruleAddOk(add: RuleAdd): boolean {
 export function ruleRemoveOk(remove: RuleRemove): boolean {
   return remove.text.trim().length > 0 && !controls(remove.text);
 }
-/** At most this many Current state lines, each at most `STATE_LINE_MAX` characters. */
-export const STATE_LINES_MAX = 20;
-export const STATE_LINE_MAX = 400;
+/**
+ * At most this many Current state lines, each at most `STATE_LINE_MAX` characters: the method's short Current state
+ * (TL-P4-08), the one home of these limits (TL-P4-14 addendum 20); the Claude reply's check and prompt import them.
+ */
+export const STATE_LINES_MAX = 8;
+export const STATE_LINE_MAX = 200;
 /** The report's row for a note whose Current state a run brought up to date. */
 export const STATE_UPDATED = 'Current state brought up to date.';
 /** The report's line on a note kept as one with another (`keep-one-note-merge`), which went to the Bin. */

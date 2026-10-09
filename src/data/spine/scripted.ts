@@ -21,7 +21,7 @@ import { recordablePile, sameText, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
 import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type Request } from '../types';
 import { isJournalRecord, type JournalRecord } from '../contracts/journal-record';
-import { PROP, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
+import { PROP, RUNNER_WRITES, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
 import { ruleLike } from '../rules';
 import { linkTitle, savedLinkAddress, savedLinkUrl } from '../search-text';
 import { EMPTY_MD5 } from '../contracts/hashes';
@@ -1509,7 +1509,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   // v1 whenever the plan has no edit (TL-P2-20 Format): its identities and bytes are exactly as before.
   const v1: Operation[] = operations.flatMap((o) => (o.effect.kind === 'edit-text' ? [] : [{ ...o, effect: o.effect }]));
   const manifest: Manifest | ManifestV2 = v1.length === operations.length ? { v: 1, ...head, operations: v1 } : { v: 2, ...head, operations };
-  const checked = await parseRunManifestV2((await canonical(manifest)).bytes, rootId);
+  const checked = await parseRunManifestV2((await canonical(manifest)).bytes, rootId, RUNNER_WRITES);
   if (!checked.ok) {
     // Past the guard's own size limit: the last edit in path order waits for the next run, and the run is planned again.
     if (checked.reason === 'edit' && checked.rule === 'size' && edits.length) return planScripted(drive, rootId, opts, edits.length - 1, held);
@@ -1531,7 +1531,7 @@ async function nothingReadyPlan(rootId: string, opts: PlanOptions): Promise<RunP
     v: 1, kind: 'run-manifest', scope, runId: opts.runId, requestId: opts.requestId, runScope: opts.scope,
     allowWeb: opts.allowWeb, requestedAt: opts.requestedAt, captureId, capture, reportPlan: [], operations: [],
   };
-  const checked = await parseRunManifestV2((await canonical(manifest)).bytes, rootId);
+  const checked = await parseRunManifestV2((await canonical(manifest)).bytes, rootId, RUNNER_WRITES);
   if (!checked.ok) return refused(`the manifest guard refused the plan (${checked.reason})`);
   return { path: 'b', manifest };
 }

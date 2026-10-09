@@ -560,7 +560,8 @@ describe('the Claude provider contract (TL-P4-01 P4-2)', () => {
     const { wire, admission } = await wired();
     const own = (await wire.drive.listAll(wire.folderId)).find((f) => f.name === SYSTEM.dir)?.id ?? '';
     // suggestions.json and last-run.json there in Bower's own folder: the manifest contract never admitted a write to them.
-    for (const name of ['suggestions.json', 'last-run.json', 'requests.json', 'hashes.json']) await wire.drive.createText(own, name, '{}\n');
+    const files: Record<string, string> = { 'suggestions.json': '{ "v": 1, "suggestions": [] }', 'last-run.json': '{}', 'requests.json': '{ "v": 1, "done": [] }', 'hashes.json': '{ "v": 1, "hashes": {} }' };
+    for (const [name, text] of Object.entries(files)) await wire.drive.createText(own, name, `${text}\n`);
     const listing = await wire.drive.listAll(wire.folderId);
     const run = { rootId: wire.folderId, runId: RUN_ID, allowWeb: false };
     const took = { taken: admission, deferred: [] };

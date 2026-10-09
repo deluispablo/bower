@@ -1,3 +1,4 @@
+import { RUNNER_WRITES } from '../vault/layout';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
@@ -129,7 +130,7 @@ function set(value: unknown, path: Path, next: unknown): void {
 }
 async function refuse(source: Uint8Array, reason: ManifestRefusal, root = 'fake-root'): Promise<void> {
   const before = source.slice();
-  const result = await parseRunManifest(source, root);
+  const result = await parseRunManifest(source, root, RUNNER_WRITES);
   expect(result).toEqual({ ok: false, reason });
   expect(result).not.toHaveProperty('value');
   expect(result).not.toHaveProperty('sha256');
@@ -138,7 +139,7 @@ async function refuse(source: Uint8Array, reason: ManifestRefusal, root = 'fake-
 async function accept(value: Manifest, root = value.scope.rootId): Promise<void> {
   const source = bytes(value);
   const before = source.slice();
-  expect(await parseRunManifest(source, root)).toEqual({ ok: true, value, sha256: H(value) });
+  expect(await parseRunManifest(source, root, RUNNER_WRITES)).toEqual({ ok: true, value, sha256: H(value) });
   expect(source).toEqual(before);
 }
 
@@ -206,7 +207,7 @@ describe('run manifests fix capture and operation identity', () => {
     const portion = take();
     const source = utf8(` \r\n${JSON.stringify(portion, null, 2)}\t`);
     const before = source.slice();
-    const result = await parseRunManifest(source, 'fake-root');
+    const result = await parseRunManifest(source, 'fake-root', RUNNER_WRITES);
     expect(result).toEqual({ ok: true, value: portion, sha256: hash });
     if (result.ok) {
       expect(result.value.captureId).toBe(captureId);
@@ -236,7 +237,7 @@ describe('run manifests fix capture and operation identity', () => {
   it('accepts a synthetic manifest with every effect, target and report field, preserving text bytes', async () => {
     const value = rich();
     await accept(value);
-    const result = await parseRunManifest(bytes(value), 'fake-root');
+    const result = await parseRunManifest(bytes(value), 'fake-root', RUNNER_WRITES);
     if (!result.ok) throw new Error('Synthetic manifest must parse');
     const text = result.value.operations[2]?.effect;
     expect(text).toMatchObject({ kind: 'create-text', text: 'Receipts\r\n é ' });
@@ -564,20 +565,20 @@ describe('run manifests fix capture and operation identity', () => {
     const source = bytes(rich());
     const all = Uint8Array.from([0xff, ...source, 0xff]);
     const before = all.slice();
-    const one = await parseRunManifest(all.subarray(1, -1), 'fake-root');
-    const two = await parseRunManifest(all.subarray(1, -1), 'fake-root');
+    const one = await parseRunManifest(all.subarray(1, -1), 'fake-root', RUNNER_WRITES);
+    const two = await parseRunManifest(all.subarray(1, -1), 'fake-root', RUNNER_WRITES);
     if (!one.ok || !two.ok) throw new Error('Synthetic manifest must parse');
     one.value.runId = 'changed';
     one.value.capture.piles.length = 0;
     expect(two.value).toEqual(rich());
     expect(all).toEqual(before);
-    expect(await parseRunManifest(source, 'fake-root')).toEqual(two);
+    expect(await parseRunManifest(source, 'fake-root', RUNNER_WRITES)).toEqual(two);
   });
   it('propagates unexpected platform hash errors and leaves source bytes intact', async () => {
     const source = bytes(rich()); const before = source.slice();
     const failure = new Error('Synthetic platform hash failure');
     const spy = vi.spyOn(crypto.subtle, 'digest').mockRejectedValueOnce(failure);
-    try { await expect(parseRunManifest(source, 'fake-root')).rejects.toBe(failure); }
+    try { await expect(parseRunManifest(source, 'fake-root', RUNNER_WRITES)).rejects.toBe(failure); }
     finally { spy.mockRestore(); }
     expect(source).toEqual(before);
   });
@@ -643,7 +644,7 @@ describe('run manifests keep captured and written text consistent', () => {
       `accepts ${site.label} text %j with the exact UTF-8 size and raw digest, preserving its bytes`, async (text) => {
         const value = variant((change) => { write(change, site, text); });
         await accept(value);
-        const result = await parseRunManifest(bytes(value), 'fake-root');
+        const result = await parseRunManifest(bytes(value), 'fake-root', RUNNER_WRITES);
         expect(result.ok && at(result.value, site.text)).toBe(text);
       });
   }

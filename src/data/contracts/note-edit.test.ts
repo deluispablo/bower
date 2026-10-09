@@ -1,3 +1,4 @@
+import { RUNNER_WRITES } from '../vault/layout';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -186,11 +187,11 @@ function opAt(value: ManifestV2, index: number): OperationV2 {
 }
 async function admits(value: ManifestV2): Promise<void> {
   const source = bytes(value);
-  expect(await parseRunManifestV2(source, 'fake-root')).toEqual({ ok: true, value, sha256: H(value) });
+  expect(await parseRunManifestV2(source, 'fake-root', RUNNER_WRITES)).toEqual({ ok: true, value, sha256: H(value) });
 }
 /** An `edit` refusal names the TL-P2-20 rule that failed (review M3); no other refusal carries one. */
 async function refuses(value: unknown, reason: ManifestV2Refusal | 'number', rule?: EditGuardRule): Promise<void> {
-  expect(await parseRunManifestV2(bytes(value), 'fake-root')).toEqual(rule === undefined ? { ok: false, reason } : { ok: false, reason, rule });
+  expect(await parseRunManifestV2(bytes(value), 'fake-root', RUNNER_WRITES)).toEqual(rule === undefined ? { ok: false, reason } : { ok: false, reason, rule });
 }
 
 // Literal digests of the ratified v1 fixtures, copied from run-manifest.test.ts; never computed by the code under test.
@@ -207,8 +208,8 @@ describe('note edits change only what the contract allows', () => {
       for (const [file, hash, first] of [['01-admission-reopen.json', manifest01Hash, operation01Id], ['04-report-publication-retry.json', manifest04Hash, operation04First]] as const) {
         const manifest = fixture(file).manifest as Manifest;
         const source = bytes(manifest);
-        const v1 = await parseRunManifest(source, manifest.scope.rootId);
-        const v2 = await parseRunManifestV2(source, manifest.scope.rootId);
+        const v1 = await parseRunManifest(source, manifest.scope.rootId, RUNNER_WRITES);
+        const v2 = await parseRunManifestV2(source, manifest.scope.rootId, RUNNER_WRITES);
         expect(v2).toEqual(v1);
         expect(v2).toEqual({ ok: true, value: manifest, sha256: hash });
         expect(v2.ok && v2.value.operations[0]?.operationId).toBe(first);
@@ -223,9 +224,9 @@ describe('note edits change only what the contract allows', () => {
     });
 
     it('is refused by the v1 parser, and edit-text is refused in a v1 manifest', async () => {
-      expect(await parseRunManifest(bytes(seal(base())), 'fake-root')).toEqual({ ok: false, reason: 'shape' });
+      expect(await parseRunManifest(bytes(seal(base())), 'fake-root', RUNNER_WRITES)).toEqual({ ok: false, reason: 'shape' });
       const v1 = variant((value) => { (value as unknown as { v: number }).v = 1; });
-      expect(await parseRunManifest(bytes(v1), 'fake-root')).toEqual({ ok: false, reason: 'shape' });
+      expect(await parseRunManifest(bytes(v1), 'fake-root', RUNNER_WRITES)).toEqual({ ok: false, reason: 'shape' });
       await refuses(v1, 'shape');
     });
 
