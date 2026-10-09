@@ -6355,5 +6355,19 @@
     "note": "TL-P4-21 order 8; spec d-v2-13 (CSS part); impact block d-v2-13 split. Codex slot (TL-P4-23); fresh Claude reviewer. Designer signed off at 6df210b0. Packet 2026-10-09-d-v2-13-css-packet.md. implementer: codex. Red c5ca3e44, fix 0be6c48d. P4-57 PASS (3 minors). Designer verified at 3f073a43.",
     "review": "P4-57 PASS",
     "design": "verified"
+  },
+  {
+    "id": "v2-boot-states",
+    "task": "p4-consolidation",
+    "category": "ui",
+    "passes": false,
+    "ui": true,
+    "what": "d-v2-12: the boot says Still opening after 3 s (read pose), drops the 8 s step, keeps offline, and a failed boot says Bower could not open with a primary Try again of at least 160 px.",
+    "steps": [
+      "Still opening is present after 3.5 s with scenario=slow.",
+      "A failed boot shows Bower could not open and Try again."
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/v2-boot-states.spec.ts -g \"the boot says still opening after 3 s|a failed boot says it could not open and offers try again\"",
+    "note": "TL-P4-21 order 8; spec d-v2-12; impact block d-v2-12. Codex slot (TL-P4-23); fresh Claude reviewer. Packet 2026-10-09-d-v2-12-packet.md, waiting for the designer sign-off. implementer: codex."
   }
 ]
