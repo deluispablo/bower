@@ -70,7 +70,7 @@ describe('what the repository promises', () => {
   it('a compaction re-reads the session state and the output rules (TL-P4-06)', () => {
     const settings = JSON.parse(read('.claude/settings.json')) as { hooks: Record<string, { matcher: string; hooks: { command: string }[] }[]> };
     const start = settings.hooks.SessionStart ?? [];
-    expect(start.some((h) => h.matcher === 'compact' && h.hooks.some((c) => c.command.includes('harness/after-compact.md')))).toBe(true);
+    expect(start.some((h) => h.matcher.split('|').includes('compact') && h.hooks.some((c) => c.command.includes('harness/after-compact.md')))).toBe(true);
     const note = read('harness/after-compact.md');
     for (const part of ['docs/harness/LEAD.md', 'docs/harness/HANDOFF.md', 'never asks the owner', 'under 120 characters']) expect(note, part).toContain(part);
   });
