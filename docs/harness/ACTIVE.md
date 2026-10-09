@@ -136,6 +136,8 @@ P3-9 is closed.
 - P2 evidence checkouts (`/private/tmp/bower-p2-*`) can be removed.
 - Resume (TL-P2-45): never clear; after a compaction re-read HANDOFF and this file; a worker gone with no delivery is redispatched fresh from its packet.
 
+- 2026-10-09: c3-pair-ask merged bdc08775 (P4-46b PASS); design check sent to the Designer. c3-state-mark dispatched (bower-escalated, /private/tmp/bower-c3-state).
+
 ## P4 ([TL-P4-01](2026-10-07-tl-p4-01-p4-start.md), [P4_PLAN](../P4_PLAN.md))
 
 - Owner authorized P4 (main fb33b21). HANDOFF restored to the docs-test headings (0dc5fde).
