@@ -1,7 +1,7 @@
 /// <reference types="node" />
 /** The harness's own rules (scripts/harness-rules.mjs): what makes the feature list dishonest. */
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -240,5 +240,60 @@ describe('the harness', () => {
     expect(wrong.status).toBe(1);
     expect(wrong.stderr).toContain('"an api test that exists" matches no test (unit');
     expect(wrong.stderr).toContain('"a src test that exists" matches no test (api');
+  });
+
+  // The marker lines are built here, so this file holds none itself.
+  const marker = (c: string, tail = ''): string => c.repeat(7) + tail;
+  const scratch = (files: Record<string, string>): string => {
+    const dir = mkdtempSync(join(tmpdir(), 'harness-gate-'));
+    const git = (...a: string[]): void => void spawnSync('git', a, { cwd: dir });
+    git('init', '-q');
+    git('config', 'user.email', 'you@example.com');
+    git('config', 'user.name', 'Alex');
+    mkdirSync(join(dir, 'scripts'));
+    mkdirSync(join(dir, 'harness'));
+    for (const f of ['harness-rules.mjs', 'harness-tests.mjs', 'check-harness.mjs']) copyFileSync(join(process.cwd(), 'scripts', f), join(dir, 'scripts', f));
+    copyFileSync(join(process.cwd(), 'harness/done.sh'), join(dir, 'harness/done.sh'));
+    writeFileSync(join(dir, 'harness/features.json'), '[]\n');
+    writeFileSync(join(dir, 'harness/proof-legacy.txt'), readFileSync(join(process.cwd(), 'harness/proof-legacy.txt')));
+    writeFileSync(join(dir, 'harness/progress.md'), '## Next\n- x\n');
+    for (const [f, c] of Object.entries(files)) {
+      mkdirSync(join(dir, f, '..'), { recursive: true });
+      writeFileSync(join(dir, f), c);
+    }
+    git('add', '-A');
+    git('commit', '-qm', 'base');
+    return dir;
+  };
+
+  it('the harness check fails on a conflict-marker line and names file and line', () => {
+    const dir = scratch({ 'src/a.ts': `one\n${marker('<', ' HEAD')}\ntwo\n${marker('=')}\nthree\n${marker('>', ' branch')}\n`, 'src/ok.ts': 'a == b\n// =======x\n' });
+    const run = spawnSync('node', ['scripts/check-harness.mjs'], { cwd: dir, encoding: 'utf8' });
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain('src/a.ts:2: conflict marker');
+    expect(run.stderr).toContain('src/a.ts:4: conflict marker');
+    expect(run.stderr).toContain('src/a.ts:6: conflict marker');
+    expect(run.stderr).not.toContain('src/ok.ts');
+  });
+
+  const escalated = (over: Record<string, unknown> = {}): Record<string, unknown> => ({ id: 'e1', task: 'p4-consolidation', steps: S, verify: V, passes: true, note: 'Rules. Starting model: bower-escalated. More.', ...over });
+
+  it('an escalated consolidation entry cannot pass without a review PASS', () => {
+    const check = (e: Record<string, unknown>): string[] => problems([e], readProofs(`e1\t${hashOf(V)}\t2026-10-09\tred\n`), undefined, new Set()) as string[];
+    expect(check(escalated())).toEqual([expect.stringContaining('e1: escalated, passes without a review PASS')]);
+    expect(check(escalated({ review: 'P4-37 BLOCK' }))).toHaveLength(1);
+    expect(check(escalated({ review: 'P4-37f PASS' }))).toEqual([]);
+    expect(check(escalated({ passes: false }))).toEqual([]);
+    expect(check(escalated({ note: 'Starting model: bower-implementer.' }))).toEqual([]);
+    expect(check(escalated({ task: 'p3-x', steps: undefined }))).toEqual([]);
+  });
+
+  it('done.sh refuses to close an escalated entry with no review PASS', () => {
+    const entry = escalated({ passes: false });
+    const dir = scratch({ 'harness/features.json': JSON.stringify([entry]), 'scripts/harness-rules.mjs': readFileSync(join(process.cwd(), 'scripts/harness-rules.mjs'), 'utf8') });
+    const run = spawnSync('bash', ['harness/done.sh', 'e1', 'close e1'], { cwd: dir, encoding: 'utf8' });
+    expect(run.status).toBe(1);
+    expect(run.stderr + run.stdout).toContain('e1: escalated, passes without a review PASS');
+    expect(run.stderr + run.stdout).toContain('e1 stays open');
   });
 });

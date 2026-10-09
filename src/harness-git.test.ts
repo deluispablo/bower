@@ -1,7 +1,7 @@
 /// <reference types="node" />
 /** done.sh's git steps (scripts/harness-git.mjs), on a throwaway repository. */
-import { execSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { execSync, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -63,5 +63,46 @@ describe('the harness and git', () => {
     expect(codeInWorktree(dir)).toEqual(['runner/src/x.ts']);
     git('commit -qam change');
     expect(codeInCommit('HEAD', dir)).toEqual(['runner/src/x.ts']);
+  });
+
+  // integrate.sh runs in the repository it is started in; these fixtures make their own.
+  const integrate = (checkCmd: string, branchFiles: Record<string, string>, dirtyFirst = false) => {
+    const { dir, git } = repo();
+    writeFileSync(join(dir, 'a.txt'), 'one\n');
+    git('add -A && git commit -qm base');
+    git('branch -M main');
+    git('checkout -qb worker');
+    for (const [f, c] of Object.entries(branchFiles)) writeFileSync(join(dir, f), c);
+    git('add -A && git commit -qm "worker change"');
+    git('checkout -q main');
+    if (dirtyFirst) writeFileSync(join(dir, 'a.txt'), 'edited\n');
+    const run = spawnSync('bash', [join(process.cwd(), 'harness/integrate.sh'), 'worker'], { cwd: dir, encoding: 'utf8', env: { ...process.env, INTEGRATE_CHECK: checkCmd } });
+    return { dir, git, run, out: run.stdout + run.stderr };
+  };
+
+  it('integrate.sh aborts a merge whose tree fails the check', () => {
+    const { dir, git, run, out } = integrate('if [ -e bad.txt ]; then echo "FAIL bad.txt should not exist"; exit 1; fi', { 'bad.txt': 'x\n' });
+    expect(run.status).toBe(1);
+    expect(out).toContain('FAIL bad.txt should not exist');
+    expect(out).toContain('check failed: worker is not merged');
+    expect(existsSync(join(dir, 'bad.txt'))).toBe(false);
+    expect(existsSync(join(dir, '.git/MERGE_HEAD'))).toBe(false);
+    expect(git('log --oneline').trim().split('\n')).toHaveLength(1);
+    expect(git('status --porcelain')).toBe('');
+  });
+
+  it('integrate.sh commits a merge whose tree passes the check', () => {
+    const { git, run } = integrate('true', { 'good.txt': 'x\n' });
+    expect(run.status).toBe(0);
+    expect(git('log -1 --format=%s').trim()).toBe("Merge branch 'worker'");
+    expect(git('log -1 --format=%p').trim().split(' ')).toHaveLength(2);
+  });
+
+  it('integrate.sh refuses to start on a dirty tree', () => {
+    const { dir, git, run, out } = integrate('true', { 'good.txt': 'x\n' }, true);
+    expect(run.status).toBe(1);
+    expect(out).toContain('The tree has changes');
+    expect(existsSync(join(dir, 'good.txt'))).toBe(false);
+    expect(git('log --oneline').trim().split('\n')).toHaveLength(1);
   });
 });
