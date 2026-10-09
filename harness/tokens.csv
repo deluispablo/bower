@@ -314,3 +314,4 @@ p4-corpus-driver,implementer,codex,gpt-5-codex,low,3,248061,245037,,210432,3024,
 p4-corpus-driver,reviewer,claude,bower-reviewer,,1,61849,,,,,,13,0.8,PASS (P4-64),2026-10-09
 c4-undo-compensate,adversarial,codex,gpt-5-codex,medium,1,1457138,1449580,,1350784,7558,,,,4 Important,2026-10-09
 c4-parse-once,adversarial,codex,gpt-5-codex,medium,1,412338,410354,,350208,1984,,,,1 Important,2026-10-09
+d-v2-07,property-red,codex,gpt-5-codex,medium,8,768995,758399,,701824,10596,,,,red written (held for ruling),2026-10-09
