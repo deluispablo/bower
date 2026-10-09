@@ -330,3 +330,4 @@ c4-undo-compensate,adversarial,codex,gpt-5-codex,medium,2,989895,983128,,892032,
 c4-parse-once,reviewer,claude,bower-reviewer,,1,61833,,,,,,12,1.0,PASS (P4-65),2026-10-10
 d-v2-07,property-red,codex,gpt-5-codex,medium,12,361342,357104,,316544,4238,,,,classifier (addendum 14),2026-10-10
 d-v2-07,implementer,codex,gpt-5-codex,medium,10,1659613,1649867,,1583744,9746,,,,done (round 8),2026-10-10
+d-v2-07,reviewer,codex,gpt-5-codex,medium,8,267830,265959,,221824,1871,,,,1 Important (red gap),2026-10-10

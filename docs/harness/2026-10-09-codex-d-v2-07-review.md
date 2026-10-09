@@ -82,3 +82,11 @@ Read-only, medium effort. Tokens: input 364616 (cached 322048), output 3763. Sto
 1. **Important — `src/bird/engine.ts:1242–1249`: Startle still hands over before landing within 2°.** At 60 fps, run `act('preen')` for 36 frames, reaching 42°, then call `nudge()`. Startle frame 8 draws −4.615°. On frame 9, `rising` becomes false and the return profile takes over; that frame draws −7.89°, still **2.11° from the −10° target**. This breaks the required landing within 2° before any hand-over. The new red checks overshoot and the angle after 45 frames, so it passes despite this premature transition.
 
 findings: 1
+
+## Round 8 pass (scope aa95b666..0496870d -- src/bird)
+
+Read-only, medium effort. Tokens: input 265959 (cached 221824), output 1871.
+
+1. **Important — `src/bird/engine.test.ts:625–626`** — The property can indefinitely skip the return acceleration bound when a snap misses its expected target. Concrete scenario: `snapGaze` sets the expected target to −5°. A faulty snap lands at 0°; subsequent gaze jumps from 0° to 7° at 60 fps, then stays there. These frames satisfy the property’s speed and range checks, but the jump exceeds 5400°/s². Because the head never settles near −5°, `snapTarget` never clears and acceleration remains exempt. No assertion requires that settlement to happen. This breaks addendum 14(3)’s move classification and the requirement that the red actually test return bounds.
+
+findings: 1
