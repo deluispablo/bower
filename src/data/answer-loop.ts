@@ -4,7 +4,7 @@
  * The answer is stored with its question once (`VaultSource.answer`: a journal line keyed by the question), and a yes
  * the run can act on starts a small tidy-up scoped to what it is about, at once:
  * - a thing or pile asked about (its subject, `contracts/questions.ts`): a run that takes only that pile, and your changes;
- * - keeping one note (a question naming its two notes as [[links]]): a run of your changes only, no pile;
+ * - keeping one note (a question about a pair of notes, `c3-pair-ask`): a run of your changes only, no pile;
  * - writing Bower's update over a Current state you edited ("Write it", by the note's file id): a run of your
  *   changes only, in which the model computes the update and the yes grants that one write, while the section still
  *   reads as asked about (`state-yes-writes`); "Keep mine" starts none and closes the question.
@@ -27,8 +27,6 @@ import type { Question, RunState } from './types';
 /** What an answer starts: a run scoped to a thing or pile in the inbox, or to your changes and notes. */
 export type AnswerRun = { scope: 'all'; subject: string } | { scope: 'instructions' };
 
-/** A question about keeping one note: the corpus' and the runner's wording (`runner/src/claude.ts`, `mergesOf`). */
-const KEEP_ONE = /\bkeep one note\b/i;
 /** A subject the Worker takes: a Drive file id or a pile id. */
 const SUBJECT = /^[A-Za-z0-9_-]{1,128}$/;
 
@@ -36,10 +34,9 @@ const SUBJECT = /^[A-Za-z0-9_-]{1,128}$/;
 export function answerRun(q: Question, yes: boolean): AnswerRun | null {
   if (!yes) return null;
   const about = subjectOf(q);
-  if (about.kind === 'state') return { scope: 'instructions' };
+  if (about.kind === 'state' || about.kind === 'pair') return { scope: 'instructions' };
   if (about.kind === 'inbox') return SUBJECT.test(about.id) ? { scope: 'all', subject: about.id } : null;
-  const notes = new Set((q.text.match(/\[\[[^\]]+\]\]/g) ?? []).map((l) => l.toLowerCase()));
-  return KEEP_ONE.test(q.text) && notes.size === 2 ? { scope: 'instructions' } : null;
+  return null;
 }
 
 /** The request id of the run an answer starts: the same for every answer to one asking of one question. */

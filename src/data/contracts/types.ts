@@ -4,6 +4,7 @@
  * adds adapters behind the same interfaces.
  */
 import type { RunPhase } from './run-phases';
+import type { AnsweredRow } from './questions';
 
 
 export type ParaRoot = 'Inbox' | 'Projects' | 'Areas' | 'Resources' | 'Archive';
@@ -142,7 +143,22 @@ export interface Question {
    * writes over them only while they still read so (`state-yes-writes`).
    */
   state?: string;
+  /**
+   * A question about a Current state you edited: the update Bower showed (`lines`, what a yes writes, with no model
+   * asked again) and the note as the run that asked left it, Drive's `md5Checksum` and `bowerOp` stamp (none when the
+   * note carried none). A yes writes only while the note still carries both (write-once's stamp-plus-checksum
+   * comparison, as the New mark's, TL-P4-19 addendum 5); otherwise it is asked again. A question from before has none
+   * and keeps the earlier path (`c3-state-mark`).
+   */
+  shown?: StateShown;
   askedAt: number;
+}
+
+/** What a question about a Current state showed, and the note as it was left then (`Question.shown`). */
+export interface StateShown {
+  lines: string[];
+  md5: string;
+  stamp?: string;
 }
 
 export interface Rule {
@@ -227,14 +243,21 @@ export interface RunReport {
   questions: Question[];
   /**
    * Things whose content was already filed (TL-P4-10 addendum 2): each went to the Bin, with the name of the file
-   * already saved. Left out when there are none.
+   * already saved. Left out when there are none. A pile of words whose lines its notes held already (c3-pair-ask)
+   * says in how many notes (`notes`); a row from before has none.
    */
-  alreadySaved?: Array<{ name: string; as: string }>;
+  alreadySaved?: Array<{ name: string; as: string; notes?: number }>;
   /**
    * Things Bower couldn't confirm (TL-P4-14 addendum 8): possibly changed, then gone from Drive before it read them
    * back. Never counted as set aside. Left out when there are none.
    */
   unconfirmed?: Array<{ name: string; why: string }>;
+  /**
+   * Answers that settled with no effect (TL-P4-19 addendum 10): their subject had gone before the run. Never counted
+   * as set aside; a pair's row also shows on the note that stays. Left out when there are none; a report from before
+   * it has none.
+   */
+  answered?: AnsweredRow[];
   /** How many of your changes (the journal) the run read. */
   yourChanges?: number;
   /** What you asked Bower that this run did, in your words. */

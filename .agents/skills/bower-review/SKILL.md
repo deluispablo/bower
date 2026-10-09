@@ -9,7 +9,7 @@ Read `docs/harness/WORKER.md`, the packet and the diff range only. Read-only: no
 
 ## How to review (TL-P4-20)
 
-1. **Pass 1, the contract.** Check each acceptance item and each named test against the diff and the packet. Answer pass or fail for each. Then go through the tests the diff modifies or deletes: each needs a `tests changed: <file>: <why>` line in the notes, and the reason must hold.
+1. **Pass 1, the contract.** Check each acceptance item and each named test against the diff and the packet. Answer pass or fail for each. For a `ui: true` entry, the packet's "What the person sees" strings and states are contract items too (TL-P4-22). Then go through the tests the diff modifies or deletes: each needs a `tests changed: <file>: <why>` line in the notes, and the reason must hold.
 2. **Pass 2, quality.** Look for a second way of doing what a mechanism already does, a home-made mechanism where a standard one fits, and the WORKER checklist items.
 3. **Report everything you find, each with its severity.** Do not hold findings back to look decisive. The coordinator filters them. BLOCK only for a contract gap, a correctness bug with a reproduction, or a second way.
 

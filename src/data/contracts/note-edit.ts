@@ -14,7 +14,8 @@ import { displayName, nameOf } from './tree';
 import type { ChangeEntry, Rule } from './types';
 import { sha256 } from './hashes';
 import { parseNote } from './note-format';
-import { parseOwnership, type ByteSpan, type OwnershipFailure } from './ownership-format';
+import { fenceAfter, parseOwnership, type ByteSpan, type Fence, type Layout, type OwnershipFailure } from './ownership-format';
+import { parseTimelineLine, timelineLine } from './timeline-line';
 import { parseRules } from './rules-format';
 import type { Change, EditEntry, EditText, Rename, RuleAdd, RuleRemove } from './run-manifest';
 
@@ -39,7 +40,6 @@ export type Authors = { splice: (text: string, at: number, insert: string) => st
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 const ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'timeline-append', 'rules-wording'];
-const TIMELINE_LINE = /^- (.*?) · (.*?)(?: · \[\[([^\]]+)\]\])?$/;
 const RULE_LINE = /^- (.*?)(?:\s*<!-- since (\d{4}-\d{2}-\d{2}) -->)?\s*$/;
 const WORDS_LINE = /^\s+\*You wrote: "(.*)"\*\s*$/;
 const SUMMARY_LINE = /^summary: \d+ rules? Bower follows in every tidy-up\.$/;
@@ -70,8 +70,20 @@ export function timelineDate(requestedAt: number): string | null {
   if (Number.isNaN(at.getTime()) || at.getUTCFullYear() > 9999) return null;
   return at.toISOString().slice(0, 10);
 }
-export function entryOk(entry: EditEntry): boolean {
-  return dateOk(entry.date) && lineFieldOk(entry.text) && (entry.source === null || displayNameOk(entry.source));
+/** How a news line starts: what Bower would have written in a Current state it may not rewrite (`stateNewsLine`). */
+export const NEWS_LEAD = 'New: ';
+/**
+ * Every Timeline line cites its source (TL-P4-19 addendum 20): a news line with none is refused. The one home of the
+ * rule: `entryOk` gates every writer with it, and the Claude reply's check calls it on the reply's Timeline lines.
+ */
+export const newsLineCited = (entry: Pick<EditEntry, 'text' | 'source'>): boolean => entry.source !== null || !entry.text.startsWith(NEWS_LEAD);
+/**
+ * A Timeline line's field rules, strict on write and lenient on read, as a Current state's bounds are (`STATE_READ`):
+ * `read` is how a stored manifest is read, so one stored before the uncited refusal still parses (TL-P4-19 addendum
+ * 22); a write or a plan (the default) also refuses a news line with no source.
+ */
+export function entryOk(entry: EditEntry, mode: 'write' | 'read' = 'write'): boolean {
+  return dateOk(entry.date) && lineFieldOk(entry.text) && (entry.source === null || displayNameOk(entry.source)) && (mode === 'read' || newsLineCited(entry));
 }
 /** Display names only: path forms and `.md` forms are never rewritten. */
 export function renameOk(rename: Rename): boolean {
@@ -98,6 +110,20 @@ export const STATE_UPDATED = 'Current state brought up to date.';
 export const keptLine = (other: string): string => `Kept as one note with ${other}, which went to the Bin.`;
 /** Why the other note of a keep stays: the person changed it while the run worked; the next tidy-up carries it all. */
 export const KEEP_CHANGED = 'It changed while Bower worked, so both notes stay; the next tidy-up keeps one.';
+/** Why the other note of a keep stays: the person moved or renamed it while the run worked (P4-19b). */
+export const KEEP_MOVED = 'It was moved or renamed while Bower worked, so both notes stay; the next tidy-up keeps one.';
+/** Why the other note of a keep was not binned by Bower: the person put it in the Bin while the run worked (P4-19b). */
+export const KEEP_BINNED = 'It went to the Bin while Bower worked, so only the kept note stays.';
+/** What a keep's other note says when its Bin was refused, by why the note was not as the run read it. */
+export const keepRefused = (reason: 'gone' | 'moved' | 'changed'): string => (reason === 'gone' ? KEEP_BINNED : reason === 'moved' ? KEEP_MOVED : KEEP_CHANGED);
+/** Every sentence `keepRefused` gives: a refused keep's report row says the one its refusal carries. */
+export const KEEP_REFUSED: readonly string[] = [KEEP_CHANGED, KEEP_MOVED, KEEP_BINNED];
+/**
+ * A yes to keeping one note whose other note was already in the Bin before Bower's run (c3-pair-ask, TL-P4-19
+ * addenda 8 and 9): nothing is merged, and the answer is settled. By the other note's name when it is known.
+ */
+export const KEEP_ALREADY_BINNED = 'Not merged: the other note was already in the Bin.';
+export const keepAlreadyBinned = (other: string | null): string => (other === null ? KEEP_ALREADY_BINNED : `Not merged: ${other} was already in the Bin.`);
 /**
  * Current state lines: `lines` each one trimmed line, none only to take back a rewrite of an empty section (TL-P4-10
  * point 4; a model always writes 1+); `previous` as read (one line each, no control character).
@@ -112,7 +138,7 @@ function fieldsOk(change: Change): boolean {
     case 'state-rewrite': return stateLinesOk(change.previous, change.lines);
     case 'link-rewrite': return change.renames.length > 0 && change.renames.every(renameOk)
       && new Set(change.renames.map((item) => item.from.toLowerCase())).size === change.renames.length;
-    case 'timeline-append': return change.entries.length > 0 && change.entries.every(entryOk);
+    case 'timeline-append': return change.entries.length > 0 && change.entries.every((entry) => entryOk(entry));
     case 'rules-wording': return change.add.length + change.remove.length > 0 && change.add.every(ruleAddOk) && change.remove.every(ruleRemoveOk);
   }
 }
@@ -129,7 +155,6 @@ export function renamesFor(changes: readonly ChangeEntry[], taken: ReadonlySet<s
 // ---------------------------------------------------------------------------------------------
 
 interface Line { start: number; end: number; after: number; text: string }
-interface Fence { character: string; length: number }
 
 /** Lines of `text` in [start, end): `end` excludes the line ending (CRLF or LF), `after` includes it. */
 function linesOf(text: string, start = 0, end = text.length): Line[] {
@@ -148,67 +173,27 @@ const eolOf = (text: string): string => (text.includes('\r\n') ? '\r\n' : '\n');
 /** A UTF-8 byte offset of `bytes` as a UTF-16 index of its decoded text. */
 const charAt = (bytes: Uint8Array, offset: number): number => decoder.decode(bytes.subarray(0, offset)).length;
 const spanOf = (bytes: Uint8Array, span: ByteSpan): { start: number; end: number } => ({ start: charAt(bytes, span.start), end: charAt(bytes, span.end) });
-/** A CRLF-normalized index as an index of the raw text (the legacy grammar measures normalized text). */
-function rawIndex(raw: string, normalized: number): number {
-  let at = 0;
-  for (let n = 0; n < normalized; n++, at++) if (raw[at] === '\r' && raw[at + 1] === '\n') at++;
-  return at;
-}
-
-/** ownership/2's fence transition, exactly as `ownership-format.ts` frames payloads. */
-function fenceAfter(text: string, open: Fence | null): Fence | null {
-  if (open) {
-    const close = /^ {0,3}(`+|~+)[ \t]*$/.exec(text);
-    return close?.[1]?.[0] === open.character && close[1].length >= open.length ? null : open;
-  }
-  const begin = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(text);
-  const run = begin?.[1];
-  if (!run || (run[0] === '`' && begin?.[2]?.includes('`'))) return null;
-  return { character: run[0] ?? '', length: run.length };
-}
-
 /**
- * The legacy grammar's boundaries (`ownership-format.ts` `legacy`, `note-format.ts` `split`), as raw indices:
- * the frontmatter's end, the `## Current state` block, and the `\n` before `## Timeline` and `## Bower's note`.
+ * The sections of a note as `parseOwnership` frames them, as UTF-16 indices of the text: the one parser finds
+ * them, this only converts its byte offsets. Null for an unreadable note.
  */
-interface Legacy { frontEnd: number; current: { start: number; end: number } | null; timeline: number | null; bower: number | null }
-function legacyOf(raw: string): Legacy | null {
-  const text = raw.replace(/\r\n/g, '\n');
-  const close = text.startsWith('---\n') ? text.indexOf('\n---', 3) : -1;
-  if (close < 0) return null;
-  const lineEnd = text.indexOf('\n', close + 1);
-  const frontEnd = lineEnd < 0 ? text.length : lineEnd + 1;
-  let start = frontEnd;
-  while (text[start] === '\n') start++;
-  let current: Legacy['current'] = null;
-  if (text.startsWith('## Current state\n', start)) {
-    const from = start;
-    start += '## Current state\n'.length;
-    while (text.startsWith('- ', start)) {
-      const end = text.indexOf('\n', start);
-      start = end < 0 ? text.length : end + 1;
-    }
-    current = { start: rawIndex(raw, from), end: rawIndex(raw, start) };
-  }
-  let end = text.length;
-  const bower = text.lastIndexOf("\n## Bower's note\n");
-  const hasBower = bower >= start - 1;
-  if (hasBower) end = bower;
-  const timeline = text.lastIndexOf('\n## Timeline\n', end);
-  const hasTimeline = timeline >= start - 1;
-  return {
-    frontEnd: rawIndex(raw, frontEnd), current,
-    timeline: hasTimeline ? rawIndex(raw, timeline) : null, bower: hasBower ? rawIndex(raw, bower) : null,
-  };
+interface Sections { frontEnd: number; front: Span | null; current: Span | null; timeline: Span | null; bowerNote: Span | null }
+interface Span { start: number; end: number }
+function sectionsOf(text: string): Sections | null {
+  const bytes = encoder.encode(text);
+  const own = parseOwnership(bytes);
+  if (own.status === 'invalid') return null;
+  const at = (span: ByteSpan | null): Span | null => (span ? spanOf(bytes, span) : null);
+  const layout: Layout = own.layout;
+  return { frontEnd: charAt(bytes, layout.frontEnd), front: at(layout.front), current: at(layout.current), timeline: at(layout.timeline), bowerNote: at(layout.bowerNote) };
 }
-/** Lines 1..n-1 of a frontmatter block opened by `---` and closed by the next line starting with `---`. */
+/** The lines between a note's `---` fences; none when it has no frontmatter. */
 function frontmatterLines(text: string): Line[] {
-  const prefix = text.startsWith('\ufeff') ? 1 : 0;
-  const lines = linesOf(text, prefix);
-  if (lines[0]?.text !== '---') return [];
-  const close = lines.findIndex((line, i) => i > 0 && line.text.startsWith('---'));
-  return close < 0 ? [] : lines.slice(1, close);
+  const front = sectionsOf(text)?.front;
+  return front ? linesOf(text, front.start, front.end) : [];
 }
+/** Where the line break before a heading that starts at `at` begins (a CRLF is one break). */
+const breakBefore = (text: string, at: number): number => (text[at - 2] === '\r' ? at - 2 : at - 1);
 function byBower(text: string): boolean {
   try { return parseNote('note.md', text).byBower; }
   catch (error) {
@@ -223,7 +208,6 @@ function byBower(text: string): boolean {
 // ---------------------------------------------------------------------------------------------
 
 type Step = { text: string; added: EditEntry[]; rules: Pick<Rule, 'text' | 'yourWords' | 'since'>[] | null } | { refused: EditRefusal };
-const lineOf = (entry: EditEntry): string => `- ${entry.date} · ${entry.text}${entry.source !== null ? ` · [[${entry.source}]]` : ''}`;
 
 function appendLines(text: string, change: Extract<Change, { kind: 'timeline-append' }>, authors: Authors): Step {
   const bytes = encoder.encode(text);
@@ -240,17 +224,17 @@ function appendLines(text: string, change: Extract<Change, { kind: 'timeline-app
     at = span.end;
     insert = (lines) => lines.map((line) => line + eol).join('');
   } else {
-    const legacy = legacyOf(text);
+    const legacy = sectionsOf(text);
     if (!legacy) return { refused: 'not-bower' };
-    if (legacy.timeline !== null) {
-      const sectionEnd = legacy.bower ?? text.length;
-      const lines = linesOf(text, legacy.timeline + (text[legacy.timeline] === '\r' ? 2 : 1), sectionEnd);
+    if (legacy.timeline) {
+      const sectionEnd = legacy.timeline.end;
+      const lines = linesOf(text, legacy.timeline.start, sectionEnd);
       region = text.slice(lines[0]?.start ?? sectionEnd, sectionEnd);
       const last = [...lines].reverse().find((line) => line.text.trim());
       at = last?.end ?? sectionEnd;
       insert = (lines) => lines.map((line) => eol + line).join('');
-    } else if (legacy.bower !== null) {
-      at = legacy.bower;
+    } else if (legacy.bowerNote) {
+      at = breakBefore(text, legacy.bowerNote.start);
       insert = (lines) => `${eol}## Timeline${eol}${lines.join(eol)}`;
     } else {
       at = text.length;
@@ -260,8 +244,8 @@ function appendLines(text: string, change: Extract<Change, { kind: 'timeline-app
   }
   // R3-3 and m-d: an entry is present when a line has the same text and source, whatever its date.
   const present = linesOf(region).flatMap((line) => {
-    const match = TIMELINE_LINE.exec(line.text);
-    return match ? [JSON.stringify([match[2] ?? '', match[3] ?? null])] : [];
+    const match = parseTimelineLine(line.text);
+    return match ? [JSON.stringify([match.text, match.source])] : [];
   });
   const seen = new Set(present);
   const added = change.entries.filter((entry) => {
@@ -271,7 +255,7 @@ function appendLines(text: string, change: Extract<Change, { kind: 'timeline-app
     return true;
   });
   if (!added.length) return { text, added, rules: null };
-  return { text: authors.splice(text, at, insert(added.map(lineOf))), added, rules: null };
+  return { text: authors.splice(text, at, insert(added.map(timelineLine))), added, rules: null };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -318,24 +302,22 @@ function stateSection(text: string): StateSection | EditRefusal {
   const own = parseOwnership(bytes);
   if (own.status === 'invalid') return own.reason;
   if (own.status === 'plain' || (own.status === 'legacy' && !byBower(text))) return 'not-bower';
-  const prefix = text.startsWith('﻿') ? 1 : 0;
-  const all = linesOf(text, prefix);
-  const closeAt = all.findIndex((line, i) => i > 0 && line.text.startsWith('---'));
-  const close = all[closeAt];
-  if (all[0]?.text !== '---' || !close) return 'not-bower';
-  const marks = all.slice(1, closeAt).filter((line) => line.text.startsWith(`${STATE_KEY}:`));
+  const sections = sectionsOf(text);
+  const close = sections?.front ? linesOf(text, sections.front.end)[0] : undefined;
+  if (!sections?.front || !close) return 'not-bower';
+  const marks = linesOf(text, sections.front.start, sections.front.end).filter((line) => line.text.startsWith(`${STATE_KEY}:`));
   if (marks.length > 1) return 'unsupported';
   const eol = eolOf(text);
   let start: number;
   let end: number;
   let open: StateSection['open'] = null;
   if (own.status === 'v2') {
-    const span = spanOf(bytes, own.payloads.current);
+    const span = sections.current;
+    if (!span) return 'unsupported';
     start = span.start;
     end = span.end;
   } else {
-    const legacy = legacyOf(text);
-    if (!legacy) return 'unsupported';
+    const legacy = sections;
     if (!legacy.current) {
       // No section in a Bower note: it goes where the grammar reads one, after the blank lines below the front matter.
       let at = legacy.frontEnd;
@@ -393,28 +375,21 @@ export function stateMarkOf(bytes: Uint8Array): string | null {
   }
 }
 
-/** The proposed lines minus any subset in order whose mark is `mark`: what Bower last wrote there, so not news. */
-function withoutSaid(lines: readonly string[], mark: string | null): string[] {
-  if (mark === null || lines.length === 0 || lines.length > 12) return [...lines];
-  for (let bits = (1 << lines.length) - 1; bits > 0; bits--) {
-    const subset = lines.filter((_, i) => (bits >> i) & 1);
-    if (stateMark(subset) === mark) return lines.filter((_, i) => !((bits >> i) & 1));
-  }
-  return [...lines];
-}
-
 /**
  * What Bower would have written in a Current state, as one Timeline line within an authored line's limits, naming
- * only what the section does not already hold (`existing`): as many whole lines as fit, or the first one cut at a word
- * with an ellipsis. Null when nothing is new, so no line is written.
+ * only what the section does not already hold (`existing`) nor Bower last wrote there (`said`: the lines of the state
+ * change whose mark the section carries, read from its run's manifest; none when that change cannot be read, so
+ * nothing is left out on a guess): as many whole lines as fit, or the first one cut at a word with an ellipsis. Null
+ * when nothing is new, so no line is written.
  */
-export function stateNewsLine(lines: readonly string[], existing: readonly string[], mark: string | null = null): string | null {
-  const lead = 'New: ';
+export function stateNewsLine(lines: readonly string[], existing: readonly string[], said: readonly string[] = []): string | null {
+  const lead = NEWS_LEAD;
   const plain = (line: string): string => line.replace(/ · /g, ', ').replace(/\[\[|\]\]/g, '').replace(/;/g, ',').trim().replace(/[.!?]+$/, '');
   const held = new Set(existing.map((line) => plain(line).toLowerCase()));
   // Plain news: the new lines joined by commas, the sentence taking one full stop at its end. A later line starts in
   // lower case (not an acronym), so the sentence reads as one.
-  const clean = withoutSaid(lines, mark).map(plain).filter((line) => line && !held.has(line.toLowerCase()))
+  const old = new Set(said);
+  const clean = lines.filter((line) => !old.has(line)).map(plain).filter((line) => line && !held.has(line.toLowerCase()))
     .map((line, i) => (i && /^[A-Z][a-z]/.test(line) ? `${line[0]?.toLowerCase() ?? ''}${line.slice(1)}` : line))
     // After the person's own lines, an article opener reads on from "New:"; a name keeps its capital.
     .map((line, i) => (i === 0 && existing.length > 0 && /^(A|An|The) /.test(line) ? `${line[0]?.toLowerCase() ?? ''}${line.slice(1)}` : line));
@@ -476,9 +451,9 @@ function outsideState(text: string, heading = false): string | null {
   if (typeof section === 'string') return null;
   let from = section.start;
   if (heading && !section.missing) {
-    const legacy = legacyOf(text);
-    if (!legacy?.current) return null;
-    from = legacy.current.start;
+    const current = sectionsOf(text)?.current;
+    if (!current) return null;
+    from = current.start;
   }
   const cut = text.slice(0, from) + text.slice(section.end);
   if (!section.mark) return cut;
@@ -600,7 +575,7 @@ function relink(text: string, change: Extract<Change, { kind: 'link-rewrite' }>)
     }
   } else if (own.status === 'plain') fenced(text, 0, text.length, renames, out);
   else {
-    const legacy = legacyOf(text);
+    const legacy = sectionsOf(text);
     if (!legacy) return { refused: 'invariant' };
     values(text, renames, out);
     fenced(text, legacy.frontEnd, text.length, renames, out);
@@ -761,12 +736,12 @@ function holds(before: string, after: string, change: Change, step: Exclude<Step
       if (same(slice(before, beforeBytes, a.payloads[owner])) !== same(slice(after, afterBytes, b.payloads[owner]))) return false;
     }
   } else if (a.status === 'legacy') {
-    const was = legacyOf(before);
-    const now = legacyOf(after);
+    const was = sectionsOf(before);
+    const now = sectionsOf(after);
     if (!was || !now) return false;
-    const parts = (text: string, at: Legacy): string[] => [
+    const parts = (text: string, at: Sections): string[] => [
       text.slice(0, at.frontEnd), at.current ? text.slice(at.current.start, at.current.end) : '',
-      at.bower !== null ? text.slice(at.bower) : '',
+      at.bowerNote ? text.slice(breakBefore(text, at.bowerNote.start)) : '',
     ];
     if (JSON.stringify(parts(before, was).map(same)) !== JSON.stringify(parts(after, now).map(same))) return false;
   }

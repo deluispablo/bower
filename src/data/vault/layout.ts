@@ -15,6 +15,7 @@
  */
 import type { RunnerWrite } from '../contracts/run-manifest';
 import { isRunWire } from '../contracts/run-wire';
+import { isAnsweredRow } from '../contracts/questions';
 import type { Question, Request, RunState, Suggestion } from '../types';
 
 export const BOWER_FOLDER = 'Bower';
@@ -105,16 +106,18 @@ const text = (v: unknown): v is string => typeof v === 'string';
 const number = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const optional = (v: unknown, check: (x: unknown) => boolean): boolean => v === undefined || check(v);
 const list = (v: unknown, check: (x: unknown) => boolean): boolean => Array.isArray(v) && v.every(check);
-const question = (v: unknown): boolean => object(v) && text(v.id) && text(v.text) && text(v.yes) && text(v.no) && number(v.askedAt) && optional(v.about, text) && optional(v.subject, text) && optional(v.hash, text) && optional(v.state, text);
+/** A question's shown update (`Question.shown`): its lines, and the note's checksum and stamp as left. */
+const shown = (v: unknown): boolean => object(v) && Array.isArray(v.lines) && v.lines.every(text) && text(v.md5) && optional(v.stamp, text);
+const question = (v: unknown): boolean => object(v) && text(v.id) && text(v.text) && text(v.yes) && text(v.no) && number(v.askedAt) && optional(v.about, text) && optional(v.subject, text) && optional(v.hash, text) && optional(v.state, text) && optional(v.shown, shown);
 const suggestion = (v: unknown): boolean => object(v) && text(v.id) && text(v.title) && text(v.why);
 const request = (v: unknown): boolean => object(v) && text(v.id) && text(v.text) && number(v.at) && optional(v.done, text);
 const pathChange = (v: unknown): boolean => object(v) && text(v.path) && text(v.what);
 const setAside = (v: unknown): boolean => object(v) && text(v.name) && text(v.why);
-const alreadySaved = (v: unknown): boolean => object(v) && text(v.name) && text(v.as);
+const alreadySaved = (v: unknown): boolean => object(v) && text(v.name) && text(v.as) && (v.notes === undefined || (typeof v.notes === 'number' && Number.isInteger(v.notes) && v.notes >= 1));
 const kinds = ['note', 'pdf', 'image', 'link', 'doc', 'sheet', 'audio', 'other'];
 const filed = (v: unknown): boolean => object(v) && text(v.name) && text(v.title) && text(v.to) && text(v.kind) && kinds.includes(v.kind) && optional(v.note, text);
 const count = (v: unknown): boolean => number(v) && Number.isInteger(v) && v >= 0;
-const report = (v: unknown): boolean => object(v) && list(v.filed, filed) && list(v.created, pathChange) && list(v.updated, pathChange) && list(v.setAside, setAside) && list(v.questions, question) && optional(v.yourChanges, count) && optional(v.rulesWorded, count) && optional(v.requests, (x) => list(x, text)) && optional(v.nothingReady, (x) => x === true) && optional(v.alreadySaved, (x) => list(x, alreadySaved)) && optional(v.unconfirmed, (x) => list(x, setAside));
+const report = (v: unknown): boolean => object(v) && list(v.filed, filed) && list(v.created, pathChange) && list(v.updated, pathChange) && list(v.setAside, setAside) && list(v.questions, question) && optional(v.yourChanges, count) && optional(v.rulesWorded, count) && optional(v.requests, (x) => list(x, text)) && optional(v.nothingReady, (x) => x === true) && optional(v.alreadySaved, (x) => list(x, alreadySaved)) && optional(v.unconfirmed, (x) => list(x, setAside)) && optional(v.answered, (x) => list(x, isAnsweredRow));
 const run = (v: unknown): boolean => isRunWire(v) && object(v) && optional(v.report, report);
 
 export interface RunnerFiles {

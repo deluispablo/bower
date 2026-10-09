@@ -1,6 +1,6 @@
 /**
  * The runner's status reports to the Worker: `POST /runner/runs/:id/status` with the run ticket and
- * `{ attempt, seq, phase, total?, failure? }` (worker contract, "Runner wire"). `seq` rises with each report of
+ * `{ attempt, seq, phase, total?, failure?, answersStayed? }` (worker contract, "Runner wire"). `seq` rises with each report of
  * this attempt. A late report is answered 409 `stale-report` with the Worker's `current: { seq, phase }`:
  *
  * - when that phase is `done` or `failed`, the run is finished: this report and any after it send nothing more;
@@ -36,6 +36,16 @@ function currentOf(reply: unknown): { seq: number; phase: RunPhase } | null {
   return typeof c.phase === 'string' && Object.hasOwn(RANK, c.phase) ? { seq: c.seq, phase: c.phase as RunPhase } : null;
 }
 
+/**
+ * What a report carries beside its phase: the total, a failed run's sentence, and at `done` whether a granted answer
+ * stayed in your changes (`answersStayed`, TL-P4-19 addendum 15: the Worker then starts the run that asks again).
+ */
+export interface StatusExtra {
+  total?: number;
+  failure?: string;
+  answersStayed?: true;
+}
+
 type Answer = { kind: 'taken' } | { kind: 'late'; current: { seq: number; phase: RunPhase } | null };
 
 export class RunnerStatus {
@@ -55,7 +65,7 @@ export class RunnerStatus {
     return this.endedAs !== null;
   }
 
-  async post(phase: RunPhase, extra: { total?: number; failure?: string } = {}): Promise<void> {
+  async post(phase: RunPhase, extra: StatusExtra = {}): Promise<void> {
     if (this.endedAs) {
       console.error(`The Worker already holds this run ${this.endedAs}; ${phase} is not sent`);
       return;
@@ -117,7 +127,7 @@ export class RunnerStatus {
     }
   }
 
-  private async send(phase: RunPhase, extra: { total?: number; failure?: string }, seq: number): Promise<Answer> {
+  private async send(phase: RunPhase, extra: StatusExtra, seq: number): Promise<Answer> {
     const res = await this.request({ attempt: this.opts.attempt, seq, phase, ...extra });
     if (res.ok) return { kind: 'taken' };
     const reply = (await res.json().catch((e: unknown) => {

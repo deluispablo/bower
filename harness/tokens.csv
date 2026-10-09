@@ -137,3 +137,34 @@ rules-template-bower,implementer,claude,sonnet,medium,1,134342,,,,,,42,10.4,deli
 p3-refreeze-review,reviewer,claude,opus,medium,1,95401,,,,,,16,2.2,PASS (5 minor),2026-10-07
 p3-refreeze2-review,reviewer,claude,opus,medium,1,145163,,,,,,31,4.8,PASS (6 minor),2026-10-07
 p3-c16-rewalk,evaluator,claude,sonnet,medium,1,122243,,,,,,,,PASS (3 minor),2026-10-07
+c3-pair-ask round2 (answered row),implementer,claude,bower-escalated,,1,247741,,,,,,97,15.4,STOPPED for restart (fix uncommitted green),2026-10-09
+c3-state-mark,implementer,claude,bower-escalated,,1,264511,,,,,,102,23.3,STOPPED for restart (fix uncommitted green; 3 answered seams + re-ask seam),2026-10-09
+c3-state-mark (resume),implementer,claude,bower-escalated,,2,100794,,,,,,17,3.2,delivered (seams wait for pair-ask answered row),2026-10-09
+c3-pair-ask round2 (resume),implementer,claude,bower-escalated,,2,109791,,,,,,30,5.2,delivered,2026-10-09
+P4-46c,reviewer,claude,bower-reviewer,,1,103745,,,,,,14,1.2,PASS (2 minor),2026-10-09
+c3-test-tamper,implementer,claude,bower-implementer,,1,94835,,,,,,23,5.5,delivered,2026-10-09
+c3-state-mark (seams),implementer,claude,bower-escalated,,3,97271,,,,,,26,4.8,delivered,2026-10-09
+P4-47,reviewer,claude,bower-reviewer,,1,113469,,,,,,21,2.3,BLOCK (1 important 5 minor),2026-10-09
+c3-hooks,implementer,claude,bower-implementer,,1,90943,,,,,,17,4.6,delivered (held: stop-gate-wrong-tree),2026-10-09
+stop-gate-wrong-tree,diagnoser,claude,bower-diagnoser,,1,138419,,,,,,33,5.1,diagnosed,2026-10-09
+c3-pair-ask round3,implementer,claude,bower-escalated,,1,114837,,,,,,48,6.7,blocked (label done; pair name needs ruling),2026-10-09
+c3-hooks (drop gate),mechanical,claude,bower-mechanical,,1,74626,,,,,,9,1.7,done,2026-10-09
+c3-flaky-policy,implementer,claude,bower-implementer,,1,106656,,,,,,32,8.2,delivered,2026-10-09
+c3-flaky-policy (merge),mechanical,claude,bower-mechanical,,1,60470,,,,,,6,1.4,done,2026-10-09
+c3-pair-ask round3 (part 2),implementer,claude,bower-escalated,,2,152619,,,,,,30,8.1,delivered,2026-10-09
+P4-46d,reviewer,claude,bower-reviewer,,1,89520,,,,,,18,1.1,PASS (5 minor),2026-10-09
+c3-permissions,implementer,claude,bower-implementer,,1,79953,,,,,,13,2.4,delivered,2026-10-09
+c3-agent-defs,implementer,claude,bower-implementer,,1,194033,,,,,,48,9.6,delivered (2 passes),2026-10-09
+rolecheck reviewer,reviewer,claude,bower-reviewer,,1,57528,,,,,,2,0.2,ok,2026-10-09
+rolecheck design-checker,design-checker,claude,bower-design-checker,,1,19841,,,,,,3,0.1,ok,2026-10-09
+rolecheck diagnoser,diagnoser,claude,bower-diagnoser,,1,11674,,,,,,2,0.1,ok,2026-10-09
+c3-stop-gate,implementer,claude,bower-implementer,,1,79885,,,,,,12,4.0,delivered,2026-10-09
+stop-gate live check,implementer,claude,bower-implementer,,1,51406,,,,,,1,0.1,gate not fired (session loaded old defs?),2026-10-09
+c3-state-mark round3,implementer,claude,bower-escalated,,4,312246,,,,,,165,22.4,blocked (write-time clash needs ruling),2026-10-09
+c3-state-mark round3b,implementer,claude,bower-escalated,,5,217637,,,,,,89,13.7,delivered (hit 80-turn cap once),2026-10-09
+P4-47b,reviewer,claude,bower-reviewer,,1,79302,,,,,,19,1.7,PASS (5 minor),2026-10-09
+c3-state-mark round4,implementer,claude,bower-escalated,,6,164293,,,,,,71,8.6,stalled (16 part, 17 done, 18 not),2026-10-09
+c3-state-mark round4b,implementer,claude,bower-escalated,,7,165601,,,,,,73,12.5,stalled (a19 engine block),2026-10-09
+c3-state-mark round4c,implementer,claude,bower-escalated,,8,136684,,,,,,58,7.6,delivered,2026-10-09
+P4-47c,reviewer,claude,bower-reviewer,,1,62297,,,,,,15,1.5,PASS (5 minor),2026-10-09
+stop-gate live check 2,implementer,claude,bower-implementer,,1,52308,,,,,,2,1.4,refused dirty stop (ok),2026-10-09

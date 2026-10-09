@@ -28,6 +28,8 @@ export const reportName = (hash: string): string => `report-${hash}.json`;
 export const dispositionName = (hash: string): string => `disposition-${hash}.json`;
 
 const MANIFEST_FILE = /^manifest-([0-9a-f]{64})\.json$/;
+/** Whether a file in a run's folder is its manifest, by its name. */
+export const isManifestName = (name: string): boolean => MANIFEST_FILE.test(name);
 const CHECKPOINT_FILE = /^checkpoint-(0|[1-9][0-9]*)-([0-9a-f]{64})\.json$/;
 
 /**

@@ -43,6 +43,7 @@ You are the one explicitly assigned integration coordinator for this batch. Foll
 - The designer (`Diseñador`, [TL-P4-18](../../docs/harness/2026-10-09-tl-p4-18-designer-role.md), addendum 3):
   - its specs reach you as entries from the lead;
   - you may consult it directly on a UI question (copy, layout, states, focus, motion, Bower on screen), in one message of 10 lines at most. A design choice outside an agreed spec still goes to the lead, who rules after the designer's answer;
+  - before dispatching a `ui: true` entry, send the designer its packet's "What the person sees" section and dispatch after its `ok` (TL-P4-22). A UI-only fix round of a non-escalated `ui: true` entry (only `src/features/`, `src/ui/`, `src/styles/` and their tests, about 150 lines at most) skips the re-review and is marked `review: skipped (TL-P4-22)` in the notes; the trial ends at the first later defect traced to one;
   - an entry that changes what the person sees or does is marked `ui: true` in its packet. After its review PASS and merge, and before `done.sh` closes it, send the designer a design check: the entry id, the claude/p3 SHA, the screens, and how to reach them (`?source=demo` or `fake`, on the dev server). Close it only after `verified`. `not as specified: <what>` starts a fix round within the spec; anything else goes to the lead.
 - Method refinements ([TL-P4-20](../../docs/harness/2026-10-09-tl-p4-20-method-refinement.md)):
   - before the first dispatch of each batch, run `harness/init.sh` and a fast e2e smoke;

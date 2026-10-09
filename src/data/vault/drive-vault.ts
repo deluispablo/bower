@@ -1350,7 +1350,9 @@ export class DriveVault implements VaultSource {
     // Things still on their way from here have no file to list yet; their questions stay open.
     for (const [id, u] of this.uploads) for (const e of u.entries) here.add(id).add(e.item.id);
     for (const item of this.queuedItems()) here.add(item.pileId).add(item.memberKey);
-    return openQuestions(all, answered, { ids: here });
+    // A question about a note that is not there now (a pair's other note in the Bin) is not shown either (TL-P4-19
+    // addendum 10): the notes as this page's listing has them, as the planner reads them.
+    return openQuestions(all, answered, { ids: here }, (await this.index()).notesSeen());
   }
 
   /**

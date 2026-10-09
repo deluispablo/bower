@@ -15,6 +15,11 @@ if ! git merge --no-ff --no-commit "$branch" >/dev/null 2>&1; then
   echo "$branch does not merge cleanly: nothing merged. Resolve it on the branch first."; exit 1
 fi
 if [ ! -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then echo "$branch has nothing new to merge."; exit 0; fi
+# A changed or deleted test needs its tests-changed line before anything slow runs (one rule, in scripts/harness-rules.mjs).
+if ! tampered=$(node "$(dirname "$0")/../scripts/check-harness.mjs" --tests-changed HEAD 2>&1); then
+  git merge --abort
+  echo "$tampered"; echo "$branch is not merged: add the lines to a notes file on the branch."; exit 1
+fi
 log=$(mktemp /tmp/integrate-check.XXXXXX)
 # One lock for heavy runs, shared with done.sh (harness/with-lock.sh); its messages stay on the terminal.
 if bash "$(dirname "$0")/with-lock.sh" bash -c 'bash -c "$2" >"$1" 2>&1' _ "$log" "${INTEGRATE_CHECK:-pnpm check}"; then

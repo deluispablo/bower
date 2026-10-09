@@ -1,5 +1,5 @@
 import { LoadError } from '@/ui/LoadError';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useId, useMemo, useRef } from 'react';
 import { report } from '@/ui/report';
 import { focusHeading, focusMain } from '@/ui/focus';
 import { answered, answerToast } from './answer-words';
@@ -25,6 +25,8 @@ import { SetAsideNote } from '@/features/piles/PileScreen';
 import { Inline, type LinkFn } from '@/features/note/markdown';
 import { resolverFor } from '@/features/note/resolve';
 import s from './home.module.css';
+import runStyles from '@/features/tidy/tidy.module.css';
+import noteStyles from '@/features/note/note.module.css';
 
 /** One sentence about keeping uploads on this device, or null: said once, for the whole inbox. */
 function useUploadNotice(): string | null | undefined {
@@ -257,6 +259,7 @@ function SearchField() {
 
 function Questions() {
   const questionsState = useQuestions();
+  const updateId = useId();
   const { data: qs } = questionsState;
   const { vault, runs } = useSources();
   const { data: tree } = useTree();
@@ -317,6 +320,22 @@ function Questions() {
               <p className={s.about}>
                 <Link to={noteRoute(q.about)}>{displayName(nameOf(q.about))}</Link>
               </p>
+            )}
+            {q.shown && q.shown.lines.length > 0 && (
+              // The update a yes writes, every line, labelled as the run result's lists are and shown as a Current
+              // state is (TL-P4-19 addendum 17): the person reads what they say yes to.
+              <>
+                <p id={`${updateId}-${q.id}`} className={runStyles.linksLabel}>
+                  {"Bower's update"}
+                </p>
+                <div className={noteStyles.state}>
+                  <ul aria-labelledby={`${updateId}-${q.id}`}>
+                    {q.shown.lines.map((l) => (
+                      <li key={l}>{l}</li>
+                    ))}
+                  </ul>
+                </div>
+              </>
             )}
             <div className={s.row2}>
               <Button size="sm" onClick={() => answer(q.id, true, q.yes)}>

@@ -136,6 +136,20 @@ P3-9 is closed.
 - P2 evidence checkouts (`/private/tmp/bower-p2-*`) can be removed.
 - Resume (TL-P2-45): never clear; after a compaction re-read HANDOFF and this file; a worker gone with no delivery is redispatched fresh from its packet.
 
+- 2026-10-09: c3-pair-ask merged bdc08775 (P4-46b PASS); design check sent to the Designer. c3-state-mark dispatched (bower-escalated, /private/tmp/bower-c3-state).
+
+- 2026-10-09: c3-pair-ask design not verified (not-merged-never-shown); TL-P4-19 addendum 10; round 2 dispatched (/private/tmp/bower-c3-pair2, designer copy in packet). c3-state-mark told to use the answered row; integrates after pair-ask.
+
+- 2026-10-09 restart: both workers stopped mid-fix for the plugin restart (pair-ask round 2 red c29a2862, state-mark red 1299ca14, fixes uncommitted in their worktrees; progress notes /private/tmp/*-progress.md). Resume order in HANDOFF.
+
+- 2026-10-09: the owner authorized in the coordinator chat: c3-hooks, c3-agent-defs, c3-permissions (TL-P4-20: .claude/settings.json hooks and permissions, agent definitions, hook scripts). Packets are written for those and for c3-test-tamper and c3-flaky-policy. c3-design-gate is dropped from the queue (already closed). Order after state-mark: test-tamper and hooks, then flaky-policy, agent-defs, permissions.
+
+- 2026-10-09 later: closed c3-test-tamper, c3-hooks (no Stop gate, addendum 3), c3-flaky-policy (batch switch E2E_BATCH=1: use it for the stage-end e2e suites). Open: c3-pair-ask round 3 part 2 (addendum 14) running; c3-state-mark round 3 (addenda 12-13, P4-47 BLOCK fold-in) after pair-ask merges; c3-permissions running; then c3-agent-defs, c3-stop-gate (serial: both edit implementer frontmatter). Load flakes logged: size-cap-test-timeout-under-load, per-thing-ask-timeout-under-load. The typescript-lsp tsserver holds worktrees open, so integrate.sh keeps them: remove by hand after checking the tree is clean.
+
+- 2026-10-09: the lead approved a coordinator restart after c3-state-mark closes and before the four suites. After the restart: re-run the live dirty-tree stop check first (agent-defs-not-live-mid-session), then the suites with E2E_BATCH=1, main, backup (the live push hook check), the SHA to the lead, and the smoke.
+
+- 2026-10-09: stage 3 entries all closed (c3-state-mark 5795b39b last). Ready for the coordinator restart; resume order in HANDOFF.
+
 ## P4 ([TL-P4-01](2026-10-07-tl-p4-01-p4-start.md), [P4_PLAN](../P4_PLAN.md))
 
 - Owner authorized P4 (main fb33b21). HANDOFF restored to the docs-test headings (0dc5fde).
@@ -466,3 +480,7 @@ P3-9 is closed.
 - c3-planner-split part 2 merged (a7c2ee04, P4-45c PASS, net -381); part 3 dispatched (split, op-id wire field, last capture tie).
 - Addendum 4 (main 49fb0270): op id + line accepted as the ordinal among the op's own lines; part 3's line is 'counted from the end of the Timeline' (a note position) → change in the P4-45d fix round. P4-45d running.
 - c3-planner-split part 3 fix round blocked: line ordinal has no anchor in the note (no per-line op); lead asked (options 1-4). No worker running.
+- Planner-split smoke prep: four suites green at b9c2674d (check: app 3858, api 234, runner 236, harness 441/449; e2e 226; e2e:fake 257; pwa 4). main moved to a0a0c1a7 (docs-only beyond b9c2674d) and backed up (remote verified a0a0c1a7). SHA sent to the lead for deploy.
+- Planner-split smoke on staging a0a0c1a7: garden PASS 51 s, offer-and-flat PASS 61 s, c05-hub-lines PASS 55 s; rows per Timeline line and New marks correct; Home 4.5 s / 15 calls, no .bower growth. c3-note-sections delivered (red 650f1ac3, fix 8233a111).
+- c3-pair-ask dispatched (escalated, packet with ruling sweep). c3-state-mark (with write-it-silent, addendum 7) registered; dispatched after pair-ask (both touch scripted.ts and questions).
+- TL-P4-18 addendum 2 (main f6856abd): UI-touching questions/defects are flagged as UI in messages to the lead (lead consults the designer). c3-pair-ask copy may change before merge (lead sends final text).

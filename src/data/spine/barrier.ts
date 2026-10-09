@@ -132,8 +132,9 @@ export function fixedReport(r: RunReport): RunReport {
   if (r.requests !== undefined) out.requests = [...r.requests];
   if (r.rulesWorded !== undefined) out.rulesWorded = r.rulesWorded;
   if (r.nothingReady) out.nothingReady = true;
-  if (r.alreadySaved?.length) out.alreadySaved = r.alreadySaved.map((a) => ({ name: a.name, as: a.as }));
+  if (r.alreadySaved?.length) out.alreadySaved = r.alreadySaved.map((a) => ({ name: a.name, as: a.as, ...(a.notes !== undefined ? { notes: a.notes } : {}) }));
   if (r.unconfirmed?.length) out.unconfirmed = r.unconfirmed.map((a) => ({ name: a.name, why: a.why }));
+  if (r.answered?.length) out.answered = r.answered.map((a) => ({ questionId: a.questionId, kind: a.kind, outcome: a.outcome, why: a.why, ...(a.note !== undefined ? { note: a.note } : {}) }));
   return out;
 }
 
@@ -267,6 +268,21 @@ export interface Finished {
   written: string[];
   /** One for every admitted item; empty with no admission manifest. */
   dispositions: ItemDisposition[];
+  /**
+   * Whether a "Write it" the person granted was refused by a clash at the write itself: its answer stays in your
+   * changes, and the run's end says so, so the Worker starts the run that asks again (TL-P4-19 addendum 15). Only a
+   * clash: the run after it asks the person again, which needs a new answer; any other refusal would be tried again
+   * with nothing changed, a loop (addendum 16).
+   */
+  answersStayed: boolean;
+}
+
+/** Whether an operation of `manifest` writes a Current state the person granted, and was refused by a clash (`Finished`). */
+function grantedClashed(manifest: RunManifest, outcomes: Checkpoint['outcomes']): boolean {
+  return manifest.operations.some((o, i) => {
+    const out = outcomes[i];
+    return o.effect.kind === 'edit-text' && o.effect.changes.some((c) => c.kind === 'state-rewrite' && c.granted !== undefined) && out?.state === 'rejected' && out.failure.code === 'conflict';
+  });
 }
 
 const UNRESOLVED = 'Bower could not check one of the things it moved. It will look again later.';
@@ -279,7 +295,7 @@ export async function finishRun(run: BarrierRun, manifest: RunManifest, manifest
   const where = { runId: run.runId };
   const mark: AttemptMark = { attemptId: run.newId(), epoch: run.attempt };
   const dispositions = (outcomes: Checkpoint['outcomes']): ItemDisposition[] => (run.admission ? itemDispositions(run.admission, manifest, outcomes) : []);
-  if (at.phase === 'done') return { chain, written: [], dispositions: dispositions(at.outcomes) };
+  if (at.phase === 'done') return { chain, written: [], dispositions: dispositions(at.outcomes), answersStayed: grantedClashed(manifest, at.outcomes) };
   if (at.phase === 'failed') throw new BowerError('unknown', SAVE_FAILED);
 
   const commit = async (patch: CheckpointPatch): Promise<Checkpoint> => {
@@ -354,5 +370,5 @@ export async function finishRun(run: BarrierRun, manifest: RunManifest, manifest
     return e.kind === 'bin' && outcomes[i]?.state === 'rejected' ? manifest.capture.piles.filter((p) => p.anchor?.fileId === e.before.fileId).map((p) => p.pileId) : [];
   });
   at = await commit({ phase: 'done', phaseAt: finishedAt, report: { state: 'published', reportHash: r.hash }, retainedPileIds });
-  return { chain, written, dispositions: dispositions(at.outcomes) };
+  return { chain, written, dispositions: dispositions(at.outcomes), answersStayed: grantedClashed(manifest, at.outcomes) };
 }

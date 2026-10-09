@@ -6,7 +6,7 @@ Read this and your packet. Do not read other planning or harness documents unles
 - **Research first.** Find the standard solution (official docs, a well-known library, a successful app) and cite it in your delivery. For current library docs you may use context7. Its queries leave the machine, so a query names only the library and the topic: never code, file contents, paths or project names (TL-P4-20 addendum 2). Prefer reusing the original app (`/Users/deluisp/Projects/bower`) where the packet says so. Use the simplest approach that is honest and loses no data.
 - **Acceptance contract.** Your packet lists the named tests, the observable behaviours and the files in scope. Build to it; anything outside it goes in "left out", not into the change ([TL-P2-44](2026-10-06-tl-p2-44-enforced-token-method.md)).
 - **Test first.** Write or adjust the test the packet names, and see it fail on an assertion. Then make the smallest fix that turns it green.
-- **Gates.** Run the packet's verify, `pnpm check`, and the e2e of the screens you touched. Always redirect output to a file and read only the failures or the tail: `pnpm check > /tmp/<entry>-check.log 2>&1; tail -20 /tmp/<entry>-check.log`. In Claude a hook does this for a plain gate command. Do not re-read a file already in your context or re-run a gate that has not changed.
+- **Gates.** Run the packet's verify, `pnpm check`, and the e2e of the screens you touched. Always redirect output to a file and read only the failures or the tail: `pnpm check > /tmp/<entry>-check.log 2>&1; tail -20 /tmp/<entry>-check.log`. `pnpm check` itself records the green mark for your worktree and HEAD on success; one command, no wrapper. In Claude a hook makes a plain gate command quiet. Do not re-read a file already in your context or re-run a gate that has not changed.
 - **Rules that never bend.**
   - No personal data: use `Alex`, `you@example.com`, `FOLDER_ID`.
   - English. UI copy in sentence case and plain words, never "vault".
@@ -28,15 +28,17 @@ Read this and your packet. Do not read other planning or harness documents unles
   - your notes file goes in its own commit, never in a fix commit;
   - never weaken a test to get to green. Every existing test you modify or delete gets a line in your notes, `tests changed: <file>: <why>`, which the reviewer checks. Never add `.only` or `.skip` (TL-P4-20);
   - use the mechanism the packet names from the ARCHITECTURE mechanism map. Never write a second way of doing what it does; if it cannot do what you need, stop and report `blocked`. For a defect, the packet cites its diagnosis note: implement the ruling, nothing else ([DEFECTS.md](DEFECTS.md)).
+- **Hook tests (TL-P4-22).** A hook test's input is copied from a recorded live hook input, never written from the docs alone; a change to a hook or agent frontmatter goes live only after the affected sessions restart.
 - **Reviewers.** Read only the diff range and the packet. Read other revisions with `git show` or `git diff`, or in a scratch worktree. Never run checkout, switch, reset, rebase, merge or stash in the main checkout: a hook blocks it for subagents, and the forms it misses (subshell, `pushd`, `GIT_DIR`) are still forbidden. Never start a server or run e2e; run the unit and contract tests only. Always answer one fixed question: does this change add a second way to do something that already exists (ARCHITECTURE mechanism map)? A yes is an Important finding. Judge against the acceptance contract: only Critical and Important findings against it block, each with a reproduction. List Minor findings in one line each; they never block.
 - **Fix rounds** start in a fresh session with the packet, the finding and the diff range; nobody resumes a finished worker.
-- **Output ([TL-P3-17](2026-10-07-tl-p3-17-output-discipline.md)).** Only the coordinator reads you, and only your final reply. Write no text between tool calls: think, act, and keep notes in files. Your final reply is one card of `key: value` lines and nothing else, with no greeting, recap or narrative. Point to files and SHAs instead of pasting them. Keep each card line under 120 characters: list SHAs, test names and paths, never explanations. Never leave out a fact the coordinator needs to decide; a missing fact costs more than a line.
-- **Delivery card (implementer), at most 8 lines:**
+- **Output ([TL-P3-17](2026-10-07-tl-p3-17-output-discipline.md)).** Only the coordinator reads you, and only your final reply. Write no text between tool calls: think, act, and keep notes in files. The stop gate judges the tree named by the strict `worktree:` line (absolute path) of the card, and refuses a reply without it. Your final reply is one card of `key: value` lines and nothing else, with no greeting, recap or narrative. Point to files and SHAs instead of pasting them. Keep each card line under 120 characters: list SHAs, test names and paths, never explanations. Never leave out a fact the coordinator needs to decide; a missing fact costs more than a line.
+- **Delivery card (implementer), at most 9 lines:**
   ```
   status: done | blocked | stalled
   commits: <sha>[, <sha>]
   red: <test name>: <the assertion that failed>
   green: verify pass; pnpm check pass|fail; e2e <names> pass|fail; logs <paths>
+  worktree: <absolute path of your worktree>
   files: <paths>
   sources: <urls>
   left out: <one line, or none>

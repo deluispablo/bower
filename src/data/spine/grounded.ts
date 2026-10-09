@@ -6,8 +6,9 @@
 import type { DriveFile } from '../drive/drive-api';
 import type { EffectV2, OperationV2, ReportContribution, SeenFile, Target } from '../contracts/run-manifest';
 import { savedLinkKey } from '../contracts/note-edit';
+import { savedWordsPile } from './duplicates';
 import { md5Hex } from '../contracts/hashes';
-import { join, nameOf } from '../tree';
+import { join, nameOf, parentOf } from '../tree';
 import { PARA_ROOTS } from '../types';
 import { sha256 } from '../vault/hashes';
 import { SYSTEM, isRunnerFile } from '../vault/layout';
@@ -55,20 +56,31 @@ export function grounded(manifest: RunManifest): boolean {
   };
   const applied = new Map<string, ReportContribution[]>();
   const rejected = new Map<string, number>();
+  const lines = new Set(manifest.capture.journal.flatMap((j) => j.fileIds));
+  // An answer whose granted write was refused keeps it, in one answered row on that edit, rejected (TL-P4-19 addendum 21).
+  const notWritten = (c: ReportContribution): boolean => {
+    const e = c.requires.length === 1 ? ops.get(c.requires[0] ?? '')?.effect : undefined;
+    return c.when === 'rejected' && !c.value.setAside.length && !c.value.filed.length && !c.value.updated.length && c.value.answered?.length === 1 && e?.kind === 'edit-text'
+      && e.changes.some((x) => x.kind === 'state-rewrite' && x.granted !== undefined);
+  };
   for (const c of manifest.reportPlan) {
     if (!c.requires.length || new Set(c.requires).size !== c.requires.length || !c.requires.every((id) => ops.has(id))) return false;
+    if (notWritten(c)) continue;
     if (c.when === 'rejected' && (c.requires.length !== 1 || c.value.setAside.length !== 1)) return false;
     // An updated row names the operation that wrote it: its contribution's first (TL-P4-19 addendum 3).
     if (c.value.updated.some((r) => r.op !== c.requires[0])) return false;
+    // An answered row is said once its answer's line is archived (TL-P4-19 addendum 10): on that move, applied.
+    if (c.value.answered?.length && (c.when !== 'applied' || !c.requires.some((id) => { const e = ops.get(id)?.effect; return e?.kind === 'move' && lines.has(e.before.fileId); }))) return false;
     for (const id of c.requires) {
       if (c.when === 'rejected') rejected.set(id, (rejected.get(id) ?? 0) + 1);
       else applied.set(id, [...(applied.get(id) ?? []), c]);
     }
     const required = c.requires.flatMap((id) => ops.get(id)?.effect ?? []);
-    // A filed row's place is its thing's move's, or its note's create's; its note the one made or edited, or in that place.
+    // A filed row's place is its thing's move's, or its note's create's, or (a pile of words carried as Timeline lines)
+    // its note's edit's; its note the one made or edited, or in that place.
     const move = required.find((e) => e.kind === 'move' && members.has(e.before.fileId));
     const made = required.find((e) => e.kind === 'create-text' || e.kind === 'edit-text');
-    const to = move?.kind === 'move' ? pathOf(move.parent) : made?.kind === 'create-text' ? pathOf(made.parent) : null;
+    const to = move?.kind === 'move' ? pathOf(move.parent) : made?.kind === 'create-text' ? pathOf(made.parent) : made?.kind === 'edit-text' ? parentOf(made.path) : null;
     for (const r of c.value.filed) {
       if (to === null || r.to !== to) return false;
       if (r.note !== undefined && r.note !== (made ? madeAt(made) : join(r.to, nameOf(r.note)))) return false;
@@ -81,7 +93,6 @@ export function grounded(manifest: RunManifest): boolean {
   const rows = (o: OperationV2): ReportContribution[] => applied.get(o.operationId) ?? [];
   /** How many set-aside rows each operation must have: none but the ones counted below. */
   const asides = new Map<string, number>();
-  const lines = new Set(manifest.capture.journal.flatMap((j) => j.fileIds));
   /** Each captured thing's outcomes with a row: filed or saved, and set aside (by its move or Bin, not a cleared mark). */
   const told = { applied: new Set<string>(), rejected: new Set<string>() };
   for (const o of manifest.operations) {
@@ -96,6 +107,9 @@ export function grounded(manifest: RunManifest): boolean {
       asides.set(o.operationId, 1);
       told.applied.add(e.before.fileId);
       told.rejected.add(e.before.fileId);
+    } else if (savedWordsPile(manifest, o) !== null) {
+      // A pile of words already saved: its Bin is told as a copy's is, once for each outcome.
+      asides.set(o.operationId, 1);
     } else if (e.kind === 'move' && lines.has(e.before.fileId)) {
       if (pathOf(e.parent) !== SYSTEM.archive || e.name !== e.before.name || Object.keys(e.properties).length || mine.length !== 1) return false;
     } else if (e.kind === 'bin' && places.has(e.before.fileId)) {

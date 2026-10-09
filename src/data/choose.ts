@@ -81,7 +81,7 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
     return { sources: makeLiveSources({ worker, driveLinks: true, declarePiles: true, drive: new DriveHttp({ token: (fresh) => worker.driveToken(fresh) }), place: { world: 'real' } }) };
   }
   const [{ pretendDrive, pretendRuns }, { FakeWorker }, { FakeLease, leaseKey }, { ALEX }] = await Promise.all([import('./fake/pretend'), import('./fake/fake-worker'), import('./fake/fake-lease'), import('./demo/fixture')]);
-  const { drive, rootId, fresh } = await pretendDrive(scenario);
+  const { drive, rootId, fresh, keys } = await pretendDrive(scenario);
   drive.latency = scenario === 'slow' ? 1500 : scale === 'instant' ? 0 : 40;
   drive.offline = scenario === 'offline';
   // The live shape: about 300 ms a call and four at once, as a browser talks to Drive. Home must show the Inbox first.
@@ -91,12 +91,18 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
     drive.calls = 0;
     (window as unknown as { __driveCalls: () => number }).__driveCalls = () => drive.calls;
   }
+  // The write-it situation: the scripted reply updates two Current states, and the page may change a note elsewhere,
+  // now or right before Bower's write to it is sent.
+  const writeIt = scenario === 'write-it' ? await import('./fake/write-it') : null;
+  const atWrite = writeIt && rootId ? writeIt.editAtWrite(drive, rootId) : null;
   // The pretend Worker's run service owns runs on the B path, across reloads, beside the pretend Drive.
-  const runs = pretendRuns(scenario, drive, fresh, scale);
+  const runs = pretendRuns(scenario, drive, fresh, scale, atWrite ? { beforeDispatch: atWrite.beforeDispatch } : undefined);
   // The pretend Worker's session lease, shared by this browser's tabs as devices share the real Worker's.
   const world = `fake:${scenario}`;
   const lease = new FakeLease({ key: leaseKey(world, await uploadAccount(ALEX.email)) });
-  const worker = new FakeWorker({ drive, scenario, rootId, fresh, offline: scenario === 'offline', runs, lease });
+  const worker = new FakeWorker({ drive, scenario, rootId, fresh, offline: scenario === 'offline', runs, lease, ...(writeIt ? { states: writeIt.writeItStates(keys) } : {}) });
+  if (writeIt && rootId) (window as unknown as { __editElsewhere: (path: string, from: string, to: string) => Promise<void> }).__editElsewhere = writeIt.editElsewhere(drive, rootId);
+  if (atWrite) (window as unknown as { __editAtWrite: (path: string, from: string, to: string) => void }).__editAtWrite = atWrite.arm;
   // The notes of changes find no network until the page says Drive now refuses them for good (the test's hook).
   if (scenario === 'journal-refused') {
     let refuses = false;

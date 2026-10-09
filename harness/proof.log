@@ -487,3 +487,13 @@ c3-alone-margin	09e27ecc04e4bb7e	2026-10-09	known-green: verify passes at 0110eb
 c3-done-harness-paths	2c906fd88093e0d5	2026-10-09	red (fixed in b2222dd5)
 c3-branch-cleanup	d4a1350c7af72e3d	2026-10-09	red (fixed in c8f43681)
 c3-planner-split	fc8aa32a0e6ea2d2	2026-10-09	known-green: red at f9b658c6/c1de99be (/tmp/c3plan-handred*.log); green at a5719afb
+c3-note-sections	dd52f59d42e4d429	2026-10-09	red (fixed in 8233a111)
+c3-design-gate	5b1b929d75b55243	2026-10-09	red (fixed in fc044c95)
+c3-test-tamper	686a68f501d1f38f	2026-10-09	red (fixed in 95e7f290)
+c3-hooks	d44545e753e65f42	2026-10-09	known-green: red proved by hand at a695ad3b: 3 verify tests fail on assertions (/tmp/c3hooks-handred.log)
+c3-flaky-policy	386bd37b30029839	2026-10-09	known-green: red proved by hand at 028910f1: 4 verify tests fail on assertions (/tmp/c3flaky-handred.log)
+c3-permissions	e1bd4934ec69cfec	2026-10-09	red (fixed in 387af2de)
+c3-pair-ask	d40d3a2eb6329797	2026-10-09	known-green: reds proved by hand at c29a2862, aa83f697, 1a8cc05a (/tmp/c3pair-handred-*.log); earlier rounds bcfdaacf, 09f64090; P4-46d PASS; designer verified 049e07d9
+c3-agent-defs	c3d1d73daf940221	2026-10-09	red (fixed in 31817d33)
+c3-stop-gate	e663e5785c3734c0	2026-10-09	red (fixed in 7c0e9f32)
+c3-state-mark	dbaa9007025ed521	2026-10-09	known-green: reds proved by hand at 1299ca14, a7f7c938, a802a1a2 (/tmp/c3state-handred-*.log); P4-47c PASS; designer verified 809ff91b

@@ -3,6 +3,7 @@ import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import tseslint from 'typescript-eslint';
+import { testRulesConfig } from './scripts/eslint-test-rules.mjs';
 import { syntaxConfig } from './scripts/eslint-syntax.mjs';
 
 export default tseslint.config(
@@ -21,5 +22,6 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': ['error', { varsIgnorePattern: '^_', argsIgnorePattern: '^_', ignoreRestSiblings: true }],
     },
   },
+  testRulesConfig(['src/**/*.test.{ts,tsx}']),
   ...syntaxConfig('root'),
 );

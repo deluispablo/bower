@@ -11,6 +11,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import type { Question } from '../../src/data/contracts/types';
 import { distinctPaths } from '../../src/data/spine/report';
+import { timelineBullets } from '../../src/data/vault/note-format';
 
 /** The capabilities the corpus covers, by the ids of `docs/P2_ACCEPTANCE.md`. */
 export const CORPUS_CAPABILITIES = ['C04', 'C05', 'C06', 'C07', 'C08', 'C09', 'C10', 'C11', 'C13', 'C15'] as const;
@@ -185,17 +186,8 @@ export interface Score {
 
 const LINK = /\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]/g;
 
-/** The Timeline lines of a note: the bullets under its `## Timeline` heading. */
-export function timelineOf(text: string): string[] {
-  const at = text.search(/^## Timeline\s*$/m);
-  if (at < 0) return [];
-  const out: string[] = [];
-  for (const l of text.slice(at).split(/\r?\n/).slice(1)) {
-    if (l.startsWith('## ')) break;
-    if (l.startsWith('- ')) out.push(l);
-  }
-  return out;
-}
+/** The Timeline lines of a note: the bullets of its Timeline section, as the app's one note parser frames it. */
+export const timelineOf = timelineBullets;
 
 function reportOf(lastRun: unknown): Record<string, unknown> | null {
   if (!lastRun || typeof lastRun !== 'object') return null;

@@ -2,6 +2,34 @@
 
 Coordinator: the Claude Code session named "Orquestador". It integrates in `/Users/deluisp/Projects/bower-app` on branch `claude/p3`; P4 continues on it. Lead: the Planificador session ([DECISIONS.md](DECISIONS.md)). Output rule: [TL-P3-29](2026-10-07-tl-p3-29-output-rule-survives-compaction.md), in AGENTS.md. Minors: [P2_POLISH.md](P2_POLISH.md). Earlier handoffs: git history of this file.
 
+## Resume after the restart (2026-10-09, second: make the stop gate and agent caps live)
+
+Read this first. **Every stage 3 entry is closed** (c3-pair-ask, c3-state-mark, c3-test-tamper, c3-hooks, c3-flaky-policy, c3-permissions, c3-agent-defs, c3-stop-gate). No worker is running and no worktree is open except the role worktrees.
+
+Order after the restart (lead, TL-P4-20 addendum 3 and its message):
+1. **Live stop-gate check first** (DEFECT_LOG `agent-defs-not-live-mid-session`).
+   - Create a scratch detached worktree of claude/p3 and run pnpm install.
+   - Dispatch a bower-implementer that creates an untracked file there and tries to stop with `status: done` + `worktree: <path>`.
+   - It must be refused. Record the outcome, then remove the worktree.
+   - If it is still not refused, log it and diagnose before the suites.
+2. **The four suites** under `bash harness/with-lock.sh`, on an idle machine, with logs to /tmp:
+   - check;
+   - e2e, e2e:fake and e2e:pwa, all with `E2E_BATCH=1` (c3-flaky-policy).
+   - A retry-passed test enters the defect flow.
+3. **Main:** `git fetch -q . claude/p3:main`. Then the secret and personal-data scan. Then the backup per BACKUP.md, with Bash outside the sandbox: `git push backup refs/heads/main:refs/heads/main`, then verify the remote SHA. This is also the live check of the c3-permissions push hook.
+4. **The SHA to the lead.** Then the staging smoke after the lead deploys (procedure in [p4-speed-baseline.md](p4-speed-baseline.md)).
+5. **Then stage 4** in TL-P4-21 order: c4-focus-return (with d-v2-04) ∥ v2-field first. Carry-overs are in [2026-10-09-stage4-packet-notes.md](2026-10-09-stage4-packet-notes.md); d-v2-02 carries the c3-state-mark copy and the answer-only Home card. Then p4-rate-limits, and the open entries report-kept-your-change and type-proposals.
+
+Rules now live:
+- WORKER cards carry `worktree: <absolute path>`.
+- `pnpm check` writes the green mark.
+- integrate.sh needs `tests changed:` lines.
+- Agents have maxTurns (80 for implementers) and `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2`.
+- The push hook allows only the backup push, and it also refuses prose that mentions the push command (`push-guard-matches-quoted-text`, minor).
+- The typescript-lsp tsserver keeps worktrees "in use", so integrate.sh keeps them. Remove them by hand after checking the tree is clean.
+
+Open defects (stage-end list): size-cap-test-timeout-under-load, per-thing-ask-timeout-under-load (load flakes, to diagnose), agent-defs-not-live-mid-session.
+
 ## Where things stand
 
 - **P3 is accepted** by the owner (GOVERNANCE, main `88bb7de`). Dossier: [2026-10-07-p3-dossier.md](2026-10-07-p3-dossier.md).

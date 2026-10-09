@@ -14,7 +14,7 @@
 import type { FakeDrive } from '../drive/fake-drive';
 import { DriveVault } from '../vault/drive-vault';
 import { fakeRead, type ScriptedRead } from '../spine/read';
-import { planScripted, type PlanOptions, type RunPlan } from '../spine/scripted';
+import { planScripted, type AuthoredState, type PlanOptions, type RunPlan } from '../spine/scripted';
 import { scriptedDecisions, type HubUpdate } from '../demo/script';
 
 export { SET_ASIDE } from '../spine/plan';
@@ -30,11 +30,14 @@ export function fakeScripted(drive: FakeDrive): ScriptedRead {
   };
 }
 
-/** A fake run's options: the scripted reply's, with the hub notes it brings up to date (the demo's by default). */
-export type FakePlanOptions = Omit<PlanOptions, 'decisions'> & { updates?: readonly HubUpdate[] };
+/**
+ * A fake run's options: the scripted reply's, with the hub notes it brings up to date (the demo's by default) and the
+ * Current states it updates (none by default; the write-it situation's).
+ */
+export type FakePlanOptions = Omit<PlanOptions, 'decisions'> & { updates?: readonly HubUpdate[]; states?: readonly AuthoredState[] };
 
 /** Plans a run on the B path over the pretend Drive: the scripted provider's planning (`planScripted`). */
 export function planRun(drive: FakeDrive, rootId: string, opts: FakePlanOptions, editCap?: number, held?: ReadonlySet<string>): Promise<RunPlan> {
-  const { updates, ...rest } = opts;
-  return planScripted(fakeScripted(drive), rootId, { ...rest, decisions: scriptedDecisions(updates) }, editCap, held);
+  const { updates, states, ...rest } = opts;
+  return planScripted(fakeScripted(drive), rootId, { ...rest, decisions: scriptedDecisions(updates, states) }, editCap, held);
 }

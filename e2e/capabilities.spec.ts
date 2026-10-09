@@ -4,7 +4,8 @@
  * them. `run-result-links` runs on demo and fake; the C04, C05 and C11
  * journeys run on the pretend Drive, where the effects are files.
  */
-import type { Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import type { Locator, Page } from '@playwright/test';
 import { expect, isFake, test } from './fixtures';
 
 const NOTE_WORDS = 'Ask the landlord about the heating';
@@ -19,6 +20,17 @@ const open = async (page: Page, path: string, scenario = 'empty', time = 'instan
 const inbox = (page: Page) => page.getByRole('region', { name: 'Inbox' });
 const home = (page: Page) => page.getByRole('link', { name: /^Home/ }).first().click();
 const timeline = (page: Page) => page.getByRole('region', { name: 'Timeline' }).getByRole('listitem');
+/** The answered rows' own label (TL-P4-19 addendum 11). */
+const ANSWERED_LABEL = 'Answers Bower could not act on';
+/** The answered rows sit in their own labelled list, never under "Brought up to date", and pass axe (WCAG 2.2, target size). */
+async function answeredListed(page: Page, within: Locator, selector: string, rows: readonly string[]): Promise<void> {
+  const list = within.getByRole('list', { name: ANSWERED_LABEL });
+  for (const row of rows) await expect(list.getByText(row, { exact: true })).toBeVisible();
+  const updated = within.getByRole('list', { name: 'Brought up to date' });
+  for (const row of rows) await expect(updated.getByText(row, { exact: true })).toHaveCount(0);
+  const axe = await new AxeBuilder({ page }).include(selector).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).options({ rules: { 'target-size': { enabled: true } } }).analyze();
+  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+}
 const FAKE_ONLY = 'the journey checks what the tidy-up wrote into the pretend Drive (TL-P2-40)';
 
 /** Puts a note with no things in the inbox, from Add. */
@@ -194,4 +206,121 @@ test('C11: a kept rule and a merge answer are applied', async ({ page }) => {
   const worded = page.getByRole('main').getByRole('listitem').filter({ hasText: WORDED });
   await expect(worded).toContainText(`You wrote: "${RULE}"`);
   await expect(page.getByText('Waiting for the next tidy-up, where Bower words it clearly.')).toHaveCount(0);
+});
+
+test('write it shows the state written, re-asks on a clash and settles as an answered row', async ({ page }) => {
+  test.skip(!isFake, FAKE_ONLY);
+  test.setTimeout(120_000);
+  // The write-it situation: Money's and Car's Current states were changed by hand since Bower wrote them, and the
+  // scripted tidy-up has an update for each (TL-P4-19 addendum 13).
+  const MONEY_UPDATE = 'October is on budget so far.';
+  const CAR = 'Areas/Car/Car.md';
+  const CAR_NOW = '- Insurance runs until 30 June.\n- MOT due in January.';
+  const CAR_UPDATE = '- Insurance runs until 30 June.\n- MOT booked for 14 January.';
+  const REASK = 'The current state of Car changed after Bower showed you its update, so nothing was written. Should Bower write its update there now?';
+  const NOTHING = 'Nothing to write: Car already said what Bower would have written.';
+  const editElsewhere = (from: string, to: string): Promise<void> => page.evaluate(async ([path, a, b]) => {
+    await (window as unknown as { __editElsewhere: (p: string, x: string, y: string) => Promise<void> }).__editElsewhere(path, a, b);
+  }, [CAR, from, to] as const);
+  await open(page, '/', 'write-it');
+  await tidyUp(page);
+  await page.getByRole('dialog').getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const questions = page.getByRole('region', { name: /questions? for you/ });
+  const asked = (text: string): Locator => questions.getByRole('listitem').filter({ hasText: text });
+  // Write it: the update Bower showed is written into Money's Current state.
+  const money = asked('You changed the current state of Money.');
+  // The card shows Bower's update, every line, under its own label, and passes axe (TL-P4-19 addendum 17).
+  const update = money.getByRole('list', { name: "Bower's update" });
+  await expect(update.getByRole('listitem')).toHaveText([MONEY_UPDATE, 'Receipts are filed by month, as your rule says.']);
+  const axe = await new AxeBuilder({ page }).include('section[aria-labelledby="qs"]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).options({ rules: { 'target-size': { enabled: true } } }).analyze();
+  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+  await money.getByRole('button', { name: 'Write it' }).click();
+  await expect(money).toHaveCount(0);
+  await page.getByRole('region', { name: 'Recent' }).getByRole('link', { name: /^Money/ }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Money' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Current state' })).toContainText(MONEY_UPDATE, { timeout: 20_000 });
+  await home(page);
+  // Car changes on another device after Bower showed its update: Write it writes nothing and asks again, saying why.
+  await editElsewhere('- [ ] Check the tyres before winter', '- [x] Check the tyres before winter');
+  const car = asked('You changed the current state of Car.');
+  await car.getByRole('button', { name: 'Write it' }).click();
+  await expect(car).toHaveCount(0);
+  const again = asked(REASK);
+  await expect(again).toBeVisible({ timeout: 20_000 });
+  // The person types Bower's update into Car themselves, then says Write it: nothing to write. It settles as one
+  // answered row on the note, in its own labelled list, and is not counted as set aside.
+  await editElsewhere(CAR_NOW, CAR_UPDATE);
+  await again.getByRole('button', { name: 'Write it' }).click();
+  await expect(again).toHaveCount(0);
+  await page.goto(`/note/${CAR.split('/').map(encodeURIComponent).join('/')}`);
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+  await expect(page.getByRole('heading', { level: 1, name: 'Car' })).toBeVisible();
+  const main = page.getByRole('main');
+  await expect(main.getByText(NOTHING, { exact: true })).toBeVisible({ timeout: 20_000 });
+  await answeredListed(page, main, 'main', [NOTHING]);
+  await expect(main).not.toContainText('set aside');
+  await expect(page.getByRole('region', { name: 'Current state' })).toContainText('MOT booked for 14 January.');
+});
+
+test('a clash at write time leads to the re-ask with the new sentence and no extra press', async ({ page, allowConsole }) => {
+  test.skip(!isFake, FAKE_ONLY);
+  test.setTimeout(120_000);
+  // The write's own fence refuses it, and says so in the log: that is the clash this test makes.
+  allowConsole(/Refused a write to target \w+: modified/, 'the write-time clash this test makes');
+  allowConsole(/This changed somewhere else while Bower was tidying/, 'the write-time clash this test makes');
+  // TL-P4-19 addendum 15: Money changes on another device right before Bower's write is sent. Nothing is written, and
+  // the question comes back in the one re-ask wording with no other press.
+  const MONEY = 'Areas/Money/Money.md';
+  const REASK = 'The current state of Money changed after Bower showed you its update, so nothing was written. Should Bower write its update there now?';
+  await open(page, '/', 'write-it');
+  await tidyUp(page);
+  await page.getByRole('dialog').getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const questions = page.getByRole('region', { name: /questions? for you/ });
+  const asked = (text: string): Locator => questions.getByRole('listitem').filter({ hasText: text });
+  await page.evaluate(async ([path, a, b]) => {
+    (window as unknown as { __editAtWrite: (p: string, x: string, y: string) => void }).__editAtWrite(path, a, b);
+  }, [MONEY, 'for the monthly plan.', 'for the yearly plan.'] as const);
+  const money = asked('You changed the current state of Money.');
+  await money.getByRole('button', { name: 'Write it' }).click();
+  await expect(money).toHaveCount(0);
+  await expect(asked(REASK)).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('region', { name: 'Recent' }).getByRole('link', { name: /^Money/ }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Money' })).toBeVisible();
+  await expect(page.getByRole('main')).toContainText('for the yearly plan.');
+  await expect(page.getByRole('region', { name: 'Current state' })).not.toContainText('October is on budget so far.');
+});
+
+test('a refused merge shows as an answered row on the note that stays and under the Home result, and is not counted as set aside', async ({ page }) => {
+  test.skip(!isFake, FAKE_ONLY);
+  test.setTimeout(90_000);
+  // The gone-answers situation: three yes answers wait whose subjects went to the Bin since (TL-P4-19 addendum 10).
+  const PAIR = 'Not merged: Flat 2, 40 Tanners Walk was already in the Bin.';
+  const ASKED = 'Not done: Kitchen photo had moved or gone to the Bin before Bower got to it.';
+  const STATE = 'Not written: Weeknight curry had moved or gone to the Bin before Bower got to it.';
+  const STAYS = 'Flat 7, Cobble Row';
+  await open(page, '/', 'gone-answers');
+  // A question whose subject is gone is not shown.
+  await expect(page.getByRole('heading', { level: 1, name: /G'day/ })).toBeVisible();
+  await expect(page.getByText('look like one flat')).toHaveCount(0);
+  await tidyUp(page);
+  const sheet = page.getByRole('dialog');
+  for (const row of [PAIR, ASKED, STATE]) await expect(sheet.getByText(row, { exact: true })).toBeVisible();
+  await answeredListed(page, sheet, 'dialog, [role="dialog"]', [PAIR, ASKED, STATE]);
+  await expect(sheet).not.toContainText('set aside');
+  // The note that stays says so too.
+  await sheet.getByRole('list', { name: 'Brought up to date' }).getByRole('link', { name: 'Flat hunt', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Flat hunt' })).toBeVisible();
+  await page.getByRole('main').getByRole('link', { name: 'Projects / Flat hunt', exact: true }).click();
+  await page.getByRole('main').getByRole('link', { name: new RegExp(`^${STAYS} Changed`) }).click();
+  await expect(page.getByRole('heading', { level: 1, name: STAYS })).toBeVisible();
+  await expect(page.getByRole('main').getByText(PAIR, { exact: true })).toBeVisible();
+  await expect(page.getByRole('main').getByText(ASKED, { exact: true })).toHaveCount(0);
+  // Home's result lists all three, in one list, and counts none of them as set aside.
+  await home(page);
+  const card = page.getByRole('region', { name: /things? filed/ });
+  for (const row of [PAIR, ASKED, STATE]) await expect(card.getByText(row, { exact: true })).toBeVisible();
+  await answeredListed(page, card, 'main', [PAIR, ASKED, STATE]);
+  await expect(card).not.toContainText('set aside');
 });

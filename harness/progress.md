@@ -242,3 +242,13 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: c3-done-harness-paths passes — done.sh treats harness scripts as code (TL-P4-17 add. 11)
 - 2026-10-09: c3-branch-cleanup passes — integrate.sh removes merged worktrees and branches, protecting role branches and worktrees in use (TL-P4-19 add. 2)
 - 2026-10-09: c3-planner-split passes — planScripted split into capture, decide and build; rows by op id; no fixtures on the live path (TL-P4-14 stage 3; add. 23-24; TL-P4-19 add. 3-5)
+- 2026-10-09: c3-note-sections passes — One section parser gives every section's position; the Timeline-line pattern exists once (TL-P4-14 stage 3)
+- 2026-10-09: c3-design-gate passes — A ui entry passes only with a verified design check (TL-P4-18 add. 3)
+- 2026-10-09: c3-test-tamper passes — test-tamper gate: tests-changed lines, forbidOnly, no focused or skipped unit tests
+- 2026-10-09: c3-hooks passes — hook audit: exit 2 denials, script-path check, SessionStart resume, PreCompact
+- 2026-10-09: c3-flaky-policy passes — flaky policy: E2E_BATCH retry once + failOnFlakyTests, quarantine file checked
+- 2026-10-09: c3-permissions passes — permissions: deny landing edits and env reads; push hook allows only the backup
+- 2026-10-09: c3-pair-ask passes — typed pair ask, words piles cited, answered rows with label and names (addenda 8-14)
+- 2026-10-09: c3-agent-defs passes — agent defs: maxTurns, no nested dispatch, read-only tools allowlists, concurrency 2
+- 2026-10-09: c3-stop-gate passes — stop gate: judges the card worktree; pnpm check writes the mark
+- 2026-10-09: c3-state-mark passes — state mark from the previous change; write it applies the shown text; clash re-asks; answered rows; cited lines

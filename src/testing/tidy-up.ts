@@ -8,6 +8,7 @@
 import type { FakeDrive } from '@/data/drive/fake-drive';
 import type { Manifest, ManifestV2 } from '@/data/contracts/run-manifest';
 import { planRun } from '@/data/fake/fake-runner';
+import type { AuthoredState } from '@/data/spine/scripted';
 import { FakeRunService, type FakeRunServiceOptions } from '@/data/fake/fake-run-service';
 import type { RunReport } from '@/data/types';
 import { SYSTEM, isRunnerFile } from '@/data/vault/layout';
@@ -20,13 +21,15 @@ export interface TidyUpOptions {
   hooks?: FakeRunServiceOptions['hooks'];
   /** The person lets Bower look things up on the web in this tidy-up (Settings); off by default. */
   allowWeb?: boolean;
+  /** The Current states the scripted reply updates (a situation's, as the pretend Worker passes them); none by default. */
+  states?: readonly AuthoredState[];
 }
 
 export async function tidyUp(drive: FakeDrive, rootId: string, scope: 'all' | 'instructions' = 'all', opts: TidyUpOptions = {}): Promise<TidyUpResult> {
   const runs = new FakeRunService({ drive, scale: 'instant', ...(opts.hooks ? { hooks: opts.hooks } : {}) });
   const binding = { account: 'you@example.com', rootId };
   const { runId, requestId } = runs.ids();
-  const plan = await planRun(drive, rootId, { scope, allowWeb: !!opts.allowWeb, runId, requestId, requestedAt: Date.now() });
+  const plan = await planRun(drive, rootId, { scope, allowWeb: !!opts.allowWeb, runId, requestId, requestedAt: Date.now(), ...(opts.states ? { states: opts.states } : {}) });
   await runs.admit(binding, plan.manifest, opts.failAt ? { failAt: opts.failAt } : {});
   for (let i = 0; i < 20; i++) {
     await runs.settled();

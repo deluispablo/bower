@@ -118,8 +118,9 @@ export const LEGACY_HASH = '837283d24771c394';
 /** The review a closed escalated consolidation entry must name: "P4-NN PASS". */
 const REVIEW_PASS = /^P4-\S+ PASS$/;
 
-/** One sentence when an escalated p4-consolidation entry passes (or is about to) with no review PASS, else null. */
+/** One sentence when an entry passes (or is about to) without what its kind needs: an escalated p4-consolidation entry a review PASS, a `ui: true` entry `design: "verified"` (TL-P4-18 addendum 3); else null. */
 export function reviewProblem(f) {
+  if (f.ui === true && f.design !== 'verified') return `${f.id}: a UI entry passes without a verified design check (set "design": "verified" after the designer's check)`;
   const escalated = f.task === 'p4-consolidation' && /Starting model: bower-escalated/.test(f.note ?? '');
   if (!escalated || REVIEW_PASS.test(f.review ?? '')) return null;
   return `${f.id}: escalated, passes without a review PASS (set "review": "P4-NN PASS" after the reviewer's PASS)`;
@@ -276,4 +277,36 @@ export function slowReport(tests, count = 5) {
     .sort((a, b) => b.duration - a.duration)
     .slice(0, count)
     .map((t) => `${Math.round(t.duration)} ms  ${t.name}`);
+}
+
+/** Test files: unit, e2e, and the api and runner tests (the same set as TEST_PATTERN in harness-git.mjs, without the helper folders). */
+const TEST_FILE = /\.test\.tsx?$|^e2e\/.+\.spec\.ts$|^(api|runner)\/test\/.+\.ts$/;
+/** A notes file a branch adds or changes. */
+const NOTES_FILE = /^docs\/harness\/.+-notes\.md$/;
+
+const git = (args, cwd) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+
+/**
+ * One line per existing test file that the judged tips of a branch modify or delete, since their merge base with
+ * `base`, when no notes file the same tips add or change carries `tests changed: <file>: <why>` for it (TL-P4-20).
+ * `tips` are the commits to judge: HEAD, plus MERGE_HEAD during an uncommitted merge (historyTips). The one home of
+ * the rule: check-harness runs it, and integrate.sh calls check-harness.
+ */
+export function testsChangedProblems(base, tips = ['HEAD'], cwd = process.cwd()) {
+  const out = [];
+  for (const tip of tips) {
+    let from;
+    try {
+      from = git(['merge-base', base, tip], cwd).trim();
+    } catch {
+      // expected: the base ref does not exist here (a fixture or a fresh clone); nothing to compare with.
+      continue;
+    }
+    const names = (filter) => git(['diff', '--name-only', `--diff-filter=${filter}`, from, tip], cwd).split('\n').filter(Boolean);
+    const stated = new Set(names('AM').filter((f) => NOTES_FILE.test(f)).flatMap((f) => [...git(['show', `${tip}:${f}`], cwd).matchAll(/^\W*tests changed:\s*(\S+?):\s/gm)].map((m) => m[1])));
+    for (const f of names('DM').filter((n) => TEST_FILE.test(n))) {
+      if (!stated.has(f)) out.push(`${f} is a changed test with no "tests changed: ${f}: <why>" line in a notes file of this branch`);
+    }
+  }
+  return [...new Set(out)];
 }

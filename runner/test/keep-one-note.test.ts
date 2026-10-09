@@ -130,6 +130,43 @@ describe('keep one note', () => {
     expect(report.setAside).toContainEqual({ name: 'Flat 3 (second)', why: 'It changed while Bower worked, so both notes stay; the next tidy-up keeps one.' });
   });
 
+  it('keep-one says what happened when the other note moved or was binned', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const c = await keepCase();
+    // The person moves, or bins, the other note on their phone while the run writes the kept one.
+    const meanwhile = (act: (drive: FakeDrive, otherId: string, root: string) => Promise<void>) => async (drive: FakeDrive, root: string): Promise<void> => {
+      const all = await drive.listAll(root);
+      const otherId = all.find((f) => f.name === 'Flat 3 (second).md')?.id ?? '';
+      const keptId = all.find((f) => f.name === 'Flat 3, 12 Larkspur Lane.md')?.id ?? '';
+      const write = drive.writeText.bind(drive);
+      let done = false;
+      drive.writeText = async (id, text, ifModified, props) => {
+        const out = await write(id, text, ifModified, props);
+        if (id === keptId && !done) {
+          done = true;
+          await act(drive, otherId, root);
+        }
+        return out;
+      };
+    };
+    const setAsideOf = (run: CaseRun): Array<{ name: string; why: string }> => (run.lastRun as { run: { report: { setAside: Array<{ name: string; why: string }> } } }).run.report.setAside;
+    const moved = await runWithClaude(c, keepOne, undefined, meanwhile(async (drive, otherId, root) => {
+      const job = (await drive.listAll(root)).find((f) => f.folder && f.name === 'Job hunt')?.id ?? '';
+      const flats = (await drive.get(otherId)).parents[0] ?? '';
+      await drive.update(otherId, { addParent: job, removeParent: flats });
+    }));
+    // Moved: both notes stay, and the report says it was moved, never that it changed.
+    expect(moved.after['Projects/Job hunt/Flat 3 (second).md']).toBe(c.folder[OTHER]);
+    expect(setAsideOf(moved)).toContainEqual({ name: 'Flat 3 (second)', why: 'It was moved or renamed while Bower worked, so both notes stay; the next tidy-up keeps one.' });
+    const binned = await runWithClaude(c, keepOne, undefined, meanwhile(async (drive, otherId) => {
+      await drive.trash(otherId);
+    }));
+    // Binned by the person: only the kept note stays, and the report never says both do.
+    expect(OTHER in binned.after).toBe(false);
+    expect(setAsideOf(binned)).toContainEqual({ name: 'Flat 3 (second)', why: 'It went to the Bin while Bower worked, so only the kept note stays.' });
+    expect(setAsideOf(binned).some((r) => /both notes stay/.test(r.why))).toBe(false);
+  });
+
   it('a line that only starts like a kept line is carried', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const c = await keepCase();

@@ -17,25 +17,26 @@ import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as M
 import { PILE_NOTE, safeInboxName } from '../piles';
 import { recordablePile, sameText, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
-import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type Request } from '../types';
+import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type Request, type StateShown } from '../types';
 import { isJournalRecord, type JournalRecord } from '../contracts/journal-record';
 import { PROP, RUNNER_WRITES, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
 import { ruleLike } from '../rules';
 import { savedLinkAddress } from '../search-text';
 import { EMPTY_MD5, md5Hex } from '../contracts/hashes';
-import { askId, openQuestions, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen } from '../contracts/questions';
+import { STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
 import { sha256 } from '../vault/hashes';
-import { parseNote, serializeNote, type ParsedNote } from '../vault/note-format';
+import { parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
+import { parseTimelineLine } from '../contracts/timeline-line';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
 import { grounded, groundedKeys, seen } from './grounded';
-import { canonical } from './records';
+import { RUNS_NAME, canonical, isManifestName } from './records';
 import { NOT_FILED } from './report';
 import { SET_ASIDE, capturePiles, listedPiles, pileShape } from './plan';
-import { duplicatesOf, type Duplicate } from './duplicates';
+import { duplicatesOf, wordsSaved, type Duplicate } from './duplicates';
 import type { AdmissionManifest } from './admission';
 import type { ScriptedRead } from './read';
-import { stampOf } from './write-once';
+import { STAMP, stampOf } from './write-once';
 
 export { SET_ASIDE, listedPiles };
 
@@ -146,6 +147,8 @@ export interface Filing {
   thingAsks?: ReadonlyMap<string, Ask>;
   /** Notes the person said yes to keeping as one (C05, `keep-one-note-merge`), each with the answer that says so. */
   keep?: readonly KeepOne[];
+  /** Two notes it was shown that may be one thing, each pair with its question: a yes keeps one (c3-pair-ask). */
+  pairAsks?: readonly PairAsk[];
 }
 
 /**
@@ -167,6 +170,14 @@ export interface Ask {
   text: string;
   yes: string;
   no: string;
+}
+
+/**
+ * A question whether two notes are one thing (c3-pair-ask, TL-P4-16 addendum): the notes by their paths as the reply
+ * named them; the plan asks it by their file ids (`pairQuestionId`), so the answer follows them wherever they go.
+ */
+export interface PairAsk extends Ask {
+  notes: readonly [string, string];
 }
 
 /** What a thing is, as the plan captured it: all a decision about it may read. */
@@ -220,6 +231,8 @@ export interface Decisions {
   states: readonly AuthoredState[];
   areas: ReadonlyMap<string, string>;
   keep: readonly KeepOne[];
+  /** Questions about two notes that may be one thing; none when left out. */
+  pairAsks?: readonly PairAsk[];
   /** Whether it acts on the answer to this question; without it, only answers the plan settles on its own are taken. */
   settles?(questionId: string): boolean;
   /** A thing joining a note, by the question whose yes asks for it. */
@@ -250,6 +263,7 @@ export function modelDecisions(filing: Filing): Decisions {
     states: filing.states ?? [],
     areas: filing.areas ?? new Map(),
     keep: filing.keep ?? [],
+    pairAsks: filing.pairAsks ?? [],
   };
 }
 
@@ -392,27 +406,61 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // that left the inbox (its question closes). A second answer to one question goes with the first: one answer. Any
   // other waits for a run that can act on it.
   const tookSubjects = new Set((opts.taken?.piles ?? []).flatMap((p) => [p.pileId, ...(p.anchor ? [p.anchor.fileId] : []), ...p.items.map((i) => i.fileId)]));
+  // The folder's notes as listed (the Bin left out): a question about a note that is not there now is gone, whatever its
+  // kind (`subjectLeft`, TL-P4-19 addendum 8), so its answer settles and its question closes.
+  const notesSeen: NotesSeen = ix.notesSeen();
   const settlesAlone = (l: JournalLine): boolean => {
     const q = l.rec.questionId ?? '';
     // A Current state you edited: a no closes its question; a yes too, once its run wrote the update (the answer goes
-    // with that edit) or asked again about a section changed since (`state-yes-writes`).
-    return keepAnswers.has(l.rec.id) || l.rec.text === 'no' || q === ADOPT_STATES_ID || subjectOf({ id: q }).kind === 'state';
+    // with that edit) or asked again about a section changed since (`state-yes-writes`). A pair by its notes' ids
+    // whose note is gone settles: nothing can be kept as one.
+    return keepAnswers.has(l.rec.id) || l.rec.text === 'no' || q === ADOPT_STATES_ID || subjectOf({ id: q }).kind === 'state' || subjectLeft({ id: q }, null, notesSeen);
   };
-  // An answer about a thing or pile goes by its question's subject, as Bower's list holds it, never by its id (P4-15b).
-  // The list is read for it only when a model's run that saw the inbox has such an answer waiting.
-  const bySubject = all && !d.settles ? lines.filter((l) => l.rec.kind === 'answer' && !settlesAlone(l)) : [];
-  const listedFile = bySubject.length ? ix.file(SYSTEM.questions) : undefined;
-  const listedValue = listedFile && !listedFile.folder ? parsed(await ownText(drive, listedFile)) : null;
-  const listed = isRunnerFile(SYSTEM.questions, listedValue) ? listedValue.questions : [];
   const inboxIds = new Set(inbox.flatMap((p) => [p.id, ...p.items.map((i) => i.id)]));
   const seenFirst: InboxSeen | null = all ? { ids: inboxIds, hashes: new Set(listing.flatMap((f) => (inboxIds.has(f.id) && f.md5Checksum ? [f.md5Checksum] : []))) } : null;
+  // An answer about a thing or pile goes by its question's subject, as Bower's list holds it, never by its id (P4-15b);
+  // so does an older pair question, by the names in its words. The list is read for it only when a model's run has
+  // such an answer waiting, or when an answer's subject may be gone (its row names what it was about).
+  const bySubject = !d.settles ? lines.filter((l) => l.rec.kind === 'answer' && !settlesAlone(l)) : [];
+  const maybeGone = lines.some((l) => l.rec.kind === 'answer' && l.rec.text !== 'no' && subjectLeft({ id: l.rec.questionId ?? '' }, seenFirst, notesSeen));
+  const listedFile = bySubject.length || maybeGone ? ix.file(SYSTEM.questions) : undefined;
+  const listedValue = listedFile && !listedFile.folder ? parsed(await ownText(drive, listedFile)) : null;
+  const listed = isRunnerFile(SYSTEM.questions, listedValue) ? listedValue.questions : [];
   const settles = (l: JournalLine): boolean => {
     if (settlesAlone(l)) return true;
     const q = listed.find((x) => x.id === l.rec.questionId);
     const key = q && subjectKey(q);
-    return q !== undefined && key !== undefined && (tookSubjects.has(key) || subjectLeft(q, seenFirst));
+    return q !== undefined && ((key !== undefined && tookSubjects.has(key)) || subjectLeft(q, seenFirst, notesSeen));
   };
   const settled = new Set(lines.filter((l) => l.rec.kind === 'answer' && settles(l)).map((l) => l.rec.questionId ?? ''));
+  /**
+   * An answer whose subject was gone before this run, of any kind (TL-P4-19 addendum 10): nothing is done, and its
+   * answered row says so, on its line's archive; one per question, its last answer's. A no did nothing to begin with.
+   * The pair note that stays is found by its file id, or an older question's by the name it links.
+   */
+  const notePath = (note: string): string | undefined => ix.pathOf(note) ?? [...ix.entries().keys()].find((p) => p.endsWith('.md') && displayName(nameOf(p)).toLowerCase() === note.toLowerCase());
+  const lastAnswer = new Map<string, JournalLine>();
+  for (const l of lines) {
+    if (l.rec.kind !== 'answer' || keepAnswers.has(l.rec.id)) continue;
+    const had = lastAnswer.get(l.rec.questionId ?? '');
+    if (!had || had.rec.at <= l.rec.at) lastAnswer.set(l.rec.questionId ?? '', l);
+  }
+  const yesAnswers = [...lastAnswer.values()].filter((l) => l.rec.text !== 'no').map((l) => ({ l, q: listed.find((x) => x.id === l.rec.questionId) ?? { id: l.rec.questionId ?? '' } }));
+  // A pair asked by ids whose other note is gone is named by the name its file keeps in the Bin: one read of that file,
+  // only for a row made here (TL-P4-19 addendum 14). A file that cannot be read (a 404 or any refusal) leaves the row
+  // its fallback words.
+  const binnedNames = new Map<string, string>();
+  for (const id of new Set(yesAnswers.flatMap(({ q }) => binnedPairNote(q, notesSeen) ?? []))) {
+    try {
+      binnedNames.set(id, displayName((await drive.binned(id)).name));
+    } catch (e) {
+      console.error('The other note of a pair could not be read; its answered row says "the other note"', e);
+    }
+  }
+  const answeredRows = new Map(yesAnswers.flatMap(({ l, q }) => {
+    const row = answeredGone(q, seenFirst, notesSeen, notePath, (id) => binnedNames.get(id));
+    return row ? [[l.rec.id, row] as const] : [];
+  }));
   let journal = lines.filter((l) => (l.rec.kind === 'request' ? !!d.request : l.rec.kind === 'answer' ? (d.settles?.(l.rec.questionId ?? '') ?? settled.has(l.rec.questionId ?? '')) : true));
   // Your rules (TL-P2-20 rules-wording): one change for every rule line, worded below in one edit of Rules.md, or
   // Rules.md made when it is missing; a line whose words cannot be worded stays pending.
@@ -485,6 +533,12 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   /** Questions about piles that stay in the inbox untouched, since their place is unclear (TL-P4-08 point 1). */
   const askedPiles: Question[] = [];
   const fromWords: Array<{ pileId: string; folder: DriveFile; words: string; context: DriveFile | null }> = [];
+  /**
+   * Piles of words only whose news a Timeline line on a note carries instead of a note of their own (c3-pair-ask, the
+   * value gate for words): each goes to the Bin only once every line citing it is written, and waits whole otherwise.
+   */
+  const citedWords = new Map<string, { folder: DriveFile; context: DriveFile | null; lines: WantedLine[]; notes: Set<string> }>();
+  const citedByLine = (pileId: string): boolean => all && keepDay && d.lines.some((l) => l.cites === pileId);
   /** Piles with things asked about (TL-P4-08 addendum 4): the rest is filed, the folder and its words stay. */
   const partly = new Set<string>();
   for (const pile of piles) {
@@ -612,7 +666,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // under a main folder; its other pile notes stay as uncaptured children. A pile with no words either has nothing
     // to write, so it is left as it is, untouched, like a held pile.
     const wordsOnly = !partial && (!pile.items.length || (!taken.length && !declared));
-    if (wordsOnly && (!words.trim() || !generatedPlace(wordsPlace(pile.id, words).to))) continue;
+    const asLine = wordsOnly && citedByLine(pile.id);
+    if (wordsOnly && (!words.trim() || (!asLine && !generatedPlace(wordsPlace(pile.id, words).to)))) continue;
     // Every member still in the folder is taken; those accounted for were filed already and are not captured again.
     if (!lost && ((!taken.length && !wordsOnly) || (declared && keys.length + askedKeys !== declared.memberKeys.size))) lost = 'one of its members is not among its things';
     // Its names must be ones a run record can carry, as the Inbox checks them (`recordablePile`).
@@ -635,7 +690,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     }
     // Everything this pile puts in the plan must be text a record can carry; a pile whose words or names cannot
     // (half of a character) is held alone, untouched, and the rest of the run goes on (review b-dest-review-1).
-    const written = { folder: folder.name, words, context: context.kind === 'text' ? context.text : null, names: members.slice(marks.members).map((m) => m.file.name), note: wordsOnly ? wordsPlace(pile.id, words).name : null };
+    const written = { folder: folder.name, words, context: context.kind === 'text' ? context.text : null, names: members.slice(marks.members).map((m) => m.file.name), note: wordsOnly && !asLine ? wordsPlace(pile.id, words).name : null };
     if (!canonicalRecordJson(written).ok) {
       members.length = marks.members;
       things.length = marks.things;
@@ -652,10 +707,20 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       context,
     });
     if (partial) partly.add(pile.id);
-    if (wordsOnly) fromWords.push({ pileId: pile.id, folder, words, context: !declared && note ? note : null });
+    if (asLine) citedWords.set(pile.id, { folder, context: !declared && note ? note : null, lines: [], notes: new Set() });
+    else if (wordsOnly) fromWords.push({ pileId: pile.id, folder, words, context: !declared && note ? note : null });
     // The question the reply asks about this pile, asked once it is filed.
     const after = d.askAfter?.(pile, opts.requestedAt);
     if (after) asking.set(pile.id, after);
+  }
+
+  // Two notes that may be one thing (c3-pair-ask): asked by their file ids, never by their names, so the answer follows
+  // them; a pair whose note is not there now, or that this run keeps as one already, is not asked.
+  for (const p of d.pairAsks ?? []) {
+    const [a, b] = p.notes.map((path) => ix.file(path));
+    if (!a || !b || a.folder || b.folder || a.id === b.id) continue;
+    if (keeps.some((x) => [x.kept.id, x.other.id].includes(a.id) && [x.kept.id, x.other.id].includes(b.id))) continue;
+    askedPiles.push({ id: pairQuestionId(a.id, b.id), text: p.text, yes: p.yes, no: p.no, about: p.notes[0], askedAt: opts.requestedAt });
   }
 
   // A copy waits on the move of the thing it copies: one whose pile was held after all waits whole with it.
@@ -674,7 +739,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const hashesIn = new Set(listing.flatMap((f) => (inInbox.has(f.id) && f.md5Checksum ? [f.md5Checksum] : [])));
   // Only a run that saw the whole inbox can say a thing is gone: an instructions run reads none (TL-P4-11 I2).
   const seenNow: InboxSeen | null = all ? { ids: inInbox, hashes: hashesIn } : null;
-  const gone = (q: Question): boolean => subjectLeft(q, seenNow);
+  const gone = (q: Question): boolean => subjectLeft(q, seenNow, notesSeen);
   /** A pile and a thing in it are one subject (a pile ask then a thing ask about its photo adds nothing). */
   const pileOf = new Map(inbox.flatMap((p) => p.items.map((i) => [i.id, p.id] as const)));
   const related = (x: string | undefined, y: string | undefined): boolean => x !== undefined && y !== undefined && (x === y || pileOf.get(x) === y || pileOf.get(y) === x);
@@ -749,14 +814,22 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const modelLines: Array<{ line: WantedLine; cites: string }> = [];
   /** A captured thing as a decision about it reads it (its link text is read only where it is filed). */
   const seenOf = (t: (typeof things)[number], linkText: string | null = null): ThingSeen => ({ fileId: t.file.id, name: t.item.name, fileName: t.file.name, kind: t.item.kind, words: t.words, linkText });
+  const pileIds = new Set(piles.map((p) => p.id));
   for (const l of all && date ? d.lines : []) {
     const f = ix.file(l.path);
     if (!f || f.folder) continue;
     const thing = l.cites === null ? undefined : things.find((t) => t.file.id === l.cites && !t.merge);
+    // A line citing a pile of words only is written only with that pile taken, and the pile waits for it.
+    const words = l.cites === null || thing ? undefined : citedWords.get(l.cites);
+    if (l.cites !== null && !thing && !words && pileIds.has(l.cites)) continue;
     const asked = thing ? (d.note(thing.file.id)?.name ?? d.thing(seenOf(thing))?.name) : undefined;
     const line: WantedLine = { entry: { date: date ?? '', text: l.text, source: asked === undefined ? null : citeName(asked) }, record: null, what: l.text, after: asked === undefined ? null : (thing?.file.id ?? null) };
     want(f, l.path).lines.push(line);
     if (thing && asked !== undefined) modelLines.push({ line, cites: thing.file.id });
+    if (words) {
+      words.lines.push(line);
+      words.notes.add(f.id);
+    }
   }
   // "Write it" (`state-yes-writes`): your yes, among the changes this run took, to Bower writing its update over a
   // Current state you edited, by the note's file id: the grant for that one write, while the section still reads as
@@ -780,11 +853,48 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       const about = subjectOf({ id });
       const path = about.kind === 'state' ? ix.pathOf(about.id) : undefined;
       const f = path === undefined ? undefined : ix.file(path);
+      // A yes whose note is not in the folder now (the Bin) writes nothing: its answer settles, and its answered row
+      // comes from `answeredRows` above (`answeredGone`, kind state), the one writer of that row (TL-P4-19 addendum 10).
       if (l.rec.text !== 'yes' || !q || !f || f.folder || path === undefined) continue;
       grants.set(f.id, { answer: l.rec.id, seen: q.state ?? null, question: q });
       want(f, path);
     }
   }
+  /**
+   * What Bower last wrote in a note's Current state (`c3-state-mark`): the lines of the earlier state change whose mark
+   * the section carries (`stateMark` of its `lines`), by the note's file id, from the run manifests the listing shows in
+   * `.bower/runs`, newest first; read only for a section the person edited, each manifest once. Empty when none says so
+   * (retention binned that run, or the mark is older than its manifest): then nothing is taken as said, and the line
+   * names all that the section lacks. A manifest that cannot be read or parsed is passed over (lenient read).
+   */
+  const manifestPaths = listing.filter((x) => !x.folder && isManifestName(x.name) && parentOf(parentOf(ix.pathOf(x.id) ?? '')) === RUNS_PATH)
+    .sort((a, b) => byCodePoint(b.modifiedTime, a.modifiedTime) || byCodePoint(a.id, b.id));
+  const stateChanges = new Map<string, Promise<Array<{ fileId: string; lines: string[] }>>>();
+  const changesIn = (file: DriveFile): Promise<Array<{ fileId: string; lines: string[] }>> => {
+    let got = stateChanges.get(file.id);
+    if (!got) {
+      // Read by the one manifest reader (`parseRunManifestV2`), as the engine reads it; one it refuses is passed over.
+      got = drive.readBytes(file.id).then(async (bytes) => {
+        const read = await parseRunManifestV2(bytes, rootId, RUNNER_WRITES);
+        if (read.ok) return stateChangesOf(read.value);
+        console.error(`A run manifest could not be read for what Bower last wrote (${file.name}): ${read.reason}`);
+        return [];
+      }).catch((e: unknown) => {
+        console.error(`A run manifest could not be read for what Bower last wrote (${file.name})`, e);
+        return [];
+      });
+      stateChanges.set(file.id, got);
+    }
+    return got;
+  };
+  const lastWritten = async (fileId: string, mark: string | null): Promise<string[]> => {
+    if (mark === null) return [];
+    for (const file of manifestPaths) {
+      const found = (await changesIn(file)).find((c) => c.fileId === fileId && stateMark(c.lines) === mark);
+      if (found) return found.lines;
+    }
+    return [];
+  };
   // A model's Current states (C05): planned below on the bytes read, only where Bower still owns the section, or the
   // person's yes grants it. A run of your changes only (no pile) writes only a granted one.
   for (const st of date ? d.states : []) {
@@ -796,7 +906,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     want(f, st.path).state = { lines: st.lines, source: asked === undefined ? null : citeName(asked), thing: asked === undefined ? null : (thing?.file.id ?? null) };
   }
   /** Current states the person edited: what Bower would write goes on the Timeline as a line, and they are asked. */
-  const personStates: Array<{ line: WantedLine; file: DriveFile; path: string; seen: string }> = [];
+  const personStates: Array<{ line: WantedLine; file: DriveFile; path: string; seen: string; shown: StateShown }> = [];
+  /** Each question about a Current state this run asks, by its note's file id: the build sets the note as left on it. */
+  const stateAsks = new Map<string, Question>();
   /** Granted sections the person changed again since they were asked: nothing is written, and they are asked again. */
   const reasked: Question[] = [];
   /** Unmarked Current states Bower may not adopt: a line each, and one question for the whole folder (TL-P4-10). */
@@ -923,9 +1035,10 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (!before || !bytes || before.size !== bytes.byteLength || before.sha256 !== (await sha256(new Blob([bytes.slice()])))) {
       console.error('A note changed while it was read; no edit is planned for it this time');
       raced.add(f.id);
-      // A yes to writing over it is not used up on a note that changed under the read: it is asked again, as it was.
+      // A yes to writing over a note that changed under the read is the same fact as a note changed since it was shown:
+      // it is asked again in the one re-ask wording (TL-P4-19 addendum 15), with the update it showed.
       const grant = grants.get(f.id);
-      if (grant) reasked.push({ ...grant.question, askedAt: opts.requestedAt });
+      if (grant) reasked.push({ ...grant.question, text: STATE_ASK_AGAIN(displayName(nameOf(w.path))), askedAt: opts.requestedAt });
       if (w.renames) holdRenames = true;
       // A passing race, not a refusal: its lines wait for the next run, like those past the cap.
       for (const l of w.lines) lineState.set(l, 'deferred');
@@ -953,15 +1066,43 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const grant = grants.get(f.id);
     const section = grant ? currentStateOf(bytes) : null;
     const mark = stateMarkOf(bytes);
-    if (grant && section?.owner === 'person' && (grant.seen === null || grant.seen !== stateMark(section.lines))) {
-      // Changed since the question (or asked before questions kept what they saw): the yes was not to these lines.
-      reasked.push({ id: stateQuestionId(f.id), text: `You changed the current state of ${displayName(nameOf(w.path))} again. Should Bower still write its update there?`, yes: 'Write it', no: 'Keep mine', about: w.path, state: stateMark(section.lines), askedAt: opts.requestedAt });
-    } else if (grant && section?.owner === 'person' && mark !== null && w.state && section.lines.join('\n') !== w.state.lines.join('\n')) {
+    const name = displayName(nameOf(w.path));
+    // The note as read now: its checksum and stamp, what a question asked now records as the note was left.
+    const stamp = f.appProperties?.[STAMP];
+    const asRead = (lines: string[]): StateShown => ({ lines, md5: md5Hex(bytes), ...(stamp === undefined ? {} : { stamp }) });
+    // A yes to "Write it" writes the update it was shown (`c3-state-mark`, TL-P4-16 addendum 2), with no model asked; a
+    // question from before (no `shown`) writes the model's update computed in this run. Either only while the section
+    // reads as asked about (its `state` mark), and the update shown only while the note still carries the stamp and
+    // checksum it had when it was asked (write-once's comparison, as the New mark's, TL-P4-19 addendum 5: an If-Match
+    // precondition, RFC 9110 13.1.1).
+    const shown = grant?.question.shown;
+    const update = shown?.lines ?? w.state?.lines;
+    const granted = grant && section?.owner === 'person' ? grant : undefined;
+    const changed = granted?.seen === null || (!!section && granted?.seen !== stateMark(section.lines));
+    const held = !shown || (stamp === shown.stamp && md5Hex(bytes) === shown.md5);
+    // Nothing to write: the section already reads as the update (the person wrote it themselves), or there is none
+    // (an older question's run had no update, or the note has no mark to grant under). Settled, with its answered row.
+    const already = !!update && !!section && section.lines.join('\n') === update.join('\n');
+    const change: StateRewrite | null = granted && !already && !changed && held && mark !== null && update ? { kind: 'state-rewrite', recordIds: [granted.answer], previous: section?.lines ?? [], lines: update, granted: { answer: granted.answer, mark } } : null;
+    const result = change ? applyChanges(bytes, [change]) : null;
+    // A clash: the write's own check finds the section is not as read (`person-edited`, `state-changed`).
+    const clash = !!result && !result.ok && (result.reason === 'person-edited' || result.reason === 'state-changed');
+    if (granted && section && !already && (changed || !held || clash)) {
+      // The note changed after Bower showed its update (the section, or the note's stamp or checksum: the one check),
+      // or the write found it so: the yes was not to this note. It is asked again, in the one re-ask wording
+      // (TL-P4-19 addendum 12), with the same update and the note as it reads now; it needs a new answer.
+      const q: Question = { id: stateQuestionId(f.id), text: STATE_ASK_AGAIN(name), yes: 'Write it', no: 'Keep mine', about: w.path, state: stateMark(section.lines), ...(shown ? { shown: asRead(shown.lines) } : {}), askedAt: opts.requestedAt };
+      reasked.push(q);
+      stateAsks.set(f.id, q);
+    } else if (change && result?.ok) {
       // The person's yes grants this one write over their lines, as read now; the answer goes with the edit.
-      const change: StateRewrite = { kind: 'state-rewrite', recordIds: [grant.answer], previous: section.lines, lines: w.state.lines, granted: { answer: grant.answer, mark } };
-      const result = applyChanges(bytes, [change]);
-      if (result.ok) state = change;
-      else console.error(`A note's Current state was refused (${result.reason}); none is planned for it`);
+      state = change;
+    } else if (granted && result && !result.ok && result.reason !== 'unchanged') {
+      // Refused for good: the answer settles, nothing is written, and its answered row says so, here and on the note.
+      console.error(`A note's Current state was refused (${result.reason}); none is planned for it`);
+      answeredRows.set(granted.answer, answeredState(granted.question.id, 'refused', w.path));
+    } else if (granted) {
+      answeredRows.set(granted.answer, answeredState(granted.question.id, 'nothing-to-write', w.path));
     } else if (w.state && !(grant && section?.owner === 'person')) {
       const now = currentStateOf(bytes);
       const adopt = now?.owner === 'unmarked' && (await adopting());
@@ -978,14 +1119,14 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
         // Same news twice in one run: a line this run adds to the note citing the same thing already says it.
         const cited = w.state.thing === null ? undefined : w.lines.find((l) => l.after === w.state?.thing && l.entry.source !== null);
         // The person is still asked, once that line is there.
-        if (cited && now?.owner === 'person') personStates.push({ line: cited, file: f, path: w.path, seen: stateMark(now.lines) });
+        if (cited && now?.owner === 'person') personStates.push({ line: cited, file: f, path: w.path, seen: stateMark(now.lines), shown: asRead(w.state.lines) });
         if (cited && now?.owner === 'unmarked') unmarkedStates.push(cited);
-        const text = cited ? null : stateNewsLine(w.state.lines, now?.lines ?? [], stateMarkOf(bytes));
+        const text = cited ? null : stateNewsLine(w.state.lines, now?.lines ?? [], now?.owner === 'person' ? await lastWritten(f.id, mark) : []);
         if (text !== null) {
           const line: WantedLine = { entry: { date: date ?? '', text, source: w.state.source }, record: null, what: text, after: w.state.thing };
           w.lines.push(line);
           lineState.set(line, 'refused');
-          if (now?.owner === 'person') personStates.push({ line, file: f, path: w.path, seen: stateMark(now.lines) });
+          if (now?.owner === 'person') personStates.push({ line, file: f, path: w.path, seen: stateMark(now.lines), shown: asRead(w.state.lines) });
           if (now?.owner === 'unmarked') unmarkedStates.push(line);
           if (w.state.thing !== null && w.state.source !== null) modelLines.push({ line, cites: w.state.thing });
         }
@@ -994,9 +1135,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // Each line on its own: one already there (from any day) is dropped; a person's note takes none.
     const lines: WantedLine[] = [];
     // A hub line with nothing to cite is there already when its words are, with or without a source (C06).
-    const said = new Set(new TextDecoder().decode(bytes).split(/\r?\n/).flatMap((x) => {
-      const m = /^- .*? · (.*?)(?: · \[\[[^\]]+\]\])?$/.exec(x);
-      return m?.[1] === undefined ? [] : [m[1]];
+    const said = new Set(timelineBullets(new TextDecoder().decode(bytes)).flatMap((x) => {
+      const m = parseTimelineLine(x);
+      return m ? [m.text] : [];
     }));
     for (const l of w.lines) {
       if (l.record === null && l.entry.source === null && said.has(l.entry.text)) {
@@ -1068,12 +1209,27 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   for (const p of personStates) {
     const kept = lineState.get(p.line);
     if (kept !== 'planned' && kept !== 'present') continue;
-    askedPiles.push({ id: stateQuestionId(p.file.id), text: `You changed the current state of ${displayName(nameOf(p.path))}. Should Bower write its update there?`, yes: 'Write it', no: 'Keep mine', about: p.path, state: p.seen, askedAt: opts.requestedAt });
+    const q: Question = { id: stateQuestionId(p.file.id), text: STATE_ASK(displayName(nameOf(p.path))), yes: 'Write it', no: 'Keep mine', about: p.path, state: p.seen, shown: p.shown, askedAt: opts.requestedAt };
+    askedPiles.push(q);
+    stateAsks.set(p.file.id, q);
   }
   // Summaries Bower did not write: one question for the folder, however many there are (TL-P4-10 point 3); a yes
   // becomes ADOPT_STATES_RULE (C11), and Bower then adopts them.
   if (unmarkedStates.some((l) => lineState.get(l) === 'planned' || lineState.get(l) === 'present')) {
     askedPiles.push({ id: ADOPT_STATES_ID, text: ADOPT_STATES_QUESTION, yes: 'Keep them up to date', no: 'Leave them', askedAt: opts.requestedAt });
+  }
+  // A pile of words a line carries goes to the Bin only with every such line written (or there already); otherwise it
+  // waits whole for the next run, its words untouched, and its lines are not written now either.
+  // At least one of them written now, so the pile is filed as the note it went into; with every one there already, it
+  // is saved already, as those notes (`duplicates.ts`), and goes to the Bin as a copy does.
+  const savedWords = new Map([...citedWords].flatMap(([id, w]) => {
+    const as = wordsSaved(w.lines.map((l) => lineState.get(l)), [...w.notes].flatMap((n) => listing.find((f) => f.id === n) ?? []));
+    return as ? [[id, as] as const] : [];
+  }));
+  const wordsWaiting = [...citedWords].filter(([id, w]) => !savedWords.has(id) && (!w.lines.some((l) => lineState.get(l) === 'planned') || !w.lines.every((l) => ['planned', 'present'].includes(lineState.get(l) ?? '')))).map(([id]) => id);
+  if (wordsWaiting.length) {
+    console.error('A pile of words could not be added to its note now; it waits for the next tidy-up');
+    return tryAgain({ editCap, held: new Set([...held, ...wordsWaiting]) });
   }
   // A keep goes whole or waits whole with its answer: every line it carries written (or there already), every note
   // linking the other note rewritten, and the other note edited by nothing else; otherwise it is planned again held.
@@ -1268,6 +1424,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     .filter((q, i, all) => (again.has(q.id) || !answered.has(q.id)) && all.findIndex((x) => x.id === q.id) === i);
   const questionsFile = ix.file(SYSTEM.questions);
   let questionsText: string | null = null;
+  /** The questions that write holds: written by the build, once it has set on each one asked now the note as left. */
+  let questionsList: Question[] | null = null;
   let fresh: Question[] = [];
   /** The questions this write closes because their thing or pile left the inbox. */
   const closing: Question[] = [];
@@ -1283,14 +1441,18 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       const again = toAsk.find((q) => q.subject !== undefined && related(subjectKey(x), q.subject) === false && sameContent(x, q));
       return again ? { ...x, subject: again.subject, ...(again.about !== undefined ? { about: again.about } : {}) } : x;
     };
-    const open = openQuestions(all, answered, seenNow);
+    const open = openQuestions(all, answered, seenNow, notesSeen);
     // A question closed because its thing goes to the Bin now (a saved copy) closes only once that Bin is done (P4-17).
     closing.push(...all.filter((q) => !answered.has(q.id) && !open.includes(q)));
     const left = [...open.map(retarget), ...fresh];
-    if (!readable || left.length !== all.length || fresh.length || left.some((q, i) => q.subject !== all[i]?.subject)) questionsText = questionsJson(left);
+    if (!readable || left.length !== all.length || fresh.length || left.some((q, i) => q.subject !== all[i]?.subject)) {
+      questionsList = left;
+      questionsText = questionsJson(left);
+    }
   } else if (toAsk.length && sys?.folder) {
     // A missing list is made again in `.bower` with the question (TL-P2-33 §2a).
     fresh = toAsk;
+    questionsList = fresh;
     questionsText = questionsJson(fresh);
   } else if (toAsk.length) {
     // No `.bower` yet: the run's own records make it; there is no list to ask in, so the question is not asked.
@@ -1365,8 +1527,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     kind: 'decided' as const, run: { runId: opts.runId, requestId: opts.requestId, scope: opts.scope, allowWeb: opts.allowWeb, requestedAt: opts.requestedAt },
     rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas: d.areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
-    requestsBroken, requestsDone, sys, questionsText, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew,
+    requestsBroken, requestsDone, sys, questionsList, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
+    rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows,
   };
 }
 type Decided = Extract<Awaited<ReturnType<typeof decide>>, { kind: 'decided' }>;
@@ -1378,8 +1540,8 @@ type Decided = Extract<Awaited<ReturnType<typeof decide>>, { kind: 'decided' }>;
 export async function build(decided: Decided): Promise<Ended> {
   const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
-    requestsBroken, requestsDone, sys, questionsText, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew } = decided;
+    requestsBroken, requestsDone, sys, questionsList, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
+    rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows } = decided;
 
   // The fixed operations, in order: clear last run's marks, make folders, file, the note edits, the merges, Bin the piles,
   // your changes, the hashes.
@@ -1516,8 +1678,21 @@ export async function build(decided: Decided): Promise<Ended> {
     const appended = edit.changes.reduce((n, c) => n + (c.kind === 'timeline-append' ? c.entries.length : 0), 0);
     // A line's row says how the note is as the run leaves it: the edit's bytes, and the stamp of its last write there,
     // the New mark's (`write-once`), so the screen marks the line only while the note is still so (addendum 5).
-    const left = appended ? { lines: appended, md5: md5Hex(new TextEncoder().encode(edit.text)), stamp: stampOf(opts.runId, await add({ kind: 'move', before: seen(edit.file), parent: { fileId: edit.file.parents[0] ?? '' }, name: edit.file.name, properties: { bowerNew: '1' } }, [op])) } : null;
+    const marked = appended ? await add({ kind: 'move', before: seen(edit.file), parent: { fileId: edit.file.parents[0] ?? '' }, name: edit.file.name, properties: { bowerNew: '1' } }, [op]) : null;
+    const asLeft = { md5: md5Hex(new TextEncoder().encode(edit.text)), stamp: stampOf(opts.runId, marked ?? op) };
+    const left = marked ? { lines: appended, ...asLeft } : null;
+    // A question about this note's Current state asked now records the note as this run leaves it: the same two
+    // things the New mark compares (`c3-state-mark`).
+    const asked = stateAsks.get(edit.file.id);
+    if (asked?.shown) asked.shown = { lines: asked.shown.lines, ...asLeft };
     for (const row of edit.rows) reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), updated: [{ path: edit.path, what: row.what, op, ...(row.line === undefined || left === null ? {} : { line: row.line, ...left }) }] } });
+    // A granted write Drive refused while the run worked keeps its answer, since the answer's archive waits for it (TL-P2-20
+    // rule 7); one answered row says so, its sentence by the refusal (`materialize`), never as a thing set aside (TL-P4-19
+    // addendum 21). A clash asks again instead, and says nothing here.
+    for (const answer of edit.changes.flatMap((c) => (c.kind === 'state-rewrite' && c.granted ? [c.granted.answer] : []))) {
+      const questionId = journal.find((l) => l.rec.id === answer)?.rec.questionId;
+      if (questionId) reportPlan.push({ requires: [op], when: 'rejected', value: { ...empty(), answered: [{ questionId, kind: 'state', outcome: 'refused', why: stateNotWritten(displayName(nameOf(edit.path)), false), note: edit.path }] } });
+    }
   }
   // What a disagreement's answer derives (R4-1): its Timeline line, which the question's removal waits for.
   for (const [id, a] of answerLines) {
@@ -1552,10 +1727,39 @@ export async function build(decided: Decided): Promise<Ended> {
     reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), alreadySaved: [{ name: s.file.name, as }] } });
     reportPlan.push({ requires: [op], when: 'rejected', value: { ...empty(), setAside: [{ name: s.file.name, why: SAVED_STAYS }] } });
   }
+  // A pile of words whose news went onto notes as Timeline lines: its context note and folder go to the Bin once those
+  // notes' edits are written; an edit refused leaves the pile in the inbox, whole, for the next tidy-up (as any line
+  // refused while it is written, it has no row of its own).
+  const wordsLines = new Map<string, string[]>();
+  /** The Bin a pile of words already saved is reported by: its pile note's, or (none bound) its folder's. */
+  const savedWordsBin = new Map<string, string>();
+  for (const [pileId, w] of citedWords) {
+    const lines = [...w.notes].flatMap((id) => editOf.get(id) ?? []);
+    wordsLines.set(pileId, lines);
+    const context = w.context ? await add({ kind: 'bin', before: seen(w.context), capturedChildIds: [] }, lines) : null;
+    if (context !== null && savedWords.has(pileId)) {
+      savedWordsBin.set(pileId, context);
+      wordsLines.set(pileId, [context]);
+    }
+    // Filed as the note its news went into (the first, when it went into more than one), once every such edit applied.
+    const into = edits.find((e) => editOf.get(e.file.id) === lines[0]);
+    if (into) reportPlan.push({ requires: lines, when: 'applied', value: { ...empty(), filed: [{ name: 'Your note', title: displayName(nameOf(into.path)), kind: 'note', to: parentOf(into.path), note: into.path }] } });
+  }
   for (const pile of capturedPiles) {
     const note = notesOf.get(pile.pileId);
     // A pile partly asked about keeps its folder, with what is asked about and its words.
-    if (pile.anchor && !partly.has(pile.pileId)) await add({ kind: 'bin', before: pile.anchor, capturedChildIds: pile.childFileIds }, [...(movesOf.get(pile.pileId) ?? []), ...(note ? [note] : [])]);
+    if (!pile.anchor || partly.has(pile.pileId)) continue;
+    const op = await add({ kind: 'bin', before: pile.anchor, capturedChildIds: pile.childFileIds }, [...(movesOf.get(pile.pileId) ?? []), ...(note ? [note] : []), ...(wordsLines.get(pile.pileId) ?? [])]);
+    if (savedWords.has(pile.pileId) && !savedWordsBin.has(pile.pileId)) savedWordsBin.set(pile.pileId, op);
+  }
+  // A pile of words already saved (`duplicates.ts`): reported as a copy is, by its folder's name and the note it is
+  // saved as; its Bin refused, it stays in the inbox, and says so.
+  for (const [pileId, op] of savedWordsBin) {
+    const w = citedWords.get(pileId);
+    const as = savedWords.get(pileId);
+    if (!w || !as) continue;
+    reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), alreadySaved: [{ name: w.folder.name, ...as }] } });
+    reportPlan.push({ requires: [op], when: 'rejected', value: { ...empty(), setAside: [{ name: w.folder.name, why: SAVED_STAYS }] } });
   }
   // Your changes: requests completed in requests.json, answered questions dropped, then each line archived.
   // A line's archive move depends on every write derived from it, so a rejected write keeps it unarchived.
@@ -1587,6 +1791,7 @@ export async function build(decided: Decided): Promise<Ended> {
     }
   }
   let questionsOp: string | null = null;
+  const questionsText = questionsList === null ? null : questionsJson(questionsList);
   if (questionsText !== null) {
     // It waits for every operation derived from the answers it drops (R4-1), so a question stays until its work is done,
     // and for the moves of the piles its new question is about, so it is asked once they are filed.
@@ -1640,7 +1845,9 @@ export async function build(decided: Decided): Promise<Ended> {
       reportPlan.push({ requires: [requestsOp, ...moves, ...archiveChain], when: 'applied', value: { ...empty(), requests: [line.rec.text ?? line.rec.what] } });
     } else {
       // A rule taken out or already there is a rule record, not one of your other changes (TL-P2-23, TL-P2-33 §3).
-      reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: line.rec.kind === 'rule' ? 0 : 1 } });
+      // An answer whose subject was gone says so in its answered row, never as a thing set aside.
+      const gone = answeredRows.get(line.rec.id);
+      reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: line.rec.kind === 'rule' ? 0 : 1, ...(gone ? { answered: [gone] } : {}) } });
     }
   }
 
@@ -1987,6 +2194,20 @@ type MergeState = Omit<Merge, 'line'> & { line: 'planned' | 'present' };
 const citeName = (name: string): string => name.replace(/\.md$/i, '');
 /** Paths in code-point order, the same everywhere (TL-P2-29). */
 const byCodePoint = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/** Where the runs' folders are: a run's manifest is in its own folder there (`records.ts`). */
+const RUNS_PATH = `${SYSTEM.dir}/${RUNS_NAME}`;
+/**
+ * The Current state changes a manifest records, each with its note's file id and the lines it wrote (an undo that gives
+ * lines back under the mark they had says so: its lines are not Bower's).
+ */
+function stateChangesOf(m: Manifest | ManifestV2): Array<{ fileId: string; lines: string[] }> {
+  return m.operations.flatMap((op) => {
+    const e = op.effect;
+    if (e.kind !== 'edit-text') return [];
+    return e.changes.flatMap((c) => (c.kind === 'state-rewrite' && c.release === undefined && c.mark === undefined ? [{ fileId: e.before.fileId, lines: [...c.lines] }] : []));
+  });
+}
 
 /**
  * Whether a note may link to a former name, read leniently (any encoding, any format): a note that does but cannot

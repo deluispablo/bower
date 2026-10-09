@@ -38,7 +38,7 @@ import { join } from 'node:path';
 import { normalizeModelInput } from './model-input';
 import { MANIFEST_V2_LIMIT, parseRunManifestV2, recordableName } from '../../src/data/contracts/run-manifest';
 import { z } from 'zod';
-import { AUTHORED_LINE_MAX, STATE_WRITE } from '../../src/data/contracts/note-edit';
+import { AUTHORED_LINE_MAX, STATE_WRITE, newsLineCited } from '../../src/data/contracts/note-edit';
 import { PILE_NOTE } from '../../src/data/piles';
 import type { Admitted, RunProvider } from '../../src/data/spine/provider';
 import type { ScriptedRead } from '../../src/data/spine/read';
@@ -46,7 +46,7 @@ import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { subjectKey, subjectOf } from '../../src/data/contracts/questions';
 import type { Question } from '../../src/data/contracts/types';
-import { modelDecisions, planScripted, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
+import { modelDecisions, planScripted, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
 import { MAX_NAME } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
 import { RUNNER_WRITES, SYSTEM } from '../../src/data/vault/layout';
@@ -176,7 +176,7 @@ interface Shown {
   /** The person's `Rules.md`, bounded, when the folder has one. */
   rules?: string;
   /** Your answers this run took, each with its question and what it is about (TL-P4-08 addendum 8). */
-  answers?: Array<{ question: string; answer: string; fileId?: string; pileId?: string; note?: string }>;
+  answers?: Array<{ question: string; answer: string; fileId?: string; pileId?: string; note?: string; notes?: string[] }>;
   /** The paths and names of the folder's files, for the check on a note's links; not shown to the model. */
   names?: Set<string>;
   folders: string[];
@@ -231,16 +231,18 @@ function promptInstructions(): string {
     '{"kind":"tidy-intent","v":1,"things":[{"fileId":"<a thing\'s fileId>","to":"<folder path>","name":"<new name>",',
     '  "basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>","note":{"name":"<note name>.md","summary":"<one line>","body":"<Markdown>"}}],',
     ' "notes":[{"pileId":"<a pile of words only>","to":"<folder path>","name":"<note name>.md","basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>"}],',
-    ' "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing\'s fileId>"}],',
+    ' "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing\'s fileId, or a pileId of words only>"}],',
     ' "states":[{"note":"<the path of a note below>","lines":["<one line>"],"cites":"<a thing\'s fileId>"}],',
     ' "asks":[{"fileId":"<a thing you do not file>","text":"<one yes-or-no question>","yes":"<short answer>","no":"<short answer>"}],',
+    '  (or, about two notes below that are one thing, {"notes":["<the path of a note below>","<the path of another>"],"text":...,"yes":...,"no":...})',
     ' "keep":[{"kept":"<the path of a note below>","other":"<the path of a note below>"}]}',
     `Every key but "things" is optional. A folder path starts with one of ${MAIN_FOLDERS.join(', ')}. A thing keeps its extension`,
     '(a saved link may become a ".md" note). "rules" below are the person\'s rules and win; a list that ends "[cut here: ..." goes on.',
     '',
     'Where each thing goes, in this order:',
     '1. Fit: reuse a folder below that fits it, a project, area or topic. Check for a near-duplicate name first: never make',
-    '   a second folder or note for what one below already is.',
+    '   a second folder or note for what one below already is. When two notes below are about one thing, ask whether to keep',
+    '   one: a question in "asks" with "notes", the paths of both, and no "fileId" or "pileId".',
     '2. Create: only when nothing fits and where it goes is clear, a new subfolder of a main folder (missing folders are made).',
     '   Projects hold a goal with an end date, Areas an ongoing responsibility with no end date, Resources topics and reference',
     '   material (one folder per topic), Archive what is no longer active. A clear thing that fits no folder below, and is',
@@ -256,7 +258,8 @@ function promptInstructions(): string {
     '',
     'What to write:',
     '- Value: a thing that only confirms what a note below already says makes no new note. File the thing beside that note',
-    '  and add a Timeline line to it saying so, citing the thing.',
+    '  and add a Timeline line to it saying so, citing the thing. A pile of words only whose news is about a note below (a date,',
+    '  a status, an amount) makes no new note either: leave it out of "notes" and add a Timeline line to that note citing its "pileId".',
     `- "note" is a note beside a thing, saying what it says, from its text only: invent nothing. Every thing with text gets one,`,
     '  unless a Timeline line on a note below cites it (the value gate above); a photo or a thing with no text needs none.',
     `  Bower refuses a reply that leaves one out. Its summary is at`,
@@ -265,13 +268,13 @@ function promptInstructions(): string {
     '  (the note named as its folder, or its project\'s or area\'s note) when there is one, and 1 to 5 related notes below,',
     '  as [[links]].',
     `- "lines" (optional): at most ${AUTHORED.lines} Timeline lines, each at most ${AUTHORED.line} characters with no link, only on the notes`,
-    '  below; "cites" names a thing you file, and Bower links it as the source. A note\'s Timeline only grows. Look in each',
+    '  below; "cites" names a thing you file, and Bower links it as the source, or a pile of words only. A note\'s Timeline only grows. Look in each',
     '  thing for what it changes in a note below, a status, a date, a deadline or an amount, and add a line to that note too.',
     '  When a thing disagrees with a note, never change it silently: the line gives both figures, the note\'s and the',
     '  thing\'s, and cites the thing.',
     `- "states" (optional): a note's whole "## Current state" as it should read now, at most ${STATE_WRITE.lines} lines of at most`,
     `  ${STATE_WRITE.line} characters with no link, only for a note below whose state the thing changes (a status, a count, a date),`,
-    '  at most one per note, citing the thing; add a Timeline line saying what changed too. Bower rewrites it only if the',
+    '  at most one per note, citing the thing or pile; add a Timeline line saying what changed too. Bower rewrites it only if the',
     '  person has not edited it; otherwise it asks them.',
     '- Every summary, line and question is one short plain line, the outcome first.',
     '- Names: every "name" says what the thing is, in plain words. A name made with underscores (Offer_letter_final), a copy',
@@ -298,7 +301,7 @@ function promptInstructions(): string {
     '',
     'Answers: "answers" (when there are any) are the person\'s answers to questions Bower asked, each with the thing ("fileId")',
     'or pile ("pileId") it is about when that is below. Place that thing or pile by what the answer says, and do not ask about',
-    'it again. For a yes to keeping one note for two notes below, name the note to keep and the other in "keep": the other\'s',
+    'it again. For a yes to keeping one note for two notes below ("notes"), name the note to keep and the other in "keep": the other\'s',
     'facts and Timeline join the kept note, and it goes to the Bin. Never "keep" two notes without that yes. For a yes to',
     'Bower writing its update in a note\'s Current state ("note"), give that note\'s whole Current state in "states", as it',
     'should read now from the note below; the person\'s yes lets Bower write over their own lines that once.',
@@ -422,9 +425,6 @@ async function notesShown(read: ScriptedRead, listing: readonly DriveFile[], ix:
   return notes;
 }
 
-/** A question about keeping one note: the person is asked whether two notes are one (the fake's and the corpus' wording). */
-const KEEP_ONE = /\bkeep one note\b/i;
-
 /** An answer of yours this run took, with the open question it answers (as `.bower/questions.json` has it). */
 interface TakenAnswer {
   /** The answer's journal record id. */
@@ -433,18 +433,28 @@ interface TakenAnswer {
   question: Pick<Question, 'id' | 'text' | 'yes' | 'no' | 'subject'>;
   /** For "Write it" (a question about a note's Current state): the note it is about, by that id: its file id and its path now. */
   note?: { fileId: string; path: string };
+  /** For keeping one note (a pair question by file ids, c3-pair-ask): the two notes, by those ids, and their paths now. */
+  pair?: { fileIds: readonly [string, string]; paths: readonly [string, string] };
+  /** For "Write it": its question keeps the update it showed, which the plan writes with no model (`c3-state-mark`). */
+  shown?: true;
+}
+
+/** Your answers a run took, and whether they are all it took of your changes and each one's question kept what it showed. */
+interface Taken {
+  answers: TakenAnswer[];
+  alone: boolean;
 }
 
 /**
  * Your answers among the changes this run took, each with the open question it answers (TL-P4-08 addendum 8): read
  * once, for what the model is shown and for the notes kept as one. None when the run took no change of yours.
  */
-async function answersTaken(read: ScriptedRead, run: ScriptedRun, took: Admitted): Promise<TakenAnswer[]> {
-  if (!took.taken.journal.length) return [];
+async function answersTaken(read: ScriptedRead, run: ScriptedRun, took: Admitted): Promise<Taken> {
+  if (!took.taken.journal.length) return { answers: [], alone: false };
   const listing = await read.listAll(run.rootId);
   const ix = VaultIndex.build(run.rootId, listing);
   const file = ix.file(SYSTEM.questions);
-  if (!file || file.folder) return [];
+  if (!file || file.folder) return { answers: [], alone: false };
   const json = (text: string): unknown => {
     try {
       return JSON.parse(text);
@@ -459,10 +469,14 @@ async function answersTaken(read: ScriptedRead, run: ScriptedRun, took: Admitted
   const questions = Array.isArray(open?.questions) ? (open.questions as Array<Record<string, unknown>>) : [];
   const text = (v: unknown): string => (typeof v === 'string' ? v : '');
   const out: Array<{ answer: TakenAnswer; at: number }> = [];
+  // A change of yours that is not an answer to a question that kept what it showed needs the model.
+  let others = 0;
   for (const line of took.taken.journal) {
     const rec = json(await read.readText(line.fileId)) as { id?: unknown; kind?: unknown; text?: unknown; questionId?: unknown; at?: unknown } | null;
+    const q = questions.find((x) => x.id === rec?.questionId);
+    const shown = !!q && subjectOf({ id: typeof q.id === 'string' ? q.id : '' }).kind === 'state' && isRecord(q.shown) && Array.isArray(q.shown.lines);
+    if (rec?.kind !== 'answer' || !shown) others++;
     if (rec?.kind !== 'answer' || (rec.text !== 'yes' && rec.text !== 'no') || typeof rec.id !== 'string') continue;
-    const q = questions.find((x) => x.id === rec.questionId);
     if (!q || typeof q.id !== 'string' || typeof q.text !== 'string') continue;
     const at = typeof rec.at === 'number' ? rec.at : 0;
     // One answer per question: of two (another device's), the later one is the person's answer (P4-20 M1).
@@ -472,30 +486,40 @@ async function answersTaken(read: ScriptedRead, run: ScriptedRun, took: Admitted
     const about = subjectOf({ id: q.id });
     const noteId = about.kind === 'state' ? about.id : undefined;
     const notePath = noteId === undefined ? undefined : ix.pathOf(noteId);
+    // A pair of notes by their file ids, wherever they are now (moved or renamed since it was asked); one gone has none.
+    const pairIds = about.kind === 'pair' && about.by === 'id' ? about.notes : undefined;
+    const pairPaths = pairIds?.map((id) => ix.pathOf(id));
+    const [pathA, pathB] = pairPaths ?? [];
     const answer: TakenAnswer = {
       id: rec.id, yes: rec.text === 'yes', question: { id: q.id, text: q.text, yes: text(q.yes), no: text(q.no), ...(typeof q.subject === 'string' ? { subject: q.subject } : {}) },
       ...(noteId !== undefined && notePath !== undefined ? { note: { fileId: noteId, path: notePath } } : {}),
+      ...(pairIds && pathA !== undefined && pathB !== undefined ? { pair: { fileIds: pairIds, paths: [pathA, pathB] } } : {}),
+      ...(shown ? { shown: true as const } : {}),
     };
     if (before >= 0) out.splice(before, 1);
     out.push({ answer, at });
   }
-  return out.map((a) => a.answer);
+  return { answers: out.map((a) => a.answer), alone: others === 0 && out.length > 0 };
 }
+
+const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
 /**
  * The pairs of notes shown that the person said yes to keeping as one (`keep-one-note-merge`): a yes answer among the
- * changes this run took, to an open question about keeping one note that links both notes by their exact names.
- * Only these may be kept as one; the answer's record id goes with the pair, so the spine archives it once done.
+ * changes this run took, to an open question about a pair of notes (its subject, `contracts/questions.ts`): by their
+ * file ids, or, for an older question, by the exact names it links. Only these may be kept as one; the answer's record
+ * id goes with the pair, so the spine archives it once done.
  */
 function mergesOf(answers: readonly TakenAnswer[], notes: readonly string[]): NonNullable<Seen['merges']> {
   if (notes.length < 2) return [];
   const shownName = (path: string): string => (path.split('/').at(-1) ?? path).replace(/\.md$/i, '').toLowerCase();
   const merges: Array<{ notes: readonly [string, string]; answer: string }> = [];
   for (const a of answers) {
-    if (!a.yes || !KEEP_ONE.test(a.question.text)) continue;
-    // Named exactly, by a [[link]] to the note (its target before any "|", "#" or "^"), never by part of a name.
-    const said = new Set([...a.question.text.matchAll(/\[\[([^\]|#^]*)/g)].map((m) => (m[1] ?? '').trim().replace(/\.md$/i, '').toLowerCase()));
-    const named = notes.filter((n) => said.has(shownName(n)));
+    const about = subjectOf({ id: a.question.id, text: a.question.text, ...(a.question.subject !== undefined ? { subject: a.question.subject } : {}) });
+    if (!a.yes || about.kind !== 'pair') continue;
+    // By id, at the paths the notes have now; an older question's by name, exactly, never by part of a name.
+    const said = new Set(about.by === 'name' ? about.notes.map((n) => n.toLowerCase()) : []);
+    const named = about.by === 'id' ? notes.filter((n) => a.pair?.paths.includes(n)) : notes.filter((n) => said.has(shownName(n)));
     // Two notes, and only two: a question naming more is not one about these two.
     if (named.length === 2) merges.push({ notes: [named[0] ?? '', named[1] ?? ''], answer: a.id });
   }
@@ -513,7 +537,7 @@ function answersShown(answers: readonly TakenAnswer[], piles: Shown['piles']): N
   return answers.slice(0, AUTHORED.lines).map((a) => {
     const subject = subjectKey(a.question);
     const about = subject === undefined ? {} : things.has(subject) ? { fileId: subject } : pileIds.has(subject) ? { pileId: subject } : {};
-    return { question: a.question.text.slice(0, ASK.text), answer: (a.yes ? a.question.yes : a.question.no).slice(0, ASK.answer) || (a.yes ? 'Yes' : 'No'), ...about, ...(a.note ? { note: a.note.path } : {}) };
+    return { question: a.question.text.slice(0, ASK.text), answer: (a.yes ? a.question.yes : a.question.no).slice(0, ASK.answer) || (a.yes ? 'Yes' : 'No'), ...about, ...(a.note ? { note: a.note.path } : {}), ...(a.pair ? { notes: [...a.pair.paths] } : {}) };
   });
 }
 
@@ -586,16 +610,18 @@ export const REFUSALS = {
   lineKeys: 'a line with keys outside the intent',
   lineNote: 'a line on a note it was not shown',
   lineText: 'a Timeline line that is not one short line',
-  lineCites: 'a line citing a thing it does not file',
+  lineCites: 'a line citing a thing it does not file, or a pile that is not words only or is also made a note',
+  lineUncited: 'a news line that cites nothing: every Timeline line cites the thing or pile it is from',
   noNote: 'a thing with text and no note',
   stateKeys: 'a state with keys outside the intent',
   stateNote: 'a state for a note it was not shown',
   stateTwice: 'two states for one note',
   stateText: `a state that is not 1 to ${STATE_WRITE.lines} short lines`,
-  stateCites: 'a state citing a thing it does not file',
-  askKeys: 'a question with keys outside the intent: give it a "fileId" or a "pileId", not both',
+  stateCites: 'a state citing a thing it does not file, or a pile of words no Timeline line cites',
+  askKeys: 'a question with keys outside the intent: give it a "fileId", a "pileId" or two "notes", only one of them',
   askNotAdmitted: 'a question about a thing or pile it was not admitted to take',
-  askTwice: 'a thing or pile asked about twice',
+  askNotes: 'a question about notes that is not about two different notes below',
+  askTwice: 'a thing, pile or pair of notes asked about twice',
   askAlsoFiles: 'a question about a thing or pile it also files',
   askText: 'a question that is not one short plain line',
   keepKeys: 'a note kept with keys outside the intent: give "kept" and "other"',
@@ -797,6 +823,7 @@ const StateShape = z.strictObject({
 const AskShape = z.strictObject({
   text: z.string(named('askText', 'askKeys')), yes: z.string(named('askText', 'askKeys')), no: z.string(named('askText', 'askKeys')),
   pileId: z.string(named('askNotAdmitted')).optional(), fileId: z.string(named('askNotAdmitted')).optional(),
+  notes: z.array(z.string(named('askNotes')), named('askNotes')).optional(),
 }, named('askKeys'));
 const KeepShape = z.strictObject({ kept: z.string(named('keepNote', 'keepKeys')), other: z.string(named('keepNote', 'keepKeys')) }, named('keepKeys'));
 type ThingIn = z.output<typeof ThingShape>;
@@ -837,6 +864,14 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   const current: AuthoredState[] = [];
   const asked = new Map<string, Ask>();
   const askedThings = new Map<string, Ask>();
+  const askedPairs: PairAsk[] = [];
+  // Piles of words only that a Timeline line cites (the value gate for words): they become no note of their own.
+  const cited = new Set<string>();
+  /** A pile of words only, not made a note: a line may cite it, so its news joins the note it is about. */
+  const wordsPile = (id: string): boolean => {
+    const pile = byPile.get(id);
+    return !!pile && !thingsOf(pile).length && !words.has(id);
+  };
   const kept: KeepOne[] = [];
   const inPairs = new Set<string>();
   const plain = (text: string, max: number): boolean => lineOk(text, max) && !/\[\[|\]\]|\]\(/.test(text) && !new RegExp(WEB.source, 'i').test(text);
@@ -877,16 +912,20 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   const Line = LineShape.superRefine(inOrder<z.output<typeof LineShape>>([
     rule('lineNote', (l) => notes.has(l.note)),
     rule('lineText', (l) => lineOk(l.text, AUTHORED.line) && unlinked(l.text)),
-    rule('lineCites', (l) => l.cites === undefined || placed.has(l.cites)),
+    rule('lineCites', (l) => l.cites === undefined || placed.has(l.cites) || wordsPile(l.cites)),
+    rule('lineUncited', (l) => newsLineCited({ text: l.text.trim(), source: l.cites ?? null })),
     rule('numbers', (l) => grounded(l.cites, [l.text], 'the Timeline line on')),
-  ], (l) => timeline.push({ path: l.note, text: l.text.trim(), cites: l.cites ?? null })));
+  ], (l) => {
+    if (l.cites !== undefined && !placed.has(l.cites)) cited.add(l.cites);
+    timeline.push({ path: l.note, text: l.text.trim(), cites: l.cites ?? null });
+  }));
   // A note's Current state as it should read now (C05): only on a note it was shown, one per note, within note-edit's
   // limits; Bower decides whether it may rewrite it (only while the person has not edited it), never the model.
   const State = StateShape.superRefine(inOrder<z.output<typeof StateShape>>([
     rule('stateNote', (st) => notes.has(st.note)),
     rule('stateTwice', (st) => !current.some((x) => x.path === st.note)),
     rule('stateText', (st) => st.lines.every((x) => lineOk(x, STATE_WRITE.line) && unlinked(x))),
-    rule('stateCites', (st) => st.cites === undefined || placed.has(st.cites)),
+    rule('stateCites', (st) => st.cites === undefined || placed.has(st.cites) || cited.has(st.cites)),
     rule('numbers', (st) => grounded(st.cites, st.lines, 'the Current state of')),
   ], (st) => current.push({ path: st.note, lines: st.lines.map((x) => x.trim()), cites: st.cites ?? null })));
   // A question about one thing, or a whole pile, it does not file: what is asked about stays in the inbox untouched,
@@ -897,25 +936,37 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     const pile = byPile.get(thing ? thing.pileId : a.pileId ?? '');
     return { thing, pile, whole: !thing || !pile?.anchor };
   };
+  // A question about two notes shown that may be one (c3-pair-ask): by the notes it was shown; Bower asks it by their
+  // file ids, and a yes keeps one (`keep`, below, in the answer's run).
+  const pairIn = (a: AskIn): readonly [string, string] | null => {
+    const [x, y] = a.notes ?? [];
+    return a.notes?.length === 2 && x !== undefined && y !== undefined && x !== y && notes.has(x) && notes.has(y) ? [x, y] : null;
+  };
   const Asked = AskShape.superRefine(inOrder<AskIn>([
-    rule('askKeys', (a) => (a.pileId === undefined) !== (a.fileId === undefined)),
-    rule('askNotAdmitted', (a) => about(a).pile !== undefined),
+    rule('askKeys', (a) => [a.pileId, a.fileId, a.notes].filter((k) => k !== undefined).length === 1),
+    rule('askNotes', (a) => a.notes === undefined || pairIn(a) !== null),
+    rule('askNotAdmitted', (a) => a.notes !== undefined || about(a).pile !== undefined),
     rule('askTwice', (a) => {
+      const pair = pairIn(a);
+      if (pair) return !askedPairs.some((p) => p.notes.includes(pair[0]) && p.notes.includes(pair[1]));
       const { pile, whole } = about(a);
       if (!pile) return true;
       return !(asked.has(pile.pileId) || (whole ? thingsOf(pile).some((i) => askedThings.has(i.fileId)) : askedThings.has(a.fileId ?? '')));
     }),
     rule('askAlsoFiles', (a) => {
       const { thing, pile, whole } = about(a);
-      if (!pile) return true;
-      const files = whole ? words.has(pile.pileId) || thingsOf(pile).some((i) => placed.has(i.fileId)) : placed.has(a.fileId ?? '');
+      if (a.notes !== undefined || !pile) return true;
+      const files = whole ? words.has(pile.pileId) || cited.has(pile.pileId) || thingsOf(pile).some((i) => placed.has(i.fileId)) : placed.has(a.fileId ?? '');
       if (!files) return true;
       return !thing && pile.anchor ? 'a question about a pile it also files: to ask about one thing of a pile, give that thing\'s "fileId" and file the rest' : false;
     }),
     rule('askText', (a) => plain(a.text, ASK.text) && plain(a.yes, ASK.answer) && plain(a.no, ASK.answer)),
   ], (a) => {
+    const said = { text: a.text.trim(), yes: a.yes.trim(), no: a.no.trim() };
+    const pair = pairIn(a);
+    if (pair) return void askedPairs.push({ notes: pair, ...said });
     const { pile, whole } = about(a);
-    (whole ? asked : askedThings).set(whole ? pile?.pileId ?? '' : a.fileId ?? '', { text: a.text.trim(), yes: a.yes.trim(), no: a.no.trim() });
+    (whole ? asked : askedThings).set(whole ? pile?.pileId ?? '' : a.fileId ?? '', said);
   }));
   // Notes kept as one (C05, `keep-one-note-merge`): two different notes it was shown, each in one pair only, the other
   // given no line or state (it goes to the Bin), and only a pair the person said yes to keeping as one.
@@ -964,7 +1015,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     intent: () => {
       // A pile with a thing neither placed nor asked about waits whole for the next run.
       const held = new Set(piles.filter((p) => thingsOf(p).some((i) => !placed.has(i.fileId) && !askedThings.has(i.fileId))).map((p) => p.pileId));
-      return { ok: true, held, filing: { thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, states: current, areas, asks: asked, thingAsks: askedThings, ...(kept.length ? { keep: kept } : {}) } };
+      return { ok: true, held, filing: { thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, states: current, areas, asks: asked, thingAsks: askedThings, ...(askedPairs.length ? { pairAsks: askedPairs } : {}), ...(kept.length ? { keep: kept } : {}) } };
     },
   };
 }
@@ -1106,9 +1157,28 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const { model, maxTurns } = claudeLimits(setup.env);
     // The model never sees a thing already saved: the plan bins it (`duplicates.ts`).
     const shownTook = await forModel(read, run, took);
-    const answers = await answersTaken(read, run, shownTook);
-    // A note a yes to "Write it" is about is always shown, so the model can write its update.
-    const shown = await shownOf(read, run, shownTook, new Set(answers.flatMap((a) => (a.yes && a.note ? [a.note.fileId] : []))));
+    const taken = await answersTaken(read, run, shownTook);
+    const answers = taken.answers;
+    // The runner builds the manifest, every id, hash and digest its own, exactly as the scripted provider does.
+    const plannedWith = async (filing: Filing, held: ReadonlySet<string> | undefined, own: string | undefined, by: string): Promise<RunManifest> => {
+      const t = took.taken;
+      const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), decisions: modelDecisions(filing) }, undefined, held);
+      const manifest: RunManifest = plan.manifest;
+      const parsed = await parseRunManifestV2((await canonical(manifest)).bytes, run.rootId, RUNNER_WRITES);
+      if (!parsed.ok) return refuse(`outside the run manifest contract (${parsed.reason})`);
+      const stray = outsideAdmitted(manifest, took, own, new Set((filing.keep ?? []).map((k) => k.other)));
+      if (stray) return refuse(stray);
+      console.log(`The Claude provider planned ${manifest.operations.length} operations ${by}.`);
+      return manifest;
+    };
+    // Only your yes or no to "Write it" questions that kept the update they showed, and no pile: the plan writes that
+    // update as shown, and the model is not asked (`c3-state-mark`, TL-P4-16 addendum 2).
+    if (taken.alone && !shownTook.taken.piles.length) {
+      const listing = await read.listAll(run.rootId);
+      return plannedWith({ thing: () => null, words: () => null }, undefined, VaultIndex.build(run.rootId, listing).file(SYSTEM.dir)?.id, 'with no model, from the updates shown');
+    }
+    // A note a yes to "Write it" is about is always shown, so the model can write its update; so are two notes to keep as one.
+    const shown = await shownOf(read, run, shownTook, new Set(answers.flatMap((a) => (!a.yes ? [] : [...(a.note ? [a.note.fileId] : []), ...(a.pair?.fileIds ?? [])]))));
     if (answers.length) shown.answers = answersShown(answers, shown.piles);
     const input = prepared(run, shownTook, shown);
     // Calculate and set the input fingerprint for the timing line, using normalized input
@@ -1188,15 +1258,6 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     }
     if (!checked.ok) return refuse(`${checked.why} (${checked.kind}, after one retry)`);
     const intent = checked.intent;
-    // The runner builds the manifest, every id, hash and digest its own, exactly as the scripted provider does.
-    const t = took.taken;
-    const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), decisions: modelDecisions(intent.filing) }, undefined, intent.held);
-    const manifest: RunManifest = plan.manifest;
-    const parsed = await parseRunManifestV2((await canonical(manifest)).bytes, run.rootId, RUNNER_WRITES);
-    if (!parsed.ok) return refuse(`outside the run manifest contract (${parsed.reason})`);
-    const stray = outsideAdmitted(manifest, took, shown.own, new Set((intent.filing.keep ?? []).map((k) => k.other)));
-    if (stray) return refuse(stray);
-    console.log(`The Claude provider planned ${manifest.operations.length} operations with ${model}.`);
-    return manifest;
+    return plannedWith(intent.filing, intent.held, shown.own, `with ${model}`);
   };
 }

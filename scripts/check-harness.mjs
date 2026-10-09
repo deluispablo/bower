@@ -4,14 +4,39 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { quarantineFileProblems } from './e2e-flaky.mjs';
 import { e2eTitles } from './harness-tests.mjs';
-import { apiTests, conflictMarkers, hashOf, LEGACY_HASH, nextProblems, problems, readProofs, runnerTests, slowReport, timerListProblems } from './harness-rules.mjs';
+import { agentDefProblems } from './check-agent-defs.mjs';
+import { hookScriptProblems } from './check-hook-scripts.mjs';
+import { historyTips } from './harness-git.mjs';
+import { apiTests, conflictMarkers, hashOf, LEGACY_HASH, nextProblems, problems, readProofs, runnerTests, slowReport, testsChangedProblems, timerListProblems } from './harness-rules.mjs';
 
 const root = new URL('..', import.meta.url);
 // Before anything slow: a committed conflict marker breaks the build in ways that read as something else.
 const markers = conflictMarkers(fileURLToPath(root));
 if (markers.length) {
   console.error(`The harness is not honest yet:\n  ${markers.join('\n  ')}`);
+  process.exit(1);
+}
+// The e2e quarantine (TL-P4-20): every entry has an owner, an unexpired date and a logged defect. `--quarantine <file> [--defect-log <file>]` runs only this rule.
+const arg = (name) => (process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : undefined);
+const quarantine = quarantineFileProblems(arg('--quarantine'), arg('--defect-log'));
+if (quarantine.length) {
+  console.error(`The harness is not honest yet:\n  ${quarantine.join('\n  ')}`);
+  process.exit(1);
+}
+if (arg('--quarantine')) process.exit(0);
+// A changed test needs its own line (TL-P4-20). `--tests-changed <base>` runs only this rule, for integrate.sh, before its slow check.
+const flag = process.argv.indexOf('--tests-changed');
+const tampered = testsChangedProblems(flag >= 0 ? process.argv[flag + 1] : 'claude/p3', historyTips());
+if (tampered.length) {
+  console.error(`The harness is not honest yet:\n  ${tampered.join('\n  ')}`);
+  process.exit(1);
+}
+if (flag >= 0) process.exit(0);
+const missingHooks = [...hookScriptProblems(fileURLToPath(root)), ...agentDefProblems(fileURLToPath(root))];
+if (missingHooks.length) {
+  console.error(`The harness is not honest yet:\n  ${missingHooks.join('\n  ')}`);
   process.exit(1);
 }
 const features = JSON.parse(readFileSync(new URL('harness/features.json', root), 'utf8'));
