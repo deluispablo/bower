@@ -6224,8 +6224,9 @@
       "Focus turns the gaze.",
       "60 s idle sleeps; input wakes with a startle."
     ],
-    "verify": "pnpm vitest run src/bird -t \"the perched Bower follows the pointer|a focused control turns the gaze|after 60 s with no input the bird sleeps|with reduced motion or moves off no transform changes over 5 s|preen and snap never run while input is recent|the run chip bird only blinks|a sleeping bird does not blink|Bower is aria-hidden and out of the tab order\"",
-    "note": "TL-P4-21 order 4 (Opus, after v2-perched-bower). Contract sign-off trial and designer sign-off before dispatch. Packet 2026-10-09-d-v2-07-packet.md."
+    "verify": "pnpm vitest run src/bird -t \"the perched Bower follows the pointer|a focused control turns the gaze|after 60 s with no input the bird sleeps|with reduced motion or moves off no transform changes over 5 s|preen and snap never run while input is recent|the run chip bird keeps its still frame|a sleeping bird does not blink|Bower is aria-hidden and out of the tab order|a tap starts within 0.1 s and cuts the running act|each idle act stays within its range\"",
+    "note": "TL-P4-21 order 4 (Opus, after v2-perched-bower). Contract sign-off trial and designer sign-off before dispatch. Packet 2026-10-09-d-v2-07-packet.md. Red e3fbbfc8, fix 08f344c1; round 2 red edeb7e2f, fix fbd1c431; round 3 red 1371da20, fix 5c2529ea. P4-58 BLOCK, 58b PASS, 58c PASS; Codex 5, 2, then 0.",
+    "review": "P4-58c PASS"
   },
   {
     "task": "p4-consolidation",
@@ -6317,15 +6318,16 @@
     "id": "c4-api-audit",
     "task": "p4-consolidation",
     "category": "security",
-    "passes": false,
+    "passes": true,
     "ui": null,
     "what": "api dev tooling clears its audit: raise wrangler and @cloudflare/vitest-pool-workers to the newest releases at least two weeks old that clear sharp and undici advisories; else exact pnpm overrides.",
     "steps": [
       "api pnpm audit is clean, or each remaining advisory is listed with its reason.",
       "api tests green; wrangler deploy --dry-run runs."
     ],
-    "verify": "",
-    "note": "TL-P4-22 addendum 19 (main 5944ce2d); defect api-dev-audit-advisories. Low priority. Mechanical rung or Codex, after c4-app-fence merges (both touch the lockfile). Packet 2026-10-09-c4-api-audit-packet.md; bower-mechanical (needs network)."
+    "verify": "pnpm -C api exec vitest run -t \"GET /health answers ok|vault makes a new Bower folder from the template\"",
+    "note": "TL-P4-22 addendum 19 (main 5944ce2d); defect api-dev-audit-advisories. Low priority. Mechanical rung or Codex, after c4-app-fence merges (both touch the lockfile). Packet 2026-10-09-c4-api-audit-packet.md; bower-mechanical (needs network). Upgrade 2e29fd6c (wrangler 4.140.0, vitest-pool-workers 0.22.0 exact; overrides undici 7.29.1, sharp 0.35.4 in pnpm-workspace.yaml). Audit 12 to 1 (sharp librsvg, clears 2026-10-11). P4-59 PASS.",
+    "review": "P4-59 PASS"
   },
   {
     "id": "c4-create-landed",
