@@ -16,3 +16,8 @@
 .pickPath { margin-left: auto; font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .confirmRow { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+.nameForm { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+.nameForm p { margin: 0; }
+.nameForm .nameActions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.nameActions > button { min-height: 44px; }

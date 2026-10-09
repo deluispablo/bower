@@ -74,6 +74,9 @@ test('New note in an empty folder asks for a name, then opens the note', async (
   await page.getByRole('button', { name: 'New note in Empty one' }).click();
   const sheet = page.getByRole('dialog', { name: 'New note' });
   await expect(sheet).toBeVisible();
+  // The one name sheet (d-v2-09): its field is "Name", and it has the Cancel / Make the note pair.
+  await expect(sheet.getByRole('textbox', { name: 'Name', exact: true })).toBeFocused();
+  await expect(sheet.getByRole('button', { name: 'Make the note', exact: true })).toBeVisible();
   await page.keyboard.type('Soup ideas');
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/note\/Resources\/Empty%20one\/Soup%20ideas\.md/);

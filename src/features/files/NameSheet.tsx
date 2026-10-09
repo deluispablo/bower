@@ -1,5 +1,5 @@
 import { LoadError } from '@/ui/LoadError';
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useSources, useTree } from '@/data/provider';
 import { BowerError } from '@/data/types';
 import { findNode, thingName, nameOf, parentOf } from '@/data/tree';
@@ -10,7 +10,7 @@ import { afterOverlaysClosed } from '@/ui/back';
 import { report } from '@/ui/report';
 import { toast } from '@/ui/toast';
 import { Sheet } from '@/ui/Sheet';
-import { Input } from '@/ui/Field';
+import { FieldError, Input } from '@/ui/Field';
 import { useFileActions } from './file-actions';
 import s from './files.module.css';
 
@@ -25,6 +25,8 @@ export function NameSheet() {
   const making = naming && 'folder' in naming ? naming : null;
   const node = renaming ? findNode(tree ?? [], renaming) : null;
   const start = renaming ? (node?.type === 'folder' ? nameOf(renaming) : thingName(nameOf(renaming))) : '';
+  // A note or a file says its links follow it; a folder says nothing.
+  const links = renaming && node?.type === 'file' ? (node.kind === 'note' ? 'Links to this note keep working.' : 'Links to this file keep working.') : null;
   const what = renaming ? 'Rename' : making?.type === 'folder' ? 'New folder' : 'New note';
   const where = renaming ? parentOf(renaming) : (making?.folder ?? '');
   const save = async (name: string): Promise<void> => {
@@ -54,14 +56,20 @@ export function NameSheet() {
     <Sheet open={!!naming} onOpenChange={(o) => !o && setNaming(null)} title={what} description={`In ${crumbs(where)}`}>
       {renaming && <LoadError state={treeState} />}
       {renaming && tree === undefined && !treeState.error && <p className="muted">Looking…</p>}
-      {naming && (!renaming || (tree !== undefined && !treeState.error)) && <NameForm key={JSON.stringify(naming)} start={start} label={renaming ? 'Rename' : making?.type === 'folder' ? 'Make the folder' : 'Make the note'} onSave={(n) => void save(n)} />}
+      {naming && (!renaming || (tree !== undefined && !treeState.error)) && <NameForm key={JSON.stringify(naming)} start={start} links={links} label={renaming ? 'Rename' : making?.type === 'folder' ? 'Make the folder' : 'Make the note'} onSave={(n) => void save(n)} onCancel={() => setNaming(null)} />}
     </Sheet>
   );
 }
 
-/** The name box, fresh for each ask (a rename starts from the name it has). */
-function NameForm({ start, label, onSave }: { start: string; label: string; onSave: (name: string) => void }) {
+/** The name box, fresh for each ask (a rename starts from the name it has, selected). */
+function NameForm({ start, label, links, onSave, onCancel }: { start: string; label: string; links: string | null; onSave: (name: string) => void; onCancel: () => void }) {
   const [name, setName] = useState(start);
+  const field = useRef<HTMLInputElement>(null);
+  const ids = useId();
+  const slash = /[/\\]/.test(name);
+  // The start is already the name without its extension (thingName), so selecting it all is the platform convention:
+  // Finder, Explorer and Android Files select the name and leave ".pdf" out.
+  useEffect(() => field.current?.select(), []);
   return (
     <form
       className={s.nameForm}
@@ -70,10 +78,31 @@ function NameForm({ start, label, onSave }: { start: string; label: string; onSa
         onSave(name);
       }}
     >
-      <Input autoFocus aria-label="Name" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-      <Button type="submit" disabled={!name.trim()}>
-        {label}
-      </Button>
+      <Input
+        ref={field}
+        autoFocus
+        aria-label="Name"
+        placeholder="Name"
+        value={name}
+        invalid={slash}
+        errorId={`${ids}-slash`}
+        aria-describedby={links ? `${ids}-links` : undefined}
+        onChange={(e) => setName(e.target.value)}
+      />
+      {slash && <FieldError id={`${ids}-slash`}>Names cannot have slashes; Bower used a dash.</FieldError>}
+      {links && (
+        <p id={`${ids}-links`} className="muted">
+          {links}
+        </p>
+      )}
+      <div className={s.nameActions}>
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={!name.trim()}>
+          {label}
+        </Button>
+      </div>
     </form>
   );
 }
