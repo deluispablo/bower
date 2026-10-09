@@ -6225,7 +6225,7 @@
       "60 s idle sleeps; input wakes with a startle."
     ],
     "verify": "pnpm vitest run src/bird -t \"the perched Bower follows the pointer|a focused control turns the gaze|after 60 s with no input the bird sleeps|with reduced motion or moves off no transform changes over 5 s|preen and snap never run while input is recent|the run chip bird keeps its still frame|a sleeping bird does not blink|Bower is aria-hidden and out of the tab order|a tap starts within 0.1 s and cuts the running act|each idle act stays within its range\"",
-    "note": "TL-P4-21 order 4 (Opus, after v2-perched-bower). Contract sign-off trial and designer sign-off before dispatch. Packet 2026-10-09-d-v2-07-packet.md. Red e3fbbfc8, fix 08f344c1; round 2 red edeb7e2f, fix fbd1c431; round 3 red 1371da20, fix 5c2529ea. P4-58 BLOCK, 58b PASS, 58c PASS; Codex 5, 2, then 0.",
+    "note": "TL-P4-21 order 4 (Opus, after v2-perched-bower). Contract sign-off trial and designer sign-off before dispatch. Packet 2026-10-09-d-v2-07-packet.md. Red e3fbbfc8, fix 08f344c1; round 2 red edeb7e2f, fix fbd1c431; round 3 red 1371da20, fix 5c2529ea. P4-58 BLOCK, 58b PASS, 58c PASS; Codex 5, 2, then 0. Designer check at 7860f261: all rows verified except the wake startle (DEFECT_LOG wake-startle-overshoot).",
     "review": "P4-58c PASS"
   },
   {
@@ -6370,7 +6370,8 @@
       "A failed boot shows Bower could not open and Try again."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/v2-boot-states.spec.ts -g \"the boot says still opening after 3 s|a failed boot says it could not open and offers try again\"",
-    "note": "TL-P4-21 order 8; spec d-v2-12; impact block d-v2-12. Codex slot (TL-P4-23); fresh Claude reviewer. Packet 2026-10-09-d-v2-12-packet.md, designer signed off at 24e5b923. implementer: codex."
+    "note": "TL-P4-21 order 8; spec d-v2-12; impact block d-v2-12. Codex slot (TL-P4-23); fresh Claude reviewer. Packet 2026-10-09-d-v2-12-packet.md, designer signed off at 24e5b923. implementer: codex. Red 815b0d08, fix 0a08db90; e2e finished by a Claude implementer (4b475989: the slow test skips on fake, the 3 s step is unit-tested). P4-60 PASS.",
+    "review": "P4-60 PASS"
   },
   {
     "id": "d-v2-24a",
