@@ -5950,5 +5950,18 @@
     ],
     "verify": "pnpm exec vitest run src/harness-git.test.ts -t \"integrate removes a merged branch and its clean worktree|a merged claude/design worktree survives integrate|a worktree with a running process survives integrate|harness-git imported under node -e with a sha argument does not run the cleanup\"",
     "note": "TL-P4-19 and addendum 2 (main df9e3476); defect cleanup-removed-active-worktrees. Tests use fixture repos in temp dirs. Starting model: bower-implementer. Fix round (red fe4ef462, fix c8f43681): defect harness-git-cli-on-import (the CLI check threw on import under done.sh)."
+  },
+  {
+    "id": "c3-note-sections",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "One section parser (ownership-format) gives every section's position (frontmatter, Current state, Timeline, Bower's note), old notes included; note-format and note-edit read it instead of their own legacy copies; the Timeline-line pattern exists once.",
+    "steps": [
+      "A legacy note, a v2 note and a plain note give every section's position from parseOwnership.",
+      "A Timeline line is parsed by one pattern everywhere."
+    ],
+    "verify": "pnpm vitest run -t \"one parser gives every section position, old notes included|the Timeline-line pattern exists once|round-trips every demo note\" && pnpm -C runner exec vitest run -t \"the corpus reads a note Timeline through the one parser\"",
+    "note": "TL-P4-14 stage 3 row. Coordinator map in docs/harness/2026-10-09-c3-note-sections-packet.md. Starting model: bower-implementer (Sonnet; parsing only, no write path change)."
   }
 ]
