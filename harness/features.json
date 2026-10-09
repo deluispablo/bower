@@ -5614,7 +5614,7 @@
     "id": "c2-create-by-id",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "One write-once rule with two cases: a create carries a Drive-reserved id (409 means it exists), an update or move carries the bowerOp stamp and checksum. One helper (create by id, update by stamp) for the app, runner and Worker; engine creates use reserved ids and the engine's create-key lookup goes.",
     "steps": [
       "A create that is retried after a lost answer makes one file, found by its reserved id.",
