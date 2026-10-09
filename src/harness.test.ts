@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module, checked by these tests
-import { apiTests, doneArgs, SLOW_CEILING, slowProblems, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs, redKind, runnerTests } from '../scripts/harness-rules.mjs';
+import { apiTests, doneArgs, REAL_TIMER_CEILING, slowReport, timerListProblems, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs, redKind, runnerTests } from '../scripts/harness-rules.mjs';
 
 type Entry = { id: string; task: string | number; steps?: string[]; verify: string; passes: boolean };
 const S = ['Open Home.', 'See it.'];
@@ -296,50 +296,26 @@ describe('the harness', () => {
     expect(run.stderr + run.stdout).toContain('e1: escalated, passes without a review PASS');
     expect(run.stderr + run.stdout).toContain('e1 stays open');
   });
-  it('a unit test over 1000 ms not on the slow list fails the harness check', () => {
-    const run = (name: string, duration: number) => ({ name, file: 'src/a.test.ts', duration });
-    const tests = [run('fast one', 40), run('listed slow one', 3200), run('new slow one', 2500), run('exactly the limit', 1000)];
-    const found = slowProblems(tests, ['listed slow one'], 1) as string[];
-    expect(found).toEqual([expect.stringContaining('new slow one')]);
-    expect(found[0]).toContain('2500 ms');
-    expect(slowProblems(tests.slice(0, 2), ['listed slow one'], 1)).toEqual([]);
-    // A name on the list that matches no test is a stale line: it goes.
-    expect(slowProblems(tests.slice(0, 1), ['a test that is gone'], 1)).toEqual([expect.stringContaining('a test that is gone')]);
-  });
-
-  it('a test slow in the full run and fast alone passes the slow ratchet', () => {
-    const tests = [{ name: 'loaded', file: 'src/a.test.ts', duration: 3200 }, { name: 'really slow', file: 'src/b.test.ts', duration: 3200 }];
-    const alone = (t: { name: string }): number => (t.name === 'loaded' ? 120 : 2100);
-    // Only the time alone counts: 'loaded' is fast alone and passes; 'really slow' is slow alone and is not listed.
-    expect(slowProblems(tests, [], 0, alone)).toEqual([expect.stringContaining('really slow')]);
-    expect(slowProblems(tests, [], 0, alone)[0]).toContain('2100 ms alone');
-    // A test fast in the full run is never rerun.
-    const reran: string[] = [];
-    slowProblems([{ name: 'quick', file: 'x', duration: 900 }], [], 0, (t: { name: string }) => (reran.push(t.name), 0));
-    expect(reran).toEqual([]);
-  });
-
-  it('a test under 2000 ms alone passes the temporary alone margin', () => {
-    const tests = [{ name: 'margin one', file: 'src/a.test.ts', duration: 3200 }];
-    const alone = (): number => 1500;
-    expect(slowProblems(tests, [], 0, alone)).toEqual([]);
-  });
-
-  it('a test over 2000 ms alone fails the slow ratchet', () => {
-    const tests = [{ name: 'margin two', file: 'src/a.test.ts', duration: 3200 }];
-    const alone = (): number => 2500;
-    expect(slowProblems(tests, [], 0, alone)).toEqual([expect.stringContaining('margin two')]);
-    expect(slowProblems(tests, [], 0, alone)[0]).toContain('2500 ms alone');
-  });
-
-  it('the slow list may only shrink', () => {
-    const tests = [{ name: 'a', file: 'x', duration: 2500 }, { name: 'b', file: 'x', duration: 2500 }];
-    expect(slowProblems(tests, ['a', 'b'], 2)).toEqual([]);
-    expect(slowProblems(tests, ['a'], 1)).toEqual([expect.stringContaining('b')]);
-    // A name added beyond the recorded size fails, even for a test that is slow.
-    expect(slowProblems(tests, ['a', 'b'], 1)).toEqual([expect.stringContaining('may only shrink')]);
-    const list = JSON.parse(readFileSync(join(process.cwd(), 'harness/slow-tests.json'), 'utf8')) as { tests: string[] };
-    expect(list.tests.length).toBeLessThanOrEqual(SLOW_CEILING);
+  it('the timer allowlist may only shrink', () => {
+    const names = ['a', 'b'];
+    expect(timerListProblems(names, ['a', 'b'], 2)).toEqual([]);
+    // A line that matches no test is stale: it goes.
+    expect(timerListProblems(names, ['a', 'gone'], 2)).toEqual([expect.stringContaining('"gone"')]);
+    // A name added beyond the recorded size fails, even for a test that exists.
+    expect(timerListProblems(names, ['a', 'b'], 1)).toEqual([expect.stringContaining('may only shrink')]);
+    const list = JSON.parse(readFileSync(join(process.cwd(), 'harness/real-timers.json'), 'utf8')) as { tests: string[] };
+    expect(list.tests.length).toBeLessThanOrEqual(REAL_TIMER_CEILING);
     expect(new Set(list.tests).size).toBe(list.tests.length);
+  });
+
+  it('wall-clock times are reported, never failed', () => {
+    const tests = [{ name: 'quick', duration: 40 }, { name: 'very slow', duration: 9000 }, { name: 'slow', duration: 2600.4 }];
+    // The slowest come first, with their time; a test far over any old limit adds no problem to the check.
+    expect(slowReport(tests, 2)).toEqual(['9000 ms  very slow', '2600 ms  slow']);
+    expect(timerListProblems(tests.map((t) => t.name), [], 0)).toEqual([]);
+    // The report never fails the check: check-harness.mjs prints it and takes its exit status from the problems alone.
+    const source = readFileSync(join(process.cwd(), 'scripts/check-harness.mjs'), 'utf8');
+    expect(source).toContain('slowReport(unit)');
+    expect(source).not.toMatch(/bad\.push\([^)]*slowReport/);
   });
 });

@@ -278,3 +278,8 @@ export function slowProblems(tests, list, ceiling = SLOW_CEILING, alone = (t) =>
   for (const name of list) if (!names.has(name)) bad.push(`harness/slow-tests.json names "${name}", which matches no test: delete the line and lower SLOW_CEILING`);
   return bad;
 }
+
+// Stubs for the red commit (c3-timer-gate): the rules do not exist yet.
+export const REAL_TIMER_CEILING = 0;
+export const timerListProblems = () => [];
+export const slowReport = () => [];
