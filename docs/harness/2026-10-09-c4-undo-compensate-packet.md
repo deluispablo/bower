@@ -30,7 +30,12 @@ History is never deleted. There is no new line kind, no fold in the app, the Wor
    - A line refused for good moves to the failed list and unblocks the rest.
    - So an inverse never reaches Drive before its original.
 4. **The three line-folding sites** (`:331`, `:350`, `:434`) keep their forward-line fallback whenever the line was sent. `Journal.remove` of a sent line is deleted, so no fourth path remains.
-5. **"Since the last tidy-up" hides an original and its inverse as a pair.** This is presentation only, in the app's list; the designer confirms it. The run report shows both lines as they happened.
+5. **Pairs (TL-P4-27 addendum 3, main 6742d00d, from the designer).**
+   - An inverse line carries an optional `undoes: <recordId>`. It is an additive field, and old readers get a fixture.
+   - One pure `pairsOf(lines)` lives in `src/data/contracts/journal-record.ts`. Two places use it: the app's "Since the last tidy-up" and the report's materialize. A pair taken in the same run gives no rows and no count.
+   - The run still applies both lines in order. Pairing is for presentation and counting only.
+   - A later inverse, one not in the same run as its original, is an ordinary line with its own row.
+   - The app and the runner deploy together.
 6. **Failures.** A storage failure uses the existing "keep this page open" path. A refused inverse uses its kind's existing sentence.
 
 ## Kept from the parked branch (taken by path, not by cherry-pick; contract pass 1, finding 21)
@@ -52,8 +57,9 @@ Name each file and what was taken in the notes. Everything else on the parked br
 | --- | --- |
 | Undo of a change (Bin, rule, restore, move), online | Today's confirmation, replaced in place: "The rule is back.", "<name> is back", "The pile is back in the inbox". No promise line. |
 | Undo of a Bin while offline, when the file is still in the Drive Bin | "<name> comes back when you are online." It never says "is back" before the file is back (designer condition, 2026-10-09). |
-| "Since the last tidy-up" after an Undo | The original and its inverse are hidden as a pair. The designer confirms this; it is presentation only. |
-| The run report after an Undo whose original was already sent | Both lines as they happened. The designer confirms the wording, and no new list is added. |
+| "Since the last tidy-up" after an Undo | The original and its inverse are hidden as a pair (`pairsOf`). |
+| The run report, when a run takes an original and its inverse together | No rows and no count for the pair (TL-P4-27 addendum 3). |
+| The run report, for an inverse that arrives after its original's run | One ordinary row for the inverse. |
 | Undo when the outbox can't be stored | The existing "keep this page open" sentence. |
 | A refused inverse | Its kind's existing sentence. |
 | Remove the pile, when Drive can't be reached to check | Unchanged (TL-P4-24 addendum 5). |
@@ -64,6 +70,12 @@ These go through the vault API (`removeRule`, `restore`, `undo`) on a fake Drive
 - round 1 #1 and #2;
 - addenda 13–14 #3 and #4.
 Each red names its Codex finding.
+
+Also:
+- `a same-run pair gives no report row and a count of 0`;
+- `a later inverse gives one ordinary row`;
+- `pairsOf hides a pair in Since the last tidy-up`;
+- the old-reader fixture: a line without `undoes` still reads.
 
 Every other finding is listed in the notes as "n/a by construction", each with a one-line reason.
 
