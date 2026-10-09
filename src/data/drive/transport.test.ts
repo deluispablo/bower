@@ -187,3 +187,80 @@ describe('the send options (c2-transport-options)', () => {
     expect(sends).toBe(1);
   });
 });
+
+/**
+ * Every error reason Drive's "Resolve errors" guide documents (https://developers.google.com/workspace/drive/api/guides/handle-errors),
+ * with the status it comes with and the one kind the transport tells for it (lead ruling, DECISIONS main ea058a7):
+ * `retry` (5xx, 408, a rate limit), `wait` (the person acts: a full Drive, a day's quota, a sign-in) and `permanent`.
+ */
+const DOCUMENTED: Array<[number, string | null, 'retry' | 'wait' | 'permanent']> = [
+  [400, 'badRequest', 'permanent'],
+  [400, 'illegalKeepForeverModification', 'permanent'],
+  [400, 'invalidSharingRequest', 'permanent'],
+  [401, 'authError', 'wait'],
+  [401, 'fileNotDownloadable', 'permanent'],
+  [403, 'activeItemCreationLimitExceeded', 'permanent'],
+  [403, 'appNotAuthorizedToFile', 'permanent'],
+  [403, 'cannotModifyInheritedTeamDrivePermission', 'permanent'],
+  [403, 'dailyLimitExceeded', 'wait'],
+  [403, 'domainPolicy', 'permanent'],
+  [403, 'downloadRestrictedForRevision', 'permanent'],
+  [403, 'emailMessage', 'permanent'],
+  [403, 'fileNotExportable', 'permanent'],
+  [403, 'fileOwnerNotMemberOfTeamDrive', 'permanent'],
+  [403, 'fileWriterTeamDriveMoveInDisabled', 'permanent'],
+  [403, 'insufficientFilePermissions', 'permanent'],
+  [403, 'myDriveHierarchyDepthLimitExceeded', 'permanent'],
+  [403, 'numChildrenInNonRootLimitExceeded', 'permanent'],
+  [403, 'rateLimitExceeded', 'retry'],
+  [403, 'sendNotificationEmails', 'permanent'],
+  [403, 'sharingRateLimitExceeded', 'permanent'],
+  [403, 'storageQuotaExceeded', 'wait'],
+  [403, 'teamDriveFileLimitExceeded', 'permanent'],
+  [403, 'teamDriveHierarchyTooDeep', 'permanent'],
+  [403, 'teamDriveMembershipRequired', 'permanent'],
+  [403, 'teamDrivesFolderMoveInNotSupported', 'permanent'],
+  [403, 'teamDrivesParentLimit', 'permanent'],
+  [403, 'UrlLeaseLimitExceeded', 'permanent'],
+  [403, 'userRateLimitExceeded', 'retry'],
+  // A stale id or place: the caller lists again, and the next try goes where it is now.
+  [404, 'notFound', 'retry'],
+  [429, 'rateLimitExceeded', 'retry'],
+  [408, null, 'retry'],
+  [500, null, 'retry'],
+  [502, null, 'retry'],
+  [503, null, 'retry'],
+  [504, null, 'retry'],
+  // A 4xx with no documented reason is not taken again.
+  [400, null, 'permanent'],
+  [403, null, 'permanent'],
+];
+
+describe('one table of Drive failures', () => {
+  it('every documented Drive error reason maps to one kind', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const kindOf: unknown = Reflect.get(transport, 'failureKind');
+    expect(typeof kindOf).toBe('function');
+    const told = kindOf as (e: unknown) => string;
+    const seen: Array<[number, string | null, string, string]> = [];
+    for (const [status, reason] of DOCUMENTED) {
+      const drive = new DriveHttp({
+        token: async () => 't',
+        fetch: async () => new Response(JSON.stringify({ error: { code: status, errors: reason ? [{ reason, message: 'm' }] : [] } }), { status }),
+        pacing: { baseMs: 0, sleep: async () => {} },
+      });
+      for (const write of [false, true]) {
+        const e: unknown = await (write ? drive.createText('FOLDER_ID', 'a.md', 'a') : drive.get('FILE_ID')).then(() => null, (x: unknown) => x);
+        expect(e).toBeInstanceOf(BowerError);
+        seen.push([status, reason, write ? 'write' : 'read', told(e)]);
+      }
+    }
+    expect(seen).toEqual(DOCUMENTED.flatMap(([status, reason, kind]) => [[status, reason, 'read', kind], [status, reason, 'write', kind]]));
+    // Where the person acts, one honest sentence says what is in the way.
+    const sentence = async (reason: string): Promise<string> =>
+      new DriveHttp({ token: async () => 't', fetch: async () => new Response(JSON.stringify({ error: { code: 403, errors: [{ reason }] } }), { status: 403 }), pacing: { baseMs: 0, sleep: async () => {} } })
+        .createText('FOLDER_ID', 'a.md', 'a').then(() => '', (x: unknown) => (x as BowerError).message);
+    expect(await sentence('storageQuotaExceeded')).toBe('Your Google Drive is full.');
+    expect(await sentence('dailyLimitExceeded')).toBe('Google Drive is not taking more from Bower today.');
+  });
+});

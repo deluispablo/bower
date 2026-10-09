@@ -147,20 +147,55 @@ export const UNCONFIRMED_WRITE = 'unconfirmed-write';
 export const isUnconfirmedWrite = (e: unknown): boolean => e instanceof BowerError && e.cause === UNCONFIRMED_WRITE;
 
 /**
- * The marker on a request still rate limited after the retries (429, or a 403 `rateLimitExceeded` /
- * `userRateLimitExceeded`): Drive did not take it, and the guide lists it as retry-with-backoff
- * (https://developers.google.com/workspace/drive/api/guides/handle-errors), so a later try may well go.
+ * What becomes of a request Drive did not take: one table for every caller (lead ruling, DECISIONS main ea058a7), from
+ * the reasons Drive's "Resolve errors" guide documents (https://developers.google.com/workspace/drive/api/guides/handle-errors).
+ * - `retry`: it did not land for now (5xx, 408 Request Timeout, which RFC 9110 15.5.9 says may be repeated, a rate
+ *   limit): asked again after a wait, and a pending write keeps its id for a later try.
+ * - `wait`: the person has to act (a full Drive, Bower's quota for the day, a sign-in): nothing is dropped, a pending
+ *   write keeps its id, and the person is told what is in the way.
+ * - `permanent`: any other 4xx; no later try of the same request changes it.
+ * A request with no answer, an unconfirmed write or any error Drive did not answer is `retry` (unknown is retryable).
  */
-export const RATE_LIMITED = 'rate-limited';
+export type FailureKind = 'retry' | 'wait' | 'permanent';
 
-/** A request Drive did not take for now: send it again later, with the same id. */
-export const isRateLimit = (e: unknown): boolean => e instanceof BowerError && e.cause === RATE_LIMITED;
+/** Every reason the guide documents with a kind of its own; a 4xx with any other reason is `permanent`. */
+export const DRIVE_REASONS: Readonly<Record<string, FailureKind>> = {
+  rateLimitExceeded: 'retry',
+  userRateLimitExceeded: 'retry',
+  // A stale id or place (the guide: check the id): the caller lists again, and the next try goes where it is now.
+  notFound: 'retry',
+  storageQuotaExceeded: 'wait',
+  dailyLimitExceeded: 'wait',
+  authError: 'wait',
+};
+
+/** The kind of Drive's answer `status` with these error `reasons`: the first one the table names, else by its status. */
+export function answerKind(status: number, reasons: readonly string[]): FailureKind {
+  for (const r of reasons) {
+    const kind = DRIVE_REASONS[r];
+    if (kind) return kind;
+  }
+  if (status >= 500 || status === 408 || status === 429) return 'retry';
+  // The guide's 401 is a sign-in (authError) unless it says otherwise; a 404 with no reason is a stale id.
+  if (status === 401 && !reasons.length) return 'wait';
+  if (status === 404 && !reasons.length) return 'retry';
+  return 'permanent';
+}
 
 /**
- * The marker on a request Drive refused with a 4xx that no later try changes: not a sign-in (401), not a rate limit,
- * not a 404 (a stale id, found again by listing) nor the 409 that proves a create landed. Only this ends a pending write.
+ * Whether an answer is asked again at once, after the backoff: a `retry` answer, except a 404, which goes again only
+ * after its caller lists anew (a stale id named again is answered 404 again).
  */
-export const REFUSED = 'refused';
+export const askAgainNow = (status: number, reasons: readonly string[]): boolean => status !== 404 && answerKind(status, reasons) === 'retry';
 
-/** Drive answered that it will not do this request, now or later. */
-export const isRefused = (e: unknown): boolean => e instanceof BowerError && e.cause === REFUSED;
+/** The marker of each kind on a `BowerError` (its ES2022 `cause`). */
+const KIND_MARK: Readonly<Record<FailureKind, string>> = { retry: 'kind:retry', wait: 'kind:wait', permanent: 'kind:permanent' };
+
+/** The options that mark an error with its kind, for `new BowerError(code, sentence, undefined, marked(kind))`. */
+export const marked = (kind: FailureKind): ErrorOptions => ({ cause: KIND_MARK[kind] });
+
+/** What becomes of a failed request, told by its marker only, never by its words: unmarked, it is tried again. */
+export function failureKind(e: unknown): FailureKind {
+  if (e instanceof BowerError) for (const kind of ['wait', 'permanent'] as const) if (e.cause === KIND_MARK[kind]) return kind;
+  return 'retry';
+}

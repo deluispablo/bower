@@ -1,5 +1,6 @@
+import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router';
-import { useNote } from '@/data/provider';
+import { useFailedChanges, useNote } from '@/data/provider';
 import { thingName, nameOf, parentOf } from '@/data/tree';
 import type { Note } from '@/data/types';
 import { crumbs, decodeSplat, noteRoute } from '@/app/paths';
@@ -11,9 +12,19 @@ import { BowerPanel } from '@/features/bower/BowerPanel';
 import s from './panel.module.css';
 import { Tabs, tabPanel } from '@/ui/Tabs';
 
+/** The changes that failed which the panel has already turned to, once each, on this page. */
+const turnedTo = new Set<string>();
+
 /** The desktop's right panel: links of the open note, its outline, and Bower. */
 export function RightPanel() {
   const { rightTab, setRightTab } = useUi();
+  const { data: failed } = useFailedChanges();
+  // A change that failed is found once: the panel turns to Bower, where it shows, and the person may turn away again.
+  useEffect(() => {
+    const fresh = (failed ?? []).filter((f) => !turnedTo.has(f.id));
+    fresh.forEach((f) => turnedTo.add(f.id));
+    if (fresh.length) setRightTab('bower');
+  }, [failed, setRightTab]);
   const loc = useLocation();
   const path = loc.pathname.startsWith('/note/') ? decodeSplat(loc.pathname.slice(6)) : null;
   const isNote = !!path && path.endsWith('.md');
