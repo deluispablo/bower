@@ -2,30 +2,25 @@
 
 Coordinator: the Claude Code session named "Orquestador". It integrates in `/Users/deluisp/Projects/bower-app` on branch `claude/p3`; P4 continues on it. Lead: the Planificador session ([DECISIONS.md](DECISIONS.md)). Output rule: [TL-P3-29](2026-10-07-tl-p3-29-output-rule-survives-compaction.md), in AGENTS.md. Minors: [P2_POLISH.md](P2_POLISH.md). Earlier handoffs: git history of this file.
 
-## Resume after the restart (2026-10-09, third: subagent cap 4, TL-P4-23 addendum 1)
+## Resume (2026-10-09, after the cap-4 restart; current order TL-P4-24 addendum 2)
 
-Read this first. Stage 4 is in progress, following the TL-P4-21 order, with TL-P4-24's data-safety fixes inserted ahead of V2. No worker is running.
+Read this first. Stage 4 is in progress, following the TL-P4-21 order, with TL-P4-24's data-safety fixes inserted ahead of V2.
 
-- **Closed in stage 4:** c4-focus-return, v2-field, v2-dock, v2-name-sheet, v2-targets, c4-run-counts, c4-runner-region, c4-e2e-port.
-- **Merged, waiting for the designer's check** (sent): v2-perched-bower (P4-48 PASS, 6011b407) and c4-segmented-one (Codex, P4-49 PASS, 21c97eba). Close each on "verified":
-  - v2-perched-bower with `--known-green` if needed (red 26b4b60d);
-  - c4-segmented-one with `--fixed-in 04a74af6` or `--known-green` (red 8456c48e failed on control height, /tmp/seg-red.log).
-- **Next, in this order** (packets on claude/p3; escalated; each gets one Codex read-only review pass beside the Claude reviewer; TL-P4-20 contract-sign-off trial):
-  1. c4-retry-fence and c4-undo-withdraw, in parallel. c4-undo-withdraw is `ui: true`: send the designer its "What the person sees" table (copy from TL-P4-24 addendum 1) for sign-off before dispatch.
-  2. Then c4-app-fence (it shares journal.ts with c4-undo-withdraw).
-  3. Then c4-test-timers (TL-P4-22 addendum 13 scope; part 1 gets an escalated review).
-  4. Then d-v2-07 (signed off; it needs its contract sign-off pass first), then 24a/24b and d-v2-06, d-v2-02, as TL-P4-21 orders.
-- **Codex (TL-P4-23):**
-  - Its sandbox cannot write the git index. The coordinator commits for it, in order (red, fix, notes), and runs its `pnpm check` and e2e under the lock. Prompts say "no git writes".
-  - Run: `codex exec --json --sandbox workspace-write -C <wt> -c model_reasoning_effort=medium - < prompt`, outside the Bash sandbox.
-  - Log its tokens from turn.completed.
-- **Rules now live:**
-  - every heavy run goes through `harness/with-lock.sh` (TL-P4-22 addendum 11);
-  - a port per worktree (`E2E_PORT` override);
-  - cap: 4 subagents; 2 Claude implementers plus 1 Codex;
-  - a UI packet gets "What the person sees", signed off before dispatch;
-  - UI-only fix rounds of non-escalated entries skip the re-review (pruning trial).
-- **Open defects:** the load flakes are ruled into c4-test-timers. The Codex findings are ruled into the three c4 fix entries.
+- **Closed in stage 4:** c4-focus-return, v2-field, v2-dock, v2-name-sheet, v2-targets, c4-run-counts, c4-runner-region, c4-e2e-port, c4-segmented-one (2cdf17f4, verified).
+- **Running:** c4-app-fence (bower-escalated, `/private/tmp/bower-c4-fence`) and c4-test-timers (implementer, `/private/tmp/bower-c4-timers`).
+  - c4-app-fence then gets review P4-50 plus one Codex read-only pass.
+  - Part 1 of c4-test-timers gets an escalated review.
+- **Next, in order:**
+  1. c4-retry-fence ∥ c4-undo-withdraw. The undo-withdraw table is signed off (9193d1fc), and its removePile row comes from addendum 5.
+  2. The v2-perched-bower proud fix round (packet `2026-10-09-v2-perched-bower-round2-packet.md`, fresh Opus, then review, then the designer's check of proud). It goes in the first free Claude slot after the data-safety pair.
+  3. d-v2-07 (it needs its contract sign-off pass), 24a/24b, d-v2-06, d-v2-02, then the c4 data entries.
+- **Codex (TL-P4-23):** the coordinator commits for it (red, fix, notes) and runs its gates under the lock. Run `codex exec --json --sandbox workspace-write -C <wt> -c model_reasoning_effort=medium - < prompt` outside the Bash sandbox. Log tokens.
+- **Rules:**
+  - every heavy run goes through `harness/with-lock.sh`;
+  - a port per worktree;
+  - cap 4 subagents (2 Claude implementers plus 1 Codex);
+  - a UI packet's "What the person sees" is signed off before dispatch;
+  - the UI-only fix rounds of non-escalated entries skip re-review.
 - **Sessions:** lead Planificador; Designer (worktree `/private/tmp/bower-design`); lead planning worktree `/private/tmp/bower-tl-planning`. Never remove role worktrees.
 
 ## Where things stand

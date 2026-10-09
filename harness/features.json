@@ -6149,7 +6149,7 @@
       "A perched Bower with the turn idles through the engine and stays on its perch."
     ],
     "verify": "pnpm vitest run src/bird -t \"a minor bird never takes the turn from the page|a minor bird steps out of sight under an overlay bird|a perched Bower with the turn idles through the engine and stays on its perch|with Bower moves off or reduced motion|minor entries are ignored|the carry group exists, is hidden and reaches onPart|each pose loop matches its CSS reference\" && bash scripts/e2e-both.sh e2e/bird-engine.spec.ts -g \"no CSS animation runs on a bird part while the engine runs\"",
-    "note": "TL-P4-21 ruling 2 (Opus, escalated); impact findings 5-6. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-v2-perched-bower-packet.md. Contract per TL-P4-22 addenda 6-7. Addendum 8: nine poses through the engine; random blink. Addendum 9; contract trial: 3 passes, dispatched without a 4th. Red 26b4b60d, fix e2038262; P4-48 PASS.",
+    "note": "TL-P4-21 ruling 2 (Opus, escalated); impact findings 5-6. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-v2-perched-bower-packet.md. Contract per TL-P4-22 addenda 6-7. Addendum 8: nine poses through the engine; random blink. Addendum 9; contract trial: 3 passes, dispatched without a 4th. Red 26b4b60d, fix e2038262; P4-48 PASS. Designer check at 21c97eba: proud fails addendum 7 (DEFECT_LOG perched-proud-shape); eight poses pass.",
     "review": "P4-48 PASS"
   },
   {
@@ -6199,7 +6199,7 @@
     "id": "c4-segmented-one",
     "task": "p4-consolidation",
     "category": "ui",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "A folder List / Table toggle uses the one Segmented; Files bookmark chips reach 44 px on the phone through the src/ui rule.",
     "steps": [
@@ -6207,8 +6207,9 @@
       "Chips are 44 px at 375."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/c4-segmented-one.spec.ts -g \"the folder view toggle is the one segmented control|the files bookmark chips are at least 44 px on the phone\"",
-    "note": "TL-P4-22 addendum 10 (a); defect second-segmented-list-table. Starting model bower-implementer; pruning trial (no re-review). Packet 2026-10-09-c4-segmented-one-packet.md. implementer: codex. Red 8456c48e, fix 04a74af6, test correction e3b7d900 (coordinator commits; the sandbox cannot write the git index). P4-49 PASS.",
-    "review": "P4-49 PASS"
+    "note": "TL-P4-22 addendum 10 (a); defect second-segmented-list-table. Starting model bower-implementer; pruning trial (no re-review). Packet 2026-10-09-c4-segmented-one-packet.md. implementer: codex. Red 8456c48e, fix 04a74af6, test correction e3b7d900 (coordinator commits; the sandbox cannot write the git index). P4-49 PASS. Designer verified at 21c97eba.",
+    "review": "P4-49 PASS",
+    "design": "verified"
   },
   {
     "id": "d-v2-07",
@@ -6261,5 +6262,34 @@
     ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"every app write of an existing file refuses one that changed name or place elsewhere|every app write of a file reads it fresh in the same call|a fence read with no answer refuses with notReadError|a lost answer whose file already holds the write resolves without a resend|unbin expects the file in the Bin\"",
     "note": "TL-P4-24 finding 2 (a); defect app-bin-skips-read-check; after c4-undo-withdraw. Escalated + Codex review pass. Packet 2026-10-09-c4-app-fence-packet.md. TL-P4-24 addendum 4: one checkStillAsSeen(seen, read, message) helper; SeenFiles folds in."
+  },
+  {
+    "id": "v2-move-here",
+    "task": "p4-consolidation",
+    "category": "ui",
+    "passes": false,
+    "ui": true,
+    "what": "The Move sheet shows the current folder in place, dimmed with a \"Now here\" pill, not choosable (aria-disabled, skipped by tap, Enter and arrows); 52 px rows; a full-width ghost Cancel (d-v2-18).",
+    "steps": [
+      "The current folder row exists, carries Now here and aria-disabled, and cannot be chosen.",
+      "Arrows step over it.",
+      "Cancel closes the sheet and returns focus to the opener."
+    ],
+    "verify": "pnpm vitest run src/features/files/MovePicker.test.tsx -t \"the move sheet's arrows step over the current folder\" && bash scripts/e2e-both.sh e2e/v2-move-here.spec.ts -g \"the move sheet shows where the thing is now and it cannot be chosen|the move sheet has a cancel that returns focus to its opener\"",
+    "note": "TL-P4-21 order 8; spec d-v2-18; impact block d-v2-18. Codex slot (TL-P4-23, lead 2026-10-09); a fresh Claude reviewer reviews it. Designer signed off at 59c72856 with the badge row. Packet 2026-10-09-d-v2-18-packet.md. implementer: codex."
+  },
+  {
+    "id": "c4-new-pill-one",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "ui": true,
+    "what": "The New pill look has one home in src/ui; folder, home and note (and the Move sheet Now here pill) use it, and each caller keeps its own placement. No visual change.",
+    "steps": [
+      "One src/ui home for the pill look; the three module copies are gone.",
+      "No visual change on the three screens (designer check)."
+    ],
+    "verify": "",
+    "note": "TL-P4-22 addendum 16 (main b8b21a8b); defect new-pill-three-copies. UI-only, so the pruning trial applies (no re-review). Codex after v2-move-here merges, and it folds that entry use in. Packet to write."
   }
 ]

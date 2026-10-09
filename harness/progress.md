@@ -260,3 +260,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: v2-name-sheet passes — NameSheet on the field rule; name selected without extension; folder New note uses it (d-v2-09)
 - 2026-10-09: v2-targets passes — desktop tab close 24x24; phone controls 44 px through one rule, one Segmented, switch rows as labels (d-v2-05, d-v2-10)
 - 2026-10-09: c4-e2e-port passes — a port per worktree and an identity check before reusing a dev server
+- 2026-10-09: c4-segmented-one passes — List/Table uses the one Segmented; bookmark chips 44 px at 375 (designer verified)
