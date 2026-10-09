@@ -6113,7 +6113,7 @@
     "id": "v2-dock",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "One bottom dock in src/ui/ holds the toast stack and the run chip, mounted once per shell, publishing --dock-h; page padding and the html scroll-padding read it (d-v2-01, d-v2-03).",
     "steps": [

@@ -501,3 +501,4 @@ c4-run-counts	32b7309d868b2630	2026-10-09	red (fixed in 728d5828)
 v2-field	5ded59694f6a4daa	2026-10-09	known-green: unit red proved by hand at 7f93f350 (/tmp/v2field-handred.log); e2e reds at 7f93f350 and 3ddbf44b (/tmp/vf2-red.log); designer verified fa1d6258
 c4-runner-region	8d6acaf1211fa36b	2026-10-09	red (fixed in cca37279)
 c4-focus-return	d3fd79f206fddd68	2026-10-09	known-green: unit red at f0df8925 by hand (/tmp/c4focus-handred.log); e2e reds at f98ae699 and f0df8925 in worker logs /tmp/c4f-*.log, /tmp/c4f2-*.log; designer verified 75db570f
+v2-dock	f55e0d4ac23dedd4	2026-10-09	known-green: e2e red by hand at 7cf3cbc9: phone width and focus tests fail on assertions (/tmp/v2dock-handred.log); designer verified 75db570f

@@ -256,3 +256,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: v2-field passes — control-line token and one field rule (d-v2-08); checkbox class and error-over-focus fix
 - 2026-10-09: c4-runner-region passes — runner workflow records the Azure region for the timing line, never failing the job
 - 2026-10-09: c4-focus-return passes — one focus home: sheets return focus to their opener, then the menu opener, then the heading (d-v2-04)
+- 2026-10-09: v2-dock passes — one bottom dock with --dock-h; messages and chip above the tab bar; focus never hidden (d-v2-01, d-v2-03)
