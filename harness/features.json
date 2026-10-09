@@ -6351,6 +6351,7 @@
       "getAnimations() is empty on the live dot and the current step mark while a tidy-up runs."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/v2-still-marks.spec.ts -g \"nothing pulses in the running tidy-up\"",
-    "note": "TL-P4-21 order 8; spec d-v2-13 (CSS part); impact block d-v2-13 split. Codex slot (TL-P4-23); fresh Claude reviewer. Designer signed off at 6df210b0. Packet 2026-10-09-d-v2-13-css-packet.md. implementer: codex."
+    "note": "TL-P4-21 order 8; spec d-v2-13 (CSS part); impact block d-v2-13 split. Codex slot (TL-P4-23); fresh Claude reviewer. Designer signed off at 6df210b0. Packet 2026-10-09-d-v2-13-css-packet.md. implementer: codex. Red c5ca3e44, fix 0be6c48d. P4-57 PASS (3 minors).",
+    "review": "P4-57 PASS"
   }
 ]
