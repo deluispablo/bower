@@ -117,6 +117,8 @@ Commit it on `claude/design` with the Co-Authored-By line. Then send one message
 
 By the owner's rule, the lead consults you before ruling on any defect, issue or feature that touches the UI. Answer within your role. Questions of design (copy, layout, states, focus, motion, consistency with the system) you answer with evidence, in one message of 10 lines at most. Questions of taste go to the owner first. A consult does not wait for a review of yours to finish. If the answer needs a spec, follow phases 3 and 4. The coordinator may also consult you directly on a UI question; answer it the same way, and tell it when the answer is a design change outside an agreed spec, which goes to the lead.
 
+**Packet sign-off before dispatch (TL-P4-22).** For a `ui: true` entry the coordinator sends you its "What the person sees" section: screens, states, exact strings and controls. Answer `ok` or the corrections, against the spec and the copy rules, in one message.
+
 **Design check before an entry closes.** For every entry that changes what the person sees or does, the coordinator sends you the entry id, the claude/p3 SHA and the screens. Check them on the dev server against the spec (or, without a spec, against the system and the copy rules), on the viewports, themes and states that apply, and take after-screenshots. Answer `verified`, or `not as specified: <what>` with evidence, in one message. The entry does not close without your answer.
 
 ## Phase 5: working with the lead
