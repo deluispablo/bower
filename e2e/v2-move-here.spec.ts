@@ -43,6 +43,9 @@ test('the move sheet shows where the thing is now and it cannot be chosen', asyn
   await input.fill('Flat hunt');
   await input.press('Enter');
   await expect(sheet).toBeVisible();
+  await expect(sheet.getByRole('status')).toHaveText(
+    'It is already in Flat hunt. Pick another folder with the arrows, or type another name.',
+  );
   await expect(current).toBeVisible();
   await input.fill('Documents');
   await expect(sheet.getByText('Now here')).toHaveCount(0);

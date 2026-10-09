@@ -12,6 +12,44 @@ afterEach(() => {
   useUi.getState().setMoveFor(null);
 });
 
+it("enter on the current folder's name moves nothing and says it is already there", async () => {
+  for (const duplicate of [false, true]) {
+    const folder = (path: string, name: string, children?: TreeNode[]): TreeNode =>
+      ({ path, name, type: 'folder', modified: 0, created: 0, children });
+    const tree = [folder('Projects', 'Projects', [
+      folder('Projects/Flat hunt', 'Flat hunt', [
+        folder('Projects/Flat hunt/Viewing photos', 'Viewing photos'),
+      ]),
+    ])];
+    if (duplicate) tree.push(folder('Elsewhere', 'Elsewhere', [folder('Elsewhere/Flat hunt', 'Flat hunt')]));
+    const base = loadingSources();
+    const move = vi.fn(async () => 'Projects/Flat hunt/Viewing photos/Example.md');
+    const vault = new Proxy(base.vault, {
+      get: (target, key) => key === 'tree' ? async () => tree : key === 'move' ? move : Reflect.get(target, key),
+    });
+    render(
+      <MemoryRouter>
+        <DataProvider sources={{ ...base, vault }}>
+          <MovePicker />
+        </DataProvider>
+      </MemoryRouter>,
+    );
+    await act(async () => useUi.getState().setMoveFor('Projects/Flat hunt/Example.md'));
+    const input = screen.getByRole('textbox', { name: 'Find a folder' });
+    fireEvent.change(input, { target: { value: 'fLaT hUnT' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(useUi.getState().moveFor).toBe('Projects/Flat hunt/Example.md');
+    expect(move).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent(duplicate
+      ? 'Several folders match. Pick one with the arrows, or type more.'
+      : 'It is already in Flat hunt. Pick another folder with the arrows, or type another name.');
+    fireEvent.change(input, { target: { value: 'Flat hunt more' } });
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    cleanup();
+    useUi.getState().setMoveFor(null);
+  }
+});
+
 it("the move sheet's arrows step over the current folder", async () => {
   const folder = (name: string): TreeNode => ({ path: name, name, type: 'folder', modified: 0, created: 0 });
   const tree = [folder('Before'), folder('Current'), folder('After')];
