@@ -5,6 +5,7 @@ import type { TreeNode } from '@/data/types';
 import { useUi } from '@/app/ui-store';
 import { crumbs, paraColor } from '@/app/paths';
 import { Sheet } from '@/ui/Sheet';
+import { fieldBox, Input } from '@/ui/Field';
 import { Icon } from '@/ui/Icon';
 import { useFileActions } from './file-actions';
 import s from './files.module.css';
@@ -55,9 +56,10 @@ export function MovePicker() {
   };
   return (
     <Sheet open={!!moveFor} onOpenChange={(o) => !o && close()} title={moveFor ? `Move ${movingName}` : 'Move'} description={from ? `Now in ${crumbs(from)}` : undefined}>
-      <label className={s.search}>
+      <label className={fieldBox()}>
         <Icon name="search" size={18} />
-        <input
+        <Input
+          inBox
           ref={input}
           autoFocus
           placeholder="Find a folder"
