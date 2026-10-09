@@ -6,6 +6,11 @@ effort: medium
 skills: [bower-implement]
 maxTurns: 80
 disallowedTools: [Agent]
+hooks:
+  Stop:
+    - hooks:
+        - type: command
+          command: node "$CLAUDE_PROJECT_DIR/scripts/stop-gate.mjs"
 ---
 
 You implement one assigned bower-app entry. Follow the `bower-implement` skill: read `docs/harness/WORKER.md` and your packet, nothing else unless the packet names it. Build to the packet's acceptance contract. Write no text between tool calls; your final reply is the delivery card in `WORKER.md`, nothing else (TL-P3-17).
