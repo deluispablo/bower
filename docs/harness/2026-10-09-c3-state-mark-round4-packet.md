@@ -32,3 +32,10 @@
 The red (tests only), then the fix, then the notes addendum in its own commit, with `tests changed:` lines and compatibility rows. The card carries a `worktree:` line.
 
 Reviewers are read-only. They never move the main checkout in any form.
+
+## Added: the shown update on the card (TL-P4-19 addendum 17, main 91bdcd8b)
+
+- The q-state question card on Home shows Bower's update: the label "Bower's update", styled like the "New notes" label, then every shown line as a bullet list in the Current state panel's style. Use existing components only: no new component, no copy of one.
+- Red: `the write it card shows every line of Bower's update`. Today the card text lacks the shown lines. It is accepted when the card contains each one and axe passes (WCAG 2.2, target-size) in the e2e.
+- A yes may apply only text that was shown. Assert this in a test.
+- Point (2), the Timeline line written while the ask is open, is by design (TL-P4-10). No change.
