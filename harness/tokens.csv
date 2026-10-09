@@ -283,3 +283,6 @@ c4-undo-compensate,property-red,codex,gpt-5-codex,medium,1,1122124,1104942,,1031
 c4-lockf,reviewer,claude,bower-reviewer,,1,40025,,,,,,7,0.6,PASS (P4-62),2026-10-09
 d-v2-07,implementer,claude,bower-escalated,,5,135159,,,,,,37,13.0,done (sweep 0/200),2026-10-09
 c4-undo-compensate,implementer,claude,bower-escalated,,1,245628,,,,,,82,15.4,turn limit; resumed,2026-10-09
+d-v2-07,reviewer,claude,bower-reviewer,,7,44389,,,,,,8,0.5,PASS (P4-58g),2026-10-09
+d-v2-07,reviewer,codex,gpt-5-codex,medium,5,421012,417809,,361344,3203,,,,2 Important,2026-10-09
+c4-parse-once,signoff,codex,gpt-5-codex,medium,1,285627,282718,,229504,2909,,,,CHANGES (8 Important),2026-10-09
