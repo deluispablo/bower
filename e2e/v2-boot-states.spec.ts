@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures';
+import { test, expect, isFake } from './fixtures';
 import { expectAxeClean } from './axe';
 
 for (const width of [375, 1440]) {
@@ -6,6 +6,9 @@ for (const width of [375, 1440]) {
     test.use({ viewport: { width, height: 900 } });
 
     test('the boot says still opening after 3 s', async ({ page }) => {
+      // The pretend Drive opens in about 2.3 s even under scenario=slow (one 1.5 s answer), so the boot is gone
+      // before 3 s there; the slow answers that keep the boot up are the demo's (two sequential 1.5 s reads).
+      test.skip(isFake, 'scenario=slow keeps the boot up past 3 s only on the demo source');
       // Keep the slow demo's two session reads pending past 3.5 s.
       await page.addInitScript(() => { Math.random = () => 0.99; });
       await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
