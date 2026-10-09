@@ -41,7 +41,7 @@
 
 /* the segmented control: one home (ui/Segmented.tsx) */
 .segmented { display: inline-flex; gap: 3px; padding: 3px; border-radius: 999px; background: var(--bg-alt); box-shadow: inset 0 0 0 1px var(--line); }
-.segment { min-height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: none; color: var(--text-muted); font-weight: 600; cursor: pointer; }
+.segment { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: none; color: var(--text-muted); font-weight: 600; cursor: pointer; }
 .segment[aria-checked='true'] { background: var(--surface-strong); color: var(--heading); }
 
 /* phone targets: one rule, no per-screen overrides (d-v2-10, WCAG 2.5.5; desktop keeps its sizes, all at least 24, 2.5.8) */

@@ -1,12 +1,12 @@
 import { useRef } from 'react';
-import type { KeyboardEvent } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import s from './ui.module.css';
 
 interface Props<T extends string> {
   /** The group's accessible name. */
   label: string;
   value: T;
-  options: ReadonlyArray<{ value: T; label: string }>;
+  options: ReadonlyArray<{ value: T; label: ReactNode }>;
   onChange: (value: T) => void;
 }
 
