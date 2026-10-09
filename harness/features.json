@@ -5935,5 +5935,19 @@
     ],
     "verify": "pnpm exec vitest run src/harness-git.test.ts -t \"done.sh sees a change under harness scripts as code|done.sh sees harness data as no code\"",
     "note": "TL-P4-17 addendum 11 (main); defect done-sh-misses-harness-dir; scripts/harness-git.mjs CODE_PATHS. Starting model: bower-mechanical."
+  },
+  {
+    "id": "c3-branch-cleanup",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": false,
+    "what": "After a green merge, harness/integrate.sh removes the merged branch's worktree (git worktree remove, never --force) and deletes the branch (git branch -d). Protected by name, not merge state: main, claude/p3, claude/tl-planning, claude/design, archive/*, codex/*, the deploy worktree, and any worktree with a running process (lsof +D) or another session in it.",
+    "steps": [
+      "A merged fixture branch and its clean worktree are gone after integrate.",
+      "A merged claude/design worktree survives integrate.",
+      "A worktree with a running process survives integrate."
+    ],
+    "verify": "pnpm exec vitest run src/harness-git.test.ts -t \"integrate removes a merged branch and its clean worktree|a merged claude/design worktree survives integrate|a worktree with a running process survives integrate\"",
+    "note": "TL-P4-19 and addendum 2 (main df9e3476); defect cleanup-removed-active-worktrees. Tests use fixture repos in temp dirs. Starting model: bower-implementer."
   }
 ]
