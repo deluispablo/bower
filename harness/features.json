@@ -5977,7 +5977,8 @@
       "If the section changed since it was shown, the question is asked again with the reason."
     ],
     "verify": "pnpm vitest run -t \"Bower's last state is read from the previous state change, not searched\" && pnpm -C runner exec vitest run -t \"a yes to write it applies the shown text with no model call|write it re-asks when the section changed since it was shown\"",
-    "note": "TL-P4-14 stage 3 row; TL-P4-19 addendum 7 (main 85fb052b): write-it-silent folds in (TL-P4-16 addendum 2; DEFECT_LOG write-it-silent; docs/harness/defects/2026-10-08-write-it-again.md). Both reds must be green before close. Starting model: bower-escalated (it writes)."
+    "note": "TL-P4-14 stage 3 row; TL-P4-19 addendum 7 (main 85fb052b): write-it-silent folds in (TL-P4-16 addendum 2; DEFECT_LOG write-it-silent; docs/harness/defects/2026-10-08-write-it-again.md). Both reds must be green before close. Starting model: bower-escalated (it writes). ui: true (the q-state question shows the stored text; the re-ask carries a reason; copy goes through the designer). Packet docs/harness/2026-10-09-c3-state-mark-packet.md.",
+    "ui": true
   },
   {
     "id": "c3-design-gate",
