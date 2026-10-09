@@ -4377,7 +4377,7 @@
     "id": "deploy-staging-production-check",
     "task": "p3-f",
     "category": "fix",
-    "what": "deploy-staging.sh judges production only by wrangler's \"Uploaded <name>\" line and by the config's \"name\" field, never by any mention of bower-api elsewhere (the staging URL holds the account subdomain bower-api.workers.dev), so a staging deploy is not stopped by a false production alarm, while an upload named bower-api still fails loudly.",
+    "what": "deploy-staging.sh judges production only by wrangler's \"Uploaded <name>\" line and by the config's \"name\" field, never by any mention of bower-api elsewhere (the staging URL holds the account subdomain <account>.workers.dev), so a staging deploy is not stopped by a false production alarm, while an upload named bower-api still fails loudly.",
     "steps": [
       "The post-deploy check reads the Uploaded line's Worker name: bower-staging passes, bower-api or anything else fails.",
       "The config check reads the parsed \"name\" field, not a grep of the whole file.",
