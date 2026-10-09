@@ -8,7 +8,7 @@
 import { type DriveApi, type DriveFile } from '../drive/drive-api';
 import { ReadCache, type Version } from '../drive/read-cache';
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
-import { Intended, holds, makeFolder, makeText, reserveId, updateByStamp, type Intent } from '../spine/write-once';
+import { Intended, byId, holds, makeFolder, makeText, reserveId, updateByStamp, type Intent } from '../spine/write-once';
 import type { Unsubscribe, VaultSource } from '../sources';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName } from '../piles';
 import { buildTree, checkCreationName, displayName, thingName, freeName, join, kindOf, moveEntry, nameOf, parentOf, removeEntry, renameEntry } from '../tree';
@@ -1081,7 +1081,16 @@ export class DriveVault implements VaultSource {
       await this.toBin(note);
       ix.drop(note.id);
     } else if (text && folderId) {
-      ix.put(await this.intended.make(`pile-note:${folderId}`, this.drive, (made) => makeText(this.drive, this.drive, { parent: folderId, name: PILE_NOTE, ...(contextKey ? { props: { [PROP.item]: contextKey } } : {}), id: made }, text)));
+      // One intended note per pile: a try again after a double failure, with new words, writes them into the same note.
+      const key = `pile-note:${id}`;
+      const earlier = this.intended.has(key);
+      ix.put(await this.intended.make(key, this.drive, async (made) => {
+        const there = earlier ? await byId(this.drive, made) : null;
+        if (!there) return makeText(this.drive, this.drive, { parent: folderId, name: PILE_NOTE, ...(contextKey ? { props: { [PROP.item]: contextKey } } : {}), id: made }, text);
+        if (there.trashed) throw new BowerError('conflict', 'This changed somewhere else. Look again and try once more.');
+        // It landed with the earlier words: the new ones go into it, stamped and fenced on the version just read.
+        return this.once(there, { text }, (op) => this.drive.writeText(there.id, text, there.modifiedTime, op));
+      }));
     }
     this.emit();
     return this.pile(id);
