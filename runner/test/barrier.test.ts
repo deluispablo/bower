@@ -7,7 +7,7 @@ import type { FencedCall } from '../../src/data/drive/fake-drive';
 import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
-import { RunRecords, type RunManifest } from '../../src/data/spine/records';
+import { RunRecords, checkpointName, type RunManifest } from '../../src/data/spine/records';
 import { SYSTEM, isRunnerFile } from '../../src/data/vault/layout';
 import { B_FAILURE } from '../../src/data/spine/scripted';
 import { runTidy, type TidyEnd, type TidyOptions } from '../src/main';
@@ -572,6 +572,53 @@ describe('the run folders a run keeps', () => {
     expect((await stored(wire, root, SYSTEM.lastRun))?.value).toMatchObject({ v: 1, run: { id: RUN_ID, phase: 'done' } });
     expect((await wire.drive.evidence(oldest.id))?.trashed).not.toBe(true);
     expect(errors.mock.calls.some((c) => String(c[0]).includes('could not go to the Bin'))).toBe(true);
+  });
+
+  it('failed runs are kept to 20 like finished ones', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, root } = await demo();
+    const earlier = await finishedBefore(wire.drive, root, 20);
+    // Every move refused and the report cannot be saved: the run ends failed, for good.
+    const effects = new StubEffects();
+    effects.refused = 'all';
+    const isView = (call: FencedCall): boolean => 'name' in call && call.name === 'last-run.json';
+
+    const end = await tidy(wire, root, 1, effects, [], isView);
+
+    expect(end.phase).toBe('failed');
+    expect(wire.statuses.at(-1)).toMatchObject({ phase: 'failed', failure: B_FAILURE });
+    // This failed run is stamped as ended, and with it 21 ended runs: the oldest goes to the Bin, 20 are kept.
+    const kept = await runFolders(wire.drive, root);
+    expect(kept.get(RUN_ID)?.appProperties).toMatchObject({ bowerRun: RUN_ID, bowerRunEnded: String(AT + 1000) });
+    expect(kept.size).toBe(20);
+    expect(kept.has('run-00')).toBe(false);
+    expect((await wire.drive.evidence(earlier.get('run-00')?.id ?? ''))?.trashed).toBe(true);
+  });
+
+  it('a stopped attempt that will be retried is not stamped as ended', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, root } = await demo();
+    const earlier = await finishedBefore(wire.drive, root, 20);
+    const effects = new StubEffects();
+    const isView = (call: FencedCall): boolean => 'name' in call && call.name === 'last-run.json';
+
+    // Attempt 1 changed things and its report cannot be saved: it stays in saving, for recovery to retry.
+    expect((await tidy(wire, root, 1, effects, [], isView)).phase).toBe('saving');
+    const stopped = await runFolders(wire.drive, root);
+    expect(stopped.get(RUN_ID)?.appProperties?.bowerRunEnded).toBeUndefined();
+    expect(stopped.size).toBe(21);
+    expect((await wire.drive.evidence(earlier.get('run-00')?.id ?? ''))?.trashed).not.toBe(true);
+
+    // Attempt 2 finds its chain broken: it ends failed, the final stop, so its folder is stamped and the oldest goes.
+    const folder = stopped.get(RUN_ID);
+    await wire.drive.createText(folder?.id ?? '', checkpointName(99, 'f'.repeat(64)), '{}');
+    const end = await tidy(wire, root, 2, effects);
+    expect(end.phase).toBe('failed');
+    expect(wire.statuses.at(-1)).toMatchObject({ attempt: 2, phase: 'failed' });
+    const kept = await runFolders(wire.drive, root);
+    expect(kept.get(RUN_ID)?.appProperties).toMatchObject({ bowerRun: RUN_ID, bowerRunEnded: String(AT + 2000) });
+    expect(kept.size).toBe(20);
+    expect(kept.has('run-00')).toBe(false);
   });
 
   it('a backlog of run folders drains at most 3 per run', async () => {
