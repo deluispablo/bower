@@ -2,6 +2,7 @@
 import type { RunReport } from './types';
 import { PHASE_RANK, isRunPhase, type RunPhase } from './run-phases';
 import { canonicalRecordJson, hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
+import { isUpdatedRow } from './run-manifest';
 
 export type Scope = { rootId: string };
 export type SeenFile = {
@@ -160,7 +161,7 @@ function savedRow(value: unknown): value is { name: string; as: string } {
 /** The existing RunReport shape, closed; optional counts and requests are omitted, never null. */
 function runReport(value: unknown): value is RunReport {
   if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded', 'nothingReady', 'alreadySaved', 'unconfirmed'])
-    || !every(value.filed, filed) || !every(value.created, pathChange) || !every(value.updated, pathChange)
+    || !every(value.filed, filed) || !every(value.created, pathChange) || !every(value.updated, isUpdatedRow)
     || !every(value.setAside, setAside) || !every(value.questions, question)) return false;
   if (Object.hasOwn(value, 'yourChanges') && !integer(value.yourChanges)) return false;
   if (Object.hasOwn(value, 'rulesWorded') && !integer(value.rulesWorded)) return false;

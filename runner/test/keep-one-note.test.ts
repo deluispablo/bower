@@ -66,7 +66,8 @@ describe('keep one note', () => {
     // Every link to the other note now names the kept one; the rest of the person's note is as it was.
     expect(run.after[LINKER]).toBe(LINKER_TEXT.replace('[[Flat 3 (second)]]', '[[Flat 3, 12 Larkspur Lane]]'));
     // The report says it in one plain line; the question is answered and gone, the answer archived.
-    expect(reportOf(run).updated).toContainEqual({ path: KEPT, what: 'Kept as one note with Flat 3 (second), which went to the Bin.' });
+    // Its row names the kept note's edit, and no line of its own.
+    expect(reportOf(run).updated).toContainEqual({ path: KEPT, what: 'Kept as one note with Flat 3 (second), which went to the Bin.', op: expect.any(String) as unknown as string });
     expect(reportOf(run).questions).toEqual([]);
     expect(JSON.parse(run.after['.bower/questions.json'] ?? '{}')).toEqual({ v: 1, questions: [] });
     expect(Object.keys(run.after).filter((p) => p.startsWith('.bower/changes/') && !p.startsWith('.bower/changes/archive/'))).toEqual([]);

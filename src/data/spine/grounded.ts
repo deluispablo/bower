@@ -6,12 +6,14 @@
 import type { DriveFile } from '../drive/drive-api';
 import type { EffectV2, OperationV2, ReportContribution, SeenFile, Target } from '../contracts/run-manifest';
 import { savedLinkKey } from '../contracts/note-edit';
+import { md5Hex } from '../contracts/hashes';
 import { join, nameOf } from '../tree';
 import { PARA_ROOTS } from '../types';
 import { sha256 } from '../vault/hashes';
 import { SYSTEM, isRunnerFile } from '../vault/layout';
 import type { RunManifest } from './records';
 import { filingMove } from './report';
+import { stampOf } from './write-once';
 
 /** The runner files a run may make again when they are missing (TL-P2-33 §2a). */
 const RUNNER_MADE = [SYSTEM.requests, SYSTEM.hashes, SYSTEM.questions] as const;
@@ -32,8 +34,9 @@ export function seen(f: DriveFile): SeenFile {
  * Contract B's grounding, structural only (TL-P4-14 stage 3 contract 5): the planner builds each row from the
  * operation it reports (op id plus entry), so grounding checks the plan's shape, never a row's words. Shape includes
  * how many rows and where (P4-45b): every row names operations of this plan, at least one and each once; a set-aside
- * row names its one operation. Every operation the person is told about has exactly the rows it implies: a captured
- * thing's move or Bin one row for each outcome, a generated note one created row (and one set-aside row, unless a
+ * row names its one operation; an updated row names its edit (`op`) and a line that edit appends, once (TL-P4-19
+ * addendum 3). Every operation the person is told about has exactly the rows it implies: a captured thing's move or
+ * Bin one row for each outcome, a generated note one created row (and one set-aside row, unless a
  * thing's move or a runner file waits for it), a note's edit one row per Timeline line it writes (one for a Current
  * state alone), the Bin of a note kept as one with another one set-aside row, and each archive move of your changes
  * one row. A row's path agrees with its operation: a filed thing's place with its move's (or its note's create's), its
@@ -55,6 +58,8 @@ export function grounded(manifest: RunManifest): boolean {
   for (const c of manifest.reportPlan) {
     if (!c.requires.length || new Set(c.requires).size !== c.requires.length || !c.requires.every((id) => ops.has(id))) return false;
     if (c.when === 'rejected' && (c.requires.length !== 1 || c.value.setAside.length !== 1)) return false;
+    // An updated row names the operation that wrote it: its contribution's first (TL-P4-19 addendum 3).
+    if (c.value.updated.some((r) => r.op !== c.requires[0])) return false;
     for (const id of c.requires) {
       if (c.when === 'rejected') rejected.set(id, (rejected.get(id) ?? 0) + 1);
       else applied.set(id, [...(applied.get(id) ?? []), c]);
@@ -101,6 +106,14 @@ export function grounded(manifest: RunManifest): boolean {
       const entries = e.changes.reduce((n, c) => n + (c.kind === 'timeline-append' ? c.entries.length : 0), 0);
       const want = entries || (e.changes.some((c) => c.kind === 'state-rewrite') ? 1 : 0);
       const own = mine.filter((c) => c.requires.length === 1).reduce((n, c) => n + c.value.updated.length, 0);
+      // Each line row names one line the edit appended (its ordinal), once, with the note as the run leaves it: the
+      // edit's bytes and its New mark's stamp (TL-P4-19 addenda 4 and 5); a Current state's row names none.
+      const rowsOf = mine.filter((c) => c.requires.length === 1).flatMap((c) => c.value.updated);
+      const at = rowsOf.map((r) => r.line);
+      if (at.some((l) => (entries ? l === undefined || l >= entries : l !== undefined)) || new Set(at).size !== at.length) return false;
+      const mark = manifest.operations.find((x) => x.dependsOn.includes(o.operationId) && x.effect.kind === 'move' && x.effect.before.fileId === e.before.fileId && x.effect.properties.bowerNew === '1');
+      const left = entries && mark ? { lines: entries, md5: md5Hex(new TextEncoder().encode(e.text)), stamp: stampOf(manifest.runId, mark.operationId) } : null;
+      if (rowsOf.some((r) => r.line !== undefined && (left === null || r.lines !== left.lines || r.md5 !== left.md5 || r.stamp !== left.stamp))) return false;
       const kept = mine.some((c) => c.requires[0] === o.operationId && c.requires.length > 1 && c.value.updated.length);
       if (kept ? own > want : own !== want) return false;
     } else if (e.kind === 'create-text') {

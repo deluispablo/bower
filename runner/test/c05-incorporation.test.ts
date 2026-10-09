@@ -85,7 +85,11 @@ describe('the C05 slice through the Claude provider', () => {
     expect(run.after[FLAT]).toContain(OFFER_LINE);
     expect(run.after[FLAT]).toContain(LISTING_LINE);
     // ...and each has its own row.
-    const report = (run.lastRun as { run: { report: { updated: Array<{ path: string; what: string }> } } }).run.report;
-    expect(report.updated.filter((r) => r.path === FLAT)).toEqual([{ path: FLAT, what: OFFER_LINE }, { path: FLAT, what: LISTING_LINE }]);
+    const report = (run.lastRun as { run: { report: { updated: Array<{ path: string; what: string; op?: string; line?: number }> } } }).run.report;
+    // ...each naming its edit and its line's ordinal among that edit's lines, with the note as the run left it
+    // (TL-P4-19 addenda 4 and 5).
+    const op = expect.any(String) as unknown as string;
+    const left = { lines: 2, md5: expect.stringMatching(/^[0-9a-f]{32}$/) as unknown as string, stamp: expect.stringMatching(/^[0-9a-f]{32}$/) as unknown as string };
+    expect(report.updated.filter((r) => r.path === FLAT)).toEqual([{ path: FLAT, what: OFFER_LINE, op, line: 0, ...left }, { path: FLAT, what: LISTING_LINE, op, line: 1, ...left }]);
   });
 });

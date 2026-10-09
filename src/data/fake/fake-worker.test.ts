@@ -21,6 +21,7 @@ import { EDIT_FILE_LIMIT, savedLinkKey } from '../contracts/note-edit';
 import { grounded, groundedKeys } from '../spine/grounded';
 import { canonical } from '../spine/records';
 import { stampOf } from '../spine/write-once';
+import { md5Hex } from '../contracts/hashes';
 import type { Checkpoint, ReportRecord } from '../contracts/run-checkpoint';
 import { parsePileDisposition } from '../contracts/pile-disposition';
 import type { Declaration } from '../contracts/pile-declaration';
@@ -34,6 +35,7 @@ import * as runner from './fake-runner';
 import * as runManifest from '../contracts/run-manifest';
 import * as runRecords from '../spine/grounded';
 import { beforeUpload } from '@/testing/upload-hook';
+import { newLineIndexes } from '@/features/note/new-lines';
 
 afterEach(() => vi.useRealTimers());
 
@@ -3991,8 +3993,10 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         const [, mark, ...more] = touching(manifest, file.id);
         expect(more).toEqual([]);
         expect(mark).toMatchObject({ dependsOn: [edit?.operationId], effect: { kind: 'move', parent: { fileId: file.parents[0] }, name: file.name, properties: { bowerNew: '1' } } });
+        // Its row names its line's ordinal, and the note as the run leaves it: the edit's bytes and the mark's stamp.
+        const left = { lines: 1, md5: md5Hex(new TextEncoder().encode(edit?.effect.text ?? '')), stamp: stampOf(manifest?.runId ?? '', (mark as OperationV2 | undefined)?.operationId ?? '') };
         expect(manifest?.reportPlan.filter((c) => c.value.updated.length)).toContainEqual({
-          requires: [edit?.operationId], when: 'applied', value: { filed: [], created: [], updated: [{ path: edit?.effect.path, what }], setAside: [], questions: [] },
+          requires: [edit?.operationId], when: 'applied', value: { filed: [], created: [], updated: [{ path: edit?.effect.path, what, op: edit?.operationId, line: 0, ...left }], setAside: [], questions: [] },
         });
       }
       if (!manifest) return;
@@ -4012,7 +4016,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         expect(writesTo(w.applied, file.id)).toHaveLength(1);
         expect((await w.drive.evidence(file.id))?.file.appProperties?.bowerNew).toBe('1');
       }
-      expect(viewOf(w)?.run.report?.updated).toEqual([{ path: FLAT, what: FLAT_WHAT }, { path: JOB, what: JOB_WHAT }]);
+      expect(viewOf(w)?.run.report?.updated).toMatchObject([{ path: FLAT, what: FLAT_WHAT }, { path: JOB, what: JOB_WHAT }]);
       await expectFiledOnce(w);
 
       // The next tidy-up finds both lines there: a v1 plan with no edit, the notes untouched, nothing reported.
@@ -4031,6 +4035,70 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(textAt(w, JOB)).toBe(jobAfter);
       for (const file of [flat, job]) expect(writesTo(w.calls, file.id)).toHaveLength(1);
       expect(viewOf(w)?.run.report?.updated).toEqual([]);
+    });
+
+    // TL-P4-19 addendum 3: each updated row names the edit that wrote it and its Timeline line (counted from the end),
+    // in the plan and in the report the app reads, so the New mark ties by id, never by words.
+    it("each updated row carries its edit's op id and its line", async () => {
+      const w = await bWorld();
+      await hub(w, FLAT, FLAT_BEFORE);
+      await hub(w, JOB, JOB_BEFORE);
+      await w.worker.process('all');
+      await w.runs.settled();
+      const [manifest] = await manifestsV2(w);
+      const edits = editsOf(manifest);
+      const rows = viewOf(w)?.run.report?.updated ?? [];
+      expect(rows.map((r) => r.path)).toEqual([FLAT, JOB]);
+      for (const row of rows) {
+        const edit = edits.find((e) => e.effect.path === row.path);
+        // The note as the run left it, as Drive keeps it: its stamp and its checksum (TL-P4-19 addendum 5).
+        const stored = await w.drive.get(edit?.effect.before.fileId ?? '', { checksums: true });
+        expect(row).toEqual({ path: row.path, what: row.what, op: edit?.operationId, line: 0, lines: 1, md5: stored.md5Checksum, stamp: stored.appProperties?.bowerOp });
+        expect(manifest?.reportPlan.filter((c) => c.value.updated.length && c.requires[0] === edit?.operationId).flatMap((c) => c.value.updated)).toEqual([row]);
+      }
+    });
+
+    // TL-P4-19 addenda 4 and 5: a row's line is its ordinal among the lines its op wrote, and the note screen marks it
+    // New only while the note is as the op left it (its stamp and its checksum), read through the app's own note read.
+    const NOTE_READ = (w: Where) => new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' });
+    const SECOND = 'The shortlist cut to two flats near the station.';
+
+    it("with no edit the New mark is on the op's line by its ordinal", async () => {
+      const w = await bWorld({ updates: [{ path: FLAT, what: FLAT_WHAT }, { path: FLAT, what: SECOND }] });
+      await hub(w, FLAT, FLAT_BEFORE);
+      await w.worker.process('all');
+      await w.runs.settled();
+      const rows = (viewOf(w)?.run.report?.updated ?? []).filter((r) => r.path === FLAT);
+      // The smoke's shape: two Timeline lines on Flat hunt, two rows, each its own line counted among the op's lines.
+      expect(rows.map((r) => [r.what, r.line])).toEqual([[FLAT_WHAT, 0], [SECOND, 1]]);
+      const note = await NOTE_READ(w).note(FLAT);
+      const at = (what: string): number => note.timeline.findIndex((t) => t.text === what);
+      expect(note.timeline.length).toBe(3);
+      for (const row of rows) expect([...newLineIndexes(note, [row])]).toEqual([at(row.what)]);
+      expect([...newLineIndexes(note, rows)].sort()).toEqual([1, 2]);
+    });
+
+    it("a person's edit after the run drops the New mark and keeps the row", async () => {
+      const w = await bWorld({ updates: [{ path: FLAT, what: FLAT_WHAT }] });
+      const flat = await hub(w, FLAT, FLAT_BEFORE);
+      await w.worker.process('all');
+      await w.runs.settled();
+      const rows = (viewOf(w)?.run.report?.updated ?? []).filter((r) => r.path === FLAT);
+      expect(rows).toHaveLength(1);
+      expect([...newLineIndexes(await NOTE_READ(w).note(FLAT), rows)]).toEqual([1]);
+      // The person adds a line of their own below Bower's, in another app (no stamp of theirs): the mark is dropped,
+      // never moved onto their line.
+      const text = textAt(w, FLAT) ?? '';
+      const lines = text.split('\n');
+      const i = lines.findIndex((l) => l.includes(FLAT_WHAT));
+      lines.splice(i + 1, 0, '- 2026-10-09 · Called the agent about the deposit.');
+      const now = (await w.drive.listAll(w.rootId)).find((f) => f.id === flat.id);
+      await w.drive.writeText(flat.id, lines.join('\n'), now?.modifiedTime ?? '');
+      const note = await NOTE_READ(w).note(FLAT);
+      expect(note.timeline.map((t) => t.text)).toContain('Called the agent about the deposit.');
+      expect([...newLineIndexes(note, rows)]).toEqual([]);
+      // The report row stays as the run wrote it.
+      expect((viewOf(w)?.run.report?.updated ?? []).filter((r) => r.path === FLAT)).toEqual(rows);
     });
 
     it('skips a line already in the Timeline, even from another day', async () => {
@@ -4091,7 +4159,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(textAt(w, FLAT)).toBe(theirs);
       expect(w.calls.filter((c) => 'id' in c && c.id === flat.id)).toEqual([]);
       expect((await w.drive.evidence(flat.id))?.file.appProperties?.bowerNew).toBeUndefined();
-      expect(viewOf(w)?.run.report?.updated).toEqual([{ path: JOB, what: JOB_WHAT }]);
+      expect(viewOf(w)?.run.report?.updated).toMatchObject([{ path: JOB, what: JOB_WHAT }]);
       await expectFiledOnce(w);
     });
 
@@ -4153,7 +4221,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         const [edit] = editsOf(manifest);
         expect(textAt(r, FLAT)).toBe(edit?.effect.text);
         expect(textAt(r, FLAT)?.split(FLAT_WHAT)).toHaveLength(2);
-        expect(viewOf(r)?.run.report?.updated).toEqual([{ path: FLAT, what: FLAT_WHAT }]);
+        expect(viewOf(r)?.run.report?.updated).toMatchObject([{ path: FLAT, what: FLAT_WHAT }]);
         expect((await r.drive.evidence(id))?.file.appProperties?.bowerNew).toBe('1');
         expect(writesTo(r.applied, id)).toEqual([]);
       }
@@ -4209,7 +4277,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(textAt(applied.w, FLAT)).toBe(applied.edit?.effect.text);
       expect(textAt(applied.w, FLAT)?.split(FLAT_WHAT)).toHaveLength(2);
       expect(await outcomeOf(applied.w, applied.admitted.id, applied.edit)).toMatchObject({ state: 'applied' });
-      expect(viewOf(applied.w)?.run.report?.updated).toEqual([{ path: FLAT, what: FLAT_WHAT }]);
+      expect(viewOf(applied.w)?.run.report?.updated).toMatchObject([{ path: FLAT, what: FLAT_WHAT }]);
 
       const back = async (w: World, id: string, text: string): Promise<void> => {
         await w.drive.writeText(id, text, (await w.drive.get(id)).modifiedTime);
@@ -4270,7 +4338,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         expect(w.calls.filter((c) => 'id' in c && c.id === idOf(path))).toEqual([]);
         expect(textAt(w, path)).toBe(FLAT_BEFORE);
       }
-      expect(viewOf(w)?.run.report?.updated).toEqual(first.map((path) => ({ path, what: whatOf(path) })));
+      expect(viewOf(w)?.run.report?.updated).toMatchObject(first.map((path) => ({ path, what: whatOf(path) })));
       await expectFiledOnce(w);
       // The next tidy-up skips the 8 lines already there and adds the rest: every note has its line once.
       const two = await tidy(w, 1);
@@ -4279,7 +4347,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         expect(writesTo(w.calls, idOf(path))).toHaveLength(1);
         expect(textAt(w, path)?.split(whatOf(path))).toHaveLength(2);
       }
-      expect(viewOf(w)?.run.report?.updated).toEqual(rest.map((path) => ({ path, what: whatOf(path) })));
+      expect(viewOf(w)?.run.report?.updated).toMatchObject(rest.map((path) => ({ path, what: whatOf(path) })));
 
       // Ten notes just under 1 MiB, full of quotes and backslashes that JSON escapes: 8 would pass the guard's 8 MiB,
       // so each run takes fewer, from the start of the path order, stays on the B path, and later runs converge.
@@ -4862,8 +4930,10 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(await pendingAnswers(w)).toEqual([]);
       expect(viewOf(w)?.run.report?.filed).toContainEqual({ name: LISTING.name, title: 'Flat 3, 12 Larkspur Lane', kind: 'link', to: 'Projects/Flat hunt', note: INTO });
       // TL-P2-40: the note the thing joined is listed as brought up to date, by its line.
-      expect(manifest.reportPlan).toContainEqual({ requires: [edit?.operationId], when: 'applied', value: { filed: [], created: [], updated: [{ path: INTO, what: LINE }], setAside: [], questions: [] } });
-      expect(viewOf(w)?.run.report?.updated).toContainEqual({ path: INTO, what: LINE });
+      const stored = await w.drive.get(into.id, { checksums: true });
+      const row = { path: INTO, what: LINE, op: edit?.operationId, line: 0, lines: 1, md5: stored.md5Checksum, stamp: stored.appProperties?.bowerOp };
+      expect(manifest.reportPlan).toContainEqual({ requires: [edit?.operationId], when: 'applied', value: { filed: [], created: [], updated: [row], setAside: [], questions: [] } });
+      expect(viewOf(w)?.run.report?.updated).toContainEqual(row);
       await expectFiledOnce(w);
     });
 
@@ -4991,6 +5061,16 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         expect(await pendingAnswers(w), cause).toEqual([]);
         await expectFiledOnce(w);
       }
+    });
+
+    // c3-planner-split part 3: the row says the note's name from the plan, so the note it could not join is not captured.
+    it('a merge that fell back captures no note it could not join', async () => {
+      const { w, into } = await merging();
+      await refusals[0]?.[1](w, into);
+      const { manifest } = await tidy(w);
+      expect(viewOf(w)?.run.report?.setAside.map((r) => r.why)).toEqual([ALONE]);
+      expect(manifest?.capture.places.map((p) => p.file.fileId)).not.toContain(into.id);
+      if (manifest) expect(grounded(manifest)).toBe(true);
     });
 
     // Coordinator ruling on the delta review: a note changed while read is a passing race, held like the cap deferral.

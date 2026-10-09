@@ -1,6 +1,7 @@
 /** Immutable run manifest validation only; no claim, dispatch, readiness or permission authority. */
 import { sha256 } from './hashes';
 import type { ReportQuestion } from './questions';
+import type { UpdatedRow } from './types';
 import { EDIT_FILE_LIMIT, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 
@@ -80,7 +81,7 @@ export type OperationV2 = { operationId: string; ordinal: number; dependsOn: str
 export type ReportFiled = { name: string; title: string; kind: FileKind; to: string; note?: string; area?: string };
 /** The existing RunReport shape in the stricter closed form used inside new records. */
 export type ManifestRunReport = {
-  filed: ReportFiled[]; created: { path: string; what: string }[]; updated: { path: string; what: string }[];
+  filed: ReportFiled[]; created: { path: string; what: string }[]; updated: UpdatedRow[];
   setAside: { name: string; why: string }[]; questions: ReportQuestion[];
   yourChanges?: number; requests?: string[]; rulesWorded?: number;
   /** A thing whose content was already filed, binned (TL-P4-10 addendum 2): its name and the saved file's name. */
@@ -351,11 +352,23 @@ function operationV2(value: unknown): value is OperationV2 {
 
 const rows = (value: unknown, keys: string[], optional: string[] = []): boolean =>
   list(value, (row) => closed(row, keys, optional) && Object.values(row).every(text));
+const hex32 = (value: unknown): value is string => typeof value === 'string' && value.length === 32 && !/[^0-9a-f]/.test(value);
+const has = (row: Fields, key: string): boolean => Object.hasOwn(row, key);
+/**
+ * An updated row, the one validator of it for the manifest and the checkpoint (P4-45d): `op` optional; `line` (an
+ * ordinal) only with its op; `lines`, `md5` and `stamp` only with a line, and the line below `lines` (TL-P4-19 addenda
+ * 3 to 5). A row from before any of them still reads.
+ */
+export const isUpdatedRow = (row: unknown): row is UpdatedRow => closed(row, ['path', 'what'], ['op', 'line', 'lines', 'md5', 'stamp'])
+  && text(row.path) && text(row.what) && (!has(row, 'op') || hash(row.op)) && (!has(row, 'line') || (has(row, 'op') && integer(row.line)))
+  && ['lines', 'md5', 'stamp'].every((k) => !has(row, k) || has(row, 'line'))
+  && (!has(row, 'lines') || (integer(row.lines) && (row.line as number) < row.lines))
+  && (!has(row, 'md5') || hex32(row.md5)) && (!has(row, 'stamp') || hex32(row.stamp));
 function runReport(value: unknown): value is ManifestRunReport {
   if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded', 'alreadySaved'])) return false;
   return list(value.filed, (row) => closed(row, ['name', 'title', 'kind', 'to'], ['note', 'area']) && text(row.name) && text(row.title)
       && oneOf(row.kind, fileKinds) && text(row.to) && (!Object.hasOwn(row, 'note') || text(row.note)) && (!Object.hasOwn(row, 'area') || text(row.area)))
-    && rows(value.created, ['path', 'what']) && rows(value.updated, ['path', 'what']) && rows(value.setAside, ['name', 'why'])
+    && rows(value.created, ['path', 'what']) && list(value.updated, isUpdatedRow) && rows(value.setAside, ['name', 'why'])
     && list(value.questions, (row) => closed(row, ['id', 'text', 'yes', 'no', 'askedAt'], ['about'])
       && text(row.id) && text(row.text) && text(row.yes) && text(row.no) && integer(row.askedAt)
       && (!Object.hasOwn(row, 'about') || text(row.about)))

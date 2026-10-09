@@ -3,7 +3,7 @@ import { report } from '@/ui/report';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { useNote, useRun, useSources, useTree } from '@/data/provider';
 import { thingName, findNode, nameOf, parentOf } from '@/data/tree';
-import type { Note, TreeNode } from '@/data/types';
+import type { Note, TreeNode, UpdatedRow } from '@/data/types';
 import { crumbs, decodeSplat, folderRoute, noteRoute, paraColor } from '@/app/paths';
 import { NodeMenuButton } from '@/features/files/Explorer';
 import { ago } from '@/app/words';
@@ -85,7 +85,7 @@ function NoteView({ path }: { path: string }) {
 
   if (error && !note) return <div className={s.page}><p>{error.message}</p></div>;
   if (!note || (loading && note.path !== path)) return <NoteSkeleton />;
-  const marked = newLineIndexes(note.timeline, fresh?.path === note.path ? fresh.rows : []);
+  const marked = newLineIndexes(note, fresh?.path === note.path ? fresh.rows : []);
 
   const link = (target: string, label: string, key: string) => {
     const p = resolve(target);
@@ -208,17 +208,17 @@ function NoteView({ path }: { path: string }) {
  * as it opened (filed or changed since you last looked, as Home's New says); each marks its one line
  * (`newLineIndexes`). Kept while the note stays open, since opening it marks it seen.
  */
-function useNewLines(path: string): { path: string; rows: readonly string[] } | null {
+function useNewLines(path: string): { path: string; rows: readonly UpdatedRow[] } | null {
   const treeState = useTree();
   const runState = useRun();
   const { data: tree } = treeState;
   const { data: run } = runState;
-  const [kept, setKept] = useState<{ path: string; rows: readonly string[] } | null>(null);
+  const [kept, setKept] = useState<{ path: string; rows: readonly UpdatedRow[] } | null>(null);
   // Known once both have loaded or failed; a failed load marks nothing new.
   const known = (tree !== undefined || !!treeState.error) && (run !== undefined || !!runState.error);
   if (known && kept?.path !== path) {
     const isNew = !!(tree && findNode(tree, path)?.isNew);
-    const rows = isNew && run?.phase === 'done' ? (run.report?.updated ?? []).filter((u) => u.path === path).map((u) => u.what) : [];
+    const rows = isNew && run?.phase === 'done' ? (run.report?.updated ?? []).filter((u) => u.path === path) : [];
     // Adjusting state while rendering, from what the last render saw (React: storing information from previous renders).
     setKept({ path, rows });
   }

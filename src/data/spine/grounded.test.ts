@@ -64,6 +64,33 @@ describe('grounding', () => {
     expect(grounded({ ...m, reportPlan: m.reportPlan.filter((_, i) => i !== one) })).toBe(false);
   });
 
+  // TL-P4-19 addendum 3: an updated row names the edit that wrote it and one line that edit appends, once.
+  it('grounded refuses an updated row without its op or its own line', async () => {
+    const m = await planned();
+    expect(grounded(m)).toBe(true);
+    const edit = m.operations.find((o) => o.effect.kind === 'edit-text'
+      && m.reportPlan.filter((c) => c.requires.length === 1 && c.requires[0] === o.operationId && c.value.updated.length).length >= 2);
+    const other = m.operations.find((o) => o.operationId !== edit?.operationId);
+    const rows = m.reportPlan.flatMap((c, i) => (c.requires.length === 1 && c.requires[0] === edit?.operationId && c.value.updated.length ? [i] : []));
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    const [first = -1, second = -1] = rows;
+    const line = m.reportPlan[second]?.value.updated[0]?.line;
+    type Row = RunManifest['reportPlan'][number]['value']['updated'][number];
+    const tamper = (at: number, change: (r: Row) => Row): RunManifest => ({
+      ...m, reportPlan: m.reportPlan.map((c, i) => (i === at ? { ...c, value: { ...c.value, updated: c.value.updated.map(change) } } : c)),
+    });
+    const without = (r: Row, key: 'op' | 'line'): Row => Object.fromEntries(Object.entries(r).filter(([k]) => k !== key)) as Row;
+    expect(grounded(tamper(first, (r) => without(r, 'op')))).toBe(false);
+    expect(grounded(tamper(first, (r) => ({ ...r, op: other?.operationId ?? '' })))).toBe(false);
+    expect(grounded(tamper(first, (r) => without(r, 'line')))).toBe(false);
+    expect(grounded(tamper(first, (r) => ({ ...r, ...(line === undefined ? {} : { line }) })))).toBe(false);
+    expect(grounded(tamper(first, (r) => ({ ...r, line: 99 })))).toBe(false);
+    // A line row says the note as the run leaves it: its op's line count, the edit's bytes and the mark's stamp.
+    expect(grounded(tamper(first, (r) => ({ ...r, lines: (r.lines ?? 0) + 1 })))).toBe(false);
+    expect(grounded(tamper(first, (r) => ({ ...r, md5: 'f'.repeat(32) })))).toBe(false);
+    expect(grounded(tamper(first, (r) => ({ ...r, stamp: 'f'.repeat(32) })))).toBe(false);
+  });
+
   it('grounded refuses a missing generated-note set-aside row', async () => {
     const m = await planned('Bins go out on Tuesday nights');
     expect(grounded(m)).toBe(true);

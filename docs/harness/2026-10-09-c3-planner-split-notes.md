@@ -174,3 +174,139 @@ src/data + src/features 3712/3712 (/tmp/c3p2r-unit.log); C05 e2e desktop and pho
 
 Production lines this round: grounded.ts +69 -24, report.ts +10 -10 (+79 -34). Part 2 after the round:
 +199 / -580, net -381.
+
+# Part 3 (last)
+
+Branch `c3-planner-split-3`, from claude/p3 a7c2ee04 (parts 1 and 2 merged).
+
+## Commits
+
+| sha | kind | what |
+|---|---|---|
+| 44135607 | red | three steps; the New mark follows the row's op id; an old report without row op ids still reads; each updated row carries its edit's op id and its line; a merge that fell back captures no note it could not join |
+| f68c6d49 | red | grounded refuses an updated row without its op or its own line |
+| 33c7c0eb | fix | `planScripted` = `capture` -> `decide` -> `build`, looped while a step asks to try again (no recursion) |
+| bced533f | fix | the note a fallen-back merge could not join is no longer captured |
+| 0549a761 | fix | `RunReport.updated` rows gain optional `op` and `line`; grounding checks them; the note screen marks by them |
+| 71c96fd2 | docs | compatibility rows for 44135607 and 0549a761 |
+
+## Contract 1: the three steps
+
+- `capture(drive, rootId, opts)`: the listing, the journal lines taken, the inbox, readiness (`capturePiles`), things
+  already saved, Bower's own files (requests.json, hashes.json). Read once per plan; never reads the reply.
+- `decide(drive, captured, opts, attempt)`: the one `Decisions` type (model or scripted) applied to the capture, with
+  the reads it names (pile notes, members' digests, notes to edit, link texts, questions.json, keep notes, compared
+  notes, and the before-content of the runner files it will write and the hashes list). Ends `decided`, `plan`
+  (nothing ready) or `again`.
+- `build(decided)`: operations, report rows, manifest guard, grounding. No Drive and no reply (test: a watched reply
+  shows every use in decide; the read count does not move in build).
+- Re-planning: `planScripted` loops `decide` and `build` with an `Attempt` (`editCap`, `held`), never recursion.
+  Each case, and why it stays a try again rather than a single pass:
+  - orphans (a copy whose kept thing is not filed): holding its pile changes which piles are captured, which comes
+    before; a try again.
+  - keep, notes missing or unnameable: now decided up front from the listing (no try again needed).
+  - keep that cannot go whole (lines, relinks or the other note's edit): known only after the edits are planned; a
+    try again with `keep:<answer>` held.
+  - waiting piles (merge line past the cap): known only after the cap; the pile is held whole, a try again.
+  - edit-cap retry (manifest too big): known only after build; a try again with one edit fewer.
+  - The folder is no longer listed again on a try again (fewer Drive calls on those rare runs; goldens unchanged).
+
+## TL-P4-19 addendum 3: rows by op id
+
+- `UpdatedRow = { path, what, op?, line? }` (contracts/types.ts), in `RunReport` and the manifest's report rows.
+  `op` is the edit that wrote the row (also the keep row: the kept note's edit); `line` is the row's Timeline line
+  counted from the end (0 = last), since one edit appends several lines and the note's lines carry no id. A line
+  comes only with its op. **Ruling point:** the addendum names only the op id; `line` was added beside it because an op
+  id alone cannot say which of an edit's lines a row is (a kept note's carried lines have no row). If the lead wants
+  only `op`, the New mark has no way to locate a line without words.
+- Readers: run-manifest and run-checkpoint parse both as optional (old records read: fixture test); layout's
+  last-run reader is lenient already; `fixedReport` keeps them. Grounding: every updated row's `op` is its
+  contribution's first op; an edit's own rows each name a distinct line below its entry count; a Current state's row
+  names none.
+- New mark: `newLineIndexes(timeline, rows)` marks `timeline.length - 1 - line` for rows with op and line. A report
+  from before marks no line until the next tidy-up (deploy app and runner together).
+- Set-aside rows: already tied by op id through their contribution's one op (part 2, `materialize`); no field added.
+
+## Verify tests (new, exact names)
+
+- `the planner runs capture, decide and build as three steps` (src/data/spine/scripted.test.ts)
+- `the New mark follows the row's op id` (src/features/note/new-lines.test.ts; replaces part 2's "follows the row's
+  op, not its text")
+- `an old report without row op ids still reads` (src/data/contracts/run-checkpoint.test.ts, fixture 04)
+- `each updated row carries its edit's op id and its line` (src/data/fake/fake-worker.test.ts, through the service view)
+- `a merge that fell back captures no note it could not join` (src/data/fake/fake-worker.test.ts)
+- `grounded refuses an updated row without its op or its own line` (src/data/spine/grounded.test.ts)
+- Updated to the rule: fake-worker and fake-runner row assertions (`toMatchObject`, or op and line), runner
+  `every Timeline line a run writes has its own report row` (lines 1 and 0) and keep-one-note (op, no line).
+
+Gates: `pnpm check` pass (/tmp/c3p3-check.log; goldens C04 78 and 25 runs 88 in the runner suite). C05 e2e desktop
+and phone pass (/tmp/c3p3-e2e-c05.log). `pnpm e2e:fake`: 257 passed, 61 skipped (/tmp/c3p3-e2e-fake.log).
+
+## Production lines
+
+Part 3 (a7c2ee04..71c96fd2, tests and docs excluded): +215 / -128, removed 128, net +87. scripted.ts +67 (+173 -106),
+grounded.ts +6, types.ts +7, run-manifest.ts +4, run-checkpoint.ts +3, barrier.ts 0, NoteScreen.tsx 0, new-lines.ts 0.
+Entry (parts 1-3): +762 / -902, net -140. scripted.ts +128, grounded.ts -402, demo/script.ts +85, new-lines.ts +17,
+report.ts -2, types.ts +7, .dependency-cruiser.cjs +7, fake-runner.ts +6, run-manifest.ts +4, corpus.ts +4,
+run-words.ts +3, run-checkpoint.ts +3, NoteScreen.tsx +2, provider.ts +1, dependency-exceptions.cjs -1, fixture.ts -2,
+claude.ts, barrier.ts, Home.tsx, Replay.tsx 0.
+
+## Left out
+
+- `line` beside the op id (ruling point above). wordRule on live (m5) still awaits the lead's ruling.
+
+## Sources
+
+- Functional core, imperative shell (Gary Bernhardt): build is the core over decided data; capture and decide are the
+  shell. https://www.destroyallsoftware.com/screencasts/catalog/functional-core-imperative-shell
+- Tolerant reader (Martin Fowler): optional fields added, old records still read. https://martinfowler.com/bliki/TolerantReader.html
+
+## Fix round (TL-P4-19 addendum 4): blocked before red
+
+- Merged claude/p3 (67a9ae1e), no conflict. No code changed.
+- Blocker: the New mark cannot "find the op's lines by the op". A Timeline line in the note carries no op id
+  (`TimelineEntry` = date, text, source; note-edit.ts `lineOf` writes `- date · text · [[source]]`), the parsed
+  `Note` the screen gets carries no file metadata, and the write stamp `bowerOp` is a hash of scope and intent on the
+  file, not per line. So given (op, ordinal) the app can locate the op's block only by a place in the note (rejected by
+  the ruling) or by words (rejected). Writer and grounded can switch to the ordinal (`c.lines` index), but the reader
+  then has nothing to anchor on; changing the writer alone would mark wrong lines.
+- Ways the lead could rule (each a design choice, not mine):
+  1. The note carries the op on each line Bower appends (e.g. a hidden `<!-- op -->` tail in Bower's Timeline
+     section): a note format change, parser and edit refusals touched, old notes have none (mark none).
+  2. The app marks only when the note is as the op left it (file stamp is the op's and md5 equals what it wrote;
+     needs the op's md5 or stamp on the row and file metadata on the note read), the op's lines being then its last
+     k Timeline lines; a person's later line drops the mark rather than moving it. k needs the op's line count.
+  3. The row also keeps the op's first line counted from the Timeline start (stable when the person appends at the
+     end, shifts if they edit earlier lines): a position, which the ruling rejects for `line`.
+- The updatedRow one-home minor is independent and waits for the same round.
+
+## Fix round 2 (TL-P4-19 addenda 4 and 5, P4-45d minor)
+
+- Merged claude/p3 (63caa95b), no conflict. Red 0ae7cd5f, fix 4ad40aff.
+- `line` = ordinal among the lines the op wrote (`c.lines` index, carried lines included). Line rows also carry
+  `lines` (k, the op's `timeline-append` entries: not derivable from rows, since a kept note's carried lines have
+  none), `md5` (MD5 of the edit's text) and `stamp`.
+- Stamp: the note's last write in the run is not the edit but its New mark move (`bowerNew: '1'`, depends on the
+  edit), which sends its own stamp, `stampOf(runId, markOp)`. So `stamp` on the row is that one: the bowerOp the note
+  carries as the op left it. `grounded` checks lines = entries, md5 = md5Hex(e.text), stamp = stampOf(manifest.runId,
+  mark op); the fake-worker tests check them against the stored file's `bowerOp` and `md5Checksum`.
+- Note read (`DriveVault.note`): `file.stamp` is `appProperties.bowerOp` from the listing (FIELDS already asks for
+  appProperties); `file.md5` is MD5 of the bytes the read already holds (the parsed cache's text), which is Drive's
+  md5Checksum of them. No extra Drive call. A file whose bytes do not round-trip as text (a BOM) marks none.
+- Screen (`newLineIndexes(note, rows)`): marks `timeline.length - lines + line` only when `note.file.stamp === row.stamp`
+  and `note.file.md5 === row.md5`, else none: a person's edit drops the mark, never moves it; the row stays.
+- Reuse: the comparison is write-once's two fields (STAMP key, Drive MD5 via md5Hex), not `holds` itself: `holds`
+  rebuilds a per-file intent stamp from the text sent, and the screen has neither the run id's op text nor the bytes
+  the op sent, only the row. No new helper; ruling point if the lead wants `holds` reshaped to take a stamp and md5.
+- updatedRow one home: `isUpdatedRow` exported from run-manifest.ts, used by run-checkpoint.ts (its copy removed).
+
+Tests (new, exact): "with no edit the New mark is on the op's line by its ordinal", "a person's edit after the run
+drops the New mark and keeps the row" (src/data/fake/fake-worker.test.ts). Updated to the rule: new-lines unit test,
+grounded row test (lines, md5, stamp tamper), run-checkpoint fixture test (new fields, bad rows), runner c05 rows,
+fake-worker row assertions.
+
+Gates: `pnpm check` pass (/tmp/c3p3b-check.log; goldens in runner suite). C05 e2e desktop and phone pass
+(/tmp/c3p3b-e2e-c05.log). `pnpm e2e:fake` 257 passed, 61 skipped (/tmp/c3p3b-e2e-fake.log).
+
+Production lines this round: +65 / -34 (removed 34), net +31: run-manifest +9, types +7, grounded +7, drive-vault +5,
+new-lines +3, scripted +2, run-checkpoint -2, barrier 0, NoteScreen 0. Part 3 net +118; entry net -109.
