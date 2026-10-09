@@ -6401,5 +6401,19 @@
     ],
     "verify": "",
     "note": "TL-P4-27 (main 802ac116); replaces c4-undo-withdraw (parked at 70a2b0da) and closes TL-P4-24 #3. Escalated, Opus plus a Codex pass; contract sign-off trial; designer copy pending. Packet 2026-10-09-c4-undo-compensate-packet.md. Re-planned by TL-P4-27 addendum 2 (main c7a6556c): design (B) and tooLate withdrawn."
+  },
+  {
+    "id": "c4-lockf",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": false,
+    "ui": null,
+    "what": "The heavy-run lock uses macOS lockf -k (kernel releases on holder death): try -t 0, print the advisory holder, then block; HARNESS_LOCK_HELD re-entry kept and e2e-both uses the same rule; mkdir lock and takeover code deleted.",
+    "steps": [
+      "An empty holder file and a second caller: the second waits.",
+      "Six callers alternate strictly."
+    ],
+    "verify": "",
+    "note": "TL-P4-22 addendum 23 (main 28ff2f23); defect check-lock-order-flaky. Ahead of other heavy work. Codex (TL-P4-23). Packet 2026-10-09-c4-lockf-packet.md. implementer: codex."
   }
 ]
