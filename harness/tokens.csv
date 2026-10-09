@@ -203,3 +203,4 @@ v2-move-here test fix 2,implementer,codex,codex,medium,3,167715,166792,0,142720,
 v2-move-here round 2,implementer,codex,codex,medium,4,179552,176143,0,158080,3409,,,,delivered,2026-10-09
 c4-app-fence delta review,reviewer,codex,codex,medium,1,161699,159932,0,124928,1767,,,,2 Important,2026-10-09
 c4-app-fence P4-50b,reviewer,claude,bower-reviewer,,1,45276,,,,,,10,4.3,PASS (4 minor),2026-10-09
+v2-move-here P4-51,reviewer,claude,bower-reviewer,,1,33189,,,,,,8,0.4,PASS (4 minor),2026-10-09
