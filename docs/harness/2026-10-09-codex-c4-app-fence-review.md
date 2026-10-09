@@ -37,3 +37,13 @@ findings: 2
    **Mechanism home violated:** `src/data/contracts/still-as-seen.ts`; packet contracts 1–3 require one definition of landed state. Retry checks are fixed, but same-call recovery retains a second, weaker acceptance path.
 
 findings: 1
+
+## Round 4 pass (8dec5faa..d735fa11)
+
+Round-3 finding: fixed. Same-call recovery now uses `landedAs`, including the intended name, place and Bin state.
+
+1. **Important — `src/data/spine/engine.ts:579`: runner recovery retains a second landed definition.** `reconcile` accepts `stampSays === 'landed'` without the checksum or intended after-state. For example, a runner text write lands, its answer is lost, and another device edits or moves the file before recovery. The retained stamp makes recovery report the operation applied. The notes’ TL-P4-05 justification explains this behavior, but conflicts with round-4 contracts 1–2, which explicitly require stamp-only runner sites to be fixed. **Mechanism home violated:** `src/data/spine/write-once.ts`, the single landed definition.
+
+2. **Important — `src/data/vault/drive-vault.ts:1141`: lost-create recovery adopts an outside move as the write’s expected place.** Create a pile note, lose both its answer and recovery read, then move it into Projects through Drive. Retry `updatePile` with new words. The checksum check at `:1130` accepts the note, and `once` fences against the newly read Projects location before overwriting it there. The original pile remains without its requested note. The fence runs, but its expectation has discarded the intended pile location, so it cannot reject the outside move. **Mechanism home violated:** `contracts/still-as-seen.ts` and `spine/write-once.ts`; the retry contract requires the intended final state and protection against outside moves.
+
+findings: 2
