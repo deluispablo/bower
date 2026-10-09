@@ -20,7 +20,11 @@
 2. **The journal uses it.** `journal.remove` (removeNow, `journal.ts:~489-505`) calls `withdraw` under `acrossTabs` before the line is dropped.
    - The same class elsewhere uses the same withdraw: drive-vault `Sending` and `reservedFile` (`drive-vault.ts:1016, 1556, 1694/1718`).
    - No second withdraw path.
-3. **Refusal sentence:** pending the designer. `journal.ts:498` holds today's storage-failure sentence. Use a named constant on a seam until the designer's sentence arrives through the coordinator.
+3. **Refusal (TL-P4-24 addendum 1, main 7a3eca46).**
+   - The sentence is "Not undone yet: Bower could not reach Drive to check. Try again when you are back online.", never in --danger.
+   - This entry builds the dock case only: a dock-message Undo is replaced in place through the v2-dock home. Its action, "Try again", runs the same Undo. It keeps the 8 s timer that pauses on hover or focus, and focus stays on the action. No second message.
+   - The inline Undo case (muted, role=status, "Undo" stays) rides with d-v2-02.
+   - `journal.ts:498` keeps its storage-failure sentence.
 
 ## What the person sees (TL-P4-22; the designer signs this off before dispatch)
 
@@ -28,7 +32,10 @@
 | --- | --- |
 | Undo of a change whose create never left the device | As today: Undo succeeds. |
 | Undo of a change whose create landed but its answer was lost | Undo succeeds, and the file Bower made goes to the Bin. No new sentence. |
-| Undo of a change whose create may or may not have landed, with Drive not answering | Undo is refused with a sentence (designer to give it). The change stays in "your changes". |
+| Undo from a dock message, of a change whose create may or may not have landed, with Drive not answering | The same dock message is replaced in place: "Not undone yet: Bower could not reach Drive to check. Try again when you are back online.", not in --danger, with the action "Try again" that runs the same Undo. It uses the 8 s timer that pauses on hover or focus, and focus stays on the action. No second message. The change stays in "your changes". |
+| The same case from an inline Undo | Rides with d-v2-02 (not this entry). |
+
+Copy ruled in TL-P4-24 addendum 1. The designer signs off this table before dispatch.
 
 ## Red (class test, from the note)
 
@@ -36,7 +43,7 @@
 
 ## Verify
 
-The red; `pnpm check`; the goldens.
+The red; `a dock undo that cannot reach Drive is replaced in place with try again` (e2e, fake, phone and desktop, with axe); `pnpm check`; the goldens.
 
 ## Commits
 
