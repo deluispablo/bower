@@ -200,6 +200,28 @@ describe('a change kind of its own for Current state (C05)', () => {
     expect(news).toEqual(['New: One application open, an offer from Ferrowick to answer.']);
   });
 
+  it('a run manifest that cannot be read is passed over, and every line the section lacks is news', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const c = await hubCase();
+    // The earlier run's state change says what Bower wrote, but its manifest no longer reads as one: it is passed over
+    // (a lenient read), so nothing is taken as said, as when there is no such run.
+    const last = ['One application open.'];
+    const edited = (c.folder[HUB] ?? '')
+      .replace('by: bower\n', `by: bower\nbower_state: ${stateMark(last)}\n`)
+      .replace('- One application open.', '- Two applications open, one interview on Friday.');
+    const unreadable = async (drive: Parameters<typeof stateWrittenBefore>[0], root: string): Promise<void> => {
+      await stateWrittenBefore(drive, root, HUB, last);
+      const all = await drive.listAll(root);
+      const m = all.find((f) => /^\.bower\/runs\/run-state\/manifest-[0-9a-f]{64}\.json$/.test(drive.pathOf(f.id, root)));
+      if (!m) throw new Error('no earlier manifest');
+      await drive.writeText(m.id, '{"v": 2, "operations": [', m.modifiedTime);
+    };
+    const run = await runWithClaude({ ...c, folder: { ...c.folder, [HUB]: edited } }, proposing, undefined, unreadable);
+    const news = parseNote(HUB, run.after[HUB] ?? '').timeline.filter((t) => t.text.startsWith('New: ')).map((t) => t.text);
+    expect(news).toEqual(['New: One application open, an offer from Ferrowick to answer.']);
+    expect(errors.mock.calls.some((call) => String(call[0]).startsWith('A run manifest could not be read'))).toBe(true);
+  });
+
   it('after a Bower append the next run only adds a line', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const c = await hubCase();
