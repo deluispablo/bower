@@ -60,3 +60,11 @@ Then a Claude delta re-review, a Codex pass on the delta, and the designer's che
    - only a confirmed absence counts as success.
 
 Red: `tab B drops the line, then tab A's Undo with a stale memo bins the file`.
+
+## Addendum 14 (main 5cc9e251): narrows addendum 13 (1)
+
+- **One exit.** Every line drop goes through the Holder port's one exit, withdraw's let-go. Never a second path.
+- **When a confirmed line is let go.** Only on a 404, on a file in the Bin, or on a file in the archive folder that carries a run's stamp. The write-once stamp tells a run's move from a person's.
+- **A file the person moved elsewhere.** The line stays confirmed. Undo fences against the changes folder and refuses with CHANGED_ELSEWHERE; nothing is binned.
+- **`outboxWaiting`** counts waiting lines only.
+- **Red:** `a person moves the confirmed file out, and another tab's Undo is refused while the file stays live`.
