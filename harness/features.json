@@ -5955,7 +5955,7 @@
     "id": "c3-note-sections",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "One section parser (ownership-format) gives every section's position (frontmatter, Current state, Timeline, Bower's note), old notes included; note-format and note-edit read it instead of their own legacy copies; the Timeline-line pattern exists once.",
     "steps": [
       "A legacy note, a v2 note and a plain note give every section's position from parseOwnership.",

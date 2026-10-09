@@ -242,3 +242,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: c3-done-harness-paths passes — done.sh treats harness scripts as code (TL-P4-17 add. 11)
 - 2026-10-09: c3-branch-cleanup passes — integrate.sh removes merged worktrees and branches, protecting role branches and worktrees in use (TL-P4-19 add. 2)
 - 2026-10-09: c3-planner-split passes — planScripted split into capture, decide and build; rows by op id; no fixtures on the live path (TL-P4-14 stage 3; add. 23-24; TL-P4-19 add. 3-5)
+- 2026-10-09: c3-note-sections passes — One section parser gives every section's position; the Timeline-line pattern exists once (TL-P4-14 stage 3)
