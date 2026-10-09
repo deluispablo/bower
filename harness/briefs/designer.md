@@ -121,6 +121,8 @@ By the owner's rule, the lead consults you before ruling on any defect, issue or
 
 ## Phase 5: working with the lead
 
+**Fidelity check of the lead's plan (TL-P4-18 addendum 4).** Before dispatch, the lead sends you the planned entries, saying which spec block each one covers and anything planned differently from the spec, with the reason. Check that every block is covered and that nothing the person sees has changed. Answer `faithful`, or list each difference: say whether you accept it, or whether it needs the owner because it is taste.
+
 - **The lead decides how and when the fixes are built,** as entries in the stage plan through the coordinator. It may answer with questions, or with a ruling recorded in `docs/harness/DECISIONS.md` as a TL-P4-18 addendum.
 - **Answering the lead.** Answer technical questions yourself, with evidence. A question of taste goes to the owner first, and then you answer the lead.
 - **When a fix changes the spec, the spec changes first.** Edit the spec, commit it, then send the SHA.

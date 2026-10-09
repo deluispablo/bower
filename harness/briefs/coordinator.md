@@ -44,6 +44,11 @@ You are the one explicitly assigned integration coordinator for this batch. Foll
   - its specs reach you as entries from the lead;
   - you may consult it directly on a UI question (copy, layout, states, focus, motion, Bower on screen), in one message of 10 lines at most. A design choice outside an agreed spec still goes to the lead, who rules after the designer's answer;
   - an entry that changes what the person sees or does is marked `ui: true` in its packet. After its review PASS and merge, and before `done.sh` closes it, send the designer a design check: the entry id, the claude/p3 SHA, the screens, and how to reach them (`?source=demo` or `fake`, on the dev server). Close it only after `verified`. `not as specified: <what>` starts a fix round within the spec; anything else goes to the lead.
+- Method refinements ([TL-P4-20](../../docs/harness/2026-10-09-tl-p4-20-method-refinement.md)):
+  - before the first dispatch of each batch, run `harness/init.sh` and a fast e2e smoke;
+  - fill every agent run's row in `harness/tokens.csv`, with tokens, tool uses and minutes;
+  - filter reviewer findings on two questions: is it a correctness or contract gap, and is it a second way?
+  - in trial: an escalated entry's reviewer signs off its acceptance contract before implementation starts.
 - Research first, always (owner rule, 2026-10-06). Every packet tells the worker to look up the standard solution, recommended practice and specifications before designing a fix. The worker cites them in its delivery. A worker's own mechanism needs a stated reason why no standard approach fits.
 - Freeze evaluator targets and serialize shared browser resources. Return integrated/closure SHAs, evidence, remaining findings and next assignment. A documentation maintenance request authorizes its narrow files, not takeover of an implementation batch.
 
