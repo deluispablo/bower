@@ -23,6 +23,7 @@ for (const width of [375, 1440]) {
       await expect(boot.locator('[data-boot-line]')).toHaveCSS('font-size', '15px');
       await expect(boot.locator('.bird')).toHaveClass(/\bread\b/);
       await expect(boot.locator('.b-eye')).toHaveCSS('animation-name', 'blink');
+      await page.clock.resume();
       await expectAxeClean(page, { include: '#boot' });
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await expect(boot.locator('.b-eye')).toHaveCSS('animation-name', 'none');
