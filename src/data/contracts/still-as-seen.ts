@@ -19,6 +19,8 @@ export interface SeenExpectation {
   parents: readonly string[];
   /** Compared only when given. */
   modifiedTime?: string;
+  /** Whether the write expects the file in the Bin (an unbin); false when left out. */
+  trashed?: boolean;
 }
 
 /** The file as stored at the moment of the check; null when Drive no longer has it. */
@@ -27,8 +29,12 @@ export interface StoredNow {
   name: string;
   parents: readonly string[];
   modifiedTime: string;
-  trashed: boolean;
+  /** In the Bin; false when left out. */
+  trashed?: boolean;
 }
+
+/** The app's one sentence for a write its fence refused (the app's `once`, the Journal's Undo). */
+export const CHANGED_ELSEWHERE = 'This changed somewhere else. Look again and try once more.';
 
 /** Why a file is not as it was read, in the order they are checked. */
 export type NotAsSeenReason = 'never-read' | 'gone' | 'id' | 'name' | 'parents' | 'modified';
@@ -44,7 +50,8 @@ export const sameParents = (a: readonly string[], b: readonly string[]): boolean
 
 /** Why the stored file is not as `seen` says, or null while it still is. */
 export function notAsSeen(seen: SeenExpectation, now: StoredNow | null): NotAsSeenReason | null {
-  if (!now || now.trashed) return 'gone';
+  // Gone: Drive keeps no file, or it is in the Bin when the write expects it out (or out when it expects it in).
+  if (!now || (now.trashed === true) !== (seen.trashed === true)) return 'gone';
   if (now.id !== seen.id) return 'id';
   if (now.name !== seen.name) return 'name';
   if (!sameParents(now.parents, seen.parents)) return 'parents';
@@ -83,4 +90,66 @@ export function notAsSeenReason(e: unknown): NotAsSeenReason | null {
   if (!(e instanceof BowerError) || typeof e.cause !== 'object' || e.cause === null) return null;
   const cause = e.cause as Partial<NotAsSeenCause>;
   return cause.kind === 'not-as-seen' && typeof cause.reason === 'string' ? cause.reason : null;
+}
+
+/**
+ * The fence's read: a read that got no answer (`unanswered`, the transport's own test) is no change found, so it is
+ * thrown as not read (`notReadError`), never as a refusal; any other error is thrown as it is. `checkStillAsSeen` reads
+ * through it, and so does `SeenFiles.read`, whose reads also include the attempt's own (no file to check).
+ */
+export async function readForFence<T>(reading: Promise<T>, unanswered: (e: unknown) => boolean): Promise<T> {
+  try {
+    return await reading;
+  } catch (e) {
+    throw unanswered(e) ? notReadError(e) : e;
+  }
+}
+
+/**
+ * A write that may already have landed: whether the stored file is now exactly what this very write makes it. Its one
+ * definition is write-once's `landedAs` (`landing` there), never stated here or at a call site (TL-P4-24 addendum 8).
+ */
+export type Landing<T> = (now: T) => boolean;
+
+/** What one fence accepts besides "still as seen", and how it says a refusal. */
+export interface FenceOptions<T> {
+  /** How to tell a read that got no answer (the transport's `isNoAnswer`). */
+  unanswered: (e: unknown) => boolean;
+  /** The refusal's code; `conflict` when left out. */
+  code?: ErrorCode;
+  /**
+   * This very write, landed though its answer was lost (write-once's `landing`: its stamp, and the file exactly what the
+   * write makes it). Then the fence resolves and nothing is sent again. Asked first, on the same fresh read.
+   */
+  landed?: Landing<T>;
+}
+
+/**
+ * Still as seen, right before a write (AGENTS: every write passes what it read; a move, a rename or a Bin checks the
+ * name and place it read). The one helper: the app's `once`, the pile edit's checks and the Journal's Undo call it.
+ * `read` gives the file as stored now (by its id, the Bin included: a gone file is null), and the fence:
+ * - resolves with it when it already holds this write (`landed`): the person's own write, landed though its answer was
+ *   lost, and the file is now exactly what that write makes it; the caller sends nothing again;
+ * - resolves null when it is still as `seen` says: the caller sends;
+ * - throws `notAsSeenError(reason, message)` when it is neither, or `notReadError` when the read got no answer.
+ * Pure but for the reader it is given, so it runs again, on a fresh read, before every resend: no state kept from an
+ * earlier press decides that a step is done.
+ */
+export async function checkStillAsSeen<T extends StoredNow>(seen: SeenExpectation, read: () => Promise<T | null>, message: string, opts: FenceOptions<T>): Promise<T | null> {
+  const now = await readForFence(read(), opts.unanswered);
+  if (now && opts.landed?.(now)) return now;
+  refuseNotAsSeen(seen, now, message, opts.code);
+  return null;
+}
+
+/**
+ * The fence's tail, on a file already read: returns while `now` is still as `seen` says, and otherwise logs the reason
+ * and throws `notAsSeenError(reason, message, code)`. `checkStillAsSeen` ends with it, and so does the run's synchronous
+ * check (`SeenFiles.assert`), so both refuse alike. `what` names the file in the log.
+ */
+export function refuseNotAsSeen(seen: SeenExpectation, now: StoredNow | null, message: string, code?: ErrorCode, what: string = seen.id): void {
+  const reason = notAsSeen(seen, now);
+  if (reason === null) return;
+  console.error(`Refused a write to ${what}: ${reason}`);
+  throw notAsSeenError(reason, message, code);
 }

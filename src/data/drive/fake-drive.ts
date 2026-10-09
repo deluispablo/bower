@@ -264,12 +264,13 @@ export class FakeDrive implements DriveApi {
     return this.reply(this.applyTrash(id, appProperties));
   }
 
-  async untrash(id: string, appProperties?: Record<string, string>): Promise<DriveFile> {
+  async untrash(id: string, appProperties?: Record<string, string>, name?: string): Promise<DriveFile> {
     await this.gate();
     const f = this.files.get(id);
     if (!f) throw driveError('not-found');
     f.trashed = false;
     if (appProperties) f.meta = { ...f.meta, appProperties: { ...f.meta.appProperties, ...appProperties } };
+    if (name !== undefined) f.meta = { ...f.meta, name, modifiedTime: this.stamp() };
     return this.reply(this.changed(this.copy(f.meta)));
   }
 

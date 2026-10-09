@@ -11,7 +11,7 @@
  * The fence of both apply engine adapters (`RunnerDrive` on Google Drive,
  * `FakeRunDrive` on the pretend one), so both refuse the same writes.
  */
-import { notAsSeen, notAsSeenError, notReadError } from '../contracts/still-as-seen';
+import { notAsSeenError, readForFence, refuseNotAsSeen } from '../contracts/still-as-seen';
 import type { DriveFile, FencedCall, FencedDrive } from './drive-api';
 import { isNoAnswer } from './transport';
 
@@ -62,7 +62,12 @@ export class SeenFiles {
     this.seen.delete(id);
   }
 
-  /** Throws a `conflict` unless the stored file is still as the run saw it (`notAsSeen`, the one check). */
+  /**
+   * Throws a `conflict` unless the stored file is still as the run saw it (`notAsSeen`, the one check). Synchronous on
+   * purpose: the pretend Drive runs it in the very step of the change (`FakeDrive.fenced`, nothing awaited between), so
+   * it decides on what it is given, read by its caller (`SeenFiles.read` on Google Drive). It has no landed case: a run's
+   * lost answer is found by its own evidence, never by this check (`checkStillAsSeen` is the app's reading fence).
+   */
   assert(target: FenceTarget, now: StoredNow | null): void {
     // A create or a move needs its folder there and out of the Bin; where that folder is, or what it is called, is no
     // version of what it holds, so it need not have been read before. A move's folder gone is told by its code.
@@ -72,14 +77,13 @@ export class SeenFiles {
       throw notAsSeenError('gone', NOT_AS_SEEN, target.part === 'destination' ? 'not-found' : 'conflict');
     }
     const seen = this.seen.get(target.id);
+    if (!seen) {
+      console.error(`Refused a write to ${target.part} ${target.id}: never-read`);
+      throw notAsSeenError('never-read', NOT_AS_SEEN);
+    }
     // A folder's own modifiedTime is no version of what is in it; a move or a Bin keeps it '' (`expectPlace`).
-    const withTime = target.part === 'target' && seen?.modifiedTime !== '';
-    const reason = seen
-      ? notAsSeen({ id: seen.id, name: seen.name, parents: seen.parents, ...(withTime ? { modifiedTime: seen.modifiedTime } : {}) }, now && { ...now.file, trashed: now.trashed })
-      : 'never-read';
-    if (reason === null) return;
-    console.error(`Refused a write to ${target.part} ${target.id}: ${reason}`);
-    throw notAsSeenError(reason, NOT_AS_SEEN);
+    const withTime = seen.modifiedTime !== '';
+    refuseNotAsSeen({ id: seen.id, name: seen.name, parents: seen.parents, ...(withTime ? { modifiedTime: seen.modifiedTime } : {}) }, now && { ...now.file, trashed: now.trashed }, NOT_AS_SEEN, undefined, `${target.part} ${target.id}`);
   }
 
   /**
@@ -87,12 +91,8 @@ export class SeenFiles {
    * read (`notReadError`), never as a refusal nor as a lost write's answer to read back; the attempt stops for recovery.
    * Any other error (a revoked token, a newer attempt) is thrown as it is.
    */
-  async read<T>(reading: Promise<T>): Promise<T> {
-    try {
-      return await reading;
-    } catch (e) {
-      throw isNoAnswer(e) ? notReadError(e) : e;
-    }
+  read<T>(reading: Promise<T>): Promise<T> {
+    return readForFence(reading, isNoAnswer);
   }
 
   /** The same writes, keeping what each answer says, and forgetting a file put in the Bin. */

@@ -185,6 +185,14 @@ describe('DriveHttp', () => {
     expect(JSON.parse(String(s.calls[0]?.body))).toEqual({ trashed: true });
   });
 
+  it('untrash puts the name in the patch body', async () => {
+    const s = stub(() => json(file('f1', 'Passport renewal 2.md', 'ROOT')));
+    const d = new DriveHttp({ token: tokens().token, fetch: s.fetch });
+    await d.untrash('f1', { bowerOp: 'op' }, 'Passport renewal 2.md');
+    expect(s.calls[0]?.method).toBe('PATCH');
+    expect(JSON.parse(String(s.calls[0]?.body))).toEqual({ trashed: false, name: 'Passport renewal 2.md', appProperties: { bowerOp: 'op' } });
+  });
+
   it('a 5xx on a create is not sent again, so it never makes two files', async () => {
     const s = stub(() => new Response('', { status: 503 }));
     const d = new DriveHttp({ token: tokens().token, fetch: s.fetch });

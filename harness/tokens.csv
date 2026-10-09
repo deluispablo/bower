@@ -213,3 +213,12 @@ v2-perched-bower P4-53,reviewer,claude,bower-reviewer,,1,43555,,,,,,8,0.5,PASS (
 c4-app-fence round 3,implementer,claude,bower-escalated,,3,402077,,,,,,164,54.3,delivered (2 sessions),2026-10-09
 c4-app-fence round3 review,reviewer,codex,codex,medium,1,208951,207656,0,158208,1295,,,,1 Important,2026-10-09
 c4-app-fence P4-50c,reviewer,claude,bower-reviewer,,1,54163,,,,,,12,1.0,PASS (3 minor),2026-10-09
+d-v2-07 contract,reviewer,claude,bower-reviewer,,1,89341,,,,,,14,2.0,CHANGES (14),2026-10-09
+c4-new-pill-one,implementer,codex,codex,medium,1,564632,558931,0,509056,5701,,,,delivered,2026-10-09
+d-v2-07 contract 2,reviewer,claude,bower-reviewer,,2,87182,,,,,,17,2.6,CHANGES (13),2026-10-09
+c4-app-fence P4-50d,reviewer,claude,bower-reviewer,,1,57930,,,,,,17,1.2,PASS (minors; 2 lead calls),2026-10-09
+c4-app-fence round 4,implementer,claude,bower-escalated,,4,149027,,,,,,52,10.5,delivered,2026-10-09
+c4-app-fence round4 review,reviewer,codex,codex,medium,1,453891,450948,0,374784,2943,,,,2 Important,2026-10-09
+d-v2-07 contract 3,reviewer,claude,bower-reviewer,,3,72462,,,,,,12,1.9,CHANGES (10),2026-10-09
+c4-new-pill-one P4-54,reviewer,claude,bower-reviewer,,1,34556,,,,,,7,0.3,PASS (2 minor),2026-10-09
+c4-new-pill-one test fix,implementer,codex,codex,medium,2,59348,58960,0,51456,388,,,,delivered,2026-10-09
