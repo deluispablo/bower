@@ -728,6 +728,35 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     expect(await w.api.fireAlarm().then(() => w.dispatched.length)).toBe(dispatched + 1);
   });
 
+  it('only a clash keeps an answer for a re-ask', async () => {
+    // TL-P4-19 addendum 16: a refusal that is not a clash (Drive answers 503 to the write, every time) needs no new
+    // answer from the person, so a run that asks again would loop. The run's end does not say the answer stayed, and
+    // nothing starts on its own.
+    const w = await shownWorld();
+    expect(await press(w)).toBe(true);
+    expect(await w.runJob(0)).toBe(0);
+    const id = await hubId(w);
+    const before = await textAt(w, HUB);
+    const { vault, answerQuestion } = await vaultOf(w);
+    const done = await answerQuestion(vault, runsOf(w), `q-state-${id}`, true, { allowWeb: false });
+    expect(done?.outcome.kind).toBe('now');
+    let refused = 0;
+    const busy: Hop = async (url, init, next) => {
+      if ((init.method ?? 'GET') === 'PATCH' && url.pathname === `/upload/drive/v3/files/${id}`) {
+        refused += 1;
+        return new Response(null, { status: 503 });
+      }
+      return await next();
+    };
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const dispatched = w.dispatched.length;
+    expect(await w.runJob(1, busy)).toBe(0);
+    expect(refused).toBeGreaterThan(0);
+    expect(await textAt(w, HUB)).toBe(before);
+    expect(w.dispatched).toHaveLength(dispatched);
+    expect(await w.api.fireAlarm().then(() => w.dispatched.length)).toBe(dispatched);
+  });
+
   it('a write it refused for good writes one answered row on Home and on the note', async () => {
     // A note past the size Bower edits (1 MiB), asked about before questions kept the update they showed: the yes is
     // checked and its write refused for good. Nothing is written and the person's section is as they left it.
