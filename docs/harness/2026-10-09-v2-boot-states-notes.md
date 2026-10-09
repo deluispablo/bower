@@ -76,3 +76,18 @@ The coordinator must replace `REDSHA` and `FIXSHA` in the compatibility rows aft
   `src/bird/poses.css` and the read reference in `src/bird/pose-reference.fixture.ts` for the still pose.
 
 The official source URLs are cited as the established references; they were not fetched because this task has no network.
+
+## Round 2 (e2e run for real)
+
+Root cause: a test scoping error, not an app bug. The timer, `bootStart` and `bootDone` behave to the packet.
+On the demo, `scenario=slow` keeps the boot up past 3.5 s (two sequential 1.5 s reads) and "Still opening" shows at 3 s.
+On the pretend Drive (the second half of `e2e-both.sh`), `scenario=slow` opens in about 2.3 s of fake time (one 1.5 s answer),
+so `bootDone` removes `#boot` before 3 s and "Still opening" cannot appear. Stepping the paused clock by 250 ms showed both timelines.
+The earlier clock handling (install, mount, `pauseAt`, `runFor(3500)`) was sound; the three failures were this source difference.
+The 3 s status step on any source stays covered by `src/app/boot.test.ts` (`one step at 3 s`, fake timers).
+
+tests changed: e2e/v2-boot-states.spec.ts: the slow test skips on the fake source (`isFake`), with its reason; no assertion changed.
+
+Green: v2-boot-states, app, robustness and qa5 on phone and desktop with axe; `pnpm check`.
+Logs: `/tmp/boot-e2e5.log`, `/tmp/boot-verify.log`, `/tmp/boot-check.log`.
+src unchanged in this round, so there is no new compatibility row.
