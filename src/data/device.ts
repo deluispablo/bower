@@ -10,6 +10,7 @@
  * go to it, the next time someone signed in to it uses this device.
  */
 import { forgetAll } from './draft-files';
+import { forgetFailedInMemory } from './vault/journal';
 
 const PERSON_LOCAL = ['bower:seen', 'bower:dismissed', 'bower:run-seen', 'bower:bookmarks', 'bower:open', 'bower:stopped-away', 'bower:failed-lines'];
 const PERSON_SESSION = ['bower:add-draft', 'bower:add-items', 'bower:toured', 'bower:tabs'];
@@ -27,6 +28,7 @@ export function sayGoodbye(): void {
 export function forgetThisPerson(): void {
   // Memory is independent of whether this device permits storage access.
   forgetAll();
+  forgetFailedInMemory();
   for (const key of PERSON_LOCAL) {
     try { localStorage.removeItem(key); }
     catch (e) { console.error(e); }

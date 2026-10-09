@@ -11,7 +11,7 @@ import { ReadCache } from '../drive/read-cache';
 import type { ChangeKind } from '../types';
 import { BowerError } from '../types';
 import { makeText, updateByStamp } from '../spine/write-once';
-import { isRefused } from '../drive/transport';
+import { failureKind } from '../drive/transport';
 import type { FailedChange } from '../sources';
 
 export type { JournalExtra, JournalRecord } from '../contracts/journal-record';
@@ -54,13 +54,18 @@ function refusedSentence(rec: JournalRecord): string {
   return REFUSED_LINE;
 }
 
+/** The kinds of change made in Drive before their line is written; a rule, a request or an answer is the line itself. */
+const madeInDrive = (kind: ChangeKind): boolean => kind !== 'rule' && kind !== 'request' && kind !== 'answer';
+
 /**
- * A refusal that will not change on a later try: a 4xx other than a rate limit, a 404 or the 409 that proves a create
- * landed (Drive's "Resolve errors" guide, https://developers.google.com/workspace/drive/api/guides/handle-errors), told
- * by the transport's kind (`isRefused`). No answer, a 5xx, a rate limit, a 404, a sign-in or anything else keeps the
- * line and its id for a later try.
+ * What the person is told when a line waits for them to act (a full Drive, `wait` in the transport's table): what is in
+ * the way, then what became of the change; the line keeps its id and goes on a later try.
  */
-const refusedForGood = (e: unknown): boolean => isRefused(e);
+const waitSentence = (inTheWay: string, rec: JournalRecord): string =>
+  `${inTheWay} ${madeInDrive(rec.kind) ? 'Your change was made; Bower will note it later.' : 'Bower kept this and will send it later.'}`;
+
+/** How a send of one line ended: sent, waiting for a later try, refused for good, or waiting on the person (`waits`). */
+type Sent = 'sent' | 'later' | 'refused' | { waits: string };
 
 /**
  * The lines Drive refused for good while nobody waited on them (a send at start, back online, or before another
@@ -69,6 +74,11 @@ const refusedForGood = (e: unknown): boolean => isRefused(e);
  */
 export const FAILED_KEY = 'bower:failed-lines';
 const failedInMemory = new Map<string, FailedChange[]>();
+
+/** Sign-out (`device.ts`): what failed and was kept only in this page's memory is forgotten with the rest. */
+export function forgetFailedInMemory(): void {
+  failedInMemory.clear();
+}
 
 const isFailed = (v: unknown): v is FailedChange =>
   typeof v === 'object' && v !== null && ['id', 'what', 'sentence'].every((k) => typeof (v as Record<string, unknown>)[k] === 'string');
@@ -240,12 +250,14 @@ export class Journal {
         readable = false;
       }
       const sentNow = await this.send(line);
+      // What the screen follows: where the thing is now, made in Drive whatever became of its line.
+      const where = { path: kind === 'trash' ? null : (extra.path ?? null) };
       if (sentNow === 'refused') {
         this.checkCurrent();
         // Told now, to the person who made it; the line no longer exists, so there is nothing to take back.
-        throw new BowerError('unknown', refusedSentence(rec));
+        throw new BowerError('unknown', refusedSentence(rec), madeInDrive(kind) && extra.fileId ? where : undefined);
       }
-      if (sentNow === 'later') {
+      if (sentNow !== 'sent') {
         let previous = this.volatile.get(key) ?? [];
         if (readable) {
           try { previous = this.waiting(key); } catch (e) { console.error(e); readable = false; }
@@ -253,10 +265,14 @@ export class Journal {
         const records = [...previous, line];
         const saved = readable ? this.keep(key, records) : false;
         if (!readable) this.volatile.set(key, records);
+        const applied = !!extra.fileId && madeInDrive(kind);
         if (!saved) {
           this.place.waiting?.();
-          const applied = !!extra.fileId && kind !== 'rule' && kind !== 'request' && kind !== 'answer';
-          throw new BowerError('unknown', applied ? 'Your change was made; keep this page open so Bower can remember it.' : 'This is not safely saved; keep this page open.', applied ? { path: kind === 'trash' ? null : (extra.path ?? null), changeId: rec.id } : undefined);
+          throw new BowerError('unknown', applied ? 'Your change was made; keep this page open so Bower can remember it.' : 'This is not safely saved; keep this page open.', applied ? { ...where, changeId: rec.id } : undefined);
+        }
+        if (sentNow !== 'later') {
+          this.checkCurrent();
+          throw new BowerError('unknown', waitSentence(sentNow.waits, rec), applied ? { ...where, changeId: rec.id } : undefined);
         }
       }
       this.checkCurrent();
@@ -304,7 +320,7 @@ export class Journal {
     for (const r of waiting) {
       this.checkCurrent();
       const out = await this.send(r);
-      if (out !== 'later') sent.add(r.line.id);
+      if (out === 'sent' || out === 'refused') sent.add(r.line.id);
       if (out === 'refused') refused.push({ id: r.line.id, what: r.line.what, sentence: refusedSentence(r.line) });
     }
     // Only what was sent, or ended as failed, leaves; anything added meanwhile stays.
@@ -321,7 +337,7 @@ export class Journal {
   }
 
   /** Sends one line with the id reserved for it, reserved now when it has none and kept on `w` for a later try. */
-  private async send(w: Waiting): Promise<'sent' | 'later' | 'refused'> {
+  private async send(w: Waiting): Promise<Sent> {
     const rec = w.line;
     try {
       this.checkCurrent();
@@ -332,11 +348,12 @@ export class Journal {
       return await this.create(w, folder, text);
     } catch (e) {
       console.error(e);
-      return 'later';
+      // Its place or id could not be had: the line itself was not refused, so it waits (on the person, when they must act).
+      return failureKind(e) === 'wait' && e instanceof BowerError ? { waits: e.message } : 'later';
     }
   }
 
-  private async create(w: Waiting, folder: string, text: string): Promise<'sent' | 'later' | 'refused'> {
+  private async create(w: Waiting, folder: string, text: string): Promise<Sent> {
     const rec = w.line;
     try {
       // Made by its reserved id (`spine/write-once.ts`): a lost answer is found again by that id, now or on a later try.
@@ -351,7 +368,10 @@ export class Journal {
       console.error(e);
       // A stale changes folder (deleted elsewhere): listed again before the next try, which makes it anew if gone.
       if (e instanceof BowerError && e.code === 'not-found') this.place.stale?.();
-      if (!refusedForGood(e)) return 'later';
+      // One table tells what becomes of it (`transport.ts`): tried again later, waiting on the person, or refused for good.
+      const kind = failureKind(e);
+      if (kind === 'retry') return 'later';
+      if (kind === 'wait') return { waits: e instanceof BowerError ? e.message : '' };
       // Refused for good: the line ends as failed and its id is let go, never waiting for a try that cannot work.
       delete w.reserved;
       return 'refused';

@@ -8,6 +8,7 @@
  * the app is real.
  */
 import { DriveHttp } from './drive/drive-http';
+import { driveError, driveFailure } from './drive/drive-api';
 import type { DemoWorld } from './demo/world';
 import type { Scenario, TimeScale } from './demo/scenario';
 import { makeLiveSources, uploadAccount } from './live';
@@ -96,6 +97,16 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
   const world = `fake:${scenario}`;
   const lease = new FakeLease({ key: leaseKey(world, await uploadAccount(ALEX.email)) });
   const worker = new FakeWorker({ drive, scenario, rootId, fresh, offline: scenario === 'offline', runs, lease });
+  // The notes of changes find no network until the page says Drive now refuses them for good (the test's hook).
+  if (scenario === 'journal-refused') {
+    let refuses = false;
+    (window as unknown as { __refuseJournal: () => void }).__refuseJournal = () => { refuses = true; };
+    const create = drive.createText.bind(drive);
+    drive.createText = async (...a: Parameters<typeof drive.createText>) => {
+      if (!/^\d{4}-\d{2}-\d{2}T[\d-]+\.\d{3}Z-[a-z0-9]{6}\.json$/.test(a[1])) return create(...a);
+      throw refuses ? driveFailure('unknown', 'permanent') : driveError('offline');
+    };
+  }
   const sources = makeLiveSources({ worker, drive, runningPiles: () => worker.runningPiles(), pollMs: 300, declarePiles: true, place: { world } });
   // The full read of the piles fails after the listing answered, until the page heals it (the test's hook).
   if (scenario === 'inbox-read-fails') {

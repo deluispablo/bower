@@ -15,6 +15,8 @@ import { canDictate, dictate } from './dictation';
 import { isRunning } from '@/features/tidy/run-words';
 import { Inline } from '@/features/note/markdown';
 import { useNoteLink } from '@/features/note/note-link';
+import { useIsDesktop } from '@/ui/media';
+import { FailedChanges } from './FailedChanges';
 import s from './bower.module.css';
 
 
@@ -38,6 +40,8 @@ export function BowerScreen() {
   const [typing, setTyping] = useState(false);
   const [listening, setListening] = useState(false);
   const stopRef = useRef<(() => void) | null>(null);
+  // The phone has no side panel: what failed shows here, where Bower's panel content lives on a phone.
+  const desktop = useIsDesktop();
   const pose: Pose = listening ? 'wait' : typing ? 'wait' : isRunning(run) ? 'write' : 'idle';
 
   const send = async (): Promise<void> => {
@@ -75,6 +79,7 @@ export function BowerScreen() {
         </div>
       </div>
       <LoadError state={runState} />
+      {!desktop && <FailedChanges />}
       <form
         className={s.composer}
         onSubmit={(e) => {

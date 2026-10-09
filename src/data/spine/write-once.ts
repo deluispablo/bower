@@ -14,7 +14,7 @@
 import { BowerError } from '../types';
 import { md5Hex, sha256Sync } from '../contracts/hashes';
 import { driveError, type DriveApi, type DriveFile, type FencedDrive } from '../drive/drive-api';
-import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
+import { isNoAnswer, isUnconfirmedWrite, marked } from '../drive/transport';
 
 export const STAMP = 'bowerOp';
 
@@ -151,5 +151,6 @@ export class Intended {
 export function confirmed(file: DriveFile, text: string): DriveFile {
   if (confirms(file, new TextEncoder().encode(text))) return file;
   console.error(`Drive did not confirm the bytes of ${file.name} as sent`);
-  throw new BowerError('unknown', 'Bower could not save what it did. Try again later.');
+  // Its key now holds other bytes: the same write sent again is answered the same, so it is not tried again as is.
+  throw new BowerError('unknown', 'Bower could not save what it did. Try again later.', undefined, marked('permanent'));
 }
