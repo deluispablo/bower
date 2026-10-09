@@ -622,8 +622,8 @@ function removeRule(text: string, wording: string): string {
 /**
  * Your rule lines as Rules.md takes them, the one home for their order (TL-P2-26, TL-P4-27 addendum 4 (1)), used by
  * wordRules, the planner's count and the app's list of rules. Adds and removals apply as one sequence by since (stable,
- * adds first at equal times): a removal takes out the worded rule with exactly its text and any add before it that it
- * repeats; an add that repeats a rule there is skipped. `removed`: the texts taken out of Rules.md; `accepted`: the adds
+ * journal ids break equal-time ties): a removal resolves its words to the worded rule and takes out any add before it
+ * that it repeats; an add that repeats a rule there is skipped. `removed`: the texts taken out of Rules.md; `accepted`: the adds
  * written, oldest first. A removal without since (a manifest from before) keeps the old order: removals first.
  */
 export function ruleSequence(rules: readonly Rule[], add: readonly RuleAdd[], remove: readonly RuleRemove[]): { removed: ReadonlySet<string>; accepted: RuleAdd[] } {
@@ -635,11 +635,14 @@ export function ruleSequence(rules: readonly Rule[], add: readonly RuleAdd[], re
   const adds = [...add].sort((a, b) => a.since - b.since).map((a) => ({ add: a, since: a.since }));
   const removes = remove.map((r) => ({ remove: r, since: r.since ?? 0 }));
   const steps: Array<{ add: RuleAdd; since: number } | { remove: RuleRemove; since: number }> = inOrder
-    ? [...adds, ...removes].sort((a, b) => a.since - b.since)
+    ? [...adds, ...removes].sort((a, b) => a.since - b.since ||
+      ('add' in a ? a.add.recordId : a.remove.recordId).localeCompare('add' in b ? b.add.recordId : b.remove.recordId))
     : [...removes, ...adds];
   for (const step of steps) {
     if ('remove' in step) {
-      removed.add(step.remove.text);
+      // Resolve the add line's own words through the same rule identity used for additions.
+      const worded = ruleLike(rules.filter((r) => !removed.has(r.text)), step.remove.text);
+      removed.add(worded?.text ?? step.remove.text);
       accepted = accepted.filter((a) => !ruleLike([asRule(a)], step.remove.text));
       continue;
     }

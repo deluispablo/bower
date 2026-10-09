@@ -213,7 +213,7 @@ export class Journal {
 
   private waiting(key: string): Waiting[] {
     const byId = new Map(readOutbox(key).map((r) => [r.line.id, r]));
-    for (const r of this.volatile.get(key) ?? []) byId.set(r.line.id, { ...byId.get(r.line.id), ...r });
+    for (const r of this.volatile.get(key) ?? []) if (!byId.has(r.line.id)) byId.set(r.line.id, r);
     return [...byId.values()];
   }
 
@@ -222,10 +222,11 @@ export class Journal {
     const previous = this.volatile.get(key) ?? [];
     this.volatile.set(key, records);
     if (!writeOutbox(key, records)) {
-      // A failed removal did not take the change back; keep its memory copy too.
+      // Storage owns every line it holds; only page-only lines remain in memory after a failed keep.
       const retained = new Map(previous.map((r) => [r.line.id, r]));
       for (const r of records) retained.set(r.line.id, r);
-      this.volatile.set(key, [...retained.values()]);
+      const stored = new Set(readOutbox(key).map((r) => r.line.id));
+      this.volatile.set(key, [...retained.values()].filter((r) => !stored.has(r.line.id)));
       return false;
     }
     this.volatile.delete(key);
@@ -393,6 +394,13 @@ export class Journal {
     const outcomes = new Map<string, Sent>();
     const waiting = this.waiting(key);
     if (!waiting.length) return outcomes;
+    const unsaved = (): Map<string, Sent> => {
+      for (const r of waiting) outcomes.set(r.line.id, 'later');
+      if (required) throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');
+      return outcomes;
+    };
+    // A page-only line must be in storage before this pass can send anything.
+    if (this.volatile.has(key) && !this.keep(key, waiting)) return unsaved();
     // A line whose answer was lost may be in Drive already, archived by a run or not: never write it twice. It is sent
     // again with the id reserved for it, and Drive refuses a second file with that id, so it is found by it. Lines with
     // none yet get theirs from the home in one request, kept in the outbox before any is sent.
@@ -408,16 +416,20 @@ export class Journal {
       this.checkCurrent();
       // Each line read again is kept as the holder the home gave its id to.
       const held = new Map(bare.map((r) => [r.line.id, r]));
-      this.keep(key, this.waiting(key).map((r) => {
+      if (!this.keep(key, readOutbox(key).map((r) => {
         const h = held.get(r.line.id);
         return r.reserved === undefined && h ? { ...r, ...h } : r;
-      }));
+      }))) return unsaved();
     }
     const sent = new Set<string>();
     const refused: FailedChange[] = [];
-    for (const r of waiting) {
+    for (const line of waiting) {
       this.checkCurrent();
+      // Storage under this lock is authoritative, including the reserved id and first intent.
+      const r = readOutbox(key).find((r) => r.line.id === line.line.id);
+      if (!r) continue;
       const out = await this.send(r, key);
+      if (r.notFound) line.notFound = true;
       outcomes.set(r.line.id, out);
       if (out === 'sent' || out === 'refused') sent.add(r.line.id);
       if (out === 'refused') refused.push({ id: r.line.id, what: r.line.what, sentence: refusedSentence(r.line) });
@@ -454,7 +466,7 @@ export class Journal {
       const text = `${JSON.stringify(rec)}\n`;
       const f = await makeOnce(w, this.drive, sentAs(folder, `${rec.id}.json`, text), (id, sent) => {
         // Its id and intent are on the device before anything is sent with them (a line already in the outbox).
-        this.keepHeld(key, w);
+        if (!this.keepHeld(key, w)) throw new BowerError('unknown', 'This is not safely saved; keep this page open.');
         return makeText(this.drive, this.drive, { ...sent, id }, text);
       }, (e) => (tried.kind = this.kindOf(w, e)));
       if (this.current()) {
@@ -480,13 +492,14 @@ export class Journal {
     }
   }
 
-  /** Keeps `w`'s id and intent on its outbox line, when the line is there; memory still holds them when storage fails. */
-  private keepHeld(key: string, w: Waiting): void {
+  /** Keeps `w`'s id and intent on its outbox line before sending; false means storage did not keep them. */
+  private keepHeld(key: string, w: Waiting): boolean {
     try {
       const all = this.waiting(key);
-      if (all.some((r) => r.line.id === w.line.id)) this.keep(key, all.map((r) => (r.line.id === w.line.id ? heldLine(r, w) : r)));
+      return !all.some((r) => r.line.id === w.line.id) || this.keep(key, all.map((r) => (r.line.id === w.line.id ? heldLine(r, w) : r)));
     } catch (e) {
       console.error(e);
+      return false;
     }
   }
 

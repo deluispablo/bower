@@ -1355,8 +1355,11 @@ export class DriveVault implements VaultSource {
    */
   private async undoRuleLine(id: string, text: string, kept = false): Promise<void> {
     if ((await this.journal.retract(id)) === 'sent') {
-      if (kept) await this.journal.record('rule', `Removed the rule "${text}"`, { path: 'Rules.md', removes: text, undoes: id });
-      else await this.journal.record('rule', `New rule: "${text}"`, { path: 'Rules.md', text, undoes: id });
+      if (kept) {
+        const { removed } = ruleSequence(await this.rules(), [], [{ recordId: id, text }]);
+        const words = [...removed][0] ?? text;
+        await this.journal.record('rule', `Removed the rule "${words}"`, { path: 'Rules.md', removes: words, undoes: id });
+      } else await this.journal.record('rule', `New rule: "${text}"`, { path: 'Rules.md', text, undoes: id });
     }
     this.emit();
   }
@@ -1436,7 +1439,7 @@ export class DriveVault implements VaultSource {
     this.emit();
     return async () => {
       undismiss(id);
-      if (line && s) await this.undoRuleLine(line.id, s.title, true);
+      if (line) await this.undoRuleLine(line.id, line.text ?? line.what, true);
       else this.emit();
     };
   }
