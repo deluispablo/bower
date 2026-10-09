@@ -72,7 +72,7 @@ describe('dispositions and the report', () => {
     expect(report.unconfirmed).toEqual([{ name, why: UNCONFIRMED_GONE }]);
     const items = itemDispositions(admission.manifest, manifest, outcomes);
     expect(reportContradictions(admission.manifest, manifest, outcomes, report, items)).toEqual([]);
-    const words = runDetail({ id: RUN, scope: 'all', phase: 'done', requestedAt: AT, phaseAt: AT, report });
+    const words = runDetail({ id: RUN, scope: 'all', phase: 'done', requestedAt: AT, phaseAt: AT, seen: false, report });
     expect(words).toContain("Bower couldn't confirm 1 thing");
     expect(words).not.toContain('set aside');
   });

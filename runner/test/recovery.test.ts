@@ -734,8 +734,10 @@ describe('recovery without the browser', () => {
     const outcome = (await chainOf(w.wire, w.root)).at(-1)?.outcomes.find((o) => o.operationId === move?.operationId);
     // Neither applied nor moved away: Bower cannot tell whether it landed, and says so.
     expect(outcome?.state === 'rejected' ? outcome.failure : outcome?.state).toEqual({ code: 'unknown', message: UNCONFIRMED_GONE });
-    const view = (await endOf(w)).view as { run: { report: { setAside: Array<{ name: string; why: string }> } } };
-    expect(view.run.report.setAside.find((r) => r.name === 'Payslip_Aug.pdf')?.why).toBe(UNCONFIRMED_GONE);
+    // On its own line, never counted as set aside.
+    const view = (await endOf(w)).view as { run: { report: { setAside: Array<{ name: string }>; unconfirmed?: Array<{ name: string; why: string }> } } };
+    expect(view.run.report.unconfirmed?.find((r) => r.name === 'Payslip_Aug.pdf')?.why).toBe(UNCONFIRMED_GONE);
+    expect(view.run.report.setAside.map((r) => r.name)).not.toContain('Payslip_Aug.pdf');
   });
 
   it('the bowerOp stamp is never accumulated', async () => {

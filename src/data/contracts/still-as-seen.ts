@@ -58,6 +58,26 @@ export function notAsSeenError(reason: NotAsSeenReason, message: string, code: E
   return new BowerError(code, message, undefined, { cause });
 }
 
+/**
+ * The typed marker of a check that could not read the file (the read got no answer): nothing was sent, and nothing
+ * was refused, since nothing was found changed (TL-P4-14 addendum 8). The caller stops the attempt for recovery.
+ */
+export interface UnreadCause {
+  kind: 'not-read';
+  error: unknown;
+}
+
+/** A check that could not read, keeping the read's own error (and its sentence, when it is a `BowerError`). */
+export function notReadError(error: unknown): BowerError {
+  const cause: UnreadCause = { kind: 'not-read', error };
+  return new BowerError('unknown', error instanceof BowerError ? error.message : "Bower couldn't read your Google Drive.", undefined, { cause });
+}
+
+/** A check that could not read (`notReadError`), told by its typed `cause`. */
+export function notRead(e: unknown): boolean {
+  return e instanceof BowerError && typeof e.cause === 'object' && e.cause !== null && (e.cause as Partial<UnreadCause>).kind === 'not-read';
+}
+
 /** Which refusal an error is, by its typed `cause`, or null when it is not a still-as-seen refusal. */
 export function notAsSeenReason(e: unknown): NotAsSeenReason | null {
   if (!(e instanceof BowerError) || typeof e.cause !== 'object' || e.cause === null) return null;
