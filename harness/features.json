@@ -5762,7 +5762,7 @@
       "The production baseline may only shrink."
     ],
     "verify": "pnpm exec vitest run src/unused-gate.test.ts -t \"an export only tests call fails the production unused-code gate|the production unused baseline may only shrink\"",
-    "note": "TL-P4-17 addendum 6 points 3 and 5 (main 7f5fa754). rateLimit, genericRateLimit, COOKIE_ROUTES stay in the baselines until p4-rate-limits. Starting model: bower-implementer."
+    "note": "TL-P4-17 addendum 6 points 3 and 5 (main 7f5fa754). rateLimit, genericRateLimit, COOKIE_ROUTES stay in the baselines until p4-rate-limits. Starting model: bower-implementer. Red at 2bb1d9a0: both tests fail (/tmp/c3p-red.log); after the merge round (743c9620) they are fixture tests of the rules module; done.sh cannot revert 894f700a (merge touched the same lines). No promised-but-dead finding among the 35."
   },
   {
     "id": "p4-rate-limits",
