@@ -301,6 +301,44 @@ describe('c2-create-by-id fix round: a waiting line', () => {
   });
 });
 
+describe('c3-reservation-home: the id kept on the outbox line', () => {
+  it('a journal line kept on the device is sent after a reload under the id the home kept', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const create = drive.createText.bind(drive);
+    const get = drive.get.bind(drive);
+    const sentWith: Array<string | undefined> = [];
+    let lose = true;
+    // The line lands and its answer is lost; the read by its id that follows gets no answer either.
+    drive.createText = async (...a: Parameters<FakeDrive['createText']>) => {
+      sentWith.push(a[4]);
+      const f = await create(...a);
+      if (lose) {
+        lose = false;
+        drive.get = async () => {
+          drive.get = get;
+          throw driveError('offline');
+        };
+        throw driveError('offline');
+      }
+      return f;
+    };
+    const one = await journal.record('move', 'one');
+    const kept = JSON.parse(localStorage.getItem(`bower:outbox:${root}`) ?? '[]') as Array<{ line: { id: string }; reserved?: string }>;
+    expect(kept.map((w) => w.line.id)).toEqual([one.id]);
+    expect(kept[0]?.reserved).toBe(sentWith[0]);
+    // The page is reloaded: a new journal knows only what this device kept.
+    journal.dispose();
+    const ids = vi.spyOn(drive, 'generateIds');
+    const reloaded = new Journal(drive, { owner: async () => root, folder: async () => changes, files: async () => (await drive.listAll(changes)).filter((f) => !f.folder) }, 'device-a');
+    await expect(reloaded.flush()).resolves.toBeUndefined();
+    // Sent under the id kept on its line, found by it: no new id, one file, nothing left waiting.
+    expect(ids).not.toHaveBeenCalled();
+    expect(sentWith).toEqual([kept[0]?.reserved, kept[0]?.reserved]);
+    expect((await drive.listAll(changes)).filter((f) => f.name === `${one.id}.json`).map((f) => f.id)).toEqual([kept[0]?.reserved]);
+    expect(localStorage.getItem(`bower:outbox:${root}`)).toBeNull();
+  });
+});
+
 /** Drive's own answer to every request, through the real transport (`drive-http.ts`), with no wait between tries. */
 const answering = (status: number, reason?: string): DriveHttp =>
   new DriveHttp({

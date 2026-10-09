@@ -5674,14 +5674,15 @@
     "id": "c3-reservation-home",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "One home for \"reserve an id per intended create, keep it until confirmed\": write-once Intended, with a port for where the id is kept (outbox line, memory). The journal and drive-vault links and empty things use it; no second intent map.",
     "steps": [
       "A person retries a journal line after a double failure: one file, by the id kept on the outbox line.",
       "A link or empty thing sent with lost answers arrives once, its id kept through the same home."
     ],
-    "verify": "pnpm vitest run -t \"only the write-once home and the ruled batch sites reserve Drive ids|a journal line keeps its reserved id until confirmed and needs no key lookup|a person.s retry after a double failure makes one file|a journal line refused for good releases its id and says so once|a journal line refused by a rate limit keeps its id and is sent later|a journal line kept on the device is sent after a reload under the id the home kept|a link and an empty thing sent with lost answers arrive once by their reserved ids, with no second try|a pile note retried with new words after a double failure is one note with the new words\" && pnpm e2e:fake -g \"a journal line refused in the background shows once in what failed on a phone\" --project phone",
-    "note": "TL-P4-14 addendum 19; TL-P4-17 and addendum 1 (main e1bbf010). Packet docs/harness/2026-10-09-c3-reservation-home-packet.md. Scope: journal.ts intent map :166, record :231-272, raw generateIds :396; drive-vault.ts:1532 Sending.reserved. upload-queue.ts:431 follows as c3-reservation-upload and stays on the rule-test allowlist (may only shrink). Batch sites engine.ts:193, runner pool, fake-worker stay. Starting model: bower-escalated. Goldens C04 78, 25-runs 88 never rise."
+    "verify": "pnpm vitest run -t \"only the write-once home and the ruled batch sites reserve Drive ids|a renamed intent map, an id set or stored by hand, or the call for ids by another name is found by what it does|a journal line keeps its reserved id until confirmed and needs no key lookup|a person.s retry after a double failure makes one file|a journal line refused for good releases its id and says so once|a journal line refused by a rate limit keeps its id and is sent later|a journal line kept on the device is sent after a reload under the id the home kept|a link and an empty thing sent with lost answers arrive once by their reserved ids, with no second try|a pile note retried with new words after a double failure is one note with the new words\" && pnpm e2e:fake -g \"a journal line refused in the background shows once in what failed on a phone\" --project phone",
+    "note": "TL-P4-14 addendum 19; TL-P4-17 and addendum 1 (main e1bbf010). Packet docs/harness/2026-10-09-c3-reservation-home-packet.md. Scope: journal.ts intent map :166, record :231-272, raw generateIds :396; drive-vault.ts:1532 Sending.reserved. upload-queue.ts:431 follows as c3-reservation-upload and stays on the rule-test allowlist (may only shrink). Batch sites engine.ts:193, runner pool, fake-worker stay. Starting model: bower-escalated. Goldens C04 78, 25-runs 88 never rise. P4-39 BLOCK (rule test passed a renamed map); fix round 89bd9cfb/21789886; P4-39b PASS, second way? no. Minors to P2_POLISH. Red proved by hand at 89bd9cfb (tests only on f162b5c7): both rule tests fail (/tmp/c3res-handred.log); done.sh cannot revert 21789886 (notes file touched since).",
+    "review": "P4-39b PASS"
   },
   {
     "id": "c3-integrate-gate",
@@ -5709,6 +5710,19 @@
       "dependency-cruiser runs only in pnpm check."
     ],
     "verify": "pnpm exec vitest run src/harness.test.ts src/dependency-rules.test.ts src/data/upload-queue-real.test.ts -t \"a unit test over 1000 ms not on the slow list fails the harness check|the slow list may only shrink|the rule list names every forbidden import|lost bytes ask to choose the file again\"",
-    "note": "TL-P4-17 entry 3 (main e1bbf010). Closes dependency-rules-timeout (ruled here) and the lost-bytes-slow class (docs/harness/defects/2026-10-09-lost-bytes-slow.md). qa10 stays with c4-focus-return. Baseline: the tests over 1000 ms in test-results/unit.json today (16 at 0cc1247a), each sped up or listed. Starting model: bower-implementer."
+    "note": "TL-P4-17 entry 3 (main e1bbf010). Closes dependency-rules-timeout (ruled here) and the lost-bytes-slow class (docs/harness/defects/2026-10-09-lost-bytes-slow.md). qa10 stays with c4-focus-return. Baseline: the tests over 1000 ms in test-results/unit.json today (16 at 0cc1247a), each sped up or listed. Starting model: bower-implementer. TL-P4-17 addendum 4 (main bed5503b): reservation-rule-test-slow folds in; syntax rules have one home, ESLint (no-restricted-syntax / no-restricted-imports with per-file overrides for allowed sites); the generateIds rule and dependency-rules keep only a fast fixture test of the rule, never a repo scan inside vitest; red: current timings on the slow list, then gone."
+  },
+  {
+    "id": "c3-reviewer-guard",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": false,
+    "what": "A PreToolUse Bash hook script, scripts/guard-main-checkout.mjs, beside quiet-gates.mjs: inside a subagent it refuses git checkout|switch|reset|rebase|merge|stash run in the main checkout and points to git show, git diff or a scratch worktree; the coordinator session is not refused.",
+    "steps": [
+      "A reviewer subagent running git checkout in the main checkout is refused with the pointer sentence.",
+      "The same command from the coordinator session, or in a scratch worktree, passes."
+    ],
+    "verify": "pnpm exec vitest run src/guard-main-checkout.test.ts -t \"a subagent.s git checkout in the main checkout is refused|the coordinator.s own git checkout in the main checkout is allowed|a subagent.s git checkout in a scratch worktree is allowed\"",
+    "note": "TL-P4-17 entry 2 (main e1bbf010); closes reviewer-checkout-main. Wiring the hook into .claude/settings.json or agent frontmatter is Claude Code config: the coordinator does not change it on a peer ruling; the owner wires it (one line, given on the card). Starting model: bower-implementer."
   }
 ]
