@@ -41,6 +41,18 @@ export { SET_ASIDE, listedPiles };
 /** A B run that failed, or a plan refused before admission: the honest-phase rule guarantees no effect applied. */
 export const B_FAILURE = 'The tidy-up stopped before changing anything. Try again.';
 
+/** A runner file's JSON, or null when it is not JSON. */
+function parsed(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    if (!(e instanceof SyntaxError)) throw e;
+    // A parser's message quotes the text: say only that it is not JSON.
+    console.error('A runner file is not valid JSON');
+    return null;
+  }
+}
+
 /** A file's stored size and hash, as the read port gives them; null when they cannot be read. */
 async function storedDigest(read: ScriptedRead, f: DriveFile): Promise<Digest | null> {
   try {
@@ -292,12 +304,68 @@ const emptyReport = (): ManifestRunReport => ({ filed: [], created: [], updated:
  * a pile whose merge line waits is planned again as `held`, left whole for the next run with its answer.
  */
 export async function planScripted(drive: ScriptedRead, rootId: string, opts: PlanOptions, editCap = EDITS_PER_RUN, held: ReadonlySet<string> = new Set()): Promise<RunPlan> {
+  const captured = await capture(drive, rootId, opts);
+  let attempt: Attempt = { editCap, held };
+  // Planned again, never recursively, while a step holds more back: each try holds a pile or a keep more, or one edit
+  // fewer, so it ends. What is held changes what comes before it (a copy whose thing waits, a keep that cannot go
+  // whole, a merge line past the cap, a manifest too big), so the reply is applied again; the folder is not read again.
+  for (;;) {
+    const decided = await decide(drive, captured, opts, attempt);
+    const ended = decided.kind === 'decided' ? await build(decided) : decided;
+    if (ended.kind === 'plan') return ended.plan;
+    attempt = ended.attempt;
+  }
+}
+
+/** What a plan is tried with: at most `editCap` edits, and what waits whole (a pile by its id, a keep as `keep:<answer>`). */
+type Attempt = { editCap: number; held: ReadonlySet<string> };
+/** How a step ends: the plan, or a try again with more held back, since what it found changes what comes before it. */
+type Ended = { kind: 'plan'; plan: RunPlan } | { kind: 'again'; attempt: Attempt };
+
+/**
+ * Capture (TL-P4-14 stage 3 contract 1): what the folder holds, read once for every try, whatever the reply decides:
+ * the listing, your changes the run took, the inbox and its piles' readiness, things already saved, and Bower's own
+ * files. It never reads the reply.
+ */
+export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOptions) {
   const all = opts.scope === 'all';
   const listing = await drive.listAll(rootId);
   const ix = VaultIndex.build(rootId, listing);
-  const newKey = opts.mintKey ?? mintKey;
   const read = await journalOf(drive, ix);
   const lines = opts.taken ? tookLines(read, opts.taken) : read;
+  // An instructions run takes no pile: it reads only your changes.
+  const inbox = all ? await drive.piles(rootId) : [];
+  // Bower's own files (TL-P2-17): a failed read refuses before admission and any effect; a malformed one is
+  // replaced when the run writes it, its old entries never claimed; a missing one is made again.
+  const sys = ix.file(SYSTEM.dir);
+  const requests = ix.file(SYSTEM.requests);
+  const hashesFile = ix.file(SYSTEM.hashes);
+  const requestsValue = requests ? parsed(await ownText(drive, requests)) : null;
+  const requestsBroken = !!requests && !isRunnerFile(SYSTEM.requests, requestsValue);
+  const requestsDone = isRunnerFile(SYSTEM.requests, requestsValue) ? requestsValue.done : [];
+  const hashesText = hashesFile ? await ownText(drive, hashesFile) : null;
+  const hashesBroken = hashesText !== null && !isRunnerFile(SYSTEM.hashes, parsed(hashesText));
+  // An inbox emptied after the Worker looked at it: the Worker's own refusal, before any effect. A run the Worker
+  // admitted is past refusing: what it took and finds gone waits, and it ends with nothing filed (TL-P3-25 point 2).
+  if (all && !inbox.length && !opts.taken) throw new BowerError('conflict', NOTHING_WAITING);
+  const piles = opts.taken ? tookPiles(inbox, opts.taken) : inbox;
+  // The capture the Worker's admission shares (TL-P3-21), with the one pile note each pile records read and checked.
+  const readiness = await capturePiles(drive, rootId, piles.map(pileShape), { notes: true });
+  // Things already saved (`duplicates.ts`, TL-P4-10 addendum 2), by their content.
+  const dups = duplicatesOf(listing, ix, piles.flatMap((p) => p.items.map((i) => i.id)));
+  return { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups };
+}
+type Captured = Awaited<ReturnType<typeof capture>>;
+
+/**
+ * Decide: the reply's decisions (`Decisions`, the model's or the scripted provider's, the one type the planner reads)
+ * applied to the capture, with what they name read: the piles taken or asked about, where each thing goes, the note
+ * edits, the generated notes, the questions. It ends decided, or with a try again that holds more back.
+ */
+export async function decide(drive: ScriptedRead, snapshot: Captured, opts: PlanOptions, attempt: Attempt = { editCap: EDITS_PER_RUN, held: new Set() }) {
+  const { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups } = snapshot;
+  const { editCap, held } = attempt;
+  const newKey = opts.mintKey ?? mintKey;
   /**
    * What the reply decided. A part it leaves out is not done (P4-2 review I1): your requests and answers then wait for
    * a run that can act on them, never archived unanswered.
@@ -307,20 +375,17 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   // A run with no day to date its lines (outside years 0000-9999) keeps nothing: the answer waits, never archived unmerged.
   const keepDay = timelineDate(opts.requestedAt) !== null;
   if (!keepDay && d.keep.length) console.error('A run with no date cannot keep one note; the answer waits for the next tidy-up');
-  const keeps = (keepDay ? d.keep : []).filter((k) => !held.has(`keep:${k.answer}`) && lines.some((l) => l.rec.id === k.answer && l.rec.kind === 'answer' && l.rec.text === 'yes'));
-  const keepAnswers = new Set(keeps.map((k) => k.answer));
-  const parsed = (text: string): unknown => {
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      if (!(e instanceof SyntaxError)) throw e;
-      // A parser's message quotes the text: say only that it is not JSON.
-      console.error('A runner file is not valid JSON');
-      return null;
-    }
-  };
-  // An instructions run takes no pile: it reads only your changes.
-  const inbox = all ? await drive.piles(rootId) : [];
+  // A keep whose notes are not there, or cannot be named in links, waits with its answer: decided here, from the listing.
+  const keeps = (keepDay ? d.keep : []).filter((k) => !held.has(`keep:${k.answer}`) && lines.some((l) => l.rec.id === k.answer && l.rec.kind === 'answer' && l.rec.text === 'yes')).flatMap((k) => {
+    const kept = ix.file(k.kept);
+    const other = ix.file(k.other);
+    const rename = { from: displayName(nameOf(k.other)), to: displayName(nameOf(k.kept)) };
+    const noteOk = (path: string): boolean => path.endsWith('.md') && MAIN_FOLDERS.includes(path.split('/')[0] ?? '');
+    if (kept && !kept.folder && other && !other.folder && noteOk(k.kept) && noteOk(k.other) && renameOk(rename)) return [{ k, kept, other, rename }];
+    console.error('A note to keep as one is not there or cannot be named in links; its answer waits for the next tidy-up');
+    return [];
+  });
+  const keepAnswers = new Set(keeps.map((x) => x.k.answer));
   // Answers a model's run settles (TL-P4-08 addendum 8): a no (it closes its question), a yes to keeping summaries up
   // to date (your rule line carries it), and an answer about a thing or pile this run took (the model is shown it) or
   // that left the inbox (its question closes). A second answer to one question goes with the first: one answer. Any
@@ -351,16 +416,6 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   // Your rules (TL-P2-20 rules-wording): one change for every rule line, worded below in one edit of Rules.md, or
   // Rules.md made when it is missing; a line whose words cannot be worded stays pending.
   const ruleWords = ruleChangesOf(journal, d.wordRule ?? tidiedRule);
-  // Bower's own files (TL-P2-17): a failed read refuses before admission and any effect; a malformed one is
-  // replaced when the run writes it, its old entries never claimed; a missing one is made again.
-  const sys = ix.file(SYSTEM.dir);
-  const requests = ix.file(SYSTEM.requests);
-  const hashesFile = ix.file(SYSTEM.hashes);
-  const requestsValue = requests ? parsed(await ownText(drive, requests)) : null;
-  const requestsBroken = !!requests && !isRunnerFile(SYSTEM.requests, requestsValue);
-  const requestsDone = isRunnerFile(SYSTEM.requests, requestsValue) ? requestsValue.done : [];
-  const hashesText = hashesFile ? await ownText(drive, hashesFile) : null;
-  const hashesBroken = hashesText !== null && !isRunnerFile(SYSTEM.hashes, parsed(hashesText));
   // A "yes" to keeping one note joins the thing it is about to that note (MERGES), by the answer's line.
   const yes = new Map(journal.filter((l) => l.rec.kind === 'answer' && l.rec.text === 'yes').map((l) => [l.rec.questionId ?? '', l.rec.id]));
   // Its note is followed through the renames and moves since the last tidy-up, as the resolver follows a link.
@@ -394,12 +449,6 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   /** Where a pile of words goes and its note's name, as the reply decided. */
   const wordsPlace = (pileId: string, words: string): Placement => d.words(pileId, words) ?? { to: '', name: '' };
 
-  // An inbox emptied after the Worker looked at it: the Worker's own refusal, before any effect. A run the Worker
-  // admitted is past refusing: what it took and finds gone waits, and it ends with nothing filed (TL-P3-25 point 2).
-  if (all && !inbox.length && !opts.taken) throw new BowerError('conflict', NOTHING_WAITING);
-  const piles = opts.taken ? tookPiles(inbox, opts.taken) : inbox;
-  // The capture the Worker's admission shares (TL-P3-21), with the one pile note each pile records read and checked.
-  const capture = await capturePiles(drive, rootId, piles.map(pileShape), { notes: true });
   const verified = async (f: DriveFile, encoding: 'utf8' | 'blob'): Promise<VerifiedContent | null> => {
     const d = await storedDigest(drive, f);
     return d ? { encoding, size: d.size, sha256: d.sha256, provenance: drive.provenance, observedModifiedTime: f.modifiedTime } : null;
@@ -412,15 +461,14 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   };
 
   /**
-   * Things already saved (`duplicates.ts`, TL-P4-10 addendum 2): each is captured with its pile and goes to the Bin, never
-   * filed and never shown to a model. A copy of another thing of this run waits on that one's move; when that one is
-   * not filed by this run (asked about, or its pile not taken), the copy stays where it is too.
+   * Things already saved: each is captured with its pile and goes to the Bin, never filed and never shown to a model.
+   * A copy of another thing of this run waits on that one's move; when that one is not filed by this run (asked about,
+   * or its pile not taken), the copy stays where it is too.
    */
-  const dups = duplicatesOf(listing, ix, piles.flatMap((p) => p.items.map((i) => i.id)));
   const pileOfThing = new Map(piles.flatMap((p) => p.items.map((i) => [i.id, p] as const)));
   const filedHere = (id: string): boolean => {
     const p = pileOfThing.get(id);
-    if (!p || capture.get(p.id)?.blocked !== null || held.has(p.id)) return false;
+    if (!p || readiness.get(p.id)?.blocked !== null || held.has(p.id)) return false;
     if (d.pileAsk(p)) return false;
     return !d.thingAsk(id);
   };
@@ -455,7 +503,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     if (!folder) continue;
     // A loose pile (TL-P2-16 item 5) has no folder: its one file is its only child, and nothing goes to the Bin.
     const loose = !folder.folder;
-    const cap = capture.get(pile.id);
+    const cap = readiness.get(pile.id);
     if (!cap) {
       hold('it changed while the run read the inbox');
       continue;
@@ -612,7 +660,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   // A copy waits on the move of the thing it copies: one whose pile was held after all waits whole with it.
   const filedIds = new Set(things.map((t) => t.file.id));
   const orphans = saved.filter((s) => s.dup.of === 'run' && !filedIds.has(s.dup.keptId));
-  if (orphans.length) return planScripted(drive, rootId, opts, editCap, new Set([...held, ...orphans.map((s) => s.pile.id)]));
+  if (orphans.length) return tryAgain({ editCap, held: new Set([...held, ...orphans.map((s) => s.pile.id)]) });
 
   // An open question belongs to its subject, never to its words (TL-P4-11 addendum): a later ask about the same thing
   // (its fileId or pileId, or the same content uploaded again) adds nothing, and a thing that left the inbox closes it.
@@ -646,7 +694,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   // its report saying nothing was ready yet, and every item it took waiting (TL-P3-25 point 2). It is no failure.
   // A thing that left the inbox closes its question, which is something to do.
   if (all && !capturedPiles.length && !journal.length && !askedPiles.length && !(await closable())) {
-    if (opts.taken) return nothingReadyPlan(rootId, opts);
+    if (opts.taken) return { kind: 'plan' as const, plan: await nothingReadyPlan(rootId, opts) };
     throw new BowerError('conflict', NOTHING_READY);
   }
 
@@ -697,7 +745,6 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   }
   // A model's Timeline lines (P4-3): each cites the note its thing gets, or the thing as filed, and waits for its move.
   // The cite is the name asked for until the filing below fixes the name each one gets; then it is that name.
-  const citeName = (name: string): string => name.replace(/\.md$/i, '');
   const modelLines: Array<{ line: WantedLine; cites: string }> = [];
   /** A captured thing as a decision about it reads it (its link text is read only where it is filed). */
   const seenOf = (t: (typeof things)[number], linkText: string | null = null): ThingSeen => ({ fileId: t.file.id, name: t.item.name, fileName: t.file.name, kind: t.item.kind, words: t.words, linkText });
@@ -818,15 +865,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   // Notes kept as one (C05): the other note's facts and Timeline lines on the kept note's Timeline, each line naming
   // the answer (so its archive waits for it), and every link to the other note rewritten to the kept one.
   const keeping: Array<{ k: KeepOne; kept: DriveFile; other: DriveFile; rename: Rename; lines: WantedLine[] }> = [];
-  for (const k of date ? keeps : []) {
-    const kept = ix.file(k.kept);
-    const other = ix.file(k.other);
-    const rename = { from: displayName(nameOf(k.other)), to: displayName(nameOf(k.kept)) };
-    const noteOk = (path: string): boolean => path.endsWith('.md') && MAIN_FOLDERS.includes(path.split('/')[0] ?? '');
-    if (!kept || kept.folder || !other || other.folder || !noteOk(k.kept) || !noteOk(k.other) || !renameOk(rename)) {
-      console.error('A note to keep as one is not there or cannot be named in links; its answer waits for the next tidy-up');
-      return planScripted(drive, rootId, opts, editCap, new Set([...held, `keep:${k.answer}`]));
-    }
+  for (const { k, kept, other, rename } of date ? keeps : []) {
     const was = await drive.readText(kept.id);
     const lines = carriedLines(parseNote(k.other, await drive.readText(other.id)), parseNote(k.kept, was))
       .map((entry): WantedLine => ({ entry: { ...entry, date: date ?? '' }, record: k.answer, what: null, after: null }));
@@ -1042,7 +1081,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     const unlinked = raced.size > 0 || [...notRelinked].some((b) => mentions(b, [x.rename]));
     if (!x.lines.every(planned) || !relinked || unlinked || edits.some((e) => e.file.id === x.other.id)) {
       console.error('Two notes could not be kept as one now; the answer waits for the next tidy-up');
-      return planScripted(drive, rootId, opts, editCap, new Set([...held, `keep:${x.k.answer}`]));
+      return tryAgain({ editCap, held: new Set([...held, `keep:${x.k.answer}`]) });
     }
   }
   /** A merge's line, when its note is one a line can go to at all. */
@@ -1054,7 +1093,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   // A merge whose line waits past the cap waits with its whole pile and its answer: planned again with that pile
   // held, so its question is never dropped (rule 7, R4-1). A refused line is not a wait (TL-P2-35): see below.
   const waitingPiles = things.filter((t) => stateOf(t.merge) === 'deferred').map((t) => t.pile.id);
-  if (waitingPiles.length) return planScripted(drive, rootId, opts, editCap, new Set([...held, ...waitingPiles]));
+  if (waitingPiles.length) return tryAgain({ editCap, held: new Set([...held, ...waitingPiles]) });
   /**
    * How each merge goes: after its line, beside a line already there, or not at all: when the note is a person's own
    * (I7), when there is no note to merge into, or when its line was refused at plan time (TL-P2-35), the thing is
@@ -1262,7 +1301,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   // A run that only asks, about piles asked about already, has nothing new to do: nothing was ready yet.
   // A Timeline line the model added on a note is something to do, so a run with one is not "nothing ready".
   if (all && !capturedPiles.length && !journal.length && questionsText === null && ![...wanted.values()].some((w) => w.lines.length || w.state)) {
-    if (opts.taken) return nothingReadyPlan(rootId, opts);
+    if (opts.taken) return { kind: 'plan' as const, plan: await nothingReadyPlan(rootId, opts) };
     throw new BowerError('conflict', NOTHING_READY);
   }
   // Your changes go to the archive the legacy runner used, made in `.bower/changes` only when a line needs it
@@ -1285,6 +1324,64 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const captureValue: ManifestCapture = { piles: capturedPiles, members, journal: captured, places: capturedPlaces };
   const scope = { rootId };
   const captureId = (await canonical({ scope, runScope: opts.scope, capture: captureValue })).hash;
+  /**
+   * What a request's done line says (C09, TL-P2-40): a scripted answer names what was found, with links to the notes
+   * it used, when every one is there; the plain line only when nothing specific can be named.
+   */
+  const answerOf = (l: JournalLine): string => {
+    const scripted = d.request?.(l.rec.text ?? l.rec.what);
+    const there = (path: string): boolean => !!ix.file(path) && !ix.file(path)?.folder;
+    // A lookup with the web off looks nothing up, and says so (C10); with it on, it names the note its result went to.
+    if (scripted?.kind === 'lookup') return !opts.allowWeb ? scripted.offline : lookups.has(l.rec.id) ? scripted.answer : REQUEST_DONE;
+    // A comparison names the note it wrote (C08).
+    const note = compared.get(l.rec.id);
+    if (scripted?.kind === 'compare') return note ? scripted.answer.replace('{note}', displayName(note.name)) : REQUEST_DONE;
+    return scripted && scripted.uses.every(there) ? scripted.answer : REQUEST_DONE;
+  };
+  const answers = new Map(journal.filter((l) => l.rec.kind === 'request').map((l) => [l.rec.id, answerOf(l)]));
+  // Bower's own files the run writes, as read now, so the writes pass what they read.
+  const requestsRead = requests && answers.size ? { file: requests, content: await ownVerified(requests) } : null;
+  const questionsRead = questionsText !== null && questionsFile ? { file: questionsFile, content: await ownVerified(questionsFile) } : null;
+  // `.bower/hashes.json` on a full run: every file's content by its path once the run is done.
+  let hashesNew: { text: string; before: VerifiedContent | null } | null = null;
+  if (all) {
+    const hashes: Record<string, string> = {};
+    const digests = new Map(things.map(({ file, content }) => [file.id, content.sha256]));
+    const finalPaths = new Map(filing.map(({ thing, to, name }) => [join(to, name), thing.file.id]));
+    for (const [path, entry] of [...planned].sort(([a], [b]) => a.localeCompare(b))) {
+      if (entry.type !== 'file' || entry.kind === 'note' || path.startsWith('Inbox/')) continue;
+      const id = finalPaths.get(path) ?? ix.idOf(path);
+      const f = id ? listing.find((x) => x.id === id) : undefined;
+      const hash = (id && digests.get(id)) ?? (f ? (await storedDigest(drive, f))?.sha256 : undefined);
+      // A derived list: a file whose bytes cannot be checked now is left out of it, and the next full run adds it.
+      if (!hash) {
+        console.error(`A file's content could not be checked; ${SYSTEM.hashes} leaves it out this time`);
+        continue;
+      }
+      hashes[hash] = path;
+    }
+    const text = `${JSON.stringify({ v: 1, hashes } satisfies HashesFile, null, 2)}\n`;
+    hashesNew = { text, before: hashesFile && text !== hashesText ? await ownVerified(hashesFile) : null };
+  }
+  return {
+    kind: 'decided' as const, run: { runId: opts.runId, requestId: opts.requestId, scope: opts.scope, allowWeb: opts.allowWeb, requestedAt: opts.requestedAt },
+    rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas: d.areas, filing, fallbackOf, derive, need,
+    generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
+    requestsBroken, requestsDone, sys, questionsText, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
+    rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew,
+  };
+}
+type Decided = Extract<Awaited<ReturnType<typeof decide>>, { kind: 'decided' }>;
+
+/**
+ * Build: the fixed operations and the report rows, each row from the operation it reports, from what was decided.
+ * It reads neither Drive nor the reply; the manifest guard and grounding check what it built.
+ */
+export async function build(decided: Decided): Promise<Ended> {
+  const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
+    generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
+    requestsBroken, requestsDone, sys, questionsText, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
+    rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew } = decided;
 
   // The fixed operations, in order: clear last run's marks, make folders, file, the note edits, the merges, Bin the piles,
   // your changes, the hashes.
@@ -1313,7 +1410,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   // A new Area the model gave a responsibility for: the first thing filed there says why it was made (TL-P4-07 addendum 3).
   const said = new Set<string>();
   const areaOf = (to: string): { area: string } | Record<string, never> => {
-    for (const [path, why] of d.areas) {
+    for (const [path, why] of areas) {
       if ((to === path || to.startsWith(`${path}/`)) && made.has(path) && !said.has(path)) {
         said.add(path);
         return { area: `New area ${nameOf(path)}, for ${why}` };
@@ -1464,23 +1561,9 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   // Your changes: requests completed in requests.json, answered questions dropped, then each line archived.
   // A line's archive move depends on every write derived from it, so a rejected write keeps it unarchived.
   const asked = journal.filter((l) => l.rec.kind === 'request');
-  /**
-   * What a request's done line says (C09, TL-P2-40): a scripted answer names what was found, with links to the notes
-   * it used, when every one is there; the plain line only when nothing specific can be named.
-   */
-  const answerOf = (l: JournalLine): string => {
-    const scripted = d.request?.(l.rec.text ?? l.rec.what);
-    const there = (path: string): boolean => !!ix.file(path) && !ix.file(path)?.folder;
-    // A lookup with the web off looks nothing up, and says so (C10); with it on, it names the note its result went to.
-    if (scripted?.kind === 'lookup') return !opts.allowWeb ? scripted.offline : lookups.has(l.rec.id) ? scripted.answer : REQUEST_DONE;
-    // A comparison names the note it wrote (C08).
-    const note = compared.get(l.rec.id);
-    if (scripted?.kind === 'compare') return note ? scripted.answer.replace('{note}', displayName(note.name)) : REQUEST_DONE;
-    return scripted && scripted.uses.every(there) ? scripted.answer : REQUEST_DONE;
-  };
   let requestsOp: string | null = null;
   if (asked.length) {
-    const done: Request[] = [...asked].reverse().map((l) => ({ id: l.rec.id, text: l.rec.text ?? l.rec.what, at: l.rec.at, done: answerOf(l) }));
+    const done: Request[] = [...asked].reverse().map((l) => ({ id: l.rec.id, text: l.rec.text ?? l.rec.what, at: l.rec.at, done: answers.get(l.rec.id) ?? REQUEST_DONE }));
     // A comparison's note, before the answer that links it; claimed by its one created row (C08).
     const notes: string[] = [];
     for (const l of asked) {
@@ -1495,10 +1578,9 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     // A request done before (its line not archived then) keeps one row: the new one.
     const again = new Set(done.map((r) => r.id));
     const text = `${JSON.stringify({ v: 1, done: [...done, ...requestsDone.filter((r) => !again.has(r.id))].slice(0, 20) } satisfies RequestsFile, null, 2)}\n`;
-    if (requests) {
-      const before = await ownVerified(requests);
+    if (requestsRead) {
       if (requestsBroken) console.error(new BowerError('unknown', REQUESTS_REPLACED), `${SYSTEM.requests} is not a valid requests file`);
-      requestsOp = await add({ kind: 'write-runner-json', before: seen(requests), beforeContent: before, path: SYSTEM.requests, text, content: await utf8(text) }, answered);
+      requestsOp = await add({ kind: 'write-runner-json', before: seen(requestsRead.file), beforeContent: requestsRead.content, path: SYSTEM.requests, text, content: await utf8(text) }, answered);
     } else {
       // Your changes live in `.bower`, so it is there; made again without it would leave the requests undone.
       if (!sys?.folder) throw new BowerError('unknown', OWN_FILES);
@@ -1518,9 +1600,8 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       // leaves the thing in the inbox, and its question open (P4-17).
       ...savedBins.filter(({ s }) => closing.some((q) => related(subjectKey(q), s.file.id) || sameContent(q, { hash: s.file.md5Checksum }))).map(({ op }) => op),
     ];
-    if (questionsFile) {
-      const before = await ownVerified(questionsFile);
-      questionsOp = await add({ kind: 'write-runner-json', before: seen(questionsFile), beforeContent: before, path: SYSTEM.questions, text: questionsText, content: await utf8(questionsText) }, derived);
+    if (questionsRead) {
+      questionsOp = await add({ kind: 'write-runner-json', before: seen(questionsRead.file), beforeContent: questionsRead.content, path: SYSTEM.questions, text: questionsText, content: await utf8(questionsText) }, derived);
     } else if (sys?.folder) {
       questionsOp = await add({ kind: 'create-text', parent: { fileId: sys.id }, name: nameOf(SYSTEM.questions), createKey: newKey('runner'), text: questionsText, content: await utf8(questionsText), purpose: 'runner-json' }, derived);
     }
@@ -1565,28 +1646,12 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   }
 
   // `.bower/hashes.json` only on a full run, as the legacy runner wrote it.
-  if (all) {
-    const hashes: Record<string, string> = {};
-    const digests = new Map(things.map(({ file, content }) => [file.id, content.sha256]));
-    const finalPaths = new Map(filing.map(({ thing, to, name }) => [join(to, name), thing.file.id]));
-    for (const [path, entry] of [...planned].sort(([a], [b]) => a.localeCompare(b))) {
-      if (entry.type !== 'file' || entry.kind === 'note' || path.startsWith('Inbox/')) continue;
-      const id = finalPaths.get(path) ?? ix.idOf(path);
-      const f = id ? listing.find((x) => x.id === id) : undefined;
-      const hash = (id && digests.get(id)) ?? (f ? (await storedDigest(drive, f))?.sha256 : undefined);
-      // A derived list: a file whose bytes cannot be checked now is left out of it, and the next full run adds it.
-      if (!hash) {
-        console.error(`A file's content could not be checked; ${SYSTEM.hashes} leaves it out this time`);
-        continue;
-      }
-      hashes[hash] = path;
-    }
-    const text = `${JSON.stringify({ v: 1, hashes } satisfies HashesFile, null, 2)}\n`;
+  if (hashesNew) {
+    const { text } = hashesNew;
     const after = [...movesOf.values()].flat();
-    if (hashesFile && text !== hashesText) {
-      const before = await ownVerified(hashesFile);
+    if (hashesFile && hashesNew.before) {
       if (hashesBroken) console.error(new BowerError('unknown', HASHES_REPLACED), `${SYSTEM.hashes} is not a valid hashes file`);
-      await add({ kind: 'write-runner-json', before: seen(hashesFile), beforeContent: before, path: SYSTEM.hashes, text, content: await utf8(text) }, after);
+      await add({ kind: 'write-runner-json', before: seen(hashesFile), beforeContent: hashesNew.before, path: SYSTEM.hashes, text, content: await utf8(text) }, after);
     } else if (!hashesFile && sys?.folder) {
       await add({ kind: 'create-text', parent: { fileId: sys.id }, name: nameOf(SYSTEM.hashes), createKey: newKey('runner'), text, content: await utf8(text), purpose: 'runner-json' }, after);
     } else if (!hashesFile) {
@@ -1605,12 +1670,15 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const checked = await parseRunManifestV2((await canonical(manifest)).bytes, rootId, RUNNER_WRITES);
   if (!checked.ok) {
     // Past the guard's own size limit: the last edit in path order waits for the next run, and the run is planned again.
-    if (checked.reason === 'edit' && checked.rule === 'size' && edits.length) return planScripted(drive, rootId, opts, edits.length - 1, held);
+    if (checked.reason === 'edit' && checked.rule === 'size' && edits.length) return tryAgain({ editCap: edits.length - 1, held });
     return refused(`the manifest guard refused the plan (${checked.reason}${checked.reason === 'edit' ? `: ${checked.rule}` : ''})`);
   }
   if (!grounded(manifest) || !(await groundedKeys(manifest))) return refused('the plan has report rows its effects do not ground');
-  return { path: 'b', manifest, needs: archives };
+  return { kind: 'plan', plan: { path: 'b', manifest, needs: archives } };
 }
+
+/** A step's end that plans again with more held back (`Attempt`). */
+const tryAgain = (attempt: Attempt): Ended => ({ kind: 'again', attempt });
 
 /**
  * The plan of an admitted full run that finds every pile it took held, and none of your changes: nothing captured,
@@ -1916,6 +1984,8 @@ type Fallback = { answer: string; into: string; alone: string | null };
 /** A merge as planned: after its Timeline line, or beside a line already there from an earlier run. */
 type MergeState = Omit<Merge, 'line'> & { line: 'planned' | 'present' };
 
+/** The name a Timeline line cites a filed thing or note by. */
+const citeName = (name: string): string => name.replace(/\.md$/i, '');
 /** Paths in code-point order, the same everywhere (TL-P2-29). */
 const byCodePoint = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
