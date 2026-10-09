@@ -11,7 +11,10 @@ import { seedFakeDrive } from './seed';
 
 const FAKE_KEY = (scenario: Scenario): string => `bower:fake:${scenario}`;
 
-export async function pretendDrive(scenario: Scenario): Promise<{ drive: FakeDrive; rootId: string | null; fresh: boolean }> {
+/** The seed's fixture keys, kept beside the pretend Drive so a reload resolves them as the first load did. */
+const KEYS_KEY = (scenario: Scenario): string => `bower:fake:${scenario}:keys`;
+
+export async function pretendDrive(scenario: Scenario): Promise<{ drive: FakeDrive; rootId: string | null; fresh: boolean; keys: ReadonlyMap<string, string> }> {
   let drive: FakeDrive | null = null;
   try {
     const kept = sessionStorage.getItem(FAKE_KEY(scenario));
@@ -20,12 +23,23 @@ export async function pretendDrive(scenario: Scenario): Promise<{ drive: FakeDri
     console.error(e);
   }
   let rootId: string | null;
+  let keys = new Map<string, string>();
   const fresh = !drive;
   if (drive) {
     rootId = (await drive.listAll('root')).find((f) => f.folder && f.name === BOWER_FOLDER && f.parents[0] === 'root')?.id ?? null;
+    try {
+      keys = new Map(JSON.parse(sessionStorage.getItem(KEYS_KEY(scenario)) ?? '[]') as Array<[string, string]>);
+    } catch (e) {
+      console.error(e);
+    }
   } else {
     drive = new FakeDrive();
-    rootId = await seedFakeDrive(drive, scenario, Date.now());
+    rootId = await seedFakeDrive(drive, scenario, Date.now(), keys);
+    try {
+      sessionStorage.setItem(KEYS_KEY(scenario), JSON.stringify([...keys]));
+    } catch (e) {
+      console.error(e);
+    }
     // The live folder's shape, for the situation that measures Home on it.
     if (scenario === 'slow-report' && rootId) await (await import('./live-shape')).liveShape(drive, rootId);
     // Answers whose subjects went since (TL-P4-19 addendum 10), for the rows a tidy-up gives them.
@@ -39,7 +53,7 @@ export async function pretendDrive(scenario: Scenario): Promise<{ drive: FakeDri
   d.onChange = () => saver.schedule();
   d.persist = () => saver.flush();
   saver.schedule();
-  return { drive: d, rootId, fresh };
+  return { drive: d, rootId, fresh, keys };
 }
 
 const RUNS_KEY = (scenario: Scenario): string => `bower:fake:${scenario}:runs`;

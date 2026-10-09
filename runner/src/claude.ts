@@ -38,7 +38,7 @@ import { join } from 'node:path';
 import { normalizeModelInput } from './model-input';
 import { MANIFEST_V2_LIMIT, parseRunManifestV2, recordableName } from '../../src/data/contracts/run-manifest';
 import { z } from 'zod';
-import { AUTHORED_LINE_MAX, STATE_WRITE } from '../../src/data/contracts/note-edit';
+import { AUTHORED_LINE_MAX, STATE_WRITE, newsLineCited } from '../../src/data/contracts/note-edit';
 import { PILE_NOTE } from '../../src/data/piles';
 import type { Admitted, RunProvider } from '../../src/data/spine/provider';
 import type { ScriptedRead } from '../../src/data/spine/read';
@@ -611,6 +611,7 @@ export const REFUSALS = {
   lineNote: 'a line on a note it was not shown',
   lineText: 'a Timeline line that is not one short line',
   lineCites: 'a line citing a thing it does not file, or a pile that is not words only or is also made a note',
+  lineUncited: 'a news line that cites nothing: every Timeline line cites the thing or pile it is from',
   noNote: 'a thing with text and no note',
   stateKeys: 'a state with keys outside the intent',
   stateNote: 'a state for a note it was not shown',
@@ -912,6 +913,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     rule('lineNote', (l) => notes.has(l.note)),
     rule('lineText', (l) => lineOk(l.text, AUTHORED.line) && unlinked(l.text)),
     rule('lineCites', (l) => l.cites === undefined || placed.has(l.cites) || wordsPile(l.cites)),
+    rule('lineUncited', (l) => newsLineCited({ text: l.text.trim(), source: l.cites ?? null })),
     rule('numbers', (l) => grounded(l.cites, [l.text], 'the Timeline line on')),
   ], (l) => {
     if (l.cites !== undefined && !placed.has(l.cites)) cited.add(l.cites);

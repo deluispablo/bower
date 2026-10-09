@@ -70,8 +70,20 @@ export function timelineDate(requestedAt: number): string | null {
   if (Number.isNaN(at.getTime()) || at.getUTCFullYear() > 9999) return null;
   return at.toISOString().slice(0, 10);
 }
-export function entryOk(entry: EditEntry): boolean {
-  return dateOk(entry.date) && lineFieldOk(entry.text) && (entry.source === null || displayNameOk(entry.source));
+/** How a news line starts: what Bower would have written in a Current state it may not rewrite (`stateNewsLine`). */
+export const NEWS_LEAD = 'New: ';
+/**
+ * Every Timeline line cites its source (TL-P4-19 addendum 20): a news line with none is refused. The one home of the
+ * rule: `entryOk` gates every writer with it, and the Claude reply's check calls it on the reply's Timeline lines.
+ */
+export const newsLineCited = (entry: Pick<EditEntry, 'text' | 'source'>): boolean => entry.source !== null || !entry.text.startsWith(NEWS_LEAD);
+/**
+ * A Timeline line's field rules, strict on write and lenient on read, as a Current state's bounds are (`STATE_READ`):
+ * `read` is how a stored manifest is read, so one stored before the uncited refusal still parses (TL-P4-19 addendum
+ * 22); a write or a plan (the default) also refuses a news line with no source.
+ */
+export function entryOk(entry: EditEntry, mode: 'write' | 'read' = 'write'): boolean {
+  return dateOk(entry.date) && lineFieldOk(entry.text) && (entry.source === null || displayNameOk(entry.source)) && (mode === 'read' || newsLineCited(entry));
 }
 /** Display names only: path forms and `.md` forms are never rewritten. */
 export function renameOk(rename: Rename): boolean {
@@ -126,7 +138,7 @@ function fieldsOk(change: Change): boolean {
     case 'state-rewrite': return stateLinesOk(change.previous, change.lines);
     case 'link-rewrite': return change.renames.length > 0 && change.renames.every(renameOk)
       && new Set(change.renames.map((item) => item.from.toLowerCase())).size === change.renames.length;
-    case 'timeline-append': return change.entries.length > 0 && change.entries.every(entryOk);
+    case 'timeline-append': return change.entries.length > 0 && change.entries.every((entry) => entryOk(entry));
     case 'rules-wording': return change.add.length + change.remove.length > 0 && change.add.every(ruleAddOk) && change.remove.every(ruleRemoveOk);
   }
 }
@@ -371,7 +383,7 @@ export function stateMarkOf(bytes: Uint8Array): string | null {
  * when nothing is new, so no line is written.
  */
 export function stateNewsLine(lines: readonly string[], existing: readonly string[], said: readonly string[] = []): string | null {
-  const lead = 'New: ';
+  const lead = NEWS_LEAD;
   const plain = (line: string): string => line.replace(/ · /g, ', ').replace(/\[\[|\]\]/g, '').replace(/;/g, ',').trim().replace(/[.!?]+$/, '');
   const held = new Set(existing.map((line) => plain(line).toLowerCase()));
   // Plain news: the new lines joined by commas, the sentence taking one full stop at its end. A later line starts in

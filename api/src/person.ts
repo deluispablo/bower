@@ -751,8 +751,8 @@ export class Person extends DurableObject<Env> {
   }
 
   /**
-   * Run `run` ended with an answer that stayed in your changes (its granted write refused at the write itself, TL-P4-19
-   * addendum 15): it waits as an answer that came during the run does, so the run's end wakes the alarm to start the
+   * Run `run` ended with an answer that stayed in your changes (its granted write refused by a clash at the write
+   * itself, TL-P4-19 addenda 15 and 16): it waits as an answer that came during the run does, so the run's end wakes the alarm to start the
    * one run that asks again (`wakeForWaiting`, `startWaiting`), with no press. It adds no subject (your changes go with
    * every such run), no requestId (no press waits on it) and no web (asking again looks nothing up). That run asks
    * again, which uses the answer up, so none loops.
@@ -763,7 +763,8 @@ export class Person extends DurableObject<Env> {
       requestIds: waiting?.requestIds ?? [],
       subjects: waiting?.subjects ?? [],
       allowWeb: waiting?.allowWeb ?? false,
-      tries: 0,
+      // The starts that failed in a row are not forgotten here (TL-P4-19 addendum 16).
+      tries: waiting?.tries ?? 0,
     } satisfies AnswersWaiting);
   }
 

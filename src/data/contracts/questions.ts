@@ -163,6 +163,18 @@ export const STATE_GONE = 'Not written: the note had moved or gone to the Bin.';
 export const stateGone = (note: string | null): string => (note === null ? STATE_GONE : `Not written: ${note} had moved or gone to the Bin before Bower got to it.`);
 /** A "Write it" refused for good (not a clash, which asks again), by the note's name when it is known. */
 export const stateRefused = (note: string | null): string => `Not written: Drive would not let Bower change ${note ?? 'the note'}. Your current state is as you left it.`;
+/** What a "Write it" whose write was refused at the run's end says it does next: its answer stays (TL-P4-19 addendum 21). */
+export const STATE_RETRY = 'Bower will try again in the next tidy-up.';
+/**
+ * The row of a "Write it" whose write Drive refused while the run worked, and not as a clash (which asks again): the
+ * answer stays in your changes and the next tidy-up tries once more (TL-P4-19 addendum 21). The failure sentence by
+ * its kind: Drive would not let Bower (`barred`), or Drive could not be reached (any other refusal).
+ */
+export function stateNotWritten(note: string | null, barred: boolean): string {
+  const name = note ?? 'the note';
+  const failed = barred ? `Not written: Drive would not let Bower change ${name}.` : `Not written: Bower couldn't reach Drive to change ${name}.`;
+  return `${failed} ${STATE_RETRY}`;
+}
 /** A "Write it" with nothing to write: the note already said it. */
 export const STATE_NOTHING = 'Nothing to write: the note already said it.';
 export const stateNothing = (note: string | null): string => (note === null ? STATE_NOTHING : `Nothing to write: ${note} already said what Bower would have written.`);

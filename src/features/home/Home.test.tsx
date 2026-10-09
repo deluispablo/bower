@@ -233,6 +233,21 @@ describe('the tidy-up sheet and Home focus', () => {
     expect(within(sheet).getByRole('button', { name: 'Tidy up 1 thing' })).toBeVisible();
   });
 
+  it("the write it card shows every line of Bower's update", async () => {
+    // TL-P4-19 addendum 17: the person reads the update a yes writes, every line of it, under its own label.
+    const base = loadingSources();
+    const shown = ['Insurance runs until 30 June.', 'MOT booked for 14 January.'];
+    const q = { id: 'q-state-f1', text: 'You changed the current state of Car. Should Bower write its update there?', yes: 'Write it', no: 'Keep mine', about: 'Areas/Car/Car.md', shown: { lines: shown, md5: 'd41d8cd98f00b204e9800998ecf8427e' }, askedAt: at };
+    const doors: Record<string, unknown> = { piles: async () => [], uploadNotice: async () => null, questions: async () => [q], changes: async () => [], suggestions: async () => [], subscribe: () => () => {} };
+    const vault = new Proxy({}, { get: (_t, k) => (typeof k === 'string' && k in doors ? doors[k] : Reflect.get(base.vault, k)) }) as Sources['vault'];
+    render(<MemoryRouter><DataProvider sources={{ ...base, vault, runs: { ...base.runs, current: async () => null } }}><main id="main" tabIndex={-1}><Home /></main></DataProvider></MemoryRouter>);
+    const card = (await screen.findByRole('button', { name: 'Write it' })).closest('li');
+    if (!card) throw new Error('no card');
+    for (const line of shown) expect(card.textContent).toContain(line);
+    const update = within(card).getByRole('list', { name: "Bower's update" });
+    expect(within(update).getAllByRole('listitem').map((li) => li.textContent)).toEqual(shown);
+  });
+
   it('focus never drops to body after a question is answered', async () => {
     const base = loadingSources();
     let qs = [

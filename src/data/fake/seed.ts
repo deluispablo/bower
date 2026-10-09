@@ -6,6 +6,7 @@
  */
 import type { FakeDrive } from '../drive/fake-drive';
 import { DemoWorld } from '../demo/world';
+import { CAR_RENEWAL } from '../demo/fixture';
 import type { Scenario } from '../demo/scenario';
 import { PILE_NOTE, safeInboxName } from '../piles';
 import type { TreeNode } from '../types';
@@ -22,10 +23,18 @@ export function madeUp(name: string, kind: string | undefined): string {
 /** Scenarios that differ only in how the app is reached seed like the default. */
 const SAME_AS_DEFAULT: Scenario[] = ['signed-out', 'fail-run', 'start-fails', 'slow', 'offline', 'running', 'gone-answers', 'write-it'];
 
-export async function seedFakeDrive(drive: FakeDrive, scenario: Scenario, now: number): Promise<string | null> {
+/**
+ * Seeds the pretend Drive and returns its root. `keys`, when given, gets each inbox thing's file id by its fixture key
+ * (the demo item id, `i1`, `s1-0`…), so a situation cites a thing by the id it was given, never by its name (TL-P4-19
+ * addendum 20).
+ */
+export async function seedFakeDrive(drive: FakeDrive, scenario: Scenario, now: number, keys: Map<string, string> = new Map()): Promise<string | null> {
   if (scenario === 'first') return null;
   const world = new DemoWorld({ scenario: SAME_AS_DEFAULT.includes(scenario) ? 'default' : scenario, scale: 'instant', latency: 0, now });
+  // The write-it situation's news lines cite what they are from: Car's, the renewal pile's notice.
+  if (scenario === 'write-it') world.addSample(CAR_RENEWAL);
   try {
+    const itemKeys = new Map<string, string>();
     const { vault, runs } = world.sources();
     const root = (await drive.createFolder('root', BOWER_FOLDER)).id;
     const ids = new Map<string, string>([['', root]]);
@@ -55,6 +64,7 @@ export async function seedFakeDrive(drive: FakeDrive, scenario: Scenario, now: n
         let name = base;
         for (let n = 2; taken.has(name.toLowerCase()); n++) name = dot > 0 ? `${base.slice(0, dot)} (${n})${base.slice(dot)}` : `${base} (${n})`;
         taken.add(name.toLowerCase());
+        itemKeys.set(lone ? p.path : `${p.path}/${name}`, it.id);
         inboxProps.set(lone ? p.path : `${p.path}/${name}`, { [PROP.asAdded]: it.name, [PROP.origin]: it.origin, [PROP.kind]: it.kind, ...(lone ? { [PROP.pile]: p.id } : {}) });
       }
       if (!lone) pileFolders.set(p.path, p.id);
@@ -74,6 +84,8 @@ export async function seedFakeDrive(drive: FakeDrive, scenario: Scenario, now: n
         if (n.isNew) props[PROP.isNew] = '1';
         const text = n.path === 'Rules.md' ? rulesText : pileNotes.get(n.path) ?? (n.kind === 'note' ? serializeNote({ ...(await vault.note(n.path)), byBower: !!n.byBower }) : n.kind === 'link' ? `[InternetShortcut]\nURL=https://${n.name.replace(/\.url$/, '')}\n` : madeUp(n.name, n.kind));
         id = (await drive.createText(await folderId(parentPath), n.name, text, Object.keys(props).length ? props : undefined)).id;
+        const key = itemKeys.get(n.path);
+        if (key !== undefined) keys.set(key, id);
         if (n.kind !== 'note' && !n.path.startsWith('Inbox/')) hashes[await sha256(new Blob([text]))] = n.path;
       }
       drive.setTimes(id, n.created, n.modified);

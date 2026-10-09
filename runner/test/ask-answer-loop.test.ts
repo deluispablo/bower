@@ -204,10 +204,11 @@ const hubChanges = async (w: RealWorld): Promise<Change[]> => (await hubEdits(w)
 let proposed: string[] = [];
 const proposeUpdate: ClaudeSpawn = async (call) => {
   proposed.push(call.input);
-  // The offer is filed beside the hub (so the hub is shown), and the hub's Current state is brought up to date.
+  // The offer is filed beside the hub (so the hub is shown), and the hub's Current state is brought up to date,
+  // citing the offer: a news line Bower writes in its place cites its source (TL-P4-19 addendum 20).
   const offer = shownOf(call).piles.flatMap((p) => p.things).find((t) => t.name === 'Offer_letter_final(2).pdf')?.fileId;
   const things = offer ? [{ fileId: offer, to: 'Projects/Job hunt/Applications', basis: HUB, name: 'Offer, Industrial Designer, Ferrowick.pdf', note: { name: 'Industrial Designer, Ferrowick.md', summary: 'An offer from Ferrowick for Industrial Designer.', body: 'Fully remote. [[Job hunt]]' } }] : [];
-  return { code: 0, stderr: '', cut: null, stdout: envelope({ kind: 'tidy-intent', v: 1, things, states: [{ note: HUB, lines: UPDATE }] }) };
+  return { code: 0, stderr: '', cut: null, stdout: envelope({ kind: 'tidy-intent', v: 1, things, states: [{ note: HUB, lines: UPDATE, ...(offer ? { cites: offer } : {}) }] }) };
 };
 /** The hub-lines folder with the hub's section edited by the person since Bower last wrote it, and nothing asked yet. */
 async function shownWorld(): Promise<RealWorld> {
@@ -726,6 +727,82 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     expect(await answersWaiting(w, `q-state-${id}`)).toEqual([]);
     // The re-ask used the answer up: nothing more starts on its own.
     expect(await w.api.fireAlarm().then(() => w.dispatched.length)).toBe(dispatched + 1);
+  });
+
+  it('only a clash keeps an answer for a re-ask', async () => {
+    // TL-P4-19 addendum 16: a refusal that is not a clash (Drive answers 503 to the write, every time) needs no new
+    // answer from the person, so a run that asks again would loop. The run's end does not say the answer stayed, and
+    // nothing starts on its own.
+    const w = await shownWorld();
+    expect(await press(w)).toBe(true);
+    expect(await w.runJob(0)).toBe(0);
+    const id = await hubId(w);
+    const before = await textAt(w, HUB);
+    const { vault, answerQuestion } = await vaultOf(w);
+    const done = await answerQuestion(vault, runsOf(w), `q-state-${id}`, true, { allowWeb: false });
+    expect(done?.outcome.kind).toBe('now');
+    let refused = 0;
+    const busy: Hop = async (url, init, next) => {
+      if ((init.method ?? 'GET') === 'PATCH' && url.pathname === `/upload/drive/v3/files/${id}`) {
+        refused += 1;
+        return new Response(null, { status: 503 });
+      }
+      return await next();
+    };
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const dispatched = w.dispatched.length;
+    expect(await w.runJob(1, busy)).toBe(0);
+    expect(refused).toBeGreaterThan(0);
+    expect(await textAt(w, HUB)).toBe(before);
+    expect(w.dispatched).toHaveLength(dispatched);
+    expect(await w.api.fireAlarm().then(() => w.dispatched.length)).toBe(dispatched);
+  });
+
+  it('the same non-clash refusal never starts more runs than the cap, then shows the not-written row', async () => {
+    // TL-P4-19 addendum 21: Drive answers 503 to the granted write, every time. The engine is untouched: the answer's
+    // archive waits for its write, so the answer stays in your changes and nothing starts on its own. The run says so
+    // in one answered row (not a thing set aside), and the next press tries the write once more.
+    const w = await shownWorld();
+    expect(await press(w)).toBe(true);
+    expect(await w.runJob(0)).toBe(0);
+    const id = await hubId(w);
+    const before = await textAt(w, HUB);
+    const { vault, answerQuestion } = await vaultOf(w);
+    const done = await answerQuestion(vault, runsOf(w), `q-state-${id}`, true, { allowWeb: false });
+    expect(done?.outcome.kind).toBe('now');
+    const writes = { refused: 0, tried: 0 };
+    const busy: Hop = async (url, init, next) => {
+      if ((init.method ?? 'GET') === 'PATCH' && url.pathname === `/upload/drive/v3/files/${id}`) {
+        writes.refused += 1;
+        return new Response(null, { status: 503 });
+      }
+      return await next();
+    };
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const dispatched = w.dispatched.length;
+    expect(await w.runJob(1, busy)).toBe(0);
+    expect(writes.refused).toBeGreaterThan(0);
+    expect(await textAt(w, HUB)).toBe(before);
+    // No further run, on its own or by the alarm.
+    expect(w.dispatched).toHaveLength(dispatched);
+    expect(await w.api.fireAlarm().then(() => w.dispatched.length)).toBe(dispatched);
+    // The answer is kept, and its row shows under the answered label, once.
+    expect(await answersWaiting(w, `q-state-${id}`)).toHaveLength(1);
+    const rows = await reportRowsAll(w);
+    expect(rows.setAside).toEqual([]);
+    expect(rows.answered).toEqual([{ questionId: `q-state-${id}`, kind: 'state', outcome: 'refused', why: "Not written: Bower couldn't reach Drive to change Job hunt. Bower will try again in the next tidy-up.", note: HUB }]);
+    // The next tidy-up (something new in the inbox) tries the write once, under the stamp-plus-checksum check, and it lands.
+    const inbox = (await w.drive.listAll(w.rootId)).find((f) => f.folder && w.drive.pathOf(f.id, w.rootId) === 'Inbox');
+    await w.drive.createText(inbox?.id ?? '', 'Call back.md', 'Call Alex back on Monday.\n');
+    const tries: Hop = async (url, init, next) => {
+      if ((init.method ?? 'GET') === 'PATCH' && url.pathname === `/upload/drive/v3/files/${id}`) writes.tried += 1;
+      return await next();
+    };
+    expect(await press(w)).toBe(true);
+    expect(await w.runJob(w.dispatched.length - 1, tries)).toBe(0);
+    expect(writes.tried).toBe(1);
+    expect(parseNote(HUB, (await textAt(w, HUB)) ?? '').currentState).toEqual(UPDATE);
+    expect(await answersWaiting(w, `q-state-${id}`)).toEqual([]);
   });
 
   it('a write it refused for good writes one answered row on Home and on the note', async () => {

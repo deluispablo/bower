@@ -9,10 +9,20 @@ import type { DispatchAt } from './fake-run-service';
  * update it shows. Only the scripted provider reads these updates (`fake-runner.ts`); the live path never does.
  * Made up, on Alex's folder.
  */
-export const WRITE_IT_STATES: readonly AuthoredState[] = [
-  { path: 'Areas/Money/Money.md', lines: ['October is on budget so far.', 'Receipts are filed by month, as your rule says.'], cites: null },
-  { path: 'Areas/Car/Car.md', lines: ['Insurance runs until 30 June.', 'MOT booked for 14 January.'], cites: null },
+export const WRITE_IT_STATES: readonly (Omit<AuthoredState, 'cites'> & { cites: string })[] = [
+  // Each cites the inbox thing its news is from, by its fixture key (`seedFakeDrive`), resolved when the situation runs.
+  { path: 'Areas/Money/Money.md', lines: ['October is on budget so far.', 'Receipts are filed by month, as your rule says.'], cites: 'r0' },
+  { path: 'Areas/Car/Car.md', lines: ['Insurance runs until 30 June.', 'MOT booked for 14 January.'], cites: 's1-0' },
 ];
+
+/** The updates with each fixture key resolved to the id the seed gave its thing (TL-P4-19 addendum 20): never by name. */
+export function writeItStates(keys: ReadonlyMap<string, string>): AuthoredState[] {
+  return WRITE_IT_STATES.map((st) => {
+    const id = keys.get(st.cites);
+    if (id === undefined) throw new Error('The write-it situation could not be set up.');
+    return { ...st, cites: id };
+  });
+}
 
 /** What Bower last wrote in each note's Current state (its mark): not the lines there now, which the person changed. */
 const BOWER_WROTE: Readonly<Record<string, readonly string[]>> = {

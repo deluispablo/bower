@@ -23,7 +23,7 @@ import { PROP, RUNNER_WRITES, SYSTEM, isRunnerFile, type HashesFile, type Questi
 import { ruleLike } from '../rules';
 import { savedLinkAddress } from '../search-text';
 import { EMPTY_MD5, md5Hex } from '../contracts/hashes';
-import { STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
+import { STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
 import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
 import { parseTimelineLine } from '../contracts/timeline-line';
@@ -1686,6 +1686,13 @@ export async function build(decided: Decided): Promise<Ended> {
     const asked = stateAsks.get(edit.file.id);
     if (asked?.shown) asked.shown = { lines: asked.shown.lines, ...asLeft };
     for (const row of edit.rows) reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), updated: [{ path: edit.path, what: row.what, op, ...(row.line === undefined || left === null ? {} : { line: row.line, ...left }) }] } });
+    // A granted write Drive refused while the run worked keeps its answer, since the answer's archive waits for it (TL-P2-20
+    // rule 7); one answered row says so, its sentence by the refusal (`materialize`), never as a thing set aside (TL-P4-19
+    // addendum 21). A clash asks again instead, and says nothing here.
+    for (const answer of edit.changes.flatMap((c) => (c.kind === 'state-rewrite' && c.granted ? [c.granted.answer] : []))) {
+      const questionId = journal.find((l) => l.rec.id === answer)?.rec.questionId;
+      if (questionId) reportPlan.push({ requires: [op], when: 'rejected', value: { ...empty(), answered: [{ questionId, kind: 'state', outcome: 'refused', why: stateNotWritten(displayName(nameOf(edit.path)), false), note: edit.path }] } });
+    }
   }
   // What a disagreement's answer derives (R4-1): its Timeline line, which the question's removal waits for.
   for (const [id, a] of answerLines) {

@@ -10,6 +10,8 @@ import type { EffectEvidence, Outcome, ReportRecord } from '../contracts/run-che
 import type { OperationV2 } from '../contracts/run-manifest';
 import type { RunReport } from '../types';
 import { KEEP_REFUSED } from '../contracts/note-edit';
+import { stateNotWritten } from '../contracts/questions';
+import { displayName, nameOf } from '../tree';
 import { savedWordsPile } from './duplicates';
 import type { AdmissionManifest } from './admission';
 import type { RunManifest } from './records';
@@ -79,7 +81,11 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
     if (c.value.yourChanges !== undefined) report.yourChanges = (report.yourChanges ?? 0) + c.value.yourChanges;
     if (c.value.rulesWorded !== undefined) report.rulesWorded = (report.rulesWorded ?? 0) + c.value.rulesWorded;
     if (c.value.alreadySaved?.length) report.alreadySaved = [...(report.alreadySaved ?? []), ...c.value.alreadySaved];
-    if (c.value.answered?.length) report.answered = [...(report.answered ?? []), ...c.value.answered];
+    // A granted write refused while the run worked says why by its refusal; a clash asks again and says nothing here.
+    const refusal = own?.state === 'rejected' && ops.get(own.operationId)?.effect.kind === 'edit-text' ? own.failure : null;
+    const answered = refusal === null ? c.value.answered ?? [] : refusal.code === 'conflict' ? []
+      : (c.value.answered ?? []).map((row) => ({ ...row, why: stateNotWritten(row.note === undefined ? null : displayName(nameOf(row.note)), refusal.code === 'auth' || refusal.code === 'not-found') }));
+    if (answered.length) report.answered = [...(report.answered ?? []), ...answered];
   }
   // No other change is said by leaving the count out (TL-P2-23): a claimed line may count 0.
   if (report.yourChanges === 0) delete report.yourChanges;

@@ -103,3 +103,11 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `dcb46f11` | c3-state-mark | none: red tests only (`runner/test/ask-answer-loop.test.ts`, `api/test/runner.test.ts`, `src/data/fake/write-it.test.ts`, `e2e/capabilities.spec.ts`) |
 | `abca07ea` | c3-state-mark | Additive runner wire (TL-P4-19 addendum 15): a `done` status report may carry `answersStayed: true` (a granted "Write it" not written); the Worker then arms the waiting-answers alarm. Only `true`, only with `done`, else 415. An older Worker ignores the key (the answer waits for the next tidy-up, as before); an older runner never sends it. Nothing stored changes shape (`ANSWERS_WAITING` keeps its fields). |
 | `107e2da1` | c3-state-mark | none: e2e test only (`e2e/capabilities.spec.ts`) |
+| `a7f7c938` | c3-state-mark | none: red tests only (`src/features/home/Home.test.tsx`, `src/data/fake/write-it.test.ts`, `e2e/capabilities.spec.ts`) |
+| `f3db5b5b` | c3-state-mark | Display only (TL-P4-19 addendum 17): Home's "Write it" card shows the question's stored `shown.lines` under "Bower's update". A question without `shown` (older) shows as before; nothing stored changes shape. |
+| `98787392` | c3-state-mark | none: red tests only (`src/data/contracts/note-edit.test.ts`, `runner/test/per-thing-ask.test.ts`) |
+| `d305b537` | c3-state-mark | Stricter on write (TL-P4-19 addendum 20): a Timeline news line ("New: ...") with no source is refused by note-edit and the reply check (`lineUncited`). Fake seed only: write-it adds the car renewal pile. Stored manifests with such a line no longer pass the guard (see notes, left open). |
+| `d147b321` | c3-state-mark | none: test fixture only (`runner/test/ask-answer-loop.test.ts`) |
+| `1d893137` | c3-state-mark | none: fake seed signature only (an optional keys map) |
+| `a802a1a2` | c3-state-mark | none: red tests only (`src/data/contracts/note-edit.test.ts`, `runner/test/ask-answer-loop.test.ts`) |
+| `54291695` | c3-state-mark | Lenient on read (TL-P4-19 addendum 22): a stored manifest with a sourceless news line parses again; writes and plans still refuse one. A non-clash refusal of a granted write (addendum 21) adds one answered row (`refused`, existing shape) and keeps the answer; nothing stored changes shape. |

@@ -230,6 +230,11 @@ test('write it shows the state written, re-asks on a clash and settles as an ans
   const asked = (text: string): Locator => questions.getByRole('listitem').filter({ hasText: text });
   // Write it: the update Bower showed is written into Money's Current state.
   const money = asked('You changed the current state of Money.');
+  // The card shows Bower's update, every line, under its own label, and passes axe (TL-P4-19 addendum 17).
+  const update = money.getByRole('list', { name: "Bower's update" });
+  await expect(update.getByRole('listitem')).toHaveText([MONEY_UPDATE, 'Receipts are filed by month, as your rule says.']);
+  const axe = await new AxeBuilder({ page }).include('section[aria-labelledby="qs"]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).options({ rules: { 'target-size': { enabled: true } } }).analyze();
+  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
   await money.getByRole('button', { name: 'Write it' }).click();
   await expect(money).toHaveCount(0);
   await page.getByRole('region', { name: 'Recent' }).getByRole('link', { name: /^Money/ }).click();

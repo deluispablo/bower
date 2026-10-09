@@ -175,7 +175,7 @@ async function tidyRun(opts: TidyOptions, timing: RunTiming, status: RunnerStatu
     const head = seen.chain?.at(-1);
     if (head?.phase === 'done') await seen.retain?.(head.phaseAt);
     // 5. Status, only after the report is read back; refused, it throws. A granted write that did not land says its
-    // answer stayed, so the Worker starts the run that asks again (TL-P4-19 addendum 15).
+    // answer stayed when a clash refused it, so the Worker starts the run that asks again (TL-P4-19 addenda 15, 16).
     await status.post('done', { ...totalOf(seen.total), ...(seen.answersStayed ? { answersStayed: true as const } : {}) });
     return end;
   }
@@ -201,7 +201,7 @@ interface Seen {
   saving: boolean;
   /** The admitted things (pile members; your changes are not things), on every report from `reading` (undefined until known). */
   total: number | undefined;
-  /** At done: a "Write it" the person granted was not written, so its answer stayed (`Finished.answersStayed`). */
+  /** At done: a "Write it" the person granted was refused by a clash, so its answer stayed (`Finished.answersStayed`). */
   answersStayed?: boolean;
   /**
    * At a terminal end (done, or failed for good), ended `at`: puts the oldest ended run folders beyond the newest 20 in

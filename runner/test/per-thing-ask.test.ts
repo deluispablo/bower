@@ -166,6 +166,7 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
       lineNote: edit((i, id) => ({ ...i, lines: [line(id, { note: 'Projects/None.md' })] })),
       lineText: edit((i, id) => ({ ...i, lines: [line(id, { text: 'one\ntwo' })] })),
       lineCites: edit((i, id) => ({ ...i, lines: [line(id, { cites: 'f-none' })] })),
+      lineUncited: edit((i) => ({ ...i, lines: [{ note: 'Projects/Job hunt/Job hunt.md', text: 'New: an offer from Ferrowick to answer.' }] })),
       noNote: edit((i) => (delete offer(i).note, i)),
       stateKeys: edit((i, id) => ({ ...i, states: [{ ...state(id), extra: 1 }] })),
       stateNote: edit((i, id) => ({ ...i, states: [{ ...state(id), note: 'Projects/None.md' }] })),
