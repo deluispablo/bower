@@ -48,6 +48,8 @@ export interface WireFile {
 
 /** The waits between tries, as a client takes them (`transport.ts`). */
 export type { Pacing };
+/** The one table's retry question, for the Worker's other outbound calls (it imports only this adapter, TL-P3-21). */
+export { askAgainNow };
 
 export interface DriveHttpOptions {
   /** The access token; `fresh` asks the Worker for a new one. */
