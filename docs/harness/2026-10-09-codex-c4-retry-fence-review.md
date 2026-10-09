@@ -7,3 +7,11 @@ Range baaa781b..22cff4b0 (worktree /private/tmp/bower-c4-retry), read-only, medi
 No second retry path found. `spine/barrier.ts:193` receives its transport fence through `RunnerDrive.fenced`.
 
 findings: 1
+
+## Fix-round pass (37f1c696..a4430287)
+
+PASS — `37f1c696..a4430287` fixes the prior finding: Undo Bin forwards its existing fresh still-as-seen check as the resend fence.
+
+No new Critical or Important findings in the delta. No second retry path added. Tests reviewed, not run.
+
+findings: 0

@@ -6237,7 +6237,8 @@
       "Each resendable refusal then a changed target: the resend is refused, Drive unchanged."
     ],
     "verify": "pnpm vitest run src/data/drive/drive-http.test.ts -t \"a resent write to an existing file runs its fence first|a passing fence still lands the resend|an unfenced write is sent once and fails as retry-kind|creates by reserved id are still resent after a rate limit\"",
-    "note": "TL-P4-24 finding 1 (a); defect transport-retry-skips-fence. Escalated + Codex review pass. Packet 2026-10-09-c4-retry-fence-packet.md. TL-P4-24 addendum 2: fence option; runs after c4-app-fence."
+    "note": "TL-P4-24 finding 1 (a); defect transport-retry-skips-fence. Escalated + Codex review pass. Packet 2026-10-09-c4-retry-fence-packet.md. TL-P4-24 addendum 2: fence option; runs after c4-app-fence. Red a6ea6210, fix 9d193972; fix round (journal.ts:509 fence) red de8a7c82, fix 6fafcc84. P4-55 BLOCK then P4-55b PASS; Codex 1 Important then 0.",
+    "review": "P4-55b PASS"
   },
   {
     "task": "p4-consolidation",

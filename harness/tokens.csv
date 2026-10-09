@@ -233,3 +233,7 @@ c4-undo-withdraw review,reviewer,codex,codex,medium,1,525776,523154,0,445056,262
 c4-undo-withdraw P4-56,reviewer,claude,bower-reviewer,,1,62115,,,,,,15,7.6,PASS (5 minor),2026-10-09
 d-v2-07,implementer,claude,bower-escalated,,1,173020,,,,,,30,20.5,delivered,2026-10-09
 c4-retry-fence round 2,implementer,claude,bower-escalated,,2,101068,,,,,,27,7.7,delivered,2026-10-09
+c4-retry-fence P4-55b,reviewer,claude,bower-reviewer,,2,38106,,,,,,8,0.4,PASS (4 minor),2026-10-09
+c4-retry-fence delta review,reviewer,codex,codex,medium,2,230623,229676,0,196480,947,,,,0 findings,2026-10-09
+d-v2-07 P4-58,reviewer,claude,bower-reviewer,,1,52179,,,,,,9,0.7,BLOCK (1 Important),2026-10-09
+d-v2-07 review,reviewer,codex,codex,medium,1,284842,282881,0,231936,1961,,,,5 Important,2026-10-09
