@@ -6324,8 +6324,9 @@
       "api pnpm audit is clean, or each remaining advisory is listed with its reason.",
       "api tests green; wrangler deploy --dry-run runs."
     ],
-    "verify": "",
-    "note": "TL-P4-22 addendum 19 (main 5944ce2d); defect api-dev-audit-advisories. Low priority. Mechanical rung or Codex, after c4-app-fence merges (both touch the lockfile). Packet 2026-10-09-c4-api-audit-packet.md; bower-mechanical (needs network)."
+    "verify": "pnpm -C api exec vitest run",
+    "note": "TL-P4-22 addendum 19 (main 5944ce2d); defect api-dev-audit-advisories. Low priority. Mechanical rung or Codex, after c4-app-fence merges (both touch the lockfile). Packet 2026-10-09-c4-api-audit-packet.md; bower-mechanical (needs network). Upgrade 2e29fd6c (wrangler 4.140.0, vitest-pool-workers 0.22.0 exact; overrides undici 7.29.1, sharp 0.35.4 in pnpm-workspace.yaml). Audit 12 to 1 (sharp librsvg, clears 2026-10-11). P4-59 PASS.",
+    "review": "P4-59 PASS"
   },
   {
     "id": "c4-create-landed",
