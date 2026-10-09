@@ -6237,7 +6237,8 @@
       "Each resendable refusal then a changed target: the resend is refused, Drive unchanged."
     ],
     "verify": "pnpm vitest run src/data/drive/drive-http.test.ts -t \"a resent write to an existing file runs its fence first|a passing fence still lands the resend|an unfenced write is sent once and fails as retry-kind|creates by reserved id are still resent after a rate limit\"",
-    "note": "TL-P4-24 finding 1 (a); defect transport-retry-skips-fence. Escalated + Codex review pass. Packet 2026-10-09-c4-retry-fence-packet.md. TL-P4-24 addendum 2: fence option; runs after c4-app-fence."
+    "note": "TL-P4-24 finding 1 (a); defect transport-retry-skips-fence. Escalated + Codex review pass. Packet 2026-10-09-c4-retry-fence-packet.md. TL-P4-24 addendum 2: fence option; runs after c4-app-fence. Red a6ea6210, fix 9d193972; fix round (journal.ts:509 fence) red de8a7c82, fix 6fafcc84. P4-55 BLOCK then P4-55b PASS; Codex 1 Important then 0.",
+    "review": "P4-55b PASS"
   },
   {
     "task": "p4-consolidation",
@@ -6344,13 +6345,15 @@
     "id": "v2-still-marks",
     "task": "p4-consolidation",
     "category": "ui",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "d-v2-13 CSS part: the running tidy-up live dot and current step are still (no pulse); dead CSS (.skeleton shimmer, .rbBusy, unused tidy props) goes. No strings change; the loading copy goes with c4-resource.",
     "steps": [
       "getAnimations() is empty on the live dot and the current step mark while a tidy-up runs."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/v2-still-marks.spec.ts -g \"nothing pulses in the running tidy-up\"",
-    "note": "TL-P4-21 order 8; spec d-v2-13 (CSS part); impact block d-v2-13 split. Codex slot (TL-P4-23); fresh Claude reviewer. Designer signed off at 6df210b0. Packet 2026-10-09-d-v2-13-css-packet.md. implementer: codex."
+    "note": "TL-P4-21 order 8; spec d-v2-13 (CSS part); impact block d-v2-13 split. Codex slot (TL-P4-23); fresh Claude reviewer. Designer signed off at 6df210b0. Packet 2026-10-09-d-v2-13-css-packet.md. implementer: codex. Red c5ca3e44, fix 0be6c48d. P4-57 PASS (3 minors). Designer verified at 3f073a43.",
+    "review": "P4-57 PASS",
+    "design": "verified"
   }
 ]

@@ -49,6 +49,21 @@ export interface BinnedItem {
   sha256: string | null;
 }
 
+/**
+ * A write's still-as-seen fence (`contracts/still-as-seen.ts`), for the transport to run again right before it sends a
+ * write to an existing file once more (a rate limit, a refreshed token): resolves while the file is as the caller read
+ * it, throws the caller's own refusal otherwise (TL-P4-24 finding 1). Never run before the first send.
+ */
+export type Fence = () => Promise<void>;
+
+/**
+ * How a write to an existing file may be sent again. With `fence`, after an answer that says it did not land, once
+ * the fence passes; with none, it is sent once, and that answer fails as `retry` for its caller's next try.
+ */
+export interface WriteOptions {
+  fence?: Fence;
+}
+
 export interface DriveApi extends ResumableDrive {
   /** Every file and folder under `rootId`, at any depth, not in the Bin. */
   listAll(rootId: string): Promise<DriveFile[]>;
@@ -61,13 +76,13 @@ export interface DriveApi extends ResumableDrive {
   createFolder(parentId: string, name: string, appProperties?: Record<string, string>, id?: string): Promise<DriveFile>;
   createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>, id?: string): Promise<DriveFile>;
   /** Writes only if the file still has `ifModified`; otherwise rejects `conflict`. `appProperties` go in the same request. */
-  writeText(id: string, text: string, ifModified: string, appProperties?: Record<string, string>): Promise<DriveFile>;
+  writeText(id: string, text: string, ifModified: string, appProperties?: Record<string, string>, opts?: WriteOptions): Promise<DriveFile>;
   /** Renames, moves, or sets appProperties (a null value removes one). */
-  update(id: string, patch: DrivePatch): Promise<DriveFile>;
+  update(id: string, patch: DrivePatch, opts?: WriteOptions): Promise<DriveFile>;
   /** To Drive's Bin; the app never deletes for good. */
-  trash(id: string, appProperties?: Record<string, string>): Promise<DriveFile>;
+  trash(id: string, appProperties?: Record<string, string>, opts?: WriteOptions): Promise<DriveFile>;
   /** Out of the Bin; with `name`, under that name in the same `files.update` (one write, so one stamp). */
-  untrash(id: string, appProperties?: Record<string, string>, name?: string): Promise<DriveFile>;
+  untrash(id: string, appProperties?: Record<string, string>, name?: string, opts?: WriteOptions): Promise<DriveFile>;
   /**
    * Files under `rootId` whose name or text has every word of `query` (Drive's `fullText contains`: whole words, any
    * order, case-insensitive), at most `SEARCH_MAX_PAGES` pages of `SEARCH_PAGE_SIZE` for each batch of `SEARCH_FOLDERS`

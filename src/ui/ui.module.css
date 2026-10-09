@@ -153,8 +153,6 @@
 .rowTitle { display: block; color: var(--heading); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rowSub { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-muted); }
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: none; }
-.skeleton { border-radius: 8px; background: linear-gradient(90deg, var(--surface) 0%, var(--surface-strong) 50%, var(--surface) 100%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
-@keyframes shimmer { to { background-position: -200% 0; } }
 .sheet:focus, .sheet:focus-visible { outline: none; }
 
 /* fields and switches: the one home for how a control you type in or toggle draws its edge (d-v2-08, WCAG 1.4.11) */

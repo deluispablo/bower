@@ -59,10 +59,11 @@ import { requireLease } from './session-lease.js';
 import { FOLDER_TEMPLATE, PLACEHOLDER_FILE } from '../../src/data/contracts/folder-template.js';
 import type { FolderTemplateFile } from '../../src/data/contracts/folder-template.js';
 import { OLD_RULES_TEMPLATE, RULES_TEMPLATE } from '../../src/data/contracts/rules-format.js';
-import { DriveHttp, FOLDER, quote, toFile, type WireFile } from '../../src/data/drive/drive-http.js';
-import type { DriveFile } from '../../src/data/drive/drive-api.js';
+import { DriveHttp, FOLDER, isNoAnswer, quote, toFile, type WireFile } from '../../src/data/drive/drive-http.js';
+import { DRIVE_MESSAGES, type DriveFile } from '../../src/data/drive/drive-api.js';
+import { checkStillAsSeen } from '../../src/data/contracts/still-as-seen.js';
 import { BowerError } from '../../src/data/types.js';
-import { heldAs, makeFolder, makeOnce, makeText, reserveFor, updateByStamp, type Holder } from '../../src/data/spine/write-once.js';
+import { byId, heldAs, makeFolder, makeOnce, makeText, reserveFor, updateByStamp, type Holder } from '../../src/data/spine/write-once.js';
 
 /** The marker every Bower folder carries in `appProperties` (private to this OAuth client). */
 export const FOLDER_MARKER = { bowerFolder: '1' } as const;
@@ -172,10 +173,14 @@ function vaultDrive(env: Env, sub: string, fetchImpl: FetchLike, pacing?: Partia
     /**
      * New text and app properties for one file as it was read (`seen`), sent once with its stamp and read back by it
      * when its answer is lost (`write-once.ts`). Drive v3 has no conditional write: the transport reads the file's
-     * modifiedTime again right before the write, and a change since refuses it (`conflict`).
+     * modifiedTime again right before the write, and a change since refuses it (`conflict`). A resend after a rate
+     * limit or a refreshed token reads it again first (`checkStillAsSeen`, TL-P4-24 finding 1).
      */
-    replaceText: (seen: DriveFile, content: string, appProperties: Record<string, string>): Promise<DriveFile> =>
-      updateByStamp(http, seen, { text: content }, (op) => http.writeText(seen.id, content, seen.modifiedTime, { ...appProperties, ...op })),
+    replaceText: (seen: DriveFile, content: string, appProperties: Record<string, string>): Promise<DriveFile> => {
+      const fence = async (): Promise<void> =>
+        void (await checkStillAsSeen({ id: seen.id, name: seen.name, parents: seen.parents, modifiedTime: seen.modifiedTime }, () => byId(http, seen.id), DRIVE_MESSAGES.conflict, { unanswered: isNoAnswer }));
+      return updateByStamp(http, seen, { text: content }, (op) => http.writeText(seen.id, content, seen.modifiedTime, { ...appProperties, ...op }, { fence }));
+    },
   };
 }
 

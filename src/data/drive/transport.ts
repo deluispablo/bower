@@ -12,6 +12,9 @@
  *   question, a status report keyed by attempt and seq) is sent again after a network error or a stall. Writes never
  *   are: a write whose answer is lost is read back by its caller instead, and only the caller's `again` may send a
  *   write again, for an answer that says it did not land (a rate limit), never for a 5xx that may have landed.
+ * - **A resend runs the caller's fence first** (`beforeResend`, TL-P4-24 finding 1): a write to a file that exists
+ *   is checked still as seen right before every resend, never before the first send (that check is the caller's).
+ *   Its refusal ends the request as it is, with nothing sent again.
  * - **Answers worth asking again** (the caller's `again`: 429, Google's 5xx, a 403 rate limit) wait and ask again, as
  *   Drive's "Resolve errors" guide says (https://developers.google.com/workspace/drive/api/guides/handle-errors,
  *   "Exponential backoff"), and as Google Cloud's retry strategy (https://cloud.google.com/storage/docs/retry-strategy).
@@ -66,6 +69,11 @@ export interface SendOptions {
    * not sent again; the person's connection coming back is what flushes their queue.
    */
   knownOffline?: boolean;
+  /**
+   * Awaited right before each resend, never before the first send: the caller's still-as-seen fence for a write to a
+   * file that exists. If it throws, the request ends with its error and nothing is sent again.
+   */
+  beforeResend?: () => Promise<void>;
 }
 
 /** Waits `ms`, or rejects with the caller's abort reason as soon as `signal` aborts (as `fetch` does). */
@@ -106,6 +114,8 @@ export async function send(fetchFn: Fetch, url: string, given: RequestInit, opts
   // The read budget bounds idempotent requests only; a write's sends are each bounded by its size.
   const budget = opts.idempotent ? BUDGET_MS : Infinity;
   for (let n = 0; ; n++) {
+    // Outside the send's own catch: a fence's refusal is the caller's error, never a network error to send again on.
+    if (n > 0) await opts.beforeResend?.();
     const left = budget - (Date.now() - started);
     let res: Response;
     try {

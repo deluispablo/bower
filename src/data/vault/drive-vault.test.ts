@@ -13,7 +13,7 @@ import { SET_ASIDE_TEXT } from '../pile-readiness';
 import { FakeRunService } from '../fake/fake-run-service';
 import { parsePileDeclaration } from '../contracts/pile-declaration';
 import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
-import { driveError, driveFailure, unconfirmedWriteError, UNCONFIRMED_WRITE_MESSAGE, type DriveFile } from '../drive/drive-api';
+import { driveError, driveFailure, unconfirmedWriteError, UNCONFIRMED_WRITE_MESSAGE, type DriveFile, type DrivePatch, type WriteOptions } from '../drive/drive-api';
 import { IDBFactory } from 'fake-indexeddb';
 import { createUploadQueue, type StorageLike, type UploadQueue } from '../upload-queue';
 import { indexedDbUploadStore, memoryUploadStore } from '../upload-store';
@@ -3821,4 +3821,104 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
     );
     expect(met.size).toBe(132);
   }, 60_000);
+});
+
+/**
+ * c4-retry-fence (TL-P4-24 finding 1): the app's move and rename through the Drive transport, answered 429 once while the
+ * file changes elsewhere. The resend runs the app's fence again first; a change it finds sends nothing more.
+ */
+describe('a write resent after a rate limit', () => {
+  const TART = 'Resources/Cooking/Lemon tart.md';
+  const pacing = { baseMs: 0, sleep: async (): Promise<void> => undefined };
+  /** `drive.update` goes over the real transport to a pretend Drive v3 that keeps `drive`; its first PATCH gets 429. */
+  function rateLimitedOnce(elsewhere: (id: string, store: FakeDrive['update']) => Promise<void>): { patches: () => number } {
+    const store = drive.update.bind(drive);
+    let patches = 0;
+    const http = new DriveHttp({
+      token: async () => 'token',
+      pacing,
+      fetch: async (url, init) => {
+        const u = new URL(url);
+        const id = decodeURIComponent(u.pathname.split('/').pop() ?? '');
+        if (++patches === 1) {
+          await elsewhere(id, store);
+          return new Response(JSON.stringify({ error: { code: 429, message: 'Slow down.', errors: [] } }), { status: 429 });
+        }
+        const body = JSON.parse(String(init?.body)) as { name?: string; appProperties?: Record<string, string> };
+        const add = u.searchParams.get('addParents');
+        const remove = u.searchParams.get('removeParents');
+        const f = await store(id, { ...(body.name ? { name: body.name } : {}), ...(body.appProperties ? { appProperties: body.appProperties } : {}), ...(add ? { addParent: add } : {}), ...(remove ? { removeParent: remove } : {}) });
+        return new Response(JSON.stringify({ ...f, mimeType: f.folder ? 'application/vnd.google-apps.folder' : 'text/markdown' }), { status: 200 });
+      },
+    });
+    // The vault's port takes the write's options; the pretend Drive's own `update` has none to take.
+    Object.assign(drive, { update: (id: string, patch: DrivePatch, opts?: WriteOptions) => http.update(id, patch, opts) });
+    return { patches: () => patches };
+  }
+
+  it('a move answered 429 while the file was renamed elsewhere is not sent again', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await vault.tree();
+    const id = await idOf(TART);
+    const sent = rateLimitedOnce(async (at, store) => void (await store(at, { name: 'Lemon tart (Alex).md' })));
+    const e = await vault.move(TART, 'Areas').catch((x: unknown) => x);
+    expect(notAsSeenReason(e)).toBe('name');
+    expect(sent.patches()).toBe(1);
+        expect(drive.pathOf(id, root)).toBe('Resources/Cooking/Lemon tart (Alex).md');
+    expect((await vault.changes()).some((r) => r.kind === 'move')).toBe(false);
+  });
+
+  it('a rename answered 429 while the file was moved elsewhere is not sent again', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await vault.tree();
+    const id = await idOf(TART);
+    const areas = await idOf('Areas');
+    const sent = rateLimitedOnce(async (at, store) => {
+      const f = await drive.get(at);
+      await store(at, { addParent: areas, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}) });
+    });
+    const e = await vault.rename(TART, 'Lemon cake').catch((x: unknown) => x);
+    expect(notAsSeenReason(e)).toBe('parents');
+    expect(sent.patches()).toBe(1);
+    expect(drive.pathOf(id, root)).toBe('Areas/Lemon tart.md');
+    expect((await vault.changes()).some((r) => r.kind === 'rename')).toBe(false);
+  });
+
+  it('a move answered 429 with nothing changed lands on the resend', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await vault.tree();
+    const id = await idOf(TART);
+    const sent = rateLimitedOnce(async () => undefined);
+    await expect(vault.move(TART, 'Areas')).resolves.toBe('Areas/Lemon tart.md');
+    expect(sent.patches()).toBe(2);
+    expect(drive.pathOf(id, root)).toBe('Areas/Lemon tart.md');
+  });
+
+  it('a restore whose journal PATCH gets a 429 still finishes', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await vault.tree();
+    const id = await idOf(TART);
+    await vault.trash(TART);
+    await vault.flushJournal();
+    expect((await vault.changes()).some((r) => r.kind === 'trash')).toBe(true);
+    // The journal record's Bin (a `files.update` PATCH) goes over the real transport; its first try gets 429.
+    const store = drive.trash.bind(drive);
+    let patches = 0;
+    const http = new DriveHttp({
+      token: async () => 'token',
+      pacing,
+      fetch: async (url, init) => {
+        const at = decodeURIComponent(new URL(url).pathname.split('/').pop() ?? '');
+        if (++patches === 1) return new Response(JSON.stringify({ error: { code: 429, message: 'Slow down.', errors: [] } }), { status: 429 });
+        const body = JSON.parse(String(init?.body)) as { appProperties?: Record<string, string> };
+        const f = await store(at, body.appProperties);
+        return new Response(JSON.stringify({ ...f, mimeType: 'application/json' }), { status: 200 });
+      },
+    });
+    Object.assign(drive, { trash: (at: string, appProperties?: Record<string, string>, opts?: WriteOptions) => http.trash(at, appProperties, opts) });
+    await expect(vault.restore(TART)).resolves.toBeUndefined();
+    expect(patches).toBe(2);
+    expect(drive.pathOf(id, root)).toBe(TART);
+    expect((await vault.changes()).some((r) => r.kind === 'trash')).toBe(false);
+  });
 });
