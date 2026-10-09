@@ -6224,8 +6224,9 @@
       "Focus turns the gaze.",
       "60 s idle sleeps; input wakes with a startle."
     ],
-    "verify": "pnpm vitest run src/bird -t \"the perched Bower follows the pointer|a focused control turns the gaze|after 60 s with no input the bird sleeps|with reduced motion or moves off no transform changes over 5 s|preen and snap never run while input is recent|the run chip bird only blinks|a sleeping bird does not blink|Bower is aria-hidden and out of the tab order\"",
-    "note": "TL-P4-21 order 4 (Opus, after v2-perched-bower). Contract sign-off trial and designer sign-off before dispatch. Packet 2026-10-09-d-v2-07-packet.md."
+    "verify": "pnpm vitest run src/bird -t \"the perched Bower follows the pointer|a focused control turns the gaze|after 60 s with no input the bird sleeps|with reduced motion or moves off no transform changes over 5 s|preen and snap never run while input is recent|the run chip bird keeps its still frame|a sleeping bird does not blink|Bower is aria-hidden and out of the tab order\"",
+    "note": "TL-P4-21 order 4 (Opus, after v2-perched-bower). Contract sign-off trial and designer sign-off before dispatch. Packet 2026-10-09-d-v2-07-packet.md. Red e3fbbfc8, fix 08f344c1; round 2 red edeb7e2f, fix fbd1c431; round 3 red 1371da20, fix 5c2529ea. P4-58 BLOCK, 58b PASS, 58c PASS; Codex 5, 2, then 0.",
+    "review": "P4-58c PASS"
   },
   {
     "task": "p4-consolidation",

@@ -21,3 +21,12 @@ findings: 5
 2. **Important — `src/bird/engine.ts:1103`** — Prior finding 5 remains unfixed in working poses. Focus a control beside a write-pose Bower, then blur or remove it. The getter correctly returns null, but `gaze()` returns without resetting the iris targets; working poses never call `rest()`. Reproduced: iris stayed at `translate(1.15 1.06)` five engine seconds after blur. **Mechanism home violated:** `useBirdEngine`’s look source and engine gaze channel; addendum 2(5) permits focus gaze only while focus stays on the control.
 
 findings: 2
+
+## Round 3 pass (504e6cbd..691dfc43)
+
+verdict: PASS
+range: 504e6cbd..691dfc43
+prior findings: Both fix-round findings and all five original findings are fixed by code inspection.
+second way: No new loop, timer, input listener system or tap queue.
+validation: Read-only inspection; tests not run.
+findings: 0
