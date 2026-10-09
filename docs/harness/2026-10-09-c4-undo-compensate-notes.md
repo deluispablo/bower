@@ -1,0 +1,110 @@
+# c4-undo-compensate notes
+
+Entry `c4-undo-compensate` (TL-P4-27 addenda 2 to 5). Worktree `/private/tmp/bower-c4-compensate`.
+
+## Commits
+
+- `1d70a38f` kept files from c4-undo-withdraw (70a2b0da) by path, never cherry-picked.
+- `8d714c20` red (mine). `9c68e81c` red, the Codex model property (cherry-pick of 5edef77f, unchanged).
+- `1b82b559` fix. This file and the compatibility rows: the notes commit.
+- Merges of claude/p3: `727a363a`, `4ecea118` (c4-lockf; lock at /tmp/bower-heavy.lockf).
+
+## Kept from the parked branch, by path
+
+- `src/ui/toast.tsx`, `src/ui/toast.test.ts`: toast `replace` and `press`.
+- `src/ui/report.ts`: `undoToast` (then given the offline branch in the fix).
+- `src/features/piles/PileScreen.tsx`, `piles.module.css`: the removePile box and "Not removed yet" copy.
+- `src/features/files/file-actions.ts`, `src/features/bower/BowerScreen.tsx`, `src/features/home/Home.tsx`: their Undos through undoToast.
+- `src/data/spine/write-once.ts`: `withdraw`, `alone`, `Intended.withdraw`; `src/data/vault/drive-vault.ts`: `withdrawPile` (Sending, uploads, removePile).
+- `src/data/contracts/types.ts` (ErrorCode `unreached`), `src/data/drive/drive-api.ts` (`DRIVE_MESSAGES.unreached`),
+  `src/data/worker/worker-http.ts` (its sentence row), `src/data/choose.ts` and `src/data/demo/scenario.ts` (`withdraw-unreached`).
+- Tests: `src/data/spine/write-once.test.ts` without the journal-keeper and confirmed-line describes;
+  `src/data/vault/drive-vault.test.ts` only the upload withdraw `it.each`.
+- Left on the parked branch: `confirmed`, `arrived`, `archivedByRun`, `listedNow`, `outboxWaits`, `bower:sent-lines`,
+  the journal "Not undone yet" path, `live/index.ts`, `session.test.ts`, `live.test.ts`, `bfcache`/`qa27` e2e edits.
+- write-once `Keeps` and `hold`: knip (check-unused-gate) does not flag them, so they stay (`withdrawPile` uses `Keeps`).
+
+## Design as built
+
+- `Journal.retract(id): Promise<'dropped' | 'sent'>` under serial + the outbox lock. Dropped: in the outbox with no
+  reserved id, or on the failed list. Else 'sent'. A failed keep throws "Bower could not take that change back; keep
+  this page open." `Journal.remove` is deleted.
+- Seven callers: move Undo (:331) inverse with `undoes`; rename (:350) combined line on 'dropped', rename line else;
+  trash (:434) nothing on 'dropped', trash line else; restore (:469) a `move` line `Put back <name>` with `path` and
+  `from` both where it came back, `fileId`, `undoes`; removeRule pending (:1313) "Removed the rule" with `undoes` of the
+  add on 'sent'; removeRule's Undo (:1322) "New rule" with `text` = the worded text and `undoes`; dismissSuggestion's
+  Undo (:1402) "Removed the rule" with `undoes`. The folding sites log a failed retract and record their forward line.
+- Choice beyond the letter: :1313 carries `undoes` (taking a pending rule out is its inverse), so "removing a waiting
+  rule leaves no line in your changes" still holds, and the Codex property expects exactly that.
+- FIFO: `sendWaiting` stops at the first line neither sent nor refused and returns each outcome; `record()` keeps its
+  line behind a waiting one (`later`); the kept retry is sent inside `sendWaiting` under the lock. An inverse awaits its
+  original's fast-path send (`flying`, per page).
+- `pairsOf(lines): Set<string>` in contracts/journal-record.ts: ids of every line whose `undoes` is in the set, and
+  that line. Used by `changes()` and the planner's report plan (a pair gives `yourChanges: 0`, no rulesWorded).
+- `ruleSequence` in contracts/note-edit.ts: the one home for rule order, used by `wordRules`, the planner's `wordedBy`
+  and `rules()`. A missing Rules.md keeps the removals in the sequence.
+- `renamesFor` drops a rename to the name a note has again (move and move back).
+- Restore with no answer from Drive (the write or its fence read) is raised as `offline`; undoToast then says
+  "Not undone yet: Bower could not reach Drive. Try again when you are back online." with Try again.
+- Mechanism map row added in docs/ARCHITECTURE.md.
+
+## Reds and their findings
+
+- round 1 #1: `undo-compensate.test.ts` "the removal undone while another page reserves its id …" (red: timeout at p3).
+- round 1 #2: the kept test in `spine/write-once.test.ts` "a pile removed while its link create is in flight never
+  leaves a live file" (red at claude/p3 on the parked branch; already green from commit 1).
+- addenda 13-14 #3: "drops the refused line and records nothing" (guard: passes at p3, which did nothing either).
+- addenda 13-14 #4: move form and Bin form (guards; the Bin form accepts "no longer in the Bin").
+- rules: "a suggestion kept as a rule online, then Undo", "a rule added online, then taken out" (red at p3: nothing to
+  read), "an Undo of a rule removal that a tidy-up already took …" (red: changed somewhere else).
+- pairs: "pairsOf hides a pair in Since the last tidy-up", "a same-run pair gives no report row and a count of 0",
+  "a same-run rule pair …" (red); "a later inverse gives one ordinary row" (red at p3: the tidy-up refused).
+- FIFO: "a change made while an earlier line waits stays behind it" (red).
+- note-edit: line-order add then removal (red), removal then add again (guard), old manifest fixture (guard), move and
+  move back rename no link (red). journal-record: old-reader fixture (guard), non-string `undoes` refused (red).
+- ui: `undo-toast.test.ts` offline Undo (red).
+- n/a by construction: round 2 #1-3, round 3 #1-2, addenda 13-14 #1, #2, #5: their structures (sent-lines,
+  `confirmed`, `archivedByRun`, listing decisions) do not exist; an Undo never reads or bins a Drive journal file.
+
+## Codex model property (TL-P4-28 ruling 2): fails, for the lead
+
+- Seed 427285, path "4": the oracle expects rule "Keep category 22" present, Drive has its inverse removal.
+- Cause: the Undo's inverse `record()` met a `permission` wait, so record kept the line and threw its existing wait
+  sentence ("… will send it later"). The property counts a thrown Undo as unresolved; the kept line is then sent at
+  the final flush, as addendum 4 (5) says a `waits` line is ("blocks … until the person acts").
+- Check: a local copy that marks such an Undo resolved when its message says the line is kept passes 30 runs at the
+  seed and 150 random runs. No other failure class seen. The property file is unchanged; the lead rules.
+
+## Tests changed
+
+tests changed: src/data/vault/journal.test.ts: "remove puts only that file in the Bin" became two retract tests (sent stays, unsent drops); `remove` is deleted (addendum 4 (3)).
+tests changed: src/data/vault/journal.test.ts: "taking a change back whose Bin answer was lost …" deleted: the client never bins a journal line now.
+tests changed: src/data/vault/journal.test.ts: the c4-retry-fence describe (journal Undo after a 429, two tests) deleted: same reason.
+tests changed: src/data/vault/journal.test.ts: full Drive test: a rule recorded behind a waiting line now resolves as later (FIFO, addendum 4 (5)) instead of throwing the full-Drive sentence.
+tests changed: src/data/vault/drive-vault.test.ts: app-fence row "journal Undo of a change whose line moved elsewhere" deleted (no journal Bin).
+tests changed: src/data/vault/drive-vault.test.ts: "an Undo whose Bin landed but lost its answer …" and "a restore retried after an outside Bin …" deleted: their trigger was the journal line's Bin.
+tests changed: src/data/vault/drive-vault.test.ts: answer-lost property loses kind 'undo' (journal Bin), met 132 -> 120 (12 cases of that kind).
+tests changed: src/data/vault/drive-vault.test.ts: "a restore whose journal PATCH gets a 429 still finishes" deleted: a restore sends no journal PATCH.
+tests changed: src/data/vault/drive-vault.test.ts: added the kept upload withdraw it.each from the parked branch.
+tests changed: src/data/contract/vault-contract.ts: "undo of a move removes its entry" renamed "undo of a move or a Bin shows no entry for either" (pairs hidden, not removed).
+tests changed: src/data/contract/vault-contract.ts: "one line for a new thing named straight away" and "made and binned straight away leaves no trace" accept the kept history when the making was already sent (create then rename / create then trash).
+tests changed: src/data/live/live.test.ts: after restore the outbox is empty and the rule line arrived once: the inverse line sends the waiting line first, in order.
+tests changed: src/data/spine/write-once.test.ts: kept from the parked branch without its journal-keeper and confirmed-line describes.
+tests changed: src/ui/toast.test.ts: kept from the parked branch (toast replace and press).
+tests changed: src/data/contracts/note-edit.test.ts: my own red "an add and its later removal" asserted ok with one rule; applyChanges answers `unchanged` for an edit that writes nothing, so it asserts that refusal (Rules.md untouched); not looser.
+tests changed: src/data/vault/undo-compensate.test.ts: my own red: typing of the generateIds stub only; round 1 #2 moved to the kept write-once test.
+tests changed: src/ui/undo-toast.test.ts: my own red: typing of the mock only.
+
+## Gates
+
+- Unit: all green except the Codex property (above). Runner tests green: drive-calls golden 78 and 25-runs 88 unchanged.
+- e2e fake, phone and desktop, with axe: c4-undo-compensate, v2-dock, qa8, qa5, journal-failed, bfcache, qa27, app,
+  capabilities, qa26, home-errors: 140 passed, 26 skipped (/tmp/compensate-e2e-touched.log).
+- Seen with the pretend Drive only: a `page.goto` right after an Undo can reload before the pretend Drive's debounced
+  save, so the e2e goes Home through the app's own link.
+
+## Sources
+
+- Event sourcing, compensating actions: https://learn.microsoft.com/en-us/azure/architecture/patterns/compensating-transaction
+- Web Locks API: https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API
+- fast-check model-based testing: https://fast-check.dev/docs/advanced/model-based-testing/
