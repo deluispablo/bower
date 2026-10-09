@@ -127,8 +127,8 @@ describe("a run folder carries Bower's mark (retention round 5)", () => {
     await new RunRecords(http, root).put(http, { runId: 'run-marked' }, manifestName('a'.repeat(64)), '{}');
     const run = (await drive.listAll(root)).find((f) => f.folder && f.name === 'run-marked');
     expect(run?.appProperties).toEqual({ [PROP.run]: 'run-marked' });
-    // The mark rides on the folder's one create: no other request names it, and nothing but creates is written.
-    const creates = sent.filter((r) => r.method === 'POST' && r.body.includes('"run-marked"'));
+    // The mark rides on the folder's one create: no other request makes it, and nothing but creates is written.
+    const creates = sent.filter((r) => r.method === 'POST' && r.body.includes('"name":"run-marked"'));
     expect(creates).toHaveLength(1);
     expect(JSON.parse(creates[0]?.body ?? '{}')).toMatchObject({ name: 'run-marked', appProperties: { [PROP.run]: 'run-marked' } });
     expect(sent.filter((r) => r.method !== 'GET' && r.method !== 'POST')).toEqual([]);

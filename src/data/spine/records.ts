@@ -161,7 +161,8 @@ export class RunRecords {
     if (stored) return;
     const parent = await this.ensure(w, where, found);
     this.placed.set(this.placeOf(where), parent);
-    await makeText(w, this.reads, { parent, name, ...(stamp ? { props: stamp } : {}) }, text);
+    const props = markOf(where, stamp);
+    await makeText(w, this.reads, { parent, name, ...(props ? { props } : {}) }, text);
   }
 
   /**
@@ -173,7 +174,8 @@ export class RunRecords {
     const parent = this.placed.get(this.placeOf(where));
     if (!parent) return this.put(w, where, name, text);
     try {
-      await makeText(w, this.reads, { parent, name }, text);
+      const props = markOf(where);
+      await makeText(w, this.reads, { parent, name, ...(props ? { props } : {}) }, text);
     } catch (e) {
       // The next write looks for its folder again.
       this.placed.delete(this.placeOf(where));
@@ -287,6 +289,14 @@ export class RunRecords {
     const space = ns[0]?.id ?? (await makeFolder(w, this.reads, { parent: sys, name: where === 'piles' ? PILES_NAME : RUNS_NAME })).id;
     return where === 'piles' ? space : (await makeFolder(w, this.reads, { parent: space, name: where.runId, props: { [PROP.run]: where.runId } })).id;
   }
+}
+
+/**
+ * What a record's create carries: in a run's folder, that run's mark (`bowerRun`, its run id), riding on the create, so
+ * retention bins a run folder only when everything inside is Bower's own record of that run (retention round 6).
+ */
+function markOf(where: Where, stamp?: Record<string, string>): Record<string, string> | undefined {
+  return where === 'piles' ? stamp : { ...stamp, [PROP.run]: where.runId };
 }
 
 function broken(why: string): Found {

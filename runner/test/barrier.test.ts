@@ -607,11 +607,13 @@ describe('the run folders a run keeps', () => {
     const end = await tidy(wire, root, 1, effects, writes, isView);
 
     expect(end.phase).toBe('failed');
-    // After the refused report write, retention picks from the run's own listing: no folder is listed again.
+    // After the refused report write, retention picks from the run's own listing: no folder is listed again but the one
+    // it bins, whose children it reads to see they are all its run's (retention round 6).
     const refused = writes.find((w) => isView(w.call));
     if (!refused) throw new Error('no report write');
     const lists = wire.requests.slice(refused.at).filter((r) => r.method === 'GET' && r.url.pathname === '/drive/v3/files');
-    expect(lists).toEqual([]);
+    const binned = earlier.get('run-00')?.id ?? '';
+    expect(lists.map((r) => r.url.searchParams.get('q')).filter((q) => !q?.startsWith(`'${binned}' in parents`))).toEqual([]);
     expect((await runFolders(wire.drive, root)).get(RUN_ID)?.appProperties).toMatchObject({ bowerRun: RUN_ID, bowerRunEnded: String(AT + 1000) });
     expect((await wire.drive.evidence(earlier.get('run-00')?.id ?? ''))?.trashed).toBe(true);
   });

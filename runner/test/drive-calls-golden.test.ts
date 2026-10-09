@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { DRIVE_MS, modelled, type Call } from './modelled';
-import { finishedBefore } from './earlier-runs';
+import { finishedBefore, runFolders } from './earlier-runs';
+import type { FakeDrive } from '../../src/data/drive/fake-drive';
 
 interface PhaseCount {
   name: string;
@@ -144,13 +145,34 @@ describe('drive-calls-cut', () => {
 const driveCalls = (calls: Call[]): number => calls.filter((c) => c.kind === 'read' || c.kind === 'write').length;
 
 describe('the C04 run past 20 earlier runs (retention-never-wired, round 2)', () => {
-  it('with 25 earlier runs a run makes 85 Drive calls', async () => {
+  it('with 25 earlier runs a run makes 88 Drive calls', async () => {
     const c04 = await modelled();
     const past = await modelled(async (drive, root) => {
       await finishedBefore(drive, root, 25);
     });
     expect(past.code).toBe(0);
     console.log(`Drive calls: C04 ${driveCalls(c04.calls)}, with 25 earlier runs ${driveCalls(past.calls)}`);
-    expect(driveCalls(past.calls)).toBe(85);
+    // +3: the children of the 3 run folders it bins are listed first (retention round 6, option A).
+    expect(driveCalls(past.calls)).toBe(88);
+  });
+});
+
+describe('run records carry their run mark (retention round 6)', () => {
+  it('every record Bower writes in a run folder carries its run mark', async () => {
+    let seen: { drive: FakeDrive; root: string } | null = null;
+    const run = await modelled(async (drive, root) => {
+      seen = { drive, root };
+    });
+    expect(run.code).toBe(0);
+    if (!seen) throw new Error('no drive');
+    const { drive, root } = seen as { drive: FakeDrive; root: string };
+    const folders = await runFolders(drive, root);
+    expect(folders.size).toBe(1);
+    const [runId, folder] = [...folders][0] ?? ['', null];
+    if (!folder) throw new Error('no run folder');
+    const inside = (await drive.listAll(root)).filter((f) => f.parents.includes(folder.id));
+    // The manifest, its checkpoints, the report and dispositions.json at least.
+    expect(inside.length).toBeGreaterThanOrEqual(4);
+    expect(inside.filter((f) => f.appProperties?.bowerRun !== runId).map((f) => f.name)).toEqual([]);
   });
 });
