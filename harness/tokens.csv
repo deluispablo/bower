@@ -315,3 +315,7 @@ p4-corpus-driver,reviewer,claude,bower-reviewer,,1,61849,,,,,,13,0.8,PASS (P4-64
 c4-undo-compensate,adversarial,codex,gpt-5-codex,medium,1,1457138,1449580,,1350784,7558,,,,4 Important,2026-10-09
 c4-parse-once,adversarial,codex,gpt-5-codex,medium,1,412338,410354,,350208,1984,,,,1 Important,2026-10-09
 d-v2-07,property-red,codex,gpt-5-codex,medium,8,768995,758399,,701824,10596,,,,red written (held for ruling),2026-10-09
+d-v2-07,property-red,codex,gpt-5-codex,low,9,304478,302205,,274304,2273,,,,narrowed (addendum 11),2026-10-09
+d-v2-07,property-red,codex,gpt-5-codex,low,10,291745,290144,,260480,1601,,,,doze start (addendum 12),2026-10-09
+c4-undo-compensate,property-red,codex,gpt-5-codex,medium,5,753702,749043,,691456,4659,,,,round 2 reds,2026-10-09
+c4-parse-once,property-red,codex,gpt-5-codex,medium,3,698260,691882,,644992,6378,,,,round 2 red,2026-10-09
