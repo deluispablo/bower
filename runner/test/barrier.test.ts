@@ -595,6 +595,57 @@ describe('the run folders a run keeps', () => {
     expect((await wire.drive.evidence(earlier.get('run-00')?.id ?? ''))?.trashed).toBe(true);
   });
 
+  it('a failed run does not list its folders again before it ends', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, root } = await demo();
+    const earlier = await finishedBefore(wire.drive, root, 20);
+    const effects = new StubEffects();
+    effects.refused = 'all';
+    const isView = (call: FencedCall): boolean => 'name' in call && call.name === 'last-run.json';
+    const writes: Write[] = [];
+
+    const end = await tidy(wire, root, 1, effects, writes, isView);
+
+    expect(end.phase).toBe('failed');
+    // After the refused report write, retention picks from the run's own listing: no folder is listed again.
+    const refused = writes.find((w) => isView(w.call));
+    if (!refused) throw new Error('no report write');
+    const lists = wire.requests.slice(refused.at).filter((r) => r.method === 'GET' && r.url.pathname === '/drive/v3/files');
+    expect(lists).toEqual([]);
+    expect((await runFolders(wire.drive, root)).get(RUN_ID)?.appProperties).toMatchObject({ bowerRun: RUN_ID, bowerRunEnded: String(AT + 1000) });
+    expect((await wire.drive.evidence(earlier.get('run-00')?.id ?? ''))?.trashed).toBe(true);
+  });
+
+  it('a lost failed report, redispatched, keeps the first stamp and ends failed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, root } = await demo();
+    const earlier = await finishedBefore(wire.drive, root, 20);
+    const effects = new StubEffects();
+    effects.refused = 'all';
+    const isView = (call: FencedCall): boolean => 'name' in call && call.name === 'last-run.json';
+    // Attempt 1's failed report never reaches the Worker, after its folder is stamped: it says the attempt ended.
+    const lostFailed: typeof fetch = async (input, init = {}) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      if (url.origin === API && url.pathname.endsWith('/status') && String(init.body).includes('"phase":"failed"')) throw new TypeError('fetch failed');
+      return wire.fetch(input, init);
+    };
+
+    await expect(tidy(wire, root, 1, effects, [], isView, { fetch: lostFailed })).rejects.toThrow();
+    expect(wire.endings).toEqual([1]);
+    const stamped = await runFolders(wire.drive, root);
+    expect(stamped.get(RUN_ID)?.appProperties).toMatchObject({ bowerRun: RUN_ID, bowerRunEnded: String(AT + 1000) });
+    expect(stamped.size).toBe(20);
+
+    // Recovery redispatches: attempt 2 ends failed for good, its folder keeps attempt 1's stamp, nothing more is binned.
+    const end = await tidy(wire, root, 2, effects, [], isView);
+    expect(end.phase).toBe('failed');
+    expect(wire.statuses.at(-1)).toMatchObject({ attempt: 2, phase: 'failed', failure: B_FAILURE });
+    const kept = await runFolders(wire.drive, root);
+    expect(kept.get(RUN_ID)?.appProperties).toMatchObject({ bowerRun: RUN_ID, bowerRunEnded: String(AT + 1000) });
+    expect(kept.size).toBe(20);
+    expect([...earlier.keys()].filter((n) => !kept.has(n))).toEqual(['run-00']);
+  });
+
   it('a stopped attempt that will be retried is not stamped as ended', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const { wire, root } = await demo();

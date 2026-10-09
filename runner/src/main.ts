@@ -226,7 +226,9 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   const reads = runnerReads(drive, opts.runId);
   const records = new RunRecords(reads, rootId);
   timeCheckpoints(records, timing);
-  seen.retain = (at) => keepFinishedAtEnd(drive, records, opts.runId, at);
+  // Retention picks from the run's listing as last read, never listed again at the end (retention-never-wired, round 4).
+  const listed = new RunRecords(reads.asListed(), rootId);
+  seen.retain = (at) => keepFinishedAtEnd(drive, listed, opts.runId, at);
   const barrier = { rootId, runId: opts.runId, attempt: opts.attempt, records, reads, batch: () => drive.batch(), fenced: () => drive.fencedWrites(), admission: grant.manifest, clock, newId };
 
   // 2. This run's report already in the folder: nothing is repeated. Its chain says done before the Worker hears it.

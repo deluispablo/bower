@@ -35,10 +35,15 @@ describe('the accepted app files, read by the runner', () => {
     expect(found.manifest).toEqual(manifestFile.content);
     expect(found.chain).toEqual(fixture('run-checkpoint').files.map((f) => f.content));
     expect(found.chain.at(-1)?.phase).toBe('done');
-    // Its folder carries no ended stamp (it is from before it): never counted nor let go of by a later run.
+    // Its folder carries no ended stamp (it is from before it). Once it is over 24 h old it counts as ended, by when it
+    // was made, so a later run lets go of it beyond the newest 20; younger, it may be a run still going and is kept.
     const runFolders = await new RunRecords(runnerReads(drive, runId), rootId).runFolders();
     expect(runFolders.map((f) => f.name)).toEqual([runId]);
-    expect(toBin(runFolders, 'a-later-run', Date.now(), 0)).toEqual([]);
+    const made = Date.parse(runFolders[0]?.createdTime ?? '');
+    const day = 24 * 3_600_000;
+    expect(toBin(runFolders, 'a-later-run', made + 2 * day, 0).map((f) => f.name)).toEqual([runId]);
+    expect(toBin(runFolders, 'a-later-run', made + 2 * day)).toEqual([]);
+    expect(toBin(runFolders, 'a-later-run', made + 3_600_000, 0)).toEqual([]);
 
     const report = await parseRunReport(recordBytes(only('run-report').content), { rootId, runId, captureId: found.manifest.captureId, manifestHash: found.manifestHash });
     expect(report.ok && report.value).toEqual(only('run-report').content);

@@ -5,12 +5,15 @@
  *
  * Ended is known without reading a record: at its end a run stamps its own folder's `appProperties` with its run id and
  * when it ended (`endedStamp`; app-private properties, https://developers.google.com/workspace/drive/api/guides/properties).
- * So the run's own listing of `.bower/runs` (the read cache, `records.ts`) is enough to pick the oldest; no kept chain
- * is read again. A folder is ended only when its stamp names its own run id (its folder name); a folder with no such
- * stamp, a run still going or one from before the stamp, is never counted nor let go of. Newest is by when the run
- * ended, then by folder name, so the choice is the same on every runner.
+ * So the run's own listing of `.bower/runs` as it last read it (the read cache, `records.ts`, never listed again) is
+ * enough to pick the oldest; no kept chain is read again. A folder is ended when its stamp names its own run id (its
+ * folder name). A folder with no stamp at all, made over 24 h before this run ends and not this run's, is ended too, as
+ * of when it was made (its listed `createdTime`): a run failed by the Worker's stale deadline, gone, or finished
+ * elsewhere (retention ruling, 24 h). A younger one may be a run still going, and a stamp naming another run is not
+ * ours: neither is counted nor let go of. Newest is by when the run ended, then by folder name, so the choice is the
+ * same on every runner.
  *
- * At most 3 go to the Bin per run, the oldest first, so a backlog drains over a few runs at a bounded cost. Each goes
+ * At most 3 runs go to the Bin per run, the oldest first, so a backlog drains over a few runs at a bounded cost. Each goes
  * through the run's fenced writes, checked against the name and place the listing gave (`stillAsSeen`), with its
  * write-once stamp (`write-once.ts`). A Bin or a stamp that fails is logged and never fails the run, nor changes its
  * report: the next run tries again.
@@ -25,7 +28,10 @@ export const KEEP_FINISHED = 20;
 /** The most run folders one run puts in the Bin. */
 export const BIN_PER_RUN = 3;
 
-/** The stamp a run puts on its own folder at done: its run id and when it ended (ms). */
+/** How old an unstamped run folder must be to count as an ended run (ms). */
+export const UNSTAMPED_ENDED_AFTER = 24 * 3_600_000;
+
+/** The stamp a run puts on its own folder at its terminal end (done or failed for good): its run id and when it ended (ms). */
 export const endedStamp = (runId: string, at: number): Record<string, string> => ({ [PROP.run]: runId, [PROP.runEnded]: String(at) });
 
 /** When the run of a run folder ended, from its stamp; null with no stamp, or one naming another run. */
@@ -35,16 +41,24 @@ export function endedAt(folder: DriveFile): number | null {
   return props[PROP.run] === folder.name && Number.isSafeInteger(at) ? at : null;
 }
 
+/** When a run folder's run ended as seen at `now`: its stamp, or, with none, when it was made if over 24 h before `now`. */
+function endedBy(folder: DriveFile, now: number): number | null {
+  const props = folder.appProperties ?? {};
+  if (props[PROP.run] !== undefined || props[PROP.runEnded] !== undefined) return endedAt(folder);
+  const made = Date.parse(folder.createdTime);
+  return Number.isFinite(made) && now - made > UNSTAMPED_ENDED_AFTER ? made : null;
+}
+
 /**
  * The run folders to put in the Bin, oldest first: of the ended runs and this run (`runId`, ended `at`), the runs
- * beyond the newest `keep`, at most `most` folders. A run counts once however many folders carry its stamp. This run
- * is placed by when it ended, never as the newest by default, so an old redispatch never lets go of one of the newest
- * `keep`; its own folders are never among them.
+ * beyond the newest `keep`, at most `most` runs with all their folders. A run is matched by its run id (its folder
+ * name) and counts once however many folders it has. This run is placed by when it ended, never as the newest by
+ * default, so an old redispatch never lets go of one of the newest `keep`; its own folders are never among them.
  */
 export function toBin(folders: readonly DriveFile[], runId: string, at: number, keep = KEEP_FINISHED, most = BIN_PER_RUN): DriveFile[] {
   const runs = new Map<string, { name: string; at: number; folders: DriveFile[] }>([[runId, { name: runId, at, folders: [] }]]);
   for (const folder of folders) {
-    const when = folder.name === runId ? null : endedAt(folder);
+    const when = folder.name === runId ? null : endedBy(folder, at);
     if (when === null) continue;
     const run = runs.get(folder.name);
     if (run) {
@@ -53,7 +67,7 @@ export function toBin(folders: readonly DriveFile[], runId: string, at: number, 
     } else runs.set(folder.name, { name: folder.name, at: when, folders: [folder] });
   }
   const order = [...runs.values()].sort((a, b) => a.at - b.at || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  return order.slice(0, Math.max(0, order.length - keep)).flatMap((run) => run.folders).slice(0, most);
+  return order.slice(0, Math.max(0, order.length - keep)).filter((run) => run.folders.length).slice(0, most).flatMap((run) => run.folders);
 }
 
 type Ends = Pick<RunnerDrive, 'fencedWrites' | 'get' | 'expectSeen'>;
