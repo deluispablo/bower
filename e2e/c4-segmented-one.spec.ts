@@ -76,7 +76,10 @@ test('the files bookmark chips are at least 44 px on the phone', async ({ page }
   await atLeast(chips, 44);
   await axeTargets(page, 'section[aria-label="Bookmarks"]');
   await chips.getByText('Flat hunt', { exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Flat hunt', exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/files\/Projects\/Flat%20hunt(?:\?|$)/);
+  // On the phone, the heading also contains the "More for Flat hunt" button.
+  await expect(page.getByRole('main').getByRole('heading', { level: 1, name: /^Flat hunt\b/ })).toBeVisible();
+  await expect(page.getByRole('main').locator('a[href="/note/Projects/Flat%20hunt/Lease%20draft.pdf"]')).toBeVisible();
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await open(page, '/files');
