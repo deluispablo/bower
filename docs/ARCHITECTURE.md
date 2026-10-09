@@ -83,21 +83,21 @@ Each mechanism has one home in the code ([TL-P4-15](harness/2026-10-08-tl-p4-15-
 
 | Mechanism | Home | Today |
 | --- | --- | --- |
-| Drive transport (token, retry, errors, wire type) | `src/data/drive/` | Target: four clients today (`c2-drive-transport`) |
-| Drive read cache, keyed by id and modifiedTime | `src/data/drive/` | Target: about 14 caches today (`c2-read-cache`) |
-| Drive ports (what a Drive can do, read or write) | `src/data/drive/drive-api.ts` | The fake has extras the real Drive lacks (`c2-fake-parity`, `c1-drive-ops-table`) |
-| "Still as seen" fence before an act | `src/data/contracts/` | Target: five or more versions (`c1-still-as-seen`) |
+| Drive transport (token, retry, errors, wire type) | `src/data/drive/` | Done: one transport with injected retry options (`c2-drive-transport`, `c2-transport-options`, `c2-transport-outcome-kind`) |
+| Drive read cache, keyed by id and modifiedTime | `src/data/drive/` | Done: one `ReadCache` (`c2-read-cache`) |
+| Drive ports (what a Drive can do, read or write) | `src/data/drive/drive-api.ts` | Done: both Drives offer the same ports, classed read or write (`c2-fake-parity`, `c1-drive-ops-table`) |
+| "Still as seen" fence before an act | `src/data/contracts/` | Done (`c1-still-as-seen`) |
 | Write-once and recovery by the `bowerOp` stamp | `src/data/spine/` | Target: six methods (`c2-write-once`) |
-| Applying a run's operations (check, send, observe, read back) | `src/data/spine/` engine | Target: two engines, the fake's and the runner's (`c2-one-engine`) |
-| Digests (size, SHA-256, MD5) | `src/data/contracts/hashes.ts` | Target: inline hashers (`c1-digest`) |
+| Applying a run's operations (check, send, observe, read back) | `src/data/spine/` engine | Done: one engine; the fake is a Drive adapter (`c2-one-engine`) |
+| Digests (size, SHA-256, MD5) | `src/data/contracts/hashes.ts` | Done, on `@noble/hashes` (`c1-digest`, `c1-digest-library`) |
 | Model reply validation and refusal kinds | one declarative schema, runner | Target: 33 hand refusals (`c3-reply-schema`) |
 | Question subject and identity | `src/data/contracts/` | Target: four id styles (`c3-subject`) |
 | Note sections (Current state, Timeline, Bower's sections) | `src/data/contracts/ownership-format.ts` | Target: three or four parsers (`c3-note-sections`) |
-| Pile readiness accounting (declarations, dispositions, which pile a record belongs to) | `src/data/pile-readiness.ts` | Reads the whole history; target `c2-pile-records` |
+| Pile readiness accounting (declarations, dispositions, which pile a record belongs to) | `src/data/pile-readiness.ts` | Done: records stamped with their pile id, read for the Inbox's piles only (`c2-pile-records`) |
 | Planning: capture, decide, build operations | `src/data/spine/` | Target: one 1,100-line function (`c3-planner-split`) |
-| Worker deadlines (alarms) | `api/src` deadlines table | Target: four kinds on one alarm (`c1-worker-deadlines`) |
-| Worker route helpers (person RPC, errors, JSON body) | `api/src` middleware | Target: per-file copies (`c1-worker-routes`) |
-| Contracts shared by app, Worker and runner (wire, phases, lease, template) | `src/data/contracts/` | Target: copied by hand (`c1-shared-contracts`) |
+| Worker deadlines (alarms) | `api/src` deadlines table | Done: one deadlines table; only the alarm dispatches (`c1-worker-deadlines`, `c2-worker-dispatch`) |
+| Worker route helpers (person RPC, errors, JSON body) | `api/src` middleware | Done (`c1-worker-routes`) |
+| Contracts shared by app, Worker and runner (wire, phases, lease, template) | `src/data/contracts/` | Done (`c1-shared-contracts`) |
 | UI data loading (one store, loading, error or ready) | `src/data/provider.tsx` | Target: per-component loads (`c4-query-store`, `c4-resource`) |
 | UI actions (busy, error, double press) | `src/ui/` `useAction` | Target: hand-written per screen (`c4-use-action`) |
 | Run status words | `src/features/tidy/run-words.ts` | Six surfaces decide alone (`c4-run-view`) |
