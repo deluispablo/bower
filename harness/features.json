@@ -5729,7 +5729,7 @@
     "id": "c3-unused-code",
     "task": "p4-consolidation",
     "category": "tooling",
-    "passes": false,
+    "passes": true,
     "what": "knip (the standard detector of unused files, exports and dependencies) runs in pnpm check across the app, api and runner workspaces against harness/unused-baseline.json, a list that may only shrink (same pattern as check-duplication-gate.mjs); what it finds dead is removed in this entry or listed under left out.",
     "steps": [
       "A new unused export fails pnpm check.",
