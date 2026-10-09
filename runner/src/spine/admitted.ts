@@ -18,7 +18,7 @@ import type { RunManifest } from '../../../src/data/spine/records';
 import type { RunnerToken } from '../token';
 import { SYSTEM } from '../../../src/data/vault/layout';
 
-export type { Admitted, Deferred };
+export type { Admitted };
 
 /** What the runner reads to check an item: its metadata now. */
 export interface AdmittedReader {

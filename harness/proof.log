@@ -468,3 +468,5 @@ c2-create-by-id	b014988743adde7e	2026-10-09	known-green: Reds proved by workers 
 spine-operations-checkpoints	5b5592be17435bc3	2026-10-09	known-green: Reds proved by workers at tests-only commits 7550a442, 8765e835, 21806fbf, 2d6e4480, a7a59d7c and 831cc251 (each by assertion); the fix spans six rounds, so no single revert. P4-38e PASS.
 c3-integrate-gate	5384e7d6a929f842	2026-10-09	red (fixed in cea01d57)
 c3-reservation-home	c361357357ec7ab1	2026-10-09	known-green: red at 89bd9cfb: 2 rule tests fail (/tmp/c3res-handred.log); green at fdf9736a
+c3-reviewer-guard	71314d312da68a1e	2026-10-09	known-green: red at 1f2a4979: module missing, 3 tests fail (/tmp/c3g-red.log); green at 2ae8516d
+c3-unused-code	8ae4530977b86ce1	2026-10-09	red (fixed in 35bb972a)

@@ -9,6 +9,15 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/scripts/quiet-gates.mjs\""
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/guard-main-checkout.mjs\""
+          }
+        ]
       }
     ],
     "SessionStart": [

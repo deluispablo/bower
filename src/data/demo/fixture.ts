@@ -5,7 +5,6 @@
  * ("28 Sep", or "Today"), written around 4 October 2026; a test keeps them
  * from being later than that.
  */
-import { RULE_EXAMPLES } from '../examples';
 import type { FileKind, Pile, PileItem, Question, Rule, SetAside, Suggestion } from '../types';
 
 export const ALEX = { name: 'Alex', email: 'you@example.com' };
@@ -352,9 +351,6 @@ export const RULE_WORDING: Record<string, string> = {
   'recipes always in cooking, vegetarian tag if no meat': 'Recipes go to Resources / Cooking; tag them #vegetarian when they have no meat or fish.',
   'never file anything from my bank, just tell me': 'Do not file bank statements; leave them in the inbox and ask about them in the report.',
 };
-
-/** The examples the Bower tab offers (data/examples.ts), all known to the demo's wording. */
-export const SAMPLE_RULES: readonly string[] = RULE_EXAMPLES;
 
 export function wordRule(raw: string): string {
   const known = RULE_WORDING[raw.trim().toLowerCase()];
