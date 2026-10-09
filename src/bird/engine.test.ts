@@ -172,7 +172,8 @@ describe("the engine's idle mind", () => {
   }
 
   it('the idle timer fires every 0.8 to 2 s and blinks every 1.6 to 5.2 s', () => {
-    const { engine, frames, read } = mount('idle', { acts: true });
+    // 80 s with no input: kept awake so the blinks are counted throughout.
+    const { engine, frames, read } = mount('idle', { acts: true, sleeps: false });
     const fired = draws(engine, frames, 40);
     const gaps = fired.slice(1).map((f, i) => f.t - (fired[i]?.t ?? 0));
     expect(gaps.length).toBeGreaterThan(15);
