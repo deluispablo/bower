@@ -135,6 +135,8 @@ const WEIGHTS: ReadonlyArray<readonly [ActName, number]> = [
   ['pause', 10],
 ];
 /** The head's range in idle and wait (the CSS snaps), which clamps the gaze's head offset. */
+/** How far, in degrees, the gaze's wanted head offset moves before the head snaps to it. */
+const GAZE_SNAP = 6;
 const PERCHED_HEAD: readonly [number, number] = [-12, 7];
 const LAYER_HEAD: readonly [number, number] = [-32, 30];
 
@@ -267,8 +269,9 @@ export class BirdEngine {
     /** The startle's seconds left, and the tuft's and head's angles when it began. */
     startleT: 0,
     startleFrom: { tuft: 0, head: 0 },
-    /** The gaze's ease back after the startle (TL-P4-25 addendum 5): its seconds left, and the offset it eases to. */
+    /** The gaze's ease back after the startle (TL-P4-25 addendum 5): its seconds left, and the offsets it eases from and to. */
     settleT: 0,
+    settleFrom: 0,
     settleTo: 0,
     /** The head offset the gaze wants this frame, before its snap guard (the settle's target). */
     gazeWant: 0,
@@ -1126,27 +1129,36 @@ export class BirdEngine {
         pin(c, keyed(STARTLE_TOTAL - S.startleT, [[0, S.startleFrom[part]], [rise, to], [rise + seconds, to], [STARTLE_TOTAL, c.t]], true));
       }
     }
-    this.gaze(dt, who === 'layer' ? LAYER_HEAD : PERCHED_HEAD);
+    const gazing = this.gaze(dt, who === 'layer' ? LAYER_HEAD : PERCHED_HEAD);
     // The step owns the head: the gaze's offset waits at 0 and eases back after it (TL-P4-25 addendum 4), a return
     // keyed ease-in-out over the step's own fall, so its speed starts and ends at 0 (TL-P4-25 addendum 5).
     if (S.startleT > 0) this.C.gaze.t = 0;
-    else if (stepping) {
-      S.settleT = STARTLE.fall;
-      S.settleTo = S.gazeWant;
+    else if (stepping) this.easeGaze(0);
+    // A return whose gaze ends, or whose target moves past the gaze's own snap threshold, eases on from where it is.
+    else if (S.settleT > 0 && S.gazeWant !== S.settleTo && (!gazing || Math.abs(S.gazeWant - S.settleTo) > GAZE_SNAP)) {
+      this.easeGaze(this.C.gaze.v);
     }
     if (S.settleT > 0) {
       S.settleT = Math.max(0, S.settleT - dt);
-      pin(this.C.gaze, keyed(STARTLE.fall - S.settleT, [[0, 0], [STARTLE.fall, S.settleTo]], true));
+      pin(this.C.gaze, keyed(STARTLE.fall - S.settleT, [[0, S.settleFrom], [STARTLE.fall, S.settleTo]], true));
     }
+  }
+
+  /** Starts the gaze's eased return from `from` to the offset the gaze wants now, over the startle's fall. */
+  private easeGaze(from: number): void {
+    const S = this.S;
+    S.settleT = STARTLE.fall;
+    S.settleFrom = from;
+    S.settleTo = S.gazeWant;
   }
 
   /**
    * The gaze channel: the iris follows the input (a pointer or touch for
    * 2.5 s, the focused control while focus stays), the head follows a little
    * within `head` (none in a working pose), and an input behind the bird for
-   * 0.5 s turns it with a hop.
+   * 0.5 s turns it with a hop. Returns whether a gaze is live.
    */
-  private gaze(dt: number, head: readonly [number, number] | null): void {
+  private gaze(dt: number, head: readonly [number, number] | null): boolean {
     const S = this.S;
     const B = this.B;
     const C = this.C;
@@ -1161,7 +1173,7 @@ export class BirdEngine {
         C.ix.t = IRIS_REST.x;
         C.iy.t = IRIS_REST.y;
       }
-      return;
+      return false;
     }
     const Z = this.size;
     const eye = { x: B.x + (C.face.v * 20 * Z) / 100, y: B.y - (58 * Z) / 100 };
@@ -1178,7 +1190,7 @@ export class BirdEngine {
       const ang = (Math.atan2(dy, Math.max(20, dx)) * 180) / Math.PI;
       const want = clamp(ang * 0.7, head[0], head[1]);
       S.gazeWant = want;
-      if (S.t - S.lastSnap > this.rand(0.14, 0.4) && Math.abs(want - C.gaze.t) > 6) {
+      if (S.t - S.lastSnap > this.rand(0.14, 0.4) && Math.abs(want - C.gaze.t) > GAZE_SNAP) {
         C.gaze.t = want;
         S.lastSnap = S.t;
       }
@@ -1186,6 +1198,7 @@ export class BirdEngine {
     const m = Math.hypot(dx, dy) || 1;
     C.ix.t = 0.3 + (1.3 * dx) / m;
     C.iy.t = (1.4 * dy) / m;
+    return true;
   }
 
   private step(dt: number): void {
