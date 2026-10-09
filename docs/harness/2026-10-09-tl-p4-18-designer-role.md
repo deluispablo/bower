@@ -66,3 +66,13 @@ The coordinator may consult the designer directly on UI questions. A design choi
 - **The handoff contents (every state, edge cases, motion, accessibility, the reason for each choice):** Anthropic's design-handoff skill (anthropics/knowledge-work-plugins).
 - **Why not the `frontend-design` skill.** It is built for new, distinctive surfaces and has no audit method, no evidence rule and no notion of an existing system. Its push toward boldness works against an established brand ([source](https://github.com/anthropics/skills/tree/main/skills/frontend-design)). The designer keeps its list of AI default looks as a "never" list, and loads it only for a new surface the owner asks for.
 - **Why not the installed `design:accessibility-review` plugin.** It targets WCAG 2.1 and uses the AAA 44 px target as the bar.
+
+**Addendum 4 (owner, 2026-10-09): the lead's intake of a spec.** The final result must reach the highest quality and stay faithful to the designer's design. So the lead never passes a spec on as it arrives:
+
+1. it checks the spec against the running app and the code;
+2. it has `bower-impact` (Opus, read-only) analyse the impact behind the UI;
+3. it plans entries under the consolidation standards: one home per mechanism, preparatory refactoring first, no duplicate components or loaders, additive contracts;
+4. it records the plan;
+5. it has the designer confirm fidelity before dispatch.
+
+The steps are in the [technical-lead brief](../../harness/briefs/technical-lead.md#designer-specs-tl-p4-18-addendum-4-the-owners-quality-bar).
