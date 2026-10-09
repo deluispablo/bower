@@ -6340,7 +6340,7 @@
       "Each of the 5 class sites calls happened or landed, named in the inventory.",
       "The 2 reproduced cases and the reconcile guard pass; the fast-check property gains create intents."
     ],
-    "verify": "",
+    "verify": "pnpm exec vitest run src/data/vault/drive-vault.test.ts src/data/spine/engine.test.ts -t \"a pile note whose create landed and then moved is refused on retry|a pile folder whose create landed and then moved is refused on retry|after a lost answer and an outside move the run reports applied and sends nothing|a create whose answer and recovery read were lost is made once after a refresh and a retry\"",
     "note": "TL-P4-24 addendum 10 (main 4dfe148a); defect pile-note-lost-create-moved (diagnosis docs/harness/defects/2026-10-09-pile-note-lost-create-moved.md). Folds c4-reconcile-guard (addendum 9 (1)). Escalated, Opus plus a Codex pass, after c4-undo-withdraw merges (that entry is parked; the lead said to run the queue, so this starts from claude/p3). Packet to write.",
     "review": "P4-61b PASS"
   },
