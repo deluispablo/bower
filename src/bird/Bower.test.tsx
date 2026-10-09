@@ -524,3 +524,72 @@ it('input during a preen or snap ends it', () => {
   b.run(0.35);
   expect(Math.abs(b.read().head)).toBeLessThan(snapped / 2);
 });
+
+// ---------- d-v2-07 round 3 ----------
+
+it('input during a preen between flights keeps the queued flight and its callback', () => {
+  const frames = fakeFrames(5);
+  const ref = createRef<BowerController>();
+  const { container } = render(
+    <div style={{ position: 'relative' }}>
+      <BowerLayer ref={ref} home={() => ({ x: 50, y: 80 })} engineOptions={{ ...frames.options, acts: false }} />
+    </div>,
+  );
+  const host = container.firstElementChild ?? document;
+  const run = (seconds: number): void => act(() => frames.run(Math.round(seconds * FPS)));
+  run(0.5);
+  const engine = activeHandle();
+  if (!engine) throw new Error('no engine');
+  act(() => engine.act('preen'));
+  run(0.2);
+  // The script is queued while the preen runs; a pointer moves before the next frame.
+  const landed = vi.fn();
+  act(() => void ref.current?.flyTo(() => ({ x: 200, y: 80, perch: true })).then(landed));
+  pointer('pointermove', 400, 34, host);
+  run(3);
+  expect(landed).toHaveBeenCalledTimes(1);
+
+  // A tap in the same place: it plays after the current action, and the script is kept.
+  run(1);
+  act(() => engine.act('preen'));
+  run(0.2);
+  const back = vi.fn();
+  act(() => void ref.current?.flyTo(() => ({ x: 50, y: 80, perch: true })).then(back));
+  pointer('pointerdown', 400, 34, host);
+  run(3);
+  expect(back).toHaveBeenCalledTimes(1);
+});
+
+it('the iris returns from a lost focus gaze in a working pose', () => {
+  const b = perched('write', {}, <button type="button">Tidy up</button>);
+  const button = b.view.getByRole('button', { name: 'Tidy up' });
+  const rect = (left: number, top: number, size: number): DOMRect =>
+    ({ left, top, width: size, height: size, right: left + size, bottom: top + size, x: left, y: top, toJSON: () => ({}) }) as DOMRect;
+  vi.spyOn(button, 'getBoundingClientRect').mockReturnValue(rect(280, 280, 40));
+  vi.spyOn(b.box, 'getBoundingClientRect').mockReturnValue(rect(0, 0, Z));
+  const iris = (): number[] => nums(b.box.querySelector('.b-iris')?.getAttribute('transform'));
+  b.run(1);
+  const [restX = NaN, restY = NaN] = iris();
+  act(() => button.focus());
+  b.run(0.3);
+  expect(iris()[1] ?? 0).toBeGreaterThan(0.8);
+  // Focus leaves: within 0.5 s of engine time the iris is back at the pose's own rest.
+  act(() => button.blur());
+  b.run(0.5);
+  const [x = NaN, y = NaN] = iris();
+  expect(Math.abs(x - restX)).toBeLessThan(0.2);
+  expect(Math.abs(y - restY)).toBeLessThan(0.2);
+});
+
+it('a body keydown keeps a live pointer gaze', () => {
+  const b = perched('idle', { acts: false });
+  b.run(1);
+  pointer('pointermove', -200, 34);
+  b.run(0.2);
+  expect(b.read().iris).toBeLessThan(0);
+  // Arrow keys scrolling the page, focus on body, while the pointer is live.
+  expect(document.activeElement).toBe(document.body);
+  act(() => void fireEvent.keyDown(document.body, { key: 'ArrowDown' }));
+  b.run(0.3);
+  expect(b.read().iris).toBeLessThan(0);
+});
