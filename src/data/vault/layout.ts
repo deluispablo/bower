@@ -80,6 +80,11 @@ export const PROP = {
   recordPile: 'bowerRecordPile',
   /** On a declaration in `.bower/piles`: `loose` or `folder`, the layout its pile was declared with. */
   recordAnchor: 'bowerRecordAnchor',
+  /**
+   * On a line of the change journal: its record id, its own key. A run's archive move overwrites the line's `bowerOp`
+   * with its own stamp and keeps this one, so a line waiting on a device is found by it, archived or not.
+   */
+  line: 'bowerLine',
 } as const;
 
 /** The stamps a new record carries: its pile, and for a declaration the layout it was declared with. */

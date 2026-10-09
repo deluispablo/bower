@@ -525,7 +525,8 @@ export function driveEffects(drive: RunDrive): Effects {
     const bytes = new TextEncoder().encode(e.text);
     if (!confirms(answer, bytes)) return null;
     const ev: StoredEvidence = { file: answer, trashed: false, content: { size: bytes.byteLength, sha256: await sha256Hex(bytes) } };
-    if (e.kind === 'edit-text') return answer.id === e.before.fileId && ev.content?.size === e.content.size && ev.content.sha256 === e.content.sha256 ? toEvidence(ev, 'utf8') : null;
+    // An edit is the same file by the name and place it was read with, holding the bytes sent.
+    if (e.kind === 'edit-text') return inPlace(answer, e.before) && ev.content?.size === e.content.size && ev.content.sha256 === e.content.sha256 ? toEvidence(ev, 'utf8') : null;
     return shows(e, ev, e.kind === 'create-text' ? parentId : null) ? toEvidence(ev, 'utf8') : null;
   };
 

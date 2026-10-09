@@ -213,3 +213,5 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: c2-fake-parity passes — Digests, unchecked and binnedByItem on both Drives; no has-it checks; Bin lookup within its grant (P4-31c PASS)
 - 2026-10-09: c2-upload-queue-only passes — One upload path through the queue; late file to the Bin; no resend on Undo after a halt (P4-34 PASS)
 - 2026-10-09: c2-one-engine passes — One apply engine for runner and fake; fence at the write boundary, no clock; unconfirmed rows on their own line (P4-35d PASS)
+- 2026-10-09: journal-ack-content passes — Test renamed to what it asserts (c2-write-once round 2, lead ruling main dd77054)
+- 2026-10-09: spine-report-barrier-dispositions passes — Test renamed to what it asserts (c2-write-once round 2, lead ruling main dd77054)

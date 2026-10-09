@@ -69,8 +69,8 @@ export async function byStamp(drive: StampSearch, stamp: string): Promise<DriveF
 }
 
 /** One of Bower's own folders, made once: stamped by its place and name, so a lost answer finds the folder that landed. */
-export async function makeFolder(w: FencedDrive, drive: StampSearch, parent: string, name: string): Promise<string> {
-  return (await writeOnce(stampOf(parent, `folder:${name}`), (op) => w.createFolder(parent, name, op), (s) => byStamp(drive, s))).id;
+export function makeFolder(w: FencedDrive, drive: StampSearch, parent: string, name: string): Promise<DriveFile> {
+  return writeOnce(stampOf(parent, `folder:${name}`), (op) => w.createFolder(parent, name, op), (s) => byStamp(drive, s));
 }
 
 /** A text file made once: stamped by its place, name and bytes, and confirmed by its answer's checksum. */

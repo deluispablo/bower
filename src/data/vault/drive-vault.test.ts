@@ -199,6 +199,42 @@ describe('DriveVault inbox and Bower', () => {
     expect(await drive.readText(note)).toBe('New remote context');
   });
 
+  it("a retry of a pile's words after my own unknown write is not called a change elsewhere", async () => {
+    const { pile } = await contextPile(true);
+    const named = await vault.updatePile(pile.id, 'Original context');
+    const note = await idOf(`${named.path}/Pile note.md`);
+    const writeText = drive.writeText.bind(drive);
+    const get = drive.get.bind(drive);
+    // The words land, Drive answers 5xx, and the read that would resolve it gets no answer either.
+    drive.writeText = async (...a) => {
+      await writeText(...a);
+      drive.writeText = writeText;
+      drive.get = async () => {
+        drive.get = get;
+        throw driveError('offline');
+      };
+      throw unconfirmedWriteError();
+    };
+    await expect(vault.updatePile(named.id, 'Original context, edited')).rejects.toMatchObject({ code: 'unknown', message: UNCONFIRMED_WRITE_MESSAGE });
+    // Alex saves again: their own write is recognised by its stamp and checksum, not reported as changed somewhere else.
+    await expect(vault.updatePile(named.id, 'Original context, edited')).resolves.toMatchObject({ text: 'Original context, edited' });
+    expect(await drive.readText(note)).toBe('Original context, edited');
+    // Changed on the laptop since, the same retry is refused, and the laptop's words stay.
+    drive.writeText = async (...a) => {
+      await writeText(...a);
+      drive.writeText = writeText;
+      drive.get = async () => {
+        drive.get = get;
+        throw driveError('offline');
+      };
+      throw unconfirmedWriteError();
+    };
+    await expect(vault.updatePile(named.id, 'Words from this phone')).rejects.toMatchObject({ code: 'unknown' });
+    await drive.writeText(note, 'Words from the laptop', (await drive.get(note)).modifiedTime);
+    await expect(vault.updatePile(named.id, 'Words from this phone')).rejects.toMatchObject({ code: 'conflict' });
+    expect(await drive.readText(note)).toBe('Words from the laptop');
+  });
+
   it.each(['', 'Different context'])('stale pile context refuses every effect before write or removal ("%s")', async (text) => {
     const { pile } = await contextPile(true);
     const named = await vault.updatePile(pile.id, 'Original context');
@@ -502,6 +538,33 @@ describe('an app write is found again by its stamp', () => {
     await expect(vault.toggleTask(PASSPORT, 4)).resolves.toBeUndefined();
     expect(drive.dump(root).get(PASSPORT)).toContain('- [x] Photo form signed by a witness');
     expect((await vault.changes()).filter((r) => r.what === 'Ticked "Photo form signed by a witness" in Passport renewal')).toHaveLength(1);
+  });
+
+  it('a retry after a change elsewhere is a conflict, not saved', async () => {
+    await vault.tree();
+    await vault.note(PASSPORT);
+    const writeText = drive.writeText.bind(drive);
+    const get = drive.get.bind(drive);
+    // The toggle lands, Drive answers 5xx, and the read that would resolve it gets no answer either.
+    drive.writeText = async (...a) => {
+      await writeText(...a);
+      drive.writeText = writeText;
+      drive.get = async () => {
+        drive.get = get;
+        throw driveError('offline');
+      };
+      throw unconfirmedWriteError();
+    };
+    await expect(vault.toggleTask(PASSPORT, 4)).rejects.toMatchObject({ code: 'unknown', message: UNCONFIRMED_WRITE_MESSAGE });
+    // Alex then edits the note on the laptop: Drive keeps Bower's stamp on it, but not Bower's text.
+    const id = await idOf(PASSPORT);
+    await drive.writeText(id, 'Edited on the laptop', (await drive.get(id)).modifiedTime);
+    // Alex taps again: the stamp says Bower's write landed once, the checksum says the note is no longer what it wrote.
+    await expect(vault.toggleTask(PASSPORT, 4)).rejects.toMatchObject({ code: 'conflict' });
+    expect(drive.dump(root).get(PASSPORT)).toBe('Edited on the laptop');
+    expect((await vault.changes()).filter((r) => r.what.startsWith('Ticked "Photo form signed by a witness"'))).toHaveLength(0);
+    // The screen shows the laptop's version, never Bower's text under it.
+    expect(JSON.stringify(await vault.note(PASSPORT))).not.toContain('Photo form signed by a witness');
   });
 
   it('a toggle after the note changed elsewhere between the read and the write is refused', async () => {

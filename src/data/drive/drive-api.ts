@@ -50,7 +50,8 @@ export interface BinnedItem {
 export interface DriveApi extends ResumableDrive {
   /** Every file and folder under `rootId`, at any depth, not in the Bin. */
   listAll(rootId: string): Promise<DriveFile[]>;
-  get(id: string): Promise<DriveFile>;
+  /** A file as Drive keeps it now; with `checksums`, its stored content's `md5Checksum` too (what a write is confirmed by). */
+  get(id: string, opts?: { checksums?: boolean }): Promise<DriveFile>;
   readText(id: string): Promise<string>;
   /** Available undecoded media bytes; each returned array is an independent copy. */
   readBytes(id: string): Promise<Uint8Array>;
@@ -82,6 +83,8 @@ export interface DriveApi extends ResumableDrive {
    * Worker's subrequest grant).
    */
   binnedByItem(rootId: string, keys: readonly string[], beforeGet?: () => void): Promise<BinnedItem[]>;
+  /** The files that carry `key` = `value` in their appProperties, anywhere, in the Bin or not, with their checksums. */
+  stamped(key: string, value: string): Promise<Array<{ file: DriveFile; trashed: boolean }>>;
 }
 
 /** `files.list` pageSize (https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list), the largest a page holds. */
@@ -160,6 +163,7 @@ export const DRIVE_OPS = {
   readBytes: 'read',
   fullText: 'read',
   binnedByItem: 'read',
+  stamped: 'read',
   storedDigest: 'read',
   sessionStatus: 'read',
   getUploaded: 'read',

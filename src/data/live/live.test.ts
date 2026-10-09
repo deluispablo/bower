@@ -1291,7 +1291,7 @@ describe('foreground discovery', () => {
 
   function client(backend: FakeDrive): DriveApi {
     return {
-      listAll: (root) => backend.listAll(root), get: (id) => backend.get(id), readText: (id) => backend.readText(id),
+      listAll: (root) => backend.listAll(root), get: (id, opts) => backend.get(id, opts), stamped: (key, value) => backend.stamped(key, value), readText: (id) => backend.readText(id),
       readBytes: (id) => backend.readBytes(id),
       createFolder: (parent, name, props) => backend.createFolder(parent, name, props),
       createText: (parent, name, text, props) => backend.createText(parent, name, text, props),
