@@ -199,6 +199,42 @@ describe('DriveVault inbox and Bower', () => {
     expect(await drive.readText(note)).toBe('New remote context');
   });
 
+  it("a retry of a pile's words after my own unknown write is not called a change elsewhere", async () => {
+    const { pile } = await contextPile(true);
+    const named = await vault.updatePile(pile.id, 'Original context');
+    const note = await idOf(`${named.path}/Pile note.md`);
+    const writeText = drive.writeText.bind(drive);
+    const get = drive.get.bind(drive);
+    // The words land, Drive answers 5xx, and the read that would resolve it gets no answer either.
+    drive.writeText = async (...a) => {
+      await writeText(...a);
+      drive.writeText = writeText;
+      drive.get = async () => {
+        drive.get = get;
+        throw driveError('offline');
+      };
+      throw unconfirmedWriteError();
+    };
+    await expect(vault.updatePile(named.id, 'Original context, edited')).rejects.toMatchObject({ code: 'unknown', message: UNCONFIRMED_WRITE_MESSAGE });
+    // Alex saves again: their own write is recognised by its stamp and checksum, not reported as changed somewhere else.
+    await expect(vault.updatePile(named.id, 'Original context, edited')).resolves.toMatchObject({ text: 'Original context, edited' });
+    expect(await drive.readText(note)).toBe('Original context, edited');
+    // Changed on the laptop since, the same retry is refused, and the laptop's words stay.
+    drive.writeText = async (...a) => {
+      await writeText(...a);
+      drive.writeText = writeText;
+      drive.get = async () => {
+        drive.get = get;
+        throw driveError('offline');
+      };
+      throw unconfirmedWriteError();
+    };
+    await expect(vault.updatePile(named.id, 'Words from this phone')).rejects.toMatchObject({ code: 'unknown' });
+    await drive.writeText(note, 'Words from the laptop', (await drive.get(note)).modifiedTime);
+    await expect(vault.updatePile(named.id, 'Words from this phone')).rejects.toMatchObject({ code: 'conflict' });
+    expect(await drive.readText(note)).toBe('Words from the laptop');
+  });
+
   it.each(['', 'Different context'])('stale pile context refuses every effect before write or removal ("%s")', async (text) => {
     const { pile } = await contextPile(true);
     const named = await vault.updatePile(pile.id, 'Original context');
