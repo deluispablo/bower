@@ -437,6 +437,16 @@ describe('note edits change only what the contract allows', () => {
       keeps(before, after, 'timeline');
     });
 
+    it('a timeline news line with no source is refused', () => {
+      // TL-P4-19 addendum 20: every Timeline line cites its source. A news line (what Bower would have written in a
+      // Current state the person owns) with no source is refused by the one field rule, for every writer.
+      const before = enc(v2('\n', ['## Timeline']));
+      expect(applyChanges(before, [append(entry('New: Alex called back.'))])).toEqual({ ok: false, reason: 'field' });
+      expect(applyChanges(before, [append(entry('New: Alex called back.', 'Call notes'))]).ok).toBe(true);
+      // Any other line keeps its rule: a hub line with nothing to cite is still written.
+      expect(applyChanges(before, [append(entry('Filed scan.pdf'))]).ok).toBe(true);
+    });
+
     it('keeps a BOM as a prefix', () => {
       expectEdit(`\ufeff${v2('\n', [])}`, [append(merged)], `\ufeff${v2('\n', [line])}`);
       expectEdit(`\ufeff${v2('\r\n', [])}`, [append(merged)], `\ufeff${v2('\r\n', [line])}`);
