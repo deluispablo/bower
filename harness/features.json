@@ -6344,7 +6344,7 @@
     "id": "v2-still-marks",
     "task": "p4-consolidation",
     "category": "ui",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "d-v2-13 CSS part: the running tidy-up live dot and current step are still (no pulse); dead CSS (.skeleton shimmer, .rbBusy, unused tidy props) goes. No strings change; the loading copy goes with c4-resource.",
     "steps": [
