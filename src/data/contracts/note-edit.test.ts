@@ -672,6 +672,14 @@ describe('note edits change only what the contract allows', () => {
     });
   });
 
+  // c4-undo-compensate (TL-P4-27 addendum 4 (2)): a move and the move back in one run rename no link.
+  it('a move under a free name and the move back rename no link to the name it has again', () => {
+    const at = Date.UTC(2026, 9, 9, 10);
+    const there: ChangeEntry = { id: 'M1', at, kind: 'move', what: 'Moved', path: 'Areas/Lease (2).md', from: 'Projects/Lease.md' };
+    const back: ChangeEntry = { id: 'M2', at: at + 1, kind: 'move', what: 'Moved', path: 'Projects/Lease.md', from: 'Areas/Lease (2).md' };
+    expect(renamesFor([there, back]).filter((r) => r.from === r.to.toLowerCase())).toEqual([]);
+  });
+
   describe('rules-wording', () => {
     const R1 = ['- File receipts under Areas/Home. <!-- since 2026-10-01 -->', '  *You wrote: "receipts go to home"*'];
     const R2 = ['- Keep PDFs whole. <!-- since 2026-09-30 -->', '  *You wrote: "dont split pdfs"*'];
@@ -692,6 +700,29 @@ describe('note edits change only what the contract allows', () => {
           ['Keep PDFs whole.', 'dont split pdfs', Date.UTC(2026, 8, 30)],
         ]);
       }
+    });
+
+    // c4-undo-compensate (TL-P4-27 addendum 4 (1)): adds and removals apply as one sequence by since, so an Undo's
+    // inverse removal after its add, in one run, leaves no rule; a manifest without since keeps removals first.
+    it('applies an add and its later removal in line order: no rule is written', () => {
+      const before = rules('\n', count(1), ...R1);
+      const out = applyChanges(enc(before), [word([rule('Name scans by date.', 'scans by date', Date.UTC(2026, 9, 6, 10))], [{ recordId: 'REMOVE_ID', text: 'scans by date', since: Date.UTC(2026, 9, 6, 11) }])]);
+      expect(out.ok).toBe(true);
+      if (out.ok) expect(parseRules(out.text).map((r) => r.text)).toEqual(['File receipts under Areas/Home.']);
+    });
+
+    it('applies a removal and its later add again in line order: the rule is there once', () => {
+      const before = rules('\n', count(2), ...R1, ...R2);
+      const out = applyChanges(enc(before), [word([rule('Keep PDFs whole.', 'dont split pdfs', Date.UTC(2026, 9, 6, 11))], [{ recordId: 'REMOVE_ID', text: 'Keep PDFs whole.', since: Date.UTC(2026, 9, 6, 10) }])]);
+      expect(out.ok).toBe(true);
+      if (out.ok) expect(parseRules(out.text).map((r) => r.text)).toEqual(['Keep PDFs whole.', 'File receipts under Areas/Home.']);
+    });
+
+    it('an old manifest whose removals carry no since keeps removals first (fixture)', () => {
+      const before = rules('\n', count(1), ...R1);
+      const out = applyChanges(enc(before), [word([rule('Name scans by date.', 'scans by date', Date.UTC(2026, 9, 6, 10))], [{ recordId: 'REMOVE_ID', text: 'Name scans by date.' }])]);
+      expect(out.ok).toBe(true);
+      if (out.ok) expect(parseRules(out.text).map((r) => r.text)).toEqual(['Name scans by date.', 'File receipts under Areas/Home.']);
     });
 
     it('puts later adds above earlier ones, newest first', () => {
