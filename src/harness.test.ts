@@ -395,7 +395,7 @@ describe('the harness', () => {
     const holding = spawn('bash', [lockScript, 'bash', '-c', `echo held; until [ -e ${release} ]; do sleep 0.05; done`], { env: { ...process.env, HARNESS_LOCK: lock } });
     const first = new Promise<void>((r) => { holding.on('close', () => { r(); }); });
     await new Promise<void>((r) => { holding.stdout.on('data', () => { r(); }); });
-    const env = { ...process.env, HARNESS_LOCK: lock, PATH: `${join(dir, 'bin')}:${process.env.PATH ?? ''}` };
+    const env: NodeJS.ProcessEnv = { ...process.env, HARNESS_LOCK: lock, PATH: `${join(dir, 'bin')}:${process.env.PATH ?? ''}` };
     delete env.HARNESS_LOCK_HELD;
     // The real entry point of `pnpm e2e:both`-style runs; it either prints that it waits or ends (the red).
     const second = spawn('bash', [join(root, 'scripts/e2e-both.sh'), 'e2e/x.spec.ts'], { env });
