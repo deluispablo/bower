@@ -147,17 +147,17 @@ const held = (p: number, steps: ReadonlyArray<readonly [number, number]>): numbe
   for (const [at, value] of steps) if (p >= at) v = value;
   return v;
 };
-/** Straight lines between keyframes, as CSS plays them. */
 /** An eased step from 0 to 1 (smoothstep), clamped. */
 const smooth = (u: number): number => {
   const x = clamp(u, 0, 1);
   return x * x * (3 - 2 * x);
 };
-const keyed = (p: number, keys: ReadonlyArray<readonly [number, number]>): number => {
+/** Straight lines between keyframes, as CSS plays them; `eased` eases in and out of each key instead. */
+const keyed = (p: number, keys: ReadonlyArray<readonly [number, number]>, eased = false): number => {
   for (let i = 1; i < keys.length; i++) {
     const [a, va] = keys[i - 1] ?? [0, 0];
     const [b, vb] = keys[i] ?? [1, 0];
-    if (p <= b) return b === a ? vb : va + ((vb - va) * (p - a)) / (b - a);
+    if (p <= b) return b === a ? vb : va + (vb - va) * (eased ? smooth((p - a) / (b - a)) : (p - a) / (b - a));
   }
   return keys[keys.length - 1]?.[1] ?? 0;
 };
@@ -720,7 +720,8 @@ export class BirdEngine {
     switch (pose) {
       case 'idle':
         C.head.t = snaps(p);
-        C.tail.t = keyed(p, [[0, 0], [0.72, 0], [0.74, -14], [0.77, 4], [0.8, 0], [1, 0]]);
+        C.tail.v = keyed(p, [[0, 0], [0.72, 0], [0.74, -14], [0.77, 4], [0.8, 0], [1, 0]], true);
+        C.tail.vel = 0;
         break;
       case 'wait':
         C.head.t = snaps(p);
@@ -748,8 +749,10 @@ export class BirdEngine {
         C.wing.v = keyed(p, [[0, 0], [0.12, 0], ...beat([0.2, 0.36], [0.28, 0.44], -38, 18, 0.6, 0)]);
         C.wing.vel = 0;
         B.ws = keyed(p, [[0, 1], [0.12, 1], [0.2, 0.7], [0.28, 1], [0.36, 0.7], [0.44, 1], [1, 1]]);
-        C.legs.t = keyed(p, [[0, 1], [0.12, 1], [0.22, 0.55], [0.48, 0.55], [0.58, 1], [1, 1]]);
-        C.tail.t = keyed(p, [[0, 0], [0.58, 0], [0.64, -16], [1, 0]]);
+        C.legs.v = keyed(p, [[0, 1], [0.12, 1], [0.22, 0.55], [0.48, 0.55], [0.58, 1], [1, 1]], true);
+        C.legs.vel = 0;
+        C.tail.v = keyed(p, [[0, 0], [0.58, 0], [0.64, -16], [1, 0]], true);
+        C.tail.vel = 0;
         break;
       case 'proud':
         if (!this.poseActed) {
@@ -758,6 +761,8 @@ export class BirdEngine {
         }
         break;
       case 'sleep':
+        // breathe: scale(1.035, .97), so the body widens 7/6 of what it sinks.
+        B.girth = -7 / 6;
         C.head.t = 20;
         B.headY = 3;
         C.tuft.t = -26;
@@ -780,7 +785,8 @@ export class BirdEngine {
         C.wing.vel = 0;
         B.ws = keyed(p, beat(ups, downs, 0.6, 1, 0.24, 1));
         C.legs.t = keyed(p, [[0, 0.5], [0.19, 0.5], [0.24, 1], [1, 1]]);
-        C.tail.t = keyed(p, [[0, 0], [0.3, 0], [0.33, -18], [0.36, 5], [0.4, 0], [1, 0]]);
+        C.tail.v = keyed(p, [[0, 0], [0.3, 0], [0.33, -18], [0.36, 5], [0.4, 0], [1, 0]], true);
+        C.tail.vel = 0;
         C.head.t = held(p, [[0, 0], [0.445, -12], [0.625, 8], [0.805, 0]]);
         break;
       }
