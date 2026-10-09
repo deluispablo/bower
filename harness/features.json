@@ -6014,7 +6014,7 @@
     "id": "c3-flaky-policy",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "Batch and freeze e2e runs use one retry and failOnFlakyTests, so a retry-passed test fails and is named; a quarantine file (owner, expiry, logged defect) reports instead of failing and is checked; no test is ever skipped.",
     "steps": [
       "A fixture test passing only on retry fails a batch run.",
