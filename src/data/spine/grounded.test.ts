@@ -85,6 +85,10 @@ describe('grounding', () => {
     expect(grounded(tamper(first, (r) => without(r, 'line')))).toBe(false);
     expect(grounded(tamper(first, (r) => ({ ...r, ...(line === undefined ? {} : { line }) })))).toBe(false);
     expect(grounded(tamper(first, (r) => ({ ...r, line: 99 })))).toBe(false);
+    // A line row says the note as the run leaves it: its op's line count, the edit's bytes and the mark's stamp.
+    expect(grounded(tamper(first, (r) => ({ ...r, lines: (r.lines ?? 0) + 1 })))).toBe(false);
+    expect(grounded(tamper(first, (r) => ({ ...r, md5: 'f'.repeat(32) })))).toBe(false);
+    expect(grounded(tamper(first, (r) => ({ ...r, stamp: 'f'.repeat(32) })))).toBe(false);
   });
 
   it('grounded refuses a missing generated-note set-aside row', async () => {

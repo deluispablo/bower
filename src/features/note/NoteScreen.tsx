@@ -85,7 +85,7 @@ function NoteView({ path }: { path: string }) {
 
   if (error && !note) return <div className={s.page}><p>{error.message}</p></div>;
   if (!note || (loading && note.path !== path)) return <NoteSkeleton />;
-  const marked = newLineIndexes(note.timeline, fresh?.path === note.path ? fresh.rows : []);
+  const marked = newLineIndexes(note, fresh?.path === note.path ? fresh.rows : []);
 
   const link = (target: string, label: string, key: string) => {
     const p = resolve(target);

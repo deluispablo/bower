@@ -6,12 +6,14 @@
 import type { DriveFile } from '../drive/drive-api';
 import type { EffectV2, OperationV2, ReportContribution, SeenFile, Target } from '../contracts/run-manifest';
 import { savedLinkKey } from '../contracts/note-edit';
+import { md5Hex } from '../contracts/hashes';
 import { join, nameOf } from '../tree';
 import { PARA_ROOTS } from '../types';
 import { sha256 } from '../vault/hashes';
 import { SYSTEM, isRunnerFile } from '../vault/layout';
 import type { RunManifest } from './records';
 import { filingMove } from './report';
+import { stampOf } from './write-once';
 
 /** The runner files a run may make again when they are missing (TL-P2-33 §2a). */
 const RUNNER_MADE = [SYSTEM.requests, SYSTEM.hashes, SYSTEM.questions] as const;
@@ -104,9 +106,14 @@ export function grounded(manifest: RunManifest): boolean {
       const entries = e.changes.reduce((n, c) => n + (c.kind === 'timeline-append' ? c.entries.length : 0), 0);
       const want = entries || (e.changes.some((c) => c.kind === 'state-rewrite') ? 1 : 0);
       const own = mine.filter((c) => c.requires.length === 1).reduce((n, c) => n + c.value.updated.length, 0);
-      // Each line row names one line the edit appended, once; a Current state's row names none.
-      const at = mine.filter((c) => c.requires.length === 1).flatMap((c) => c.value.updated.map((r) => r.line));
+      // Each line row names one line the edit appended (its ordinal), once, with the note as the run leaves it: the
+      // edit's bytes and its New mark's stamp (TL-P4-19 addenda 4 and 5); a Current state's row names none.
+      const rowsOf = mine.filter((c) => c.requires.length === 1).flatMap((c) => c.value.updated);
+      const at = rowsOf.map((r) => r.line);
       if (at.some((l) => (entries ? l === undefined || l >= entries : l !== undefined)) || new Set(at).size !== at.length) return false;
+      const mark = manifest.operations.find((x) => x.dependsOn.includes(o.operationId) && x.effect.kind === 'move' && x.effect.before.fileId === e.before.fileId && x.effect.properties.bowerNew === '1');
+      const left = entries && mark ? { lines: entries, md5: md5Hex(new TextEncoder().encode(e.text)), stamp: stampOf(manifest.runId, mark.operationId) } : null;
+      if (rowsOf.some((r) => r.line !== undefined && (left === null || r.lines !== left.lines || r.md5 !== left.md5 || r.stamp !== left.stamp))) return false;
       const kept = mine.some((c) => c.requires[0] === o.operationId && c.requires.length > 1 && c.value.updated.length);
       if (kept ? own > want : own !== want) return false;
     } else if (e.kind === 'create-text') {

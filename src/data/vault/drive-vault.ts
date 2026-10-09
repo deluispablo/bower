@@ -8,7 +8,7 @@
 import { driveError, type DriveApi, type DriveFile } from '../drive/drive-api';
 import { ReadCache, type Version } from '../drive/read-cache';
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
-import { Intended, byId, confirms, holds, makeFolder, makeOnce, makeText, updateByStamp, type Holder, type Intent } from '../spine/write-once';
+import { Intended, STAMP, byId, confirms, holds, makeFolder, makeOnce, makeText, updateByStamp, type Holder, type Intent } from '../spine/write-once';
 import type { FailedChange, Unsubscribe, VaultSource } from '../sources';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName } from '../piles';
 import { buildTree, checkCreationName, displayName, thingName, freeName, join, kindOf, moveEntry, nameOf, parentOf, removeEntry, renameEntry } from '../tree';
@@ -37,7 +37,7 @@ import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
 import { ADOPT_STATES_ID, ADOPT_STATES_RULE } from '../contracts/note-edit';
 import { HIDDEN_AT_ROOT, PROP, SYSTEM, isRunnerFile, recordStamp, type RunnerFiles, type LastRunFile } from './layout';
-import { sha256 } from './hashes';
+import { md5Hex, sha256 } from './hashes';
 import { placeOf, plainSnippet, plainText, savedLinkAddress, savedLinkUrl, searchLines } from '../search-text';
 import { noteRefusal, parseNote, toggleTaskInText, type ParsedNote } from './note-format';
 import { parseRules } from './rules-format';
@@ -297,7 +297,12 @@ export class DriveVault implements VaultSource {
       return note?.links.some((l) => wanted.has(linkTarget(l))) ? p : null;
     });
     const backlinks = linking.filter((p): p is string => !!p);
-    return { ...parsed, path, links: [...new Set(links)], backlinks };
+    // The file as read, for the New mark (TL-P4-19 addendum 5): its stamp from the listing (which asks for
+    // appProperties), and the MD5 of the very bytes this read holds, which is Drive's md5Checksum of them.
+    const read = this.notes.get(f.id);
+    const stamp = f.appProperties?.[STAMP];
+    const file = read?.modified === f.modifiedTime ? { md5: md5Hex(new TextEncoder().encode(read.text)), ...(stamp === undefined ? {} : { stamp }) } : undefined;
+    return { ...parsed, path, links: [...new Set(links)], backlinks, ...(file ? { file } : {}) };
   }
 
   async driveLink(path = ''): Promise<string | null> {

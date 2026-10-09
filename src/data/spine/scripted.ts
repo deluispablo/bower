@@ -22,7 +22,7 @@ import { isJournalRecord, type JournalRecord } from '../contracts/journal-record
 import { PROP, RUNNER_WRITES, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
 import { ruleLike } from '../rules';
 import { savedLinkAddress } from '../search-text';
-import { EMPTY_MD5 } from '../contracts/hashes';
+import { EMPTY_MD5, md5Hex } from '../contracts/hashes';
 import { askId, openQuestions, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen } from '../contracts/questions';
 import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote, type ParsedNote } from '../vault/note-format';
@@ -35,6 +35,7 @@ import { SET_ASIDE, capturePiles, listedPiles, pileShape } from './plan';
 import { duplicatesOf, type Duplicate } from './duplicates';
 import type { AdmissionManifest } from './admission';
 import type { ScriptedRead } from './read';
+import { stampOf } from './write-once';
 
 export { SET_ASIDE, listedPiles };
 
@@ -1052,8 +1053,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     for (const l of c.lines) lineState.set(l, 'planned');
     if (c.rules) rulesState = 'planned';
     // One report row per Timeline line it writes (report-misses-hub-line); a Current state alone says it was updated.
-    // Each row names its line by its place counted from the Timeline's end, where the edit appends them in order.
-    const written = c.lines.flatMap((l, i) => (l.what === null ? [] : [{ what: l.what, line: c.lines.length - 1 - i }]));
+    // Each row names its line by its ordinal among the lines the edit appends, in order (TL-P4-19 addendum 4).
+    const written = c.lines.flatMap((l, i) => (l.what === null ? [] : [{ what: l.what, line: i }]));
     const rows = written.length ? written : c.state ? [{ what: STATE_UPDATED }] : [];
     const after = [...new Set([...c.lines.flatMap((l) => (l.after === null ? [] : [l.after])), ...(c.stateAfter === null ? [] : [c.stateAfter])])];
     // An edit a keep needs (the kept note's lines, a link to the other note) keeps the note's text as read, for its undo.
@@ -1512,10 +1513,11 @@ export async function build(decided: Decided): Promise<Ended> {
     for (const answer of edit.keeps) derive(answer, op);
     for (const id of edit.changes.flatMap((c) => (c.kind === 'rules-wording' ? [...c.add, ...c.remove].map((r) => r.recordId) : c.recordIds))) need(id).edits.push(op);
     // Only a Timeline line marks a note new (m3); a link fix never does.
-    if (edit.changes.some((c) => c.kind === 'timeline-append')) {
-      await add({ kind: 'move', before: seen(edit.file), parent: { fileId: edit.file.parents[0] ?? '' }, name: edit.file.name, properties: { bowerNew: '1' } }, [op]);
-    }
-    for (const row of edit.rows) reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), updated: [{ path: edit.path, what: row.what, op, ...(row.line === undefined ? {} : { line: row.line }) }] } });
+    const appended = edit.changes.reduce((n, c) => n + (c.kind === 'timeline-append' ? c.entries.length : 0), 0);
+    // A line's row says how the note is as the run leaves it: the edit's bytes, and the stamp of its last write there,
+    // the New mark's (`write-once`), so the screen marks the line only while the note is still so (addendum 5).
+    const left = appended ? { lines: appended, md5: md5Hex(new TextEncoder().encode(edit.text)), stamp: stampOf(opts.runId, await add({ kind: 'move', before: seen(edit.file), parent: { fileId: edit.file.parents[0] ?? '' }, name: edit.file.name, properties: { bowerNew: '1' } }, [op])) } : null;
+    for (const row of edit.rows) reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), updated: [{ path: edit.path, what: row.what, op, ...(row.line === undefined || left === null ? {} : { line: row.line, ...left }) }] } });
   }
   // What a disagreement's answer derives (R4-1): its Timeline line, which the question's removal waits for.
   for (const [id, a] of answerLines) {

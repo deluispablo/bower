@@ -352,14 +352,23 @@ function operationV2(value: unknown): value is OperationV2 {
 
 const rows = (value: unknown, keys: string[], optional: string[] = []): boolean =>
   list(value, (row) => closed(row, keys, optional) && Object.values(row).every(text));
-/** An updated row: its op and its line are optional (TL-P4-19 addendum 3), and a line comes only with its op. */
-const updatedRow = (row: unknown): boolean => closed(row, ['path', 'what'], ['op', 'line']) && text(row.path) && text(row.what)
-  && (!Object.hasOwn(row, 'op') || hash(row.op)) && (!Object.hasOwn(row, 'line') || (Object.hasOwn(row, 'op') && integer(row.line)));
+const hex32 = (value: unknown): value is string => typeof value === 'string' && value.length === 32 && !/[^0-9a-f]/.test(value);
+const has = (row: Fields, key: string): boolean => Object.hasOwn(row, key);
+/**
+ * An updated row, the one validator of it for the manifest and the checkpoint (P4-45d): `op` optional; `line` (an
+ * ordinal) only with its op; `lines`, `md5` and `stamp` only with a line, and the line below `lines` (TL-P4-19 addenda
+ * 3 to 5). A row from before any of them still reads.
+ */
+export const isUpdatedRow = (row: unknown): row is UpdatedRow => closed(row, ['path', 'what'], ['op', 'line', 'lines', 'md5', 'stamp'])
+  && text(row.path) && text(row.what) && (!has(row, 'op') || hash(row.op)) && (!has(row, 'line') || (has(row, 'op') && integer(row.line)))
+  && ['lines', 'md5', 'stamp'].every((k) => !has(row, k) || has(row, 'line'))
+  && (!has(row, 'lines') || (integer(row.lines) && (row.line as number) < row.lines))
+  && (!has(row, 'md5') || hex32(row.md5)) && (!has(row, 'stamp') || hex32(row.stamp));
 function runReport(value: unknown): value is ManifestRunReport {
   if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded', 'alreadySaved'])) return false;
   return list(value.filed, (row) => closed(row, ['name', 'title', 'kind', 'to'], ['note', 'area']) && text(row.name) && text(row.title)
       && oneOf(row.kind, fileKinds) && text(row.to) && (!Object.hasOwn(row, 'note') || text(row.note)) && (!Object.hasOwn(row, 'area') || text(row.area)))
-    && rows(value.created, ['path', 'what']) && list(value.updated, updatedRow) && rows(value.setAside, ['name', 'why'])
+    && rows(value.created, ['path', 'what']) && list(value.updated, isUpdatedRow) && rows(value.setAside, ['name', 'why'])
     && list(value.questions, (row) => closed(row, ['id', 'text', 'yes', 'no', 'askedAt'], ['about'])
       && text(row.id) && text(row.text) && text(row.yes) && text(row.no) && integer(row.askedAt)
       && (!Object.hasOwn(row, 'about') || text(row.about)))

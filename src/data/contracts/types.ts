@@ -66,6 +66,11 @@ export interface Note {
   /** For a companion note: the original file it describes. */
   original?: string;
   byBower: boolean;
+  /**
+   * The note file as read (TL-P4-19 addendum 5): its write stamp (`bowerOp`), when it has one, and the MD5 of the
+   * bytes read, which is Drive's `md5Checksum` of them. Left out by a source that reads no file.
+   */
+  file?: { stamp?: string; md5: string };
 }
 
 export interface PileItem {
@@ -207,10 +212,12 @@ export interface FiledItem {
 
 /**
  * A note a run brought up to date: one row per Timeline line it wrote, or one for a Current state alone. `op` is the
- * operation that wrote it and `line` its Timeline line counted from the end (0 is the last), so a row is tied by id and
- * place, never by its words (TL-P4-19 addendum 3). A report from before them has neither; a line comes with its op.
+ * operation that wrote it; `line` is the 0-based ordinal of its line among the `lines` Timeline lines that op wrote
+ * (TL-P4-19 addendum 4), never a place in the note nor its words. `md5` and `stamp` are the note as the run left it
+ * (Drive's `md5Checksum` and `bowerOp`), so the New mark shows only while the note is still so (addendum 5). A report
+ * from before them has none; a line comes with its op, and `lines`, `md5` and `stamp` with a line.
  */
-export type UpdatedRow = { path: string; what: string; op?: string; line?: number };
+export type UpdatedRow = { path: string; what: string; op?: string; line?: number; lines?: number; md5?: string; stamp?: string };
 
 export interface RunReport {
   filed: FiledItem[];

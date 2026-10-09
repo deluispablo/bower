@@ -21,6 +21,7 @@ import { EDIT_FILE_LIMIT, savedLinkKey } from '../contracts/note-edit';
 import { grounded, groundedKeys } from '../spine/grounded';
 import { canonical } from '../spine/records';
 import { stampOf } from '../spine/write-once';
+import { md5Hex } from '../contracts/hashes';
 import type { Checkpoint, ReportRecord } from '../contracts/run-checkpoint';
 import { parsePileDisposition } from '../contracts/pile-disposition';
 import type { Declaration } from '../contracts/pile-declaration';
@@ -3992,8 +3993,10 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         const [, mark, ...more] = touching(manifest, file.id);
         expect(more).toEqual([]);
         expect(mark).toMatchObject({ dependsOn: [edit?.operationId], effect: { kind: 'move', parent: { fileId: file.parents[0] }, name: file.name, properties: { bowerNew: '1' } } });
+        // Its row names its line's ordinal, and the note as the run leaves it: the edit's bytes and the mark's stamp.
+        const left = { lines: 1, md5: md5Hex(new TextEncoder().encode(edit?.effect.text ?? '')), stamp: stampOf(manifest?.runId ?? '', (mark as OperationV2 | undefined)?.operationId ?? '') };
         expect(manifest?.reportPlan.filter((c) => c.value.updated.length)).toContainEqual({
-          requires: [edit?.operationId], when: 'applied', value: { filed: [], created: [], updated: [{ path: edit?.effect.path, what, op: edit?.operationId, line: 0 }], setAside: [], questions: [] },
+          requires: [edit?.operationId], when: 'applied', value: { filed: [], created: [], updated: [{ path: edit?.effect.path, what, op: edit?.operationId, line: 0, ...left }], setAside: [], questions: [] },
         });
       }
       if (!manifest) return;
@@ -4048,7 +4051,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(rows.map((r) => r.path)).toEqual([FLAT, JOB]);
       for (const row of rows) {
         const edit = edits.find((e) => e.effect.path === row.path);
-        expect(row).toEqual({ path: row.path, what: row.what, op: edit?.operationId, line: 0 });
+        // The note as the run left it, as Drive keeps it: its stamp and its checksum (TL-P4-19 addendum 5).
+        const stored = await w.drive.get(edit?.effect.before.fileId ?? '', { checksums: true });
+        expect(row).toEqual({ path: row.path, what: row.what, op: edit?.operationId, line: 0, lines: 1, md5: stored.md5Checksum, stamp: stored.appProperties?.bowerOp });
         expect(manifest?.reportPlan.filter((c) => c.value.updated.length && c.requires[0] === edit?.operationId).flatMap((c) => c.value.updated)).toEqual([row]);
       }
     });
@@ -4069,8 +4074,8 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const note = await NOTE_READ(w).note(FLAT);
       const at = (what: string): number => note.timeline.findIndex((t) => t.text === what);
       expect(note.timeline.length).toBe(3);
-      for (const row of rows) expect([...newLineIndexes(note.timeline, [row])]).toEqual([at(row.what)]);
-      expect([...newLineIndexes(note.timeline, rows)].sort()).toEqual([1, 2]);
+      for (const row of rows) expect([...newLineIndexes(note, [row])]).toEqual([at(row.what)]);
+      expect([...newLineIndexes(note, rows)].sort()).toEqual([1, 2]);
     });
 
     it("a person's edit after the run drops the New mark and keeps the row", async () => {
@@ -4080,7 +4085,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await w.runs.settled();
       const rows = (viewOf(w)?.run.report?.updated ?? []).filter((r) => r.path === FLAT);
       expect(rows).toHaveLength(1);
-      expect([...newLineIndexes((await NOTE_READ(w).note(FLAT)).timeline, rows)]).toEqual([1]);
+      expect([...newLineIndexes(await NOTE_READ(w).note(FLAT), rows)]).toEqual([1]);
       // The person adds a line of their own below Bower's, in another app (no stamp of theirs): the mark is dropped,
       // never moved onto their line.
       const text = textAt(w, FLAT) ?? '';
@@ -4091,7 +4096,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await w.drive.writeText(flat.id, lines.join('\n'), now?.modifiedTime ?? '');
       const note = await NOTE_READ(w).note(FLAT);
       expect(note.timeline.map((t) => t.text)).toContain('Called the agent about the deposit.');
-      expect([...newLineIndexes(note.timeline, rows)]).toEqual([]);
+      expect([...newLineIndexes(note, rows)]).toEqual([]);
       // The report row stays as the run wrote it.
       expect((viewOf(w)?.run.report?.updated ?? []).filter((r) => r.path === FLAT)).toEqual(rows);
     });
@@ -4925,8 +4930,10 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(await pendingAnswers(w)).toEqual([]);
       expect(viewOf(w)?.run.report?.filed).toContainEqual({ name: LISTING.name, title: 'Flat 3, 12 Larkspur Lane', kind: 'link', to: 'Projects/Flat hunt', note: INTO });
       // TL-P2-40: the note the thing joined is listed as brought up to date, by its line.
-      expect(manifest.reportPlan).toContainEqual({ requires: [edit?.operationId], when: 'applied', value: { filed: [], created: [], updated: [{ path: INTO, what: LINE, op: edit?.operationId, line: 0 }], setAside: [], questions: [] } });
-      expect(viewOf(w)?.run.report?.updated).toContainEqual({ path: INTO, what: LINE, op: edit?.operationId, line: 0 });
+      const stored = await w.drive.get(into.id, { checksums: true });
+      const row = { path: INTO, what: LINE, op: edit?.operationId, line: 0, lines: 1, md5: stored.md5Checksum, stamp: stored.appProperties?.bowerOp };
+      expect(manifest.reportPlan).toContainEqual({ requires: [edit?.operationId], when: 'applied', value: { filed: [], created: [], updated: [row], setAside: [], questions: [] } });
+      expect(viewOf(w)?.run.report?.updated).toContainEqual(row);
       await expectFiledOnce(w);
     });
 

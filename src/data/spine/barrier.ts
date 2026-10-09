@@ -124,7 +124,7 @@ export function fixedReport(r: RunReport): RunReport {
   const out: RunReport = {
     filed: r.filed.map((f) => ({ name: f.name, title: f.title, kind: f.kind, to: f.to, ...(f.note !== undefined ? { note: f.note } : {}), ...(f.area !== undefined ? { area: f.area } : {}) })),
     created: r.created.map((c) => ({ path: c.path, what: c.what })),
-    updated: r.updated.map((u) => ({ path: u.path, what: u.what, ...(u.op !== undefined ? { op: u.op } : {}), ...(u.line !== undefined ? { line: u.line } : {}) })),
+    updated: r.updated.map((u) => ({ path: u.path, what: u.what, ...(['op', 'line', 'lines', 'md5', 'stamp'] as const).reduce((o, k) => (u[k] === undefined ? o : { ...o, [k]: u[k] }), {}) })),
     setAside: r.setAside.map((a) => ({ name: a.name, why: a.why })),
     questions: r.questions.map(fixedQuestion),
   };
