@@ -4095,8 +4095,8 @@
       "A contract test runs the same operations on the fake drive and on the adapter over a fake fetch and gets the same chain."
     ],
     "verify": "pnpm exec vitest run src/data -t \"the shared operations give the same chain on the fake and on Drive\" && pnpm -C runner exec vitest run -t \"a restarted runner resumes after its last checkpoint|an applied operation is never applied twice|only the last 20 finished run folders are kept\"",
-    "passes": true,
-    "note": "TL-P3-21 points 2 and 3 (extract, not port; checkpoints in .bower/runs/<run_id>/, retention 20 to the Bin)."
+    "passes": false,
+    "note": "TL-P3-21 points 2 and 3 (extract, not port; checkpoints in .bower/runs/<run_id>/, retention 20 to the Bin). Reopened 2026-10-09 (retention-never-wired, main f9e2515): keepFinished was never called by a run; wire it at run end after the report barrier through the engine and write-once helper; a Bin failure is logged, never fails the run; test through a real run: \"after 21 finished runs, 20 run folders remain and the oldest is in the Bin\" (replaces the direct-call test name in the verify)."
   },
   {
     "id": "spine-report-barrier-dispositions",
