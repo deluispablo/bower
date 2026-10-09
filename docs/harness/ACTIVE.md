@@ -415,3 +415,4 @@ P3-9 is closed.
 - c2-create-by-id fix round merged (red 0709119f, fix 18b1abba; ids per intended create kept with the pending action; fake Worker on the helper; chunks of 1000; foreign stamp → unconfirmed; prod +207/-109; C04 76; check green, e2e:fake 256). keepFinished (retention) has no production caller: dead code, lead told. P4-37b check dispatched.
 - Stage 2 production net since 9265d860: +167 (lead asked how to close). keepFinished removal at the stage end; retention is a post-P4 product question.
 - Lead: stage 2 closes at +167 (main 7ccb60f); condition: jscpd clones ≤ 22 at the stage end. keepFinished removal dispatched (mechanical).
+- keepFinished removal held: it is TL-P3-21 retention, promised by closed entry spine-operations-checkpoints and never wired (retention-never-wired logged).
