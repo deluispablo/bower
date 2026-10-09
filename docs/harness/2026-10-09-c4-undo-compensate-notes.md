@@ -164,3 +164,41 @@ The lock scope used here is the explicit Addenda 4 and 5 packet contract and the
 
 tests changed: src/data/vault/undo-compensate.property.test.ts: a kept inverse (thrown with the waits sentence, line still in the outbox) is pending and resolved by the flush; only a refusal with nothing kept is unresolved, classified by the outbox and failed list after the call; adds: the sentence promises "later" exactly when kept; seed 427285 x30 plus 300 random runs; oracle unchanged (TL-P4-27 addendum 6, amended by a fresh Codex session).
 tests changed: src/data/vault/undo-compensate.property.test.ts: the model tracks each kept inverse until it is sent or refused; a later refusal leaves the original in force and the inverse must show on the failed list (journal.ts:421); report and recovery expectations use the tracked outcome; seeds, counts and oracle unchanged (TL-P4-27 addendum 7, Codex property session).
+
+## Round 2 (addendum 8)
+
+Implementation session for the four independent reds in `0e6fde89`; no network or Git write command used.
+The standard mechanisms remain the existing Web Locks outbox and compensating forward lines, using the
+Microsoft compensating-transaction and MDN Web Locks sources already cited above.
+
+- `src/data/vault/journal.ts:213`: storage wins over page memory for every stored line. A failed keep retains
+  only page-only lines, so a failed reservation cannot leave a stale shadow that resurrects another tab's retract.
+  `:392` sends nothing when keeping fails and marks every waiting line `later`; required flush still throws the
+  existing offline sentence. `:426` rereads each send's holder from storage under the existing lock.
+  `:469` checks keeping the first intent before create; `:496` returns the existing keep operation's success.
+  FIFO, reservation, intent recovery and retraction remain in their existing homes.
+- `src/data/vault/drive-vault.ts:1359`: kept-rule Undo resolves the add line's text to the stored wording through
+  `ruleSequence`; `:1442` passes the add line's text, never the suggestion title. The inverse stores and says
+  the resolved rule wording. This also uses the rule's own words when a tidy-up has already archived its add.
+- `src/data/contracts/note-edit.ts:637`: the shared sequence sorts modern changes by since then recordId,
+  matching journal order at equal timestamps without sorting by class. Both wordRules and rules() use it.
+  `:643` resolves removals through the existing ruleLike identity inside this one sequence, including the
+  worded rule's You wrote text. Old manifests with a removal lacking since retain removals-first ordering.
+- `src/data/spine/scripted.ts:1845`: an unpaired rule inverse has its own ordinary updated row and one change
+  counted, dependent on its rule effects and archive. Same-run pairs still hide both rows and count neither.
+  Report construction and pairsOf remain the existing presentation homes.
+
+tests changed: none
+compatibility: c9811c7e
+
+Verification (output redirected; failure blocks and summary counts only inspected):
+- Red baseline: all four new scenarios failed; `/tmp/compensate-r2-red.log`.
+- `pnpm exec tsc -p tsconfig.app.json`: PASS; `/tmp/compensate-r2-tsc.log`.
+- `pnpm exec vitest run src/data`: PASS, 73 files / 3,804 tests; `/tmp/compensate-r2-unit.log`.
+  All four round-2 reds, every existing data test and the unchanged property's seeded and random batches pass.
+- `pnpm -C runner exec vitest run`: PASS, 40 files / 314 tests; `/tmp/compensate-r2-runner.log`.
+  Unchanged `runner/test/drive-calls-golden.test.ts` asserts C04 exactly 78 and 25-runs exactly 88.
+- `git diff --check`: PASS. No test file is modified. No pnpm check or e2e run.
+
+The coordinator commits the four production files as the fix, substitutes its SHA for c9811c7e, then commits
+this notes file separately. No out-of-scope mechanism or second implementation path was added.
