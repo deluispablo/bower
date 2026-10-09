@@ -453,3 +453,4 @@ P3-9 is closed.
 - c3-reservation-home closed (e66f2b1d; P4-39 BLOCK, fix round, P4-39b PASS second way? no; prod journal +8/-2 on top of +103/-64). reservation-rule-test-slow logged (rule test hit 5 s under load; c3-test-time class). 425/430. c3-test-time running; c3-reviewer-guard next.
 - Guard hook wired by owner (main 91b3b3f7); checked from a throwaway subagent: main-checkout git checkout blocked, coordinator git status runs. c3-test-time and c3-unused-code running.
 - Addendum 6 (main 7f5fa754): slow ratchet uses alone times; ESLint rule on the primitive; c3-test-time fix round running. Registered c3-unused-production (Sonnet, next free slot) and p4-rate-limits (escalated, after stage 3). c3-reservation-upload (escalated) running. 427/434.
+- Addendum 7 (main e451eb84): c3-reservation-upload fix round queued (4xx releases the record id through the keeper port); P4-40 PASS withdrawn until its re-review. Order: integrate c3-test-time, then upload.
