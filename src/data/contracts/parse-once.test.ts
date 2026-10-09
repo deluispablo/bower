@@ -296,7 +296,7 @@ describe.each(['fenced', 'external'] as const)('%s write invalidates the fetched
       bowerNote: "## Bower's note\nCompare.\n",
     });
     expect(result).toMatchObject({ summary: 'Lease', currentState: ['One offer'], body: 'Your words.\n- [ ] Call Alex',
-      timeline: [{ date: '2026-10-01', text: 'Started.' }, { date: '2026-10-09', text: WHAT }], bowerNote: 'Compare.' });
+      timeline: [{ date: '2026-10-01', text: 'Started.' }, { date: '2026-10-09', text: WHAT }], bowerNote: { text: 'Compare.', source: 'notes' } });
     expect(observed.contexts).toHaveLength(1);
     expect(observed.contexts[0]?.misses.map(({ fileId, hash }) => ({ fileId, hash }))).toEqual([
       { fileId: file.id, hash: sha256Sync(a) }, { fileId: file.id, hash: sha256Sync(b) },
