@@ -6062,7 +6062,7 @@
       "Each changed role runs once after merge."
     ],
     "verify": "pnpm exec vitest run src/agents.test.ts -t \"every worker agent has a turn cap and read-only roles list their tools\"",
-    "note": "TL-P4-20 rows 5-6. Owner authorized the config changes in the coordinator chat 2026-10-09. Packet 2026-10-09-c3-agent-defs-packet.md. Red ceef07f7, fix 31817d33, research tools d27bf91c. Concurrency env CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2."
+    "note": "TL-P4-20 rows 5-6. Owner authorized the config changes in the coordinator chat 2026-10-09. Packet 2026-10-09-c3-agent-defs-packet.md. Red ceef07f7, fix 31817d33, research tools d27bf91c. Concurrency env CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2. Live role checks after merge: reviewer (Bash, ToolSearch, WebFetch), design-checker (browser MCP prefix, WebFetch), diagnoser (Write, context7) all ok; impact and evaluator share those lists."
   },
   {
     "id": "c3-stop-gate",
