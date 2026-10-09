@@ -21,6 +21,7 @@ import { makeFolder, makeText, updateByStamp } from '../spine/write-once';
 import { BOWER_FOLDER, SYSTEM, isRunnerFile, type LastRunFile } from '../vault/layout';
 import type { Me, ProcessOptions, RunReply, RunWire, StatusReply, WorkerApi } from '../worker/worker-api';
 import { planRun, type HubUpdate } from './fake-runner';
+import type { AuthoredState } from '../spine/scripted';
 import type { Binding, FakeRunService } from './fake-run-service';
 import type { FakeLease } from './fake-lease';
 import { openElsewhere, type LeaseReply, type SessionAction } from '../session';
@@ -42,6 +43,8 @@ export interface FakeWorkerOptions {
   lease?: FakeLease;
   /** The hub notes a full B run brings up to date; the demo's two by default. */
   updates?: readonly HubUpdate[];
+  /** The Current states the scripted reply updates; none by default. */
+  states?: readonly AuthoredState[];
 }
 
 export class FakeWorker implements WorkerApi {
@@ -62,6 +65,7 @@ export class FakeWorker implements WorkerApi {
   private onB = false;
   private readonly lease: FakeLease | null;
   private readonly updates: readonly HubUpdate[] | undefined;
+  private readonly states: readonly AuthoredState[] | undefined;
   /** The place this client last held the lease for, and its epoch: what the real Worker reads from the request. */
   private holder: { place: string; epoch: number } | null = null;
 
@@ -76,6 +80,7 @@ export class FakeWorker implements WorkerApi {
     this.account = opts.account ?? ALEX.email;
     this.lease = opts.lease ?? null;
     this.updates = opts.updates;
+    this.states = opts.states;
     // Offline, the folder cannot be read now; every call says so on its own.
     this.loaded = this.offline ? Promise.resolve() : this.load(opts.scenario, opts.fresh ?? true).catch((e: unknown) => {
       console.error(e);
@@ -268,7 +273,7 @@ export class FakeWorker implements WorkerApi {
     const subjects = [...(opts.subject !== undefined ? [opts.subject] : []), ...(opts.subjects ?? [])];
     const scoped = !subjects.length ? null : await planAdmission(fakeRead(this.drive), root, { scope, subjects, clock: () => Date.now(), newId: () => requestId });
     if (scoped?.kind === 'nothing') throw new BowerError('conflict', NOTHING[scoped.cause]);
-    const plan = await planRun(this.drive, root, { scope, allowWeb: !!opts.allowWeb, runId, requestId, requestedAt: Date.now(), ...(scoped ? { taken: scoped.manifest } : {}), ...(this.updates ? { updates: this.updates } : {}) });
+    const plan = await planRun(this.drive, root, { scope, allowWeb: !!opts.allowWeb, runId, requestId, requestedAt: Date.now(), ...(scoped ? { taken: scoped.manifest } : {}), ...(this.updates ? { updates: this.updates } : {}), ...(this.states ? { states: this.states } : {}) });
     const failAt = this.failOnce;
     this.failOnce = false;
     const wire = await this.runs.admit(this.binding(root), plan.manifest, failAt ? { failAt: 'writing' } : {});
@@ -284,6 +289,11 @@ export class FakeWorker implements WorkerApi {
 
   async status(): Promise<StatusReply> {
     const run = await this.latest();
+    // A run that ended with a granted answer still in your changes (its write refused at the write itself): it waits
+    // as an answer that came during the run, so its run starts now, with no press (TL-P4-19 addendum 15).
+    if (run?.phase === 'done' && this.onB && this.rootId && this.runs.stayed(this.binding(this.rootId), run.id)) {
+      this.waiting ??= { requestIds: [], subjects: [], allowWeb: false };
+    }
     if (this.waiting && (!run || ['done', 'failed'].includes(run.phase))) {
       const next = await this.startWaiting(this.waiting);
       if (next) return this.stamp(next);
@@ -381,7 +391,7 @@ export class FakeWorker implements WorkerApi {
   private async startRunning(root: string): Promise<void> {
     try {
       const { runId, requestId } = this.runs.ids();
-      const plan = await planRun(this.drive, root, { scope: 'all', allowWeb: false, runId, requestId, requestedAt: Date.now() - 70_000, ...(this.updates ? { updates: this.updates } : {}) });
+      const plan = await planRun(this.drive, root, { scope: 'all', allowWeb: false, runId, requestId, requestedAt: Date.now() - 70_000, ...(this.updates ? { updates: this.updates } : {}), ...(this.states ? { states: this.states } : {}) });
       await this.runs.admit(this.binding(root), plan.manifest);
       this.onB = true;
     } catch (e) {

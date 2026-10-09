@@ -174,8 +174,9 @@ async function tidyRun(opts: TidyOptions, timing: RunTiming, status: RunnerStatu
     // Retention, once, after the report barrier: a Bin that fails is logged and never fails the run (`retention.ts`).
     const head = seen.chain?.at(-1);
     if (head?.phase === 'done') await seen.retain?.(head.phaseAt);
-    // 5. Status, only after the report is read back; refused, it throws.
-    await status.post('done', totalOf(seen.total));
+    // 5. Status, only after the report is read back; refused, it throws. A granted write that did not land says its
+    // answer stayed, so the Worker starts the run that asks again (TL-P4-19 addendum 15).
+    await status.post('done', { ...totalOf(seen.total), ...(seen.answersStayed ? { answersStayed: true as const } : {}) });
     return end;
   }
   if (end.phase === 'failed') return end;
@@ -200,6 +201,8 @@ interface Seen {
   saving: boolean;
   /** The admitted things (pile members; your changes are not things), on every report from `reading` (undefined until known). */
   total: number | undefined;
+  /** At done: a "Write it" the person granted was not written, so its answer stayed (`Finished.answersStayed`). */
+  answersStayed?: boolean;
   /**
    * At a terminal end (done, or failed for good), ended `at`: puts the oldest ended run folders beyond the newest 20 in
    * the Bin and stamps this run's folder as ended; set once the run's records are known. Never at a stop recovery retries.
@@ -239,6 +242,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
     if (found.kind === 'run' && found.chain.length) {
       const finished = await finishRun(barrier, found.manifest, found.manifestHash, found.chain);
       seen.chain = finished.chain;
+      seen.answersStayed = finished.answersStayed;
       return { phase: 'done', dispositions: finished.dispositions };
     }
     // No chain to say it in (its records already let go of): the report itself is what landed.
@@ -294,6 +298,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
     end.chain,
   ));
   seen.chain = finished.chain;
+  seen.answersStayed = finished.answersStayed;
   return { phase: 'done', dispositions: finished.dispositions };
 }
 

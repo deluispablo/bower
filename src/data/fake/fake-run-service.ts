@@ -143,6 +143,11 @@ export class FakeRunService {
   private recovering = new Map<string, Promise<void>>();
   private admitting = new Map<string, Promise<RunWire>>();
   private failing = new Set<string>();
+  /**
+   * Runs that ended done with a granted answer that stayed in your changes (`Finished.answersStayed`): the runner's end
+   * status says so to the Worker, which starts the run that asks again (TL-P4-19 addendum 15). Taken once (`stayed`).
+   */
+  private answersStayed = new Set<string>();
 
   constructor(opts: FakeRunServiceOptions) {
     this.drive = opts.drive;
@@ -280,6 +285,15 @@ export class FakeRunService {
       console.error(e);
       return false;
     }
+  }
+
+  /**
+   * Whether run `runId` of the binding ended saying a granted answer stayed (the runner's end status, TL-P4-19
+   * addendum 15); told once, as the Worker takes a report once.
+   */
+  stayed(binding: Binding, runId: string): boolean {
+    this.authorize(binding);
+    return this.rows.get(keyOf(binding))?.control.runId === runId && this.answersStayed.delete(runId);
   }
 
   /** The piles the binding's run took, while it goes. */
@@ -420,6 +434,7 @@ export class FakeRunService {
     }, manifest, row.control.manifestHash, chain);
     const head = finished.chain.at(-1);
     if (!head) throw new BowerError('unknown', SAVE_FAILED);
+    if (finished.answersStayed) this.answersStayed.add(manifest.runId);
     await this.advance(attempt, head, this.clock());
     const cache = this.cache.get(attempt.key);
     if (cache) {

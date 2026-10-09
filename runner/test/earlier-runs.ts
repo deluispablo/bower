@@ -3,8 +3,10 @@
  * checkpoints, and the run folder stamped as ended (`bowerRun`, `bowerRunEnded`), as a run stamps it at done. Shared by
  * the retention tests (`barrier.test.ts`) and the C04 golden variant (`drive-calls-golden.test.ts`).
  */
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { hashRecordJson } from '../../src/data/contracts/record-json';
+import type { EditText } from '../../src/data/contracts/run-manifest';
 import type { DriveFile } from '../../src/data/drive/drive-api';
 import type { FakeDrive } from '../../src/data/drive/fake-drive';
 import { RunRecords, canonical, checkpointName, firstCheckpoint, manifestName, nextCheckpoint, type RunManifest } from '../../src/data/spine/records';
@@ -22,11 +24,17 @@ export async function hash(value: unknown): Promise<string> {
 }
 
 /** The planned manifest for another run of this folder: its capture id and operation ids made again, as the planner makes them. */
-export async function planned(rootId: string, runId: string): Promise<RunManifest> {
+export async function planned(rootId: string, runId: string, edit?: EditText): Promise<RunManifest> {
   const value = JSON.parse(PLANNED) as RunManifest;
   value.runId = runId;
   value.requestId = `request-${runId}`;
   value.scope = { rootId };
+  if (edit) {
+    // A run whose one operation is that note's edit: the note is the one place it captured.
+    value.capture = { piles: [], members: [], journal: [], places: [{ file: edit.before, path: edit.path }] };
+    value.operations = [{ operationId: 'state-edit', ordinal: 0, dependsOn: [], effect: edit }];
+    value.reportPlan = [];
+  }
   value.captureId = await hash({ scope: value.scope, runScope: value.runScope, capture: value.capture });
   const renamed = new Map<string, string>();
   const ref = (id: string): string => renamed.get(id) ?? id;
@@ -46,26 +54,52 @@ export async function planned(rootId: string, runId: string): Promise<RunManifes
  * by run id. Each folder carries the stamp a run puts on its folder at its end.
  */
 export async function finishedBefore(drive: FakeDrive, root: string, count: number): Promise<Map<string, DriveFile>> {
+  for (let i = 0; i < count; i++) await finished(drive, root, await planned(root, `run-${String(i).padStart(2, '0')}`), i);
+  return runFolders(drive, root);
+}
+
+/** One earlier run of the folder with `manifest`, ended before this one: its manifest, two checkpoints, its folder stamped. */
+async function finished(drive: FakeDrive, root: string, manifest: RunManifest, i: number): Promise<void> {
   const records = new RunRecords(drive, root);
   const w = drive.fenced(() => {});
-  for (let i = 0; i < count; i++) {
-    const manifest = await planned(root, `run-${String(i).padStart(2, '0')}`);
-    const m = await canonical(manifest);
-    const where = { runId: manifest.runId };
-    await records.put(w, where, manifestName(m.hash), m.text);
-    const mark = { attemptId: `earlier-${i}`, epoch: 1 };
-    const first = firstCheckpoint(manifest, m.hash, mark, EARLIER_AT - 2000 + i);
-    const c0 = await canonical(first);
-    await records.put(w, where, checkpointName(0, c0.hash), c0.text);
-    const endedAt = EARLIER_AT - 1000 + i;
-    const last = nextCheckpoint(first, c0.hash, mark, { phase: 'failed', phaseAt: endedAt });
-    const c1 = await canonical(last);
-    await records.putNew(w, where, checkpointName(1, c1.hash), c1.text);
-    const folder = (await runFolders(drive, root)).get(manifest.runId);
-    if (!folder) throw new Error(`no folder for ${manifest.runId}`);
-    await drive.update(folder.id, { appProperties: { bowerRun: manifest.runId, bowerRunEnded: String(endedAt) } });
-  }
-  return runFolders(drive, root);
+  const m = await canonical(manifest);
+  const where = { runId: manifest.runId };
+  await records.put(w, where, manifestName(m.hash), m.text);
+  const mark = { attemptId: `earlier-${i}`, epoch: 1 };
+  const first = firstCheckpoint(manifest, m.hash, mark, EARLIER_AT - 2000 + i);
+  const c0 = await canonical(first);
+  await records.put(w, where, checkpointName(0, c0.hash), c0.text);
+  const endedAt = EARLIER_AT - 1000 + i;
+  const last = nextCheckpoint(first, c0.hash, mark, { phase: 'failed', phaseAt: endedAt });
+  const c1 = await canonical(last);
+  await records.putNew(w, where, checkpointName(1, c1.hash), c1.text);
+  const folder = (await runFolders(drive, root)).get(manifest.runId);
+  if (!folder) throw new Error(`no folder for ${manifest.runId}`);
+  await drive.update(folder.id, { appProperties: { bowerRun: manifest.runId, bowerRunEnded: String(endedAt) } });
+}
+
+/**
+ * An earlier run that wrote `lines` as the Current state of the note at `path` (by its file id): its manifest's one
+ * state change, as the planner records it (`state-rewrite`, its `previous` and `lines`), so a later run reads there what
+ * Bower last wrote. That edit is the run's one operation.
+ */
+export async function stateWrittenBefore(drive: FakeDrive, root: string, path: string, lines: string[]): Promise<void> {
+  const file = (await drive.listAll(root)).find((f) => drive.pathOf(f.id, root) === path);
+  if (!file) throw new Error(`no ${path}`);
+  const before = { fileId: file.id, name: file.name, parents: file.parents, folder: false, modifiedTime: file.modifiedTime };
+  const text = await drive.readText(file.id);
+  // The note as that run left it (`text`), and as it read it before: a manifest the one reader (`parseRunManifestV2`)
+  // takes, as a run's own is (the note a captured place, its before and after told apart).
+  const digest = (t: string): string => createHash('sha256').update(Buffer.from(t, 'utf8')).digest('hex');
+  const size = (t: string): number => new TextEncoder().encode(t).byteLength;
+  const earlier = `${text}\n`;
+  const edit: EditText = {
+    kind: 'edit-text', path, text, before,
+    beforeContent: { encoding: 'utf8', size: size(earlier), sha256: digest(earlier), provenance: 'fake-stored', observedModifiedTime: file.modifiedTime },
+    changes: [{ kind: 'state-rewrite', recordIds: [], previous: [], lines }],
+    content: { encoding: 'utf8', size: size(text), sha256: digest(text) },
+  };
+  await finished(drive, root, await planned(root, 'run-state', edit), 9);
 }
 
 /** The folders in `.bower/runs` outside the Bin, by name. */

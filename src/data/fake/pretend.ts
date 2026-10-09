@@ -6,7 +6,7 @@
 import { FakeDrive } from '../drive/fake-drive';
 import type { Scenario, TimeScale } from '../demo/scenario';
 import { BOWER_FOLDER } from '../vault/layout';
-import { FakeRunService } from './fake-run-service';
+import { FakeRunService, type FakeRunServiceOptions } from './fake-run-service';
 import { seedFakeDrive } from './seed';
 
 const FAKE_KEY = (scenario: Scenario): string => `bower:fake:${scenario}`;
@@ -30,6 +30,8 @@ export async function pretendDrive(scenario: Scenario): Promise<{ drive: FakeDri
     if (scenario === 'slow-report' && rootId) await (await import('./live-shape')).liveShape(drive, rootId);
     // Answers whose subjects went since (TL-P4-19 addendum 10), for the rows a tidy-up gives them.
     if (scenario === 'gone-answers' && rootId) await (await import('./gone-answers')).goneAnswers(drive, rootId);
+    // Current states changed by hand since Bower wrote them (TL-P4-19 addendum 13), for "Write it".
+    if (scenario === 'write-it' && rootId) await (await import('./write-it')).writeIt(drive, rootId);
   }
   const d = drive;
   const saver = new Saver(scenario, d);
@@ -115,10 +117,10 @@ const savers = new WeakMap<FakeDrive, Saver>();
  * same snapshot as the Drive. An admission is acknowledged only once that
  * snapshot holds it. A fresh pretend Drive starts with no runs.
  */
-export function pretendRuns(scenario: Scenario, drive: FakeDrive, fresh: boolean, scale: TimeScale): FakeRunService {
+export function pretendRuns(scenario: Scenario, drive: FakeDrive, fresh: boolean, scale: TimeScale, hooks?: FakeRunServiceOptions['hooks']): FakeRunService {
   const saver = savers.get(drive) ?? new Saver(scenario, drive);
   savers.set(drive, saver);
-  const opts = { drive, scale, persist: () => saver.flush() };
+  const opts = { drive, scale, persist: () => saver.flush(), ...(hooks ? { hooks } : {}) };
   let runs: FakeRunService | null = null;
   try {
     const kept = fresh ? null : sessionStorage.getItem(RUNS_KEY(scenario));

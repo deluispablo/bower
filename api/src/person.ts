@@ -750,6 +750,23 @@ export class Person extends DurableObject<Env> {
     return this.ctx.storage.sql.exec(`SELECT key FROM deadlines WHERE kind = 'answers'`).toArray().length > 0;
   }
 
+  /**
+   * Run `run` ended with an answer that stayed in your changes (its granted write refused at the write itself, TL-P4-19
+   * addendum 15): it waits as an answer that came during the run does, so the run's end wakes the alarm to start the
+   * one run that asks again (`wakeForWaiting`, `startWaiting`), with no press. It adds no subject (your changes go with
+   * every such run), no requestId (no press waits on it) and no web (asking again looks nothing up). That run asks
+   * again, which uses the answer up, so none loops.
+   */
+  private answersStayed(): void {
+    const waiting = this.ctx.storage.kv.get<AnswersWaiting>(ANSWERS_WAITING);
+    this.ctx.storage.kv.put(ANSWERS_WAITING, {
+      requestIds: waiting?.requestIds ?? [],
+      subjects: waiting?.subjects ?? [],
+      allowWeb: waiting?.allowWeb ?? false,
+      tries: 0,
+    } satisfies AnswersWaiting);
+  }
+
   /** A run ended at `now`: when answers wait for it, the alarm wakes at once to start their run (`wake`). */
   private wakeForWaiting(now: number): void {
     if (this.ctx.storage.kv.get<AnswersWaiting>(ANSWERS_WAITING) !== undefined) this.arm('answers', 'waiting', now);
@@ -1215,6 +1232,7 @@ export class Person extends DurableObject<Env> {
             .one()
         : run;
       sql.exec('UPDATE run_ticket SET report_seq = ?, report_phase = ?, retired = ? WHERE hash = ?', report.seq, report.phase, ended ? 1 : 0, hash);
+      if (ended && report.answersStayed === true) this.answersStayed();
       if (ended) this.wakeForWaiting(now);
       return { accepted: true, reply: { run: toWire(row), revision: shows ? this.raiseRevision() : this.revision() } };
     });

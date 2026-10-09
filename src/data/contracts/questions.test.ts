@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { answerRun } from '../answer-loop';
-import { subjectOf } from './questions';
+import { STATE_ASK_AGAIN, answeredState, isAnsweredRow, subjectOf } from './questions';
 import type { Question } from './types';
 
 const PAIR: Question = { id: 'q-pair-note-a.note-b', text: 'Flat 3, 12 Larkspur Lane and Flat 3 (second) look like one flat. Keep one note?', yes: 'Yes, keep one', no: 'No, keep both', askedAt: 1 };
@@ -28,5 +28,27 @@ describe('question subjects', () => {
     // Malformed pair ids are not pairs.
     expect(subjectOf({ ...PAIR, id: 'q-pair-note-a.note-a' }).kind).toBe('folder');
     expect(subjectOf({ ...PAIR, id: 'q-pair-note-a' }).kind).toBe('folder');
+  });
+});
+
+describe('a Write it with no effect (TL-P4-19 addendum 12)', () => {
+  it('asks again in one sentence that says why', () => {
+    expect(STATE_ASK_AGAIN('Home')).toBe('The current state of Home changed after Bower showed you its update, so nothing was written. Should Bower write its update there now?');
+  });
+
+  it('a refused write and nothing to write name the note, or say "the note", and show on it', () => {
+    const at = 'Areas/Home/Home.md';
+    expect(answeredState('q-state-f1', 'refused', at)).toEqual({ questionId: 'q-state-f1', kind: 'state', outcome: 'refused', why: 'Not written: Drive would not let Bower change Home. Your current state is as you left it.', note: at });
+    expect(answeredState('q-state-f1', 'refused', null)).toEqual({ questionId: 'q-state-f1', kind: 'state', outcome: 'refused', why: 'Not written: Drive would not let Bower change the note. Your current state is as you left it.' });
+    expect(answeredState('q-state-f1', 'nothing-to-write', at)).toEqual({ questionId: 'q-state-f1', kind: 'state', outcome: 'nothing-to-write', why: 'Nothing to write: Home already said what Bower would have written.', note: at });
+    expect(answeredState('q-state-f1', 'nothing-to-write', null)).toEqual({ questionId: 'q-state-f1', kind: 'state', outcome: 'nothing-to-write', why: 'Nothing to write: the note already said it.' });
+  });
+
+  it('rows stored before still read, and the new rows read too', () => {
+    const gone = { questionId: 'q-state-f1', kind: 'state', outcome: 'subject-gone', why: 'Not written: the note had moved or gone to the Bin.' };
+    expect(isAnsweredRow(gone)).toBe(true);
+    expect(isAnsweredRow(answeredState('q-state-f1', 'refused', 'Areas/Home/Home.md'))).toBe(true);
+    expect(isAnsweredRow(answeredState('q-state-f1', 'nothing-to-write', null))).toBe(true);
+    expect(isAnsweredRow({ ...gone, outcome: 'clash' })).toBe(false);
   });
 });

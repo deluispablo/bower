@@ -61,6 +61,11 @@ export interface RunnerReport {
   phase: RunPhase;
   total?: number;
   failure?: string;
+  /**
+   * Only with `done`: a "Write it" the person granted was not written (a clash at the write itself), so its answer
+   * stayed in your changes; the Worker starts the run that asks again, as for answers that waited (TL-P4-19 addendum 15).
+   */
+  answersStayed?: true;
 }
 
 /** What a runner's ticket opens: the attempt it was minted for, and the person's folder. */

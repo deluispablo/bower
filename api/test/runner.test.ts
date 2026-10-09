@@ -409,6 +409,21 @@ describe('runner wire', () => {
     }
   });
 
+  it('a report says an answer stayed only with done', async () => {
+    const { runner } = await aRun();
+    // The answer that stayed (TL-P4-19 addendum 15) is said only at the run's end, and only as true.
+    for (const bad of [
+      JSON.stringify({ attempt: 1, seq: 1, phase: 'saving', answersStayed: true }),
+      JSON.stringify({ attempt: 1, seq: 1, phase: 'failed', failure: 'Bower could not reach your folder.', answersStayed: true }),
+      JSON.stringify({ attempt: 1, seq: 1, phase: 'done', answersStayed: false }),
+      JSON.stringify({ attempt: 1, seq: 1, phase: 'done', answersStayed: 'yes' }),
+    ]) {
+      const r = await runner.report(bad);
+      expect(r.status, bad).toBe(415);
+      expect(await code(r)).toBe('unsupported-media-type');
+    }
+  });
+
   it('a stale report answers the current seq and phase', async () => {
     const { sub, runner } = await aRun();
     await reply(await runner.report({ attempt: 1, seq: 1, phase: 'writing' }));

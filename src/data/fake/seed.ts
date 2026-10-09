@@ -20,7 +20,7 @@ export function madeUp(name: string, kind: string | undefined): string {
 }
 
 /** Scenarios that differ only in how the app is reached seed like the default. */
-const SAME_AS_DEFAULT: Scenario[] = ['signed-out', 'fail-run', 'start-fails', 'slow', 'offline', 'running', 'gone-answers'];
+const SAME_AS_DEFAULT: Scenario[] = ['signed-out', 'fail-run', 'start-fails', 'slow', 'offline', 'running', 'gone-answers', 'write-it'];
 
 export async function seedFakeDrive(drive: FakeDrive, scenario: Scenario, now: number): Promise<string | null> {
   if (scenario === 'first') return null;
