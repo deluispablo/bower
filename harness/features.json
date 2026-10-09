@@ -5847,7 +5847,7 @@
     "id": "c3-subject",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "One Subject type (pile, thing, note state or folder, with id and content hash), one key function and one open-questions function shared by the reader and the planner; one question type replaces Question, ReportQuestion and CorpusQuestion. A refused Bin keeps its question open; an answer whose subject left is settled.",
     "steps": [
       "The engine refuses a saved copy's Bin: its question stays open.",

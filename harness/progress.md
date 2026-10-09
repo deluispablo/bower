@@ -231,3 +231,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: c3-reservation-upload passes — The upload queue reserves and releases its id through the write-once keeper port (TL-P4-17 add. 1, 7)
 - 2026-10-09: c3-retention-race passes — Retention lists each picked run folder just before its own Bin (stage 3 carry-over)
 - 2026-10-09: c3-reservation-worker passes — The Worker template reserves through write-once with Durable Object storage as keeper (TL-P4-17 add. 3)
+- 2026-10-09: c3-subject passes — One Subject, key and open-questions function; a refused Bin keeps its question; answers settle by subject (TL-P4-14 stage 3)
