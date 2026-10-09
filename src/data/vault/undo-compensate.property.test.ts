@@ -382,7 +382,10 @@ async function setup(): Promise<Real> {
   return r;
 }
 
-it('TL-P4-28(2): compensating Undo preserves FIFO and the Drive-only person-state oracle', async () => {
+it.each([
+  { label: 'seeded', seed: 427285, numRuns: 30 },
+  ...Array.from({ length: 6 }, (_, index) => ({ label: `random batch ${index + 1}`, numRuns: 50 })),
+])('TL-P4-28(2): compensating Undo preserves FIFO and the Drive-only person-state oracle ($label)', async (batch) => {
   const command = fc.oneof(
     fc.record({ op: fc.constant('change' as const), kind: fc.constantFrom<Kind>('bin', 'move', 'add', 'remove'),
       tab: fc.integer({ min: 0, max: 1 }), api: fc.boolean() }),
@@ -433,6 +436,5 @@ it('TL-P4-28(2): compensating Undo preserves FIFO and the Drive-only person-stat
       vi.unstubAllGlobals();
     }
   });
-  await fc.assert(property, { seed: 427285, numRuns: 30, endOnFailure: true });
-  await fc.assert(property, { numRuns: 300, endOnFailure: true });
+  await fc.assert(property, { ...batch, endOnFailure: true });
 });
