@@ -10,7 +10,7 @@
 
 ## Contract
 
-1. **The startle's tuft** eases from −26 to 18° with no overshoot, holds for 0.6 s, then returns eased, never more than 2° past its range in either direction (no undershoot below −2°).
+1. **The one startle step (TL-P4-26 addendum 1, main 2f1ae3bb): tuft 18° plus head −10°, held 0.6 s.** Both ease with no overshoot, then return eased, never more than 2° past their range (the tuft never undershoots below −2°). d-v2-24a reuses this step for its error and offline wakes.
    - Use the same easing as proud (`showOff`'s `fall`, `smooth`).
    - Add no second easing path.
 2. **Meta-test (the class, seen twice now):** every act or action name the engine exposes (`act(name)` names, the named actions such as `nudge`'s startle, and the pose loops) must have a row in `pose-reference.fixture.ts`. A new name without a row fails the test.
@@ -19,7 +19,7 @@
 
 ## Red
 
-- `the wake startle stays within its reference range`: a new fixture row for the startle (tuft 18 ± 2° peak, hold 0.6 s, range −2..20 for the return). Today it overshoots to +30.9° and undershoots to −5.5°.
+- `the wake startle stays within its reference range`: a new fixture row for the startle (tuft 18 ± 2° and head −10 ± 2° at the peak, hold 0.6 s, tuft range −2..20 on the return). Today it overshoots to +30.9° and undershoots to −5.5°.
 - `every engine act has a reference row`: the meta-test. It fails today for any exposed name that has no row; list them in the notes.
 
 ## Verify
