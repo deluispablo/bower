@@ -45,7 +45,7 @@ import { isSeen, markSeen } from './seen';
 import { VaultIndex } from './vault-index';
 import { NOT_SENT_TEXT, PERSIST_REFUSED_TEXT, UNREADABLE_TEXT, createUploadQueue, stoppedText, type QueueItem, type UploadQueue } from '../upload-queue';
 import { memoryUploadStore } from '../upload-store';
-import { checkStillAsSeen, notAsSeen, notAsSeenReason, type SeenExpectation } from '../contracts/still-as-seen';
+import { CHANGED_ELSEWHERE, checkStillAsSeen, notAsSeen, notAsSeenReason, sameParents, type SeenExpectation } from '../contracts/still-as-seen';
 import { openQuestions } from '../contracts/questions';
 
 export interface DriveVaultOptions {
@@ -84,8 +84,12 @@ export const NOT_THE_SAME_TEXT = {
 
 /** A file by the name and place it was listed with: what a move or a rename must still find. */
 const seenPlace = (f: DriveFile): SeenExpectation => ({ id: f.id, name: f.name, parents: f.parents });
-/** The app's sentence for a write its fence refused. */
-const CHANGED_ELSEWHERE = 'This changed somewhere else. Look again and try once more.';
+/**
+ * Whether `now` already holds that write to `f` (write-once `holds`: its stamp, and the checksum of text); for a
+ * rename, also the name it gives and the place it keeps. The fence's landed test for every app write.
+ */
+const landedAs = (f: DriveFile, intent: Intent) => (now: DriveFile): boolean =>
+  holds(f, intent, now) && (typeof intent !== 'string' || !intent.startsWith('rename:') || (now.name === intent.slice('rename:'.length) && sameParents(now.parents, f.parents)));
 const where = (folder: string): string => folder.replaceAll('/', ' / ') || 'your Bower folder';
 const inInbox = (path: string): boolean => path === 'Inbox' || path.startsWith('Inbox/');
 
@@ -146,7 +150,7 @@ export class DriveVault implements VaultSource {
   /** Declaration copies a Remove of this pile sent to the Bin before it stopped: Undo restores them with the rest. */
   private removing = new Map<string, DriveFile[]>();
   /** What went to the Bin, as each Bin answered it, so Undo takes each back by the stamp of its own write. */
-  private bin = new Map<string, { file: DriveFile | null; change: string | null; top?: string; late?: DriveFile[]; pending?: Upload; pileKey?: string; declarations?: DriveFile[] }>();
+  private bin = new Map<string, { file: DriveFile | null; change: string | null; top?: string; late?: DriveFile[]; pending?: Upload; pileKey?: string; declarations?: DriveFile[]; back?: { file: DriveFile; name: string } }>();
   /** Things on their way into the inbox, by pile; a failed one stays with upload -1. */
   private uploads = new Map<string, Upload>();
   private sendingPiles = new Set<string>();
@@ -461,8 +465,11 @@ export class DriveVault implements VaultSource {
     // The name may have been taken since: come back under a free one, never over it.
     // A pile goes back whole, under its own folder's name.
     const at = gone.top ?? path;
-    const want = freeName(ix.entries(), parentOf(at), nameOf(at));
-    const back = await this.fromBin(gone.file);
+    // Out of the Bin on an earlier press whose rename lost its answer: that file and that name, so the rename that
+    // landed is recognised by its stamp (`once`), never taken for a change elsewhere.
+    const want = gone.back?.name ?? freeName(ix.entries(), parentOf(at), nameOf(at));
+    const back = gone.back?.file ?? (await this.fromBin(gone.file));
+    gone.back = { file: back, name: want };
     for (const f of gone.late ?? []) await this.fromBin(f);
     if (want !== nameOf(at) || back.name !== want) await this.once(back, `rename:${want}`, (op) => this.drive.update(back.id, { name: want, appProperties: op }));
     if (gone.change) await this.journal.remove(gone.change);
@@ -1063,7 +1070,11 @@ export class DriveVault implements VaultSource {
     const ix = await this.index();
     const f = pile.path ? ix.file(pile.path) : undefined;
     if (!f || !pile.path) throw new BowerError('not-found', 'That pile is already filed.');
-    await this.stillAsSeen(f);
+    // The folder as listed, unless it already holds this very edit's rename or move (its answer lost): then the retry
+    // goes on, and `once` takes that landed write as done.
+    const renamedTo = f.folder && text ? freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text }), pile.path) : null;
+    const keptFolder = this.intended.kept(`pile-folder:${id}`);
+    await this.fence(seenPlace(f), f.id, (now) => (renamedTo !== null && landedAs(f, `rename:${renamedTo}`)(now)) || (keptFolder !== undefined && landedAs(f, `move:${keptFolder}`)(now)));
     const note = ix.file(join(pile.path, PILE_NOTE));
     // A note listed is the one this pile has: an id kept for an earlier create of it is no longer needed.
     if (note) {
@@ -1075,7 +1086,7 @@ export class DriveVault implements VaultSource {
     // Check the context before a rename or removal can partially apply a stale edit: its name, place and words as
     // read (the one fence, as every content write), unless this very write already landed (a retry of the person's own
     // unknown write, `once`).
-    if (note) await this.fence({ ...seenPlace(note), modifiedTime: note.modifiedTime }, note.id, text ? (now) => holds(note, { text }, now) : undefined);
+    if (note) await this.fence({ ...seenPlace(note), modifiedTime: note.modifiedTime }, note.id, (now) => landedAs(note, { text })(now) || landedAs(note, 'bin')(now));
     let folderPath = pile.path;
     if (!f.folder) {
       // A lone thing that gets a note becomes a pile folder; the pile keeps its id.
@@ -1744,7 +1755,7 @@ export class DriveVault implements VaultSource {
    */
   private async once(f: DriveFile, intent: Intent, write: (op: Record<string, string>) => Promise<DriveFile>): Promise<DriveFile> {
     const seen: SeenExpectation = { ...seenPlace(f), ...(typeof intent !== 'string' ? { modifiedTime: f.modifiedTime } : {}), ...(intent === 'unbin' ? { trashed: true } : {}) };
-    const landed = await this.fence(seen, f.id, (now) => holds(f, intent, now));
+    const landed = await this.fence(seen, f.id, landedAs(f, intent));
     if (landed) return landed;
     let now: DriveFile | null | undefined;
     try {

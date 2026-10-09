@@ -33,6 +33,9 @@ export interface StoredNow {
   trashed?: boolean;
 }
 
+/** The app's one sentence for a write its fence refused (the app's `once`, the Journal's Undo). */
+export const CHANGED_ELSEWHERE = 'This changed somewhere else. Look again and try once more.';
+
 /** Why a file is not as it was read, in the order they are checked. */
 export type NotAsSeenReason = 'never-read' | 'gone' | 'id' | 'name' | 'parents' | 'modified';
 
@@ -90,20 +93,9 @@ export function notAsSeenReason(e: unknown): NotAsSeenReason | null {
 }
 
 /**
- * The one refusal step: throws `notAsSeenError` (with `message` and `code`) unless `now` is still as `seen` says.
- * `SeenFiles.assert` calls it on what its fenced step peeked or read; `checkStillAsSeen` calls it on what it reads.
- * `what` names the file in the log line (the runner's says which part of the write it is).
- */
-export function refuseUnlessAsSeen(seen: SeenExpectation, now: StoredNow | null, message: string, code: ErrorCode = 'conflict', what: string = seen.id): void {
-  const reason = notAsSeen(seen, now);
-  if (reason === null) return;
-  console.error(`Refused a write to ${what}: ${reason}`);
-  throw notAsSeenError(reason, message, code);
-}
-
-/**
  * The fence's read: a read that got no answer (`unanswered`, the transport's own test) is no change found, so it is
- * thrown as not read (`notReadError`), never as a refusal; any other error is thrown as it is.
+ * thrown as not read (`notReadError`), never as a refusal; any other error is thrown as it is. `checkStillAsSeen` reads
+ * through it, and so does `SeenFiles.read`, whose reads also include the attempt's own (no file to check).
  */
 export async function readForFence<T>(reading: Promise<T>, unanswered: (e: unknown) => boolean): Promise<T> {
   try {
@@ -113,28 +105,45 @@ export async function readForFence<T>(reading: Promise<T>, unanswered: (e: unkno
   }
 }
 
-/** How one fence reads and what it accepts besides "still as seen". */
+/** What one fence accepts besides "still as seen", and how it says a refusal. */
 export interface FenceOptions<T> {
-  /** Whether an error of the read means it got no answer (the transport's `isNoAnswer`). */
-  unanswered: (e: unknown) => boolean;
   /** The refusal's code; `conflict` when left out. */
   code?: ErrorCode;
-  /** Whether the stored file already holds this very write (its stamp, `holds`): it landed, and is not sent again. */
+  /**
+   * Whether the stored file already holds this very write (write-once `holds`: its stamp, and for a rename its name and
+   * place): it landed though its answer was lost, so the fence resolves and nothing is sent again. Asked first.
+   */
   landed?: (now: T) => boolean;
+  /** Names the file in the log line of a refusal; its id when left out (the runner says which part of the write). */
+  what?: string;
+}
+
+/** A fence that reads: how to tell a read that got no answer (the transport's `isNoAnswer`). */
+export interface ReadingFence<T> extends FenceOptions<T> {
+  unanswered: (e: unknown) => boolean;
 }
 
 /**
  * Still as seen, right before a write (AGENTS: every write passes what it read; a move, a rename or a Bin checks the
- * name and place it read). Reads the file (`read`, by its id, the Bin included: a gone file reads as null) and:
- * - resolves with what it read when that already holds this write (`landed`): the person's own write, landed though
- *   its answer was lost; the caller sends nothing again;
- * - resolves null when the file is still as `seen` says: the caller sends;
+ * name and place it read). The one helper: the app's `once`, the Journal's Undo and the runner's `SeenFiles` call it.
+ * `read` gives the file as stored now (by its id, the Bin included: a gone file is null), and the fence:
+ * - resolves with it when it already holds this write (`landed`): the person's own write, landed though its answer was
+ *   lost; the caller sends nothing again;
+ * - resolves null when it is still as `seen` says: the caller sends;
  * - throws `notAsSeenError(reason, message)` when it is not, or `notReadError` when the read got no answer.
- * Pure but for the reader it is given, so it can run again before every resend, with no side effect but its error.
+ * Pure but for the reader it is given, so it can run again before every resend, with no side effect but its error. A
+ * reader that answers at once (the pretend Drive's one-step fence, `FakeRunDrive`) gets its answer at once.
  */
-export async function checkStillAsSeen<T extends StoredNow>(seen: SeenExpectation, read: () => Promise<T | null>, message: string, opts: FenceOptions<T>): Promise<T | null> {
-  const now = await readForFence(read(), opts.unanswered);
-  if (now && opts.landed?.(now)) return now;
-  refuseUnlessAsSeen(seen, now, message, opts.code);
-  return null;
+export function checkStillAsSeen<T extends StoredNow>(seen: SeenExpectation, read: () => Promise<T | null>, message: string, opts: ReadingFence<T>): Promise<T | null>;
+export function checkStillAsSeen<T extends StoredNow>(seen: SeenExpectation, read: () => T | null, message: string, opts?: FenceOptions<T>): T | null;
+export function checkStillAsSeen<T extends StoredNow>(seen: SeenExpectation, read: () => Promise<T | null> | T | null, message: string, opts: FenceOptions<T> & { unanswered?: (e: unknown) => boolean } = {}): Promise<T | null> | T | null {
+  const decide = (now: T | null): T | null => {
+    if (now && opts.landed?.(now)) return now;
+    const reason = notAsSeen(seen, now);
+    if (reason === null) return null;
+    console.error(`Refused a write to ${opts.what ?? seen.id}: ${reason}`);
+    throw notAsSeenError(reason, message, opts.code);
+  };
+  const now = read();
+  return now instanceof Promise ? readForFence(now, opts.unanswered ?? (() => false)).then(decide) : decide(now);
 }
