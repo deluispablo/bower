@@ -763,6 +763,8 @@ describe('runner-writable files (runner-paths-disagree, TL-P4-14 addendum 20)', 
     // The list it is given decides, for both versions' reader: a path outside it is refused, one inside it admitted.
     const suggestions = writing('.bower/suggestions.json');
     expect(await parseRunManifestV2(bytes(suggestions), 'fake-root', writes)).toEqual({ ok: false, reason: 'shape' });
+    // The list is typed by the contract's `RunnerWrite`, so no caller can name another file; the list given still decides.
+    // @ts-expect-error suggestions.json is not a runner-writable file
     expect(await parseRunManifestV2(bytes(suggestions), 'fake-root', [...writes, '.bower/suggestions.json'])).toMatchObject({ ok: true });
     const questions = rich();
     expect(await parseRunManifestV2(bytes(questions), 'fake-root', writes)).toMatchObject({ ok: true });

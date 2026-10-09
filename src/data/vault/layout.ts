@@ -13,6 +13,7 @@
  * the runner moves them to `changes/archive/` after reading them; `piles/`,
  * one immutable declaration per pile, written before any of its things.
  */
+import type { RunnerWrite } from '../contracts/run-manifest';
 import { isRunWire } from '../contracts/run-wire';
 import type { Question, Request, RunState, Suggestion } from '../types';
 
@@ -36,7 +37,7 @@ export const SYSTEM = {
  * the manifest contract (`parseRunManifestV2`, given it by every caller) and the runner's admitted check both judge by
  * it. `suggestions.json` and `last-run.json` are written by the barrier after the run, never through the manifest.
  */
-export const RUNNER_WRITES = [SYSTEM.questions, SYSTEM.requests, SYSTEM.hashes] as const;
+export const RUNNER_WRITES = [SYSTEM.questions, SYSTEM.requests, SYSTEM.hashes] as const satisfies readonly RunnerWrite[];
 
 export const HIDDEN_AT_ROOT = ['index.md', 'hot.md', 'log.md'] as const;
 

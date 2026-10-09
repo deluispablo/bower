@@ -38,7 +38,7 @@ import { join } from 'node:path';
 import { normalizeModelInput } from './model-input';
 import { MANIFEST_V2_LIMIT, parseRunManifestV2, recordableName } from '../../src/data/contracts/run-manifest';
 import { z } from 'zod';
-import { AUTHORED_LINE_MAX, STATE_LINE_MAX, STATE_LINES_MAX } from '../../src/data/contracts/note-edit';
+import { AUTHORED_LINE_MAX, STATE_WRITE } from '../../src/data/contracts/note-edit';
 import { PILE_NOTE } from '../../src/data/piles';
 import type { Admitted, RunProvider } from '../../src/data/spine/provider';
 import type { ScriptedRead } from '../../src/data/spine/read';
@@ -144,9 +144,6 @@ export function claudeArgs(model: string, maxTurns: number): string[] {
     // policy, if the machine has one, and the policy passed here apply (cli-reference, settings precedence).
     '--setting-sources', '',
     '--settings', JSON.stringify(CLAUDE_SETTINGS),
-    // The reply's shape, from its one declaration (`REPLY_JSON_SCHEMA`): Claude Code validates the result against it and
-    // hands it back as `structured_output` (cli-reference `--json-schema`; agent-sdk/structured-outputs).
-    '--json-schema', JSON.stringify(REPLY_JSON_SCHEMA),
   ];
 }
 
@@ -158,7 +155,7 @@ export function claudeArgs(model: string, maxTurns: number): string[] {
 export const CONTEXT_BOUNDS = { perThing: 12_000, perRun: 48_000, perNote: 4_000, notes: 12, notesPerRun: 24_000 } as const;
 /**
  * What the model may write: a note's summary and body, a Timeline line, and how many lines one reply may add. A Current
- * state's limits have one home, the manifest contract's (`STATE_LINES_MAX`, `STATE_LINE_MAX` in note-edit.ts).
+ * state's limits have one home, the manifest contract's write bound (`STATE_WRITE` in note-edit.ts).
  */
 const AUTHORED = { summary: 200, body: 8_000, line: AUTHORED_LINE_MAX, lines: 20 } as const;
 /** A question's bounds: its text and each answer, one short line with no link (TL-P4-08 point 1). */
@@ -270,8 +267,8 @@ function promptInstructions(): string {
     '  thing for what it changes in a note below, a status, a date, a deadline or an amount, and add a line to that note too.',
     '  When a thing disagrees with a note, never change it silently: the line gives both figures, the note\'s and the',
     '  thing\'s, and cites the thing.',
-    `- "states" (optional): a note's whole "## Current state" as it should read now, at most ${STATE_LINES_MAX} lines of at most`,
-    `  ${STATE_LINE_MAX} characters with no link, only for a note below whose state the thing changes (a status, a count, a date),`,
+    `- "states" (optional): a note's whole "## Current state" as it should read now, at most ${STATE_WRITE.lines} lines of at most`,
+    `  ${STATE_WRITE.line} characters with no link, only for a note below whose state the thing changes (a status, a count, a date),`,
     '  at most one per note, citing the thing; add a Timeline line saying what changed too. Bower rewrites it only if the',
     '  person has not edited it; otherwise it asks them.',
     '- Every summary, line and question is one short plain line, the outcome first.',
@@ -594,7 +591,7 @@ export const REFUSALS = {
   stateKeys: 'a state with keys outside the intent',
   stateNote: 'a state for a note it was not shown',
   stateTwice: 'two states for one note',
-  stateText: `a state that is not 1 to ${STATE_LINES_MAX} short lines`,
+  stateText: `a state that is not 1 to ${STATE_WRITE.lines} short lines`,
   stateCites: 'a state citing a thing it does not file',
   askKeys: 'a question with keys outside the intent: give it a "fileId" or a "pileId", not both',
   askNotAdmitted: 'a question about a thing or pile it was not admitted to take',
@@ -748,9 +745,8 @@ const RESPONSIBILITY_MAX = 60;
  * addendum 20): each part's shape, then its rules in the order they are checked. Every issue is named by its refusal
  * kind: its message is the kind (`REFUSALS`), and `params.why` words it more closely when a rule does (zod's error
  * customization, https://zod.dev/error-customization, and refinements, https://zod.dev/api#refinements). The first
- * issue refuses the reply with that kind and reason. The same declaration gives `claude` its JSON Schema
- * (`z.toJSONSchema`, https://zod.dev/json-schema; `--json-schema`, https://code.claude.com/docs/en/cli-reference), whose
- * rules it cannot express stay checked here only.
+ * issue refuses the reply with that kind and reason. `claude` gets no `--json-schema` yet (TL-P4-14 addendum 22): a
+ * reply it gave up on would end the run without this retry; p4-structured-output may adopt it after a live A/B.
  */
 /** A field's issue: `keys` when it is missing, `kind` when it is there but not what it should be. */
 const named = (kind: RefusalKind, keys: RefusalKind = kind): { error: (issue: { input?: unknown }) => RefusalKind } => ({
@@ -795,7 +791,7 @@ const LineShape = z.strictObject({
 }, named('lineKeys'));
 const StateShape = z.strictObject({
   note: z.string(named('stateNote', 'stateKeys')),
-  lines: z.array(z.string(named('stateText')), named('stateText', 'stateKeys')).min(1, named('stateText')).max(STATE_LINES_MAX, named('stateText')),
+  lines: z.array(z.string(named('stateText')), named('stateText', 'stateKeys')).min(1, named('stateText')).max(STATE_WRITE.lines, named('stateText')),
   cites: z.string(named('stateCites')).optional(),
 }, named('stateKeys'));
 const AskShape = z.strictObject({
@@ -889,7 +885,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   const State = StateShape.superRefine(inOrder<z.output<typeof StateShape>>([
     rule('stateNote', (st) => notes.has(st.note)),
     rule('stateTwice', (st) => !current.some((x) => x.path === st.note)),
-    rule('stateText', (st) => st.lines.every((x) => lineOk(x, STATE_LINE_MAX) && unlinked(x))),
+    rule('stateText', (st) => st.lines.every((x) => lineOk(x, STATE_WRITE.line) && unlinked(x))),
     rule('stateCites', (st) => st.cites === undefined || placed.has(st.cites)),
     rule('numbers', (st) => grounded(st.cites, st.lines, 'the Current state of')),
   ], (st) => current.push({ path: st.note, lines: st.lines.map((x) => x.trim()), cites: st.cites ?? null })));
@@ -973,9 +969,6 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   };
 }
 
-/** The reply's JSON Schema for `claude --json-schema` (draft-07, as Claude Code validates), from the same declaration. */
-export const REPLY_JSON_SCHEMA = z.toJSONSchema(replySchema([], { notes: new Set() }).schema, { target: 'draft-7' });
-
 /**
  * The model's intent, checked against what the run took by the reply's declaration (`replySchema`). Anything else
  * refuses the whole reply, by its first issue. A pile with a thing left out waits whole for the next run.
@@ -1058,9 +1051,6 @@ function replyOf(exit: ClaudeExit, maxTurns: number): Read {
   const { subtype, is_error: isError, num_turns: turns, result } = envelope as Record<string, unknown>;
   if (subtype === 'error_max_turns' || (typeof turns === 'number' && turns > maxTurns)) return { ok: false, kind: null, why: `over its turn cap of ${maxTurns}` };
   if (subtype !== 'success' || isError !== false || exit.code !== 0) return { ok: false, kind: null, why: `an error result (${String(subtype)}, exit ${exit.code})` };
-  // With `--json-schema` the reply is the validated `structured_output`; a result without one is read as its text.
-  const structured = (envelope as Record<string, unknown>).structured_output;
-  if (structured !== undefined && structured !== null) return { ok: true, value: structured };
   if (typeof result !== 'string') return no('noText');
   const text = result.trim().replace(/^```(?:json)?\n([\s\S]*)\n```$/, '$1');
   try {

@@ -34,8 +34,13 @@ export type Effect =
     purpose: 'generated' | 'runner-json' }
   | { kind: 'write-runner-json'; before: SeenFile; beforeContent: VerifiedContent;
     /** One of the runner-writable files the reader is given (`RUNNER_WRITES` in `vault/layout.ts`). */
-    path: string; text: string; content: Content }
+    path: RunnerWrite; text: string; content: Content }
   | { kind: 'bin'; before: SeenFile; capturedChildIds: string[] };
+/**
+ * The type of a runner-writable file (TL-P4-14 addendum 20): `RUNNER_WRITES` in `vault/layout.ts` is the one list and
+ * is typed by it; the contracts cannot import the layout (architecture.test.ts), so the path's type lives here.
+ */
+export type RunnerWrite = '.bower/questions.json' | '.bower/requests.json' | '.bower/hashes.json';
 export type Operation = { operationId: string; ordinal: number; dependsOn: string[]; effect: Effect };
 /** One Timeline line: `- <date> · <text>` plus ` · [[<source>]]` when there is a source (TL-P2-20). */
 export type EditEntry = { date: string; text: string; source: string | null };
@@ -405,7 +410,7 @@ async function digest(value: unknown): Promise<string> {
  * Compare independently supplied scope; a matching root or digest grants no access or dispatch. `writes` is the list of
  * Bower's files a `write-runner-json` may name (`RUNNER_WRITES` in `vault/layout.ts`); any other path is refused as `shape`.
  */
-export async function parseRunManifest(bytes: Uint8Array, expectedRootId: string, writes: readonly string[]): Promise<ManifestResult> {
+export async function parseRunManifest(bytes: Uint8Array, expectedRootId: string, writes: readonly RunnerWrite[]): Promise<ManifestResult> {
   const parsed = parseRecordJson(bytes);
   if (!parsed.ok) return parsed;
   return admit(parsed.value, expectedRootId, manifest, writes);
@@ -413,7 +418,7 @@ export async function parseRunManifest(bytes: Uint8Array, expectedRootId: string
 
 /** The guards every manifest version shares, in the v1 order; identities are computed as in v1. */
 async function admit<M extends Manifest | ManifestV2>(
-  parsed: unknown, expectedRootId: string, guard: (value: unknown) => value is M, writes: readonly string[],
+  parsed: unknown, expectedRootId: string, guard: (value: unknown) => value is M, writes: readonly RunnerWrite[],
 ): Promise<{ ok: true; value: M; sha256: string } | { ok: false; reason: ManifestRefusal }> {
   if (!guard(parsed)) return { ok: false, reason: 'shape' };
   if (parsed.operations.some(({ effect: e }) => e.kind === 'write-runner-json' && !writes.includes(e.path))) return { ok: false, reason: 'shape' };
@@ -527,7 +532,7 @@ function edits(value: ManifestV2): EditGuardRule | null {
  * Reads v1 exactly as `parseRunManifest` (same path, digests and identities) and v2: v1's guards plus `edit-text`.
  * A later version refuses as `version`, so a build that reads v2 can say it needs a newer Bower (R3-7 m9).
  */
-export async function parseRunManifestV2(bytes: Uint8Array, expectedRootId: string, writes: readonly string[]): Promise<ManifestV2Result> {
+export async function parseRunManifestV2(bytes: Uint8Array, expectedRootId: string, writes: readonly RunnerWrite[]): Promise<ManifestV2Result> {
   const parsed = parseRecordJson(bytes);
   if (!parsed.ok) return parsed;
   const v = record(parsed.value) ? parsed.value.v : undefined;

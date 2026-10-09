@@ -85,11 +85,13 @@ export function ruleRemoveOk(remove: RuleRemove): boolean {
   return remove.text.trim().length > 0 && !controls(remove.text);
 }
 /**
- * At most this many Current state lines, each at most `STATE_LINE_MAX` characters: the method's short Current state
- * (TL-P4-08), the one home of these limits (TL-P4-14 addendum 20); the Claude reply's check and prompt import them.
+ * A Current state's two bounds, in lines and characters per line, one home (TL-P4-14 addenda 20 and 22): strict on
+ * write, lenient on read. `STATE_WRITE` is what Bower writes, the method's short state (TL-P4-08): the Claude reply's
+ * check and prompt import it. `STATE_READ` is what Bower reads: a person's state (`previous`), what an undo writes
+ * back, and every stored manifest, which must still parse.
  */
-export const STATE_LINES_MAX = 8;
-export const STATE_LINE_MAX = 200;
+export const STATE_WRITE = { lines: 8, line: 200 } as const;
+export const STATE_READ = { lines: 20, line: 400 } as const;
 /** The report's row for a note whose Current state a run brought up to date. */
 export const STATE_UPDATED = 'Current state brought up to date.';
 /** The report's line on a note kept as one with another (`keep-one-note-merge`), which went to the Bin. */
@@ -101,8 +103,8 @@ export const KEEP_CHANGED = 'It changed while Bower worked, so both notes stay; 
  * point 4; a model always writes 1+); `previous` as read (one line each, no control character).
  */
 export function stateLinesOk(previous: readonly string[], lines: readonly string[]): boolean {
-  const one = (line: string): boolean => !controls(line) && line.length <= STATE_LINE_MAX;
-  return lines.length <= STATE_LINES_MAX && previous.length <= STATE_LINES_MAX
+  const one = (line: string): boolean => !controls(line) && line.length <= STATE_READ.line;
+  return lines.length <= STATE_READ.lines && previous.length <= STATE_READ.lines
     && lines.every((line) => one(line) && line.trim() === line && line.length > 0) && previous.every(one);
 }
 function fieldsOk(change: Change): boolean {
