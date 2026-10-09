@@ -473,3 +473,4 @@ c3-unused-code	8ae4530977b86ce1	2026-10-09	red (fixed in 35bb972a)
 c3-test-time	29bd6bc4329b8011	2026-10-09	red (fixed in 62bb8258)
 c3-unused-production	8d883a47a16f4eed	2026-10-09	known-green: red at 2bb1d9a0: both tests fail (/tmp/c3p-red.log); green at 2fbf3feb
 c3-integrate-history	a259c056fe9f95e1	2026-10-09	red (fixed in ec26ac56)
+c3-reservation-upload	050c7cdfbca36938	2026-10-09	red (fixed in 80548be1)

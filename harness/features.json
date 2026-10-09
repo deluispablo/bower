@@ -5742,7 +5742,7 @@
     "id": "c3-reservation-upload",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "The upload queue reserves and keeps its file id through the write-once home (Holder/port: the id kept with the device upload record), so no module but write-once asks Drive for an id; upload-queue leaves the reservation allowlist.",
     "steps": [
       "An upload whose reply was lost, after a reload, is sent under the id kept on the device and makes one file.",
