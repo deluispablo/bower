@@ -30,6 +30,8 @@ export interface FailedChange {
   id: string;
   what: string;
   sentence: string;
+  /** The screen already turned to it once (on any page load); it shows until put away, but is not turned to again. */
+  seen?: true;
 }
 
 export interface Session {
@@ -86,7 +88,8 @@ export interface VaultSource {
   answer(id: string, yes: boolean): Promise<void>;
   rules(): Promise<Rule[]>;
   requests(): Promise<Request[]>;
-  addRequest(text: string): Promise<Request>;
+  /** `intent`: one per intended request (a press whose words are sent again after a wait); sent again, it is that request. */
+  addRequest(text: string, intent?: string): Promise<Request>;
   /** The web address a saved link (a `.url` file) opens, or null. */
   linkAddress(path: string): Promise<string | null>;
   /** Names, summaries and note text. */
@@ -104,6 +107,8 @@ export interface VaultSource {
   failedChanges?(): Promise<FailedChange[]>;
   /** The person has seen that failed change. */
   putAwayFailed?(id: string): Promise<void>;
+  /** The screen turned to this failed change once: it is not turned to again, on this or any later load. */
+  markFailedSeen?(id: string): Promise<void>;
   /** Keeps a suggestion as a rule, or says no to it; gives back its Undo. */
   dismissSuggestion(id: string, keep: boolean): Promise<() => Promise<void>>;
   subscribe(cb: () => void): Unsubscribe;

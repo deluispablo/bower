@@ -503,6 +503,12 @@ describe('c2-create-by-id round 5: what a refusal leaves', () => {
 });
 
 describe('c2-create-by-id round 6: a gone target, a resent request', () => {
+  // What failed in an earlier test, kept in memory while storage refused it, is not this test's.
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    forgetThisPerson();
+  });
+
   it('a second not-found ends the line for good', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     let listedAnew = 0;
