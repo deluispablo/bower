@@ -24,16 +24,6 @@ describe('dependency rules', () => {
     expect(forbidden.every((r) => r.severity === 'error')).toBe(true);
   });
 
-  it('screens never import a data source directly', () => {
-    // Screens (features, app, ui, bird) reach data only through sources: every source folder is a target.
-    const [screens, shell] = rulesNamed('screens-use-data-only-through-sources');
-    for (const from of ['src/features/a/Screen.ts', 'src/app/Shell.tsx', 'src/ui/Button.tsx', 'src/bird/presence.ts']) expect(hits(screens?.from.path ?? '', from), from).toBe(true);
-    for (const target of ['demo', 'drive', 'vault', 'live', 'worker', 'fake', 'contract'].map((d) => `src/data/${d}/x.ts`).concat('src/data/choose.ts')) expect(hits(screens?.to.path ?? '', target), target).toBe(true);
-    expect(hits(screens?.to.path ?? '', 'src/data/sources.ts')).toBe(false);
-    expect(hits(screens?.from.path ?? '', 'src/data/provider.tsx')).toBe(false);
-    expect(hits(shell?.from.path ?? '', 'src/app/App.tsx')).toBe(true);
-  });
-
   it('production code imports no fake or demo module', () => {
     // Production code never imports a fake or demo module: the two folders, and any file named fake-*.
     const [general] = rulesNamed('production-imports-no-fake-or-demo');

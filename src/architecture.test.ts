@@ -5,10 +5,11 @@
  */
 /// <reference types="node" />
 import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
-import { fixture, removeFixtures, run } from '@/testing/dependency-gate';
+import { fixture, removeFixtures, ROOT, run } from '@/testing/dependency-gate';
 
 afterAll(removeFixtures);
 
@@ -30,6 +31,19 @@ describe('the shape of the code', () => {
       expect(r.out).toContain('screens-use-data-only-through-sources');
     }
     expect(run(fixture({ ...base, 'src/data/provider.tsx': 'export const q = 1;\n', 'src/features/a/Screen.ts': "import { q } from '../../data/provider';\n" })).code).toBe(0);
+  });
+
+  it('screens never import a data source directly', () => {
+    // The rule list (dependency-cruiser itself runs once, on the real tree, in pnpm check).
+    const { forbidden } = createRequire(import.meta.url)(join(ROOT, '.dependency-cruiser.cjs')) as { forbidden: { name: string; from: { path: string }; to: { path: string } }[] };
+    const hits = (re: string, path: string): boolean => new RegExp(re).test(path);
+    const [screens, shell] = forbidden.filter((r) => r.name === 'screens-use-data-only-through-sources');
+    // Screens (features, app, ui, bird) reach data only through sources: every source folder is a target.
+    for (const from of ['src/features/a/Screen.ts', 'src/app/Shell.tsx', 'src/ui/Button.tsx', 'src/bird/presence.ts']) expect(hits(screens?.from.path ?? '', from), from).toBe(true);
+    for (const target of ['demo', 'drive', 'vault', 'live', 'worker', 'fake', 'contract'].map((d) => `src/data/${d}/x.ts`).concat('src/data/choose.ts')) expect(hits(screens?.to.path ?? '', target), target).toBe(true);
+    expect(hits(screens?.to.path ?? '', 'src/data/sources.ts')).toBe(false);
+    expect(hits(screens?.from.path ?? '', 'src/data/provider.tsx')).toBe(false);
+    expect(hits(shell?.from.path ?? '', 'src/app/App.tsx')).toBe(true);
   });
 
   it('errors are never swallowed', () => {
