@@ -1,7 +1,7 @@
 # c4-new-pill-one
 
 implementer: codex
-review: skipped (TL-P4-22)
+review: P4-54 PASS (Codex entry, TL-P4-23; the pruning trial skip is superseded by the Codex review rule)
 tests changed: none
 
 ## Change
