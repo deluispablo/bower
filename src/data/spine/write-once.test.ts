@@ -16,7 +16,7 @@ import { driveError, driveFailure, type DriveFile } from '../drive/drive-api';
 import { DriveVault } from '../vault/drive-vault';
 import { seedFakeDrive } from '../fake/seed';
 import * as home from './write-once';
-import { updateByStamp } from './write-once';
+import { makeOnce, sentAs, updateByStamp, type Holder, type Sent } from './write-once';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = (p: string): string[] => readFileSync(join(ROOT, p), 'utf8').split('\n');
@@ -323,5 +323,29 @@ describe('a withdrawn intended create never leaves a live file', () => {
       expect(record.reserved).toBeUndefined();
       if (state !== 'unsent') expect(await withdrawn(drive, id)).toBe(true);
     });
+  });
+});
+
+describe('c4-create-landed: the intent kept with a reserved id', () => {
+  it('a retry resends the intent first sent; a 404 lets the intent go and keeps the id', async () => {
+    const drive = new FakeDrive();
+    const h: Holder = {};
+    const sends: Sent[] = [];
+    const lost = (e: unknown) => async (_id: string, sent: Sent): Promise<never> => {
+      sends.push(sent);
+      throw e;
+    };
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(makeOnce(h, drive, sentAs('p1', 'Untitled.md', ''), lost(driveError('offline')))).rejects.toMatchObject({ code: 'offline' });
+    const id = h.reserved;
+    // Tried again with a name picked anew: the one first sent goes, with the same id.
+    await expect(makeOnce(h, drive, sentAs('p1', 'Untitled 2.md', ''), lost(driveError('offline')))).rejects.toMatchObject({ code: 'offline' });
+    expect(sends.map((x) => x.name)).toEqual(['Untitled.md', 'Untitled.md']);
+    expect(h.reserved).toBe(id);
+    // Its folder is gone (a 404): nothing was made there; the id stays and the next try is sent where its place is now.
+    await expect(makeOnce(h, drive, sentAs('p1', 'Untitled.md', ''), lost(driveError('not-found')))).rejects.toMatchObject({ code: 'not-found' });
+    expect({ reserved: h.reserved, sent: h.sent }).toEqual({ reserved: id, sent: undefined });
+    await expect(makeOnce(h, drive, sentAs('p2', 'Untitled.md', ''), lost(driveError('offline')))).rejects.toMatchObject({ code: 'offline' });
+    expect(sends.at(-1)?.parent).toBe('p2');
   });
 });

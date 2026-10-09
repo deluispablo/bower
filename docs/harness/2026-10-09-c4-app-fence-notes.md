@@ -187,6 +187,7 @@ Code sites:
   it. Not changed here: requiring the after-state would contradict that ruling and resend or misreport a run's own
   chain. For the lead. `:546 confirms` and `:593 stampOf`: the direct answer's check (`answered`, full state via
   `shows`/`inPlace`) and the stamp sent.
+- Ruled (TL-P4-24 addenda 9-10, c4-create-landed): `engine.ts:425 stampSays` asks write-once's `happened`, not `landed`.
 - `src/data/spine/grounded.ts:17,129 stampOf`: the stamp a report row must name (plan validation); `:137,154 holds`:
   a runner JSON's shape. `src/data/spine/scripted.ts:39,1682 stampOf`: the stamp a row records as the run leaves
   the note. Not landed decisions.

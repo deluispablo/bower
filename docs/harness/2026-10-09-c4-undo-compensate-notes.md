@@ -113,3 +113,49 @@ tests changed: src/ui/undo-toast.test.ts: my own red: typing of the mock only.
 
 - check-harness: features.json entry `c2-create-by-id` names "taking a change back whose Bin answer was lost is resolved
   by its stamp", deleted here (no journal Bin). Workers do not edit features.json: its verify needs the coordinator.
+
+## Merge with claude/p3 (c4-create-landed round 1)
+
+Resolved the four conflicted files in the existing merge; no Git write command was run. The coordinator stages and
+commits the result. This resolution reuses the existing mechanisms and the sources cited above; no network was used.
+
+- `src/data/spine/write-once.ts`: merged the imports for both the landed checks and the withdrawal fence.
+  `makeOnce(h, w, fresh, create)` keeps the first `Sent` on `Holder.sent`, resends it, releases it with a permanently
+  refused id, and clears only the intent on a retryable 404, as round 1 requires. All of that remains inside `alone`,
+  so creates and withdrawals on the same holder still serialize. `Intended.make` takes the new signature while
+  `Intended.withdraw` stays. Successful withdrawal clears both the id and its intent; refused or held withdrawal
+  keeps both. The existing landed/intent helpers remain their only home.
+- `src/data/spine/write-once.test.ts`: merged both import lists and retained both complete describes: the withdrawal
+  keeper/outcome matrix (including removePile while Sending) and the first-intent retry/404 regression. Their
+  assertions are unchanged; only the shared closing braces were separated so neither suite nests in the other.
+- `src/data/vault/drive-vault.ts`: combined the active landed/intent and withdrawal imports, removing imports whose
+  uses the landed changes replaced. Kept the round 1 create signatures for Intended and Sending, alongside ours'
+  removal-waits-for-create behavior. A removed Sending link/empty thing returns after withdrawal settled it, so it
+  is not binned twice. Undo still uses retract and records inverse forward lines with undoes; no journal Bin or
+  journal remove caller is restored.
+- `src/data/vault/journal.ts`: kept retract, the FIFO outcome map/break, and record's original-in-flight wait and
+  single-send decision. Removed the conflicting extra unconditional send, which would bypass that decision.
+  Both the fast-path send and the locked sendWaiting loop pass the folder's outbox key to the intent-aware send.
+  `makeOnce` stores the intent, and keepHeld persists the id and intent before an outbox send and after failure.
+  The old-keeper parser remains lenient. Kept retries still go through the already locked sendWaiting loop;
+  the fast path remains unlocked, with an inverse waiting for its original's in-flight send. No re-entrant lock
+  or second outbox mechanism was introduced. Imports and file bookkeeping used only by the deleted journal Bin
+  path stay deleted. Replacement inverse lines use the same intent-aware record/send path as other lines.
+
+Both contracts therefore use one write-once home for create recovery and intended landing, and one journal home
+for outbox storage, retract and per-folder order. The automatically merged keeper and landed regressions remain,
+including the refresh/retry red, old-entry fixtures and the compensating-Undo reds. No test or red was weakened.
+
+tests changed: src/data/spine/write-once.test.ts: combined imports and separate describe closures; both suites and assertions kept.
+
+Verification:
+- `pnpm exec tsc -p tsconfig.app.json`: PASS; `/tmp/compensate-merge-tsc.log`.
+- `pnpm exec vitest run src/data`: 72 files passed, 1 failed; 3,793 tests passed, 1 failed;
+  `/tmp/compensate-merge-unit.log`. The sole failure is the expected Codex property, seed 427285, path "4":
+  the oracle counts the kept inverse as unresolved and expects "Keep category 22 together" to remain.
+- `src/data/vault/undo-compensate.property.test.ts` is unchanged. No other failure occurred.
+- No conflict markers remain in src/data, and `git diff --check` passes.
+- No pnpm check or e2e was run, as instructed for this merge.
+
+Reference check: the supplied DECISIONS.md and HEAD version contain TL-P4-27 addenda 4 and 5, but no addendum 6.
+The lock scope used here is the explicit Addenda 4 and 5 packet contract and the matching addendum 4 (6) ruling.

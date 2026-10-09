@@ -10,7 +10,7 @@ import type { DriveApi, DriveFile } from '../drive/drive-api';
 import { ReadCache } from '../drive/read-cache';
 import type { ChangeKind } from '../types';
 import { BowerError } from '../types';
-import { Intended, makeOnce, makeText, reserveFor, type Holder } from '../spine/write-once';
+import { Intended, isSent, makeOnce, makeText, reserveFor, sentAs, type Holder } from '../spine/write-once';
 import { afterNotFound, type FailureKind } from '../drive/transport';
 import type { FailedChange } from '../sources';
 
@@ -118,10 +118,19 @@ export const outboxKey = (folder: string): string => `bower:outbox:${folder}`;
 /**
  * A line waiting to be sent, the holder of the id Drive reserved for its file once one was (`spine/write-once.ts`, the
  * outbox port): kept with the line until its create is confirmed, so a line whose answer was lost is sent again with the
- * same id and found by it, after a reload too, never written twice. An outbox from before keeps bare lines; each gets its
- * id before it is sent.
+ * same id and found by it, after a reload too, never written twice. With the id it keeps where and as what the line was
+ * first sent (`sent`, TL-P4-24 addendum 16). An outbox from before keeps bare lines, or ids with no intent; each gets
+ * what it lacks when it is next sent.
  */
 interface Waiting extends Holder { line: JournalRecord; notFound?: true }
+
+/** The line as the outbox keeps it: its holder's id and intent as they are now (either let go, it keeps none). */
+const heldLine = (r: Waiting, h: Holder): Waiting => ({
+  line: r.line,
+  ...(r.notFound ? { notFound: true as const } : {}),
+  ...(h.reserved !== undefined ? { reserved: h.reserved } : {}),
+  ...(h.sent !== undefined ? { sent: h.sent } : {}),
+});
 
 const isWaiting = (v: unknown): v is Waiting =>
   typeof v === 'object' && v !== null && isJournalRecord((v as Waiting).line) && (typeof (v as Waiting).reserved === 'string' || (v as Waiting).reserved === undefined) &&
@@ -132,7 +141,8 @@ function readOutbox(key: string): Waiting[] {
     const v: unknown = JSON.parse(localStorage.getItem(key) ?? '[]');
     if (!Array.isArray(v)) throw new Error('Unreadable change outbox');
     return v.map((x: unknown): Waiting => {
-      if (isWaiting(x)) return x;
+      // Lenient on read: an intent that does not read as one is dropped, and the line is sent as before intents were kept.
+      if (isWaiting(x)) return x.sent === undefined || isSent(x.sent) ? x : heldLine(x, { ...(x.reserved !== undefined ? { reserved: x.reserved } : {}) });
       if (isJournalRecord(x)) return { line: x };
       throw new Error('Unreadable change outbox');
     });
@@ -290,7 +300,7 @@ export class Journal {
       if (waited) sentNow = tried ?? 'later';
       else if (behind) sentNow = 'later';
       else {
-        const going = this.send(w);
+        const going = this.send(w, key);
         flying.set(rec.id, going);
         try {
           sentNow = await going;
@@ -407,7 +417,7 @@ export class Journal {
     const refused: FailedChange[] = [];
     for (const r of waiting) {
       this.checkCurrent();
-      const out = await this.send(r);
+      const out = await this.send(r, key);
       outcomes.set(r.line.id, out);
       if (out === 'sent' || out === 'refused') sent.add(r.line.id);
       if (out === 'refused') refused.push({ id: r.line.id, what: r.line.what, sentence: refusedSentence(r.line) });
@@ -433,7 +443,7 @@ export class Journal {
    * Sends one line with the id the home keeps on it (`spine/write-once.ts`), reserved now when it has none: a lost answer
    * is found again by that id, now or on a later try, after a reload too; a refusal lets it go.
    */
-  private async send(w: Waiting): Promise<Sent> {
+  private async send(w: Waiting, key: string): Promise<Sent> {
     const rec = w.line;
     // The kind of a failed create, once it was sent (`kindOf`, told once); a failure before it is not the line's.
     const tried: { kind?: FailureKind } = {};
@@ -442,7 +452,11 @@ export class Journal {
       const folder = await this.place.folder();
       this.checkCurrent();
       const text = `${JSON.stringify(rec)}\n`;
-      const f = await makeOnce(w, this.drive, (id) => makeText(this.drive, this.drive, { parent: folder, name: `${rec.id}.json`, id }, text), (e) => (tried.kind = this.kindOf(w, e)));
+      const f = await makeOnce(w, this.drive, sentAs(folder, `${rec.id}.json`, text), (id, sent) => {
+        // Its id and intent are on the device before anything is sent with them (a line already in the outbox).
+        this.keepHeld(key, w);
+        return makeText(this.drive, this.drive, { ...sent, id }, text);
+      }, (e) => (tried.kind = this.kindOf(w, e)));
       if (this.current()) {
         this.reads.wrote(f, text);
         this.place.wrote?.(f);
@@ -450,6 +464,8 @@ export class Journal {
       return 'sent';
     } catch (e) {
       console.error(e);
+      // What the home kept or let go of (its id, its intent) is what the outbox keeps for the next try.
+      this.keepHeld(key, w);
       // One table tells what becomes of it (`transport.ts`): tried again later, waiting on the person, or refused for good.
       if (tried.kind === 'retry') return 'later';
       if (tried.kind === 'wait') return { waits: e instanceof BowerError ? e.message : '' };
@@ -461,6 +477,16 @@ export class Journal {
       const kind = this.kindOf(w, e);
       if (kind === 'permanent' && w.notFound && e instanceof BowerError && e.code === 'not-found') return 'refused';
       return kind === 'wait' && e instanceof BowerError ? { waits: e.message } : 'later';
+    }
+  }
+
+  /** Keeps `w`'s id and intent on its outbox line, when the line is there; memory still holds them when storage fails. */
+  private keepHeld(key: string, w: Waiting): void {
+    try {
+      const all = this.waiting(key);
+      if (all.some((r) => r.line.id === w.line.id)) this.keep(key, all.map((r) => (r.line.id === w.line.id ? heldLine(r, w) : r)));
+    } catch (e) {
+      console.error(e);
     }
   }
 

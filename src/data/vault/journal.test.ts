@@ -332,6 +332,73 @@ describe('c3-reservation-home: the id kept on the outbox line', () => {
   });
 });
 
+/**
+ * c4-create-landed fix round 1 (TL-P4-24 addendum 16): the outbox line keeps, with its reserved id, where and as what it
+ * was first sent. A retry resends that and is judged against it; a line kept before intents were stored is sent as before.
+ */
+describe('c4-create-landed: the intent kept on the outbox line', () => {
+  type Kept = Array<{ line: { id: string }; reserved?: string; sent?: { parent: string; name: string; content?: { md5: string; sha256: string } } }>;
+  const kept = (): Kept => JSON.parse(localStorage.getItem(`bower:outbox:${root}`) ?? '[]') as Kept;
+  /** The line lands and its answer is lost; the read by its id that follows gets no answer either. */
+  const loseFirst = (): Array<{ parent: string; name: string; id?: string }> => {
+    const create = drive.createText.bind(drive);
+    const get = drive.get.bind(drive);
+    const sends: Array<{ parent: string; name: string; id?: string }> = [];
+    drive.createText = async (...a: Parameters<FakeDrive['createText']>) => {
+      sends.push({ parent: a[0], name: a[1], ...(a[4] ? { id: a[4] } : {}) });
+      const f = await create(...a);
+      if (sends.length === 1) {
+        drive.get = async () => {
+          drive.get = get;
+          throw driveError('offline');
+        };
+        throw driveError('offline');
+      }
+      return f;
+    };
+    return sends;
+  };
+
+  it('a line whose answer was lost is sent again where it was first sent, though its folder is looked up anew', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const sends = loseFirst();
+    const one = await journal.record('move', 'one');
+    // The id and the intent are on the device with the line.
+    expect(kept()[0]?.sent).toMatchObject({ parent: changes, name: `${one.id}.json` });
+    expect(kept()[0]?.sent?.content?.sha256).toMatch(/^[0-9a-f]{64}$/);
+    // After a reload the changes folder is looked up as another one: the line still goes where it went, and is found there.
+    journal.dispose();
+    const other = (await drive.createFolder(root, 'elsewhere')).id;
+    const reloaded = new Journal(drive, { owner: async () => root, folder: async () => other, files: async () => (await drive.listAll(changes)).filter((f) => !f.folder) }, 'device-a');
+    await expect(reloaded.flush()).resolves.toBeUndefined();
+    expect(sends.map((x) => x.parent)).toEqual([changes, changes]);
+    expect((await drive.listAll(changes)).filter((f) => f.name === `${one.id}.json`)).toHaveLength(1);
+    expect(await drive.listAll(other)).toEqual([]);
+    expect(localStorage.getItem(`bower:outbox:${root}`)).toBeNull();
+    expect(localStorage.getItem(FAILED_KEY)).toBeNull();
+  });
+
+  it('an outbox line kept before intents, or with one that does not read, is sent as before under its kept id', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    for (const stored of ['none', 'unreadable'] as const) {
+      localStorage.clear();
+      const sends = loseFirst();
+      const one = await journal.record('move', `one ${stored}`);
+      const line = kept()[0];
+      if (!line?.reserved) throw new Error('no kept id');
+      // The outbox as an earlier build kept it: the line and its id, no intent (or one this build cannot read).
+      localStorage.setItem(`bower:outbox:${root}`, JSON.stringify([{ line: line.line, reserved: line.reserved, ...(stored === 'unreadable' ? { sent: { parent: 7 } } : {}) }]));
+      journal.dispose();
+      const reloaded = new Journal(drive, { owner: async () => root, folder: async () => changes, files: async () => (await drive.listAll(changes)).filter((f) => !f.folder) }, 'device-a');
+      await expect(reloaded.flush()).resolves.toBeUndefined();
+      expect(sends.map((x) => x.id)).toEqual([line.reserved, line.reserved]);
+      expect((await drive.listAll(changes)).filter((f) => f.name === `${one.id}.json`).map((f) => f.id)).toEqual([line.reserved]);
+      expect(localStorage.getItem(`bower:outbox:${root}`)).toBeNull();
+      journal = reloaded;
+    }
+  });
+});
+
 /** Drive's own answer to every request, through the real transport (`drive-http.ts`), with no wait between tries. */
 const answering = (status: number, reason?: string): DriveHttp =>
   new DriveHttp({
