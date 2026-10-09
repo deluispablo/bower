@@ -116,6 +116,8 @@ const RECENT = 2.5;
 const DOZE = 60;
 /** The startle on waking or a nudge: tuft up, in degrees, for seconds. */
 const STARTLE = { tuft: 18, seconds: 0.6 } as const;
+/** The iris at rest, where no act or input moves it (wait looks straight ahead instead). */
+const IRIS_REST = { x: 0.4, y: 0 } as const;
 /** The draw's weights (TL-P4-25 act table); wait adds `look`. */
 const WEIGHTS: ReadonlyArray<readonly [ActName, number]> = [
   ['snap', 40],
@@ -218,8 +220,8 @@ export class BirdEngine {
     jaw: spring(0, 1400, 46),
     tuft: spring(0, 300, 12),
     face: spring(1, 700, 34),
-    ix: spring(0.4, 600, 40),
-    iy: spring(0, 600, 40),
+    ix: spring(IRIS_REST.x, 600, 40),
+    iy: spring(IRIS_REST.y, 600, 40),
     gaze: spring(0, 900, 38),
   };
   private B = {
@@ -369,10 +371,11 @@ export class BirdEngine {
    * pointer or a touch, and for as long as focus stays on a control. A focused
    * control's place is read each frame, and its gaze ends when that read gives
    * null (focus left it). `null` is an input with no place (a key with nothing
-   * focused): it counts as input, and the gaze rests.
+   * focused): it counts as input and leaves the gaze as it is, so a live
+   * pointer gaze holds.
    */
   look(p: Point | (() => Point | null) | null, source: LookSource): void {
-    if (!this.heard()) return;
+    if (!this.heard() || !p) return;
     this.S.ptr = p;
     this.S.ptrT = this.S.t;
     this.S.ptrSrc = source;
@@ -491,16 +494,18 @@ export class BirdEngine {
     return this;
   }
   /**
-   * Drops what is queued (the action under way finishes, so nothing jumps).
-   * `now` also cuts the action and the act under way at once, keeps what the
-   * bird holds, and leaves the springs where they are: a tap starts at the
-   * next frame and a perched pose's loop picks up at its next cycle.
+   * Drops what is queued and the tap kept for later (the action under way
+   * finishes, so nothing jumps). `now` instead cuts only the action and the
+   * act under way, at once: it keeps the queued script, the kept tap and what
+   * the bird holds, and leaves the springs where they are, so a tap starts at
+   * the next frame, a layer's script goes on and a perched pose's loop picks up
+   * at its next cycle (TL-P4-25 addendum 3 (4)).
    */
   interrupt({ now = false }: { now?: boolean } = {}): void {
     const S = this.S;
-    S.queue = [];
-    S.tap = false;
     if (!now) {
+      S.queue = [];
+      S.tap = false;
       this.B.carrying = false;
       return;
     }
@@ -1032,8 +1037,8 @@ export class BirdEngine {
     C.wing.t = 0;
     C.tuft.t = who === 'wait' ? 8 : 0;
     if (this.S.chirpT <= 0) C.jaw.t = 0;
-    C.ix.t = who === 'wait' ? 0 : 0.4;
-    C.iy.t = 0;
+    C.ix.t = who === 'wait' ? 0 : IRIS_REST.x;
+    C.iy.t = IRIS_REST.y;
   }
 
   /** One draw of the act table by weight; no snap or preen while input is recent. */
@@ -1104,6 +1109,11 @@ export class BirdEngine {
     if (!p || (S.ptrSrc !== 'focus' && S.t - S.ptrT >= RECENT)) {
       C.gaze.t = 0;
       S.behindT = 0;
+      // A working pose never rests its parts (`rest()`), so the iris goes back to its rest here.
+      if (!head) {
+        C.ix.t = IRIS_REST.x;
+        C.iy.t = IRIS_REST.y;
+      }
       return;
     }
     const Z = this.size;
