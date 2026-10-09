@@ -172,3 +172,4 @@ stage-3-live-slower,diagnoser,claude,bower-diagnoser,,1,130060,,,,,,40,5.7,diagn
 v2-field,implementer,claude,bower-implementer,,1,159295,,,,,,75,32.1,delivered,2026-10-09
 c4-focus-return,implementer,claude,bower-implementer,,1,135926,,,,,,50,39.8,delivered,2026-10-09
 c4-run-counts,implementer,claude,bower-implementer,,1,104660,,,,,,24,6.8,delivered,2026-10-09
+v2-field round2,implementer,claude,bower-implementer,,2,71215,,,,,,14,5.3,delivered (review skipped TL-P4-22),2026-10-09
