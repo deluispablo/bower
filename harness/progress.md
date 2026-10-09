@@ -217,3 +217,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: spine-report-barrier-dispositions passes — Test renamed to what it asserts (c2-write-once round 2, lead ruling main dd77054)
 - 2026-10-09: c2-write-once passes — Every write reconciles by bowerOp stamp plus checksum; journal lines by their own key; no headless offline (P4-36b PASS)
 - 2026-10-09: c2-create-by-id passes — One write-once rule: creates by reserved id kept with the pending action, updates by stamp + checksum; foreign stamp unconfirmed (P4-37b PASS)
+- 2026-10-09: spine-operations-checkpoints passes — Retention wired at run end: stamp at done, Bin the oldest beyond 20 (at most 3 a run), through the fence (P4-38 PASS)
