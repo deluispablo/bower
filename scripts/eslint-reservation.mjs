@@ -31,7 +31,6 @@ export const ALLOWED = {
     'src/data/spine/write-once.ts', // the home
     'src/data/spine/engine.ts', // one batch for a run's creates; one id for a create the batch did not cover
     'src/data/fake/fake-worker.ts', // the template's batch
-    'src/data/upload-queue.ts', // until c3-reservation-upload
     'src/data/drive/seen-files.ts', // passes the call on
     'src/data/fake/fake-run-drive.ts', // passes the call on
     'src/data/drive/fake-drive.ts', // the pretend Drive: its reserved ids and the creates that carry them
@@ -39,7 +38,7 @@ export const ALLOWED = {
   api: ['src/vault.ts'], // the Worker's template, which fake-worker stands in for
   runner: ['src/drive.ts'], // a per-attempt pool none outlives, and the fenced create that carries its id
 };
-export const ALLOWED_MAX = 9;
+export const ALLOWED_MAX = 8;
 
 /** The flat-config block for one package: the rule everywhere except the allowed files. */
 export const reservationConfig = (pkg) => ({

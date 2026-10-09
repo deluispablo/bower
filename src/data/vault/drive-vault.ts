@@ -595,7 +595,7 @@ export class DriveVault implements VaultSource {
       const path = ix.pathOf(f.id);
       if (!path) return null;
       const id = f.appProperties?.[PROP.pile] ?? f.id;
-      const queued = this.queuedItems(id).filter((i) => !listed(i.reserved));
+      const queued = this.queuedItems(id).filter((i) => !listed(i.fileId));
       const sending = [...(this.uploads.get(id)?.entries ?? []).filter((e) => !listed(this.reservedFor(e))).map((e) => e.item), ...queued.map(queuedRow)];
       if (!f.folder) {
         // A declared loose file waits for the run's reason, by the rule the run shares (TL-P2-21, TL-P2-29).
@@ -678,7 +678,7 @@ export class DriveVault implements VaultSource {
     for (const [id, u] of this.uploads) if (u.lone && !out.some((p) => p.id === id)) out.push({ id, text: '', createdAt: u.createdAt, items: u.entries.map((e) => e.item) });
     // A lone thing a reload left on its way: the upload queue still holds it.
     for (const item of this.queuedItems()) {
-      if (listed(item.reserved)) continue;
+      if (listed(item.fileId)) continue;
       const pile = out.find((p) => p.id === item.pileId);
       if (pile) {
         if (!pile.path && !pile.items.some((i) => i.id === item.memberKey)) pile.items.push(queuedRow(item));
@@ -1653,7 +1653,7 @@ export class DriveVault implements VaultSource {
 
   /** The file id reserved for a thing this page is sending, once the queue has one. */
   private reservedFor(e: Sending): string | null {
-    return e.queued ? (this.queued.queue.items().find((i) => i.id === e.queued)?.reserved ?? null) : null;
+    return e.queued ? (this.queued.queue.items().find((i) => i.id === e.queued)?.fileId ?? null) : null;
   }
 
   /**
@@ -1671,7 +1671,7 @@ export class DriveVault implements VaultSource {
       const item = await queue.halt(it.id);
       if (!item) continue;
       ids.push(item.id);
-      const found = item.reserved ? await this.reservedFile(item) : null;
+      const found = item.fileId ? await this.reservedFile(item) : null;
       if (!found) continue;
       // Arrived, wherever it is now: never sent again. Binned only where it was sent.
       arrived.add(item.memberKey);
@@ -1685,10 +1685,10 @@ export class DriveVault implements VaultSource {
    * `inPlace` only while still where it was sent; filed elsewhere, it stays.
    */
   private async reservedFile(item: QueueItem): Promise<{ file: DriveFile; inPlace: boolean } | null> {
-    if (!item.reserved) return null;
+    if (!item.fileId) return null;
     let file: DriveFile;
     try {
-      file = await this.drive.getUploaded(item.reserved);
+      file = await this.drive.getUploaded(item.fileId);
     } catch (err) {
       // Not made: nothing to bin. Unknown: it stays, where the person sees it.
       if (!(err instanceof BowerError && err.code === 'not-found')) console.error(err);

@@ -58,7 +58,7 @@ describe('one home for an intended create', () => {
     const paths = Object.entries(lists).flatMap(([pkg, files]) => files.map((f) => (pkg === 'root' ? f : `${pkg}/${f}`)));
     expect(paths.filter((p) => !existsSync(join(ROOT, p))), 'A file that is gone: delete its line from ALLOWED').toEqual([]);
     expect(paths.length, 'The allowlist may only shrink: lower ALLOWED_MAX with it').toBeLessThanOrEqual(ALLOWED_MAX as number);
-    expect(ALLOWED_MAX).toBeLessThanOrEqual(9);
+    expect(ALLOWED_MAX).toBeLessThanOrEqual(8);
   });
 
   it('the rule targets the primitive, not the names of what holds an id', () => {
