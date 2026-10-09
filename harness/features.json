@@ -6406,7 +6406,7 @@
     "id": "c4-lockf",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "ui": null,
     "what": "The heavy-run lock uses macOS lockf -k (kernel releases on holder death): try -t 0, print the advisory holder, then block; HARNESS_LOCK_HELD re-entry kept and e2e-both uses the same rule; mkdir lock and takeover code deleted.",
     "steps": [
