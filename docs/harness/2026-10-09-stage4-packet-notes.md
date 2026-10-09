@@ -14,3 +14,4 @@
   - The auth and not-found kinds take the same form. A final refusal after the retry that was "unreachable" says "could not reach".
   - Nit: the "Bower's update" label uses the heading colour, while "New notes" is muted. Make them match.
 - **For the lead (designer):** if "Let Bower read them now" shows on Home for a kept answer, it must run the retry. Otherwise the row's "next tidy-up" waits for a new inbox thing (P4-47c minor).
+- **Next smoke (lead):** add a case where a new q-state is asked and then "Write it" is pressed, so the no-model path (`shown`) is seen live.
