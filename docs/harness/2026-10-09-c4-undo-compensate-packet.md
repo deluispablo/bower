@@ -22,9 +22,13 @@
    - admission (spine/plan.ts:378);
    - `journalOf` (scripted.ts:1931-1974), which folds before the 20-request cap.
    - A run never applies X while it can see undo(X) in its listing; it holds X back.
-4. **The run settles each undo.** No new report or manifest field (run-manifest.ts:377 is a closed key list).
+4. **The run settles each undo.** Corrected by TL-P4-27 addendum 1 (main 8c4d1f80): `RunReport` gains one optional field, `tooLate: [{ kind: 'bin' | 'restore' | 'rule', name, recordId }]`. It is additive, like `answered` (TL-P4-19 addendum 10):
+   - the closed key list (run-manifest.ts:377) gains the key in the same deploy;
+   - old reports still read;
+   - an old-report fixture test covers it;
+   - it is never folded into `answered`, because these are changes, not answers.
    - X with undo(X): both are archived, and the row shows `yourChanges: 0`, as rules do.
-   - An undo whose target is already archived (a late undo) is archived and gets its own report row with the designer's copy.
+   - An undo whose target is already archived (a late undo) is archived, and its change goes into `tooLate`.
    - An undo whose target is nowhere is archived with no effect.
 5. **Strict on write, lenient on read, released in two steps.**
    - First, the runner and the Worker read `undo`. Then the app writes it.
@@ -55,8 +59,8 @@ Update the mechanism map row.
 
 | Situation | What shows |
 | --- | --- |
-| Undo of a change (Bin, rule, restore), online or offline | The change leaves "your changes" at once. The dock message promises that the next tidy-up skips it. **Copy: from the designer (pending).** Undo always works; there is no "Not undone yet" for journal Undos. |
-| A late undo (a run that started elsewhere had already taken the change) | The tidy-up's report shows its own row. **Copy: from the designer (pending).** |
+| Undo of a change (Bin, rule, restore), online or offline | Nothing new in the dock. The Undo keeps today's confirmation, replaced in place, and the change leaves "Since the last tidy-up" as it does today. Undo always works, offline too. There is no "Not undone yet" for journal Undos. |
+| A late undo (a run that started elsewhere had already taken the change) | A labelled list, "Too late to undo", in the "New notes" style, on the Home card and the done sheet. It is not counted. Its rows use display names only:<br>- Bin: "<name> was already in the Bin before your Undo.", with the link "Open the Bin in Drive";<br>- Restore: "<name> was already back before your Undo.", with the link "Open <name>";<br>- Rule: "The rule "<words>" was already added before your Undo.", with the link "Open Your rules". |
 | Remove the pile, when Drive can't be reached to check | As in TL-P4-24 addendum 5: the confirm box's line, "Not removed yet: …", unchanged. |
 
 ## Tests
@@ -67,7 +71,8 @@ Update the mechanism map row.
   - every resolved Undo either dropped a line with no reserved id, or its undo line reaches Drive or the failed list;
   - every late undo has a report row.
 - **One red for each of the 12 Codex findings,** named in the notes against the review sections.
-- **The version-skew test and the old-line and old-report fixtures.**
+- **The version-skew test and the old-line and old-report fixtures,** including a report without `tooLate`.
+- **e2e:** the "Too late to undo" list on the Home card and the done sheet, from a scripted late undo on fake, phone and desktop, with axe.
 - **e2e:** the dock Undo (online and offline) and removePile, on fake, phone and desktop, with axe.
 
 ## Verify
