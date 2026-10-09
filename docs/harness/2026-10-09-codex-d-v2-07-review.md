@@ -13,3 +13,11 @@ Range 4a75046f..4b43b268 (worktree /private/tmp/bower-d-v2-07), read-only, mediu
 5. **Important — `src/bird/engine.ts:1079`** — Focus gaze persists after focus leaves the control. Focus a button, then blur or remove it without pointer input: no focus-loss listener clears the saved point, and `'focus'` bypasses expiry indefinitely. **Mechanism home violated:** `useBirdEngine`’s look source and engine gaze channel; addendum 2(5) holds gaze only while focus stays on the control.
 
 findings: 5
+
+## Fix-round pass (d00dba83..504e6cbd)
+
+1. **Important — `src/bird/engine.ts:399`** — Input can erase a pending layer script. While preen or snap runs between flights, queue `flyTo(...).then(callback)` and move the pointer or tap before the next frame. `heard()` calls `interrupt({ now: true })`, which clears `S.queue`; the flight and callback never run. Reproduced with injected frames. **Mechanism home violated:** engine act ownership and the single tap slot; layer taps must preserve the script and play after its current action.
+
+2. **Important — `src/bird/engine.ts:1103`** — Prior finding 5 remains unfixed in working poses. Focus a control beside a write-pose Bower, then blur or remove it. The getter correctly returns null, but `gaze()` returns without resetting the iris targets; working poses never call `rest()`. Reproduced: iris stayed at `translate(1.15 1.06)` five engine seconds after blur. **Mechanism home violated:** `useBirdEngine`’s look source and engine gaze channel; addendum 2(5) permits focus gaze only while focus stays on the control.
+
+findings: 2
