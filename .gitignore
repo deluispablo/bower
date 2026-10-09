@@ -21,3 +21,4 @@ e2e/_explore-*
 !.claude/skills/bower-implement
 !.claude/skills/bower-review
 !.claude/skills/bower-evaluate
+!.claude/skills/bower-design
