@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DriveHttp } from './drive-http';
-import { isUnconfirmedWrite } from './transport';
+import { failureKind, isNoAnswer, isUnconfirmedWrite } from './transport';
+import { CHANGED_ELSEWHERE, checkStillAsSeen, notAsSeenReason, type NotAsSeenReason } from '../contracts/still-as-seen';
+import { BowerError } from '../types';
 
 interface Call {
   method: string;
@@ -393,4 +395,109 @@ describe('DriveHttp', () => {
     }
   });
 
+});
+
+/**
+ * c4-retry-fence (TL-P4-24 finding 1, defect transport-retry-skips-fence): a write to an existing file is resent after an
+ * answer that says it did not land only after its caller's fence passes again, right before the resend.
+ */
+describe('a resend of a write to an existing file', () => {
+  const T1 = '2026-10-04T10:00:00.000Z';
+  const T2 = '2026-10-04T11:00:00.000Z';
+  const pacing = { baseMs: 0, sleep: async (): Promise<void> => undefined };
+  const rateLimit = (reason: string | null): Response =>
+    json({ error: { code: reason ? 403 : 429, message: 'Slow down.', errors: reason ? [{ domain: 'usageLimits', reason }] : [] } }, reason ? 403 : 429);
+  /** The first answer to the write: each one that says it did not land, and a 401 the transport refreshes the token for. */
+  const refusals: [string, () => Response][] = [
+    ['429', () => rateLimit(null)],
+    ['403 rateLimitExceeded', () => rateLimit('rateLimitExceeded')],
+    ['403 userRateLimitExceeded', () => rateLimit('userRateLimitExceeded')],
+    ['401 then a refresh', () => new Response('', { status: 401 })],
+  ];
+  type Fence = () => Promise<void>;
+  const existing: [string, (d: DriveHttp, opts: { fence?: Fence }) => Promise<unknown>][] = [
+    ['writeText', (d, o) => d.writeText('f1', 'bower body', T1, undefined, o)],
+    ['writeText with properties (multipart PATCH)', (d, o) => d.writeText('f1', 'bower body', T1, { bowerOp: 'op' }, o)],
+    ['update', (d, o) => d.update('f1', { name: 'b.md' }, o)],
+    ['trash', (d, o) => d.trash('f1', undefined, o)],
+    ['untrash', (d, o) => d.untrash('f1', undefined, undefined, o)],
+  ];
+  /** What changes elsewhere while the refusal is answered: its modifiedTime, its name or its folder. */
+  const changes: [string, NotAsSeenReason, (f: ReturnType<typeof file>) => void][] = [
+    ['modifiedTime', 'modified', (f) => void (f.modifiedTime = T2)],
+    ['name', 'name', (f) => void (f.name = 'Renamed elsewhere.md')],
+    ['parents', 'parents', (f) => void (f.parents = ['OTHER'])],
+  ];
+
+  /** A Drive holding one file: reads answer it as stored; the first write gets `first`, later writes land. */
+  function drive(first: () => Response, change?: (f: ReturnType<typeof file>) => void) {
+    const stored = { ...file('f1', 'a.md', 'ROOT'), modifiedTime: T1 };
+    const seen = { landed: 0, fences: 0, fencesAtFirstSend: -1 };
+    let writes = 0;
+    const s = stub((c) => {
+      if (c.method === 'GET') return json(stored);
+      if (++writes === 1) {
+        seen.fencesAtFirstSend = seen.fences;
+        change?.(stored);
+        return first();
+      }
+      seen.landed++;
+      return json(stored);
+    });
+    const d = new DriveHttp({ token: tokens().token, fetch: s.fetch, context: 'headless', pacing });
+    const fence: Fence = async () => {
+      seen.fences++;
+      await checkStillAsSeen({ id: 'f1', name: 'a.md', parents: ['ROOT'], modifiedTime: T1 }, () => d.get('f1', { binned: true }), CHANGED_ELSEWHERE, { unanswered: isNoAnswer });
+    };
+    const sent = (): number => s.calls.filter((c) => c.method !== 'GET').length;
+    return { d, fence, seen, sent, stored };
+  }
+
+  const rows = existing.flatMap(([write, run]) => refusals.flatMap(([refusal, first]) => changes.map(([what, reason, change]) => ({ write, run, refusal, first, what, reason, change }))));
+  it.each(rows)('a resent write to an existing file runs its fence first ($write, $refusal, $what changed)', async ({ run, first, reason, change }) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { d, fence, seen, sent } = drive(first, change);
+    const e = await run(d, { fence }).catch((x: unknown) => x);
+    expect(notAsSeenReason(e)).toBe(reason);
+    expect(e).toMatchObject({ message: CHANGED_ELSEWHERE });
+    expect(sent()).toBe(1);
+    expect(seen.landed).toBe(0);
+    expect(seen.fences).toBe(1);
+    expect(seen.fencesAtFirstSend).toBe(0);
+  });
+
+  const passing = existing.flatMap(([write, run]) => refusals.map(([refusal, first]) => ({ write, run, refusal, first })));
+  it.each(passing)('a passing fence still lands the resend ($write, $refusal)', async ({ run, first }) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { d, fence, seen, sent } = drive(first);
+    await expect(run(d, { fence })).resolves.toMatchObject({ id: 'f1' });
+    expect(sent()).toBe(2);
+    expect(seen.landed).toBe(1);
+    expect(seen.fences).toBe(1);
+    expect(seen.fencesAtFirstSend).toBe(0);
+  });
+
+  it.each(passing)('an unfenced write is sent once and fails as retry-kind ($write, $refusal)', async ({ run, first }) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { d, sent, seen } = drive(first);
+    const e = await run(d, {}).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(BowerError);
+    expect(failureKind(e)).toBe('retry');
+    expect(isUnconfirmedWrite(e)).toBe(false);
+    expect(sent()).toBe(1);
+    expect(seen.landed).toBe(0);
+  });
+
+  const creates: [string, (d: DriveHttp) => Promise<unknown>][] = [
+    ['createText', (d) => d.createText('ROOT', 'a.md', 'x', undefined, 'RESERVED_ID')],
+    ['createFolder', (d) => d.createFolder('ROOT', 'A', undefined, 'RESERVED_ID')],
+  ];
+  const rated = creates.flatMap(([write, run]) => refusals.slice(0, 3).map(([refusal, first]) => ({ write, run, refusal, first })));
+  it.each(rated)('creates by reserved id are still resent after a rate limit ($write, $refusal)', async ({ run, first }) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { d, sent, seen } = drive(first);
+    await expect(run(d)).resolves.toMatchObject({ id: 'f1' });
+    expect(sent()).toBe(2);
+    expect(seen.landed).toBe(1);
+  });
 });

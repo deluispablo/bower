@@ -799,3 +799,49 @@ describe('POST /vault against delete me and sign-out', () => {
     });
   });
 });
+
+/**
+ * c4-retry-fence (TL-P4-24 finding 1): the Worker's `replaceText` through `POST /vault`, its repair PATCH answered 429
+ * while the person types a rule on another device. The resend reads the file again first, and the change stops it.
+ */
+describe('POST /vault repairs Rules with a fence before any resend', () => {
+  const pacing = { baseMs: 0, sleep: (): Promise<void> => Promise.resolve() };
+  async function rateLimitedRepair(typedElsewhere: boolean): Promise<{ patches: () => number; rules: Item }> {
+    const { cookie } = await someone();
+    const g = new FakeGoogle();
+    const { folderId } = await body(await post(g, cookie));
+    const rules = [...g.items.values()].find((i) => i.name === 'Rules.md' && i.parents.includes(folderId));
+    if (rules === undefined) throw new Error('Rules.md missing');
+    rules.content = OLD_RULES_TEMPLATE;
+    rules.appProperties = {};
+    const inner = g.fetchImpl;
+    let patches = 0;
+    const limited: FetchLike = async (input, init) => {
+      if ((init?.method ?? 'GET') === 'PATCH' && ++patches === 1) {
+        if (typedElsewhere) {
+          rules.content = `${OLD_RULES_TEMPLATE}\n- Typed on another device.\n`;
+          rules.modifiedTime = g.tick();
+        }
+        return Response.json({ error: { code: 429, message: 'Slow down.', errors: [] } }, { status: 429 });
+      }
+      return inner(input, init);
+    };
+    const res = await createApp({ fetchImpl: limited, pacing }).request(`${APP}/vault`, { method: 'POST', headers: { cookie, origin: APP, 'content-type': 'application/json', ...(leases.get(cookie) ?? {}) }, body: '{}' }, env);
+    expect(res.status).toBe(200);
+    return { patches: () => patches, rules };
+  }
+
+  it('a repair answered 429 while the person typed a rule elsewhere is not sent again', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { patches, rules } = await rateLimitedRepair(true);
+    expect(patches()).toBe(1);
+    expect(rules.content).toBe(`${OLD_RULES_TEMPLATE}\n- Typed on another device.\n`);
+  });
+
+  it('a repair answered 429 with nothing changed lands on the resend', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { patches, rules } = await rateLimitedRepair(false);
+    expect(patches()).toBe(2);
+    expect(rules.content).toBe(RULES_TEMPLATE.text);
+  });
+});
