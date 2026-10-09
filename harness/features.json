@@ -6185,7 +6185,7 @@
     "id": "c4-e2e-port",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "Each worktree runs e2e on its own port (one helper, derived from the worktree root); an already-running server is reused only if it serves this worktree, else the run fails with one line.",
     "steps": [
       "Two worktrees resolve different ports.",
