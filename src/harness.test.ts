@@ -559,7 +559,7 @@ describe('the harness', () => {
 
   it('e2e-both uses the same re-entry rule as with-lock', () => {
     const source = readFileSync(join(root, 'scripts/e2e-both.sh'), 'utf8');
-    expect(source).toMatch(/lock=\$\{HARNESS_LOCK:-\/tmp\/bower-heavy\.lock\}/);
+    expect(source).toMatch(/lock=\$\{HARNESS_LOCK:-\/tmp\/bower-heavy\.lockf\}/);
     const rule = '[ "${HARNESS_LOCK_HELD:-}" = "$lock" ]';
     expect(source).toContain(rule);
     expect(readFileSync(lockScript, 'utf8')).toContain(rule);

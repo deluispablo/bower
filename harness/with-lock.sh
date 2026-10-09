@@ -5,7 +5,7 @@
 # usage: bash harness/with-lock.sh <command> [args...]      HARNESS_LOCK overrides the lock file.
 set -uo pipefail
 [ $# -eq 0 ] && { echo "usage: with-lock.sh <command> [args...]"; exit 2; }
-lock=${HARNESS_LOCK:-/tmp/bower-heavy.lock}
+lock=${HARNESS_LOCK:-/tmp/bower-heavy.lockf}
 # Only a child of the holder inherits this lock's path and passes through.
 [ "${HARNESS_LOCK_HELD:-}" = "$lock" ] && exec "$@"
 

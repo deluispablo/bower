@@ -4,6 +4,7 @@ implementer: codex
 
 ## Tests changed
 
+tests changed: src/harness.test.ts: e2e-both uses the same re-entry rule as with-lock: expect default /tmp/bower-heavy.lockf per TL-P4-22 addendum 24.
 tests changed: src/harness.test.ts: two checks started together run one after the other: use the shared clean environment; replace deleted-directory expectation with persistent lock-file and released-kernel-lock assertions; retain ordering and timestamp assertions.
 tests changed: src/harness.test.ts: a second check waits and prints who holds the lock: wait for published advisory metadata at lock.holder, rather than directory creation; retain the holder-message assertion and use the shared clean environment.
 tests changed: src/harness.test.ts: a second heavy run waits for the first: both spawned entry points use the shared clean environment instead of separate inherited-flag handling; all assertions remain.
@@ -33,6 +34,8 @@ Command output stays on its original stdout and stderr. A private descriptor car
 Read the installed manual before editing: `man lockf`, LOCKF(1), macOS 26.6, manual dated November 25, 2023; DESCRIPTION, OPTIONS, EXIT STATUS and EXAMPLES. It documents exclusive BSD flock(2) locking, recommends -k for concurrent callers and guaranteed ordering, specifies -t 0 as immediate acquisition only, and says the default wait is indefinite. The descriptor example is also the basis of the test holder, which owns the sole descriptor and can be killed without a surviving child holding it. EX_TEMPFAIL is the busy-lock status; successful acquisition otherwise returns the command status.
 
 ## Evidence and remaining gates
+
+Default path /tmp/bower-heavy.lockf (TL-P4-22 addendum 24), so it never collides with the old mkdir lock.
 
 Fix: helper moved to src/testing/ for the unused-code gate (knip --production).
 
