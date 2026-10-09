@@ -165,3 +165,4 @@ c3-state-mark round3b,implementer,claude,bower-escalated,,5,217637,,,,,,89,13.7,
 P4-47b,reviewer,claude,bower-reviewer,,1,79302,,,,,,19,1.7,PASS (5 minor),2026-10-09
 c3-state-mark round4,implementer,claude,bower-escalated,,6,164293,,,,,,71,8.6,stalled (16 part, 17 done, 18 not),2026-10-09
 c3-state-mark round4b,implementer,claude,bower-escalated,,7,165601,,,,,,73,12.5,stalled (a19 engine block),2026-10-09
+c3-state-mark round4c,implementer,claude,bower-escalated,,8,136684,,,,,,58,7.6,delivered,2026-10-09
