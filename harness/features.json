@@ -5594,7 +5594,7 @@
       "Fake becomes a Drive adapter."
     ],
     "verify": "pnpm vitest run -t \"the runner and the fake run the same engine|a landed move later purged is reported as applied\" && pnpm -C runner exec vitest run -t \"a create into a folder binned since the run read it is refused\"",
-    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Carry-over: a landed move later purged is reported as applied (safety-polish #7). c2-read-cache ruling (main 9366148): the runner HOLD_MS fence hold for a create's parent folder moves here (named item)."
+    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Carry-over: a landed move later purged is reported as applied (safety-polish #7). c2-read-cache ruling (main 9366148): the runner HOLD_MS fence hold for a create's parent folder moves here (named item). Lead rulings (main fe2b3c8): a move whose answer was lost, then purged before the read-back, is reported with the outcome-unknown kind (\"Bower couldn't confirm this; the file is gone\"), neither set aside nor applied; fix round with a named test \"a lost-answer move purged before the read-back is reported as unconfirmed\". The strict edit-text rule stays in both fake and runner."
   },
   {
     "id": "c2-write-once",
