@@ -25,7 +25,7 @@
    - `journal.remove` (removeNow, `journal.ts:~489-505`) calls `withdraw` under `acrossTabs` before the line drops.
    - The other keepers use the same withdraw: drive-vault `Sending` and `reservedFile` (`:1016, 1556, 1694/1718`), `Intended`, and the upload record.
    - No second withdraw path.
-3. **Scope.** The dock Undos are Bin, rule and restore, plus `removePile` (its sentence comes from the designer, through the coordinator; until then it uses a named constant on a seam). Lines `drive-vault.ts:332, 352, 436` are line folds, not Undos, and stay as they are.
+3. **Scope.** The dock Undos are Bin, rule and restore, plus `removePile` (its refusal per TL-P4-24 addendum 5, below). Lines `drive-vault.ts:332, 352, 436` are line folds, not Undos, and stay as they are.
 4. **The refusal is distinguishable.** It carries its own BowerError code, so `report()` and the dock can tell it apart from the storage-failure sentence at `journal.ts:498`, which stays.
 5. **Dock replace-in-place.** `toast.tsx` gains `replace(id, text, action)`. It keeps the item, restarts its timer (8 s with an action, pausing on hover or focus), and keeps focus on the action. No second component, no second message.
    - Copy: "Not undone yet: Bower could not reach Drive to check. Try again when you are back online." It is never in --danger.
@@ -39,8 +39,9 @@
 | Undo of a change whose create landed but its answer was lost | Undo succeeds, and the file Bower made goes to the Bin. No new sentence. |
 | Undo from a dock message, of a change whose create may or may not have landed, with Drive not answering | The same dock message is replaced in place: "Not undone yet: Bower could not reach Drive to check. Try again when you are back online.", not in --danger, with the action "Try again" that runs the same Undo. It uses the 8 s timer that pauses on hover or focus, and focus stays on the action. No second message. The change stays in "your changes". |
 | The same case from an inline Undo | Rides with d-v2-02 (not this entry). |
+| Remove the pile, when Bower cannot tell whether the pile's create landed and Drive is not answering (TL-P4-24 addendum 5) | Inline in the pile screen's open confirm box (PileScreen, role=alert): the box's line is replaced by "Not removed yet: Bower could not reach Drive to check. Try again when you are back online.", muted, never --danger. "Remove the pile" stays as the retry, with focus on it; "Keep it" closes the box. No "Pile removed" and no report() toast in this case. The generic "That did not work. Try again." stays for real failures. |
 
-Copy ruled in TL-P4-24 addendum 1. The designer signs off this table before dispatch.
+Copy ruled in TL-P4-24 addenda 1 and 5. Designer signed off the table at 9193d1fc; the removePile row is the designer's own answer (addendum 5).
 
 ## Red (class test, from the note)
 
@@ -62,6 +63,7 @@ Copy ruled in TL-P4-24 addendum 1. The designer signs off this table before disp
 - The red.
 - `toast replace keeps the item and restarts its timer` (unit, `src/ui/toast.test.ts`).
 - `a dock undo that cannot reach Drive is replaced in place with try again`: e2e on fake, phone and desktop, with axe. It needs a named fake trigger for an unreachable withdraw; name it on your card.
+- `a pile removal that cannot reach Drive says so in its confirm box`: e2e on fake, phone and desktop, with axe. The line is replaced, focus is on "Remove the pile", and no toast shows. It uses the same named fake trigger.
 - `pnpm check`.
 - The goldens.
 
