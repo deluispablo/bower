@@ -19,6 +19,12 @@
  *   kept in the person object before `files.create` is sent with that id.
  *   Drive refuses a second file with the same id, so a retry after a lost
  *   reply adopts or creates that one folder, never a second one.
+ * - Every id goes through write-once (`reserveFor`, `makeOnce`, `makeFolder`,
+ *   `makeText`), the person object as its keeper (the third, after the
+ *   journal's outbox line and the device's upload record): a create refused
+ *   outright (a permanent 4xx) lets its id go there, and the next call
+ *   reserves anew for it; a lost answer, a 5xx, a rate limit, a full Drive or
+ *   a 409 keep it.
  * - The same call reserves one id per template folder and file, kept with the
  *   pointer; every create sends its id, and a 409 (Drive: the id exists) means
  *   an earlier or stalled fill made it. So a fill resumed after its 60 s claim
@@ -56,7 +62,7 @@ import { OLD_RULES_TEMPLATE, RULES_TEMPLATE } from '../../src/data/contracts/rul
 import { DriveHttp, FOLDER, quote, toFile, type WireFile } from '../../src/data/drive/drive-http.js';
 import type { DriveFile } from '../../src/data/drive/drive-api.js';
 import { BowerError } from '../../src/data/types.js';
-import { createById, reserveId, updateByStamp } from '../../src/data/spine/write-once.js';
+import { heldAs, makeFolder, makeOnce, makeText, reserveFor, updateByStamp, type Holder } from '../../src/data/spine/write-once.js';
 
 /** The marker every Bower folder carries in `appProperties` (private to this OAuth client). */
 export const FOLDER_MARKER = { bowerFolder: '1' } as const;
@@ -77,7 +83,6 @@ export const RULES_FILE: VaultFile = { path: 'Rules.md', content: RULES_TEMPLATE
 export const VAULT_TEMPLATE: readonly VaultFile[] = FOLDER_TEMPLATE;
 
 const FILES_URL = 'https://www.googleapis.com/drive/v3/files';
-const UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files';
 const PLACEHOLDER = PLACEHOLDER_FILE;
 
 export interface VaultResult {
@@ -140,24 +145,6 @@ function vaultDrive(env: Env, sub: string, fetchImpl: FetchLike, pacing?: Partia
     const response = await http.call(`${FILES_URL}/${encodeURIComponent(id)}?${new URLSearchParams({ fields })}`, {}, [404]);
     return response.status === 404 ? null : json<DriveItem>('get', response);
   };
-  /** A multipart upload (Drive v3, "Upload file data"): metadata, then the text. */
-  const multipart = async (url: string, method: string, metadata: Record<string, unknown>, mimeType: string, content: string): Promise<Response> => {
-    const boundary = `bower-${crypto.randomUUID()}`;
-    const body =
-      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
-      `--${boundary}\r\nContent-Type: ${mimeType}; charset=UTF-8\r\n\r\n${content}\r\n--${boundary}--`;
-    return http.call(url, { method, headers: { 'content-type': `multipart/related; boundary=${boundary}` }, body });
-  };
-  /** A create with the id reserved for it (`spine/write-once.ts`): a 409, or a lost answer, is that id found by a read. */
-  const made = (id: string, send: (id: string) => Promise<unknown>): Promise<string> =>
-    createById(
-      id,
-      async (at) => {
-        await send(at);
-        return at;
-      },
-      async (at) => ((await get(at, 'id')) === null ? null : at),
-    );
   return {
     get: (id: string) => get(id, 'id,mimeType,trashed'),
     /** The person's oldest live folder carrying the Bower marker, or null. */
@@ -167,16 +154,11 @@ function vaultDrive(env: Env, sub: string, fetchImpl: FetchLike, pacing?: Partia
       return (await list(q, 'files(id,name,mimeType)', { orderBy: 'createdTime' }))[0] ?? null;
     },
     children: (parentId: string) => list(`${quote(parentId)} in parents and trashed = false`, 'files(id,name,mimeType)'),
-    /** `files.generateIds`: `count` ids (Drive allows 1 to 1000) to create files with later. */
-    generateIds: (count: number) => http.generateIds(count),
-    /** `files.create` for a folder, with the id reserved for it (`generateIds`): made once, however often it is sent. */
-    makeFolder: (name: string, parentId: string | null, id: string, appProperties?: Record<string, string>): Promise<string> =>
-      made(id, (at) => http.call(`${FILES_URL}?fields=id`, { method: 'POST', headers: { 'content-type': 'application/json; charset=UTF-8' }, body: JSON.stringify({ name, mimeType: FOLDER, id: at, ...(parentId !== null ? { parents: [parentId] } : {}), ...(appProperties !== undefined ? { appProperties } : {}) }) })),
-    /** `files.create` with a multipart upload of a new text file, with the id reserved for it: made once. */
-    makeText(name: string, parentId: string, content: string, id: string, appProperties?: Record<string, string>): Promise<string> {
-      const mimeType = name.endsWith('.md') ? 'text/markdown' : name.endsWith('.json') ? 'application/json' : 'text/plain';
-      return made(id, (at) => multipart(`${UPLOAD_URL}?uploadType=multipart&fields=id`, 'POST', { name, mimeType, parents: [parentId], id: at, ...(appProperties === undefined ? {} : { appProperties }) }, mimeType, content));
-    },
+    /**
+     * The one Drive transport, as the write-once makers take it: they reserve ids (`files.generateIds`) and send each
+     * create with its id (`files.create`), found again by that id after a lost answer or a 409.
+     */
+    http,
     /** The one live file called `name` in `parentId` with what the repair checks, or null when there is none or more than one. */
     async onlyNamed(parentId: string, name: string): Promise<DriveItem | null> {
       const files = await list(`${quote(parentId)} in parents and name = ${quote(name)} and trashed = false`, 'files(id,mimeType,modifiedTime,appProperties)', { pageSize: '2' });
@@ -228,15 +210,18 @@ async function repairRules(drive: Drive, folderId: string): Promise<void> {
  * Completes `rootId` from the template by name, as the original's
  * `copyTemplate`: folders first (a child needs its parent), then each file
  * whose name is not taken. Creates only; whatever is there is left as it is.
- * `rootIsEmpty` skips listing a folder this call just made.
+ * `rootIsEmpty` skips listing a folder this call just made. Each create is
+ * the home's (`makeOnce`), with the id `held` keeps for its path in the person
+ * object, as the fake Worker makes the same template.
  */
 async function completeTemplate(
   drive: Drive,
   rootId: string,
   rootIsEmpty: boolean,
   files: readonly VaultFile[],
-  ids: Record<string, string>,
+  held: (path: string) => Holder,
 ): Promise<void> {
+  const make = (path: string, create: (id: string) => Promise<DriveFile>): Promise<DriveFile> => makeOnce(held(path), drive.http, create);
   const folders = new Map<string, string>([['', rootId]]);
   const children = new Map<string, DriveItem[]>();
   if (rootIsEmpty) children.set(rootId, []);
@@ -257,7 +242,7 @@ async function completeTemplate(
     const existing = (await childrenOf(parent)).find((c) => c.name === name && c.mimeType === FOLDER);
     let id: string;
     if (existing === undefined) {
-      id = await drive.makeFolder(name, parent, ids[path] ?? (await reserveId(drive)));
+      id = (await make(path, (at) => makeFolder(drive.http, drive.http, { parent, name, id: at }))).id;
       children.set(id, []);
     } else {
       id = existing.id;
@@ -271,7 +256,7 @@ async function completeTemplate(
     const name = file.path.slice(slash + 1);
     if (name === PLACEHOLDER) continue;
     if ((await childrenOf(parent)).some((c) => c.name === name)) continue;
-    await drive.makeText(name, parent, file.content, ids[file.path] ?? (await reserveId(drive)), file.appProperties);
+    await make(file.path, (at) => makeText(drive.http, drive.http, { parent, name, id: at, ...(file.appProperties ? { props: file.appProperties } : {}) }, file.content));
   }
 }
 
@@ -383,14 +368,20 @@ async function attemptVault(
 
   if (folderId === null) {
     if (reserved === null) {
-      // One call reserves the folder's id and one per template folder and file.
+      // One request reserves the folder's id and one per template folder and file (`reserveFor`), all kept in the
+      // person object before any create is sent.
       const keys = templateKeys(files);
-      const [folder, ...rest] = await drive.generateIds(keys.length + 1);
-      reserved = folder ?? '';
-      const ids = Object.fromEntries(keys.map((k, i) => [k, rest[i] ?? '']));
+      const folder: Holder = {};
+      const items = keys.map((): Holder => ({}));
+      await reserveFor(drive.http, [folder, ...items]);
+      reserved = folder.reserved ?? '';
+      const ids = Object.fromEntries(keys.map((k, i) => [k, items[i]?.reserved ?? '']));
       if (!(await person.reserveFolder(gen, reserved, { folderId: reserved, ids }, state.folderId))) return null;
     }
-    folderId = await drive.makeFolder(env.TEMPLATE_FOLDER_NAME, null, reserved, FOLDER_MARKER);
+    // Kept in the person object until made; a refusal outright lets it go there (`makeOnce`).
+    const at = reserved;
+    const keptFolder = heldAs(at, () => person.dropReservation(gen, at));
+    folderId = (await makeOnce(keptFolder, drive.http, (id) => makeFolder(drive.http, drive.http, { parent: 'root', name: env.TEMPLATE_FOLDER_NAME, props: { ...FOLDER_MARKER }, id }))).id;
     made = true;
   }
 
@@ -400,19 +391,23 @@ async function attemptVault(
   const kept = await person.vaultState();
   if (kept.folderId !== folderId) return null;
   if (!kept.complete) {
-    let templateIds = kept.templateIds?.folderId === folderId ? kept.templateIds.ids : null;
-    if (templateIds === null) {
-      // A folder found rather than reserved here: reserve its template ids before any create,
-      // or use the ones another call kept for it meanwhile.
-      const keys = templateKeys(files);
-      const fresh = await drive.generateIds(keys.length);
-      templateIds = await person.reserveTemplate(gen, {
-        folderId,
-        ids: Object.fromEntries(keys.map((k, i) => [k, fresh[i] ?? ''])),
-      });
-      if (templateIds === null) return null;
+    let ids = kept.templateIds?.folderId === folderId ? kept.templateIds.ids : {};
+    const bare = templateKeys(files).filter((k) => ids[k] === undefined);
+    if (bare.length > 0) {
+      // A folder found rather than reserved here, or an item whose id was let go: reserve those ids before any
+      // create and keep them, or use the ones another call kept for them meanwhile.
+      const fresh = bare.map((): Holder => ({}));
+      await reserveFor(drive.http, fresh);
+      const keptIds = await person.reserveTemplate(gen, { folderId, ids: Object.fromEntries(bare.map((k, i) => [k, fresh[i]?.reserved ?? ''])) });
+      if (keptIds === null) return null;
+      ids = keptIds;
     }
-    await completeTemplate(drive, folderId, made, files, templateIds);
+    const root = folderId;
+    await completeTemplate(drive, root, made, files, (path) => {
+      const id = ids[path];
+      if (id === undefined) throw driveError(`no id kept for a template item`);
+      return heldAs(id, () => person.letTemplateIdGo(gen, root, path, id));
+    });
     await person.markFolderComplete(gen, folderId);
   }
   await repairRules(drive, folderId);

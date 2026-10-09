@@ -394,27 +394,38 @@ export class Person extends DurableObject<Env> {
 
   /**
    * Keeps the ids reserved for the template's items in `templateIds.folderId`,
-   * before any is created, unless ids are kept for that folder already; only
-   * while that folder is the pointer and not complete. Answers the ids kept
-   * for that folder (the earlier ones when there were any), or null when
-   * refused: the caller reads the state again.
+   * before any is created, for each item with no id kept for that folder yet
+   * (an id kept earlier stays); only while that folder is the pointer and not
+   * complete. The keeper of the Worker's ids behind write-once's port: the read
+   * and the write here are one synchronous step. Answers the ids kept for that
+   * folder, or null when refused: the caller reads the state again.
    */
   reserveTemplate(gen: number, templateIds: TemplateIds): Record<string, string> | null {
     const { folderId } = templateIds;
-    if (this.account()?.generation !== gen) return null;
-    this.ctx.storage.sql.exec(
-      `UPDATE account SET pending_template_ids = ?
-       WHERE id = 1 AND session_generation = ? AND folder_id = ? AND folder_complete = 0
-         AND (pending_template_ids IS NULL OR json_extract(pending_template_ids, '$.folderId') IS NOT ?)`,
-      JSON.stringify(templateIds),
-      gen,
-      folderId,
-      folderId,
-    );
     const state = this.vaultState();
-    return state.folderId === folderId && !state.complete && state.templateIds?.folderId === folderId
-      ? state.templateIds.ids
-      : null;
+    if (this.account()?.generation !== gen || state.folderId !== folderId || state.complete) return null;
+    const ids = { ...templateIds.ids, ...(state.templateIds?.folderId === folderId ? state.templateIds.ids : {}) };
+    this.ctx.storage.sql.exec(
+      'UPDATE account SET pending_template_ids = ? WHERE id = 1 AND session_generation = ?',
+      JSON.stringify({ folderId, ids }),
+      gen,
+    );
+    return ids;
+  }
+
+  /**
+   * Lets one template item's id go (write-once's `letGo`: its create was refused outright), only while it is still
+   * the id kept for `key` in `folderId`; the next call reserves anew for that item and keeps the others.
+   */
+  letTemplateIdGo(gen: number, folderId: string, key: string, id: string): void {
+    const kept = this.vaultState().templateIds;
+    if (this.account()?.generation !== gen || kept?.folderId !== folderId || kept.ids[key] !== id) return;
+    const ids = Object.fromEntries(Object.entries(kept.ids).filter(([k]) => k !== key));
+    this.ctx.storage.sql.exec(
+      'UPDATE account SET pending_template_ids = ? WHERE id = 1 AND session_generation = ?',
+      JSON.stringify({ folderId, ids }),
+      gen,
+    );
   }
 
   /** Forgets a reservation that can no longer be used (that file is in the Bin or is not a folder). */
