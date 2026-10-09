@@ -8,9 +8,9 @@
 import { BowerError } from '../types';
 import type { Digest } from '../pile-readiness';
 import { sha256 } from '../vault/hashes';
-import { answerKind, askAgainNow, mayHaveLanded, noAnswer, send, type Context, type Fetch, type Pacing } from './transport';
+import { answerKind, askAgainNow, isNoAnswer, mayHaveLanded, noAnswer, send, type Context, type Fetch, type Pacing } from './transport';
 import { confirmedFrom, chunkRange } from './resumable-upload';
-import { BIN_KEYS, DRIVE_MESSAGES, driveError, driveFailure, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type ResumableTarget, type SessionStatus } from './drive-api';
+import { BIN_KEYS, DRIVE_MESSAGES, driveError, driveFailure, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type Fence, type ResumableTarget, type SessionStatus, type WriteOptions } from './drive-api';
 
 const API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
@@ -31,6 +31,11 @@ const BATCH = SEARCH_FOLDERS;
 /** How many folders up a binned file's place is looked for. */
 const BIN_DEPTH = 8;
 
+/** A fence's own refusal, carried through the transport's catch untouched (`authorized`). */
+class FenceRefused {
+  constructor(readonly error: unknown) {}
+}
+
 /** A file as Drive v3 answers it (`FIELDS`, and the checksums when asked); the one wire type of every client. */
 export interface WireFile {
   id: string;
@@ -50,6 +55,8 @@ export interface WireFile {
 export type { Pacing };
 /** The one table's retry question, for the Worker's other outbound calls (it imports only this adapter, TL-P3-21). */
 export { askAgainNow };
+/** A request that got no answer, for the Worker's fence (`checkStillAsSeen`'s `unanswered`), through this adapter. */
+export { isNoAnswer };
 
 export interface DriveHttpOptions {
   /** The access token; `fresh` asks the Worker for a new one. */
@@ -184,33 +191,34 @@ export class DriveHttp implements DriveApi {
 
   /**
    * Drive v3 has no If-Match on files: this reads, then writes, which leaves a short window. `current`, when given, is
-   * the file as the caller read it moments ago (the runner's fence), compared in place of one more read.
+   * the file as the caller read it moments ago (the runner's fence), compared in place of one more read. `fence` runs
+   * again before any resend (`WriteOptions`); this compare runs once, before the first send.
    * `appProperties`, when given, go in the same request: a multipart `files.update`, metadata then media
    * (https://developers.google.com/workspace/drive/api/guides/manage-uploads#multipart).
    */
-  async writeText(id: string, text: string, ifModified: string, appProperties?: Record<string, string>, current?: DriveFile): Promise<DriveFile> {
-    const now = current ?? (await this.get(id));
+  async writeText(id: string, text: string, ifModified: string, appProperties?: Record<string, string>, opts: WriteOptions & { current?: DriveFile } = {}): Promise<DriveFile> {
+    const now = opts.current ?? (await this.get(id));
     if (now.modifiedTime !== ifModified) throw driveError('conflict');
-    if (appProperties) return this.multipart({ appProperties }, new Blob([text], { type: mimeOf(now.name) }), id);
-    const res = await this.call(`${UPLOAD}/files/${id}?uploadType=media&fields=${LISTED_FIELDS}`, { method: 'PATCH', headers: { 'content-type': mimeOf(now.name) }, body: text });
+    if (appProperties) return this.multipart({ appProperties }, new Blob([text], { type: mimeOf(now.name) }), id, opts.fence);
+    const res = await this.call(`${UPLOAD}/files/${id}?uploadType=media&fields=${LISTED_FIELDS}`, { method: 'PATCH', headers: { 'content-type': mimeOf(now.name) }, body: text }, [], opts.fence);
     return toFile((await res.json()) as WireFile);
   }
 
-  async update(id: string, patch: DrivePatch): Promise<DriveFile> {
+  async update(id: string, patch: DrivePatch, opts: WriteOptions = {}): Promise<DriveFile> {
     const q = new URLSearchParams({ fields: LISTED_FIELDS });
     if (patch.addParent) q.set('addParents', patch.addParent);
     if (patch.removeParent) q.set('removeParents', patch.removeParent);
-    return this.json(`${API}/files/${id}?${q}`, 'PATCH', { ...(patch.name ? { name: patch.name } : {}), ...(patch.appProperties ? { appProperties: patch.appProperties } : {}) });
+    return this.json(`${API}/files/${id}?${q}`, 'PATCH', { ...(patch.name ? { name: patch.name } : {}), ...(patch.appProperties ? { appProperties: patch.appProperties } : {}) }, opts.fence);
   }
 
   /** `appProperties`, when given, are set by the same `files.update` that puts it in the Bin. */
-  async trash(id: string, appProperties?: Record<string, string>): Promise<DriveFile> {
-    return this.json(`${API}/files/${id}?fields=${LISTED_FIELDS}`, 'PATCH', { trashed: true, ...(appProperties ? { appProperties } : {}) });
+  async trash(id: string, appProperties?: Record<string, string>, opts: WriteOptions = {}): Promise<DriveFile> {
+    return this.json(`${API}/files/${id}?fields=${LISTED_FIELDS}`, 'PATCH', { trashed: true, ...(appProperties ? { appProperties } : {}) }, opts.fence);
   }
 
   /** `appProperties` and `name`, when given, are set by the same `files.update` that takes it out of the Bin. */
-  async untrash(id: string, appProperties?: Record<string, string>, name?: string): Promise<DriveFile> {
-    return this.json(`${API}/files/${id}?fields=${FIELDS}`, 'PATCH', { trashed: false, ...(name !== undefined ? { name } : {}), ...(appProperties ? { appProperties } : {}) });
+  async untrash(id: string, appProperties?: Record<string, string>, name?: string, opts: WriteOptions = {}): Promise<DriveFile> {
+    return this.json(`${API}/files/${id}?fields=${FIELDS}`, 'PATCH', { trashed: false, ...(name !== undefined ? { name } : {}), ...(appProperties ? { appProperties } : {}) }, opts.fence);
   }
 
   async fullText(rootId: string, query: string): Promise<DriveFile[]> {
@@ -359,16 +367,34 @@ export class DriveHttp implements DriveApi {
     return this.authorized(url, init, { idempotent, again: async (res) => askAgainNow(res.status, await reasonsOf(res)) });
   }
 
-  /** The request under the transport's policy, with the token and its one refresh; any answer but a 401 goes back. */
-  private async authorized(url: string, init: RequestInit, opts: Parameters<typeof send>[3], write = false): Promise<Response> {
+  /**
+   * The request under the transport's policy, with the token and its one refresh; any answer but a 401 goes back.
+   * `existing` is set for a write to a file that exists (TL-P4-24 finding 1): with its `fence`, the fence runs before
+   * every resend, after a rate limit (`send`'s `beforeResend`) or a refreshed token, and its refusal ends the request
+   * as it is; with none (`fence` absent), a 401 refreshes the token for the next try and fails as `retry`, unsent.
+   */
+  private async authorized(url: string, init: RequestInit, opts: Parameters<typeof send>[3], write = false, existing?: { fence?: Fence | undefined }): Promise<Response> {
     // Only a browser known offline before the call proves nothing was sent; any other write with no answer may have landed.
     const knownOffline = this.context === 'browser' && (globalThis as { navigator?: { onLine?: boolean } }).navigator?.onLine === false;
+    const given = existing?.fence;
+    const fence = given
+      ? async (): Promise<void> => {
+          try {
+            await given();
+          } catch (e) {
+            throw new FenceRefused(e);
+          }
+        }
+      : undefined;
     let token = await this.token(false);
     for (let refreshed = false; ; refreshed = true) {
       let res: Response;
       try {
-        res = await send(this.fetchFn, url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${token}` } }, { ...opts, knownOffline, pacing: this.pacing });
+        // A resend after the refresh runs the fence first, as one after a rate limit does.
+        if (refreshed) await fence?.();
+        res = await send(this.fetchFn, url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${token}` } }, { ...opts, knownOffline, pacing: this.pacing, ...(fence ? { beforeResend: fence } : {}) });
       } catch (e) {
+        if (e instanceof FenceRefused) throw e.error;
         if (e instanceof BowerError) throw e;
         // Stopped on purpose: the queue tells this from a failure.
         if (e instanceof DOMException && e.name === 'AbortError' && init.signal) throw e;
@@ -379,6 +405,11 @@ export class DriveHttp implements DriveApi {
       if (res.status !== 401) return res;
       if (refreshed) throw await failureOf(res, write);
       token = await this.refreshed();
+      if (existing && !fence) {
+        // Sent once with no fence to run again: refused unsent, so the caller's next try checks and sends it.
+        console.error(`Drive answered 401 for ${init.method ?? 'GET'} ${new URL(url).pathname}; not sent again without its fence`);
+        throw driveFailure('unknown', 'retry');
+      }
     }
   }
 
@@ -427,13 +458,13 @@ export class DriveHttp implements DriveApi {
     return file;
   }
 
-  private async json(url: string, method: string, body: unknown): Promise<DriveFile> {
-    const res = await this.call(url, { method, headers: { 'content-type': 'application/json; charset=UTF-8' }, body: JSON.stringify(body) });
+  private async json(url: string, method: string, body: unknown, fence?: Fence): Promise<DriveFile> {
+    const res = await this.call(url, { method, headers: { 'content-type': 'application/json; charset=UTF-8' }, body: JSON.stringify(body) }, [], fence);
     return this.changed(toFile((await res.json()) as WireFile));
   }
 
-  /** A create, or with `id` an update of that file's metadata and content in one request. */
-  private async multipart(meta: Record<string, unknown>, content: Blob, id?: string): Promise<DriveFile> {
+  /** A create, or with `id` an update of that file's metadata and content in one request (`fence`: `WriteOptions`). */
+  private async multipart(meta: Record<string, unknown>, content: Blob, id?: string, fence?: Fence): Promise<DriveFile> {
     const boundary = `bower${Math.random().toString(36).slice(2)}`;
     const body = new Blob([
       `--${boundary}\r\ncontent-type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n`,
@@ -445,21 +476,28 @@ export class DriveHttp implements DriveApi {
       method: id ? 'PATCH' : 'POST',
       headers: { 'content-type': `multipart/related; boundary=${boundary}` },
       body,
-    });
+    }, [], fence);
     return this.changed(toFile((await res.json()) as WireFile));
   }
 
   /**
    * One request with the token, the one refresh and the retries (`transport.ts`): a read is sent again after a stall
    * or a 5xx; a write only after a rate limit, which says it did not land. A write with no definitive answer (5xx, network error, stall) is unconfirmed, unless the browser was known offline before it (nothing was sent).
+   * A write to a file that exists (a PATCH of `files/{id}`) is sent again only with its `fence`, run right before
+   * each resend; with none it is sent once (TL-P4-24 finding 1). A create (a POST, by a reserved id or not) and a
+   * read go again as they always have.
    * Answers ok or 308 (resumable), or a status in `pass` for the caller to read; anything else is a `BowerError`.
    */
-  async call(url: string, init: RequestInit = {}, pass: readonly number[] = []): Promise<Response> {
+  async call(url: string, init: RequestInit = {}, pass: readonly number[] = [], fence?: Fence): Promise<Response> {
     const method = (init.method ?? 'GET').toUpperCase();
+    // Every PATCH here is `files.update` of a file that exists: keyed by the method and its target, not by an id.
+    const existing = method === 'PATCH' ? { fence } : undefined;
     // A rate limit says the request did not land: ask again. A 5xx on a write may have landed (a create made the
     // file, an update overwrote a newer edit): only a read is asked again; a write's 5xx is told as unconfirmed below.
-    const again = async (res: Response): Promise<boolean> => !mayHaveLanded(res.status, method !== 'GET') && askAgainNow(res.status, await reasonsOf(res));
-    const res = await this.authorized(url, init, { idempotent: method === 'GET', again }, method !== 'GET');
+    // A write to a file that exists goes again only behind its fence.
+    const again = async (res: Response): Promise<boolean> =>
+      (!existing || fence !== undefined) && !mayHaveLanded(res.status, method !== 'GET') && askAgainNow(res.status, await reasonsOf(res));
+    const res = await this.authorized(url, init, { idempotent: method === 'GET', again }, method !== 'GET', existing);
     if (res.ok || res.status === 308 || pass.includes(res.status)) return res;
     if (res.status !== 404 && res.status !== 409) console.error(`Drive answered ${res.status} for ${method} ${new URL(url).pathname}`);
     // Told by kind, never by words (`transport.ts`): what is asked again, what waits for the person, what never goes.

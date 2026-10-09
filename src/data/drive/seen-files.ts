@@ -101,13 +101,13 @@ export class SeenFiles {
       generateIds: (count) => writes.generateIds(count),
       createFolder: async (parentId, name, appProperties, id) => this.note(await writes.createFolder(parentId, name, appProperties, id)),
       createText: async (parentId, name, text, appProperties, id) => this.note(await writes.createText(parentId, name, text, appProperties, id)),
-      update: async (id, patch) => this.note(await writes.update(id, patch)),
-      trash: async (id, appProperties) => {
-        const binned = await writes.trash(id, appProperties);
+      update: async (id, patch, opts) => this.note(await writes.update(id, patch, opts)),
+      trash: async (id, appProperties, opts) => {
+        const binned = await writes.trash(id, appProperties, opts);
         this.forget(id);
         return binned;
       },
-      writeText: async (id, text, ifModified, appProperties) => this.note(await writes.writeText(id, text, ifModified, appProperties)),
+      writeText: async (id, text, ifModified, appProperties, opts) => this.note(await writes.writeText(id, text, ifModified, appProperties, opts)),
     };
   }
 }

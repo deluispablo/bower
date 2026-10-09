@@ -423,3 +423,56 @@ describe('c2-create-by-id: an edit is taken only by its own answer', () => {
     expect(found).toEqual([]);
   });
 });
+
+/**
+ * c4-retry-fence (TL-P4-24 finding 1): a fenced write the transport sends again after a rate limit runs the runner's
+ * fence again first: the attempt, then the target as seen. A takeover or a change during the wait sends nothing more.
+ */
+describe('a fenced write resent after a rate limit', () => {
+  const pacing = { baseMs: 0, sleep: async (): Promise<void> => {} };
+  /** The first PATCH is answered 403 userRateLimitExceeded, after `between` ran; the rest go to the pretend Drive. */
+  function limitedOnce(wire: DriveV3, between: () => Promise<void> | void): { adapter: RunnerDrive; patches: () => number } {
+    let patches = 0;
+    const fetchFn: typeof fetch = async (input, init) => {
+      if ((init?.method ?? 'GET').toUpperCase() === 'PATCH' && ++patches === 1) {
+        await between();
+        return new Response(JSON.stringify({ error: { code: 403, errors: [{ domain: 'usageLimits', reason: 'userRateLimitExceeded', message: 'm' }] } }), { status: 403 });
+      }
+      return wire.fetch(input, init);
+    };
+    const token = new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: wire.fetch, now: () => wire.now });
+    return { adapter: new RunnerDrive({ token, attempt: 1, fetch: fetchFn, pacing }), patches: () => patches };
+  }
+
+  it('a takeover between the rate limit and the resend sends nothing more', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, note } = await seeded();
+    const { adapter, patches } = limitedOnce(wire, () => void (wire.attempt = 2));
+    await adapter.get(note.id);
+    const writes = await adapter.batch();
+    await expect(writes.update(note.id, { name: 'Late.md' })).rejects.toMatchObject(STALE);
+    expect(patches()).toBe(1);
+    expect((await wire.drive.get(note.id)).name).toBe('Note.md');
+  });
+
+  it('a rename elsewhere between the rate limit and the resend is refused', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, note } = await seeded();
+    const { adapter, patches } = limitedOnce(wire, async () => void (await wire.drive.update(note.id, { name: 'Renamed elsewhere.md' })));
+    await adapter.get(note.id);
+    const writes = await adapter.batch();
+    await expect(writes.writeText(note.id, 'Over it.', note.modifiedTime)).rejects.toMatchObject({ code: 'conflict' });
+    expect(patches()).toBe(1);
+    expect(await wire.drive.readText(note.id)).toBe('First words.');
+  });
+
+  it('with nothing changed the resend lands', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, note } = await seeded();
+    const { adapter, patches } = limitedOnce(wire, () => undefined);
+    await adapter.get(note.id);
+    const writes = await adapter.batch();
+    await expect(writes.update(note.id, { name: 'Kept.md' })).resolves.toMatchObject({ name: 'Kept.md' });
+    expect(patches()).toBe(2);
+  });
+});

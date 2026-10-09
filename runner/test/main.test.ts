@@ -217,3 +217,31 @@ describe('the runner process', () => {
     expect(items.every((i) => i.disposition === 'waiting')).toBe(true);
   });
 });
+
+/** c4-retry-fence (TL-P4-24 finding 1): the runner's `main`, a fenced write answered 429 while a newer attempt took over. */
+describe('the runner process under a rate limit', () => {
+  it('main sends no fenced write again after a takeover during the rate limit wait', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { wire, root } = await wired();
+    const patched: string[] = [];
+    const fetchFn: typeof fetch = async (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      if (url.origin === 'https://www.googleapis.com' && (init?.method ?? 'GET').toUpperCase() === 'PATCH') {
+        patched.push(decodeURIComponent(url.pathname.split('/').pop() ?? ''));
+        if (patched.length === 1) {
+          // The Worker starts attempt 2 while Drive answers this one's write with a rate limit.
+          wire.attempt = 2;
+          return new Response(JSON.stringify({ error: { code: 429, errors: [] } }), { status: 429 });
+        }
+      }
+      return wire.fetch(input, init);
+    };
+    const before = await wire.drive.listAll(root);
+    await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile() }, { fetch: fetchFn, pacing: { baseMs: 0, sleep: async () => {} } });
+    expect(patched).toHaveLength(1);
+    const target = patched[0] ?? '';
+    const after = await wire.drive.listAll(root);
+    expect(after.find((f) => f.id === target)).toEqual(before.find((f) => f.id === target));
+  });
+});

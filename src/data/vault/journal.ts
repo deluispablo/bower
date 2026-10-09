@@ -6,7 +6,7 @@
  * change once written, so normal reads are kept (the one read cache, by
  * id and modifiedTime); acknowledging a waiting copy always checks Drive afresh.
  */
-import type { DriveApi, DriveFile } from '../drive/drive-api';
+import type { DriveApi, DriveFile, Fence } from '../drive/drive-api';
 import { ReadCache } from '../drive/read-cache';
 import type { ChangeKind } from '../types';
 import { BowerError } from '../types';
@@ -504,9 +504,12 @@ export class Journal {
       this.checkCurrent();
       // Still as listed (the one fence, `checkStillAsSeen`): moved, renamed or binned elsewhere, nothing is sent; already
       // in the Bin by this very Undo (its answer lost), it landed. Then sent once with its stamp: a lost answer is found
-      // again by reading the file by its id.
-      const landed = await checkStillAsSeen({ id: file.id, name: file.name, parents: file.parents }, () => byId(this.drive, file.id), CHANGED_ELSEWHERE, { unanswered: isNoAnswer, landed: landing(file, 'bin') });
-      if (!landed) await updateByStamp(this.drive, file, 'bin', (op) => this.drive.trash(file.id, op));
+      // again by reading the file by its id. The same check is the write's `fence` (`WriteOptions`), which the transport
+      // runs again right before a resend after a rate limit or a refreshed token (TL-P4-24 finding 1).
+      const check = (): Promise<DriveFile | null> => checkStillAsSeen({ id: file.id, name: file.name, parents: file.parents }, () => byId(this.drive, file.id), CHANGED_ELSEWHERE, { unanswered: isNoAnswer, landed: landing(file, 'bin') });
+      const fence: Fence = async () => void (await check());
+      const landed = await check();
+      if (!landed) await updateByStamp(this.drive, file, 'bin', (op) => this.drive.trash(file.id, op, { fence }));
       this.place.removed?.(file.id);
     }
     this.filesOf.delete(id);
