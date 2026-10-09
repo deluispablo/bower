@@ -5899,7 +5899,7 @@
       "The same wait under fake timers passes.",
       "A slow compute-bound test is reported, not failed."
     ],
-    "verify": "pnpm exec vitest run src/harness.test.ts src/timer-gate.test.ts -t \"a real wait of 100 ms or more fails the unit run|a wait under fake timers passes the timer gate|the timer allowlist may only shrink|wall-clock times are reported, never failed|two checks started together run one after the other|a second check waits and prints who holds the lock|a lock whose holder is gone is taken over with a printed line\"",
+    "verify": "pnpm exec vitest run src/harness.test.ts src/timer-gate.test.ts -t \"a real wait of 100 ms or more fails the unit run|a wait under fake timers passes the timer gate|the timer allowlist may only shrink|wall-clock times are reported, never failed|two checks started together run one after the other|a second check waits and prints who holds the lock|a lock whose holder is gone is released by the kernel\"",
     "note": "TL-P4-17 addendum 9 (main 925d3fbb); defect slow-ratchet-alone-under-load. Starting model: bower-implementer. TL-P4-17 addendum 10 (main 56dd8d86): a timer counts when it fires (a cleared timer never waited); fix round: done.sh and integrate.sh share one mkdir-based lock around pnpm check and the e2e suites, a second caller waits and prints who holds it (red: two checks started together run one after the other); the 22-name allowlist goes to c4-test-timers in stage 4. Red proved by hand: b6e01216 timer gate test fails (/tmp/c3timer-handred0.log); ff34204c lock test fails (/tmp/c3timer-handred.log). done.sh sees no code in 2bec3895 (harness/*.sh is outside CODE_PATHS)."
   },
   {
@@ -6252,7 +6252,7 @@
       "Every create outcome x withdrawal: reserved id 404 or trashed, or the holder kept."
     ],
     "verify": "pnpm vitest run src/data/spine/write-once.test.ts src/ui/toast.test.ts -t \"a withdrawn intended create never leaves a live file|toast replace keeps the item and restarts its timer\"",
-    "note": "TL-P4-24 finding 3 (a); defect undo-drops-reserved-create. Escalated + Codex review pass; refusal sentence from the designer. Packet 2026-10-09-c4-undo-withdraw-packet.md. TL-P4-24 addenda 1 and 3; after c4-app-fence; removePile sentence from the designer. Rounds 2-3 (addenda 11-14). PARKED by the lead after the addenda 13-14 Codex pass (5 Important): re-plan via a Plan-agent design note, (A) one-lifecycle lock with retention vs (B) append-only compensating line. Branch c4-undo-withdraw at 70a2b0da kept as is; do not merge."
+    "note": "TL-P4-24 finding 3 (a); defect undo-drops-reserved-create. Escalated + Codex review pass; refusal sentence from the designer. Packet 2026-10-09-c4-undo-withdraw-packet.md. TL-P4-24 addenda 1 and 3; after c4-app-fence; removePile sentence from the designer. Rounds 2-3 (addenda 11-14). PARKED by the lead after the addenda 13-14 Codex pass (5 Important): re-plan via a Plan-agent design note, (A) one-lifecycle lock with retention vs (B) append-only compensating line. Branch c4-undo-withdraw at 70a2b0da kept as is; do not merge. Superseded by c4-undo-compensate (TL-P4-27)."
   },
   {
     "task": "p4-consolidation",
@@ -6387,5 +6387,34 @@
     ],
     "verify": "",
     "note": "TL-P4-21 ruling 4 (24a, Opus, escalated); spec d-v2-24; bower-map.md. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-d-v2-24a-packet.md."
+  },
+  {
+    "id": "c4-undo-compensate",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "ui": true,
+    "what": "Undo is the inverse forward change (TL-P4-27 addendum 2): under the outbox lock an unreserved line drops locally, otherwise the inverse forward line is recorded; the lock covers storing the reserved id before any send; sends go in order per folder; no journal file is ever deleted; no new kind, no fold, no tooLate.",
+    "steps": [
+      "Undo under the outbox lock: Journal.retract drops an unreserved or failed line, otherwise the inverse with undoes is recorded; no inverse reaches Drive before its original.",
+      "Rules apply in line order (wordRules and rules() one sequence by since); pairsOf hides a same-run pair in Since the last tidy-up and the report."
+    ],
+    "verify": "",
+    "note": "TL-P4-27 (main 802ac116); replaces c4-undo-withdraw (parked at 70a2b0da) and closes TL-P4-24 #3. Escalated, Opus plus a Codex pass; contract sign-off trial; designer copy pending. Packet 2026-10-09-c4-undo-compensate-packet.md. Re-planned by TL-P4-27 addendum 2 (main c7a6556c): design (B) and tooLate withdrawn. Addenda 4-5 (main a370c1da, b938c629) folded in 2a828b2f; dispatched on Opus."
+  },
+  {
+    "id": "c4-lockf",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": true,
+    "ui": null,
+    "what": "The heavy-run lock uses macOS lockf -k (kernel releases on holder death): try -t 0, print the advisory holder, then block; HARNESS_LOCK_HELD re-entry kept and e2e-both uses the same rule; mkdir lock and takeover code deleted.",
+    "steps": [
+      "An empty holder file and a second caller: the second waits.",
+      "Six callers alternate strictly."
+    ],
+    "verify": "pnpm exec vitest run src/harness.test.ts -t \"an empty holder file and a second caller: the second waits|a held lockf blocks the caller and a killed holder frees it|six callers started together alternate strictly|uses the same re-entry rule as with-lock|two checks started together run one after the other\"",
+    "note": "TL-P4-22 addendum 23 (main 28ff2f23); defect check-lock-order-flaky. Ahead of other heavy work. Codex (TL-P4-23). Packet 2026-10-09-c4-lockf-packet.md. implementer: codex.",
+    "review": "P4-62 PASS"
   }
 ]

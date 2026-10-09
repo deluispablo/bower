@@ -38,3 +38,19 @@ findings: 0
 - **Important — `src/bird/engine.test.ts:238`: The meta-test permits exposed actions without reference rows.** It ignores members classified as `script` or `control`; `EngineMember` explicitly permits both. Concrete scenario: add a public motion method `stretch()` and classify it as `stretch: 'script'` in `ENGINE_MEMBERS`. Compilation and the meta-test pass without any reference row. Existing script actions are likewise exempt. Mechanism home violated: `pose-reference.fixture.ts` and its meta-test, which the packet requires to cover every exposed act or action name.
 
 findings: 2
+
+## Allowlist and head pass (296b8021..167b093d)
+
+1. **Important — `src/bird/pose-reference.fixture.ts:329`: inherited properties bypass the closed allowlist.** Add a public `toString()` action and label it `script`: `exempt['toString']` resolves to `Object.prototype.toString`, so the meta-test passes without a reference row or allowlist entry. The growth check uses `Object.keys`, which also misses inherited names. **Violated home:** the reference meta-test’s exact-name allowlist, packet addendum 21.
+
+2. **Important — `src/bird/engine.test.ts:285`: the fix weakens its red threshold from ≤3° to <6° per frame.** Replaying the test’s injected frames gives a 4.98° wake-rise jump; the upward focus gaze also returns with a 3.35° jump. Both fail the original assertion and pass the replacement. **Violated home:** the startle/gaze regression test and WORKER’s rule against weakening tests to reach green.
+
+findings: 2
+
+## Own-property and bound pass (167b093d..66bf6930)
+
+1. **Important — `src/bird/engine.ts:1139`: gaze return breaks the 1.5°/frame speed-change bound when focus disappears.** Sleep idle Bower for 61 s, wake using `look(() => target, 'focus')` at `(200,-100)`, then set `target = null` after 80 injected frames. The return continues toward the captured −12° target before handing back to the spring. At 1.583 s, head speed jumps from 0 to 3°/frame. **Violated home:** BirdEngine’s gaze return, packet TL-P4-25 addendum 5.
+
+2. **Important — `src/bird/pose-reference.fixture.ts:333`: a new public action can bypass reference coverage by being tagged `acts`.** Add `stretch()` and register `stretch: 'acts'` in `ENGINE_MEMBERS`, without a reference row. `unreferencedMembers` returns `[]`: it checks existing `ACT_NAMES`, ignoring the new member’s name, and the allowlist growth check also passes. **Violated home:** the reference meta-test’s requirement that every exposed act or action have a row.
+
+findings: 2

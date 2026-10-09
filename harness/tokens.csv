@@ -263,3 +263,23 @@ d-v2-07 startle review,reviewer,codex,codex,medium,4,250682,248656,0,212608,2026
 c4-undo-withdraw round 3 add. 13-14,implementer,claude,bower-escalated,,3,205198,,,,,,24,6.4,delivered,2026-10-09
 c4-undo-withdraw P4-56d,reviewer,claude,bower-reviewer,,4,48097,,,,,,12,1.0,PASS (4 minor),2026-10-09
 c4-undo-withdraw add.13-14 review,reviewer,codex,codex,medium,4,591512,587677,0,519424,3835,,,,5 Important,2026-10-09
+d-v2-07 allowlist+head,implementer,claude,bower-escalated,,5,83812,,,,,,23,4.6,delivered,2026-10-09
+d-v2-07 P4-58e,reviewer,claude,bower-reviewer,,5,33883,,,,,,6,0.3,PASS (5 minor),2026-10-09
+d-v2-07 allowlist review,reviewer,codex,codex,medium,5,405312,402484,0,354304,2828,,,,2 Important,2026-10-09
+c4-undo-compensate contract,reviewer,claude,bower-reviewer,,1,128658,,,,,,32,5.3,CHANGES (26),2026-10-09
+d-v2-07 own-property+bound,implementer,claude,bower-escalated,,6,96249,,,,,,35,8.8,delivered,2026-10-09
+d-v2-07 P4-58f,reviewer,claude,bower-reviewer,,6,34809,,,,,,7,0.4,PASS (2 minor),2026-10-09
+d-v2-07 own-property review,reviewer,codex,codex,medium,6,583362,579508,0,529536,3854,,,,2 Important,2026-10-09
+check-lock-order-flaky,diagnoser,claude,bower-diagnoser,,1,39456,,,,,,15,3.9,diagnosed,2026-10-09
+c4-undo-compensate contract 2,reviewer,claude,bower-reviewer,,2,90720,,,,,,23,3.6,CHANGES (8),2026-10-09
+c4-create-landed,implementer,claude,bower-escalated,,1,410251,,,,,,165,33.8,delivered (2 sessions),2026-10-09
+c4-create-landed,reviewer,claude,bower-reviewer,,1,54311,,,,,,15,1.4,PASS (P4-61),2026-10-09
+d-v2-07,implementer,claude,bower-escalated,,4,102463,,,,,,33,5.7,blocked (addendum 5 property red),2026-10-09
+c4-create-landed,reviewer,codex,gpt-5-codex,medium,1,455283,452747,,375680,2536,,,,1 Important,2026-10-09
+c4-lockf,implementer,codex,gpt-5-codex,medium,1,601737,591226,,542208,10511,,,,delivered (knip fix pending),2026-10-09
+c4-lockf,implementer,codex,gpt-5-codex,medium,2,102188,101233,,90496,955,,,,knip fix,2026-10-09
+c4-lockf,implementer,codex,gpt-5-codex,medium,3,142637,141608,,116352,1029,,,,lockf path (addendum 24),2026-10-09
+c4-undo-compensate,property-red,codex,gpt-5-codex,medium,1,1122124,1104942,,1031168,17182,,,,red written (seed 427285),2026-10-09
+c4-lockf,reviewer,claude,bower-reviewer,,1,40025,,,,,,7,0.6,PASS (P4-62),2026-10-09
+d-v2-07,implementer,claude,bower-escalated,,5,135159,,,,,,37,13.0,done (sweep 0/200),2026-10-09
+c4-undo-compensate,implementer,claude,bower-escalated,,1,245628,,,,,,82,15.4,turn limit; resumed,2026-10-09
