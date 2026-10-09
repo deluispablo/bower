@@ -125,12 +125,15 @@ export interface Question {
   yes: string;
   no: string;
   about?: string;
-  /** What the question is about: a fileId or pileId. One open question per subject, whatever its words (TL-P4-11). */
+  /**
+   * What the question is about: a fileId or pileId. One open question per subject, whatever its words (TL-P4-11); read
+   * only through `contracts/questions.ts` (`subjectOf`).
+   */
   subject?: string;
   /** The content hash (md5Checksum) of that thing, so the same photo uploaded again is the same subject. */
   hash?: string;
   /**
-   * A question about a Current state you edited (`q-state-`): the mark (`stateMark`) of its lines as asked about. A yes
+   * A question about a Current state you edited (`stateQuestionId`): the mark (`stateMark`) of its lines as asked about. A yes
    * writes over them only while they still read so (`state-yes-writes`).
    */
   state?: string;
