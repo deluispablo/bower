@@ -3,6 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # One heavy run at a time (harness/with-lock.sh); a call inside a held lock passes through.
-[ -n "${HARNESS_LOCK_HELD:-}" ] || exec bash harness/with-lock.sh bash "$0" "$@"
+lock=${HARNESS_LOCK:-/tmp/bower-heavy.lock}
+[ "${HARNESS_LOCK_HELD:-}" = "$lock" ] || exec bash harness/with-lock.sh bash "$0" "$@"
 pnpm exec playwright test "$@"
 E2E_SOURCE=fake pnpm exec playwright test "$@"
