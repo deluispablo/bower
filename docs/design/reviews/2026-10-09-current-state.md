@@ -69,6 +69,12 @@ Text contrast passes axe in both themes on every screen. No page scrolls sideway
 3. **Bower's head as the note icon.** In folder lists, every note Bower keeps shows Bower's head, so it appears three or four times in a list (`folder-375-dark.png`). Do you want that as the sign for "a note Bower keeps"?
 4. **The 44 px rule.** On the phone, the question answers are 40 px tall. Switches are 50×30, and segments and the request/rule choice are 34 tall. These sizes match native iOS, and nothing fails WCAG. Should they be raised to the house 44 px?
 
+5. **"Brought up to date" shows only a note's first change.** This item came from the lead.
+   - **What happens.** When one tidy-up adds two Timeline lines to a note, the Home result keeps one row per note with only the first change. The lead saw it on staging (a0a0c1a7, Flat hunt). The second line shows only on the note screen.
+   - **Where.** `runLinkRows` in `src/features/tidy/run-words.ts` keeps the first row per path (`once`); `RunLinks.tsx` renders it.
+   - **Not a defect.** Bower's report keeps both lines, so this is a presentation choice.
+   - **Options.** (a) Keep it as it is. (b) One row per note, with its changes joined in report order (my recommendation). (c) One row per change, with the note's name repeated.
+
 ## Nit
 
 Each of these is rated 1:
