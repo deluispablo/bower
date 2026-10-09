@@ -191,3 +191,29 @@
 - tests changed: src/data/fake/write-it.test.ts: one test added, none changed.
 - tests changed: e2e/capabilities.spec.ts: the write-it test gains the update list and axe checks; nothing removed.
 - No `.only` or `.skip` added.
+
+## Round 4b (TL-P4-19 addenda 19 and 20)
+
+- Commits: red 98787392, fix d305b537 (addendum 20).
+- Addendum 20, done: note-edit `newsLineCited` (a line starting `NEWS_LEAD`, "New: ", needs a source) is part of
+  `entryOk`, so `applyChanges` refuses it (`field`) for every writer. The reply check (runner/src/claude.ts) calls
+  the same predicate on each Timeline line (`lineUncited`); states are not checked there, since a granted or
+  Bower-owned state is rewritten and makes no news line. Red `a timeline news line with no source is refused`
+  (note-edit.test.ts) failed: applyChanges returned ok for a sourceless news line. per-thing-ask's refusal table
+  gained `lineUncited` (its key check failed before the fix).
+- Fixture: `seedFixture` returns `{ root, keys }` (demo item id -> file id); `seedFakeDrive` returns its root.
+  The write-it seed adds the car renewal sample pile (`CAR_RENEWAL`), so Car's news line cites its notice (`s1-0`);
+  Money's cites the first Saltmere receipt (`r0`). `writeItStates(keys)` resolves keys when the scenario runs;
+  pretend.ts keeps the keys in sessionStorage beside the Drive, for a reload.
+- Left open: run-manifest's guard (`editEntry`) calls `entryOk`, so a stored manifest with a sourceless news line
+  no longer parses (lenient on read). A lenient read variant plus a fixture test needs the lead's nod.
+- Addendum 19, stalled: the answered row can be planned in the report home (a `when: 'rejected'` contribution on
+  the granted state-rewrite, its sentence picked by failure code in `materialize`). Using the answer up cannot: the
+  answer's archive move depends on that edit, and the engine refuses a dependent of an op not applied
+  (engine.ts:273), so the answer stays in your changes and the next press retries the write without asking,
+  which would make "It will ask again in the next tidy-up" untrue. Needs a ruling: an archive not waiting on the
+  edit (then a clash loses its answer, against addendum 15), or a new dependency kind in the engine.
+- tests changed: src/data/contracts/note-edit.test.ts: one test added, none changed.
+- tests changed: runner/test/per-thing-ask.test.ts: the refusal table gains `lineUncited`; nothing removed.
+- tests changed: src/data/fake/write-it.test.ts: seeds with `seedFixture` and resolves the states' keys; same asserts.
+- No `.only` or `.skip` added.

@@ -105,3 +105,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `107e2da1` | c3-state-mark | none: e2e test only (`e2e/capabilities.spec.ts`) |
 | `a7f7c938` | c3-state-mark | none: red tests only (`src/features/home/Home.test.tsx`, `src/data/fake/write-it.test.ts`, `e2e/capabilities.spec.ts`) |
 | `f3db5b5b` | c3-state-mark | Display only (TL-P4-19 addendum 17): Home's "Write it" card shows the question's stored `shown.lines` under "Bower's update". A question without `shown` (older) shows as before; nothing stored changes shape. |
+| `98787392` | c3-state-mark | none: red tests only (`src/data/contracts/note-edit.test.ts`, `runner/test/per-thing-ask.test.ts`) |
+| `d305b537` | c3-state-mark | Stricter on write (TL-P4-19 addendum 20): a Timeline news line ("New: ...") with no source is refused by note-edit and the reply check (`lineUncited`). Fake seed only: write-it adds the car renewal pile. Stored manifests with such a line no longer pass the guard (see notes, left open). |
