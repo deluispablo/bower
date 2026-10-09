@@ -6191,8 +6191,8 @@
       "Two worktrees resolve different ports.",
       "A server from another worktree is refused for reuse."
     ],
-    "verify": "pnpm vitest run -t \"two worktrees run e2e at once, each on its own server|a server from another worktree is never reused\"",
-    "note": "TL-P4-22 addendum 10 (c), gate integrity; defect e2e-port-shared-across-worktrees. Starting model bower-implementer. Packet 2026-10-09-c4-e2e-port-packet.md. After merge: rerun the closed stage 4 entries e2e once on claude/p3 under the lock."
+    "verify": "pnpm vitest run src/e2e-port.test.ts -t \"two worktrees run e2e at once, each on its own server|a server from another worktree is never reused\"",
+    "note": "TL-P4-22 addendum 10 (c), gate integrity; defect e2e-port-shared-across-worktrees. Starting model bower-implementer. Packet 2026-10-09-c4-e2e-port-packet.md. After merge: rerun the closed stage 4 entries e2e once on claude/p3 under the lock. Red 027562a1, fixes 07658f7b and 797d6bf9. Env override E2E_PORT (preview E2E_PREVIEW_PORT)."
   },
   {
     "id": "c4-segmented-one",
