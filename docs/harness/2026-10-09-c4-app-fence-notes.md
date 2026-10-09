@@ -138,3 +138,80 @@ tests changed: runner/test/drive-v3-real.ts: the replayed Drive v3 fixture's unt
 | Stamps already stored | - | `unbin`, `bin`, `rename:`, `move:`, text are unchanged; `unbin:<name>` is new |
 | Drive calls | - | a restore under a free name sends one PATCH, not two |
 | DriveApi | - | `untrash(id, appProperties?, name?)`: the name is optional, every caller compiles unchanged |
+
+## Fix round 4 (addendum 8)
+
+red: a6c39106 (tests only); fix: a0d246ef. Sources: the Codex "Round 3 pass" (1 Important, `write-once.ts:85`/`:98`),
+round-4 packet `2026-10-09-c4-app-fence-round4-packet.md`.
+
+tests changed: src/data/vault/drive-vault.test.ts: `loseWithRead` takes an optional `meanwhile` (a change elsewhere run
+before the recovery read, which then answers); every existing caller passes none and behaves as before.
+tests changed: src/data/vault/drive-vault.test.ts: the property gains the timing "before the recovery read"; a first
+press that is done (its lost answer found by that read) ends the case, since there is nothing to retry; all 132 cases
+must be met (was 88); the fix commit raised its runs from 500 to 1200 so the seed meets all 132. Same seed 20261009.
+tests changed: src/data/drive/drive-http.test.ts: added the guard 'untrash puts the name in the patch body' (passes
+before the fix: `untrash` already sends `name`).
+
+- Red today: a restore under a free name renamed elsewhere, and an emptied pile note moved into Projects elsewhere,
+  both between the lost answer and the recovery read, resolve as landed. The property's counterexample before the fix
+  is `["text","rename","before the recovery read","its answer"]`.
+- One definition (contract 1): `landedAs(f, intent, now)` in `spine/write-once.ts`: the stamp and, for text, the
+  checksum (private `stamped`), and `notAsSeen(expectedAfter(f, intent), now) === null` (`expectedAfter` moved here
+  from still-as-seen, built from the intent, modifiedTime left out). `landing(f, intent)` is it as the fence's
+  `Landing<T> = (now) => boolean`; `checkStillAsSeen` only calls it. `updateByStamp`'s recovery calls `landedAs`.
+  `holds` is gone; its Bin and unbin checks are now `expectedAfter`'s trashed state.
+- The app's `once`, when the recovery read finds the file changed or gone, now throws the fence's typed refusal
+  (`notAsSeenError(reason, CHANGED_ELSEWHERE)`): same code and sentence, now with its reason, so a later press is a
+  new read (the property needed it: the refresh had dropped a renamed note from its pile, and the retry was not one).
+- Minor `seen-files.ts`: `SeenFiles.assert` ends with `refuseNotAsSeen`, the tail `checkStillAsSeen` ends with (log,
+  then `notAsSeenError`); synchronous, no second fence. Minor `pure-rand` 8.4.2: published 2026-07-10, older than
+  two weeks; no override.
+
+### Site list (`git grep -n -E 'holds|confirms|landedAs|stampOf'` in src, runner/src, api/src)
+
+Code sites:
+
+- `src/data/spine/write-once.ts`: `:112 landedAs` is the definition; `:81 stamped` is its private stamp part; `:115
+  landing` and `:125` (updateByStamp's recovery) call it. `:26 stampOf`, `:74 stampFor` derive a key; `:29 confirms`
+  compares bytes; `:252 confirmed` checks the answer to the write just sent (or a recovery `landedAs` accepted), not a
+  lost answer.
+- `src/data/vault/drive-vault.ts:11` imports; `:1071`, `:1085`, `:1753` pass `landing(...)`; `:1757` updateByStamp.
+  `:1130 confirms`: whether a pile note this page created holds words it sent, so it is Bower's to write over; that
+  create's landing is by its reserved id (createById, case 1), and the write after it goes through `once`.
+- `src/data/vault/journal.ts:508-509`: `landing(file, 'bin')` and updateByStamp: call the definition.
+- `src/data/spine/barrier.ts:193`, `src/data/fake/fake-worker.ts:337`, `runner/src/rules-repair.ts:56-57`,
+  `runner/src/spine/retention.ts:133,142`: updateByStamp, so their recovery calls `landedAs` (no runner red needed).
+- `src/data/spine/engine.ts:425 stampSays` (run read-back, `reconcile`): decides a run operation landed by the run's
+  own stamp (or that of an operation that waits on it), and records what Drive stores now as its evidence: TL-P4-05
+  addendum ("what the person changed since is kept"); a later operation of the same run legitimately renames or moves
+  it. Not changed here: requiring the after-state would contradict that ruling and resend or misreport a run's own
+  chain. For the lead. `:546 confirms` and `:593 stampOf`: the direct answer's check (`answered`, full state via
+  `shows`/`inPlace`) and the stamp sent.
+- `src/data/spine/grounded.ts:17,129 stampOf`: the stamp a report row must name (plan validation); `:137,154 holds`:
+  a runner JSON's shape. `src/data/spine/scripted.ts:39,1682 stampOf`: the stamp a row records as the run leaves
+  the note. Not landed decisions.
+- `src/data/spine/plan.ts:327,412 holds`: a subject in a file; `src/data/contracts/note-edit.ts:696,781 holds`: a text
+  change kept. Not landed decisions.
+- Lease, not landed: `src/data/contracts/lease.ts:91`, `lease-cases.ts` (9), `src/data/fake/fake-lease.ts:9,71,73`,
+  `src/data/fake/fake-worker.ts:137`, `api/src/person.ts:21,541,542`, `api/src/session-lease.ts:57,61,62`.
+
+Prose only (comments, log lines, prompt text, CSS, README; the English verb, or a description of the above):
+`drive-vault.ts` (rest of 21), `scripted.ts` (rest), `plan.ts` (rest), `api/src/person.ts` (rest),
+`fake-run-service.ts`, `runner/src/status.ts`, `engine.ts` (rest), `runner/src/claude.ts`, `runner/src/main.ts`,
+`session.ts`, `resumable-upload.ts`, `fake-drive.ts`, `pile-readiness.ts`, `drive-api.ts`, `still-as-seen.ts`,
+`run-manifest.ts`, `questions.ts`, `prefs.ts`, `api/src/recovery.ts`, `person-schema.ts`, `Add.tsx`, `upload-queue.ts`,
+`admission.ts`, `live/runs.ts`, `pretend.ts`, `drive-http.ts`, `scenario.ts`, `ui-store.ts`, `runner/src/token.ts`,
+`runner/src/drive.ts`, `api/src/process.ts`, `ui.module.css`, `focus.ts`, `Field.tsx`, `Settings.tsx`, `item-words.ts`,
+`Welcome.tsx`, `new-lines.ts`, `FolderScreen.tsx`, `worker-http.ts`, `worker-api.ts`, `vault/seen.ts`,
+`upload-store.ts`, `report.ts`, `spine/read.ts`, `budget.ts`, `seen-files.ts`, `read-cache.ts`, `run-checkpoint.ts`,
+`folder-template.ts`, `fixtures/p2/README.md`, `compat-p2-fixtures.ts`, `choose.ts`, `bird/presence.ts`,
+`bird/engine.ts`, `tabs-store.ts`, `runner/src/spine/records.ts`, `admitted.ts`, `api/src/vault.ts`, `security.ts`,
+`run-ticket.ts`.
+
+| Area | Round 3 | Round 4 |
+| --- | --- | --- |
+| Landed, at the fence | stamp + checksum + after-state, in still-as-seen | the same, one definition in write-once (`landedAs`) |
+| Landed, lost answer's own read | stamp + checksum + Bin state (`holds`) | `landedAs` |
+| Changed before that read (app) | success | "This changed somewhere else", typed reason |
+| Runner updateByStamp recovery | stamp alone | `landedAs`: name and place as read, Bin as intended |
+| Stamps, Drive calls, strings | - | unchanged |
