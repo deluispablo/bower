@@ -29,8 +29,9 @@ describe('one write-once rule', () => {
       paths.flatMap((p) => read(p).flatMap((line, i) => (what.test(line) && !through.test(line) ? [`${p}:${i + 1}`] : [])));
     // A create is sent only with the id reserved for it (`createById`, `makeFolder`, `makeText`).
     expect(calls(CREATES, /\.(createFolder|createText)\(/, /\bid\)/)).toEqual([]);
-    // An app write to a file is sent only by the helper, with its stamp: `(op) => ...`.
-    expect(calls(UPDATES, /\.(trash|untrash|update|writeText)\(/, /\(op\) =>/)).toEqual([]);
+    // An app write to a file is sent only by the helper, with its stamp: `(op) => ...`, or `(op, fence) => ...` when
+    // it also takes the fence for a resend (TL-P4-24 finding 1).
+    expect(calls(UPDATES, /\.(trash|untrash|update|writeText)\(/, /\(op(, fence)?\) =>/)).toEqual([]);
     // The run engine and the Worker make theirs through the helper itself.
     // The Worker's repair of Rules.md is sent by the helper too.
     expect(read('api/src/vault.ts').some((line) => line.includes('updateByStamp('))).toBe(true);

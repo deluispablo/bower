@@ -28,7 +28,7 @@
  * `lose-reply`: the write lands, then its answer is lost).
  */
 import { BowerError } from '../../src/data/types';
-import type { DriveFile, DrivePatch, FaultAction, FaultHook, FencedCall, FencedDrive, RunDrive, StoredEvidence } from '../../src/data/drive/drive-api';
+import type { DriveFile, DrivePatch, FaultAction, Fence, FaultHook, FencedCall, FencedDrive, RunDrive, StoredEvidence } from '../../src/data/drive/drive-api';
 import type { Pacing } from '../../src/data/drive/transport';
 import { DriveHttp, FIELDS, quote, toFile, type WireFile } from '../../src/data/drive/drive-http';
 import type { SpineRead } from '../../src/data/spine/plan';
@@ -107,10 +107,11 @@ export class RunnerDrive implements RunDrive {
         this.fenced({ op: 'create-folder', parentId, name, ...(appProperties ? { appProperties } : {}), ...(id ? { reserved: id } : {}) }, () => this.http.createFolder(parentId, name, appProperties, id)),
       createText: (parentId, name, text, appProperties, id) =>
         this.fenced({ op: 'create-text', parentId, name, text, ...(appProperties ? { appProperties } : {}), ...(id ? { reserved: id } : {}) }, () => this.http.createText(parentId, name, text, appProperties, id)),
-      update: (id: string, patch: DrivePatch) => this.fenced({ op: 'update', id, patch }, () => this.http.update(id, patch)),
-      trash: (id, appProperties) => this.fenced({ op: 'trash', id, ...(appProperties ? { appProperties } : {}) }, () => this.http.trash(id, appProperties)),
+      update: (id: string, patch: DrivePatch) => this.fenced({ op: 'update', id, patch }, (fence) => this.http.update(id, patch, { fence })),
+      trash: (id, appProperties) => this.fenced({ op: 'trash', id, ...(appProperties ? { appProperties } : {}) }, (fence) => this.http.trash(id, appProperties, { fence })),
       writeText: (id, text, ifModified, appProperties) =>
-        this.fenced({ op: 'write-text', id, text, ifModified, ...(appProperties ? { appProperties } : {}) }, () => this.http.writeText(id, text, ifModified, appProperties, this.peeked?.id === id ? this.peeked : undefined)),
+        this.fenced({ op: 'write-text', id, text, ifModified, ...(appProperties ? { appProperties } : {}) }, (fence) =>
+          this.http.writeText(id, text, ifModified, appProperties, { fence, ...(this.peeked?.id === id ? { current: this.peeked } : {}) })),
     };
   }
 
@@ -289,8 +290,12 @@ export class RunnerDrive implements RunDrive {
     return this.http.readBytes(id);
   }
 
-  /** One fenced write: one at a time, after its still-as-seen read. */
-  private fenced(call: FencedCall, write: () => Promise<DriveFile>): Promise<DriveFile> {
+  /**
+   * One fenced write: one at a time, after its still-as-seen read. A write to a file that exists gets the same fence
+   * for the transport (`WriteOptions`), which runs it again right before any resend, so a takeover or a change during
+   * a rate limit's wait sends nothing more (TL-P4-24 finding 1). A create by its reserved id is resent as it is.
+   */
+  private fenced(call: FencedCall, write: (fence: Fence) => Promise<DriveFile>): Promise<DriveFile> {
     const run = this.queue.then(async () => {
       // The attempt again, right before this write: a runner that stalled after its batch began and woke after a
       // takeover sends nothing more (TL-P3-23).
@@ -299,16 +304,19 @@ export class RunnerDrive implements RunDrive {
       // Every read of the fence goes through the one cannot-read handling (`SeenFiles.read`): a read that gets no
       // answer is no change found, thrown as not read, so the attempt stops for recovery.
       const into = destinationOf(call);
-      const { now, intoNow } = await this.seen.read(this.fenceReads(target, into));
-      if (into) this.seen.assert(into, intoNow);
-      this.seen.assert(target, now);
-      this.peeked = now?.file ?? null;
+      const fence: Fence = async () => {
+        const { now, intoNow } = await this.seen.read(this.fenceReads(target, into));
+        if (into) this.seen.assert(into, intoNow);
+        this.seen.assert(target, now);
+        this.peeked = now?.file ?? null;
+      };
+      await fence();
       this.current = { call, action: null };
       this.generation++;
       this.writing = true;
       let change: Change | null = null;
       try {
-        const answer = await write();
+        const answer = await write(fence);
         change = call.op === 'trash' ? { gone: call.id } : { file: answer };
         if (call.op !== 'trash') {
           // Noted here too, before the next queued write asks: the wrap notes it only after this promise has resolved.

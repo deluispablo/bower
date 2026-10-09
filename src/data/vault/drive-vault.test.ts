@@ -13,7 +13,7 @@ import { SET_ASIDE_TEXT } from '../pile-readiness';
 import { FakeRunService } from '../fake/fake-run-service';
 import { parsePileDeclaration } from '../contracts/pile-declaration';
 import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
-import { driveError, driveFailure, unconfirmedWriteError, UNCONFIRMED_WRITE_MESSAGE, type DriveFile } from '../drive/drive-api';
+import { driveError, driveFailure, unconfirmedWriteError, UNCONFIRMED_WRITE_MESSAGE, type DriveFile, type DrivePatch, type WriteOptions } from '../drive/drive-api';
 import { IDBFactory } from 'fake-indexeddb';
 import { createUploadQueue, type StorageLike, type UploadQueue } from '../upload-queue';
 import { indexedDbUploadStore, memoryUploadStore } from '../upload-store';
@@ -3851,7 +3851,8 @@ describe('a write resent after a rate limit', () => {
         return new Response(JSON.stringify({ ...f, mimeType: f.folder ? 'application/vnd.google-apps.folder' : 'text/markdown' }), { status: 200 });
       },
     });
-    drive.update = (id, patch, opts) => http.update(id, patch, opts);
+    // The vault's port takes the write's options; the pretend Drive's own `update` has none to take.
+    Object.assign(drive, { update: (id: string, patch: DrivePatch, opts?: WriteOptions) => http.update(id, patch, opts) });
     return { patches: () => patches };
   }
 
