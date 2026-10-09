@@ -376,8 +376,8 @@ describe("the engine's named actions", () => {
     expect(heads[heads.length - 1], 'startle lands').toBeLessThanOrEqual(-8);
   });
 
-  it('the startle arrives within 2° before any handover from every pose and holds 0.6 s from landing', () => {
-    // Arrival-based transitions: TL-P4-25 addendum 10. Reuse the fixture's domain, not idle's angle limits.
+  it('the startle settles within 2° and at rest before any handover from every pose and holds 0.6 s from landing', () => {
+    // Settling-based transitions: TL-P4-25 addendum 14. Reuse the fixture's domain, not idle's angle limits.
     const preen = ACT_REFERENCE.preen;
     const ranges = POSES.map((pose) => ({ pose, range: POSE_REFERENCE[pose].parts.head?.range ?? [0, 0] }));
     ranges.push({ pose: 'idle', range: [Math.min(...preen.values), Math.max(...preen.values)] });
@@ -492,7 +492,7 @@ describe("the engine's named actions", () => {
           const range = 'doze' in entry ? [20, 20] : entry.act ? [0, Math.max(...preen.values)] : POSE_REFERENCE[entry.pose].parts.head?.range ?? [0, 0];
           if (head < (range[0] ?? 0) - 2 || head > (range[1] ?? 0) + 2) fail('fixture range', `${head.toFixed(4)}°`);
           const tuftFrom = read().tuft;
-          let headAt = Math.abs(head + 10) <= 2 ? 0 : Infinity;
+          let headAt = Infinity;
           let tuftAt = Math.abs(tuftFrom - 18) <= 0.01 ? 0 : Infinity;
           let landingAt = headAt === 0 && tuftAt === 0 ? 0 : Infinity;
           let tuftClock = 0;
@@ -500,17 +500,19 @@ describe("the engine's named actions", () => {
           const nudgedAt = time;
           const step = internals.step;
           const spy = vi.spyOn(internals, 'step').mockImplementation(function (dt, headDt) {
-            if (Math.abs(internals.H.v + 10) > 2 && headAt === Infinity) {
+            if (headAt === Infinity) {
               const probe = Object.assign(Object.create(Object.getPrototypeOf(engine)) as ProfileProbe, engine, {
                 H: { ...internals.H }, S: { ...internals.S }, B: { ...internals.B },
                 C: Object.fromEntries(Object.entries(internals.C).map(([key, spring]) => [key, { ...spring }])),
               }) as unknown as ProfileProbe;
-              const direction = Math.sign(-10 - probe.H.v);
+              const direction = Math.sign(-10 - head) || Math.sign(-10 - from) || 1;
               const before = probe.H.v;
               probe.H.vel = -direction * 360;
               step.call(probe, 0, headDt);
-              if ((probe.H.v - before) * direction <= 0) {
-                fail('handover before arrival', `${(time - nudgedAt).toFixed(4)} s, head ${before.toFixed(4)}°`);
+              const toward = (probe.H.v - before) * direction;
+              // A snap already on target stays there; a return with the injected velocity moves away.
+              if (toward < 0 || (toward === 0 && before !== -10)) {
+                fail('handover before settling', `${(time - nudgedAt).toFixed(4)} s, head ${head.toFixed(4)}°`);
               }
             }
             step.call(internals, dt, headDt);
@@ -533,7 +535,7 @@ describe("the engine's named actions", () => {
             if ((from >= -10 && now < -12) || (from < -10 && now > -8 && elapsed <= landingAt + 0.6)) {
               fail('overshoot', `${now.toFixed(4)}° at ${elapsed.toFixed(4)} s`);
             }
-            if (headAt === Infinity && Math.abs(now + 10) <= 2) headAt = elapsed;
+            if (headAt === Infinity && Math.abs(now + 10) <= 2 && speed < 1e-6) headAt = elapsed;
             if (tuftAt === Infinity && Math.abs(tuft - 18) <= 0.01) tuftAt = elapsed;
             if (landingAt === Infinity && headAt < Infinity && tuftAt < Infinity) landingAt = elapsed;
             if (elapsed < landingAt + 0.6 - 1e-10 && landingAt < Infinity) {
@@ -595,11 +597,13 @@ describe("the engine's named actions", () => {
         let focus: { x: number; y: number } | null = null;
         let head = readHead();
         let speed = 0;
-        let stepAt = -Infinity;
         let inputAt = 0;
         let snapFrom = head;
-        let wasSnap = false;
-        let actSnapUntil = -Infinity;
+        let snapTarget: number | null = null;
+        const startSnap = (target: number) => {
+          snapFrom = head;
+          snapTarget = target;
+        };
         let frame = 0;
         let time = 0;
         const problems: string[] = [];
@@ -613,21 +617,19 @@ describe("the engine's named actions", () => {
             const now = readHead();
             const v = (now - head) / dt;
             const asleep = time - inputAt >= 60;
-            const rising = stepAt > -Infinity && Math.abs(head + 10) > 2;
-            const snap = rising || time < actSnapUntil;
-            if (Math.abs(now + 10) <= 2) stepAt = -Infinity;
-            if (snap && !wasSnap) snapFrom = head;
+            // The settling frame still belongs to the snap, including its uncapped hard stop.
+            const snap = snapTarget !== null;
             if (Math.abs(v) > 360) problems.push(`frame ${frame}: speed ${v.toFixed(2)} deg/s`);
             if (snap && (now < -12 - 2 || now > Math.max(7, snapFrom) + 2)) problems.push(`frame ${frame}: overshoot ${now.toFixed(2)}`);
             const acceleration = (v - speed) / dt;
             if (!snap && !asleep && Math.abs(acceleration) > 5400) problems.push(`frame ${frame}: return acceleration ${acceleration.toFixed(2)} deg/s^2`);
-            wasSnap = snap;
+            if (snapTarget !== null && Math.abs(now - snapTarget) <= 2 && Math.abs(v) < 1e-6) snapTarget = null;
             head = now;
             speed = v;
           }
         };
         const input = () => {
-          if (time - inputAt >= 60) stepAt = time; // an input wakes a sleeping bird with the startle
+          if (time - inputAt >= 60) startSnap(-10); // an input wakes a sleeping bird with the startle
           inputAt = time;
         };
         for (const e of events) {
@@ -641,15 +643,15 @@ describe("the engine's named actions", () => {
             choosingSnap = true;
             engine.act('snap');
             choosingSnap = false;
-            actSnapUntil = time + 0.6;
+            startSnap(-5); // The deterministic snap with this focus lands at -5° (the gaze-after-snap fixture).
             tick(5 / FPS);
             focus = { x: 200, y: 250 };
-            actSnapUntil = -Infinity; // this retarget is gaze, so every following frame uses return bounds
+            // Gaze uses return bounds once the preceding snap has measurably settled.
           } else if (e.kind === 'preenNudge') {
             engine.act('preen');
             tick(36 / FPS);
             input();
-            stepAt = time;
+            startSnap(-10);
             engine.nudge();
           } else if (e.kind === 'pointer' || e.kind === 'touch') {
             input();
@@ -661,7 +663,7 @@ describe("the engine's named actions", () => {
           } else if (e.kind === 'blur') focus = null;
           else if (e.kind === 'nudge') {
             input();
-            stepAt = time;
+            startSnap(-10);
           } else {
             focus = null;
             tick(61);
