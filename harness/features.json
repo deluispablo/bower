@@ -5870,5 +5870,31 @@
     ],
     "verify": "pnpm -C runner exec vitest run -t \"the reply schema reaches the CLI as its JSON schema\"",
     "note": "TL-P4-14 addendum 22 point 2 (main b2a790cc). From c3-reply-schema; after a live A/B. Starting model: bower-escalated."
+  },
+  {
+    "id": "c3-alone-margin",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": false,
+    "what": "Temporary (TL-P4-17 addendum 9): a unit test over 1000 ms in the full run fails the slow ratchet only if its alone rerun takes over 2000 ms; lifted by c3-timer-gate.",
+    "steps": [
+      "A test 1500 ms alone passes; 2500 ms alone fails."
+    ],
+    "verify": "pnpm exec vitest run src/harness.test.ts -t \"a test under 2000 ms alone passes the temporary alone margin|a test over 2000 ms alone fails the slow ratchet\"",
+    "note": "TL-P4-17 addendum 9 (main 925d3fbb). scripts/harness-rules.mjs:272 compares the alone time with SLOW_MS; a separate ALONE_MS = 2000 with a comment naming c3-timer-gate. Starting model: bower-mechanical."
+  },
+  {
+    "id": "c3-timer-gate",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": false,
+    "what": "A vitest setup file fails any unit test that schedules a real setTimeout or setInterval of 100 ms or more outside fake timers; its allowlist only shrinks (target empty) and replaces harness/slow-tests.json; wall-clock times become a check-harness report, never a failure; the 5000 ms test timeout stays as the backstop; the temporary 2000 ms alone margin (c3-alone-margin) is removed.",
+    "steps": [
+      "A fixture test with a real 150 ms wait fails.",
+      "The same wait under fake timers passes.",
+      "A slow compute-bound test is reported, not failed."
+    ],
+    "verify": "pnpm exec vitest run src/harness.test.ts src/timer-gate.test.ts -t \"a real wait of 100 ms or more fails the unit run|a wait under fake timers passes the timer gate|the timer allowlist may only shrink|wall-clock times are reported, never failed\"",
+    "note": "TL-P4-17 addendum 9 (main 925d3fbb); defect slow-ratchet-alone-under-load. Starting model: bower-implementer."
   }
 ]
