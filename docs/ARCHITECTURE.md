@@ -87,7 +87,7 @@ Each mechanism has one home in the code ([TL-P4-15](harness/2026-10-08-tl-p4-15-
 | Drive read cache, keyed by id and modifiedTime | `src/data/drive/` | Done: one `ReadCache`; the runner's listing patch log is its listing part (`c2-read-cache`, `c2-write-once`) |
 | Drive ports (what a Drive can do, read or write) | `src/data/drive/drive-api.ts` | Done: both Drives offer the same ports, classed read or write (`c2-fake-parity`, `c1-drive-ops-table`) |
 | "Still as seen" fence before an act | `src/data/contracts/` | Done (`c1-still-as-seen`) |
-| Write-once and recovery by the `bowerOp` stamp | `src/data/spine/` | Target: six methods (`c2-write-once`) |
+| Write-once: creates by Drive-reserved id, updates and moves by the `bowerOp` stamp plus checksum | `src/data/spine/` | Target: six methods (`c2-write-once`) |
 | Applying a run's operations (check, send, observe, read back) | `src/data/spine/` engine | Done: one engine; the fake is a Drive adapter (`c2-one-engine`) |
 | Digests (size, SHA-256, MD5) | `src/data/contracts/hashes.ts` | Done, on `@noble/hashes` (`c1-digest`, `c1-digest-library`) |
 | Model reply validation and refusal kinds | one declarative schema, runner | Target: 33 hand refusals (`c3-reply-schema`) |
