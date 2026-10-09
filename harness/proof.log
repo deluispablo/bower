@@ -459,3 +459,4 @@ c2-fake-parity	1a91d8e719b951db	2026-10-09	red (fixed in 8e176ebe)
 c2-upload-queue-only	2443addfbd4c150a	2026-10-09	red (fixed in 9eeb05a7)
 c2-one-engine	1583a47c83ca9aaa	2026-10-09	red (fixed in 7fa1bcb7)
 journal-ack-content	7ff8d6c46619fe95	2026-10-09	known-green: Rename only; the test body changed in c2-write-once round 2 (1fc5edf7) per lead ruling main dd77054; the renamed test passes on this tree.
+spine-report-barrier-dispositions	ce8dc5027ae5aced	2026-10-09	known-green: Rename only; the test body changed in c2-write-once round 2 (1fc5edf7) per lead ruling main dd77054; the renamed test passes on this tree.
