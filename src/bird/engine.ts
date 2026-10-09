@@ -245,7 +245,8 @@ export class BirdEngine {
     t: 0,
     queue: [] as Action[],
     action: null as Action | null,
-    ptr: null as Point | null,
+    /** Where the input is: a point, or one read each frame (a focused control, which may scroll or leave). */
+    ptr: null as Point | (() => Point | null) | null,
     ptrT: -10,
     ptrSrc: 'pointer' as LookSource,
     /** The last input, in engine time (recency). */
@@ -285,6 +286,8 @@ export class BirdEngine {
   private acts: boolean;
   /** Asleep: set by the sleep pose, or by the mind after 60 s with no input. */
   private asleep = false;
+  /** The name of the act under way (`S.doing`), so input can cut a snap or preen. */
+  private doing: ActName | null = null;
 
   constructor(
     private parts: RigParts,
@@ -363,9 +366,12 @@ export class BirdEngine {
   }
   /**
    * Where an input is, in layer pixels: Bower looks at it, for 2.5 s after a
-   * pointer or a touch, and for as long as focus stays on a control.
+   * pointer or a touch, and for as long as focus stays on a control. A focused
+   * control's place is read each frame, and its gaze ends when that read gives
+   * null (focus left it). `null` is an input with no place (a key with nothing
+   * focused): it counts as input, and the gaze rests.
    */
-  look(p: Point, source: LookSource): void {
+  look(p: Point | (() => Point | null) | null, source: LookSource): void {
     if (!this.heard()) return;
     this.S.ptr = p;
     this.S.ptrT = this.S.t;
@@ -380,12 +386,17 @@ export class BirdEngine {
     if (!this.heard()) return;
     if (this.minded()) this.S.startleT = STARTLE.seconds;
   }
-  /** Marks an input in engine time and wakes a dozing bird; false for a bird in the sleep pose, which hears nothing. */
+  /**
+   * Marks an input in engine time, wakes a dozing bird and cuts a snap or
+   * preen under way (none while input is recent); false for a bird in the
+   * sleep pose, which hears nothing.
+   */
   private heard(): boolean {
     if (this.pose === 'sleep') return false;
     this.S.inputT = this.S.t;
     this.S.quietT = this.S.t;
     if (this.asleep) this.wake();
+    if (this.doing === 'snap' || this.doing === 'preen') this.interrupt({ now: true });
     return true;
   }
   /** Whether the mind owns the act channel: idle, wait, or a layer's bird. */
@@ -411,10 +422,12 @@ export class BirdEngine {
     const a = this.makeAct(name);
     a.el = 0;
     this.S.doing = a;
+    this.doing = name;
   }
   private endAct(): void {
     const a = this.S.doing;
     this.S.doing = null;
+    this.doing = null;
     a?.end?.();
   }
   /** The act table (TL-P4-25): each act writes its part; `rest()` puts the parts back each frame. */
@@ -869,6 +882,11 @@ export class BirdEngine {
       if (S.action.update(S.action.el, dt)) {
         S.action.end?.();
         S.action = null;
+        // A layer's tap plays when the action under way ends, before the next one.
+        if (S.tap && !this.pose) {
+          S.tap = false;
+          this.hello();
+        }
         this.settle();
       }
       if (!this.pose) return;
@@ -886,12 +904,12 @@ export class BirdEngine {
     const h = this.home();
     B.x = h.x;
     B.y = h.y;
-    if (B.carrying) return;
     if (S.tap) {
       S.tap = false;
       this.interrupt({ now: true });
       this.hello();
     }
+    if (B.carrying) return;
     this.idle(dt, 'layer');
   }
 
@@ -929,12 +947,18 @@ export class BirdEngine {
         }
         break;
       case 'write': {
+        // Cut by a tap (`interrupt({ now: true })`): the springs carry on until the next cycle.
+        if (this.poseActed) break;
         const nod = (el % 1.4) / 1.4;
         C.head.t = held(nod, [[0, 16], [0.12, 22], [0.23, 16], [0.47, 21], [0.58, 16]]);
         C.jaw.t = held(p, [[0, 0], [0.82, 14], [0.9, 0]]);
         break;
       }
       case 'carry':
+        if (this.poseActed) {
+          B.ws = 1;
+          break;
+        }
         B.hopY = (keyed(p, [[0, 0], [0.12, 0], [0.35, -16], [0.58, 0], [1, 0]]) * Z) / 100;
         C.pitch.t = keyed(p, [[0, 0], [0.12, 0], [0.35, -6], [0.58, 0], [1, 0]]);
         C.squash.t = keyed(p, [[0, 0.92], [0.12, 1.06], [0.35, 1], [0.58, 0.9], [0.72, 1], [1, 0.92]]);
@@ -1075,7 +1099,8 @@ export class BirdEngine {
     const S = this.S;
     const B = this.B;
     const C = this.C;
-    const p = S.ptr;
+    const p = typeof S.ptr === 'function' ? S.ptr() : S.ptr;
+    if (!p) S.ptr = null;
     if (!p || (S.ptrSrc !== 'focus' && S.t - S.ptrT >= RECENT)) {
       C.gaze.t = 0;
       S.behindT = 0;

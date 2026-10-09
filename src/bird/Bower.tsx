@@ -148,12 +148,19 @@ function useBirdEngine(els: EngineEls, home: TargetFn, size: number, moves: bool
       const p = toFrame(ev.clientX, ev.clientY);
       if (p) engine.current?.look(p, ev.type === 'pointerdown' ? 'touch' : 'pointer');
     };
+    // The focused control's place is read each frame, so the gaze follows it as the page scrolls or
+    // lays out again, and ends when focus leaves it. A key with nothing focused still counts as input.
     const onFocus = (ev: Event): void => {
       const el = ev.type === 'keydown' ? document.activeElement : ev.target;
-      if (!(el instanceof Element) || el === document.body || el === document.documentElement) return;
-      const t = el.getBoundingClientRect();
-      const p = toFrame(t.left + t.width / 2, t.top + t.height / 2);
-      if (p) engine.current?.look(p, 'focus');
+      if (!(el instanceof Element) || el === document.body || el === document.documentElement) {
+        engine.current?.look(null, 'focus');
+        return;
+      }
+      engine.current?.look(() => {
+        if (!el.isConnected || document.activeElement !== el) return null;
+        const t = el.getBoundingClientRect();
+        return toFrame(t.left + t.width / 2, t.top + t.height / 2);
+      }, 'focus');
     };
     host.addEventListener('pointermove', onPointer);
     host.addEventListener('pointerdown', onPointer);
