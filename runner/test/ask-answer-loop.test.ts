@@ -98,7 +98,7 @@ function runsOf(w: RealWorld): AppRuns {
 }
 
 const envelope = (intent: unknown): string => JSON.stringify({ type: 'result', subtype: 'success', is_error: false, duration_ms: 1000, duration_api_ms: 900, num_turns: 1, result: JSON.stringify(intent), usage: { input_tokens: 10, output_tokens: 10 } });
-interface Shown { piles: Array<{ pileId: string; things: Array<{ fileId: string; name: string }> }>; answers?: Array<{ question: string; answer: string; fileId?: string; pileId?: string; note?: string }> }
+interface Shown { piles: Array<{ pileId: string; things: Array<{ fileId: string; name: string }> }>; answers?: Array<{ question: string; answer: string; fileId?: string; pileId?: string; note?: string; notes?: string[] }> }
 const shownOf = (call: ClaudeCall): Shown => JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Shown;
 
 /** The model: keeps one note only when it is shown the person's yes to that question, and files nothing else. */
@@ -230,6 +230,44 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     expect(m.operations.some((o) => o.effect.kind === 'bin' && o.effect.before.name === 'Flat 3 (second).md')).toBe(true);
     expect(await answersWaiting(w, KEEP_Q)).toEqual([]);
     expect(await openQuestions(w)).toEqual([]);
+  });
+
+  // c3-pair-ask (keep-one-not-asked): nothing seeded. The model asks about the two notes as a pair in a full run, the
+  // person says yes in the app, and the answer's run merges them through keep-one-note-merge.
+  it('a yes to a pair ask merges through keep-one-note-merge', async () => {
+    const c = await corpusCase('c05-keep-one-note');
+    const WORDS = 'Flat 3 at 12 Larkspur Lane: second viewing booked for Saturday.';
+    const ask = { text: 'Flat 3, 12 Larkspur Lane and Flat 3 (second) look like one flat. Keep one note?', yes: 'Yes, keep one', no: 'No, keep both' };
+    const shown: Shown[] = [];
+    const model: ClaudeSpawn = async (call) => {
+      const s = shownOf(call);
+      shown.push(s);
+      const pile = s.piles[0]?.pileId;
+      const yes = (s.answers ?? []).some((a) => a.answer === ask.yes);
+      const intent = yes
+        ? { kind: 'tidy-intent', v: 1, things: [], keep: [{ kept: KEPT, other: OTHER }] }
+        : { kind: 'tidy-intent', v: 1, things: [], ...(pile ? { notes: [{ pileId: pile, to: 'Projects/Flat hunt', name: 'Flat 3, second viewing.md' }] } : {}), asks: [{ notes: [KEPT, OTHER], ...ask }] };
+      return { code: 0, stderr: '', cut: null, stdout: envelope(intent) };
+    };
+    const w = await realWorld({ seed: (drive) => seedCase(drive, { ...c, scope: 'all', journal: [], questions: [], inbox: [{ line: WORDS, files: [] }] }), claude: model });
+    const runs = runsOf(w);
+    await runs.start('all', { allowWeb: false });
+    expect(await w.runJob(0)).toBe(0);
+    // Bower asked, in plain words; the app shows the question.
+    const { vault, answerQuestion } = await vaultOf(w);
+    const asked = (await vault.questions()).find((q) => q.text === ask.text);
+    expect(asked).toBeDefined();
+    const done = await answerQuestion(vault, runs, asked?.id ?? '', true, { allowWeb: false });
+    expect(done?.outcome.kind).toBe('now');
+    expect(w.dispatched[1]?.scope).toBe('instructions');
+    expect(await w.runJob(1)).toBe(0);
+    // The model was shown the yes with the two notes it is about...
+    expect(shown.at(-1)?.answers).toEqual([expect.objectContaining({ answer: ask.yes, notes: [KEPT, OTHER] })]);
+    // ...and the merge ran: the other note in the Bin, its fact on the kept note, the question and answer gone.
+    expect(await w.paths()).not.toContain(OTHER);
+    expect(await textAt(w, KEPT)).toContain('The listing says the lease is twelve months.');
+    expect(await openQuestions(w)).toEqual([]);
+    expect(await answersWaiting(w, asked?.id ?? '')).toEqual([]);
   });
 
   it('answering twice starts one run', async () => {
