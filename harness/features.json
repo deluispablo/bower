@@ -5901,7 +5901,7 @@
     "id": "c3-planner-split",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "planScripted is split into capture, decisions (from the script or the model) and building operations; the live path imports no demo fixture; answers reach the model path; one record-to-operations map replaces the five waits-for-the-next-run filters; report rows are generated from operation metadata and keyed by op id, so grounded() keeps only a structural check.",
     "steps": [
       "Two moves with the same name get their own rows by op id.",

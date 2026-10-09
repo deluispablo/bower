@@ -486,3 +486,4 @@ c3-test-time	103288c755edf8b5	2026-10-09	known-green: verify passes at 0110ebab 
 c3-alone-margin	09e27ecc04e4bb7e	2026-10-09	known-green: verify passes at 0110ebab after c3-timer-gate
 c3-done-harness-paths	2c906fd88093e0d5	2026-10-09	red (fixed in b2222dd5)
 c3-branch-cleanup	d4a1350c7af72e3d	2026-10-09	red (fixed in c8f43681)
+c3-planner-split	fc8aa32a0e6ea2d2	2026-10-09	known-green: red at f9b658c6/c1de99be (/tmp/c3plan-handred*.log); green at a5719afb
