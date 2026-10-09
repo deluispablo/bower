@@ -23,7 +23,7 @@ export interface ScriptedRead extends SpineRead {
   provenance: 'fake-stored' | 'adapter-read';
 }
 
-type DriveReads = Pick<DriveApi, 'listAll' | 'readBytes' | 'readText' | 'binnedByItem'> & Pick<ResumableDrive, 'getUploaded'>;
+type DriveReads = Pick<DriveApi, 'listAll' | 'readBytes' | 'readText' | 'binnedByItem' | 'get'> & Pick<ResumableDrive, 'getUploaded'>;
 
 /** Drive v3: the listing, Bower's own files, and `sha256Checksum` with `size` from `files.get`. */
 export function driveRead(drive: DriveReads): SpineRead {
@@ -36,17 +36,19 @@ export function driveRead(drive: DriveReads): SpineRead {
       return now.sha256 !== undefined && now.size !== undefined ? { size: now.size, sha256: now.sha256 } : null;
     },
     binnedByItem: (rootId, keys) => drive.binnedByItem(rootId, keys),
+    binned: (id) => drive.get(id, { binned: true }),
   };
 }
 
 /** The pretend Drive: what it stored (`fake-stored`), and its Bin lookup by item key. */
-export function fakeRead(drive: Pick<DriveApi, 'listAll' | 'readBytes' | 'readText' | 'storedDigest' | 'binnedByItem'>): SpineRead {
+export function fakeRead(drive: Pick<DriveApi, 'listAll' | 'readBytes' | 'readText' | 'storedDigest' | 'binnedByItem' | 'get'>): SpineRead {
   return {
     listAll: (rootId) => drive.listAll(rootId),
     readBytes: (id) => drive.readBytes(id),
     readText: (id) => drive.readText(id),
     digest: (file) => drive.storedDigest(file.id),
     binnedByItem: (rootId, keys) => drive.binnedByItem(rootId, keys),
+    binned: (id) => drive.get(id, { binned: true }),
   };
 }
 
@@ -57,7 +59,7 @@ export function fakeRead(drive: Pick<DriveApi, 'listAll' | 'readBytes' | 'readTe
 export const READ_AHEAD = 8;
 
 /** The Drive admission reads: `DriveHttp`, whose listing can carry each file's checksum. */
-type AdmissionDrive = Pick<DriveApi, 'readBytes' | 'readText' | 'binnedByItem'> &
+type AdmissionDrive = Pick<DriveApi, 'readBytes' | 'readText' | 'binnedByItem' | 'get'> &
   Pick<ResumableDrive, 'getUploaded'> & { listAll(rootId: string, opts: { checksums: boolean }): Promise<DriveFile[]> };
 
 /** Runs each task with at most `limit` running at once, in the order given. */
@@ -147,7 +149,7 @@ export function admissionRead(drive: AdmissionDrive, scope: AdmissionScope, budg
     }
     return pending;
   };
-  // Each read granted against the budget, by kind and id (`t:` text, `b:` bytes, `d:` digest), and those refused.
+  // Each read granted against the budget, by kind and id (`t:` text, `b:` bytes, `d:` digest, `g:` a Bin get), and those refused.
   const granted = new Set<string>();
   const refused = new Set<string>();
   // What the invocation had fetched when the listing was in: the token and the listing's pages.
@@ -206,5 +208,7 @@ export function admissionRead(drive: AdmissionDrive, scope: AdmissionScope, budg
         if (budget && budget.used() - start >= allowance) throw new NotReadHere();
       });
     },
+    // One `files.get`, granted as one read (`g:`), or left to the runner.
+    binned: (id) => (afford(`g:${id}`) ? drive.get(id, { binned: true }) : Promise.reject(new NotReadHere())),
   };
 }
