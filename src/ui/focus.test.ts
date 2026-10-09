@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { focusHeading, focusRouteHeading, returnFocusTo, focusMain } from './focus';
+import { closeFocus, focusHeading, focusRouteHeading, openerNow, returnFocusTo, focusMain } from './focus';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -36,6 +36,50 @@ describe('returnFocusTo', () => {
     document.body.innerHTML = '<main id="main" tabindex="-1"><h1>Home</h1></main>';
     returnFocusTo(null);
     expect(document.activeElement?.tagName).toBe('H1');
+  });
+});
+
+describe('close focus (one home, no timer)', () => {
+  const closing = (): Event => new Event('focus-scope.unmount', { cancelable: true });
+
+  it('focus returns on close with no timer', async () => {
+    document.body.innerHTML = '<main id="main" tabindex="-1"><h1>Home</h1><button id="o">Tidy up</button></main>';
+    const timers = vi.spyOn(globalThis, 'setTimeout');
+    const opener = document.getElementById('o');
+    opener?.focus();
+    const was = openerNow();
+    expect(was).toBe(opener);
+    // A sheet takes the keyboard, then closes: the handler runs once Radix has removed it.
+    document.body.focus();
+    const event = closing();
+    closeFocus(() => was)(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(opener);
+    // The opener gone: the heading, again with no timer.
+    opener?.remove();
+    document.body.focus();
+    const again = closing();
+    closeFocus(() => was)(again);
+    expect(document.activeElement?.tagName).toBe('H1');
+    expect(timers).not.toHaveBeenCalled();
+    timers.mockRestore();
+  });
+
+  it('falls to the heading when the opener left before the close, and when there was none', () => {
+    document.body.innerHTML = '<main id="main" tabindex="-1"><h1>Home</h1></main>';
+    expect(openerNow()).toBeNull();
+    closeFocus(() => null)(closing());
+    expect(document.activeElement?.tagName).toBe('H1');
+  });
+
+  it('watches the opener without a timer: it goes, focus goes to the heading; focus moved elsewhere ends the watch', async () => {
+    document.body.innerHTML = '<main id="main" tabindex="-1"><h1>Home</h1><button id="o">Watch</button><button id="p">Other</button></main>';
+    const opener = document.getElementById('o');
+    returnFocusTo(opener);
+    document.getElementById('p')?.focus();
+    opener?.remove();
+    await Promise.resolve();
+    expect(document.activeElement?.id).toBe('p');
   });
 });
 

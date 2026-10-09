@@ -4,7 +4,8 @@
  * the single-page-app routing studies (Fable Tech Labs, GOV.UK): after a route change
  * focus moves to the new view's h1.
  */
-import type { Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import type { Locator, Page } from '@playwright/test';
 import { expect, isFake, test } from './fixtures';
 
 const open = async (page: Page, path: string): Promise<void> => {
@@ -115,3 +116,40 @@ test('focus: every route lands the keyboard on its h1, or on the control that na
   await expect(page).toHaveURL(/sign-in/);
   await h1Focused('sign-in');
 });
+
+/**
+ * d-v2-04 (APG modal dialog: on close, focus returns to the control that opened it). The sheet is
+ * opened by keyboard from each button that opens it; every wait is for focus, never for time.
+ */
+const openers = (page: Page, isMobile: boolean): Array<[string, Locator]> => {
+  const list: Array<[string, Locator]> = [['Home button', page.getByRole('main').getByRole('button', { name: /^Tidy up \d+ things$/ })]];
+  if (!isMobile) list.push(['tab-bar button', page.getByRole('button', { name: /^Tidy up \d+$/ })]);
+  return list;
+};
+
+const axeClean = async (page: Page): Promise<void> => {
+  const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).options({ rules: { 'target-size': { enabled: true } } }).analyze();
+  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+};
+
+for (const [name, how] of [
+  ['closing the tidy sheet returns focus to its opener', 'Escape'],
+  ['closing the tidy sheet with not now returns focus to its opener', 'Not now'],
+] as const) {
+  test(name, async ({ page, isMobile }) => {
+    await open(page, '/');
+    for (const [label, opener] of openers(page, isMobile)) {
+      await expect(opener, label).toBeVisible();
+      await opener.focus();
+      await page.keyboard.press('Enter');
+      const sheet = page.getByRole('dialog', { name: /^Tidy up \d+ things\?$/ });
+      await expect(sheet, label).toBeVisible();
+      if (label === 'Home button') await axeClean(page);
+      if (how === 'Escape') await page.keyboard.press('Escape');
+      else await sheet.getByRole('button', { name: 'Not now' }).click();
+      await expect(sheet, label).toHaveCount(0);
+      await expect(opener, label).toBeFocused();
+      await axeClean(page);
+    }
+  });
+}
