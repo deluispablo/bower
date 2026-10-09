@@ -5940,7 +5940,7 @@
     "id": "c3-branch-cleanup",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "After a green merge, harness/integrate.sh removes the merged branch's worktree (git worktree remove, never --force) and deletes the branch (git branch -d). Protected by name, not merge state: main, claude/p3, claude/tl-planning, claude/design, archive/*, codex/*, the deploy worktree, and any worktree with a running process (lsof +D) or another session in it.",
     "steps": [
       "A merged fixture branch and its clean worktree are gone after integrate.",

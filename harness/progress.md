@@ -240,3 +240,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: c3-test-time passes — Re-proved under c3-timer-gate's tests (TL-P4-17 add. 10)
 - 2026-10-09: c3-alone-margin passes — Re-proved under c3-timer-gate's tests (TL-P4-17 add. 10)
 - 2026-10-09: c3-done-harness-paths passes — done.sh treats harness scripts as code (TL-P4-17 add. 11)
+- 2026-10-09: c3-branch-cleanup passes — integrate.sh removes merged worktrees and branches, protecting role branches and worktrees in use (TL-P4-19 add. 2)
