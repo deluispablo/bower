@@ -5834,7 +5834,7 @@
     "id": "c3-reply-schema",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "One declarative zod 4 schema (runner only) for the model reply; each rule is a named issue whose id is its refusal kind, with unchanged retry text; state and line limits come from note-edit.ts (8 x 200); Bower's runner-writable files are one list, layout.ts RUNNER_WRITES (questions, requests, hashes), imported by run-manifest.ts and admitted.ts.",
     "steps": [
       "A reply over the note-edit state limits is refused with the same kind and retry text as today.",

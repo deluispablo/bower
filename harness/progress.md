@@ -233,3 +233,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: c3-reservation-worker passes — The Worker template reserves through write-once with Durable Object storage as keeper (TL-P4-17 add. 3)
 - 2026-10-09: c3-subject passes — One Subject, key and open-questions function; a refused Bin keeps its question; answers settle by subject (TL-P4-14 stage 3)
 - 2026-10-09: c3-alone-margin passes — Temporary: the slow ratchet fails an alone rerun only over 2000 ms (TL-P4-17 add. 9)
+- 2026-10-09: c3-reply-schema passes — One zod reply declaration; note-edit write/read bounds; RUNNER_WRITES (TL-P4-14 add. 20, 22)
