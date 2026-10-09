@@ -30,9 +30,9 @@ Phase 4/5. The owner approved V2 on 2026-10-09.
 
 - **Review:** `reviews/2026-10-09-current-state.md`.
   - Findings: E1–E8, I1–I2, questions 1–5. All are decided: the owner approved V2, and question 5 is (b).
-- **V2 plan (TL-P4-21, main 552b401e):** the lead sent it for the fidelity check. I answered its seven questions by amending the spec (d-v2-02 per-outcome copy, Undo only on `next`/`failed`; -07 engine ranges and preen; -24 0.1 s start and settle-then-hold, `bower-map.md`; -06 one carried glyph; -12 "while opening"; -19 no toast; -21 "Show all <n>" in place, no "Ask Bower"). Verdict: faithful.
-- **c3-pair-ask round 2 (6f7c2ae2):** not as specified. (1) The answered rows have no label and read as "Brought up to date"; my label copy is "Answers Bower could not act on". (2) A pair asked by id always shows the fallback name; the Bin still has the name. Both went to the lead for a ruling (TL-P4-15). Evidence: scratchpad walk/pairask/.
-- **c3-state-mark:** a copy consult from the coordinator (re-ask, refused write, nothing to write).
+- **V2 plan (TL-P4-21, main 552b401e):** the lead sent it for the fidelity check. I answered its seven questions by amending the spec (d-v2-02 per-outcome copy, Undo only on `next`/`failed`; -07 engine ranges and preen; -24 0.1 s start and settle-then-hold, `bower-map.md`; -06 one carried glyph; -12 "while opening"; -19 no toast; -21 "Show all <n>" in place, no "Ask Bower"). Verdict: faithful; merged as TL-P4-21 addendum 1 (main e85722cd). V2 opens stage 4 after the stage 3 smoke, with c4-focus-return and v2-field. I check each V2 entry before it closes.
+- **c3-pair-ask round 2 (6f7c2ae2):** not as specified. (1) The answered rows have no label and read as "Brought up to date"; my label copy is "Answers Bower could not act on". (2) A pair asked by id always shows the fallback name; the Bin still has the name. Ruled as proposed (TL-P4-19 addendum 11). I re-check after its fix round. Evidence: scratchpad walk/pairask/.
+- **c3-state-mark:** copy given to the coordinator: one re-ask wording, plus answered rows for a refused write and for nothing to write. I asked the lead to rule that a clash re-asks rather than closes; waiting.
 - **Waits on the owner:** nothing.
 
 ## How I check builds
