@@ -320,3 +320,4 @@ d-v2-07,property-red,codex,gpt-5-codex,low,10,291745,290144,,260480,1601,,,,doze
 c4-undo-compensate,property-red,codex,gpt-5-codex,medium,5,753702,749043,,691456,4659,,,,round 2 reds,2026-10-09
 c4-parse-once,property-red,codex,gpt-5-codex,medium,3,698260,691882,,644992,6378,,,,round 2 red,2026-10-09
 c4-parse-once,implementer,codex,gpt-5-codex,medium,4,488029,485297,,442624,2732,,,,blocked: scope,2026-10-09
+d-v2-07,implementer,codex,gpt-5-codex,medium,8,713565,708166,,655488,5399,,,,blocked: red typing and old classifier,2026-10-09
