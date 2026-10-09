@@ -6317,7 +6317,7 @@
     "id": "c4-api-audit",
     "task": "p4-consolidation",
     "category": "security",
-    "passes": false,
+    "passes": true,
     "ui": null,
     "what": "api dev tooling clears its audit: raise wrangler and @cloudflare/vitest-pool-workers to the newest releases at least two weeks old that clear sharp and undici advisories; else exact pnpm overrides.",
     "steps": [
