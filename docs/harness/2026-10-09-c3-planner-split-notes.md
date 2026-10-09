@@ -260,3 +260,22 @@ claude.ts, barrier.ts, Home.tsx, Replay.tsx 0.
 - Functional core, imperative shell (Gary Bernhardt): build is the core over decided data; capture and decide are the
   shell. https://www.destroyallsoftware.com/screencasts/catalog/functional-core-imperative-shell
 - Tolerant reader (Martin Fowler): optional fields added, old records still read. https://martinfowler.com/bliki/TolerantReader.html
+
+## Fix round (TL-P4-19 addendum 4): blocked before red
+
+- Merged claude/p3 (67a9ae1e), no conflict. No code changed.
+- Blocker: the New mark cannot "find the op's lines by the op". A Timeline line in the note carries no op id
+  (`TimelineEntry` = date, text, source; note-edit.ts `lineOf` writes `- date · text · [[source]]`), the parsed
+  `Note` the screen gets carries no file metadata, and the write stamp `bowerOp` is a hash of scope and intent on the
+  file, not per line. So given (op, ordinal) the app can locate the op's block only by a place in the note (rejected by
+  the ruling) or by words (rejected). Writer and grounded can switch to the ordinal (`c.lines` index), but the reader
+  then has nothing to anchor on; changing the writer alone would mark wrong lines.
+- Ways the lead could rule (each a design choice, not mine):
+  1. The note carries the op on each line Bower appends (e.g. a hidden `<!-- op -->` tail in Bower's Timeline
+     section): a note format change, parser and edit refusals touched, old notes have none (mark none).
+  2. The app marks only when the note is as the op left it (file stamp is the op's and md5 equals what it wrote;
+     needs the op's md5 or stamp on the row and file metadata on the note read), the op's lines being then its last
+     k Timeline lines; a person's later line drops the mark rather than moving it. k needs the op's line count.
+  3. The row also keeps the op's first line counted from the Timeline start (stable when the person appends at the
+     end, shifts if they edit earlier lines): a position, which the ruling rejects for `line`.
+- The updatedRow one-home minor is independent and waits for the same round.
