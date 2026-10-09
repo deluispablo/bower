@@ -49,8 +49,8 @@ export interface CaseRun {
   root: string;
 }
 
-export async function runScripted(c: LoadedCase, around?: (fetch: typeof globalThis.fetch) => typeof globalThis.fetch, realTokens = false, before?: Before): Promise<CaseRun> {
-  return runCase(c, { around, realTokens, ...(before ? { before } : {}) });
+export async function runScripted(c: LoadedCase, around?: (fetch: typeof globalThis.fetch) => typeof globalThis.fetch, realTokens = false, before?: Before, env?: Record<string, string>): Promise<CaseRun> {
+  return runCase(c, { around, realTokens, ...(before ? { before } : {}), ...(env ? { env } : {}) });
 }
 
 /**
@@ -71,6 +71,8 @@ interface CaseOptions {
   /** More appProperties for some of the case's folder files, by path (as an older run or the original app left them). */
   props?: Record<string, Record<string, string>>;
   before?: Before;
+  /** More environment for the runner (what the executor provides, for example the region). */
+  env?: Record<string, string>;
 }
 
 /**
@@ -120,7 +122,7 @@ export async function seedCase(drive: FakeDrive, c: LoadedCase, props: Record<st
   return root;
 }
 
-async function runCase(c: LoadedCase, { around, realTokens = false, claude, props = {}, before }: CaseOptions): Promise<CaseRun> {
+async function runCase(c: LoadedCase, { around, realTokens = false, claude, props = {}, before, env: more = {} }: CaseOptions): Promise<CaseRun> {
   const drive = fixedDrive();
   const root = await seedCase(drive, c, props);
   await before?.(drive, root);
@@ -135,7 +137,7 @@ async function runCase(c: LoadedCase, { around, realTokens = false, claude, prop
   const file = join(dir, 'event.json');
   await writeFile(file, JSON.stringify({ action: 'bower-tidy', client_payload: { run_id: RUN_ID, attempt: 1, ticket: TICKET, scope: c.scope, allow_web: c.allowWeb } }));
   const env = claude ? { BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' } : {};
-  const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env }, { fetch: around ? around(wire.fetch) : wire.fetch, ...(claude ? { claude } : {}) });
+  const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env, ...more }, { fetch: around ? around(wire.fetch) : wire.fetch, ...(claude ? { claude } : {}) });
   const { after, props: kept } = await snapshot(drive, root);
   const lastRun: unknown = after[SYSTEM.lastRun] ? JSON.parse(after[SYSTEM.lastRun] ?? 'null') : null;
   return { after, props: kept, lastRun, code, drive, root };

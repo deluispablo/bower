@@ -1,91 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { DRIVE_MS, modelled, type Call } from './modelled';
+import { DRIVE_MS, countsOf, drivecalls, modelled } from './modelled';
 import { finishedBefore, runFolders } from './earlier-runs';
 import type { FakeDrive } from '../../src/data/drive/fake-drive';
 
-interface PhaseCount {
-  name: string;
-  token: number;
-  reads: number;
-  model: number;
-  apply: number;
-  checkpoints: number;
-  report: number;
-  status: number;
-}
-
-/**
- * Analyze calls per phase. The run's sequence is:
- * 1. token: Worker /token call(s)
- * 2. reads: Drive GETs before first write (plan reads)
- * 3. model: Worker /attempt call(s) during planning (model inference)
- * 4. apply: Drive writes for folder operations (non-checkpoint writes)
- * 5. checkpoints: Drive multipart writes with "checkpoint-" name
- * 6. report: Drive operations between "saving" and "done" status (includes attempt status checks)
- * 7. status: Worker /status calls
- *
- * Note: in the modelled output, attempt calls in the report phase are status checks during reporting,
- * not the model inference step.
- */
-function analyzeCalls(calls: Call[]): PhaseCount {
-  const count = {
-    name: 'C04',
-    token: 0,
-    reads: 0,
-    model: 0,
-    apply: 0,
-    checkpoints: 0,
-    report: 0,
-    status: 0,
-  };
-
-  const statusCalls = calls
-    .map((c, i) => ({ c, i }))
-    .filter((x) => x.c.kind === 'status');
-  const firstWrite = calls.findIndex((c) => c.kind === 'write');
-
-  if (firstWrite < 0 || statusCalls.length < 2) {
-    throw new Error('Could not find first write or at least 2 status calls');
-  }
-
-  // Report phase starts at the second-to-last status call or later
-  const reportStartIdx = Math.max(firstWrite, statusCalls[Math.max(0, statusCalls.length - 2)]?.i ?? 0);
-  const doneCallIdx = statusCalls[statusCalls.length - 1]?.i ?? calls.length;
-
-  for (const [i, call] of calls.entries()) {
-    if (call.kind === 'token') {
-      count.token++;
-    } else if (call.kind === 'status') {
-      count.status++;
-    } else if (call.kind === 'attempt') {
-      if (i < firstWrite) {
-        count.model++;
-      } else {
-        count.report++;
-      }
-    } else if (call.kind === 'read') {
-      if (i < firstWrite) {
-        count.reads++;
-      } else if (i >= reportStartIdx && i < doneCallIdx) {
-        count.report++;
-      }
-    } else if (call.kind === 'write') {
-      if (call.name?.startsWith('checkpoint-')) {
-        count.checkpoints++;
-      } else if (i >= reportStartIdx && i < doneCallIdx) {
-        count.report++;
-      } else {
-        count.apply++;
-      }
-    }
-  }
-
-  return count;
-}
-
 describe('the C04 run makes the golden number of Drive calls per step', () => {
   it('the C04 run makes the golden number of Drive calls per step', async () => {
-    const { calls, code } = await modelled();
+    const { calls, code, timing } = await modelled();
     expect(code).toBe(0);
 
     // Total Drive calls (reads + writes), after drive-calls-cut (TL-P4-08 addendum 6, fix round: the fence reads right before every send): 80, was 134 at fd99ca3
@@ -99,19 +19,12 @@ describe('the C04 run makes the golden number of Drive calls per step', () => {
     // 78 recorded exception: retention wiring (main 5733eb8, lead ruling option a).
     const totalDriveCalls = calls.filter((c) => c.kind === 'read' || c.kind === 'write').length;
     expect(totalDriveCalls).toBe(78);
-
-    const count = analyzeCalls(calls);
-
-    // Per step before the cut: token 2, reads 17, model 2, apply 19, checkpoints 4, report 45, status 4.
-    expect(count.token).toBe(2);
-    expect(count.reads).toBe(17);
-    // 3 since c2-create-by-id: the attempt is read again before the ids are reserved (a fenced write; a Worker call).
-    expect(count.model).toBe(3);
-    expect(count.apply).toBe(19);
-    expect(count.checkpoints).toBe(4);
-    // 43 recorded exception: retention wiring (main 5733eb8, lead ruling option a).
-    expect(count.report).toBe(43);
-    expect(count.status).toBe(4);
+    // The counts are timing's own (`timing.ts`), read from the line the runner logs; the golden infers no phase.
+    expect(drivecalls(timing)).toBe(78);
+    // By timing's phases (the Worker's token, model and status calls are not Drive calls; the two read outside any phase
+    // are the run's first listings, before the plan reads).
+    const calls_ = Object.fromEntries(Object.entries(countsOf(timing).phases).map(([k, v]) => [k, v.calls]));
+    expect(calls_).toEqual({ token: 0, reads: 15, model: 0, apply: 47, checkpoints: 4, report: 10, status: 0, runner: 2 });
   });
 });
 
@@ -142,7 +55,7 @@ describe('drive-calls-cut', () => {
 });
 
 /** Drive calls, reads and writes, of a modelled run. */
-const driveCalls = (calls: Call[]): number => calls.filter((c) => c.kind === 'read' || c.kind === 'write').length;
+const driveCalls = (run: { timing: string }): number => drivecalls(run.timing);
 
 describe('the C04 run past 20 earlier runs (retention-never-wired, round 2)', () => {
   it('with 25 earlier runs a run makes 88 Drive calls', async () => {
@@ -151,9 +64,9 @@ describe('the C04 run past 20 earlier runs (retention-never-wired, round 2)', ()
       await finishedBefore(drive, root, 25);
     });
     expect(past.code).toBe(0);
-    console.log(`Drive calls: C04 ${driveCalls(c04.calls)}, with 25 earlier runs ${driveCalls(past.calls)}`);
+    console.log(`Drive calls: C04 ${driveCalls(c04)}, with 25 earlier runs ${driveCalls(past)}`);
     // +3: the children of the 3 run folders it bins are listed first (retention round 6, option A).
-    expect(driveCalls(past.calls)).toBe(88);
+    expect(driveCalls(past)).toBe(88);
   });
 });
 

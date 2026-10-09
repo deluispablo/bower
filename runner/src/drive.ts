@@ -38,6 +38,7 @@ import { sha256 } from '../../src/data/contracts/hashes';
 import { ReadCache } from '../../src/data/drive/read-cache';
 import { destinationOf, SeenFiles, targetOf, type FenceTarget, type StoredNow } from '../../src/data/drive/seen-files';
 import { staleAttempt, type RunnerToken } from './token';
+import type { RunTiming } from './timing';
 
 export interface RunnerDriveOptions {
   token: RunnerToken;
@@ -46,6 +47,8 @@ export interface RunnerDriveOptions {
   fetch?: typeof fetch;
   /** The transport's waits between tries; the real backoff when absent. */
   pacing?: Partial<Pacing>;
+  /** Counts each Drive call and its bytes under the phase running (`timing.ts`). */
+  timing?: RunTiming;
 }
 
 const API = 'https://www.googleapis.com/drive/v3';
@@ -85,7 +88,8 @@ export class RunnerDrive implements RunDrive {
   constructor(opts: RunnerDriveOptions) {
     this.token = opts.token;
     this.attempt = opts.attempt;
-    this.fetchFn = opts.fetch ?? ((url, init) => fetch(url, init));
+    const send = opts.fetch ?? ((url: string, init?: RequestInit) => fetch(url, init));
+    this.fetchFn = opts.timing ? opts.timing.meter(send) : send;
     // Headless: a request with no answer is never worded as offline; a lost write's answer is still read back (`isNoAnswer`).
     this.http = new DriveHttp({ token: (fresh) => this.token.token(fresh), fetch: (url, init) => this.hooked(url, init), context: 'headless', ...(opts.pacing ? { pacing: opts.pacing } : {}) });
     this.writes = {
