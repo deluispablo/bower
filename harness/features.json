@@ -5670,10 +5670,10 @@
       "Open the tree menu on a folder, press Escape, then Delete at once: the Delete question shows.",
       "Close a sheet, the palette or the replay: focus returns where it was, with no delay."
     ],
-    "verify": "pnpm vitest run -t \"focus returns on close with no timer\" && bash scripts/e2e-both.sh e2e/focus-after-close.spec.ts e2e/qa10.spec.ts -g \"Delete on a folder asks before the Bin|closing the tidy sheet returns focus to its opener|closing the tidy sheet with not now returns focus to its opener\"",
-    "note": "Defect qa10-toast-flake, ruling (b) (main 7a708aa); docs/harness/defects/2026-10-09-qa10-toast-flake.md. Opens stage 4. Sites: Explorer.tsx:125,130,532-547; focus.ts:5,80; Sheet.tsx:30; toast.tsx:73; Palette.tsx:107; Replay.tsx:146. Tests wait for focus, never for time; the mechanism map gets a row. Starting model: bower-implementer. TL-P4-21: carries d-v2-04 (Sheet opener, all 8 sheets); ui: true. Packet 2026-10-09-c4-focus-return-packet.md. The e2e file may differ; the worker names it.",
+    "verify": "pnpm vitest run src/ui/focus.test.ts -t \"focus returns on close with no timer|a sheet opened from a menu sheet returns focus to the menu.s opener\" && bash scripts/e2e-both.sh e2e/focus-after-close.spec.ts e2e/qa10.spec.ts -g \"Delete on a folder asks before the Bin|closing the tidy sheet returns focus to its opener|closing the tidy sheet with not now returns focus to its opener\"",
+    "note": "Defect qa10-toast-flake, ruling (b) (main 7a708aa); docs/harness/defects/2026-10-09-qa10-toast-flake.md. Opens stage 4. Sites: Explorer.tsx:125,130,532-547; focus.ts:5,80; Sheet.tsx:30; toast.tsx:73; Palette.tsx:107; Replay.tsx:146. Tests wait for focus, never for time; the mechanism map gets a row. Starting model: bower-implementer. TL-P4-21: carries d-v2-04 (Sheet opener, all 8 sheets); ui: true. Packet 2026-10-09-c4-focus-return-packet.md. The e2e file may differ; the worker names it. Fix round (addendum 5): red f0df8925, fix a50ccb18, review skipped (TL-P4-22). Designer verified 75db570f.",
     "ui": true,
-    "design": "not verified: menu-sheet-focus-to-heading (a4d092e7)"
+    "design": "verified"
   },
   {
     "id": "c3-reservation-home",
@@ -6122,7 +6122,8 @@
       "Focused controls end 16 px above the tab bar."
     ],
     "verify": "pnpm vitest run -t \"the dock stacks three messages at most, oldest first\" && bash scripts/e2e-both.sh e2e/v2-dock.spec.ts -g \"a message spans the phone width above the tab bar|a message is at most 520 wide and centred in main on desktop|the last result row ends above the run chip at full scroll|keyboard focus is never hidden behind the tab bar\"",
-    "note": "TL-P4-21 order 2; spec d-v2-01, d-v2-03. Starting model bower-implementer. Packet 2026-10-09-v2-dock-packet.md; e2e file may differ (worker names it)."
+    "note": "TL-P4-21 order 2; spec d-v2-01, d-v2-03. Starting model bower-implementer. Packet 2026-10-09-v2-dock-packet.md; e2e file may differ (worker names it). Red 7cf3cbc9, fix 956c5419. Designer verified 75db570f.",
+    "design": "verified"
   },
   {
     "id": "c4-runner-region",
