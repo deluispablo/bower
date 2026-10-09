@@ -14,6 +14,9 @@ import { tidyUp } from '@/testing/tidy-up';
 import { DriveVault } from './drive-vault';
 import { SYSTEM } from './layout';
 import type { TreeNode } from '../types';
+import { Journal } from './journal';
+import { applyChanges } from '../contracts/note-edit';
+import { parseRules } from './rules-format';
 
 /** One holder per name at a time, in order, as the browser's Web Locks give (https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API). */
 function stubLocks(): void {
@@ -284,5 +287,102 @@ describe('the outbox sends in order per folder', () => {
     expect(linesInDrive().map((l) => l.text)).toEqual([]);
     await v.flushJournal();
     expect(linesInDrive().map((l) => l.text)).toEqual(['Put my id papers together', 'Keep my lease papers together']);
+  });
+});
+
+// Round 2: the four reproductions in the adversarial pass, TL-P4-27 addendum 8.
+describe('round 2 compensating lines', () => {
+  it('a line dropped in one tab is never sent by another tab whose keep failed', async () => {
+    const changes = (await drive.listAll(root)).find((f) => f.folder && f.name === 'changes');
+    if (!changes) throw new Error('no changes folder in the seed');
+    const place = { owner: async () => root, folder: async () => changes.id, files: async () => (await drive.listAll(changes.id)).filter((f) => !f.folder) };
+    // Separate page memories; storage and the browser's lock are shared.
+    const a = new Journal(drive, place, 'device-a', () => true, {} as FakeDrive);
+    const b = new Journal(drive, place, 'device-b', () => true, {} as FakeDrive);
+    const net = journalOffline();
+    const line = await b.record('rule', 'New rule: "Keep recipes together"', { path: 'Rules.md', text: 'Keep recipes together' });
+    const stored = localStorage.getItem(`bower:outbox:${root}`);
+    const ids = drive.generateIds.bind(drive);
+    // Reservation succeeds, but neither keeping the reservation nor sending the line can succeed.
+    drive.generateIds = async (n) => {
+      net.off = false;
+      const reserved = await ids(n);
+      net.off = true;
+      return reserved;
+    };
+    const create = vi.spyOn(drive, 'createText');
+    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Full', 'QuotaExceededError'); });
+    await expect(a.flush()).rejects.toMatchObject({ code: 'offline' });
+    expect.soft(create).not.toHaveBeenCalled();
+    expect(localStorage.getItem(`bower:outbox:${root}`)).toBe(stored);
+    set.mockRestore();
+    await expect(b.retract(line.id)).resolves.toBe('dropped');
+    drive.generateIds = ids;
+    net.off = false;
+    await a.flush();
+    await b.flush();
+    expect(linesInDrive().filter((r) => r.id === line.id)).toEqual([]);
+    expect(localStorage.getItem(`bower:outbox:${root}`)).toBeNull();
+  });
+
+  it('Undo of a kept suggestion removes the worded rule after a tidy-up', async () => {
+    const v = tab();
+    const suggestion = (await v.suggestions()).find((s) => s.title === 'Recipes go to Resources / Cooking');
+    if (!suggestion) throw new Error('no cooking suggestion in the seed');
+    const undo = await v.dismissSuggestion(suggestion.id, true);
+    expect((await tidyUp(drive, root, 'instructions')).phase).toBe('done');
+    expect(parseRules(rulesText()).map((r) => r.text)).toContain(`${suggestion.title}.`);
+    await v.refresh();
+    await undo();
+    expect((await tidyUp(drive, root, 'instructions')).phase).toBe('done');
+    expect(parseRules(rulesText()).map((r) => r.text)).not.toContain(`${suggestion.title}.`);
+  });
+
+  it('rules at equal since keep the journal order', async () => {
+    const a = tab();
+    const b = tab();
+    const worded = (await a.rules()).find((r) => !r.pending);
+    if (!worded) throw new Error('no worded rule in the seed');
+    const before = rulesText();
+    const at = Date.parse('2026-10-09T12:00:00Z');
+    vi.spyOn(Date, 'now').mockReturnValue(at);
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.1);
+    await a.removeRule(worded.id);
+    random.mockReturnValue(0.9);
+    const added = await b.addRule(worded.text);
+    const lines = linesInDrive().filter((r) => r.at === at && r.kind === 'rule').sort((x, y) => String(x.id).localeCompare(String(y.id)));
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatchObject({ removes: worded.text });
+    expect(lines[1]).toMatchObject({ id: added.id, text: worded.text });
+    // Real note-edit API and the app view must both replay removal, then addition at the same clock value.
+    const out = applyChanges(new TextEncoder().encode(before), [{ kind: 'rules-wording',
+      add: [{ recordId: added.id, text: worded.text, yourWords: worded.text, since: at }],
+      remove: [{ recordId: String(lines[0]?.id), text: worded.text, since: at }],
+    }]);
+    expect.soft(out.ok).toBe(true);
+    if (out.ok) expect.soft(parseRules(out.text).filter((r) => r.text === worded.text)).toHaveLength(1);
+    expect.soft((await tab().rules()).filter((r) => r.text === worded.text)).toHaveLength(1);
+  });
+
+  it('a later rule inverse gives its own report row', async () => {
+    const v = tab();
+    const words = 'Keep recipes together.';
+    // A suggestion already ending in a full stop isolates the report defect from the wording defect above.
+    const suggestions = (await drive.listAll(root)).find((f) => drive.pathOf(f.id, root) === SYSTEM.suggestions);
+    if (!suggestions) throw new Error('no suggestions file in the seed');
+    await drive.writeText(suggestions.id, JSON.stringify({ v: 1, suggestions: [{ id: 's-r2', title: words, why: 'Keep recipes in one place.' }] }), suggestions.modifiedTime);
+    const undo = await v.dismissSuggestion('s-r2', true);
+    const original = linesInDrive().find((r) => r.kind === 'rule' && r.text === words);
+    expect(original).toBeDefined();
+    expect((await tidyUp(drive, root, 'instructions')).phase).toBe('done');
+    expect(parseRules(rulesText()).map((r) => r.text)).toContain(words);
+    await v.refresh();
+    await undo();
+    expect(linesInDrive().find((r) => r.undoes === original?.id)).toMatchObject({ removes: words });
+    const run = await tidyUp(drive, root, 'instructions');
+    expect(run.phase).toBe('done');
+    if (run.phase !== 'done') throw new Error(run.failure);
+    expect(parseRules(rulesText()).map((r) => r.text)).not.toContain(words);
+    expect(run.report.updated).toEqual([expect.objectContaining({ path: 'Rules.md', what: `Removed the rule "${words}"` })]);
   });
 });
