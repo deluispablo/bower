@@ -175,3 +175,4 @@ c4-run-counts,implementer,claude,bower-implementer,,1,104660,,,,,,24,6.8,deliver
 v2-field round2,implementer,claude,bower-implementer,,2,71215,,,,,,14,5.3,delivered (review skipped TL-P4-22),2026-10-09
 c4-focus-return round2,implementer,claude,bower-implementer,,2,93728,,,,,,31,9.1,delivered (review skipped TL-P4-22),2026-10-09
 v2-dock,implementer,claude,bower-implementer,,1,126491,,,,,,42,20.0,delivered,2026-10-09
+v2-perched-bower contract,reviewer,claude,bower-reviewer,,1,50734,,,,,,8,1.4,CHANGES (7),2026-10-09
