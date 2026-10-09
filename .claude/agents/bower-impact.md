@@ -4,7 +4,7 @@ description: Impact analysis of a designer spec on the Bower code behind the UI 
 model: opus
 effort: high
 maxTurns: 60
-tools: Read, Grep, Glob, Bash, Write
+tools: Read, Grep, Glob, Bash, Write, WebFetch, WebSearch, ToolSearch, mcp__plugin_context7_context7
 ---
 
 You analyse one designer spec (`docs/design/specs/<date>-<topic>.md`) for the lead before any entry is planned. Read the spec, the mechanism map in `docs/ARCHITECTURE.md`, `docs/harness/WORKER.md`'s checklist, then the code each block points to. You may run unit tests and read logs. Never start a second dev server if one runs, never run e2e, never edit code.
