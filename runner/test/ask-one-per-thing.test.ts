@@ -59,6 +59,21 @@ describe('one open question per thing (TL-P4-11 addendum)', () => {
     expect(openOf(second.after)).toEqual([]);
   });
 
+  it('an answer whose subject left is settled', async () => {
+    const c = await offerAndFlat();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const first = await runWithClaude({ ...c, inbox: [otherPile, photoPile] }, asking('Is the kitchen photo from the Wrenfield Road viewing?'));
+    const before = openOf(first.after);
+    expect(before).toHaveLength(1);
+    // The person says yes, and then takes the photo out of the inbox before any tidy-up takes it.
+    const second = await runWithClaude({ ...c, inbox: [otherPile], journal: [{ kind: 'answer', text: 'yes', questionId: before[0]?.id ?? '' }], questions: before as never }, answering(() => ({ kind: 'tidy-intent', v: 1, things: [] })));
+    expect(second.code).toBe(0);
+    expect(openOf(second.after)).toEqual([]);
+    // Its answer is settled with its question: archived, not left waiting among your changes.
+    expect(Object.keys(second.after).filter((p) => p.startsWith('.bower/changes/') && !p.startsWith('.bower/changes/archive/'))).toEqual([]);
+    expect(Object.keys(second.after).filter((p) => p.startsWith('.bower/changes/archive/'))).toHaveLength(1);
+  });
+
   it('a re-upload of the same thing adds no question', async () => {
     const c = await offerAndFlat();
     vi.spyOn(console, 'error').mockImplementation(() => {});

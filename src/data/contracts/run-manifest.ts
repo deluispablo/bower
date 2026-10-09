@@ -1,5 +1,6 @@
 /** Immutable run manifest validation only; no claim, dispatch, readiness or permission authority. */
 import { sha256 } from './hashes';
+import type { ReportQuestion } from './questions';
 import { EDIT_FILE_LIMIT, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 
@@ -71,7 +72,6 @@ export type EditText = {
 export type EffectV2 = Effect | EditText;
 export type OperationV2 = { operationId: string; ordinal: number; dependsOn: string[]; effect: EffectV2 };
 export type ReportFiled = { name: string; title: string; kind: FileKind; to: string; note?: string; area?: string };
-export type ReportQuestion = { id: string; text: string; yes: string; no: string; askedAt: number; about?: string };
 /** The existing RunReport shape in the stricter closed form used inside new records. */
 export type ManifestRunReport = {
   filed: ReportFiled[]; created: { path: string; what: string }[]; updated: { path: string; what: string }[];

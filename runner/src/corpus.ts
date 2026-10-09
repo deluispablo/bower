@@ -9,6 +9,7 @@
  */
 import { readFile, readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
+import type { Question } from '../../src/data/contracts/types';
 
 /** The capabilities the corpus covers, by the ids of `docs/P2_ACCEPTANCE.md`. */
 export const CORPUS_CAPABILITIES = ['C04', 'C05', 'C06', 'C07', 'C08', 'C09', 'C10', 'C11', 'C13', 'C15'] as const;
@@ -21,14 +22,8 @@ export interface CorpusPile {
   files: string[];
 }
 
-export interface CorpusQuestion {
-  id: string;
-  text: string;
-  yes: string;
-  no: string;
-  about?: string;
-  askedAt: number;
-}
+/** A question a case starts with: Bower's one question type, as the accepted app wrote it (no subject). */
+export type CorpusQuestion = Pick<Question, 'id' | 'text' | 'yes' | 'no' | 'about' | 'askedAt'>;
 
 export interface CorpusJournalLine {
   kind: 'request' | 'rule' | 'answer';

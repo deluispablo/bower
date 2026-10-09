@@ -3,7 +3,7 @@ import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import tseslint from 'typescript-eslint';
-import { reservationConfig } from './scripts/eslint-reservation.mjs';
+import { syntaxConfig } from './scripts/eslint-syntax.mjs';
 
 export default tseslint.config(
   { ignores: ['dist', 'node_modules', 'playwright-report', 'test-results', 'scripts', 'api', 'runner', 'e2e/_explore-*'] },
@@ -21,5 +21,5 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': ['error', { varsIgnorePattern: '^_', argsIgnorePattern: '^_', ignoreRestSiblings: true }],
     },
   },
-  reservationConfig('root'),
+  ...syntaxConfig('root'),
 );
