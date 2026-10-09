@@ -84,3 +84,36 @@ Checked OK against code
 - Red 3 fails today: PoseBower has no engine, the transform is empty (Bower.tsx:33-40). At home {Z/2, 0.92Z}, apply() gives translate(0,0)
   (engine.ts:660) before hop/bob.
 - Point 5 `look` source: pointer listener uses layer.parentElement (Bower.tsx:157); fine as an argument.
+# v2-perched-bower contract sign-off, pass 3: CHANGES
+
+Answered from passes 1-2: minor prop (1), topPriority (2), CSS off engine bird (3), listener home (5), carry (6), wrapper (8),
+handle API (9), C1 (Red 2 is now a guard; RunChip.tsx:22 is priority 0, so the guard passes today), C2 (point 11 covers 9 poses).
+
+Open
+1. Test files for the three reds and the e2e. Packet names presence/Rig/engine tests only. The reds mount PoseBower plus the chip
+   (needs Bower.test.tsx, as pass 2 C6 asked). The e2e `no CSS animation runs...` has no file (pass 2 C5). Name both. Also name how the
+   reds inject scheduler and random into PoseBower (no such option exists: Bower.tsx:28-42, engine.ts:137,:503); otherwise red 3 may
+   fail for a missing seam, not on the transform assertion.
+2. "Existing actions" cannot meet the ±20% peak test. peck (engine.ts:338-366): 0.55 s, pitch 34, head 24 vs CSS peck 2.2 s, rig 24, head 14
+   (poses.css:25-26). showOff (:430-471): 2.8 s, tail +32, wing 42, tuft -26, head -18, chirp x2, sparkle, face flips at :455/:459 vs CSS proud
+   (:56-58) 3 s, tail -22, tuft +16, rig scale 1.05, no wing, no turn. Carry hop: engine hopY -9 (:588) / -20 (:314) vs CSS -16 (:38); wing beat
+   exists only while flying (:601-607). Say the engine gains parameterised loop actions per pose (the existing ones are not reused as is),
+   and that the perched bird never turns, chirps or sparkles outside the script (else "no pose borrows another's act" fails).
+3. idle() is random (engine.ts:569-578: head -26..22, tail kick, chirp, wing, turn). The packet does not say perched mode replaces it with the
+   fixed script (two snaps at 23%/47% of 6 s, flick at 74/77%). Without that, the idle period test cannot hold and turn() (:577) flips the bird.
+   Also say look() is never called for the perched bird (pass 2 C3), so idle's pointer branch (:543-568) stays off.
+4. Blink. Packet point 4 still says "the blink of the 6 s loop"; CSS blink is 5.2 s on every pose (poses.css:9), snaps/flick are the 6 s loop.
+   Engine blink is random 1.6-5.2 s with a 25% double (engine.ts:615-616), so a ±10% period check cannot apply. State blink is excluded from the
+   period check and is tested by range under the seed. Sleep needs a way to hold the eye shut and suppress blink; eye is written only from
+   S.blink (:679-682), so that is new engine code, not "existing".
+5. Reference fixture units. "peak angle or offset ... rest within 1 px" does not cover scale parts: proud rig scale (poses.css:56), breathe (:47),
+   wing scaleY .7 (:39), legs scaleY (:40), eye scaleY (:10). Name the attribute read per part (rotate deg from engine.ts:663-682, scale
+   factor, px for the bird translate) and the tolerance per unit; "within 1 px" is meaningless for degrees or scale.
+6. land vs "never flies off its perch". CSS land starts at translate(-120px,-150px) opacity 0 (poses.css:65). Either the engine's land is the
+   in-place squash/wing/tail/head part only (say so, and the reference excludes the fly-in), or the red-3 bounds exclude land.
+7. "Bower moves" off / reduced motion row has no named test. Say the engine is mounted only when turn && moves (point 10 says only turn), a
+   non-moving bird keeps `posed <pose> still`, and add a Bower.test.tsx case: moves off, no engine transform, `still` class.
+8. presence `minor entries are ignored` must say it asserts both activeId and topPriority (a minor entry with priority 1 does not hide the
+   page bird nor take the turn). Today's useOutranked (presence.ts:47-59) would hide it.
+Reds: red 1 fails today for the stated reason (chip mounts later, equal priority, newest wins, presence.ts:21; page gets `still`). Red 3 fails
+today (no engine; transform empty). Guard passes today (presence.ts:50-59).
