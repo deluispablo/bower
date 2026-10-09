@@ -2,19 +2,16 @@
 
 Coordinator: the Claude Code session named "Orquestador". It integrates in `/Users/deluisp/Projects/bower-app` on branch `claude/p3`; P4 continues on it. Lead: the Planificador session ([DECISIONS.md](DECISIONS.md)). Output rule: [TL-P3-29](2026-10-07-tl-p3-29-output-rule-survives-compaction.md), in AGENTS.md. Minors: [P2_POLISH.md](P2_POLISH.md). Earlier handoffs: git history of this file.
 
-## Resume (2026-10-09 night)
+## Resume (2026-10-09 late night)
 
-Read this first. Stage 4 follows the TL-P4-21 order, with TL-P4-24's data-safety fixes ahead of V2. TL-P4-28: Codex does the escalated contract sign-offs, writes the property reds on escalated data entries, and takes all non-escalated work. The cap is 2 Claude plus 2 Codex.
-- **Running (Claude):**
-  - c4-undo-compensate on Opus (`/private/tmp/bower-c4-compensate`), with addenda 4 and 5 folded in.
-  - d-v2-07 round 5 on Opus (`/private/tmp/bower-d-v2-07b`, TL-P4-25 addendum 7: the head motion profile).
-- **Running (Codex):**
-  - the undo-compensate property red (`/private/tmp/bower-c4-compensate-prop`). I commit it onto the worker's branch as a red, and the worker may not change it.
-  - the c4-lockf path change to /tmp/bower-heavy.lockf (TL-P4-22 addendum 24).
-- **c4-lockf:** at fb9ff3ed and more, with e2e qa7 green. Next: pnpm check, a Claude review, then drain every heavy run, integrate, and have each worktree merge claude/p3 before its next gate. Delete the old /tmp/bower-heavy.lock path afterwards.
-- **c4-create-landed:** P4-61 PASS, then the Codex pass found 1 Important. The fix round packet section is written (TL-P4-24 addenda 15 and 16). It goes on a fresh Opus session when a Claude slot frees, then a Codex pass.
+Read this first. TL-P4-29 (Codex first): Codex implements everything, including escalated entries and fix rounds. Claude keeps the final review (a fresh bower-reviewer), the designer, and the lead. The cap is 1 Claude plus 3 Codex. Codex cannot write the git index or open ports, so the coordinator commits for it (red, fix, notes) and runs its pnpm check and e2e under `harness/with-lock.sh` (lock /tmp/bower-heavy.lockf). TL-P4-29 ruling 4 was withdrawn. Escalated data entries use three Codex sessions: the red, the implementation, and a read-only adversarial pass. Prompts sit in the scratchpad (`codex-*-prompt.md`); never put the word for sending to a remote in a Bash command line, because the guard hook blocks it.
+- **Closed tonight:** c4-lockf, c4-precheck-runner, c4-create-landed (472/482).
+- **d-v2-07:** on hold at aa95b666 (`/private/tmp/bower-d-v2-07b`). The round-7 Codex pass found 1 Important, which triggered the stop rule. The lead is re-planning with the designer (TL-P4-25 addendum 10 lifts the hold).
+- **c4-undo-compensate** (`/private/tmp/bower-c4-compensate`): the Opus implementation and the merge with create-landed are done. The property is amended by addendum 6, split into batches, and is now being amended for addendum 7 by Codex. Next: pnpm check and e2e under the lock, the Codex adversarial pass, a Claude review, then the designer checks the Undo toasts.
+- **c4-parse-once** (`/private/tmp/bower-c4-parse-once`): red b48a7655 plus 573c4bfd (addendum 26); Codex implementation session 2 is running. Then gates, the adversarial pass, and a Claude review.
+- **p4-corpus-driver** (`/private/tmp/bower-p4-c05-prep`, carries the C05 prep): case 6 is removed per TL-P4-28 addendum 2 and goes to an open-question file. Commit in the groups Codex lists, then gates and a Claude review.
+- **Next on Codex:** d-v2-24a (Opus is no longer used). Then the queue: 24b ∥ d-v2-06, d-v2-02, the c4 data entries, then P4-C.
 - **Parked:** c4-undo-withdraw at 70a2b0da. Delete it after c4-undo-compensate merges.
-- **Queue:** d-v2-24a (Opus plus Codex, after d-v2-07 merges), c4-parse-once, 24b ∥ d-v2-06, d-v2-02, then the c4 data entries.
 - **Sessions:** lead Planificador; Designer (`/private/tmp/bower-design`); lead planning worktree `/private/tmp/bower-tl-planning`. Never remove role worktrees.
 
 ## Where things stand
