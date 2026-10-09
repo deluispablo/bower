@@ -35,6 +35,13 @@ module.exports = {
       to: { path: FAKE_OR_DEMO, pathNot: KNOWN.filter((k) => k.from === from).flatMap((k) => k.to).map(esc) },
     })),
     {
+      name: 'claude-provider-reaches-no-fixture',
+      comment: 'The Claude provider plans from the model reply alone (TL-P4-14 addendum 23): nothing it imports, however deep, reaches a demo module. Fixture-driven decisions live in src/data/demo/script.ts.',
+      severity: 'error',
+      from: { path: '^runner/src/claude\\.ts$' },
+      to: { path: '^src/data/demo/', reachable: true },
+    },
+    {
       name: 'screens-use-data-only-through-sources',
       comment: 'Screens talk to data only through src/data/sources.ts (useSources, useLoad hooks in provider.tsx) and types.ts. Move what the screen needs behind a VaultSource/RunSource method, or into a pure module outside demo/drive/vault/live/worker/fake.',
       severity: 'error',

@@ -5,7 +5,8 @@ import { seedFakeDrive } from '../fake/seed';
 import type { AdmissionManifest } from './admission';
 import { planAdmission } from './plan';
 import { fakeRead } from './read';
-import { runKeys, scriptedProvider } from './scripted';
+import { scriptedProvider } from '../demo/script';
+import { runKeys } from './scripted';
 
 const AT = Date.UTC(2026, 9, 7, 9);
 const RUN = 'run-scripted';

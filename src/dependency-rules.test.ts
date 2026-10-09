@@ -20,7 +20,7 @@ const rulesNamed = (name: string): Rule[] => forbidden.filter((r) => r.name === 
 
 describe('dependency rules', () => {
   it('the rule list names every forbidden import', () => {
-    expect(new Set(forbidden.map((r) => r.name))).toEqual(new Set(['production-imports-no-fake-or-demo', 'screens-use-data-only-through-sources']));
+    expect(new Set(forbidden.map((r) => r.name))).toEqual(new Set(['production-imports-no-fake-or-demo', 'claude-provider-reaches-no-fixture', 'screens-use-data-only-through-sources']));
     expect(forbidden.every((r) => r.severity === 'error')).toBe(true);
   });
 

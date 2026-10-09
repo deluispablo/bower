@@ -8,7 +8,7 @@ import { fakeRead } from './read';
 import type { RunManifest } from './records';
 import { runDetail } from '@/features/tidy/run-words';
 import { itemDispositions, materialize, NOT_FILED, reportContradictions, UNCONFIRMED_GONE } from './report';
-import { scriptedProvider } from './scripted';
+import { scriptedProvider } from '../demo/script';
 
 const AT = Date.UTC(2026, 9, 7, 9);
 const RUN = 'run-report';

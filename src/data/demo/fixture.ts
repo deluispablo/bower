@@ -6,6 +6,7 @@
  * from being later than that.
  */
 import type { FileKind, Pile, PileItem, Question, Rule, SetAside, Suggestion } from '../types';
+import { tidiedRule } from '../spine/scripted';
 
 export const ALEX = { name: 'Alex', email: 'you@example.com' };
 
@@ -353,10 +354,7 @@ export const RULE_WORDING: Record<string, string> = {
 };
 
 export function wordRule(raw: string): string {
-  const known = RULE_WORDING[raw.trim().toLowerCase()];
-  if (known) return known;
-  const t = raw.trim().replace(/\s+/g, ' ');
-  return `${t.charAt(0).toUpperCase()}${t.slice(1)}${/[.!?]$/.test(t) ? '' : '.'}`;
+  return RULE_WORDING[raw.trim().toLowerCase()] ?? tidiedRule(raw);
 }
 
 // ---------- sample piles for the demo panel, each with where its things go
