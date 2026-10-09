@@ -212,7 +212,7 @@ test('a refused merge shows as an answered row on the note that stays and under 
   test.skip(!isFake, FAKE_ONLY);
   test.setTimeout(90_000);
   // The gone-answers situation: three yes answers wait whose subjects went to the Bin since (TL-P4-19 addendum 10).
-  const PAIR = 'Not merged: the other note was already in the Bin.';
+  const PAIR = 'Not merged: Flat 2, 40 Tanners Walk was already in the Bin.';
   const ASKED = 'Not done: Kitchen photo had moved or gone to the Bin before Bower got to it.';
   const STATE = 'Not written: Weeknight curry had moved or gone to the Bin before Bower got to it.';
   const STAYS = 'Flat 7, Cobble Row';

@@ -1170,12 +1170,53 @@ describe('an answer whose subject is gone (TL-P4-19 addendum 10)', () => {
     const byKind = [...(out.report.answered ?? [])].sort((a, b) => a.kind.localeCompare(b.kind));
     expect(byKind).toEqual([
       { questionId: askedId, kind: 'ask', outcome: 'subject-gone', why: 'Not done: Kitchen photo had moved or gone to the Bin before Bower got to it.' },
-      { questionId: pairId, kind: 'pair', outcome: 'subject-gone', why: 'Not merged: the other note was already in the Bin.', note: STAYS },
+      { questionId: pairId, kind: 'pair', outcome: 'subject-gone', why: 'Not merged: Flat 2, 40 Tanners Walk was already in the Bin.', note: STAYS },
       { questionId: stateId, kind: 'state', outcome: 'subject-gone', why: 'Not written: Weeknight curry had moved or gone to the Bin before Bower got to it.' },
     ]);
     // None is counted as set aside, and none of the three questions is left open.
     expect(out.report.setAside.filter((r) => /^Not (merged|done|written)/.test(r.why))).toEqual([]);
     const open = (await fresh().questions()).map((q) => q.id);
     expect(open.filter((id) => [pairId, askedId, stateId].includes(id))).toEqual([]);
+  });
+
+  /** A yes to keeping one of two notes, asked by their ids; then the other note goes to the Bin in Drive itself. */
+  async function pairBinnedInDrive(): Promise<{ pairId: string; otherId: string; stays: string }> {
+    const STAYS = 'Projects/Flat hunt/Flat 7, Cobble Row.md';
+    const OTHER = 'Projects/Flat hunt/Flat 2, 40 Tanners Walk.md';
+    const ids = new Map((await drive.listAll(root)).map((f) => [drive.pathOf(f.id, root), f.id]));
+    const otherId = ids.get(OTHER) ?? '';
+    const pairId = pairQuestionId(ids.get(STAYS) ?? '', otherId);
+    const questions = [{ id: pairId, text: 'Flat 7 and Flat 2 look like one flat. Keep one note?', yes: 'Yes, keep one', no: 'No, keep both', about: STAYS, askedAt: 1 }];
+    const file = (await drive.listAll(root)).find((f) => drive.pathOf(f.id, root) === SYSTEM.questions);
+    if (!file) throw new Error('no questions.json');
+    await drive.writeText(file.id, JSON.stringify({ v: 1, questions }), (await drive.get(file.id)).modifiedTime);
+    await vault.refresh();
+    await vault.answer(pairId, true);
+    await vault.settled();
+    await drive.trash(otherId);
+    return { pairId, otherId, stays: STAYS };
+  }
+
+  it('a note binned in Drive itself shows its name in the row', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { pairId, otherId, stays } = await pairBinnedInDrive();
+    const get = vi.spyOn(drive, 'get');
+    const out = await tidyUp(drive, root);
+    if (out.phase !== 'done') throw new Error('failed');
+    expect(out.report.answered).toEqual([{ questionId: pairId, kind: 'pair', outcome: 'subject-gone', why: 'Not merged: Flat 2, 40 Tanners Walk was already in the Bin.', note: stays }]);
+    // One read of the binned note, the Bin included, and no other read of it (TL-P4-19 addendum 14).
+    expect(get.mock.calls.filter(([id]) => id === otherId)).toEqual([[otherId, { binned: true }]]);
+  });
+
+  it('a pair whose other note cannot be read uses the fallback', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { pairId, otherId, stays } = await pairBinnedInDrive();
+    const real = drive.get.bind(drive);
+    vi.spyOn(drive, 'get').mockImplementation((id, opts) => (id === otherId ? Promise.reject(driveError('not-found')) : real(id, opts)));
+    const out = await tidyUp(drive, root);
+    if (out.phase !== 'done') throw new Error('failed');
+    expect(out.report.answered).toEqual([{ questionId: pairId, kind: 'pair', outcome: 'subject-gone', why: 'Not merged: the other note was already in the Bin.', note: stays }]);
+    // Said, never swallowed.
+    expect(errors.mock.calls.some(([m]) => typeof m === 'string' && m.includes('other note'))).toBe(true);
   });
 });

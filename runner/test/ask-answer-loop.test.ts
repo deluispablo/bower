@@ -337,7 +337,7 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     expect(await w.paths()).toContain(KEPT);
     // Not set aside (TL-P4-19 addendum 10): an answered row, on the note that stays.
     expect((await reportOf(w))?.setAside).toEqual([]);
-    expect((await reportOf(w))?.answered).toEqual([{ questionId: asked?.id, kind: 'pair', outcome: 'subject-gone', why: 'Not merged: the other note was already in the Bin.', note: KEPT }]);
+    expect((await reportOf(w))?.answered).toEqual([{ questionId: asked?.id, kind: 'pair', outcome: 'subject-gone', why: 'Not merged: Flat 3 (second) was already in the Bin.', note: KEPT }]);
   });
 
   it('with no new input a second run leaves nothing held or waiting for the same reason', async () => {
