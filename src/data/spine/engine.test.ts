@@ -253,3 +253,35 @@ describe('write once by the bowerOp stamp', () => {
   });
 });
 
+describe('c2-create-by-id: a run makes each thing by its reserved id', () => {
+  it("a run's create whose answer was lost is read back by its reserved id, though a search misses it", async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    let lost: (FencedCall & { op: 'create-text' }) | null = null;
+    let hidden: string | null = null;
+    let parentHides = 1;
+    const { drive, root, manifest, chain } = await applied(
+      (call, d) => {
+        if (lost || call.op !== 'create-text' || call.appProperties?.bowerItem === undefined) return 'pass';
+        lost = call;
+        // Drive's search lags behind the create: a stamp search, and one listing of its folder, do not show it yet.
+        const stamped = d.stamped.bind(d);
+        const listAll = d.listAll.bind(d);
+        d.stamped = async (key, value) => (await stamped(key, value)).filter((f) => f.file.id !== hidden);
+        d.listAll = async (id) => (await listAll(id)).filter((f) => !(id === call.parentId && f.id === hidden && parentHides-- > 0));
+        return 'lose-reply';
+      },
+      (call, d) => {
+        if (call !== lost) return;
+        const files = (d as unknown as { files: Map<string, { meta: DriveFile }> }).files;
+        hidden = [...files.values()].find((f) => f.meta.name === call.name && f.meta.parents[0] === call.parentId)?.meta.id ?? null;
+      },
+    );
+    const made = lost as (FencedCall & { op: 'create-text' }) | null;
+    if (!made || hidden === null) throw new Error('no create lost its answer');
+    const op = manifest.operations.find((o) => o.effect.kind === 'create-text' && o.effect.name === made.name);
+    expect(chain.at(-1)?.outcomes.find((o) => o.operationId === op?.operationId)?.state).toBe('applied');
+    const same = (await drive.listAll(root)).filter((f) => f.name === made.name && f.parents[0] === made.parentId);
+    expect(same.map((f) => f.id)).toEqual([hidden]);
+  });
+});
+

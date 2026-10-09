@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
 import { Journal } from './journal';
+import { driveError } from '../drive/drive-api';
 import { tidyUp } from '@/testing/tidy-up';
 
 let drive: FakeDrive;
@@ -226,5 +227,22 @@ describe('when Drive does not answer', () => {
     await recording;
     expect((await journal.list()).map((r) => r.what)).toEqual(['one', 'two']);
     expect((await drive.listAll(changes)).filter((f) => !f.folder)).toHaveLength(1);
+  });
+});
+
+describe('c2-create-by-id: a change taken back', () => {
+  it('taking a change back whose Bin answer was lost is resolved by its stamp', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const a = await journal.record('move', 'one');
+    const trash = drive.trash.bind(drive);
+    let lost = 0;
+    drive.trash = async (...x: Parameters<FakeDrive['trash']>) => {
+      const out = await trash(...x);
+      if (lost++ === 0) throw driveError('offline');
+      return out;
+    };
+    await expect(journal.remove(a.id)).resolves.toBeUndefined();
+    expect(lost).toBe(1);
+    expect((await journal.list()).map((r) => r.what)).toEqual([]);
   });
 });

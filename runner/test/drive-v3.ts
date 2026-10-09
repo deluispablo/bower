@@ -54,6 +54,8 @@ export interface DriveV3 {
    * token refused, answers 410 `gone`; from then on the attempt route does too, as the Worker's person object does.
    */
   revoked: boolean;
+  /** When set, the answer to each write as Drive would give it is changed by this before the runner sees it. */
+  reshape: ((answer: Record<string, unknown>) => Record<string, unknown>) | null;
 }
 
 export interface StatusPost {
@@ -90,6 +92,7 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
     endings: [],
     oldWorker: false,
     revoked: false,
+    reshape: null,
     checksums: true,
     fetch: async (input, init = {}) => {
       const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
@@ -117,7 +120,8 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
       if (url.origin !== 'https://www.googleapis.com') return json(404, driveFailure(404, 'notFound'));
       if (wire.revoked || !live.has(auth.replace(/^Bearer /, ''))) return json(401, driveFailure(401, 'authError'));
       try {
-        return await answer(wire, method, url, init.body ?? null);
+        const res = await answer(wire, method, url, init.body ?? null);
+        return wire.reshape && method !== 'GET' && res.ok ? json(res.status, wire.reshape((await res.json()) as Record<string, unknown>)) : res;
       } catch (e) {
         if (e instanceof BowerError && e.code === 'not-found') return json(404, driveFailure(404, 'notFound'));
         throw e;
