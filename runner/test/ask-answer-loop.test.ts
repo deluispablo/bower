@@ -204,10 +204,11 @@ const hubChanges = async (w: RealWorld): Promise<Change[]> => (await hubEdits(w)
 let proposed: string[] = [];
 const proposeUpdate: ClaudeSpawn = async (call) => {
   proposed.push(call.input);
-  // The offer is filed beside the hub (so the hub is shown), and the hub's Current state is brought up to date.
+  // The offer is filed beside the hub (so the hub is shown), and the hub's Current state is brought up to date,
+  // citing the offer: a news line Bower writes in its place cites its source (TL-P4-19 addendum 20).
   const offer = shownOf(call).piles.flatMap((p) => p.things).find((t) => t.name === 'Offer_letter_final(2).pdf')?.fileId;
   const things = offer ? [{ fileId: offer, to: 'Projects/Job hunt/Applications', basis: HUB, name: 'Offer, Industrial Designer, Ferrowick.pdf', note: { name: 'Industrial Designer, Ferrowick.md', summary: 'An offer from Ferrowick for Industrial Designer.', body: 'Fully remote. [[Job hunt]]' } }] : [];
-  return { code: 0, stderr: '', cut: null, stdout: envelope({ kind: 'tidy-intent', v: 1, things, states: [{ note: HUB, lines: UPDATE }] }) };
+  return { code: 0, stderr: '', cut: null, stdout: envelope({ kind: 'tidy-intent', v: 1, things, states: [{ note: HUB, lines: UPDATE, ...(offer ? { cites: offer } : {}) }] }) };
 };
 /** The hub-lines folder with the hub's section edited by the person since Bower last wrote it, and nothing asked yet. */
 async function shownWorld(): Promise<RealWorld> {
