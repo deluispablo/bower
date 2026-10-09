@@ -154,5 +154,8 @@
 - tests changed: src/data/fake/write-it.test.ts: two tests added; the fix commit swaps the test's own hook for the
   `editAtWrite` seam it adds.
 - tests changed: api/test/runner.test.ts: one test added, none changed.
-- tests changed: e2e/capabilities.spec.ts: one test added, none changed.
+- tests changed: e2e/capabilities.spec.ts: one test added, none changed; 107e2da1 lets that test allow the fence's
+  two expected log lines (`allowConsole`), assertions unchanged.
 - tests changed: src/data/contracts/questions.test.ts: tests added in round 3, none changed.
+- Gates: `pnpm check` exit 0 (/tmp/csm3b-check.log); e2e:fake capabilities and capabilities-b 26 passed, phone and
+  desktop (/tmp/csm3b-e2e.log).
