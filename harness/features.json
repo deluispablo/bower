@@ -6068,7 +6068,7 @@
     "id": "c3-stop-gate",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "Implementers and escalated workers cannot stop with a dirty worktree or without a green pnpm check mark on its HEAD; the gate judges the tree named by the card's strict worktree line, pnpm check writes the mark, and stop_hook_active frees a second try.",
     "steps": [
       "Prove SubagentStop carries last_assistant_message (docs and one live stop).",
