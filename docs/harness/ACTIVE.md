@@ -433,3 +433,4 @@ P3-9 is closed.
 - Lead (main ea058a7): one Drive failure table in the transport (retry / wait-for-the-person / permanent); forwarded to round 5.
 - Retention terminal-run round merged (red 21806fbf, fix fdea3310; check green). Open: runs failed by the Worker stale deadline never stamped (no runner); failure path +11 calls in the fake (stale listing pages). P4-38b check dispatched.
 - Retention ruling (main 38f0370): unstamped folders over 24 h old count as terminal; failure path reuses the listing if P4-38b confirms +11. Round after P4-38b.
+- P4-38b PASS (retention terminal); real runner pays +7 on the failure path (re-walk), so ruling 2 applies. Round 4 of retention dispatched (24 h rule, failure path reuses the listing, P4-38b minors).
