@@ -6436,13 +6436,14 @@
     "id": "p4-corpus-driver",
     "task": "p4-c",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "The corpus scorer counts questions exactly and checks a pair subject; cases may edit the folder between two runs; a two-run scripted driver runs the C05 prep cases 1-6 through the existing planner and provider.",
     "steps": [
       "The C05 corpus cases, old and new, score green with scripted proposals.",
       "A case whose person edit lands between two runs keeps that edit after run 2."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"the scorer counts questions exactly and checks a pair.s subject|a case.s between step runs between two runs|the C05 corpus cases score green with scripted proposals\"",
-    "note": "TL-P4-28 addendum 1 (main 2dd78c84): C05 prep accepted; Codex (TL-P4-29). Branch carries the prep (537859e7). Packet 2026-10-09-p4-corpus-driver-packet.md."
+    "note": "TL-P4-28 addendum 1 (main 2dd78c84): C05 prep accepted; Codex (TL-P4-29). Branch carries the prep (537859e7). Packet 2026-10-09-p4-corpus-driver-packet.md.",
+    "review": "P4-64 PASS"
   }
 ]

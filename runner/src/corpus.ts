@@ -10,6 +10,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import type { Question } from '../../src/data/contracts/types';
+import { subjectOf } from '../../src/data/contracts/questions';
 import { distinctPaths } from '../../src/data/spine/report';
 import { timelineBullets } from '../../src/data/vault/note-format';
 
@@ -34,6 +35,10 @@ export interface CorpusJournalLine {
   questionId?: string;
 }
 
+export type CorpusBetween =
+  | { kind: 'edit'; path: string; text: string }
+  | { kind: 'move'; path: string; to: string };
+
 export interface CorpusCase {
   id: string;
   capability: CorpusCapability;
@@ -53,6 +58,8 @@ export interface CorpusCase {
   questions: CorpusQuestion[];
   /** Files of `folder/` that Bower owns (marked `by: bower` in Drive), such as `Rules.md`. */
   bowerOwned: string[];
+  /** The person changes the same folder after run 1, before run 2. */
+  between?: CorpusBetween[];
 }
 
 export interface ReportExpectation {
@@ -67,6 +74,8 @@ export interface ReportExpectation {
   updatedAtLeast?: number;
   /** At most this many questions (a bounded ask). */
   questionsAtMost?: number;
+  questionsExactly?: number;
+  pairSubject?: { kind: 'pair'; notes: [string, string] };
   setAside?: number;
   /** Question ids. */
   questions?: string[];
@@ -169,6 +178,8 @@ export async function loadCorpus(root: string): Promise<LoadedCase[]> {
 }
 
 export interface ScoreInput {
+  /** Shown paths by stable Drive id, for typed pair report questions. */
+  pathsById?: Readonly<Record<string, string>>;
   expected: Expected;
   /** The starting folder before the run. */
   before: Readonly<Record<string, string>>;
@@ -286,6 +297,17 @@ export function score(input: ScoreInput): Score {
       const updated = distinctPaths(paths(report.updated)).length;
       if (want.updatedAtLeast !== undefined && updated < want.updatedAtLeast) unmet.push(`report.updated: ${updated}, expected at least ${want.updatedAtLeast}`);
       if (want.questionsAtMost !== undefined && list(report.questions).length > want.questionsAtMost) unmet.push(`report.questions: ${list(report.questions).length}, expected at most ${want.questionsAtMost}`);
+      if (want.questionsExactly !== undefined && list(report.questions).length !== want.questionsExactly) unmet.push(`report.questions: ${list(report.questions).length}, expected exactly ${want.questionsExactly}`);
+      if (want.pairSubject) {
+        const wanted = [...want.pairSubject.notes].sort();
+        const matches = list(report.questions).some((q) => {
+          if (!q || typeof q !== 'object' || typeof (q as { id?: unknown }).id !== 'string') return false;
+          const subject = subjectOf(q as { id: string });
+          return subject.kind === 'pair' && subject.by === 'id'
+            && JSON.stringify(subject.notes.map((id) => input.pathsById?.[id]).sort()) === JSON.stringify(wanted);
+        });
+        if (!matches) unmet.push(`report.questions: missing pair subject [${wanted.join(', ')}]`);
+      }
       if (want.questions) {
         const got = list(report.questions).flatMap((q) => (q && typeof q === 'object' && typeof (q as { id?: unknown }).id === 'string' ? [(q as { id: string }).id] : []));
         if (JSON.stringify([...got].sort()) !== JSON.stringify([...want.questions].sort())) unmet.push(`report.questions: [${got.join(', ')}], expected [${want.questions.join(', ')}]`);

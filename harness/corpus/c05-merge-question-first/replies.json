@@ -1,0 +1,18 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [],
+    "asks": [
+      {
+        "notes": [
+          "Projects/Flat hunt/Larkspur Lane flat.md",
+          "Projects/Flat hunt/Larkspur Lane flat, second listing.md"
+        ],
+        "text": "These notes describe the same Larkspur Lane flat. Keep one note?",
+        "yes": "Yes, keep one",
+        "no": "No, keep both"
+      }
+    ]
+  }
+]

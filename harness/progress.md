@@ -276,3 +276,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: c4-precheck-runner passes — harness: c4-precheck-runner passes (P4-63 PASS)
 - 2026-10-09: c4-create-landed passes — fix(c4-create-landed): passes (P4-61 and P4-61b PASS)
 - 2026-10-09: c2-create-by-id passes — harness: c2-create-by-id re-proved after c4-undo-compensate removed the journal Bin
+- 2026-10-09: p4-corpus-driver passes — harness: p4-corpus-driver passes (P4-64 PASS)

@@ -1,0 +1,22 @@
+{
+  "id": "c05-merge-question-first",
+  "capability": "C05",
+  "title": "Ask before combining two notes about the same flat",
+  "covers": "scripted",
+  "source": "new (C05 preservation through scripted intent replies and the existing planner)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "These two Larkspur Lane listings describe the same flat in Saltmere.",
+      "files": []
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Projects/Flat hunt/Larkspur Lane flat.md",
+    "Projects/Flat hunt/Larkspur Lane flat, second listing.md",
+    "Projects/Flat hunt/Flat hunt.md"
+  ]
+}
