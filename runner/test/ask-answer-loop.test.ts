@@ -229,9 +229,16 @@ async function press(w: RealWorld): Promise<boolean> {
   return res.status === 200;
 }
 
-/** The report of the last run, as the Worker's status gives it. */
+/** The report of the run, as its last checkpoint in `.bower/runs` holds it. */
 async function reportOf(w: RealWorld): Promise<{ setAside: unknown[] } | undefined> {
-  return ((await (await w.api.browser(`${ORIGIN}/status`)).json()) as { run: { report?: { setAside: unknown[] } } | null }).run?.report;
+  let found: { setAside: unknown[] } | undefined;
+  for (const f of await w.drive.listAll(w.rootId)) {
+    if (f.folder || !w.drive.pathOf(f.id, w.rootId).startsWith('.bower/runs/')) continue;
+    const text = await w.drive.readText(f.id);
+    const m = /"kind":\s*"run-report"/.test(text) ? (JSON.parse(text) as { kind?: string; report?: { setAside: unknown[] }; reportRecord?: { report: { setAside: unknown[] } } }) : null;
+    found = m?.report ?? m?.reportRecord?.report ?? found;
+  }
+  return found;
 }
 
 describe('an answer applies at once (TL-P4-08 addendum 8)', () => {

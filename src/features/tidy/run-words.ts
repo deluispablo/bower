@@ -74,6 +74,12 @@ export function runTitle(r: RunState): string {
 }
 
 /**
+ * A pile of words already saved (c3-pair-ask, TL-P4-19 addendum 9): its lines were in one note already, by its name,
+ * or in several (`null`). In lower case: it is a part of the run's sentence.
+ */
+export const linesAlreadyIn = (note: string | null): string => `your lines were already in ${note ?? 'your notes'}`;
+
+/**
  * What a finished tidy-up did with the inbox, in a few words: how many things it filed, or, when it filed none and
  * only found things already saved, how many those were (never "0 things filed" for a run that did something).
  */
@@ -108,8 +114,11 @@ export function runDetail(r: RunState): string {
       if (rep.setAside.length) parts.push(`${plural(rep.setAside.length, 'thing')} set aside`);
       // Never counted as set aside: possibly changed, then gone before Bower read it back.
       if (rep.unconfirmed?.length) parts.push(`Bower couldn't confirm ${plural(rep.unconfirmed.length, 'thing')}`);
-      // Things already saved went to the Bin: one alone names the file already saved, without its extension.
-      const saved = rep.alreadySaved ?? [];
+      // Things already saved went to the Bin: one alone names the file already saved, without its extension. A pile of
+      // words whose lines were in its notes already (`notes`) says so, apart.
+      const lines = (rep.alreadySaved ?? []).filter((s) => s.notes !== undefined);
+      const saved = (rep.alreadySaved ?? []).filter((s) => s.notes === undefined);
+      if (lines.length) parts.push(linesAlreadyIn(lines.length === 1 && lines[0]?.notes === 1 ? thingName(lines[0].as) : null));
       if (saved.length === 1) parts.push(`1 thing already saved as ${thingName(saved[0]?.as ?? '')}`);
       else if (saved.length) parts.push(`${plural(saved.length, 'thing')} already saved`);
       const asked = rep.requests ?? [];
@@ -119,7 +128,9 @@ export function runDetail(r: RunState): string {
       // The changes it names above are not counted again here.
       const other = asked.length || rep.rulesWorded ? 'other ' : '';
       if (rep.yourChanges) parts.push(`${rep.yourChanges} ${other}${rep.yourChanges === 1 ? 'change' : 'changes'} of yours read`);
-      return parts.length ? `${parts.join(', ').replace(/, ([^,]*)$/, ' and $1')}.` : 'Everything has its place.';
+      // Joined part by part: a name may hold a comma of its own.
+      const said = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1) ?? ''}` : (parts[0] ?? '');
+      return said ? `${said.charAt(0).toUpperCase()}${said.slice(1)}.` : 'Everything has its place.';
     }
     case 'failed':
       return r.failure ?? 'Nothing was moved. Try again in a minute.';

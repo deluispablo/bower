@@ -107,6 +107,12 @@ export const keepRefused = (reason: 'gone' | 'moved' | 'changed'): string => (re
 /** Every sentence `keepRefused` gives: a refused keep's report row says the one its refusal carries. */
 export const KEEP_REFUSED: readonly string[] = [KEEP_CHANGED, KEEP_MOVED, KEEP_BINNED];
 /**
+ * A yes to keeping one note whose other note was already in the Bin before Bower's run (c3-pair-ask, TL-P4-19
+ * addenda 8 and 9): nothing is merged, and the answer is settled. By the other note's name when it is known.
+ */
+export const KEEP_ALREADY_BINNED = 'Not merged: the other note was already in the Bin.';
+export const keepAlreadyBinned = (other: string | null): string => (other === null ? KEEP_ALREADY_BINNED : `Not merged: ${other} was already in the Bin.`);
+/**
  * Current state lines: `lines` each one trimmed line, none only to take back a rewrite of an empty section (TL-P4-10
  * point 4; a model always writes 1+); `previous` as read (one line each, no control character).
  */

@@ -2,7 +2,7 @@
 import type { RunReport } from './types';
 import { PHASE_RANK, isRunPhase, type RunPhase } from './run-phases';
 import { canonicalRecordJson, hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
-import { isUpdatedRow } from './run-manifest';
+import { isSavedRow, isUpdatedRow } from './run-manifest';
 
 export type Scope = { rootId: string };
 export type SeenFile = {
@@ -154,10 +154,6 @@ function question(value: unknown): boolean {
     && text(value.id) && text(value.text) && text(value.yes) && text(value.no) && integer(value.askedAt)
     && (!Object.hasOwn(value, 'about') || text(value.about));
 }
-/** A thing already saved (TL-P4-10 addendum 2): its name, and the name of the file it is a copy of. */
-function savedRow(value: unknown): value is { name: string; as: string } {
-  return closed(value, ['name', 'as']) && text(value.name) && text(value.as);
-}
 /** The existing RunReport shape, closed; optional counts and requests are omitted, never null. */
 function runReport(value: unknown): value is RunReport {
   if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded', 'nothingReady', 'alreadySaved', 'unconfirmed'])
@@ -167,7 +163,7 @@ function runReport(value: unknown): value is RunReport {
   if (Object.hasOwn(value, 'rulesWorded') && !integer(value.rulesWorded)) return false;
   if (Object.hasOwn(value, 'requests') && !list(value.requests, text)) return false;
   if (Object.hasOwn(value, 'nothingReady') && value.nothingReady !== true) return false;
-  if (Object.hasOwn(value, 'alreadySaved') && !(list(value.alreadySaved, savedRow) && value.alreadySaved.length > 0)) return false;
+  if (Object.hasOwn(value, 'alreadySaved') && !(list(value.alreadySaved, isSavedRow) && value.alreadySaved.length > 0)) return false;
   if (Object.hasOwn(value, 'unconfirmed') && !(every(value.unconfirmed, setAside) && value.unconfirmed.length > 0)) return false;
   // Question IDs are identities; a materialized report never repeats one.
   return unique(value.questions.map((item) => (item as { id: unknown }).id));

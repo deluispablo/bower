@@ -110,7 +110,7 @@ const suggestion = (v: unknown): boolean => object(v) && text(v.id) && text(v.ti
 const request = (v: unknown): boolean => object(v) && text(v.id) && text(v.text) && number(v.at) && optional(v.done, text);
 const pathChange = (v: unknown): boolean => object(v) && text(v.path) && text(v.what);
 const setAside = (v: unknown): boolean => object(v) && text(v.name) && text(v.why);
-const alreadySaved = (v: unknown): boolean => object(v) && text(v.name) && text(v.as);
+const alreadySaved = (v: unknown): boolean => object(v) && text(v.name) && text(v.as) && (v.notes === undefined || (typeof v.notes === 'number' && Number.isInteger(v.notes) && v.notes >= 1));
 const kinds = ['note', 'pdf', 'image', 'link', 'doc', 'sheet', 'audio', 'other'];
 const filed = (v: unknown): boolean => object(v) && text(v.name) && text(v.title) && text(v.to) && text(v.kind) && kinds.includes(v.kind) && optional(v.note, text);
 const count = (v: unknown): boolean => number(v) && Number.isInteger(v) && v >= 0;

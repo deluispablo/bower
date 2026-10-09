@@ -6,6 +6,7 @@
 import type { DriveFile } from '../drive/drive-api';
 import type { EffectV2, OperationV2, ReportContribution, SeenFile, Target } from '../contracts/run-manifest';
 import { savedLinkKey } from '../contracts/note-edit';
+import { savedWordsPile } from './duplicates';
 import { md5Hex } from '../contracts/hashes';
 import { join, nameOf, parentOf } from '../tree';
 import { PARA_ROOTS } from '../types';
@@ -97,6 +98,9 @@ export function grounded(manifest: RunManifest): boolean {
       asides.set(o.operationId, 1);
       told.applied.add(e.before.fileId);
       told.rejected.add(e.before.fileId);
+    } else if (savedWordsPile(manifest, o) !== null) {
+      // A pile of words already saved: its Bin is told as a copy's is, once for each outcome.
+      asides.set(o.operationId, 1);
     } else if (e.kind === 'move' && lines.has(e.before.fileId)) {
       if (pathOf(e.parent) !== SYSTEM.archive || e.name !== e.before.name || Object.keys(e.properties).length || mine.length !== 1) return false;
     } else if (e.kind === 'bin' && places.has(e.before.fileId)) {

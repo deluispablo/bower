@@ -227,9 +227,10 @@ export interface RunReport {
   questions: Question[];
   /**
    * Things whose content was already filed (TL-P4-10 addendum 2): each went to the Bin, with the name of the file
-   * already saved. Left out when there are none.
+   * already saved. Left out when there are none. A pile of words whose lines its notes held already (c3-pair-ask)
+   * says in how many notes (`notes`); a row from before has none.
    */
-  alreadySaved?: Array<{ name: string; as: string }>;
+  alreadySaved?: Array<{ name: string; as: string; notes?: number }>;
   /**
    * Things Bower couldn't confirm (TL-P4-14 addendum 8): possibly changed, then gone from Drive before it read them
    * back. Never counted as set aside. Left out when there are none.

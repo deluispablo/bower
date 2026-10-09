@@ -2,7 +2,7 @@
  * What a question is about, and whether it is still open (TL-P4-14 stage 3, `c3-subject`): the one home of a
  * question's subject, its key and the open-questions rule, for the reader (`DriveVault.questions()`, the answer loop)
  * and the planner (`planScripted`, the runner's answers). One open question per subject, never per its words
- * (TL-P4-11); a subject that left the inbox closes its question.
+ * (TL-P4-11); a subject that is gone (left the inbox, or a note in the Bin) closes its question.
  *
  * The subject is a discriminated union (TypeScript handbook, "Discriminated unions",
  * https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions): its `kind` says which fields
@@ -92,17 +92,40 @@ export interface InboxSeen {
 }
 
 /**
- * Whether a question's thing or pile left the inbox: neither its id nor its content is there now. Only a reader that
- * saw the whole inbox can say so (`null`: it did not, and nothing has left).
+ * The folder's notes as a reader saw them in its listing (the Bin is left out): their file ids, and their names
+ * without ".md", in lower case (an older pair question names its notes so).
  */
-export function subjectLeft(q: Asked, inbox: InboxSeen | null): boolean {
-  const s = subjectOf(q);
-  return inbox !== null && s.kind === 'inbox' && !inbox.ids.has(s.id) && !(s.hash !== undefined && !!inbox.hashes?.has(s.hash));
+export interface NotesSeen {
+  ids: ReadonlySet<string>;
+  names: ReadonlySet<string>;
 }
 
-/** The questions still open: not answered, and not about a thing or pile that left the inbox. */
-export function openQuestions<Q extends Asked>(all: readonly Q[], answered: ReadonlySet<string | undefined>, inbox: InboxSeen | null): Q[] {
-  return all.filter((q) => !answered.has(q.id) && !subjectLeft(q, inbox));
+/**
+ * The notes a question's subject names that are not there now (in the Bin, or gone): a Current state's note, or a
+ * pair's (by id, or an older one's by name). None for a thing, a pile or the folder, or when the notes were not seen.
+ */
+export function notesGone(q: Asked, notes: NotesSeen | null): string[] {
+  const s = subjectOf(q);
+  if (notes === null) return [];
+  if (s.kind === 'state') return notes.ids.has(s.id) ? [] : [s.id];
+  if (s.kind !== 'pair') return [];
+  return s.notes.filter((n) => (s.by === 'id' ? !notes.ids.has(n) : !notes.names.has(n.toLowerCase())));
+}
+
+/**
+ * Whether a question's subject is gone, for every kind of subject (TL-P4-19 addendum 8): a thing or pile that left
+ * the inbox (neither its id nor its content is there now), or a note it names that is not there now. Only a reader
+ * that saw the whole inbox, or the folder's notes, can say so (`null`: it did not, and nothing has gone).
+ */
+export function subjectLeft(q: Asked, inbox: InboxSeen | null, notes: NotesSeen | null = null): boolean {
+  const s = subjectOf(q);
+  if (s.kind === 'inbox') return inbox !== null && !inbox.ids.has(s.id) && !(s.hash !== undefined && !!inbox.hashes?.has(s.hash));
+  return notesGone(q, notes).length > 0;
+}
+
+/** The questions still open: not answered, and not about a subject that is gone. */
+export function openQuestions<Q extends Asked>(all: readonly Q[], answered: ReadonlySet<string | undefined>, inbox: InboxSeen | null, notes: NotesSeen | null = null): Q[] {
+  return all.filter((q) => !answered.has(q.id) && !subjectLeft(q, inbox, notes));
 }
 
 /** A question as a run's report row has it: what the person reads, never its subject, hash or mark. */

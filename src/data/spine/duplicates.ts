@@ -87,3 +87,27 @@ export function savedTwins(manifest: RunManifest, op: OperationV2, head: Checkpo
   const as = manifest.reportPlan.find((c) => c.when === 'applied' && c.requires.includes(op.operationId))?.value.alreadySaved?.[0]?.as;
   return manifest.capture.places.flatMap((p) => (!p.file.folder && p.file.name === as && !members.has(p.file.fileId) ? [p.file] : []));
 }
+
+/**
+ * A pile of words already saved (c3-pair-ask, TL-P4-19 addendum 8): every Timeline line citing it is on its note
+ * already (`present`), so nothing in it is new. It is a copy of what those notes hold, and settles as a copy does: to
+ * the Bin, its row saying it is already saved as the first note, and in how many notes its lines are. Null when any
+ * line is new, or was not written.
+ */
+export function wordsSaved(states: readonly (string | undefined)[], notes: readonly DriveFile[]): { as: string; notes: number } | null {
+  const [first] = notes;
+  return first && states.length > 0 && states.every((s) => s === 'present') ? { as: first.name, notes: notes.length } : null;
+}
+
+/**
+ * The pile a planned Bin settles as a pile of words already saved, or null: the Bin of a captured pile with no things
+ * (its pile note, or its folder), which the plan reports, alone, as already saved.
+ */
+export function savedWordsPile(manifest: RunManifest, op: OperationV2): string | null {
+  const e = op.effect;
+  if (e.kind !== 'bin') return null;
+  const reported = manifest.reportPlan.some((c) => c.when === 'applied' && c.requires.length === 1 && c.requires[0] === op.operationId && !!c.value.alreadySaved?.length);
+  const pile = manifest.capture.piles.find((p) => !manifest.capture.members.some((m) => m.pileId === p.pileId)
+    && (p.anchor?.fileId === e.before.fileId || (p.context.kind === 'text' && p.context.file.fileId === e.before.fileId)));
+  return reported && pile ? pile.pileId : null;
+}
