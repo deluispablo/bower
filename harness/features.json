@@ -5800,7 +5800,8 @@
       "The 25-run golden stays 88 calls."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"each run folder is listed just before its own Bin|a picked folder that gains an unmarked child before its turn is kept\"",
-    "note": "Stage 3 carry-over (docs/harness/2026-10-09-stage3-carryover.md; P4-38e minor; lead 2026-10-09: touches data, not polish). runner/src/spine/retention.ts:126 clean() lists all picks before any Bin. Starting model: bower-escalated (it bins). Goldens: C04 78, 25-runs 88 never rise."
+    "note": "Stage 3 carry-over (docs/harness/2026-10-09-stage3-carryover.md; P4-38e minor; lead 2026-10-09: touches data, not polish). runner/src/spine/retention.ts:126 clean() lists all picks before any Bin. Starting model: bower-escalated (it bins). Goldens: C04 78, 25-runs 88 never rise. P4-41 PASS (second way? no).",
+    "review": "P4-41 PASS"
   },
   {
     "id": "c3-reservation-worker",
