@@ -142,6 +142,8 @@ P3-9 is closed.
 
 - 2026-10-09 restart: both workers stopped mid-fix for the plugin restart (pair-ask round 2 red c29a2862, state-mark red 1299ca14, fixes uncommitted in their worktrees; progress notes /private/tmp/*-progress.md). Resume order in HANDOFF.
 
+- 2026-10-09: the owner authorized in the coordinator chat: c3-hooks, c3-agent-defs, c3-permissions (TL-P4-20: .claude/settings.json hooks and permissions, agent definitions, hook scripts). Packets are written for those and for c3-test-tamper and c3-flaky-policy. c3-design-gate is dropped from the queue (already closed). Order after state-mark: test-tamper and hooks, then flaky-policy, agent-defs, permissions.
+
 ## P4 ([TL-P4-01](2026-10-07-tl-p4-01-p4-start.md), [P4_PLAN](../P4_PLAN.md))
 
 - Owner authorized P4 (main fb33b21). HANDOFF restored to the docs-test headings (0dc5fde).
