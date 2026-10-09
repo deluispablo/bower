@@ -5737,5 +5737,18 @@
     ],
     "verify": "pnpm exec vitest run src/unused-gate.test.ts -t \"a new unused export fails the unused-code gate|the unused baseline may only shrink\"",
     "note": "TL-P4-17 entry 4 (main e1bbf010): class C (promised but never wired: keepFinished had no production caller). Research: https://knip.dev. Harness code: production net does not count it, but removed dead code is reported as removed lines. Starting model: bower-implementer."
+  },
+  {
+    "id": "c3-reservation-upload",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "The upload queue reserves and keeps its file id through the write-once home (Holder/port: the id kept with the device upload record), so no module but write-once asks Drive for an id; upload-queue leaves the reservation allowlist.",
+    "steps": [
+      "An upload whose reply was lost, after a reload, is sent under the id kept on the device and makes one file.",
+      "upload-queue.ts is no longer on the reservation allowlist."
+    ],
+    "verify": "pnpm vitest run -t \"an upload reserves its file id through the write-once home and keeps it on the device|an upload whose reply was lost is found again by its kept id after a reload|lost bytes ask to choose the file again\" && pnpm e2e:fake -g \"a file added again after a reload is not doubled\"",
+    "note": "TL-P4-17 addendum 1 (main e1bbf010): upload-queue.ts:431 follows c3-reservation-home, same home and port; the allowlist shrinks by one. Starting model: bower-escalated (write-once, data safety). Goldens never rise."
   }
 ]
