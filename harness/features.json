@@ -6325,7 +6325,7 @@
       "api tests green; wrangler deploy --dry-run runs."
     ],
     "verify": "",
-    "note": "TL-P4-22 addendum 19 (main 5944ce2d); defect api-dev-audit-advisories. Low priority. Mechanical rung or Codex, after c4-app-fence merges (both touch the lockfile). Packet to write."
+    "note": "TL-P4-22 addendum 19 (main 5944ce2d); defect api-dev-audit-advisories. Low priority. Mechanical rung or Codex, after c4-app-fence merges (both touch the lockfile). Packet 2026-10-09-c4-api-audit-packet.md; bower-mechanical (needs network)."
   },
   {
     "id": "c4-create-landed",
