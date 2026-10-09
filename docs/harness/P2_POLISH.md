@@ -324,3 +324,9 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - barrier.ts:281: a non-clash rejection does not use the answer up, so the run is left to re-run;
   - e2e `test.skip(!isFake)` is a conditional skip, which is the file's existing pattern;
   - fake-run-service: the taken-once flag is lost on reload.
+- 2026-10-09 P4-47c (c3-state-mark round 4), Minors:
+  - The auth and not-found rows also say "will try again" (designer to confirm under a21).
+  - A retry needs an inbox thing, since a press with only your changes is "nothing waiting" (sent to the lead).
+  - In Home.tsx, the list key={l} is duplicated when two update lines are equal.
+  - A pretend Drive kept in sessionStorage by an older build has no keys, so write-it throws on load.
+  - newsLineCited relies on the "New: " prefix (ruled; heuristic).
