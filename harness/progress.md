@@ -226,3 +226,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: c3-reviewer-guard passes — A PreToolUse hook script refuses a subagent's checkout-class git commands in the main checkout (TL-P4-17 entry 2)
 - 2026-10-09: c3-unused-code passes — knip in pnpm check with a shrink-only baseline; 8 dead items removed (TL-P4-17 entry 4)
 - 2026-10-09: c3-test-time passes — No unit test waits on real time; slow tests judged alone with a shrink-only list; syntax rules in ESLint (TL-P4-17 entry 3, add. 4, 6)
+- 2026-10-09: c3-unused-production passes — knip --production pass with its own shrink-only baseline; isStale removed (TL-P4-17 add. 6)

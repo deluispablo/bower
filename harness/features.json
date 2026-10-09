@@ -5755,7 +5755,7 @@
     "id": "c3-unused-production",
     "task": "p4-consolidation",
     "category": "tooling",
-    "passes": false,
+    "passes": true,
     "what": "knip also runs a --production pass (tests are not entries) in pnpm check with its own shrink-only baseline, so a helper only tests call is caught (the keepFinished case); isStale in api/src/process.ts is removed (ownDeadline is the one home of that rule).",
     "steps": [
       "A production export that only a test calls fails the production gate.",
