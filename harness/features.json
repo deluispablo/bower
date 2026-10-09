@@ -5474,8 +5474,8 @@
       "Words-only piles may be cited by a Timeline line.",
       "Yes reuses keep-one-note-merge through the answer loop."
     ],
-    "verify": "pnpm -C runner exec vitest run -t \"two notes for one thing are asked as a pair|a words-only pile can become a Timeline line\"",
-    "note": "TL-P4-16 addendum (main e44eeed), defect keep-one-not-asked. Escalated. Stage 3."
+    "verify": "pnpm -C runner exec vitest run -t \"two notes for one thing are asked as a pair|a words-only pile can become a Timeline line|keep-one says what happened when the other note moved or was binned|a yes to a pair ask merges through keep-one-note-merge\" && pnpm vitest run -t \"a pair question has a typed two-note subject\" && bash scripts/e2e-both.sh e2e/capabilities.spec.ts -g \"C11: a kept rule and a merge answer are applied\"",
+    "note": "TL-P4-16 addendum (main e44eeed), defect keep-one-not-asked. Escalated. Stage 3. Sweep before dispatch (TL-P4-19 addendum 7): TL-P4-16 addendum (keep-one-not-asked, option b: typed pair, words-only cites under the value gate, merge reuses keep-one-note-merge; option c rejected; live proof on the real path) and safety-polish carry-over row 3 / TL-P4-14 addendum 3 (KEEP_CHANGED after a move or Bin, P4-19b). Packet docs/harness/2026-10-09-c3-pair-ask-packet.md."
   },
   {
     "id": "c1-digest-library",
