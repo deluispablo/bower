@@ -6262,7 +6262,8 @@
       "Each app write with its target changed elsewhere is refused, Drive unchanged."
     ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"every app write of an existing file refuses one that changed name or place elsewhere|every app write of a file reads it fresh in the same call|a fence read with no answer refuses with notReadError|a lost answer whose file already holds the write resolves without a resend|unbin expects the file in the Bin\"",
-    "note": "TL-P4-24 finding 2 (a); defect app-bin-skips-read-check; after c4-undo-withdraw. Escalated + Codex review pass. Packet 2026-10-09-c4-app-fence-packet.md. TL-P4-24 addendum 4: one checkStillAsSeen(seen, read, message) helper; SeenFiles folds in."
+    "note": "TL-P4-24 finding 2 (a); defect app-bin-skips-read-check; after c4-undo-withdraw. Escalated + Codex review pass. Packet 2026-10-09-c4-app-fence-packet.md. TL-P4-24 addendum 4: one checkStillAsSeen(seen, read, message) helper; SeenFiles folds in. Rounds 2-4 per TL-P4-24 addenda 6-8 (reds 76f37dfc, 0edf5b3f, a6c39106; fixes b829a69a, f0409898, a0d246ef). P4-50/50b/50c/50d PASS; Codex passes found 3+2+1+2 Important. Merged per addendum 9 (re-plan): reconcile is c4-reconcile-guard; the pile-note lost create is defect pile-note-lost-create-moved.",
+    "review": "P4-50d PASS"
   },
   {
     "id": "v2-move-here",
@@ -6322,5 +6323,19 @@
     ],
     "verify": "",
     "note": "TL-P4-22 addendum 19 (main 5944ce2d); defect api-dev-audit-advisories. Low priority. Mechanical rung or Codex, after c4-app-fence merges (both touch the lockfile). Packet to write."
+  },
+  {
+    "id": "c4-reconcile-guard",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "ui": null,
+    "what": "write-once names its two questions, happened (did this write run: stamp) and landed (is the file as intended); the runner reconcile (engine.ts stampSays) uses happened, with a test that after a lost answer and an outside move the run reports applied and sends nothing.",
+    "steps": [
+      "write-once exports happened and landed; stampSays uses happened.",
+      "After a lost answer and an outside move, reconcile reports applied and sends nothing."
+    ],
+    "verify": "",
+    "note": "TL-P4-24 addendum 9 (main 78f23312) point 1. Mechanical rung or Codex. Add the reason to the c4-app-fence notes inventory. Packet to write."
   }
 ]
