@@ -58,11 +58,13 @@ Name each file and what was taken in the notes. Everything else on the parked br
 | Undo of a change (Bin, rule, restore, move), online | Today's confirmation, replaced in place: "The rule is back.", "<name> is back", "The pile is back in the inbox". No promise line. |
 | Undo of a Bin while offline, when the file is still in the Drive Bin | "<name> comes back when you are online." It never says "is back" before the file is back (designer condition, 2026-10-09). |
 | "Since the last tidy-up" after an Undo | The original and its inverse are hidden as a pair (`pairsOf`). |
-| The run report, when a run takes an original and its inverse together | No rows and no count for the pair (TL-P4-27 addendum 3). |
-| The run report, for an inverse that arrives after its original's run | One ordinary row for the inverse. |
+| The run report, when a run takes an original and its inverse together | Neither line is listed, and neither counts in "N changes of yours read" (TL-P4-27 addendum 3). |
+| The run report, for an inverse that arrives after its original's run | The inverse shows alone, in the run that applies it, worded with its kind's existing line ("Removed the rule", "Put back <name>", and so on). No new list. |
 | Undo when the outbox can't be stored | The existing "keep this page open" sentence. |
 | A refused inverse | Its kind's existing sentence. |
 | Remove the pile, when Drive can't be reached to check | Unchanged (TL-P4-24 addendum 5). |
+
+**Re-signed** by the designer on 2026-10-09 (1e46b9b7), with the report rows as above (TL-P4-27 addendum 3).
 
 ## Red
 
