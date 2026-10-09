@@ -87,3 +87,17 @@
 ## Left out
 
 - Gaze, preen and the blink bounds (d-v2-07); `react()` (d-v2-24); the carry chip's content (d-v2-06).
+
+## Addendum 12: pose reference is a test fixture (TL-P4-22)
+
+tests changed: src/bird/Bower.test.tsx: import moved to pose-reference.fixture.ts
+tests changed: src/bird/engine.test.ts: import moved to pose-reference.fixture.ts
+tests changed: src/bird/presence.test.ts: import moved to pose-reference.fixture.ts
+
+Baseline rows removed from harness/unused-production-baseline.json:
+- files src/bird/pose-reference.ts src/bird/pose-reference.ts
+- exports src/data/fake/ordered-reports.fixture.ts SEQUENCES
+- files src/testing/dependency-gate.ts src/testing/dependency-gate.ts
+- files src/testing/loading-sources.ts src/testing/loading-sources.ts
+- files src/testing/tidy-up.ts src/testing/tidy-up.ts
+- files src/testing/upload-hook.ts src/testing/upload-hook.ts
