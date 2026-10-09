@@ -5793,7 +5793,7 @@
     "id": "c3-retention-race",
     "task": "p4-consolidation",
     "category": "data",
-    "passes": false,
+    "passes": true,
     "what": "Retention lists each picked run folder just before its own Bin, not all three first, so a person moving an item into a picked folder in between is seen on the closest listing; no extra Drive call.",
     "steps": [
       "A folder whose child loses its mark between picks is kept.",
