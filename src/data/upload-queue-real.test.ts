@@ -287,7 +287,7 @@ describe('the upload queue on the real Drive client', () => {
     expect(env.drive.ops.filter((o) => o.op === 'ids')).toHaveLength(1);
     const open = env.drive.ops.find((o) => o.op === 'open');
     if (open?.op !== 'open') throw new Error('no session');
-    expect(vi.mocked(makeOnce).mock.calls[0]?.[0]).toEqual({ reserved: open.id });
+    expect(vi.mocked(makeOnce).mock.calls[0]?.[0]).toMatchObject({ reserved: open.id });
     // The device kept that id before the first byte went: only the reservation had been asked for.
     expect(keptAt).toEqual({ fileId: open.id, ops: ['ids'] });
     expect((await real.list(ACCOUNT, FOLDER)).map((r) => r.fileId)).toEqual([open.id]);

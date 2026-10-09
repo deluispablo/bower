@@ -391,6 +391,17 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
         demote(error);
       }
     };
+    /**
+     * Drive refused the create for good under the kept id (write-once lets it go): the device lets it go too, with its
+     * session and confirmed bytes, so the next try reserves anew. Nothing was made under it.
+     */
+    const letFileIdGo = async (): Promise<void> => {
+      record.fileId = null;
+      record.session = null;
+      record.confirmed = 0;
+      item.fileId = null;
+      await save();
+    };
     /** Drive confirmed the file (its id and checksum checked): only now is it sent. */
     const finish = async (file: DriveFile): Promise<void> => {
       if (entry.kept) {
@@ -430,7 +441,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
       }
       // The file's identity is reserved through write-once and kept on the device before anything is created.
       const file = await makeOnce(
-        heldAs(record.fileId),
+        heldAs(record.fileId, letFileIdGo),
         fenced,
         async (id) => {
           if (record.fileId === null) {

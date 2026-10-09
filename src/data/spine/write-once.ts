@@ -121,13 +121,16 @@ export const makeText = async (w: Makes, reads: Gets, at: Place, text: string): 
  */
 export interface Holder {
   reserved?: string;
+  /** A keeper that stores the id in its own shape lets it go there too, when the home lets it go (`makeOnce`). */
+  letGo?: () => Promise<void>;
 }
 
 /**
  * The holder of an id a keeper stores in its own shape (an upload record's `fileId`, null until one is reserved): the
- * home reserves it once (`makeOnce`), and the keeper keeps it in its create, before anything is sent with it.
+ * home reserves it once (`makeOnce`), the keeper keeps it in its create before anything is sent with it, and lets it go
+ * (`letGo`) when the home does, so a try after a refusal reserves anew.
  */
-export const heldAs = (id: string | null): Holder => (id === null ? {} : { reserved: id });
+export const heldAs = (id: string | null, letGo: () => Promise<void>): Holder => (id === null ? { letGo } : { reserved: id, letGo });
 
 /** Ids for every holder that has none yet, in one request (`files.generateIds`), each set on its holder. */
 export async function reserveFor(w: Pick<Makes, 'generateIds'>, holders: readonly Holder[], signal?: AbortSignal): Promise<void> {
@@ -158,7 +161,10 @@ export async function makeOnce(h: Holder, w: Pick<Makes, 'generateIds'>, create:
   try {
     return await create(id);
   } catch (e) {
-    if (releases(e, kindOf(e))) delete h.reserved;
+    if (releases(e, kindOf(e))) {
+      delete h.reserved;
+      await h.letGo?.();
+    }
     throw e;
   }
 }
