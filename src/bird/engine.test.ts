@@ -305,6 +305,29 @@ describe("the engine's named actions", () => {
     }
   });
 
+  it('a gaze return keeps its speed bounds when focus disappears mid-return', () => {
+    // TL-P4-25 addendum 5, the Codex scenario: wake at (200, -100), then focus goes away after 80 frames.
+    const { engine, frames, read } = mount('idle');
+    frames.run(61 * FPS);
+    let target: { x: number; y: number } | null = { x: 200, y: -100 };
+    engine.look(() => target, 'focus');
+    let before = read().head;
+    const speeds: number[] = [];
+    for (let i = 0; i < 4 * FPS; i++) {
+      if (i === 80) target = null;
+      frames.run(1);
+      const head = read().head;
+      speeds.push(head - before);
+      before = head;
+    }
+    const from = Math.floor(0.75 * FPS);
+    const back = speeds.slice(from);
+    const ramp = back.map((v, i) => Math.abs(v - (speeds[from + i - 1] ?? v)));
+    expect(Math.max(...ramp), 'return speed change').toBeLessThanOrEqual(1.5);
+    expect(Math.max(...back.map(Math.abs)), 'return speed').toBeLessThanOrEqual(6);
+    expect(Math.abs(back[back.length - 1] ?? 0), 'return ends').toBeLessThanOrEqual(1.5);
+  });
+
   it('the wake startle stays within its reference range', () => {
     const ref = ACTION_REFERENCE.startle;
     expect(ref, 'the startle has a reference row').toBeDefined();
