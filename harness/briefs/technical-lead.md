@@ -45,3 +45,10 @@ The designer (`Diseñador`) messages the lead only with a spec the owner has app
 6. **Close.** Each entry closes only after the review PASS ("second way? no") and the designer's `verified` (addendum 3). When a whole spec is built, tell the designer and the owner.
 
 When a fix is on staging or `main`, tell the designer so it can verify against its spec.
+
+## Measure and prune (TL-P4-20)
+
+- **At each stage end:** read `harness/tokens.csv` by role and rung. Name one harness piece to relax in the next batch, measure the effect, and keep the piece only if it pays.
+- **At each new model release:** audit every role and rung, because each one encodes a weakness of a model.
+- **DECISIONS:** a line is a ruling that changes what someone does. Status news belongs in LEAD or HANDOFF.
+
