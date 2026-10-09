@@ -113,6 +113,28 @@ describe('shared run records', () => {
   });
 });
 
+describe("a run folder carries Bower's mark (retention round 5)", () => {
+  it("the run folder is made with Bower's mark in its create request", async () => {
+    const { drive, root } = await seeded();
+    const sent: { method: string; url: string; body: string }[] = [];
+    const answer = driveV3(drive);
+    const fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const body = init.body === undefined || init.body === null ? '' : await bodyText(init.body);
+      sent.push({ method: (init.method ?? 'GET').toUpperCase(), url: String(input), body });
+      return answer(input, { ...init, ...(init.body === undefined || init.body === null ? {} : { body }) });
+    }) as typeof globalThis.fetch;
+    const http = new DriveHttp({ token: async () => 'drive-token', fetch });
+    await new RunRecords(http, root).put(http, { runId: 'run-marked' }, manifestName('a'.repeat(64)), '{}');
+    const run = (await drive.listAll(root)).find((f) => f.folder && f.name === 'run-marked');
+    expect(run?.appProperties).toEqual({ [PROP.run]: 'run-marked' });
+    // The mark rides on the folder's one create: no other request names it, and nothing but creates is written.
+    const creates = sent.filter((r) => r.method === 'POST' && r.body.includes('"run-marked"'));
+    expect(creates).toHaveLength(1);
+    expect(JSON.parse(creates[0]?.body ?? '{}')).toMatchObject({ name: 'run-marked', appProperties: { [PROP.run]: 'run-marked' } });
+    expect(sent.filter((r) => r.method !== 'GET' && r.method !== 'POST')).toEqual([]);
+  });
+});
+
 describe('a record write that stamps its pile (TL-P4-16 b)', () => {
   it('stamps a new disposition with its pile id', async () => {
     const { drive, root } = await seeded();
