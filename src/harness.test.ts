@@ -307,6 +307,18 @@ describe('the harness', () => {
     expect(slowProblems(tests.slice(0, 1), ['a test that is gone'], 1)).toEqual([expect.stringContaining('a test that is gone')]);
   });
 
+  it('a test slow in the full run and fast alone passes the slow ratchet', () => {
+    const tests = [{ name: 'loaded', file: 'src/a.test.ts', duration: 3200 }, { name: 'really slow', file: 'src/b.test.ts', duration: 3200 }];
+    const alone = (t: { name: string }): number => (t.name === 'loaded' ? 120 : 2100);
+    // Only the time alone counts: 'loaded' is fast alone and passes; 'really slow' is slow alone and is not listed.
+    expect(slowProblems(tests, [], 0, alone)).toEqual([expect.stringContaining('really slow')]);
+    expect(slowProblems(tests, [], 0, alone)[0]).toContain('2100 ms alone');
+    // A test fast in the full run is never rerun.
+    const reran: string[] = [];
+    slowProblems([{ name: 'quick', file: 'x', duration: 900 }], [], 0, (t: { name: string }) => (reran.push(t.name), 0));
+    expect(reran).toEqual([]);
+  });
+
   it('the slow list may only shrink', () => {
     const tests = [{ name: 'a', file: 'x', duration: 2000 }, { name: 'b', file: 'x', duration: 2000 }];
     expect(slowProblems(tests, ['a', 'b'], 2)).toEqual([]);

@@ -23,6 +23,12 @@ function runGate(root: string, baseline: string) {
   return spawnSync('node', [gate, '--root', root, '--baseline', baseline], { encoding: 'utf8' });
 }
 
+describe('unused-code gate rules', () => {
+  it('the gate test runs no tool: its rules are a module fed a fixture report', () => {
+    expect(fs.existsSync(path.resolve(__dirname, '..', 'scripts', 'unused-gate-rules.mjs'))).toBe(true);
+  });
+});
+
 describe('unused-code gate', () => {
   it('a new unused export fails the unused-code gate', () => {
     const root = sampleTree();

@@ -61,6 +61,14 @@ describe('one home for an intended create', () => {
     expect(ALLOWED_MAX).toBeLessThanOrEqual(9);
   });
 
+  it('the rule targets the primitive, not the names of what holds an id', () => {
+    expect(JSON.stringify(SELECTORS)).not.toMatch(/Holder|Intended|JournalRecord|Sending|reserved/);
+    // Each spelling of a reserve or a create by a reserved id is found, whatever holds the id.
+    expect(flagged("export const go = (w: Gate, id: string) => createById(id, send, find);\n")).toEqual(['1 calls for ids']);
+    expect(flagged("export const go = async (w: Gate) => (await reserveId(w));\n")).toEqual(['1 calls for ids']);
+    expect(flagged("export class Whatever {\n  private kept = new Map<string, Anything>();\n  async go(d: Gate): Promise<string[]> { return d.generateIds(1); }\n}\n")).toEqual(['3 calls for ids']);
+  });
+
   it('a renamed intent map, an id set or stored by hand, or the call for ids by another name is found by what it does', () => {
     // The drift at journal.ts:166, renamed: an intent -> line map kept outside the home.
     expect(flagged("import type { JournalRecord } from './journal';\nexport class Journal {\n  private intents = new Map<string, JournalRecord>();\n}\n")).toEqual(['3 keeps intended creates outside the home']);
