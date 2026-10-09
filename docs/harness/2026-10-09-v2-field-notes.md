@@ -15,3 +15,10 @@
   - NameSheet has no inline error message today (the slash note is a toast), so it has no error edge.
   - The Home search kbd hint and the Bower composer's font (17 px now, was 18).
 - tests changed: none.
+
+## Addendum: fix round (TL-P4-22 addendum 3)
+
+- Checkbox class renamed `.check` to `.taskBox` (ui.module.css, Field.tsx); the menu `.check` indicator is as before v2-field.
+- Invalid focused field: a later rule at equal specificity keeps `--danger` over the focus edge; the focus ring is untouched. No `!important`.
+- tests changed: e2e/v2-field.spec.ts: two tests added (sort menu tick, focused invalid field); no existing test changed.
+- review: skipped (TL-P4-22)
