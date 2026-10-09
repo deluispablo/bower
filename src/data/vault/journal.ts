@@ -11,7 +11,6 @@ import { ReadCache } from '../drive/read-cache';
 import type { ChangeKind } from '../types';
 import { BowerError } from '../types';
 import { makeText, updateByStamp } from '../spine/write-once';
-import { PROP } from './layout';
 
 export type { JournalExtra, JournalRecord } from '../contracts/journal-record';
 export { isJournalRecord } from '../contracts/journal-record';
@@ -23,10 +22,8 @@ export interface JournalPlace {
   folder: () => Promise<string>;
   /** The Bower folder's id: whose journal this is. */
   owner: () => Promise<string>;
-  /** All copies of the journal, before paths are disambiguated. A fresh
-   * listing with archives also acknowledges a write processed elsewhere.
-   */
-  files: (fresh?: boolean, archived?: boolean) => Promise<DriveFile[]>;
+  /** All copies of the journal, before paths are disambiguated. */
+  files: () => Promise<DriveFile[]>;
   /** The vault's read cache, so a Home load reads each change once; a journal of its own when not given. */
   reads?: ReadCache;
   /** Told about each file the journal writes or bins, so a listing cache stays true. */
@@ -41,18 +38,32 @@ export interface JournalPlace {
 /** Where this device keeps a folder's change outbox (live sources read it to know lines wait). */
 export const outboxKey = (folder: string): string => `bower:outbox:${folder}`;
 
-function readOutbox(key: string): JournalRecord[] {
+/**
+ * A line waiting to be sent, with the id Drive reserved for its file once one was (`spine/write-once.ts`): kept with
+ * the line until its create is confirmed, so a line whose answer was lost is sent again with the same id and found by
+ * it, never written twice. An outbox from before keeps bare lines; each gets its id before it is sent.
+ */
+type Waiting = { line: JournalRecord; reserved?: string };
+
+const isWaiting = (v: unknown): v is Waiting =>
+  typeof v === 'object' && v !== null && isJournalRecord((v as Waiting).line) && (typeof (v as Waiting).reserved === 'string' || (v as Waiting).reserved === undefined);
+
+function readOutbox(key: string): Waiting[] {
   try {
     const v: unknown = JSON.parse(localStorage.getItem(key) ?? '[]');
-    if (!Array.isArray(v) || !v.every(isJournalRecord)) throw new Error('Unreadable change outbox');
-    return v;
+    if (!Array.isArray(v)) throw new Error('Unreadable change outbox');
+    return v.map((x: unknown): Waiting => {
+      if (isWaiting(x)) return x;
+      if (isJournalRecord(x)) return { line: x };
+      throw new Error('Unreadable change outbox');
+    });
   } catch (e) {
     console.error(e);
     throw new BowerError('unknown', 'Bower cannot read your waiting changes; keep this page open.');
   }
 }
 
-function writeOutbox(key: string, recs: JournalRecord[]): boolean {
+function writeOutbox(key: string, recs: Waiting[]): boolean {
   try {
     if (recs.length) localStorage.setItem(key, JSON.stringify(recs));
     else localStorage.removeItem(key);
@@ -64,10 +75,10 @@ function writeOutbox(key: string, recs: JournalRecord[]): boolean {
 }
 
 /** Isolated by Drive as well as folder: simulated Drives may reuse ids after a reset. */
-const volatile = new WeakMap<DriveApi, Map<string, JournalRecord[]>>();
+const volatile = new WeakMap<DriveApi, Map<string, Waiting[]>>();
 
 export class Journal {
-  private readonly volatile: Map<string, JournalRecord[]>;
+  private readonly volatile: Map<string, Waiting[]>;
   private readonly reads: ReadCache;
   /** Drive files per record id (a line written twice has two), as last read or written, for remove. */
   private filesOf = new Map<string, DriveFile[]>();
@@ -105,20 +116,20 @@ export class Journal {
     // Folder-keyed waiting records survive every session, including storage failures.
   }
 
-  private waiting(key: string): JournalRecord[] {
-    const byId = new Map(readOutbox(key).map((r) => [r.id, r]));
-    for (const r of this.volatile.get(key) ?? []) byId.set(r.id, r);
+  private waiting(key: string): Waiting[] {
+    const byId = new Map(readOutbox(key).map((r) => [r.line.id, r]));
+    for (const r of this.volatile.get(key) ?? []) byId.set(r.line.id, { ...byId.get(r.line.id), ...r });
     return [...byId.values()];
   }
 
-  private keep(key: string, records: JournalRecord[]): boolean {
+  private keep(key: string, records: Waiting[]): boolean {
     // Memory is kept first: quota or blocked storage must never discard the current line.
     const previous = this.volatile.get(key) ?? [];
     this.volatile.set(key, records);
     if (!writeOutbox(key, records)) {
       // A failed removal did not take the change back; keep its memory copy too.
-      const retained = new Map(previous.map((r) => [r.id, r]));
-      for (const r of records) retained.set(r.id, r);
+      const retained = new Map(previous.map((r) => [r.line.id, r]));
+      for (const r of records) retained.set(r.line.id, r);
       this.volatile.set(key, [...retained.values()]);
       return false;
     }
@@ -138,6 +149,7 @@ export class Journal {
     const at = (this.lastAt = Math.max(Date.now(), this.lastAt + 1));
     const id = `${new Date(at).toISOString().replace(/:/g, '-')}-${Math.random().toString(36).slice(2, 8).padEnd(6, '0')}`;
     const rec: JournalRecord = { v: 1, id, at, kind, what, device: this.device, ...extra };
+    const line: Waiting = { line: rec };
     // Capture the original owner before queue admission, including post-effect bookkeeping.
     const key = outboxKey(await this.place.owner());
     return this.serial(async () => {
@@ -146,8 +158,8 @@ export class Journal {
           let previous = this.volatile.get(key) ?? [];
           let readable = true;
           try { previous = this.waiting(key); } catch (e) { console.error(e); readable = false; }
-          if (readable) this.keep(key, [...previous, rec]);
-          else this.volatile.set(key, [...previous, rec]);
+          if (readable) this.keep(key, [...previous, line]);
+          else this.volatile.set(key, [...previous, line]);
         }
         this.checkCurrent();
       }
@@ -159,12 +171,12 @@ export class Journal {
         console.error(e);
         readable = false;
       }
-      if (!(await this.send(rec))) {
+      if (!(await this.send(line))) {
         let previous = this.volatile.get(key) ?? [];
         if (readable) {
           try { previous = this.waiting(key); } catch (e) { console.error(e); readable = false; }
         }
-        const records = [...previous, rec];
+        const records = [...previous, line];
         const saved = readable ? this.keep(key, records) : false;
         if (!readable) this.volatile.set(key, records);
         if (!saved) {
@@ -196,37 +208,45 @@ export class Journal {
     this.checkCurrent();
     const waiting = this.waiting(key);
     if (!waiting.length) return;
-    // A line whose answer was lost may be in Drive already, archived by a run or not: never write it twice. It is found
-    // by its own key (`PROP.line`, its record id), which the archive move keeps. The folder itself is asked (a cached
-    // listing never saw a file whose answer was lost).
-    let there: DriveFile[];
-    try {
-      there = await this.place.files(true, true);
-    } catch (e) {
-      console.error(e);
-      if (required) throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');
-      return;
+    // A line whose answer was lost may be in Drive already, archived by a run or not: never write it twice. It is sent
+    // again with the id reserved for it, and Drive refuses a second file with that id, so it is found by it. Lines with
+    // none yet get theirs in one request, kept in the outbox before any is sent.
+    const bare = waiting.filter((r) => r.reserved === undefined);
+    if (bare.length) {
+      try {
+        const ids = await this.drive.generateIds(bare.length);
+        bare.forEach((r, i) => (r.reserved = ids[i]));
+      } catch (e) {
+        console.error(e);
+        if (required) throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');
+        return;
+      }
+      this.checkCurrent();
+      const ids = new Map(bare.map((r) => [r.line.id, r.reserved]));
+      this.keep(key, this.waiting(key).map((r) => (r.reserved === undefined && ids.has(r.line.id) ? { ...r, reserved: ids.get(r.line.id) } : r)));
     }
-    const landed = new Set(there.map((f) => f.appProperties?.[PROP.line]));
     const sent = new Set<string>();
     for (const r of waiting) {
       this.checkCurrent();
-      if (landed.has(r.id) || (await this.send(r))) sent.add(r.id);
+      if (await this.send(r)) sent.add(r.line.id);
     }
     // Only what was sent leaves; anything added meanwhile stays.
     this.checkCurrent();
-    this.keep(key, this.waiting(key).filter((r) => !sent.has(r.id)));
+    this.keep(key, this.waiting(key).filter((r) => !sent.has(r.line.id)));
     if (required && sent.size !== waiting.length) throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');
   }
 
-  private async send(rec: JournalRecord): Promise<boolean> {
+  /** Sends one line with the id reserved for it, reserved now when it has none and kept on `w` for a later try. */
+  private async send(w: Waiting): Promise<boolean> {
+    const rec = w.line;
     try {
       this.checkCurrent();
       const folder = await this.place.folder();
       this.checkCurrent();
       const text = `${JSON.stringify(rec)}\n`;
-      // Made by its reserved id (`spine/write-once.ts`): a lost answer is found again by that id; and keyed by its record id.
-      const f = await makeText(this.drive, this.drive, { parent: folder, name: `${rec.id}.json`, props: { [PROP.line]: rec.id } }, text);
+      w.reserved ??= (await this.drive.generateIds(1))[0];
+      // Made by its reserved id (`spine/write-once.ts`): a lost answer is found again by that id, now or on a later try.
+      const f = await makeText(this.drive, this.drive, { parent: folder, name: `${rec.id}.json`, ...(w.reserved ? { id: w.reserved } : {}) }, text);
       if (this.current()) {
         this.reads.wrote(f, text);
         this.filesOf.set(rec.id, [...(this.filesOf.get(rec.id) ?? []), f]);
@@ -267,7 +287,7 @@ export class Journal {
     });
     this.checkCurrent();
     for (const [rid, ids] of seenFiles) this.filesOf.set(rid, ids);
-    for (const r of this.waiting(key)) if (!byId.has(r.id)) byId.set(r.id, r);
+    for (const { line } of this.waiting(key)) if (!byId.has(line.id)) byId.set(line.id, line);
     return [...byId.values()].sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
   }
 
@@ -280,7 +300,7 @@ export class Journal {
   private async removeNow(id: string, key: string): Promise<void> {
     this.checkCurrent();
     const waiting = this.waiting(key);
-    if (waiting.some((r) => r.id === id) && !this.keep(key, waiting.filter((r) => r.id !== id))) {
+    if (waiting.some((r) => r.line.id === id) && !this.keep(key, waiting.filter((r) => r.line.id !== id))) {
       this.volatile.set(key, waiting);
       throw new BowerError('unknown', 'Bower could not take that change back; keep this page open.');
     }

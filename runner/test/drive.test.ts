@@ -337,6 +337,18 @@ async function visible(drive: FakeDrive): Promise<unknown> {
 }
 
 describe('c2-create-by-id: an edit is taken only by its own answer', () => {
+  it('a batch of more than 1000 creates reserves its ids in chunks of 1000', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire } = await seeded();
+    const adapter = adapterOn(wire);
+    // A run's opening names an id for each of its 1001 creates in one call; Drive gives at most 1000 a request.
+    const reserving = (await adapter.batch()).generateIds(1001);
+    await expect(reserving).resolves.toHaveLength(1001);
+    expect(new Set(await reserving).size).toBe(1001);
+    const counts = wire.requests.filter((r) => r.url.pathname.endsWith('/files/generateIds')).map((r) => Number(r.url.searchParams.get('count')));
+    expect(counts).toEqual([1000, 1]);
+  });
+
   it("an edit's answer showing another name or place is not taken as the edit", async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const sha = (t: string): string => createHash('sha256').update(t).digest('hex');

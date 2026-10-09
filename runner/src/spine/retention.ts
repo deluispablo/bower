@@ -7,14 +7,18 @@
  */
 import type { FencedDrive } from '../../../src/data/drive/drive-api';
 import type { RunRecords } from '../../../src/data/spine/records';
+import { updateByStamp, type Gets } from '../../../src/data/spine/write-once';
 
 export const KEEP_FINISHED = 20;
 
-/** Puts the finished run folders beyond the newest `keep` in the Bin; gives their ids. */
-export async function keepFinished(records: RunRecords, w: FencedDrive, keep = KEEP_FINISHED): Promise<string[]> {
+/**
+ * Puts the finished run folders beyond the newest `keep` in the Bin; gives their ids. Each Bin carries its stamp, so
+ * one whose answer was lost is read back by it through `reads` (`write-once.ts`), never sent again.
+ */
+export async function keepFinished(records: RunRecords, w: FencedDrive, reads: Gets, keep = KEEP_FINISHED): Promise<string[]> {
   const finished = await records.finished();
   finished.sort((a, b) => b.at - a.at || (a.folder.name < b.folder.name ? 1 : a.folder.name > b.folder.name ? -1 : 0));
-  const old = finished.slice(keep).map((f) => f.folder.id);
-  for (const id of old) await w.trash(id);
-  return old;
+  const old = finished.slice(keep).map((f) => f.folder);
+  for (const folder of old) await updateByStamp(reads, folder, 'bin', (op) => w.trash(folder.id, op));
+  return old.map((f) => f.id);
 }

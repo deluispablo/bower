@@ -21,6 +21,12 @@ export const NOT_FILED = "It couldn't be filed this time.";
  * the Bin before Bower read it back: Drive keeps nothing to tell landed from never sent (TL-P4-14 addendum 7).
  */
 export const UNCONFIRMED_GONE = "Bower couldn't confirm this; the file is gone.";
+/**
+ * A thing possibly moved (its answer lost), then changed by another writer, the app's Bin or restore or another run,
+ * before Bower read it back: its stamp is that writer's, so nothing tells whether Bower's change landed.
+ */
+export const UNCONFIRMED_CHANGED = "Bower couldn't confirm this; it was changed while Bower was filing it.";
+const UNCONFIRMED = [UNCONFIRMED_GONE, UNCONFIRMED_CHANGED];
 /** The failure a move's own precondition gives when its source is not as captured; the service is its only author. */
 export const SOURCE_NOT_AS_SEEN = 'It was moved, renamed or removed before Bower could get to it.';
 
@@ -55,9 +61,10 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
       });
       const own = (named.length ? named : c.requires).map((id) => byId.get(id));
       const moved = own.every((o) => o?.state === 'rejected' && o.failure.code === 'conflict' && o.failure.message === SOURCE_NOT_AS_SEEN);
-      const gone = own.every((o) => o?.state === 'rejected' && o.failure.code === 'unknown' && o.failure.message === UNCONFIRMED_GONE);
+      const unsure = own.map((o) => (o?.state === 'rejected' && o.failure.code === 'unknown' ? o.failure.message : null));
+      const why = unsure[0];
       // A thing Bower couldn't confirm is on its own line, never counted as set aside (TL-P4-14 addendum 8).
-      if (gone) report.unconfirmed = [...(report.unconfirmed ?? []), { ...row, why: UNCONFIRMED_GONE }];
+      if (why && UNCONFIRMED.includes(why) && unsure.every((m) => m === why)) report.unconfirmed = [...(report.unconfirmed ?? []), { ...row, why }];
       else report.setAside.push({ ...row, why: moved ? MOVED_AWAY : NOT_FILED });
     }
     report.questions.push(...c.value.questions);

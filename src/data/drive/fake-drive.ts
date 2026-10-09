@@ -164,7 +164,7 @@ export class FakeDrive implements DriveApi {
 
   /** A file as a listing gives it: its metadata, and whether a checksum of its content is kept (`unchecked`). */
   private listed(f: Stored): DriveFile {
-    return { ...this.copy(f.meta), ...(f.bytesUnavailable && f.sha256 === undefined ? { unchecked: true as const } : {}) };
+    return { ...this.copy(f.meta), ...(f.bytesUnavailable && f.sha256 === undefined ? { unchecked: true as const } : {}), ...(f.trashed ? { trashed: true as const } : {}) };
   }
 
   async readText(id: string): Promise<string> {

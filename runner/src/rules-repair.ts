@@ -16,6 +16,7 @@
  * - The text is written first, then the mark: the text alone already makes the file Bower's to word (its front
  *   matter says `by: bower`), and a mark is never put on a text the person changed. A runner that stops between
  *   the two leaves the template's text without the mark; the next run sees those bytes and adds only the mark.
+ * - Each write carries its stamp (`spine/write-once.ts`): one whose answer is lost is read back by it, never sent twice.
  * - Cost: no listing of its own (the run's record listing holds the folder's root; one listing without it), plus one read of `Rules.md` only when its size says the
  *   bytes might match. Once repaired, the old text is gone, so a later run finds nothing to do; no state is kept.
  * - With a rule waiting in the same run: the repair lands first, then the planner reads a Bower-owned file and words
@@ -25,6 +26,7 @@ import { BowerError } from '../../src/data/types';
 import { OLD_RULES_TEMPLATE, RULES_TEMPLATE } from '../../src/data/contracts/rules-format';
 import type { DriveFile } from '../../src/data/drive/drive-api';
 import type { RunnerDrive } from './drive';
+import { updateByStamp } from '../../src/data/spine/write-once';
 
 export const RULES_FILE_NAME = 'Rules.md';
 
@@ -49,8 +51,10 @@ export async function repairRules(drive: RunnerDrive, rootId: string, listed?: (
   if (!old && !(text === RULES_TEMPLATE.text && !marked(file))) return;
   try {
     const writes = await drive.batch();
-    const written = old ? await writes.writeText(file.id, RULES_TEMPLATE.text, file.modifiedTime) : file;
-    if (!marked(written)) await writes.update(file.id, { appProperties: { ...RULES_TEMPLATE.appProperties } });
+    // Each write sent once with its stamp: a lost answer is read back by it (`write-once.ts`), never sent again.
+    const text = RULES_TEMPLATE.text;
+    const written = old ? await updateByStamp(drive, file, { text }, (op) => writes.writeText(file.id, text, file.modifiedTime, op)) : file;
+    if (!marked(written)) await updateByStamp(drive, written, 'mark-rules', (op) => writes.update(file.id, { appProperties: { ...RULES_TEMPLATE.appProperties, ...op } }));
   } catch (e) {
     if (!(e instanceof BowerError) || e.code !== 'conflict') throw e;
     console.error(`${RULES_FILE_NAME} changed while Bower was repairing it; it is left as it is`, e);

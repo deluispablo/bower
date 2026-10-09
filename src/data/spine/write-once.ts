@@ -72,9 +72,13 @@ export type Intent = string | { text: string };
 /** The stamp of one write to `f`: the version it read and what it does, so a retry of the same change is the same write. */
 const stampFor = (f: DriveFile, intent: Intent): string => stampOf(f.id, `${f.modifiedTime}:${typeof intent === 'string' ? intent : `text:${sha256Sync(intent.text)}`}`);
 
-/** Whether `now` holds that write to `f`: it carries its stamp and, for text, Drive's checksum of the text sent. */
+/**
+ * Whether `now` holds that write to `f`: it carries its stamp and, for text, Drive's checksum of the text sent; a Bin
+ * or a restore, only while it is still in the Bin or out of it (a restore in Drive's own page keeps the stamp).
+ */
 export const holds = (f: DriveFile, intent: Intent, now: DriveFile): boolean =>
-  now.appProperties?.[STAMP] === stampFor(f, intent) && (typeof intent === 'string' || confirms(now, new TextEncoder().encode(intent.text)));
+  now.appProperties?.[STAMP] === stampFor(f, intent) &&
+  (intent === 'bin' ? now.trashed === true : intent === 'unbin' ? now.trashed !== true : typeof intent === 'string' || confirms(now, new TextEncoder().encode(intent.text)));
 
 /**
  * Case 2: an update or a move of a file read as `f`, sent once with its stamp and found again by reading `f` by its id;
@@ -109,6 +113,29 @@ export const makeFolder = async (w: Makes, reads: Gets, at: Place): Promise<Driv
 /** A text file made once, by its reserved id, and confirmed by its answer's checksum. */
 export const makeText = async (w: Makes, reads: Gets, at: Place, text: string): Promise<DriveFile> =>
   confirmed(await createById(at.id ?? (await reserveId(w)), (id) => w.createText(at.parent, at.name, text, at.props, id), (id) => byId(reads, id)), text);
+
+/**
+ * The ids reserved for the creates a person means to make, each kept by what is meant (its `key`) until its create is
+ * confirmed: a try again after an answer lost and a read-back failed too is sent with the same id, so it makes one file.
+ * There is no pool: each id is reserved for one create, when it is first tried.
+ */
+export class Intended {
+  private readonly ids = new Map<string, string>();
+
+  async make(key: string, w: Pick<Makes, 'generateIds'>, create: (id: string) => Promise<DriveFile>): Promise<DriveFile> {
+    const id = this.ids.get(key) ?? (await reserveId(w));
+    this.ids.set(key, id);
+    try {
+      const made = await create(id);
+      this.ids.delete(key);
+      return made;
+    } catch (e) {
+      // Still not known whether it landed: the id stays for the next try. Refused outright: it is not kept.
+      if (!unsettled(e)) this.ids.delete(key);
+      throw e;
+    }
+  }
+}
 
 /** The file a write answered, when its checksum is that of `text`; otherwise the write is not confirmed. */
 export function confirmed(file: DriveFile, text: string): DriveFile {

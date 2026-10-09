@@ -117,4 +117,25 @@ describe('real adapters: the old template Rules.md in an existing folder', () =>
       }
     }
   });
+
+  it("the runner's Rules.md repair whose answers were lost is resolved by its stamp", async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { w, rulesId } = await folderWith(OLD_RULES_TEMPLATE);
+    const lost = new Set<string>();
+    // The text and then the mark land, and each answer is lost.
+    const hop: Hop = async (url, init, next) => {
+      const res = await next();
+      const write = (init.method ?? 'GET').toUpperCase() === 'PATCH' && url.pathname.endsWith(`/files/${rulesId}`);
+      const which = url.pathname.startsWith('/upload/') ? 'text' : 'mark';
+      if (write && res.ok && !lost.has(which)) {
+        lost.add(which);
+        throw new TypeError('network lost');
+      }
+      return res;
+    };
+    expect(await runOnce(w, hop)).toBe(0);
+    expect([...lost].sort()).toEqual(['mark', 'text']);
+    expect((await w.drive.get(rulesId)).appProperties?.[PROP.by]).toBe('bower');
+    expect(parseRules(await w.drive.readText(rulesId))[0]?.yourWords).toBe('receipts go to money');
+  });
 });

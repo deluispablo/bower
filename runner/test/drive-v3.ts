@@ -164,7 +164,12 @@ async function answer(wire: DriveV3, method: string, url: URL, body: RequestInit
   const path = url.pathname;
   const one = /^\/(upload\/)?drive\/v3\/files\/([^/]+)$/.exec(path);
   // `files.generateIds`: ids the pretend Drive keeps for creates to come.
-  if (method === 'GET' && path === '/drive/v3/files/generateIds') return json(200, { ids: await drive.generateIds(Number(url.searchParams.get('count') ?? '1')) });
+  if (method === 'GET' && path === '/drive/v3/files/generateIds') {
+    // Drive gives 1 to 1000 ids a call (https://developers.google.com/workspace/drive/api/reference/rest/v3/files/generateIds).
+    const count = Number(url.searchParams.get('count') ?? '1');
+    if (count < 1 || count > 1000) return json(400, driveFailure(400, 'invalid'));
+    return json(200, { ids: await drive.generateIds(count) });
+  }
   if (method === 'GET' && path === '/drive/v3/files') return list(drive, url);
   if (method === 'GET' && one) {
     const id = decodeURIComponent(one[2] ?? '');

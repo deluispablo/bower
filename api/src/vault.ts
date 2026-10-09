@@ -53,8 +53,10 @@ import { requireLease } from './session-lease.js';
 import { FOLDER_TEMPLATE, PLACEHOLDER_FILE } from '../../src/data/contracts/folder-template.js';
 import type { FolderTemplateFile } from '../../src/data/contracts/folder-template.js';
 import { OLD_RULES_TEMPLATE, RULES_TEMPLATE } from '../../src/data/contracts/rules-format.js';
-import { DriveHttp, FOLDER, quote, type WireFile } from '../../src/data/drive/drive-http.js';
-import { createById, reserveId } from '../../src/data/spine/write-once.js';
+import { DriveHttp, FOLDER, quote, toFile, type WireFile } from '../../src/data/drive/drive-http.js';
+import type { DriveFile } from '../../src/data/drive/drive-api.js';
+import { BowerError } from '../../src/data/types.js';
+import { createById, reserveId, updateByStamp } from '../../src/data/spine/write-once.js';
 
 /** The marker every Bower folder carries in `appProperties` (private to this OAuth client). */
 export const FOLDER_MARKER = { bowerFolder: '1' } as const;
@@ -185,12 +187,13 @@ function vaultDrive(env: Env, sub: string, fetchImpl: FetchLike, pacing?: Partia
       const response = await http.call(`${FILES_URL}/${encodeURIComponent(id)}?alt=media`, {}, [404]);
       return response.status === 404 ? null : response.text();
     },
-    /** `files.get`: when the file last changed, or null when Drive says 404. */
-    modifiedTime: async (id: string): Promise<string | null> => (await get(id, 'modifiedTime'))?.modifiedTime ?? null,
-    /** `files.update` with a multipart upload: new text and app properties for one file. */
-    async replaceText(id: string, content: string, appProperties: Record<string, string>): Promise<void> {
-      await multipart(`${UPLOAD_URL}/${encodeURIComponent(id)}?uploadType=multipart&fields=id`, 'PATCH', { appProperties }, 'text/markdown', content);
-    },
+    /**
+     * New text and app properties for one file as it was read (`seen`), sent once with its stamp and read back by it
+     * when its answer is lost (`write-once.ts`). Drive v3 has no conditional write: the transport reads the file's
+     * modifiedTime again right before the write, and a change since refuses it (`conflict`).
+     */
+    replaceText: (seen: DriveFile, content: string, appProperties: Record<string, string>): Promise<DriveFile> =>
+      updateByStamp(http, seen, { text: content }, (op) => http.writeText(seen.id, content, seen.modifiedTime, { ...appProperties, ...op })),
   };
 }
 
@@ -211,8 +214,14 @@ async function repairRules(drive: Drive, folderId: string): Promise<void> {
   if (file === null || file.mimeType === FOLDER || file.modifiedTime === undefined) return;
   if (file.appProperties?.['by'] === 'bower') return;
   if ((await drive.text(file.id)) !== OLD_RULES_TEMPLATE) return;
-  if ((await drive.modifiedTime(file.id)) !== file.modifiedTime) return;
-  await drive.replaceText(file.id, RULES_FILE.content, RULES_FILE.appProperties ?? {});
+  const seen = toFile({ name: RULES_FILE.path, parents: [folderId], createdTime: '', ...file, modifiedTime: file.modifiedTime });
+  try {
+    await drive.replaceText(seen, RULES_FILE.content, RULES_FILE.appProperties ?? {});
+  } catch (e) {
+    // Changed between the read and the write: left as the person made it.
+    if (!(e instanceof BowerError) || e.code !== 'conflict') throw e;
+    console.error('Rules.md changed while Bower was repairing it; it is left as it is', e);
+  }
 }
 
 /**

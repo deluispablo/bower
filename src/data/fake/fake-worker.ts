@@ -17,6 +17,7 @@ import { FOLDER_TEMPLATE, PLACEHOLDER_FILE } from '../contracts/folder-template'
 import { PHASE_RANK as RANK } from '../contracts/run-phases';
 import { BowerError } from '../types';
 import { DriveVault } from '../vault/drive-vault';
+import { makeFolder, makeText, updateByStamp } from '../spine/write-once';
 import { BOWER_FOLDER, SYSTEM, isRunnerFile, type LastRunFile } from '../vault/layout';
 import type { Me, ProcessOptions, RunReply, RunWire, StatusReply, WorkerApi } from '../worker/worker-api';
 import { planRun, type HubUpdate } from './fake-runner';
@@ -144,21 +145,28 @@ export class FakeWorker implements WorkerApi {
     forget(false);
     if (this.rootId) return { id: this.rootId, found };
     const d = this.drive;
-    const root = (await d.createFolder('root', BOWER_FOLDER)).id;
-    // The contracts' template, as the real Worker creates it: a folder for each path, a file where there is content.
+    // The contracts' template, as the real Worker creates it: one call reserves the folder's id and one per template
+    // folder and file, and each is made by its id (`write-once.ts`), so a lost answer is found again, never made twice.
+    const files = FOLDER_TEMPLATE.filter((f) => !f.path.endsWith(`/${PLACEHOLDER_FILE}`) && f.path !== PLACEHOLDER_FILE);
+    const paths = [...new Set(FOLDER_TEMPLATE.flatMap((f) => f.path.split('/').slice(0, -1).map((_, i, parts) => parts.slice(0, i + 1).join('/'))))];
+    const [rootId, ...rest] = await d.generateIds(1 + paths.length + files.length);
+    const ids = new Map([...paths, ...files.map((f) => f.path)].map((p, i) => [p, rest[i]]));
+    const root = (await makeFolder(d, d, { parent: 'root', name: BOWER_FOLDER, ...(rootId ? { id: rootId } : {}) })).id;
     const folders = new Map<string, string>([['', root]]);
     const folder = async (path: string): Promise<string> => {
       const known = folders.get(path);
       if (known !== undefined) return known;
       const cut = path.lastIndexOf('/');
-      const id = (await d.createFolder(await folder(cut < 0 ? '' : path.slice(0, cut)), path.slice(cut + 1))).id;
-      folders.set(path, id);
-      return id;
+      const id = ids.get(path);
+      const made = await makeFolder(d, d, { parent: await folder(cut < 0 ? '' : path.slice(0, cut)), name: path.slice(cut + 1), ...(id ? { id } : {}) });
+      folders.set(path, made.id);
+      return made.id;
     };
     for (const file of FOLDER_TEMPLATE) {
       const cut = file.path.lastIndexOf('/');
       const parent = await folder(cut < 0 ? '' : file.path.slice(0, cut));
-      if (file.path.slice(cut + 1) !== PLACEHOLDER_FILE) await d.createText(parent, file.path.slice(cut + 1), file.content, file.appProperties);
+      const id = ids.get(file.path);
+      if (file.path.slice(cut + 1) !== PLACEHOLDER_FILE) await makeText(d, d, { parent, name: file.path.slice(cut + 1), ...(file.appProperties ? { props: file.appProperties } : {}), ...(id ? { id } : {}) }, file.content);
     }
     this.rootId = root;
     return { id: root, found: false };
@@ -315,8 +323,9 @@ export class FakeWorker implements WorkerApi {
     const all = await this.drive.listAll(root);
     const sys = all.find((f) => f.folder && f.name === SYSTEM.dir && f.parents[0] === root);
     const file = sys && all.find((f) => f.name === 'last-run.json' && f.parents[0] === sys.id);
-    if (file) await this.drive.writeText(file.id, text, file.modifiedTime);
-    else await this.drive.createText(sys?.id ?? (await this.drive.createFolder(root, SYSTEM.dir)).id, 'last-run.json', text);
+    const d = this.drive;
+    if (file) await updateByStamp(d, file, { text }, (op) => d.writeText(file.id, text, file.modifiedTime, op));
+    else await makeText(d, d, { parent: sys?.id ?? (await makeFolder(d, d, { parent: root, name: SYSTEM.dir })).id, name: 'last-run.json' }, text);
   }
 
   /**
