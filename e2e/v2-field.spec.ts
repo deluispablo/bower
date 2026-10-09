@@ -1,0 +1,171 @@
+/**
+ * v2-field (d-v2-08, WCAG 1.4.11): every field, switch and task box draws its edge with
+ * `control-line`, and placeholders use `--text-muted`. Phone and desktop, dark and light,
+ * on the fake Drive. An error field says so to the screen reader (`aria-invalid` and
+ * `aria-describedby`) and passes axe with the WCAG 2.2 tags and target size.
+ */
+import type { Locator, Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import { expect, isFake, test } from './fixtures';
+
+const THEMES = ['dark', 'light'] as const;
+
+const open = async (page: Page, path: string): Promise<void> => {
+  await page.goto(`${path}${path.includes('?') ? '&' : '?'}scenario=default&time=instant`);
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+};
+const theme = (page: Page, value: string) =>
+  page.evaluate((v) => document.documentElement.setAttribute('data-theme', v), value);
+
+/** What a token resolves to in the current theme, as the browser computes a colour from it. */
+const resolved = (page: Page, token: string): Promise<string> =>
+  page.evaluate((t) => {
+    const probe = document.createElement('i');
+    probe.style.color = `var(${t})`;
+    document.body.append(probe);
+    const c = getComputedStyle(probe).color;
+    probe.remove();
+    return c;
+  }, token);
+
+/** The colour of the box edge: a border, or an inset ring. */
+const edge = (el: Locator): Promise<{ border: string; width: number; ring: string }> =>
+  el.evaluate((n) => {
+    const c = getComputedStyle(n);
+    return { border: c.borderTopColor, width: parseFloat(c.borderTopWidth), ring: c.boxShadow };
+  });
+const placeholder = (el: Locator): Promise<string> =>
+  el.evaluate((n) => getComputedStyle(n, '::placeholder').color);
+
+const axeClean = async (page: Page, within = 'main'): Promise<void> => {
+  const axe = await new AxeBuilder({ page })
+    .include(within)
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .options({ rules: { 'target-size': { enabled: true } } })
+    .analyze();
+  expect(
+    axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`),
+  ).toEqual([]);
+};
+
+/** A field whose own box (or its wrapper's) is the control edge. */
+async function checkField(
+  page: Page,
+  name: string,
+  box: Locator,
+  text: Locator | null,
+  radius?: number,
+): Promise<void> {
+  const line = await resolved(page, '--control-line');
+  const e = await edge(box);
+  expect(e.border, `${name}: border colour`).toBe(line);
+  expect(e.width, `${name}: border width`).toBe(1.5);
+  expect((await box.boundingBox())?.height ?? 0, `${name}: height`).toBeGreaterThanOrEqual(48);
+  if (radius)
+    expect(
+      await box.evaluate((n) => parseFloat(getComputedStyle(n).borderTopLeftRadius)),
+      `${name}: radius`,
+    ).toBe(radius);
+  if (text)
+    expect(await placeholder(text), `${name}: placeholder`).toBe(
+      await resolved(page, '--text-muted'),
+    );
+}
+
+test('fields and switches draw their edge with the control line', async ({ page }, info) => {
+  test.skip(!isFake, 'The fake Drive is the source this entry is judged on.');
+  test.setTimeout(120_000);
+  const desktop = info.project.name === 'desktop';
+  for (const t of THEMES) {
+    // Add: "What is this?", the link field, and the invalid-link error.
+    await open(page, '/add');
+    await theme(page, t);
+    const what = page.getByLabel('What is this?');
+    await checkField(page, 'What is this?', what, what, 14);
+    const link = page.getByLabel('Paste a link');
+    await checkField(page, 'Paste a link', page.locator('form', { has: link }), link, 14);
+    await link.fill('not a link');
+    await page.getByRole('button', { name: 'Add link' }).click();
+    const bad = page.getByRole('alert').filter({ hasText: 'That is not a web address' });
+    await expect(bad).toBeVisible();
+    await expect(link).toHaveAttribute('aria-invalid', 'true');
+    const described = (await link.getAttribute('aria-describedby')) ?? '';
+    expect(described.split(' ')).toContain((await bad.getAttribute('id')) ?? 'missing');
+    expect((await edge(page.locator('form', { has: link }))).border, 'error edge').toBe(
+      await resolved(page, '--danger'),
+    );
+    expect(
+      await bad.evaluate((n) => [getComputedStyle(n).color, getComputedStyle(n).fontSize]),
+    ).toEqual([await resolved(page, '--danger'), '13px']);
+    await axeClean(page);
+
+    // A pile's note.
+    await open(page, '/pile/p1');
+    await theme(page, t);
+    const note = page.locator('#pile-note-text');
+    await checkField(page, 'pile note', note, null, 14);
+
+    // Tell Bower's box.
+    await open(page, '/bower');
+    await theme(page, t);
+    const ask = page.getByRole('textbox', { name: /Your request|The rule/ });
+    await checkField(page, 'Tell Bower', page.locator('form', { has: ask }), ask, 14);
+    await axeClean(page);
+
+    // Home's search is a button that opens the palette; the pill keeps its edge.
+    await open(page, '/');
+    await theme(page, t);
+    await checkField(
+      page,
+      'Home search',
+      page.locator('main button', { hasText: /Search/ }).first(),
+      null,
+      999,
+    );
+
+    // The switch.
+    await open(page, '/settings');
+    await theme(page, t);
+    const line = await resolved(page, '--control-line');
+    const off = page.getByRole('switch', { checked: false }).first();
+    expect((await edge(off)).ring, 'switch, off: inset ring').toContain(line);
+    await axeClean(page);
+
+    // A task box, unticked: custom drawn, 24 x 24, and still a checkbox with a name.
+    await open(page, '/note/Areas/Documents/Passport%20renewal.md');
+    await theme(page, t);
+    const box = page.getByRole('checkbox', { checked: false }).first();
+    await expect(box).toBeVisible();
+    const b = await box.boundingBox();
+    expect([b?.width, b?.height]).toEqual([24, 24]);
+    expect((await edge(box)).ring, 'task box: inset ring').toContain(line);
+    expect(await box.evaluate((n) => getComputedStyle(n).borderTopLeftRadius)).toBe('7px');
+    await expect(box).toHaveAccessibleName(/\S/);
+    await box.focus();
+    await page.keyboard.press('Space');
+    await expect(page.getByRole('checkbox', { checked: true }).first()).toBeVisible();
+    await axeClean(page);
+
+    // Folder page: the New note sheet's name field.
+    await open(page, '/files/Projects/Job%20hunt/Applications');
+    await theme(page, t);
+    await page.getByRole('button', { name: 'New note' }).first().click();
+    const name = page.getByLabel('Name of the note');
+    await checkField(page, 'New note name', name, name, 14);
+    await page.keyboard.press('Escape');
+
+    if (desktop) {
+      // The side panel's search and Move's "Find a folder".
+      await open(page, '/');
+      await theme(page, t);
+      await page.keyboard.press('ControlOrMeta+Shift+f');
+      const panel = page.getByLabel('Search your notes and files');
+      await expect(panel).toBeVisible();
+      await checkField(page, 'panel search', page.locator('label', { has: panel }), panel, 999);
+      await page.getByRole('treeitem', { name: /Lease draft/ }).click({ button: 'right' });
+      await page.getByRole('menuitem', { name: 'Rename' }).click();
+      const rename = page.getByLabel('Name', { exact: true });
+      if (await rename.count()) await checkField(page, 'rename', rename, rename, 14);
+    }
+  }
+});
