@@ -6254,14 +6254,14 @@
   },
   {
     "task": "p4-consolidation",
-    "passes": false,
+    "passes": true,
     "id": "c4-app-fence",
     "category": "fix",
     "what": "DriveVault.once checks every send (the Bin too) through one read-then-notAsSeen helper in contracts/still-as-seen.ts; stillAsSeen and the hand checks fold in.",
     "steps": [
       "Each app write with its target changed elsewhere is refused, Drive unchanged."
     ],
-    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"every app write of an existing file refuses one that changed name or place elsewhere|every app write of a file reads it fresh in the same call|a fence read with no answer refuses with notReadError|a lost answer whose file already holds the write resolves without a resend|unbin expects the file in the Bin\"",
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"every app write of an existing file refuses one that changed name or place elsewhere|every app write of an existing file reads it fresh in the same call|a fence read with no answer refuses with notReadError|a lost answer whose file already holds the write resolves without a resend|unbin expects the file in the Bin|a lost answer whose file changed before the recovery read is not reported as landed\"",
     "note": "TL-P4-24 finding 2 (a); defect app-bin-skips-read-check; after c4-undo-withdraw. Escalated + Codex review pass. Packet 2026-10-09-c4-app-fence-packet.md. TL-P4-24 addendum 4: one checkStillAsSeen(seen, read, message) helper; SeenFiles folds in. Rounds 2-4 per TL-P4-24 addenda 6-8 (reds 76f37dfc, 0edf5b3f, a6c39106; fixes b829a69a, f0409898, a0d246ef). P4-50/50b/50c/50d PASS; Codex passes found 3+2+1+2 Important. Merged per addendum 9 (re-plan): reconcile is c4-reconcile-guard; the pile-note lost create is defect pile-note-lost-create-moved.",
     "review": "P4-50d PASS"
   },
@@ -6286,7 +6286,7 @@
     "id": "c4-new-pill-one",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "The New pill look has one home in src/ui; folder, home and note (and the Move sheet Now here pill) use it, and each caller keeps its own placement. No visual change.",
     "steps": [
@@ -6294,7 +6294,9 @@
       "No visual change on the three screens (designer check)."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/c4-new-pill-one.spec.ts -g \"the new pill has one look everywhere\"",
-    "note": "TL-P4-22 addendum 16 (main b8b21a8b); defect new-pill-three-copies. UI-only, so the pruning trial applies (no re-review). Codex after v2-move-here merges, and it folds that entry use in. Packet 2026-10-09-c4-new-pill-one-packet.md (designer signed off with the .newtag shape). implementer: codex."
+    "note": "TL-P4-22 addendum 16 (main b8b21a8b); defect new-pill-three-copies. UI-only, so the pruning trial applies (no re-review). Codex after v2-move-here merges, and it folds that entry use in. Packet 2026-10-09-c4-new-pill-one-packet.md (designer signed off with the .newtag shape). implementer: codex. Red 588023ab, fix 01fc4694, test scope 75a1a4ce. P4-54 PASS (2 minors). Designer verified at e9af106f.",
+    "review": "P4-54 PASS",
+    "design": "verified"
   },
   {
     "id": "c4-parse-once",
@@ -6325,17 +6327,30 @@
     "note": "TL-P4-22 addendum 19 (main 5944ce2d); defect api-dev-audit-advisories. Low priority. Mechanical rung or Codex, after c4-app-fence merges (both touch the lockfile). Packet to write."
   },
   {
-    "id": "c4-reconcile-guard",
+    "id": "c4-create-landed",
     "task": "p4-consolidation",
     "category": "refactor",
     "passes": false,
     "ui": null,
-    "what": "write-once names its two questions, happened (did this write run: stamp) and landed (is the file as intended); the runner reconcile (engine.ts stampSays) uses happened, with a test that after a lost answer and an outside move the run reports applied and sends nothing.",
+    "what": "write-once names happened (did this write run) and landed (is the file as intended), both covering creates; engine reconcile and upload use happened, app creates use landed; a create that happened but was moved elsewhere is refused with CHANGED_ELSEWHERE, nothing sent or made again, the id let go, the file left where the person put it.",
     "steps": [
-      "write-once exports happened and landed; stampSays uses happened.",
-      "After a lost answer and an outside move, reconcile reports applied and sends nothing."
+      "Each of the 5 class sites calls happened or landed, named in the inventory.",
+      "The 2 reproduced cases and the reconcile guard pass; the fast-check property gains create intents."
     ],
     "verify": "",
-    "note": "TL-P4-24 addendum 9 (main 78f23312) point 1. Mechanical rung or Codex. Add the reason to the c4-app-fence notes inventory. Packet to write."
+    "note": "TL-P4-24 addendum 10 (main 4dfe148a); defect pile-note-lost-create-moved (diagnosis docs/harness/defects/2026-10-09-pile-note-lost-create-moved.md). Folds c4-reconcile-guard (addendum 9 (1)). Escalated, Opus plus a Codex pass, after c4-undo-withdraw merges. Packet to write."
+  },
+  {
+    "id": "v2-still-marks",
+    "task": "p4-consolidation",
+    "category": "ui",
+    "passes": false,
+    "ui": true,
+    "what": "d-v2-13 CSS part: the running tidy-up live dot and current step are still (no pulse); dead CSS (.skeleton shimmer, .rbBusy, unused tidy props) goes. No strings change; the loading copy goes with c4-resource.",
+    "steps": [
+      "getAnimations() is empty on the live dot and the current step mark while a tidy-up runs."
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/v2-still-marks.spec.ts -g \"nothing pulses in the running tidy-up\"",
+    "note": "TL-P4-21 order 8; spec d-v2-13 (CSS part); impact block d-v2-13 split. Codex slot (TL-P4-23); fresh Claude reviewer. Designer signed off at 6df210b0. Packet 2026-10-09-d-v2-13-css-packet.md. implementer: codex."
   }
 ]

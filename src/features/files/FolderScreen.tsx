@@ -169,7 +169,7 @@ function Folder({ path }: { path: string }) {
                   <span className={c.type === 'file' && c.kind !== 'note' ? `${s.name} ${s.mono}` : s.name}>{c.type === 'folder' ? c.name : thingName(c.name)}</span>
                   <span className={s.sub}>{c.type === 'folder' ? plural(folderCount(c), 'thing') : `Changed ${agoInSentence(c.modified)}`}</span>
                 </span>
-                {c.isNew && <span className={s.new}>New</span>}
+                {c.isNew && <span className={`${ui.freshPill} ${s.new}`}>New</span>}
                 <Icon name="chev" size={16} />
               </Link>
             </li>

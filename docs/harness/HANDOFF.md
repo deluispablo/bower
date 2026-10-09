@@ -2,26 +2,32 @@
 
 Coordinator: the Claude Code session named "Orquestador". It integrates in `/Users/deluisp/Projects/bower-app` on branch `claude/p3`; P4 continues on it. Lead: the Planificador session ([DECISIONS.md](DECISIONS.md)). Output rule: [TL-P3-29](2026-10-07-tl-p3-29-output-rule-survives-compaction.md), in AGENTS.md. Minors: [P2_POLISH.md](P2_POLISH.md). Earlier handoffs: git history of this file.
 
-## Resume (2026-10-09, after the cap-4 restart; current order TL-P4-24 addendum 2)
+## Resume (2026-10-09 evening)
 
-Read this first. Stage 4 is in progress, following the TL-P4-21 order, with TL-P4-24's data-safety fixes inserted ahead of V2.
+Read this first. Stage 4 follows the TL-P4-21 order, with TL-P4-24's data-safety fixes ahead of V2.
 
-- **Closed in stage 4:** c4-focus-return, v2-field, v2-dock, v2-name-sheet, v2-targets, c4-run-counts, c4-runner-region, c4-e2e-port, c4-segmented-one (2cdf17f4, verified).
-- **Running:** c4-app-fence (bower-escalated, `/private/tmp/bower-c4-fence`) and c4-test-timers (implementer, `/private/tmp/bower-c4-timers`).
-  - c4-app-fence then gets review P4-50 plus one Codex read-only pass.
-  - Part 1 of c4-test-timers gets an escalated review.
-- **Next, in order:**
-  1. c4-retry-fence ∥ c4-undo-withdraw. The undo-withdraw table is signed off (9193d1fc), and its removePile row comes from addendum 5.
-  2. The v2-perched-bower proud fix round (packet `2026-10-09-v2-perched-bower-round2-packet.md`, fresh Opus, then review, then the designer's check of proud). It goes in the first free Claude slot after the data-safety pair.
-  3. d-v2-07 (it needs its contract sign-off pass), 24a/24b, d-v2-06, d-v2-02, then the c4 data entries.
-- **Codex (TL-P4-23):** the coordinator commits for it (red, fix, notes) and runs its gates under the lock. Run `codex exec --json --sandbox workspace-write -C <wt> -c model_reasoning_effort=medium - < prompt` outside the Bash sandbox. Log tokens.
+- **Closed in stage 4:** c4-focus-return, v2-field, v2-dock, v2-name-sheet, v2-targets, c4-run-counts, c4-runner-region, c4-e2e-port, c4-segmented-one, c4-test-timers, v2-move-here, v2-perched-bower, c4-app-fence (4 rounds; re-planned by TL-P4-24 addendum 9).
+- **Merged, waiting for the designer:** c4-new-pill-one (e9af106f, P4-54 PASS). It closes on "verified".
+- **Running:**
+  - c4-retry-fence (`/private/tmp/bower-c4-retry`) and c4-undo-withdraw (`/private/tmp/bower-c4-undo`): both escalated, then a Claude review plus one Codex pass;
+  - the diagnoser on `pile-note-lost-create-moved`.
+- **Ready to dispatch when a Claude slot frees:** d-v2-07. Packet signed: 3 contract passes, TL-P4-25 and addenda 1–3, and the designer's re-sign at a2453704. Worktree `/private/tmp/bower-d-v2-07`, on Opus.
+- **Codex slot:** d-v2-13 CSS (`v2-still-marks`) is waiting for the designer's sign-off of its table.
+- **Queue, after the TL-P4-24 pair:**
+  - c4-parse-once (escalated);
+  - the pile-note-lost-create fix (after its ruling);
+  - c4-reconcile-guard (mechanical or Codex; it touches write-once, so it goes after undo-withdraw);
+  - c4-api-audit (mechanical; it needs network, so not Codex);
+  - then 24a/24b, d-v2-06, d-v2-02, and the c4 data entries.
+- **Codex (TL-P4-23):**
+  - the coordinator commits for it (red, fix, notes) and runs its gates under the lock;
+  - every src commit, the red included, needs a compatibility row;
+  - every Codex entry gets a fresh Claude reviewer.
 - **Rules:**
-  - every heavy run goes through `harness/with-lock.sh`;
-  - a port per worktree;
+  - every heavy run goes through `harness/with-lock.sh` (re-entrant);
   - cap 4 subagents (2 Claude implementers plus 1 Codex);
-  - a UI packet's "What the person sees" is signed off before dispatch;
-  - the UI-only fix rounds of non-escalated entries skip re-review.
-- **Sessions:** lead Planificador; Designer (worktree `/private/tmp/bower-design`); lead planning worktree `/private/tmp/bower-tl-planning`. Never remove role worktrees.
+  - a UI packet's table is signed off before dispatch.
+- **Sessions:** lead Planificador; Designer (`/private/tmp/bower-design`); lead planning worktree `/private/tmp/bower-tl-planning`. Never remove role worktrees.
 
 ## Where things stand
 

@@ -219,3 +219,11 @@ d-v2-07 contract 2,reviewer,claude,bower-reviewer,,2,87182,,,,,,17,2.6,CHANGES (
 c4-app-fence P4-50d,reviewer,claude,bower-reviewer,,1,57930,,,,,,17,1.2,PASS (minors; 2 lead calls),2026-10-09
 c4-app-fence round 4,implementer,claude,bower-escalated,,4,149027,,,,,,52,10.5,delivered,2026-10-09
 c4-app-fence round4 review,reviewer,codex,codex,medium,1,453891,450948,0,374784,2943,,,,2 Important,2026-10-09
+d-v2-07 contract 3,reviewer,claude,bower-reviewer,,3,72462,,,,,,12,1.9,CHANGES (10),2026-10-09
+c4-new-pill-one P4-54,reviewer,claude,bower-reviewer,,1,34556,,,,,,7,0.3,PASS (2 minor),2026-10-09
+c4-new-pill-one test fix,implementer,codex,codex,medium,2,59348,58960,0,51456,388,,,,delivered,2026-10-09
+pile-note-lost-create-moved,diagnoser,claude,bower-diagnoser,,1,89863,,,,,,40,5.2,diagnosed,2026-10-09
+v2-still-marks,implementer,codex,codex,medium,1,548722,543593,0,491520,5129,,,,delivered,2026-10-09
+c4-retry-fence,implementer,claude,bower-escalated,,1,210336,,,,,,65,12.2,delivered,2026-10-09
+c4-retry-fence P4-55,reviewer,claude,bower-reviewer,,1,55088,,,,,,12,0.9,BLOCK (1 Important),2026-10-09
+c4-retry-fence review,reviewer,codex,codex,medium,1,434514,432222,0,367104,2292,,,,1 Important,2026-10-09

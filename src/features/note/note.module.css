@@ -51,7 +51,7 @@
 .timeline li { display: grid; grid-template-columns: 76px 1fr; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .when { color: var(--text-muted); font-size: 15px; }
 .from { color: var(--text-muted); font-size: 15px; }
-.new { display: inline-block; margin-left: 8px; padding: 0 8px; border-radius: 999px; background: var(--fresh); color: var(--brand-line); font-size: 13px; font-weight: 600; vertical-align: 1px; }
+.new { margin-left: 8px; vertical-align: 1px; }
 .linked { margin-top: 30px; }
 .linked h2 { font-size: 20px; margin-bottom: 4px; }
 
