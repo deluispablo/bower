@@ -65,6 +65,30 @@ describe('the harness and git', () => {
     expect(codeInCommit('HEAD', dir)).toEqual(['runner/src/x.ts']);
   });
 
+  it('done.sh sees a change under harness scripts as code', () => {
+    const { dir, git } = repo();
+    mkdirSync(join(dir, 'harness'), { recursive: true });
+    writeFileSync(join(dir, 'harness/with-lock.sh'), 'echo one\n');
+    git('add -A && git commit -qm base');
+    writeFileSync(join(dir, 'harness/with-lock.sh'), 'echo two\n');
+    expect(codeInWorktree(dir)).toEqual(['harness/with-lock.sh']);
+    git('commit -qam change');
+    expect(codeInCommit('HEAD', dir)).toEqual(['harness/with-lock.sh']);
+  });
+
+  it('done.sh sees harness data as no code', () => {
+    const { dir, git } = repo();
+    mkdirSync(join(dir, 'harness'), { recursive: true });
+    writeFileSync(join(dir, 'harness/features.json'), '[]\n');
+    writeFileSync(join(dir, 'harness/notes.md'), 'old\n');
+    git('add -A && git commit -qm base');
+    writeFileSync(join(dir, 'harness/features.json'), '[{}]\n');
+    writeFileSync(join(dir, 'harness/notes.md'), 'new\n');
+    expect(codeInWorktree(dir)).toEqual([]);
+    git('commit -qam change');
+    expect(codeInCommit('HEAD', dir)).toEqual([]);
+  });
+
   // integrate.sh runs in the repository it is started in; these fixtures make their own.
   const integrate = (checkCmd: string, branchFiles: Record<string, string>, dirtyFirst = false) => {
     const { dir, git } = repo();
