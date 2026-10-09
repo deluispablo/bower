@@ -84,3 +84,53 @@ CHANGED_ELSEWHERE is an existing sentence.
 
 - The runner goldens (C04 78, 25-runs 88) pass unchanged in `pnpm check` (`runner/test/drive-calls-golden.test.ts`).
 - Designer: no new copy (CHANGED_ELSEWHERE exists). A refused link shows the existing "failed" mark with Try again.
+
+## Fix round 1 (TL-P4-24 addenda 15 and 16)
+
+Commits: red `ce4ddfc8`, fix `3022e9df`.
+
+- **Red:** `a create whose answer and recovery read were lost is made once after a refresh and a retry`
+  (drive-vault.test.ts). Before the fix: "promise rejected 'This changed somewhere else.' instead of resolving". The
+  property gains a fourth timing, `after a refresh, before the retry` (96 cases, seed 20261009, 800 runs). Before the
+  fix its counterexample was `["note","none","after a refresh, before the retry"]`: `expected 'refused' to be 'done'`.
+- **Fix, in write-once.ts (its one home):** `Sent` = parent, name and, for text, the content's hashes (`md5` and
+  `sha256`, as `confirms` reads Drive's answer). `Holder.sent` keeps it with the reserved id. `makeOnce(h, w, fresh,
+  create)` sets `h.sent ??= fresh` once the id is held, and `create(id, h.sent)` sends it, so a retry never sends a
+  name picked anew. `asMade` judges `landed` against that intent, with the content first sent added to the texts it
+  accepts. A refusal lets the id and the intent go. A 404 (the folder sent to is gone, so nothing was made there) lets
+  only the intent go: the id stays, the next try goes where the place is found now, and a file an earlier try made
+  with the id is still met by it (409, then `asMade`).
+- **Keepers:**
+  - `Intended` (memory; drive-vault create, pile folder, pile note): the holder in its map keeps `sent`. The create
+    computes `freeName` for the first send only. The pile note takes its place from `sent`; its texts list stays.
+  - `Sending` (a link or an empty thing): the same object is kept across tries, so `sent` stays with it.
+  - The journal outbox line: `sent` is written to the line on the device before the create is sent (`keepHeld`), and
+    again after a failure (what was let go). Reading is lenient: a line with no intent, or one that does not read
+    (`isSent`), is sent as before and keeps the intent from then on. Two fixture tests in journal.test.ts.
+  - The upload record: it already stored `parentId`, `name` and `sha256` before its `fileId`. Those are its intent, and
+    `makeOnce` is passed them. Uploads ask `happened` (sendResumable), so no content hash is added.
+  - The Worker's template (api/src/vault.ts): passes `sentAs(parent, name)`. A template path names one fixed name and
+    place, and it is not one of the four keepers. Its person-object store is unchanged.
+- **Addendum 15 (1):** unchanged, as ruled. **(2):** retitled, see below.
+- **Gates:** focused unit tests pass, including journal, write-once and drive-vault. `pnpm check` passes every
+  step except `check-harness`. That step fails only because c2-create-by-id's verify in features.json still names the
+  old title, and a worker may not edit features.json (`/tmp/create-r1-check.log`). check-bundle and fix-landing pass when
+  run by hand. e2e qa9, qa10, capabilities and capabilities-b pass on fake, phone and desktop, 62 passed
+  (`/tmp/create-r1-e2e.log`). The runner is untouched in this round, and its goldens pass in `pnpm check`.
+
+### tests changed (fix round 1)
+
+- tests changed: src/data/vault/drive-vault.test.ts: `a pile note binned elsewhere after a double failure is made again
+  with the new words` is now `... is refused first, then made with the new words`. Its body is unchanged (addendum 15
+  (2)). c2-create-by-id's verify in features.json must name the new title (coordinator).
+- tests changed: src/data/vault/drive-vault.test.ts: the create property gains the timing `after a refresh, before the
+  retry`, and `met.size` goes from 72 to 96. This adds cases and loosens no bound.
+- tests changed: src/data/vault/drive-vault.test.ts: new red in the `c4-create-landed` describe.
+- tests changed: src/data/vault/journal.test.ts: new describe `c4-create-landed: the intent kept on the outbox line`
+  (2 tests, one a fixture of the earlier outbox shape).
+- tests changed: src/data/spine/write-once.test.ts: new describe `c4-create-landed: the intent kept with a reserved id`.
+
+### Compatibility rows (fix round 1)
+
+None. No commit touches `src/features/**` or `src/data/contracts/**`. The outbox line on the device gains an optional
+`sent`. It is additive and read leniently, and a build without it ignores the key.
