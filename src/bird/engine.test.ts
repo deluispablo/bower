@@ -247,6 +247,14 @@ describe("the engine's named actions", () => {
     ]);
   });
 
+  it('a new member tagged acts without a row fails the meta-test', () => {
+    // The Codex scenario: `stretch()` registered as `acts` reaches no reference row of its own.
+    expect(unreferencedMembers({ ...ENGINE_MEMBERS, stretch: 'acts', curl: 'poses' })).toEqual([
+      'stretch: acts, but not the act dispatcher, so no reference row',
+      'curl: poses, but not the pose dispatcher, so no reference row',
+    ]);
+  });
+
   it('an inherited name like toString is not on the allowlist', () => {
     expect(unreferencedMembers({ ...ENGINE_MEMBERS, toString: 'script' as const, constructor: 'control' as const })).toEqual([
       'toString: not referenced and not on the allowlist',
