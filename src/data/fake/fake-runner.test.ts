@@ -292,7 +292,7 @@ describe('the fake runner', () => {
     if (out.phase !== 'done') throw new Error('failed');
     expect(drive.dump(root).get(FLAT_3)).toMatch(/\n- \d{4}-\d{2}-\d{2} · Council tax band C, looked up on the web\. · \[\[https:\/\/council-tax\.example\/bands\/12-larkspur-lane\]\]\n/);
     expect((await fresh().requests())[0]?.done).toBe('Council tax band C, found on the web. Added to [[Flat 3, 12 Larkspur Lane]] with its source.');
-    expect(out.report.updated).toEqual([{ path: FLAT_3, what: 'Council tax band C, looked up on the web.' }]);
+    expect(out.report.updated).toMatchObject([{ path: FLAT_3, what: 'Council tax band C, looked up on the web.' }]);
     expect(out.report.requests).toEqual([LOOKUP]);
   });
 

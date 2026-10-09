@@ -32,8 +32,9 @@ export function seen(f: DriveFile): SeenFile {
  * Contract B's grounding, structural only (TL-P4-14 stage 3 contract 5): the planner builds each row from the
  * operation it reports (op id plus entry), so grounding checks the plan's shape, never a row's words. Shape includes
  * how many rows and where (P4-45b): every row names operations of this plan, at least one and each once; a set-aside
- * row names its one operation. Every operation the person is told about has exactly the rows it implies: a captured
- * thing's move or Bin one row for each outcome, a generated note one created row (and one set-aside row, unless a
+ * row names its one operation; an updated row names its edit (`op`) and a line that edit appends, once (TL-P4-19
+ * addendum 3). Every operation the person is told about has exactly the rows it implies: a captured thing's move or
+ * Bin one row for each outcome, a generated note one created row (and one set-aside row, unless a
  * thing's move or a runner file waits for it), a note's edit one row per Timeline line it writes (one for a Current
  * state alone), the Bin of a note kept as one with another one set-aside row, and each archive move of your changes
  * one row. A row's path agrees with its operation: a filed thing's place with its move's (or its note's create's), its
@@ -55,6 +56,8 @@ export function grounded(manifest: RunManifest): boolean {
   for (const c of manifest.reportPlan) {
     if (!c.requires.length || new Set(c.requires).size !== c.requires.length || !c.requires.every((id) => ops.has(id))) return false;
     if (c.when === 'rejected' && (c.requires.length !== 1 || c.value.setAside.length !== 1)) return false;
+    // An updated row names the operation that wrote it: its contribution's first (TL-P4-19 addendum 3).
+    if (c.value.updated.some((r) => r.op !== c.requires[0])) return false;
     for (const id of c.requires) {
       if (c.when === 'rejected') rejected.set(id, (rejected.get(id) ?? 0) + 1);
       else applied.set(id, [...(applied.get(id) ?? []), c]);
@@ -101,6 +104,9 @@ export function grounded(manifest: RunManifest): boolean {
       const entries = e.changes.reduce((n, c) => n + (c.kind === 'timeline-append' ? c.entries.length : 0), 0);
       const want = entries || (e.changes.some((c) => c.kind === 'state-rewrite') ? 1 : 0);
       const own = mine.filter((c) => c.requires.length === 1).reduce((n, c) => n + c.value.updated.length, 0);
+      // Each line row names one line the edit appended, once; a Current state's row names none.
+      const at = mine.filter((c) => c.requires.length === 1).flatMap((c) => c.value.updated.map((r) => r.line));
+      if (at.some((l) => (entries ? l === undefined || l >= entries : l !== undefined)) || new Set(at).size !== at.length) return false;
       const kept = mine.some((c) => c.requires[0] === o.operationId && c.requires.length > 1 && c.value.updated.length);
       if (kept ? own > want : own !== want) return false;
     } else if (e.kind === 'create-text') {

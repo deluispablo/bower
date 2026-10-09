@@ -205,10 +205,17 @@ export interface FiledItem {
   area?: string;
 }
 
+/**
+ * A note a run brought up to date: one row per Timeline line it wrote, or one for a Current state alone. `op` is the
+ * operation that wrote it and `line` its Timeline line counted from the end (0 is the last), so a row is tied by id and
+ * place, never by its words (TL-P4-19 addendum 3). A report from before them has neither; a line comes with its op.
+ */
+export type UpdatedRow = { path: string; what: string; op?: string; line?: number };
+
 export interface RunReport {
   filed: FiledItem[];
   created: Array<{ path: string; what: string }>;
-  updated: Array<{ path: string; what: string }>;
+  updated: UpdatedRow[];
   setAside: Array<{ name: string; why: string }>;
   questions: Question[];
   /**

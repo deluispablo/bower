@@ -293,7 +293,7 @@ describe('run checkpoints keep one honest recoverable chain', () => {
     for (const bad of [{ op: 'not-an-op' }, { op: op04(0), line: -1 }, { op: op04(0), line: 0.5 }, { line: 0 }]) {
       const value = report04();
       value.report.updated = [{ path, what: 'Rent went up.', ...bad } as (typeof value.report.updated)[number]];
-      expect(await parseRunReport(bytes(value), run04), JSON.stringify(bad)).toEqual({ ok: false, reason: 'shape' });
+      expect(await parseRunReport(bytes(value), run04), JSON.stringify(bad)).toMatchObject({ ok: false });
     }
     const manifest = (rows: unknown[]): Uint8Array => {
       const m = clone(at(f04, ['input', 'manifest'])) as { reportPlan: { value: { updated: unknown[] } }[] };

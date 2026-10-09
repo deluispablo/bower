@@ -1,6 +1,7 @@
 /** Immutable run manifest validation only; no claim, dispatch, readiness or permission authority. */
 import { sha256 } from './hashes';
 import type { ReportQuestion } from './questions';
+import type { UpdatedRow } from './types';
 import { EDIT_FILE_LIMIT, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 
@@ -80,7 +81,7 @@ export type OperationV2 = { operationId: string; ordinal: number; dependsOn: str
 export type ReportFiled = { name: string; title: string; kind: FileKind; to: string; note?: string; area?: string };
 /** The existing RunReport shape in the stricter closed form used inside new records. */
 export type ManifestRunReport = {
-  filed: ReportFiled[]; created: { path: string; what: string }[]; updated: { path: string; what: string }[];
+  filed: ReportFiled[]; created: { path: string; what: string }[]; updated: UpdatedRow[];
   setAside: { name: string; why: string }[]; questions: ReportQuestion[];
   yourChanges?: number; requests?: string[]; rulesWorded?: number;
   /** A thing whose content was already filed, binned (TL-P4-10 addendum 2): its name and the saved file's name. */
@@ -351,11 +352,14 @@ function operationV2(value: unknown): value is OperationV2 {
 
 const rows = (value: unknown, keys: string[], optional: string[] = []): boolean =>
   list(value, (row) => closed(row, keys, optional) && Object.values(row).every(text));
+/** An updated row: its op and its line are optional (TL-P4-19 addendum 3), and a line comes only with its op. */
+const updatedRow = (row: unknown): boolean => closed(row, ['path', 'what'], ['op', 'line']) && text(row.path) && text(row.what)
+  && (!Object.hasOwn(row, 'op') || hash(row.op)) && (!Object.hasOwn(row, 'line') || (Object.hasOwn(row, 'op') && integer(row.line)));
 function runReport(value: unknown): value is ManifestRunReport {
   if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded', 'alreadySaved'])) return false;
   return list(value.filed, (row) => closed(row, ['name', 'title', 'kind', 'to'], ['note', 'area']) && text(row.name) && text(row.title)
       && oneOf(row.kind, fileKinds) && text(row.to) && (!Object.hasOwn(row, 'note') || text(row.note)) && (!Object.hasOwn(row, 'area') || text(row.area)))
-    && rows(value.created, ['path', 'what']) && rows(value.updated, ['path', 'what']) && rows(value.setAside, ['name', 'why'])
+    && rows(value.created, ['path', 'what']) && list(value.updated, updatedRow) && rows(value.setAside, ['name', 'why'])
     && list(value.questions, (row) => closed(row, ['id', 'text', 'yes', 'no', 'askedAt'], ['about'])
       && text(row.id) && text(row.text) && text(row.yes) && text(row.no) && integer(row.askedAt)
       && (!Object.hasOwn(row, 'about') || text(row.about)))

@@ -1047,18 +1047,19 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     return [];
   });
   const renameIds = holdRenames ? [] : moved.map((l) => l.rec.id);
-  const edits: Array<{ file: DriveFile; path: string; whats: string[]; before: VerifiedContent; bytes: Uint8Array; changes: Change[]; text: string; after: string[]; keeps: string[] }> = [];
+  const edits: Array<{ file: DriveFile; path: string; rows: Array<{ what: string; line?: number }>; before: VerifiedContent; bytes: Uint8Array; changes: Change[]; text: string; after: string[]; keeps: string[] }> = [];
   for (const { c, text } of authored) {
     for (const l of c.lines) lineState.set(l, 'planned');
     if (c.rules) rulesState = 'planned';
     // One report row per Timeline line it writes (report-misses-hub-line); a Current state alone says it was updated.
-    const written = c.lines.flatMap((l) => (l.what === null ? [] : [l.what]));
-    const whats = written.length ? written : c.state ? [STATE_UPDATED] : [];
+    // Each row names its line by its place counted from the Timeline's end, where the edit appends them in order.
+    const written = c.lines.flatMap((l, i) => (l.what === null ? [] : [{ what: l.what, line: c.lines.length - 1 - i }]));
+    const rows = written.length ? written : c.state ? [{ what: STATE_UPDATED }] : [];
     const after = [...new Set([...c.lines.flatMap((l) => (l.after === null ? [] : [l.after])), ...(c.stateAfter === null ? [] : [c.stateAfter])])];
     // An edit a keep needs (the kept note's lines, a link to the other note) keeps the note's text as read, for its undo.
     // So does a write the person's yes granted: its undo puts their section back byte for byte (`undoEdit`).
     const keeps = [...new Set([...keeping.filter((x) => x.kept.id === c.file.id).map((x) => x.k.answer), ...(c.rewrite ? keptFor(c.bytes) : []), ...(c.state?.granted ? [c.state.granted.answer] : [])])];
-    edits.push({ file: c.file, path: ix.pathOf(c.file.id) ?? c.path, whats, before: c.before, bytes: c.bytes, changes: changesOf(c, renameIds), text, after, keeps });
+    edits.push({ file: c.file, path: ix.pathOf(c.file.id) ?? c.path, rows, before: c.before, bytes: c.bytes, changes: changesOf(c, renameIds), text, after, keeps });
     places.set(c.file.id, c.file);
   }
   for (const [l, twin] of twins) lineState.set(l, lineState.get(twin) ?? 'refused');
@@ -1514,7 +1515,7 @@ export async function build(decided: Decided): Promise<Ended> {
     if (edit.changes.some((c) => c.kind === 'timeline-append')) {
       await add({ kind: 'move', before: seen(edit.file), parent: { fileId: edit.file.parents[0] ?? '' }, name: edit.file.name, properties: { bowerNew: '1' } }, [op]);
     }
-    for (const what of edit.whats) reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), updated: [{ path: edit.path, what }] } });
+    for (const row of edit.rows) reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), updated: [{ path: edit.path, what: row.what, op, ...(row.line === undefined ? {} : { line: row.line }) }] } });
   }
   // What a disagreement's answer derives (R4-1): its Timeline line, which the question's removal waits for.
   for (const [id, a] of answerLines) {
@@ -1533,7 +1534,7 @@ export async function build(decided: Decided): Promise<Ended> {
     const keptEdit = editOf.get(x.kept.id);
     // The other note changed after it was read (the Bin checks its modifiedTime): it stays, and so does the question.
     reportPlan.push({ requires: [op], when: 'rejected', value: { ...empty(), setAside: [{ name: displayName(nameOf(x.k.other)), why: KEEP_CHANGED }] } });
-    if (keptEdit) reportPlan.push({ requires: [keptEdit, ...written.filter((w) => w !== keptEdit), op], when: 'applied', value: { ...empty(), updated: [{ path: ix.pathOf(x.kept.id) ?? x.k.kept, what: keptLine(displayName(nameOf(x.k.other))) }] } });
+    if (keptEdit) reportPlan.push({ requires: [keptEdit, ...written.filter((w) => w !== keptEdit), op], when: 'applied', value: { ...empty(), updated: [{ path: ix.pathOf(x.kept.id) ?? x.k.kept, what: keptLine(displayName(nameOf(x.k.other))), op: keptEdit }] } });
   }
   // Things already saved go to the Bin (never deleted), a copy of this run's thing after that one's move; each is
   // reported as already saved under the name of the file it copies, and gets no note and no line.

@@ -3992,7 +3992,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         expect(more).toEqual([]);
         expect(mark).toMatchObject({ dependsOn: [edit?.operationId], effect: { kind: 'move', parent: { fileId: file.parents[0] }, name: file.name, properties: { bowerNew: '1' } } });
         expect(manifest?.reportPlan.filter((c) => c.value.updated.length)).toContainEqual({
-          requires: [edit?.operationId], when: 'applied', value: { filed: [], created: [], updated: [{ path: edit?.effect.path, what }], setAside: [], questions: [] },
+          requires: [edit?.operationId], when: 'applied', value: { filed: [], created: [], updated: [{ path: edit?.effect.path, what, op: edit?.operationId, line: 0 }], setAside: [], questions: [] },
         });
       }
       if (!manifest) return;
@@ -4012,7 +4012,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         expect(writesTo(w.applied, file.id)).toHaveLength(1);
         expect((await w.drive.evidence(file.id))?.file.appProperties?.bowerNew).toBe('1');
       }
-      expect(viewOf(w)?.run.report?.updated).toEqual([{ path: FLAT, what: FLAT_WHAT }, { path: JOB, what: JOB_WHAT }]);
+      expect(viewOf(w)?.run.report?.updated).toMatchObject([{ path: FLAT, what: FLAT_WHAT }, { path: JOB, what: JOB_WHAT }]);
       await expectFiledOnce(w);
 
       // The next tidy-up finds both lines there: a v1 plan with no edit, the notes untouched, nothing reported.
@@ -4110,7 +4110,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(textAt(w, FLAT)).toBe(theirs);
       expect(w.calls.filter((c) => 'id' in c && c.id === flat.id)).toEqual([]);
       expect((await w.drive.evidence(flat.id))?.file.appProperties?.bowerNew).toBeUndefined();
-      expect(viewOf(w)?.run.report?.updated).toEqual([{ path: JOB, what: JOB_WHAT }]);
+      expect(viewOf(w)?.run.report?.updated).toMatchObject([{ path: JOB, what: JOB_WHAT }]);
       await expectFiledOnce(w);
     });
 
@@ -4172,7 +4172,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         const [edit] = editsOf(manifest);
         expect(textAt(r, FLAT)).toBe(edit?.effect.text);
         expect(textAt(r, FLAT)?.split(FLAT_WHAT)).toHaveLength(2);
-        expect(viewOf(r)?.run.report?.updated).toEqual([{ path: FLAT, what: FLAT_WHAT }]);
+        expect(viewOf(r)?.run.report?.updated).toMatchObject([{ path: FLAT, what: FLAT_WHAT }]);
         expect((await r.drive.evidence(id))?.file.appProperties?.bowerNew).toBe('1');
         expect(writesTo(r.applied, id)).toEqual([]);
       }
@@ -4228,7 +4228,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(textAt(applied.w, FLAT)).toBe(applied.edit?.effect.text);
       expect(textAt(applied.w, FLAT)?.split(FLAT_WHAT)).toHaveLength(2);
       expect(await outcomeOf(applied.w, applied.admitted.id, applied.edit)).toMatchObject({ state: 'applied' });
-      expect(viewOf(applied.w)?.run.report?.updated).toEqual([{ path: FLAT, what: FLAT_WHAT }]);
+      expect(viewOf(applied.w)?.run.report?.updated).toMatchObject([{ path: FLAT, what: FLAT_WHAT }]);
 
       const back = async (w: World, id: string, text: string): Promise<void> => {
         await w.drive.writeText(id, text, (await w.drive.get(id)).modifiedTime);
@@ -4289,7 +4289,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         expect(w.calls.filter((c) => 'id' in c && c.id === idOf(path))).toEqual([]);
         expect(textAt(w, path)).toBe(FLAT_BEFORE);
       }
-      expect(viewOf(w)?.run.report?.updated).toEqual(first.map((path) => ({ path, what: whatOf(path) })));
+      expect(viewOf(w)?.run.report?.updated).toMatchObject(first.map((path) => ({ path, what: whatOf(path) })));
       await expectFiledOnce(w);
       // The next tidy-up skips the 8 lines already there and adds the rest: every note has its line once.
       const two = await tidy(w, 1);
@@ -4298,7 +4298,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         expect(writesTo(w.calls, idOf(path))).toHaveLength(1);
         expect(textAt(w, path)?.split(whatOf(path))).toHaveLength(2);
       }
-      expect(viewOf(w)?.run.report?.updated).toEqual(rest.map((path) => ({ path, what: whatOf(path) })));
+      expect(viewOf(w)?.run.report?.updated).toMatchObject(rest.map((path) => ({ path, what: whatOf(path) })));
 
       // Ten notes just under 1 MiB, full of quotes and backslashes that JSON escapes: 8 would pass the guard's 8 MiB,
       // so each run takes fewer, from the start of the path order, stays on the B path, and later runs converge.
@@ -4881,8 +4881,8 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(await pendingAnswers(w)).toEqual([]);
       expect(viewOf(w)?.run.report?.filed).toContainEqual({ name: LISTING.name, title: 'Flat 3, 12 Larkspur Lane', kind: 'link', to: 'Projects/Flat hunt', note: INTO });
       // TL-P2-40: the note the thing joined is listed as brought up to date, by its line.
-      expect(manifest.reportPlan).toContainEqual({ requires: [edit?.operationId], when: 'applied', value: { filed: [], created: [], updated: [{ path: INTO, what: LINE }], setAside: [], questions: [] } });
-      expect(viewOf(w)?.run.report?.updated).toContainEqual({ path: INTO, what: LINE });
+      expect(manifest.reportPlan).toContainEqual({ requires: [edit?.operationId], when: 'applied', value: { filed: [], created: [], updated: [{ path: INTO, what: LINE, op: edit?.operationId, line: 0 }], setAside: [], questions: [] } });
+      expect(viewOf(w)?.run.report?.updated).toContainEqual({ path: INTO, what: LINE, op: edit?.operationId, line: 0 });
       await expectFiledOnce(w);
     });
 

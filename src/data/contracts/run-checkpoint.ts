@@ -147,6 +147,9 @@ function filed(value: unknown): boolean {
     && (!Object.hasOwn(value, 'note') || text(value.note)) && (!Object.hasOwn(value, 'area') || text(value.area));
 }
 const pathChange = (value: unknown): boolean => closed(value, ['path', 'what']) && text(value.path) && text(value.what);
+/** An updated row: its op and its line are optional (TL-P4-19 addendum 3), and a line comes only with its op. */
+const updatedRow = (value: unknown): boolean => closed(value, ['path', 'what'], ['op', 'line']) && text(value.path) && text(value.what)
+  && (!Object.hasOwn(value, 'op') || hash(value.op)) && (!Object.hasOwn(value, 'line') || (Object.hasOwn(value, 'op') && integer(value.line)));
 const setAside = (value: unknown): boolean => closed(value, ['name', 'why']) && text(value.name) && text(value.why);
 function question(value: unknown): boolean {
   return closed(value, ['id', 'text', 'yes', 'no', 'askedAt'], ['about'])
@@ -160,7 +163,7 @@ function savedRow(value: unknown): value is { name: string; as: string } {
 /** The existing RunReport shape, closed; optional counts and requests are omitted, never null. */
 function runReport(value: unknown): value is RunReport {
   if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded', 'nothingReady', 'alreadySaved', 'unconfirmed'])
-    || !every(value.filed, filed) || !every(value.created, pathChange) || !every(value.updated, pathChange)
+    || !every(value.filed, filed) || !every(value.created, pathChange) || !every(value.updated, updatedRow)
     || !every(value.setAside, setAside) || !every(value.questions, question)) return false;
   if (Object.hasOwn(value, 'yourChanges') && !integer(value.yourChanges)) return false;
   if (Object.hasOwn(value, 'rulesWorded') && !integer(value.rulesWorded)) return false;
