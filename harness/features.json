@@ -5672,7 +5672,8 @@
     ],
     "verify": "pnpm vitest run -t \"focus returns on close with no timer\" && bash scripts/e2e-both.sh e2e/focus-after-close.spec.ts e2e/qa10.spec.ts -g \"Delete on a folder asks before the Bin|closing the tidy sheet returns focus to its opener|closing the tidy sheet with not now returns focus to its opener\"",
     "note": "Defect qa10-toast-flake, ruling (b) (main 7a708aa); docs/harness/defects/2026-10-09-qa10-toast-flake.md. Opens stage 4. Sites: Explorer.tsx:125,130,532-547; focus.ts:5,80; Sheet.tsx:30; toast.tsx:73; Palette.tsx:107; Replay.tsx:146. Tests wait for focus, never for time; the mechanism map gets a row. Starting model: bower-implementer. TL-P4-21: carries d-v2-04 (Sheet opener, all 8 sheets); ui: true. Packet 2026-10-09-c4-focus-return-packet.md. The e2e file may differ; the worker names it.",
-    "ui": true
+    "ui": true,
+    "design": "not verified: menu-sheet-focus-to-heading (a4d092e7)"
   },
   {
     "id": "c3-reservation-home",
