@@ -16,7 +16,7 @@
  * Blink (5.2 s) is left out.
  */
 import type { Pose } from './Bower';
-import type { ActName } from './engine';
+import type { ActName, BirdEngine } from './engine';
 
 export type PartKey =
   | 'dx'
@@ -227,6 +227,66 @@ export function actProblems(name: ActName, samples: ReadonlyArray<Record<PartKey
   }
   return problems;
 }
+
+/** The engine's named actions outside the act table, each with its reference row (TL-P4-22 addendum 20). */
+export type ActionName = 'startle';
+
+export interface ActionRef {
+  /** The part the action moves. */
+  part: PartKey;
+  /** The value it eases to and holds, within 2. */
+  peak: number;
+  /** Seconds the peak is held (within 2). */
+  hold: number;
+  /**
+   * The lowest and highest value once the peak is reached, through the return
+   * to rest, for a part resting at 0; the low end moves up with a higher rest.
+   */
+  range: [number, number];
+}
+
+export const ACTION_REFERENCE: Partial<Record<ActionName, ActionRef>> = {
+  // TL-P4-25 addendum 1 (6): on waking or a nudge the tuft eases up to 18deg, holds 0.6 s and eases back (addendum 20)
+  startle: { part: 'tuft', peak: 18, hold: 0.6, range: [-2, 20] },
+};
+
+/**
+ * Every public member of the engine, and how its motion is checked. `acts`
+ * and `poses` are checked name by name (ACT_REFERENCE, POSE_REFERENCE); an
+ * `action` names its ACTION_REFERENCE row; `script` is a layer script step
+ * (the court's flights, pecks and displays), and `control` moves nothing.
+ * A new public member fails to compile until it is listed here.
+ */
+export type EngineMember = 'control' | 'script' | 'acts' | 'poses' | { action: ActionName };
+
+export const ENGINE_MEMBERS: Record<keyof BirdEngine, EngineMember> = {
+  speed: 'control',
+  start: 'control',
+  stop: 'control',
+  release: 'control',
+  setPose: 'poses',
+  setSize: 'control',
+  setHome: 'control',
+  snapHome: 'control',
+  look: 'control',
+  nudge: { action: 'startle' },
+  busy: 'control',
+  settled: 'control',
+  act: 'acts',
+  interrupt: 'control',
+  then: 'control',
+  wait: 'control',
+  chirp: 'script',
+  flyTo: 'script',
+  hopTo: 'script',
+  peck: 'script',
+  face: 'script',
+  study: 'script',
+  scribble: 'script',
+  holding: 'script',
+  showOff: 'script',
+  poke: 'script',
+};
 
 const nums = (s: string | null | undefined): number[] => (s ?? '').match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
 

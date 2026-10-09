@@ -85,7 +85,8 @@ const pin = (c: Spring, v: number): void => {
 };
 
 /** The poses a perched Bower plays in place (the same names as the still frames). */
-export type PoseName = 'idle' | 'wait' | 'read' | 'write' | 'carry' | 'proud' | 'sleep' | 'alarm' | 'land';
+export const POSE_NAMES = ['idle', 'wait', 'read', 'write', 'carry', 'proud', 'sleep', 'alarm', 'land'] as const;
+export type PoseName = (typeof POSE_NAMES)[number];
 
 /**
  * Where frames and chance come from. Defaults: requestAnimationFrame and
@@ -102,7 +103,8 @@ export interface EngineOptions {
 }
 
 /** The mind's idle acts (TL-P4-25); `look` is wait's own. */
-export type ActName = 'snap' | 'flick' | 'chirp' | 'wing' | 'preen' | 'pause' | 'look';
+export const ACT_NAMES = ['snap', 'flick', 'chirp', 'wing', 'preen', 'pause', 'look'] as const;
+export type ActName = (typeof ACT_NAMES)[number];
 
 /** Where an input came from: a pointer moving, a touch or press, or the focused control. */
 export type LookSource = 'pointer' | 'touch' | 'focus';

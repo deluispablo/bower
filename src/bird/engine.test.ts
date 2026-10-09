@@ -1,11 +1,13 @@
 import { createElement } from 'react';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { BirdEngine, type ActName, type EngineOptions } from './engine';
+import { ACT_NAMES, BirdEngine, POSE_NAMES, type ActName, type EngineOptions } from './engine';
 import { Rig, type RigPart } from './Rig';
 import type { Pose } from './Bower';
 import {
+  ACTION_REFERENCE,
   ACT_REFERENCE,
+  ENGINE_MEMBERS,
   FPS,
   NEUTRAL,
   PART_KIND,
@@ -226,6 +228,56 @@ describe("the engine's idle mind", () => {
       }
       expect(Math.max(...eyes), pose).toBeCloseTo(0.08, 2);
       expect(Math.min(...eyes), pose).toBeCloseTo(0.08, 2);
+    }
+  });
+});
+
+describe("the engine's named actions", () => {
+  it('every engine act has a reference row', () => {
+    const missing: string[] = [];
+    for (const [member, kind] of Object.entries(ENGINE_MEMBERS)) {
+      if (kind === 'acts') missing.push(...ACT_NAMES.filter((n) => !(n in ACT_REFERENCE)).map((n) => `${member}('${n}')`));
+      else if (kind === 'poses') missing.push(...POSE_NAMES.filter((n) => !(n in POSE_REFERENCE)).map((n) => `${member}('${n}')`));
+      else if (typeof kind === 'object' && !ACTION_REFERENCE[kind.action]) missing.push(`${member}: ${kind.action}`);
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it('the wake startle stays within its reference range', () => {
+    const ref = ACTION_REFERENCE.startle;
+    expect(ref, 'the startle has a reference row').toBeDefined();
+    if (!ref) return;
+    for (const pose of ['idle', 'wait'] as const) {
+      // Asleep after 60 s with no input (tuft down at -26deg), then an input with no place wakes it.
+      const { engine, frames, read } = mount(pose);
+      frames.run(61 * FPS);
+      const from = read()[ref.part];
+      expect(from, pose).toBeCloseTo(-26, 0);
+      engine.nudge();
+      const seen: number[] = [];
+      for (let i = 0; i < 3 * FPS; i++) {
+        frames.run(1);
+        seen.push(read()[ref.part]);
+      }
+      const rest = POSE_REFERENCE[pose].parts.tuft?.rest ?? 0;
+      const top = seen.indexOf(Math.max(...seen));
+      const problems: string[] = [];
+      // Eases up: never back down on the way to the peak, never past it.
+      const rise = seen.slice(0, top + 1);
+      if (rise.some((v, i) => i > 0 && v < (rise[i - 1] ?? v) - 0.01)) problems.push('the tuft dips on its way up');
+      if (Math.abs((seen[top] ?? 0) - ref.peak) > 2) problems.push(`peak ${(seen[top] ?? 0).toFixed(2)}, reference ${ref.peak} ± 2`);
+      // Holds the peak for its seconds.
+      const held = seen.filter((v) => Math.abs(v - ref.peak) <= 2).length / FPS;
+      if (held < ref.hold) problems.push(`held ${held.toFixed(2)}s, reference ${ref.hold}s`);
+      // From the peak back to rest: within the range, and at rest at the end.
+      const [lo, hi] = ref.range;
+      const back = seen.slice(top);
+      const min = Math.min(...back);
+      const max = Math.max(...back);
+      if (min < lo + rest || max > hi) problems.push(`returns over ${min.toFixed(2)}..${max.toFixed(2)}, range ${lo + rest}..${hi}`);
+      const end = seen[seen.length - 1] ?? 0;
+      if (Math.abs(end - rest) > 1) problems.push(`ends at ${end.toFixed(2)}, rest ${rest}`);
+      expect(problems, pose).toEqual([]);
     }
   });
 });
