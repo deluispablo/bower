@@ -5702,7 +5702,7 @@
     "id": "c3-test-time",
     "task": "p4-consolidation",
     "category": "test",
-    "passes": false,
+    "passes": true,
     "what": "Unit tests never wait on real time: backoff, deadlines and toasts use the injected clock, transport options or fake timers; dependency-cruiser runs once (scripts/check-dependencies.mjs in pnpm check), not inside vitest; check-harness fails any unit test over 1000 ms that is not in harness/slow-tests.json, a list that may only shrink.",
     "steps": [
       "A unit test over 1000 ms not in harness/slow-tests.json fails the harness check.",
