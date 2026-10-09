@@ -5723,6 +5723,6 @@
       "The same command from the coordinator session, or in a scratch worktree, passes."
     ],
     "verify": "pnpm exec vitest run src/guard-main-checkout.test.ts -t \"a subagent.s git checkout in the main checkout is refused|the coordinator.s own git checkout in the main checkout is allowed|a subagent.s git checkout in a scratch worktree is allowed\"",
-    "note": "TL-P4-17 entry 2 (main e1bbf010); closes reviewer-checkout-main. Wiring the hook into .claude/settings.json or agent frontmatter is Claude Code config: the coordinator does not change it on a peer ruling; the owner wires it (one line, given on the card). Starting model: bower-implementer."
+    "note": "TL-P4-17 entry 2 (main e1bbf010); closes reviewer-checkout-main. Wiring the hook into .claude/settings.json or agent frontmatter is Claude Code config: the coordinator does not change it on a peer ruling; the owner wires it (one line, given on the card). Starting model: bower-implementer. Red at 1f2a4979: the script is a new file, so the red is its missing module (/tmp/c3g-red.log); done.sh cannot load a revert of a new file. Wiring (owner): PreToolUse matcher Bash, command node \"$CLAUDE_PROJECT_DIR/scripts/guard-main-checkout.mjs\"; subagent field agent_id."
   }
 ]
