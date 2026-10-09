@@ -251,3 +251,4 @@ d-v2-07 P4-58c,reviewer,claude,bower-reviewer,,3,34407,,,,,,8,0.3,PASS (4 minor)
 c4-undo-withdraw P4-56b,reviewer,claude,bower-reviewer,,2,50237,,,,,,11,0.8,PASS (4 minor),2026-10-09
 d-v2-07 round3 review,reviewer,codex,codex,medium,3,198690,197953,0,149888,737,,,,0 findings,2026-10-09
 c4-undo-withdraw round2 review,reviewer,codex,codex,medium,2,435738,433245,0,365824,2493,,,,3 Important,2026-10-09
+v2-boot-states test fix 3,implementer,claude,bower-implementer,,4,82091,,,,,,21,10.4,delivered,2026-10-09
