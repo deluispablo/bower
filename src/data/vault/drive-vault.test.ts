@@ -3464,8 +3464,11 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
     expect(untrash).not.toHaveBeenCalled();
   });
 
-  /** The first call of `k` that `when` picks lands; its answer is lost, and so is the read that would find it. */
-  function loseWithRead(k: 'update' | 'writeText' | 'trash' | 'untrash', when: (args: unknown[]) => boolean = () => true): () => number {
+  /**
+   * The first call of `k` that `when` picks lands; its answer is lost, and so is the read that would find it. With
+   * `meanwhile`, that read gets its answer instead, and `meanwhile` (a change elsewhere) runs before it.
+   */
+  function loseWithRead(k: 'update' | 'writeText' | 'trash' | 'untrash', when: (args: unknown[]) => boolean = () => true, meanwhile?: () => Promise<void>): () => number {
     const d = drive as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>;
     const real = d[k]?.bind(drive);
     if (!real) throw new Error(`no ${k}`);
@@ -3474,6 +3477,10 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
       const out = await real(...a);
       if (lost > 0 || !when(a)) return out;
       lost++;
+      if (meanwhile) {
+        await meanwhile();
+        throw driveError('offline');
+      }
       const get = drive.get.bind(drive);
       drive.get = async () => {
         drive.get = get;
@@ -3623,9 +3630,37 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
     expect(drive.pathOf(note, root)).toBe('Projects/Pile note.md');
   });
 
+  it('a lost answer whose file changed before the recovery read is not reported as landed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // A restore under a free name lands, its answer is lost, and another device renames it before Bower reads it back.
+    await vault.tree();
+    const id = await idOf(PASSPORT);
+    await vault.trash(PASSPORT);
+    await vault.flushJournal();
+    await vault.create('Areas/Documents', 'note', 'Passport renewal.md');
+    const renamed = loseWithRead('untrash', (a) => a[0] === id && typeof a[2] === 'string', async () => {
+      await drive.update(id, { name: 'Passport (Alex).md' });
+    });
+    await expect(vault.restore(PASSPORT)).rejects.toMatchObject({ code: 'conflict' });
+    expect(renamed()).toBe(1);
+    expect((await drive.get(id, { binned: true })).name).toBe('Passport (Alex).md');
+    // A pile note emptied, its answer lost, and filed into Projects by another device before Bower reads it back.
+    const v = declaring();
+    const made = await v.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
+    await v.settled();
+    await v.flushJournal();
+    await v.piles();
+    const note = await idOf(`${made.path ?? ''}/Pile note.md`);
+    const moved = loseWithRead('writeText', (a) => a[0] === note, () => moveElsewhere(note));
+    await expect(v.updatePile(made.id, '')).rejects.toMatchObject({ code: 'conflict' });
+    expect(moved()).toBe(1);
+    expect(drive.pathOf(note, root)).toBe('Projects/Pile note.md');
+  });
+
   /**
    * The fast-check trial (TL-P4-20): every app write of an existing file, its answer lost (or a later step of the same
-   * press failing), with a move, a rename or a Bin in Drive before the write or between the press and its retry. On
+   * press failing), with a move, a rename or a Bin in Drive before the write, between the lost answer and the read that
+   * looks for it (TL-P4-24 addendum 8), or between the press and its retry. On
    * every press: success only when the file is in the state the write intends, and no write to a file that is not as
    * the press read it (by name, place and Bin, and for text by its modifiedTime). With no change elsewhere, the retry
    * of a landed write succeeds. Seeded and bounded, so every run is the same.
@@ -3723,13 +3758,13 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
       return notAsSeenReason(e) === null ? 'failed' as const : 'refused' as const;
     });
 
-    // Every case met: each kind, change and moment, and for a restore each loss (88 in all, for this seed).
+    // Every case met: each kind, change and moment, and for a restore each loss (132 in all, for this seed).
     const met = new Set<string>();
     await fc.assert(
       fc.asyncProperty(
         fc.constantFrom(...kinds),
         fc.constantFrom('none', 'move', 'rename', 'bin'),
-        fc.constantFrom('before the write', 'before the retry'),
+        fc.constantFrom('before the write', 'before the recovery read', 'before the retry'),
         fc.constantFrom('its answer', 'a later step'),
         async (kind, change, when, loss) => {
           met.add([kind, change, when, ...(kind === 'unbin' || kind === 'restore' ? [loss] : [])].join(' / '));
@@ -3755,9 +3790,11 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
             d.trash = async (...a: unknown[]) => {
               if (a[0] === p.target) return trash(...a);
               d.trash = trash;
+              if (when === 'before the recovery read') await elsewhere(raw, change, p.target);
               throw driveError('offline');
             };
-          } else loseWithRead(p.op, (a) => a[0] === p.target);
+          } else if (when === 'before the recovery read') loseWithRead(p.op, (a) => a[0] === p.target, () => elsewhere(raw, change, p.target));
+          else loseWithRead(p.op, (a) => a[0] === p.target);
           const tryOnce = async (): Promise<'done' | 'refused' | 'failed'> => {
             const before = await stored(p.target);
             const from = sends.length;
@@ -3770,8 +3807,10 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
             return ended;
           };
           if (when === 'before the write') await elsewhere(raw, change, p.target);
-          // Refused, the person looks again: what they press next is a new read, no retry of this one.
-          if ((await tryOnce()) === 'refused') return;
+          // Refused, the person looks again: what they press next is a new read, no retry of this one. Done (its lost
+          // answer found again by the read that looks for it), there is nothing to retry.
+          const first = await tryOnce();
+          if (first === 'refused' || first === 'done') return;
           if (when === 'before the retry') await elsewhere(raw, change, p.target);
           const retried = await tryOnce();
           // A landed write, nothing changed elsewhere: the retry resolves (TL-P4-24 addendum 4).
@@ -3780,6 +3819,6 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
       ),
       { seed: 20261009, numRuns: 500 },
     );
-    expect(met.size).toBe(88);
+    expect(met.size).toBe(132);
   }, 60_000);
 });
