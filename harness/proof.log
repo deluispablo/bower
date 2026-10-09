@@ -479,3 +479,4 @@ c3-reservation-worker	f15c904f6dbf4c83	2026-10-09	known-green: red at 104707e3: 
 c3-subject	f318fd1dce8e4eec	2026-10-09	known-green: red at 856cde1e: 2 carry-over tests fail (/tmp/c3subj-handred.log); green at 0a8d7228
 c3-alone-margin	ef54b709d2bf7721	2026-10-09	red (fixed in 2263d7ba)
 c3-reply-schema	bc41f2db4250e155	2026-10-09	known-green: red at 358476d4: 2 tests fail (/tmp/c3rs-handred-*.log); green at 29891386
+c3-fingerprint	a894a70a61a4344d	2026-10-09	red (fixed in df2bfc88)

@@ -5821,7 +5821,7 @@
     "id": "c3-fingerprint",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "The input fingerprint hashes a normalized object (run-dependent fields set to fixed values by key, at any depth), not regex-edited JSON text.",
     "steps": [
       "The same case run twice with different ids gives the same fingerprint.",
