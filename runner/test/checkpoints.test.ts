@@ -8,7 +8,7 @@ import { driveError, type DriveFile } from '../../src/data/drive/drive-api';
 import { RunRecords, canonical, checkpointName, firstCheckpoint, manifestName, nextCheckpoint, type RunManifest } from '../../src/data/spine/records';
 import { RunnerDrive } from '../src/drive';
 import { runnerReads } from '../src/spine/records';
-import { keepFinished } from '../src/spine/retention';
+import { endedStamp, keepFinishedAtEnd } from '../src/spine/retention';
 import { runOperations, type Effects, type ReadBack, type RunEnd } from '../../src/data/spine/engine';
 import { RunnerToken } from '../src/token';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
@@ -307,16 +307,21 @@ describe('runner checkpoints', () => {
       const first = firstCheckpoint(manifest, m.hash, mark, AT + i);
       const c0 = await canonical(first);
       await records.put(w, where, checkpointName(0, c0.hash), c0.text);
+      // Still going, or from before the stamp: no stamp, so never counted nor let go of.
       if (unfinished.has(i)) continue;
       // Finished in a scrambled order, so the newest are told by when they finished, not by their names.
-      const last = nextCheckpoint(first, c0.hash, mark, { phase: 'failed', phaseAt: AT + 1000 + ((i * 7) % 25) });
+      const endedAt = AT + 1000 + ((i * 7) % 25);
+      const last = nextCheckpoint(first, c0.hash, mark, { phase: 'failed', phaseAt: endedAt });
       const c1 = await canonical(last);
       await records.putNew(w, where, checkpointName(1, c1.hash), c1.text);
+      const folder = (await drive.listAll(root)).find((f) => f.folder && f.name === manifest.runId);
+      await drive.update(folder?.id ?? '', { appProperties: endedStamp(manifest.runId, endedAt) });
     }
     const wire = driveV3(drive);
     const token = new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: wire.fetch, now: () => wire.now });
     const adapter = new RunnerDrive({ token, attempt: 1, fetch: wire.fetch });
-    const trashed = await keepFinished(new RunRecords(runnerReads(adapter), root), await adapter.batch(), adapter);
+    // 23 ended and this run: 4 beyond the newest 20, of which the oldest 3 go this time.
+    const trashed = await keepFinishedAtEnd(adapter, new RunRecords(runnerReads(adapter, RUN_ID), root), RUN_ID, AT + 5000);
 
     const folders = (await drive.listAll(root)).filter((f) => f.folder && f.name.startsWith('run-'));
     const finishedAt = (i: number): number => (i * 7) % 25;
@@ -349,13 +354,15 @@ describe('runner checkpoints', () => {
       const last = nextCheckpoint(first, c0.hash, mark, { phase: 'failed', phaseAt: AT + 1000 + i });
       const c1 = await canonical(last);
       await records.putNew(w, where, checkpointName(1, c1.hash), c1.text);
+      const folder = (await drive.listAll(root)).find((f) => f.folder && f.name === manifest.runId);
+      await drive.update(folder?.id ?? '', { appProperties: endedStamp(manifest.runId, AT + 1000 + i) });
     }
     const wire = driveV3(drive);
     const token = new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: wire.fetch, now: () => wire.now });
     const adapter = new RunnerDrive({ token, attempt: 1, fetch: wire.fetch });
-    // The oldest folder goes to the Bin and the answer is lost.
+    // The oldest folder goes to the Bin (3 ended and this run, 3 kept) and the answer is lost.
     adapter.fault = { before: (call) => (call.op === 'trash' ? 'lose-reply' : 'pass') };
-    const letGo = keepFinished(new RunRecords(runnerReads(adapter), root), await adapter.batch(), adapter, 2);
+    const letGo = keepFinishedAtEnd(adapter, new RunRecords(runnerReads(adapter, RUN_ID), root), RUN_ID, AT + 5000, 3);
     await expect(letGo).resolves.toHaveLength(1);
     const [id] = await letGo;
     expect((await drive.evidence(id ?? ''))?.trashed).toBe(true);

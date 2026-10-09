@@ -6,6 +6,7 @@ import { parseRunReport } from '../../src/data/contracts/run-checkpoint';
 import type { DriveFile } from '../../src/data/drive/drive-api';
 import { RunRecords } from '../../src/data/spine/records';
 import { runnerReads, type RunnerReads } from '../src/spine/records';
+import { toBin } from '../src/spine/retention';
 
 /** The accepted app's files, listed the way the runner's Drive adapter lists a folder. */
 describe('the accepted app files, read by the runner', () => {
@@ -34,8 +35,10 @@ describe('the accepted app files, read by the runner', () => {
     expect(found.manifest).toEqual(manifestFile.content);
     expect(found.chain).toEqual(fixture('run-checkpoint').files.map((f) => f.content));
     expect(found.chain.at(-1)?.phase).toBe('done');
-    // Its finished run is one the runner may let go of.
-    expect((await new RunRecords(runnerReads(drive), rootId).finished()).map((f) => f.folder.name)).toEqual([runId]);
+    // Its folder carries no ended stamp (it is from before it): never counted nor let go of by a later run.
+    const runFolders = await new RunRecords(runnerReads(drive, runId), rootId).runFolders();
+    expect(runFolders.map((f) => f.name)).toEqual([runId]);
+    expect(toBin(runFolders, 'a-later-run', 0)).toEqual([]);
 
     const report = await parseRunReport(recordBytes(only('run-report').content), { rootId, runId, captureId: found.manifest.captureId, manifestHash: found.manifestHash });
     expect(report.ok && report.value).toEqual(only('run-report').content);

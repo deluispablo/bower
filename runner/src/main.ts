@@ -197,7 +197,7 @@ interface Seen {
   saving: boolean;
   /** The admitted things (pile members; your changes are not things), on every report from `reading` (undefined until known). */
   total: number | undefined;
-  /** Puts the finished run folders beyond the newest 20 in the Bin; set once the run's records are known. */
+  /** At done: puts the oldest ended run folders beyond the newest 20 in the Bin and stamps this run's folder as ended; set once the run's records are known. */
   retain?: () => Promise<unknown>;
 }
 
@@ -220,7 +220,10 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   const reads = runnerReads(drive, opts.runId);
   const records = new RunRecords(reads, rootId);
   timeCheckpoints(records, timing);
-  seen.retain = () => keepFinishedAtEnd(drive, rootId, records);
+  seen.retain = async () => {
+    const ended = seen.chain?.at(-1);
+    if (ended?.phase === 'done') await keepFinishedAtEnd(drive, records, opts.runId, ended.phaseAt);
+  };
   const barrier = { rootId, runId: opts.runId, attempt: opts.attempt, records, reads, batch: () => drive.batch(), fenced: () => drive.fencedWrites(), admission: grant.manifest, clock, newId };
 
   // 2. This run's report already in the folder: nothing is repeated. Its chain says done before the Worker hears it.
@@ -230,6 +233,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
     if (found.kind === 'run') seen.total ??= found.manifest.capture.members.length;
     if (found.kind === 'run' && found.chain.length) {
       const finished = await finishRun(barrier, found.manifest, found.manifestHash, found.chain);
+      seen.chain = finished.chain;
       return { phase: 'done', dispositions: finished.dispositions };
     }
     // No chain to say it in (its records already let go of): the report itself is what landed.
@@ -283,6 +287,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
     end.manifestHash,
     end.chain,
   ));
+  seen.chain = finished.chain;
   return { phase: 'done', dispositions: finished.dispositions };
 }
 

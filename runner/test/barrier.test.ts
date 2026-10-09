@@ -280,14 +280,15 @@ describe('the report barrier', () => {
     const sent = new Map(effects.sent);
     expect([...sent.values()].every((n) => n === 1)).toBe(true);
 
-    // The redispatch reads that checkpoint, applies no effect and writes only the report, then its last checkpoint.
+    // The redispatch reads that checkpoint, applies no effect and writes only the report, then its last checkpoint,
+    // then the ended stamp on its run's folder (`retention.ts`).
     const writes: Write[] = [];
     const second = await tidy(wire, root, 2, effects, writes);
     expect(second.phase).toBe('done');
     expect(effects.sent).toEqual(sent);
     expect(effects.observed).toBe(0);
     const names = await Promise.all(writes.map((w) => nameOf(wire, w.call)));
-    expect(names).toEqual(['last-run.json', expect.stringMatching(/^checkpoint-\d+-[0-9a-f]{64}\.json$/)]);
+    expect(names).toEqual(['last-run.json', expect.stringMatching(/^checkpoint-\d+-[0-9a-f]{64}\.json$/), RUN_ID]);
     expect((await stored(wire, root, SYSTEM.lastRun))?.value).toMatchObject({ v: 1, run: { id: RUN_ID, phase: 'done' } });
     expect(wire.statuses.at(-1)).toMatchObject({ attempt: 2, phase: 'done' });
   });
@@ -440,7 +441,8 @@ describe('the report barrier', () => {
     expect((await tidy(wire, root, 1, effects, writes)).phase).toBe('done');
     expect(effects.sent).toEqual(sent);
     const names = await Promise.all(writes.map((w) => nameOf(wire, w.call)));
-    expect(names).toEqual([expect.stringMatching(/^checkpoint-\d+-[0-9a-f]{64}\.json$/)]);
+    // Its done checkpoint, then the ended stamp on its run's folder (`retention.ts`).
+    expect(names).toEqual([expect.stringMatching(/^checkpoint-\d+-[0-9a-f]{64}\.json$/), RUN_ID]);
     expect((await chainOf(wire, root)).at(-1)).toMatchObject({ phase: 'done', report: { state: 'published' } });
     const done = wire.statuses.at(-1);
     expect(done).toMatchObject({ attempt: 1, seq: 4, phase: 'done' });

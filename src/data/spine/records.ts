@@ -62,12 +62,6 @@ export type Found =
   | { kind: 'run'; manifest: RunManifest; manifestHash: string; chain: Checkpoint[]; head: string | null }
   | { kind: 'broken'; why: string };
 
-/** A run folder whose verified head is terminal, and when it ended (its `phaseAt`). */
-export interface Finished {
-  folder: DriveFile;
-  at: number;
-}
-
 const SAVE_FAILED = 'Bower could not save what it did. Try again later.';
 const READ_FAILED = 'Bower could not read what it did. Try again later.';
 /** A manifest version later than this build reads (TL-P2-20 R3-7 m9): the run stays saving. */
@@ -270,21 +264,6 @@ export class RunRecords {
   async runFolders(): Promise<DriveFile[]> {
     const { listing, ns } = await this.folders({ runId: '' });
     return runFoldersIn(listing, ns);
-  }
-
-  /**
-   * The run folders in `.bower/runs` whose verified chain ends done or failed, each by its own folder (a duplicate
-   * name is its own folder). Anything that cannot be verified is not finished, so it is never let go of.
-   */
-  async finished(): Promise<Finished[]> {
-    const { listing, ns } = await this.folders({ runId: '' });
-    const out: Finished[] = [];
-    for (const folder of runFoldersIn(listing, ns)) {
-      const found = await this.foundIn({ listing, run: [folder] }, folder.name);
-      const head = found.kind === 'run' ? found.chain.at(-1) : undefined;
-      if (head && (head.phase === 'done' || head.phase === 'failed')) out.push({ folder, at: head.phaseAt });
-    }
-    return out;
   }
 
   /** Writes a consumed disposition after checking it against its pile's full key set. */
