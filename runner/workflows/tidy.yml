@@ -59,6 +59,14 @@ jobs:
       - name: Put Claude Code on the path
         if: vars.BOWER_PROVIDER == 'claude'
         run: printf '%s\n' "$HOME/claude-cli/node_modules/.bin" >> "$GITHUB_PATH"
+      # The runner's Azure region, read from the instance metadata service as text
+      # (https://learn.microsoft.com/en-us/azure/virtual-machines/instance-metadata-service). Any failure or a
+      # non-region answer leaves BOWER_RUNNER_REGION unset (the timing line then says unknown); the step never fails the job.
+      - name: Record the runner region
+        continue-on-error: true
+        run: |
+          region="$(curl -s -m 2 -H Metadata:true 'http://169.254.169.254/metadata/instance/compute/location?api-version=2021-02-01&format=text' || true)"
+          if printf '%s' "$region" | grep -qE '^[a-z0-9]+$'; then printf 'BOWER_RUNNER_REGION=%s\n' "$region" >> "$GITHUB_ENV"; fi
       # The scripted provider's step: no secret in its environment.
       - name: Tidy up
         if: vars.BOWER_PROVIDER != 'claude'
