@@ -99,7 +99,7 @@ const wholeFrom = (value: unknown, min: number): value is number =>
 
 function parseReport(value: unknown): RunnerReport {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) throw unreadable();
-  const { attempt, seq, phase, total, failure } = value as Record<string, unknown>;
+  const { attempt, seq, phase, total, failure, answersStayed } = value as Record<string, unknown>;
   if (!wholeFrom(attempt, 1) || !wholeFrom(seq, 1)) throw unreadable();
   if (!isRunPhase(phase)) throw unreadable();
   if (total !== undefined && !wholeFrom(total, 0)) throw unreadable();
@@ -107,12 +107,15 @@ function parseReport(value: unknown): RunnerReport {
     const sentence = typeof failure === 'string' && failure.trim() !== '' && failure.length <= MAX_FAILURE_LENGTH;
     if (!sentence || phase !== 'failed') throw unreadable();
   }
+  // An answer that stayed is said only at done, and only as true (TL-P4-19 addendum 15).
+  if (answersStayed !== undefined && (answersStayed !== true || phase !== 'done')) throw unreadable();
   return {
     attempt,
     seq,
     phase,
     ...(total === undefined ? {} : { total }),
     ...(failure === undefined ? {} : { failure }),
+    ...(answersStayed === true ? { answersStayed } : {}),
   };
 }
 

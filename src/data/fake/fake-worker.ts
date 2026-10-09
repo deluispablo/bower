@@ -289,6 +289,11 @@ export class FakeWorker implements WorkerApi {
 
   async status(): Promise<StatusReply> {
     const run = await this.latest();
+    // A run that ended with a granted answer still in your changes (its write refused at the write itself): it waits
+    // as an answer that came during the run, so its run starts now, with no press (TL-P4-19 addendum 15).
+    if (run?.phase === 'done' && this.onB && this.rootId && this.runs.stayed(this.binding(this.rootId), run.id)) {
+      this.waiting ??= { requestIds: [], subjects: [], allowWeb: false };
+    }
     if (this.waiting && (!run || ['done', 'failed'].includes(run.phase))) {
       const next = await this.startWaiting(this.waiting);
       if (next) return this.stamp(next);

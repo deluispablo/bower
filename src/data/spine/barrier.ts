@@ -268,6 +268,17 @@ export interface Finished {
   written: string[];
   /** One for every admitted item; empty with no admission manifest. */
   dispositions: ItemDisposition[];
+  /**
+   * Whether a "Write it" the person granted was not written (its edit refused, as by a clash at the write itself): its
+   * answer stays in your changes, and the run's end says so, so the Worker starts the run that asks again (TL-P4-19
+   * addendum 15).
+   */
+  answersStayed: boolean;
+}
+
+/** Whether an operation of `manifest` writes a Current state the person granted, and did not land (`Finished`). */
+function grantedNotWritten(manifest: RunManifest, outcomes: Checkpoint['outcomes']): boolean {
+  return manifest.operations.some((o, i) => o.effect.kind === 'edit-text' && o.effect.changes.some((c) => c.kind === 'state-rewrite' && c.granted !== undefined) && outcomes[i]?.state !== 'applied');
 }
 
 const UNRESOLVED = 'Bower could not check one of the things it moved. It will look again later.';
@@ -280,7 +291,7 @@ export async function finishRun(run: BarrierRun, manifest: RunManifest, manifest
   const where = { runId: run.runId };
   const mark: AttemptMark = { attemptId: run.newId(), epoch: run.attempt };
   const dispositions = (outcomes: Checkpoint['outcomes']): ItemDisposition[] => (run.admission ? itemDispositions(run.admission, manifest, outcomes) : []);
-  if (at.phase === 'done') return { chain, written: [], dispositions: dispositions(at.outcomes) };
+  if (at.phase === 'done') return { chain, written: [], dispositions: dispositions(at.outcomes), answersStayed: grantedNotWritten(manifest, at.outcomes) };
   if (at.phase === 'failed') throw new BowerError('unknown', SAVE_FAILED);
 
   const commit = async (patch: CheckpointPatch): Promise<Checkpoint> => {
@@ -355,5 +366,5 @@ export async function finishRun(run: BarrierRun, manifest: RunManifest, manifest
     return e.kind === 'bin' && outcomes[i]?.state === 'rejected' ? manifest.capture.piles.filter((p) => p.anchor?.fileId === e.before.fileId).map((p) => p.pileId) : [];
   });
   at = await commit({ phase: 'done', phaseAt: finishedAt, report: { state: 'published', reportHash: r.hash }, retainedPileIds });
-  return { chain, written, dispositions: dispositions(at.outcomes) };
+  return { chain, written, dispositions: dispositions(at.outcomes), answersStayed: grantedNotWritten(manifest, at.outcomes) };
 }

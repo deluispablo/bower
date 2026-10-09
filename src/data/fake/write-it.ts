@@ -1,6 +1,7 @@
 import { stateMark } from '../contracts/note-edit';
 import type { FakeDrive } from '../drive/fake-drive';
 import type { AuthoredState } from '../spine/scripted';
+import type { DispatchAt } from './fake-run-service';
 
 /**
  * The write-it situation (TL-P4-19 addenda 12 and 13): Money's and Car's Current states were changed by hand since
@@ -41,5 +42,25 @@ export function editElsewhere(drive: FakeDrive, root: string): (path: string, fr
     const text = await drive.readText(file.id);
     if (!text.includes(from)) throw new Error(`The note at ${path} does not say what is to change.`);
     await drive.writeText(file.id, text.replace(from, to), file.modifiedTime);
+  };
+}
+
+/**
+ * The page's hook for a clash at the write itself (TL-P4-19 addendum 15): `arm` has the person change a note on another
+ * device right before Bower's next write to that note is sent, after the run planned it; `beforeDispatch` is the run
+ * service's seam that does it, once.
+ */
+export function editAtWrite(drive: FakeDrive, root: string): { arm: (path: string, from: string, to: string) => void; beforeDispatch: (at: DispatchAt) => Promise<void> } {
+  let armed: { path: string; from: string; to: string } | null = null;
+  return {
+    arm: (path, from, to) => {
+      armed = { path, from, to };
+    },
+    beforeDispatch: async (at) => {
+      if (!armed || at.effect.kind !== 'edit-text' || at.effect.path !== armed.path) return;
+      const { path, from, to } = armed;
+      armed = null;
+      await editElsewhere(drive, root)(path, from, to);
+    },
   };
 }

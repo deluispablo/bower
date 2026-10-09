@@ -8,8 +8,8 @@ import { FakeDrive } from '../drive/fake-drive';
 import { DriveVault } from '../vault/drive-vault';
 import { parseNote } from '../vault/note-format';
 import { seedFakeDrive } from './seed';
-import { WRITE_IT_STATES, editElsewhere, writeIt } from './write-it';
-import { FakeRunService, type DispatchAt } from './fake-run-service';
+import { WRITE_IT_STATES, editAtWrite, editElsewhere, writeIt } from './write-it';
+import { FakeRunService } from './fake-run-service';
 import { FakeWorker } from './fake-worker';
 
 const MONEY = 'Areas/Money/Money.md';
@@ -84,14 +84,8 @@ describe('the write-it situation', () => {
   it('a clash at write time leads to the re-ask with the new sentence and no extra press', async () => {
     // The note changes on another device right before Bower's write is sent (TL-P4-19 addendum 15): the write is
     // refused, the answer stays, and the pretend Worker starts the run that asks again, as the real Worker's alarm does.
-    let armed = false;
-    const hooks = {
-      beforeDispatch: async (at: DispatchAt): Promise<void> => {
-        if (!armed || at.effect.kind !== 'edit-text' || at.effect.path !== MONEY) return;
-        armed = false;
-        await editElsewhere(drive, root)(MONEY, 'for the monthly plan.', 'for the yearly plan.');
-      },
-    };
+    const atWrite = editAtWrite(drive, root);
+    const hooks = { beforeDispatch: atWrite.beforeDispatch };
     const worker = new FakeWorker({ drive, runs: new FakeRunService({ drive, scale: 'instant', hooks }), scenario: 'write-it', rootId: root, states: WRITE_IT_STATES });
     const ended = async (not: ReadonlySet<string>): Promise<string | null> => {
       for (let i = 0; i < 400; i++) {
@@ -107,12 +101,12 @@ describe('the write-it situation', () => {
     const money = (await vault().questions()).find((q) => q.about === MONEY);
     expect(money?.text).toBe('You changed the current state of Money. Should Bower write its update there?');
     await answer(money?.id ?? '');
-    armed = true;
+    atWrite.arm(MONEY, 'for the monthly plan.', 'for the yearly plan.');
     const answered = (await worker.process('instructions', { requestId: 'answer-1', answer: true })).run;
     seen.add(answered?.id ?? '');
     // No other press: the next status after that run ends starts the run that asks again.
     const next = await ended(seen);
-    expect(armed).toBe(false);
+    expect(await note(MONEY)).toContain('for the yearly plan.');
     expect(next).not.toBeNull();
     expect(parseNote(MONEY, await note(MONEY)).currentState).not.toEqual(WRITE_IT_STATES[0]?.lines);
     expect((await vault().questions()).find((q) => q.about === MONEY)?.text).toBe(REASK('Money'));

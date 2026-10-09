@@ -707,14 +707,14 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
       return await next();
     };
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    const dispatched = w.dispatched.length;
     expect(await w.runJob(1, elsewhere)).toBe(0);
     expect(changed).toBe(true);
     const before = await textAt(w, HUB) ?? '';
     expect(parseNote(HUB, before).currentState).toEqual(PERSON);
     expect(await answersWaiting(w, `q-state-${id}`)).toHaveLength(1);
-    // No press: the Worker's own alarm starts the next run of your changes, once.
-    const dispatched = w.dispatched.length;
-    expect(await w.api.fireAlarm()).toBe(true);
+    // No press: at the run's end the Worker's own alarm (due at once, as the runtime fires it) starts the next run of
+    // your changes, once.
     expect(w.dispatched).toHaveLength(dispatched + 1);
     expect(w.dispatched.at(-1)?.scope).toBe('instructions');
     expect(await w.runJob(dispatched)).toBe(0);

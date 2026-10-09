@@ -1035,9 +1035,10 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (!before || !bytes || before.size !== bytes.byteLength || before.sha256 !== (await sha256(new Blob([bytes.slice()])))) {
       console.error('A note changed while it was read; no edit is planned for it this time');
       raced.add(f.id);
-      // A yes to writing over it is not used up on a note that changed under the read: it is asked again, as it was.
+      // A yes to writing over a note that changed under the read is the same fact as a note changed since it was shown:
+      // it is asked again in the one re-ask wording (TL-P4-19 addendum 15), with the update it showed.
       const grant = grants.get(f.id);
-      if (grant) reasked.push({ ...grant.question, askedAt: opts.requestedAt });
+      if (grant) reasked.push({ ...grant.question, text: STATE_ASK_AGAIN(displayName(nameOf(w.path))), askedAt: opts.requestedAt });
       if (w.renames) holdRenames = true;
       // A passing race, not a refusal: its lines wait for the next run, like those past the cap.
       for (const l of w.lines) lineState.set(l, 'deferred');
