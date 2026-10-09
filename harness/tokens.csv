@@ -160,3 +160,4 @@ rolecheck design-checker,design-checker,claude,bower-design-checker,,1,19841,,,,
 rolecheck diagnoser,diagnoser,claude,bower-diagnoser,,1,11674,,,,,,2,0.1,ok,2026-10-09
 c3-stop-gate,implementer,claude,bower-implementer,,1,79885,,,,,,12,4.0,delivered,2026-10-09
 stop-gate live check,implementer,claude,bower-implementer,,1,51406,,,,,,1,0.1,gate not fired (session loaded old defs?),2026-10-09
+c3-state-mark round3,implementer,claude,bower-escalated,,4,312246,,,,,,165,22.4,blocked (write-time clash needs ruling),2026-10-09
