@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DRIVE_MS, drivecalls, modelled } from './modelled';
+import { DRIVE_MS, countsOf, drivecalls, modelled } from './modelled';
 import { finishedBefore, runFolders } from './earlier-runs';
 import type { FakeDrive } from '../../src/data/drive/fake-drive';
 
@@ -21,6 +21,10 @@ describe('the C04 run makes the golden number of Drive calls per step', () => {
     expect(totalDriveCalls).toBe(78);
     // The counts are timing's own (`timing.ts`), read from the line the runner logs; the golden infers no phase.
     expect(drivecalls(timing)).toBe(78);
+    // By timing's phases (the Worker's token, model and status calls are not Drive calls; the two read outside any phase
+    // are the run's first listings, before the plan reads).
+    const calls_ = Object.fromEntries(Object.entries(countsOf(timing).phases).map(([k, v]) => [k, v.calls]));
+    expect(calls_).toEqual({ token: 0, reads: 15, model: 0, apply: 47, checkpoints: 4, report: 10, status: 0, runner: 2 });
   });
 });
 

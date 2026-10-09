@@ -224,7 +224,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   const grant = await timing.time('token', () => token.grant());
   const rootId = grant.folderId;
   if (grant.manifest) seen.total = admittedThings(grant.manifest);
-  const drive = new RunnerDrive({ token, attempt: opts.attempt, ...(fetchFn ? { fetch: fetchFn } : {}), ...(opts.pacing ? { pacing: opts.pacing } : {}) });
+  const drive = new RunnerDrive({ token, attempt: opts.attempt, timing, ...(fetchFn ? { fetch: fetchFn } : {}), ...(opts.pacing ? { pacing: opts.pacing } : {}) });
   opts.onDrive?.(drive);
   const reads = runnerReads(drive, opts.runId);
   const records = new RunRecords(reads, rootId);
@@ -369,6 +369,7 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
   console.log(`Tidy-up ${runId}, attempt ${attempt}, with the ${name} provider.`);
   // The job's start up to here: Node's uptime, as the original's queue and set-up row.
   const timing = new RunTiming(process.uptime() * 1000);
+  timing.setRegion(env.BOWER_RUNNER_REGION);
   try {
     const end = await runTidy({
       api,

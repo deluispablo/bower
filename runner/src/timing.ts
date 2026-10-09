@@ -18,6 +18,22 @@ export interface ModelStats {
   outputTokens: number;
 }
 
+type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
+
+/** The Drive calls a phase made, and the bytes they sent and got. */
+interface Traffic {
+  calls: number;
+  bytes: number;
+}
+
+/** The size of a request body, in bytes (0 for none). */
+function sentBytes(body: RequestInit["body"]): number {
+  if (typeof body === 'string') return new TextEncoder().encode(body).length;
+  if (body instanceof Blob) return body.size;
+  if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) return body.byteLength;
+  return 0;
+}
+
 export interface SectionHashes {
   prompt?: string;
   tree?: string;
@@ -34,6 +50,8 @@ export class RunTiming {
   model: ModelStats | null = null;
   private inputFingerprint: string | null = null;
   private sectionHashes: SectionHashes | null = null;
+  private readonly traffic = new Map<Phase, Traffic>();
+  private region = 'unknown';
 
   /** `startMs`: how long the job took to start this process (Node's uptime when the runner began). */
   constructor(
@@ -51,6 +69,30 @@ export class RunTiming {
   /** Set the section hashes (first 6 hex of sha256 of each section's normalized text). */
   setSectionHashes(hashes: SectionHashes): void {
     this.sectionHashes = hashes;
+  }
+
+  /**
+   * The runner's region, as the environment names it. GitHub sets no region variable on its runners (only `RUNNER_OS`,
+   * `RUNNER_ARCH`, `RUNNER_NAME` and `RUNNER_ENVIRONMENT`), so the job's own step provides `BOWER_RUNNER_REGION`.
+   */
+  setRegion(region: string | undefined): void {
+    const r = region?.trim();
+    if (r) this.region = r.replace(/\s+/g, '-');
+  }
+
+  /**
+   * Wraps the Drive transport's fetch (`RunnerDrive`, the one place a Drive call is sent) so each call and its bytes
+   * count under the phase running when it was sent: the phases are this class's own, no list is kept elsewhere.
+   */
+  meter(fetchFn: Fetch): Fetch {
+    return async (url, init) => {
+      const phase = this.stack.at(-1)?.phase ?? 'runner';
+      const res = await fetchFn(url, init);
+      const got = (await res.clone().arrayBuffer()).byteLength;
+      const was = this.traffic.get(phase) ?? { calls: 0, bytes: 0 };
+      this.traffic.set(phase, { calls: was.calls + 1, bytes: was.bytes + sentBytes(init?.body) + got });
+      return res;
+    };
   }
 
   /** Runs `f` as `phase`, its time taken out of the phase it runs inside. */
@@ -90,6 +132,8 @@ export class RunTiming {
       // The model's wall time is the one it reports; with no model, the provider's own time is zero.
       `model=${m ? ms(m.wallMs) : own('model')} api=${ms(m?.apiMs ?? 0)} turns=${m?.turns ?? 0} in=${m?.inputTokens ?? 0} out=${m?.outputTokens ?? 0}${this.inputFingerprint ? ` input=${this.inputFingerprint}${sectionsPart}` : ''}`,
       `apply=${own('apply')} checkpoints=${own('checkpoints')}/${this.checkpointWrites} report=${own('report')} status=${own('status')}`,
+      // New fields go last: Drive calls/bytes per phase (`runner`: outside every phase), then the runner's region.
+      `drive=${[...PHASES, 'runner' as const].map((p) => `${p}:${this.traffic.get(p)?.calls ?? 0}/${this.traffic.get(p)?.bytes ?? 0}`).join(',')} region=${this.region}`,
     ].join(' ');
   }
 

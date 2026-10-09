@@ -47,7 +47,7 @@ export async function modelled(before?: Before, env?: Record<string, string>): P
   const log = console.log.bind(console);
   console.log = (...args: unknown[]): void => {
     if (typeof args[0] === 'string' && args[0].startsWith('timing: ')) logged.push(args[0]);
-    else log(...args);
+    log(...args);
   };
   const running = runScripted(c, (inner) => async (input, init) => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
