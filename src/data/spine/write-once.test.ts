@@ -20,10 +20,12 @@ describe('one write-once rule', () => {
   it('the app, runner and Worker write through one create-by-id and update-by-stamp helper', () => {
     const calls = (paths: string[], what: RegExp, through: RegExp): string[] =>
       paths.flatMap((p) => read(p).flatMap((line, i) => (what.test(line) && !through.test(line) ? [`${p}:${i + 1}`] : [])));
-    // A create is sent only by the helper, with the id it reserved: `(id) => ...`.
-    expect(calls(CREATES, /\.(createFolder|createText)\(/, /\(id\) =>/)).toEqual([]);
+    // A create is sent only with the id reserved for it (`createById`, `makeFolder`, `makeText`).
+    expect(calls(CREATES, /\.(createFolder|createText)\(/, /\bid\)/)).toEqual([]);
     // An app write to a file is sent only by the helper, with its stamp: `(op) => ...`.
     expect(calls(UPDATES, /\.(trash|untrash|update|writeText)\(/, /\(op\) =>/)).toEqual([]);
+    // The run engine and the Worker make theirs through the helper itself.
+    for (const p of ['src/data/spine/engine.ts', 'api/src/vault.ts']) expect(read(p).some((line) => line.includes('createById(')), p).toBe(true);
     for (const p of CREATES) expect(read(p).some((line) => /from '[./a-z]*spine\/write-once(\.js)?'|from '\.\/write-once'/.test(line)), p).toBe(true);
   });
 });

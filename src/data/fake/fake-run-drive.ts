@@ -19,13 +19,20 @@ export class FakeRunDrive implements RunDrive {
 
   /** This attempt's fenced writes: its authority and the target still as this run saw it, in the step of the change. */
   fenced(): FencedDrive {
-    return this.seen.wrap(this.drive.fenced((peek, call) => {
+    const w = this.drive.fenced((peek, call) => {
       this.authority();
       const target = targetOf(call);
       const into = destinationOf(call);
       if (into) this.seen.assert(into, peek(into.id));
       this.seen.assert(target, peek(target.id));
-    }));
+    });
+    return this.seen.wrap({
+      ...w,
+      generateIds: async (count) => {
+        this.authority();
+        return w.generateIds(count);
+      },
+    });
   }
 
   /** The run records' reads, kept as seen so a record's write into a folder it listed passes the fence. */
@@ -33,7 +40,7 @@ export class FakeRunDrive implements RunDrive {
     return {
       listAll: async (rootId) => (await this.drive.listAll(rootId)).map((f) => this.seen.note(f)),
       readBytes: (id) => this.drive.readBytes(id),
-      stamped: (key, value) => this.drive.stamped(key, value),
+      get: (id, opts) => this.drive.get(id, opts),
     };
   }
 
@@ -58,10 +65,6 @@ export class FakeRunDrive implements RunDrive {
 
   async list(parentId: string): Promise<DriveFile[]> {
     return (await this.drive.listAll(parentId)).filter((f) => f.parents.includes(parentId)).map((f) => this.seen.note(f));
-  }
-
-  stamped(key: string, value: string): Promise<Array<{ file: DriveFile; trashed: boolean }>> {
-    return this.drive.stamped(key, value);
   }
 
   expectSeen(seen: { fileId: string; name: string; parents: string[]; folder: boolean; modifiedTime: string }, withTime = false): void {

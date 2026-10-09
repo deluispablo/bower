@@ -217,12 +217,14 @@ describe('write once by the bowerOp stamp', () => {
 
   it('every write reconciles by its bowerOp stamp', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    // Operations, run records and report files alike: each write carries a stamp, and its answer confirms it.
+    // The key each write carries (c2-create-by-id): a create its reserved id, any other write its stamp.
+    const keyOf = (c: FencedCall): string | undefined => (c.op === 'create-folder' || c.op === 'create-text' ? c.reserved : stampOfCall(c));
+    // Operations, run records and report files alike: each write carries its key, and its answer confirms it.
     const clean = await applied();
     expect(clean.chain.at(-1)?.phase).toBe('done');
-    expect(clean.calls.filter((c) => stampOfCall(c) === undefined).map(what)).toEqual([]);
+    expect(clean.calls.filter((c) => keyOf(c) === undefined).map(what)).toEqual([]);
     expect(clean.readBacks).toEqual([]);
-    // Every answer lost once: each write is found again by its stamp, never written twice nor taken by its name or text.
+    // Every answer lost once: each write is found again by its key, never written twice nor taken by its name or text.
     const lost = new Set<string>();
     const blind = await applied((call) => {
       const key = JSON.stringify(call);
@@ -231,10 +233,11 @@ describe('write once by the bowerOp stamp', () => {
       return 'lose-reply';
     });
     expect(blind.chain.at(-1)?.phase).toBe('done');
-    const stamps = blind.calls.map(stampOfCall);
-    expect(stamps.filter((s) => s === undefined).length).toBe(0);
-    for (const s of new Set(stamps)) expect((await blind.drive.stamped('bowerOp', s ?? '')).length, s).toBeLessThanOrEqual(1);
-    expect(blind.calls.length).toBe(new Set(stamps).size);
+    const keys = blind.calls.map(keyOf);
+    expect(keys.filter((s) => s === undefined).length).toBe(0);
+    const carrying = (s: string | undefined): number => [...(blind.drive as unknown as { files: Map<string, { meta: DriveFile }> }).files.values()].filter((f) => f.meta.id === s || f.meta.appProperties?.bowerOp === s).length;
+    for (const s of new Set(keys)) expect(carrying(s), s).toBeLessThanOrEqual(1);
+    expect(blind.calls.length).toBe(new Set(keys).size);
   });
 
   it('a lost write that reads back as not landed is never called offline headless', async () => {
@@ -263,10 +266,8 @@ describe('c2-create-by-id: a run makes each thing by its reserved id', () => {
       (call, d) => {
         if (lost || call.op !== 'create-text' || call.appProperties?.bowerItem === undefined) return 'pass';
         lost = call;
-        // Drive's search lags behind the create: a stamp search, and one listing of its folder, do not show it yet.
-        const stamped = d.stamped.bind(d);
+        // Drive's search lags behind the create: a listing of its folder does not show it yet; a read by its id does.
         const listAll = d.listAll.bind(d);
-        d.stamped = async (key, value) => (await stamped(key, value)).filter((f) => f.file.id !== hidden);
         d.listAll = async (id) => (await listAll(id)).filter((f) => !(id === call.parentId && f.id === hidden && parentHides-- > 0));
         return 'lose-reply';
       },

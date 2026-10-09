@@ -27,7 +27,7 @@ class StubEffects implements Effects {
   /** After this many sends, the next one stops on an error nobody caught. */
   breakAfter: number | null = null;
 
-  async apply(op: OperationV2, _head: Checkpoint, _w: unknown, _m: RunManifest, sending: () => Promise<void>): Promise<Settled> {
+  async apply(op: OperationV2, _head: Checkpoint, _w: unknown, _m: RunManifest, sending: () => Promise<unknown>): Promise<Settled> {
     const e = op.effect;
     if (e.kind === 'move' && (this.refused === 'all' || e.before.fileId === this.refused)) return { state: 'rejected', failure: { code: 'conflict', message: MOVED } };
     await sending();

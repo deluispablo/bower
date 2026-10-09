@@ -98,8 +98,9 @@ export class SeenFiles {
   /** The same writes, keeping what each answer says, and forgetting a file put in the Bin. */
   wrap(writes: FencedDrive): FencedDrive {
     return {
-      createFolder: async (parentId, name, appProperties) => this.note(await writes.createFolder(parentId, name, appProperties)),
-      createText: async (parentId, name, text, appProperties) => this.note(await writes.createText(parentId, name, text, appProperties)),
+      generateIds: (count) => writes.generateIds(count),
+      createFolder: async (parentId, name, appProperties, id) => this.note(await writes.createFolder(parentId, name, appProperties, id)),
+      createText: async (parentId, name, text, appProperties, id) => this.note(await writes.createText(parentId, name, text, appProperties, id)),
       update: async (id, patch) => this.note(await writes.update(id, patch)),
       trash: async (id, appProperties) => {
         const binned = await writes.trash(id, appProperties);

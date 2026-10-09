@@ -1291,12 +1291,12 @@ describe('foreground discovery', () => {
 
   function client(backend: FakeDrive): DriveApi {
     return {
-      listAll: (root) => backend.listAll(root), get: (id, opts) => backend.get(id, opts), stamped: (key, value) => backend.stamped(key, value), readText: (id) => backend.readText(id),
+      listAll: (root) => backend.listAll(root), get: (id, opts) => backend.get(id, opts), readText: (id) => backend.readText(id),
       readBytes: (id) => backend.readBytes(id),
-      createFolder: (parent, name, props) => backend.createFolder(parent, name, props),
-      createText: (parent, name, text, props) => backend.createText(parent, name, text, props),
-      writeText: (id, text, version) => backend.writeText(id, text, version), update: (id, patch) => backend.update(id, patch),
-      trash: (id) => backend.trash(id), untrash: (id) => backend.untrash(id), fullText: (root, query) => backend.fullText(root, query),
+      createFolder: (parent, name, props, id) => backend.createFolder(parent, name, props, id),
+      createText: (parent, name, text, props, id) => backend.createText(parent, name, text, props, id),
+      writeText: (id, text, version, props) => backend.writeText(id, text, version, props), update: (id, patch) => backend.update(id, patch),
+      trash: (id, props) => backend.trash(id, props), untrash: (id, props) => backend.untrash(id, props), fullText: (root, query) => backend.fullText(root, query),
       storedDigest: (id, known) => backend.storedDigest(id, known), binnedByItem: (root, keys) => backend.binnedByItem(root, keys),
       generateIds: (count) => backend.generateIds(count), openResumable: (target) => backend.openResumable(target), putChunk: (session, start, chunk, size, signal) => backend.putChunk(session, start, chunk, size, signal),
       sessionStatus: (session, size) => backend.sessionStatus(session, size), getUploaded: (id) => backend.getUploaded(id),

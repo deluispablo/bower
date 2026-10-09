@@ -4,12 +4,12 @@
  * consumed dispositions in `.bower/piles/`, with the report record read back and a disposition checked before it is
  * written. Shared by the fake run service and the runner (TL-P3-21 point 2:
  * extracted, not ported): the reads come through a small interface, the writes through a `FencedDrive`, and time and
- * ids are handed in. Every folder is found by its real name and parents, duplicates included; a record is written
- * once by its stamp and confirmed by its answer's checksum (`write-once.ts`), and a reply lost after it landed is
- * found again by that stamp, never written again. The pure record guards live in `contracts/`.
+ * ids are handed in. Every folder is found by its real name and parents, duplicates included; a record is made once
+ * by its reserved id and confirmed by its answer's checksum (`write-once.ts`), and a reply lost after it landed is
+ * found again by that id, never written again. The pure record guards live in `contracts/`.
  */
 import type { DriveFile, FencedDrive } from '../drive/drive-api';
-import { makeFolder, makeText, type StampSearch } from './write-once';
+import { makeFolder, makeText, type Gets } from './write-once';
 import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
 import { parsePileDisposition, type Disposition } from '../contracts/pile-disposition';
 import { parseRunCheckpoint, verifyCheckpointChain, type Checkpoint, type Outcome } from '../contracts/run-checkpoint';
@@ -39,8 +39,8 @@ export type RunManifest = Omit<Manifest, 'v' | 'operations'> & { v: 1 | 2; opera
 /** Where a record lives: one run's folder, or the pile records. */
 export type Where = { runId: string } | 'piles';
 
-/** What the records read: everything under a folder that is not in the Bin, a file's stored bytes, and a stamp search. */
-export interface RecordReads extends StampSearch {
+/** What the records read: everything under a folder that is not in the Bin, a file's stored bytes, and a file by its id. */
+export interface RecordReads extends Gets {
   listAll(rootId: string): Promise<DriveFile[]>;
   readBytes(id: string): Promise<Uint8Array>;
 }
@@ -164,7 +164,7 @@ export class RunRecords {
     if (stored) return;
     const parent = await this.ensure(w, where, found);
     this.placed.set(this.placeOf(where), parent);
-    await makeText(w, this.reads, parent, name, text, stamp);
+    await makeText(w, this.reads, { parent, name, ...(stamp ? { props: stamp } : {}) }, text);
   }
 
   /**
@@ -176,7 +176,7 @@ export class RunRecords {
     const parent = this.placed.get(this.placeOf(where));
     if (!parent) return this.put(w, where, name, text);
     try {
-      await makeText(w, this.reads, parent, name, text);
+      await makeText(w, this.reads, { parent, name }, text);
     } catch (e) {
       // The next write looks for its folder again.
       this.placed.delete(this.placeOf(where));
@@ -289,12 +289,12 @@ export class RunRecords {
     await this.put(w, 'piles', dispositionName(c.hash), c.text, recordStamp(value.pileId));
   }
 
-  /** The record folder, made (with `.bower/runs`) when missing; a lost reply finds the folder that landed by its stamp. */
+  /** The record folder, made (with `.bower/runs`) when missing; a lost reply finds the folder that landed by its id. */
   private async ensure(w: FencedDrive, where: Where, { bower, ns, run }: Folders): Promise<string> {
     if (run[0]) return run[0].id;
-    const sys = bower[0]?.id ?? (await makeFolder(w, this.reads, this.rootId, SYSTEM.dir)).id;
-    const space = ns[0]?.id ?? (await makeFolder(w, this.reads, sys, where === 'piles' ? PILES_NAME : RUNS_NAME)).id;
-    return where === 'piles' ? space : (await makeFolder(w, this.reads, space, where.runId)).id;
+    const sys = bower[0]?.id ?? (await makeFolder(w, this.reads, { parent: this.rootId, name: SYSTEM.dir })).id;
+    const space = ns[0]?.id ?? (await makeFolder(w, this.reads, { parent: sys, name: where === 'piles' ? PILES_NAME : RUNS_NAME })).id;
+    return where === 'piles' ? space : (await makeFolder(w, this.reads, { parent: space, name: where.runId })).id;
   }
 }
 

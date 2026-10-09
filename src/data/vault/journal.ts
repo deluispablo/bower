@@ -10,7 +10,7 @@ import type { DriveApi, DriveFile } from '../drive/drive-api';
 import { ReadCache } from '../drive/read-cache';
 import type { ChangeKind } from '../types';
 import { BowerError } from '../types';
-import { makeText } from '../spine/write-once';
+import { makeText, updateByStamp } from '../spine/write-once';
 import { PROP } from './layout';
 
 export type { JournalExtra, JournalRecord } from '../contracts/journal-record';
@@ -69,8 +69,8 @@ const volatile = new WeakMap<DriveApi, Map<string, JournalRecord[]>>();
 export class Journal {
   private readonly volatile: Map<string, JournalRecord[]>;
   private readonly reads: ReadCache;
-  /** Drive file ids per record id (a line written twice has two), for remove. */
-  private filesOf = new Map<string, string[]>();
+  /** Drive files per record id (a line written twice has two), as last read or written, for remove. */
+  private filesOf = new Map<string, DriveFile[]>();
   /** Two changes in one millisecond still keep their order. */
   private lastAt = 0;
   /** Writes go one at a time, so a line is never sent twice nor dropped from the outbox by another write. */
@@ -225,11 +225,11 @@ export class Journal {
       const folder = await this.place.folder();
       this.checkCurrent();
       const text = `${JSON.stringify(rec)}\n`;
-      // Stamped (`spine/write-once.ts`): a lost answer is found again by its stamp; and keyed by its record id.
-      const f = await makeText(this.drive, this.drive, folder, `${rec.id}.json`, text, { [PROP.line]: rec.id });
+      // Made by its reserved id (`spine/write-once.ts`): a lost answer is found again by that id; and keyed by its record id.
+      const f = await makeText(this.drive, this.drive, { parent: folder, name: `${rec.id}.json`, props: { [PROP.line]: rec.id } }, text);
       if (this.current()) {
         this.reads.wrote(f, text);
-        this.filesOf.set(rec.id, [...(this.filesOf.get(rec.id) ?? []), f.id]);
+        this.filesOf.set(rec.id, [...(this.filesOf.get(rec.id) ?? []), f]);
         this.place.wrote?.(f);
       }
       return true;
@@ -245,7 +245,7 @@ export class Journal {
     const key = outboxKey(await this.place.owner());
     const files = (await this.place.files()).filter((f) => !f.folder && f.name.endsWith('.json'));
     const byId = new Map<string, JournalRecord>();
-    const seenFiles = new Map<string, string[]>();
+    const seenFiles = new Map<string, DriveFile[]>();
     // The lines are asked for together (a dozen at 300 ms each are one wait, not a dozen); each version is read once.
     const records = await Promise.all(files.map(async (f) => {
       try {
@@ -263,7 +263,7 @@ export class Journal {
       const rec = records[i];
       if (!rec) return;
       byId.set(rec.id, rec);
-      seenFiles.set(rec.id, [...(seenFiles.get(rec.id) ?? []), f.id]);
+      seenFiles.set(rec.id, [...(seenFiles.get(rec.id) ?? []), f]);
     });
     this.checkCurrent();
     for (const [rid, ids] of seenFiles) this.filesOf.set(rid, ids);
@@ -285,10 +285,11 @@ export class Journal {
       throw new BowerError('unknown', 'Bower could not take that change back; keep this page open.');
     }
     if (!this.filesOf.has(id)) await this.list();
-    for (const fileId of this.filesOf.get(id) ?? []) {
+    for (const file of this.filesOf.get(id) ?? []) {
       this.checkCurrent();
-      await this.drive.trash(fileId);
-      this.place.removed?.(fileId);
+      // Sent once with its stamp: a lost answer is found again by reading the file by its id.
+      await updateByStamp(this.drive, file, 'bin', (op) => this.drive.trash(file.id, op));
+      this.place.removed?.(file.id);
     }
     this.filesOf.delete(id);
   }

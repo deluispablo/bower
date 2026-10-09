@@ -155,9 +155,10 @@ export class FakeDrive implements DriveApi {
     return this.live(rootId).map((f) => this.listed(f));
   }
 
-  async get(id: string, opts: { checksums?: boolean } = {}): Promise<DriveFile> {
+  async get(id: string, opts: { checksums?: boolean; binned?: boolean } = {}): Promise<DriveFile> {
     await this.gate();
-    const f = this.listed(this.find(id));
+    const kept = this.files.get(id);
+    const f = this.listed(opts.binned && kept ? kept : this.find(id));
     return opts.checksums ? this.answered(f) : f;
   }
 
@@ -231,14 +232,14 @@ export class FakeDrive implements DriveApi {
     return { size: bytes.byteLength, sha256: await sha256(new Blob([bytes])) };
   }
 
-  async createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile> {
+  async createFolder(parentId: string, name: string, appProperties?: Record<string, string>, id?: string): Promise<DriveFile> {
     await this.gate();
-    return this.changed(this.add(parentId, name, true, null, appProperties));
+    return this.reply(this.changed(this.add(parentId, name, true, null, appProperties, id)));
   }
 
-  async createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>): Promise<DriveFile> {
+  async createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>, id?: string): Promise<DriveFile> {
     await this.gate();
-    return this.answered(this.changed(this.add(parentId, name, false, text, appProperties)));
+    return this.reply(this.answered(this.changed(this.add(parentId, name, false, text, appProperties, id))));
   }
 
   async upload(parentId: string, name: string, body: Blob, onProgress?: (fraction: number) => void, appProperties?: Record<string, string>): Promise<DriveFile> {
@@ -260,15 +261,16 @@ export class FakeDrive implements DriveApi {
 
   async trash(id: string, appProperties?: Record<string, string>): Promise<DriveFile> {
     await this.gate();
-    return this.applyTrash(id, appProperties);
+    return this.reply(this.applyTrash(id, appProperties));
   }
 
-  async untrash(id: string): Promise<DriveFile> {
+  async untrash(id: string, appProperties?: Record<string, string>): Promise<DriveFile> {
     await this.gate();
     const f = this.files.get(id);
     if (!f) throw driveError('not-found');
     f.trashed = false;
-    return this.changed(this.copy(f.meta));
+    if (appProperties) f.meta = { ...f.meta, appProperties: { ...f.meta.appProperties, ...appProperties } };
+    return this.reply(this.changed(this.copy(f.meta)));
   }
 
   /**
@@ -308,7 +310,7 @@ export class FakeDrive implements DriveApi {
     for (const session of this.sessions.values()) session.expired = true;
   }
 
-  /** The next resumable call, `update` or `writeText` does what it was asked, then its answer is lost. */
+  /** The next resumable call, create, `update`, `writeText`, `trash` or `untrash` does what it was asked, then its answer is lost. */
   loseNextReply(): void {
     this.loseReply = true;
   }
@@ -454,7 +456,10 @@ export class FakeDrive implements DriveApi {
     return f;
   }
 
+  /** With `reservedId` (`generateIds`), as Drive: an id it did not reserve is refused, and one taken already is a conflict (409). */
   private add(parentId: string, name: string, folder: boolean, content: string | Blob | null, appProperties?: Record<string, string>, reservedId?: string): DriveFile {
+    if (reservedId !== undefined && !this.reserved.has(reservedId)) throw driveError('unknown');
+    if (reservedId !== undefined && this.files.has(reservedId)) throw driveError('conflict');
     this.find(parentId);
     const at = this.stamp();
     const id = reservedId ?? `f${++this.seq}`;
@@ -511,8 +516,9 @@ export class FakeDrive implements DriveApi {
     };
     const props = (appProperties?: Record<string, string>): { appProperties?: Record<string, string> } => (appProperties ? { appProperties: { ...appProperties } } : {});
     return {
-      createFolder: (parentId, name, appProperties) => run({ op: 'create-folder', parentId, name, ...props(appProperties) }, () => this.changed(this.add(parentId, name, true, null, appProperties))),
-      createText: (parentId, name, text, appProperties) => run({ op: 'create-text', parentId, name, text, ...props(appProperties) }, () => this.changed(this.add(parentId, name, false, text, appProperties))),
+      generateIds: (count) => this.generateIds(count),
+      createFolder: (parentId, name, appProperties, id) => run({ op: 'create-folder', parentId, name, ...props(appProperties), ...(id ? { reserved: id } : {}) }, () => this.changed(this.add(parentId, name, true, null, appProperties, id))),
+      createText: (parentId, name, text, appProperties, id) => run({ op: 'create-text', parentId, name, text, ...props(appProperties), ...(id ? { reserved: id } : {}) }, () => this.changed(this.add(parentId, name, false, text, appProperties, id))),
       update: (id, patch) => run({ op: 'update', id, patch }, () => this.applyUpdate(id, patch)),
       trash: (id, appProperties) => run({ op: 'trash', id, ...props(appProperties) }, () => this.applyTrash(id, appProperties)),
       writeText: (id, text, ifModified, appProperties) => run({ op: 'write-text', id, text, ifModified, ...props(appProperties) }, () => this.applyWrite(id, text, ifModified, appProperties)),
@@ -586,15 +592,6 @@ export class FakeDrive implements DriveApi {
     twin.sessions = new Map([...this.sessions].map(([url, x]) => [url, { ...x, target: { ...x.target }, parts: [...x.parts], file: x.file ? this.copy(x.file) : null }]));
     const kept = alongside();
     return { snapshot: await twin.snapshot(), alongside: kept };
-  }
-
-  /**
-   * The files that carry `key` = `value` in their appProperties, wherever they are and in the Bin or not: Drive's
-   * `appProperties has { key=... and value=... }` query, as the runner sends it (`RunnerDrive.stamped`).
-   */
-  async stamped(key: string, value: string): Promise<Array<{ file: DriveFile; trashed: boolean }>> {
-    await this.gate();
-    return [...this.files.values()].filter((f) => f.meta.appProperties?.[key] === value).map((f) => ({ file: this.answered(this.copy(f.meta)), trashed: f.trashed }));
   }
 
   /** What is stored for an id, in the Bin or not: its metadata, its own Bin flag and its bytes' size and SHA-256 (fake-stored). */

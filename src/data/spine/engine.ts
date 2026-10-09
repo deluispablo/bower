@@ -15,7 +15,7 @@
  * - A restarted runner, or a new attempt, reads only its run's folder, verifies the chain and goes on from its last
  *   checkpoint; it never plans again. A broken or unverifiable chain stops the run as failed with nothing written.
  * - An operation recorded as applied or rejected is never sent again. One named by a batch an earlier attempt opened
- *   is read back first, by its stamp (TL-P3-23, TL-P4-05 addendum): landed, it is applied on that evidence and never
+ *   is read back first, by its reserved id or its stamp (TL-P3-23, TL-P4-05 addendum): landed, it is applied on that evidence and never
  *   sent again; not landed, it is sent once if its checks still pass, under this attempt's fence; unreadable, the run
  *   stops there without a send, since sending it again could apply it twice.
  *
@@ -30,10 +30,10 @@
  * - After it, the answer to the write shows the effect (its metadata, its stamp and the stored bytes' checksum,
  *   `write-once.ts`), with no read after it. A write sent whose answer shows no effect stops the run unresolved; it is
  *   never sent again blindly (TL-P2-16).
- * - A write whose answer never came (a network error, or a 5xx) is read back by its stamp (`reconcile`, TL-P3-28):
- *   landed, it counts as applied; no stamp, it is not done and settles rejected, in the words of an outcome Bower
- *   could not confirm (never offline: a run's network is not the person's); unreadable, the run stops unresolved.
- * - Every write carries the run's stamp in the same request (`write-once.ts`, TL-P4-05 addendum).
+ * - A write whose answer never came (a network error, or a 5xx) is read back (`reconcile`, TL-P3-28): a create by the
+ *   id Drive reserved for it, which the opening names, any other write by the run's stamp it carries (`write-once.ts`).
+ *   Landed, it counts as applied; not there, it settles rejected, in the words of an outcome Bower could not confirm
+ *   (never offline: a run's network is not the person's); unreadable, the run stops unresolved.
  *
  * Drive v3 offers no compare-and-swap on files: these are prechecks with a short window, not a lock (ARCHITECTURE,
  * "Safety at the actual storage boundary").
@@ -50,7 +50,7 @@ import { savedTwins } from './duplicates';
 import { canonical, checkpointName, firstCheckpoint, manifestName, nextCheckpoint, type AttemptMark, type CheckpointPatch, type RunManifest, type RunRecords } from './records';
 import { SOURCE_NOT_AS_SEEN, UNCONFIRMED_GONE, materialize } from './report';
 import { conflicts, needsOf } from './schedule';
-import { STAMP, confirms, stampOf } from './write-once';
+import { STAMP, confirms, createById, reserveId, stampOf } from './write-once';
 /**
  * How one operation ended once sent: `rejected` only when its precondition refused it before anything was sent, or
  * when a send whose answer was lost reads back as not landed (the folder still as the plan saw it).
@@ -69,9 +69,10 @@ export interface Effects {
   /**
    * Sends the operation once through these fenced writes; `manifest` is the run's, for what the operation relies on.
    * `sending` is awaited right before the send is attempted, after every read that may refuse it; an operation that
-   * settles without it was refused before anything was sent.
+   * settles without it was refused before anything was sent. It gives the id reserved for a create, when the chain
+   * names one.
    */
-  apply(op: OperationV2, head: Checkpoint, w: FencedDrive, manifest: RunManifest, sending: () => Promise<void>): Promise<Settled>;
+  apply(op: OperationV2, head: Checkpoint, w: FencedDrive, manifest: RunManifest, sending: () => Promise<string | null>): Promise<Settled>;
   /** An operation possibly sent by an earlier runner, read back: landed, not landed, or unreadable. */
   readBack(op: OperationV2, head: Checkpoint, manifest: RunManifest): Promise<ReadBack>;
 }
@@ -153,10 +154,10 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
 
   let at: Checkpoint = head;
   let atHash: string = headHash;
-  const commit = async (patch: CheckpointPatch): Promise<void> => {
+  const commit = async (patch: CheckpointPatch, writes?: FencedDrive): Promise<void> => {
     const next = nextCheckpoint(at, atHash, mark, patch);
     const c = await canonical(next);
-    await run.records.putNew(run.fenced?.() ?? (await run.batch()), where, checkpointName(next.revision, c.hash), c.text);
+    await run.records.putNew(writes ?? run.fenced?.() ?? (await run.batch()), where, checkpointName(next.revision, c.hash), c.text);
     at = next;
     atHash = c.hash;
     chain = [...chain, next];
@@ -185,12 +186,17 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
    * check that cannot read before the first send never counts as a change.
    */
   const opening = async (): Promise<void> => {
+    // Each create still to go is named with an id Drive reserved for it, so a lost answer is read back by that id.
+    const creates = manifest.operations.filter((o) => (o.effect.kind === 'create-folder' || o.effect.kind === 'create-text') && unnamed(outcomes.find((x) => x.operationId === o.operationId))).map((o) => o.operationId);
+    const w = run.fenced?.() ?? (await run.batch());
+    const ids = creates.length ? await w.generateIds(creates.length) : [];
     const named = outcomes.map((o): Outcome => {
       if (!unnamed(o)) return writable(o);
       fresh.add(o.operationId);
-      return { operationId: o.operationId, state: 'possible-effect', dispatchId: run.newId() };
+      const fileId = ids[creates.indexOf(o.operationId)];
+      return { operationId: o.operationId, state: 'possible-effect', dispatchId: run.newId(), ...(fileId ? { fileId } : {}) };
     });
-    await commit({ phase: 'saving', phaseAt: run.clock(), outcomes: named });
+    await commit({ phase: 'saving', phaseAt: run.clock(), outcomes: named }, w);
     outcomes = outcomes.map((o) => (unnamed(o) ? (named.find((n) => n.operationId === o.operationId) ?? o) : o));
   };
 
@@ -223,9 +229,9 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
     // once the chain names it.
     let sent = false;
     const settled = await run.effects.apply(op, working(), run.fenced?.() ?? (await run.batch()), manifest, async () => {
-      if (sent) return;
-      if (unnamed(inChain(operationId))) await openOnce();
+      if (!sent && unnamed(inChain(operationId))) await openOnce();
       sent = true;
+      return reservedIn(at, operationId);
     });
     if (settled.state === 'applied' && !sent) {
       console.error(`Operation ${op.ordinal} of run ${run.runId} shows applied with no send attempted`);
@@ -354,6 +360,9 @@ export function reusedNoteOf(manifest: RunManifest, op: OperationV2): { file: Se
 
 const refused = (code: Failure['code'], message: string): Settled => ({ state: 'rejected', failure: { code, message } });
 
+/** What a send gives: its write's answer, or, for a create met again by its reserved id, what was read back. */
+type Sent = { answer: DriveFile } | { landed: EffectEvidence };
+
 /** Still by the name and place the plan saw (`notAsSeen`, the one check; the caller has it out of the Bin). */
 const inPlace = (f: DriveFile, seen: SeenFile): boolean => notAsSeen({ id: seen.fileId, name: seen.name, parents: seen.parents }, { ...f, trashed: false }) === null;
 
@@ -367,6 +376,12 @@ function asEvidence(ev: StoredEvidence, encoding: 'utf8' | 'blob', provenance: E
     provenance,
   };
 }
+
+/** The id the chain names for a create, reserved before it was possibly sent; null when it names none. */
+const reservedIn = (head: Checkpoint, operationId: string): string | null => {
+  const o = head.outcomes.find((x) => x.operationId === operationId);
+  return o?.state === 'possible-effect' ? (o.fileId ?? null) : null;
+};
 
 /** The id of an operation's parent: a captured folder, or the folder an applied earlier operation made. */
 function parentOf(head: Checkpoint, e: Effect): string | null {
@@ -482,8 +497,8 @@ export function driveEffects(drive: RunDrive): Effects {
     return { parentId, modifiedTime: null };
   };
 
-  /** Sends the effect once through the fenced writes. */
-  const send = async (e: Effect, w: FencedDrive, parentId: string, modifiedTime: string | null, stamp: string): Promise<DriveFile> => {
+  /** Sends the effect once through the fenced writes; a create with the id reserved for it. */
+  const send = async (e: Effect, w: FencedDrive, parentId: string, modifiedTime: string | null, stamp: string, id: string): Promise<DriveFile> => {
     const op = { [STAMP]: stamp };
     switch (e.kind) {
       case 'move': {
@@ -495,7 +510,7 @@ export function driveEffects(drive: RunDrive): Effects {
         });
       }
       case 'create-folder':
-        return w.createFolder(parentId, e.name, { bowerItem: e.createKey, ...op });
+        return w.createFolder(parentId, e.name, { bowerItem: e.createKey, ...op }, id);
       case 'bin':
         return w.trash(e.before.fileId, op);
       case 'write-runner-json':
@@ -503,9 +518,8 @@ export function driveEffects(drive: RunDrive): Effects {
         if (modifiedTime === null) throw new BowerError('unknown', UNRESOLVED);
         return w.writeText(e.before.fileId, e.text, modifiedTime, op);
       case 'create-text':
-        // A generated note is stamped as Bower's, new, and with its create key at creation (TL-P2-17); a runner file made again only with its create key. Either way a lost reply is found
-        // again by that key.
-        return w.createText(parentId, e.name, e.text, e.purpose === 'generated' ? { by: 'bower', bowerNew: '1', bowerItem: e.createKey, ...op } : { bowerItem: e.createKey, ...op });
+        // A generated note is marked as Bower's and new, with its create key, at creation (TL-P2-17); a runner file with its create key.
+        return w.createText(parentId, e.name, e.text, e.purpose === 'generated' ? { by: 'bower', bowerNew: '1', bowerItem: e.createKey, ...op } : { bowerItem: e.createKey, ...op }, id);
     }
   };
 
@@ -538,38 +552,26 @@ export function driveEffects(drive: RunDrive): Effects {
    *   meanwhile is set aside with the same words an uninterrupted run would use;
    * - a thing it changes is gone from Drive (purged): gone. Drive keeps nothing to tell a change that landed before
    *   the purge from one never sent, so it is reported as not confirmed (TL-P4-14 addendum 7), never sent again;
-   * - a read fails, or a made thing has a lookalike with its create key and no stamp (made before
-   *   stamps, or by something else): unreadable, since making it again could make it twice.
+   * - a create is read by the id reserved for it: there (wherever the person put it since, in the Bin or not), it
+   *   landed; not there, it did not;
+   * - a read fails, or a create the chain names no id for: unreadable, since making it again could make it twice.
    */
-  const reconcile = async (op: OperationV2, head: Checkpoint, manifest: RunManifest): Promise<ReadBack> => {
+  const reconcile = async (op: OperationV2, head: Checkpoint, manifest: RunManifest, reserved = reservedIn(head, op.operationId)): Promise<ReadBack> => {
     const e = op.effect;
     const encoding = e.kind === 'create-folder' || e.kind === 'move' || e.kind === 'bin' ? 'blob' : 'utf8';
-    const landed = async (id: string): Promise<ReadBack> => {
-      const ev = await drive.evidence(id);
-      return ev ? { state: 'landed', evidence: toEvidence(ev, encoding) } : { state: 'unreadable', why: `Operation ${op.ordinal} shows a thing that is gone` };
-    };
-    const other = (): ReadBack => ({ state: 'unreadable', why: `Operation ${op.ordinal} shows another operation's stamp` });
     try {
       if (e.kind === 'create-folder' || e.kind === 'create-text') {
-        // Its own stamp, wherever the person put it since and in the Bin or not: what they did with it is kept.
-        const mine = await drive.stamped(STAMP, stampOf(head.runId, op.operationId));
-        const [only, ...more] = mine;
-        if (more.length) return { state: 'unreadable', why: `Operation ${op.ordinal} shows its stamp more than once` };
-        if (only) return landed(only.file.id);
-        const parentId = parentOf(head, e);
-        if (!parentId) return { state: 'unreadable', why: `Operation ${op.ordinal} has no folder to look in` };
-        // A thing with its create key and no stamp of its own: made by an operation waiting on it, or it cannot be told.
-        const alike = (await drive.list(parentId)).filter((f) => f.appProperties?.bowerItem === e.createKey);
-        const [one, ...others] = alike;
-        if (!one) return { state: 'not-landed' };
-        return !others.length && stampSays(one.appProperties?.[STAMP], head.runId, op, manifest) === 'landed' ? landed(one.id) : other();
+        // Only this create can have made a file with its reserved id: what the person did with it since is kept.
+        if (reserved === null) return { state: 'unreadable', why: `Operation ${op.ordinal} names no reserved id` };
+        const ev = await drive.evidence(reserved);
+        return ev ? { state: 'landed', evidence: toEvidence(ev, encoding) } : { state: 'not-landed' };
       }
       // Gone from Drive (the person emptied the Bin): no stamp to read, and nothing left to send to.
       const ev = await drive.evidence(e.before.fileId);
       if (!ev) return { state: 'gone' };
       const says = stampSays(ev.file.appProperties?.[STAMP], head.runId, op, manifest);
       if (says === 'landed') return { state: 'landed', evidence: toEvidence(ev, encoding) };
-      return says === 'unknown' ? other() : { state: 'not-landed' };
+      return says === 'unknown' ? { state: 'unreadable', why: `Operation ${op.ordinal} shows another operation's stamp` } : { state: 'not-landed' };
     } catch (err) {
       console.error(err);
       return { state: 'unreadable', why: `Operation ${op.ordinal} could not be read back` };
@@ -583,10 +585,18 @@ export function driveEffects(drive: RunDrive): Effects {
       const ok = await check(op, head, manifest);
       if ('refused' in ok) return ok.refused;
       // Possibly sent from here on: everything before it only read.
-      await sending();
-      let answer: DriveFile;
+      const reserved = await sending();
+      // A create is sent with its reserved id (one the chain names, or, from an earlier build's opening, one now); with
+      // its answer lost it is read back by that id once (`createById`), and that read stands.
+      let back: ReadBack | null = null;
+      let sent: Sent;
       try {
-        answer = await send(op.effect, w, ok.parentId, ok.modifiedTime, stamp);
+        const kind = op.effect.kind;
+        const go = async (id: string): Promise<Sent> => ({ answer: await send(op.effect, w, ok.parentId, ok.modifiedTime, stamp, id) });
+        sent = kind !== 'create-folder' && kind !== 'create-text' ? await go('') : await createById(reserved ?? (await reserveId(w)), go, async (id) => {
+          back = await reconcile(op, head, manifest, id);
+          return back.state === 'landed' ? { landed: back.evidence } : null;
+        });
       } catch (e) {
         // The fence could not read before anything was sent: no change found, so no refusal and no read-back. The
         // attempt stops; recovery reads it back by its stamp and sends it once (TL-P4-14 addendum 8).
@@ -602,16 +612,17 @@ export function driveEffects(drive: RunDrive): Effects {
         // No answer kept (a network error, or Google's 5xx): read back once, never sent again blindly (TL-P3-28).
         if (isNoAnswer(e) || isUnconfirmedWrite(e)) {
           console.error(e);
-          const back = await reconcile(op, head, manifest);
-          if (back.state === 'landed') return { state: 'applied', evidence: back.evidence };
-          if (back.state === 'not-landed') return refused('unknown', UNCONFIRMED_WRITE_MESSAGE);
-          if (back.state === 'gone') return refused('unknown', UNCONFIRMED_GONE);
-          console.error(back.why);
+          const read: ReadBack = back ?? (await reconcile(op, head, manifest, reserved));
+          if (read.state === 'landed') return { state: 'applied', evidence: read.evidence };
+          if (read.state === 'not-landed') return refused('unknown', UNCONFIRMED_WRITE_MESSAGE);
+          if (read.state === 'gone') return refused('unknown', UNCONFIRMED_GONE);
+          console.error(read.why);
         }
         throw e;
       }
+      if ('landed' in sent) return { state: 'applied', evidence: sent.landed };
       // The answer to the write shows the effect: no read follows it.
-      const seen = await answered(op, ok.parentId, answer, stamp);
+      const seen = await answered(op, ok.parentId, sent.answer, stamp);
       if (!seen) {
         console.error(`Operation ${op.ordinal} was sent and shows no effect`);
         throw new BowerError('unknown', UNRESOLVED);

@@ -74,7 +74,7 @@ class Stub implements Effects {
   readonly sent = new Set<string>();
   constructor(private readonly refused: string) {}
 
-  async apply(op: OperationV2, _head: Checkpoint, _w: unknown, _m: RunManifest, sending: () => Promise<void>): Promise<Settled> {
+  async apply(op: OperationV2, _head: Checkpoint, _w: unknown, _m: RunManifest, sending: () => Promise<unknown>): Promise<Settled> {
     if (op.effect.kind === 'move' && op.effect.before.fileId === this.refused) return { state: 'rejected', failure: { code: 'conflict', message: 'It was moved, renamed or removed before Bower could get to it.' } };
     await sending();
     this.sent.add(op.operationId);

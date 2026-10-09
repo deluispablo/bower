@@ -87,6 +87,7 @@ describe('runner drive adapter', () => {
     // The person writes between the check and the send (the effect's `sending` is awaited after its check).
     const settled = await driveEffects(adapter).apply(op, head, await adapter.batch(), manifest, async () => {
       await wire.drive.writeText(note.id, 'The person wrote this.', (await wire.drive.get(note.id)).modifiedTime);
+      return null;
     });
     expect(settled.state).toBe('rejected');
     expect(await wire.drive.readText(note.id)).toBe('The person wrote this.');
@@ -364,7 +365,7 @@ describe('c2-create-by-id: an edit is taken only by its own answer', () => {
       const w = await adapter.batch();
       // The same file by its id, holding the bytes sent, but its answer shows it under another name or in another folder.
       const lying: FencedDrive = { ...w, writeText: async (...a) => ({ ...(await w.writeText(...a)), ...shown }) };
-      await expect(driveEffects(adapter).apply(op, head, lying, manifest, async () => {})).rejects.toMatchObject({ code: 'unknown' });
+      await expect(driveEffects(adapter).apply(op, head, lying, manifest, async () => null)).rejects.toMatchObject({ code: 'unknown' });
       expect(await wire.drive.readText(note.id)).toBe(text);
     }
   });

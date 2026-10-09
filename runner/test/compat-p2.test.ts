@@ -26,7 +26,6 @@ describe('the accepted app files, read by the runner', () => {
       },
       list: async (parent) => tree.files.filter((f) => f.parents.includes(parent)),
       readText: async (id) => tree.text.get(id) ?? '',
-      stamped: async () => [],
     };
     // Its chain of records, found from the run's folder alone.
     const found = await new RunRecords(runnerReads(drive, runId), rootId).found(runId);

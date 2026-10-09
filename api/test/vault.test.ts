@@ -364,16 +364,16 @@ describe('POST /vault', () => {
     g.loseNextFolderReply = true;
     // Drive's search has not caught up with the create yet: only the reserved id can tell.
     g.searchBlind = true;
-    const lost = await post(g, cookie);
-    expect(lost.status).toBe(500);
+    // The create whose reply was lost is read back by its reserved id in the same call (`createById`).
+    const made = await body(await post(g, cookie));
+    expect(made.found).toBe(false);
     expect(g.marked).toHaveLength(1);
-    const retry = await body(await post(g, cookie));
-    // The retry is the first answer about a brand-new folder.
-    expect(retry.found).toBe(false);
+    expect(made.folderId).toBe(g.marked[0]?.id);
+    expect(g.paths(made.folderId).sort()).toEqual(expectedPaths().sort());
+    expect(await person(sub).folderId()).toBe(made.folderId);
+    // A retry finds it, still one folder.
+    expect((await body(await post(g, cookie))).folderId).toBe(made.folderId);
     expect(g.marked).toHaveLength(1);
-    expect(retry.folderId).toBe(g.marked[0]?.id);
-    expect(g.paths(retry.folderId).sort()).toEqual(expectedPaths().sort());
-    expect(await person(sub).folderId()).toBe(retry.folderId);
   });
 
   it('a reserved folder id that was never created is created on the next call', async () => {

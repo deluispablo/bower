@@ -19,7 +19,7 @@ export type EffectEvidence = {
 export type Outcome =
   | { operationId: string; state: 'not-dispatched' }
   | { operationId: string; state: 'before-effect-refused'; failure: Failure }
-  | { operationId: string; state: 'possible-effect'; dispatchId: string }
+  | { operationId: string; state: 'possible-effect'; dispatchId: string; fileId?: string }
   | { operationId: string; state: 'applied'; evidence: EffectEvidence }
   | { operationId: string; state: 'rejected'; failure: Failure };
 export type ReportRecord = {
@@ -135,7 +135,7 @@ function outcome(value: unknown): value is Outcome {
     case 'not-dispatched': return closed(value, ['operationId', 'state']);
     case 'before-effect-refused':
     case 'rejected': return closed(value, ['operationId', 'state', 'failure']) && failure(value.failure);
-    case 'possible-effect': return closed(value, ['operationId', 'state', 'dispatchId']) && id(value.dispatchId);
+    case 'possible-effect': return closed(value, ['operationId', 'state', 'dispatchId'], ['fileId']) && id(value.dispatchId) && (value.fileId === undefined || driveId(value.fileId));
     case 'applied': return closed(value, ['operationId', 'state', 'evidence']) && evidence(value.evidence);
     default: return false;
   }

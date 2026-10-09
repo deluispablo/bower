@@ -23,7 +23,8 @@ describe('every upload goes through the queue', () => {
     await vault.settled();
     // Today: the direct path sends it (1 direct call, 0 ids reserved, 0 sessions opened).
     expect(direct).toEqual([]);
-    expect(drive.resumableCalls.filter((c) => c.op === 'generateIds')).toHaveLength(1);
+    // Its id was reserved before its session opened (the pile's other creates reserve theirs too).
+    expect(drive.resumableCalls.findIndex((c) => c.op === 'generateIds')).toBeLessThan(drive.resumableCalls.findIndex((c) => c.op === 'open'));
     const opened = drive.resumableCalls.filter((c) => c.op === 'open');
     expect(opened).toHaveLength(1);
     const made = (await drive.listAll(root)).filter((f) => f.appProperties?.asAdded === 'scan.pdf');
