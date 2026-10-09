@@ -35,10 +35,10 @@ export const ALLOWED = {
     'src/data/fake/fake-run-drive.ts', // passes the call on
     'src/data/drive/fake-drive.ts', // the pretend Drive: its reserved ids and the creates that carry them
   ],
-  api: ['src/vault.ts'], // the Worker's template, which fake-worker stands in for
+  api: [],
   runner: ['src/drive.ts'], // a per-attempt pool none outlives, and the fenced create that carries its id
 };
-export const ALLOWED_MAX = 8;
+export const ALLOWED_MAX = 7;
 
 /** The flat-config block for one package: the rule everywhere except the allowed files. */
 export const reservationConfig = (pkg) => ({
