@@ -11,7 +11,8 @@ import { runnerReads } from '../src/spine/records';
 import { endedStamp, keepFinishedAtEnd } from '../src/spine/retention';
 import { runOperations, type Effects, type ReadBack, type RunEnd } from '../../src/data/spine/engine';
 import { RunnerToken } from '../src/token';
-import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
+import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3, type WireRequest } from './drive-v3';
+import type { FakeDrive, FaultHook } from '../../src/data/drive/fake-drive';
 
 const AT = Date.UTC(2026, 9, 7, 9);
 
@@ -143,7 +144,11 @@ const appliedIn = (c: Checkpoint | undefined): number => c?.outcomes.filter((o) 
  */
 type Inside = { name: string; folder?: boolean; props?: Record<string, string> };
 
-async function keptAt(folders: { name: string; props?: Record<string, string>; created?: number; files?: string[]; inside?: Inside[] }[], at: number): Promise<{ binned: string[]; trashed: string[] }> {
+async function keptAt(
+  folders: { name: string; props?: Record<string, string>; created?: number; files?: string[]; inside?: Inside[] }[],
+  at: number,
+  hook?: (drive: FakeDrive, made: DriveFile[]) => FaultHook,
+): Promise<{ binned: string[]; trashed: string[]; requests: WireRequest[]; made: DriveFile[] }> {
   const drive = fixedDrive();
   const root = (await drive.createFolder('root', 'Bower')).id;
   const sys = (await drive.createFolder(root, '.bower')).id;
@@ -159,10 +164,11 @@ async function keptAt(folders: { name: string; props?: Record<string, string>; c
   const wire = driveV3(drive);
   const token = new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: wire.fetch, now: () => wire.now });
   const adapter = new RunnerDrive({ token, attempt: 1, fetch: wire.fetch });
+  if (hook) adapter.fault = hook(drive, made);
   const ids = await keepFinishedAtEnd(adapter, new RunRecords(runnerReads(adapter, RUN_ID), root), RUN_ID, at);
   const trashed: string[] = [];
   for (const f of made) if ((await drive.evidence(f.id))?.trashed) trashed.push(f.name);
-  return { binned: made.filter((f) => ids.includes(f.id)).map((f) => f.name), trashed };
+  return { binned: made.filter((f) => ids.includes(f.id)).map((f) => f.name), trashed, requests: wire.requests, made };
 }
 
 describe('runner checkpoints', () => {
@@ -500,6 +506,42 @@ describe('runner checkpoints', () => {
     const { binned, trashed } = await keptAt([twin, ...others, { name: RUN_ID }], AT + 5000);
     expect(binned).toEqual(['run-00', 'run-00', 'run-01']);
     expect(trashed).toEqual(['run-00', 'run-00', 'run-01']);
+  });
+
+  it('each run folder is listed just before its own Bin', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // 23 ended runs and this run: run-00, run-01 and run-02 go. Each is listed, then binned, before the next is listed
+    // (P4-38e), so what was moved into one while an earlier one went is seen.
+    const others = Array.from({ length: 23 }, (_, i) => ({ name: `run-${String(i).padStart(2, '0')}`, props: endedStamp(`run-${String(i).padStart(2, '0')}`, AT + 100 + i) }));
+    const { binned, requests, made } = await keptAt([...others, { name: RUN_ID }], AT + 5000);
+    expect(binned).toEqual(['run-00', 'run-01', 'run-02']);
+    const name = new Map(made.filter((f) => f.name.startsWith('run-')).map((f) => [f.id, f.name]));
+    const steps = requests.flatMap((r) => {
+      const inside = /'([^']+)' in parents/.exec(r.url.searchParams.get('q') ?? '')?.[1];
+      if (r.method === 'GET' && inside && name.has(inside)) return [`list ${name.get(inside) ?? ''}`];
+      const id = decodeURIComponent(r.url.pathname.split('/').at(-1) ?? '');
+      return r.method === 'PATCH' && name.has(id) ? [`bin ${name.get(id) ?? ''}`] : [];
+    });
+    expect(steps).toEqual(['list run-00', 'bin run-00', 'list run-01', 'bin run-01', 'list run-02', 'bin run-02']);
+  });
+
+  it('a picked folder that gains an unmarked child before its turn is kept', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // P4-38e: 23 ended runs, so run-00, run-01 and run-02 are picked. Right after run-00 goes to the Bin, Alex moves a
+    // note into run-01: run-01 is kept with its note, run-02 still goes.
+    const others = Array.from({ length: 23 }, (_, i) => ({ name: `run-${String(i).padStart(2, '0')}`, props: endedStamp(`run-${String(i).padStart(2, '0')}`, AT + 100 + i) }));
+    const moved: Promise<DriveFile>[] = [];
+    const { binned, trashed } = await keptAt([...others, { name: RUN_ID }], AT + 5000, (drive, made) => ({
+      applied: (call) => {
+        const first = made.find((f) => f.name === 'run-00');
+        const second = made.find((f) => f.name === 'run-01');
+        if (call.op === 'trash' && call.id === first?.id && second) moved.push(drive.createText(second.id, 'Ideas.md', 'Ideas by Alex'));
+      },
+    }));
+    expect(moved).toHaveLength(1);
+    await Promise.all(moved);
+    expect(binned).toEqual(['run-00', 'run-02']);
+    expect(trashed).toEqual(['run-00', 'run-02']);
   });
 
   it('a run folder let go of whose Bin answer was lost is resolved by its stamp', async () => {
