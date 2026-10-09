@@ -3041,7 +3041,7 @@ describe('c2-create-by-id: an app write whose answer was lost is found again by 
     // Alex adds a line to the landed note on another device before this page lists the folder again.
     await drive.writeText(note, 'Job offer papers, and my own line', (await drive.get(note, {})).modifiedTime);
     const retried = await vault.updatePile(pile, 'Job offer, signed papers').then(() => 'saved', (e: unknown) => (e as BowerError).message);
-    expect({ retried, text: await drive.readText(note) }).toEqual({ retried: 'This note changed somewhere else. Open it again to see the new version.', text: 'Job offer papers, and my own line' });
+    expect({ retried, text: await drive.readText(note) }).toEqual({ retried: CHANGED_ELSEWHERE, text: 'Job offer papers, and my own line' });
     // Looked at again, the pile shows Alex's words, and the next save goes into that one note.
     await vault.refresh();
     expect((await vault.piles()).find((p) => p.id === pile)?.text).toBe('Job offer papers, and my own line');
@@ -3049,11 +3049,16 @@ describe('c2-create-by-id: an app write whose answer was lost is found again by 
     expect((await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md').map((f) => f.id)).toEqual([note]);
   });
 
+  // c2-create-by-id's verify names this test: since TL-P4-24 addendum 10 the retry is refused first, then made again.
   it('a pile note binned elsewhere after a double failure is made again with the new words', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const { pile, folder, note } = await lostPileNote('Job offer papers');
     // Alex bins the landed note in Drive before this page lists the folder again: it stays in the Bin, untouched.
     await drive.trash(note);
+    // Not as it was made (TL-P4-24 addendum 10): refused, nothing made on that press, and its id let go.
+    const e: unknown = await vault.updatePile(pile, 'Job offer, signed papers').then(() => null, (err: unknown) => err);
+    expect({ reason: notAsSeenReason(e), message: (e as BowerError | null)?.message }).toEqual({ reason: 'gone', message: CHANGED_ELSEWHERE });
+    expect((await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md')).toEqual([]);
     await expect(vault.updatePile(pile, 'Job offer, signed papers')).resolves.toMatchObject({ text: 'Job offer, signed papers' });
     const notes = (await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md');
     expect(notes).toHaveLength(1);

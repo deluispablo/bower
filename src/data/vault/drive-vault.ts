@@ -5,10 +5,10 @@
  * writes one journal line for each change you make, so the next tidy-up
  * knows what happened. It never writes Bower's own sections of a note.
  */
-import { driveError, type DriveApi, type DriveFile, type Fence } from '../drive/drive-api';
+import { type DriveApi, type DriveFile, type Fence } from '../drive/drive-api';
 import { ReadCache, type Version } from '../drive/read-cache';
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
-import { Intended, STAMP, byId, confirms, landing, makeFolder, makeOnce, makeText, unbins, updateByStamp, type Holder, type Intent } from '../spine/write-once';
+import { Intended, STAMP, byId, landing, madeAt, makeFolder, makeOnce, makeText, unbins, updateByStamp, type Holder, type Intent } from '../spine/write-once';
 import type { FailedChange, Unsubscribe, VaultSource } from '../sources';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName } from '../piles';
 import { buildTree, checkCreationName, displayName, thingName, freeName, join, kindOf, moveEntry, nameOf, parentOf, removeEntry, renameEntry } from '../tree';
@@ -1117,29 +1117,27 @@ export class DriveVault implements VaultSource {
     } else if (text && folderId) {
       // One intended note per pile: a try again after a double failure, with new words, writes them into the same note.
       const key = `pile-note:${id}`;
+      const at = { parent: folderId, name: PILE_NOTE, ...(contextKey ? { props: { [PROP.item]: contextKey } } : {}) };
       const kept = this.intended.kept(key);
-      let there = kept ? await byId(this.drive, kept) : null;
-      if (there?.trashed) {
-        // Binned since it landed (in Drive, or by another device): it stays in the Bin, and these words make a new note.
-        this.intended.forget(key);
-        this.pileNoteSent.delete(key);
-        there = null;
-      }
-      const sent = there ? (this.pileNoteSent.get(key) ?? []) : [];
-      // Only a note that still holds words Bower sent is Bower's to write over (its checksum); any other is an edit.
-      if (there && !sent.some((words) => confirms(there, new TextEncoder().encode(words)))) {
-        this.intended.forget(key);
-        this.pileNoteSent.delete(key);
-        void this.refresh();
-        throw driveError('conflict');
-      }
+      const sent = kept ? (this.pileNoteSent.get(key) ?? []) : [];
       this.pileNoteSent.set(key, [...sent, text]);
-      const made = await this.intended.make(key, this.drive, (reserved) => {
-        if (!there) return makeText(this.drive, this.drive, { parent: folderId, name: PILE_NOTE, ...(contextKey ? { props: { [PROP.item]: contextKey } } : {}), id: reserved }, text);
-        // It landed with words Bower sent: the new ones go into it, stamped and fenced on the version that holds them.
-        const landed = there;
-        return this.once(landed, { text }, (op, fence) => this.drive.writeText(landed.id, text, landed.modifiedTime, op, { fence }));
-      });
+      let made: DriveFile;
+      try {
+        made = await this.intended.make(key, this.drive, async (reserved) => {
+          // Found by its reserved id, it is Bower's to write over only as it was made: in this pile, under its name,
+          // out of the Bin, with words Bower sent (write-once's `landed`). Moved, renamed, binned or edited since, it is
+          // refused, and its id let go: it stays as the person left it.
+          const there = reserved === kept ? await madeAt(this.drive, { ...at, id: reserved }, sent) : null;
+          if (!there) return makeText(this.drive, this.drive, { ...at, id: reserved }, text);
+          // It landed with words Bower sent: the new ones go into it, stamped and fenced on the version that holds them.
+          return this.once(there, { text }, (op, fence) => this.drive.writeText(there.id, text, there.modifiedTime, op, { fence }));
+        });
+      } catch (e) {
+        // Refused or let go: nothing more is kept for it, and the pile is shown as it is now.
+        if (this.intended.kept(key) === undefined) this.pileNoteSent.delete(key);
+        if (notAsSeenReason(e) !== null) void this.refresh();
+        throw e;
+      }
       this.pileNoteSent.delete(key);
       ix.put(made);
     }
