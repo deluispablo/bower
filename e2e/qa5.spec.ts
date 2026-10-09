@@ -3,7 +3,7 @@
  * harness/features.json (category bug or polish), on demo and on fake.
  */
 import type { Page } from '@playwright/test';
-import { expectAxeClean } from './axe';
+import { animationsEnd, expectAxeClean } from './axe';
 import { expect, isFake, test } from './fixtures';
 
 const open = async (page: Page, path: string, scenario = 'default', time = 'instant'): Promise<void> => {
@@ -288,6 +288,7 @@ test('one bird on screen when a tidy-up ends', async ({ page }) => {
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
   await expect(page.getByRole('dialog').getByText(/Done\. 15 things filed/).last()).toBeVisible({ timeout: 5000 });
   // Every bird of the page under the dialog stays under its dimmed backdrop.
+  await animationsEnd(page);
   const above = await page.evaluate(() => {
     const main = document.getElementById('main');
     return [...(main?.querySelectorAll('svg') ?? [])]
