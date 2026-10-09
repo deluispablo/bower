@@ -230,3 +230,6 @@ c4-retry-fence review,reviewer,codex,codex,medium,1,434514,432222,0,367104,2292,
 c4-undo-withdraw,implementer,claude,bower-escalated,,1,219585,,,,,,77,26.2,delivered,2026-10-09
 v2-still-marks P4-57,reviewer,claude,bower-reviewer,,1,35220,,,,,,6,0.3,PASS (3 minor),2026-10-09
 c4-undo-withdraw review,reviewer,codex,codex,medium,1,525776,523154,0,445056,2622,,,,2 Important,2026-10-09
+c4-undo-withdraw P4-56,reviewer,claude,bower-reviewer,,1,62115,,,,,,15,7.6,PASS (5 minor),2026-10-09
+d-v2-07,implementer,claude,bower-escalated,,1,173020,,,,,,30,20.5,delivered,2026-10-09
+c4-retry-fence round 2,implementer,claude,bower-escalated,,2,101068,,,,,,27,7.7,delivered,2026-10-09
