@@ -5892,7 +5892,7 @@
     "id": "c3-timer-gate",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": true,
+    "passes": false,
     "what": "A vitest setup file fails any unit test that schedules a real setTimeout or setInterval of 100 ms or more outside fake timers; its allowlist only shrinks (target empty) and replaces harness/slow-tests.json; wall-clock times become a check-harness report, never a failure; the 5000 ms test timeout stays as the backstop; the temporary 2000 ms alone margin (c3-alone-margin) is removed.",
     "steps": [
       "A fixture test with a real 150 ms wait fails.",
