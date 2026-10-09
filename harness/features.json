@@ -5716,7 +5716,7 @@
     "id": "c3-reviewer-guard",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "A PreToolUse Bash hook script, scripts/guard-main-checkout.mjs, beside quiet-gates.mjs: inside a subagent it refuses git checkout|switch|reset|rebase|merge|stash run in the main checkout and points to git show, git diff or a scratch worktree; the coordinator session is not refused.",
     "steps": [
       "A reviewer subagent running git checkout in the main checkout is refused with the pointer sentence.",
