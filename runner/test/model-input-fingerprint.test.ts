@@ -144,7 +144,7 @@ describe('model input fingerprint', () => {
     expect(fingerprint1).toBe(fingerprint2);
   });
 
-  it('two fresh folders with different Drive and admission ids give the same fingerprint', async () => {
+  it('the same case with other ids has the same fingerprint', async () => {
     const fingerprintOf = async (spare: number, admission: string, runId: string): Promise<{ fingerprint: string; input: string }> => {
       const g = await gardenFolder(spare);
       const admitted = await planAdmission(fakeRead(g.drive), g.root, { scope: 'all', clock: () => AT, newId: () => admission });
@@ -163,10 +163,12 @@ describe('model input fingerprint', () => {
     expect(b.fingerprint).toBe(a.fingerprint);
   });
 
-  it('an id written inside a note still changes the fingerprint', () => {
+  it('a value that looks like an id inside text is kept', () => {
     const input = (text: string): string => `{"runId":"r","admission":"a","piles":[{"things":[{"fileId":"f1","text":${JSON.stringify(text)}}]}]}`;
     expect(normalizeModelInput(input('"id":"x"'))).not.toBe(normalizeModelInput(input('"id":"y"')));
     expect(normalizeModelInput(input('"fileId":"x"'))).not.toBe(normalizeModelInput(input('"fileId":"y"')));
+    // A line of prompt text (not JSON) holding the same words is kept as written.
+    expect(normalizeModelInput('Note reads "id":"x" here')).not.toBe(normalizeModelInput('Note reads "id":"y" here'));
   });
 
   it('two fresh fake folders on the same case give the same input fingerprint through main', async () => {
