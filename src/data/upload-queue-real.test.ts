@@ -68,6 +68,8 @@ class ResumableDrive {
   readonly sessions = new Map<string, Session>();
   readonly ops: Op[] = [];
   offline = false;
+  /** Refuses every new session for good (403 `insufficientFilePermissions`), as a folder no longer shared would. */
+  refuseOpen = false;
   /** Requests sent while `offline`. */
   attempts = 0;
   /** Called after a chunk is committed; a promise that never settles loses Drive's reply. */
@@ -96,6 +98,7 @@ class ResumableDrive {
     if (method === 'POST' && `${url.origin}${url.pathname}` === UPLOAD && url.searchParams.get('uploadType') === 'resumable') {
       const meta = JSON.parse(String(init.body)) as Session['meta'];
       this.ops.push({ op: 'open', id: meta.id });
+      if (this.refuseOpen) return Response.json({ error: { code: 403, errors: [{ reason: 'insufficientFilePermissions' }] } }, { status: 403 });
       // A reserved id a file already has is refused: Drive never makes a second one.
       if (this.files.has(meta.id)) return Response.json({ error: { code: 409, message: 'A file already exists with the provided ID.' } }, { status: 409 });
       const id = `SESSION_${++this.next}`;
@@ -288,6 +291,37 @@ describe('the upload queue on the real Drive client', () => {
     // The device kept that id before the first byte went: only the reservation had been asked for.
     expect(keptAt).toEqual({ fileId: open.id, ops: ['ids'] });
     expect((await real.list(ACCOUNT, FOLDER)).map((r) => r.fileId)).toEqual([open.id]);
+  });
+
+  it('an upload refused for good releases its id from the device record', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const env = setup();
+    const added = await member(1);
+    env.drive.refuseOpen = true;
+    const tab = device(env);
+    await tab.queue.start(ACCOUNT, FOLDER);
+    await tab.queue.add(added);
+    await tab.queue.idle();
+    const refused = env.drive.ops.find((o) => o.op === 'open');
+    if (refused?.op !== 'open') throw new Error('no session asked for');
+    expect(tab.queue.items()[0]).toMatchObject({ state: 'failed', fileId: null });
+
+    // Drive refused the create for good: nothing was made, and the device keeps no id for it.
+    expect(env.drive.files.size).toBe(0);
+    expect((await indexedDbUploadStore(env.idb).list(ACCOUNT, FOLDER)).map((r) => r.fileId)).toEqual([null]);
+
+    // A reload, then a try again: a new id is reserved, and one file is made under it.
+    env.drive.refuseOpen = false;
+    const from = env.drive.ops.length;
+    const second = device(env);
+    await second.queue.start(ACCOUNT, FOLDER);
+    await second.queue.idle();
+    const open = env.drive.ops.slice(from).find((o) => o.op === 'open');
+    if (open?.op !== 'open') throw new Error('no session asked for');
+    expect(env.drive.opsFrom(from).slice(0, 2)).toEqual(['ids', `open:${open.id}`]);
+    expect(open.id).not.toBe(refused.id);
+    expect([...env.drive.files.keys()]).toEqual([open.id]);
+    expect(second.queue.items()[0]).toMatchObject({ state: 'done', file: { id: open.id } });
   });
 
   it('an upload whose reply was lost is found again by its kept id after a reload', async () => {
