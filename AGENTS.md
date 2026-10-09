@@ -11,6 +11,7 @@ The Bower app rebuild. Owner authorization and roles: `docs/harness/GOVERNANCE.m
 - Every session writes its own state to these files at batch boundaries and after decisions (TL-P2-43); no session clears itself, the owner compacts by hand (TL-P2-45); nothing important lives only in chat.
 - **Output (TL-P3-17, TL-P3-29).** Only the lead (and the designer, TL-P4-18) talks to the owner. The coordinator and every worker write for no reader: no text between tool calls, and the end of a coordinator turn is one line. A worker's final reply is its card from `WORKER.md`, each line under 120 characters, with details in a notes file. Messages between sessions stay complete and are 10 lines at most. The coordinator never asks the owner anything (no question tool, no question in its output): it messages the lead, who rules or asks the owner (TL-P4-02).
 - **Defects (TL-P4-15).** Nothing is fixed where it shows: log it, diagnose it, the lead rules on the design, then implement (`docs/harness/DEFECTS.md`). Each mechanism has one home (`docs/ARCHITECTURE.md`, mechanism map); never add a second way to do what one already does.
+- **Integration (TL-P4-17, TL-P4-19).** Merges go only through `harness/integrate.sh`, which also removes the merged branch and worktree. Only the coordinator switches the main checkout's branch; other sessions use their own worktrees (`docs/harness/COORDINATION.md`).
 - Never read `harness/features.json` whole (query it with `jq`), archives, history files or old reviews unless the task is about them.
 
 ## Where things are

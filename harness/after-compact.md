@@ -4,5 +4,6 @@ After a compaction (TL-P4-06), before anything else:
 - Coordinator (Orquestador): re-read docs/harness/HANDOFF.md and docs/harness/ACTIVE.md.
 - Output (TL-P3-17, TL-P3-29): only the lead (and the designer, TL-P4-18) talks to the owner, in Spanish and briefly. The coordinator and workers write no text between tool calls; a coordinator turn ends with one line; worker cards have lines under 120 characters.
 - Defects (TL-P4-15): log, diagnose (bower-diagnoser), the lead rules on the design, then implement (docs/harness/DEFECTS.md). The coordinator never designs a fix.
-- Questions (TL-P4-02): the coordinator never asks the owner; it messages the lead.
+- Questions (TL-P4-02): the coordinator never asks the owner; it messages the lead. When sends pause, questions go in docs/harness/LEAD_QUESTIONS.md and answers come in DECISIONS.
+- Integration (TL-P4-17, TL-P4-19): merge only through harness/integrate.sh, which removes merged branches and worktrees. Close escalated entries only after a review PASS. Nobody but the coordinator switches the main checkout's branch.
 - Messages between sessions: at most 10 lines, combined. After 10 sends with no owner message, sends pause; the lead warns the owner at about 8.
