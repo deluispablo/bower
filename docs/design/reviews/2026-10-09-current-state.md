@@ -44,6 +44,19 @@ Text contrast passes axe in both themes on every screen. No page scrolls sideway
 - **Suggestion.** A target of at least 24×24.
 - **Evidence.** axe rule `target-size` on `._tabX_`, seen in `home-1440-dark.png`.
 
+### E5. In the replay, Bower lands in the air and hides behind what it carries (2, minor; found after the owner reported it)
+
+- **Observation.** In "What Bower did", measured per frame at 375 and 1440 px:
+  - At every shelf, Bower's toes stop 30 px above the twig. They land on the empty dashed slot, because `pointOn` aims at the slot's top edge.
+  - At the inbox heap, Bower lands 0 to over 60 px above the label it picks. The target is the bounding box of a tilted label, and that label is often buried under others.
+  - The carried label covers Bower's head in 332 of 841 frames at 1440, and in 222 of 841 at 375.
+  - The tidy-up scene itself is right: the toes are within 2 px of its ground line.
+- **Impact.** Bower looks as if it floats or vanishes. That breaks the brand's rules that every landing squashes onto something and that Bower faces and holds what it moves.
+- **Suggestion.**
+  - A landing puts the toes (y 92 of the drawing) on the top edge of what Bower stands on: the twig beside the slot, or the top label of the heap, laid flat.
+  - The thing carried is the drawing's own small paper. Its name appears on the shelf.
+- **Evidence.** Frame logs and shots are in the session's scratch folder. Before images are on the design canvas.
+
 ## Improvements
 
 - **I1. The same questions twice on desktop Home (1).** The right Bower panel repeats both questions shown in the main column. Its link "Answer on Home" points to the page you are already on. See `home-1440-dark.png`.
