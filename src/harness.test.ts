@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module, checked by these tests
-import { apiTests, doneArgs, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs, redKind, runnerTests } from '../scripts/harness-rules.mjs';
+import { apiTests, doneArgs, SLOW_CEILING, slowProblems, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs, redKind, runnerTests } from '../scripts/harness-rules.mjs';
 
 type Entry = { id: string; task: string | number; steps?: string[]; verify: string; passes: boolean };
 const S = ['Open Home.', 'See it.'];
@@ -252,7 +252,7 @@ describe('the harness', () => {
     git('config', 'user.name', 'Alex');
     mkdirSync(join(dir, 'scripts'));
     mkdirSync(join(dir, 'harness'));
-    for (const f of ['harness-rules.mjs', 'harness-tests.mjs', 'check-harness.mjs']) copyFileSync(join(process.cwd(), 'scripts', f), join(dir, 'scripts', f));
+    for (const f of ['harness-rules.mjs', 'harness-tests.mjs', 'harness-alone.mjs', 'check-harness.mjs']) copyFileSync(join(process.cwd(), 'scripts', f), join(dir, 'scripts', f));
     copyFileSync(join(process.cwd(), 'harness/done.sh'), join(dir, 'harness/done.sh'));
     writeFileSync(join(dir, 'harness/features.json'), '[]\n');
     writeFileSync(join(dir, 'harness/proof-legacy.txt'), readFileSync(join(process.cwd(), 'harness/proof-legacy.txt')));
@@ -295,5 +295,38 @@ describe('the harness', () => {
     expect(run.status).toBe(1);
     expect(run.stderr + run.stdout).toContain('e1: escalated, passes without a review PASS');
     expect(run.stderr + run.stdout).toContain('e1 stays open');
+  });
+  it('a unit test over 1000 ms not on the slow list fails the harness check', () => {
+    const run = (name: string, duration: number) => ({ name, file: 'src/a.test.ts', duration });
+    const tests = [run('fast one', 40), run('listed slow one', 3200), run('new slow one', 1500), run('exactly the limit', 1000)];
+    const found = slowProblems(tests, ['listed slow one'], 1) as string[];
+    expect(found).toEqual([expect.stringContaining('new slow one')]);
+    expect(found[0]).toContain('1500 ms');
+    expect(slowProblems(tests.slice(0, 2), ['listed slow one'], 1)).toEqual([]);
+    // A name on the list that matches no test is a stale line: it goes.
+    expect(slowProblems(tests.slice(0, 1), ['a test that is gone'], 1)).toEqual([expect.stringContaining('a test that is gone')]);
+  });
+
+  it('a test slow in the full run and fast alone passes the slow ratchet', () => {
+    const tests = [{ name: 'loaded', file: 'src/a.test.ts', duration: 3200 }, { name: 'really slow', file: 'src/b.test.ts', duration: 3200 }];
+    const alone = (t: { name: string }): number => (t.name === 'loaded' ? 120 : 2100);
+    // Only the time alone counts: 'loaded' is fast alone and passes; 'really slow' is slow alone and is not listed.
+    expect(slowProblems(tests, [], 0, alone)).toEqual([expect.stringContaining('really slow')]);
+    expect(slowProblems(tests, [], 0, alone)[0]).toContain('2100 ms alone');
+    // A test fast in the full run is never rerun.
+    const reran: string[] = [];
+    slowProblems([{ name: 'quick', file: 'x', duration: 900 }], [], 0, (t: { name: string }) => (reran.push(t.name), 0));
+    expect(reran).toEqual([]);
+  });
+
+  it('the slow list may only shrink', () => {
+    const tests = [{ name: 'a', file: 'x', duration: 2000 }, { name: 'b', file: 'x', duration: 2000 }];
+    expect(slowProblems(tests, ['a', 'b'], 2)).toEqual([]);
+    expect(slowProblems(tests, ['a'], 1)).toEqual([expect.stringContaining('b')]);
+    // A name added beyond the recorded size fails, even for a test that is slow.
+    expect(slowProblems(tests, ['a', 'b'], 1)).toEqual([expect.stringContaining('may only shrink')]);
+    const list = JSON.parse(readFileSync(join(process.cwd(), 'harness/slow-tests.json'), 'utf8')) as { tests: string[] };
+    expect(list.tests.length).toBeLessThanOrEqual(SLOW_CEILING);
+    expect(new Set(list.tests).size).toBe(list.tests.length);
   });
 });

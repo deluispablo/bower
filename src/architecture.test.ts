@@ -5,6 +5,7 @@
  */
 /// <reference types="node" />
 import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -19,7 +20,8 @@ const files = (dir: string): string[] =>
     return statSync(p).isDirectory() ? files(p) : /\.(ts|tsx)$/.test(n) && !/\.test\.tsx?$/.test(n) ? [p] : [];
   });
 
-// Who may import which data source is checked by dependency-cruiser (.dependency-cruiser.cjs); these tests drive that gate.
+// Who may import which data source is checked by dependency-cruiser (.dependency-cruiser.cjs) on the real tree in pnpm check;
+// this test drives that gate on small fixture trees (the rule list itself: src/dependency-rules.test.ts).
 describe('the shape of the code', () => {
   it('the import rule sees dynamic and relative imports', () => {
     const base = { 'src/data/demo/world.ts': 'export const w = 1;\n', 'src/data/fake/pretend.ts': 'export const p = 1;\n', 'src/data/drive/fake-drive.ts': 'export const d = 1;\n' };
@@ -32,9 +34,16 @@ describe('the shape of the code', () => {
   });
 
   it('screens never import a data source directly', () => {
-    const r = run(ROOT);
-    expect(r.out, 'Screens talk to data only through src/data/sources.ts (useSources, useLoad hooks in provider.tsx) and types.ts. Move what the screen needs behind a VaultSource/RunSource method, or into a pure module outside demo/drive/vault/live/worker/fake.').not.toContain('screens-use-data-only-through-sources');
-    expect(r.code).toBe(0);
+    // The rule list (dependency-cruiser itself runs once, on the real tree, in pnpm check).
+    const { forbidden } = createRequire(import.meta.url)(join(ROOT, '.dependency-cruiser.cjs')) as { forbidden: { name: string; from: { path: string }; to: { path: string } }[] };
+    const hits = (re: string, path: string): boolean => new RegExp(re).test(path);
+    const [screens, shell] = forbidden.filter((r) => r.name === 'screens-use-data-only-through-sources');
+    // Screens (features, app, ui, bird) reach data only through sources: every source folder is a target.
+    for (const from of ['src/features/a/Screen.ts', 'src/app/Shell.tsx', 'src/ui/Button.tsx', 'src/bird/presence.ts']) expect(hits(screens?.from.path ?? '', from), from).toBe(true);
+    for (const target of ['demo', 'drive', 'vault', 'live', 'worker', 'fake', 'contract'].map((d) => `src/data/${d}/x.ts`).concat('src/data/choose.ts')) expect(hits(screens?.to.path ?? '', target), target).toBe(true);
+    expect(hits(screens?.to.path ?? '', 'src/data/sources.ts')).toBe(false);
+    expect(hits(screens?.from.path ?? '', 'src/data/provider.tsx')).toBe(false);
+    expect(hits(shell?.from.path ?? '', 'src/app/App.tsx')).toBe(true);
   });
 
   it('errors are never swallowed', () => {
