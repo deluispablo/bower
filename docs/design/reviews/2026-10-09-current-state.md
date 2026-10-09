@@ -57,6 +57,22 @@ Text contrast passes axe in both themes on every screen. No page scrolls sideway
   - The thing carried is the drawing's own small paper. Its name appears on the shelf.
 - **Evidence.** Frame logs and shots are in the session's scratch folder. Before images are on the design canvas.
 
+### E6. Bower is a fixed loop on most screens: it does not watch you or react (3, major; reported by the owner)
+
+- **Observation.** Home, a note, Tell Bower, sign-in, welcome, the tidy-up sheet's resting bird and the run chip all use `PoseBower`. That is a CSS loop of 6 s in `src/bird/poses.css`: two head snaps, a tail flick and a blink, repeated identically. Only Add, the tidy-up scene and the replay use `BowerLayer`, the engine with the "idle mind" that watches the pointer, snaps at random, chirps and turns. The landing uses that engine too, so the app feels flat next to it.
+- **Impact.** Bower is meant to be the person's companion and "the one living thing" (brand book). As a looping sticker it reads as decoration, not company.
+- **Suggestion.** Every resting Bower runs the engine's idle mind. It watches the pointer, the keyboard focus or the last touch. It reacts to the person's actions on that screen. It sleeps after a minute of stillness. "Bower moves" and reduced motion keep it still. See the canvas page "Bower, your companion" (behaviour map, four moments and a live demo).
+
+### E7. Two controls drawn by the browser, not the brand (2, minor)
+
+- **Rename.** The name field in the Rename sheet is the browser's default input: white, 13 px, about 160 px wide. It sits next to a brand button.
+- **Moved to the Bin.** In the message, "Undo" wraps one letter per line, because of the half-width message (E1).
+- **Evidence.** `today/rename-375.png` and `today/bin-375.png` in the session scratch folder.
+
+### E8. Things that move on their own besides Bower (1, cosmetic)
+
+The loading skeleton shimmers and the "live" dot pulses forever. The brand book says only Bower moves on its own; everything else moves in answer to the person.
+
 ## Improvements
 
 - **I1. The same questions twice on desktop Home (1).** The right Bower panel repeats both questions shown in the main column. Its link "Answer on Home" points to the page you are already on. See `home-1440-dark.png`.
