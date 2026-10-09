@@ -84,7 +84,7 @@ Each mechanism has one home in the code ([TL-P4-15](harness/2026-10-08-tl-p4-15-
 | Mechanism | Home | Today |
 | --- | --- | --- |
 | Drive transport (token, retry, errors, wire type) | `src/data/drive/` | Done: one transport with injected retry options (`c2-drive-transport`, `c2-transport-options`, `c2-transport-outcome-kind`) |
-| Drive read cache, keyed by id and modifiedTime | `src/data/drive/` | Done: one `ReadCache` (`c2-read-cache`) |
+| Drive read cache, keyed by id and modifiedTime | `src/data/drive/` | Done: one `ReadCache`; the runner's listing patch log is its listing part (`c2-read-cache`, `c2-write-once`) |
 | Drive ports (what a Drive can do, read or write) | `src/data/drive/drive-api.ts` | Done: both Drives offer the same ports, classed read or write (`c2-fake-parity`, `c1-drive-ops-table`) |
 | "Still as seen" fence before an act | `src/data/contracts/` | Done (`c1-still-as-seen`) |
 | Write-once and recovery by the `bowerOp` stamp | `src/data/spine/` | Target: six methods (`c2-write-once`) |
