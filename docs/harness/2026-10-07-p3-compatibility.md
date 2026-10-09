@@ -78,3 +78,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `053e710c` | c3-planner-split | none on the wire: `RunReport.updated` keeps `{path, what}`; a note with N new Timeline lines now has N rows (was 1). Home, Replay and the run summary count notes by distinct path (`notesUpdated`), so "N notes brought up to date" is unchanged; the note screen now marks every new line, not only the first |
 | `a189e639` | c3-planner-split | none: red tests only (`src/features/note/new-lines.test.ts`, `src/features/tidy/run-words.test.ts`, spine tests) |
 | `7f569779` | c3-planner-split | none: `notesUpdated` and the run links count notes through one `distinctPaths` (same counts; a row with no path is no note) |
+| `895bfe15` | c3-planner-split | none on the wire: the note screen marks one Timeline line per report row (the last with its words), so an earlier line with the same words is no longer marked New |

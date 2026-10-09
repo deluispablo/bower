@@ -1532,6 +1532,8 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const rulesMade = rules.made !== null
     ? await add({ kind: 'create-text', parent: { fileId: rootId }, name: RULES_PATH, createKey: newKey('rules'), text: rules.made, content: await utf8(rules.made), purpose: 'generated' })
     : null;
+  // Every rule line Rules.md is made to word waits for it, in the one map (`needs`).
+  if (rulesMade) for (const r of ruleWords.change?.add ?? []) derive(r.recordId, rulesMade);
   const rulesOp = rulesMade ?? (rulesState === 'planned' && rulesFile ? editOf.get(rulesFile.id) ?? null : null);
   const archiveChain: string[] = [];
   let archiveTo: Target | null = archiveFolder ? { fileId: archiveFolder.id } : null;
@@ -1547,7 +1549,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     if (!archiveTo) throw new BowerError('unknown', OWN_FILES);
     const write = line.rec.kind === 'request' ? requestsOp : line.rec.kind === 'answer' ? questionsOp : null;
     const n = need(line.rec.id);
-    const derived = [...new Set([...(write ? [write] : []), ...n.edits, ...n.derived, ...(rulesMade && rules.held.has(line.rec.id) ? [rulesMade] : [])])];
+    const derived = [...new Set([...(write ? [write] : []), ...n.edits, ...n.derived])];
     archives.set(line.rec.id, derived);
     const moves: string[] = [];
     for (const f of line.files) moves.push(await add({ kind: 'move', before: seen(f), parent: archiveTo, name: f.name, properties: {} }, derived));
@@ -1755,12 +1757,12 @@ function wordedBy(before: string, change: RulesWording, after: string): Readonly
 }
 
 /**
- * How a run words your rules. `worded` are the lines whose rule is written, `held` the lines whose archive waits
- * for that write, `left` the lines that stay pending, uncaptured: a line whose words cannot be worded, or every rule
+ * How a run words your rules. `worded` are the lines whose rule is written (each archive waits for that write, in
+ * `needs`), `left` the lines that stay pending, uncaptured: a line whose words cannot be worded, or every rule
  * line when Rules.md is not Bower's, is damaged, too big, changed while read or past the edit cap (rule 7). `made`
  * is Rules.md's text when it is missing: authored by `applyChanges` on the template's empty one (R3-4).
  */
-type RulesPlan = { worded: ReadonlySet<string>; held: ReadonlySet<string>; left: ReadonlySet<string>; made: string | null };
+type RulesPlan = { worded: ReadonlySet<string>; left: ReadonlySet<string>; made: string | null };
 
 function rulesPlanOf(
   words: { change: RulesWording | null; left: ReadonlySet<string> }, file: DriveFile | undefined,
@@ -1778,14 +1780,14 @@ function rulesPlanBy(
 ): RulesPlan {
   const { change, left } = words;
   const ids = change ? [...change.add, ...change.remove].map((r) => r.recordId) : [];
-  const none: RulesPlan = { worded: new Set(), held: new Set(), left, made: null };
+  const none: RulesPlan = { worded: new Set(), left, made: null };
   if (!change) return none;
   if (file?.folder) {
     console.error(`${RULES_PATH} is a folder`);
     return { ...none, left: new Set([...left, ...ids]) };
   }
   if (file) {
-    if (state === 'planned') return { worded, held: new Set(ids), left, made: null };
+    if (state === 'planned') return { worded, left, made: null };
     // Every rule there already and none to take out: nothing to write, and each line is satisfied as it is.
     if (state === 'present') return none;
     return { ...none, left: new Set([...left, ...ids]) };
@@ -1800,7 +1802,7 @@ function rulesPlanBy(
     console.error(`${RULES_PATH} could not be made (${result.ok ? 'count' : result.reason})`);
     return { ...none, left: new Set([...left, ...change.add.map((r) => r.recordId)]) };
   }
-  return { worded: made, held: new Set(change.add.map((r) => r.recordId)), left, made: result.text };
+  return { worded: made, left, made: result.text };
 }
 
 const RULES_PATH = 'Rules.md';
