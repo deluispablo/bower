@@ -389,4 +389,23 @@ describe('the harness', () => {
     expect(run.out).toMatch(/stale.*pid 999999.*taking it over/i);
     expect(run.out).toContain('ran');
   });
+
+  // A focused or skipped unit test is linted in the three packages (the vitest plugin's no-focused-tests and no-disabled-tests).
+  it('a focused or skipped unit test fails the check', () => {
+    const lint = (cwd: string, file: string, code: string): string[] => {
+      const r = spawnSync('pnpm', ['exec', 'eslint', '--stdin', '--stdin-filename', file, '--format', 'json'], { cwd: join(process.cwd(), cwd), input: code, encoding: 'utf8' });
+      const out = JSON.parse(r.stdout) as { messages: { ruleId: string | null }[] }[];
+      return out.flatMap((f) => f.messages.map((m) => m.ruleId ?? ''));
+    };
+    const here = [['.', 'src/x.test.ts'], ['api', 'test/x.test.ts'], ['runner', 'test/x.test.ts']] as const;
+    for (const [cwd, file] of here) {
+      expect(lint(cwd, file, "import { it } from 'vitest';\nit.only('a', () => {});\n")).toContain('vitest/no-focused-tests');
+      expect(lint(cwd, file, "import { it } from 'vitest';\nit.skip('a', () => {});\n")).toContain('vitest/no-disabled-tests');
+      expect(lint(cwd, file, "import { it } from 'vitest';\nit('a', () => {});\n")).toEqual([]);
+    }
+  }, 60_000);
+
+  it('both playwright configs forbid only', () => {
+    for (const f of ['playwright.config.ts', 'e2e/pwa.config.ts']) expect(readFileSync(f, 'utf8')).toMatch(/forbidOnly:\s*true/);
+  });
 });
