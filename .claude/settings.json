@@ -18,6 +18,15 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/scripts/guard-main-checkout.mjs\""
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/guard-push.mjs\""
+          }
+        ]
       }
     ],
     "SessionStart": [
@@ -40,6 +49,13 @@
           }
         ]
       }
+    ]
+  },
+  "permissions": {
+    "deny": [
+      "Edit(public/landing/**)",
+      "Write(public/landing/**)",
+      "Read(.env*)"
     ]
   }
 }
