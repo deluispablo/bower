@@ -114,3 +114,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `54629de1` | c4-focus-return | none: where focus lands after a sheet or the tree menu closes; the tree menu returns the keyboard to the tree at once. No stored data, no strings. |
 | `e1c6b698` | c4-focus-return | none: a field the next sheet took keeps the keyboard; the rename box keeps it. Focus only, no stored data, no strings. |
 | `c1e57875` | v2-field | none: markup and styles only (fields, switch, task box); no stored format, route or data changes. |
+| `956c5419` | v2-dock | none: one bottom dock for messages and the run chip; only the Bin message words change ("is in your Drive's Bin."). No stored data, route or format changes. |
