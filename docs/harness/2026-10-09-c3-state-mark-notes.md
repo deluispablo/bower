@@ -201,7 +201,8 @@
   Bower-owned state is rewritten and makes no news line. Red `a timeline news line with no source is refused`
   (note-edit.test.ts) failed: applyChanges returned ok for a sourceless news line. per-thing-ask's refusal table
   gained `lineUncited` (its key check failed before the fix).
-- Fixture: `seedFixture` returns `{ root, keys }` (demo item id -> file id); `seedFakeDrive` returns its root.
+- Fixture: `seedFakeDrive` fills the `keys` map it is given (demo item id -> file id) and returns the root (1d893137:
+  a second export failed the unused-code gate).
   The write-it seed adds the car renewal sample pile (`CAR_RENEWAL`), so Car's news line cites its notice (`s1-0`);
   Money's cites the first Saltmere receipt (`r0`). `writeItStates(keys)` resolves keys when the scenario runs;
   pretend.ts keeps the keys in sessionStorage beside the Drive, for a reload.
@@ -215,7 +216,7 @@
   edit (then a clash loses its answer, against addendum 15), or a new dependency kind in the engine.
 - tests changed: src/data/contracts/note-edit.test.ts: one test added, none changed.
 - tests changed: runner/test/per-thing-ask.test.ts: the refusal table gains `lineUncited`; nothing removed.
-- tests changed: src/data/fake/write-it.test.ts: seeds with `seedFixture` and resolves the states' keys; same asserts.
+- tests changed: src/data/fake/write-it.test.ts: seeds with a keys map and resolves the states' keys; same asserts.
 - tests changed: runner/test/ask-answer-loop.test.ts (d147b321): `proposeUpdate`'s state cites the offer it files, so
   its news line has a source; same asserts.
 - No `.only` or `.skip` added.
