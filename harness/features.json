@@ -6128,7 +6128,7 @@
     "id": "c4-runner-region",
     "task": "p4-consolidation",
     "category": "perf",
-    "passes": false,
+    "passes": true,
     "what": "runner/workflows/tidy.yml records BOWER_RUNNER_REGION from Azure IMDS compute/location before the runner step; any failure leaves it unset (line says unknown) and never fails the job.",
     "steps": [
       "The workflow test finds the step before the runner, with -m 2 and Metadata:true, unable to fail the job."
