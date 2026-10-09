@@ -267,6 +267,11 @@ export class BirdEngine {
     /** The startle's seconds left, and the tuft's and head's angles when it began. */
     startleT: 0,
     startleFrom: { tuft: 0, head: 0 },
+    /** The gaze's ease back after the startle (TL-P4-25 addendum 5): its seconds left, and the offset it eases to. */
+    settleT: 0,
+    settleTo: 0,
+    /** The head offset the gaze wants this frame, before its snap guard (the settle's target). */
+    gazeWant: 0,
     sleepT0: 0,
     /** The latest tap on a layer bird in flight or carrying, played when it lands. */
     tap: false,
@@ -350,6 +355,7 @@ export class BirdEngine {
     this.asleep = pose === 'sleep';
     this.S.quietT = this.S.t;
     this.S.startleT = 0;
+    this.S.settleT = 0;
     this.poseT0 = this.S.t;
     this.poseCycle = -1;
     this.B.headY = 0;
@@ -419,6 +425,7 @@ export class BirdEngine {
   private startle(): void {
     const C = this.C;
     this.S.startleT = STARTLE_TOTAL;
+    this.S.settleT = 0;
     this.S.startleFrom = { tuft: C.tuft.v, head: C.head.v + C.gaze.v };
     pin(C.gaze, 0);
   }
@@ -1086,6 +1093,7 @@ export class BirdEngine {
       this.asleep = true;
       S.sleepT0 = S.t;
       S.startleT = 0;
+      S.settleT = 0;
       this.endAct();
       this.C.gaze.t = 0;
     }
@@ -1107,7 +1115,8 @@ export class BirdEngine {
       a.el = (a.el ?? 0) + dt;
       if (a.update(a.el, dt)) this.endAct();
     }
-    if (S.startleT > 0) {
+    const stepping = S.startleT > 0;
+    if (stepping) {
       // Keyed and eased as the acts are, back to the rest `rest()` just set: no spring overshoot.
       S.startleT = Math.max(0, S.startleT - dt);
       const { rise, seconds } = STARTLE;
@@ -1118,8 +1127,17 @@ export class BirdEngine {
       }
     }
     this.gaze(dt, who === 'layer' ? LAYER_HEAD : PERCHED_HEAD);
-    // The step owns the head: the gaze's offset waits at 0 and eases back after it (TL-P4-25 addendum 4).
+    // The step owns the head: the gaze's offset waits at 0 and eases back after it (TL-P4-25 addendum 4), a return
+    // keyed ease-in-out over the step's own fall, so its speed starts and ends at 0 (TL-P4-25 addendum 5).
     if (S.startleT > 0) this.C.gaze.t = 0;
+    else if (stepping) {
+      S.settleT = STARTLE.fall;
+      S.settleTo = S.gazeWant;
+    }
+    if (S.settleT > 0) {
+      S.settleT = Math.max(0, S.settleT - dt);
+      pin(this.C.gaze, keyed(STARTLE.fall - S.settleT, [[0, 0], [STARTLE.fall, S.settleTo]], true));
+    }
   }
 
   /**
@@ -1134,6 +1152,7 @@ export class BirdEngine {
     const C = this.C;
     const p = typeof S.ptr === 'function' ? S.ptr() : S.ptr;
     if (!p) S.ptr = null;
+    S.gazeWant = 0;
     if (!p || (S.ptrSrc !== 'focus' && S.t - S.ptrT >= RECENT)) {
       C.gaze.t = 0;
       S.behindT = 0;
@@ -1158,6 +1177,7 @@ export class BirdEngine {
     if (head) {
       const ang = (Math.atan2(dy, Math.max(20, dx)) * 180) / Math.PI;
       const want = clamp(ang * 0.7, head[0], head[1]);
+      S.gazeWant = want;
       if (S.t - S.lastSnap > this.rand(0.14, 0.4) && Math.abs(want - C.gaze.t) > 6) {
         C.gaze.t = want;
         S.lastSnap = S.t;
