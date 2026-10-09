@@ -297,3 +297,43 @@ describe('c2-create-by-id fix round: a waiting line', () => {
     expect(localStorage.getItem(`bower:outbox:${root}`)).toBeNull();
   });
 });
+
+describe('c2-create-by-id reopened: a line refused for good', () => {
+  it('a journal line refused for good releases its id and says so once', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const create = drive.createText.bind(drive);
+    let mode: 'offline' | 'refuse' | 'fine' = 'offline';
+    const sentWith: Array<string | undefined> = [];
+    drive.createText = async (...a: Parameters<FakeDrive['createText']>) => {
+      sentWith.push(a[4]);
+      if (mode === 'offline') throw driveError('offline');
+      // A permanent 4xx (not the 409 that proves a create landed): Drive refuses this id for good.
+      if (mode === 'refuse') throw driveError('unknown');
+      return create(...a);
+    };
+    // A line that cannot go yet keeps its reserved id for the next try.
+    const one = await journal.record('move', 'one');
+    const kept = JSON.parse(localStorage.getItem(`bower:outbox:${root}`) ?? '[]') as Array<{ line: { id: string }; reserved?: string }>;
+    expect(kept.map((w) => w.line.id)).toEqual([one.id]);
+    expect(kept[0]?.reserved).toBeDefined();
+    // Drive then refuses it for good: the line ends as failed, its id is released, and the person is told once.
+    mode = 'refuse';
+    logged.mockClear();
+    await expect(journal.flush()).rejects.toMatchObject({ message: "Your change was made, but Bower couldn't make a note of it." });
+    expect(localStorage.getItem(`bower:outbox:${root}`)).toBeNull();
+    expect(logged).toHaveBeenCalled();
+    // Never again: the next try has nothing to send and says nothing.
+    sentWith.length = 0;
+    mode = 'fine';
+    await expect(journal.flush()).resolves.toBeUndefined();
+    expect(sentWith).toEqual([]);
+    // A new line met with the same refusal at once tells the person once, and is not kept.
+    mode = 'refuse';
+    await expect(journal.record('move', 'two')).rejects.toMatchObject({ message: "Your change was made, but Bower couldn't make a note of it." });
+    expect(localStorage.getItem(`bower:outbox:${root}`)).toBeNull();
+    mode = 'fine';
+    await expect(journal.flush()).resolves.toBeUndefined();
+    expect((await journal.list()).map((r) => r.what)).toEqual([]);
+  });
+});
+

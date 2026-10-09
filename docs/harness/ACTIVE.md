@@ -419,3 +419,7 @@ P3-9 is closed.
 - retention-never-wired ruled (a) (main f9e2515): spine-operations-checkpoints reopened; escalated wiring round dispatched. 421/427.
 - c2-create-by-id closed (8322ae27, P4-37b PASS). 422/427. Two P4-37b minors asked of the lead (journal 4xx reserved id waits forever; pile-note retry with new words makes a second note). Waiting: retention wiring (spine-operations-checkpoints), then the stage 2 suites.
 - Two P4-37b defects ruled (main cb4f7c8); c2-create-by-id reopened; implementer round queued after the retention round. 421/427.
+- Retention round delivered (red 7550a442, fix a6328140) but NOT merged: above 20 finished runs every run adds +128 Drive calls (37 → 165; re-verifies every kept chain); no engine.ts change. Lead asked. c2-create-by-id round dispatched.
+- Retention round 2 dispatched (bounded: stamp at done, Bin ≤3 oldest per run, ≤+3 calls past 20, golden variant with 25 runs).
+- c2-create-by-id round 3 merged (red da4624ed, fix 700ce9f9; 4xx releases the id with "Your change was made, but Bower couldn't make a note of it."; pile note keyed by pile id; check green). Open: a background flush only logs a refused line (lead asked). P4-37c check dispatched.
+- Background-refused journal line → side panel "what failed" once (lead); follow-up round after P4-37c.

@@ -13,3 +13,9 @@ A promised behaviour proved by calling a helper directly instead of through the 
 - A failure to bin is logged and never fails the run.
 - Test through a real run: after 21 finished runs, 20 folders remain and the oldest is in the Bin.
 - spine-operations-checkpoints is reopened until the wired test proves it.
+
+## Ruling, round 2 (lead): bounded cost
+- Round 1 (a6328140) added +128 Drive calls per run past 20 runs (37 → 165), so it was not merged.
+- "Finished" is known without reading: at done the run folder is stamped in appProperties, so the listing the runner already has is enough.
+- Bin only the oldest beyond 20, at most 3 per run (a backlog drains over time); no re-verification of kept chains.
+- Target: at most +3 calls past run 20, pinned by a C04 golden variant with 25 earlier runs.

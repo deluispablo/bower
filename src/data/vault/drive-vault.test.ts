@@ -2908,6 +2908,32 @@ describe('c2-create-by-id: an app write whose answer was lost is found again by 
     expect((await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md')).toHaveLength(1);
   });
 
+  it('a pile note retried with new words after a double failure is one note with the new words', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const blind = (): true => {
+      const real = drive.get.bind(drive);
+      drive.get = async () => {
+        drive.get = real;
+        throw driveError('offline');
+      };
+      return true;
+    };
+    await vault.tree();
+    const pile = (await vault.piles()).find((p) => p.path && p.text.startsWith('Job offer'));
+    if (!pile?.path) throw new Error('no pile');
+    const folder = await idOf(pile.path);
+    for (const n of (await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md')) await drive.trash(n.id);
+    await vault.refresh();
+    // The note lands with the first words; its answer and the read-back are both lost.
+    lose('createText', (a) => a[1] === 'Pile note.md' && blind());
+    await expect(vault.updatePile(pile.id, 'Job offer papers')).rejects.toMatchObject({ code: 'offline' });
+    // Alex tries again with new words: they go into the same note, not a second one.
+    await expect(vault.updatePile(pile.id, 'Job offer, signed papers')).resolves.toMatchObject({ text: 'Job offer, signed papers' });
+    const notes = (await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md');
+    expect(notes).toHaveLength(1);
+    expect(await drive.readText(notes[0]?.id ?? '')).toBe('Job offer, signed papers');
+  });
+
   it('a create whose answer is lost and that never landed never takes an older file of that name', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await vault.tree();
