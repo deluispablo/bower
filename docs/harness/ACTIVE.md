@@ -458,3 +458,4 @@ P3-9 is closed.
 - Closed c3-integrate-history (44378369) and c3-reservation-upload (5870a7cd, P4-40b PASS). 431/436. Dispatched c3-retention-race and c3-reservation-worker (both escalated). Next: c3-reply-schema, c3-subject, c3-planner-split, c3-note-sections, c3-pair-ask, c3-state-mark, c3-fingerprint.
 - Addendum 21 (main 43a0289a): c3-fingerprint round 2 queued (JCS, golden regenerated, raw-input golden). Running: c3-reply-schema, c3-subject.
 - P4-44 BLOCK (c3-reply-schema: structured_output branch untested; CLI give-up skips retry) → fix round per addendum 22 (read/write bounds, --json-schema off) running. c3-subject fix round (rule to ESLint) running. c3-fingerprint round 2 queued.
+- Addendum 10 (main 56dd8d86): c3-timer-gate fix round (shared check lock) running; c3-test-time/c3-alone-margin to be re-proved after it. c4-test-timers registered. c3-planner-split running. Lead near send pause: questions go to LEAD_QUESTIONS.md if sends stop.
