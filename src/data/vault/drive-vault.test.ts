@@ -13,7 +13,7 @@ import { SET_ASIDE_TEXT } from '../pile-readiness';
 import { FakeRunService } from '../fake/fake-run-service';
 import { parsePileDeclaration } from '../contracts/pile-declaration';
 import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
-import { driveError, unconfirmedWriteError, UNCONFIRMED_WRITE_MESSAGE } from '../drive/drive-api';
+import { driveError, driveFailure, unconfirmedWriteError, UNCONFIRMED_WRITE_MESSAGE } from '../drive/drive-api';
 import { IDBFactory } from 'fake-indexeddb';
 import { createUploadQueue, type StorageLike, type UploadQueue } from '../upload-queue';
 import { indexedDbUploadStore, memoryUploadStore } from '../upload-store';
@@ -765,6 +765,44 @@ describe('the outbox over the folder itself', () => {
     const changes = all.find((f) => f.name === 'changes' && f.folder);
     const lines = all.filter((f) => f.parents[0] === changes?.id && f.name.endsWith('.json'));
     expect(lines).toHaveLength(2);
+  });
+
+  it('a journal line kept on the device is sent after a reload under the id the home kept, through the app', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await vault.tree();
+    const real = drive.createText.bind(drive);
+    const get = drive.get.bind(drive);
+    const rule = (a: Parameters<FakeDrive['createText']>): boolean => a[1].endsWith('.json') && a[2].includes('"kind":"rule"');
+    const sentWith: Array<string | undefined> = [];
+    let lose = true;
+    // The rule's line lands and its answer is lost; the read by its id that follows gets no answer either.
+    drive.createText = async (...a: Parameters<FakeDrive['createText']>) => {
+      if (rule(a)) sentWith.push(a[4]);
+      const f = await real(...a);
+      if (lose && rule(a)) {
+        lose = false;
+        drive.get = async () => {
+          drive.get = get;
+          throw driveError('offline');
+        };
+        throw driveError('offline');
+      }
+      return f;
+    };
+    await vault.addRule('anything from the dentist goes in health');
+    const kept = JSON.parse(localStorage.getItem(`bower:outbox:${root}`) ?? '[]') as Array<{ line: { id: string }; reserved?: string }>;
+    expect(kept).toHaveLength(1);
+    expect(kept[0]?.reserved).toBe(sentWith[0]);
+    // The page is reloaded: a new app knows only what this device kept.
+    vault.dispose();
+    const ids = vi.spyOn(drive, 'generateIds');
+    const reloaded = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    await reloaded.flushJournal();
+    // Sent under the id kept on its line and found by it: no new id, one file, nothing left waiting.
+    expect(ids).not.toHaveBeenCalled();
+    expect(sentWith).toEqual([kept[0]?.reserved, kept[0]?.reserved]);
+    expect((await drive.listAll(root)).filter((f) => f.name === `${kept[0]?.line.id}.json`).map((f) => f.id)).toEqual([kept[0]?.reserved]);
+    expect(localStorage.getItem(`bower:outbox:${root}`)).toBeNull();
   });
 });
 
@@ -3122,6 +3160,34 @@ describe('c2-create-by-id: an app write whose answer was lost is found again by 
     const all = await drive.listAll(root);
     expect(all.filter((f) => f.name.endsWith('.url') && f.name.startsWith('insurer.example'))).toHaveLength(1);
     expect(all.filter((f) => f.name === 'blank.txt')).toHaveLength(1);
+  });
+
+  it('a link refused with a 4xx lets its id go, and Try again sends it under a new one', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const create = drive.createText.bind(drive);
+    const sentWith: Array<string | undefined> = [];
+    let refuse = true;
+    // Drive refuses the link's file outright the first time (a 4xx, permanent in the transport's table).
+    drive.createText = async (...a: Parameters<FakeDrive['createText']>) => {
+      if (a[1].endsWith('.url')) {
+        sentWith.push(a[4]);
+        if (refuse) {
+          refuse = false;
+          throw driveFailure('unknown', 'permanent');
+        }
+      }
+      return create(...a);
+    };
+    const p = await vault.addPile({ text: 'Car insurance', items: [{ name: 'insurer.example/renewal', kind: 'link', origin: 'A link you pasted', url: 'https://insurer.example/renewal' }] });
+    await vault.settled();
+    expect((await vault.piles()).find((x) => x.id === p.id)?.items.map((i) => i.upload)).toEqual([-1]);
+    await vault.retryPile(p.id);
+    await vault.settled();
+    // The refused id was let go (TL-P4-14 addendum 13): the try again carries a new one, and makes one file with it.
+    expect(sentWith).toHaveLength(2);
+    expect(sentWith.every((id) => typeof id === 'string')).toBe(true);
+    expect(sentWith[1]).not.toBe(sentWith[0]);
+    expect((await drive.listAll(root)).filter((f) => f.name.startsWith('insurer.example') && f.name.endsWith('.url')).map((f) => f.id)).toEqual([sentWith[1]]);
   });
 
   it('a system folder made with a lost answer is found by its reserved id', async () => {

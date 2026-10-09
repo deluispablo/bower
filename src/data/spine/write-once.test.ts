@@ -42,34 +42,74 @@ const sources = (dir: string): string[] =>
     return statSync(join(ROOT, p)).isDirectory() ? sources(p) : /\.tsx?$/.test(n) && !/\.(test|spec)\.tsx?$/.test(n) ? [p] : [];
   });
 
+/** A source file to look through: its path from the repository root and its text. */
+type Source = { path: string; text: string };
+
+const HOME = 'src/data/spine/write-once.ts';
+/** Drive's own call for ids (`files.generateIds`) and the home's call for one. */
+const RESERVING = new Set(['generateIds', 'reserveId']);
+
 /**
- * Who may reserve a Drive id (TL-P4-17 addendum 1): the write-once home, the ruled batch sites (TL-P4-14 addendum 11)
- * and the upload queue until c3-reservation-upload moves it (this list may only shrink). The Drive adapters only define
- * or pass the call on.
+ * Where a reservation for an intended create is made or kept by hand, read from the code's syntax (TypeScript's own
+ * parser), never from a field's name: the home's ports (its exported interfaces) say what the id's slot is called.
+ * 1. a call for ids, or the call passed on (`generateIds`, `reserveId`), by any receiver or alias;
+ * 2. the slot set, cleared or given by hand (`h.reserved = id`, `h['reserved'] = id`, `delete h.reserved`, `{ reserved: id }`);
+ * 3. a store kept beyond one call (a class field or a module's own) that maps a key to an intended create: a Map whose
+ *    values are a holder (a type with a slot for an id, or built on a port) or what a holder always carries (a line);
+ * 4. the slot's id put in a store by hand (`ids.set(key, h.reserved)`).
  */
-const RESERVES = new Set([
-  'src/data/spine/write-once.ts',
-  'src/data/spine/engine.ts', // one batch for a run's creates
-  'runner/src/drive.ts', // a per-attempt pool none outlives
-  'src/data/fake/fake-worker.ts', // the template's batch
-  'api/src/vault.ts', // the Worker's template, which fake-worker stands in for
-  'src/data/upload-queue.ts', // until c3-reservation-upload
-  'src/data/drive/drive-api.ts',
-  'src/data/drive/drive-http.ts',
-  'src/data/drive/fake-drive.ts',
-  'src/data/drive/seen-files.ts',
-  'src/data/fake/fake-run-drive.ts',
-]);
+function reservationSites(files: readonly Source[]): string[] {
+  // The line rule as it stood (P4-39): a call for ids, an id set on a holder, or a field named `intended`.
+  const reserves = /\bgenerateIds\(|\breserveId\(|\.reserved\s*(\?\?=|=(?!=))|\bintended\s*=\s*new Map\b/;
+  return files.filter((f) => f.path !== HOME).flatMap((f) => f.text.split('\n').flatMap((line, i) => (reserves.test(line) && !/^\s*(\*|\/\/)/.test(line) ? [`${f.path}:${i + 1} reserves`] : [])));
+}
+
+/** Every source file Bower runs, tests aside. */
+const ALL = (): Source[] => ['src', 'runner/src', 'api/src'].flatMap(sources).map((path) => ({ path, text: read(path).join('\n') }));
+/** How many reservation sites each file has, from `reservationSites`. */
+const count = (sites: readonly string[]): Record<string, number> =>
+  sites.reduce<Record<string, number>>((n, s) => {
+    const p = s.slice(0, s.indexOf(':'));
+    n[p] = (n[p] ?? 0) + 1;
+    return n;
+  }, {});
+
+/**
+ * Who may reserve a Drive id outside the home (TL-P4-17 addendum 1), and at how many sites: the ruled batch sites
+ * (TL-P4-14 addendum 11), the Drive adapters that pass the call on, and the upload queue until c3-reservation-upload.
+ * A ratchet, as the duplication baseline: a site more fails, and a site fewer fails until its number is lowered here.
+ * This list may only shrink.
+ */
+const ALLOWED: Record<string, number> = {
+  'src/data/spine/engine.ts': 2, // one batch for a run's creates; one id for a create the batch did not cover
+  'runner/src/drive.ts': 3, // a per-attempt pool none outlives, and the fenced create that carries its id
+  'src/data/fake/fake-worker.ts': 1, // the template's batch
+  'api/src/vault.ts': 5, // the Worker's template, which fake-worker stands in for (the lead rules on it)
+  'src/data/upload-queue.ts': 4, // until c3-reservation-upload
+  'src/data/drive/seen-files.ts': 1, // passes the call on
+  'src/data/fake/fake-run-drive.ts': 1, // passes the call on
+  'src/data/drive/fake-drive.ts': 6, // the pretend Drive: its reserved ids and the creates that carry them
+};
 
 describe('one home for an intended create', () => {
   it('only the write-once home and the ruled batch sites reserve Drive ids', () => {
-    // A reservation is a call for ids, an id set on a holder by hand, or an intent map kept outside the home.
-    const reserves = /\bgenerateIds\(|\breserveId\(|\.reserved\s*(\?\?=|=(?!=))|\bintended\s*=\s*new Map\b/;
-    const found = ['src', 'runner/src', 'api/src']
-      .flatMap(sources)
-      .filter((p) => !RESERVES.has(p))
-      .flatMap((p) => read(p).flatMap((line, i) => (reserves.test(line) && !/^\s*(\*|\/\/)/.test(line) ? [`${p}:${i + 1}`] : [])));
-    expect(found, 'Reserve an id for an intended create through write-once (makeOnce, Intended, reserveFor), keeping it on its holder').toEqual([]);
+    const sites = reservationSites(ALL());
+    const outside = sites.filter((s) => !(s.slice(0, s.indexOf(':')) in ALLOWED));
+    expect(outside, 'Reserve an id for an intended create through write-once (makeOnce, Intended, reserveFor), keeping it on its holder').toEqual([]);
+    expect(count(sites), 'A ratchet: a site more fails; a site fewer, lower its number in ALLOWED').toEqual(ALLOWED);
+  });
+
+  it('a renamed intent map, an id set or stored by hand, or the call for ids by another name is found by what it does', () => {
+    const fixture = (path: string, text: string): string[] =>
+      reservationSites([...ALL(), { path, text }]).filter((s) => s.startsWith(`${path}:`)).map((s) => s.slice(path.length + 1));
+    // The drift at journal.ts:166, renamed: an intent -> line map kept outside the home.
+    expect(fixture('src/data/vault/renamed.ts', "import type { JournalRecord } from './journal';\nexport class Journal {\n  private intents = new Map<string, JournalRecord>();\n}\n")).toEqual(['3 keeps intended creates outside the home']);
+    // An intent -> id map, filled from a holder's slot.
+    expect(fixture('src/data/vault/ids.ts', "import type { Holder } from '../spine/write-once';\nexport class Ids {\n  private readonly idFor = new Map<string, string>();\n  keep(intent: string, h: Holder): void { this.idFor.set(intent, h.reserved ?? ''); }\n}\n")).toEqual(['4 stores an id by hand']);
+    // The slot set or cleared by hand, by any spelling, and the call for ids by an alias.
+    expect(fixture('src/data/vault/hand.ts', "export function hand(w: { reserved?: string }, id: string, d: { generateIds(n: number): Promise<string[]> }): void {\n  w['reserved'] = id;\n  delete w.reserved;\n  const more = d['generateIds'];\n  void more;\n}\n")).toEqual(['2 sets an id by hand', '3 lets an id go by hand', '4 calls for ids']);
+    // Not a reservation: a map of numbers named `intended`, a map made for one call, the slot read.
+    expect(fixture('src/data/vault/fine.ts', "import type { JournalRecord } from './journal';\nexport class Fine {\n  private intended = new Map<string, number>();\n  list(all: JournalRecord[], h: { reserved?: string }): number {\n    const byId = new Map<string, JournalRecord>(all.map((r) => [r.id, r]));\n    return byId.size + (h.reserved ? 1 : 0) + this.intended.size;\n  }\n}\n")).toEqual([]);
   });
 });
 
