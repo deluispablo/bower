@@ -3,9 +3,6 @@
 .hero { display: flex; align-items: flex-end; gap: 14px; }
 .title { font-size: clamp(28px, 4vw, 36px); }
 .composer { margin-top: 18px; }
-.kinds { display: inline-flex; gap: 4px; padding: 3px; border-radius: 999px; background: var(--bg); }
-.kinds button { min-height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: none; color: var(--text-muted); font-weight: 600; cursor: pointer; }
-.kinds button[aria-checked='true'] { background: var(--surface-strong); color: var(--heading); }
 .composer textarea { display: block; width: 100%; margin-top: 10px; padding: 10px 4px; resize: vertical; line-height: 1.45; }
 .composerFoot { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; }
 .sent { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
