@@ -6022,7 +6022,7 @@
       "A bad quarantine entry fails the check."
     ],
     "verify": "pnpm exec vitest run src/harness.test.ts -t \"a test that passes only on retry fails a batch run|a quarantined test that passes on retry is reported, not failed|a quarantine entry without an owner or past its expiry fails the check|a quarantine entry must name a logged defect\"",
-    "note": "TL-P4-20 row 9. Packet 2026-10-09-c3-flaky-policy-packet.md. Starting model bower-implementer."
+    "note": "TL-P4-20 row 9. Packet 2026-10-09-c3-flaky-policy-packet.md. Starting model bower-implementer. Red 028910f1, fix 866c64bb, notes e9bbbbec, merged ca334fe2. Batch switch E2E_BATCH=1. Red proved by hand at 028910f1: 4 verify tests fail on assertions (/tmp/c3flaky-handred.log); the revert cannot apply (check-harness.mjs touched later)."
   },
   {
     "id": "c3-hooks",
