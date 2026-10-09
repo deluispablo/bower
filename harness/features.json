@@ -5664,7 +5664,7 @@
     "id": "c4-focus-return",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "One focus-return helper in src/ui/focus.ts, built on the components' close-focus hooks (Radix onCloseAutoFocus), with no timers; all 7 same-class sites use it, so a key pressed right after closing a menu reaches the tree.",
     "steps": [
       "Open the tree menu on a folder, press Escape, then Delete at once: the Delete question shows.",
