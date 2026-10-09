@@ -16,7 +16,8 @@ if ! git merge --no-ff --no-commit "$branch" >/dev/null 2>&1; then
 fi
 if [ ! -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then echo "$branch has nothing new to merge."; exit 0; fi
 log=$(mktemp /tmp/integrate-check.XXXXXX)
-if bash -c "${INTEGRATE_CHECK:-pnpm check}" >"$log" 2>&1; then
+# One lock for heavy runs, shared with done.sh (harness/with-lock.sh); its messages stay on the terminal.
+if bash "$(dirname "$0")/with-lock.sh" bash -c 'bash -c "$2" >"$1" 2>&1' _ "$log" "${INTEGRATE_CHECK:-pnpm check}"; then
   git commit -q --no-edit && git log --oneline -1
 else
   git merge --abort

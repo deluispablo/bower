@@ -341,7 +341,7 @@ describe('the harness', () => {
     expect(lines.map((l) => l.split(' ')[0])).toEqual(['start', 'end', 'start', 'end']);
     const t = lines.map((l) => Number(l.split(' ')[1]));
     // The second run starts only after the first ended.
-    expect(t[2]).toBeGreaterThanOrEqual(t[1]);
+    expect(t[2] ?? 0).toBeGreaterThanOrEqual(t[1] ?? Infinity);
     expect(existsSync(join(dir, 'lock'))).toBe(false);
   });
 

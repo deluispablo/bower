@@ -5702,7 +5702,7 @@
     "id": "c3-test-time",
     "task": "p4-consolidation",
     "category": "test",
-    "passes": true,
+    "passes": false,
     "what": "Unit tests never wait on real time: backoff, deadlines and toasts use the injected clock, transport options or fake timers; dependency-cruiser runs once (scripts/check-dependencies.mjs in pnpm check), not inside vitest; check-harness fails any unit test over 1000 ms that is not in harness/slow-tests.json, a list that may only shrink.",
     "steps": [
       "A unit test over 1000 ms not in harness/slow-tests.json fails the harness check.",
@@ -5875,7 +5875,7 @@
     "id": "c3-alone-margin",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": true,
+    "passes": false,
     "what": "Temporary (TL-P4-17 addendum 9): a unit test over 1000 ms in the full run fails the slow ratchet only if its alone rerun takes over 2000 ms; lifted by c3-timer-gate.",
     "steps": [
       "A test 1500 ms alone passes; 2500 ms alone fails."
@@ -5894,7 +5894,7 @@
       "The same wait under fake timers passes.",
       "A slow compute-bound test is reported, not failed."
     ],
-    "verify": "pnpm exec vitest run src/harness.test.ts src/timer-gate.test.ts -t \"a real wait of 100 ms or more fails the unit run|a wait under fake timers passes the timer gate|the timer allowlist may only shrink|wall-clock times are reported, never failed|two checks started together run one after the other\"",
+    "verify": "pnpm exec vitest run src/harness.test.ts src/timer-gate.test.ts -t \"a real wait of 100 ms or more fails the unit run|a wait under fake timers passes the timer gate|the timer allowlist may only shrink|wall-clock times are reported, never failed|two checks started together run one after the other|a second check waits and prints who holds the lock|a lock whose holder is gone is taken over with a printed line\"",
     "note": "TL-P4-17 addendum 9 (main 925d3fbb); defect slow-ratchet-alone-under-load. Starting model: bower-implementer. TL-P4-17 addendum 10 (main 56dd8d86): a timer counts when it fires (a cleared timer never waited); fix round: done.sh and integrate.sh share one mkdir-based lock around pnpm check and the e2e suites, a second caller waits and prints who holds it (red: two checks started together run one after the other); the 22-name allowlist goes to c4-test-timers in stage 4."
   },
   {
