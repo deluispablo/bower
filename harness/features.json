@@ -5613,7 +5613,7 @@
     "id": "c2-upload-queue-only",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "The upload queue is always used, with an in-memory store in tests; the direct upload path and DriveHttp's second resumable loop go.",
     "steps": [
       "Queue only."
