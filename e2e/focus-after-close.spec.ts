@@ -154,3 +154,36 @@ for (const [name, how] of [
     }
   });
 }
+
+// A sheet opened from a menu sheet gives the keyboard back to the control that opened the menu (APG: focus returns to the invoking element).
+for (const item of ['Rename', 'Move to…']) {
+  test(`a sheet opened from a menu sheet returns focus to the menu's opener: ${item} on a note page`, async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'the phone');
+    await open(page, '/note/Resources/Cooking/Lemon%20tart.md');
+    const more = page.getByRole('button', { name: 'More for Lemon tart' });
+    await more.focus();
+    await page.keyboard.press('Enter');
+    await page.getByRole('dialog').getByRole('button', { name: item }).click();
+    const sheet = page.getByRole('dialog', { name: item === 'Rename' ? 'Rename' : /^Move/ });
+    await expect(sheet).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(sheet).toHaveCount(0);
+    await expect(more).toBeFocused();
+    await axeClean(page);
+  });
+
+  test(`a sheet opened from a menu sheet returns focus to the menu's opener: ${item} on a file row`, async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'the phone');
+    await open(page, '/files');
+    const row = page.getByRole('tree', { name: 'Your Bower folder' }).getByRole('treeitem', { name: /^Flat hunt/ });
+    await row.focus();
+    await row.dispatchEvent('contextmenu');
+    await page.getByRole('dialog').getByRole('button', { name: item }).click();
+    const sheet = page.getByRole('dialog', { name: item === 'Rename' ? 'Rename' : /^Move/ });
+    await expect(sheet).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(sheet).toHaveCount(0);
+    expect(await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.textContent?.trim().slice(0, 30))).toMatch(/Flat hunt/);
+    await axeClean(page);
+  });
+}

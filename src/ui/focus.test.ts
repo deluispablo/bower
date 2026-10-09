@@ -92,6 +92,51 @@ describe('close focus (one home, no timer)', () => {
   });
 });
 
+describe('a sheet opened from a menu sheet', () => {
+  const closing = (): Event => new Event('focus-scope.unmount', { cancelable: true });
+  const page = '<main id="main" tabindex="-1"><h1>Car</h1><button id="more">More for Car</button></main>';
+
+  const openMenuThenRename = (): { more: HTMLElement | null; rename: HTMLElement | null; was: HTMLElement | null } => {
+    document.body.innerHTML = page;
+    const more = document.getElementById('more');
+    more?.focus();
+    openerNow(); // the menu sheet opens from "More for Car"
+    document.body.insertAdjacentHTML('beforeend', '<div role="dialog"><button id="rename">Rename</button></div>');
+    const rename = document.getElementById('rename');
+    rename?.focus();
+    return { more, rename, was: openerNow() }; // the rename sheet opens from the menu
+  };
+
+  it('a sheet opened from a menu sheet returns focus to the menu\'s opener', () => {
+    const { more, rename, was } = openMenuThenRename();
+    expect(was).toBe(rename);
+    // The menu sheet closes with its Rename button; the rename sheet then closes.
+    document.querySelector('[role="dialog"]')?.remove();
+    closeFocus(closing(), was);
+    expect(document.activeElement).toBe(more);
+  });
+
+  it('goes to the heading when both openers are gone', () => {
+    const { more, was } = openMenuThenRename();
+    document.querySelector('[role="dialog"]')?.remove();
+    more?.remove();
+    closeFocus(closing(), was);
+    expect(document.activeElement?.tagName).toBe('H1');
+  });
+
+  it('prefers the opener itself while it is on the page', () => {
+    document.body.innerHTML = page + '<button id="again">Again</button>';
+    document.getElementById('more')?.focus();
+    openerNow();
+    const again = document.getElementById('again');
+    again?.focus();
+    const was = openerNow();
+    document.body.focus();
+    closeFocus(closing(), was);
+    expect(document.activeElement).toBe(again);
+  });
+});
+
 describe('focusRouteHeading', () => {
   const wait = (ms: number): Promise<unknown> => new Promise((r) => setTimeout(r, ms));
 
