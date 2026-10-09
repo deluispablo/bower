@@ -216,4 +216,6 @@
 - tests changed: src/data/contracts/note-edit.test.ts: one test added, none changed.
 - tests changed: runner/test/per-thing-ask.test.ts: the refusal table gains `lineUncited`; nothing removed.
 - tests changed: src/data/fake/write-it.test.ts: seeds with `seedFixture` and resolves the states' keys; same asserts.
+- tests changed: runner/test/ask-answer-loop.test.ts (d147b321): `proposeUpdate`'s state cites the offer it files, so
+  its news line has a source; same asserts.
 - No `.only` or `.skip` added.
