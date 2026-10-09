@@ -382,9 +382,10 @@ export class RunnerDrive implements RunDrive {
       }
       // Read now, right before the send, never from an earlier read; only a record going into one of this run's own
       // record folders takes that folder as its create answered (`ownFolder`). A move's folder is read with its target.
-      const own = target.part === 'parent' ? await this.ownFolder(target.id) : null;
+      // A read that fails here is no change found: thrown as not read, so the attempt stops for recovery.
+      const own = target.part === 'parent' ? await this.seen.read(this.ownFolder(target.id)) : null;
       const into = destinationOf(call);
-      const [, now, intoNow] = await Promise.all([this.stillCurrent(), own ?? this.peek(target.id), into ? this.peek(into.id) : null]);
+      const [, now, intoNow] = await Promise.all([this.stillCurrent(), own ?? this.seen.read(this.peek(target.id)), into ? this.seen.read(this.peek(into.id)) : null]);
       if (into) this.seen.assert(into, intoNow);
       this.seen.assert(target, now);
       this.peeked = now?.file ?? null;

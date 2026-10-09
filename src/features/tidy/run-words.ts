@@ -105,6 +105,8 @@ export function runDetail(r: RunState): string {
       if (rep.updated.length) parts.push(`${plural(rep.updated.length, 'note')} brought up to date`);
       if (rep.questions.length) parts.push(`${plural(rep.questions.length, 'question')} for you`);
       if (rep.setAside.length) parts.push(`${plural(rep.setAside.length, 'thing')} set aside`);
+      // Never counted as set aside: possibly changed, then gone before Bower read it back.
+      if (rep.unconfirmed?.length) parts.push(`Bower couldn't confirm ${plural(rep.unconfirmed.length, 'thing')}`);
       // Things already saved went to the Bin: one alone names the file already saved, without its extension.
       const saved = rep.alreadySaved ?? [];
       if (saved.length === 1) parts.push(`1 thing already saved as ${thingName(saved[0]?.as ?? '')}`);

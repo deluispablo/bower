@@ -213,6 +213,11 @@ export interface RunReport {
    * already saved. Left out when there are none.
    */
   alreadySaved?: Array<{ name: string; as: string }>;
+  /**
+   * Things Bower couldn't confirm (TL-P4-14 addendum 8): possibly changed, then gone from Drive before it read them
+   * back. Never counted as set aside. Left out when there are none.
+   */
+  unconfirmed?: Array<{ name: string; why: string }>;
   /** How many of your changes (the journal) the run read. */
   yourChanges?: number;
   /** What you asked Bower that this run did, in your words. */

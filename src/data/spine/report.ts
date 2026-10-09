@@ -53,7 +53,9 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
       const o = byId.get(id);
       return o?.state === 'rejected' && o.failure.code === 'unknown' && o.failure.message === UNCONFIRMED_GONE;
     });
-    report.setAside.push(...(moves ? c.value.setAside.map((row) => ({ ...row, why: gone ? UNCONFIRMED_GONE : moved ? MOVED_AWAY : NOT_FILED })) : c.value.setAside));
+    // A thing Bower couldn't confirm is on its own line, never counted as set aside (TL-P4-14 addendum 8).
+    if (moves && gone) report.unconfirmed = [...(report.unconfirmed ?? []), ...c.value.setAside.map((row) => ({ ...row, why: UNCONFIRMED_GONE }))];
+    else report.setAside.push(...(moves ? c.value.setAside.map((row) => ({ ...row, why: moved ? MOVED_AWAY : NOT_FILED })) : c.value.setAside));
     report.questions.push(...c.value.questions);
     if (c.value.requests) report.requests = [...(report.requests ?? []), ...c.value.requests];
     if (c.value.yourChanges !== undefined) report.yourChanges = (report.yourChanges ?? 0) + c.value.yourChanges;
@@ -227,7 +229,7 @@ export function reportContradictions(admission: AdmissionManifest, manifest: Run
     const e = ops.get(id)?.effect;
     return e?.kind === 'bin' && !e.before.folder && !members.has(e.before.fileId) && manifest.capture.places.some((p) => p.file.fileId === e.before.fileId);
   };
-  for (const row of report.setAside) {
+  for (const row of [...report.setAside, ...(report.unconfirmed ?? [])]) {
     const from = given.filter((c) => c.value.setAside.some((a) => a.name === row.name));
     if (from.length && from.every((c) => c.requires.every(keptBin))) continue;
     trace(`set aside ${row.name}`, from, ['filed', 'set-aside'], named.setAside);

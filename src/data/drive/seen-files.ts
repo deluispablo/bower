@@ -11,8 +11,9 @@
  * The fence of both apply engine adapters (`RunnerDrive` on Google Drive,
  * `FakeRunDrive` on the pretend one), so both refuse the same writes.
  */
-import { notAsSeen, notAsSeenError } from '../contracts/still-as-seen';
+import { notAsSeen, notAsSeenError, notReadError } from '../contracts/still-as-seen';
 import type { DriveFile, FencedCall, FencedDrive } from './drive-api';
+import { isNoAnswer } from './transport';
 
 /** A file as stored at the moment of the check; null when it is gone. */
 export interface StoredNow {
@@ -79,6 +80,19 @@ export class SeenFiles {
     if (reason === null) return;
     console.error(`Refused a write to ${target.part} ${target.id}: ${reason}`);
     throw notAsSeenError(reason, NOT_AS_SEEN);
+  }
+
+  /**
+   * A read the check needs, right before the send: one that got no answer is no change found, so it is thrown as not
+   * read (`notReadError`), never as a refusal nor as a lost write's answer to read back; the attempt stops for recovery.
+   * Any other error (a revoked token, a newer attempt) is thrown as it is.
+   */
+  async read<T>(reading: Promise<T>): Promise<T> {
+    try {
+      return await reading;
+    } catch (e) {
+      throw isNoAnswer(e) ? notReadError(e) : e;
+    }
   }
 
   /** The same writes, keeping what each answer says, and forgetting a file put in the Bin. */

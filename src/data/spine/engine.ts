@@ -45,7 +45,7 @@ import { sha256Hex, sha256Sync } from '../contracts/hashes';
 import type { Checkpoint, EffectEvidence, Failure, Outcome } from '../contracts/run-checkpoint';
 import { readBackEdit, recheckEdit, savedLinkKey } from '../contracts/note-edit';
 import { parseRunManifestV2, type EditText, type Effect as ManifestEffect, type OperationV2, type SeenFile } from '../contracts/run-manifest';
-import { notAsSeen, notAsSeenReason } from '../contracts/still-as-seen';
+import { notAsSeen, notAsSeenReason, notRead } from '../contracts/still-as-seen';
 import type { DriveFile, FencedDrive, RunDrive, StoredEvidence } from '../drive/drive-api';
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
 import { savedTwins } from './duplicates';
@@ -643,6 +643,9 @@ export function driveEffects(drive: RunDrive): Effects {
       try {
         answer = await send(op.effect, w, ok.parentId, ok.modifiedTime, stamp);
       } catch (e) {
+        // The fence could not read before anything was sent: no change found, so no refusal and no read-back. The
+        // attempt stops; recovery reads it back by its stamp and sends it once (TL-P4-14 addendum 8).
+        if (notRead(e)) throw e;
         // Refused by the fence's own read before anything was sent: an honest rejection.
         const k = op.effect.kind;
         if (e instanceof BowerError && (notAsSeenReason(e) !== null || (e.code === 'conflict' && (k === 'write-runner-json' || k === 'edit-text')))) {

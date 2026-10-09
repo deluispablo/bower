@@ -6,7 +6,8 @@ import { seedFakeDrive } from '../fake/seed';
 import { planAdmission } from './plan';
 import { fakeRead } from './read';
 import type { RunManifest } from './records';
-import { itemDispositions, materialize, reportContradictions } from './report';
+import { runDetail } from '@/features/tidy/run-words';
+import { itemDispositions, materialize, reportContradictions, UNCONFIRMED_GONE } from './report';
 import { scriptedProvider } from './scripted';
 
 const AT = Date.UTC(2026, 9, 7, 9);
@@ -49,5 +50,30 @@ describe('dispositions and the report', () => {
     expect(first?.disposition).toBe('filed');
     if (!first || !report) return;
     expect(reportContradictions(admission.manifest, manifest, outcomes, report, [{ ...first, disposition: 'set-aside' }, ...rest])).not.toEqual([]);
+  });
+
+  it('a run summary counts unconfirmed things on their own line, never as set aside', async () => {
+    const drive = new FakeDrive({ clock: () => 0 });
+    const root = (await seedFakeDrive(drive, 'default', AT)) ?? '';
+    const admission = await planAdmission(fakeRead(drive), root, { scope: 'all', clock: () => AT, newId: () => 'request-report' });
+    if (admission.kind !== 'manifest') throw new Error(`nothing admitted: ${admission.cause}`);
+    const manifest = await scriptedProvider(fakeScripted(drive), { rootId: root, runId: RUN, allowWeb: false })({ taken: admission.manifest, deferred: [] });
+    // One filing move whose answer was lost, its thing then emptied from the Bin before Bower read it back.
+    const members = new Set(manifest.capture.members.map((m) => m.file.fileId));
+    const move = manifest.operations.find((o) => o.effect.kind === 'move' && members.has(o.effect.before.fileId));
+    if (!move || move.effect.kind !== 'move') throw new Error('no filing move');
+    const name = manifest.capture.members.find((m) => m.file.fileId === (move.effect.kind === 'move' ? move.effect.before.fileId : ''))?.file.name;
+    const outcomes = settle(manifest, new Set([move.operationId])).map((o): Outcome => (o.operationId === move.operationId
+      ? { operationId: o.operationId, state: 'rejected', failure: { code: 'unknown', message: UNCONFIRMED_GONE } }
+      : o));
+    const report = materialize(manifest, 'a'.repeat(64), outcomes)?.report;
+    if (!report) throw new Error('no report');
+    expect(report.setAside).toEqual([]);
+    expect(report.unconfirmed).toEqual([{ name, why: UNCONFIRMED_GONE }]);
+    const items = itemDispositions(admission.manifest, manifest, outcomes);
+    expect(reportContradictions(admission.manifest, manifest, outcomes, report, items)).toEqual([]);
+    const words = runDetail({ id: RUN, scope: 'all', phase: 'done', requestedAt: AT, phaseAt: AT, seen: false, report });
+    expect(words).toContain("Bower couldn't confirm 1 thing");
+    expect(words).not.toContain('set aside');
   });
 });

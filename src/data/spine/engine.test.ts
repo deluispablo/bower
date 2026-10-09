@@ -160,6 +160,32 @@ describe('the runner and the fake run the same engine', () => {
     expect(outcome?.state === 'rejected' ? outcome.failure.code : outcome?.state).toBe('not-found');
     const thing = await drive.evidence(b?.thing ?? '');
     expect(thing?.trashed).toBe(false);
-    expect(thing?.file.parents).not.toContain(b?.folder);
+    // The moved thing stays where it was, as on the runner.
+    expect(op?.effect.kind === 'move' ? op.effect.before.parents : null).not.toBeNull();
+    expect(thing?.file.parents).toEqual(op?.effect.kind === 'move' ? op.effect.before.parents : null);
+  });
+
+  it('a fence that reads a real change sets the operation aside', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // Right before the first filing move is sent, the person renames the thing it moves: the fence reads that change.
+    let renamed: string | null = null;
+    const { drive, manifest, chain, view } = await applied((call, d) => {
+      if (renamed !== null || call.op !== 'update' || call.patch.addParent === undefined) return 'pass';
+      renamed = call.id;
+      const stored = (storedOf(d) as unknown as Map<string, { meta: { name: string } }>).get(call.id);
+      if (stored) stored.meta.name = 'Renamed by Alex.pdf';
+      return 'pass';
+    });
+    expect(renamed).not.toBeNull();
+    expect(chain.at(-1)?.phase).toBe('done');
+    const op = manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === renamed);
+    if (op?.effect.kind !== 'move') throw new Error('no move');
+    const outcome = chain.at(-1)?.outcomes.find((o) => o.operationId === op.operationId);
+    expect(outcome?.state === 'rejected' ? outcome.failure.code : outcome?.state).toBe('conflict');
+    const thing = await drive.evidence(op.effect.before.fileId);
+    expect(thing?.file.name).toBe('Renamed by Alex.pdf');
+    expect(thing?.file.parents).toEqual(op.effect.before.parents);
+    const report = (JSON.parse(view) as { run: { report: { setAside: { name: string }[] } } }).run.report;
+    expect(report.setAside.map((r) => r.name)).toContain(op.effect.before.name);
   });
 });
