@@ -6163,5 +6163,19 @@
     ],
     "verify": "pnpm vitest run -t \"one segmented control serves settings and tell bower\" && bash scripts/e2e-both.sh e2e/v2-targets.spec.ts -g \"the desktop tab close button is at least 24 square|every listed phone control is at least 44 px|a tap on a switch row toggles it|desktop control sizes stay at least 24\"",
     "note": "TL-P4-21 order 3; spec d-v2-05, d-v2-10. Starting model bower-implementer. Packet 2026-10-09-v2-targets-packet.md; e2e file may differ."
+  },
+  {
+    "id": "v2-name-sheet",
+    "task": "p4-consolidation",
+    "category": "ui",
+    "passes": false,
+    "ui": true,
+    "what": "NameSheet uses the one field rule: full width, name selected, muted links line on rename, half-width 44 px buttons (d-v2-09); FolderScreen New note opens NameSheet and its own form is deleted.",
+    "steps": [
+      "At 375 the rename field is at least 300 px with a 16 px font and the name selected.",
+      "A folder New note opens NameSheet."
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/v2-name-sheet.spec.ts -g \"the rename field spans the sheet and selects the name|new note from a folder uses the name sheet\"",
+    "note": "TL-P4-21 order 3; spec d-v2-09 (after v2-field). Starting model bower-implementer. Packet 2026-10-09-v2-name-sheet-packet.md; e2e file may differ."
   }
 ]
