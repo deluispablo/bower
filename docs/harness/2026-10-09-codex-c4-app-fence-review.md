@@ -29,3 +29,11 @@ The three earlier lost-answer reproductions are fixed. The delta introduces two 
    **Mechanism home violated:** `src/data/contracts/still-as-seen.ts` — landed recovery bypasses the fence despite a subsequent outside structural change.
 
 findings: 2
+
+## Round 3 pass (babe395b..344ad493)
+
+1. **Important — `src/data/spine/write-once.ts:85` (recovery at `:98`): same-call recovery still accepts a state the write did not make.** `checkStillAsSeen` now validates the intended name, place and Bin state, but `updateByStamp` resolves lost answers using only `holds`. For example, restore unbins under a free name, its answer is lost, and another device renames or moves the file before the recovery read. The stamp remains and the file is unbinned, so recovery reports success in the wrong final state. The same gap remains for an emptied note moved before recovery. The property forces the recovery read to fail and changes the file between presses, so it misses this interleaving.
+
+   **Mechanism home violated:** `src/data/contracts/still-as-seen.ts`; packet contracts 1–3 require one definition of landed state. Retry checks are fixed, but same-call recovery retains a second, weaker acceptance path.
+
+findings: 1
