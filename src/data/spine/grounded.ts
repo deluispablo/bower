@@ -43,7 +43,7 @@ export function seen(f: DriveFile): SeenFile {
  * archived once and claimed by exactly one row. A hub note brought up to date
  * (TL-P2-20 I10): an applied `updated` row requires exactly one `edit-text`
  * with a Timeline line, names that edit's path and says what one of its lines
- * says; each edit is claimed once. A generated note (TL-P2-17) is claimed by
+ * says; each line is claimed once, so an edit has one row per line it writes. A generated note (TL-P2-17) is claimed by
  * one applied row naming its resolved path and one set-aside row for what it
  * was for (see `noteRow`). A rule worded (`rulesWorded: 1`) is one captured
  * line's row: it requires the one operation that words Rules.md (its edit
@@ -173,12 +173,14 @@ export function grounded(manifest: RunManifest): boolean {
       const between = more.slice(0, -1).every((x) => ops.get(x)?.effect.kind === 'edit-text');
       return other !== undefined && other.endsWith('.md') && between && row.what === keptLine(displayName(nameOf(other)));
     }
-    if (more.length || updated.has(id)) return false;
-    // Its row says one of its Timeline lines, or (C05) that its Current state was brought up to date.
+    // One row per Timeline line the edit writes (report-misses-hub-line), each its own entry, or (C05) one saying its
+    // Current state was brought up to date.
+    const key = `${id}\u0000${row.what}`;
+    if (more.length || updated.has(key)) return false;
     const says = edit.changes.some((change) => (change.kind === 'timeline-append' && change.entries.some((entry) => entry.text === row.what))
       || (change.kind === 'state-rewrite' && row.what === STATE_UPDATED));
     if (!says) return false;
-    updated.add(id);
+    updated.add(key);
     return true;
   };
   // Generated notes (TL-P2-17): what each is for, from the fixed plan: a filed thing's own note follows that thing's

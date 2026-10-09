@@ -308,7 +308,7 @@ export async function finishRun(run: BarrierRun, manifest: RunManifest, manifest
   const r = await canonical(body);
   if (r.hash !== pending.report.reportHash) throw new BowerError('unknown', SAVE_FAILED);
   // Never a summary that contradicts where the items ended (TL-P3-24 point 1): the run stops here, in `saving`.
-  const wrong = run.admission ? reportContradictions(run.admission, manifest, at.outcomes, body.report, dispositions(at.outcomes)) : [];
+  const wrong = run.admission ? reportContradictions(run.admission, manifest, at.outcomes, dispositions(at.outcomes)) : [];
   if (wrong.length) {
     console.error(`Run ${run.runId}: its dispositions contradict its report`, wrong);
     throw new BowerError('unknown', SAVE_FAILED);

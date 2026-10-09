@@ -7,7 +7,8 @@
 import type { AdmissionScope } from '../../src/data/spine/admission';
 import type { RunProvider } from '../../src/data/spine/provider';
 import type { ScriptedRead } from '../../src/data/spine/read';
-import { listedPiles, scriptedProvider, type ScriptedRun } from '../../src/data/spine/scripted';
+import { scriptedProvider } from '../../src/data/demo/script';
+import { listedPiles, type ScriptedRun } from '../../src/data/spine/scripted';
 import { claudeProvider, type ClaudeSetup } from './claude';
 import type { RunnerDrive } from './drive';
 

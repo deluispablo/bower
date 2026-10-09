@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
+import { DriveVault } from '../vault/drive-vault';
 import { fakeScripted, planRun } from '../fake/fake-runner';
 import { seedFakeDrive } from '../fake/seed';
 import type { AdmissionManifest } from './admission';
 import { planAdmission } from './plan';
 import { fakeRead } from './read';
-import { runKeys, scriptedProvider } from './scripted';
+import { scriptedProvider } from '../demo/script';
+import { runKeys } from './scripted';
 
 const AT = Date.UTC(2026, 9, 7, 9);
 const RUN = 'run-scripted';
@@ -43,5 +45,30 @@ describe('the scripted provider', () => {
     const moved = new Set(planned.operations.flatMap((o) => (o.effect.kind === 'move' ? [o.effect.before.fileId] : [])));
     expect(waits.items.filter((i) => moved.has(i.fileId))).toEqual([]);
     expect(planned.capture.piles.length).toBe(rest.length);
+  });
+
+  // c3-planner-split: what each of your changes waits for is one map, record by record, and its archive follows it.
+  it('one map from records to the operations they need', async () => {
+    const { drive, root, admitted } = await seeded();
+    // Your changes: a rule, a lookup request and an answer, each waiting on a write of its own.
+    const vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    await vault.addRule('anything from the dentist goes in health');
+    await vault.addRequest('What council tax band is Flat 3?');
+    await vault.answer('q1', true);
+    const plan = await planRun(drive, root, { scope: 'all', allowWeb: true, runId: RUN, requestId: admitted.id, requestedAt: admitted.at, mintKey: await runKeys(RUN) });
+    const m = plan.manifest;
+    const ids = m.capture.journal.map((j) => j.recordId).sort();
+    expect(ids.length).toBeGreaterThan(0);
+    expect(Object.keys(plan)).toContain('needs');
+    // One entry per record the run takes, none for anything else.
+    expect([...plan.needs.keys()].sort()).toEqual(ids);
+    // Some change waits on a write (a rule worded, a request answered, an answer's question dropped).
+    expect([...plan.needs.values()].some((ops) => ops.length > 0)).toBe(true);
+    for (const j of m.capture.journal) {
+      const archive = m.operations.filter((o) => o.effect.kind === 'move' && j.fileIds.includes(o.effect.before.fileId));
+      expect(archive.length).toBe(j.fileIds.length);
+      // Each archive move waits for exactly what its record needs.
+      for (const o of archive) expect([...o.dependsOn].sort()).toEqual([...(plan.needs.get(j.recordId) ?? [])].sort());
+    }
   });
 });

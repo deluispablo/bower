@@ -46,7 +46,7 @@ import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { subjectKey, subjectOf } from '../../src/data/contracts/questions';
 import type { Question } from '../../src/data/contracts/types';
-import { planScripted, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
+import { modelDecisions, planScripted, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
 import { MAX_NAME } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
 import { RUNNER_WRITES, SYSTEM } from '../../src/data/vault/layout';
@@ -1190,7 +1190,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const intent = checked.intent;
     // The runner builds the manifest, every id, hash and digest its own, exactly as the scripted provider does.
     const t = took.taken;
-    const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), filing: intent.filing, updates: [] }, undefined, intent.held);
+    const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), decisions: modelDecisions(intent.filing) }, undefined, intent.held);
     const manifest: RunManifest = plan.manifest;
     const parsed = await parseRunManifestV2((await canonical(manifest)).bytes, run.rootId, RUNNER_WRITES);
     if (!parsed.ok) return refuse(`outside the run manifest contract (${parsed.reason})`);

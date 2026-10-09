@@ -20,7 +20,7 @@ const rulesNamed = (name: string): Rule[] => forbidden.filter((r) => r.name === 
 
 describe('dependency rules', () => {
   it('the rule list names every forbidden import', () => {
-    expect(new Set(forbidden.map((r) => r.name))).toEqual(new Set(['production-imports-no-fake-or-demo', 'screens-use-data-only-through-sources']));
+    expect(new Set(forbidden.map((r) => r.name))).toEqual(new Set(['production-imports-no-fake-or-demo', 'claude-provider-reaches-no-fixture', 'screens-use-data-only-through-sources']));
     expect(forbidden.every((r) => r.severity === 'error')).toBe(true);
   });
 
@@ -45,5 +45,11 @@ describe('dependency rules', () => {
       expect(own.length, `${k.from} has its own rule`).toBeGreaterThan(0);
       for (const t of k.to) expect(own.every((r) => (r.to.pathNot ?? []).some((re) => hits(re, t))), `${k.from} may import ${t}`).toBe(true);
     }
+  });
+
+  it('the live path imports no demo fixture', () => {
+    // The planner the Claude provider runs (TL-P4-14 stage 3, addendum 23): fixtures live only on the scripted side.
+    expect(readFileSync(join(ROOT, 'src/data/spine/scripted.ts'), 'utf8')).not.toMatch(/from '[^']*demo\/[^']*'/);
+    expect(KNOWN.filter((k) => k.from === 'src/data/spine/scripted.ts')).toEqual([]);
   });
 });
