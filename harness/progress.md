@@ -264,3 +264,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: c4-test-timers passes — One byte table per note; re-entrant heavy-run lock; Vite pre-bundle; axe waits for animations; empty timer allowlist
 - 2026-10-09: v2-move-here passes — Move sheet marks where the thing is now (d-v2-18; designer verified)
 - 2026-10-09: v2-perched-bower passes — One engine for perched Bower; nine poses match their CSS reference (designer verified)
+- 2026-10-09: c4-app-fence passes — Every app write of an existing file is fenced on a fresh read; one landed definition in write-once

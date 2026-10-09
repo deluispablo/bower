@@ -6254,7 +6254,7 @@
   },
   {
     "task": "p4-consolidation",
-    "passes": false,
+    "passes": true,
     "id": "c4-app-fence",
     "category": "fix",
     "what": "DriveVault.once checks every send (the Bin too) through one read-then-notAsSeen helper in contracts/still-as-seen.ts; stillAsSeen and the hand checks fold in.",
