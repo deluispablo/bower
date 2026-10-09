@@ -25,6 +25,13 @@ import type { PlaceSource } from './session';
 
 export type Unsubscribe = () => void;
 
+/** A change whose line Drive refused for good while nobody waited on it: what it was, and what is true now. */
+export interface FailedChange {
+  id: string;
+  what: string;
+  sentence: string;
+}
+
 export interface Session {
   current(): Promise<User | null>;
   signIn(): Promise<User>;
@@ -93,6 +100,10 @@ export interface VaultSource {
   toggleTask(path: string, index: number): Promise<void>;
   /** Your changes since the last tidy-up (the change journal). */
   changes(): Promise<ChangeEntry[]>;
+  /** Changes whose line Drive refused while nobody waited on it, shown once until put away; only a source with a journal in Drive has it. */
+  failedChanges?(): Promise<FailedChange[]>;
+  /** The person has seen that failed change. */
+  putAwayFailed?(id: string): Promise<void>;
   /** Keeps a suggestion as a rule, or says no to it; gives back its Undo. */
   dismissSuggestion(id: string, keep: boolean): Promise<() => Promise<void>>;
   subscribe(cb: () => void): Unsubscribe;

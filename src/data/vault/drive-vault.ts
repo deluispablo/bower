@@ -5,11 +5,11 @@
  * writes one journal line for each change you make, so the next tidy-up
  * knows what happened. It never writes Bower's own sections of a note.
  */
-import { type DriveApi, type DriveFile } from '../drive/drive-api';
+import { driveError, type DriveApi, type DriveFile } from '../drive/drive-api';
 import { ReadCache, type Version } from '../drive/read-cache';
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
-import { Intended, byId, holds, makeFolder, makeText, reserveId, updateByStamp, type Intent } from '../spine/write-once';
-import type { Unsubscribe, VaultSource } from '../sources';
+import { Intended, byId, confirms, holds, makeFolder, makeText, reserveId, updateByStamp, type Intent } from '../spine/write-once';
+import type { FailedChange, Unsubscribe, VaultSource } from '../sources';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName } from '../piles';
 import { buildTree, checkCreationName, displayName, thingName, freeName, join, kindOf, moveEntry, nameOf, parentOf, removeEntry, renameEntry } from '../tree';
 import {
@@ -111,6 +111,8 @@ export class DriveVault implements VaultSource {
   protected readonly journal: Journal;
   /** The ids reserved for the creates a person means to make, until each is confirmed (`write-once.ts`). */
   private readonly intended = new Intended();
+  /** The words each try of a kept pile-note create sent, so a retry writes only over a note that still holds them. */
+  private readonly pileNoteSent = new Map<string, string[]>();
   private readonly declarePiles: boolean;
   /** Declarations never change: each copy is read once, by file id and modified time. */
   private declarationCache = new Map<string, DeclarationResult>();
@@ -181,6 +183,9 @@ export class DriveVault implements VaultSource {
         wrote: (f) => { if (this.current()) void this.ix?.then((ix) => { if (this.current()) ix.put(f); }); },
         removed: (id) => { if (this.current()) void this.ix?.then((ix) => { if (this.current()) ix.drop(id); }); },
         waiting: () => this.emit(),
+        // The changes folder Drive no longer knows: the next send lists the folder again (and makes it, if gone).
+        stale: () => { if (this.current()) this.ix = null; },
+        failed: () => this.emit(),
       },
       opts.device ?? deviceId(),
       () => this.current(),
@@ -214,6 +219,16 @@ export class DriveVault implements VaultSource {
   /** Sends this device's waiting journal lines (before a tidy-up, back online, at start). */
   flushJournal(): Promise<void> {
     return this.journal.flush();
+  }
+
+  /** The changes whose line Drive refused while nobody waited on it, until put away (shown once among what failed). */
+  failedChanges(): Promise<FailedChange[]> {
+    return this.journal.failed();
+  }
+
+  async putAwayFailed(id: string): Promise<void> {
+    await this.journal.putAway(id);
+    this.emit();
   }
 
   /** Lists the folder again (after a tidy-up, or when another device may have changed it). */
@@ -1039,6 +1054,11 @@ export class DriveVault implements VaultSource {
     if (!f || !pile.path) throw new BowerError('not-found', 'That pile is already filed.');
     await this.stillAsSeen(f);
     const note = ix.file(join(pile.path, PILE_NOTE));
+    // A note listed is the one this pile has: an id kept for an earlier create of it is no longer needed.
+    if (note) {
+      this.intended.forget(`pile-note:${id}`);
+      this.pileNoteSent.delete(`pile-note:${id}`);
+    }
     // Words Bower could not read are never saved over: the note must read back first.
     if (note) await this.text(note);
     // Check the context before a rename or removal can partially apply a stale edit.
@@ -1083,14 +1103,31 @@ export class DriveVault implements VaultSource {
     } else if (text && folderId) {
       // One intended note per pile: a try again after a double failure, with new words, writes them into the same note.
       const key = `pile-note:${id}`;
-      const earlier = this.intended.has(key);
-      ix.put(await this.intended.make(key, this.drive, async (made) => {
-        const there = earlier ? await byId(this.drive, made) : null;
-        if (!there) return makeText(this.drive, this.drive, { parent: folderId, name: PILE_NOTE, ...(contextKey ? { props: { [PROP.item]: contextKey } } : {}), id: made }, text);
-        if (there.trashed) throw new BowerError('conflict', 'This changed somewhere else. Look again and try once more.');
-        // It landed with the earlier words: the new ones go into it, stamped and fenced on the version just read.
-        return this.once(there, { text }, (op) => this.drive.writeText(there.id, text, there.modifiedTime, op));
-      }));
+      const kept = this.intended.kept(key);
+      let there = kept ? await byId(this.drive, kept) : null;
+      if (there?.trashed) {
+        // Binned since it landed (in Drive, or by another device): it stays in the Bin, and these words make a new note.
+        this.intended.forget(key);
+        this.pileNoteSent.delete(key);
+        there = null;
+      }
+      const sent = there ? (this.pileNoteSent.get(key) ?? []) : [];
+      // Only a note that still holds words Bower sent is Bower's to write over (its checksum); any other is an edit.
+      if (there && !sent.some((words) => confirms(there, new TextEncoder().encode(words)))) {
+        this.intended.forget(key);
+        this.pileNoteSent.delete(key);
+        void this.refresh();
+        throw driveError('conflict');
+      }
+      this.pileNoteSent.set(key, [...sent, text]);
+      const made = await this.intended.make(key, this.drive, (reserved) => {
+        if (!there) return makeText(this.drive, this.drive, { parent: folderId, name: PILE_NOTE, ...(contextKey ? { props: { [PROP.item]: contextKey } } : {}), id: reserved }, text);
+        // It landed with words Bower sent: the new ones go into it, stamped and fenced on the version that holds them.
+        const landed = there;
+        return this.once(landed, { text }, (op) => this.drive.writeText(landed.id, text, landed.modifiedTime, op));
+      });
+      this.pileNoteSent.delete(key);
+      ix.put(made);
     }
     this.emit();
     return this.pile(id);

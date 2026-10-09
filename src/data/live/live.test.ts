@@ -1620,7 +1620,7 @@ describe('foreground discovery', () => {
 
 
 describe('person cleanup forgets pending draft bytes and keeps the folder outbox', () => {
-  const personLocal = ['bower:seen', 'bower:dismissed', 'bower:run-seen', 'bower:bookmarks', 'bower:open', 'bower:stopped-away'];
+  const personLocal = ['bower:seen', 'bower:dismissed', 'bower:run-seen', 'bower:bookmarks', 'bower:open', 'bower:stopped-away', 'bower:failed-lines'];
   const personSession = ['bower:add-draft', 'bower:add-items', 'bower:toured', 'bower:tabs'];
   const outbox = '[{"v":1,"id":"CHANGE_A","device":"DEVICE_A","at":1,"kind":"create","what":"Synthetic note","fileId":"FILE_A"}]';
   const prefs = '{"theme":"dark"}';

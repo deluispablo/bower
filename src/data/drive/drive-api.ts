@@ -6,7 +6,7 @@
  */
 import { BowerError, type ErrorCode } from '../types';
 import type { Digest } from '../pile-readiness';
-import { UNCONFIRMED_WRITE } from './transport';
+import { RATE_LIMITED, REFUSED, UNCONFIRMED_WRITE } from './transport';
 
 export interface DriveFile {
   id: string;
@@ -152,6 +152,12 @@ export const driveError = (code: ErrorCode): BowerError => new BowerError(code, 
 /** A write answered 5xx: it may have landed, so the sentence never invites a second one. Tell it by `isUnconfirmedWrite`. */
 export const UNCONFIRMED_WRITE_MESSAGE = "Bower couldn't confirm that change. Refresh to check.";
 export const unconfirmedWriteError = (): BowerError => new BowerError('unknown', UNCONFIRMED_WRITE_MESSAGE, undefined, { cause: UNCONFIRMED_WRITE });
+
+/** A request still rate limited after the retries: it did not land; tell it by `isRateLimit`. */
+export const rateLimitedError = (): BowerError => new BowerError('unknown', DRIVE_MESSAGES.unknown, undefined, { cause: RATE_LIMITED });
+
+/** A 4xx Drive will answer to every try of this request; tell it by `isRefused`. */
+export const refusedError = (): BowerError => new BowerError('unknown', DRIVE_MESSAGES.unknown, undefined, { cause: REFUSED });
 
 /**
  * Every Drive method, read or write, in one place. The lease guard fences the writes (fail closed: a method

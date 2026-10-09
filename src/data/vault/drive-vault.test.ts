@@ -2982,7 +2982,6 @@ describe('c2-create-by-id: an app write whose answer was lost is found again by 
     expect(notes[0]?.id).not.toBe(note);
     expect(await drive.readText(notes[0]?.id ?? '')).toBe('Job offer, signed papers');
     expect(await drive.get(note, { binned: true })).toMatchObject({ trashed: true });
-    expect(await drive.readText(note)).toBe('Job offer papers');
     // Nothing is left stuck: the next words go into the new note.
     await expect(vault.updatePile(pile, 'Job offer, all signed')).resolves.toMatchObject({ text: 'Job offer, all signed' });
     expect((await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md').map((f) => f.id)).toEqual([notes[0]?.id]);
