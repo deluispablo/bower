@@ -5922,5 +5922,18 @@
     ],
     "verify": "pnpm exec vitest run src/timer-gate.test.ts -t \"the timer allowlist may only shrink\"",
     "note": "TL-P4-17 addendum 10 (main 56dd8d86); stage 4. Starting model: bower-implementer."
+  },
+  {
+    "id": "c3-done-harness-paths",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": false,
+    "what": "done.sh treats harness/ scripts (*.sh, *.mjs, *.ts) as code, so a fix there is proved like code; harness/*.json and docs stay data.",
+    "steps": [
+      "A commit that only changes harness/with-lock.sh is code to done.sh.",
+      "A commit that only changes harness/features.json is not."
+    ],
+    "verify": "pnpm exec vitest run src/harness-git.test.ts -t \"done.sh sees a change under harness scripts as code|done.sh sees harness data as no code\"",
+    "note": "TL-P4-17 addendum 11 (main); defect done-sh-misses-harness-dir; scripts/harness-git.mjs CODE_PATHS. Starting model: bower-mechanical."
   }
 ]
