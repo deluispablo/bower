@@ -415,7 +415,16 @@ describe('run manifests fix capture and operation identity', () => {
   it.each(['2026-10-05T10-00-00.000Z-abc123', 'legacy id: a/b c.é', '😀', '\u0080\u009f', 'x'.repeat(1024), 'é'.repeat(512), '😀'.repeat(256)])('keeps opaque legacy journal record ID %j up to 1024 UTF-8 bytes', async (recordId) => {
     await accept(variant((value) => { set(value, ['capture', 'journal', 0, 'recordId'], recordId); }));
   });
-  it.each(['', 'a\n', '\u0000', 'a\u007f', 'x'.repeat(1025), 'é'.repeat(512) + 'x', '😀'.repeat(256) + 'x', 'x'.repeat(1024 * 1024)])('refuses empty, control or over-1024-byte journal record ID %j', async (recordId) => {
+  it.each([
+    ['empty', ''],
+    ['a newline', 'a\n'],
+    ['a null', '\u0000'],
+    ['a delete character', 'a\u007f'],
+    ['1025 ASCII bytes', 'x'.repeat(1025)],
+    ['1025 bytes of two-byte letters', 'é'.repeat(512) + 'x'],
+    ['1025 bytes of four-byte emoji', '😀'.repeat(256) + 'x'],
+    ['a megabyte', 'x'.repeat(1024 * 1024)],
+  ])('refuses empty, control or over-1024-byte journal record ID: %s', async (_what, recordId) => {
     await refuse(bytes(variant((value) => { set(value, ['capture', 'journal', 0, 'recordId'], recordId); })), 'shape');
   });
 

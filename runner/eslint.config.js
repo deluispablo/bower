@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import { reservationConfig } from '../scripts/eslint-reservation.mjs';
 
 export default tseslint.config(
   { ignores: ['node_modules', 'dist', 'test-results'] },
@@ -13,4 +14,5 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': ['error', { varsIgnorePattern: '^_', argsIgnorePattern: '^_', ignoreRestSiblings: true }],
     },
   },
+  reservationConfig('runner'),
 );
