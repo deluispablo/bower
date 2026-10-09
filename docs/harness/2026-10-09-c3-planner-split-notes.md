@@ -279,3 +279,34 @@ claude.ts, barrier.ts, Home.tsx, Replay.tsx 0.
   3. The row also keeps the op's first line counted from the Timeline start (stable when the person appends at the
      end, shifts if they edit earlier lines): a position, which the ruling rejects for `line`.
 - The updatedRow one-home minor is independent and waits for the same round.
+
+## Fix round 2 (TL-P4-19 addenda 4 and 5, P4-45d minor)
+
+- Merged claude/p3 (63caa95b), no conflict. Red 0ae7cd5f, fix 4ad40aff.
+- `line` = ordinal among the lines the op wrote (`c.lines` index, carried lines included). Line rows also carry
+  `lines` (k, the op's `timeline-append` entries: not derivable from rows, since a kept note's carried lines have
+  none), `md5` (MD5 of the edit's text) and `stamp`.
+- Stamp: the note's last write in the run is not the edit but its New mark move (`bowerNew: '1'`, depends on the
+  edit), which sends its own stamp, `stampOf(runId, markOp)`. So `stamp` on the row is that one: the bowerOp the note
+  carries as the op left it. `grounded` checks lines = entries, md5 = md5Hex(e.text), stamp = stampOf(manifest.runId,
+  mark op); the fake-worker tests check them against the stored file's `bowerOp` and `md5Checksum`.
+- Note read (`DriveVault.note`): `file.stamp` is `appProperties.bowerOp` from the listing (FIELDS already asks for
+  appProperties); `file.md5` is MD5 of the bytes the read already holds (the parsed cache's text), which is Drive's
+  md5Checksum of them. No extra Drive call. A file whose bytes do not round-trip as text (a BOM) marks none.
+- Screen (`newLineIndexes(note, rows)`): marks `timeline.length - lines + line` only when `note.file.stamp === row.stamp`
+  and `note.file.md5 === row.md5`, else none: a person's edit drops the mark, never moves it; the row stays.
+- Reuse: the comparison is write-once's two fields (STAMP key, Drive MD5 via md5Hex), not `holds` itself: `holds`
+  rebuilds a per-file intent stamp from the text sent, and the screen has neither the run id's op text nor the bytes
+  the op sent, only the row. No new helper; ruling point if the lead wants `holds` reshaped to take a stamp and md5.
+- updatedRow one home: `isUpdatedRow` exported from run-manifest.ts, used by run-checkpoint.ts (its copy removed).
+
+Tests (new, exact): "with no edit the New mark is on the op's line by its ordinal", "a person's edit after the run
+drops the New mark and keeps the row" (src/data/fake/fake-worker.test.ts). Updated to the rule: new-lines unit test,
+grounded row test (lines, md5, stamp tamper), run-checkpoint fixture test (new fields, bad rows), runner c05 rows,
+fake-worker row assertions.
+
+Gates: `pnpm check` pass (/tmp/c3p3b-check.log; goldens in runner suite). C05 e2e desktop and phone pass
+(/tmp/c3p3b-e2e-c05.log). `pnpm e2e:fake` 257 passed, 61 skipped (/tmp/c3p3b-e2e-fake.log).
+
+Production lines this round: +65 / -34 (removed 34), net +31: run-manifest +9, types +7, grounded +7, drive-vault +5,
+new-lines +3, scripted +2, run-checkpoint -2, barrier 0, NoteScreen 0. Part 3 net +118; entry net -109.
