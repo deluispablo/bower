@@ -3133,7 +3133,8 @@ describe('c2-create-by-id: an app write whose answer was lost is found again by 
     await vault.tree();
     await vault.trash(PASSPORT);
     await vault.create('Areas/Documents', 'note', 'Passport renewal.md');
-    const lost = lose('update', (a) => typeof (a[1] as { name?: string }).name === 'string');
+    // Out of the Bin under the free name in one write (TL-P4-24 addendum 7): that write's answer is the one lost.
+    const lost = lose('untrash', (a) => typeof a[2] === 'string');
     await expect(vault.restore(PASSPORT)).resolves.toBeUndefined();
     expect(lost()).toBe(1);
     expect(await named('Areas/Documents', 'Passport renewal')).toHaveLength(2);
@@ -3489,17 +3490,13 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
     const id = await idOf(PASSPORT);
     await vault.trash(PASSPORT);
     await vault.create('Areas/Documents', 'note', 'Passport renewal.md');
-    const untrash = drive.untrash.bind(drive);
-    // Out of the Bin, and renamed elsewhere before Bower renames it to a free name.
-    drive.untrash = async (...a) => {
-      const out = await untrash(...a);
-      drive.untrash = untrash;
-      await drive.update(id, { name: 'Passport (Alex).md' });
-      return out;
-    };
+    // Renamed in the Bin elsewhere before Bower takes it out under a free name (one write, TL-P4-24 addendum 7).
+    await drive.untrash(id);
+    await drive.update(id, { name: 'Passport (Alex).md' });
+    await drive.trash(id);
     const e: unknown = await vault.restore(PASSPORT).then(() => null, (err: unknown) => err);
     expect(ELSEWHERE).toContain(notAsSeenReason(e));
-    expect((await drive.get(id)).name).toBe('Passport (Alex).md');
+    expect(await drive.get(id, { binned: true })).toMatchObject({ name: 'Passport (Alex).md', trashed: true });
   });
 
   it('every app write of an existing file refuses one that changed name or place elsewhere: late upload (1544)', async () => {
@@ -3526,7 +3523,8 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
     await vault.tree();
     await vault.trash(PASSPORT);
     await vault.create('Areas/Documents', 'note', 'Passport renewal.md');
-    const lost = loseWithRead('update', (a) => typeof (a[1] as { name?: string }).name === 'string');
+    // The rename is the untrash's own name now (one write, TL-P4-24 addendum 7): that write's answer is the one lost.
+    const lost = loseWithRead('untrash', (a) => typeof a[2] === 'string');
     await expect(vault.restore(PASSPORT)).rejects.toMatchObject({ code: 'offline' });
     expect(lost()).toBe(1);
     await expect(vault.restore(PASSPORT)).resolves.toBeUndefined();
@@ -3725,6 +3723,8 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
       return notAsSeenReason(e) === null ? 'failed' as const : 'refused' as const;
     });
 
+    // Every case met: each kind, change and moment, and for a restore each loss (88 in all, for this seed).
+    const met = new Set<string>();
     await fc.assert(
       fc.asyncProperty(
         fc.constantFrom(...kinds),
@@ -3732,6 +3732,7 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
         fc.constantFrom('before the write', 'before the retry'),
         fc.constantFrom('its answer', 'a later step'),
         async (kind, change, when, loss) => {
+          met.add([kind, change, when, ...(kind === 'unbin' || kind === 'restore' ? [loss] : [])].join(' / '));
           localStorage.clear();
           drive = new FakeDrive();
           root = (await seedFakeDrive(drive, 'default', Date.now())) ?? '';
@@ -3777,7 +3778,8 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
           if (change === 'none') expect(retried).toBe('done');
         },
       ),
-      { seed: 20261009, numRuns: 120 },
+      { seed: 20261009, numRuns: 500 },
     );
+    expect(met.size).toBe(88);
   }, 60_000);
 });

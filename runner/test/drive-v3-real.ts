@@ -1,8 +1,8 @@
 /**
  * Drive v3 for the real-adapter world (P3-18): the runner's Drive v3 fake (`drive-v3.ts`, unchanged) with what
  * real Drive also does and the app's `DriveHttp` needs, answered over the same `FakeDrive`:
- * - `PATCH files/:id` with `{ trashed: false }` restores from the Bin (files.update,
- *   https://developers.google.com/drive/api/reference/rest/v3/files/update);
+ * - `PATCH files/:id` with `{ trashed: false }` restores from the Bin, with the `name` and `appProperties` of the same
+ *   body set by the same update (files.update, https://developers.google.com/drive/api/reference/rest/v3/files/update);
  * - `fullText contains '…'` in a listing's `q` (search for files,
  *   https://developers.google.com/drive/api/guides/search-files), matched on name and text as the `FakeDrive` does;
  * - access tokens come from Google's token endpoint here, not from the fake's token route: `mint` gives one, and
@@ -44,10 +44,10 @@ export function realDrive(drive: FakeDrive): RealDrive {
     if (method !== 'GET') writes.push(`${method} ${url.pathname}`);
     const one = /^\/drive\/v3\/files\/([^/]+)$/.exec(url.pathname);
     if (method === 'PATCH' && one && given.has(token)) {
-      const patch = JSON.parse(String(init.body ?? '{}')) as { trashed?: boolean };
+      const patch = JSON.parse(String(init.body ?? '{}')) as { trashed?: boolean; name?: string; appProperties?: Record<string, string> };
       if (patch.trashed === false) {
         try {
-          const f = await drive.untrash(decodeURIComponent(one[1] ?? ''));
+          const f = await drive.untrash(decodeURIComponent(one[1] ?? ''), patch.appProperties, patch.name);
           return json(200, { kind: 'drive#file', id: f.id, name: f.name, mimeType: f.folder ? FOLDER : 'text/plain', parents: f.parents, modifiedTime: f.modifiedTime, createdTime: f.createdTime, ...(f.appProperties ? { appProperties: f.appProperties } : {}), trashed: false });
         } catch {
           return json(404, { error: { code: 404, message: 'notFound', errors: [{ domain: 'global', reason: 'notFound', message: 'notFound' }] } });

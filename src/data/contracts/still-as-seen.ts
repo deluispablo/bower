@@ -105,45 +105,70 @@ export async function readForFence<T>(reading: Promise<T>, unanswered: (e: unkno
   }
 }
 
+/** What one write does to a file (write-once's `Intent`): a change named by its intent, or a text. */
+export type WriteIntent = string | { text: string };
+
+/**
+ * The file as this write leaves it: what it read, with the write's own change applied (TL-P4-24 addendum 7). Its
+ * modifiedTime is left out, since the write itself changes it.
+ * - a rename (`rename:<name>`): that name; a move (`move:<folder>` or `move:<folder>:<name>`): that folder, and name;
+ * - a Bin: in the Bin; an unbin (`unbin`, or `unbin:<name>` back under a free name): out of it, under that name;
+ * - a text: the name and place it read, out of the Bin.
+ */
+function expectedAfter(seen: SeenExpectation, intent: WriteIntent): SeenExpectation {
+  const read: SeenExpectation = { id: seen.id, name: seen.name, parents: seen.parents, trashed: seen.trashed === true };
+  if (typeof intent !== 'string') return { ...read, trashed: false };
+  const [kind = '', ...rest] = intent.split(':');
+  const arg = rest.join(':');
+  if (kind === 'bin') return { ...read, trashed: true };
+  if (kind === 'unbin') return { ...read, trashed: false, ...(arg ? { name: arg } : {}) };
+  if (kind === 'rename') return { ...read, name: arg };
+  if (kind === 'move') {
+    const [to = '', ...name] = rest;
+    // Drive's move: the folder it read goes (`removeParent`, its one parent), the new one comes (`addParent`).
+    return { ...read, parents: [...seen.parents.slice(1), to], ...(name.length ? { name: name.join(':') } : {}) };
+  }
+  return read;
+}
+
+/** A write that may already have landed: its intent, and whether the stored file carries its write-once stamp. */
+export interface Landing<T> {
+  intent: WriteIntent;
+  /** Write-once `holds`: its stamp, and for text the checksum of the text sent. */
+  stamped: (now: T) => boolean;
+}
+
 /** What one fence accepts besides "still as seen", and how it says a refusal. */
 export interface FenceOptions<T> {
+  /** How to tell a read that got no answer (the transport's `isNoAnswer`). */
+  unanswered: (e: unknown) => boolean;
   /** The refusal's code; `conflict` when left out. */
   code?: ErrorCode;
   /**
-   * Whether the stored file already holds this very write (write-once `holds`: its stamp, and for a rename its name and
-   * place): it landed though its answer was lost, so the fence resolves and nothing is sent again. Asked first.
+   * This very write, landed though its answer was lost: the stored file carries its stamp **and** is exactly what the
+   * write makes it (`expectedAfter`, built here once from the intent). Then the fence resolves and nothing is sent
+   * again. Asked first, on the same fresh read.
    */
-  landed?: (now: T) => boolean;
-  /** Names the file in the log line of a refusal; its id when left out (the runner says which part of the write). */
-  what?: string;
-}
-
-/** A fence that reads: how to tell a read that got no answer (the transport's `isNoAnswer`). */
-export interface ReadingFence<T> extends FenceOptions<T> {
-  unanswered: (e: unknown) => boolean;
+  landed?: Landing<T>;
 }
 
 /**
  * Still as seen, right before a write (AGENTS: every write passes what it read; a move, a rename or a Bin checks the
- * name and place it read). The one helper: the app's `once`, the Journal's Undo and the runner's `SeenFiles` call it.
+ * name and place it read). The one helper: the app's `once`, the pile edit's checks and the Journal's Undo call it.
  * `read` gives the file as stored now (by its id, the Bin included: a gone file is null), and the fence:
  * - resolves with it when it already holds this write (`landed`): the person's own write, landed though its answer was
- *   lost; the caller sends nothing again;
+ *   lost, and the file is now exactly what that write makes it; the caller sends nothing again;
  * - resolves null when it is still as `seen` says: the caller sends;
- * - throws `notAsSeenError(reason, message)` when it is not, or `notReadError` when the read got no answer.
- * Pure but for the reader it is given, so it can run again before every resend, with no side effect but its error. A
- * reader that answers at once (the pretend Drive's one-step fence, `FakeRunDrive`) gets its answer at once.
+ * - throws `notAsSeenError(reason, message)` when it is neither, or `notReadError` when the read got no answer.
+ * Pure but for the reader it is given, so it runs again, on a fresh read, before every resend: no state kept from an
+ * earlier press decides that a step is done.
  */
-export function checkStillAsSeen<T extends StoredNow>(seen: SeenExpectation, read: () => Promise<T | null>, message: string, opts: ReadingFence<T>): Promise<T | null>;
-export function checkStillAsSeen<T extends StoredNow>(seen: SeenExpectation, read: () => T | null, message: string, opts?: FenceOptions<T>): T | null;
-export function checkStillAsSeen<T extends StoredNow>(seen: SeenExpectation, read: () => Promise<T | null> | T | null, message: string, opts: FenceOptions<T> & { unanswered?: (e: unknown) => boolean } = {}): Promise<T | null> | T | null {
-  const decide = (now: T | null): T | null => {
-    if (now && opts.landed?.(now)) return now;
-    const reason = notAsSeen(seen, now);
-    if (reason === null) return null;
-    console.error(`Refused a write to ${opts.what ?? seen.id}: ${reason}`);
-    throw notAsSeenError(reason, message, opts.code);
-  };
-  const now = read();
-  return now instanceof Promise ? readForFence(now, opts.unanswered ?? (() => false)).then(decide) : decide(now);
+export async function checkStillAsSeen<T extends StoredNow>(seen: SeenExpectation, read: () => Promise<T | null>, message: string, opts: FenceOptions<T>): Promise<T | null> {
+  const now = await readForFence(read(), opts.unanswered);
+  const landed = opts.landed;
+  if (now && landed && landed.stamped(now) && notAsSeen(expectedAfter(seen, landed.intent), now) === null) return now;
+  const reason = notAsSeen(seen, now);
+  if (reason === null) return null;
+  console.error(`Refused a write to ${seen.id}: ${reason}`);
+  throw notAsSeenError(reason, message, opts.code);
 }

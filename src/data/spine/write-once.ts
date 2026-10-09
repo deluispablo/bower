@@ -13,6 +13,7 @@
  */
 import { BowerError } from '../types';
 import { md5Hex, sha256Sync } from '../contracts/hashes';
+import type { Landing, WriteIntent } from '../contracts/still-as-seen';
 import { driveError, type DriveApi, type DriveFile, type FencedDrive } from '../drive/drive-api';
 import { failureKind, isNoAnswer, isUnconfirmedWrite, marked, type FailureKind } from '../drive/transport';
 
@@ -67,10 +68,13 @@ export const byId = (drive: Gets, id: string): Promise<DriveFile | null> =>
   });
 
 /** What one write to a file does: a change named by its intent, or a text (whose bytes are checked too). */
-export type Intent = string | { text: string };
+export type Intent = WriteIntent;
 
 /** The stamp of one write to `f`: the version it read and what it does, so a retry of the same change is the same write. */
 const stampFor = (f: DriveFile, intent: Intent): string => stampOf(f.id, `${f.modifiedTime}:${typeof intent === 'string' ? intent : `text:${sha256Sync(intent.text)}`}`);
+
+/** An unbin: out of the Bin as it was (`unbin`), or under a free name in the same write (`unbin:<name>`). */
+export const unbins = (intent: Intent): boolean => intent === 'unbin' || (typeof intent === 'string' && intent.startsWith('unbin:'));
 
 /**
  * Whether `now` holds that write to `f`: it carries its stamp and, for text, Drive's checksum of the text sent; a Bin
@@ -78,7 +82,10 @@ const stampFor = (f: DriveFile, intent: Intent): string => stampOf(f.id, `${f.mo
  */
 export const holds = (f: DriveFile, intent: Intent, now: DriveFile): boolean =>
   now.appProperties?.[STAMP] === stampFor(f, intent) &&
-  (intent === 'bin' ? now.trashed === true : intent === 'unbin' ? now.trashed !== true : typeof intent === 'string' || confirms(now, new TextEncoder().encode(intent.text)));
+  (intent === 'bin' ? now.trashed === true : unbins(intent) ? now.trashed !== true : typeof intent === 'string' || confirms(now, new TextEncoder().encode(intent.text)));
+
+/** That write to `f` as the fence's landed case (`checkStillAsSeen`): its intent, and its stamp (`holds`). */
+export const landing = (f: DriveFile, intent: Intent): Landing<DriveFile> => ({ intent, stamped: (now) => holds(f, intent, now) });
 
 /**
  * Case 2: an update or a move of a file read as `f`, sent once with its stamp and found again by reading `f` by its id;

@@ -208,9 +208,9 @@ export class DriveHttp implements DriveApi {
     return this.json(`${API}/files/${id}?fields=${LISTED_FIELDS}`, 'PATCH', { trashed: true, ...(appProperties ? { appProperties } : {}) });
   }
 
-  /** `appProperties`, when given, are set by the same `files.update` that takes it out of the Bin. */
-  async untrash(id: string, appProperties?: Record<string, string>): Promise<DriveFile> {
-    return this.json(`${API}/files/${id}?fields=${FIELDS}`, 'PATCH', { trashed: false, ...(appProperties ? { appProperties } : {}) });
+  /** `appProperties` and `name`, when given, are set by the same `files.update` that takes it out of the Bin. */
+  async untrash(id: string, appProperties?: Record<string, string>, name?: string): Promise<DriveFile> {
+    return this.json(`${API}/files/${id}?fields=${FIELDS}`, 'PATCH', { trashed: false, ...(name !== undefined ? { name } : {}), ...(appProperties ? { appProperties } : {}) });
   }
 
   async fullText(rootId: string, query: string): Promise<DriveFile[]> {
