@@ -247,7 +247,7 @@ describe("the engine's named actions", () => {
   });
 
   it('an inherited name like toString is not on the allowlist', () => {
-    expect(unreferencedMembers({ ...ENGINE_MEMBERS, toString: 'script', constructor: 'control' })).toEqual([
+    expect(unreferencedMembers({ ...ENGINE_MEMBERS, toString: 'script' as const, constructor: 'control' as const })).toEqual([
       'toString: not referenced and not on the allowlist',
       'constructor: not referenced and not on the allowlist',
     ]);
