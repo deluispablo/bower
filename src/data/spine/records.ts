@@ -16,7 +16,7 @@ import { parseRunCheckpoint, verifyCheckpointChain, type Checkpoint, type Outcom
 import { parseRunManifestV2, type Manifest, type OperationV2 } from '../contracts/run-manifest';
 import { BowerError } from '../types';
 import { sha256 } from '../vault/hashes';
-import { SYSTEM, recordStamp } from '../vault/layout';
+import { PROP, SYSTEM, recordStamp } from '../vault/layout';
 
 /** `.bower/runs`, as Drive names it. */
 export const RUNS_NAME = 'runs';
@@ -277,12 +277,15 @@ export class RunRecords {
     await this.put(w, 'piles', dispositionName(c.hash), c.text, recordStamp(value.pileId));
   }
 
-  /** The record folder, made (with `.bower/runs`) when missing; a lost reply finds the folder that landed by its id. */
+  /**
+   * The record folder, made (with `.bower/runs`) when missing; a lost reply finds the folder that landed by its id. A
+   * run's folder carries Bower's mark, its run id, from its create (retention acts only on folders that carry it).
+   */
   private async ensure(w: FencedDrive, where: Where, { bower, ns, run }: Folders): Promise<string> {
     if (run[0]) return run[0].id;
     const sys = bower[0]?.id ?? (await makeFolder(w, this.reads, { parent: this.rootId, name: SYSTEM.dir })).id;
     const space = ns[0]?.id ?? (await makeFolder(w, this.reads, { parent: sys, name: where === 'piles' ? PILES_NAME : RUNS_NAME })).id;
-    return where === 'piles' ? space : (await makeFolder(w, this.reads, { parent: space, name: where.runId })).id;
+    return where === 'piles' ? space : (await makeFolder(w, this.reads, { parent: space, name: where.runId, props: { [PROP.run]: where.runId } })).id;
   }
 }
 
