@@ -14,4 +14,4 @@ Boundary assignments follow `docs/ARCHITECTURE.md`: preserve consumer compatibil
 
 ## Designer specs (TL-P4-18)
 
-The designer (`Diseñador`) messages the lead with a spec on `claude/design`. Merge it into `main` with a fast-forward or `git merge --no-ff`, since docs only. Check it against the mechanism map and the stage plan, rule on the entries (each "accept when" line becomes a verify), and hand them to the coordinator. When a fix is on staging or `main`, tell the designer so it can verify against its spec.
+The designer (`Diseñador`) messages the lead only with a spec the owner has approved, on `claude/design`. Its blocks map one-to-one to entries: proposed id, red, change, verify ("accept when"), mechanism and out of scope. Questions of taste go back to the designer, never straight to the owner. Merge it into `main` with a fast-forward or `git merge --no-ff`, since docs only. Check it against the mechanism map and the stage plan, rule on the entries (each "accept when" line becomes a verify), and hand them to the coordinator. When a fix is on staging or `main`, tell the designer so it can verify against its spec.

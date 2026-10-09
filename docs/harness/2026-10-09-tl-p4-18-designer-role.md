@@ -9,13 +9,32 @@
 - **Talks to the owner directly.** This is an exception to "only the lead talks to the owner" (TL-P3-17), because taste is the owner's call. The designer speaks Spanish to the owner and English in the repository.
 - **Never edits app code. Never messages the coordinator.** Its output is a spec on branch `claude/design` (worktree `/private/tmp/bower-design`) under `docs/design/reviews/`, plus one message to the lead.
 
-## The flow
+## The flow (owner addendum, 2026-10-09: discover first; the lead is contacted only after the owner's OK)
 
-1. **Review.** The owner tells the designer what bothers them. The designer checks the running app (dev server with demo or fake data; staging only with the owner signed in) and writes findings with evidence and NN/g severity. The checker challenges them, and the owner decides on each one: fix, later, or not a problem.
-2. **Spec.** For each agreed fix the spec gives where, now, change (tokens and existing components, every state, breakpoints, motion), exact copy, "accept when" checks a Playwright test can run, and what is out of scope. The designer commits it and messages the lead with the path and SHA.
-3. **Lead.** The lead merges the spec into `main` and rules on how it is built: mechanism map, stage plan, and which entry or packet. The lead hands entries to the coordinator. The "accept when" lines become each entry's verify.
-4. **Build.** The coordinator implements through workers under the usual rules (TL-P4-15 defect flow, review, gates).
-5. **Design acceptance.** Once a fix is on staging or `main`, the lead tells the designer. The designer checks it against the spec on the same viewports and themes, writes `verified` or `not as specified`, and tells the owner and the lead.
+1. **Discover.** Before designing anything, the designer:
+   - reads the owner's design artifacts on claude.ai (titles starting with "Bower");
+   - reads the design system in the repository: tokens, components, the UI spec, PRODUCT and the copy rules;
+   - uses the real app on phone and desktop, in both themes.
+
+   It measures what it sees (WCAG 2.2 AA, axe, keyboard, states), backs every finding with evidence and an NN/g severity, and has `bower-design-checker` challenge the findings.
+2. **Show the owner, then wait.** The designer writes a current-state review: what matches, errors, improvements and questions. It gives the owner the top three, then asks. Nothing is designed until the owner says what to work on.
+3. **Design until OK.** The designer designs only the agreed items, from the existing tokens and components, and shows before and after (a mockup Artifact or screenshots). Anything new needs a reason and the owner's yes.
+4. **Spec to the lead, only after the owner's OK.** The spec has one block per fix, in the shape the lead plans with:
+   - a proposed entry id;
+   - where;
+   - now (the red);
+   - change (every state, breakpoints, motion);
+   - exact copy;
+   - accept when (the verify);
+   - the owning mechanism;
+   - out of scope;
+   - severity and the owner's OK.
+
+   The designer commits it on `claude/design` and sends one message of 10 lines at most to the lead.
+5. **Lead.** The lead merges the spec into `main` and rules on how and when each fix is built: entries in the stage plan, packets, and the coordinator. It records each ruling as a TL-P4-18 addendum. It asks the designer technical questions, and the designer takes questions of taste to the owner.
+6. **Build and verify.** The coordinator implements under the usual rules. When a fix is on staging or `main`, the lead tells the designer. The designer checks it against the spec, writes `verified` or `not as specified`, and tells the owner and the lead. A "not as specified" result is a defect (TL-P4-15).
+
+The designer keeps `docs/design/STATE.md` in its worktree (TL-P2-43) and never messages the coordinator.
 
 **Timing.** Feature work is paused during the consolidation (TL-P4-14). Design review can start now. Agreed fixes are built in stage 4, which already covers the screen layer (focus return, run view, copy), or right after it. Before then, only a severity-4 fix (a catastrophe) jumps the queue, and only by the lead's ruling.
 
