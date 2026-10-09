@@ -337,3 +337,4 @@ c4-undo-compensate,property-red,codex,gpt-5-codex,medium,6,1772501,1758465,,1647
 c4-undo-compensate,implementer,codex,gpt-5-codex,medium,4,1343064,1334790,,1244800,8274,,,,blocked: volatile outbox ruling,2026-10-10
 d-v2-24a,implementer,codex,gpt-5-codex,medium,1,2264142,2243267,,2142080,20875,,,,reds; blocked on presence test,2026-10-10
 d-v2-24a,implementer,codex,gpt-5-codex,medium,2,429662,426637,,369792,3025,,,,blocked: red repairs need ruling,2026-10-10
+move-sheet-flaky,diagnosis,codex,gpt-5-codex,medium,1,205044,203150,,148096,1894,,,,test timing,2026-10-10
