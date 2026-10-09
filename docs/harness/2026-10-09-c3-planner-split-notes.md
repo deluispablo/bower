@@ -174,3 +174,89 @@ src/data + src/features 3712/3712 (/tmp/c3p2r-unit.log); C05 e2e desktop and pho
 
 Production lines this round: grounded.ts +69 -24, report.ts +10 -10 (+79 -34). Part 2 after the round:
 +199 / -580, net -381.
+
+# Part 3 (last)
+
+Branch `c3-planner-split-3`, from claude/p3 a7c2ee04 (parts 1 and 2 merged).
+
+## Commits
+
+| sha | kind | what |
+|---|---|---|
+| 44135607 | red | three steps; the New mark follows the row's op id; an old report without row op ids still reads; each updated row carries its edit's op id and its line; a merge that fell back captures no note it could not join |
+| f68c6d49 | red | grounded refuses an updated row without its op or its own line |
+| 33c7c0eb | fix | `planScripted` = `capture` -> `decide` -> `build`, looped while a step asks to try again (no recursion) |
+| bced533f | fix | the note a fallen-back merge could not join is no longer captured |
+| 0549a761 | fix | `RunReport.updated` rows gain optional `op` and `line`; grounding checks them; the note screen marks by them |
+| 71c96fd2 | docs | compatibility rows for 44135607 and 0549a761 |
+
+## Contract 1: the three steps
+
+- `capture(drive, rootId, opts)`: the listing, the journal lines taken, the inbox, readiness (`capturePiles`), things
+  already saved, Bower's own files (requests.json, hashes.json). Read once per plan; never reads the reply.
+- `decide(drive, captured, opts, attempt)`: the one `Decisions` type (model or scripted) applied to the capture, with
+  the reads it names (pile notes, members' digests, notes to edit, link texts, questions.json, keep notes, compared
+  notes, and the before-content of the runner files it will write and the hashes list). Ends `decided`, `plan`
+  (nothing ready) or `again`.
+- `build(decided)`: operations, report rows, manifest guard, grounding. No Drive and no reply (test: a watched reply
+  shows every use in decide; the read count does not move in build).
+- Re-planning: `planScripted` loops `decide` and `build` with an `Attempt` (`editCap`, `held`), never recursion.
+  Each case, and why it stays a try again rather than a single pass:
+  - orphans (a copy whose kept thing is not filed): holding its pile changes which piles are captured, which comes
+    before; a try again.
+  - keep, notes missing or unnameable: now decided up front from the listing (no try again needed).
+  - keep that cannot go whole (lines, relinks or the other note's edit): known only after the edits are planned; a
+    try again with `keep:<answer>` held.
+  - waiting piles (merge line past the cap): known only after the cap; the pile is held whole, a try again.
+  - edit-cap retry (manifest too big): known only after build; a try again with one edit fewer.
+  - The folder is no longer listed again on a try again (fewer Drive calls on those rare runs; goldens unchanged).
+
+## TL-P4-19 addendum 3: rows by op id
+
+- `UpdatedRow = { path, what, op?, line? }` (contracts/types.ts), in `RunReport` and the manifest's report rows.
+  `op` is the edit that wrote the row (also the keep row: the kept note's edit); `line` is the row's Timeline line
+  counted from the end (0 = last), since one edit appends several lines and the note's lines carry no id. A line
+  comes only with its op. **Ruling point:** the addendum names only the op id; `line` was added beside it because an op
+  id alone cannot say which of an edit's lines a row is (a kept note's carried lines have no row). If the lead wants
+  only `op`, the New mark has no way to locate a line without words.
+- Readers: run-manifest and run-checkpoint parse both as optional (old records read: fixture test); layout's
+  last-run reader is lenient already; `fixedReport` keeps them. Grounding: every updated row's `op` is its
+  contribution's first op; an edit's own rows each name a distinct line below its entry count; a Current state's row
+  names none.
+- New mark: `newLineIndexes(timeline, rows)` marks `timeline.length - 1 - line` for rows with op and line. A report
+  from before marks no line until the next tidy-up (deploy app and runner together).
+- Set-aside rows: already tied by op id through their contribution's one op (part 2, `materialize`); no field added.
+
+## Verify tests (new, exact names)
+
+- `the planner runs capture, decide and build as three steps` (src/data/spine/scripted.test.ts)
+- `the New mark follows the row's op id` (src/features/note/new-lines.test.ts; replaces part 2's "follows the row's
+  op, not its text")
+- `an old report without row op ids still reads` (src/data/contracts/run-checkpoint.test.ts, fixture 04)
+- `each updated row carries its edit's op id and its line` (src/data/fake/fake-worker.test.ts, through the service view)
+- `a merge that fell back captures no note it could not join` (src/data/fake/fake-worker.test.ts)
+- `grounded refuses an updated row without its op or its own line` (src/data/spine/grounded.test.ts)
+- Updated to the rule: fake-worker and fake-runner row assertions (`toMatchObject`, or op and line), runner
+  `every Timeline line a run writes has its own report row` (lines 1 and 0) and keep-one-note (op, no line).
+
+Gates: `pnpm check` pass (/tmp/c3p3-check.log; goldens C04 78 and 25 runs 88 in the runner suite). C05 e2e desktop
+and phone pass (/tmp/c3p3-e2e-c05.log). `pnpm e2e:fake`: 257 passed, 61 skipped (/tmp/c3p3-e2e-fake.log).
+
+## Production lines
+
+Part 3 (a7c2ee04..71c96fd2, tests and docs excluded): +215 / -128, removed 128, net +87. scripted.ts +67 (+173 -106),
+grounded.ts +6, types.ts +7, run-manifest.ts +4, run-checkpoint.ts +3, barrier.ts 0, NoteScreen.tsx 0, new-lines.ts 0.
+Entry (parts 1-3): +762 / -902, net -140. scripted.ts +128, grounded.ts -402, demo/script.ts +85, new-lines.ts +17,
+report.ts -2, types.ts +7, .dependency-cruiser.cjs +7, fake-runner.ts +6, run-manifest.ts +4, corpus.ts +4,
+run-words.ts +3, run-checkpoint.ts +3, NoteScreen.tsx +2, provider.ts +1, dependency-exceptions.cjs -1, fixture.ts -2,
+claude.ts, barrier.ts, Home.tsx, Replay.tsx 0.
+
+## Left out
+
+- `line` beside the op id (ruling point above). wordRule on live (m5) still awaits the lead's ruling.
+
+## Sources
+
+- Functional core, imperative shell (Gary Bernhardt): build is the core over decided data; capture and decide are the
+  shell. https://www.destroyallsoftware.com/screencasts/catalog/functional-core-imperative-shell
+- Tolerant reader (Martin Fowler): optional fields added, old records still read. https://martinfowler.com/bliki/TolerantReader.html
