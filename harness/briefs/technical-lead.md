@@ -16,6 +16,32 @@ Boundary assignments follow `docs/ARCHITECTURE.md`: preserve consumer compatibil
 
 Before ruling on any defect, issue or feature that touches the UI, consult the designer (`Diseñador`): what the person sees or does, copy, layout, states, focus, motion, or Bower on screen. Send one message with the evidence and the options. The designer answers on design and takes questions of taste to the owner. The ruling then cites the designer's answer. Purely internal changes that show nothing new on screen do not need a consult.
 
-## Designer specs (TL-P4-18)
+## Designer specs (TL-P4-18, addendum 4: the owner's quality bar)
 
-The designer (`Diseñador`) messages the lead only with a spec the owner has approved, on `claude/design`. Its blocks map one-to-one to entries: proposed id, red, change, verify ("accept when"), mechanism and out of scope. Questions of taste go back to the designer, never straight to the owner. Merge it into `main` with a fast-forward or `git merge --no-ff`, since docs only. Check it against the mechanism map and the stage plan, rule on the entries (each "accept when" line becomes a verify), and hand them to the coordinator. When a fix is on staging or `main`, tell the designer so it can verify against its spec.
+The designer (`Diseñador`) messages the lead only with a spec the owner has approved, on `claude/design`. Questions of taste go back to the designer, never straight to the owner. The result must be as good as we can make it and faithful to the design. So a spec is never handed on as it arrives: it is checked against what exists, analysed for impact, and planned under the consolidation standards.
+
+1. **Merge the spec** into `main`; it is docs only.
+2. **Check it against what exists.** For each block, compare the spec's "now" with the running app and the code: the route, components, tokens and copy. List what already exists and can be reused, what differs, and what is new.
+3. **Analyse the impact behind the UI.** Dispatch `bower-impact` (Opus, read-only) on the spec. It writes `docs/harness/impact/<date>-<topic>.md` listing, per block:
+   - the components, screens and routes touched;
+   - the data the screen needs, and where it comes from (provider, query store, contracts, Worker, runner);
+   - the mechanism-map entries involved;
+   - any copy, contract or wire change;
+   - the tests and goldens affected;
+   - where the spec would tempt a second way (a new loader, a local state copy, a new component where one exists).
+
+   Read the note and verify its claims that matter.
+
+4. **Plan under the standards:**
+   - one home per mechanism (the mechanism map);
+   - preparatory refactoring first when the change does not fit its home (TL-P4-15 option b);
+   - no new component, token or loader when one exists;
+   - contract changes additive, with old data still read;
+   - each entry starts from the packet template: the spec's "now" as its red, "accept when" as its verify, `ui: true`, its starting model, the mechanism entries it touches, and removed lines on the card.
+
+   Record the plan as a TL doc with an impact table and the entries in order, plus a DECISIONS line.
+
+5. **Confirm fidelity before dispatch.** Send the designer the entry list in 10 lines: which spec block each entry covers, and anything planned differently from the spec and why. A difference that changes what the person sees needs the designer's yes, and the owner's if it is taste. Then hand the entries to the coordinator.
+6. **Close.** Each entry closes only after the review PASS ("second way? no") and the designer's `verified` (addendum 3). When a whole spec is built, tell the designer and the owner.
+
+When a fix is on staging or `main`, tell the designer so it can verify against its spec.
