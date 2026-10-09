@@ -498,3 +498,4 @@ c3-agent-defs	c3d1d73daf940221	2026-10-09	red (fixed in 31817d33)
 c3-stop-gate	e663e5785c3734c0	2026-10-09	red (fixed in 7c0e9f32)
 c3-state-mark	dbaa9007025ed521	2026-10-09	known-green: reds proved by hand at 1299ca14, a7f7c938, a802a1a2 (/tmp/c3state-handred-*.log); P4-47c PASS; designer verified 809ff91b
 c4-run-counts	32b7309d868b2630	2026-10-09	red (fixed in 728d5828)
+v2-field	5ded59694f6a4daa	2026-10-09	known-green: unit red proved by hand at 7f93f350 (/tmp/v2field-handred.log); e2e reds at 7f93f350 and 3ddbf44b (/tmp/vf2-red.log); designer verified fa1d6258

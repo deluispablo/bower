@@ -6085,7 +6085,7 @@
     "id": "v2-field",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "New token control-line (3:1 on every ground) and one field rule in src/ui/ that every field, switch and task box uses (d-v2-08); screens drop their own field CSS.",
     "steps": [

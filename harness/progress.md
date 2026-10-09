@@ -253,3 +253,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: c3-stop-gate passes — stop gate: judges the card worktree; pnpm check writes the mark
 - 2026-10-09: c3-state-mark passes — state mark from the previous change; write it applies the shown text; clash re-asks; answered rows; cited lines
 - 2026-10-09: c4-run-counts passes — runner counts Drive calls and bytes per timing phase; timing line names the region
+- 2026-10-09: v2-field passes — control-line token and one field rule (d-v2-08); checkbox class and error-over-focus fix
