@@ -1,6 +1,6 @@
 /**
  * TL-P4-14 `c1-still-as-seen`: every path that checks a file is still as it was read before a write (the runner's
- * fence, the runner's admission re-read, the fake run service's boundary, the app's moves and renames) gives the
+ * fence, the runner's admission re-read, the fake run adapter's boundary, the app's moves and renames) gives the
  * same answer for the same change, and a refusal says why by a typed reason (`cause`), never by its words.
  *
  * Drive v3's `parents` is a list of folder ids with no meaning in its order (and, since 2020, one folder at most):
@@ -10,15 +10,14 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { SeenFiles } from '../../../runner/src/still-as-seen';
+import { SeenFiles } from '../drive/seen-files';
 import { takeAdmitted } from '../../../runner/src/spine/admitted';
 import type { DriveFile } from '../drive/drive-api';
-import { FakeDrive, type Peek } from '../drive/fake-drive';
-import { FakeRunService } from '../fake/fake-run-service';
+import { FakeDrive } from '../drive/fake-drive';
+import { FakeRunDrive } from '../fake/fake-run-drive';
 import type { AdmissionManifest } from '../spine/admission';
 import { DriveVault } from '../vault/drive-vault';
 import { BowerError } from './types';
-import type { OperationV2 } from './run-manifest';
 
 const ROOT = join(__dirname, '..', '..', '..');
 
@@ -83,10 +82,6 @@ class MovesAndRenames extends DriveVault {
   }
 }
 
-/** The fake run service's own check, inside its fenced boundary, for a Bin of the file. */
-type FakeCheck = { stillAsSeen(op: OperationV2, parentId: string, modifiedTime: string | null, peek: Peek, reused: null): unknown };
-const STOP = new Error('stop');
-
 const PATHS: Record<string, { write: boolean; check: (x: Folder, seen: DriveFile) => Promise<Verdict> }> = {
   'runner fence': {
     write: true,
@@ -106,21 +101,13 @@ const PATHS: Record<string, { write: boolean; check: (x: Folder, seen: DriveFile
       return { refused: out.deferred.length > 0, reason: out.deferred[0]?.why ?? null };
     },
   },
-  'fake run service': {
+  'fake run adapter': {
     write: true,
     check: async (x, seen) => {
-      const svc = new FakeRunService({ drive: x.drive }) as unknown as FakeCheck;
-      const before = { fileId: seen.id, name: seen.name, parents: seen.parents, folder: seen.folder, modifiedTime: seen.modifiedTime };
-      const op = { operationId: 'op-1', ordinal: 1, dependsOn: [], effect: { kind: 'bin', before, capturedChildIds: [] } } as unknown as OperationV2;
-      let out: unknown = null;
-      const w = x.drive.fenced((peek) => {
-        out = svc.stillAsSeen(op, '', null, peek, null);
-        throw STOP;
-      });
-      await w.trash(x.id).catch((e: unknown) => {
-        if (e !== STOP) throw e;
-      });
-      return out === null ? { refused: false, reason: null } : { refused: true, reason: reasonOf(out) };
+      // The engine's adapter on the pretend Drive: the runner's expectation, checked in the step of the change.
+      const d = new FakeRunDrive(x.drive, () => undefined);
+      d.expectSeen({ fileId: seen.id, name: seen.name, parents: seen.parents, folder: seen.folder, modifiedTime: seen.modifiedTime });
+      return thrown(() => d.fenced().trash(x.id));
     },
   },
   'app moves and renames': {
@@ -134,9 +121,10 @@ const PATHS: Record<string, { write: boolean; check: (x: Folder, seen: DriveFile
 
 /** The write paths that once compared parents or recognised a refusal on their own. */
 const WRITE_PATHS = [
-  'runner/src/still-as-seen.ts',
+  'src/data/drive/seen-files.ts',
   'runner/src/spine/admitted.ts',
-  'runner/src/effects.ts',
+  'src/data/spine/engine.ts',
+  'src/data/fake/fake-run-drive.ts',
   'src/data/fake/fake-run-service.ts',
   'src/data/vault/drive-vault.ts',
   'src/data/contracts/note-edit.ts',

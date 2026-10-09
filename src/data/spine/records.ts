@@ -234,22 +234,6 @@ export class RunRecords {
   }
 
   /**
-   * The committed chain, from the control head back to revision zero by each
-   * record's own digest; orphan records are never taken as head. Verified as a
-   * monotonic chain (contracts/run-checkpoint).
-   */
-  async chain(manifest: RunManifest, manifestHash: string, head: string): Promise<Checkpoint[]> {
-    const runId = manifest.runId;
-    const files = (await this.list({ runId })).filter((f) => f.name.startsWith('checkpoint-'));
-    const walked = await this.walk(files, (name) => this.read({ runId }, name), manifest, manifestHash, head);
-    if (!walked.ok) {
-      console.error(walked.why);
-      throw new BowerError('unknown', READ_FAILED);
-    }
-    return walked.chain;
-  }
-
-  /**
    * A run's folder with no control row to name its head (the runner, TL-P3-21 point 3): only this run's folder is
    * read. Its one manifest, then its chain from the one checkpoint of the highest revision; every checkpoint there
    * must be on that chain, so a fork or a stray record is never taken for the run. A failed read throws as usual.

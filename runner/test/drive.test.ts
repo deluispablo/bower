@@ -3,11 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DriveFile } from '../../src/data/drive/drive-api';
 import type { FakeDrive, FaultHook, FencedCall, FencedDrive } from '../../src/data/drive/fake-drive';
 import { RunnerDrive } from '../src/drive';
-import { driveEffects } from '../src/effects';
+import { driveEffects } from '../../src/data/spine/engine';
 import type { Checkpoint } from '../../src/data/contracts/run-checkpoint';
 import type { OperationV2 } from '../../src/data/contracts/run-manifest';
 import type { RunManifest } from '../../src/data/spine/records';
-import { SeenFiles, targetOf } from '../src/still-as-seen';
+import { SeenFiles, targetOf } from '../../src/data/drive/seen-files';
 import { RunnerToken } from '../src/token';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 

@@ -5,12 +5,14 @@
  * checkpoint head, the current claim with its epoch and the outstanding
  * dispatch. A run is admitted only after its manifest and first checkpoint are
  * confirmed in the folder; then one attempt at a time, under an unexpired
- * claim, commits each effect's intent before dispatching it through the fake
- * Drive's fenced boundary, where a stale epoch or a revoked session is refused
- * in the same step as the change. Recovery belongs to the service: `status()`
- * (and so `process()`) issues a new claim with a greater epoch when no live
- * attempt holds one, reconciles possible effects from stored evidence, never
- * plans again, and rebuilds the report from the durable plan. Public `done`
+ * claim, applies it with the runner's engine (`spine/engine.ts`) over the fake
+ * Drive's adapter (`FakeRunDrive`): one opening and one closing checkpoint per
+ * batch, every effect stamped with its operation, and each write fenced, so a
+ * stale epoch or a revoked session is refused in the same step as the change.
+ * Recovery belongs to the service: `status()` (and so `process()`) issues a
+ * new claim with a greater epoch when no live attempt holds one; the engine
+ * reads back what an earlier attempt may have sent by its stamp, never plans
+ * again, and the report is rebuilt from the durable plan. Public `done`
  * and `failed` are derived: only once the head is terminal and the
  * `.bower/last-run.json` view matches its exact body (TL-P2-06 §3, TL-P2-10 §2).
  *
@@ -19,18 +21,19 @@
  * at the instant it passes the check. It proves no real Drive CAS or
  * exactly-once delivery.
  */
-import type { FakeDrive, FencedDrive, Peek } from '../drive/fake-drive';
-import type { Checkpoint, EffectEvidence, Outcome } from '../contracts/run-checkpoint';
-import { readBackEdit, recheckEdit, savedLinkKey } from '../contracts/note-edit';
-import type { EditText, OperationV2, SeenFile } from '../contracts/run-manifest';
+import type { FakeDrive, FencedDrive } from '../drive/fake-drive';
+import type { Checkpoint } from '../contracts/run-checkpoint';
+import type { OperationV2 } from '../contracts/run-manifest';
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
 import { BowerError, type RunReport } from '../types';
-import { notAsSeen, notAsSeenError, notAsSeenReason, type SeenExpectation, type StoredNow } from '../contracts/still-as-seen';
 import { SYSTEM, isRunnerFile, type LastRunFile } from '../vault/layout';
 import type { RunWire } from '../worker/worker-api';
-import { RunRecords, canonical, checkpointName, dispositionsFor, manifestName, materialize, reportName, reusedNoteOf, shows, SOURCE_NOT_AS_SEEN, textHash, toEvidence, type RunManifest } from './fake-run-records';
+import { textHash } from '../spine/grounded';
+import { RunRecords, canonical, checkpointName, manifestName, type RunManifest } from '../spine/records';
 import { firstCheckpoint, nextCheckpoint, type CheckpointPatch } from '../spine/records';
-import { fixedReport, lastRunText, sameView, saveReport } from '../spine/barrier';
+import { driveEffects, runOperations, type Effects } from '../spine/engine';
+import { FakeRunDrive } from './fake-run-drive';
+import { finishRun, fixedReport, lastRunText, sameView, saveReport } from '../spine/barrier';
 import { checksumOf, md5Hex } from '../contracts/hashes';
 import { PHASE_RANK, isRunPhase } from '../contracts/run-phases';
 import { B_FAILURE } from '../spine/scripted';
@@ -46,7 +49,6 @@ export type Control = {
   runId: string; requestId: string; scope: { rootId: string }; manifestHash: string; head: string;
   statusRevision: number;
   claim: null | { attemptId: string; epoch: number; expiresAt: number };
-  outstandingDispatch: null | { operationId: string; dispatchId: string; epoch: number };
 };
 
 export interface DispatchAt {
@@ -61,7 +63,7 @@ export interface FakeRunServiceOptions {
   drive: FakeDrive;
   clock?: () => number;
   scale?: TimeScale;
-  /** Test seam: awaited after an effect's intent is committed and before it is dispatched. */
+  /** Test seam: awaited after an effect's checks and its batch's opening, right before it is sent. */
   hooks?: { beforeDispatch?: (at: DispatchAt) => Promise<void> };
   /** Test seam: how the admitting attempt waits out each phase's pace (a timer by default). */
   sleep?: (ms: number) => Promise<void>;
@@ -85,15 +87,6 @@ interface Row {
   lastEpoch: number;
   /** SHA-256 of the view text the folder showed at admission (null: none); the only view a publication may replace. */
   viewBefore: string | null;
-  /**
-   * Dispatches that passed the boundary, recorded in the same synchronous step
-   * as the change and before it, and kept across a reload. One that never
-   * passed can be sent again (same dispatch id) once its epoch is superseded;
-   * one that passed and shows no effect stays unresolved. A trusted no-effect
-   * proof of the FAKE boundary only (TL-P2-16): it does not carry to P3, where
-   * a real Drive call can still land after any check.
-   */
-  crossed: string[];
   /** This binding's run ids in admission order (the latest last): a view of an earlier one may be replaced. */
   admitted: string[];
 }
@@ -109,12 +102,6 @@ interface Cache {
   failures: number;
 }
 
-/** A note a filing move goes beside, as captured, and the key it must still carry for that move's file. */
-interface Reused {
-  file: SeenFile;
-  key: string;
-}
-
 interface Attempt {
   key: string;
   attemptId: string;
@@ -127,23 +114,10 @@ const TERMINAL: readonly string[] = ['done', 'failed'];
 const STALE = 'Bower is finishing this tidy-up elsewhere.';
 const SIGNED_OUT = 'Sign in again to keep going.';
 const NOT_YOURS = 'This tidy-up belongs to another account or folder.';
-const UNRESOLVED = 'Bower could not check one of the things it moved. It will look again later.';
 const SAVE_FAILED = 'Bower could not save what it did. Try again later.';
-const NOT_AS_SEEN = SOURCE_NOT_AS_SEEN;
-/** A reused note no longer where, or what, the plan saw: not the thing's own cause (TL-P2-34). */
-const NOTE_NOT_AS_SEEN = 'The note it goes beside is not where Bower left it.';
-const NOTE_CHANGED = 'The note changed before Bower could add to it.';
-const NOTE_THERE = 'A note with that name was already there, so Bower did not write it.';
-const NAME_TAKEN = 'Something else has that name there, so Bower left it as it was.';
+const READ_FAILED = 'Bower could not read what it did. Try again later.';
 /** Attempts in a row before this instance stops retrying a run that keeps failing; it stays saving. */
 const MAX_TRIES = 5;
-
-const NO_FOLDER = 'The folder for it could not be made.';
-const ARRIVED = 'Something new arrived in it, so it stays in your inbox.';
-const LIST_CHANGED = "Bower's list of your files changed meanwhile.";
-
-/** A file as the boundary sees it, for the one still-as-seen check. */
-const storedNow = (peeked: ReturnType<Peek>): StoredNow | null => peeked && { ...peeked.file, trashed: peeked.trashed, children: peeked.children };
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, Math.max(0, ms)));
 const keyOf = (b: Binding): string => `${b.account}:${b.rootId}`;
@@ -248,11 +222,10 @@ export class FakeRunService {
       binding: { ...binding },
       control: {
         runId: manifest.runId, requestId: manifest.requestId, scope: { rootId: binding.rootId }, manifestHash: m.hash, head: c.hash,
-        statusRevision: 0, claim: { attemptId: attempt.attemptId, epoch: attempt.epoch, expiresAt: this.clock() + CLAIM_MS }, outstandingDispatch: null,
+        statusRevision: 0, claim: { attemptId: attempt.attemptId, epoch: attempt.epoch, expiresAt: this.clock() + CLAIM_MS },
       },
       lastEpoch: attempt.epoch,
       viewBefore,
-      crossed: [],
       admitted: [...(before?.admitted ?? []), manifest.runId].slice(-ADMITTED_KEPT),
     });
     this.cache.set(key, { manifest, chain: [first], confirmed: false, notBefore: 0, failures: 0 });
@@ -350,7 +323,6 @@ export class FakeRunService {
     const claim = row.control.claim;
     if (claim && claim.expiresAt >= this.clock() && this.live.has(claim.attemptId)) return;
     if ((this.cache.get(key)?.notBefore ?? 0) > this.clock()) return;
-    if (!(await this.quiescent(key))) return;
     // A new attempt under a strictly greater epoch: from now on the old one is refused at the boundary.
     const attempt: Attempt = { key, attemptId: this.mint('attempt'), epoch: row.lastEpoch + 1, original: false };
     row.lastEpoch = attempt.epoch;
@@ -358,25 +330,6 @@ export class FakeRunService {
     row.control.statusRevision++;
     this.changed();
     await this.launch(attempt);
-  }
-
-  /**
-   * Whether the outstanding dispatch allows a new claim: none; one that never
-   * passed the boundary (the new epoch keeps it from ever passing); or one that
-   * passed and whose effect the stored evidence shows. Otherwise it stays
-   * unresolved and no claim is issued.
-   */
-  private async quiescent(key: string): Promise<boolean> {
-    const row = this.row(key);
-    const out = row.control.outstandingDispatch;
-    if (!out || !row.crossed.includes(out.dispatchId)) return true;
-    const { manifest, chain } = await this.loaded(key, true);
-    const head = chain.at(-1);
-    const op = manifest.operations.find((o) => o.operationId === out.operationId);
-    if (head && op && (await this.observe(head, op))) return true;
-    console.error(new BowerError('unknown', UNRESOLVED), `dispatch ${out.dispatchId} of run ${row.control.runId} passed the boundary and shows no effect`);
-    this.failed(key);
-    return false;
   }
 
   private launch(attempt: Attempt): Promise<void> {
@@ -422,7 +375,6 @@ export class FakeRunService {
   /** One attempt: from the committed head to the terminal view, never planning again. */
   private async execute(attempt: Attempt): Promise<void> {
     const { manifest, chain } = await this.loaded(attempt.key, !attempt.original);
-    const records = this.records(attempt.key);
     let head = chain.at(-1);
     if (!head) throw new BowerError('unknown', SAVE_FAILED);
     const ms = PHASE_MS[this.scale];
@@ -442,269 +394,95 @@ export class FakeRunService {
     }
     if (head.phase === 'saving') {
       const pace = attempt.original ? this.pace(ms.saving) : Promise.resolve();
-      for (const op of manifest.operations) head = await this.settle(attempt, manifest, head, op);
+      if (head.report.state === 'not-ready') await this.apply(attempt, manifest);
       await pace;
-      const manifestHash = this.row(attempt.key).control.manifestHash;
-      if (head.report.state === 'not-ready') {
-        const body = materialize(manifest, manifestHash, head.outcomes);
-        if (!body) throw new BowerError('unknown', UNRESOLVED);
-        head = await this.commit(attempt, head, { report: { state: 'pending', reportHash: (await canonical(body)).hash, body } });
-      }
-      if (head.report.state === 'pending') {
-        const r = await canonical(head.report.body);
-        if (r.hash !== head.report.reportHash) throw new BowerError('unknown', SAVE_FAILED);
-        await records.put(this.fence(attempt), { runId: manifest.runId }, reportName(r.hash), r.text);
-        await records.report(manifest, manifestHash, r.hash);
-        head = await this.commit(attempt, head, { report: { state: 'published', reportHash: r.hash } });
-      }
-      if (head.report.state === 'published') {
-        for (const d of dispositionsFor(manifest, head.outcomes, head.report.reportHash)) await records.putDisposition(this.fence(attempt), d);
-        const retained = manifest.operations.flatMap((o, i) => {
-          const e = o.effect;
-          return e.kind === 'bin' && head?.outcomes[i]?.state === 'rejected' ? manifest.capture.piles.filter((p) => p.anchor?.fileId === e.before.fileId).map((p) => p.pileId) : [];
-        });
-        head = await this.commit(attempt, head, { phase: 'done', phaseAt: this.clock(), retainedPileIds: retained });
-      }
-    }
-    if (TERMINAL.includes(head.phase)) await this.publish(attempt);
+      await this.finish(attempt, manifest);
+    } else if (TERMINAL.includes(head.phase)) await this.publish(attempt);
   }
 
   /**
-   * One operation to a final outcome: its intent is committed before it is
-   * dispatched; a possible effect is reconciled from stored evidence; one that
-   * never passed the boundary is sent again under the same dispatch id; one
-   * that passed and shows no effect stays unresolved.
+   * The report barrier the runner ends a run with (`finishRun`): the report record, the dispositions, the report
+   * files and the view, each read back, then done in the chain. The view replaces only one this service may replace.
    */
-  private async settle(attempt: Attempt, manifest: RunManifest, head: Checkpoint, op: OperationV2): Promise<Checkpoint> {
-    const outcome = head.outcomes[op.ordinal];
-    if (!outcome || outcome.state === 'applied' || outcome.state === 'rejected') return head;
+  private async finish(attempt: Attempt, manifest: RunManifest): Promise<void> {
     const row = this.row(attempt.key);
-    let dispatchId: string;
-    if (outcome.state === 'possible-effect') {
-      const seen = await this.observe(head, op);
-      if (seen) return this.resolve(attempt, head, op, { operationId: op.operationId, state: 'applied', evidence: seen });
-      if (row.crossed.includes(outcome.dispatchId)) {
-        console.error(`Operation ${op.ordinal} of run ${manifest.runId} passed the boundary and shows no effect`);
-        throw new BowerError('unknown', UNRESOLVED);
-      }
-      // It never passed the boundary, and its epoch is superseded: it never will. The same dispatch goes again.
-      // This no-effect proof holds for the FAKE boundary only (TL-P2-16); it does not carry to P3.
-      const out = row.control.outstandingDispatch;
-      if (out?.dispatchId !== outcome.dispatchId || out.epoch >= attempt.epoch) {
-        console.error(`Operation ${op.ordinal} of run ${manifest.runId} is not superseded; it is not sent again`);
-        throw new BowerError('unknown', UNRESOLVED);
-      }
-      dispatchId = outcome.dispatchId;
-      row.control.outstandingDispatch = { operationId: op.operationId, dispatchId, epoch: attempt.epoch };
-      this.changed();
-    } else {
-      dispatchId = this.mint('dispatch');
-      head = await this.resolve(attempt, head, op, { operationId: op.operationId, state: 'possible-effect', dispatchId });
+    const { chain } = await this.loaded(attempt.key, false);
+    const finished = await finishRun({
+      rootId: row.binding.rootId,
+      runId: manifest.runId,
+      attempt: attempt.epoch,
+      records: this.records(attempt.key),
+      reads: this.drive,
+      checksum: { stored: async (id) => md5Hex(await this.drive.readBytes(id)), of: checksumOf },
+      batch: async () => this.fence(attempt),
+      admission: null,
+      clock: this.clock,
+      newId: () => this.mint('attempt'),
+      mayReplace: (stored) => this.replaceable(row, stored),
+    }, manifest, row.control.manifestHash, chain);
+    const head = finished.chain.at(-1);
+    if (!head) throw new BowerError('unknown', SAVE_FAILED);
+    await this.advance(attempt, head, this.clock());
+    const cache = this.cache.get(attempt.key);
+    if (cache) {
+      cache.chain = finished.chain;
+      cache.confirmed = true;
     }
-    const pre = await this.precheck(head, op);
-    if ('failure' in pre) return this.resolve(attempt, head, op, { operationId: op.operationId, state: 'rejected', failure: pre.failure });
-    const reused = await this.reused(manifest, op);
-    await this.hooks?.beforeDispatch?.({ runId: manifest.runId, attemptId: attempt.attemptId, epoch: attempt.epoch, ordinal: op.ordinal, effect: op.effect });
-    try {
-      await this.dispatch(attempt, head, op, dispatchId, pre.modifiedTime, reused);
-    } catch (e) {
-      // Refused inside the boundary before it passed: nothing was sent, so the outcome is an honest rejection.
-      if (notAsSeenReason(e) !== null && e instanceof BowerError) return this.resolve(attempt, head, op, { operationId: op.operationId, state: 'rejected', failure: { code: e.code, message: e.message } });
-      throw e;
-    }
-    const seen = await this.observe(head, op);
-    if (!seen) {
-      console.error(`Operation ${op.ordinal} of run ${manifest.runId} was sent and shows no effect`);
-      throw new BowerError('unknown', UNRESOLVED);
-    }
-    return this.resolve(attempt, head, op, { operationId: op.operationId, state: 'applied', evidence: seen });
   }
 
   /**
-   * A note a filing move goes beside without creating it (TL-P2-20 R4-2, Ratification 6): the place as captured
-   * and the key recomputed from the move's own file, checked again inside the boundary in the move's step.
+   * The run's operations, applied by the runner's engine (`runOperations`, `driveEffects`) over the fake Drive's
+   * adapter, under this attempt's claim: it reads the chain from the folder and goes on from it, one opening and one
+   * closing checkpoint per batch, each effect stamped and read back by that stamp after an interrupted attempt.
    */
-  private async reused(manifest: RunManifest, op: OperationV2): Promise<Reused | null> {
-    const place = reusedNoteOf(manifest, op);
-    if (!place || op.effect.kind !== 'move') return null;
-    return { file: place.file, key: await savedLinkKey(op.effect.before.fileId) };
-  }
-
-  private resolve(attempt: Attempt, head: Checkpoint, op: OperationV2, outcome: Outcome): Promise<Checkpoint> {
-    return this.commit(attempt, head, { outcomes: head.outcomes.map((o, i) => (i === op.ordinal ? outcome : o)) });
-  }
-
-  /** The id of an operation's parent: a captured folder, or the folder an applied earlier operation made. */
-  private parentOf(head: Checkpoint, op: OperationV2): string | null {
-    const e = op.effect;
-    if (e.kind === 'bin' || e.kind === 'write-runner-json' || e.kind === 'edit-text') return null;
-    if ('fileId' in e.parent) return e.parent.fileId;
-    const by = e.parent.createdBy;
-    const made = head.outcomes.find((o) => o.operationId === by);
-    return made?.state === 'applied' ? made.evidence.file.fileId : null;
-  }
-
-  /** Stored evidence that this very effect applied, or null. A lookalike without the create key never counts. */
-  private async observe(head: Checkpoint, op: OperationV2): Promise<EffectEvidence | null> {
-    const e = op.effect;
-    const parentId = this.parentOf(head, op);
-    if (e.kind === 'create-folder') {
-      if (!parentId) return null;
-      const made = (await this.drive.listAll(parentId)).filter((f) => f.parents[0] === parentId && f.folder && f.name === e.name && f.appProperties?.bowerItem === e.createKey);
-      const [only, ...more] = made;
-      if (!only || more.length) return null;
-      const ev = await this.drive.evidence(only.id);
-      return ev && shows(e, ev, parentId) ? toEvidence(ev) : null;
-    }
-    if (e.kind === 'create-text') {
-      // Ours only with its create key (TL-P2-17): a lookalike at that path never counts as this operation.
-      if (!parentId) return null;
-      const made = (await this.drive.listAll(parentId)).filter((f) => f.parents[0] === parentId && !f.folder && f.name === e.name && f.appProperties?.bowerItem === e.createKey);
-      const [only, ...more] = made;
-      if (!only || more.length) return null;
-      const ev = await this.drive.evidence(only.id);
-      return ev && shows(e, ev, parentId) ? toEvidence(ev, 'utf8') : null;
-    }
-    if (e.kind === 'edit-text') return this.readBack(e);
-    const ev = await this.drive.evidence(e.before.fileId);
-    if (!ev || !shows(e, ev, parentId)) return null;
-    return toEvidence(ev, e.kind === 'write-runner-json' ? 'utf8' : 'blob');
-  }
-
-  /**
-   * An edit read back (TL-P2-20 rule 5): the same file, out of the Bin, with
-   * exactly the edit's text is applied. The bytes it was planned on stay a
-   * possible effect, and anything else stays unresolved: neither is evidence.
-   */
-  private async readBack(e: EditText): Promise<EffectEvidence | null> {
-    const ev = await this.drive.evidence(e.before.fileId);
-    if (!ev) return null;
-    const bytes = ev.trashed ? new Uint8Array() : await this.drive.readBytes(e.before.fileId);
-    const read = await readBackEdit(e, { fileId: ev.file.id, name: ev.file.name, parents: ev.file.parents, trashed: ev.trashed, bytes });
-    if (read === 'applied' && ev.content?.size === e.content.size && ev.content.sha256 === e.content.sha256) return toEvidence(ev, 'utf8');
-    console.error(`The edit of ${e.path} reads back as ${read === 'applied' ? 'unresolved' : read}`);
-    return null;
-  }
-
-  /**
-   * What can be checked ahead of the boundary: what it depends on happened,
-   * its parent folder exists, and for the hashes the content it read (with
-   * the modified time that content was read at, checked again inside the
-   * boundary). Whether the source is still as seen is checked inside.
-   */
-  private async precheck(head: Checkpoint, op: OperationV2): Promise<{ failure: { code: 'conflict' | 'not-found'; message: string } } | { modifiedTime: string | null }> {
-    const e = op.effect;
-    // What it depends on must have happened: a pile folder whose things did not all go stays, and so do the hashes.
-    if (op.dependsOn.some((id) => head.outcomes.find((o) => o.operationId === id)?.state !== 'applied')) return { failure: { code: 'conflict', message: 'Some of its things stayed where they were, so it stays too.' } };
-    if (e.kind !== 'bin' && e.kind !== 'write-runner-json' && e.kind !== 'edit-text' && !this.parentOf(head, op)) return { failure: { code: 'not-found', message: NO_FOLDER } };
-    if (e.kind === 'edit-text') return this.precheckEdit(e);
-    if (e.kind !== 'write-runner-json') return { modifiedTime: null };
-    const ev = await this.drive.evidence(e.before.fileId);
-    if (!ev || ev.trashed || ev.content?.sha256 !== e.beforeContent.sha256) return { failure: { code: 'conflict', message: LIST_CHANGED } };
-    return { modifiedTime: ev.file.modifiedTime };
-  }
-
-  /**
-   * An edit's precondition (TL-P2-20 rules 1 and 4): one read gives the
-   * stored bytes' hash with their modifiedTime; the bytes must be the ones
-   * planned on, by the same name in the same place and out of the Bin, and
-   * `applyChanges` on them must give the edit's text again. The write then
-   * carries that read's modifiedTime, so a newer time with the same bytes
-   * before the read is no clash, and any change after it is refused inside
-   * the boundary.
-   */
-  private async precheckEdit(e: EditText): Promise<{ failure: { code: 'conflict' | 'not-found'; message: string } } | { modifiedTime: string }> {
-    const ev = await this.drive.evidence(e.before.fileId);
-    if (!ev || notAsSeen({ id: e.before.fileId, name: e.before.name, parents: e.before.parents }, { ...ev.file, trashed: ev.trashed }) !== null) return { failure: { code: 'conflict', message: NOT_AS_SEEN } };
-    if (ev.content?.size !== e.beforeContent.size || ev.content.sha256 !== e.beforeContent.sha256) return { failure: { code: 'conflict', message: NOTE_CHANGED } };
-    if ((await recheckEdit(e, await this.drive.readBytes(e.before.fileId))) !== 'ok') return { failure: { code: 'conflict', message: NOTE_CHANGED } };
-    return { modifiedTime: ev.file.modifiedTime };
-  }
-
-  /**
-   * Whether the stored source is still as the plan saw it, at the instant of the change (`notAsSeen`, the one check):
-   * the refusal, or null when it is.
-   */
-  private stillAsSeen(op: OperationV2, parentId: string, modifiedTime: string | null, peek: Peek, reused: Reused | null): BowerError | null {
-    const e = op.effect;
-    if (e.kind === 'create-folder' || e.kind === 'move' || e.kind === 'create-text') {
-      const parent = peek(parentId);
-      if (!parent || parent.trashed) return notAsSeenError('gone', NO_FOLDER, 'not-found');
-      if (e.kind === 'create-folder') return null;
-      // Any file or folder already at a made file's path is a lookalike, never overwritten (TL-P2-17).
-      if (e.kind === 'create-text') {
-        const taken = parent.children.some((id) => peek(id)?.file.name.toLowerCase() === e.name.toLowerCase());
-        return taken ? notAsSeenError('children', e.purpose === 'generated' ? NOTE_THERE : NAME_TAKEN) : null;
-      }
-    }
-    if (reused) {
-      // The note it is filed beside: still where and as it was captured, and still the note for this very link.
-      const note = peek(reused.file.fileId);
-      const why = notAsSeen({ id: reused.file.fileId, name: reused.file.name, parents: reused.file.parents }, storedNow(note))
-        ?? (note?.file.appProperties?.bowerItem === reused.key ? null : 'id');
-      if (why) return notAsSeenError(why, NOTE_NOT_AS_SEEN);
-    }
-    // A move or a Bin by the name and place it read; a content write with the modifiedTime its precheck read too.
-    const content = e.kind === 'write-runner-json' || e.kind === 'edit-text';
-    const seen: SeenExpectation = {
-      id: e.before.fileId,
-      name: e.before.name,
-      parents: e.before.parents,
-      ...(content ? { modifiedTime: modifiedTime ?? '' } : {}),
-      ...(e.kind === 'bin' ? { children: e.capturedChildIds } : {}),
+  private async apply(attempt: Attempt, manifest: RunManifest): Promise<void> {
+    const row = this.row(attempt.key);
+    const drive = new FakeRunDrive(this.drive, () => this.check(attempt));
+    const effects = driveEffects(drive);
+    const hooked: Effects = {
+      ...effects,
+      apply: (op, head, w, m, sending) => effects.apply(op, head, w, m, async () => {
+        await sending();
+        await this.hooks?.beforeDispatch?.({ runId: manifest.runId, attemptId: attempt.attemptId, epoch: attempt.epoch, ordinal: op.ordinal, effect: op.effect });
+      }),
     };
-    const why = notAsSeen(seen, storedNow(peek(e.before.fileId)));
-    if (!why) return null;
-    const message = why === 'children' ? ARRIVED : why !== 'modified' ? NOT_AS_SEEN : e.kind === 'write-runner-json' ? LIST_CHANGED : NOTE_CHANGED;
-    return notAsSeenError(why, message);
+    // The control row follows the chain as it grows, in order: a recovery reads it from the folder all the same.
+    let heads = Promise.resolve();
+    const end = await runOperations({
+      rootId: row.binding.rootId,
+      runId: manifest.runId,
+      attempt: attempt.epoch,
+      records: new RunRecords(drive.reads(), row.binding.rootId, this.placed),
+      batch: async () => drive.fenced(),
+      fenced: () => drive.fenced(),
+      effects: hooked,
+      plan: () => Promise.reject(new BowerError('unknown', SAVE_FAILED)),
+      clock: this.clock,
+      newId: () => this.mint('attempt'),
+      onChain: (chain) => {
+        const cache = this.cache.get(attempt.key);
+        if (cache) cache.chain = chain;
+        const last = chain.at(-1);
+        const at = this.clock();
+        if (last) heads = heads.then(() => this.advance(attempt, last, at));
+      },
+    });
+    await heads;
+    if (end.state === 'failed') {
+      console.error(end.why);
+      throw new BowerError('unknown', SAVE_FAILED);
+    }
   }
 
-  /**
-   * Sends one effect through the boundary. Inside it, in one step with the
-   * change: the claim, the source still as seen, then the dispatch is marked
-   * as passed (kept with the rows) and only then applied.
-   */
-  private async dispatch(attempt: Attempt, head: Checkpoint, op: OperationV2, dispatchId: string, modifiedTime: string | null, reused: Reused | null): Promise<void> {
-    const row = this.row(attempt.key);
-    const e = op.effect;
-    const parentId = this.parentOf(head, op) ?? '';
-    const w = this.drive.fenced((peek) => {
-      this.check(attempt);
-      const refused = this.stillAsSeen(op, parentId, modifiedTime, peek, reused);
-      if (refused) throw refused;
-      if (!row.crossed.includes(dispatchId)) row.crossed.push(dispatchId);
-      this.changed();
-    });
-    switch (e.kind) {
-      case 'move': {
-        const from = e.before.parents[0];
-        await w.update(e.before.fileId, {
-          ...(e.name !== e.before.name ? { name: e.name } : {}),
-          ...(parentId !== from ? { addParent: parentId, ...(from ? { removeParent: from } : {}) } : {}),
-          appProperties: { ...e.properties },
-        });
-        return;
-      }
-      case 'create-folder':
-        await w.createFolder(parentId, e.name, { bowerItem: e.createKey });
-        return;
-      case 'bin':
-        await w.trash(e.before.fileId);
-        return;
-      case 'write-runner-json':
-        await w.writeText(e.before.fileId, e.text, modifiedTime ?? e.before.modifiedTime);
-        return;
-      case 'edit-text':
-        // Only after precheckEdit, with the modifiedTime of the read it checked.
-        if (modifiedTime === null) throw new BowerError('unknown', UNRESOLVED);
-        await w.writeText(e.before.fileId, e.text, modifiedTime);
-        return;
-      case 'create-text':
-        // A generated note is stamped as Bower's, new, and with its create key at creation (TL-P2-17); a runner file
-        // made again (TL-P2-33 §2a) only with its create key. Either way a lost reply is found again by that key.
-        await w.createText(parentId, e.name, e.text, e.purpose === 'generated' ? { by: 'bower', bowerNew: '1', bowerItem: e.createKey } : { bowerItem: e.createKey });
-        return;
-    }
+  /** The control row's head moves to a checkpoint the engine wrote at `at`, while this attempt holds the claim. */
+  private async advance(attempt: Attempt, head: Checkpoint, at: number): Promise<void> {
+    const hash = (await canonical(head)).hash;
+    const row = this.rows.get(attempt.key);
+    if (row?.control.claim?.attemptId !== attempt.attemptId || row.control.head === hash) return;
+    row.control.head = hash;
+    row.control.statusRevision++;
+    row.control.claim.expiresAt = at + CLAIM_MS;
+    this.changed();
   }
 
   /**
@@ -722,10 +500,8 @@ export class FakeRunService {
     if (!cache) throw new BowerError('unknown', SAVE_FAILED);
     await this.records(attempt.key).putNew(this.fence(attempt, expected), { runId: next.runId }, checkpointName(next.revision, c.hash), c.text);
     this.check(attempt, expected);
-    const pending = next.outcomes.find((o) => o.state === 'possible-effect');
     row.control.head = c.hash;
     row.control.statusRevision++;
-    row.control.outstandingDispatch = pending?.state === 'possible-effect' ? { operationId: pending.operationId, dispatchId: pending.dispatchId, epoch: attempt.epoch } : null;
     if (row.control.claim) row.control.claim.expiresAt = this.clock() + CLAIM_MS;
     cache.chain = [...cache.chain, next];
     this.changed();
@@ -843,7 +619,14 @@ export class FakeRunService {
     if (cache && !fresh && cache.manifest.runId === row.control.runId) return cache;
     const records = this.records(key);
     const manifest = await records.manifest(row.control.runId, row.control.manifestHash);
-    const chain = await records.chain(manifest, row.control.manifestHash, row.control.head);
+    // The folder is the authority (as for the runner): the chain up to its last checkpoint, whoever wrote it.
+    const found = await records.found(row.control.runId);
+    if (found.kind !== 'run' || found.manifestHash !== row.control.manifestHash || found.head === null) {
+      console.error(found.kind === 'broken' ? found.why : `Run ${row.control.runId} has no chain of its own`);
+      throw new BowerError('unknown', READ_FAILED);
+    }
+    const { chain } = found;
+    row.control.head = found.head;
     const kept = this.cache.get(key);
     const same = kept?.manifest.runId === row.control.runId;
     this.cache.set(key, { manifest, chain, confirmed: same ? kept.confirmed : false, notBefore: same ? kept.notBefore : 0, failures: same ? kept.failures : 0 });
@@ -921,7 +704,6 @@ function isState(v: unknown): v is { v: 1; seq: number; revoked: string[]; rows:
     const c = r.control as Record<string, unknown> | null;
     return !!b && text(b.account) && text(b.rootId) && !!c && text(c.runId) && text(c.requestId) && text(c.manifestHash) && text(c.head)
       && count(c.statusRevision) && count(r.lastEpoch) && (r.viewBefore === null || text(r.viewBefore))
-      && Array.isArray(r.crossed) && r.crossed.every(text)
       && (r.admitted === undefined || (Array.isArray(r.admitted) && r.admitted.every(text)));
   };
   return s.v === 1 && count(s.seq) && Array.isArray(s.revoked) && s.revoked.every(text)

@@ -18,7 +18,9 @@ import { B_FAILURE, CLAIM_MS, FakeRunService, RETRY_MS, type DispatchAt, type Fa
 import type { FaultAction, FencedCall } from '../drive/fake-drive';
 import { MANIFEST_V2_LIMIT, type EditText, type Manifest, type ManifestV2, type OperationV2, type ReportContribution } from '../contracts/run-manifest';
 import { EDIT_FILE_LIMIT, savedLinkKey } from '../contracts/note-edit';
-import { canonical, grounded, groundedKeys } from './fake-run-records';
+import { grounded, groundedKeys } from '../spine/grounded';
+import { canonical } from '../spine/records';
+import { stampOf } from '../spine/engine';
 import type { Checkpoint, ReportRecord } from '../contracts/run-checkpoint';
 import { parsePileDisposition } from '../contracts/pile-disposition';
 import type { Declaration } from '../contracts/pile-declaration';
@@ -30,7 +32,7 @@ import { pretendDrive, pretendRuns } from './pretend';
 import { SET_ASIDE_TEXT } from '../pile-readiness';
 import * as runner from './fake-runner';
 import * as runManifest from '../contracts/run-manifest';
-import * as runRecords from './fake-run-records';
+import * as runRecords from '../spine/grounded';
 import { beforeUpload } from '@/testing/upload-hook';
 
 afterEach(() => vi.useRealTimers());
@@ -455,6 +457,18 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       return action;
     };
   };
+  /**
+   * `match`'s write lands and its answer is lost, and the read-back right after it fails too: the attempt stops there,
+   * as a runner killed after the write would (TL-P3-28), and a later attempt reads it back by its stamp.
+   */
+  const stopsAfter = (drive: FakeDrive, match: (call: FencedCall) => boolean): Rule => {
+    const lose = once(match, 'lose-reply');
+    return (call) => {
+      const action = lose(call);
+      if (action) drive.failNext('unknown');
+      return action;
+    };
+  };
   const textOf = (call: FencedCall): string | null => (call.op === 'create-text' || call.op === 'write-text' ? call.text : null);
   const isView = (w: { drive: FakeDrive; rootId: string }, call: FencedCall, phase?: 'done' | 'failed'): boolean => {
     const text = call.op === 'create-text' && call.name === 'last-run.json' ? call.text : call.op === 'write-text' && w.drive.pathOf(call.id, w.rootId) === SYSTEM.lastRun ? call.text : null;
@@ -706,12 +720,12 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     expect(again.finishedAt).toBeUndefined();
     expect(viewOf(w)).toBeNull();
 
-    // Durably done: the head is the done checkpoint and its report record is saved.
+    // Effects done, report pending, its report record saved: done is committed only once the view is read back.
     const head = (await checkpointsOf(w, admitted.id)).at(-1);
-    expect(head).toMatchObject({ phase: 'done', report: { state: 'published' } });
+    expect(head).toMatchObject({ phase: 'saving', report: { state: 'pending' } });
     const reports = await reportsOf(w);
     expect(reports).toHaveLength(1);
-    expect(head?.report.state === 'published' ? head.report.reportHash : null).toBe(reports[0]?.hash);
+    expect(head?.report.state === 'pending' ? head.report.reportHash : null).toBe(reports[0]?.hash);
     expect(bowerErrors(w).length).toBeGreaterThan(0);
     await expectFiledOnce(w);
   });
@@ -733,12 +747,13 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const done = (await checkpointsOf(w, admitted.id)).find((c) => c.phase === 'done');
     expect(status).toMatchObject({ id: admitted.id, phase: 'done', finishedAt: done?.phaseAt });
 
-    // Only the view was written; no record, place or byte of your folders changed.
+    // Only the view, then the done checkpoint, were written; no other record, place or byte of your folders changed.
     const fresh = w.applied.slice(seen);
-    expect(fresh.map((c) => c.op)).toEqual(['create-text']);
-    expect(fresh.every((c) => isView(w, c, 'done'))).toBe(true);
+    expect(fresh.map((c) => c.op)).toEqual(['create-text', 'create-text']);
+    expect(isView(w, fresh[0] ?? { op: 'trash', id: '' }, 'done')).toBe(true);
+    expect(fresh[1]?.op === 'create-text' && fresh[1].name.startsWith('checkpoint-')).toBe(true);
     expect(await domain(w.drive, w.rootId)).toBe(rest);
-    expect(await recordsOf(w)).toEqual(records);
+    expect((await recordsOf(w)).filter((r) => !r.name.startsWith('checkpoint-'))).toEqual(records.filter((r) => !r.name.startsWith('checkpoint-')));
 
     // The screens read the very report that was saved, and the first client sees the same run.
     const [report] = await reportsOf(w);
@@ -772,10 +787,11 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const worker = new FakeWorker({ drive, scenario: 'first', rootId: w.rootId, runs, fresh: false });
     const status = await after(worker, runs);
     expect(status).toMatchObject({ id: admitted.id, phase: 'done' });
-    expect(applied.map((c) => c.op)).toEqual(['create-text']);
+    // The view, then the done checkpoint.
+    expect(applied.map((c) => c.op)).toEqual(['create-text', 'create-text']);
     const reloaded = { drive, rootId: w.rootId };
     expect(await domain(drive, w.rootId)).toBe(rest);
-    expect(await recordsOf(reloaded)).toEqual(records);
+    expect((await recordsOf(reloaded)).filter((r) => !r.name.startsWith('checkpoint-'))).toEqual(records.filter((r) => !r.name.startsWith('checkpoint-')));
     expect(viewOf(reloaded)?.run).toMatchObject({ id: admitted.id, phase: 'done', report: (await reportsOf(reloaded))[0]?.body.report });
     for (const id of w.sources) {
       expect(movesOf(w, id)).toBe(1);
@@ -818,7 +834,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
   it('reconciles a lost move reply without moving it again', async () => {
     const w = await bWorld();
     const lost = w.sources[0] ?? '';
-    w.rules.push(once(isMoveOf(lost), 'lose-reply'));
+    w.rules.push(stopsAfter(w.drive, isMoveOf(lost)));
     const admitted = (await w.worker.process('all')).run;
     await w.runs.settled();
     expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'saving' });
@@ -976,13 +992,13 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     }
     expect([...piles].sort()).toEqual(declarations.map((d) => d.pileId).sort());
 
-    // Every disposition landed before the done checkpoint, and the done checkpoint before the view.
+    // Every disposition landed before the view, and the view before the done checkpoint (the runner's barrier).
     const order = w.applied.map((c) => (c.op === 'create-text' ? c.name : c.op === 'write-text' && isView(w, c) ? 'last-run.json' : ''));
     const done = order.findIndex((n) => n.startsWith('checkpoint-') && (JSON.parse(textOf(w.applied[order.indexOf(n)] ?? { op: 'trash', id: '' }) ?? '{}') as Checkpoint).phase === 'done');
     const lastDisposition = order.reduce((at, n, i) => (n.startsWith('disposition-') ? i : at), -1);
     expect(lastDisposition).toBeGreaterThan(-1);
-    expect(done).toBeGreaterThan(lastDisposition);
-    expect(order.indexOf('last-run.json')).toBeGreaterThan(done);
+    expect(order.indexOf('last-run.json')).toBeGreaterThan(lastDisposition);
+    expect(done).toBeGreaterThan(order.indexOf('last-run.json'));
     await expectFiledOnce(w);
   });
 
@@ -1059,36 +1075,35 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const rest = await domain(w.drive, w.rootId);
 
     w.clock.later();
+    const status = await after(w.worker, w.runs);
     const done = (await checkpointsOf(w, admitted.id)).find((c) => c.phase === 'done');
-    expect(await after(w.worker, w.runs)).toMatchObject({ id: admitted.id, phase: 'done', finishedAt: done?.phaseAt });
+    expect(status).toMatchObject({ id: admitted.id, phase: 'done', finishedAt: done?.phaseAt });
     expect(viewOf(w)?.run).toMatchObject({ id: admitted.id, phase: 'done', report: (await reportsOf(w))[0]?.body.report });
     expect(await domain(w.drive, w.rootId)).toBe(rest);
     await expectFiledOnce(w);
   });
 
-  it('keeps a dispatch that passed the boundary and shows no effect unresolved, never sending it again', async () => {
+  it('keeps a landed move the person undid before its read-back as they left it, never sending it again', async () => {
     const w = await bWorld();
     const lost = w.sources[0] ?? '';
-    w.rules.push(once(isMoveOf(lost), 'lose-reply'));
+    w.rules.push(stopsAfter(w.drive, isMoveOf(lost)));
     const admitted = (await w.worker.process('all')).run;
     await w.runs.settled();
-    // The move landed, then the file went back where it was: the effect no longer shows.
+    expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'saving' });
+    // The move landed, then the file went back where it was: its stamp still says the move was Bower's.
     const inbox = (await w.drive.listAll(w.rootId)).filter((f) => f.folder && w.drive.pathOf(f.id, w.rootId).startsWith('Inbox/'));
     const [manifest] = await manifestsOf(w);
     const before = manifest?.capture.members.find((m) => m.file.fileId === lost)?.file;
     const now = await w.drive.get(lost);
     expect(inbox.some((f) => f.id === before?.parents[0])).toBe(true);
     await w.drive.update(lost, { name: before?.name ?? '', addParent: before?.parents[0] ?? '', removeParent: now.parents[0] ?? '' });
-    w.errors.mockClear();
-    const records = await recordsOf(w);
 
-    for (let i = 0; i < 3; i++) {
-      w.clock.later();
-      expect(await after(w.worker, w.runs)).toMatchObject({ id: admitted.id, phase: 'saving' });
-    }
+    w.clock.later();
+    expect(await after(w.worker, w.runs)).toMatchObject({ id: admitted.id, phase: 'done' });
     expect(w.calls.filter(isMoveOf(lost))).toHaveLength(1);
-    expect(await recordsOf(w)).toEqual(records);
-    expect(bowerErrors(w).length).toBeGreaterThan(0);
+    expect((await w.drive.get(lost)).parents).toEqual(before?.parents);
+    const op = manifest?.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === lost && !('fileId' in o.effect.parent && o.effect.parent.fileId === o.effect.before.parents[0]));
+    expect((await checkpointsOf(w, admitted.id)).at(-1)?.outcomes.find((o) => o.operationId === op?.operationId)?.state).toBe('applied');
   });
 
   it('never reuses an epoch after the service is restored', async () => {
@@ -1611,7 +1626,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const made = lines.find((l) => l.rec.kind === 'create');
       const asked = lines.find((l) => l.rec.kind === 'request');
       if (!made || !asked) throw new Error('missing journal lines');
-      w.rules.push(once(isWriteOf(w, SYSTEM.requests), 'lose-reply'), once(isMoveOf(made.file.id), 'lose-reply'));
+      w.rules.push(stopsAfter(w.drive, isWriteOf(w, SYSTEM.requests)), once(isMoveOf(made.file.id), 'lose-reply'));
       const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
       expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'saving' });
@@ -2162,7 +2177,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const createKey = create?.effect.kind === 'create-text' ? create.effect.createKey : '';
       const text = m.drive.dump(m.rootId).get(RULES) ?? '';
       // With the MD5 of the very text it sent (TL-P4-10).
-      expect(files[0]?.appProperties).toEqual({ by: 'bower', bowerNew: '1', bowerItem: createKey });
+      expect(files[0]?.appProperties).toEqual({ by: 'bower', bowerNew: '1', bowerItem: createKey, bowerOp: stampOf(made.id, create?.operationId ?? '') });
       expect(text).toContain('by: bower');
       // Newest first, and the count is what the made file holds.
       expect(parseRules(text).map((r) => r.yourWords)).toEqual([RECEIPTS_RULE, LEASE_RULE]);
@@ -3521,7 +3536,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         expect(w.calls.filter(isCreateOf(op.effect.name)), op.effect.name).toHaveLength(1);
         const made = (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && f.name === op.effect.name);
         expect(made, op.effect.name).toHaveLength(1);
-        expect(made[0]?.appProperties).toEqual({ by: 'bower', bowerNew: '1', bowerItem: op.effect.createKey });
+        expect(made[0]?.appProperties).toEqual({ by: 'bower', bowerNew: '1', bowerItem: op.effect.createKey, bowerOp: stampOf(admitted.id, op.operationId) });
         expect(w.drive.dump(w.rootId).get(w.drive.pathOf(made[0]?.id ?? '', w.rootId))).toBe(op.effect.text);
       }
       expect(w.drive.dump(w.rootId).get(`Resources/Ideas/${WORDS}.md`)).toBe('Alex wrote this one.');
@@ -3538,11 +3553,13 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     it('a lookalike note at the planned place is never taken as ours: the words stay in the inbox', async () => {
       let drive: FakeDrive | null = null;
       let ideas = '';
+      let made = false;
       const hooks: Hooks = {
         beforeDispatch: async (at) => {
-          if (!drive || at.effect.kind !== 'create-text' || at.effect.name !== `${WORDS} (2).md`) return;
-          // Alex makes a note with that very name after Bower planned it.
-          await drive.createText(ideas, at.effect.name, 'Alex got there first.');
+          if (!drive || made || (at.effect.kind === 'create-text' && at.effect.name === `${WORDS} (2).md`)) return;
+          // Alex makes a note with that very name after Bower planned it, while the run goes and before Bower makes its own.
+          made = true;
+          await drive.createText(ideas, `${WORDS} (2).md`, 'Alex got there first.');
         },
       };
       const w = await generating({ hooks });
@@ -3563,12 +3580,15 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     it("a thing filed without its note says Bower couldn't write its note", async () => {
       let drive: FakeDrive | null = null;
       let rootId = '';
+      let made = false;
       const hooks: Hooks = {
         beforeDispatch: async (at) => {
-          if (!drive || at.effect.kind !== 'create-text' || at.effect.name !== 'Industrial Designer, Ferrowick.md') return;
-          // Alex makes a note with that very name after Bower planned it: Bower's is not written.
+          if (!drive || made || (at.effect.kind === 'create-text' && at.effect.name === 'Industrial Designer, Ferrowick.md')) return;
+          // Alex makes a note with that very name after Bower planned it, before Bower makes its own: Bower's is not written.
           const folder = (await drive.listAll(rootId)).find((f) => f.folder && drive?.pathOf(f.id, rootId) === 'Projects/Job hunt/Applications');
-          await drive.createText(folder?.id ?? '', at.effect.name, 'Alex got there first.');
+          if (!folder) return;
+          made = true;
+          await drive.createText(folder.id, 'Industrial Designer, Ferrowick.md', 'Alex got there first.');
         },
       };
       const w = await generating({ hooks });
@@ -3857,7 +3877,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await w.uploader.addPile({ text: words, items: [] });
       await w.uploader.settled();
       const isWords = (call: FencedCall): boolean => call.op === 'create-text' && call.name === `${words}.md`;
-      w.rules.push(once(isWords, 'lose-reply'));
+      w.rules.push(stopsAfter(w.drive, isWords));
       const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
       expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'saving' });
@@ -4057,10 +4077,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await expectFiledOnce(w);
     });
 
-    // Rule 4: the precondition is the content hash of one read plus stillAsSeen (name and place); the write carries
-    // the modifiedTime of that read. A newer modifiedTime with the same bytes before that read is no clash; any change
-    // after it, even to the same bytes, is.
-    it('goes ahead when only the modified time changed before its read, and refuses any change after it', async () => {
+    // Rule 4, as the runner applies it (`spine/engine.ts`): the bytes read must be the planned ones, and the write
+    // carries the modifiedTime the plan read, so any change since the plan, even to the same bytes, is a clash.
+    it('refuses an edit when the note changed since the plan read it, even only its modified time', async () => {
       const ahead = acting();
       const w = await bWorld({ hooks: ahead.hooks });
       const flat = await hub(w, FLAT, FLAT_BEFORE);
@@ -4077,9 +4096,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const [edit] = editsOf(manifest);
       expect(touched).not.toBe('');
       expect(touched).not.toBe(edit?.effect.before.modifiedTime);
-      expect(writesTo(w.applied, flat.id)).toEqual([expect.objectContaining({ ifModified: touched, text: edit?.effect.text })]);
-      expect(textAt(w, FLAT)).toBe(edit?.effect.text);
-      expect(await outcomeOf(w, admitted.id, edit)).toMatchObject({ state: 'applied' });
+      expect(writesTo(w.applied, flat.id)).toEqual([]);
+      expect(textAt(w, FLAT)).toBe(FLAT_BEFORE);
+      expect(await outcomeOf(w, admitted.id, edit)).toMatchObject({ state: 'rejected', failure: { code: 'conflict' } });
 
       const after = acting();
       const v = await bWorld({ hooks: after.hooks });
@@ -4133,7 +4152,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
       const v = await bWorld();
       const late = await hub(v, FLAT, FLAT_BEFORE);
-      v.rules.push(once((call) => call.op === 'write-text' && call.id === late.id, 'lose-reply'));
+      v.rules.push(stopsAfter(v.drive, (call) => call.op === 'write-text' && call.id === late.id));
       const cut = (await v.worker.process('all')).run;
       await v.runs.settled();
       expect((await v.worker.status()).run).toMatchObject({ id: cut.id, phase: 'saving' });
@@ -4147,13 +4166,13 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await expectOneLine(back, late.id, cut.id);
     });
 
-    it('reads a lost reply back: its text is applied once, the old bytes stay possible, anything else stays unresolved', async () => {
+    it('reads a lost reply back by its stamp: its text is applied once, and what the person wrote since is kept', async () => {
       const isWrite = (id: string) => (call: FencedCall): boolean => call.op === 'write-text' && call.id === id;
       /** A run whose write of the Flat hunt note lands and loses its reply; `meanwhile` acts before the recovery. */
       async function lost(meanwhile?: (w: World, id: string) => Promise<void>) {
         const w = await bWorld();
         const flat = await hub(w, FLAT, FLAT_BEFORE);
-        w.rules.push(once(isWrite(flat.id), 'lose-reply'));
+        w.rules.push(stopsAfter(w.drive, isWrite(flat.id)));
         const admitted = (await w.worker.process('all')).run;
         await w.runs.settled();
         expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'saving' });
@@ -4165,7 +4184,6 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         const [manifest] = await manifestsV2(w);
         return { w, flat, admitted, edit: editsOf(manifest)[0] };
       }
-      const reads = (w: World, state: string): boolean => w.errors.mock.calls.some((c) => String(c[0]).includes(`reads back as ${state}`));
 
       const applied = await lost();
       expect((await applied.w.worker.status()).run).toMatchObject({ id: applied.admitted.id, phase: 'done' });
@@ -4181,12 +4199,12 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const before = await lost((w, id) => back(w, id, FLAT_BEFORE));
       const other = FLAT_BEFORE.replace('Three flats so far.', 'Four flats, says Alex.');
       const elsewhere = await lost((w, id) => back(w, id, other));
-      for (const [run, text, state] of [[before, FLAT_BEFORE, 'possible-effect'], [elsewhere, other, 'unresolved']] as const) {
-        expect((await run.w.worker.status()).run).toMatchObject({ id: run.admitted.id, phase: 'saving' });
+      // The write landed (its stamp is on the note), so it is applied and never sent again; the person's text stays.
+      for (const [run, text] of [[before, FLAT_BEFORE], [elsewhere, other]] as const) {
+        expect((await run.w.worker.status()).run).toMatchObject({ id: run.admitted.id, phase: 'done' });
         expect(writesTo(run.w.calls, run.flat.id)).toHaveLength(1);
         expect(textAt(run.w, FLAT)).toBe(text);
-        expect(await outcomeOf(run.w, run.admitted.id, run.edit)).toMatchObject({ state: 'possible-effect' });
-        expect(reads(run.w, state)).toBe(true);
+        expect(await outcomeOf(run.w, run.admitted.id, run.edit)).toMatchObject({ state: 'applied' });
       }
     });
 
@@ -4413,7 +4431,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
     it('reconciles a lost create reply by its key, ending with one note', async () => {
       const { w, link } = await linkWorld();
-      w.rules.push(once((c) => c.op === 'create-text' && c.name === NOTE_NAME, 'lose-reply'));
+      w.rules.push(stopsAfter(w.drive, (c) => c.op === 'create-text' && c.name === NOTE_NAME));
       const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
       expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'saving' });
@@ -4463,7 +4481,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(viewOf(w)?.run.report?.created.map((c) => c.path)).not.toContain(NOTE);
     });
 
-    it('checks a reused note again in the same step as the move, and sets the link aside when it is no longer the one', async () => {
+    it('checks a reused note again before the move, and sets the link aside when it is no longer the one', async () => {
       const { w, act, link } = await linkWorld();
       act.at = async (at) => {
         if (!isLinkMove(link.id)(at) || act.at === null) return;
@@ -4473,9 +4491,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await tidy(w);
       await w.drive.update(link.id, { name: link.name });
       const [note] = await notesOf(w);
-      // Right before the move is sent, the note loses Bower's key for this link: the move is refused, nothing else.
+      // While the run goes, before the move's checks, the note loses Bower's key for this link: the move is refused, nothing else.
       act.at = async (at) => {
-        if (!isLinkMove(link.id)(at) || act.at === null) return;
+        if (isLinkMove(link.id)(at) || act.at === null) return;
         act.at = null;
         await w.drive.update(note?.id ?? '', { appProperties: { bowerItem: null } });
       };
@@ -4662,7 +4680,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
     it('reconciles a lost rewrite reply by reading it back, writing it once', async () => {
       const { w, files } = await renamed();
-      w.rules.push(once((c) => c.op === 'write-text' && c.id === files.weekend.id, 'lose-reply'));
+      w.rules.push(stopsAfter(w.drive, (c) => c.op === 'write-text' && c.id === files.weekend.id));
       const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
       expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'saving' });

@@ -6,7 +6,7 @@
  * 2. Before any write, the folder is checked for this run's report (`last-run.json` showing it done): a run whose
  *    report already landed is not repeated. It reads the report back, commits `done` to its chain (when a runner
  *    stopped before that), then reports `done` (worker contract, "Runner wire").
- * 3. Spine: the operations, each behind a checkpoint (`spine/run.ts`); `writing` is reported first. A new run
+ * 3. Spine: the operations, a batch between two checkpoints (the engine, `src/data/spine/engine.ts`); `writing` is reported first. A new run
  *    repairs the old template's `Rules.md` (`rules-repair.ts`) just before it plans.
  * 4. Barrier: once every operation is settled, "effects done, report pending" is committed to the chain, and only
  *    then, when the chain holds an applied effect, is `saving` reported. The report is saved and read back
@@ -32,7 +32,7 @@
  *
  * The provider (what the run plans from what it took) and the effects (how an operation reaches Drive) are handed
  * in to `runTidy`; `main`, the process on GitHub Actions, hands in the provider `BOWER_PROVIDER` names (scripted by
- * default) and the real Drive effects (`effects.ts`), so a run there really changes the folder. Injected effects
+ * default) and the real Drive effects (`driveEffects` over this adapter), so a run there really changes the folder. Injected effects
  * are for tests only.
  */
 import type { Pacing } from '../../src/data/drive/transport';
@@ -46,16 +46,15 @@ import { B_FAILURE } from '../../src/data/spine/scripted';
 import { BowerError } from '../../src/data/types';
 import { RunRecords } from '../../src/data/spine/records';
 import type { ItemDisposition } from '../../src/data/spine/report';
-import { shownDone, type Checksum } from '../../src/data/spine/barrier';
+import { finishRun, shownDone, type Checksum } from '../../src/data/spine/barrier';
 import { RunnerDrive } from './drive';
 import { RunnerStatus } from './status';
 import { NO_LONGER_ALLOWED, RunnerToken, isGone, isStaleAttempt } from './token';
-import { admittedPlan, runOperations, type Effects } from './spine/run';
-import { POOL } from './spine/schedule';
-import { driveEffects } from './effects';
+import { driveEffects, runOperations, type Effects } from '../../src/data/spine/engine';
+import { POOL } from '../../src/data/spine/schedule';
+import { admittedPlan } from './spine/admitted';
 import type { ClaudeSpawn } from './claude';
 import { providerFor, providerNamed, type ProviderName } from './provider';
-import { finishRun } from './spine/barrier';
 import { runnerReads } from './spine/records';
 import { repairRules } from './rules-repair';
 import { RunTiming } from './timing';

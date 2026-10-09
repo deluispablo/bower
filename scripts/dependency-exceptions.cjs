@@ -7,9 +7,6 @@
  */
 module.exports = {
   KNOWN: [
-    // The fake run service becomes only a Drive adapter; the shared engine owns these records.
-    { from: 'runner/src/effects.ts', to: ['src/data/fake/fake-run-records.ts'], entry: 'c2-one-engine' },
-    { from: 'src/data/spine/scripted.ts', to: ['src/data/fake/fake-run-records.ts'], entry: 'c2-one-engine' },
     // The live path imports no demo fixture.
     { from: 'src/data/spine/scripted.ts', to: ['src/data/demo/fixture.ts'], entry: 'c3-planner-split' },
   ],

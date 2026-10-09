@@ -12,8 +12,7 @@ import { SYSTEM, isRunnerFile } from '../../src/data/vault/layout';
 import { B_FAILURE } from '../../src/data/spine/scripted';
 import { runTidy, type TidyEnd, type TidyOptions } from '../src/main';
 import type { Admitted } from '../src/spine/admitted';
-import type { Effects, ReadBack, Settled } from '../src/spine/run';
-import { driveEffects } from '../src/effects';
+import { driveEffects, type Effects, type ReadBack, type Settled } from '../../src/data/spine/engine';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 
 const AT = Date.UTC(2026, 9, 7, 9);

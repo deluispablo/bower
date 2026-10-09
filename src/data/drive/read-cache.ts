@@ -9,8 +9,10 @@
  * - **Single flight.** A file asked for again while its read is on its way shares that read (request coalescing).
  * - **One version per id.** A newer modifiedTime replaces the one kept; an older one (a caller still on an older
  *   listing) is read and not kept. A read that fails is not kept, so the next ask reads again.
- * - **Never a fence.** A write's check reads Drive itself, right before the send (`stillAsSeen`, the runner's fence and
- *   the transport's `ifModified`); nothing here stands in for that read.
+ * - **Never a fence, but for the runner's own records.** A write's check reads Drive itself, right before the send
+ *   (`stillAsSeen`, the runner's fence and the transport's `ifModified`). The one read that stands in for it is a
+ *   record folder the runner made, kept by the version its create answered (`keep`), while that is the latest
+ *   version the runner saw.
  */
 
 /** A file as a listing gave it: its id and modifiedTime (undefined when no listing shows it; then it is not kept). */
@@ -19,7 +21,7 @@ export interface Version {
   readonly modifiedTime: string | undefined;
 }
 
-type Kind = 'text' | 'bytes' | 'digest';
+type Kind = 'text' | 'bytes' | 'digest' | 'file';
 
 export class ReadCache {
   private readonly kept = new Map<string, { modifiedTime: string; reads: Map<Kind, Promise<unknown>> }>();
@@ -41,6 +43,17 @@ export class ReadCache {
   keptText(v: Version): Promise<string> | undefined {
     const entry = this.kept.get(v.id);
     return entry && entry.modifiedTime === v.modifiedTime ? (entry.reads.get('text') as Promise<string> | undefined) : undefined;
+  }
+
+  /** A file's metadata, under the version it shows (a folder the runner made or read). */
+  keep<T extends Version>(file: T): void {
+    this.once('file', file, () => Promise.resolve(file));
+  }
+
+  /** The file kept for this version by `made`. */
+  keptFile<T>(v: Version): Promise<T> | undefined {
+    const entry = this.kept.get(v.id);
+    return entry && entry.modifiedTime === v.modifiedTime ? (entry.reads.get('file') as Promise<T> | undefined) : undefined;
   }
 
   /** Text this page wrote, under the version Drive's answer gave. */

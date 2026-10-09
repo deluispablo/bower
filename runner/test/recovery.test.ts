@@ -14,10 +14,9 @@ import { fakeRead } from '../../src/data/spine/read';
 import { RunRecords } from '../../src/data/spine/records';
 import { MOVED_AWAY } from '../../src/data/spine/report';
 import { SYSTEM } from '../../src/data/vault/layout';
-import { STAMP, driveEffects, stampOf } from '../src/effects';
 import { runTidy, type TidyEnd } from '../src/main';
 import { providerFor } from '../src/provider';
-import type { Effects } from '../src/spine/run';
+import { STAMP, driveEffects, stampOf, type Effects } from '../../src/data/spine/engine';
 import { RunnerToken, isStaleAttempt } from '../src/token';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 
@@ -552,6 +551,31 @@ describe('recovery without the browser', () => {
     expect([...changed].sort()).toEqual(['bin', 'move']);
     expect((await drive.get(outside.get('move') ?? '')).name).toBe('Person renamed.pdf');
     expect((await drive.evidence(outside.get('bin') ?? ''))?.trashed).toBe(false);
+  });
+
+  it('a create into a folder binned since the run read it is refused', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const w = await world();
+    // Right before the first create into a folder this run made, the person puts that folder in the Bin.
+    let binned: string | null = null;
+    const end = await tidy(w, 1, {
+      afterIntent: async (op) => {
+        const e = op.effect;
+        if (binned !== null || (e.kind !== 'create-folder' && e.kind !== 'create-text') || 'fileId' in e.parent) return;
+        const found = await new RunRecords(w.wire.drive, w.root).found(RUN_ID);
+        const by = found.kind === 'run' ? found.manifest.operations.find((o) => o.operationId === ('createdBy' in e.parent ? e.parent.createdBy : '')) : undefined;
+        const key = by?.effect.kind === 'create-folder' ? by.effect.createKey : '';
+        const folder = (await w.wire.drive.listAll(w.root)).find((f) => f.folder && f.appProperties?.bowerItem === key);
+        if (!folder) return;
+        binned = folder.id;
+        await w.wire.drive.trash(folder.id);
+      },
+    });
+    expect(end.phase).toBe('done');
+    expect(binned).not.toBeNull();
+    // Nothing was made in it: the create's fence read the folder again and refused it.
+    const data = JSON.parse(await w.wire.drive.snapshot()) as { files: Array<{ meta: { parents: string[] } }> };
+    expect(data.files.filter((f) => f.meta.parents.includes(binned ?? '')).length).toBe(0);
   });
 
   it('the bowerOp stamp is never accumulated', async () => {

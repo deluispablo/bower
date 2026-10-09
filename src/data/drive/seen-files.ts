@@ -1,18 +1,16 @@
 /**
  * What the run saw of each file, and the check before each write that it is
- * still so: the target's (or, for a create, its folder's) name, parents and
- * Bin state, and the target's modifiedTime. A file the run never read is
- * never written.
+ * still so: the target's name, parents and Bin state, and (for a content
+ * write) its modifiedTime. A file the run never read is never written.
  *
- * A folder's own modifiedTime is not compared for a create: it is not a
- * version of what is inside it, and a create only needs the folder to be
- * where the run saw it and out of the Bin.
+ * A create's folder is checked only for being there, a folder, and out of
+ * the Bin: where it is and what it is called are no version of what is in it.
  *
- * Shared by the runner's Drive adapter and by the fake's `fenced()` check in
- * tests, so both refuse the same writes.
+ * The fence of both apply engine adapters (`RunnerDrive` on Google Drive,
+ * `FakeRunDrive` on the pretend one), so both refuse the same writes.
  */
-import { notAsSeen, notAsSeenError } from '../../src/data/contracts/still-as-seen';
-import type { DriveFile, FencedCall, FencedDrive } from '../../src/data/drive/drive-api';
+import { notAsSeen, notAsSeenError } from '../contracts/still-as-seen';
+import type { DriveFile, FencedCall, FencedDrive } from './drive-api';
 
 /** A file as stored at the moment of the check; null when it is gone. */
 export interface StoredNow {
@@ -48,12 +46,24 @@ export class SeenFiles {
     this.seen.set(file.id, { ...file, parents: [...file.parents], ...(withTime ? {} : { modifiedTime: '' }) });
   }
 
+  /** The modifiedTime of the latest read or answer of this file; undefined when the run never read it. */
+  version(id: string): string | undefined {
+    return this.seen.get(id)?.modifiedTime;
+  }
+
   forget(id: string): void {
     this.seen.delete(id);
   }
 
   /** Throws a `conflict` unless the stored file is still as the run saw it (`notAsSeen`, the one check). */
   assert(target: FenceTarget, now: StoredNow | null): void {
+    // A create needs its folder there and out of the Bin; where that folder is, or what it is called, is no version of
+    // what it holds, so it need not have been read before.
+    if (target.part === 'parent') {
+      if (now && !now.trashed && now.file.folder) return;
+      console.error(`Refused a write into folder ${target.id}: gone`);
+      throw notAsSeenError('gone', NOT_AS_SEEN);
+    }
     const seen = this.seen.get(target.id);
     // A folder's own modifiedTime is no version of what is in it; a move or a Bin keeps it '' (`expectPlace`).
     const withTime = target.part === 'target' && seen?.modifiedTime !== '';

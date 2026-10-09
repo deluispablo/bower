@@ -18,7 +18,10 @@ import type { DriveFile, FencedDrive } from '../drive/drive-api';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { BowerError, type Question, type RunReport } from '../types';
 import { SYSTEM, isRunnerFile, type LastRunFile, type RunnerFiles } from '../vault/layout';
-import type { RecordReads } from './records';
+import type { Checkpoint } from '../contracts/run-checkpoint';
+import type { AdmissionManifest } from './admission';
+import { canonical, checkpointName, nextCheckpoint, reportName, type AttemptMark, type CheckpointPatch, type RecordReads, type RunManifest, type RunRecords } from './records';
+import { dispositionsFor, itemDispositions, materialize, reportContradictions, type ItemDisposition } from './report';
 
 /** A file's checksum as stored, and the same checksum of the bytes meant to be there. */
 export interface Checksum {
@@ -242,4 +245,155 @@ function parsed(text: string): unknown {
     console.error('A runner file is not valid JSON');
     return undefined;
   }
+}
+
+/**
+ * Ending a settled run (`finishRun`), for the runner and the fake run service alike: the report barrier (TL-P3-22
+ * point 2; ARCHITECTURE invariant 6), after the last operation checkpoint:
+ *
+ * 1. The report, made from the fixed plan and the settled outcomes, is committed in the chain as pending: "effects
+ *    done, report pending". From here a run that stops stays in `saving`, and a redispatch resumes here: every
+ *    operation is settled, so no effect is applied again.
+ * 2. The report is checked against where every admitted item ended (`reportContradictions`): one that contradicts
+ *    them stops the run here, in `saving`, with nothing more written. The report record goes in the run's folder, read back, and each declared pile filed whole gets its consumed
+ *    disposition in `.bower/piles`. Then `dispositions.json` in the run's folder: one line for every admitted item,
+ *    journal lines included, filed, set aside or waiting (`itemDispositions`); one already there is left as it is.
+ * 3. The report files, then `.bower/last-run.json` last, through the shared barrier (`src/data/spine/barrier.ts`),
+ *    each read back by its checksum.
+ * 4. Only then is the report published and the run done in the chain; the caller reports `done` after this.
+ *
+ * Every write is the same on a second try: a record already there with these bytes, or a file that already says
+ * it, is not written again; the view's times come from the chain, so a redispatch writes the same view.
+ */
+export interface BarrierRun {
+  rootId: string;
+  runId: string;
+  attempt: number;
+  records: RunRecords;
+  /** Reads of `.bower` (the report files) and the run's records. */
+  reads: RecordReads;
+  checksum: Checksum;
+  /** The fenced writes of the next batch (the adapter's `batch()`, which checks the attempt first). */
+  batch(): Promise<FencedDrive>;
+  /**
+   * The same fenced writes with no attempt read of their own, for a write right after a `batch()`: each fenced write
+   * reads the attempt again right before it is sent. Without it, every write asks `batch()`.
+   */
+  fenced?(): FencedDrive;
+  /** What the run was admitted to take; null when the Worker kept none. */
+  admission: AdmissionManifest | null;
+  clock(): number;
+  newId(): string;
+  /** Called once "effects done, report pending" is in the chain, with it (the runner reports `saving` then). */
+  onPending?(chain: Checkpoint[]): Promise<void>;
+  /** Whether the stored view may be replaced; a view of an earlier run (`olderView`) when not given. */
+  mayReplace?(stored: string | null): Promise<boolean>;
+}
+
+/** Where every admitted item ended, in the run's folder. */
+export const DISPOSITIONS = 'dispositions.json';
+
+/** `dispositions.json`: one line per admitted item. */
+export interface DispositionsFile {
+  v: 1;
+  runId: string;
+  items: ItemDisposition[];
+}
+
+export interface Finished {
+  chain: Checkpoint[];
+  /** The report files written, in order, `last-run.json` last. */
+  written: string[];
+  /** One for every admitted item; empty with no admission manifest. */
+  dispositions: ItemDisposition[];
+}
+
+const UNRESOLVED = 'Bower could not check one of the things it moved. It will look again later.';
+
+/** Ends a settled run: the report saved and read back, then done in the chain. Throws, leaving it in `saving`, when it cannot. */
+export async function finishRun(run: BarrierRun, manifest: RunManifest, manifestHash: string, settled: Checkpoint[]): Promise<Finished> {
+  let chain = settled;
+  let at = chain.at(-1);
+  if (!at) throw new BowerError('unknown', SAVE_FAILED);
+  const where = { runId: run.runId };
+  const mark: AttemptMark = { attemptId: run.newId(), epoch: run.attempt };
+  const dispositions = (outcomes: Checkpoint['outcomes']): ItemDisposition[] => (run.admission ? itemDispositions(run.admission, manifest, outcomes) : []);
+  if (at.phase === 'done') return { chain, written: [], dispositions: dispositions(at.outcomes) };
+  if (at.phase === 'failed') throw new BowerError('unknown', SAVE_FAILED);
+
+  const commit = async (patch: CheckpointPatch): Promise<Checkpoint> => {
+    const head = chain.at(-1);
+    if (!head) throw new BowerError('unknown', SAVE_FAILED);
+    const next = nextCheckpoint(head, (await canonical(head)).hash, mark, patch);
+    const c = await canonical(next);
+    await run.records.putNew(await run.batch(), where, checkpointName(next.revision, c.hash), c.text);
+    chain = [...chain, next];
+    return next;
+  };
+
+  // 1. Effects done, report pending.
+  if (at.report.state === 'not-ready') {
+    const body = materialize(manifest, manifestHash, at.outcomes);
+    if (!body) {
+      console.error(`Run ${run.runId} has an operation not settled at its report`);
+      throw new BowerError('unknown', UNRESOLVED);
+    }
+    at = await commit({ phase: 'saving', phaseAt: run.clock(), report: { state: 'pending', reportHash: (await canonical(body)).hash, body } });
+  }
+  const pending = chain.find((c) => c.report.state === 'pending');
+  if (pending?.report.state !== 'pending') throw new BowerError('unknown', SAVE_FAILED);
+  await run.onPending?.(chain);
+  const body = pending.report.body;
+  const r = await canonical(body);
+  if (r.hash !== pending.report.reportHash) throw new BowerError('unknown', SAVE_FAILED);
+  // Never a summary that contradicts where the items ended (TL-P3-24 point 1): the run stops here, in `saving`.
+  const wrong = run.admission ? reportContradictions(run.admission, manifest, at.outcomes, body.report, dispositions(at.outcomes)) : [];
+  if (wrong.length) {
+    console.error(`Run ${run.runId}: its dispositions contradict its report`, wrong);
+    throw new BowerError('unknown', SAVE_FAILED);
+  }
+
+  // The attempt is asked once for the report's writes; every fenced write asks it again right before it is sent.
+  let asked = false;
+  const writes = async (): Promise<FencedDrive> => {
+    if (asked && run.fenced) return run.fenced();
+    asked = true;
+    return run.batch();
+  };
+
+  // 2. The report record, read back, and the consumed dispositions.
+  await run.records.put(await writes(), where, reportName(r.hash), r.text);
+  await run.records.report(manifest, manifestHash, r.hash);
+  for (const d of dispositionsFor(manifest, at.outcomes, r.hash)) await run.records.putDisposition(await writes(), d);
+  if ((await run.records.read(where, DISPOSITIONS)) === null) {
+    const file: DispositionsFile = { v: 1, runId: run.runId, items: dispositions(at.outcomes) };
+    // A fenced create, read back byte for byte; a reply lost after it landed is not a second file.
+    await run.records.put(await writes(), where, DISPOSITIONS, jsonText(file));
+  }
+
+  // 3. The report files, then last-run.json last, each read back. The view's times are those of the pending report.
+  const finishedAt = pending.phaseAt;
+  const report = fixedReport(body.report);
+  const view = lastRunText({
+    v: 1,
+    run: { id: manifest.runId, scope: manifest.runScope, phase: 'done', requestedAt: manifest.requestedAt, phaseAt: finishedAt, total: manifest.capture.members.length, finishedAt, report },
+  });
+  const written = await saveReport({
+    rootId: run.rootId,
+    reads: run.reads,
+    checksum: run.checksum,
+    batch: writes,
+    report,
+    view,
+    mayReplace: run.mayReplace ?? (async (stored) => olderView(stored, { id: manifest.runId, requestedAt: manifest.requestedAt })),
+  });
+
+  // 4. Published and done, only now, with the piles kept where a Bin of their anchor was refused.
+  const outcomes = at.outcomes;
+  const retainedPileIds = manifest.operations.flatMap((o, i) => {
+    const e = o.effect;
+    return e.kind === 'bin' && outcomes[i]?.state === 'rejected' ? manifest.capture.piles.filter((p) => p.anchor?.fileId === e.before.fileId).map((p) => p.pileId) : [];
+  });
+  at = await commit({ phase: 'done', phaseAt: finishedAt, report: { state: 'published', reportHash: r.hash }, retainedPileIds });
+  return { chain, written, dispositions: dispositions(at.outcomes) };
 }

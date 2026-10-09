@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { driveEffects } from '../src/effects';
+import { driveEffects } from '../../src/data/spine/engine';
 import type { RunnerDrive } from '../src/drive';
 import type { Checkpoint } from '../../src/data/contracts/run-checkpoint';
 import type { OperationV2 } from '../../src/data/contracts/run-manifest';

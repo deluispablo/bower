@@ -107,7 +107,8 @@ describe('recovery without the browser on the fake', () => {
     const expected = await endOf(whole, once.root);
     const chain = await chainOf(whole, once.root, once.runId);
     const kinds = chain.map((_, at) => kindOf(chain, at));
-    for (const kind of ['first', 'possible-effect', 'applied', 'report pending', 'done']) expect(kinds).toContain(kind);
+    // One batch, as the runner's: its opening names every operation possibly sent, its closing settles them with the report pending.
+    for (const kind of ['first', 'possible-effect', 'report pending', 'done']) expect(kinds).toContain(kind);
 
     for (let at = 0; at < chain.length; at++) {
       // The page that ran it: killed right after it wrote checkpoint `at`; nothing it tries after that lands.
