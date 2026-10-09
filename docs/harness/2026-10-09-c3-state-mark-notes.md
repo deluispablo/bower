@@ -47,3 +47,21 @@
   (https://developers.google.com/drive/api/reference/rest/v3/files).
 - Left out: no fake e2e for "Write it" (the scripted provider never grants a state write; the runner tests above
   drive it); open questions do not take fresh evidence (c3-subject).
+
+## Round 2 (answered-row seams)
+
+- Merge `c65fb2ab` (claude/p3 at 365e4a2f). Conflicts: `scripted.ts` import (STATE_ASK* plus `answeredGone`;
+  `notesGone` no longer used there), the decided fields (`questionsList`, `stateAsks`, and `answeredRows` in place of
+  `keepGone`), the report-row comment in `questions.ts`, and the compatibility rows (both kept).
+- Test `95fdd9d8` "a write it yes whose note is gone writes one answered row" (`runner/test/ask-answer-loop.test.ts`,
+  helper `reportRowsAll`). It passed on the merge: pair-ask's `answeredGone` already writes the state row (copy
+  "Not written: Job hunt had moved or gone to the Bin before Bower got to it."). Red shown by taking out the state
+  kind in `answeredGone`: `expected [] to deeply equal [ { questionId: 'q-state-f13', ... } ]` (/tmp/csm2-red-probe.log).
+- Fix `11e79dc6`: the gone seam comment now points to `answeredRows` and `answeredGone`. No code path added.
+- Open (no approved sentence, for the designer): a refused write (`scripted.ts` refused seam) and nothing to write
+  (the section already reads as the update, carries no mark, or an older question's run had no update). Today in
+  both: the question closes, nothing is written, and Home's run line counts it as "1 change of yours read".
+- The re-ask seam is unchanged.
+- tests changed: runner/test/ask-answer-loop.test.ts: one test and one helper added, no existing test changed.
+- Gates: `pnpm check` exit 0 (/tmp/csm2-check.log; unit 3868, api 234, runner 250); goldens C04 78, 25 runs 88
+  unchanged; e2e:fake capabilities and capabilities-b 22 passed (/tmp/csm2-e2e.log).
