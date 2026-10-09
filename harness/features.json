@@ -5711,5 +5711,18 @@
     ],
     "verify": "pnpm exec vitest run src/harness.test.ts src/dependency-rules.test.ts src/data/upload-queue-real.test.ts -t \"a unit test over 1000 ms not on the slow list fails the harness check|the slow list may only shrink|the rule list names every forbidden import|lost bytes ask to choose the file again\"",
     "note": "TL-P4-17 entry 3 (main e1bbf010). Closes dependency-rules-timeout (ruled here) and the lost-bytes-slow class (docs/harness/defects/2026-10-09-lost-bytes-slow.md). qa10 stays with c4-focus-return. Baseline: the tests over 1000 ms in test-results/unit.json today (16 at 0cc1247a), each sped up or listed. Starting model: bower-implementer."
+  },
+  {
+    "id": "c3-reviewer-guard",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": false,
+    "what": "A PreToolUse Bash hook script, scripts/guard-main-checkout.mjs, beside quiet-gates.mjs: inside a subagent it refuses git checkout|switch|reset|rebase|merge|stash run in the main checkout and points to git show, git diff or a scratch worktree; the coordinator session is not refused.",
+    "steps": [
+      "A reviewer subagent running git checkout in the main checkout is refused with the pointer sentence.",
+      "The same command from the coordinator session, or in a scratch worktree, passes."
+    ],
+    "verify": "pnpm exec vitest run src/guard-main-checkout.test.ts -t \"a subagent.s git checkout in the main checkout is refused|the coordinator.s own git checkout in the main checkout is allowed|a subagent.s git checkout in a scratch worktree is allowed\"",
+    "note": "TL-P4-17 entry 2 (main e1bbf010); closes reviewer-checkout-main. Wiring the hook into .claude/settings.json or agent frontmatter is Claude Code config: the coordinator does not change it on a peer ruling; the owner wires it (one line, given on the card). Starting model: bower-implementer."
   }
 ]
