@@ -1,6 +1,7 @@
 import type { Note } from '@/data/types';
 import { LIST_MARK, TASK_BOX } from '@/data/tasks';
 import type { ReactNode } from 'react';
+import { Checkbox } from '@/ui/Field';
 
 /**
  * A small Markdown reader for Bower's notes: headings, paragraphs, lists,
@@ -74,7 +75,7 @@ export function Markdown({ text, link, onToggle }: MarkdownProps) {
           <li key={`${key}-${items.length}`} className={box ? 'md-task' : undefined}>
             {box ? (
               <label className={box[1] === 'x' ? 'md-done' : undefined}>
-                <input type="checkbox" checked={box[1] === 'x'} readOnly={!onToggle} disabled={!onToggle} onChange={() => onToggle?.(n)} />
+                <Checkbox checked={box[1] === 'x'} readOnly={!onToggle} disabled={!onToggle} onChange={() => onToggle?.(n)} />
                 <span>{inline(t.slice(box[0].length), link, `${key}-${items.length}`)}</span>
               </label>
             ) : (

@@ -4,6 +4,7 @@ import { useSources, useRules, useUser } from '@/data/provider';
 import { usePrefs, type Theme } from '@/app/prefs';
 import { plural } from '@/app/words';
 import { Button } from '@/ui/Button';
+import { Switch } from '@/ui/Field';
 import { toast } from '@/ui/toast';
 import { afterOverlaysClosed } from '@/ui/back';
 import { Sheet } from '@/ui/Sheet';
@@ -21,29 +22,6 @@ function Row({ title, sub, children }: { title: string; sub?: string; children: 
       </div>
       {children}
     </div>
-  );
-}
-
-function Toggle({
-  on,
-  label,
-  onChange,
-}: {
-  on: boolean;
-  label: string;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      className={s.toggle}
-      onClick={() => onChange(!on)}
-    >
-      <span />
-    </button>
   );
 }
 
@@ -105,7 +83,7 @@ export function Settings() {
 
       <h2 className={s.h2}>Tidying up</h2>
       <Row title="Look things up on the web" sub="Fill in what a document leaves out, with sources">
-        <Toggle
+        <Switch
           on={prefs.lookUpWeb}
           label="Look things up on the web"
           onChange={(v) => prefs.set({ lookUpWeb: v })}
@@ -119,7 +97,7 @@ export function Settings() {
             : 'A notification on this device'
         }
       >
-        <Toggle
+        <Switch
           on={prefs.notifyRuns}
           label="Tell me when a tidy-up ends"
           onChange={(v) => void setNotify(v, (on) => prefs.set({ notifyRuns: on }))}
@@ -152,7 +130,7 @@ export function Settings() {
         title="Bower moves"
         sub="Hops, flies and carries things around the app. Off keeps Bower still."
       >
-        <Toggle
+        <Switch
           on={prefs.birdMoves}
           label="Bower moves"
           onChange={(v) => prefs.set({ birdMoves: v })}

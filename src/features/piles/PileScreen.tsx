@@ -14,6 +14,7 @@ import { isRunning } from '@/features/tidy/run-words';
 import { PileStack } from './PileStack';
 import { normaliseLink } from './link';
 import { itemLine, pileLine } from './item-words';
+import { FieldError, fieldBox, Input, Textarea } from '@/ui/Field';
 import s from './piles.module.css';
 
 export function PileScreen() {
@@ -246,14 +247,15 @@ function useTryAgain(pile: Pile | undefined, choose: boolean): { onClick: () => 
   const paste = pasted ? (
     <>
       <form
-        className={s.linkRow}
+        className={`${s.linkRow} ${fieldBox()}`}
         onSubmit={(e) => {
           e.preventDefault();
           send();
         }}
       >
         <Icon name="link" size={18} />
-        <input
+        <Input
+          inBox
           ref={field}
           type="text"
           inputMode="url"
@@ -262,8 +264,9 @@ function useTryAgain(pile: Pile | undefined, choose: boolean): { onClick: () => 
           spellCheck={false}
           placeholder="Paste a link"
           aria-label="Paste a link"
-          aria-invalid={badLink || undefined}
-          aria-describedby={badLink ? `${linkAskId} ${badId}` : linkAskId}
+          aria-describedby={linkAskId}
+          invalid={badLink}
+          errorId={badId}
           value={link}
           onChange={(e) => {
             setLink(e.target.value);
@@ -278,9 +281,7 @@ function useTryAgain(pile: Pile | undefined, choose: boolean): { onClick: () => 
         </span>
       </form>
       {badLink && (
-        <p id={badId} className={s.badLink} role="alert">
-          That is not a web address. Check it and try again.
-        </p>
+        <FieldError id={badId}>That is not a web address. Check it and try again.</FieldError>
       )}
     </>
   ) : null;
@@ -424,7 +425,7 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
       <label htmlFor="pile-note-text" id="pile-note">
         {pile.items.length ? 'What is this?' : 'Your note'}
       </label>
-      <textarea
+      <Textarea
         id="pile-note-text"
         rows={3}
         value={text}

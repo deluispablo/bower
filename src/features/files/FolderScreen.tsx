@@ -14,6 +14,7 @@ import { Icon, BowerHead } from '@/ui/Icon';
 import { IconButton } from '@/ui/Button';
 import { Explorer } from './Explorer';
 import { Sheet } from '@/ui/Sheet';
+import { Input } from '@/ui/Field';
 import { Button } from '@/ui/Button';
 import { useFileActions } from './file-actions';
 import s from './folder.module.css';
@@ -237,7 +238,7 @@ function NewNoteButton({ folder, label }: { folder: string; label: string }) {
             void make();
           }}
         >
-          <input autoFocus aria-label="Name of the note" placeholder="Name of the note" value={name} onChange={(e) => setName(e.target.value)} />
+          <Input autoFocus aria-label="Name of the note" placeholder="Name of the note" value={name} onChange={(e) => setName(e.target.value)} />
           <Button type="submit" disabled={!name.trim()}>
             Make the note
           </Button>

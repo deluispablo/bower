@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSources } from '@/data/provider';
 import type { SearchHit } from '@/data/types';
+import { fieldBox, Input } from '@/ui/Field';
 import { Icon } from '@/ui/Icon';
 import { useFileActions } from './file-actions';
 import s from './files.module.css';
@@ -34,9 +35,9 @@ export function SearchPanel({ focus = true }: { focus?: boolean }) {
   const searching = !!q.trim() && result?.q !== q;
   return (
     <div className={s.panel}>
-      <label className={s.search}>
+      <label className={fieldBox({ pill: true })}>
         <Icon name="search" size={18} />
-        <input type="search" autoFocus={focus} placeholder="Search your notes and files" aria-label="Search your notes and files" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Input inBox type="search" autoFocus={focus} placeholder="Search your notes and files" aria-label="Search your notes and files" value={q} onChange={(e) => setQ(e.target.value)} />
       </label>
       <p className={s.hint} role="status">
         {searching ? 'Searching…' : result?.q === q && result.failed ? 'Search did not work. Try again.' : shown === null ? 'Names, summaries and what notes say.' : `${shown.length} ${shown.length === 1 ? 'match' : 'matches'}`}

@@ -6,6 +6,7 @@
   --surface: #162034;
   --surface-strong: #1f2b42;
   --line: rgba(223,229,238,0.12);
+  --control-line: rgba(223,229,238,0.44);
   --heading: #f3f6fa;
   --text: #dfe5ee;
   --text-muted: #9fabbf;
@@ -56,6 +57,7 @@
     --surface: #ffffff;
     --surface-strong: #ebe8e2;
     --line: #e3e0da;
+    --control-line: #8a857c;
     --heading: #1c2333;
     --text: #1c2333;
     --text-muted: #475569;
@@ -76,6 +78,7 @@
   --surface: #ffffff;
   --surface-strong: #ebe8e2;
   --line: #e3e0da;
+  --control-line: #8a857c;
   --heading: #1c2333;
   --text: #1c2333;
   --text-muted: #475569;

@@ -56,10 +56,29 @@ async function checkField(
   text: Locator | null,
   radius?: number,
 ): Promise<void> {
+  // A sheet pops in; measure once it has settled.
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+        .map((a) => a.finished.catch(() => undefined)),
+    ),
+  );
   const line = await resolved(page, '--control-line');
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   const e = await edge(box);
   expect(e.border, `${name}: border colour`).toBe(line);
-  expect(e.width, `${name}: border width`).toBe(1.5);
+  // The browser snaps a border to whole device pixels; 1.5px computes as it does on a plain 1.5px border.
+  const snapped = await page.evaluate(() => {
+    const probe = document.createElement('i');
+    probe.style.cssText = 'border:1.5px solid';
+    document.body.append(probe);
+    const w = parseFloat(getComputedStyle(probe).borderTopWidth);
+    probe.remove();
+    return w;
+  });
+  expect(e.width, `${name}: border width`).toBe(snapped);
   expect((await box.boundingBox())?.height ?? 0, `${name}: height`).toBeGreaterThanOrEqual(48);
   if (radius)
     expect(
@@ -70,6 +89,19 @@ async function checkField(
     expect(await placeholder(text), `${name}: placeholder`).toBe(
       await resolved(page, '--text-muted'),
     );
+  // Focused, the border turns --text-muted (a button box is not typed in).
+  const typed =
+    text ??
+    ((await box.locator('input, textarea').count())
+      ? box.locator('input, textarea').first()
+      : null);
+  if (typed) {
+    await typed.focus();
+    expect((await edge(box)).border, `${name}: focused border`).toBe(
+      await resolved(page, '--text-muted'),
+    );
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  }
 }
 
 test('fields and switches draw their edge with the control line', async ({ page }, info) => {
@@ -146,26 +178,31 @@ test('fields and switches draw their edge with the control line', async ({ page 
     await expect(page.getByRole('checkbox', { checked: true }).first()).toBeVisible();
     await axeClean(page);
 
-    // Folder page: the New note sheet's name field.
-    await open(page, '/files/Projects/Job%20hunt/Applications');
-    await theme(page, t);
-    await page.getByRole('button', { name: 'New note' }).first().click();
-    const name = page.getByLabel('Name of the note');
-    await checkField(page, 'New note name', name, name, 14);
-    await page.keyboard.press('Escape');
+    if (!desktop) {
+      // The Rename sheet's name field, from a folder page's menu (the desktop renames in the tree).
+      await open(page, '/files/Projects/Job%20hunt/Applications');
+      await theme(page, t);
+      await page.getByRole('button', { name: 'More for Applications' }).click();
+      await page.getByRole('button', { name: 'Rename' }).click();
+      const name = page.getByLabel('Name', { exact: true });
+      await checkField(page, 'Rename name', name, name, 14);
+      await page.keyboard.press('Escape');
+    }
 
     if (desktop) {
       // The side panel's search and Move's "Find a folder".
       await open(page, '/');
       await theme(page, t);
-      await page.keyboard.press('ControlOrMeta+Shift+f');
+      await page.getByRole('tab', { name: 'Search' }).click();
       const panel = page.getByLabel('Search your notes and files');
       await expect(panel).toBeVisible();
       await checkField(page, 'panel search', page.locator('label', { has: panel }), panel, 999);
-      await page.getByRole('treeitem', { name: /Lease draft/ }).click({ button: 'right' });
-      await page.getByRole('menuitem', { name: 'Rename' }).click();
-      const rename = page.getByLabel('Name', { exact: true });
-      if (await rename.count()) await checkField(page, 'rename', rename, rename, 14);
+      await page.keyboard.press('Escape');
+      await page.getByRole('tab', { name: 'Files' }).click();
+      await page.getByRole('treeitem', { name: /Flat hunt/ }).click({ button: 'right' });
+      await page.getByRole('menuitem', { name: 'Move to…' }).click();
+      const find = page.getByLabel('Find a folder');
+      await checkField(page, 'Find a folder', page.locator('label', { has: find }), find, 14);
     }
   }
 });
