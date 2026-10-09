@@ -45,3 +45,8 @@ Then a Claude delta review, a Codex pass on the delta, and the designer's re-che
 - **Steps that poses or reactions play.** If a pose or a reaction plays a step, that step has a row through the pose or reaction. 24a's composite steps use exempt steps only through rows carrying the designer's values.
 - **The list only shrinks,** like the baselines. A check fails if it grows.
 - **Red:** `a new engine name tagged script but not on the allowlist fails the meta-test`.
+
+## TL-P4-25 addendum 4 (main 757bd9fe): a step owns the head
+
+- While a reaction or startle step plays, the step owns the head, and gaze moves only the iris (as in working poses). When the step ends, the head offset eases back, with no jump. 24a's composite acts follow the same rule.
+- Red: `a wake startle with a focus gaze holds the head at −10 ±2`. An idle bird sleeps 61 s, then wakes through `look({x:200,y:-100}, 'focus')`; a second cell uses (200,250). Today the head holds at −22°.
