@@ -200,3 +200,4 @@ c4-app-fence review,reviewer,codex,codex,medium,1,282286,280167,0,229760,2119,,,
 c4-app-fence P4-50,reviewer,claude,bower-reviewer,,1,46179,,,,,,7,3.6,PASS (4 minor),2026-10-09
 v2-move-here test fix,implementer,codex,codex,medium,2,57222,56968,0,44928,254,,,,delivered,2026-10-09
 v2-move-here test fix 2,implementer,codex,codex,medium,3,167715,166792,0,142720,923,,,,delivered,2026-10-09
+v2-move-here round 2,implementer,codex,codex,medium,4,179552,176143,0,158080,3409,,,,delivered,2026-10-09
