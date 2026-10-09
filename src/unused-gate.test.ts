@@ -1,66 +1,35 @@
 import { describe, it, expect } from 'vitest';
-import { spawnSync } from 'node:child_process';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
+// @ts-expect-error plain JS module, the gate's rules
+import { compare, findingsOf } from '../scripts/unused-gate-rules.mjs';
 
-const gate = path.resolve(__dirname, '..', 'scripts', 'check-unused-gate.mjs');
-
-function sampleTree(): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'unused-gate-'));
-  fs.mkdirSync(path.join(root, 'src'));
-  fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'sample', private: true, type: 'module' }));
-  fs.writeFileSync(
-    path.join(root, 'knip.json'),
-    JSON.stringify({ entry: ['src/index.ts'], project: ['src/**/*.ts'], ignoreExportsUsedInFile: true }),
-  );
-  fs.writeFileSync(path.join(root, 'src', 'index.ts'), "import { used } from './lib';\nexport const main = used();\n");
-  fs.writeFileSync(path.join(root, 'src', 'lib.ts'), 'export const used = () => 1;\n');
-  return root;
-}
-
-function runGate(root: string, baseline: string) {
-  return spawnSync('node', [gate, '--root', root, '--baseline', baseline], { encoding: 'utf8' });
-}
-
-describe('unused-code gate rules', () => {
-  it('the gate test runs no tool: its rules are a module fed a fixture report', () => {
-    expect(fs.existsSync(path.resolve(__dirname, '..', 'scripts', 'unused-gate-rules.mjs'))).toBe(true);
-  });
-});
+// The gate's rules, fed a fixture of what knip reports. The tool runs once, in `pnpm check` (scripts/check-unused-gate.mjs);
+// no test here starts it (TL-P4-17 addendum 6).
+const report = (names: string[]): unknown => ({ issues: [{ file: 'src/lib.ts', exports: names.map((name) => ({ name })) }] });
 
 describe('unused-code gate', () => {
   it('a new unused export fails the unused-code gate', () => {
-    const root = sampleTree();
-    try {
-      const baseline = path.join(root, 'baseline.json');
-      fs.writeFileSync(baseline, JSON.stringify({ findings: [] }));
-      expect(runGate(root, baseline).status).toBe(0);
+    const baseline = new Set<string>();
+    expect(compare(findingsOf(report([])), baseline)).toEqual({ fresh: [], stale: [] });
 
-      fs.appendFileSync(path.join(root, 'src', 'lib.ts'), 'export const neverCalled = () => 2;\n');
-      const failed = runGate(root, baseline);
-      expect(failed.status).not.toBe(0);
-      expect(failed.stderr).toContain('New unused code');
-      expect(failed.stderr).toContain('exports src/lib.ts neverCalled');
+    const found = findingsOf(report(['neverCalled']));
+    expect(compare(found, baseline).fresh).toEqual(['exports src/lib.ts neverCalled']);
 
-      fs.writeFileSync(baseline, JSON.stringify({ findings: ['exports src/lib.ts neverCalled'] }));
-      expect(runGate(root, baseline).status).toBe(0);
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-  }, 60_000);
+    expect(compare(found, new Set(['exports src/lib.ts neverCalled']))).toEqual({ fresh: [], stale: [] });
+  });
 
   it('the unused baseline may only shrink', () => {
-    const root = sampleTree();
-    try {
-      const baseline = path.join(root, 'baseline.json');
-      fs.writeFileSync(baseline, JSON.stringify({ findings: ['exports src/lib.ts gone'] }));
-      const result = runGate(root, baseline);
-      expect(result.status).not.toBe(0);
-      expect(result.stderr).toContain('Baseline lists code that is no longer unused');
-      expect(result.stderr).toContain('exports src/lib.ts gone');
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-  }, 60_000);
+    const { fresh, stale } = compare(findingsOf(report([])), new Set(['exports src/lib.ts gone']));
+    expect(fresh).toEqual([]);
+    expect(stale).toEqual(['exports src/lib.ts gone']);
+  });
+
+  it('a file, a duplicate and a member are each one line', () => {
+    const found = findingsOf({
+      issues: [
+        { file: 'src/dead.ts', files: [{ name: 'src/dead.ts' }] },
+        { file: 'src/a.ts', duplicates: [[{ name: 'one' }, { name: 'two' }]], types: [{ name: 'T' }] },
+      ],
+    });
+    expect([...found].sort()).toEqual(['duplicates src/a.ts one=two', 'files src/dead.ts src/dead.ts', 'types src/a.ts T']);
+  });
 });

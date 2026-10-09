@@ -3,33 +3,20 @@
 // (TL-P4-17 addendum 4); this module is that rule, shared by the app's, the Worker's and the runner's configs.
 // Its test (src/reservation-rule.test.ts) feeds it sample source; it never scans the repo inside vitest.
 
-const RESERVING = '/^(generateIds|reserveId)$/';
-const SLOT = 'reserved';
-/** The types a store of intended creates would hold: the home's port and what it is built on. */
-const HOLDERS = '/^(Holder|Intended|JournalRecord|Sending)$/';
-const reason = 'Reserve an id for an intended create through write-once (makeOnce, Intended, reserveFor), keeping it on its holder.';
+// The rule names the primitive: the call that reserves an id (`generateIds`, write-once's `reserveId`) and the create that
+// takes a reserved id by hand (`createById`). It never names what holds an id (a holder type, a map, a slot): a rename
+// hides those (P4-39), and a call cannot be renamed away by a type. The home's own makers (makeOnce, makeFolder, makeText,
+// reserveFor, Intended) are what everyone else uses.
+const RESERVING = '/^(generateIds|reserveId|createById)$/';
+const reason = 'Reserve an id for an intended create through write-once (makeOnce, makeFolder, makeText, Intended, reserveFor), keeping it on its holder.';
 const rule = (selector, what) => ({ selector, message: `${what}: ${reason}` });
 
-/** The syntax that reserves, keeps or hands over a Drive id outside the home. */
+/** The syntax that reserves an id, or creates by a reserved one, outside the home: the call, or the call passed on, by any receiver or alias. */
 export const SELECTORS = [
-  // 1. A call for ids, or that call passed on, by any receiver or alias.
   rule(`MemberExpression[computed=false][property.name=${RESERVING}]`, 'calls for ids'),
   rule(`MemberExpression[computed=true][property.value=${RESERVING}]`, 'calls for ids'),
   rule(`CallExpression[callee.name=${RESERVING}]`, 'calls for ids'),
   rule(`ObjectPattern > Property[key.name=${RESERVING}]`, 'takes the call for ids'),
-  // 2. The slot set, cleared or given by hand.
-  rule(`AssignmentExpression > MemberExpression.left[property.name='${SLOT}']`, 'sets an id by hand'),
-  rule(`AssignmentExpression > MemberExpression.left[property.value='${SLOT}']`, 'sets an id by hand'),
-  rule(`UnaryExpression[operator='delete'] > MemberExpression[property.name='${SLOT}']`, 'lets an id go by hand'),
-  rule(`ObjectExpression > Property[key.name='${SLOT}']`, 'gives an id by hand'),
-  // 3. A store of intended creates kept beyond one call.
-  ...[
-    'PropertyDefinition',
-    'Program > VariableDeclaration',
-    'Program > ExportNamedDeclaration > VariableDeclaration',
-  ].map((kept) => rule(`${kept} NewExpression[callee.name=/^(Map|WeakMap)$/] > TSTypeParameterInstantiation > TSTypeReference[typeName.name=${HOLDERS}]`, 'keeps intended creates outside the home')),
-  // 4. The slot's id put in a store by hand.
-  rule(`CallExpression[callee.property.name='set']:has(MemberExpression[property.name='${SLOT}'])`, 'stores an id by hand'),
 ];
 
 /** Test files, test helpers' fixtures and e2e are not production code. */

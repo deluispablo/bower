@@ -62,7 +62,7 @@ describe('one home for an intended create', () => {
   });
 
   it('the rule targets the primitive, not the names of what holds an id', () => {
-    expect(JSON.stringify(SELECTORS)).not.toMatch(/Holder|Intended|JournalRecord|Sending|reserved/);
+    expect((SELECTORS as { selector: string }[]).map((r) => r.selector).join(' ')).not.toMatch(/Holder|Intended|JournalRecord|Sending|reserved/);
     // Each spelling of a reserve or a create by a reserved id is found, whatever holds the id.
     expect(flagged("export const go = (w: Gate, id: string) => createById(id, send, find);\n")).toEqual(['1 calls for ids']);
     expect(flagged("export const go = async (w: Gate) => (await reserveId(w));\n")).toEqual(['1 calls for ids']);
@@ -70,14 +70,14 @@ describe('one home for an intended create', () => {
   });
 
   it('a renamed intent map, an id set or stored by hand, or the call for ids by another name is found by what it does', () => {
-    // The drift at journal.ts:166, renamed: an intent -> line map kept outside the home.
-    expect(flagged("import type { JournalRecord } from './journal';\nexport class Journal {\n  private intents = new Map<string, JournalRecord>();\n}\n")).toEqual(['3 keeps intended creates outside the home']);
-    // An intent -> id map, filled from a holder's slot.
-    expect(flagged("import type { Holder } from '../spine/write-once';\nexport class Ids {\n  private readonly idFor = new Map<string, string>();\n  keep(intent: string, h: Holder): void { this.idFor.set(intent, h.reserved ?? ''); }\n}\n")).toEqual(['4 stores an id by hand']);
-    // The slot set or cleared by hand, by any spelling, and the call for ids by an alias.
-    expect(flagged("export function hand(w: { reserved?: string }, id: string, d: { generateIds(n: number): Promise<string[]> }): void {\n  w['reserved'] = id;\n  delete w.reserved;\n  const more = d['generateIds'];\n  void more;\n}\n")).toEqual(['2 sets an id by hand', '3 lets an id go by hand', '4 calls for ids']);
-    // Not a reservation: a map of numbers named `intended`, a map made for one call, the slot read.
-    expect(flagged("import type { JournalRecord } from './journal';\nexport class Fine {\n  private intended = new Map<string, number>();\n  list(all: JournalRecord[], h: { reserved?: string }): number {\n    const byId = new Map<string, JournalRecord>(all.map((r) => [r.id, r]));\n    return byId.size + (h.reserved ? 1 : 0) + this.intended.size;\n  }\n}\n")).toEqual([]);
+    // The drift at journal.ts:166, renamed: a map of lines kept outside the home still has to call for its ids.
+    expect(flagged("import type { Renamed } from './journal';\nexport class Journal {\n  private intents = new Map<string, Renamed>();\n  async ids(d: Gate, n: number): Promise<string[]> { return d.generateIds(n); }\n}\n")).toEqual(['4 calls for ids']);
+    // A renamed holder, with its slot named anything, cannot hide the call for ids or the create by hand.
+    expect(flagged("export class Ids {\n  private readonly idFor = new Map<string, { kept?: string }>();\n  async keep(intent: string, d: Gate): Promise<void> { this.idFor.set(intent, { kept: (await d.generateIds(1))[0] }); }\n}\n")).toEqual(['3 calls for ids']);
+    // The call by any spelling, and by an alias or a destructured name.
+    expect(flagged("export function hand(d: { generateIds(n: number): Promise<string[]> }): void {\n  const more = d['generateIds'];\n  const { generateIds } = d;\n  void more; void generateIds;\n}\n")).toEqual(['2 calls for ids', '3 takes the call for ids']);
+    // Not a reservation: the home's own makers and a map made for one call.
+    expect(flagged("import { makeOnce, makeText, reserveFor } from '../spine/write-once';\nexport async function fine(h: { reserved?: string }, w: Gate): Promise<void> {\n  await reserveFor(w, [h]);\n  await makeOnce(h, w, (id) => makeText(w, w, { parent: id, name: 'a' }, ''));\n}\n")).toEqual([]);
   });
 });
 
