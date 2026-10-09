@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DataProvider } from '@/data/provider';
 import { loadingSources } from '@/testing/loading-sources';
 import { BowerPanel } from './BowerPanel';
@@ -94,5 +94,71 @@ describe('what failed is found once on a note', () => {
     listeners.forEach((l) => l());
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.getByRole('tab', { name: 'Linked notes' })).toHaveAttribute('aria-selected', 'true');
+  });
+});
+
+describe('what failed is found once, and focus stays with the person', () => {
+  beforeEach(cleanup);
+  afterEach(cleanup);
+  const note = { path: 'Projects/Flat.md', title: 'Flat', summary: '', properties: [], tags: [], currentState: [], body: '# Rent\n\nSee [[Money]].', timeline: [], links: ['Areas/Money.md'], backlinks: [], byBower: false };
+  const panel = (failed: () => Array<{ id: string; what: string; sentence: string; seen?: true }>, seen: (id: string) => void) => {
+    const never = (): Promise<never> => new Promise(() => undefined);
+    const listeners = new Set<() => void>();
+    const sources = loadingSources();
+    const vault = new Proxy({}, {
+      get: (_t, k) => {
+        if (k === 'driveLinks') return false;
+        if (k === 'subscribe') return (cb: () => void) => { listeners.add(cb); return () => listeners.delete(cb); };
+        if (k === 'failedChanges') return async () => failed();
+        if (k === 'markFailedSeen') return async (id: string) => { seen(id); listeners.forEach((l) => l()); };
+        if (k === 'note') return async () => note;
+        if (k === 'rules' || k === 'requests' || k === 'questions') return async () => [];
+        return never;
+      },
+    });
+    useUi.getState().setRightTab('links');
+    render(
+      <MemoryRouter initialEntries={['/note/Projects/Flat.md']}>
+        <DataProvider sources={{ ...sources, vault: vault as typeof sources.vault, runs: { ...sources.runs, subscribe: () => () => undefined } }}>
+          <RightPanel />
+        </DataProvider>
+      </MemoryRouter>,
+    );
+    return { changed: () => listeners.forEach((l) => l()) };
+  };
+
+  it('the right panel turns to Bower once per failure and marks it seen, so a reload does not turn it again', async () => {
+    let failed: Array<{ id: string; what: string; sentence: string; seen?: true }> = [];
+    const seen: string[] = [];
+    const { changed } = panel(() => failed, (id) => {
+      seen.push(id);
+      failed = failed.map((f) => (f.id === id ? { ...f, seen: true } : f));
+    });
+    failed = [{ id: 'L2', what: 'Moved Cooking to Archive', sentence: "Your change was made, but Bower couldn't make a note of it." }];
+    changed();
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Bower' })).toHaveAttribute('aria-selected', 'true'));
+    // Turned once, then marked seen where what failed is kept, so the next page load knows.
+    await waitFor(() => expect(seen).toEqual(['L2']));
+    // A failure already turned to on an earlier load (seen) does not turn the panel again.
+    fireEvent.click(screen.getByRole('tab', { name: 'Linked notes' }));
+    failed = [...failed, { id: 'L3', what: 'Renamed Soup', sentence: "Your change was made, but Bower couldn't make a note of it.", seen: true }];
+    changed();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.getByRole('tab', { name: 'Linked notes' })).toHaveAttribute('aria-selected', 'true');
+    expect(seen).toEqual(['L2']);
+  });
+
+  it('a turn to Bower moves focus from the panel that closes to the Bower tab, never to the page', async () => {
+    let failed: Array<{ id: string; what: string; sentence: string; seen?: true }> = [];
+    const { changed } = panel(() => failed, () => undefined);
+    // The person is on a link in the links panel when a line fails in the background.
+    const link = (await screen.findAllByRole('link', { name: /Money/ })).at(-1) as HTMLElement;
+    link.focus();
+    expect(document.activeElement).toBe(link);
+    failed = [{ id: 'L4', what: 'Moved Taxes to Money', sentence: "Your change was made, but Bower couldn't make a note of it." }];
+    changed();
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Bower' })).toHaveAttribute('aria-selected', 'true'));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Bower' })));
+    expect(document.activeElement).not.toBe(document.body);
   });
 });

@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { DriveFile } from '../../src/data/drive/drive-api';
 import type { FakeDrive, FaultHook, FencedCall, FencedDrive } from '../../src/data/drive/fake-drive';
@@ -9,6 +11,9 @@ import type { OperationV2 } from '../../src/data/contracts/run-manifest';
 import type { RunManifest } from '../../src/data/spine/records';
 import { SeenFiles, targetOf } from '../../src/data/drive/seen-files';
 import { RunnerToken } from '../src/token';
+import { DriveHttp } from '../../src/data/drive/drive-http';
+import { failureKind, isNoAnswer, isUnconfirmedWrite } from '../../src/data/drive/transport';
+import { BowerError } from '../../src/data/types';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 
 const STALE = { code: 'conflict', message: 'This tidy-up was taken over.' };
@@ -380,5 +385,41 @@ describe('c2-create-by-id: an edit is taken only by its own answer', () => {
       await expect(driveEffects(adapter).apply(op, head, lying, manifest, async () => null)).rejects.toMatchObject({ code: 'unknown' });
       expect(await wire.drive.readText(note.id)).toBe(text);
     }
+  });
+
+  it('the runner classifies Drive failures through the one table', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const pacing = { baseMs: 0, sleep: async () => {} };
+    const answer = (status: number, reason: string | null): Response =>
+      new Response(JSON.stringify({ error: { code: status, errors: reason ? [{ reason, message: 'm' }] : [] } }), { status });
+    const shape = (e: unknown) => (e instanceof BowerError ? { code: e.code, message: e.message, kind: failureKind(e), unconfirmed: isUnconfirmedWrite(e), lost: isNoAnswer(e) } : e);
+    for (const [status, reason] of [[503, null], [500, 'backendError'], [403, 'storageQuotaExceeded'], [403, 'insufficientFilePermissions'], [404, 'notFound'], [408, null]] as const) {
+      const { wire, folder } = await seeded();
+      // The fenced write's own request gets this answer from Drive; everything else goes as Drive answers it.
+      const fetchFn: typeof fetch = async (input, init) => {
+        const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+        if (url.origin === 'https://www.googleapis.com' && (init?.method ?? 'GET').toUpperCase() === 'POST' && !url.pathname.endsWith('/generateIds')) return answer(status, reason);
+        return wire.fetch(input, init);
+      };
+      const token = new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: wire.fetch, now: () => wire.now });
+      const adapter = new RunnerDrive({ token, attempt: 1, fetch: fetchFn, pacing });
+      await adapter.get(folder.id);
+      const fenced = await (await adapter.batch()).createText(folder.id, 'New.md', 'Words.').then(() => null, (e: unknown) => e);
+      const plain = await new DriveHttp({ token: async () => 't', fetch: async () => answer(status, reason), context: 'headless', pacing })
+        .createText(folder.id, 'New.md', 'Words.').then(() => null, (e: unknown) => e);
+      expect([status, reason, shape(fenced)]).toEqual([status, reason, shape(plain)]);
+    }
+    // One classifier, no exceptions: no status is split into kinds anywhere but the transport's table.
+    const root = join(import.meta.dirname, '../..');
+    const sources = (dir: string): string[] =>
+      readdirSync(join(root, dir), { withFileTypes: true }).flatMap((d) =>
+        d.isDirectory() ? sources(join(dir, d.name)) : /\.tsx?$/.test(d.name) && !/\.test\.tsx?$/.test(d.name) ? [join(dir, d.name)] : [],
+      );
+    const split = /(?:^|[^.\w]|\bres\.|\bresponse\.)status\s*(?:>=|<=|>|<)\s*[45]\d\d|(?:^|[^.\w]|\bres\.|\bresponse\.)status\s*[!=]==\s*(?:408|429|5\d\d)/;
+    const found = ['src', 'api/src', 'runner/src']
+      .flatMap(sources)
+      .filter((f) => !f.startsWith(join('src', 'testing')) && f !== join('src', 'data', 'drive', 'transport.ts'))
+      .flatMap((f) => readFileSync(join(root, f), 'utf8').split('\n').flatMap((line, i) => (split.test(line) ? [`${relative('.', f)}:${i + 1}`] : [])));
+    expect(found).toEqual([]);
   });
 });
