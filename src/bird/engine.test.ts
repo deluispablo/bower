@@ -504,7 +504,7 @@ describe("the engine's named actions", () => {
               const probe = Object.assign(Object.create(Object.getPrototypeOf(engine)) as ProfileProbe, engine, {
                 H: { ...internals.H }, S: { ...internals.S }, B: { ...internals.B },
                 C: Object.fromEntries(Object.entries(internals.C).map(([key, spring]) => [key, { ...spring }])),
-              });
+              }) as unknown as ProfileProbe;
               const direction = Math.sign(-10 - probe.H.v);
               const before = probe.H.v;
               probe.H.vel = -direction * 360;
@@ -613,8 +613,9 @@ describe("the engine's named actions", () => {
             const now = readHead();
             const v = (now - head) / dt;
             const asleep = time - inputAt >= 60;
-            const rising = time - stepAt < 0.15;
+            const rising = stepAt > -Infinity && Math.abs(head + 10) > 2;
             const snap = rising || time < actSnapUntil;
+            if (Math.abs(now + 10) <= 2) stepAt = -Infinity;
             if (snap && !wasSnap) snapFrom = head;
             if (Math.abs(v) > 360) problems.push(`frame ${frame}: speed ${v.toFixed(2)} deg/s`);
             if (snap && (now < -12 - 2 || now > Math.max(7, snapFrom) + 2)) problems.push(`frame ${frame}: overshoot ${now.toFixed(2)}`);
