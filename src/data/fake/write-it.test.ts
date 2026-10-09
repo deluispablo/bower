@@ -48,6 +48,16 @@ describe('the write-it situation', () => {
     expect(parseNote(MONEY, await note(MONEY)).currentState).toEqual(WRITE_IT_STATES[0]?.lines);
   });
 
+  it('a yes writes only the update that was shown', async () => {
+    // TL-P4-19 addendum 17: the run that acts on the yes has a different update for Money; the yes was to the one shown.
+    await tidyUp(drive, root, 'all', { states: WRITE_IT_STATES });
+    const money = (await vault().questions()).find((q) => q.about === MONEY);
+    await answer(money?.id ?? '');
+    const other = WRITE_IT_STATES.map((st) => ({ ...st, lines: ['Money is over budget this month.'] }));
+    expect((await tidyUp(drive, root, 'instructions', { states: other })).phase).toBe('done');
+    expect(parseNote(MONEY, await note(MONEY)).currentState).toEqual(WRITE_IT_STATES[0]?.lines);
+  });
+
   it('a change elsewhere asks again, and the update typed by hand settles as an answered row', async () => {
     await tidyUp(drive, root, 'all', { states: WRITE_IT_STATES });
     const car = (await vault().questions()).find((q) => q.about === CAR);
