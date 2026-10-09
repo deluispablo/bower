@@ -18,7 +18,7 @@
 5. **One listener home.** The hook takes a `look` source argument: `document` for the perched bird, the parent for the layer. d-v2-07 uses it.
 6. **One home for what Bower holds: `holding()`.**
    - The SVG `b-carry` is always rendered, hidden, and `RigPart` gains `'carry'`.
-   - `holding(true` shows it, and so does a `.posed.carry .b-carry` still-frame rule.
+   - `holding(true)` shows it, and so does a `.posed.carry .b-carry` still-frame rule.
    - The engine's HTML `carry` (`engine.ts:33`) is documented as the label chip. d-v2-06 changes its content and never adds a third carry.
 7. **Injected sources.** The engine takes an injected frame scheduler and random source. They default to `requestAnimationFrame` (:137, :503) and `Math.random` (:68, :572, :615), so tests run on fake frames with a seed.
 8. **Inner wrapper.** The engine owns an inner wrapper. The caller's `className` and `style` stay on the outer div. List any caller transform in the notes.

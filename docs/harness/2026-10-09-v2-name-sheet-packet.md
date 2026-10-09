@@ -20,7 +20,7 @@
    - The field spans the sheet's width, with the v2-field style.
    - The name is selected when the sheet opens.
    - A muted line sits under the field (rename of a note or a file only): "Links to this note keep working." or "Links to this file keep working." Folders get no line.
-  - The selection covers the name without its extension.
+   - The selection covers the name without its extension.
    - Buttons: "Cancel" (outline) and "Rename" (primary), side by side, each half the width and 44 px tall. For new note and new folder, the primary keeps today's label.
 2. **One New-note path.** `NewNoteButton` calls `setNaming({folder, type: 'note'})` and its own sheet is deleted. It gains NameSheet's slash rule and applied-path handling.
 3. **Second-way risk:** do not style FolderScreen's copy as well; delete it.
