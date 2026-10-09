@@ -6036,7 +6036,7 @@
       "A missing hook path fails check-harness."
     ],
     "verify": "pnpm exec vitest run src/hooks.test.ts -t \"a hook denial exits 2|every hook script named in settings exists|the main-checkout guard uses the hook input cwd\"",
-    "note": "TL-P4-20 rows 2-3. Owner authorized the config changes in the coordinator chat 2026-10-09. Packet 2026-10-09-c3-hooks-packet.md."
+    "note": "TL-P4-20 rows 2-3. Owner authorized the config changes in the coordinator chat 2026-10-09. Packet 2026-10-09-c3-hooks-packet.md. Red a695ad3b, fix 1345dd13, Stop gate dropped f91584a3 (addendum 3), merged b2620a1e. Red proved by hand at a695ad3b: the 3 kept verify tests fail on assertions (/tmp/c3hooks-handred.log); the revert cannot apply (gate files deleted later)."
   },
   {
     "id": "c3-permissions",
