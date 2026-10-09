@@ -34,3 +34,19 @@ Bookmarks remain phone-only; the desktop Files overview is unchanged.
 - [WCAG 2.5.5, Target Size (Enhanced)](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html):
   targets are at least 44 by 44 CSS pixels, subject to the criterion's exceptions;
   this entry reuses the existing shared phone height rule.
+
+## Bookmark assertion follow-up
+
+Coordinator: corrected this entry's new bookmark test to check the folder URL,
+its level-one heading and a seeded child; the phone heading includes the
+"More for Flat hunt" button's accessible name, so exact "Flat hunt" cannot match.
+The click still calls `act.open(node)`, which navigates to the folder route;
+fake seeding preserves `Projects/Flat hunt` from the demo fixture. Existing
+bookmark specs check chip presence; folder-opening specs also check folder
+content. No app code changed, and this is not a tests-changed case.
+
+The coordinator reported the size and axe assertions passed on both projects;
+the exact heading assertion failed after clicking. No e2e or `pnpm check` was
+run for this follow-up, as instructed.
+ESLint passed for `e2e/c4-segmented-one.spec.ts`; log:
+`/tmp/c4-segmented-one-followup-eslint.log`.
