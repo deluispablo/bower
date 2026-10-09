@@ -20,7 +20,7 @@ All three share: border-radius 999px, background `--fresh`, color `--brand-line`
 
 1. **One home for the look.** The pill's look (radius, fill, colour, size, weight and its own padding) lives once in `src/ui/`, as a class in `ui.module.css` or a tiny `Pill` component. Use whichever matches how src/ui exposes similar marks today, and say which on the card.
 2. **Placement stays with each caller:** note's `margin-left` and `vertical-align`, and `flex: none` in home and folder. Each caller keeps only its placement rule, or none.
-3. **Same pixels.** Pick one padding and name it on the card. The designer checks whether the 1px difference between note (0 8px) and home/folder (1px 9px) is visible.
+3. **Shape (designer, 2026-10-09).** Use the canvas `.newtag`: a fixed 22 px height, `padding: 0 9px`, centred with inline-flex. The 1 px vertical padding goes; today the pill is 21.5 px tall, so nothing visibly changes. The note pill moves from 0 8px to 0 9px, 1 px each side, which is accepted.
 4. **Callers:** NoteScreen, Home, FolderScreen and MovePicker's "Now here". MovePicker drops its import of `folder.module.css`.
 
 ## What the person sees (TL-P4-22; the designer signs this off before dispatch)
@@ -33,6 +33,8 @@ All three share: border-radius 999px, background `--fresh`, color `--brand-line`
 | "Now here" in the Move sheet | Unchanged | Unchanged |
 
 No strings change.
+
+**Signed off** by the designer on 2026-10-09 (85e89e61), with the .newtag shape in point 3.
 
 ## Red
 

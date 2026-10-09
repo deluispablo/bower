@@ -6276,8 +6276,9 @@
       "Cancel closes the sheet and returns focus to the opener."
     ],
     "verify": "pnpm vitest run src/features/files/MovePicker.test.tsx -t \"the move sheet's arrows step over the current folder\" && bash scripts/e2e-both.sh e2e/v2-move-here.spec.ts -g \"the move sheet shows where the thing is now and it cannot be chosen|the move sheet has a cancel that returns focus to its opener\"",
-    "note": "TL-P4-21 order 8; spec d-v2-18; impact block d-v2-18. Codex slot (TL-P4-23, lead 2026-10-09); a fresh Claude reviewer reviews it. Designer signed off at 59c72856 with the badge row. Packet 2026-10-09-d-v2-18-packet.md. implementer: codex. Red 3a16e205, fix 137b59dd; round 2 (Enter on the current folder, designer) red 72ad0e8f, fix 65425820. P4-51 PASS (4 minors).",
-    "review": "P4-51 PASS"
+    "note": "TL-P4-21 order 8; spec d-v2-18; impact block d-v2-18. Codex slot (TL-P4-23, lead 2026-10-09); a fresh Claude reviewer reviews it. Designer signed off at 59c72856 with the badge row. Packet 2026-10-09-d-v2-18-packet.md. implementer: codex. Red 3a16e205, fix 137b59dd; round 2 (Enter on the current folder, designer) red 72ad0e8f, fix 65425820. P4-51 PASS (4 minors). Designer verified at bee8a889.",
+    "review": "P4-51 PASS",
+    "design": "verified"
   },
   {
     "id": "c4-new-pill-one",
