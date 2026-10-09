@@ -10,7 +10,8 @@ import {
   useState,
   type CSSProperties,
 } from 'react';
-import { prefersReducedMotion, usePrefs } from '@/app/prefs';
+import { usePrefs } from '@/app/prefs';
+import { useMedia } from '@/ui/media';
 import { BirdEngine, type EngineOptions, type PoseName, type Point, type TargetFn } from './engine';
 import { useBirdTurn, useOutranked } from './presence';
 import { Rig, type RigPart } from './Rig';
@@ -22,7 +23,8 @@ export type Pose = PoseName;
 /** Whether the Bower holding the turn may move: the setting, the system. */
 function useMoves(turn: boolean): boolean {
   const birdMoves = usePrefs((p) => p.birdMoves);
-  return turn && birdMoves && !prefersReducedMotion();
+  const reduced = useMedia('(prefers-reduced-motion: reduce)');
+  return turn && birdMoves && !reduced;
 }
 
 interface EngineEls {
@@ -45,8 +47,9 @@ interface EngineUse {
 /**
  * The one engine mount, for the layer and the perched bird: the rig's parts,
  * the engine, its size and speed, start and stop on motion and visibility,
- * home on resize, and the pointer (`look`: the layer's parent, or the whole
- * document for a perched bird). Presence gets the engine while it moves.
+ * home on resize, and the look source: the pointer and touches (over the
+ * layer's parent, or the whole document for a perched bird) and the focused
+ * control. Presence gets the engine while it moves.
  */
 function useBirdEngine(els: EngineEls, home: TargetFn, size: number, moves: boolean, look: 'parent' | 'document', use: EngineUse) {
   const parts = useRef<Partial<Record<RigPart, SVGGElement | null>>>({});
@@ -85,7 +88,8 @@ function useBirdEngine(els: EngineEls, home: TargetFn, size: number, moves: bool
       },
       () => homeRef.current(),
       size,
-      options,
+      // A perched bird dozes after a minute with no input; a layer's never does.
+      { sleeps: perched, ...options },
     );
     engine.current = e;
     return () => {
@@ -130,17 +134,46 @@ function useBirdEngine(els: EngineEls, home: TargetFn, size: number, moves: bool
     return () => setHandle(null);
   }, [moves, live, setHandle]);
 
-  // Bower watches the pointer while it is over the layer's parent, or anywhere for a perched bird.
+  // The look source: Bower watches the pointer and touches over the layer's parent (anywhere, for a
+  // perched bird) and the focused control. Listeners only read; they never stop or change the event.
   useEffect(() => {
     const host = look === 'document' ? document : els.frame.current?.parentElement;
     if (!host || !moves) return;
-    const onMove = (ev: Event): void => {
+    const toFrame = (x: number, y: number): Point | null => {
       const r = els.frame.current?.getBoundingClientRect();
-      if (r && ev instanceof PointerEvent) engine.current?.look({ x: ev.clientX - r.left, y: ev.clientY - r.top });
+      return r ? { x: x - r.left, y: y - r.top } : null;
     };
-    host.addEventListener('pointermove', onMove);
-    return () => host.removeEventListener('pointermove', onMove);
-    // The elements are refs, read when the pointer moves.
+    const onPointer = (ev: Event): void => {
+      if (!(ev instanceof MouseEvent)) return;
+      const p = toFrame(ev.clientX, ev.clientY);
+      if (p) engine.current?.look(p, ev.type === 'pointerdown' ? 'touch' : 'pointer');
+    };
+    // The focused control's place is read each frame, so the gaze follows it as the page scrolls or
+    // lays out again, and ends when focus leaves it. A key with nothing focused still counts as input,
+    // and leaves a live pointer gaze as it is.
+    const onFocus = (ev: Event): void => {
+      const el = ev.type === 'keydown' ? document.activeElement : ev.target;
+      if (!(el instanceof Element) || el === document.body || el === document.documentElement) {
+        engine.current?.look(null, 'focus');
+        return;
+      }
+      engine.current?.look(() => {
+        if (!el.isConnected || document.activeElement !== el) return null;
+        const t = el.getBoundingClientRect();
+        return toFrame(t.left + t.width / 2, t.top + t.height / 2);
+      }, 'focus');
+    };
+    host.addEventListener('pointermove', onPointer);
+    host.addEventListener('pointerdown', onPointer);
+    document.addEventListener('focusin', onFocus);
+    document.addEventListener('keydown', onFocus);
+    return () => {
+      host.removeEventListener('pointermove', onPointer);
+      host.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('focusin', onFocus);
+      document.removeEventListener('keydown', onFocus);
+    };
+    // The elements are refs, read when an input comes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moves, look]);
 
@@ -182,7 +215,7 @@ export function PoseBower({ pose, size, priority = 0, minor = false, className =
   }, [size]);
   // The feet on y 92 of the drawing, in the middle of the box.
   const home = useCallback(() => ({ x: drawn / 2, y: 0.92 * drawn }), [drawn]);
-  const { onPart } = useBirdEngine({ bird: perch, frame: box }, home, drawn, moves, 'document', {
+  const { onPart, engine } = useBirdEngine({ bird: perch, frame: box }, home, drawn, moves, 'document', {
     pose,
     setHandle,
     options: engineOptions,
@@ -194,6 +227,9 @@ export function PoseBower({ pose, size, priority = 0, minor = false, className =
       style={{ width: size, height: size, ...style, ...(outranked ? { visibility: 'hidden' } : {}) }}
       data-pose={pose}
       data-bird
+      aria-hidden="true"
+      // A tap pokes Bower (pointer or touch only: it is never focusable, and no key pokes it).
+      onPointerDown={() => engine.current?.poke()}
     >
       <div ref={perch} className="bird-perch">
         <Rig onPart={onPart} />

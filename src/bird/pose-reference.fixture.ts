@@ -16,6 +16,7 @@
  * Blink (5.2 s) is left out.
  */
 import type { Pose } from './Bower';
+import type { ActName } from './engine';
 
 export type PartKey =
   | 'dx'
@@ -93,20 +94,10 @@ export interface PoseRef {
 }
 
 export const POSE_REFERENCE: Record<Pose, PoseRef> = {
-  // snaps 6s (head 0 → -12 → 7 → 0), flick 6s (tail -14 at 74%, 4 at 77%)
-  idle: {
-    period: 6,
-    parts: { head: { peak: -12, rest: 0, restAt: 0.1, range: [-12, 7] }, tail: { peak: -14, rest: 0, restAt: 0.5, range: [-14, 4] } },
-  },
-  // snaps 4s, tuft held at 8deg, iris look 4s (-2.2px at 42–70%, 1px at 72–100%)
-  wait: {
-    period: 4,
-    parts: {
-      head: { peak: -12, rest: 0, restAt: 0.1, range: [-12, 7] },
-      tuft: { peak: 8, rest: 8, restAt: 0.5, range: [8, 8] },
-      iris: { peak: -2.2, rest: 0, restAt: 0.2, range: [-2.2, 1] },
-    },
-  },
+  // idle and wait keep only their rest frames: the mind's acts (ACT_REFERENCE) replaced their CSS loops (TL-P4-25).
+  idle: { period: 6, parts: {} },
+  // tuft held at 8deg
+  wait: { period: 4, parts: { tuft: { peak: 8, rest: 8, restAt: 0.5, range: [8, 8] } } },
   // peck 2.2s (rig 24–25deg at 40–64%), peckhead (14deg, then -10deg at 76–88%), pecktail (-18deg at 44%)
   read: {
     period: 2.2,
@@ -185,6 +176,89 @@ export const POSE_REFERENCE: Record<Pose, PoseRef> = {
     },
   },
 };
+
+/** The mind's acts in idle and wait (TL-P4-25): which part each one moves and the values it reaches. */
+
+export interface ActRef {
+  /** The pose the act is played in (look is wait's own). */
+  pose: 'idle' | 'wait';
+  /** The part the act moves and the values it reaches (snap reaches one of its two); none for a pause. */
+  part?: PartKey;
+  values: number[];
+}
+
+export const ACT_REFERENCE: Record<ActName, ActRef> = {
+  // the CSS snaps: head to -12deg or 7deg
+  snap: { pose: 'idle', part: 'head', values: [-12, 7] },
+  // the CSS flick: tail to -14deg, then 4deg
+  flick: { pose: 'idle', part: 'tail', values: [-14, 4] },
+  chirp: { pose: 'idle', part: 'jaw', values: [14] },
+  wing: { pose: 'idle', part: 'wing', values: [-10] },
+  // head to the wing: 38 -> 42 -> 38deg, twice
+  preen: { pose: 'idle', part: 'head', values: [38, 42] },
+  pause: { pose: 'idle', values: [] },
+  // wait's CSS iris loop: -2.2px, then 1px
+  look: { pose: 'wait', part: 'iris', values: [-2.2, 1] },
+};
+
+/**
+ * What is wrong with one act, sampled from before it starts until after it
+ * ends: its part reaches one of its values (within 2 degrees or units) and
+ * never goes more than 2 past them; every other part stays at its rest.
+ */
+export function actProblems(name: ActName, samples: ReadonlyArray<Record<PartKey, number>>, rest: Record<PartKey, number>): string[] {
+  const ref = ACT_REFERENCE[name];
+  const problems: string[] = [];
+  for (const k of Object.keys(NEUTRAL) as PartKey[]) {
+    if (k === 'eye') continue;
+    const values = samples.map((s) => s[k]);
+    if (k !== ref.part) {
+      const off = Math.max(...values.map((v) => Math.abs(v - rest[k])));
+      if (off > (PART_KIND[k] === 'scale' ? 0.02 : 1)) problems.push(`${name}: ${k} moves ${off.toFixed(3)} but the act leaves it still`);
+      continue;
+    }
+    const peak = values.reduce((a, v) => (Math.abs(v - rest[k]) > Math.abs(a - rest[k]) ? v : a), rest[k]);
+    if (!ref.values.some((v) => Math.abs(peak - v) <= 2)) problems.push(`${name}: ${k} peaks at ${peak.toFixed(2)}, reference ${ref.values.join(' or ')}`);
+    const lo = Math.min(rest[k], ...ref.values) - 2;
+    const hi = Math.max(rest[k], ...ref.values) + 2;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    if (min < lo || max > hi) problems.push(`${name}: ${k} spans ${min.toFixed(2)}..${max.toFixed(2)}, range ${lo}..${hi}`);
+  }
+  return problems;
+}
+
+const nums = (s: string | null | undefined): number[] => (s ?? '').match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
+
+/** Reads every part the engine moves, in the drawing's units (`size`: the bird's box in pixels). */
+export function readRig(bird: HTMLElement, part: (name: 'rig' | 'head' | 'tail' | 'wing' | 'legs' | 'jaw' | 'tuft' | 'eye' | 'iris') => Element | null | undefined, size = 100) {
+  const at = (name: Parameters<typeof part>[0]): number[] => nums(part(name)?.getAttribute('transform'));
+  return (): Record<PartKey, number> => {
+    const [tx = 0, ty = 0] = nums(bird.style.transform);
+    const rig = at('rig');
+    const head = at('head');
+    const wing = at('wing');
+    const tuft = at('tuft');
+    return {
+      dx: (tx * 100) / size,
+      dy: (ty * 100) / size,
+      pitch: rig[0] ?? 0,
+      squash: rig[6] ?? 1,
+      stretch: rig[5] ?? 1,
+      head: head[0] ?? 0,
+      headY: head[4] ?? 0,
+      tail: at('tail')[0] ?? 0,
+      wing: wing[0] ?? 0,
+      wingScale: wing[6] ?? 1,
+      legs: at('legs')[3] ?? 1,
+      jaw: at('jaw')[0] ?? 0,
+      tuft: tuft[0] ?? 0,
+      tuftY: tuft[4] ?? 0,
+      eye: at('eye')[3] ?? 1,
+      iris: at('iris')[0] ?? 0,
+    };
+  };
+}
 
 export const FPS = 60;
 

@@ -31,3 +31,39 @@ test('no CSS animation runs on a bird part while the engine runs', async ({ page
 
   await expectAxeClean(page, { include: 'main' });
 });
+
+/**
+ * d-v2-07: one bird moves per screen. Every bird's transforms are sampled until the bird with the
+ * turn changes (3 s at most); exactly one bird changed, and no bird is left out of the count.
+ */
+test('only one bird changes transforms per screen', async ({ page }) => {
+  await page.goto(withSource('/?scenario=default&time=instant'));
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+  await expect(page.getByRole('heading', { level: 1, name: /G'day, Alex/ })).toBeVisible();
+
+  const sample = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('[data-bird]')].map((bird) =>
+        [bird, ...bird.querySelectorAll('*')]
+          .map((el) => `${el.getAttribute('transform') ?? ''}|${el instanceof HTMLElement ? el.style.transform : ''}`)
+          .join(';'),
+      ),
+    );
+  const first = await sample();
+  expect(first.length).toBeGreaterThan(0);
+  let changed: number[] = [];
+  await expect
+    .poll(
+      async () => {
+        const now = await sample();
+        expect(now).toHaveLength(first.length);
+        changed = now.flatMap((s, i) => (s === first[i] ? [] : [i]));
+        return changed.length;
+      },
+      { timeout: 3000 },
+    )
+    .toBeGreaterThan(0);
+  expect(changed).toHaveLength(1);
+
+  await expectAxeClean(page, { include: 'main' });
+});
