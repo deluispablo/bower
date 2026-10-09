@@ -12,6 +12,7 @@ You are the one explicitly assigned integration coordinator for this batch. Foll
 - Token budget ([TL-P2-41](../../docs/harness/2026-10-06-tl-p2-41-token-budget.md)):
   - one-page packets that point workers to `WORKER.md` only, each with an acceptance contract: named tests, observable behaviours, files in scope;
   - dispatch Claude workers only as the project agents (`bower-implementer`, `bower-reviewer`, `bower-evaluator`, `bower-mechanical`, `bower-escalated`) and never pass `model`; Codex workers through `codex exec --json` with an explicit reasoning effort ([TL-P2-44](../../docs/harness/2026-10-06-tl-p2-44-enforced-token-method.md));
+  - Codex capacity in stage 4 ([TL-P4-23](../../docs/harness/2026-10-09-tl-p4-23-codex-capacity.md)): Codex takes well-specified, non-escalated Sonnet-rung entries, at most one at a time, beside two Claude workers on files that do not overlap. You prepare its worktree (`pnpm install`), dispatch `codex exec --json --sandbox workspace-write` in it, run its gates through `harness/with-lock.sh`, and stand in for the hooks: a clean tree and a green `pnpm check` at its HEAD before review. Its branch uses the normal worker name, never `codex/*`. A fresh Claude `bower-reviewer` reviews every Codex entry;
   - one review from the other provider, against the contract, only for contracts, data safety and shared persistence, plus one batch review at the freeze; every fix round and every climb is a fresh session, never a resumed worker;
   - logs to files;
   - messages of 10 lines at most;
