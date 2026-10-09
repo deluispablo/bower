@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Merges a worker branch into the current branch only if the merged tree passes the check.
 #  git merge --no-ff --no-commit <branch>, then `pnpm check` (output to a log under /tmp);
-#  green: commit with the standard merge message; red: git merge --abort and print only the failures.
+#  green: commit with the standard merge message, then remove the branch's worktree and branch (scripts/harness-git.mjs cleanup: protected list, dirty or busy worktrees kept); red: git merge --abort and print only the failures.
 # Runs in the repository it is started in. INTEGRATE_CHECK replaces `pnpm check` (tests use a stub).
 # usage: bash harness/integrate.sh <branch>
 set -euo pipefail
@@ -19,6 +19,7 @@ log=$(mktemp /tmp/integrate-check.XXXXXX)
 # One lock for heavy runs, shared with done.sh (harness/with-lock.sh); its messages stay on the terminal.
 if bash "$(dirname "$0")/with-lock.sh" bash -c 'bash -c "$2" >"$1" 2>&1' _ "$log" "${INTEGRATE_CHECK:-pnpm check}"; then
   git commit -q --no-edit && git log --oneline -1
+  node "$(dirname "$0")/../scripts/harness-git.mjs" cleanup "$branch"
 else
   git merge --abort
   { grep -E "FAIL|✗|×|AssertionError|error TS|Error:" "$log" | head -40; } || tail -20 "$log"
