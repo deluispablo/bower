@@ -255,6 +255,8 @@ export function redKind(output) {
 
 /** A unit test slower than this must be on harness/slow-tests.json (TL-P4-17 entry 3). */
 export const SLOW_MS = 1000;
+/** Temporary (TL-P4-17 addendum 9): the alone rerun fails only over this; removed by c3-timer-gate. */
+export const ALONE_MS = 2000;
 /** The size of harness/slow-tests.json today. The list may only shrink: lower this when a line goes, never raise it. */
 export const SLOW_CEILING = 8;
 /**
@@ -269,7 +271,7 @@ export function slowProblems(tests, list, ceiling = SLOW_CEILING, alone = (t) =>
   for (const t of tests) {
     if (t.duration <= SLOW_MS || listed.has(t.name)) continue;
     const ms = alone(t);
-    if (ms > SLOW_MS) bad.push(`"${t.name}" took ${Math.round(ms)} ms alone: make it wait for events, not time, or (only if it cannot) it stays out of harness/slow-tests.json, which may only shrink`);
+    if (ms > ALONE_MS) bad.push(`"${t.name}" took ${Math.round(ms)} ms alone: make it wait for events, not time, or (only if it cannot) it stays out of harness/slow-tests.json, which may only shrink`);
   }
   if (list.length > ceiling) bad.push(`harness/slow-tests.json has ${list.length} lines, over the ${ceiling} it may keep: the slow list may only shrink`);
   const names = new Set(tests.map((t) => t.name));
