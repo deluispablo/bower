@@ -111,3 +111,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `1d893137` | c3-state-mark | none: fake seed signature only (an optional keys map) |
 | `a802a1a2` | c3-state-mark | none: red tests only (`src/data/contracts/note-edit.test.ts`, `runner/test/ask-answer-loop.test.ts`) |
 | `54291695` | c3-state-mark | Lenient on read (TL-P4-19 addendum 22): a stored manifest with a sourceless news line parses again; writes and plans still refuse one. A non-clash refusal of a granted write (addendum 21) adds one answered row (`refused`, existing shape) and keeps the answer; nothing stored changes shape. |
+| `54629de1` | c4-focus-return | none: where focus lands after a sheet or the tree menu closes; the tree menu returns the keyboard to the tree at once. No stored data, no strings. |
