@@ -70,7 +70,8 @@ type SpringName =
  * the drawn angle `v` and its velocity `vel` (degrees a second); its target is
  * the act channel's `t` plus the gaze channel's `gaze`. Each frame the velocity
  * moves toward the target under the move's speed and acceleration caps, so a
- * target change never touches the state and the speed never steps.
+ * target change never touches the drawn angle. A snap owns its target through
+ * its hard stop; later moves use the return profile.
  */
 interface HeadProfile {
   v: number;
@@ -82,7 +83,7 @@ interface HeadProfile {
   /** Target channels last followed, and the class of that target change. */
   actTarget: number;
   gazeTarget: number;
-  snap: boolean;
+  snapTarget: number | null;
 }
 /**
  * Time-based caps (TL-P4-25 addendum 8), in degrees/second and degrees/second².
@@ -96,16 +97,26 @@ const HEAD_MOVES = {
   snap: { speed: 360 - DRAWN / FRAME, accel: Infinity },
 } as const;
 /** One frame of the head's profile, `dt` seconds long. */
-const follow = (h: HeadProfile, dt: number, move: (typeof HEAD_MOVES)[keyof typeof HEAD_MOVES]): void => {
+const follow = (
+  h: HeadProfile,
+  dt: number,
+  move: (typeof HEAD_MOVES)[keyof typeof HEAD_MOVES],
+): void => {
   if (dt <= 0) return;
   const top = move.speed * dt;
-  const d = h.t + h.gaze - h.v;
+  const d = (h.snapTarget ?? h.t + h.gaze) - h.v;
+  // A snap has no acceleration cap: run at the speed cap, then stop on target.
+  if (h.snapTarget !== null) {
+    const s = Math.sign(d) * Math.min(top, Math.abs(d));
+    h.v += s;
+    h.vel = s === d ? 0 : s / dt;
+    return;
+  }
   // Express the acceleration-limited velocity change as this frame's displacement.
   const a = move.accel * dt * dt;
   const was = h.vel * dt;
   // The fastest step that still brakes onto the target, each later step `braking` smaller: s + (s - a) + ... + (s - n a) = |d|.
-  // Sudden moves may accelerate at once, but brake with the return cap so the next class can take over at rest.
-  const braking = HEAD_MOVES.glide.accel * dt * dt;
+  const braking = a;
   const n = Math.floor((Math.sqrt(1 + (8 * Math.abs(d)) / braking) - 1) / 2);
   const brake = (Math.abs(d) + (braking * n * (n + 1)) / 2) / (n + 1);
   let s = clamp(Math.sign(d) * Math.min(top, brake), was - a, was + a);
@@ -130,6 +141,14 @@ const pin = (c: Spring, v: number): void => {
   c.v = v;
   c.t = v;
   c.vel = 0;
+};
+
+/** The engine owns transforms until release; retain each last rendered value. */
+const drawnTransforms = new WeakMap<SVGGElement, string>();
+const transform = (part: SVGGElement, value: string): void => {
+  if (drawnTransforms.get(part) === value) return;
+  part.setAttribute('transform', value);
+  drawnTransforms.set(part, value);
 };
 
 /** The poses a perched Bower plays in place (the same names as the still frames). */
@@ -281,7 +300,15 @@ export class BirdEngine {
     iy: spring(IRIS_REST.y, 600, 40),
   };
   /** The head, the one part that moves by its motion profile instead of a spring. */
-  private H: HeadProfile = { v: 0, vel: 0, t: 0, gaze: 0, actTarget: 0, gazeTarget: 0, snap: false };
+  private H: HeadProfile = {
+    v: 0,
+    vel: 0,
+    t: 0,
+    gaze: 0,
+    actTarget: 0,
+    gazeTarget: 0,
+    snapTarget: null,
+  };
   private B = {
     x: 0,
     y: 0,
@@ -315,8 +342,9 @@ export class BirdEngine {
     quietT: 0,
     /** The act under way on the act channel (idle, wait, a layer's bird between flights). */
     doing: null as Action | null,
-    /** The startle's seconds left, and the tuft's angle when it began. */
+    /** The startle's seconds left, head settlement, and the tuft's starting angle. */
     startleT: 0,
+    startleLanded: false,
     startleFrom: 0,
     sleepT0: 0,
     /** The latest tap on a layer bird in flight or carrying, played when it lands. */
@@ -331,6 +359,9 @@ export class BirdEngine {
     behindT: 0,
   };
   private raf = 0;
+  private drawnSize: number | null = null;
+  private drawnPlace: string | null = null;
+  private drawnGlyph: boolean | null = null;
   private last = 0;
   private running = false;
   private idleWaiters: Array<() => void> = [];
@@ -386,9 +417,15 @@ export class BirdEngine {
   release(): void {
     this.stop();
     const P = this.parts;
-    for (const g of [P.rig, P.head, P.tail, P.wing, P.legs, P.jaw, P.tuft, P.eye, P.iris]) g.removeAttribute('transform');
+    for (const g of [P.rig, P.head, P.tail, P.wing, P.legs, P.jaw, P.tuft, P.eye, P.iris]) {
+      g.removeAttribute('transform');
+      drawnTransforms.delete(g);
+    }
     P.glyph?.setAttribute('display', 'none');
     for (const k of ['transform', 'width', 'height', 'opacity'] as const) P.bird.style[k] = '';
+    this.drawnSize = null;
+    this.drawnPlace = null;
+    this.drawnGlyph = null;
   }
   /**
    * Plays a pose in place, looping its fixed script, and never flies home or
@@ -469,6 +506,7 @@ export class BirdEngine {
    */
   private startle(): void {
     this.S.startleT = STARTLE_TOTAL;
+    this.S.startleLanded = false;
     this.S.startleFrom = this.C.tuft.v;
     this.H.gaze = 0;
   }
@@ -1161,10 +1199,30 @@ export class BirdEngine {
     if (S.startleT > 0) {
       // The tuft keyed and eased as the acts are, back to the rest `rest()` just set: no spring overshoot. The head's
       // profile rises to the step's angle and holds it, then returns to rest when the hold ends.
-      S.startleT = Math.max(0, S.startleT - dt);
       const { rise, seconds } = STARTLE;
+      // The tuft rises independently. The hold clock waits at its peak for
+      // head settlement, then counts the full hold before the existing fall.
+      const holdStart = seconds + STARTLE.fall;
+      S.startleT =
+        S.startleT > holdStart
+          ? Math.max(holdStart, S.startleT - dt)
+          : S.startleLanded
+            ? Math.max(0, S.startleT - dt)
+            : holdStart;
       const c = this.C.tuft;
-      pin(c, keyed(STARTLE_TOTAL - S.startleT, [[0, S.startleFrom], [rise, STARTLE.tuft], [rise + seconds, STARTLE.tuft], [STARTLE_TOTAL, c.t]], true));
+      pin(
+        c,
+        keyed(
+          STARTLE_TOTAL - S.startleT,
+          [
+            [0, S.startleFrom],
+            [rise, STARTLE.tuft],
+            [rise + seconds, STARTLE.tuft],
+            [STARTLE_TOTAL, c.t],
+          ],
+          true,
+        ),
+      );
       if (STARTLE_TOTAL - S.startleT < rise + seconds) this.H.t = STARTLE.head;
     }
     this.gaze(dt, who === 'layer' ? LAYER_HEAD : PERCHED_HEAD);
@@ -1233,20 +1291,38 @@ export class BirdEngine {
       C.jaw.t = 18 * Math.abs(Math.sin(S.chirpT * Math.PI * 6));
       if (S.chirpT <= 0) C.jaw.t = 0;
     }
-    for (const c of Object.values(C)) {
+    for (const name in C) {
+      const c = C[name as SpringName];
+      if (c.vel === 0 && c.v === c.t) continue;
       const a = c.k * (c.t - c.v) - c.c * c.vel;
       c.vel += a * dt;
       c.v += c.vel * dt;
     }
-    // The startle accelerates suddenly on the rise, then brakes under return caps while its target stays held.
-    const rising = S.startleT > STARTLE_TOTAL - STARTLE.rise;
     const h = this.H;
-    if (h.t !== h.actTarget) h.snap = this.doing === 'snap';
-    // A gaze retarget owns the class until the act target changes again; a held snap cannot upgrade it later.
-    if (h.gaze !== h.gazeTarget) h.snap = false;
-    h.actTarget = h.t;
-    h.gazeTarget = h.gaze;
-    follow(h, headDt, rising || h.snap ? HEAD_MOVES.snap : HEAD_MOVES.glide);
+    const rising = S.startleT > 0 && !S.startleLanded;
+    if (rising) h.snapTarget = STARTLE.head;
+    if (h.snapTarget === null) {
+      // Gaze changes start returns; an act snap freezes its combined target
+      // until the measured head has stopped, even if either channel retargets.
+      if (h.t !== h.actTarget && this.doing === 'snap' && h.gaze === h.gazeTarget) {
+        h.snapTarget = h.t + h.gaze;
+      }
+      h.actTarget = h.t;
+      h.gazeTarget = h.gaze;
+    }
+    const before = h.v;
+    follow(h, headDt, h.snapTarget !== null ? HEAD_MOVES.snap : HEAD_MOVES.glide);
+    // The stationary frame completes the segment, including its uncapped stop.
+    if (
+      headDt > 0 &&
+      h.snapTarget !== null &&
+      h.v === before &&
+      h.vel === 0 &&
+      Math.abs(h.v - h.snapTarget) <= 2
+    ) {
+      h.snapTarget = null;
+      if (rising) S.startleLanded = true;
+    }
     if (B.flying) {
       B.ph += dt * Math.PI * 2 * (B.flare ? 6 : 10);
       const s = Math.sin(B.ph);
@@ -1308,35 +1384,48 @@ export class BirdEngine {
     const B = this.B;
     const C = this.C;
     const Z = this.size;
-    P.bird.style.width = `${Z}px`;
-    P.bird.style.height = `${Z}px`;
+    if (this.drawnSize !== Z) {
+      P.bird.style.width = `${Z}px`;
+      P.bird.style.height = `${Z}px`;
+      this.drawnSize = Z;
+    }
     let f = C.face.v;
     if (Math.abs(f) < 0.06) f = f < 0 ? -0.06 : 0.06;
-    P.bird.style.transform = `translate(${(B.x - Z / 2).toFixed(1)}px,${(B.y + B.hopY + B.bob - 0.92 * Z).toFixed(1)}px) scaleX(${f.toFixed(3)})`;
+    const place = `translate(${(B.x - Z / 2).toFixed(1)}px,${(B.y + B.hopY + B.bob - 0.92 * Z).toFixed(1)}px) scaleX(${f.toFixed(3)})`;
+    if (this.drawnPlace !== place) {
+      P.bird.style.transform = place;
+      this.drawnPlace = place;
+    }
     if (this.pose === 'land') P.bird.style.opacity = B.opacity.toFixed(2);
     // A flier breathes on its own; a perched pose breathes only in its script (sleep).
     const sy = C.squash.v * (this.pose ? 1 : 1 + 0.014 * Math.sin(this.S.t * 2.6));
     const sx = 1 + (sy - 1) * B.girth;
-    P.rig.setAttribute(
-      'transform',
+    transform(
+      P.rig,
       `rotate(${C.pitch.v.toFixed(2)} 50 92) translate(50 92) scale(${sx.toFixed(3)} ${sy.toFixed(3)}) translate(-50 -92)`,
     );
-    P.head.setAttribute('transform', `rotate(${this.H.v.toFixed(4)} 60 50)${B.headY ? ` translate(0 ${B.headY})` : ''}`);
-    P.tail.setAttribute('transform', `rotate(${C.tail.v.toFixed(2)} 32 70)`);
-    P.wing.setAttribute(
-      'transform',
+    transform(
+      P.head,
+      `rotate(${this.H.v.toFixed(4)} 60 50)${B.headY ? ` translate(0 ${B.headY})` : ''}`,
+    );
+    transform(P.tail, `rotate(${C.tail.v.toFixed(2)} 32 70)`);
+    transform(
+      P.wing,
       `rotate(${C.wing.v.toFixed(2)} 56 55) translate(56 55) scale(1 ${B.ws.toFixed(3)}) translate(-56 -55)`,
     );
-    P.legs.setAttribute(
-      'transform',
+    transform(
+      P.legs,
       `translate(50 82) scale(1 ${Math.max(0.2, C.legs.v).toFixed(3)}) translate(-50 -82)`,
     );
-    P.jaw.setAttribute('transform', `rotate(${Math.max(0, C.jaw.v).toFixed(2)} 78 38)`);
-    P.tuft.setAttribute('transform', `rotate(${C.tuft.v.toFixed(2)} 61 23)${B.tuftY ? ` translate(0 ${B.tuftY})` : ''}`);
+    transform(P.jaw, `rotate(${Math.max(0, C.jaw.v).toFixed(2)} 78 38)`);
+    transform(
+      P.tuft,
+      `rotate(${C.tuft.v.toFixed(2)} 61 23)${B.tuftY ? ` translate(0 ${B.tuftY})` : ''}`,
+    );
     // Asleep, the eyes stay shut through the blink.
     const open = this.asleep ? 0.08 : 1 - 0.92 * this.S.blink;
-    P.eye.setAttribute('transform', `translate(70 34) scale(1 ${open.toFixed(3)}) translate(-70 -34)`);
-    P.iris.setAttribute('transform', `translate(${C.ix.v.toFixed(2)} ${C.iy.v.toFixed(2)})`);
+    transform(P.eye, `translate(70 34) scale(1 ${open.toFixed(3)}) translate(-70 -34)`);
+    transform(P.iris, `translate(${C.ix.v.toFixed(2)} ${C.iy.v.toFixed(2)})`);
     if (P.carry) {
       if (B.carrying) {
         const p = this.beak();
@@ -1347,6 +1436,10 @@ export class BirdEngine {
         P.carry.style.transform = `translate(${(p.x - w * 0.35 + C.face.v * w * 0.25).toFixed(1)}px,${(p.y - h * 0.3).toFixed(1)}px) rotate(${(C.pitch.v * C.face.v * 0.5).toFixed(1)}deg)`;
       } else P.carry.style.opacity = '0';
     }
-    P.glyph?.setAttribute('display', B.carrying && !P.carry ? 'inline' : 'none');
+    const glyph = B.carrying && !P.carry;
+    if (this.drawnGlyph !== glyph) {
+      P.glyph?.setAttribute('display', glyph ? 'inline' : 'none');
+      this.drawnGlyph = glyph;
+    }
   }
 }
