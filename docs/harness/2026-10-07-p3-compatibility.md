@@ -79,3 +79,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `a189e639` | c3-planner-split | none: red tests only (`src/features/note/new-lines.test.ts`, `src/features/tidy/run-words.test.ts`, spine tests) |
 | `7f569779` | c3-planner-split | none: `notesUpdated` and the run links count notes through one `distinctPaths` (same counts; a row with no path is no note) |
 | `895bfe15` | c3-planner-split | none on the wire: the note screen marks one Timeline line per report row (the last with its words), so an earlier line with the same words is no longer marked New |
+| `09d0127d` | c3-planner-split | none on the wire (src/data only): `grounded()` checks the plan's structure at plan time, never a stored manifest; `materialize` ties a set-aside row to its contribution's one op, same report |
+| `167297dc` | c3-planner-split | none on the wire (src/data only): `RulesPlan.held` goes; the made Rules.md is `derive`d for each rule line it words, the same dependencies as before |

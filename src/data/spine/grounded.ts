@@ -4,13 +4,14 @@
  * `report.ts`, and the pure record guards in `contracts/`.
  */
 import type { DriveFile } from '../drive/drive-api';
-import type { OperationV2, SeenFile, Target } from '../contracts/run-manifest';
+import type { EffectV2, OperationV2, ReportContribution, SeenFile, Target } from '../contracts/run-manifest';
 import { savedLinkKey } from '../contracts/note-edit';
-import { join } from '../tree';
+import { join, nameOf } from '../tree';
 import { PARA_ROOTS } from '../types';
 import { sha256 } from '../vault/hashes';
 import { SYSTEM, isRunnerFile } from '../vault/layout';
 import type { RunManifest } from './records';
+import { filingMove } from './report';
 
 /** The runner files a run may make again when they are missing (TL-P2-33 §2a). */
 const RUNNER_MADE = [SYSTEM.requests, SYSTEM.hashes, SYSTEM.questions] as const;
@@ -29,52 +30,96 @@ export function seen(f: DriveFile): SeenFile {
 
 /**
  * Contract B's grounding, structural only (TL-P4-14 stage 3 contract 5): the planner builds each row from the
- * operation it reports (op id plus entry), so grounding checks the plan's shape, never a row's words. Every row names
- * operations of this plan, at least one; a set-aside row names its one operation (never paired with one by position);
- * every operation the person is told about has a row: a captured thing's move or Bin (one row for each outcome), a
- * generated note's create, a note's Timeline line or Current state, the Bin of a note kept as one with another, and
- * the archive moves of your changes. The plan's own places hold too: every captured line is moved once, into the
- * archive (TL-P2-33 §1), a runner file is made again only at its own path in `.bower/` (TL-P2-33 §2a), and a
- * generated note only under a main folder (TL-P2-17).
+ * operation it reports (op id plus entry), so grounding checks the plan's shape, never a row's words. Shape includes
+ * how many rows and where (P4-45b): every row names operations of this plan, at least one and each once; a set-aside
+ * row names its one operation. Every operation the person is told about has exactly the rows it implies: a captured
+ * thing's move or Bin one row for each outcome, a generated note one created row (and one set-aside row, unless a
+ * thing's move or a runner file waits for it), a note's edit one row per Timeline line it writes (one for a Current
+ * state alone), the Bin of a note kept as one with another one set-aside row, and each archive move of your changes
+ * one row. A row's path agrees with its operation: a filed thing's place with its move's (or its note's create's), its
+ * note with the note made or edited, a created or updated note's path with its create or edit. The plan's own places
+ * hold too: every captured line is moved once, into the archive (TL-P2-33 §1), a runner file is made again only at
+ * its own path in `.bower/` (TL-P2-33 §2a), and a generated note only under a main folder (TL-P2-17).
  */
 export function grounded(manifest: RunManifest): boolean {
   const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
   const members = new Set(manifest.capture.members.map((m) => m.file.fileId));
   const places = new Set(manifest.capture.places.map((p) => p.file.fileId));
   const pathOf = (t: Target): string | null => placePath(manifest, t);
-  const rows = { applied: new Set<string>(), rejected: new Set<string>() };
+  const madeAt = (e: EffectV2): string | null => {
+    const parent = e.kind === 'create-text' ? pathOf(e.parent) : null;
+    return e.kind === 'create-text' && parent !== null ? join(parent, e.name) : e.kind === 'edit-text' ? e.path : null;
+  };
+  const applied = new Map<string, ReportContribution[]>();
+  const rejected = new Map<string, number>();
   for (const c of manifest.reportPlan) {
-    if (!c.requires.length || !c.requires.every((id) => ops.has(id))) return false;
+    if (!c.requires.length || new Set(c.requires).size !== c.requires.length || !c.requires.every((id) => ops.has(id))) return false;
     if (c.when === 'rejected' && (c.requires.length !== 1 || c.value.setAside.length !== 1)) return false;
-    for (const id of c.requires) rows[c.when].add(id);
+    for (const id of c.requires) {
+      if (c.when === 'rejected') rejected.set(id, (rejected.get(id) ?? 0) + 1);
+      else applied.set(id, [...(applied.get(id) ?? []), c]);
+    }
+    const required = c.requires.flatMap((id) => ops.get(id)?.effect ?? []);
+    // A filed row's place is its thing's move's, or its note's create's; its note the one made or edited, or in that place.
+    const move = required.find((e) => e.kind === 'move' && members.has(e.before.fileId));
+    const made = required.find((e) => e.kind === 'create-text' || e.kind === 'edit-text');
+    const to = move?.kind === 'move' ? pathOf(move.parent) : made?.kind === 'create-text' ? pathOf(made.parent) : null;
+    for (const r of c.value.filed) {
+      if (to === null || r.to !== to) return false;
+      if (r.note !== undefined && r.note !== (made ? madeAt(made) : join(r.to, nameOf(r.note)))) return false;
+    }
+    // A created or updated row names the note its first operation makes or edits.
+    const first = ops.get(c.requires[0] ?? '')?.effect;
+    const at = first ? madeAt(first) : null;
+    if ([...c.value.created, ...c.value.updated].some((r) => r.path !== at)) return false;
   }
+  const rows = (o: OperationV2): ReportContribution[] => applied.get(o.operationId) ?? [];
+  /** How many set-aside rows each operation must have: none but the ones counted below. */
+  const asides = new Map<string, number>();
   const lines = new Set(manifest.capture.journal.flatMap((j) => j.fileIds));
-  const rowed = (o: OperationV2): boolean => rows.applied.has(o.operationId) || rows.rejected.has(o.operationId);
   /** Each captured thing's outcomes with a row: filed or saved, and set aside (by its move or Bin, not a cleared mark). */
   const told = { applied: new Set<string>(), rejected: new Set<string>() };
   for (const o of manifest.operations) {
     const e = o.effect;
+    const mine = rows(o);
+    const aside = rejected.get(o.operationId) ?? 0;
     if ((e.kind === 'move' || e.kind === 'bin') && members.has(e.before.fileId)) {
-      // A filing move goes to a verified destination: a captured place or a folder the run makes, never the root.
-      if (e.kind === 'move' && rowed(o) && pathOf(e.parent) === null) return false;
-      if (rows.applied.has(o.operationId)) told.applied.add(e.before.fileId);
-      if (rows.rejected.has(o.operationId)) told.rejected.add(e.before.fileId);
+      if (!mine.length && !aside) continue;
+      // Filed (or already saved) once, set aside once; a filing move goes to a verified destination, never the root.
+      if (mine.reduce((n, c) => n + c.value.filed.length + (c.value.alreadySaved?.length ?? 0), 0) !== 1) return false;
+      if (e.kind === 'move' && pathOf(e.parent) === null) return false;
+      asides.set(o.operationId, 1);
+      told.applied.add(e.before.fileId);
+      told.rejected.add(e.before.fileId);
     } else if (e.kind === 'move' && lines.has(e.before.fileId)) {
-      if (pathOf(e.parent) !== SYSTEM.archive || e.name !== e.before.name || Object.keys(e.properties).length || !rowed(o)) return false;
+      if (pathOf(e.parent) !== SYSTEM.archive || e.name !== e.before.name || Object.keys(e.properties).length || mine.length !== 1) return false;
     } else if (e.kind === 'bin' && places.has(e.before.fileId)) {
-      if (!rowed(o)) return false;
-    } else if (e.kind === 'edit-text' && e.changes.some((c) => c.kind === 'timeline-append' || c.kind === 'state-rewrite')) {
-      if (!rowed(o)) return false;
+      asides.set(o.operationId, 1);
+    } else if (e.kind === 'edit-text') {
+      // One row per Timeline line it writes, or one for a Current state alone; a kept note's lines carried from the
+      // other note are said in the keep's one row instead.
+      const entries = e.changes.reduce((n, c) => n + (c.kind === 'timeline-append' ? c.entries.length : 0), 0);
+      const want = entries || (e.changes.some((c) => c.kind === 'state-rewrite') ? 1 : 0);
+      const own = mine.filter((c) => c.requires.length === 1).reduce((n, c) => n + c.value.updated.length, 0);
+      const kept = mine.some((c) => c.requires[0] === o.operationId && c.requires.length > 1 && c.value.updated.length);
+      if (kept ? own > want : own !== want) return false;
     } else if (e.kind === 'create-text') {
       const parent = pathOf(e.parent);
       const rootRules = e.name === RULES && 'fileId' in e.parent && e.parent.fileId === manifest.scope.rootId;
       const made = parent === SYSTEM.dir ? RUNNER_MADE.find((x) => x === join(parent, e.name)) : undefined;
       if (e.purpose === 'runner-json' && (made === undefined || !holds(made, e.text))) return false;
-      if (e.purpose === 'generated' && !rootRules && (!MAIN_FOLDERS.includes(parent?.split('/')[0] ?? '') || !rowed(o))) return false;
+      if (e.purpose !== 'generated' || rootRules) continue;
+      if (!MAIN_FOLDERS.includes(parent?.split('/')[0] ?? '') || mine.reduce((n, c) => n + c.value.created.length, 0) !== 1) return false;
+      // A link's note is set aside with its link; a request's note with the answer that names it.
+      const waited = manifest.operations.some((x) => x.dependsOn.includes(o.operationId)
+        && (filingMove(manifest, x) || (x.effect.kind === 'write-runner-json' ? x.effect.path : madeAt(x.effect)) === SYSTEM.requests));
+      if (!waited) asides.set(o.operationId, 1);
     }
   }
-  // Every captured thing has a row for either outcome, and every captured line's every file is moved once.
-  return [...members].every((id) => told.applied.has(id) && told.rejected.has(id))
+  // Exactly the set-aside rows counted; every captured thing has a row for either outcome; every captured line's
+  // every file is moved once.
+  return manifest.operations.every((o) => (rejected.get(o.operationId) ?? 0) === (asides.get(o.operationId) ?? 0))
+    && [...members].every((id) => told.applied.has(id) && told.rejected.has(id))
     && [...lines].every((id) => manifest.operations.filter((o) => 'before' in o.effect && o.effect.before.fileId === id).length === 1);
 }
 
