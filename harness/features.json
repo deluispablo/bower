@@ -6286,7 +6286,7 @@
     "id": "c4-new-pill-one",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "The New pill look has one home in src/ui; folder, home and note (and the Move sheet Now here pill) use it, and each caller keeps its own placement. No visual change.",
     "steps": [
