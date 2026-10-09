@@ -1,20 +1,19 @@
 /**
- * Write-once by the `bowerOp` stamp (ARCHITECTURE, mechanism map): every write Bower sends, the app's and a run's
- * alike, carries one `appProperties` key, `bowerOp`, set in the same request and overwritten by the next write
- * (https://developers.google.com/workspace/drive/api/guides/properties). The stamp names the write's intent, so it is an
- * idempotency key (as Stripe's: https://stripe.com/docs/api/idempotent_requests; RFC 9110 9.2.2 lets only idempotent
- * requests be repeated blindly):
- *
- * - the answer confirms the write: Drive gives the stored content's `md5Checksum` on the `files.create` or
- *   `files.update` answer when `fields` asks for it (https://developers.google.com/workspace/drive/api/reference/rest/v3/files),
- *   so no read follows a write to confirm it (`confirms`);
- * - a write with no answer, an unknown outcome (a 5xx) or a conflict is looked for by its stamp (`writeOnce`): found,
- *   it landed (the person's own write, never "changed somewhere else"); not found, the error stands. Never by a name,
- *   a substring or a text.
+ * Write-once (ARCHITECTURE, mechanism map): every write Bower sends, the app's, a run's and the Worker's, carries an
+ * idempotency key (as Stripe's: https://stripe.com/docs/api/idempotent_requests; RFC 9110 9.2.2). With no answer, an
+ * unknown outcome (a 5xx) or a conflict, the write is looked for by that key: found, it landed (the person's own write,
+ * never "changed somewhere else"); not found, the error stands. Never by a name, a substring or a text. Two cases:
+ * 1. A create carries an id Drive reserved for it (`files.generateIds`,
+ *    https://developers.google.com/workspace/drive/api/reference/rest/v3/files/generateIds); Drive refuses a second
+ *    file with it (409, https://developers.google.com/workspace/drive/api/guides/handle-errors) (`createById`).
+ * 2. An update or a move carries one `appProperties` key, `bowerOp` (https://developers.google.com/workspace/drive/api/guides/properties),
+ *    naming its intent; the file read by its id must carry it and, for text, the checksum of the bytes sent (`updateByStamp`).
+ * The answer confirms the write by the `md5Checksum` its `fields` ask for
+ * (https://developers.google.com/workspace/drive/api/reference/rest/v3/files), with no read after it (`confirms`).
  */
 import { BowerError } from '../types';
 import { md5Hex, sha256Sync } from '../contracts/hashes';
-import type { DriveFile, FencedDrive } from '../drive/drive-api';
+import { driveError, type DriveApi, type DriveFile, type FencedDrive } from '../drive/drive-api';
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
 
 export const STAMP = 'bowerOp';
@@ -31,52 +30,85 @@ export function confirms(answer: DriveFile, bytes: Uint8Array): boolean {
   return answer.sha256 !== undefined && answer.sha256 === sha256Sync(bytes);
 }
 
-/** A write whose outcome is to be read back by its stamp: no answer, a 5xx, or a conflict its own landing may explain. */
+/** A write whose outcome is to be read back by its key: no answer, a 5xx, or a conflict its own landing may explain. */
 const unsettled = (e: unknown): boolean => isNoAnswer(e) || isUnconfirmedWrite(e) || (e instanceof BowerError && e.code === 'conflict');
 
-/**
- * Sends a write once with its stamp. With no answer, an unknown outcome or a conflict, it is looked for by that stamp
- * (`find`): what carries it is the write, landed; nothing, or a look that fails, leaves the error as it was.
- */
-export async function writeOnce(stamp: string, send: (op: { [STAMP]: string }) => Promise<DriveFile>, find: (stamp: string) => Promise<DriveFile | null>): Promise<DriveFile> {
+/** The rule: sends the write with its key; with no answer, an unknown outcome or a conflict, looks for it by that key. */
+async function once<T>(key: string, send: (key: string) => Promise<T>, find: (key: string) => Promise<T | null>): Promise<T> {
   try {
-    return await send({ [STAMP]: stamp });
+    return await send(key);
   } catch (e) {
     if (!unsettled(e)) throw e;
-    let found: DriveFile | null;
+    let found: T | null;
     try {
-      found = await find(stamp);
+      found = await find(key);
     } catch (again) {
       console.error(again);
       throw e;
     }
-    if (!found) throw e;
+    if (found === null) throw e;
     // It landed and only its answer was lost (or a retry met it): the same write, not a second one.
     console.error(e);
     return found;
   }
 }
 
-/** A stamp search: Drive's `appProperties has { key=... and value=... }`, in the Bin or not. */
-export interface StampSearch {
-  stamped(key: string, value: string): Promise<Array<{ file: DriveFile; trashed: boolean }>>;
+/** Case 1: a create, sent with the id Drive reserved for it and found again by that id (a 409 says it is there). */
+export const createById = <T>(id: string, send: (id: string) => Promise<T>, find: (id: string) => Promise<T | null>): Promise<T> => once(id, send, find);
+
+/** A read by id: the file as Drive keeps it, even in the Bin (`binned`), with its checksum. */
+export type Gets = Pick<DriveApi, 'get'>;
+
+/** The file Drive keeps under `id`, in the Bin or not, with its checksum; null when it keeps none. */
+export const byId = (drive: Gets, id: string): Promise<DriveFile | null> =>
+  drive.get(id, { checksums: true, binned: true }).catch((e: unknown) => {
+    if (e instanceof BowerError && e.code === 'not-found') return null;
+    throw e;
+  });
+
+/** What one write to a file does: a change named by its intent, or a text (whose bytes are checked too). */
+export type Intent = string | { text: string };
+
+/** The stamp of one write to `f`: the version it read and what it does, so a retry of the same change is the same write. */
+const stampFor = (f: DriveFile, intent: Intent): string => stampOf(f.id, `${f.modifiedTime}:${typeof intent === 'string' ? intent : `text:${sha256Sync(intent.text)}`}`);
+
+/** Whether `now` holds that write to `f`: it carries its stamp and, for text, Drive's checksum of the text sent. */
+export const holds = (f: DriveFile, intent: Intent, now: DriveFile): boolean =>
+  now.appProperties?.[STAMP] === stampFor(f, intent) && (typeof intent === 'string' || confirms(now, new TextEncoder().encode(intent.text)));
+
+/**
+ * Case 2: an update or a move of a file read as `f`, sent once with its stamp and found again by reading `f` by its id;
+ * a text write counts only when Drive's checksum is that of the text sent. `read` is told what that read found.
+ */
+export async function updateByStamp(reads: Gets, f: DriveFile, intent: Intent, send: (op: { [STAMP]: string }) => Promise<DriveFile>, read?: (now: DriveFile | null) => void): Promise<DriveFile> {
+  const out = await once(stampFor(f, intent), (s) => send({ [STAMP]: s }), async () => {
+    const now = await byId(reads, f.id);
+    read?.(now);
+    return now && holds(f, intent, now) ? now : null;
+  });
+  return typeof intent === 'string' ? out : confirmed(out, intent.text);
 }
 
-/** The one file out of the Bin carrying `stamp`; null when none or more than one does. */
-export async function byStamp(drive: StampSearch, stamp: string): Promise<DriveFile | null> {
-  const found = (await drive.stamped(STAMP, stamp)).filter((f) => !f.trashed);
-  return found.length === 1 ? (found[0]?.file ?? null) : null;
+/** What makes a file once: an id reserved, then a create with it. */
+type Makes = Pick<FencedDrive, 'generateIds' | 'createFolder' | 'createText'>;
+
+/** An id Drive reserved for one create (`files.generateIds`): the create's idempotency key. */
+export async function reserveId(w: Pick<Makes, 'generateIds'>): Promise<string> {
+  const [id] = await w.generateIds(1);
+  if (id === undefined) throw driveError('unknown');
+  return id;
 }
 
-/** One of Bower's own folders, made once: stamped by its place and name, so a lost answer finds the folder that landed. */
-export function makeFolder(w: FencedDrive, drive: StampSearch, parent: string, name: string): Promise<DriveFile> {
-  return writeOnce(stampOf(parent, `folder:${name}`), (op) => w.createFolder(parent, name, op), (s) => byStamp(drive, s));
-}
+/** Where a create goes and what it carries; `id` when one was reserved for it earlier (kept across tries). */
+type Place = { parent: string; name: string; props?: Record<string, string>; id?: string };
 
-/** A text file made once: stamped by its place, name and bytes, and confirmed by its answer's checksum. */
-export async function makeText(w: FencedDrive, drive: StampSearch, parent: string, name: string, text: string, props?: Record<string, string>): Promise<DriveFile> {
-  return confirmed(await writeOnce(stampOf(parent, `${name}:${sha256Sync(text)}`), (op) => w.createText(parent, name, text, { ...props, ...op }), (s) => byStamp(drive, s)), text);
-}
+/** A folder made once, by its reserved id. */
+export const makeFolder = async (w: Makes, reads: Gets, at: Place): Promise<DriveFile> =>
+  createById(at.id ?? (await reserveId(w)), (id) => w.createFolder(at.parent, at.name, at.props, id), (id) => byId(reads, id));
+
+/** A text file made once, by its reserved id, and confirmed by its answer's checksum. */
+export const makeText = async (w: Makes, reads: Gets, at: Place, text: string): Promise<DriveFile> =>
+  confirmed(await createById(at.id ?? (await reserveId(w)), (id) => w.createText(at.parent, at.name, text, at.props, id), (id) => byId(reads, id)), text);
 
 /** The file a write answered, when its checksum is that of `text`; otherwise the write is not confirmed. */
 export function confirmed(file: DriveFile, text: string): DriveFile {

@@ -17,7 +17,6 @@ const EXPECTED = {
   readBytes: 'read',
   fullText: 'read',
   binnedByItem: 'read',
-  stamped: 'read',
   storedDigest: 'read',
   generateIds: 'write',
   sessionStatus: 'read',

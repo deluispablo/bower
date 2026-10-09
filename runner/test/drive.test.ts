@@ -87,6 +87,7 @@ describe('runner drive adapter', () => {
     // The person writes between the check and the send (the effect's `sending` is awaited after its check).
     const settled = await driveEffects(adapter).apply(op, head, await adapter.batch(), manifest, async () => {
       await wire.drive.writeText(note.id, 'The person wrote this.', (await wire.drive.get(note.id)).modifiedTime);
+      return null;
     });
     expect(settled.state).toBe('rejected');
     expect(await wire.drive.readText(note.id)).toBe('The person wrote this.');
@@ -334,3 +335,38 @@ async function visible(drive: FakeDrive): Promise<unknown> {
   for (const id of ['f1', 'f2', 'f3', 'f4']) binned.push({ id, trashed: (await drive.evidence(id))?.trashed ?? null });
   return { live, binned, text: [...drive.dump().entries()] };
 }
+
+describe('c2-create-by-id: an edit is taken only by its own answer', () => {
+  it("an edit's answer showing another name or place is not taken as the edit", async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const sha = (t: string): string => createHash('sha256').update(t).digest('hex');
+    const sized = (t: string) => ({ encoding: 'utf8' as const, size: new TextEncoder().encode(t).byteLength, sha256: sha(t) });
+    for (const shown of [{ name: 'Elsewhere.md' }, { parents: ['FOLDER_ID'] }]) {
+      const { wire, note: first } = await seeded();
+      const adapter = adapterOn(wire);
+      const note = await wire.drive.writeText(first.id, 'See [[Old]].', first.modifiedTime);
+      const text = 'See [[New]].';
+      const op = {
+        operationId: 'e'.repeat(64),
+        ordinal: 0,
+        dependsOn: [],
+        effect: {
+          kind: 'edit-text',
+          before: { fileId: note.id, name: note.name, parents: note.parents, modifiedTime: note.modifiedTime },
+          path: 'Note.md',
+          beforeContent: sized('See [[Old]].'),
+          changes: [{ kind: 'link-rewrite', recordIds: ['r'], renames: [{ from: 'Old', to: 'New' }] }],
+          text,
+          content: sized(text),
+        },
+      } as unknown as OperationV2;
+      const head = { runId: RUN_ID, outcomes: [] } as unknown as Checkpoint;
+      const manifest = { operations: [op] } as unknown as RunManifest;
+      const w = await adapter.batch();
+      // The same file by its id, holding the bytes sent, but its answer shows it under another name or in another folder.
+      const lying: FencedDrive = { ...w, writeText: async (...a) => ({ ...(await w.writeText(...a)), ...shown }) };
+      await expect(driveEffects(adapter).apply(op, head, lying, manifest, async () => null)).rejects.toMatchObject({ code: 'unknown' });
+      expect(await wire.drive.readText(note.id)).toBe(text);
+    }
+  });
+});

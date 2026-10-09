@@ -34,6 +34,7 @@ function driveV3(drive: FakeDrive): typeof fetch {
     const url = new URL(String(input));
     const method = (init.method ?? 'GET').toUpperCase();
     const one = /^\/drive\/v3\/files\/([^/]+)$/.exec(url.pathname);
+    if (method === 'GET' && url.pathname === '/drive/v3/files/generateIds') return json(200, { ids: await drive.generateIds(Number(url.searchParams.get('count') ?? '1')) });
     if (method === 'GET' && url.pathname === '/drive/v3/files') {
       const parents = [...(url.searchParams.get('q') ?? '').matchAll(/'([^']+)' in parents/g)].map((m) => m[1] ?? '');
       const files: DriveFile[] = [];
@@ -42,16 +43,16 @@ function driveV3(drive: FakeDrive): typeof fetch {
     }
     if (method === 'GET' && one && url.searchParams.get('alt') === 'media') return new Response(new TextDecoder().decode(await drive.readBytes(decodeURIComponent(one[1] ?? ''))));
     if (method === 'POST' && url.pathname === '/drive/v3/files') {
-      const meta = JSON.parse(await bodyText(init.body)) as { name: string; parents: string[]; appProperties?: Record<string, string> };
-      return json(200, wire(await drive.createFolder(meta.parents[0] ?? '', meta.name, meta.appProperties)));
+      const meta = JSON.parse(await bodyText(init.body)) as { name: string; parents: string[]; appProperties?: Record<string, string>; id?: string };
+      return json(200, wire(await drive.createFolder(meta.parents[0] ?? '', meta.name, meta.appProperties, meta.id)));
     }
     if (method === 'POST' && url.pathname === '/upload/drive/v3/files') {
       const text = await bodyText(init.body);
       const boundary = /^--([^\r\n]+)\r\n/.exec(text)?.[1] ?? '';
       const [meta, content] = text.split(`--${boundary}`).slice(1, -1).map((p) => p.slice(p.indexOf('\r\n\r\n') + 4).replace(/\r\n$/, ''));
-      const m = JSON.parse(meta ?? '{}') as { name: string; parents: string[]; appProperties?: Record<string, string> };
+      const m = JSON.parse(meta ?? '{}') as { name: string; parents: string[]; appProperties?: Record<string, string>; id?: string };
       // Drive gives the stored bytes' md5Checksum on the answer when `fields` names it.
-      return json(200, { ...wire(await drive.createText(m.parents[0] ?? '', m.name, content ?? '', m.appProperties)), md5Checksum: md5Hex(new TextEncoder().encode(content ?? '')) });
+      return json(200, { ...wire(await drive.createText(m.parents[0] ?? '', m.name, content ?? '', m.appProperties, m.id)), md5Checksum: md5Hex(new TextEncoder().encode(content ?? '')) });
     }
     return json(400, { error: { code: 400, message: 'badRequest', errors: [{ reason: 'badRequest' }] } });
   };
@@ -118,7 +119,8 @@ describe('a record write that stamps its pile (TL-P4-16 b)', () => {
     const records = new RunRecords(drive, root);
     await records.put(drive.fenced(() => {}), 'piles', `disposition-${'a'.repeat(64)}.json`, '{}', recordStamp('pile-1'));
     const made = (await drive.listAll(root)).find((f) => f.name.startsWith('disposition-'));
-    expect(made?.appProperties).toEqual({ bowerOp: expect.stringMatching(/^[0-9a-f]{32}$/) as string, [PROP.recordPile]: 'pile-1' });
+    // Made by its reserved id (c2-create-by-id): no stamp, only its pile.
+    expect(made?.appProperties).toEqual({ [PROP.recordPile]: 'pile-1' });
   });
 
   it('never rewrites a record that is there: one changed between the read and the write is a conflict, and an identical one keeps its version', async () => {

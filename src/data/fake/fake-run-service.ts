@@ -440,8 +440,9 @@ export class FakeRunService {
     const hooked: Effects = {
       ...effects,
       apply: (op, head, w, m, sending) => effects.apply(op, head, w, m, async () => {
-        await sending();
+        const reserved = await sending();
         await this.hooks?.beforeDispatch?.({ runId: manifest.runId, attemptId: attempt.attemptId, epoch: attempt.epoch, ordinal: op.ordinal, effect: op.effect });
+        return reserved;
       }),
     };
     // The control row follows the chain as it grows, in order: a recovery reads it from the folder all the same.

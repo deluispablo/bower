@@ -133,9 +133,9 @@ export class DriveHttp implements DriveApi {
     return out;
   }
 
-  async get(id: string, opts: { checksums?: boolean } = {}): Promise<DriveFile> {
+  async get(id: string, opts: { checksums?: boolean; binned?: boolean } = {}): Promise<DriveFile> {
     const w = (await (await this.call(`${API}/files/${id}?fields=${opts.checksums ? LISTED_FIELDS : FIELDS}`)).json()) as WireFile;
-    if (w.trashed) throw driveError('not-found');
+    if (w.trashed && !opts.binned) throw driveError('not-found');
     return toFile(w);
   }
 
@@ -155,12 +155,12 @@ export class DriveHttp implements DriveApi {
     }
   }
 
-  async createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile> {
-    return this.json(`${API}/files?fields=${LISTED_FIELDS}`, 'POST', { name, mimeType: FOLDER, parents: [parentId], ...(appProperties ? { appProperties } : {}) });
+  async createFolder(parentId: string, name: string, appProperties?: Record<string, string>, id?: string): Promise<DriveFile> {
+    return this.json(`${API}/files?fields=${LISTED_FIELDS}`, 'POST', { name, mimeType: FOLDER, parents: [parentId], ...(appProperties ? { appProperties } : {}), ...(id ? { id } : {}) });
   }
 
-  async createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>): Promise<DriveFile> {
-    const meta = { name, parents: [parentId], mimeType: mimeOf(name), ...(appProperties ? { appProperties } : {}) };
+  async createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>, id?: string): Promise<DriveFile> {
+    const meta = { name, parents: [parentId], mimeType: mimeOf(name), ...(appProperties ? { appProperties } : {}), ...(id ? { id } : {}) };
     return this.multipart(meta, new Blob([text], { type: mimeOf(name) }));
   }
 
@@ -190,19 +190,9 @@ export class DriveHttp implements DriveApi {
     return this.json(`${API}/files/${id}?fields=${LISTED_FIELDS}`, 'PATCH', { trashed: true, ...(appProperties ? { appProperties } : {}) });
   }
 
-  /**
-   * The files that carry `key` = `value` in their appProperties, wherever they are and in the Bin or not, with their
-   * checksums: Drive's `appProperties has { key=... and value=... }` query, with no parent clause and no `trashed`
-   * clause (https://developers.google.com/workspace/drive/api/guides/search-files). A write is found again this way
-   * by its stamp (`spine/write-once.ts`), even after the person moved it elsewhere or put it in the Bin.
-   */
-  async stamped(key: string, value: string): Promise<Array<{ file: DriveFile; trashed: boolean }>> {
-    const found = await this.wires(`appProperties has { key=${quote(key)} and value=${quote(value)} }`, Infinity, LISTED_FIELDS);
-    return found.map((w) => ({ file: toFile(w), trashed: w.trashed === true }));
-  }
-
-  async untrash(id: string): Promise<DriveFile> {
-    return this.json(`${API}/files/${id}?fields=${FIELDS}`, 'PATCH', { trashed: false });
+  /** `appProperties`, when given, are set by the same `files.update` that takes it out of the Bin. */
+  async untrash(id: string, appProperties?: Record<string, string>): Promise<DriveFile> {
+    return this.json(`${API}/files/${id}?fields=${FIELDS}`, 'PATCH', { trashed: false, ...(appProperties ? { appProperties } : {}) });
   }
 
   async fullText(rootId: string, query: string): Promise<DriveFile[]> {
@@ -435,6 +425,8 @@ export class DriveHttp implements DriveApi {
     const res = await this.authorized(url, init, { idempotent: method === 'GET', again }, method !== 'GET');
     if (res.ok || res.status === 308 || pass.includes(res.status)) return res;
     if (res.status === 404) throw driveError('not-found');
+    // A create whose reserved id is taken (https://developers.google.com/workspace/drive/api/guides/handle-errors).
+    if (res.status === 409) throw driveError('conflict');
     console.error(`Drive answered ${res.status} for ${method} ${new URL(url).pathname}`);
     throw res.status >= 500 && method !== 'GET' ? unconfirmedWriteError() : driveError('unknown');
   }

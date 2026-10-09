@@ -217,12 +217,14 @@ describe('write once by the bowerOp stamp', () => {
 
   it('every write reconciles by its bowerOp stamp', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    // Operations, run records and report files alike: each write carries a stamp, and its answer confirms it.
+    // The key each write carries (c2-create-by-id): a create its reserved id, any other write its stamp.
+    const keyOf = (c: FencedCall): string | undefined => (c.op === 'create-folder' || c.op === 'create-text' ? c.reserved : stampOfCall(c));
+    // Operations, run records and report files alike: each write carries its key, and its answer confirms it.
     const clean = await applied();
     expect(clean.chain.at(-1)?.phase).toBe('done');
-    expect(clean.calls.filter((c) => stampOfCall(c) === undefined).map(what)).toEqual([]);
+    expect(clean.calls.filter((c) => keyOf(c) === undefined).map(what)).toEqual([]);
     expect(clean.readBacks).toEqual([]);
-    // Every answer lost once: each write is found again by its stamp, never written twice nor taken by its name or text.
+    // Every answer lost once: each write is found again by its key, never written twice nor taken by its name or text.
     const lost = new Set<string>();
     const blind = await applied((call) => {
       const key = JSON.stringify(call);
@@ -231,10 +233,11 @@ describe('write once by the bowerOp stamp', () => {
       return 'lose-reply';
     });
     expect(blind.chain.at(-1)?.phase).toBe('done');
-    const stamps = blind.calls.map(stampOfCall);
-    expect(stamps.filter((s) => s === undefined).length).toBe(0);
-    for (const s of new Set(stamps)) expect((await blind.drive.stamped('bowerOp', s ?? '')).length, s).toBeLessThanOrEqual(1);
-    expect(blind.calls.length).toBe(new Set(stamps).size);
+    const keys = blind.calls.map(keyOf);
+    expect(keys.filter((s) => s === undefined).length).toBe(0);
+    const carrying = (s: string | undefined): number => [...(blind.drive as unknown as { files: Map<string, { meta: DriveFile }> }).files.values()].filter((f) => f.meta.id === s || f.meta.appProperties?.bowerOp === s).length;
+    for (const s of new Set(keys)) expect(carrying(s), s).toBeLessThanOrEqual(1);
+    expect(blind.calls.length).toBe(new Set(keys).size);
   });
 
   it('a lost write that reads back as not landed is never called offline headless', async () => {
@@ -250,6 +253,36 @@ describe('write once by the bowerOp stamp', () => {
     expect(outcome?.state).toBe('rejected');
     expect(outcome?.state === 'rejected' ? outcome.failure.code : null).not.toBe('offline');
     expect(view).not.toContain("couldn't reach Google Drive");
+  });
+});
+
+describe('c2-create-by-id: a run makes each thing by its reserved id', () => {
+  it("a run's create whose answer was lost is read back by its reserved id, though a search misses it", async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    let lost: (FencedCall & { op: 'create-text' }) | null = null;
+    let hidden: string | null = null;
+    let parentHides = 1;
+    const { drive, root, manifest, chain } = await applied(
+      (call, d) => {
+        if (lost || call.op !== 'create-text' || call.appProperties?.bowerItem === undefined) return 'pass';
+        lost = call;
+        // Drive's search lags behind the create: a listing of its folder does not show it yet; a read by its id does.
+        const listAll = d.listAll.bind(d);
+        d.listAll = async (id) => (await listAll(id)).filter((f) => !(id === call.parentId && f.id === hidden && parentHides-- > 0));
+        return 'lose-reply';
+      },
+      (call, d) => {
+        if (call !== lost) return;
+        const files = (d as unknown as { files: Map<string, { meta: DriveFile }> }).files;
+        hidden = [...files.values()].find((f) => f.meta.name === call.name && f.meta.parents[0] === call.parentId)?.meta.id ?? null;
+      },
+    );
+    const made = lost as (FencedCall & { op: 'create-text' }) | null;
+    if (!made || hidden === null) throw new Error('no create lost its answer');
+    const op = manifest.operations.find((o) => o.effect.kind === 'create-text' && o.effect.name === made.name);
+    expect(chain.at(-1)?.outcomes.find((o) => o.operationId === op?.operationId)?.state).toBe('applied');
+    const same = (await drive.listAll(root)).filter((f) => f.name === made.name && f.parents[0] === made.parentId);
+    expect(same.map((f) => f.id)).toEqual([hidden]);
   });
 });
 

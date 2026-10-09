@@ -2813,3 +2813,173 @@ describe('the inbox from the listing alone (home-inbox-first)', () => {
     expect(listed.map((p) => p.id).sort()).toEqual(read);
   });
 });
+
+describe('c2-create-by-id: an app write whose answer was lost is found again by its reserved id or its stamp', () => {
+  type Writes = 'createFolder' | 'createText' | 'trash' | 'untrash' | 'update';
+  /** The first call of `k` that `when` picks lands, then its answer is lost; gives how many were lost. */
+  function lose(k: Writes, when: (args: unknown[]) => boolean = () => true): () => number {
+    const d = drive as unknown as Record<Writes, (...a: unknown[]) => Promise<unknown>>;
+    const real = d[k].bind(drive);
+    let lost = 0;
+    d[k] = async (...a: unknown[]) => {
+      const out = await real(...a);
+      if (lost === 0 && when(a)) {
+        lost++;
+        throw driveError('offline');
+      }
+      return out;
+    };
+    return () => lost;
+  }
+  /** The next call of `k` never lands and gets no answer. */
+  function refuse(k: Writes): void {
+    const d = drive as unknown as Record<Writes, (...a: unknown[]) => Promise<unknown>>;
+    const real = d[k];
+    d[k] = async () => {
+      d[k] = real;
+      throw driveError('offline');
+    };
+  }
+  const named = async (folder: string, start: string): Promise<string[]> =>
+    (await drive.listAll(root)).filter((f) => f.name.startsWith(start) && drive.pathOf(f.id, root) === `${folder}/${f.name}`).map((f) => f.name);
+  const declaring = (): DriveVault => new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set(), declarePiles: true });
+  const pdf = (name: string): { name: string; kind: 'pdf'; origin: string; body: Blob } => ({ name, kind: 'pdf', origin: 'From this computer', body: new Blob([`%PDF ${name}`]) });
+
+  it('a create retried after a lost answer makes one file by its reserved id', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await vault.tree();
+    await vault.create('Resources/Cooking', 'note');
+    // Alex renames the first note in Drive itself; what Bower set on it stays with it.
+    await drive.update(await idOf('Resources/Cooking/Untitled.md'), { name: 'Shopping.md' });
+    await vault.refresh();
+    const lost = lose('createText', (a) => a[1] === 'Untitled.md');
+    const made = await vault.create('Resources/Cooking', 'note').catch(() => vault.create('Resources/Cooking', 'note'));
+    expect(lost()).toBe(1);
+    expect(made).toBe('Resources/Cooking/Untitled.md');
+    expect(await named('Resources/Cooking', 'Untitled')).toEqual(['Untitled.md']);
+    expect(await named('Resources/Cooking', 'Shopping')).toEqual(['Shopping.md']);
+  });
+
+  it('a create whose answer is lost and that never landed never takes an older file of that name', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await vault.tree();
+    await vault.create('Resources/Cooking', 'note');
+    await drive.update(await idOf('Resources/Cooking/Untitled.md'), { name: 'Shopping.md' });
+    await vault.refresh();
+    refuse('createText');
+    await expect(vault.create('Resources/Cooking', 'note')).rejects.toMatchObject({ code: 'offline' });
+    expect(await named('Resources/Cooking', 'Untitled')).toEqual([]);
+  });
+
+  it('a Bin whose answer was lost is resolved by its stamp', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await vault.tree();
+    const lost = lose('trash');
+    await expect(vault.trash(PASSPORT)).resolves.toBeUndefined();
+    expect(lost()).toBe(1);
+    expect(drive.dump(root).has(PASSPORT)).toBe(false);
+  });
+
+  it('a Bin of something renamed elsewhere since it was read, whose answer was lost, is a change elsewhere', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await vault.tree();
+    await drive.update(await idOf(PASSPORT), { name: 'Passport.md' });
+    refuse('trash');
+    await expect(vault.trash(PASSPORT)).rejects.toMatchObject({ code: 'conflict' });
+    expect(drive.dump(root).has('Areas/Documents/Passport.md')).toBe(true);
+  });
+
+  it('a restore whose answer was lost is resolved by its stamp', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await vault.tree();
+    await vault.trash(PASSPORT);
+    const lost = lose('untrash');
+    await expect(vault.restore(PASSPORT)).resolves.toBeUndefined();
+    expect(lost()).toBe(1);
+    expect(drive.dump(root).has(PASSPORT)).toBe(true);
+  });
+
+  it('a restore under a free name whose rename answer was lost is resolved by its stamp', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await vault.tree();
+    await vault.trash(PASSPORT);
+    await vault.create('Areas/Documents', 'note', 'Passport renewal.md');
+    const lost = lose('update', (a) => typeof (a[1] as { name?: string }).name === 'string');
+    await expect(vault.restore(PASSPORT)).resolves.toBeUndefined();
+    expect(lost()).toBe(1);
+    expect(await named('Areas/Documents', 'Passport renewal')).toHaveLength(2);
+  });
+
+  it('a lone thing given a note is made into its pile folder once, every answer lost', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const lone = (await vault.piles()).find((p) => p.path === 'Inbox/Dentist reminder.pdf');
+    if (!lone) throw new Error('no lone pile');
+    const lost = [lose('createFolder'), lose('update'), lose('createText', (a) => a[1] === 'Pile note.md')];
+    await expect(vault.updatePile(lone.id, 'From the dentist')).resolves.toMatchObject({ path: expect.stringMatching(/From the dentist$/) });
+    expect(lost.map((n) => n())).toEqual([1, 1, 1]);
+    expect((await drive.listAll(root)).filter((f) => f.folder && f.name.endsWith('From the dentist'))).toHaveLength(1);
+  });
+
+  it('a pile renamed for its new words, its answer lost, is resolved by its stamp', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const pile = (await vault.piles()).find((p) => p.path && p.text.startsWith('Job offer'));
+    if (!pile) throw new Error('no pile');
+    const lost = lose('update', (a) => typeof (a[1] as { name?: string }).name === 'string');
+    await expect(vault.updatePile(pile.id, 'Flat near the new job')).resolves.toMatchObject({ text: 'Flat near the new job' });
+    expect(lost()).toBe(1);
+  });
+
+  it('a declared pile whose folder and note answers were lost is made once by their reserved ids', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const uploader = declaring();
+    const lost = [lose('createFolder', (a) => typeof a[1] === 'string' && a[1].endsWith('Papers from Alex')), lose('createText', (a) => a[1] === 'Pile note.md')];
+    await expect(uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] })).resolves.toMatchObject({ path: expect.stringMatching(/Papers from Alex$/) });
+    await uploader.settled();
+    expect(lost.map((n) => n())).toEqual([1, 1]);
+    const folders = (await drive.listAll(root)).filter((f) => f.folder && f.name.endsWith('Papers from Alex'));
+    expect(folders).toHaveLength(1);
+    expect((await drive.listAll(folders[0]?.id ?? '')).filter((f) => f.name === 'Pile note.md')).toHaveLength(1);
+  });
+
+  it('a missing pile note written again, its answer lost, is made once by its reserved id', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await uploader.settled();
+    const folder = (await drive.listAll(root)).find((f) => f.folder && f.name.endsWith('Papers from Alex'));
+    const note = (await drive.listAll(folder?.id ?? '')).find((f) => f.name === 'Pile note.md');
+    await drive.trash(note?.id ?? '');
+    const lost = lose('createText', (a) => a[1] === 'Pile note.md');
+    await expect(declaring().retryPile(pile.id)).resolves.toBeUndefined();
+    expect(lost()).toBe(1);
+    expect((await drive.listAll(folder?.id ?? '')).filter((f) => f.name === 'Pile note.md')).toHaveLength(1);
+  });
+
+  it('a link and an empty thing sent with lost answers arrive once by their reserved ids, with no second try', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const lost = [lose('createText', (a) => String(a[1]).endsWith('.url')), lose('createText', (a) => a[1] === 'blank.txt')];
+    const p = await vault.addPile({
+      text: 'Car insurance',
+      items: [
+        { name: 'insurer.example/renewal', kind: 'link', origin: 'A link you pasted', url: 'https://insurer.example/renewal' },
+        { name: 'blank.txt', kind: 'other', origin: 'From this computer' },
+      ],
+    });
+    await vault.settled();
+    expect(lost.map((n) => n())).toEqual([1, 1]);
+    expect((await vault.piles()).find((x) => x.id === p.id)?.items.map((i) => i.upload)).toEqual([undefined, undefined]);
+    const all = await drive.listAll(root);
+    expect(all.filter((f) => f.name.endsWith('.url') && f.name.startsWith('insurer.example'))).toHaveLength(1);
+    expect(all.filter((f) => f.name === 'blank.txt')).toHaveLength(1);
+  });
+
+  it('a system folder made with a lost answer is found by its reserved id', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const lost = lose('createFolder', (a) => a[1] === 'piles');
+    const uploader = declaring();
+    await expect(uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] })).resolves.toMatchObject({ text: 'Papers from Alex' });
+    await uploader.settled();
+    expect(lost()).toBe(1);
+    expect((await drive.listAll(root)).filter((f) => f.folder && f.name === 'piles')).toHaveLength(1);
+  });
+});

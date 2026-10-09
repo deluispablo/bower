@@ -8,8 +8,7 @@
 import { type DriveApi, type DriveFile } from '../drive/drive-api';
 import { ReadCache, type Version } from '../drive/read-cache';
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
-import { STAMP, confirmed, confirms, makeFolder, makeText, stampOf, writeOnce } from '../spine/write-once';
-import { sha256Sync } from '../contracts/hashes';
+import { holds, makeFolder, makeText, reserveId, updateByStamp, type Intent } from '../spine/write-once';
 import type { Unsubscribe, VaultSource } from '../sources';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName } from '../piles';
 import { buildTree, checkCreationName, displayName, thingName, freeName, join, kindOf, moveEntry, nameOf, parentOf, removeEntry, renameEntry } from '../tree';
@@ -51,6 +50,8 @@ import { notAsSeen, notAsSeenError, type SeenExpectation } from '../contracts/st
 export interface DriveVaultOptions {
   driveLinks?: boolean;
   drive: DriveApi;
+  /** The Drive a pile's link or empty thing is sent through: one that waits while another place is active (TL-P2-24). */
+  addedDrive?: DriveApi;
   rootId: () => Promise<string>;
   /** The piles the running tidy-up took; they cannot be changed until it ends. */
   runningPiles: () => ReadonlySet<string>;
@@ -104,6 +105,7 @@ class NoDigest extends Error {}
 export class DriveVault implements VaultSource {
   readonly driveLinks: boolean;
   protected readonly drive: DriveApi;
+  private readonly addedDrive: DriveApi;
   protected readonly rootId: () => Promise<string>;
   protected readonly runningPiles: () => ReadonlySet<string>;
   protected readonly journal: Journal;
@@ -135,8 +137,9 @@ export class DriveVault implements VaultSource {
   /** What went to the Bin from here, by the path it had, so Undo can bring it back. */
   /** What went to the Bin here, by where it was; a pile also takes its declaration copies (TL-P2-31). A pile that had no place has no id. */
   /** Declaration copies a Remove of this pile sent to the Bin before it stopped: Undo restores them with the rest. */
-  private removing = new Map<string, string[]>();
-  private bin = new Map<string, { id: string | null; change: string | null; top?: string; late?: string[]; pending?: Upload; pileKey?: string; declarations?: string[] }>();
+  private removing = new Map<string, DriveFile[]>();
+  /** What went to the Bin, as each Bin answered it, so Undo takes each back by the stamp of its own write. */
+  private bin = new Map<string, { file: DriveFile | null; change: string | null; top?: string; late?: DriveFile[]; pending?: Upload; pileKey?: string; declarations?: DriveFile[] }>();
   /** Things on their way into the inbox, by pile; a failed one stays with upload -1. */
   private uploads = new Map<string, Upload>();
   private sendingPiles = new Set<string>();
@@ -146,7 +149,7 @@ export class DriveVault implements VaultSource {
   private sending = new Set<Promise<void>>();
   private disposed = false;
   /** Files that landed and went to the Bin before their pile's Bin entry existed, by the pile's folder and key. */
-  private readonly lateFor = new Map<string, string[]>();
+  private readonly lateFor = new Map<string, DriveFile[]>();
   private readonly queued: DriveVaultUploads;
   private queueStart: Promise<void> | null = null;
   private unqueue: () => void = () => undefined;
@@ -160,6 +163,7 @@ export class DriveVault implements VaultSource {
   constructor(opts: DriveVaultOptions, private readonly lifetime: () => boolean = () => true, journalOwner = opts.rootId, memoryDrive = opts.drive) {
     this.driveLinks = opts.driveLinks ?? false;
     this.drive = opts.drive;
+    this.addedDrive = opts.addedDrive ?? opts.drive;
     this.rootId = opts.rootId;
     this.runningPiles = opts.runningPiles;
     this.declarePiles = opts.declarePiles ?? false;
@@ -340,7 +344,8 @@ export class DriveVault implements VaultSource {
     checkCreationName(base, type);
     const path = join(folder, freeName(ix.entries(), folder, base));
     refuseReserved(path);
-    const made = type === 'folder' ? await makeFolder(this.drive, this.drive, parent, nameOf(path)) : await makeText(this.drive, this.drive, parent, nameOf(path), '');
+    const at = { parent, name: nameOf(path) };
+    const made = type === 'folder' ? await makeFolder(this.drive, this.drive, at) : await makeText(this.drive, this.drive, at, '');
     ix.put(made);
     await this.journal.record('create', `New ${type} "${(type === 'folder' ? nameOf(path) : thingName(nameOf(path)))}" in ${where(folder)}`, { path, fileId: made.id });
     this.emit();
@@ -361,18 +366,18 @@ export class DriveVault implements VaultSource {
       const pending = this.uploads.get(pileKey);
       this.uploads.delete(pileKey);
       const held = await this.haltQueued(pileKey);
-      const binned: string[] = [];
+      const binned: DriveFile[] = [];
+      let pileFile: DriveFile;
       try {
         // Its declaration goes with it, so no device lists it again; Undo brings both back. The copies go first:
         // stopped halfway, the pile is still listed, and removing it again finishes the job.
         await this.binDeclarations(pileKey, declarations);
-        await this.drive.trash(f.id);
+        pileFile = await this.toBin(f);
         ix.drop(f.id);
         for (const made of held.made) {
           if (made.id === f.id || made.parents.includes(f.id)) continue;
-          await this.drive.trash(made.id);
+          binned.push(await this.toBin(made));
           ix.drop(made.id);
-          binned.push(made.id);
         }
       } catch (e) {
         if (pending && this.current()) this.uploads.set(pileKey, pending);
@@ -388,16 +393,17 @@ export class DriveVault implements VaultSource {
         this.lateFor.delete(key);
       }
       const copies = this.removedDeclarations(pileKey);
-      this.bin.set(path, { id: f.id, change: null, top, ...(pending ? { pending, pileKey } : {}), ...(binned.length ? { late: [...new Set(binned)] } : {}), ...(copies.length ? { declarations: copies } : {}) });
+      const late = [...new Map(binned.map((b) => [b.id, b])).values()];
+      this.bin.set(path, { file: pileFile, change: null, top, ...(pending ? { pending, pileKey } : {}), ...(late.length ? { late } : {}), ...(copies.length ? { declarations: copies } : {}) });
       this.emit();
       return;
     }
     const f = this.mustFile(ix, path);
     removeEntry(ix.entries(), path);
     const made = (await this.journal.list()).find((c) => c.kind === 'create' && c.path === path);
-    await this.drive.trash(f.id);
+    const binned = await this.toBin(f);
     ix.drop(f.id);
-    this.bin.set(path, { id: f.id, change: null });
+    this.bin.set(path, { file: binned, change: null });
     // Something made and binned before any tidy-up saw it leaves no trace.
     let change: string | null = null;
     let removed = false;
@@ -408,19 +414,19 @@ export class DriveVault implements VaultSource {
       try {
         change = (await this.journal.record('trash', `Put ${(f.folder ? nameOf(path) : thingName(nameOf(path)))} in the Bin`, { path, fileId: f.id })).id;
       } catch (e) {
-        if (e instanceof BowerError && e.applied) this.bin.set(path, { id: f.id, change: e.applied.changeId });
+        if (e instanceof BowerError && e.applied) this.bin.set(path, { file: binned, change: e.applied.changeId });
         throw e;
       }
     }
-    this.bin.set(path, { id: f.id, change });
+    this.bin.set(path, { file: binned, change });
     this.emit();
   }
 
   async restore(path: string): Promise<void> {
     const gone = this.bin.get(path);
     if (!gone) throw new BowerError('not-found', 'It is no longer in the Bin.');
-    for (const id of gone.declarations ?? []) await this.drive.untrash(id);
-    if (gone.id === null) {
+    for (const f of gone.declarations ?? []) await this.fromBin(f);
+    if (gone.file === null) {
       // A loose thing that never arrived: its declaration was all there was of it.
       this.bin.delete(path);
       await this.refresh();
@@ -431,9 +437,9 @@ export class DriveVault implements VaultSource {
     // A pile goes back whole, under its own folder's name.
     const at = gone.top ?? path;
     const want = freeName(ix.entries(), parentOf(at), nameOf(at));
-    const back = await this.drive.untrash(gone.id);
-    for (const id of gone.late ?? []) await this.drive.untrash(id);
-    if (want !== nameOf(at) || back.name !== want) await this.drive.update(gone.id, { name: want });
+    const back = await this.fromBin(gone.file);
+    for (const f of gone.late ?? []) await this.fromBin(f);
+    if (want !== nameOf(at) || back.name !== want) await this.once(back, `rename:${want}`, (op) => this.drive.update(back.id, { name: want, appProperties: op }));
     if (gone.change) await this.journal.remove(gone.change);
     this.bin.delete(path);
     await this.refresh();
@@ -669,14 +675,13 @@ export class DriveVault implements VaultSource {
     const done = this.removing.get(pileKey) ?? [];
     this.removing.set(pileKey, done);
     for (const copy of copies) {
-      await this.drive.trash(copy.id);
+      done.push(await this.toBin(copy));
       ix.drop(copy.id);
-      done.push(copy.id);
     }
   }
 
   /** Every copy this pile's Remove sent to the Bin, across tries; forgotten once the Remove is done. */
-  private removedDeclarations(pileKey: string): string[] {
+  private removedDeclarations(pileKey: string): DriveFile[] {
     const done = this.removing.get(pileKey) ?? [];
     this.removing.delete(pileKey);
     return done;
@@ -892,7 +897,7 @@ export class DriveVault implements VaultSource {
       this.emit();
       return;
     }
-    const made = await this.drive.createText(folder.id, PILE_NOTE, context.originalText, { [PROP.item]: context.memberKey });
+    const made = await makeText(this.drive, this.drive, { parent: folder.id, name: PILE_NOTE, props: { [PROP.item]: context.memberKey } }, context.originalText);
     this.checkCurrent();
     ix.put(made);
     this.emit();
@@ -918,7 +923,7 @@ export class DriveVault implements VaultSource {
       throw new BowerError('unknown', 'Bower could not save this pile. Try again.');
     }
     const at = await this.systemFolder(SYSTEM.piles);
-    const written = await makeText(this.drive, this.drive, at, record.name, record.text, recordStamp(declaration.pileId, name === null ? 'loose' : 'folder'));
+    const written = await makeText(this.drive, this.drive, { parent: at, name: record.name, props: recordStamp(declaration.pileId, name === null ? 'loose' : 'folder') }, record.text);
     this.checkCurrent();
     (await this.index()).put(written);
     return { pileId: declaration.pileId, declarationId: declaration.declarationId, contextKey, keys: members.map((m) => m.memberKey), hashes: members.map((m) => m.content.sha256) };
@@ -939,20 +944,18 @@ export class DriveVault implements VaultSource {
       path = join('Inbox', freeName(ix.entries(), 'Inbox', pileFolderName({ id, text, createdAt, items: [] })));
       // A declared pile's declaration comes first: a failed write leaves nothing to send.
       if (this.declarePiles) declared = await this.declare(input, text, inbox, nameOf(path), createdAt);
-      const folder = declared
-        ? await this.drive.createFolder(inbox, nameOf(path), { [PROP.pile]: declared.pileId, [PROP.declaration]: declared.declarationId })
-        : await this.drive.createFolder(inbox, nameOf(path));
+      const folder = await makeFolder(this.drive, this.drive, { parent: inbox, name: nameOf(path), ...(declared ? { props: { [PROP.pile]: declared.pileId, [PROP.declaration]: declared.declarationId } } : {}) });
       this.checkCurrent();
       ix.put(folder);
       id = declared?.pileId ?? folder.id;
       parent = folder.id;
       if (text) {
         try {
-          ix.put(declared ? await this.drive.createText(folder.id, PILE_NOTE, text, { [PROP.item]: declared.contextKey }) : await this.drive.createText(folder.id, PILE_NOTE, text));
+          ix.put(await makeText(this.drive, this.drive, { parent: folder.id, name: PILE_NOTE, ...(declared ? { props: { [PROP.item]: declared.contextKey } } : {}) }, text));
         } catch (e) {
           if (!this.current()) throw e;
           // Half a pile helps nobody: its empty folder goes to the Bin, and you can save again.
-          await this.drive.trash(folder.id).catch((err: unknown) => console.error(err));
+          await this.toBin(folder).catch((err: unknown) => console.error(err));
           ix.drop(folder.id);
           throw e;
         }
@@ -964,7 +967,6 @@ export class DriveVault implements VaultSource {
     }
     const entries: Sending[] = input.items.map((it, i) => ({
       key: declared?.keys[i] ?? `${id}-${i}-${Math.random().toString(36).slice(2, 10)}`,
-      tried: false,
       item: { id: declared?.keys[i] ?? `${id}-${i}`, name: it.name, kind: it.kind, origin: it.origin, upload: 0 },
       ...(it.body ? { body: it.body } : {}),
       ...(it.url ? { url: it.url } : {}),
@@ -989,17 +991,18 @@ export class DriveVault implements VaultSource {
     const u = this.uploads.get(id);
     this.uploads.delete(id);
     const held = await this.haltQueued(id);
+    let binned: DriveFile | null = null;
     try {
       // The copies first: stopped halfway, the pile is still listed, and Remove again finishes the job.
       await this.binDeclarations(id, declarations);
       if (f) {
-        await this.drive.trash(f.id);
+        binned = await this.toBin(f);
         ix.drop(f.id);
       }
       // A thing whose answer was lost may be in Drive already, where it was sent: it goes to the Bin too.
       for (const made of held.made) {
         if (made.id === f?.id || (f && made.parents.includes(f.id))) continue;
-        await this.drive.trash(made.id);
+        await this.toBin(made);
         ix.drop(made.id);
       }
     } catch (e) {
@@ -1012,7 +1015,7 @@ export class DriveVault implements VaultSource {
     await this.endQueued(held.ids);
     // Undo, from where it was (or by its id when it had no place), brings back its folder and declaration.
     const copies = this.removedDeclarations(id);
-    if (f || copies.length) this.bin.set(pile.path ?? id, { id: f?.id ?? null, change: null, ...(pile.path ? { top: pile.path } : {}), ...(copies.length ? { declarations: copies } : {}) });
+    if (f || copies.length) this.bin.set(pile.path ?? id, { file: binned, change: null, ...(pile.path ? { top: pile.path } : {}), ...(copies.length ? { declarations: copies } : {}) });
     this.emit();
   }
 
@@ -1042,7 +1045,7 @@ export class DriveVault implements VaultSource {
     // Check the context before a rename or removal can partially apply a stale edit.
     // Changed since, unless by this very write already landed (a retry of the person's own unknown write, `once`).
     const now = note ? await this.drive.get(note.id, { checksums: !!text }) : null;
-    if (note && now && now.modifiedTime !== note.modifiedTime && !(text && this.holds(note, { text }, now))) {
+    if (note && now && now.modifiedTime !== note.modifiedTime && !(text && holds(note, { text }, now))) {
       void this.refresh();
       throw new BowerError('conflict', 'This changed somewhere else. Look again and try once more.');
     }
@@ -1053,17 +1056,17 @@ export class DriveVault implements VaultSource {
       // A declared loose thing becomes an ordinary pile (TL-P2-31 amendment): its declaration copies go to the Bin
       // first, so no device ever looks for it as a loose thing again.
       for (const copy of await this.declarationCopiesOf(id, f)) {
-        await this.drive.trash(copy.id);
+        await this.toBin(copy);
         ix.drop(copy.id);
       }
       folderPath = join('Inbox', freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text })));
-      const folder = await this.drive.createFolder(f.parents[0] ?? (await this.rootId()), nameOf(folderPath), { [PROP.pile]: id });
+      const folder = await makeFolder(this.drive, this.drive, { parent: f.parents[0] ?? (await this.rootId()), name: nameOf(folderPath), props: { [PROP.pile]: id } });
       ix.put(folder);
-      ix.put(await this.drive.update(f.id, { addParent: folder.id, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}) }));
+      ix.put(await this.once(f, `move:${folder.id}`, (op) => this.drive.update(f.id, { addParent: folder.id, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}), appProperties: op })));
     } else if (text) {
       const name = freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text }), pile.path);
       if (name !== nameOf(pile.path)) {
-        ix.put(await this.drive.update(f.id, { name }));
+        ix.put(await this.once(f, `rename:${name}`, (op) => this.drive.update(f.id, { name, appProperties: op })));
         folderPath = join('Inbox', name);
       }
     }
@@ -1074,9 +1077,9 @@ export class DriveVault implements VaultSource {
     // A declared pile's note stays, empty: its context arrived, and only your words changed.
     else if (note && declared) ix.put(await this.once(note, { text: '' }, (op) => this.drive.writeText(note.id, '', note.modifiedTime, op)));
     else if (note) {
-      await this.drive.trash(note.id);
+      await this.toBin(note);
       ix.drop(note.id);
-    } else if (text && folderId) ix.put(await makeText(this.drive, this.drive, folderId, PILE_NOTE, text, contextKey ? { [PROP.item]: contextKey } : undefined));
+    } else if (text && folderId) ix.put(await makeText(this.drive, this.drive, { parent: folderId, name: PILE_NOTE, ...(contextKey ? { props: { [PROP.item]: contextKey } } : {}) }, text));
     this.emit();
     return this.pile(id);
   }
@@ -1162,7 +1165,6 @@ export class DriveVault implements VaultSource {
     if (u?.entries.some((e) => e.key === key) || this.queuedItems(pileId).some((i) => i.memberKey === key)) return;
     const entry: Sending = {
       key,
-      tried: false,
       sha256: member.content.sha256,
       item: { id: key, name: shownName(member), kind: member.kind, origin: member.origin ?? 'Added in Drive', upload: 0 },
       ...(url === undefined ? { body: bytes } : { url }),
@@ -1467,39 +1469,26 @@ export class DriveVault implements VaultSource {
       if (this.uploads.get(pileId) !== u) return;
       try {
         const ix = await this.index();
-        if (e.tried && !e.queued) {
-          // The last try may have arrived with its answer lost: look before sending again.
-          const there = (await this.drive.listAll(u.parent)).find((f) => f.parents[0] === u.parent && f.appProperties?.[PROP.item] === e.key);
-          if (there) {
-            ix.put(there);
-            u.entries = u.entries.filter((x) => x !== e);
-            this.emit();
-            continue;
-          }
-        }
-        e.tried = true;
         const parentPath = ix.pathOf(u.parent) ?? 'Inbox';
         const name = freeName(ix.entries(), parentPath, safeInboxName(e.item));
         // The session fence (live/index.ts) recognises a pile's thing by PROP.asAdded: it waits for Use here.
         const props: Record<string, string> = { [PROP.asAdded]: e.item.name, [PROP.origin]: e.item.origin, [PROP.kind]: e.item.kind, [PROP.item]: e.key, ...(u.lone ? { [PROP.pile]: pileId } : {}), ...(u.declaration ? { [PROP.declaration]: u.declaration } : {}) };
         e.item.upload = 0;
-        const made = e.url
-          ? await this.drive.createText(u.parent, name, shortcut(e.url), props)
-          : e.body
-            ? await this.sendQueued(pileId, u, e, e.body, name, props)
-            : await this.drive.createText(u.parent, name, '', props);
+        // A link or an empty thing keeps the id reserved for it: a try after a lost answer is that same file.
+        if (!e.body) e.reserved ??= await reserveId(this.addedDrive);
+        const made = e.body ? await this.sendQueued(pileId, u, e, e.body, name, props) : await makeText(this.addedDrive, this.addedDrive, { parent: u.parent, name, props, ...(e.reserved ? { id: e.reserved } : {}) }, e.url ? shortcut(e.url) : '');
         if (!this.current()) return;
         if (this.uploads.get(pileId) !== u) {
           // The pile was removed while this was on its way: it follows the pile to the Bin,
           // and comes back with it on Undo.
-          await this.drive.trash(made.id).catch(async (err: unknown) => {
+          const binned = await this.toBin(made).catch(async (err: unknown) => {
             console.error(err);
-            await this.drive.trash(made.id);
+            return this.toBin(made);
           });
           // Its Bin entry may not exist yet (the pile's own Bin is still being written): then trash() takes it from here.
           let kept = false;
-          for (const g of this.bin.values()) if (g.id === u.parent || g.id === pileId) { g.late = [...(g.late ?? []), made.id]; kept = true; }
-          if (!kept) for (const key of new Set([u.parent, pileId])) this.lateFor.set(key, [...(this.lateFor.get(key) ?? []), made.id]);
+          for (const g of this.bin.values()) if (g.file?.id === u.parent || g.file?.id === pileId) { g.late = [...(g.late ?? []), binned]; kept = true; }
+          if (!kept) for (const key of new Set([u.parent, pileId])) this.lateFor.set(key, [...(this.lateFor.get(key) ?? []), binned]);
           return;
         }
         ix.put(made);
@@ -1678,41 +1667,25 @@ export class DriveVault implements VaultSource {
   }
 
   /**
-   * One of the person's writes to `f`, sent once with its stamp (`spine/write-once.ts`), named by the version it read
-   * and what it does, so a retry of the same change is the same write. A text write (`intent` is `{ text }`, the text
-   * sent) also carries the modifiedTime it read and counts only when Drive's checksum is that of the text sent. With no
-   * answer, an unknown outcome or a conflict, the file is read by id: carrying this stamp and, for text, that checksum,
-   * it landed (their own write, never a change elsewhere). The stamp alone proves only that the write landed once, not
-   * that the file still holds it: another text is a change elsewhere, never "saved". Still as read, the error stands.
+   * One of the person's writes to `f`, sent once with its stamp (`updateByStamp`): with its answer lost and the file
+   * read by id not holding it, still as read the error stands; changed or gone since, it is a change elsewhere.
    */
-  private async once(f: DriveFile, intent: string | { text: string }, write: (op: Record<string, string>) => Promise<DriveFile>): Promise<DriveFile> {
-    const sent = typeof intent !== 'string';
-    const read: { now?: DriveFile } = {};
-    let out: DriveFile;
+  private async once(f: DriveFile, intent: Intent, write: (op: Record<string, string>) => Promise<DriveFile>): Promise<DriveFile> {
+    let now: DriveFile | null | undefined;
     try {
-      out = await writeOnce(this.stampOf(f, intent), write, async () => {
-        read.now = await this.drive.get(f.id, { checksums: sent });
-        return this.holds(f, intent, read.now) ? read.now : null;
-      });
+      return await updateByStamp(this.drive, f, intent, write, (read) => (now = read));
     } catch (e) {
       if (!isNoAnswer(e) && !isUnconfirmedWrite(e)) throw e;
-      if (!read.now) throw isUnconfirmedWrite(e) ? e : new BowerError('offline', "Bower isn't sure that saved. Check again when you're back online.");
-      if (notAsSeen({ ...seenPlace(f), ...(sent ? { modifiedTime: f.modifiedTime } : {}) }, { ...read.now, trashed: false }) === null) throw e;
+      if (now === undefined) throw isUnconfirmedWrite(e) ? e : new BowerError('offline', "Bower isn't sure that saved. Check again when you're back online.");
+      if (now && notAsSeen({ ...seenPlace(f), ...(typeof intent !== 'string' ? { modifiedTime: f.modifiedTime } : {}) }, { ...now, trashed: false }) === null) throw e;
       void this.refresh();
       throw new BowerError('conflict', 'This changed somewhere else. Look again and try once more.');
     }
-    return typeof intent === 'string' ? out : confirmed(out, intent.text);
   }
 
-  /** The stamp of one of the person's writes to `f`: the version it read and what it does. */
-  private stampOf(f: DriveFile, intent: string | { text: string }): string {
-    return stampOf(f.id, `${f.modifiedTime}:${typeof intent === 'string' ? intent : `text:${sha256Sync(intent.text)}`}`);
-  }
-
-  /** Whether `now` holds that write: it carries its stamp and, for text, Drive's checksum of the text sent. */
-  private holds(f: DriveFile, intent: string | { text: string }, now: DriveFile): boolean {
-    return now.appProperties?.[STAMP] === this.stampOf(f, intent) && (typeof intent === 'string' || confirms(now, new TextEncoder().encode(intent.text)));
-  }
+  /** `f` to the Bin, once; the answer is what Undo takes back out (`fromBin`), once too. */
+  private toBin = (f: DriveFile): Promise<DriveFile> => this.once(f, 'bin', (op) => this.drive.trash(f.id, op));
+  private fromBin = (f: DriveFile): Promise<DriveFile> => this.once(f, 'unbin', (op) => this.drive.untrash(f.id, op));
 
   /** Your own write changes the file's time; if you had seen it, it stays seen. */
   protected keepSeen(before: DriveFile, after: DriveFile): DriveFile {
@@ -1780,16 +1753,17 @@ export class DriveVault implements VaultSource {
     const known = ix.idOf(path);
     if (known) return known;
     const parent = parentOf(path);
-    const made = await this.drive.createFolder(parent ? await this.systemFolder(parent) : await this.rootId(), nameOf(path));
+    const made = await makeFolder(this.drive, this.drive, { parent: parent ? await this.systemFolder(parent) : await this.rootId(), name: nameOf(path) });
     ix.put(made);
     return made.id;
   }
 }
 
 interface Sending {
-  /** Set on the file as appProperties.bowerItem, so a retry can tell it already arrived. */
+  /** Set on the file as appProperties.bowerItem: the thing as the pile declares it. */
   key: string;
-  tried: boolean;
+  /** A link's or an empty thing's id, reserved for its create (`spine/write-once.ts`): every try makes that one file. */
+  reserved?: string;
   /** The bytes' SHA-256 as the declaration has it. */
   sha256?: string;
   /** Its id in the upload queue, once added. */

@@ -118,8 +118,9 @@ function tidy(w: World, attempt: number, opts: Attempt = {}): Promise<TidyEnd> {
         }
         stamps.set(stampOf(RUN_ID, op.operationId), op.operationId);
         return real.apply(op, head, fenced, manifest, async () => {
-          await sending();
+          const reserved = await sending();
           await opts.afterIntent?.(op);
+          return reserved;
         });
       },
     };

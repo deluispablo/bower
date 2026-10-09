@@ -27,7 +27,7 @@ class StubEffects implements Effects {
   /** After this many sends, the next one stops on an error nobody caught. */
   breakAfter: number | null = null;
 
-  async apply(op: OperationV2, _head: Checkpoint, _w: unknown, _m: RunManifest, sending: () => Promise<void>): Promise<Settled> {
+  async apply(op: OperationV2, _head: Checkpoint, _w: unknown, _m: RunManifest, sending: () => Promise<unknown>): Promise<Settled> {
     const e = op.effect;
     if (e.kind === 'move' && (this.refused === 'all' || e.before.fileId === this.refused)) return { state: 'rejected', failure: { code: 'conflict', message: MOVED } };
     await sending();
@@ -244,6 +244,19 @@ describe('the report barrier', () => {
     expect(wire.statuses.filter((s) => s.phase === 'done')).toHaveLength(1);
     const head = (await chainOf(wire, root)).at(-1);
     expect(head).toMatchObject({ phase: 'done', report: { state: 'published' } });
+  });
+
+  it('last-run.json whose answer shows other bytes than those sent is not confirmed, and done is never reported', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, root } = await demo();
+    // Drive stored, by its answer, other bytes than those sent: its md5Checksum is not theirs.
+    wire.reshape = (a) => (a.name === 'last-run.json' && typeof a.md5Checksum === 'string' ? { ...a, md5Checksum: '0'.repeat(32) } : a);
+
+    const end = await tidy(wire, root, 1, new StubEffects());
+
+    expect(end.phase).not.toBe('done');
+    expect(wire.statuses.filter((s) => s.phase === 'done')).toHaveLength(0);
+    expect((await chainOf(wire, root)).at(-1)).toMatchObject({ phase: 'saving' });
   });
 
   it('a failed report save stays in saving and a redispatch only writes the report', async () => {

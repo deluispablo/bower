@@ -50,20 +50,21 @@ export interface BinnedItem {
 export interface DriveApi extends ResumableDrive {
   /** Every file and folder under `rootId`, at any depth, not in the Bin. */
   listAll(rootId: string): Promise<DriveFile[]>;
-  /** A file as Drive keeps it now; with `checksums`, its stored content's `md5Checksum` too (what a write is confirmed by). */
-  get(id: string, opts?: { checksums?: boolean }): Promise<DriveFile>;
+  /** A file as Drive keeps it now; with `checksums`, its content's `md5Checksum` too; with `binned`, even in the Bin. */
+  get(id: string, opts?: { checksums?: boolean; binned?: boolean }): Promise<DriveFile>;
   readText(id: string): Promise<string>;
   /** Available undecoded media bytes; each returned array is an independent copy. */
   readBytes(id: string): Promise<Uint8Array>;
-  createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile>;
-  createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>): Promise<DriveFile>;
+  /** With `id`, reserved by `generateIds`: a file with that id there already rejects `conflict` (Drive's 409). */
+  createFolder(parentId: string, name: string, appProperties?: Record<string, string>, id?: string): Promise<DriveFile>;
+  createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>, id?: string): Promise<DriveFile>;
   /** Writes only if the file still has `ifModified`; otherwise rejects `conflict`. `appProperties` go in the same request. */
   writeText(id: string, text: string, ifModified: string, appProperties?: Record<string, string>): Promise<DriveFile>;
   /** Renames, moves, or sets appProperties (a null value removes one). */
   update(id: string, patch: DrivePatch): Promise<DriveFile>;
   /** To Drive's Bin; the app never deletes for good. */
-  trash(id: string): Promise<DriveFile>;
-  untrash(id: string): Promise<DriveFile>;
+  trash(id: string, appProperties?: Record<string, string>): Promise<DriveFile>;
+  untrash(id: string, appProperties?: Record<string, string>): Promise<DriveFile>;
   /**
    * Files under `rootId` whose name or text has every word of `query` (Drive's `fullText contains`: whole words, any
    * order, case-insensitive), at most `SEARCH_MAX_PAGES` pages of `SEARCH_PAGE_SIZE` for each batch of `SEARCH_FOLDERS`
@@ -83,8 +84,6 @@ export interface DriveApi extends ResumableDrive {
    * Worker's subrequest grant).
    */
   binnedByItem(rootId: string, keys: readonly string[], beforeGet?: () => void): Promise<BinnedItem[]>;
-  /** The files that carry `key` = `value` in their appProperties, anywhere, in the Bin or not, with their checksums. */
-  stamped(key: string, value: string): Promise<Array<{ file: DriveFile; trashed: boolean }>>;
 }
 
 /** `files.list` pageSize (https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list), the largest a page holds. */
@@ -163,7 +162,6 @@ export const DRIVE_OPS = {
   readBytes: 'read',
   fullText: 'read',
   binnedByItem: 'read',
-  stamped: 'read',
   storedDigest: 'read',
   sessionStatus: 'read',
   getUploaded: 'read',
@@ -185,8 +183,8 @@ export const isKnownDriveWrite = (key: PropertyKey): boolean => (DRIVE_OPS as Re
 
 /** A write through a fence (the runner's, the fake's `fenced`), as the fault hook sees it. */
 export type FencedCall =
-  | { op: 'create-folder'; parentId: string; name: string; appProperties?: Record<string, string> }
-  | { op: 'create-text'; parentId: string; name: string; text: string; appProperties?: Record<string, string> }
+  | { op: 'create-folder'; parentId: string; name: string; appProperties?: Record<string, string>; reserved?: string }
+  | { op: 'create-text'; parentId: string; name: string; text: string; appProperties?: Record<string, string>; reserved?: string }
   | { op: 'update'; id: string; patch: DrivePatch }
   | { op: 'trash'; id: string; appProperties?: Record<string, string> }
   | { op: 'write-text'; id: string; text: string; ifModified: string; appProperties?: Record<string, string> };
@@ -197,15 +195,11 @@ export interface FaultHook {
   /** Told after a fenced write changed the Drive. */
   applied?: (call: FencedCall) => void;
 }
-/** The writes a run may make, each checked against what it read right before it is sent. */
-export interface FencedDrive {
-  createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile>;
-  createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>): Promise<DriveFile>;
-  update(id: string, patch: DrivePatch): Promise<DriveFile>;
-  /** `appProperties`, when given, are set in the same request (a run's stamp on its effect); answers the file binned. */
-  trash(id: string, appProperties?: Record<string, string>): Promise<DriveFile>;
-  writeText(id: string, text: string, ifModified: string, appProperties?: Record<string, string>): Promise<DriveFile>;
-}
+/**
+ * The writes a run may make, each checked against what it read right before it is sent; the ids its creates carry
+ * (`generateIds`) are a write too. A Bin's `appProperties` are a run's stamp on its effect.
+ */
+export type FencedDrive = Pick<DriveApi, 'generateIds' | 'createFolder' | 'createText' | 'update' | 'trash' | 'writeText'>;
 /** What Drive stores for a file now, as evidence of an effect: metadata, Bin state, and the content's size and SHA-256. */
 export interface StoredEvidence {
   file: DriveFile;
@@ -228,8 +222,6 @@ export interface RunDrive {
   readBytes(id: string): Promise<Uint8Array>;
   /** A folder's live children. */
   list(parentId: string): Promise<DriveFile[]>;
-  /** The files that carry `key` = `value` in their appProperties, anywhere, in the Bin or not. */
-  stamped(key: string, value: string): Promise<Array<{ file: DriveFile; trashed: boolean }>>;
   /**
    * What the plan saw of a file an effect changes, as the fence must find it right before the send: its name and place
    * and, with `withTime`, its modifiedTime too (a content write, which carries it).

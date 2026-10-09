@@ -21,8 +21,7 @@ import { SYSTEM, isRunnerFile, type LastRunFile, type RunnerFiles } from '../vau
 import type { Checkpoint } from '../contracts/run-checkpoint';
 import type { AdmissionManifest } from './admission';
 import { canonical, checkpointName, nextCheckpoint, reportName, type AttemptMark, type CheckpointPatch, type RecordReads, type RunManifest, type RunRecords } from './records';
-import { byStamp, confirmed, makeFolder, makeText, stampOf, writeOnce } from './write-once';
-import { sha256Sync } from '../contracts/hashes';
+import { makeFolder, makeText, updateByStamp } from './write-once';
 import { dispositionsFor, itemDispositions, materialize, reportContradictions, type ItemDisposition } from './report';
 
 export interface ReportSave {
@@ -184,23 +183,19 @@ async function stored(save: Pick<ReportSave, 'rootId' | 'reads'>, path: string):
 }
 
 /**
- * Writes one file with the modifiedTime it read (or makes it), stamped by its place, the version it replaces and its
- * bytes, and confirmed by its answer's checksum (`write-once.ts`).
+ * Writes one file with the modifiedTime it read (or makes it by its reserved id), stamped by the version it replaces
+ * and its bytes, and confirmed by its answer's checksum (`write-once.ts`).
  */
 async function write(save: ReportSave, path: string, found: Stored | null, text: string): Promise<void> {
   const w = await save.batch();
-  if (!found) {
-    await makeText(w, save.reads, await system(save, w), nameIn(path), text);
-    return;
-  }
-  const stamp = stampOf(found.file.id, `${found.file.modifiedTime}:${sha256Sync(text)}`);
-  confirmed(await writeOnce(stamp, (op) => w.writeText(found.file.id, text, found.file.modifiedTime, op), (s) => byStamp(save.reads, s)), text);
+  if (!found) await makeText(w, save.reads, { parent: await system(save, w), name: nameIn(path) }, text);
+  else await updateByStamp(save.reads, found.file, { text }, (op) => w.writeText(found.file.id, text, found.file.modifiedTime, op));
 }
 
-/** The `.bower` folder, made when missing; a lost reply finds the folder that landed by its stamp. */
+/** The `.bower` folder, made when missing; a lost reply finds the folder that landed by its reserved id. */
 async function system(save: ReportSave, w: FencedDrive): Promise<string> {
   const { sys } = await where(save, SYSTEM.dir);
-  return (sys ?? (await makeFolder(w, save.reads, save.rootId, SYSTEM.dir))).id;
+  return (sys ?? (await makeFolder(w, save.reads, { parent: save.rootId, name: SYSTEM.dir }))).id;
 }
 
 /** A runner file's value; undefined, said once in the log, when it is not JSON. */

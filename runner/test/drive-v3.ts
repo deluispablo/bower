@@ -54,6 +54,8 @@ export interface DriveV3 {
    * token refused, answers 410 `gone`; from then on the attempt route does too, as the Worker's person object does.
    */
   revoked: boolean;
+  /** When set, the answer to each write as Drive would give it is changed by this before the runner sees it. */
+  reshape: ((answer: Record<string, unknown>) => Record<string, unknown>) | null;
 }
 
 export interface StatusPost {
@@ -90,6 +92,7 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
     endings: [],
     oldWorker: false,
     revoked: false,
+    reshape: null,
     checksums: true,
     fetch: async (input, init = {}) => {
       const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
@@ -117,9 +120,12 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
       if (url.origin !== 'https://www.googleapis.com') return json(404, driveFailure(404, 'notFound'));
       if (wire.revoked || !live.has(auth.replace(/^Bearer /, ''))) return json(401, driveFailure(401, 'authError'));
       try {
-        return await answer(wire, method, url, init.body ?? null);
+        const res = await answer(wire, method, url, init.body ?? null);
+        return wire.reshape && method !== 'GET' && res.ok ? json(res.status, wire.reshape((await res.json()) as Record<string, unknown>)) : res;
       } catch (e) {
         if (e instanceof BowerError && e.code === 'not-found') return json(404, driveFailure(404, 'notFound'));
+        // A create whose reserved id is taken: Drive answers 409.
+        if (e instanceof BowerError && e.code === 'conflict') return json(409, driveFailure(409, 'conflict'));
         throw e;
       }
     },
@@ -157,6 +163,8 @@ async function answer(wire: DriveV3, method: string, url: URL, body: RequestInit
   const drive = wire.drive;
   const path = url.pathname;
   const one = /^\/(upload\/)?drive\/v3\/files\/([^/]+)$/.exec(path);
+  // `files.generateIds`: ids the pretend Drive keeps for creates to come.
+  if (method === 'GET' && path === '/drive/v3/files/generateIds') return json(200, { ids: await drive.generateIds(Number(url.searchParams.get('count') ?? '1')) });
   if (method === 'GET' && path === '/drive/v3/files') return list(drive, url);
   if (method === 'GET' && one) {
     const id = decodeURIComponent(one[2] ?? '');
@@ -170,13 +178,13 @@ async function answer(wire: DriveV3, method: string, url: URL, body: RequestInit
     return json(200, { ...wireFile(stored.file, stored.trashed), ...size, ...sha });
   }
   if (method === 'POST' && path === '/drive/v3/files') {
-    const meta = JSON.parse(await new Response(body).text()) as { name: string; mimeType?: string; parents: string[]; appProperties?: Record<string, string> };
+    const meta = JSON.parse(await new Response(body).text()) as { name: string; mimeType?: string; parents: string[]; appProperties?: Record<string, string>; id?: string };
     if (meta.mimeType !== FOLDER) return json(400, driveFailure(400, 'badRequest'));
-    return json(200, wireFile(await drive.createFolder(meta.parents[0] ?? '', meta.name, meta.appProperties), false));
+    return json(200, wireFile(await drive.createFolder(meta.parents[0] ?? '', meta.name, meta.appProperties, meta.id), false));
   }
   if (method === 'POST' && path === '/upload/drive/v3/files' && url.searchParams.get('uploadType') === 'multipart') {
     const { meta, content } = await multipart(body);
-    const made = await drive.createText(meta.parents[0] ?? '', meta.name, content, meta.appProperties);
+    const made = await drive.createText(meta.parents[0] ?? '', meta.name, content, meta.appProperties, meta.id);
     // Drive's answer to a create carries the stored content's checksums when `fields` names them
     // (https://developers.google.com/drive/api/reference/rest/v3/files: md5Checksum, sha256Checksum).
     const fields = url.searchParams.get('fields') ?? '';
@@ -268,7 +276,7 @@ async function list(drive: FakeDrive, url: URL): Promise<Response> {
   return json(200, { kind: 'drive#fileList', files, ...next });
 }
 
-async function multipart(body: RequestInit["body"]): Promise<{ meta: { name: string; parents: string[]; appProperties?: Record<string, string> }; content: string }> {
+async function multipart(body: RequestInit["body"]): Promise<{ meta: { name: string; parents: string[]; appProperties?: Record<string, string>; id?: string }; content: string }> {
   const text = await new Response(body).text();
   const boundary = /^--([^\r\n]+)\r\n/.exec(text)?.[1] ?? '';
   const parts = text.split(`--${boundary}`).slice(1, -1).map((p) => p.slice(p.indexOf('\r\n\r\n') + 4).replace(/\r\n$/, ''));

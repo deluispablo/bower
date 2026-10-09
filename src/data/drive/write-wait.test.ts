@@ -21,7 +21,10 @@ const silent = ((): Promise<Response> => new Promise<Response>(() => undefined))
 
 /** Reads answer, writes never do. */
 const readsOnly = ((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-  void input;
+  const url = String(input instanceof Request ? input.url : input);
+  // Drive reserves an id; the file it names is not there (it was never made).
+  if (url.includes('generateIds')) return Promise.resolve(Response.json({ ids: ['r1'] }));
+  if (url.includes('/files/r1')) return Promise.resolve(Response.json({ error: { code: 404 } }, { status: 404 }));
   if ((init?.method ?? 'GET') === 'GET') return Promise.resolve(Response.json({ files: [] }));
   return new Promise<Response>(() => undefined);
 }) as typeof fetch;

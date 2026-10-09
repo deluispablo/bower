@@ -49,6 +49,8 @@ export interface RunnerDriveOptions {
 }
 
 const API = 'https://www.googleapis.com/drive/v3';
+/** Ids reserved at once for a run's creates: C04 makes 17 (records and things), so one request covers a run. */
+const ID_POOL = 50;
 /** What one of this run's own writes did to a folder listing: the file as Drive answered, or the file put in the Bin. */
 export type Change = { file: DriveFile } | { gone: string };
 
@@ -75,6 +77,8 @@ export class RunnerDrive implements RunDrive {
   private readonly ended: Array<{ end: number; change: Change | null }> = [];
   /** What the plan read of each file, by id and the modifiedTime its listing gave (the one read cache, `read-cache.ts`). */
   private readonly reads = new ReadCache();
+  /** Ids Drive reserved for this attempt's creates and not used yet (`reserve`). */
+  private readonly ids: string[] = [];
   /** The record folders this run made (`ownFolder`). */
   private readonly records = new Set<string>();
 
@@ -85,8 +89,19 @@ export class RunnerDrive implements RunDrive {
     // Headless: a request with no answer is never worded as offline; a lost write's answer is still read back (`isNoAnswer`).
     this.http = new DriveHttp({ token: (fresh) => this.token.token(fresh), fetch: (url, init) => this.hooked(url, init), context: 'headless', ...(opts.pacing ? { pacing: opts.pacing } : {}) });
     this.writes = {
-      createFolder: (parentId, name, appProperties) => this.fenced({ op: 'create-folder', parentId, name, ...(appProperties ? { appProperties } : {}) }, () => this.http.createFolder(parentId, name, appProperties)),
-      createText: (parentId, name, text, appProperties) => this.fenced({ op: 'create-text', parentId, name, text, ...(appProperties ? { appProperties } : {}) }, () => this.http.createText(parentId, name, text, appProperties)),
+      // One `files.generateIds` (up to 1000 ids) reserves the run's create ids, records and things alike, after the
+      // attempt is read again (a fenced write); an id left unused names nothing.
+      generateIds: async (count) => {
+        if (this.ids.length < count) {
+          await this.seen.read(this.stillCurrent());
+          this.ids.push(...(await this.http.generateIds(Math.max(count, ID_POOL))));
+        }
+        return this.ids.splice(0, count);
+      },
+      createFolder: (parentId, name, appProperties, id) =>
+        this.fenced({ op: 'create-folder', parentId, name, ...(appProperties ? { appProperties } : {}), ...(id ? { reserved: id } : {}) }, () => this.http.createFolder(parentId, name, appProperties, id)),
+      createText: (parentId, name, text, appProperties, id) =>
+        this.fenced({ op: 'create-text', parentId, name, text, ...(appProperties ? { appProperties } : {}), ...(id ? { reserved: id } : {}) }, () => this.http.createText(parentId, name, text, appProperties, id)),
       update: (id: string, patch: DrivePatch) => this.fenced({ op: 'update', id, patch }, () => this.http.update(id, patch)),
       trash: (id, appProperties) => this.fenced({ op: 'trash', id, ...(appProperties ? { appProperties } : {}) }, () => this.http.trash(id, appProperties)),
       writeText: (id, text, ifModified, appProperties) =>
@@ -166,8 +181,8 @@ export class RunnerDrive implements RunDrive {
     }
   }
 
-  async get(id: string): Promise<DriveFile> {
-    return this.seen.note(await this.http.get(id));
+  async get(id: string, opts?: { checksums?: boolean; binned?: boolean }): Promise<DriveFile> {
+    return this.seen.note(await this.http.get(id, opts));
   }
 
   /**
@@ -181,13 +196,6 @@ export class RunnerDrive implements RunDrive {
   /** A folder's live children, every page. */
   async list(parentId: string): Promise<DriveFile[]> {
     return (await this.http.query(`${quote(parentId)} in parents and trashed = false`)).map((f) => this.seen.note(f));
-  }
-
-  /** The files carrying a stamp, anywhere and in the Bin or not (`DriveHttp.stamped`); those out of the Bin are kept as seen. */
-  async stamped(key: string, value: string): Promise<Array<{ file: DriveFile; trashed: boolean }>> {
-    const found = await this.http.stamped(key, value);
-    for (const f of found) if (!f.trashed) this.seen.note(f.file);
-    return found;
   }
 
   async readText(id: string): Promise<string> {

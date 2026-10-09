@@ -63,7 +63,7 @@ class CountedEffects implements Effects {
   /** The operation (by ordinal) whose send is attempted and fails with no answer, nothing landing, once. */
   refuseAt: number | null = null;
 
-  async apply(op: OperationV2, _head: Checkpoint, _w: unknown, _m: RunManifest, sending: () => Promise<void>): Promise<{ state: 'applied'; evidence: EffectEvidence }> {
+  async apply(op: OperationV2, _head: Checkpoint, _w: unknown, _m: RunManifest, sending: () => Promise<unknown>): Promise<{ state: 'applied'; evidence: EffectEvidence }> {
     await sending();
     this.attempted.add(op.operationId);
     if (this.refuseAt === op.ordinal) {

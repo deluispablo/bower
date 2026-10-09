@@ -54,6 +54,7 @@ import { FOLDER_TEMPLATE, PLACEHOLDER_FILE } from '../../src/data/contracts/fold
 import type { FolderTemplateFile } from '../../src/data/contracts/folder-template.js';
 import { OLD_RULES_TEMPLATE, RULES_TEMPLATE } from '../../src/data/contracts/rules-format.js';
 import { DriveHttp, FOLDER, quote, type WireFile } from '../../src/data/drive/drive-http.js';
+import { createById, reserveId } from '../../src/data/spine/write-once.js';
 
 /** The marker every Bower folder carries in `appProperties` (private to this OAuth client). */
 export const FOLDER_MARKER = { bowerFolder: '1' } as const;
@@ -137,14 +138,24 @@ function vaultDrive(env: Env, sub: string, fetchImpl: FetchLike, pacing?: Partia
     const response = await http.call(`${FILES_URL}/${encodeURIComponent(id)}?${new URLSearchParams({ fields })}`, {}, [404]);
     return response.status === 404 ? null : json<DriveItem>('get', response);
   };
-  /** A multipart upload (Drive v3, "Upload file data"): metadata, then the text. With `id`, a 409 says that id exists. */
+  /** A multipart upload (Drive v3, "Upload file data"): metadata, then the text. */
   const multipart = async (url: string, method: string, metadata: Record<string, unknown>, mimeType: string, content: string): Promise<Response> => {
     const boundary = `bower-${crypto.randomUUID()}`;
     const body =
       `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
       `--${boundary}\r\nContent-Type: ${mimeType}; charset=UTF-8\r\n\r\n${content}\r\n--${boundary}--`;
-    return http.call(url, { method, headers: { 'content-type': `multipart/related; boundary=${boundary}` }, body }, [409]);
+    return http.call(url, { method, headers: { 'content-type': `multipart/related; boundary=${boundary}` }, body });
   };
+  /** A create with the id reserved for it (`spine/write-once.ts`): a 409, or a lost answer, is that id found by a read. */
+  const made = (id: string, send: (id: string) => Promise<unknown>): Promise<string> =>
+    createById(
+      id,
+      async (at) => {
+        await send(at);
+        return at;
+      },
+      async (at) => ((await get(at, 'id')) === null ? null : at),
+    );
   return {
     get: (id: string) => get(id, 'id,mimeType,trashed'),
     /** The person's oldest live folder carrying the Bower marker, or null. */
@@ -156,27 +167,13 @@ function vaultDrive(env: Env, sub: string, fetchImpl: FetchLike, pacing?: Partia
     children: (parentId: string) => list(`${quote(parentId)} in parents and trashed = false`, 'files(id,name,mimeType)'),
     /** `files.generateIds`: `count` ids (Drive allows 1 to 1000) to create files with later. */
     generateIds: (count: number) => http.generateIds(count),
-    /**
-     * `files.create` for a folder. With `id` (from `generateIds`), Drive answers 409 when a file with that id exists
-     * already: that is our folder, made by an earlier try whose answer was lost.
-     */
-    async createFolder(name: string, parentId: string | null, extra: { appProperties?: Record<string, string>; id?: string } = {}): Promise<string> {
-      const metadata = { name, mimeType: FOLDER, ...(extra.id !== undefined ? { id: extra.id } : {}), ...(parentId !== null ? { parents: [parentId] } : {}), ...(extra.appProperties !== undefined ? { appProperties: extra.appProperties } : {}) };
-      const response = await http.call(`${FILES_URL}?fields=id`, { method: 'POST', headers: { 'content-type': 'application/json; charset=UTF-8' }, body: JSON.stringify(metadata) }, [409]);
-      if (response.status === 409) {
-        if (extra.id !== undefined) return extra.id;
-        throw driveError('create folder answered 409');
-      }
-      const created = await json<DriveItem>('create folder', response);
-      if (typeof created.id !== 'string') throw driveError('create folder answered no id');
-      return created.id;
-    },
-    /** `files.create` with a multipart upload of a new text file. With `id`, Drive answers 409 when that id exists: made by an earlier try, so done. */
-    async createText(name: string, parentId: string, content: string, id?: string, appProperties?: Record<string, string>): Promise<void> {
+    /** `files.create` for a folder, with the id reserved for it (`generateIds`): made once, however often it is sent. */
+    makeFolder: (name: string, parentId: string | null, id: string, appProperties?: Record<string, string>): Promise<string> =>
+      made(id, (at) => http.call(`${FILES_URL}?fields=id`, { method: 'POST', headers: { 'content-type': 'application/json; charset=UTF-8' }, body: JSON.stringify({ name, mimeType: FOLDER, id: at, ...(parentId !== null ? { parents: [parentId] } : {}), ...(appProperties !== undefined ? { appProperties } : {}) }) })),
+    /** `files.create` with a multipart upload of a new text file, with the id reserved for it: made once. */
+    makeText(name: string, parentId: string, content: string, id: string, appProperties?: Record<string, string>): Promise<string> {
       const mimeType = name.endsWith('.md') ? 'text/markdown' : name.endsWith('.json') ? 'application/json' : 'text/plain';
-      const metadata = { name, mimeType, parents: [parentId], ...(id === undefined ? {} : { id }), ...(appProperties === undefined ? {} : { appProperties }) };
-      const response = await multipart(`${UPLOAD_URL}?uploadType=multipart&fields=id`, 'POST', metadata, mimeType, content);
-      if (response.status === 409 && id === undefined) throw driveError('upload answered 409');
+      return made(id, (at) => multipart(`${UPLOAD_URL}?uploadType=multipart&fields=id`, 'POST', { name, mimeType, parents: [parentId], id: at, ...(appProperties === undefined ? {} : { appProperties }) }, mimeType, content));
     },
     /** The one live file called `name` in `parentId` with what the repair checks, or null when there is none or more than one. */
     async onlyNamed(parentId: string, name: string): Promise<DriveItem | null> {
@@ -192,8 +189,7 @@ function vaultDrive(env: Env, sub: string, fetchImpl: FetchLike, pacing?: Partia
     modifiedTime: async (id: string): Promise<string | null> => (await get(id, 'modifiedTime'))?.modifiedTime ?? null,
     /** `files.update` with a multipart upload: new text and app properties for one file. */
     async replaceText(id: string, content: string, appProperties: Record<string, string>): Promise<void> {
-      const response = await multipart(`${UPLOAD_URL}/${encodeURIComponent(id)}?uploadType=multipart&fields=id`, 'PATCH', { appProperties }, 'text/markdown', content);
-      if (response.status === 409) throw driveError('update answered 409');
+      await multipart(`${UPLOAD_URL}/${encodeURIComponent(id)}?uploadType=multipart&fields=id`, 'PATCH', { appProperties }, 'text/markdown', content);
     },
   };
 }
@@ -252,7 +248,7 @@ async function completeTemplate(
     const existing = (await childrenOf(parent)).find((c) => c.name === name && c.mimeType === FOLDER);
     let id: string;
     if (existing === undefined) {
-      id = await drive.createFolder(name, parent, ids[path] === undefined ? {} : { id: ids[path] });
+      id = await drive.makeFolder(name, parent, ids[path] ?? (await reserveId(drive)));
       children.set(id, []);
     } else {
       id = existing.id;
@@ -266,7 +262,7 @@ async function completeTemplate(
     const name = file.path.slice(slash + 1);
     if (name === PLACEHOLDER) continue;
     if ((await childrenOf(parent)).some((c) => c.name === name)) continue;
-    await drive.createText(name, parent, file.content, ids[file.path], file.appProperties);
+    await drive.makeText(name, parent, file.content, ids[file.path] ?? (await reserveId(drive)), file.appProperties);
   }
 }
 
@@ -385,7 +381,7 @@ async function attemptVault(
       const ids = Object.fromEntries(keys.map((k, i) => [k, rest[i] ?? '']));
       if (!(await person.reserveFolder(gen, reserved, { folderId: reserved, ids }, state.folderId))) return null;
     }
-    folderId = await drive.createFolder(env.TEMPLATE_FOLDER_NAME, null, { appProperties: FOLDER_MARKER, id: reserved });
+    folderId = await drive.makeFolder(env.TEMPLATE_FOLDER_NAME, null, reserved, FOLDER_MARKER);
     made = true;
   }
 

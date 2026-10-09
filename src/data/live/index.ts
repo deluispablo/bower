@@ -6,7 +6,6 @@ import { isKnownDriveWrite, type DriveApi } from '../drive/drive-api';
 import type { Sources } from '../sources';
 import { DriveVault } from '../vault/drive-vault';
 import { outboxKey } from '../vault/journal';
-import { PROP } from '../vault/layout';
 import type { WorkerApi } from '../worker/worker-api';
 import { BowerError } from '../types';
 import { broadcastBus, createUploadQueue, type QueueRole, type UploadQueue } from '../upload-queue';
@@ -114,15 +113,6 @@ async function untilActive(guard: PlaceGuard, here: WaitingHere): Promise<void> 
       }
     }
   }
-}
-
-/**
- * A pile's thing on its way to Drive (blocked is not closed, TL-P2-24): a file sent straight, or a link or
- * note written as text with the "as added" property that only a pile's send sets.
- */
-function addedHere(key: PropertyKey, args: readonly unknown[]): boolean {
-  const props = key === 'createText' ? args[3] : undefined;
-  return !!props && typeof props === 'object' && typeof (props as Record<string, unknown>)[PROP.asAdded] === 'string';
 }
 
 export function makeLiveSources(opts: LiveOptions): LiveSources {
@@ -297,7 +287,8 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
     };
     const policy = guard ? drivePolicy(guard, outboxWaiting) : null;
     const boundWorker = guardWorker(at, boundRoot, () => resolved);
-    function bound<T extends object>(api: T): T {
+    /** `added`: a pile's link or empty thing on its way (blocked is not closed, TL-P2-24): its writes wait for Use here. */
+    function bound<T extends object>(api: T, added = false): T {
       return new Proxy(api, {
         get(target, key, receiver) {
           const value: unknown = Reflect.get(target, key, receiver);
@@ -307,7 +298,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
             if (disposed) throw new BowerError('unknown', 'Bower is no longer open on this page.');
             // Fail closed: every method that is not a read goes only from the active place.
             // A file on its way waits while another place is active, and goes after Use here (TL-P2-24).
-            const fencing = guard && policy ? (addedHere(key, args) ? untilActive(guard, waitingHere) : policy.before(key, args)) : null;
+            const fencing = guard && policy ? (added && isKnownDriveWrite(key) ? untilActive(guard, waitingHere) : policy.before(key, args)) : null;
             if (fencing) {
               await fencing;
               check(at);
@@ -325,6 +316,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
       driveLinks: opts.driveLinks ?? false,
       declarePiles: opts.declarePiles ?? false,
       drive: bound(drive),
+      addedDrive: bound(drive, true),
       rootId: boundRoot,
       uploads: { queue: vaultQueue, account },
       runningPiles: () => {

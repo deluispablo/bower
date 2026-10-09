@@ -10,10 +10,9 @@ import { SYSTEM } from '../../../src/data/vault/layout';
 
 /** What the runner's adapter reads: a file, a folder's live children, and a file's text. */
 export interface RunnerReads {
-  get(id: string): Promise<DriveFile>;
+  get(id: string, opts?: { checksums?: boolean; binned?: boolean }): Promise<DriveFile>;
   list(parentId: string): Promise<DriveFile[]>;
   readText(id: string): Promise<string>;
-  stamped(key: string, value: string): Promise<Array<{ file: DriveFile; trashed: boolean }>>;
   /** Rises with every write the adapter sends; a listing read at one value is current while it stays (`drive.ts`). */
   generation?: number;
   /** What the adapter's own writes did since a listing taken at a generation (`drive.ts`); null when that is not known. */
@@ -51,7 +50,7 @@ export function runnerReads(drive: RunnerReads, runId?: string): RecordReads {
     },
     // Records are canonical JSON written as UTF-8 text, so their text gives their exact bytes back.
     readBytes: async (id) => new TextEncoder().encode(await drive.readText(id)),
-    stamped: (key, value) => drive.stamped(key, value),
+    get: (id, opts) => drive.get(id, opts),
   };
 }
 
@@ -106,11 +105,9 @@ function patched(files: readonly DriveFile[], walked: Map<string, boolean>, chan
 async function listRecordFolders(drive: RunnerReads, rootId: string, runId: string | undefined): Promise<DriveFile[]> {
   const out: DriveFile[] = [];
   let level: Array<{ id: string; runs: boolean }> = [{ id: rootId, runs: false }];
-  let first = true;
   while (level.length) {
-    // The folder itself is read too: a record folder made in it is checked against it.
-    const [lists] = await Promise.all([Promise.all(level.map((folder) => drive.list(folder.id))), first ? drive.get(rootId) : null]);
-    first = false;
+    // A record folder made in a folder is checked by the fence's own read of it, right before the create (`seen-files.ts`).
+    const lists = await Promise.all(level.map((folder) => drive.list(folder.id)));
     const next: typeof level = [];
     level.forEach((folder, i) => {
       for (const f of lists[i] ?? []) {

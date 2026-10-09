@@ -92,6 +92,8 @@ describe('the C04 run makes the golden number of Drive calls per step', () => {
     // where a kept read stood for it before (+2); lead to weigh (no kept-read window, per the lead's constraint).
     // 76 since c2-write-once: every write is confirmed by its own answer's checksum, so no read follows a made note
     // (2), the report record (1), last-run.json (1) or another write (2).
+    // Still 76 since c2-create-by-id: one files.generateIds reserves the run's create ids (+1), and the record listing no
+    // longer reads the root folder first, which the fence reads right before a create into it anyway (-1).
     const totalDriveCalls = calls.filter((c) => c.kind === 'read' || c.kind === 'write').length;
     expect(totalDriveCalls).toBe(76);
 
@@ -100,7 +102,8 @@ describe('the C04 run makes the golden number of Drive calls per step', () => {
     // Per step before the cut: token 2, reads 17, model 2, apply 19, checkpoints 4, report 45, status 4.
     expect(count.token).toBe(2);
     expect(count.reads).toBe(17);
-    expect(count.model).toBe(2);
+    // 3 since c2-create-by-id: the attempt is read again before the ids are reserved (a fenced write; a Worker call).
+    expect(count.model).toBe(3);
     expect(count.apply).toBe(19);
     expect(count.checkpoints).toBe(4);
     expect(count.report).toBe(40);
