@@ -19,6 +19,7 @@ import { FakeDrive } from '../drive/fake-drive';
 import { FakeWorker } from '../fake/fake-worker';
 import { FakeRunService, CLAIM_MS } from '../fake/fake-run-service';
 import { DriveVault } from '../vault/drive-vault';
+import { VaultIndex } from '../vault/vault-index';
 import { fakeRead } from '../spine/read';
 import { planAdmission } from '../spine/plan';
 import { planScripted } from '../spine/scripted';
@@ -30,6 +31,11 @@ import { API, RUN_ID, TICKET, driveV3 } from '../../../runner/test/drive-v3';
 
 const observed = vi.hoisted(() => ({
   active: false,
+  whole: null as null | {
+    paths: Map<string, string>;
+    parsing: string | null;
+    parses: Array<{ fileId: string; hash: string }>;
+  },
   contexts: [] as Array<{
     misses: Array<{ fileId: string; hash: string; bytes: Uint8Array }>;
     reads: Array<{ fileId: string; hash: string }>;
@@ -41,14 +47,21 @@ vi.mock('./ownership-format', async (importOriginal) => {
   return {
     ...real,
     parseOwnership: (bytes: Uint8Array) => {
-      if (observed.active) observed.candidates.push(new Uint8Array(bytes));
+      if (observed.active) {
+        const fileId = observed.whole?.parsing;
+        if (fileId) observed.whole?.parses.push({ fileId, hash: sha256Sync(bytes) });
+        else observed.candidates.push(new Uint8Array(bytes));
+      }
       return real.parseOwnership(bytes);
     },
     createOwnershipContext: () => {
       const log = { misses: [] as Array<{ fileId: string; hash: string; bytes: Uint8Array }>, reads: [] as Array<{ fileId: string; hash: string }> };
       if (observed.active) observed.contexts.push(log);
       const context = real.createOwnershipContext((bytes: Uint8Array, key: { fileId: string; hash: string }) => {
-        if (observed.active) log.misses.push({ ...key, bytes: new Uint8Array(bytes) });
+        if (observed.active) {
+          log.misses.push({ ...key, bytes: new Uint8Array(bytes) });
+          observed.whole?.parses.push({ ...key });
+        }
         return real.parseOwnership(bytes);
       });
       const read = context.read.bind(context);
@@ -57,6 +70,23 @@ vi.mock('./ownership-format', async (importOriginal) => {
         return read(fileId, bytes);
       };
       return context;
+    },
+  };
+});
+
+// Attribute uncached parseNote calls through the actual listing, never by equal bytes.
+// The parser mock above still counts the real invocation; this wrapper supplies only provenance.
+vi.mock('./note-format', async (importOriginal) => {
+  const real = await importOriginal<typeof import('./note-format')>();
+  return {
+    ...real,
+    parseNote: (...args: Parameters<typeof real.parseNote>) => {
+      const whole = observed.whole;
+      if (!observed.active || !whole) return real.parseNote(...args);
+      const previous = whole.parsing;
+      whole.parsing = args[2]?.fileId ?? whole.paths.get(args[0]) ?? null;
+      try { return real.parseNote(...args); }
+      finally { whole.parsing = previous; }
     },
   };
 });
@@ -96,6 +126,7 @@ function startObserving(): void {
 }
 afterEach(() => {
   observed.active = false;
+  observed.whole = null;
   vi.restoreAllMocks();
   vi.useRealTimers();
   localStorage.clear();
@@ -304,4 +335,110 @@ describe.each(['fenced', 'external'] as const)('%s write invalidates the fetched
     expect(observed.candidates.map((bytes) => sha256Sync(bytes))).toEqual(candidatesBeforeRead);
     expect(await drive.readBytes(file.id)).toEqual(enc(AFTER));
   });
+});
+
+it('across a whole attempt with piles, each Drive-read text is parsed at most once', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(AT);
+  for (const entry of ['fake Worker/service', 'runTidy'] as const) {
+    const w = await seed();
+    const inbox = (await w.drive.listAll(w.rootId)).find((f) => f.name === 'Inbox');
+    if (!inbox) throw new Error('No Inbox folder');
+    const pileIds: string[] = [];
+    const explicit = new Map(w.ids.map((fileId) => [fileId, sha256Sync(enc(BEFORE))]));
+    for (const n of [1, 2]) {
+      const folder = await w.drive.createFolder(inbox.id, `Words ${n}`);
+      const text = `Compare the offer in paper ${n}.`;
+      const note = await w.drive.createText(folder.id, 'Pile note.md', text);
+      await w.drive.createText(folder.id, `paper ${n}.txt`, `Made-up attachment ${n}.`);
+      pileIds.push(note.id);
+      explicit.set(note.id, sha256Sync(enc(text)));
+    }
+    const files = await w.drive.listAll(w.rootId);
+    const ix = VaultIndex.build(w.rootId, files);
+    const paths = new Map<string, string>();
+    for (const file of files) {
+      const path = ix.pathOf(file.id);
+      if (path && !file.folder) paths.set(path, file.id);
+    }
+    // Drive provenance is observed independently of the memo: an omitted parse site cannot omit its reads.
+    const reads: Array<{ fileId: string; hash: string }> = [];
+    const observeReads = (drive: FakeDrive) => {
+      const readText = drive.readText.bind(drive);
+      const readBytes = drive.readBytes.bind(drive);
+      vi.spyOn(drive, 'readText').mockImplementation(async (fileId) => {
+        const text = await readText(fileId);
+        if (observed.active) reads.push({ fileId, hash: sha256Sync(enc(text)) });
+        return text;
+      });
+      vi.spyOn(drive, 'readBytes').mockImplementation(async (fileId) => {
+        const bytes = await readBytes(fileId);
+        if (observed.active) reads.push({ fileId, hash: sha256Sync(bytes) });
+        return bytes;
+      });
+    };
+    if (entry === 'fake Worker/service') observeReads(w.drive);
+    // Admission and fixture setup are outside the attempt being measured.
+    const admitted = entry === 'runTidy'
+      ? await planAdmission(fakeRead(w.drive), w.rootId, { scope: 'all', clock: () => AT, newId: () => 'pile-admission' })
+      : null;
+    const wire = driveV3(w.drive);
+    wire.folderId = w.rootId;
+    // Count only actual media responses, not the wire fixture's internal metadata/checksum reads.
+    const fetchObserved: typeof fetch = async (input, init) => {
+      const response = await wire.fetch(input, init);
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      const file = /^\/drive\/v3\/files\/([^/]+)$/.exec(url.pathname);
+      if (observed.active && response.ok && file?.[1] && url.searchParams.get('alt') === 'media') {
+        reads.push({ fileId: decodeURIComponent(file[1]), hash: sha256Sync(new Uint8Array(await response.clone().arrayBuffer())) });
+      }
+      return response;
+    };
+    if (admitted?.kind === 'manifest') wire.manifest = admitted.manifest;
+    else if (entry === 'runTidy') throw new Error('Nothing admitted');
+    startObserving();
+    const whole = { paths, parsing: null as string | null, parses: [] as Array<{ fileId: string; hash: string }> };
+    observed.whole = whole;
+    if (entry === 'fake Worker/service') {
+      await w.worker.process('all');
+      await w.runs.settled();
+      observed.active = false;
+      expect((await w.worker.status()).run?.phase, entry).toBe('done');
+    } else {
+      const result = await runTidy({
+        api: API, runId: RUN_ID, ticket: TICKET, attempt: 1, fetch: fetchObserved,
+        pacing: { baseMs: 0 }, clock: () => AT,
+        provider: (drive, rootId, context: Context) => {
+          const read = runnerScripted(drive);
+          return async ({ taken }) => {
+            read.aim(taken.scope);
+            return (await planScripted(read, rootId, { scope: taken.scope, allowWeb: false, runId: RUN_ID,
+              requestId: taken.id, requestedAt: taken.at, taken, decisions: scriptedDecisions(UPDATES), context })).manifest;
+          };
+        },
+        effects: (drive, context: Context) => driveEffects(drive, context),
+      });
+      observed.active = false;
+      expect(result.phase, entry).toBe('done');
+    }
+    // All fetched note texts, including any newly reached note, rather than just the two edited hubs.
+    // Other Drive payloads (attachments, declarations and run JSON) do not use the note parser.
+    const noteIds = new Set(files.filter((f) => !f.folder && f.name.endsWith('.md')).map((f) => f.id));
+    const key = ({ fileId, hash }: { fileId: string; hash: string }) => `${fileId}:${hash}`;
+    const fetched = new Map(reads.filter((r) => noteIds.has(r.fileId)).map((r) => [key(r), r]));
+    expect(explicit.size, entry).toBe(4);
+    expect(pileIds, entry).toHaveLength(2);
+    for (const [fileId, hash] of explicit) expect(fetched.has(key({ fileId, hash })), `${entry}: explicit ${fileId}`).toBe(true);
+    expect(fetched.size, entry).toBeGreaterThanOrEqual(explicit.size);
+    for (const [identity] of fetched) {
+      expect.soft(whole.parses.filter((p) => key(p) === identity), `${entry}: fetched ${identity}`).toHaveLength(1);
+    }
+    for (const parsed of whole.parses) expect(fetched.has(key(parsed)), `${entry}: parse has Drive provenance`).toBe(true);
+    expect(observed.contexts, entry).toHaveLength(1);
+    // Generated validation still runs and is counted independently, even where its bytes equal a fetched hub.
+    expect(observed.candidates.filter((bytes) => sha256Sync(bytes) === sha256Sync(enc(AFTER))).length, entry).toBeGreaterThan(0);
+    await expectOutput(w.drive, w.ids);
+    observed.whole = null;
+    vi.restoreAllMocks();
+  }
 });
