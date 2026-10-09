@@ -11,4 +11,5 @@ One page. Workers read `WORKER.md` and the packet only.
 - **Fixtures:** a change to corpus, demo or fake fixtures runs the full `pnpm e2e:fake` before delivery.
 - **Reviewers:** read-only, unit and contract tests only; never start a server or run e2e; never `git checkout` in the main repo (use `git show`, `git diff` or a scratch worktree). The guard hook blocks checkout-class commands from subagents but not a subshell, `pushd` or `GIT_DIR`: those stay forbidden by this rule (TL-P4-17 addendum 5).
 - **Fix rounds:** a fresh session with the packet, the finding and the diff range; never resume a finished worker.
+- **Commits:** the red (tests only), then the fix, then the notes file in its own commit, so `done.sh` can revert the fix alone.
 - **Reply:** the WORKER.md card, lines under 120 characters; details in a notes file.

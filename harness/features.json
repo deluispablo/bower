@@ -5816,5 +5816,18 @@
     "verify": "pnpm -C api exec vitest run -t \"the Worker template retried after a lost answer makes one file per intent|the Worker keeps reserved ids in Durable Object storage through the write-once port\"",
     "note": "TL-P4-17 addendum 3 (main 35989307): api/src/vault.ts:388,408 keeps ids across requests; same rule, not a batch site. After c3-reservation-upload. Starting model: bower-escalated. Subrequest budget (TL-P4-11) must hold. P4-42 PASS (second way? no); notices (root parent, text/plain .json, md5 confirm) judged harmless alignment with the app. Red proved by hand at 104707e3: the Durable Object keeper test fails (/tmp/c3wrk-handred.log); done.sh cannot revert 53f92201 (its notes file changed later).",
     "review": "P4-42 PASS"
+  },
+  {
+    "id": "c3-fingerprint",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "The input fingerprint hashes a normalized object (run-dependent fields set to fixed values by key, at any depth), not regex-edited JSON text.",
+    "steps": [
+      "The same case run twice with different ids gives the same fingerprint.",
+      "A text field that happens to contain \"id\":\"x\" is not rewritten."
+    ],
+    "verify": "pnpm -C runner exec vitest run test/model-input-fingerprint.test.ts -t \"the same case with other ids has the same fingerprint|a value that looks like an id inside text is kept\"",
+    "note": "TL-P4-14 stage 3 row (c3-fingerprint, mechanical). runner/src/model-input.ts normalizeModelInput is six regex replaces on JSON text (callers claude.ts:194, :1020). Starting model: bower-mechanical."
   }
 ]
