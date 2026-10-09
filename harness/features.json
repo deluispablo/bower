@@ -5807,7 +5807,7 @@
     "id": "c3-reservation-worker",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "The Worker template reserves and keeps its ids through the write-once home, with Durable Object storage as a third keeper behind the write-once port; api/src/vault.ts leaves the reservation allowlist.",
     "steps": [
       "The Worker template retried after a lost answer makes one file per intent.",
