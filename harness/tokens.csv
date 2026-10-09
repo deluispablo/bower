@@ -302,3 +302,7 @@ c4-parse-once,property-red,codex,gpt-5-codex,medium,1,1745363,1733288,,1648128,1
 c4-undo-compensate,property-red,codex,gpt-5-codex,medium,2,327658,325314,,294272,2344,,,,amended (addendum 6),2026-10-09
 c4-parse-once,implementer,codex,gpt-5-codex,medium,1,525214,522255,,451840,2959,,,,blocked on red shape,2026-10-09
 c4-undo-compensate,property-red,codex,gpt-5-codex,low,3,135881,134930,,121984,951,,,,split; new counterexample,2026-10-09
+c4-parse-once,property-red,codex,gpt-5-codex,low,2,158439,157418,,137600,1021,,,,amended (addendum 26),2026-10-09
+c4-undo-compensate,diagnosis,codex,gpt-5-codex,medium,1,586717,582483,,519552,4234,,,,model wrong,2026-10-09
+d-v2-07,implementer,codex,gpt-5-codex,medium,7,823923,817524,,764672,6399,,,,done (round 7),2026-10-09
+p4-corpus-driver,implementer,codex,gpt-5-codex,medium,2,2189226,2170150,,2069760,19076,,,,blocked on case 6,2026-10-09
