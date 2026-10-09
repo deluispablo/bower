@@ -1,6 +1,6 @@
 # c3-reservation-worker: implementer notes
 
-- Red `104707e3` (tests only), fix: see the card, from `claude/p3` bbc80e85. Ruling TL-P4-17 add. 3 and 7.
+- Red `104707e3` (tests only), fix `53f92201`, from `claude/p3` bbc80e85. Ruling TL-P4-17 add. 3 and 7.
 - Red: "the Worker keeps reserved ids in Durable Object storage through the write-once port" failed with
   `expected 'reserved-14' to be undefined` (a 400 on Rules.md's create kept its id in the person object). The
   write-once ratchet failed too: `makeOnce(: expected false to be true` and `expected 8 to be less than or equal to 7`.
