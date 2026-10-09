@@ -230,6 +230,22 @@ describe('note edits change only what the contract allows', () => {
       await refuses(v1, 'shape');
     });
 
+    it('a stored v2 manifest over the write bound still parses', async () => {
+      // Strict on write, lenient on read (TL-P4-14 addendum 22): a Current state Bower read (`previous`), or one an undo
+      // writes back, holds up to 20 lines of 400 characters; a manifest stored with one still parses, so undo and
+      // history keep working. Past that read bound it is refused.
+      const lines = (n: number, size: number): string[] => Array.from({ length: n }, (_, k) => `${'Two applications open, '.repeat(20)}${k}`.slice(0, size - 1) + 'x');
+      const stated = (previous: string[], next: string[]): ManifestV2 => variant((value) => {
+        editAt(value).changes.unshift({ kind: 'state-rewrite', recordIds: [], previous, lines: next });
+      });
+      await admits(stated(lines(20, 400), lines(1, 200)));
+      await admits(stated(lines(1, 200), lines(20, 400)));
+      await admits(stated(lines(9, 201), lines(9, 201)));
+      await refuses(stated(lines(21, 400), lines(1, 200)), 'shape');
+      await refuses(stated(lines(1, 401), lines(1, 200)), 'shape');
+      await refuses(stated(lines(1, 200), lines(21, 400)), 'shape');
+    });
+
     it('refuses a v2 manifest without edit-text, and names a later version apart', async () => {
       await refuses(variant((value) => {
         value.operations = [op(archive('journal-merge', 'merge.json'))];
