@@ -2488,7 +2488,7 @@
       "An exact matching copy is acknowledged without creating another copy."
     ],
     "verify": "pnpm vitest run src/data/vault/journal.test.ts -t \"a waiting change is acknowledged by its line key, never by a lookalike's name or contents\"",
-    "passes": false,
+    "passes": true,
     "note": "Test renamed 2026-10-09 to what it asserts after c2-write-once round 2 (lead ruling main dd77054); re-proved with --known-green, rename only."
   },
   {
