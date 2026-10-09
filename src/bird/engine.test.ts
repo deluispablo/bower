@@ -246,6 +246,13 @@ describe("the engine's named actions", () => {
     ]);
   });
 
+  it('an inherited name like toString is not on the allowlist', () => {
+    expect(unreferencedMembers({ ...ENGINE_MEMBERS, toString: 'script', constructor: 'control' })).toEqual([
+      'toString: not referenced and not on the allowlist',
+      'constructor: not referenced and not on the allowlist',
+    ]);
+  });
+
   it('the allowlist only shrinks and names only unreferenced members', () => {
     // Frozen at TL-P4-22 addendum 21: a name may leave this list, never join it.
     const atAddendum21 = [
