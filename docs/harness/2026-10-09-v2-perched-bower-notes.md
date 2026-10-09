@@ -101,3 +101,56 @@ Baseline rows removed from harness/unused-production-baseline.json:
 - files src/testing/loading-sources.ts src/testing/loading-sources.ts
 - files src/testing/tidy-up.ts src/testing/tidy-up.ts
 - files src/testing/upload-hook.ts src/testing/upload-hook.ts
+
+## Round 2: the proud pose (TL-P4-22 addenda 14 and 15)
+
+Red c58dc1c9 (tests and fixture only), fix 619b8640.
+
+- **Fixture.** Each part gains `range` (its lowest and highest keyframe value over a loop, poses.css at 21648ecc)
+  and, where the keyframes hold the peak, `hold`. The rig's scale is now read on both axes: `squash` (tall,
+  `rig[6]`) and the new `stretch` (wide, `rig[5]`), with carry 1.08, proud 1.05, sleep 1.035 and land 1.12.
+  Proud holds squash, stretch, pitch, tail and tuft through 0.2–0.5.
+- **Checks.** Each axis's peak sits within ±20% of its excursion from 1 (the existing peak check, now per axis);
+  a held peak stays within that tolerance through `hold`; no part goes more than 2° or 2 grid units past its
+  range. For a scale part the allowance is 0.02 (2 units on the 100-unit body), the existing rest tolerance.
+- **Red on proud (before):** stretch peak 0.022 (want 0.05), stretch down to 0.978, stretch 0.072 off its held
+  peak, tail to +6.55 (range −22..0), tuft to −4.68 (range 0..16).
+- **Fix.** `showOff` gains `wide` (the body's width at the swell) and `fall` (seconds of smoothstep return
+  after `seconds`, inside the same action). One `girth` rule sets the rig's width from its height,
+  `sx = 1 + (sy − 1) · girth`, in `apply` and `beak`; it defaults to −0.7 (today's volume-keeping rule, so
+  every other pose's width is unchanged) and showOff sets it for its run, reset at its end and in `setPose`.
+  Proud: `wide: 1.05, fall: 1.4` (rise 0.6 s, held to 1.5 s, back by 2.9 s of the 3 s loop).
+- **Proud after:** stretch 1.000..1.052, squash 1.000..1.031, pitch −4.03..0.01, tail −22.79..0.10,
+  tuft −0.10..16.70; every hold and rest check passes.
+- **Other poses still red (not changed: contract 3 keeps their motion; a ruling is needed):**
+  - idle: tail goes to +6.98 (range −14..4), the spring past the +4 flick;
+  - carry: tail goes to −18.33 (range −16..0);
+  - land: tail goes to +8.56 (range −18..5);
+  - sleep: stretch peak 0.021, reference 0.035 ± 0.007 (the −0.7 girth gives 1.021 wide at 0.97 tall).
+  - Seen but not tested (outside the packet's rig-scale holds): carry's legs stray 0.156 from the 0.55 tuck
+    held at 22–48%.
+- **Gates.** Verify units: the four poses above fail, the rest pass. e2e bird-engine, qa6, qa27 on phone and
+  desktop, demo and fake: 37 and 39 passed. `pnpm check`: fails only on those four unit tests (0 lint errors).
+- **Sources.** CSS `animation-timing-function` default `ease` per keyframe interval
+  (https://developer.mozilla.org/en-US/docs/Web/CSS/animation-timing-function); smoothstep
+  (https://en.wikipedia.org/wiki/Smoothstep).
+
+tests changed: src/bird/engine.test.ts: reads the rig's width as `stretch`; adds the range bound and the hold check
+tests changed: src/bird/pose-reference.fixture.ts: adds `stretch`, `range` and `hold` per part
+
+## Round 2, addendum 17: the other four poses (main 63566a5a)
+
+Red 8f75c915 (fixture: carry's legs `hold: [0.22, 0.48]`; it failed with legs 0.156 off the 0.55 tuck), fix b1606f7d.
+The bound and every tolerance are unchanged.
+
+- **Tails (idle, carry, land).** Eased targets on the tail spring made it worse (idle +8.27, carry −19.62,
+  land −20.59/+10.33): the spring (k 420, c 14) is underdamped and the flicks last 0.1–0.2 s. So the tail
+  plays its keyframes straight on the part, eased in and out of each key, with no velocity: the way the carry
+  wing already plays its beat in `perch`. `keyed()` gains an `eased` mode (smoothstep per interval) instead
+  of a second helper.
+- **Carry legs.** The same: the tuck is played on the part, eased, so it sits at 0.55 from 22% to 48%.
+- **Sleep.** `girth` −7/6 in the sleep script, so 0.97 tall is 1.035 wide (breathe: scale(1.035, .97)).
+- **Gates.** `pnpm check` green (3936 unit tests). e2e bird-engine, qa6 and qa27, phone and desktop, demo and
+  fake: 37 and 39 passed.
+
+tests changed: src/bird/pose-reference.fixture.ts: carry legs gain the 22–48% hold (addendum 17)

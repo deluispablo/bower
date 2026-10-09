@@ -28,6 +28,7 @@ function reader(bird: HTMLElement, g: Partial<Record<RigPart, SVGGElement | null
       dy: (ty * 100) / Z,
       pitch: rig[0] ?? 0,
       squash: rig[6] ?? 1,
+      stretch: rig[5] ?? 1,
       head: head[0] ?? 0,
       headY: head[4] ?? 0,
       tail: at('tail')[0] ?? 0,
@@ -79,6 +80,8 @@ function mount(pose: Pose) {
 const tolerance = (key: PartKey, excursion: number): number =>
   PART_KIND[key] === 'offset' ? 2 : Math.max(PART_KIND[key] === 'scale' ? 0.004 : 1, 0.2 * excursion);
 const restTolerance = (key: PartKey): number => (PART_KIND[key] === 'scale' ? 0.02 : 1);
+/** How far a part may go past its reference range: 2 degrees, 2 grid units, or a scale of 2 units on the 100-unit body. */
+const beyond = (key: PartKey): number => (PART_KIND[key] === 'scale' ? 0.02 : 2);
 
 describe('the engine plays the perched poses', () => {
   it.each(POSES)('each pose loop matches its CSS reference: %s', (pose) => {
@@ -131,6 +134,23 @@ describe('the engine plays the perched poses', () => {
       if (Math.abs(got - want) > tol) problems.push(`${k} peak ${got.toFixed(3)}, reference ${want} ± ${tol.toFixed(3)}`);
       const at = loop[Math.round(r.restAt * per) % per];
       if (at && Math.abs(at[k] - r.rest) > restTolerance(k)) problems.push(`${k} at rest ${at[k].toFixed(3)}, reference ${r.rest}`);
+
+      // The bound: never more than a little past the reference's own range (crossing rest is allowed when it does).
+      const [lo, hi] = r.range;
+      const min = Math.min(...loop.map((s) => s[k]));
+      const max = Math.max(...loop.map((s) => s[k]));
+      if (min < lo - beyond(k)) problems.push(`${k} goes to ${min.toFixed(3)}, reference range ${lo}..${hi}`);
+      if (max > hi + beyond(k)) problems.push(`${k} goes to ${max.toFixed(3)}, reference range ${lo}..${hi}`);
+
+      // A held peak stays at the peak through the reference's hold window.
+      if (r.hold) {
+        const [from, to] = r.hold;
+        const off = loop
+          .slice(Math.round(from * per), Math.round(to * per) + 1)
+          .map((s) => Math.abs(s[k] - r.peak))
+          .reduce((a, b) => Math.max(a, b), 0);
+        if (off > tol) problems.push(`${k} strays ${off.toFixed(3)} from its held peak ${r.peak} at ${from}..${to}`);
+      }
     }
 
     // Only carry holds the thing in the beak, through holding().
