@@ -151,3 +151,4 @@ c3-pair-ask round3,implementer,claude,bower-escalated,,1,114837,,,,,,48,6.7,bloc
 c3-hooks (drop gate),mechanical,claude,bower-mechanical,,1,74626,,,,,,9,1.7,done,2026-10-09
 c3-flaky-policy,implementer,claude,bower-implementer,,1,106656,,,,,,32,8.2,delivered,2026-10-09
 c3-flaky-policy (merge),mechanical,claude,bower-mechanical,,1,60470,,,,,,6,1.4,done,2026-10-09
+c3-pair-ask round3 (part 2),implementer,claude,bower-escalated,,2,152619,,,,,,30,8.1,delivered,2026-10-09
