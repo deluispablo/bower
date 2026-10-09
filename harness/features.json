@@ -5696,5 +5696,19 @@
     ],
     "verify": "pnpm exec vitest run src/harness.test.ts src/harness-git.test.ts -t \"the harness check fails on a conflict-marker line and names file and line|an escalated consolidation entry cannot pass without a review PASS|done.sh refuses to close an escalated entry with no review PASS|integrate.sh aborts a merge whose tree fails the check\"",
     "note": "TL-P4-17 entry 1 (main e1bbf010); docs/harness/2026-10-09-tl-p4-17-stage-2-pattern-review.md. Closes merge-before-check, close-before-review, conflict markers committed. Red: three fixtures failing today. Starting model: bower-implementer (Sonnet). Harness code: production net does not count it; the card reports removed lines."
+  },
+  {
+    "id": "c3-test-time",
+    "task": "p4-consolidation",
+    "category": "test",
+    "passes": false,
+    "what": "Unit tests never wait on real time: backoff, deadlines and toasts use the injected clock, transport options or fake timers; dependency-cruiser runs once (scripts/check-dependencies.mjs in pnpm check), not inside vitest; check-harness fails any unit test over 1000 ms that is not in harness/slow-tests.json, a list that may only shrink.",
+    "steps": [
+      "A unit test over 1000 ms not in harness/slow-tests.json fails the harness check.",
+      "harness/slow-tests.json may only shrink.",
+      "dependency-cruiser runs only in pnpm check."
+    ],
+    "verify": "pnpm exec vitest run src/harness.test.ts src/dependency-rules.test.ts src/data/upload-queue-real.test.ts -t \"a unit test over 1000 ms not on the slow list fails the harness check|the slow list may only shrink|the rule list names every forbidden import|lost bytes ask to choose the file again\"",
+    "note": "TL-P4-17 entry 3 (main e1bbf010). Closes dependency-rules-timeout (ruled here) and the lost-bytes-slow class (docs/harness/defects/2026-10-09-lost-bytes-slow.md). qa10 stays with c4-focus-return. Baseline: the tests over 1000 ms in test-results/unit.json today (16 at 0cc1247a), each sped up or listed. Starting model: bower-implementer."
   }
 ]
