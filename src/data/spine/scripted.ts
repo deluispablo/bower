@@ -55,7 +55,12 @@ async function storedDigest(read: ScriptedRead, f: DriveFile): Promise<Digest | 
  * A run's plan, fixed before any effect: always the B path with its manifest (TL-P2-38). What it cannot take it holds,
  * and what Bower's own checks refuse is refused before admission; there is no other path.
  */
-export type RunPlan = { path: 'b'; manifest: Manifest | ManifestV2 };
+export type RunPlan = {
+  path: 'b';
+  manifest: Manifest | ManifestV2;
+  /** Each of your changes the run takes, by record id, with the operations its archive waits for (`Need`). */
+  needs: ReadonlyMap<string, readonly string[]>;
+};
 
 export interface PlanOptions {
   scope: 'all' | 'instructions';
@@ -372,8 +377,20 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     const m = d.merge?.(item, (q) => yes.has(q));
     return m && yes.has(m.question) ? { into: follow(m.into), title: m.title, line: m.line, answer: yes.get(m.question) ?? '' } : null;
   };
-  /** Answers whose merge waits with its pile: they stay unarchived and keep their question (R4-1). */
-  const heldAnswers = new Set<string>();
+  /**
+   * What each of your changes needs (rule 7, R3-4, R4-1), in one map by record id: it waits whole for the next run
+   * (`held`), or until every Timeline line it needs is written; once taken, its archive waits for the edits that
+   * name it and the operations derived from it (`edits`, `derived`).
+   */
+  const needs = new Map<string, Need>();
+  const need = (id: string): Need => {
+    const had = needs.get(id);
+    if (had) return had;
+    const made: Need = { held: false, lines: [], edits: [], derived: [] };
+    needs.set(id, made);
+    return made;
+  };
+  const derive = (id: string, ...ops: string[]): void => void need(id).derived.push(...ops);
   /** Where a pile of words goes and its note's name, as the reply decided. */
   const wordsPlace = (pileId: string, words: string): Placement => d.words(pileId, words) ?? { to: '', name: '' };
 
@@ -451,7 +468,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     if (held.has(pile.id) && !ask) {
       for (const item of pile.items) {
         const m = mergeOf(item);
-        if (m) heldAnswers.add(m.answer);
+        if (m) need(m.answer).held = true;
       }
       continue;
     }
@@ -769,6 +786,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     const line: WantedLine = { entry: { date: date ?? '', text: scripted.found.text, source: scripted.found.url }, record: l.rec.id, what: scripted.found.text, after: null };
     want(f, path).lines.push(line);
     lookups.set(l.rec.id, line);
+    need(l.rec.id).lines.push(line);
   }
   // A disagreement's answer (C07, TL-P2-40): what you said goes on the stored note's Timeline, naming the answer, and
   // its question goes once that line is there (R4-1). The note's Current state waits for P4. The question is read
@@ -787,6 +805,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     const line: WantedLine = { entry: { date: date ?? '', text: said.line, source: null }, record: l.rec.id, what: said.line, after: null };
     want(f, path).lines.push(line);
     answerLines.set(l.rec.id, { fileId: f.id, line });
+    need(l.rec.id).lines.push(line);
   }
   // The rename and move lines this run takes; their renames as the resolver follows them (chains, `taken`).
   const moved = journal.filter((l) => l.rec.kind === 'rename' || l.rec.kind === 'move');
@@ -1052,23 +1071,15 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     if (!m || mergeState(thing)) return null;
     return { answer: m.answer, into: m.into, alone: stateOf(m) === 'refused' ? displayName(nameOf(m.into)) : null };
   };
-  // Lines held back stay where they are, uncaptured, for the next run (rule 7).
-  if (holdRenames) journal = journal.filter((l) => !moved.includes(l));
-  // An answer whose line is not written waits for the next run with its question, as a merge's does (R4-1).
-  const heldSaid = new Set([...answerLines].filter(([, a]) => !['planned', 'present'].includes(lineState.get(a.line) ?? '')).map(([id]) => id));
-  if (heldSaid.size) {
-    console.error(`${heldSaid.size} answers wait for the next tidy-up: what you said could not be written now`);
-    journal = journal.filter((l) => !heldSaid.has(l.rec.id));
-  }
-  // A lookup whose line is not written (past the cap, a note changed while read, refused) waits for the next run.
-  const heldLookups = new Set([...lookups].filter(([, line]) => !['planned', 'present'].includes(lineState.get(line) ?? '')).map(([id]) => id));
-  if (heldLookups.size) {
-    console.error(`${heldLookups.size} lookup requests wait for the next tidy-up: their result could not be written now`);
-    journal = journal.filter((l) => !heldLookups.has(l.rec.id));
-  }
-  if (heldAnswers.size) journal = journal.filter((l) => !heldAnswers.has(l.rec.id));
+  // Lines held back stay where they are, uncaptured, for the next run (rule 7): renames, rule lines left pending, and
+  // any change whose line (a lookup's result, what you said) is not written now, past the cap or refused.
   const rules = rulesPlanOf(ruleWords, rulesFile, rulesState, rulesWorded);
-  if (rules.left.size) journal = journal.filter((l) => !rules.left.has(l.rec.id));
+  for (const l of holdRenames ? moved : []) need(l.rec.id).held = true;
+  for (const id of rules.left) need(id).held = true;
+  const waits = new Set([...needs].filter(([, n]) => n.held || !n.lines.every((l) => ['planned', 'present'].includes(lineState.get(l) ?? ''))).map(([id]) => id));
+  if (waits.size) journal = journal.filter((l) => !waits.has(l.rec.id));
+  const unwritten = [...waits].filter((id) => !needs.get(id)?.held).length;
+  if (unwritten) console.error(`${unwritten} of your changes wait for the next tidy-up: what they add could not be written now`);
   // An instructions run with no line it can take, once every held line is left out, has nothing to read: the
   // existing refusal, before admission.
   if (!all && !journal.length) throw new BowerError('conflict', NOTHING_TO_READ);
@@ -1313,11 +1324,8 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const movesOf = new Map<string, string[]>();
   const moveOf = new Map<string, string>();
   const empty = emptyReport;
-  /** Each edit by the journal records it comes from (their archives wait for it, rule 7, R3-4), and by its note. */
-  const editsFrom = new Map<string, string[]>();
+  /** Each edit by its note; by the records it comes from, in `needs` (their archives wait for it, rule 7, R3-4). */
   const editOf = new Map<string, string>();
-  /** The operations derived from each answer (R3-4, R4-1): its merge's line and move. */
-  const fromAnswer = new Map<string, string[]>();
   const fileOne = async ({ thing, to, name, note, merge }: (typeof filing)[number]): Promise<void> => {
     const isNote = kindOf(name) === 'note';
     // A saved link's note first (R3-6): written once by its key, then the link file moves beside it.
@@ -1336,7 +1344,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     const fallback = fallbackOf(thing);
     if (fallback) {
       // R4-1: what derives from the answer is now this ordinary filing; TL-P2-35: and the report says why, once it applied.
-      fromAnswer.set(fallback.answer, [...(fromAnswer.get(fallback.answer) ?? []), ...(created ? [created] : []), move]);
+      derive(fallback.answer, ...(created ? [created] : []), move);
       if (fallback.alone !== null) {
         reportPlan.push({ requires: [move], when: 'applied', value: { ...empty(), setAside: [{ name: thing.file.name, why: `Bower couldn't add it to ${fallback.alone}, so it was filed on its own.` }] } });
       }
@@ -1344,7 +1352,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     if (merge) {
       // The line first, then the move after it; filed with the note only when both applied (I4, R3-5).
       const line = merge.line === 'planned' ? editOf.get(ix.idOf(merge.into) ?? '') ?? null : null;
-      fromAnswer.set(merge.answer, [...(fromAnswer.get(merge.answer) ?? []), ...(line ? [line] : []), move]);
+      derive(merge.answer, ...(line ? [line] : []), move);
       const row = line
         ? { name: thing.file.name, title: displayName(nameOf(merge.into)), kind: thing.item.kind, to, note: merge.into }
         : { name: thing.file.name, title: thingName(name), kind: thing.item.kind, to };
@@ -1407,8 +1415,8 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     const beforeText = edit.keeps.length ? { beforeText: new TextDecoder().decode(edit.bytes) } : {};
     const op = await add({ kind: 'edit-text', before: seen(edit.file), path: edit.path, beforeContent: edit.before, changes: edit.changes, text: edit.text, content: await utf8(edit.text), ...beforeText }, cited);
     editOf.set(edit.file.id, op);
-    for (const answer of edit.keeps) fromAnswer.set(answer, [...(fromAnswer.get(answer) ?? []), op]);
-    for (const id of edit.changes.flatMap((c) => (c.kind === 'rules-wording' ? [...c.add, ...c.remove].map((r) => r.recordId) : c.recordIds))) editsFrom.set(id, [...(editsFrom.get(id) ?? []), op]);
+    for (const answer of edit.keeps) derive(answer, op);
+    for (const id of edit.changes.flatMap((c) => (c.kind === 'rules-wording' ? [...c.add, ...c.remove].map((r) => r.recordId) : c.recordIds))) need(id).edits.push(op);
     // Only a Timeline line marks a note new (m3); a link fix never does.
     if (edit.changes.some((c) => c.kind === 'timeline-append')) {
       await add({ kind: 'move', before: seen(edit.file), parent: { fileId: edit.file.parents[0] ?? '' }, name: edit.file.name, properties: { bowerNew: '1' } }, [op]);
@@ -1418,15 +1426,15 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   // What a disagreement's answer derives (R4-1): its Timeline line, which the question's removal waits for.
   for (const [id, a] of answerLines) {
     const op = lineState.get(a.line) === 'planned' ? editOf.get(a.fileId) : undefined;
-    if (op) fromAnswer.set(id, [...(fromAnswer.get(id) ?? []), op]);
+    if (op) derive(id, op);
   }
   for (const f of filing.filter((x) => x.merge)) await fileOne(f);
   // The other note of each keep goes to the Bin (never deleted), once the kept note and every link to it are written;
   // the report says so in one line on the kept note, and the answer's question goes once it is done (R4-1).
   for (const x of keeping) {
-    const written = fromAnswer.get(x.k.answer) ?? [];
+    const written = [...need(x.k.answer).derived];
     const op = await add({ kind: 'bin', before: seen(x.other), capturedChildIds: [] }, written);
-    fromAnswer.set(x.k.answer, [...written, op]);
+    derive(x.k.answer, op);
     // Grounded by the kept note's edit first, then the link rewrites, then the Bin (`grounded`); with nothing new to
     // write on the kept note there is no edit to ground it, and the Bin says it alone.
     const keptEdit = editOf.get(x.kept.id);
@@ -1483,7 +1491,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       notes.push(op);
     }
     // An answer that names what a request did is written once that is done (a lookup's Timeline line, a note).
-    const answered = [...new Set([...asked.flatMap((l) => editsFrom.get(l.rec.id) ?? []), ...notes])];
+    const answered = [...new Set([...asked.flatMap((l) => need(l.rec.id).edits), ...notes])];
     // A request done before (its line not archived then) keeps one row: the new one.
     const again = new Set(done.map((r) => r.id));
     const text = `${JSON.stringify({ v: 1, done: [...done, ...requestsDone.filter((r) => !again.has(r.id))].slice(0, 20) } satisfies RequestsFile, null, 2)}\n`;
@@ -1502,7 +1510,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     // It waits for every operation derived from the answers it drops (R4-1), so a question stays until its work is done,
     // and for the moves of the piles its new question is about, so it is asked once they are filed.
     const derived = [
-      ...journal.flatMap((l) => (l.rec.kind === 'answer' ? fromAnswer.get(l.rec.id) ?? [] : [])),
+      ...journal.flatMap((l) => (l.rec.kind === 'answer' ? need(l.rec.id).derived : [])),
       ...(fresh.length ? [...asking.keys()].flatMap((id) => movesOf.get(id) ?? []) : []),
       // A disagreement is asked once the note it links is written (C07).
       ...disagreeing.filter((d) => fresh.some((q) => q.id === d.question.id)).flatMap((d) => notesOf.get(d.pileId) ?? []),
@@ -1532,11 +1540,15 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     archiveChain.push(made);
     archiveTo = { createdBy: made };
   }
+  /** What each record's archive waits for: the plan's `needs`. */
+  const archives = new Map<string, readonly string[]>();
   for (const line of journal) {
     // Unreachable: a captured line has its changes folder, so its archive is there or planned above.
     if (!archiveTo) throw new BowerError('unknown', OWN_FILES);
     const write = line.rec.kind === 'request' ? requestsOp : line.rec.kind === 'answer' ? questionsOp : null;
-    const derived = [...new Set([...(write ? [write] : []), ...(editsFrom.get(line.rec.id) ?? []), ...(fromAnswer.get(line.rec.id) ?? []), ...(rulesMade && rules.held.has(line.rec.id) ? [rulesMade] : [])])];
+    const n = need(line.rec.id);
+    const derived = [...new Set([...(write ? [write] : []), ...n.edits, ...n.derived, ...(rulesMade && rules.held.has(line.rec.id) ? [rulesMade] : [])])];
+    archives.set(line.rec.id, derived);
     const moves: string[] = [];
     for (const f of line.files) moves.push(await add({ kind: 'move', before: seen(f), parent: archiveTo, name: f.name, properties: {} }, derived));
     if (rulesOp && rules.worded.has(line.rec.id)) {
@@ -1595,7 +1607,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     return refused(`the manifest guard refused the plan (${checked.reason}${checked.reason === 'edit' ? `: ${checked.rule}` : ''})`);
   }
   if (!grounded(manifest) || !(await groundedKeys(manifest))) return refused('the plan has report rows its effects do not ground');
-  return { path: 'b', manifest };
+  return { path: 'b', manifest, needs: archives };
 }
 
 /**
@@ -1612,7 +1624,7 @@ async function nothingReadyPlan(rootId: string, opts: PlanOptions): Promise<RunP
   };
   const checked = await parseRunManifestV2((await canonical(manifest)).bytes, rootId, RUNNER_WRITES);
   if (!checked.ok) return refused(`the manifest guard refused the plan (${checked.reason})`);
-  return { path: 'b', manifest };
+  return { path: 'b', manifest, needs: new Map() };
 }
 
 /**
@@ -1884,6 +1896,8 @@ export function generatedName(title: string): string {
  * wording, and the captured file whose move it waits for (the thing it cites).
  */
 type WantedLine = { entry: EditEntry; record: string | null; what: string | null; after: string | null };
+/** What one of your changes needs: to wait whole, the Timeline lines it adds, the edits naming it and what derives from it. */
+type Need = { held: boolean; lines: WantedLine[]; edits: string[]; derived: string[] };
 /** What a run wants to change in one note, before applyChanges decides what it may. */
 type Wanted = { file: DriveFile; path: string; lines: WantedLine[]; renames: Rename[] | null; rules: RulesWording | null; state: WantedState | null };
 /** A Current state a model wrote for a note (C05): its lines, the name it cites and the thing whose move it waits for. */
