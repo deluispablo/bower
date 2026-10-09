@@ -8,7 +8,7 @@
 import { type DriveApi, type DriveFile, type Fence } from '../drive/drive-api';
 import { ReadCache, type Version } from '../drive/read-cache';
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
-import { Intended, STAMP, byId, landing, madeAt, makeFolder, makeOnce, makeText, unbins, updateByStamp, type Holder, type Intent } from '../spine/write-once';
+import { Intended, STAMP, byId, landing, madeAt, makeFolder, makeOnce, makeText, sentAs, unbins, updateByStamp, type Holder, type Intent } from '../spine/write-once';
 import type { FailedChange, Unsubscribe, VaultSource } from '../sources';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName } from '../piles';
 import { buildTree, checkCreationName, displayName, thingName, freeName, join, kindOf, moveEntry, nameOf, parentOf, removeEntry, renameEntry } from '../tree';
@@ -363,11 +363,11 @@ export class DriveVault implements VaultSource {
     const base = name ?? (type === 'folder' ? 'New folder' : 'Untitled.md');
     checkCreationName(base, type);
     refuseReserved(join(folder, freeName(ix.entries(), folder, base)));
-    // One intended note or folder, one id: tried again after a lost answer, it is found by that id, not made twice.
-    const made = await this.intended.make(`create:${parent}:${type}:${base}`, this.drive, (id) => {
-      const at = { parent, name: freeName(ix.entries(), folder, base), id };
-      return type === 'folder' ? makeFolder(this.drive, this.drive, at) : makeText(this.drive, this.drive, at, '');
-    });
+    // One intended note or folder, one id: tried again after a lost answer, it is found by that id, not made twice. A
+    // free name is picked for its first send only; a retry resends that one (the folder listed since may show it).
+    const fresh = sentAs(parent, freeName(ix.entries(), folder, base), type === 'folder' ? undefined : '');
+    const made = await this.intended.make(`create:${parent}:${type}:${base}`, this.drive, fresh, (id, sent) =>
+      type === 'folder' ? makeFolder(this.drive, this.drive, { ...sent, id }) : makeText(this.drive, this.drive, { ...sent, id }, ''));
     const path = join(folder, made.name);
     ix.put(made);
     await this.journal.record('create', `New ${type} "${(type === 'folder' ? nameOf(path) : thingName(nameOf(path)))}" in ${where(folder)}`, { path, fileId: made.id });
@@ -1095,7 +1095,7 @@ export class DriveVault implements VaultSource {
       }
       folderPath = join('Inbox', freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text })));
       const parent = f.parents[0] ?? (await this.rootId());
-      const folder = await this.intended.make(`pile-folder:${id}`, this.drive, (made) => makeFolder(this.drive, this.drive, { parent, name: nameOf(folderPath), props: { [PROP.pile]: id }, id: made }));
+      const folder = await this.intended.make(`pile-folder:${id}`, this.drive, sentAs(parent, nameOf(folderPath)), (made, sent) => makeFolder(this.drive, this.drive, { ...sent, props: { [PROP.pile]: id }, id: made }));
       folderPath = join('Inbox', folder.name);
       ix.put(folder);
       ix.put(await this.once(f, `move:${folder.id}`, (op, fence) => this.drive.update(f.id, { addParent: folder.id, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}), appProperties: op }, { fence })));
@@ -1117,13 +1117,15 @@ export class DriveVault implements VaultSource {
     } else if (text && folderId) {
       // One intended note per pile: a try again after a double failure, with new words, writes them into the same note.
       const key = `pile-note:${id}`;
-      const at = { parent: folderId, name: PILE_NOTE, ...(contextKey ? { props: { [PROP.item]: contextKey } } : {}) };
+      const props = contextKey ? { props: { [PROP.item]: contextKey } } : {};
       const kept = this.intended.kept(key);
       const sent = kept ? (this.pileNoteSent.get(key) ?? []) : [];
       this.pileNoteSent.set(key, [...sent, text]);
       let made: DriveFile;
       try {
-        made = await this.intended.make(key, this.drive, async (reserved) => {
+        made = await this.intended.make(key, this.drive, sentAs(folderId, PILE_NOTE, text), async (reserved, first) => {
+          // Where and as what it was first sent with this id (`write-once.ts`), never a place read anew.
+          const at = { ...first, ...props };
           // Found by its reserved id, it is Bower's to write over only as it was made: in this pile, under its name,
           // out of the Bin, with words Bower sent (write-once's `landed`). Moved, renamed, binned or edited since, it is
           // refused, and its id let go: it stays as the person left it.
@@ -1537,7 +1539,8 @@ export class DriveVault implements VaultSource {
         const props: Record<string, string> = { [PROP.asAdded]: e.item.name, [PROP.origin]: e.item.origin, [PROP.kind]: e.item.kind, [PROP.item]: e.key, ...(u.lone ? { [PROP.pile]: pileId } : {}), ...(u.declaration ? { [PROP.declaration]: u.declaration } : {}) };
         e.item.upload = 0;
         // A link or an empty thing keeps the id reserved for it (`write-once.ts`): a try after a lost answer is that same file.
-        const made = e.body ? await this.sendQueued(pileId, u, e, e.body, name, props) : await makeOnce(e, this.addedDrive, (id) => makeText(this.addedDrive, this.addedDrive, { parent: u.parent, name, props, id }, e.url ? shortcut(e.url) : ''));
+        const text = e.url ? shortcut(e.url) : '';
+        const made = e.body ? await this.sendQueued(pileId, u, e, e.body, name, props) : await makeOnce(e, this.addedDrive, sentAs(u.parent, name, text), (id, sent) => makeText(this.addedDrive, this.addedDrive, { ...sent, props, id }, text));
         if (!this.current()) return;
         if (this.uploads.get(pileId) !== u) {
           // The pile was removed while this was on its way: it follows the pile to the Bin,

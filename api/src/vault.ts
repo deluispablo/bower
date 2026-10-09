@@ -63,7 +63,7 @@ import { DriveHttp, FOLDER, isNoAnswer, quote, toFile, type WireFile } from '../
 import { DRIVE_MESSAGES, type DriveFile } from '../../src/data/drive/drive-api.js';
 import { checkStillAsSeen } from '../../src/data/contracts/still-as-seen.js';
 import { BowerError } from '../../src/data/types.js';
-import { byId, heldAs, makeFolder, makeOnce, makeText, reserveFor, updateByStamp, type Holder } from '../../src/data/spine/write-once.js';
+import { byId, heldAs, makeFolder, makeOnce, makeText, reserveFor, sentAs, updateByStamp, type Holder, type Sent } from '../../src/data/spine/write-once.js';
 
 /** The marker every Bower folder carries in `appProperties` (private to this OAuth client). */
 export const FOLDER_MARKER = { bowerFolder: '1' } as const;
@@ -226,7 +226,8 @@ async function completeTemplate(
   files: readonly VaultFile[],
   held: (path: string) => Holder,
 ): Promise<void> {
-  const make = (path: string, create: (id: string) => Promise<DriveFile>): Promise<DriveFile> => makeOnce(held(path), drive.http, create);
+  // A template path names one place and name, the same on every try: its intent is not picked anew.
+  const make = (path: string, fresh: Sent, create: (id: string, sent: Sent) => Promise<DriveFile>): Promise<DriveFile> => makeOnce(held(path), drive.http, fresh, create);
   const folders = new Map<string, string>([['', rootId]]);
   const children = new Map<string, DriveItem[]>();
   if (rootIsEmpty) children.set(rootId, []);
@@ -247,7 +248,7 @@ async function completeTemplate(
     const existing = (await childrenOf(parent)).find((c) => c.name === name && c.mimeType === FOLDER);
     let id: string;
     if (existing === undefined) {
-      id = (await make(path, (at) => makeFolder(drive.http, drive.http, { parent, name, id: at }))).id;
+      id = (await make(path, sentAs(parent, name), (at, sent) => makeFolder(drive.http, drive.http, { ...sent, id: at }))).id;
       children.set(id, []);
     } else {
       id = existing.id;
@@ -261,7 +262,7 @@ async function completeTemplate(
     const name = file.path.slice(slash + 1);
     if (name === PLACEHOLDER) continue;
     if ((await childrenOf(parent)).some((c) => c.name === name)) continue;
-    await make(file.path, (at) => makeText(drive.http, drive.http, { parent, name, id: at, ...(file.appProperties ? { props: file.appProperties } : {}) }, file.content));
+    await make(file.path, sentAs(parent, name, file.content), (at, sent) => makeText(drive.http, drive.http, { ...sent, id: at, ...(file.appProperties ? { props: file.appProperties } : {}) }, file.content));
   }
 }
 
@@ -386,7 +387,7 @@ async function attemptVault(
     // Kept in the person object until made; a refusal outright lets it go there (`makeOnce`).
     const at = reserved;
     const keptFolder = heldAs(at, () => person.dropReservation(gen, at));
-    folderId = (await makeOnce(keptFolder, drive.http, (id) => makeFolder(drive.http, drive.http, { parent: 'root', name: env.TEMPLATE_FOLDER_NAME, props: { ...FOLDER_MARKER }, id }))).id;
+    folderId = (await makeOnce(keptFolder, drive.http, sentAs('root', env.TEMPLATE_FOLDER_NAME), (id, sent) => makeFolder(drive.http, drive.http, { ...sent, props: { ...FOLDER_MARKER }, id }))).id;
     made = true;
   }
 
