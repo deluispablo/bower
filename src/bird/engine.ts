@@ -79,6 +79,10 @@ interface HeadProfile {
   t: number;
   /** The gaze channel's head offset, added to `t`. */
   gaze: number;
+  /** Target channels last followed, and the class of that target change. */
+  actTarget: number;
+  gazeTarget: number;
+  snap: boolean;
 }
 /**
  * Time-based caps (TL-P4-25 addendum 8), in degrees/second and degrees/second².
@@ -99,16 +103,11 @@ const follow = (h: HeadProfile, dt: number, move: (typeof HEAD_MOVES)[keyof type
   // Express the acceleration-limited velocity change as this frame's displacement.
   const a = move.accel * dt * dt;
   const was = h.vel * dt;
-  if (!Number.isFinite(a)) {
-    // A sudden move: at the speed cap, straight onto the target.
-    const s = Math.sign(d) * Math.min(top, Math.abs(d));
-    h.v += s;
-    h.vel = s / dt;
-    return;
-  }
-  // The fastest step that still brakes onto the target, each later step `a` smaller: s + (s - a) + ... + (s - n a) = |d|.
-  const n = Math.floor((Math.sqrt(1 + (8 * Math.abs(d)) / a) - 1) / 2);
-  const brake = (Math.abs(d) + (a * n * (n + 1)) / 2) / (n + 1);
+  // The fastest step that still brakes onto the target, each later step `braking` smaller: s + (s - a) + ... + (s - n a) = |d|.
+  // Sudden moves may accelerate at once, but brake with the return cap so the next class can take over at rest.
+  const braking = HEAD_MOVES.glide.accel * dt * dt;
+  const n = Math.floor((Math.sqrt(1 + (8 * Math.abs(d)) / braking) - 1) / 2);
+  const brake = (Math.abs(d) + (braking * n * (n + 1)) / 2) / (n + 1);
   let s = clamp(Math.sign(d) * Math.min(top, brake), was - a, was + a);
   // Lands on the target when the last step is within the cap; a target that jumped closer is passed and come back to.
   if (Math.sign(s) === Math.sign(d) && Math.abs(s) > Math.abs(d) && Math.abs(d - was) <= a) s = d;
@@ -282,7 +281,7 @@ export class BirdEngine {
     iy: spring(IRIS_REST.y, 600, 40),
   };
   /** The head, the one part that moves by its motion profile instead of a spring. */
-  private H: HeadProfile = { v: 0, vel: 0, t: 0, gaze: 0 };
+  private H: HeadProfile = { v: 0, vel: 0, t: 0, gaze: 0, actTarget: 0, gazeTarget: 0, snap: false };
   private B = {
     x: 0,
     y: 0,
@@ -1239,9 +1238,15 @@ export class BirdEngine {
       c.vel += a * dt;
       c.v += c.vel * dt;
     }
-    // The idle snaps and the startle's rise are sudden; every other head move ramps (TL-P4-25 addendum 5).
+    // The startle accelerates suddenly on the rise, then brakes under return caps while its target stays held.
     const rising = S.startleT > STARTLE_TOTAL - STARTLE.rise;
-    follow(this.H, headDt, this.doing === 'snap' || rising ? HEAD_MOVES.snap : HEAD_MOVES.glide);
+    const h = this.H;
+    if (h.t !== h.actTarget) h.snap = this.doing === 'snap';
+    // A gaze retarget owns the class until the act target changes again; a held snap cannot upgrade it later.
+    if (h.gaze !== h.gazeTarget) h.snap = false;
+    h.actTarget = h.t;
+    h.gazeTarget = h.gaze;
+    follow(h, headDt, rising || h.snap ? HEAD_MOVES.snap : HEAD_MOVES.glide);
     if (B.flying) {
       B.ph += dt * Math.PI * 2 * (B.flare ? 6 : 10);
       const s = Math.sin(B.ph);
