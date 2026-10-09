@@ -6093,8 +6093,8 @@
       "Every listed field, switch and task box draws its edge with control-line; placeholders use --text-muted."
     ],
     "verify": "pnpm vitest run src/styles/control-line.test.ts -t \"every control edge is at least 3:1 on its ground\" && bash scripts/e2e-both.sh e2e/v2-field.spec.ts -g \"fields and switches draw their edge with the control line|a focused invalid field keeps the danger edge|the sort menu tick keeps its own size and place\"",
-    "note": "TL-P4-21 order 1 (P2 one field rule); spec d-v2-08; impact finding 3. Starting model bower-implementer. Packet 2026-10-09-v2-field-packet.md. The e2e file may differ; the worker names it. Red 7f93f350, fix c1e57875. Fix round (addendum 3): red 3ddbf44b, fix faa8ad73; review skipped (TL-P4-22).",
-    "design": "not verified: field-check-class-clash, field-error-loses-to-focus (a78c360e)"
+    "note": "TL-P4-21 order 1 (P2 one field rule); spec d-v2-08; impact finding 3. Starting model bower-implementer. Packet 2026-10-09-v2-field-packet.md. The e2e file may differ; the worker names it. Red 7f93f350, fix c1e57875. Fix round (addendum 3): red 3ddbf44b, fix faa8ad73; review skipped (TL-P4-22). Designer verified the fix round at fa1d6258. Unit red proved by hand at 7f93f350 (/tmp/v2field-handred.log); the e2e reds at 3ddbf44b are in the worker log /tmp/vf2-red.log.",
+    "design": "verified"
   },
   {
     "id": "c4-run-counts",
