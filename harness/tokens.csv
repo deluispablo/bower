@@ -277,3 +277,5 @@ c4-create-landed,reviewer,claude,bower-reviewer,,1,54311,,,,,,15,1.4,PASS (P4-61
 d-v2-07,implementer,claude,bower-escalated,,4,102463,,,,,,33,5.7,blocked (addendum 5 property red),2026-10-09
 c4-create-landed,reviewer,codex,gpt-5-codex,medium,1,455283,452747,,375680,2536,,,,1 Important,2026-10-09
 c4-lockf,implementer,codex,gpt-5-codex,medium,1,601737,591226,,542208,10511,,,,delivered (knip fix pending),2026-10-09
+c4-lockf,implementer,codex,gpt-5-codex,medium,2,102188,101233,,90496,955,,,,knip fix,2026-10-09
+c4-lockf,implementer,codex,gpt-5-codex,medium,3,142637,141608,,116352,1029,,,,lockf path (addendum 24),2026-10-09
