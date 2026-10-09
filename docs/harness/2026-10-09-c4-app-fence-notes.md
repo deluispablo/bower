@@ -95,3 +95,46 @@ no existing test was edited or removed.
 | Retry after a landed restore rename, pile rename, cleared words | refused as changed elsewhere | resolves as landed |
 | Drive calls | unchanged | unchanged (the prechecks read once, as before) |
 | Stored formats, strings | none | none |
+
+## Fix round 3 (addendum 7)
+
+red: 0edf5b3f (tests, fast-check 4.10.2 devDependency, lockfile); fix: f0409898. Sources: the Codex delta pass
+(2 Important), round-3 packet `2026-10-09-c4-app-fence-round3-packet.md`.
+
+tests changed: src/data/vault/drive-vault.test.ts: added the two reds and the fast-check property (seed 20261009,
+500 runs, asserts all 88 cases met); the fix commit raised the property's runs from 120 and added the coverage check.
+tests changed: src/data/vault/drive-vault.test.ts: 'a restore under a free name whose rename answer was lost is
+resolved by its stamp' (c2) loses the untrash with a name: the free name now goes in that one write.
+tests changed: src/data/vault/drive-vault.test.ts: 'a restore whose rename landed but lost its answer resolves on the
+second press': the same, with `loseWithRead('untrash')`; its assertions are unchanged.
+tests changed: src/data/vault/drive-vault.test.ts: 'restore rename (467)': no gap is left between unbin and rename,
+so the outside rename happens in the Bin before the press; still refused, the name kept, the file left in the Bin.
+tests changed: runner/test/drive-v3-real.ts: the replayed Drive v3 fixture's untrash applies the body's `name` and
+`appProperties`, as Drive's files.update does; it dropped both before.
+
+- Red today: restore after an outside Bin reports success while binned (Codex delta 1); an emptied pile note that
+  landed then moved is accepted on retry (Codex delta 2); the property's first counterexample is a landed text write
+  accepted after an outside Bin (`["text","bin","before the retry","its answer"]`).
+- Landed (contract 1-3): `checkStillAsSeen(seen, read, message, { unanswered, landed: { intent, stamped } })`.
+  Landed holds when `stamped(now)` (write-once `holds`) and `notAsSeen(expectedAfter(seen, intent), now) === null`.
+  `expectedAfter` is private to the helper, built once from the intent, with no modifiedTime. Call sites pass
+  `landing(f, intent)` from write-once and never state an after-state. `landedAs` is gone.
+- The pile edit's note fence takes the edit's own intent: its words, a declared pile's empty note, or the Bin. A landed
+  Bin is no longer accepted for an edit with words. `declared` is now read before that fence; it was read after it.
+- No cached state (contract 4): restore takes the file out of the Bin under the chosen free name in one write,
+  `untrash(id, op, name)` (Drive files.update with `trashed: false` and `name`). The intent is `unbin`, or
+  `unbin:<name>`. Each press fences that write on a fresh read. `gone.back` keeps only the chosen name. After an outside
+  Bin with the name unchanged, the file is again as read, so the retry takes it out again. Renamed, it is refused.
+- One async signature (contract 5): no overloads, no `instanceof Promise`. `SeenFiles.assert` stays synchronous,
+  because FakeDrive's `fenced` check runs in the very step of the change (nothing awaited, which keeps the run's
+  authority and fence atomic). It decides with `notAsSeen` and `notAsSeenError`, the comparator the helper uses, and
+  has no landed case. It does not call a second fence helper; `checkStillAsSeen` lost its unused `what` option.
+
+| Area | Round 2 | Round 3 |
+| --- | --- | --- |
+| Landed test | stamp (+ name and place for a rename) | stamp and checksum, plus the full after-state from the intent |
+| Restore under a free name | untrash, then a rename (two writes, two stamps) | one untrash with the name (one write, one stamp) |
+| Restore retried after an outside Bin | success while binned | taken out again (as read), or refused if renamed |
+| Stamps already stored | - | `unbin`, `bin`, `rename:`, `move:`, text are unchanged; `unbin:<name>` is new |
+| Drive calls | - | a restore under a free name sends one PATCH, not two |
+| DriveApi | - | `untrash(id, appProperties?, name?)`: the name is optional, every caller compiles unchanged |
