@@ -11,7 +11,7 @@ import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
 import { useIsDesktop } from '@/ui/media';
 import { report } from '@/ui/report';
-import { landedSummary } from './run-words';
+import { landedSummary, notesUpdated } from './run-words';
 import { useBackCloses } from '@/ui/back';
 import { returnFocusTo } from '@/ui/focus';
 import s from './replay.module.css';
@@ -37,7 +37,7 @@ export function Replay() {
     void runs.markSeen(run.id).catch((e: unknown) => report(e, 'That did not work. Try again.'));
     startReplay(null);
   };
-  return createPortal(<Court items={run.report.filed} summary={landedSummary(run)} updated={run.report.updated.length} onClose={close} />, document.body);
+  return createPortal(<Court items={run.report.filed} summary={landedSummary(run)} updated={notesUpdated(run.report)} onClose={close} />, document.body);
 }
 
 /** A small, stable pseudo-random number per index, so the heap looks the same every time. */

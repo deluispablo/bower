@@ -409,6 +409,7 @@ describe('what a tidy-up reports, as the run over Drive does', () => {
       await vault.answer('q1', true);
       const first = await run(w);
       expect(first.created.map((c) => c.path)).toContain('Resources/Cooking/Weeknight curry, clipping.md');
+      // One row per Timeline line written (report-misses-hub-line): the listing joined Flat 3, so Job hunt got one line.
       expect(first.updated).toEqual([
         { path: 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md', what: 'The Wrenfield Road listing is the same building; kept here, as you asked.' },
         { path: 'Projects/Flat hunt/Flat hunt.md', what: 'A fourth flat added; the shortlist compared by commute.' },

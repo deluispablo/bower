@@ -40,7 +40,7 @@ describe('dispositions and the report', () => {
       expect(report).toBeDefined();
       if (!report) return;
       const items = itemDispositions(admission.manifest, manifest, outcomes);
-      expect(reportContradictions(admission.manifest, manifest, outcomes, report, items)).toEqual([]);
+      expect(reportContradictions(admission.manifest, manifest, outcomes, items)).toEqual([]);
     }
     // And a disposition turned the other way is found.
     const outcomes = settle(manifest, new Set());
@@ -49,7 +49,7 @@ describe('dispositions and the report', () => {
     const [first, ...rest] = items.filter((i) => i.pileId !== null);
     expect(first?.disposition).toBe('filed');
     if (!first || !report) return;
-    expect(reportContradictions(admission.manifest, manifest, outcomes, report, [{ ...first, disposition: 'set-aside' }, ...rest])).not.toEqual([]);
+    expect(reportContradictions(admission.manifest, manifest, outcomes, [{ ...first, disposition: 'set-aside' }, ...rest])).not.toEqual([]);
   });
 
   it('a run summary counts unconfirmed things on their own line, never as set aside', async () => {
@@ -71,7 +71,7 @@ describe('dispositions and the report', () => {
     expect(report.setAside).toEqual([]);
     expect(report.unconfirmed).toEqual([{ name, why: UNCONFIRMED_GONE }]);
     const items = itemDispositions(admission.manifest, manifest, outcomes);
-    expect(reportContradictions(admission.manifest, manifest, outcomes, report, items)).toEqual([]);
+    expect(reportContradictions(admission.manifest, manifest, outcomes, items)).toEqual([]);
     const words = runDetail({ id: RUN, scope: 'all', phase: 'done', requestedAt: AT, phaseAt: AT, seen: false, report });
     expect(words).toContain("Bower couldn't confirm 1 thing");
     expect(words).not.toContain('set aside');

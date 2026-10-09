@@ -929,16 +929,18 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     return [];
   });
   const renameIds = holdRenames ? [] : moved.map((l) => l.rec.id);
-  const edits: Array<{ file: DriveFile; path: string; what: string | null; before: VerifiedContent; bytes: Uint8Array; changes: Change[]; text: string; after: string[]; keeps: string[] }> = [];
+  const edits: Array<{ file: DriveFile; path: string; whats: string[]; before: VerifiedContent; bytes: Uint8Array; changes: Change[]; text: string; after: string[]; keeps: string[] }> = [];
   for (const { c, text } of authored) {
     for (const l of c.lines) lineState.set(l, 'planned');
     if (c.rules) rulesState = 'planned';
-    const what = c.lines.find((l) => l.what !== null)?.what ?? (c.state ? STATE_UPDATED : null);
+    // One report row per Timeline line it writes (report-misses-hub-line); a Current state alone says it was updated.
+    const written = c.lines.flatMap((l) => (l.what === null ? [] : [l.what]));
+    const whats = written.length ? written : c.state ? [STATE_UPDATED] : [];
     const after = [...new Set([...c.lines.flatMap((l) => (l.after === null ? [] : [l.after])), ...(c.stateAfter === null ? [] : [c.stateAfter])])];
     // An edit a keep needs (the kept note's lines, a link to the other note) keeps the note's text as read, for its undo.
     // So does a write the person's yes granted: its undo puts their section back byte for byte (`undoEdit`).
     const keeps = [...new Set([...keeping.filter((x) => x.kept.id === c.file.id).map((x) => x.k.answer), ...(c.rewrite ? keptFor(c.bytes) : []), ...(c.state?.granted ? [c.state.granted.answer] : [])])];
-    edits.push({ file: c.file, path: ix.pathOf(c.file.id) ?? c.path, what, before: c.before, bytes: c.bytes, changes: changesOf(c, renameIds), text, after, keeps });
+    edits.push({ file: c.file, path: ix.pathOf(c.file.id) ?? c.path, whats, before: c.before, bytes: c.bytes, changes: changesOf(c, renameIds), text, after, keeps });
     places.set(c.file.id, c.file);
   }
   for (const [l, twin] of twins) lineState.set(l, lineState.get(twin) ?? 'refused');
@@ -1351,7 +1353,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     if (edit.changes.some((c) => c.kind === 'timeline-append')) {
       await add({ kind: 'move', before: seen(edit.file), parent: { fileId: edit.file.parents[0] ?? '' }, name: edit.file.name, properties: { bowerNew: '1' } }, [op]);
     }
-    if (edit.what !== null) reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), updated: [{ path: edit.path, what: edit.what }] } });
+    for (const what of edit.whats) reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), updated: [{ path: edit.path, what }] } });
   }
   // What a disagreement's answer derives (R4-1): its Timeline line, which the question's removal waits for.
   for (const [id, a] of answerLines) {

@@ -283,12 +283,13 @@ export function score(input: ScoreInput): Score {
       if (want.filedAtLeast !== undefined && list(report.filed).length < want.filedAtLeast) unmet.push(`report.filed: ${list(report.filed).length}, expected at least ${want.filedAtLeast}`);
       if (want.setAside !== undefined && list(report.setAside).length !== want.setAside) unmet.push(`report.setAside: ${list(report.setAside).length}, expected ${want.setAside}`);
       for (const key of ['created', 'updated'] as const) {
-        const got = paths(report[key]);
+        // The notes a run made or brought up to date, once each: a note with two new lines has two rows.
+        const got = [...new Set(paths(report[key]))];
         const wanted = want[key];
         if (wanted && JSON.stringify([...got].sort()) !== JSON.stringify([...wanted].sort())) unmet.push(`report.${key}: [${got.join(', ')}], expected [${wanted.join(', ')}]`);
       }
       if (want.createdAtLeast !== undefined && paths(report.created).length < want.createdAtLeast) unmet.push(`report.created: ${paths(report.created).length}, expected at least ${want.createdAtLeast}`);
-      if (want.updatedAtLeast !== undefined && paths(report.updated).length < want.updatedAtLeast) unmet.push(`report.updated: ${paths(report.updated).length}, expected at least ${want.updatedAtLeast}`);
+      if (want.updatedAtLeast !== undefined && new Set(paths(report.updated)).size < want.updatedAtLeast) unmet.push(`report.updated: ${new Set(paths(report.updated)).size}, expected at least ${want.updatedAtLeast}`);
       if (want.questionsAtMost !== undefined && list(report.questions).length > want.questionsAtMost) unmet.push(`report.questions: ${list(report.questions).length}, expected at most ${want.questionsAtMost}`);
       if (want.questions) {
         const got = list(report.questions).flatMap((q) => (q && typeof q === 'object' && typeof (q as { id?: unknown }).id === 'string' ? [(q as { id: string }).id] : []));
