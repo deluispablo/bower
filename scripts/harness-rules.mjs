@@ -253,28 +253,27 @@ export function redKind(output) {
   return 'none';
 }
 
-/** A unit test slower than this must be on harness/slow-tests.json (TL-P4-17 entry 3). */
-export const SLOW_MS = 1000;
-/** Temporary (TL-P4-17 addendum 9): the alone rerun fails only over this; removed by c3-timer-gate. */
-export const ALONE_MS = 2000;
-/** The size of harness/slow-tests.json today. The list may only shrink: lower this when a line goes, never raise it. */
-export const SLOW_CEILING = 8;
+/** The size of harness/real-timers.json today. The list may only shrink, to empty: lower this when a line goes, never raise it. */
+export const REAL_TIMER_CEILING = 22;
 /**
- * The unit tests over SLOW_MS that are not on the slow list, a list longer than the ceiling, and lines that match no test.
- * `tests` are `{ name, duration }` from test-results/unit.json (vitest's JSON report, the same file the pattern check reads).
+ * The timer allowlist (harness/real-timers.json, enforced while tests run by harness/timer-gate.ts): a list longer than the
+ * ceiling, and lines that match no test. `names` are the full names of every unit test of the app, api and runner.
  */
-export function slowProblems(tests, list, ceiling = SLOW_CEILING, alone = (t) => t.duration) {
+export function timerListProblems(names, list, ceiling = REAL_TIMER_CEILING) {
   const bad = [];
-  const listed = new Set(list);
-  // Load makes a test look slow (TL-P4-17 addendum 6): one over the limit in the full run is run again alone, and only
-  // that time counts. A test inside the limit, or on the list, is never rerun.
-  for (const t of tests) {
-    if (t.duration <= SLOW_MS || listed.has(t.name)) continue;
-    const ms = alone(t);
-    if (ms > ALONE_MS) bad.push(`"${t.name}" took ${Math.round(ms)} ms alone: make it wait for events, not time, or (only if it cannot) it stays out of harness/slow-tests.json, which may only shrink`);
-  }
-  if (list.length > ceiling) bad.push(`harness/slow-tests.json has ${list.length} lines, over the ${ceiling} it may keep: the slow list may only shrink`);
-  const names = new Set(tests.map((t) => t.name));
-  for (const name of list) if (!names.has(name)) bad.push(`harness/slow-tests.json names "${name}", which matches no test: delete the line and lower SLOW_CEILING`);
+  if (list.length > ceiling) bad.push(`harness/real-timers.json has ${list.length} lines, over the ${ceiling} it may keep: the timer list may only shrink`);
+  const known = new Set(names);
+  for (const name of list) if (!known.has(name)) bad.push(`harness/real-timers.json names "${name}", which matches no test: delete the line and lower REAL_TIMER_CEILING`);
   return bad;
+}
+
+/**
+ * The slowest unit tests by wall-clock time, one line each: a report only, never a failure (TL-P4-17 addendum 9). Time
+ * measures the machine under load; the timer gate judges the test, and vitest's 5000 ms timeout stays as the backstop.
+ */
+export function slowReport(tests, count = 5) {
+  return [...tests]
+    .sort((a, b) => b.duration - a.duration)
+    .slice(0, count)
+    .map((t) => `${Math.round(t.duration)} ms  ${t.name}`);
 }
