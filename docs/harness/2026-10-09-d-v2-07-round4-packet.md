@@ -71,3 +71,4 @@ This replaces both 3 and 6. In `engine.test.ts:285`, test by move class:
 2. **The meta-test** (`pose-reference.fixture.ts:333`). A new member tagged `acts` without a row passes, because `unreferencedMembers` checks the existing `ACT_NAMES`, not each `ENGINE_MEMBERS` key.
    - The check runs over every key of `ENGINE_MEMBERS`. Each one needs a reference row (act, pose, reaction) or an entry on the closed allowlist.
    - Red: `a new member tagged acts without a row fails the meta-test`.
+3. **Property (TL-P4-25 addendum 6, main 81b4f469).** A fast-check property drives random focus, pointer, touch, step and wake events at random frames, with a fixed seed and bounded runs. It asserts addendum 5 on every frame for both classes, and addendum 21 over every `ENGINE_MEMBERS` key. If this round still has findings, the lead re-plans: every head target goes through one slew-limited smoother ahead of the one spring, and a target change never touches the spring's state.
