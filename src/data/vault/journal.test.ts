@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
 import { FAILED_KEY, Journal } from './journal';
 import { forgetThisPerson } from '../device';
-import { driveError } from '../drive/drive-api';
+import { driveError, type WriteOptions } from '../drive/drive-api';
+import { notAsSeenReason } from '../contracts/still-as-seen';
 import { DriveHttp } from '../drive/drive-http';
 import type { BowerError } from '../types';
 import { tidyUp } from '@/testing/tidy-up';
@@ -601,5 +602,51 @@ describe('c2-create-by-id round 6: a gone target, a resent request', () => {
     // Another press is another request.
     await journal.record('request', 'Asked Bower: "Compare the flats"', { text: 'Compare the flats' }, 'press-2');
     expect((await journal.list()).map((r) => r.what)).toEqual(['Asked Bower: "Put my id papers together"', 'Asked Bower: "Compare the flats"']);
+  });
+});
+
+describe('c4-retry-fence fix round: an Undo resent after a rate limit', () => {
+  const pacing = { baseMs: 0, sleep: async (): Promise<void> => undefined };
+  /** `drive.trash` goes over the real transport to a pretend Drive v3 that keeps `drive`; its first PATCH gets 429. */
+  function binRateLimitedOnce(elsewhere: (id: string) => Promise<void>): { patches: () => number } {
+    const store = drive.trash.bind(drive);
+    let patches = 0;
+    const http = new DriveHttp({
+      token: async () => 'token',
+      pacing,
+      fetch: async (url, init) => {
+        const id = decodeURIComponent(new URL(url).pathname.split('/').pop() ?? '');
+        if (++patches === 1) {
+          await elsewhere(id);
+          return new Response(JSON.stringify({ error: { code: 429, message: 'Slow down.', errors: [] } }), { status: 429 });
+        }
+        const body = JSON.parse(String(init?.body)) as { appProperties?: Record<string, string> };
+        const f = await store(id, body.appProperties);
+        return new Response(JSON.stringify({ ...f, mimeType: 'application/json' }), { status: 200 });
+      },
+    });
+    // The journal's port takes the write's options; the pretend Drive's own `trash` has none to take.
+    Object.assign(drive, { trash: (id: string, appProperties?: Record<string, string>, opts?: WriteOptions) => http.trash(id, appProperties, opts) });
+    return { patches: () => patches };
+  }
+
+  it('journal Undo after a 429 and an outside move sends no resend', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const a = await journal.record('move', 'one');
+    const sent = binRateLimitedOnce(async (id) => void (await drive.update(id, { addParent: root, removeParent: changes })));
+    const e = await journal.remove(a.id).catch((x: unknown) => x);
+    expect(notAsSeenReason(e)).toBe('parents');
+    expect(sent.patches()).toBe(1);
+    expect((await drive.listAll(root)).filter((f) => !f.folder && f.parents.includes(root))).toHaveLength(1);
+  });
+
+  it('journal Undo after a 429 with the file unchanged lands on the resend', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const a = await journal.record('move', 'one');
+    await journal.record('move', 'two');
+    const sent = binRateLimitedOnce(async () => undefined);
+    await expect(journal.remove(a.id)).resolves.toBeUndefined();
+    expect(sent.patches()).toBe(2);
+    expect((await journal.list()).map((r) => r.what)).toEqual(['two']);
   });
 });

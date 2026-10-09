@@ -3893,4 +3893,32 @@ describe('a write resent after a rate limit', () => {
     expect(sent.patches()).toBe(2);
     expect(drive.pathOf(id, root)).toBe('Areas/Lemon tart.md');
   });
+
+  it('a restore whose journal PATCH gets a 429 still finishes', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await vault.tree();
+    const id = await idOf(TART);
+    await vault.trash(TART);
+    await vault.flushJournal();
+    expect((await vault.changes()).some((r) => r.kind === 'trash')).toBe(true);
+    // The journal record's Bin (a `files.update` PATCH) goes over the real transport; its first try gets 429.
+    const store = drive.trash.bind(drive);
+    let patches = 0;
+    const http = new DriveHttp({
+      token: async () => 'token',
+      pacing,
+      fetch: async (url, init) => {
+        const at = decodeURIComponent(new URL(url).pathname.split('/').pop() ?? '');
+        if (++patches === 1) return new Response(JSON.stringify({ error: { code: 429, message: 'Slow down.', errors: [] } }), { status: 429 });
+        const body = JSON.parse(String(init?.body)) as { appProperties?: Record<string, string> };
+        const f = await store(at, body.appProperties);
+        return new Response(JSON.stringify({ ...f, mimeType: 'application/json' }), { status: 200 });
+      },
+    });
+    Object.assign(drive, { trash: (at: string, appProperties?: Record<string, string>, opts?: WriteOptions) => http.trash(at, appProperties, opts) });
+    await expect(vault.restore(TART)).resolves.toBeUndefined();
+    expect(patches).toBe(2);
+    expect(drive.pathOf(id, root)).toBe(TART);
+    expect((await vault.changes()).some((r) => r.kind === 'trash')).toBe(false);
+  });
 });
