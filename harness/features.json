@@ -6055,7 +6055,7 @@
     "id": "c3-agent-defs",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "Every worker agent has maxTurns and no nested dispatch; read-only roles use tools allowlists; the concurrency cap is set if the docs offer it; a sensor checks the frontmatter.",
     "steps": [
       "The sensor fails on the current agents.",

@@ -249,3 +249,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: c3-flaky-policy passes — flaky policy: E2E_BATCH retry once + failOnFlakyTests, quarantine file checked
 - 2026-10-09: c3-permissions passes — permissions: deny landing edits and env reads; push hook allows only the backup
 - 2026-10-09: c3-pair-ask passes — typed pair ask, words piles cited, answered rows with label and names (addenda 8-14)
+- 2026-10-09: c3-agent-defs passes — agent defs: maxTurns, no nested dispatch, read-only tools allowlists, concurrency 2
