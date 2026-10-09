@@ -293,3 +293,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
 - P4-35c minors: SeenFiles.read has no src unit test (seen-files.ts:90); a fence that never reads ends after 2 attempts with SAVING_FAILURE, which overclaims (api/src/process.ts:96, pre-existing).
 - P4-35d (c2-one-engine round 4) minor: seen-files.ts:94 says "couldn't reach Google Drive" when the attempt route failed (console only).
 - Post-P4 product question (lead): run-record retention, how long .bower/runs keeps finished runs; not built.
+- P4-37b (c2-create-by-id fix) minors: old-outbox bare line whose answer was lost before this build is written twice (dedup by id, journal.ts:211); a foreign stamp read at plan time plus a Drive rename reads back unconfirmed (engine.ts:582); a card mixing GONE and CHANGED goes to set aside "couldn't be filed" (report.ts:64).
