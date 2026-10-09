@@ -263,3 +263,4 @@ d-v2-07 startle review,reviewer,codex,codex,medium,4,250682,248656,0,212608,2026
 c4-undo-withdraw round 3 add. 13-14,implementer,claude,bower-escalated,,3,205198,,,,,,24,6.4,delivered,2026-10-09
 c4-undo-withdraw P4-56d,reviewer,claude,bower-reviewer,,4,48097,,,,,,12,1.0,PASS (4 minor),2026-10-09
 c4-undo-withdraw add.13-14 review,reviewer,codex,codex,medium,4,591512,587677,0,519424,3835,,,,5 Important,2026-10-09
+d-v2-07 allowlist+head,implementer,claude,bower-escalated,,5,83812,,,,,,23,4.6,delivered,2026-10-09
