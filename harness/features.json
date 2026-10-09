@@ -5963,5 +5963,19 @@
     ],
     "verify": "pnpm vitest run -t \"one parser gives every section position, old notes included|the Timeline-line pattern exists once|round-trips every demo note\" && pnpm -C runner exec vitest run -t \"the corpus reads a note Timeline through the one parser\"",
     "note": "TL-P4-14 stage 3 row. Coordinator map in docs/harness/2026-10-09-c3-note-sections-packet.md. Starting model: bower-implementer (Sonnet; parsing only, no write path change)."
+  },
+  {
+    "id": "c3-state-mark",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "Bower's last-written Current state is read from the previous state change in the manifest (or each line is marked), so the 2^12 subset search goes. Also write-it-silent: the q-state question stores the shown text with its evidence; a yes applies that text with no model call through the usual fence; if the section changed since it was shown, the question is re-asked; stamp+checksum comparison from write-once, no new helper.",
+    "steps": [
+      "Bower's last-written state is found without a subset search.",
+      "A yes to \"Should Bower write its update there?\" writes the text the person was shown, with no model call.",
+      "If the section changed since it was shown, the question is asked again with the reason."
+    ],
+    "verify": "pnpm vitest run -t \"Bower's last state is read from the previous state change, not searched\" && pnpm -C runner exec vitest run -t \"a yes to write it applies the shown text with no model call|write it re-asks when the section changed since it was shown\"",
+    "note": "TL-P4-14 stage 3 row; TL-P4-19 addendum 7 (main 85fb052b): write-it-silent folds in (TL-P4-16 addendum 2; DEFECT_LOG write-it-silent; docs/harness/defects/2026-10-08-write-it-again.md). Both reds must be green before close. Starting model: bower-escalated (it writes)."
   }
 ]
