@@ -40,3 +40,11 @@ describe('dependency rules', () => {
     expect(stale, 'These imports are gone: delete their lines from scripts/dependency-exceptions.cjs.').toEqual([]);
   });
 });
+
+describe('the rule list', () => {
+  it('the rule list names every forbidden import', () => {
+    // dependency-cruiser itself runs once, in pnpm check (scripts/check-dependencies.mjs); here only the list is read.
+    const gate = ['@/testing', 'dependency-gate'].join('/');
+    expect(readFileSync(join(ROOT, 'src/dependency-rules.test.ts'), 'utf8')).not.toContain(`from '${gate}'`);
+  });
+});
