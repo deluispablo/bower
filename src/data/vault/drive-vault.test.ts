@@ -21,6 +21,7 @@ import { makeLiveSources, uploadAccount } from '../live';
 import { FakeWorker } from '../fake/fake-worker';
 import { pairQuestionId } from '../contracts/questions';
 import { notAsSeenReason, notRead } from '../contracts/still-as-seen';
+import fc from 'fast-check';
 
 const PASSPORT = 'Areas/Documents/Passport renewal.md';
 let drive: FakeDrive;
@@ -3585,4 +3586,198 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
     await expect(undo()).resolves.toBeUndefined();
     expect(sent).toHaveBeenCalledTimes(1);
   });
+
+  it('a restore retried after an outside Bin does not report success while the file is in the Bin', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await vault.tree();
+    const id = await idOf(PASSPORT);
+    await vault.trash(PASSPORT);
+    await vault.flushJournal();
+    // Out of the Bin; then taking its change line back gets no answer, so the press stops there.
+    const trash = drive.trash.bind(drive);
+    drive.trash = async () => {
+      drive.trash = trash;
+      throw driveError('offline');
+    };
+    await expect(vault.restore(PASSPORT)).rejects.toMatchObject({ code: 'offline' });
+    expect((await drive.get(id, { binned: true })).trashed).toBeFalsy();
+    // Put in the Bin in Drive before Alex presses Undo again: the press takes it out again, as read, or says nothing done.
+    await drive.trash(id);
+    await expect(vault.restore(PASSPORT)).resolves.toBeUndefined();
+    expect((await drive.get(id, { binned: true })).trashed).toBeFalsy();
+  });
+
+  it('an emptied pile note that landed and then moved elsewhere is refused on retry', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const v = declaring();
+    const made = await v.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
+    await v.settled();
+    await v.flushJournal();
+    await v.piles();
+    const note = await idOf(`${made.path ?? ''}/Pile note.md`);
+    const lost = loseWithRead('writeText', (a) => a[0] === note);
+    await expect(v.updatePile(made.id, '')).rejects.toMatchObject({ code: 'offline' });
+    expect(lost()).toBe(1);
+    // Filed into Projects in Drive before the retry: no longer the pile's note, so the retry is no success.
+    await moveElsewhere(note);
+    const e: unknown = await v.updatePile(made.id, '').then(() => null, (err: unknown) => err);
+    expect(ELSEWHERE).toContain(notAsSeenReason(e));
+    expect(drive.pathOf(note, root)).toBe('Projects/Pile note.md');
+  });
+
+  /**
+   * The fast-check trial (TL-P4-20): every app write of an existing file, its answer lost (or a later step of the same
+   * press failing), with a move, a rename or a Bin in Drive before the write or between the press and its retry. On
+   * every press: success only when the file is in the state the write intends, and no write to a file that is not as
+   * the press read it (by name, place and Bin, and for text by its modifiedTime). With no change elsewhere, the retry
+   * of a landed write succeeds. Seeded and bounded, so every run is the same.
+   */
+  it('every app write, its answer lost, against a move, rename or Bin elsewhere: success only in the intended state', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    type Op = 'update' | 'writeText' | 'trash' | 'untrash';
+    interface Press {
+      vault: DriveVault;
+      target: string;
+      /** The write's own file as the press read it. */
+      read: DriveFile;
+      /** A content write: its modifiedTime is part of what it read. */
+      withTime: boolean;
+      act: () => Promise<unknown>;
+      op: Op;
+      /** Whether the file now is what this write makes it; `sent` is the last write to it this press sent. */
+      final: (now: DriveFile, sent: unknown[] | undefined) => Promise<boolean>;
+    }
+    const kinds = ['text', 'empty text', 'rename', 'move', 'bin', 'unbin', 'restore', 'removePile', 'undo'] as const;
+    const stored = (id: string): Promise<DriveFile> => drive.get(id, { binned: true });
+    const samePlace = (a: DriveFile, b: DriveFile): boolean => a.parents.length === b.parents.length && a.parents.every((p) => b.parents.includes(p));
+    const asRead = (p: Press, now: DriveFile): boolean =>
+      now.name === p.read.name && samePlace(now, p.read) && !!now.trashed === !!p.read.trashed && (!p.withTime || now.modifiedTime === p.read.modifiedTime);
+    const out = (now: DriveFile, read: DriveFile, name = read.name): boolean => !now.trashed && now.name === name && samePlace(now, read);
+    const binned = (now: DriveFile, read: DriveFile): boolean => !!now.trashed && now.name === read.name && samePlace(now, read);
+    const press = async (kind: (typeof kinds)[number]): Promise<Press> => {
+      await vault.tree();
+      const passport = await idOf(PASSPORT);
+      if (kind === 'text') {
+        await vault.note(PASSPORT);
+        const read = await stored(passport);
+        return { vault, target: passport, read, withTime: true, act: () => vault.toggleTask(PASSPORT, 4), op: 'writeText',
+          final: async (now, sent) => out(now, read) && sent !== undefined && (await drive.readText(passport)) === sent[1] };
+      }
+      if (kind === 'empty text') {
+        const v = declaring();
+        const made = await v.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
+        await v.settled();
+        await v.flushJournal();
+        await v.piles();
+        const note = await idOf(`${made.path ?? ''}/Pile note.md`);
+        const read = await stored(note);
+        return { vault: v, target: note, read, withTime: true, act: () => v.updatePile(made.id, ''), op: 'writeText', final: async (now) => out(now, read) && (await drive.readText(note)) === '' };
+      }
+      if (kind === 'rename' || kind === 'move' || kind === 'bin') {
+        const read = await stored(passport);
+        const projects = await idOf('Projects');
+        const act = kind === 'rename' ? () => vault.rename(PASSPORT, 'Passport 2026') : kind === 'move' ? () => vault.move(PASSPORT, 'Projects') : () => vault.trash(PASSPORT);
+        const final = async (now: DriveFile): Promise<boolean> =>
+          kind === 'rename' ? out(now, read, 'Passport 2026.md') : kind === 'move' ? !now.trashed && now.name === read.name && samePlace(now, { ...read, parents: [projects] }) : binned(now, read);
+        return { vault, target: passport, read, withTime: false, act, op: kind === 'bin' ? 'trash' : 'update', final };
+      }
+      if (kind === 'unbin' || kind === 'restore') {
+        await vault.trash(PASSPORT);
+        await vault.flushJournal();
+        if (kind === 'restore') await vault.create('Areas/Documents', 'note', 'Passport renewal.md');
+        const read = await stored(passport);
+        const taken = kind === 'restore' ? await idOf(PASSPORT) : null;
+        const final = async (now: DriveFile): Promise<boolean> => (taken ? !now.trashed && samePlace(now, read) && now.name !== read.name && now.name.startsWith('Passport renewal') : out(now, read));
+        return { vault, target: passport, read, withTime: false, act: () => vault.restore(PASSPORT), op: 'untrash', final };
+      }
+      if (kind === 'removePile') {
+        const p = await lonePile();
+        const id = await idOf(p.path);
+        const read = await stored(id);
+        return { vault, target: id, read, withTime: false, act: () => vault.removePile(p.id), op: 'trash', final: async (now) => binned(now, read) };
+      }
+      const rule = (await vault.rules()).find((r) => !r.pending);
+      if (!rule) throw new Error('no worded rule');
+      const lines = await idOf('.bower/changes');
+      const before = new Set((await drive.listAll(lines)).map((f) => f.id));
+      const undo = await vault.removeRule(rule.id);
+      await vault.flushJournal();
+      await vault.changes();
+      const line = (await drive.listAll(lines)).find((f) => !before.has(f.id));
+      if (!line) throw new Error('no change line');
+      const read = await stored(line.id);
+      return { vault, target: line.id, read, withTime: false, act: undo, op: 'trash', final: async (now) => binned(now, read) };
+    };
+    /** The pretend Drive's own writes, as another device makes them: never lost, never counted as the press's. */
+    type Raw = Pick<FakeDrive, 'update' | 'trash' | 'untrash'>;
+    /** A move, a rename or a Bin of `id` directly in Drive, as another device would (a file in the Bin, renamed there). */
+    const elsewhere = async (raw: Raw, change: 'none' | 'move' | 'rename' | 'bin', id: string): Promise<void> => {
+      const now = await stored(id);
+      if (change === 'none' || (change === 'bin' && now.trashed)) return;
+      if (now.trashed) await raw.untrash(id);
+      if (change === 'bin') await raw.trash(id);
+      else await raw.update(id, change === 'move' ? { addParent: root, ...(now.parents[0] ? { removeParent: now.parents[0] } : {}) } : { name: `Changed elsewhere (Alex)${now.name.includes('.') ? now.name.slice(now.name.lastIndexOf('.')) : ''}` });
+      if (now.trashed && change !== 'bin') await raw.trash(id);
+    };
+    /** How a press ended: done, refused as changed elsewhere (the person looks again, a new read), or failed. */
+    const settle = (p: Promise<unknown>): Promise<'done' | 'refused' | 'failed'> => p.then(() => 'done' as const, (e: unknown) => {
+      if (!(e instanceof BowerError)) throw e;
+      return notAsSeenReason(e) === null ? 'failed' as const : 'refused' as const;
+    });
+
+    await fc.assert(
+      fc.asyncProperty(
+        fc.constantFrom(...kinds),
+        fc.constantFrom('none', 'move', 'rename', 'bin'),
+        fc.constantFrom('before the write', 'before the retry'),
+        fc.constantFrom('its answer', 'a later step'),
+        async (kind, change, when, loss) => {
+          localStorage.clear();
+          drive = new FakeDrive();
+          root = (await seedFakeDrive(drive, 'default', Date.now())) ?? '';
+          vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+          const p = await press(kind);
+          const raw: Raw = { update: drive.update.bind(drive), trash: drive.trash.bind(drive), untrash: drive.untrash.bind(drive) };
+          // Every write to the file this press changes, as sent.
+          const sends: unknown[][] = [];
+          const d = drive as unknown as Record<Op, (...a: unknown[]) => Promise<unknown>>;
+          for (const k of ['update', 'writeText', 'trash', 'untrash'] as const) {
+            const real = d[k].bind(drive);
+            d[k] = async (...a: unknown[]) => {
+              if (a[0] === p.target) sends.push(a);
+              return real(...a);
+            };
+          }
+          if (loss === 'a later step' && p.op === 'untrash') {
+            // The file comes out of the Bin; taking the change line back then gets no answer.
+            const trash = d.trash;
+            d.trash = async (...a: unknown[]) => {
+              if (a[0] === p.target) return trash(...a);
+              d.trash = trash;
+              throw driveError('offline');
+            };
+          } else loseWithRead(p.op, (a) => a[0] === p.target);
+          const tryOnce = async (): Promise<'done' | 'refused' | 'failed'> => {
+            const before = await stored(p.target);
+            const from = sends.length;
+            const ended = await settle(p.act());
+            const mine = sends.slice(from);
+            // Not as the press read it: nothing is written to it.
+            if (!asRead(p, before)) expect(mine).toEqual([]);
+            // Success only in the state the write intends.
+            if (ended === 'done') expect(await p.final(await stored(p.target), sends.at(-1))).toBe(true);
+            return ended;
+          };
+          if (when === 'before the write') await elsewhere(raw, change, p.target);
+          // Refused, the person looks again: what they press next is a new read, no retry of this one.
+          if ((await tryOnce()) === 'refused') return;
+          if (when === 'before the retry') await elsewhere(raw, change, p.target);
+          const retried = await tryOnce();
+          // A landed write, nothing changed elsewhere: the retry resolves (TL-P4-24 addendum 4).
+          if (change === 'none') expect(retried).toBe('done');
+        },
+      ),
+      { seed: 20261009, numRuns: 120 },
+    );
+  }, 60_000);
 });
