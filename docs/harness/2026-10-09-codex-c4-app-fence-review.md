@@ -15,3 +15,17 @@ Range 397ec1a5..7dcdacf8 (worktree /private/tmp/bower-c4-fence), read-only, medi
    **Mechanism home violated:** `src/data/contracts/still-as-seen.ts` landed-write shortcut and `src/data/spine/write-once.ts` stamped recovery; packet contract 4.
 
 findings: 3
+
+## Delta pass (round 2, f772b9ce..f47217e5)
+
+The three earlier lost-answer reproductions are fixed. The delta introduces two Important gaps. No second fence mechanism was added.
+
+1. **Important — `src/data/vault/drive-vault.ts:471`: cached restore state skips the next fence.**  
+   Restore now reuses `gone.back.file` without calling `fromBin`. Restore a file whose original name remains free; let unbin succeed, then let journal removal fail. Bin the file elsewhere in Drive before retrying. The retry skips both unbin and rename, deletes the restore record, and reports success while the file remains binned.  
+   **Mechanism home violated:** `src/data/contracts/still-as-seen.ts` — current Bin state must be checked, rather than treating an earlier successful answer as current state.
+
+2. **Important — `src/data/vault/drive-vault.ts:1089`: empty-text recovery accepts an outside move, rename or Bin.**  
+   `landedAs(note, { text: '' })` checks only the stamp and checksum; it does not check name, parents or Bin state. Clear a declared pile’s note, lose the write answer and recovery read, then move that note to Projects through Drive. Retrying accepts the empty write as landed, bypasses the changed-place refusal, and completes against a note that is no longer in the pile. This bypass becomes reachable for empty text in this delta.  
+   **Mechanism home violated:** `src/data/contracts/still-as-seen.ts` — landed recovery bypasses the fence despite a subsequent outside structural change.
+
+findings: 2
