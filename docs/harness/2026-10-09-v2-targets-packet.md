@@ -49,6 +49,8 @@
 
 No strings change.
 
+**Signed off** by the designer on 2026-10-09 (69a41ec9), as written.
+
 ## Red
 
 - At 1440, the `Close Home` box is 22×22; it must be at least 24×24.
