@@ -15,6 +15,7 @@
  * app/src/upload-queue.ts, the protocol part; FSL-1.1-MIT, owner's copyright).
  */
 import { BowerError } from '../types';
+import { happened } from '../spine/write-once';
 import { RESUMABLE_UNIT, type DriveFile, type ResumableDrive, type ResumableTarget, type SessionStatus } from './drive-api';
 
 /** Drive wants chunks in multiples of 256 KiB; 8 MiB keeps requests few. */
@@ -61,10 +62,10 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
 /**
  * The file Drive made is the one this upload meant: same id, size and content.
  * Its place may have changed since: filed by a tidy-up or moved by the person,
- * it still arrived.
+ * it still arrived (write-once's `happened`, never `landed`: TL-P4-24 addendum 10).
  */
 function check(target: Pick<CheckedTarget, 'id' | 'size' | 'sha256'>, file: DriveFile): DriveFile {
-  if (file.id === target.id && (file.size === undefined || file.size === target.size) && file.sha256 === target.sha256) return file;
+  if (happened({ id: target.id }, file) && (file.size === undefined || file.size === target.size) && file.sha256 === target.sha256) return file;
   console.error('A reserved upload id holds a different file', { want: { id: target.id, size: target.size }, got: { id: file.id, size: file.size, checked: file.sha256 !== undefined } });
   throw new BowerError('unknown', 'Google Drive has a different file where this one should go. Remove this one and add it again.');
 }

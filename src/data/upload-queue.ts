@@ -441,8 +441,10 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
       }
       // The file's identity is reserved through write-once and kept on the device before anything is created.
       const file = await makeOnce(
+        // The record is the intent kept with its id (TL-P4-24 addendum 16): its folder, name and bytes never change.
         heldAs(record.fileId, letFileIdGo),
         fenced,
+        { parent: record.parentId, name: record.name },
         async (id) => {
           if (record.fileId === null) {
             if (item.durable && gen === generation) await keepFileId(id);

@@ -10,10 +10,21 @@
  *    naming its intent; the file read by its id must carry it and, for text, the checksum of the bytes sent (`updateByStamp`).
  * The answer confirms the write by the `md5Checksum` its `fields` ask for
  * (https://developers.google.com/workspace/drive/api/reference/rest/v3/files), with no read after it (`confirms`).
+ *
+ * A key found again answers two questions, each with its one name here (TL-P4-24 addenda 9 and 10), for both cases:
+ * - `happened`: did this write run? The reserved id is there, or the stamp is this write's. The runner's reconcile and
+ *   the upload ask it: sending again would undo what the person did with the file since.
+ * - `landed`: is the file as this write intended? It happened, and the file is what the write makes it (`notAsSeen`
+ *   against what it read with the write's own change applied, or for a create the name and place it was sent with, out
+ *   of the Bin; modifiedTime ignored), with the bytes sent for text. The app asks it: a create that happened but has
+ *   moved, been renamed, binned or changed elsewhere since is refused (`CHANGED_ELSEWHERE`), nothing is sent or made
+ *   again, and its id is let go, so the file stays where the person put it. An idempotency key that finds a different
+ *   state is refused, not reinterpreted (Stripe, as above; RFC 9110 13.1.1: a precondition comes from what the client
+ *   meant, never from a read just before the write).
  */
 import { BowerError } from '../types';
 import { md5Hex, sha256Sync } from '../contracts/hashes';
-import { notAsSeen, type Landing, type SeenExpectation } from '../contracts/still-as-seen';
+import { CHANGED_ELSEWHERE, notAsSeen, notAsSeenError, notAsSeenReason, type Landing, type SeenExpectation } from '../contracts/still-as-seen';
 import { driveError, type DriveApi, type DriveFile, type FencedDrive } from '../drive/drive-api';
 import { failureKind, isNoAnswer, isUnconfirmedWrite, marked, type FailureKind } from '../drive/transport';
 
@@ -25,11 +36,21 @@ export const STAMP = 'bowerOp';
  */
 export const stampOf = (scope: string, intent: string): string => sha256Sync(`${scope}:${intent}`).slice(0, 32);
 
+/** A content's hashes, as Drive answers one of them: its `md5Checksum`, or its SHA-256 when it gives one. */
+export interface Hashes { md5: string; sha256: string }
+
+/** The hashes of `bytes`, or of a text's UTF-8 bytes. */
+export const hashesOf = (content: Uint8Array | string): Hashes => {
+  const bytes = typeof content === 'string' ? new TextEncoder().encode(content) : content;
+  return { md5: md5Hex(bytes), sha256: sha256Sync(bytes) };
+};
+
+/** Whether a file Drive answered holds the content of `h` (its `md5Checksum`, or its SHA-256 when it gives one). */
+const holds = (answer: DriveFile, h: Hashes): boolean =>
+  answer.md5Checksum !== undefined ? answer.md5Checksum === h.md5 : answer.sha256 !== undefined && answer.sha256 === h.sha256;
+
 /** Whether the answer to a write says Drive stored exactly `bytes` (its `md5Checksum`, or its SHA-256 when it gives one). */
-export function confirms(answer: DriveFile, bytes: Uint8Array): boolean {
-  if (answer.md5Checksum !== undefined) return answer.md5Checksum === md5Hex(bytes);
-  return answer.sha256 !== undefined && answer.sha256 === sha256Sync(bytes);
-}
+export const confirms = (answer: DriveFile, bytes: Uint8Array): boolean => holds(answer, hashesOf(bytes));
 
 /** A write whose outcome is to be read back by its key: no answer, a 5xx, or a conflict its own landing may explain. */
 const unsettled = (e: unknown): boolean => isNoAnswer(e) || isUnconfirmedWrite(e) || (e instanceof BowerError && e.code === 'conflict');
@@ -76,9 +97,22 @@ const stampFor = (f: DriveFile, intent: Intent): string => stampOf(f.id, `${f.mo
 /** An unbin: out of the Bin as it was (`unbin`), or under a free name in the same write (`unbin:<name>`). */
 export const unbins = (intent: Intent): boolean => intent === 'unbin' || (typeof intent === 'string' && intent.startsWith('unbin:'));
 
-/** Whether `now` carries the stamp of that write to `f` and, for text, Drive's checksum of the text sent. */
-const stamped = (f: DriveFile, intent: Intent, now: DriveFile): boolean =>
-  now.appProperties?.[STAMP] === stampFor(f, intent) && (typeof intent === 'string' || confirms(now, new TextEncoder().encode(intent.text)));
+/** A write's key: the id reserved for a create (case 1), or the stamp of an update (case 2). */
+export type WriteKey = { id: string } | { stamp: string };
+
+/** Did this write run? Drive keeps the file under its reserved id, or the file carries its stamp. */
+export const happened = (key: WriteKey, now: DriveFile | null): now is DriveFile =>
+  now !== null && ('id' in key ? now.id === key.id : now.appProperties?.[STAMP] === key.stamp);
+
+/**
+ * Is the file as this write intended? It `happened`, it is what the write makes it (`intended`, by `notAsSeen`,
+ * modifiedTime ignored), and for text it holds one of the contents sent (Drive's checksum).
+ */
+export const landed = (key: WriteKey, intended: SeenExpectation, now: DriveFile | null, contents?: readonly Hashes[]): now is DriveFile =>
+  happened(key, now) && (contents === undefined || contents.some((h) => holds(now, h))) && notAsSeen(sameButTime(intended), now) === null;
+
+/** What a write intends, its modifiedTime left out: the write itself changes it. */
+const sameButTime = ({ id, name, parents, trashed }: SeenExpectation): SeenExpectation => ({ id, name, parents, ...(trashed !== undefined ? { trashed } : {}) });
 
 /**
  * The file as that write to `f` leaves it: what it read, with the write's own change applied (TL-P4-24 addendum 7). Its
@@ -104,12 +138,13 @@ function expectedAfter(f: DriveFile, intent: Intent): SeenExpectation {
 }
 
 /**
- * The one definition of "landed" (TL-P4-24 addenda 7 and 8): `now` carries the stamp of that write to `f` (and, for
- * text, the checksum of the text sent) **and** is exactly what the write makes it (`expectedAfter`, by `notAsSeen`,
- * modifiedTime ignored). A file renamed, moved or put in or out of the Bin since, elsewhere, is not this write landed.
- * The fence (`checkStillAsSeen`, through `landing`) and a lost answer's read (`updateByStamp`) both ask it.
+ * `landed` for a write to `f` (TL-P4-24 addenda 7 and 8): `now` carries the stamp of that write (and, for text, the
+ * checksum of the text sent) **and** is exactly what the write makes it (`expectedAfter`). A file renamed, moved or put
+ * in or out of the Bin since, elsewhere, is not this write landed. The fence (`checkStillAsSeen`, through `landing`)
+ * and a lost answer's read (`updateByStamp`) both ask it.
  */
-export const landedAs = (f: DriveFile, intent: Intent, now: DriveFile): boolean => stamped(f, intent, now) && notAsSeen(expectedAfter(f, intent), now) === null;
+export const landedAs = (f: DriveFile, intent: Intent, now: DriveFile): boolean =>
+  landed({ stamp: stampFor(f, intent) }, expectedAfter(f, intent), now, typeof intent === 'string' ? undefined : [hashesOf(intent.text)]);
 
 /** That write to `f` as the fence's landed case (`checkStillAsSeen`): `landedAs`. */
 export const landing = (f: DriveFile, intent: Intent): Landing<DriveFile> => (now) => landedAs(f, intent, now);
@@ -137,16 +172,71 @@ export async function reserveId(w: Pick<Makes, 'generateIds'>): Promise<string> 
   return id;
 }
 
+/**
+ * What one create was first sent as, kept with the id reserved for it (TL-P4-24 addendum 16): its folder, its name and,
+ * for text, its content's hashes. A retry resends it, never a name picked anew, and is judged against it (`asMade`): a
+ * folder listed again since shows the landed file, so a name picked now would be another one.
+ */
+export interface Sent { parent: string; name: string; content?: Hashes }
+
+/** The intent a create sends first: where, under which name and, for text, with which content. */
+export const sentAs = (parent: string, name: string, text?: string): Sent => ({ parent, name, ...(text !== undefined ? { content: hashesOf(text) } : {}) });
+
+const isHashes = (v: unknown): v is Hashes =>
+  typeof v === 'object' && v !== null && /^[0-9a-f]{32}$/.test(String((v as Hashes).md5)) && /^[0-9a-f]{64}$/.test(String((v as Hashes).sha256));
+
+/** A kept intent, as a keeper reads it back from the device: anything else is not one (and the keeper keeps none). */
+export const isSent = (v: unknown): v is Sent =>
+  typeof v === 'object' && v !== null && typeof (v as Sent).parent === 'string' && typeof (v as Sent).name === 'string' &&
+  ((v as Sent).content === undefined || isHashes((v as Sent).content));
+
 /** Where a create goes and what it carries; `id` when one was reserved for it earlier (kept across tries). */
-type Place = { parent: string; name: string; props?: Record<string, string>; id?: string };
+type Place = Sent & { props?: Record<string, string>; id?: string };
+
+/** What a create at `at` with `id` makes: that id, under its name, in its folder, out of the Bin. */
+const createdAs = (id: string, at: Place): SeenExpectation => ({ id, name: at.name, parents: [at.parent], trashed: false });
+
+/**
+ * A create found again by its reserved id, as `landed` says: the file when it is as made (and, for text, holds one of
+ * `texts`, or the content first sent with that id); refused when it happened but was moved, renamed, binned or changed
+ * elsewhere since. The refusal lets the id go (`releases`), and nothing is written to the file.
+ */
+function asMade(id: string, at: Place, now: DriveFile, texts?: readonly string[]): DriveFile {
+  const intended = createdAs(id, at);
+  const contents = texts === undefined ? undefined : [...texts.map((t) => hashesOf(t)), ...(at.content ? [at.content] : [])];
+  if (landed({ id }, intended, now, contents)) return now;
+  const reason = notAsSeen(intended, now) ?? 'modified';
+  console.error(`A file made by its reserved id is no longer as made (${reason}); it stays where it is`);
+  throw notAsSeenError(reason, CHANGED_ELSEWHERE);
+}
+
+/**
+ * The file a create kept on `at.id` made, read by that id: null when Drive keeps none; the file when it `landed` (with
+ * one of `texts`, for text); refused when it happened and is no longer as made.
+ */
+export async function madeAt(reads: Gets, at: Place & { id: string }, texts?: readonly string[]): Promise<DriveFile | null> {
+  const now = await byId(reads, at.id);
+  return now === null ? null : asMade(at.id, at, now, texts);
+}
+
+/** An app's create, sent once by its reserved id; found again by it, it counts only when it `landed` (`asMade`). */
+async function makeAs(id: string, at: Place, send: (id: string) => Promise<DriveFile>, reads: Gets, texts?: readonly string[]): Promise<DriveFile> {
+  const read: { found?: DriveFile } = {};
+  const out = await createById(id, send, async (key) => {
+    const now = await byId(reads, key);
+    if (now) read.found = now;
+    return now;
+  });
+  return out === read.found ? asMade(id, at, out, texts) : out;
+}
 
 /** A folder made once, by its reserved id. */
 export const makeFolder = async (w: Makes, reads: Gets, at: Place): Promise<DriveFile> =>
-  createById(at.id ?? (await reserveId(w)), (id) => w.createFolder(at.parent, at.name, at.props, id), (id) => byId(reads, id));
+  makeAs(at.id ?? (await reserveId(w)), at, (id) => w.createFolder(at.parent, at.name, at.props, id), reads);
 
 /** A text file made once, by its reserved id, and confirmed by its answer's checksum. */
 export const makeText = async (w: Makes, reads: Gets, at: Place, text: string): Promise<DriveFile> =>
-  confirmed(await createById(at.id ?? (await reserveId(w)), (id) => w.createText(at.parent, at.name, text, at.props, id), (id) => byId(reads, id)), text);
+  confirmed(await makeAs(at.id ?? (await reserveId(w)), at, (id) => w.createText(at.parent, at.name, text, at.props, id), reads, [text]), text);
 
 /**
  * The port: where one intended create keeps the id reserved for it, the home keeping no store of its own. Its outbox
@@ -155,6 +245,8 @@ export const makeText = async (w: Makes, reads: Gets, at: Place, text: string): 
  */
 export interface Holder {
   reserved?: string;
+  /** What the create was first sent as with `reserved` (`Sent`); an entry kept before it was stored has none. */
+  sent?: Sent;
   /** A keeper that stores the id in its own shape lets it go there too, when the home lets it go (`makeOnce`). */
   letGo?: () => Promise<void>;
 }
@@ -176,28 +268,37 @@ export async function reserveFor(w: Pick<Makes, 'generateIds'>, holders: readonl
 }
 
 /**
- * Whether a failed create lets its id go: only when refused outright (a 4xx, `permanent` in the transport's table,
- * TL-P4-14 addendum 13). Not known to have failed (no answer, a 5xx, a conflict its landing may explain), or not taken
- * for now (a rate limit, a full Drive: addendum 16), it keeps it for the next try.
+ * Whether a failed create lets its id go: when refused outright (a 4xx, `permanent` in the transport's table,
+ * TL-P4-14 addendum 13), or found again no longer as made (`asMade`: the file is the person's now, TL-P4-24 addendum
+ * 10). Not known to have failed (no answer, a 5xx, a conflict its landing may explain), or not taken for now (a rate
+ * limit, a full Drive: addendum 16), it keeps it for the next try.
  */
-const releases = (e: unknown, kind: FailureKind): boolean => kind === 'permanent' && !unsettled(e);
+const releases = (e: unknown, kind: FailureKind): boolean => notAsSeenReason(e) !== null || (kind === 'permanent' && !unsettled(e));
 
 /**
  * One intended create, sent with the id its holder keeps (reserved now when it has none) and found again by it: the id
  * stays on the holder until the create is confirmed, so a try after a lost answer and a failed read-back is that same
- * file; a refusal lets it go. `kindOf` tells a failure's kind when the caller's own table refines it (a 404 listed anew);
- * `signal` stops the reservation with the send it is for.
+ * file; a refusal lets it go. With the id the holder keeps what the create was first sent as (`sent`, else `fresh`):
+ * every try sends that, never a name picked anew (TL-P4-24 addendum 16). `kindOf` tells a failure's kind when the
+ * caller's own table refines it (a 404 listed anew); `signal` stops the reservation with the send it is for.
  */
-export async function makeOnce(h: Holder, w: Pick<Makes, 'generateIds'>, create: (id: string) => Promise<DriveFile>, kindOf: (e: unknown) => FailureKind = failureKind, signal?: AbortSignal): Promise<DriveFile> {
+export async function makeOnce(h: Holder, w: Pick<Makes, 'generateIds'>, fresh: Sent, create: (id: string, sent: Sent) => Promise<DriveFile>, kindOf: (e: unknown) => FailureKind = failureKind, signal?: AbortSignal): Promise<DriveFile> {
   await reserveFor(w, [h], signal);
   const id = h.reserved;
   if (id === undefined) throw driveError('unknown');
+  // An entry kept before intents were stored has none: it sends this try's, as it did, and keeps it from now on.
+  h.sent ??= fresh;
   try {
-    return await create(id);
+    return await create(id, h.sent);
   } catch (e) {
     if (releases(e, kindOf(e))) {
       delete h.reserved;
+      delete h.sent;
       await h.letGo?.();
+    } else if (e instanceof BowerError && e.code === 'not-found') {
+      // A 404: the folder it was sent to is gone, so nothing was made there. The id stays; the next try is sent where
+      // its place is found anew, and a file an earlier try made with this id is still met by it (a 409, then `asMade`).
+      delete h.sent;
     }
     throw e;
   }
@@ -231,12 +332,12 @@ export class Intended<H extends Holder = Holder> {
     this.held.delete(key);
   }
 
-  /** One intended create kept in this page's memory, by its key (`makeOnce`). */
-  async make(this: Intended<Holder>, key: string, w: Pick<Makes, 'generateIds'>, create: (id: string) => Promise<DriveFile>): Promise<DriveFile> {
+  /** One intended create kept in this page's memory, by its key (`makeOnce`), with what it was first sent as. */
+  async make(this: Intended<Holder>, key: string, w: Pick<Makes, 'generateIds'>, fresh: Sent, create: (id: string, sent: Sent) => Promise<DriveFile>): Promise<DriveFile> {
     const h = this.held.get(key) ?? {};
     this.held.set(key, h);
     try {
-      const made = await makeOnce(h, w, create);
+      const made = await makeOnce(h, w, fresh, create);
       this.held.delete(key);
       return made;
     } catch (e) {
