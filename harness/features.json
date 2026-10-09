@@ -5687,7 +5687,7 @@
     "id": "c3-integrate-gate",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "Process checks get one home each: harness/integrate.sh merges a worker branch only on a green pnpm check; check-harness fails on conflict-marker lines in tracked files; an escalated p4-consolidation entry cannot pass without a review PASS (features.json review field), in harness-rules and done.sh.",
     "steps": [
       "integrate.sh on a branch whose merged tree fails pnpm check aborts the merge and prints the failures.",
