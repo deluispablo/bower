@@ -391,3 +391,4 @@ P3-9 is closed.
 - P4-34 PASS (c2-upload-queue-only). Short fix round: a test for the late-file Bin-retry branch (lead), plus the dead code P4-34 lists. late-upload-undo-resend logged (lead asked).
 - c2-one-engine merged (red 3b3bff20, fix b425fdd3, 82170ad0; prod -147; HOLD_MS gone; dup baseline 22; C04 still 80; check + full e2e:fake 256 green on merged tree). Two rulings asked (lost-reply move purged before read-back stays set aside; edit-text time-only change now refused in the fake as in the runner). P4-35 review dispatched.
 - c2-one-engine rulings (main fe2b3c8): lost-answer move purged → outcome-unknown kind (fix round after P4-35, findings joined); strict edit-text rule kept in both.
+- My slip: a main merge conflicted (docs/ARCHITECTURE.md) and my chained commit -am recorded the conflict markers (5cfcb689); resolved with the lead's rows in 022194da minutes later. Rule for me: merge main with && and stop on a conflict.
