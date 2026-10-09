@@ -52,3 +52,31 @@ Branch `c3-reply-schema` from `claude/p3` f20c4d3c. Commits: red `592b1b41`, fix
 - Red logs: `/tmp/c3-rs-red-runner.log`, `/tmp/c3-rs-red-runner2.log`, `/tmp/c3-rs-red-contracts.log`.
 - `pnpm check`: `/tmp/c3-rs-check3.log`. No e2e: no screen touched.
 - Production diff (no tests, lockfile): +286 / -165; removed 165 lines (claude.ts -141).
+
+## Fix round (P4-44 BLOCK; TL-P4-14 addendum 22)
+
+Merge `6d56157b` (claude/p3; one conflict in the compatibility list, both rows kept). Red `358476d4`, fix `8dd8a5dc`.
+
+- **Two state bounds.** `note-edit.ts` names `STATE_WRITE` (8 x 200, what Bower writes; the reply check and prompt
+  import it) and `STATE_READ` (20 x 400, what Bower reads: `previous`, what an undo writes back, every stored manifest).
+  `stateLinesOk` judges both `previous` and `lines` by the read bound, since an undo swaps them. Back to the pre-entry
+  behaviour: the planner rewrites a 9-20 line state again, and stored v2 manifests over 8 x 200 parse.
+  Red: "a stored v2 manifest over the write bound still parses" (note-edit.test.ts; 20x400 previous, 20x400 lines,
+  9x201 both admitted; 21 lines or 401 characters refused as shape).
+- **`--json-schema` off.** `claudeArgs` passes no schema; `REPLY_JSON_SCHEMA` and the `structured_output` branch of
+  `replyOf` are gone, so every refusal kind is retried by Bower as before (I1 resolved). The zod declaration stays.
+  Red in "every validation refusal is retried once with its reason": no `--json-schema` in any call, and a
+  `structured_output` beside a bad result is not taken (refused `notJson`, asked again).
+- **Typed path.** `run-manifest.ts` exports `RunnerWrite` (the three-path union that was the effect's type before the
+  entry); `Effect.path`, `parseRunManifest(V2)`'s `writes` and `admit` use it; `layout.ts` declares `RUNNER_WRITES`
+  `as const satisfies readonly RunnerWrite[]` with a type-only import (layout already imports contracts). The contracts
+  cannot import layout (architecture.test.ts), so the union is the type and `RUNNER_WRITES` the value. The contract
+  test now marks the suggestions list `@ts-expect-error`.
+- **RUNNER_WRITES on the provider run (TL-P4-17).** The test runs `claudeProvider` on the recorded reply with
+  suggestions, last-run, requests and hashes in `.bower`; its own writes are all on the list; each of the five files,
+  added as a correctly hashed write, is judged alike by `outsideAdmitted` and `parseRunManifestV2` (three admitted, two
+  refused). This test passed at red (the lists already agreed); it is the entry-point strengthening, not a red.
+- Production for the whole entry (claude/p3..fix, no tests or lockfile): +288 / -168, net +120: claude.ts +97,
+  run-manifest.ts +9, layout.ts +8, note-edit.ts +5, engine.ts +1, runner/package.json +1, admitted.ts -1.
+- Logs: red `/tmp/c3-rs-r2-red-runner.log`, `/tmp/c3-rs-r2-red-contracts.log`; verify `/tmp/c3-rs-r2-v1.log`,
+  `/tmp/c3-rs-r2-v2.log`; check `/tmp/c3-rs-r2-check2.log`.
