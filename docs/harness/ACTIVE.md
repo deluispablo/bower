@@ -413,3 +413,4 @@ P3-9 is closed.
 - c2-create-by-id rulings (main 921d957): fix round after P4-37 (id per intended create kept with the pending action; fake Worker through the helper; batch reservation).
 - P4-37 PASS (c2-create-by-id); fix round dispatched with the lead rulings (main 921d957) and P4-37 minors (holds() checks trashed state, generateIds chunked by 1000, remaining unstamped runner/Worker writes).
 - c2-create-by-id fix round merged (red 0709119f, fix 18b1abba; ids per intended create kept with the pending action; fake Worker on the helper; chunks of 1000; foreign stamp → unconfirmed; prod +207/-109; C04 76; check green, e2e:fake 256). keepFinished (retention) has no production caller: dead code, lead told. P4-37b check dispatched.
+- Stage 2 production net since 9265d860: +167 (lead asked how to close). keepFinished removal at the stage end; retention is a post-P4 product question.

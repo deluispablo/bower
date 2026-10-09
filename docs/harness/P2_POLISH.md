@@ -292,3 +292,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
 - P4-35 (c2-one-engine) minors: create read-back uses Drive search and may lag (engine.ts:605, pre-existing); orphan doc comment (engine.ts:112); the precheck-window same-name create is no longer tested.
 - P4-35c minors: SeenFiles.read has no src unit test (seen-files.ts:90); a fence that never reads ends after 2 attempts with SAVING_FAILURE, which overclaims (api/src/process.ts:96, pre-existing).
 - P4-35d (c2-one-engine round 4) minor: seen-files.ts:94 says "couldn't reach Google Drive" when the attempt route failed (console only).
+- Post-P4 product question (lead): run-record retention, how long .bower/runs keeps finished runs; not built.
