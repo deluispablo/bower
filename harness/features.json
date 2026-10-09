@@ -6247,8 +6247,8 @@
     "steps": [
       "Every create outcome x withdrawal: reserved id 404 or trashed, or the holder kept."
     ],
-    "verify": "pnpm vitest run -t \"a withdrawn intended create never leaves a live file\"",
-    "note": "TL-P4-24 finding 3 (a); defect undo-drops-reserved-create. Escalated + Codex review pass; refusal sentence from the designer. Packet 2026-10-09-c4-undo-withdraw-packet.md."
+    "verify": "pnpm vitest run src/data/spine/write-once.test.ts src/ui/toast.test.ts -t \"a withdrawn intended create never leaves a live file|toast replace keeps the item and restarts its timer\"",
+    "note": "TL-P4-24 finding 3 (a); defect undo-drops-reserved-create. Escalated + Codex review pass; refusal sentence from the designer. Packet 2026-10-09-c4-undo-withdraw-packet.md. TL-P4-24 addenda 1 and 3; after c4-app-fence; removePile sentence from the designer."
   },
   {
     "task": "p4-consolidation",

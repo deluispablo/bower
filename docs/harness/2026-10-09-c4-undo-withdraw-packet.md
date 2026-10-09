@@ -10,21 +10,26 @@
 - **Review:** an escalated Claude reviewer plus one Codex read-only review pass (TL-P4-23 ruling 6).
 - **Starting model:** `bower-escalated`.
 
-## Contract
+## Contract (TL-P4-24 addenda 1 and 3, main 09e633f1)
 
-1. **`withdraw` on the Holder port** in `src/data/spine/write-once.ts`. It is the one home that withdraws an intended create:
-   - a get by the reserved id;
-   - a 404 lets the id go;
-   - a found file goes to the Bin, never a hard delete, with stillAsSeen;
-   - an unknown answer keeps the line and refuses the Undo.
-2. **The journal uses it.** `journal.remove` (removeNow, `journal.ts:~489-505`) calls `withdraw` under `acrossTabs` before the line is dropped.
-   - The same class elsewhere uses the same withdraw: drive-vault `Sending` and `reservedFile` (`drive-vault.ts:1016, 1556, 1694/1718`).
+**Order.** This entry runs after c4-app-fence merges (addendum 2). Merge claude/p3 first; the Bin's check uses `contracts/still-as-seen.ts` from that entry.
+
+1. **`withdraw` on the Holder port** (`src/data/spine/write-once.ts`) is the one home that withdraws an intended create.
+   - A line never sent has no reserved id (`journal.ts:120-123`). It lets go without a read.
+   - Otherwise it gets the file by its reserved id:
+     - a **404** lets go;
+     - a file found in the Bin counts as let go;
+     - a file found live goes to the Bin, through the still-as-seen helper, never a hard delete;
+     - anything else is **unknown** (not a 404 and not found). Unknown keeps the line and refuses the Undo. So it is refused offline.
+2. **Callers.**
+   - `journal.remove` (removeNow, `journal.ts:~489-505`) calls `withdraw` under `acrossTabs` before the line drops.
+   - The other keepers use the same withdraw: drive-vault `Sending` and `reservedFile` (`:1016, 1556, 1694/1718`), `Intended`, and the upload record.
    - No second withdraw path.
-3. **Refusal (TL-P4-24 addendum 1, main 7a3eca46).**
-   - The sentence is "Not undone yet: Bower could not reach Drive to check. Try again when you are back online.", never in --danger.
-   - This entry builds the dock case only: a dock-message Undo is replaced in place through the v2-dock home. Its action, "Try again", runs the same Undo. It keeps the 8 s timer that pauses on hover or focus, and focus stays on the action. No second message.
-   - The inline Undo case (muted, role=status, "Undo" stays) rides with d-v2-02.
-   - `journal.ts:498` keeps its storage-failure sentence.
+3. **Scope.** The dock Undos are Bin, rule and restore, plus `removePile` (its sentence comes from the designer, through the coordinator; until then it uses a named constant on a seam). Lines `drive-vault.ts:332, 352, 436` are line folds, not Undos, and stay as they are.
+4. **The refusal is distinguishable.** It carries its own BowerError code, so `report()` and the dock can tell it apart from the storage-failure sentence at `journal.ts:498`, which stays.
+5. **Dock replace-in-place.** `toast.tsx` gains `replace(id, text, action)`. It keeps the item, restarts its timer (8 s with an action, pausing on hover or focus), and keeps focus on the action. No second component, no second message.
+   - Copy: "Not undone yet: Bower could not reach Drive to check. Try again when you are back online." It is never in --danger.
+   - The action "Try again" runs the same Undo.
 
 ## What the person sees (TL-P4-22; the designer signs this off before dispatch)
 
@@ -39,11 +44,26 @@ Copy ruled in TL-P4-24 addendum 1. The designer signs off this table before disp
 
 ## Red (class test, from the note)
 
-`a withdrawn intended create never leaves a live file`. It is one table-driven suite over the Holder keepers (journal outbox line, Sending, Intended, upload record), running every create outcome against every withdrawal (`removeRule`/`restore`, `removePile`, `trash`), with a memoised listing. It expects the reserved id to be 404 or trashed, or the holder to be kept. It fails today for "landed, answer lost".
+`a withdrawn intended create never leaves a live file`, in `src/data/spine/write-once.test.ts`. One table-driven suite.
+- **Keepers:** the journal outbox line, Sending, Intended and the upload record.
+- **Create outcomes:**
+  - unsent;
+  - landed, with its answer and read-back lost;
+  - landed and confirmed;
+  - refused with a 4xx.
+- **Withdrawals:** `removeRule`/`restore`, `removePile` and `trash`, run against a memoised listing.
+- **Two more cells:**
+  - two Journals in two tabs, sharing `navigator.locks`, where only one withdraw runs;
+  - the line stays when the answer is unknown.
+- **Expected:** the reserved id is 404 or trashed, or the holder is kept. Mark in the test which cells are red today; at least "landed, answer lost" is.
 
 ## Verify
 
-The red; `a dock undo that cannot reach Drive is replaced in place with try again` (e2e, fake, phone and desktop, with axe); `pnpm check`; the goldens.
+- The red.
+- `toast replace keeps the item and restarts its timer` (unit, `src/ui/toast.test.ts`).
+- `a dock undo that cannot reach Drive is replaced in place with try again`: e2e on fake, phone and desktop, with axe. It needs a named fake trigger for an unreachable withdraw; name it on your card.
+- `pnpm check`.
+- The goldens.
 
 ## Commits
 
