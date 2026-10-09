@@ -24,3 +24,10 @@ A promised behaviour proved by calling a helper directly instead of through the 
 - Up to 3 Bins per run only while there is a backlog; in steady state each run adds one folder and bins one (+2 on top of the stamp).
 - C04 = 78 is a recorded exception (it wires a P3 promise). No fence exception for record folders (that would be a second rule).
 - Goldens pinned: C04 = 78, and the 25-earlier-runs case = 85. Merge after review.
+
+## Ruling, round 5 (lead, after P4-38c): option (a), Bower acts only on what carries Bower's mark
+- P4-38c found that the 24 h rule could bin a folder the person made inside .bower/runs ("Alex notes"), because run folders carried no Bower mark at create.
+- Bower stamps bowerRun=<run_id> when it creates the folder, in the same create request, through the create-by-id helper.
+- Retention, including the done stamps and the 24 h rule, only ever touches folders that carry it. Unstamped folders are never binned, whatever their age. Unstamped legacy staging folders are left alone (accepted).
+- Tests: the "Alex notes" repro is kept (never binned), and a stamped 2-day-old run beyond 20 is binned.
+- Class for the lead's stage-end review: "Bower acts only on what carries Bower's mark".
