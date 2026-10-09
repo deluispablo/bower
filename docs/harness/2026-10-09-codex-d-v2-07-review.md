@@ -30,3 +30,19 @@ prior findings: Both fix-round findings and all five original findings are fixed
 second way: No new loop, timer, input listener system or tap queue.
 validation: Read-only inspection; tests not run.
 findings: 0
+
+## Startle round pass (e49ff311..296b8021)
+
+- **Important — `src/bird/engine.ts:1111`: Wake startle’s visible head exceeds the ±2° bound.** The startle pins the head to −10°, but `gaze()` still runs and `apply()` adds its angle. Concrete reproduction: idle Bower at home `(50,92)`, size 100, sleeps for 61 seconds; wake with `look({x:200,y:-100}, 'focus')`. Injected frames show the head held at **−22°**, while the tuft holds 18°. A focus point `(200,250)` produces **−3°**. The new test exercises only `nudge()` without gaze, so misses both failures. Mechanism home violated: the one startle step in `BirdEngine`’s mind, with the packet’s bounded head movement.
+
+- **Important — `src/bird/engine.test.ts:238`: The meta-test permits exposed actions without reference rows.** It ignores members classified as `script` or `control`; `EngineMember` explicitly permits both. Concrete scenario: add a public motion method `stretch()` and classify it as `stretch: 'script'` in `ENGINE_MEMBERS`. Compilation and the meta-test pass without any reference row. Existing script actions are likewise exempt. Mechanism home violated: `pose-reference.fixture.ts` and its meta-test, which the packet requires to cover every exposed act or action name.
+
+findings: 2
+
+## Allowlist and head pass (296b8021..167b093d)
+
+1. **Important — `src/bird/pose-reference.fixture.ts:329`: inherited properties bypass the closed allowlist.** Add a public `toString()` action and label it `script`: `exempt['toString']` resolves to `Object.prototype.toString`, so the meta-test passes without a reference row or allowlist entry. The growth check uses `Object.keys`, which also misses inherited names. **Violated home:** the reference meta-test’s exact-name allowlist, packet addendum 21.
+
+2. **Important — `src/bird/engine.test.ts:285`: the fix weakens its red threshold from ≤3° to <6° per frame.** Replaying the test’s injected frames gives a 4.98° wake-rise jump; the upward focus gaze also returns with a 3.35° jump. Both fail the original assertion and pass the replacement. **Violated home:** the startle/gaze regression test and WORKER’s rule against weakening tests to reach green.
+
+findings: 2

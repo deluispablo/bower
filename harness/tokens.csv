@@ -259,3 +259,10 @@ c4-undo-withdraw round3 review,reviewer,codex,codex,medium,3,267815,266570,0,220
 c4-undo-withdraw P4-56c,reviewer,claude,bower-reviewer,,3,55966,,,,,,13,1.1,PASS (4 minor),2026-10-09
 d-v2-07 startle round,implementer,claude,bower-escalated,,4,116778,,,,,,29,9.5,delivered,2026-10-09
 d-v2-07 P4-58d,reviewer,claude,bower-reviewer,,4,32401,,,,,,5,0.3,PASS (3 minor; open labels),2026-10-09
+d-v2-07 startle review,reviewer,codex,codex,medium,4,250682,248656,0,212608,2026,,,,2 Important,2026-10-09
+c4-undo-withdraw round 3 add. 13-14,implementer,claude,bower-escalated,,3,205198,,,,,,24,6.4,delivered,2026-10-09
+c4-undo-withdraw P4-56d,reviewer,claude,bower-reviewer,,4,48097,,,,,,12,1.0,PASS (4 minor),2026-10-09
+c4-undo-withdraw add.13-14 review,reviewer,codex,codex,medium,4,591512,587677,0,519424,3835,,,,5 Important,2026-10-09
+d-v2-07 allowlist+head,implementer,claude,bower-escalated,,5,83812,,,,,,23,4.6,delivered,2026-10-09
+d-v2-07 P4-58e,reviewer,claude,bower-reviewer,,5,33883,,,,,,6,0.3,PASS (5 minor),2026-10-09
+d-v2-07 allowlist review,reviewer,codex,codex,medium,5,405312,402484,0,354304,2828,,,,2 Important,2026-10-09

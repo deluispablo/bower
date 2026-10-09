@@ -6252,7 +6252,7 @@
       "Every create outcome x withdrawal: reserved id 404 or trashed, or the holder kept."
     ],
     "verify": "pnpm vitest run src/data/spine/write-once.test.ts src/ui/toast.test.ts -t \"a withdrawn intended create never leaves a live file|toast replace keeps the item and restarts its timer\"",
-    "note": "TL-P4-24 finding 3 (a); defect undo-drops-reserved-create. Escalated + Codex review pass; refusal sentence from the designer. Packet 2026-10-09-c4-undo-withdraw-packet.md. TL-P4-24 addenda 1 and 3; after c4-app-fence; removePile sentence from the designer."
+    "note": "TL-P4-24 finding 3 (a); defect undo-drops-reserved-create. Escalated + Codex review pass; refusal sentence from the designer. Packet 2026-10-09-c4-undo-withdraw-packet.md. TL-P4-24 addenda 1 and 3; after c4-app-fence; removePile sentence from the designer. Rounds 2-3 (addenda 11-14). PARKED by the lead after the addenda 13-14 Codex pass (5 Important): re-plan via a Plan-agent design note, (A) one-lifecycle lock with retention vs (B) append-only compensating line. Branch c4-undo-withdraw at 70a2b0da kept as is; do not merge."
   },
   {
     "task": "p4-consolidation",
@@ -6341,7 +6341,7 @@
       "The 2 reproduced cases and the reconcile guard pass; the fast-check property gains create intents."
     ],
     "verify": "",
-    "note": "TL-P4-24 addendum 10 (main 4dfe148a); defect pile-note-lost-create-moved (diagnosis docs/harness/defects/2026-10-09-pile-note-lost-create-moved.md). Folds c4-reconcile-guard (addendum 9 (1)). Escalated, Opus plus a Codex pass, after c4-undo-withdraw merges. Packet to write."
+    "note": "TL-P4-24 addendum 10 (main 4dfe148a); defect pile-note-lost-create-moved (diagnosis docs/harness/defects/2026-10-09-pile-note-lost-create-moved.md). Folds c4-reconcile-guard (addendum 9 (1)). Escalated, Opus plus a Codex pass, after c4-undo-withdraw merges (that entry is parked; the lead said to run the queue, so this starts from claude/p3). Packet to write."
   },
   {
     "id": "v2-still-marks",

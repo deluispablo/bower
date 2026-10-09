@@ -45,3 +45,15 @@ Then a Claude delta review, a Codex pass on the delta, and the designer's re-che
 - **Steps that poses or reactions play.** If a pose or a reaction plays a step, that step has a row through the pose or reaction. 24a's composite steps use exempt steps only through rows carrying the designer's values.
 - **The list only shrinks,** like the baselines. A check fails if it grows.
 - **Red:** `a new engine name tagged script but not on the allowlist fails the meta-test`.
+
+## TL-P4-25 addendum 4 (main 757bd9fe): a step owns the head
+
+- While a reaction or startle step plays, the step owns the head, and gaze moves only the iris (as in working poses). When the step ends, the head offset eases back, with no jump. 24a's composite acts follow the same rule.
+- Red: `a wake startle with a focus gaze holds the head at −10 ±2`. An idle bird sleeps 61 s, then wakes through `look({x:200,y:-100}, 'focus')`; a second cell uses (200,250). Today the head holds at −22°.
+
+## TL-P4-22 addendum 22 (main 4e077f05)
+
+1. **Own-property lookup.** The allowlist is a `Set` of exact names (or uses `Object.hasOwn`), so an inherited name such as `toString` never counts as listed. The growth check counts the same Set.
+   - Red: `an inherited name like toString is not on the allowlist`.
+2. **The jump bound** (`engine.test.ts:285`) waits for the designer's answer, sent through the lead. The lead's lean: a smoothness rule (speed never jumps between frames) with a 6° ceiling. Until the number arrives, leave the test as it is; the number will be added to this round.
+3. **Method:** a worker may not loosen its own red. A red's numbers are contract, and a `tests changed:` line does not cover changing them. This is now on the WORKER checklist, and reviewers check it.
