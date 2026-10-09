@@ -74,3 +74,77 @@ provider.ts +1, claude.ts 0, barrier.ts 0, Home.tsx 0, Replay.tsx 0.
   https://www.destroyallsoftware.com/screencasts/catalog/functional-core-imperative-shell. The planner reads a
   reply (decisions) and builds operations; the providers own the reply.
 - dependency-cruiser `reachable` rules: https://github.com/sverweij/dependency-cruiser/blob/main/doc/rules-reference.md#reachable
+
+# Part 2 (staged stop)
+
+Branch `c3-planner-split-2`, from claude/p3 a1bf5b9a (part 1 merged). Stopped at a green step after items 2-4: the
+change is +120 / -546 production lines (666 changed, past the ~600 stop), mostly the removal from `grounded()`.
+Item 1 (the capture, decide and build split) is left for part 3.
+
+## Commits
+
+| sha | kind | what |
+|---|---|---|
+| a189e639 | red | grounded checks structure only; a set-aside row names its op; the New mark follows the row's op, not its text; one distinct-path count; guard: a rule waits in the one map for the Rules.md it makes (passed before the fix) |
+| 09d0127d | fix | `grounded()` is structural: every row names ops of the plan (at least one); a rejected row names one op and one set-aside row; every op the person is told about has a row (a member's move or Bin for both outcomes, a generated note, an edit with a Timeline line or Current state, a kept note's Bin, an archive move). The plan's own places stay checked (archive moves, runner files made again at their path and holding their shape, generated notes under a main folder, a filing move to a verified destination). `materialize` drops the position pairing: a set-aside row is its contribution's one op's |
+| 7f569779 | fix | `distinctPaths` (spine/report.ts) is the one count: `notesUpdated`, `runLinkRows`, the corpus scorer |
+| 895bfe15 | fix | `newLineIndexes` (features/note/new-lines.ts): each updated row marks one Timeline line, the last unclaimed one with its words |
+| 167297dc | fix | `RulesPlan.held` goes: the made Rules.md is `derive`d for each rule line it words, in `needs` |
+| 5e5a8f19 | chore | duplication baseline lowered to 20 clones (the gate asks for it when clones fall) |
+
+## Verify tests (new, exact names)
+
+- `grounded checks structure only` (src/data/spine/grounded.test.ts): reworded rows still grounded; an unknown op, an
+  empty `requires`, an edit or a filing move with no row are not.
+- `a set-aside row names its op` (src/data/spine/report.test.ts): rows listed in the other order are never said to
+  be another row's op's outcome; such a plan is not grounded.
+- `the New mark follows the row's op, not its text` (src/features/note/new-lines.test.ts).
+- `one distinct-path count` (src/features/tidy/run-words.test.ts).
+- `a rule waits in the one map for the Rules.md it makes` (src/data/spine/scripted.test.ts): a guard, green before.
+- Part 1's `two moves with the same name get their own rows by op id` and `a run with confirmed and unconfirmed moves
+  counts each on its own line` now set the two moves aside with one contribution each, as the planner emits them.
+
+Gates: `pnpm check` passed after the baseline commit (/tmp/c3p2-check.log failed only on the ratchet; the gates
+after it re-run: /tmp/c3p2-dup2.log, -unused, -deps, -harn, -bundle, -land). C05 e2e on desktop and phone passed
+(/tmp/c3p2-e2e-c05.log). `pnpm e2e:fake`: 257 passed, 61 skipped (/tmp/c3p2-e2e-fake.log). Goldens unchanged: C04 78,
+25 runs 88 (runner suite green, /tmp/c3p2-verify.log).
+
+## Tests rewritten with grounding
+
+Removed, since `grounded()` no longer reads a row's words: fake-worker.test.ts tamper assertions on a question's
+askedAt, an updated row's path and words, a saved link's note path and created rows, a link's row names, a merge row
+without its edit; the tests "refuses the filed-on-its-own row anywhere but on a merge that fell back, and in any
+other words" and "grounds a merged thing's note only on a line carrying the answer that asked for it"; fake-runner's
+comparison note path. Kept: rows with no row for an edit or a create, runner files at their paths (now also by
+shape), the root as a filing destination, generated notes only under main folders, `groundedKeys`.
+
+## Production lines
+
+Part 2 (a1bf5b9a..5e5a8f19, tests excluded): +120 / -546, removed 546. grounded.ts -455 (+58 -513), report.ts +7,
+scripted.ts +2, corpus.ts +3, NoteScreen.tsx +2, new-lines.ts +17 (new), run-words.ts -2.
+Entry so far (part 1 + part 2): +467 / -739, net -272. scripted.ts +61, demo/script.ts +85, grounded.ts -453,
+report.ts -2, fake-runner.ts +6, run-words.ts +3, fixture.ts -2, .dependency-cruiser.cjs +7,
+dependency-exceptions.cjs -1, corpus.ts +4, provider.ts +1, NoteScreen.tsx +2, new-lines.ts +17.
+
+## Compatibility rows
+
+a189e639, 7f569779 and 895bfe15 are in `docs/harness/2026-10-07-p3-compatibility.md`. Wire shapes unchanged: the
+manifest, `ReportContribution`, `RunReport` and `last-run.json`. 895bfe15 changes what the note screen marks: one
+line per row, so an earlier line with the same words is no longer marked New.
+
+## Left out (part 3 and rulings)
+
+- Contract 1: `planScripted` is still one function; re-planning by recursion stays (orphans, keep, waiting piles,
+  the edit-cap retry).
+- The New mark ties each row to one line, but still finds it by its words from the end of the Timeline: an exact
+  tie (op id or line index on the row) needs a field on `RunReport.updated`, a wire change, so a ruling.
+- A set-aside row carries its op through its contribution (`requires`, one op), not a field on the row: same reason.
+- scripted.ts still captures the note a fallen-back merge could not join "grounding its row's name"; grounding no
+  longer reads it, but dropping it changes the capture, so it waits for the split.
+- wordRule on live (m5) still awaits the lead's ruling.
+
+## Sources
+
+- Functional core, imperative shell: the report rows are data the core builds from operations; the check is
+  structural (https://www.destroyallsoftware.com/screencasts/catalog/functional-core-imperative-shell).
+- jscpd ratchet as the repo's gate (`scripts/check-duplication-gate.mjs`).
