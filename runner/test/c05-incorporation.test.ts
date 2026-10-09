@@ -3,11 +3,13 @@
  * proposals first, as the model would answer under the method, through the Claude provider and the spine, each
  * scored by the corpus scorer. No live call.
  */
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { resolve } from 'node:path';
 import type { ClaudeSpawn } from '../src/claude';
 import { loadCorpus, score, type LoadedCase } from '../src/corpus';
-import { runWithClaude } from './corpus-run';
+import { caseReplies, runWithClaude } from './corpus-run';
 
 const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
 
@@ -29,6 +31,7 @@ const LISTING = 'listing-88213.example.url';
 const offerThing = (id: (n: string) => string): unknown => ({ fileId: id(OFFER), to: 'Projects/Job hunt/Applications', basis: JOB, name: 'Offer, Industrial Designer, Ferrowick.pdf', note: { name: 'Industrial Designer, Ferrowick.md', summary: 'An offer from Ferrowick for Industrial Designer.', body: 'Fully remote. Start 2 November. [[Job hunt]]' } });
 
 const SCRIPTS: Record<string, ClaudeSpawn> = {
+
   'c05-hub-lines': answering((id) => ({
     kind: 'tidy-intent', v: 1,
     things: [offerThing(id), { fileId: id(LISTING), to: 'Projects/Flat hunt', name: 'Flat 9, Wrenfield Road.md' }],
@@ -60,11 +63,13 @@ const SCRIPTS: Record<string, ClaudeSpawn> = {
 describe('the C05 slice through the Claude provider', () => {
   it('the C05 corpus cases score green with scripted proposals', async () => {
     const cases: LoadedCase[] = (await loadCorpus(ROOT)).filter((c) => c.capability === 'C05');
+    // Cases with recorded intents join the same SCRIPTS table; a missing reply still fails the full case list.
+    for (const c of cases) if (existsSync(join(c.dir, 'replies.json'))) SCRIPTS[c.id] = caseReplies(c.id);
     expect(cases.map((c) => c.id).sort()).toEqual(Object.keys(SCRIPTS).sort());
     const results: Record<string, unknown> = {};
     for (const c of cases) {
       const run = await runWithClaude(c, SCRIPTS[c.id] as ClaudeSpawn);
-      results[c.id] = { code: run.code, ...score({ expected: c.expected, before: c.folder, after: run.after, lastRun: run.lastRun }) };
+      results[c.id] = { code: run.code, ...score({ expected: c.expected, before: c.folder, after: run.after, lastRun: run.lastRun, pathsById: run.pathsById }) };
     }
     expect(results).toEqual(Object.fromEntries(cases.map((c) => [c.id, { code: 0, pass: true, unmet: [] }])));
   });

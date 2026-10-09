@@ -11,7 +11,7 @@
 2. **`CorpusCase.between`** (optional, additive): edits applied to the folder between two runs (the person's edit: path plus new bytes, or a move). A case without it is one run, as today.
 3. **A two-run scripted driver** through the existing planner and the scripted provider (`runner/test/corpus-run.ts` and `runner/src/provider.ts`): run 1, apply `between`, run 2, score the end state. No second planner, no write path outside the existing one; proposals come from the case's scripted reply objects (the prep doc's shapes, `runner/src/claude.ts:230`).
 4. **Cases 1–3 run scripted** with their proposals: set each case's `covers: scripted`, add them to `c05-incorporation.test.ts`'s SCRIPTS, and give each a verdict row ("agrees" or "changed", with a reason of 10+ chars) in the method log, judged against the method (TL-P4-08).
-5. **Then cases 4–6** (`c05-conflicting-fact-kept`, `c05-marked-state-keeps-history`, `c05-note-not-written-by-bower`) as folders in the same format, scripted through the driver, with rows in the README, SCRIPTS and the method log.
+5. **Then cases 4–5** (`c05-conflicting-fact-kept`, `c05-marked-state-keeps-history`) as folders in the same format, scripted through the driver, with rows in the README, SCRIPTS and the method log.
 6. Made-up data only (Alex, Larkspur Lane, Saltmere, Ferrowick; 2026 dates).
 
 ## Red
@@ -27,4 +27,7 @@
 
 ## Commits
 
-1. The red. 2. The scorer and driver. 3. Cases 1–3 scripted. 4. Cases 4–6. 5. The notes (`docs/harness/2026-10-09-p4-corpus-driver-notes.md`) with `tests changed:` lines.
+1. The red. 2. The scorer and driver. 3. Cases 1–3 scripted. 4. Cases 4–5. 5. The notes (`docs/harness/2026-10-09-p4-corpus-driver-notes.md`) with `tests changed:` lines.
+
+TL-P4-28 addendum 2 supersedes the case-6 scope: deferred product-policy question, not a defect.
+See `2026-10-09-c05-open-question-person-notes.md`; cases 1–5 and their expectations are unchanged.

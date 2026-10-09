@@ -1,0 +1,29 @@
+{
+  "id": "c05-marked-state-keeps-history",
+  "capability": "C05",
+  "title": "A genuine Bower state changes while personal prose and history survive",
+  "covers": "scripted",
+  "source": "new (C05 preservation through scripted intent replies and the existing planner)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "Update the garden plot from the committee notice.",
+      "files": [
+        "Committee notice.txt"
+      ]
+    },
+    {
+      "line": "Update the garden plot from this committee letter.",
+      "files": [
+        "Water butt update.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Areas/Home/Garden plot.md"
+  ],
+  "between": []
+}

@@ -2,7 +2,7 @@
  * Runs a corpus case with the scripted provider over the runner's pretend Drive v3 (as `main.test.ts` does) and
  * returns what the scorer needs: the folder after the run and the parsed `last-run.json`.
  */
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FakeDrive } from '../../src/data/drive/fake-drive';
@@ -40,6 +40,9 @@ function asAdded(name: string): Record<string, string> {
 export interface CaseRun {
   /** The folder after the run, path to text; folders and the Bin are left out. */
   after: Record<string, string>;
+  pathsById: Record<string, string>;
+  /** Prior runs over this same Drive, for ownership and lifecycle assertions. */
+  runs?: CaseRun[];
   /** Each file's appProperties after the run, by the same paths (none: no entry). */
   props: Record<string, Record<string, string>>;
   lastRun: unknown;
@@ -126,8 +129,43 @@ async function runCase(c: LoadedCase, { around, realTokens = false, claude, prop
   const drive = fixedDrive();
   const root = await seedCase(drive, c, props);
   await before?.(drive, root);
-  const admitted = await planAdmission(fakeRead(drive), root, { scope: c.scope === 'undo' ? 'instructions' : c.scope, clock: () => AT, newId: () => 'admission-1' });
-  const wire = driveV3(drive);
+  let scripted = claude;
+  if (!scripted) {
+    try { scripted = replySequence(JSON.parse(await readFile(join(c.dir, 'replies.json'), 'utf8')) as unknown[]); }
+    catch (e) { if (!(e instanceof Error && 'code' in e && e.code === 'ENOENT')) throw e; }
+  }
+  const first = await runOnDrive(c, drive, root, { around, realTokens, ...(scripted ? { claude: scripted } : {}), env: more }, 1);
+  if (!c.between) return first;
+  for (const step of c.between) {
+    const seen = await snapshot(drive, root);
+    const id = Object.entries(seen.pathsById).find(([, path]) => path === step.path)?.[0];
+    if (!id) throw new Error(`between: missing ${step.path}`);
+    const file = await drive.get(id);
+    if (step.kind === 'edit') await drive.writeText(id, step.text, file.modifiedTime);
+    else {
+      const parts = step.to.split('/');
+      const name = parts.pop() ?? step.to;
+      const folders = new Map((await drive.listAll(root)).filter((f) => f.folder).map((f) => [seen.pathsById[f.id] ?? '', f.id]));
+      const parent = await ensureFolder(drive, root, folders, parts.join('/'));
+      await drive.update(id, { name, addParent: parent, removeParent: file.parents[0] });
+    }
+  }
+  const second = await runOnDrive(c, drive, root, { around, realTokens, ...(scripted ? { claude: scripted } : {}), env: more }, 2);
+  return { ...second, runs: [first] };
+}
+
+/** Each press admits the current folder and uses the production runner/planner/write path. */
+export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, { around, realTokens = false, claude, env: more = {} }: CaseOptions, press: number): Promise<CaseRun> {
+  const current = await snapshot(drive, root);
+  if (press > 1) {
+    const changes = Object.entries(current.pathsById).find(([, path]) => path === SYSTEM.changes)?.[0];
+    if (!changes) throw new Error('The changes folder is missing.');
+    await drive.createText(changes, `press-${press}.json`, JSON.stringify({ v: 1, id: `press-${press}`, device: 'device-1', at: AT + press, kind: 'request', what: 'Asked Bower to update the notes', text: 'Update these notes.' }));
+  }
+  const scope = press > 1 && !Object.keys(current.after).some((p) => p.startsWith('Inbox/')) ? 'instructions' : c.scope;
+  const admitted = await planAdmission(fakeRead(drive), root, { scope: scope === 'undo' ? 'instructions' : scope, clock: () => AT + press - 1, newId: () => `admission-${press}` });
+  const runId = press === 1 ? RUN_ID : `${RUN_ID}-${press}`;
+  const wire = driveV3(drive, 1, runId);
   wire.folderId = root;
   // The token route's expiry on the real clock, as the Worker's is, so the runner keeps a token as it does on Actions.
   if (realTokens) wire.now = Date.now();
@@ -135,28 +173,62 @@ async function runCase(c: LoadedCase, { around, realTokens = false, claude, prop
   wire.manifest = admitted.manifest;
   const dir = await mkdtemp(join(tmpdir(), 'bower-corpus-'));
   const file = join(dir, 'event.json');
-  await writeFile(file, JSON.stringify({ action: 'bower-tidy', client_payload: { run_id: RUN_ID, attempt: 1, ticket: TICKET, scope: c.scope, allow_web: c.allowWeb } }));
+  await writeFile(file, JSON.stringify({ action: 'bower-tidy', client_payload: { run_id: runId, attempt: 1, ticket: TICKET, scope, allow_web: c.allowWeb } }));
   const env = claude ? { BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' } : {};
   const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env, ...more }, { fetch: around ? around(wire.fetch) : wire.fetch, ...(claude ? { claude } : {}) });
-  const { after, props: kept } = await snapshot(drive, root);
+  const { after, props: kept, pathsById } = await snapshot(drive, root);
   const lastRun: unknown = after[SYSTEM.lastRun] ? JSON.parse(after[SYSTEM.lastRun] ?? 'null') : null;
-  return { after, props: kept, lastRun, code, drive, root };
+  return { after, props: kept, pathsById, lastRun, code, drive, root };
 }
 
-async function snapshot(drive: FakeDrive, root: string): Promise<{ after: Record<string, string>; props: Record<string, Record<string, string>> }> {
+async function snapshot(drive: FakeDrive, root: string): Promise<{ after: Record<string, string>; props: Record<string, Record<string, string>>; pathsById: Record<string, string> }> {
   const all = await drive.listAll(root);
   const byId = new Map(all.map((f) => [f.id, f]));
   const out: Record<string, string> = {};
+  const pathsById: Record<string, string> = {};
   const props: Record<string, Record<string, string>> = {};
   for (const f of all) {
-    if (f.folder) continue;
     const parts: string[] = [];
     for (let x = byId.get(f.id); x; x = byId.get(x.parents[0] ?? '')) {
       parts.unshift(x.name);
       if (x.parents[0] === root) break;
     }
+    pathsById[f.id] = parts.join('/');
+    if (f.folder) continue;
     out[parts.join('/')] = await drive.readText(f.id);
     if (f.appProperties) props[parts.join('/')] = f.appProperties;
   }
-  return { after: out, props };
+  return { after: out, props, pathsById };
+}
+
+/** Bind only exact admitted names to ids; the intent still passes the existing Claude provider's validation. */
+export function replySequence(replies: unknown[]): ClaudeSpawn {
+  let turn = -1;
+  let cwd: string | undefined;
+  return async (call) => {
+    // A provider retry belongs to the same press and must receive the same case reply.
+    if (cwd !== call.cwd) { cwd = call.cwd; turn++; }
+    const ctx = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { piles: Array<{ things: Array<{ name: string; fileId: string }> }> };
+    const ids = new Map(ctx.piles.flatMap((p) => p.things).map((t) => [t.name, t.fileId]));
+    const bind = (value: unknown): unknown => {
+      if (typeof value === 'string' && value.startsWith('$file:')) {
+        const id = ids.get(value.slice(6));
+        if (!id) throw new Error(`Scripted reply names an unshown file: ${value}`);
+        return id;
+      }
+      if (Array.isArray(value)) return value.map(bind);
+      if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, bind(v)]));
+      return value;
+    };
+    const intent = bind(replies[Math.min(turn, replies.length - 1)]);
+    return { code: 0, stderr: '', cut: null, stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: JSON.stringify(intent), usage: { input_tokens: 10, output_tokens: 10 } }) };
+  };
+}
+
+export function caseReplies(id: string): ClaudeSpawn {
+  let spawn: ClaudeSpawn | undefined;
+  return async (call) => {
+    spawn ??= replySequence(JSON.parse(await readFile(join(import.meta.dirname, '../../harness/corpus', id, 'replies.json'), 'utf8')) as unknown[]);
+    return spawn(call);
+  };
 }

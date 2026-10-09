@@ -24,6 +24,7 @@ export interface WireRequest {
 
 export interface DriveV3 {
   drive: FakeDrive;
+  runId: string;
   fetch: typeof fetch;
   requests: WireRequest[];
   /** The attempt the token route reports as current. */
@@ -73,7 +74,7 @@ const RANK: Record<string, number> = { queued: 0, reading: 1, writing: 2, saving
 /** A Drive with fixed times, so two of them made the same way stay identical. */
 export const fixedDrive = (): FakeDrive => new FakeDrive({ clock: () => 0 });
 
-export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
+export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1, runId = RUN_ID): DriveV3 {
   let minted = 0;
   const live = new Set<string>();
   const wire: DriveV3 = {
@@ -89,6 +90,7 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
     statuses: [],
     dropDone: null,
     refuseDone: false,
+    runId,
     endings: [],
     oldWorker: false,
     revoked: false,
@@ -99,14 +101,14 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
       const method = (init.method ?? 'GET').toUpperCase();
       const auth = new Headers(init.headers).get('authorization') ?? '';
       if (url.origin === API) {
-        if (url.pathname === `/runner/runs/${RUN_ID}/status` && method === 'POST') {
+        if (url.pathname === `/runner/runs/${wire.runId}/status` && method === 'POST') {
           if (auth !== `Bearer ${TICKET}`) return json(401, { error: { code: 'signed-out', message: 'Sign in again to keep going.' } });
           return status(wire, JSON.parse(String(init.body)) as Omit<StatusPost, 'after'>);
         }
         const route = method === 'GET' ? /^\/runner\/runs\/([^/]+)\/(token|attempt)$/.exec(url.pathname) : null;
         if (route?.[2] === 'attempt') wire.attemptCalls++;
         else wire.tokenCalls++;
-        if (route?.[1] !== RUN_ID) return json(404, { error: { code: 'not-found', message: 'Not found.' } });
+        if (route?.[1] !== wire.runId) return json(404, { error: { code: 'not-found', message: 'Not found.' } });
         if (auth !== `Bearer ${TICKET}`) return json(401, { error: { code: 'signed-out', message: 'Sign in again to keep going.' } });
         if (wire.revoked && route[2] === 'token') wire.tokenRefusal = { status: 410, error: 'gone' };
         if (wire.tokenRefusal) return json(wire.tokenRefusal.status, { error: { code: wire.tokenRefusal.error, message: 'This tidy-up was taken over.' } });
@@ -142,7 +144,7 @@ function status(wire: DriveV3, body: Omit<StatusPost, 'after'> & { ended?: unkno
     if (wire.oldWorker) return json(415, { error: { code: 'unsupported-media-type', message: 'Bower could not read that.' } });
     if (body.attempt !== wire.attempt) return json(409, { error: { code: 'stale-attempt', message: 'This tidy-up was taken over.' } });
     wire.endings.push(body.attempt);
-    return json(200, { run: { id: RUN_ID, phase: wire.statuses.at(-1)?.phase ?? 'queued' }, revision: wire.statuses.length });
+    return json(200, { run: { id: wire.runId, phase: wire.statuses.at(-1)?.phase ?? 'queued' }, revision: wire.statuses.length });
   }
   if (body.phase === 'done' && wire.dropDone !== null) return json(wire.dropDone, { error: { code: 'unknown', message: 'Try again.' } });
   if (body.attempt !== wire.attempt) return json(409, { error: { code: 'stale-attempt', message: 'This tidy-up was taken over.' } });
@@ -156,7 +158,7 @@ function status(wire: DriveV3, body: Omit<StatusPost, 'after'> & { ended?: unkno
     return json(409, { error: { code: 'stale-report', message: 'That update arrived late.' }, current });
   }
   wire.statuses.push({ ...body, after: wire.requests.length });
-  return json(200, { run: { id: RUN_ID, phase: body.phase }, revision: wire.statuses.length });
+  return json(200, { run: { id: wire.runId, phase: body.phase }, revision: wire.statuses.length });
 }
 
 async function answer(wire: DriveV3, method: string, url: URL, body: RequestInit["body"]): Promise<Response> {
