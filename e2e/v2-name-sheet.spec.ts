@@ -12,6 +12,10 @@ const open = async (page: Page, path: string): Promise<void> => {
 };
 
 const axeClean = async (page: Page, within: string): Promise<void> => {
+  // A sheet pops in; check it once it has settled.
+  await page.evaluate(() =>
+    Promise.all(document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished.catch(() => undefined))),
+  );
   const axe = await new AxeBuilder({ page })
     .include(within)
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])

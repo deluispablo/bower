@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NodeMenuButton } from './Explorer';
-import { report } from '@/ui/report';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { usePiles, useSources, useTree } from '@/data/provider';
 import { folderCount } from '@/data/piles';
@@ -13,9 +12,6 @@ import { useIsDesktop } from '@/ui/media';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { IconButton } from '@/ui/Button';
 import { Explorer } from './Explorer';
-import { Sheet } from '@/ui/Sheet';
-import { Input } from '@/ui/Field';
-import { Button } from '@/ui/Button';
 import { useFileActions } from './file-actions';
 import s from './folder.module.css';
 import { useBookmarks } from './bookmarks';
@@ -207,44 +203,13 @@ function PhoneBookmarks() {
   );
 }
 
-/** A new note gets its name first, then opens. */
+/** A new note gets its name first, in the one name sheet, then opens. */
 function NewNoteButton({ folder, label }: { folder: string; label: string }) {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState('');
-  const { vault } = useSources();
-  const act = useFileActions();
-  const make = async (): Promise<void> => {
-    const n = name.trim();
-    if (!n) return;
-    try {
-      const path = await vault.create(folder, 'note', `${n.replace(/[/\\]/g, '-')}.md`);
-      setOpen(false);
-      setName('');
-      act.open({ path, type: 'file' });
-    } catch (e) {
-      report(e, 'The note was not made. Try again.');
-    }
-  };
+  const { setNaming } = useUi();
   return (
-    <>
-      <button type="button" className={s.linkBtn} onClick={() => setOpen(true)}>
-        {label}
-      </button>
-      <Sheet open={open} onOpenChange={setOpen} title="New note" description={`In ${crumbs(folder)}`}>
-        <form
-          className={s.nameForm}
-          onSubmit={(e) => {
-            e.preventDefault();
-            void make();
-          }}
-        >
-          <Input autoFocus aria-label="Name of the note" placeholder="Name of the note" value={name} onChange={(e) => setName(e.target.value)} />
-          <Button type="submit" disabled={!name.trim()}>
-            Make the note
-          </Button>
-        </form>
-      </Sheet>
-    </>
+    <button type="button" className={s.linkBtn} onClick={() => setNaming({ folder, type: 'note' })}>
+      {label}
+    </button>
   );
 }
 
