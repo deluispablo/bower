@@ -51,7 +51,7 @@ import { savedTwins } from './duplicates';
 import { canonical, checkpointName, firstCheckpoint, manifestName, nextCheckpoint, type AttemptMark, type CheckpointPatch, type RunManifest, type RunRecords } from './records';
 import { SOURCE_NOT_AS_SEEN, UNCONFIRMED_CHANGED, UNCONFIRMED_GONE, keptOther, materialize } from './report';
 import { conflicts, needsOf } from './schedule';
-import { STAMP, confirms, createById, reserveId, stampOf } from './write-once';
+import { STAMP, confirms, createById, happened, reserveId, stampOf } from './write-once';
 /**
  * How one operation ended once sent: `rejected` only when its precondition refused it before anything was sent, or
  * when a send whose answer was lost reads back as not landed (the folder still as the plan saw it).
@@ -415,14 +415,15 @@ function waitsOn(manifest: RunManifest, from: string, to: string): boolean {
 }
 
 /**
- * What a stamp found on a thing says of `op`. `landed`: it is `op`'s own, or that of an operation of the same run
- * waiting on `op`, which is only ever sent once `op` applied (the note an edit changes and then moves carries the
- * move's stamp). `not-landed`: none, or that of an operation `op` waits on (sent before it). `foreign`: another
- * writer's (the app's, another run's). `unknown`: another operation of this run, unrelated to it.
+ * What the stamp found on a thing says of `op`, by write-once's `happened` (TL-P4-24 addenda 9 and 10), never `landed`:
+ * what the person did with it since is kept, so a write that ran is not sent again. `landed`: it is `op`'s own, or that
+ * of an operation of the same run waiting on `op`, which is only ever sent once `op` applied (the note an edit changes
+ * and then moves carries the move's stamp). `not-landed`: none, or that of an operation `op` waits on (sent before
+ * it). `foreign`: another writer's (the app's, another run's). `unknown`: another operation of this run, unrelated to it.
  */
-function stampSays(found: string | undefined, runId: string, op: OperationV2, manifest: RunManifest): 'landed' | 'not-landed' | 'foreign' | 'unknown' {
-  if (found === undefined) return 'not-landed';
-  const id = manifest.operations.find((o) => stampOf(runId, o.operationId) === found)?.operationId;
+function stampSays(file: DriveFile, runId: string, op: OperationV2, manifest: RunManifest): 'landed' | 'not-landed' | 'foreign' | 'unknown' {
+  if (file.appProperties?.[STAMP] === undefined) return 'not-landed';
+  const id = manifest.operations.find((o) => happened({ stamp: stampOf(runId, o.operationId) }, file))?.operationId;
   if (id === undefined) return 'foreign';
   if (id === op.operationId || waitsOn(manifest, id, op.operationId)) return 'landed';
   return waitsOn(manifest, op.operationId, id) ? 'not-landed' : 'unknown';
@@ -567,15 +568,16 @@ export function driveEffects(drive: RunDrive): Effects {
     const encoding = e.kind === 'create-folder' || e.kind === 'move' || e.kind === 'bin' ? 'blob' : 'utf8';
     try {
       if (e.kind === 'create-folder' || e.kind === 'create-text') {
-        // Only this create can have made a file with its reserved id: what the person did with it since is kept.
+        // Only this create can have made a file with its reserved id: it `happened`, and what the person did with it
+        // since is kept (write-once's `happened`, never `landed`).
         if (reserved === null) return { state: 'unreadable', why: `Operation ${op.ordinal} names no reserved id` };
         const ev = await drive.evidence(reserved);
-        return ev ? { state: 'landed', evidence: toEvidence(ev, encoding) } : { state: 'not-landed' };
+        return ev && happened({ id: reserved }, ev.file) ? { state: 'landed', evidence: toEvidence(ev, encoding) } : { state: 'not-landed' };
       }
       // Gone from Drive (the person emptied the Bin): no stamp to read, and nothing left to send to.
       const ev = await drive.evidence(e.before.fileId);
       if (!ev) return { state: 'unconfirmed', message: UNCONFIRMED_GONE };
-      const says = stampSays(ev.file.appProperties?.[STAMP], head.runId, op, manifest);
+      const says = stampSays(ev.file, head.runId, op, manifest);
       if (says === 'landed') return { state: 'landed', evidence: toEvidence(ev, encoding) };
       if (says === 'unknown') return { state: 'unreadable', why: `Operation ${op.ordinal} shows another operation's stamp` };
       // Another writer's stamp (the app's Bin or restore, another run) on a thing changed since the plan read it: that
