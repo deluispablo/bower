@@ -11,6 +11,7 @@ import { DriveHttp } from '../../src/data/drive/drive-http.js';
 import type { AdmissionManifest } from '../../src/data/spine/admission.js';
 import { capturePiles, listedPiles, pileShape, planAdmission } from '../../src/data/spine/plan.js';
 import { admissionRead, driveRead } from '../../src/data/spine/read.js';
+import { NotReadHere } from '../../src/data/spine/budget.js';
 import { DISPATCH_SUBREQUESTS, SUBREQUEST_BUDGET } from '../../src/data/spine/budget.js';
 import { declaredPile, holderOf, press, pressGitHub, storedManifest } from './admission-support.js';
 import { driveFolder, type DriveFolder } from './drive-v3.js';
@@ -154,4 +155,47 @@ describe('admission subrequest budget', () => {
     const ordinary = budgeted.manifest.piles.find((p) => p.pileId === 'pile-plain');
     expect(ordinary).toEqual(unbudgeted.manifest.piles[0]);
   }, 120_000);
+});
+
+describe('the Bin lookup in admission', () => {
+  /**
+   * Admission's reader with the invocation at `at` fetches when the Bin is asked (TL-P4-11: 35, 3 for the dispatch).
+   * The Bin holds `keys.length` members whose folders are in the Bin too (Drive marks a trashed folder's children
+   * trashed, `explicitlyTrashed` false): each folder is in no listing, and its place is only found through `files.get`.
+   */
+  async function askBin(keys: string[], at = 30): Promise<{ fetches: number; granted: boolean }> {
+    const folder = await driveFolder();
+    const count = { n: 0 };
+    const scripted = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const url = new URL(String(input));
+      const stamp = { modifiedTime: '2026-10-09T10:00:00.000Z', createdTime: '2026-10-09T10:00:00.000Z' };
+      if (url.searchParams.get('q')?.startsWith('trashed = true')) {
+        const files = keys.map((k, i) => ({ id: `kid-${i}`, name: `m${i}.pdf`, mimeType: 'application/pdf', parents: [`gone-${i}`], appProperties: { bowerItem: k }, size: '5', sha256Checksum: 'ab', ...stamp }));
+        return new Response(JSON.stringify({ files }));
+      }
+      const gone = /\/files\/(gone-\d+)$/.exec(url.pathname);
+      if (gone) return new Response(JSON.stringify({ id: gone[1], parents: [folder.root] }));
+      return await folder.fetchImpl(String(input), init);
+    };
+    const http = new DriveHttp({ token: async () => 'access-cached', fetch: async (i, init) => (count.n += 1, scripted(i, init)) });
+    let shift = 0;
+    const read = admissionRead(http, 'all', { used: () => shift + count.n, limit: SUBREQUEST_BUDGET, reserve: DISPATCH_SUBREQUESTS });
+    await read.listAll(folder.root);
+    shift = at - count.n;
+    const before = count.n;
+    const granted = await read.binnedByItem(folder.root, keys).then(() => true, (e: unknown) => {
+      if (e instanceof NotReadHere) return false;
+      throw e;
+    });
+    return { fetches: count.n - before, granted };
+  }
+
+  it('the Bin lookup in admission stays within its subrequest grant', async () => {
+    expect((await askBin([])).fetches, 'fetches with no missing member').toBe(0);
+    const one = await askBin(['key-0']);
+    expect(one.fetches, `fetches for 1 key in 1 binned folder (granted ${one.granted})`).toBeLessThanOrEqual(2);
+    const keys = ['key-0', 'key-1', 'key-2', 'key-3'];
+    const many = await askBin(keys);
+    expect(many.fetches, `fetches for ${keys.length} keys in ${keys.length} binned folders (granted ${many.granted})`).toBeLessThanOrEqual(2);
+  }, 60_000);
 });

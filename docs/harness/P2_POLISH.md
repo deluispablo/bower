@@ -285,3 +285,6 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
 - P4-33 (c2-transport-options): unused `pacing` param no caller passes (api/src/process.ts:154,173); SendOptions.signal used only by a test (transport.ts:66-67,104); unused export sleep (transport.ts:72) and a second Pacing import path (drive-http.ts:48); offline test pins attempts not elapsed (upload-queue-real.test.ts:286); onLine read before the token await can go stale (drive-http.ts:369, pre-existing).
 - P4-31 (c2-fake-parity) minors: the real Bin query covers all of Drive, hits outside the root fetched then dropped (drive-http.ts:280); fake fullText no longer matches part-of-word searches (listed).
 - P4-32 (c2-pile-records) minors: retire-by-stamp restates disposedKeys loosely (pile-readiness.ts:197); questions about a vanished loose thing close while Home still lists it (drive-vault.ts:1272).
+- P4-31b minors: fake-runner.test.ts:923 spy still checks typeof binnedByItem; Bin query searches all of Drive (drive-http.ts:278, from round 1).
+- P4-31c (c2-fake-parity round 3) minors: admission-budget.test.ts:194 `granted` not asserted; check-then-fetch not atomic across Promise.all(parents) (drive-http.ts:261, multi-parent only); two imports from budget.js (admission-budget.test.ts:14).
+- Post-P4 feature idea (lead): parallel uploads, 2–3 at once like Drive's web app; not now.

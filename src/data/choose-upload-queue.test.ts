@@ -23,11 +23,11 @@ afterEach(() => {
   sessionStorage.clear();
 });
 
-describe('the persistent upload queue by source', () => {
+describe('the persistent upload queue by source (no source opts out of it)', () => {
   it('the pretend Drive sends pile files through the upload queue', async () => {
     const { sources } = await buildSources('fake', 'default', 'instant');
     expect(sources.vault).toBeDefined();
-    expect(made).toEqual([{ uploadQueue: true }]);
+    expect(made).toEqual([{ uploadQueue: undefined }]);
   });
 
   it('the real source sends pile files through the upload queue', async () => {
@@ -36,6 +36,6 @@ describe('the persistent upload queue by source', () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))));
     const { sources } = await buildSources('real', 'default', 'instant');
     expect(sources.vault).toBeDefined();
-    expect(made).toEqual([{ uploadQueue: true }]);
+    expect(made).toEqual([{ uploadQueue: undefined }]);
   });
 });

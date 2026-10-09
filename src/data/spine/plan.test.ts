@@ -14,6 +14,7 @@ import { admissionRead, driveRead, fakeRead } from './read';
 
 const FOLDER = 'application/vnd.google-apps.folder';
 const AT = Date.UTC(2026, 9, 7, 9, 0, 0);
+const SESSIONS = 'https://www.googleapis.com/upload/session/';
 
 const json = (status: number, body: unknown): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=UTF-8' } });
@@ -56,6 +57,23 @@ function driveV3(drive: FakeDrive, root = ''): typeof fetch {
       const made = await drive.upload(meta.parents[0] ?? '', meta.name, new Blob([content]), undefined, meta.appProperties);
       return json(200, await wire(made, fields));
     }
+    // Resumable uploads under a reserved id: the session address carries the pretend Drive's own session.
+    if (method === 'POST' && url.pathname === '/upload/drive/v3/files' && url.searchParams.get('uploadType') === 'resumable') {
+      const meta = JSON.parse(String(init?.body)) as { id: string; name: string; parents: string[]; appProperties?: Record<string, string> };
+      const sent = new Headers(init?.headers);
+      const session = await drive.openResumable({ id: meta.id, parentId: meta.parents[0] ?? '', name: meta.name, type: sent.get('x-upload-content-type') ?? '', size: Number(sent.get('x-upload-content-length')), ...(meta.appProperties ? { appProperties: meta.appProperties } : {}) });
+      return new Response(null, { status: 200, headers: { location: `${SESSIONS}${encodeURIComponent(session)}` } });
+    }
+    if (method === 'PUT' && url.href.startsWith(SESSIONS)) {
+      const session = decodeURIComponent(url.href.slice(SESSIONS.length));
+      const range = new Headers(init?.headers).get('content-range') ?? '';
+      const ask = /^bytes \*\/(\d+)$/.exec(range);
+      const part = /^bytes (\d+)-\d+\/(\d+)$/.exec(range);
+      const answer = ask ? await drive.sessionStatus(session, Number(ask[1])) : await drive.putChunk(session, Number(part?.[1]), init?.body as Blob, Number(part?.[2]));
+      if (answer.kind === 'done') return json(200, await wire(answer.file, 'sha256Checksum'));
+      if (answer.kind === 'expired') return json(404, { error: { code: 404, message: 'notFound' } });
+      return new Response(null, { status: 308, headers: answer.confirmed > 0 ? { range: `bytes=0-${answer.confirmed - 1}` } : {} });
+    }
     if (method === 'POST' && url.pathname === '/drive/v3/files') {
       const meta = JSON.parse(String(init?.body)) as { name: string; parents: string[]; appProperties?: Record<string, string> };
       return json(200, await wire(await drive.createFolder(meta.parents[0] ?? '', meta.name, meta.appProperties), fields));
@@ -83,6 +101,7 @@ function driveV3(drive: FakeDrive, root = ''): typeof fetch {
       const page = all.slice(at, at + 3);
       return json(200, { files: await Promise.all(page.map((x) => wire(x, fields))), ...(at + 3 < all.length ? { nextPageToken: String(at + 3) } : {}) });
     }
+    if (url.pathname === '/drive/v3/files/generateIds') return json(200, { ids: await drive.generateIds(Number(url.searchParams.get('count'))) });
     const id = decodeURIComponent(/^\/drive\/v3\/files\/([^/]+)$/.exec(url.pathname)?.[1] ?? '');
     if (url.searchParams.get('alt') === 'media') return new Response(new Uint8Array(await drive.readBytes(id)));
     return json(200, await wire(await drive.get(id), fields));

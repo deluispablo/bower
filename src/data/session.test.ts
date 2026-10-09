@@ -681,30 +681,6 @@ describe('review findings and TL-P2-25: blocked is not closed, nothing stale lan
     expect(await failedRows(a.live)).toBe(0);
   });
 
-  it('without a queue, a direct upload the block refused waits and goes once after Use here', async () => {
-    const w = await world();
-    const a = page(w, 'laptop', browser());
-    await a.place.start();
-    await drain();
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    await leaseOn(w.storage, w.clock).session('phone', 'take');
-    await w.clock.advance(TRUST_MS + 1);
-    const upload = vi.spyOn(w.drive, 'upload');
-    await a.live.vault.addPile(lone('direct.pdf'));
-    await drain();
-    expect(a.place.state()).toBe('elsewhere');
-    expect(upload).not.toHaveBeenCalled();
-    expect(await failedRows(a.live)).toBe(0);
-    // Its bytes exist only in this page: the block screen says so.
-    expect(a.place.pageOnly()).toBe(true);
-    await a.place.useHere();
-    await vi.waitFor(async () => expect(await inDrive(w, 'direct.pdf')).toBe(1));
-    await drain();
-    expect(upload).toHaveBeenCalledTimes(1);
-    expect(await failedRows(a.live)).toBe(0);
-    expect(a.place.pageOnly()).toBe(false);
-  });
-
   it('a tidy-up from a blocked place says Bower is open in another window', async () => {
     const w = await world();
     const hub = browser();
@@ -1177,7 +1153,7 @@ describe('delta review: every thing added here waits for Use here', () => {
 });
 
 describe('final delta: a file sent straight checks the lease afresh', () => {
-  it('a direct upload asks the lease right before it starts, even within 5 s of the last check', async () => {
+  it('an upload asks the lease right before it starts, even within 5 s of the last check', async () => {
     const w = await world();
     const a = page(w, 'laptop', browser());
     await a.place.start();
@@ -1189,10 +1165,10 @@ describe('final delta: a file sent straight checks the lease afresh', () => {
       order.push(action);
       return check(p, action);
     });
-    const upload = w.drive.upload.bind(w.drive);
-    vi.spyOn(w.drive, 'upload').mockImplementation(async (...args) => {
+    const open = w.drive.openResumable.bind(w.drive);
+    vi.spyOn(w.drive, 'openResumable').mockImplementation(async (...args) => {
       order.push('upload');
-      return upload(...args);
+      return open(...args);
     });
     await a.live.vault.addPile({ text: '', items: [{ name: 'fresh.pdf', kind: 'pdf', origin: 'Added here', body: new Blob([new Uint8Array([1])], { type: 'application/pdf' }) }] });
     await vi.waitFor(() => expect(order).toContain('upload'));

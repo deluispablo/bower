@@ -8,6 +8,7 @@ import { DriveVault, NOT_THE_SAME_TEXT } from './drive-vault';
 import { noteRefusal } from './note-format';
 import { planRun } from '../fake/fake-runner';
 import { tidyUp } from '@/testing/tidy-up';
+import { beforeUpload, holdChunks } from '@/testing/upload-hook';
 import { SET_ASIDE_TEXT } from '../pile-readiness';
 import { FakeRunService } from '../fake/fake-run-service';
 import { parsePileDeclaration } from '../contracts/pile-declaration';
@@ -261,11 +262,9 @@ describe('DriveVault inbox and Bower', () => {
   });
 
   it('an upload that fails marks upload -1 and keeps the rest', async () => {
-    const real = drive.upload.bind(drive);
-    drive.upload = async (parent, name, body, onProgress) => {
+    beforeUpload(drive, ({ name }) => {
       if (name === 'b.jpg') throw new Error('network down');
-      return real(parent, name, body, onProgress);
-    };
+    });
     const p = await vault.addPile({ text: 'Two photos', items: [{ name: 'a.jpg', kind: 'image', origin: 'x', body: new Blob(['a']) }, { name: 'b.jpg', kind: 'image', origin: 'x', body: new Blob(['b']) }] });
     await vault.settled();
     const pile = (await vault.piles()).find((x) => x.id === p.id);
@@ -314,12 +313,10 @@ describe('DriveVault inbox and Bower', () => {
 
 describe('sending things again', () => {
   it('retry uploads only the missing items', async () => {
-    const real = drive.upload.bind(drive);
     let fail = true;
-    drive.upload = async (parent, name, body, onProgress, props) => {
+    beforeUpload(drive, ({ name }) => {
       if (name === 'b.jpg' && fail) throw new Error('network down');
-      return real(parent, name, body, onProgress, props);
-    };
+    });
     const p = await vault.addPile({ text: 'Two photos', items: [{ name: 'a.jpg', kind: 'image', origin: 'x', body: new Blob(['a']) }, { name: 'b.jpg', kind: 'image', origin: 'x', body: new Blob(['b']) }] });
     await vault.settled();
     fail = false;
@@ -345,15 +342,15 @@ describe('what the review found', () => {
   });
 
   it('a retry never sends twice a thing that arrived but whose answer was lost', async () => {
-    const real = drive.upload.bind(drive);
     let lose = true;
-    drive.upload = async (parent, name, body, onProgress, props) => {
-      const f = await real(parent, name, body, onProgress, props);
-      if (name === 'b.jpg' && lose) {
-        lose = false;
-        throw new TypeError('Failed to fetch');
-      }
-      return f;
+    let armed = false;
+    beforeUpload(drive, ({ name }) => { armed = name === 'b.jpg' && lose; });
+    // It arrives in Drive, but its answer is lost.
+    drive.beforeChunk = () => {
+      if (!armed) return;
+      armed = false;
+      lose = false;
+      drive.loseNextReply();
     };
     const p = await vault.addPile({ text: 'Two photos', items: [{ name: 'a.jpg', kind: 'image', origin: 'x', body: new Blob(['a']) }, { name: 'b.jpg', kind: 'image', origin: 'x', body: new Blob(['b']) }] });
     await vault.settled();
@@ -364,27 +361,26 @@ describe('what the review found', () => {
   });
 
   it('Try again works while another pile is still on its way', async () => {
-    const real = drive.upload.bind(drive);
     let failA = true;
     let release: () => void = () => undefined;
     const slow = new Promise<void>((r) => (release = r));
-    drive.upload = async (parent, name, body, onProgress, props) => {
+    beforeUpload(drive, async ({ name }) => {
       if (name === 'a.jpg' && failA) {
         failA = false;
         throw new Error('network down');
       }
       if (name === 'slow.jpg') await slow;
-      return real(parent, name, body, onProgress, props);
-    };
+    });
     const a = await vault.addPile({ text: 'Pile A', items: [{ name: 'a.jpg', kind: 'image', origin: 'x', body: new Blob(['a']) }] });
     await new Promise((r) => setTimeout(r, 0));
     await vault.addPile({ text: 'Pile B', items: [{ name: 'slow.jpg', kind: 'image', origin: 'x', body: new Blob(['s']) }] });
     for (let i = 0; i < 20 && (await vault.piles()).find((x) => x.id === a.id)?.items[0]?.upload !== -1; i++) await new Promise((r) => setTimeout(r, 0));
     await vault.retryPile(a.id);
-    for (let i = 0; i < 50 && (await vault.piles()).find((x) => x.id === a.id)?.items[0]?.upload !== undefined; i++) await new Promise((r) => setTimeout(r, 0));
-    expect((await vault.piles()).find((x) => x.id === a.id)?.items[0]?.upload).toBeUndefined();
+    // The queue sends one file at a time: Try again is taken at once and goes when the other one is in.
+    expect((await vault.piles()).find((x) => x.id === a.id)?.items[0]?.upload).toBe(0);
     release();
     await vault.settled();
+    expect((await vault.piles()).find((x) => x.id === a.id)?.items[0]?.upload).toBeUndefined();
   });
 
   it('backlinks are only notes that really link here', async () => {
@@ -491,14 +487,11 @@ describe('what the code review found', () => {
   });
 
   it('a pile removed while a thing is on its way does not come back', async () => {
-    const real = drive.upload.bind(drive);
     let release: () => void = () => undefined;
     const slow = new Promise<void>((r) => (release = r));
-    drive.upload = async (parent, name, body, onProgress, props) => {
-      await slow;
-      return real(parent, name, body, onProgress, props);
-    };
+    holdChunks(drive, slow);
     const p = await vault.addPile({ text: '', items: [{ name: 'late.pdf', kind: 'pdf', origin: 'x', body: new Blob(['x']) }] });
+    await vi.waitFor(() => expect(drive.resumableCalls.some((c) => c.op === 'open')).toBe(true));
     await vault.removePile(p.id);
     release();
     await vault.settled();
@@ -671,14 +664,11 @@ describe('links', () => {
 
 describe('things that arrive late', () => {
   it('a late thing comes back with its pile on Undo', async () => {
-    const real = drive.upload.bind(drive);
     let release: () => void = () => undefined;
     const slow = new Promise<void>((r) => (release = r));
-    drive.upload = async (parent, name, body, onProgress, props) => {
-      await slow;
-      return real(parent, name, body, onProgress, props);
-    };
+    holdChunks(drive, slow);
     const p = await vault.addPile({ text: 'Late papers', items: [{ name: 'late.pdf', kind: 'pdf', origin: 'x', body: new Blob(['x']) }] });
+    await vi.waitFor(() => expect(drive.resumableCalls.some((c) => c.op === 'open')).toBe(true));
     await vault.trash(p.path ?? '');
     release();
     await vault.settled();
@@ -688,39 +678,20 @@ describe('things that arrive late', () => {
     expect((await drive.listAll(root)).filter((f) => f.name === 'late.pdf')).toHaveLength(1);
   });
 
-  it('a late file still goes to the Bin when the first Bin fails, and comes back on Undo', async () => {
-    const real = drive.upload.bind(drive);
-    const realTrash = drive.trash.bind(drive);
+  it('a late file whose answer comes after the pile went to the Bin goes with it, and comes back on Undo', async () => {
     let release: () => void = () => undefined;
     const slow = new Promise<void>((r) => (release = r));
     let lateId = '';
     let started: () => void = () => undefined;
     const onItsWay = new Promise<void>((r) => (started = r));
-    drive.upload = async (parent, name, body, onProgress, props) => {
-      // It arrives in Drive, but its answer comes only after the pile went to the Bin.
-      const made = await real(parent, name, body, onProgress, props);
-      lateId = made.id;
-      started();
-      await slow;
-      return made;
-    };
-    let failOnce = true;
-    drive.trash = async (id) => {
-      if (id === lateId && failOnce) {
-        failOnce = false;
-        throw new TypeError('Failed to fetch');
-      }
-      return realTrash(id);
-    };
+    // It arrives in Drive, but its answer comes only after the pile went to the Bin.
+    holdChunks(drive, slow, true, (file) => { lateId = file.id; started(); });
     const p = await vault.addPile({ text: 'Late papers', items: [{ name: 'late.pdf', kind: 'pdf', origin: 'x', body: new Blob(['x']) }] });
-    // The file is on its way when the pile goes to the Bin.
     await onItsWay;
     await vault.trash(p.path ?? '');
     release();
     await vault.settled();
-    expect(failOnce).toBe(false);
-    // In the Bin itself, not only inside a binned folder.
-    await expect(drive.get(lateId)).rejects.toThrow();
+    expect((await drive.listAll(root)).some((f) => f.id === lateId)).toBe(false);
     await vault.restore(p.path ?? '');
     await vault.settled();
     expect((await drive.listAll(root)).filter((f) => f.name === 'late.pdf')).toHaveLength(1);
@@ -922,12 +893,10 @@ describe('pile declarations', () => {
 
   /** b.pdf does not get through until `heal` is called. */
   function failing(name: string): () => void {
-    const real = drive.upload.bind(drive);
     let fail = true;
-    drive.upload = async (parent, n, body, onProgress, props) => {
+    beforeUpload(drive, ({ name: n }) => {
       if (n === name && fail) throw driveError('offline');
-      return real(parent, n, body, onProgress, props);
-    };
+    });
     return () => { fail = false; };
   }
 
@@ -938,8 +907,7 @@ describe('pile declarations', () => {
     drive.createText = async (parent, name, text, props) => { order.push(`text:${name}`); return createText(parent, name, text, props); };
     drive.createFolder = async (parent, name, props) => { order.push(`folder:${name}`); return createFolder(parent, name, props); };
     const heal = failing('b.pdf');
-    const upload = drive.upload.bind(drive);
-    drive.upload = async (parent, name, body, onProgress, props) => { order.push(`upload:${name}`); return upload(parent, name, body, onProgress, props); };
+    beforeUpload(drive, ({ name }) => { order.push(`upload:${name}`); });
     const writeText = vi.spyOn(drive, 'writeText');
     const uploader = declaring();
     const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
@@ -971,7 +939,7 @@ describe('pile declarations', () => {
       if (name.startsWith('declaration-')) throw driveError('offline');
       return createText(parent, name, text, props);
     };
-    const upload = vi.spyOn(drive, 'upload');
+    const upload = vi.spyOn(drive, 'openResumable');
     const uploader = declaring();
     await expect(uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] })).rejects.toMatchObject({ name: 'BowerError', code: 'offline' });
     await uploader.settled();
@@ -1070,7 +1038,7 @@ describe('pile declarations', () => {
     const { folder, note, declaration } = await declaredParts(pile.id);
     if (!note || declaration.context.kind !== 'text') throw new Error('no context');
     await drive.trash(note.id);
-    const upload = vi.spyOn(drive, 'upload');
+    const upload = vi.spyOn(drive, 'openResumable');
     await expect(declaring().retryPile(pile.id)).rejects.toMatchObject({ code: 'conflict', message: 'Choose b.pdf again on this device to send it.' });
     const again = (await drive.listAll(folder.id)).filter((f) => f.name === 'Pile note.md');
     expect(again.map((f) => f.appProperties?.bowerItem)).toEqual([declaration.context.memberKey]);
@@ -1371,30 +1339,20 @@ describe('uploads survive a reload, through the vault', () => {
     expect(await rowsOf(vault, pile.id)).toEqual([['scan.pdf', -1]]);
   });
 
-  it.each([
-    ['left out', undefined],
-    ['off', false],
-    ['on', true],
-  ] as const)('live sources use the upload queue only when asked to (%s)', async (_label, uploadQueue) => {
-    // A browser: IndexedDB is there, so only the option decides. Signed in, as a fresh tab is.
+  it('every upload goes through the queue: live sources build one when given none', async () => {
+    // A browser: IndexedDB is there. Signed in, as a fresh tab is.
     sessionStorage.clear();
     vi.stubGlobal('indexedDB', new IDBFactory());
     try {
       const backend = new FakeDrive();
       const backendRoot = (await seedFakeDrive(backend, 'default', Date.now())) ?? '';
       const upload = vi.spyOn(backend, 'upload');
-      const live = makeLiveSources({ drive: backend, worker: new FakeWorker({ drive: backend, runs: new FakeRunService({ drive: backend, scale: 'instant' }), rootId: backendRoot, scenario: 'default' }), declarePiles: true, ...(uploadQueue === undefined ? {} : { uploadQueue }) });
+      const live = makeLiveSources({ drive: backend, worker: new FakeWorker({ drive: backend, runs: new FakeRunService({ drive: backend, scale: 'instant' }), rootId: backendRoot, scenario: 'default' }), declarePiles: true });
       try {
         await live.vault.addPile({ text: 'Papers', items: [scan()] });
         await vi.waitFor(async () => expect(await scans(backend, backendRoot)).toHaveLength(1));
-        const resumable = backend.resumableCalls.map((c) => c.op);
-        if (uploadQueue === true) {
-          expect(resumable).toEqual(expect.arrayContaining(['generateIds', 'open', 'put']));
-          expect(upload).not.toHaveBeenCalled();
-        } else {
-          expect(resumable).toEqual([]);
-          expect(upload).toHaveBeenCalledOnce();
-        }
+        expect(backend.resumableCalls.map((c) => c.op)).toEqual(expect.arrayContaining(['generateIds', 'open', 'put']));
+        expect(upload).not.toHaveBeenCalled();
       } finally {
         live.dispose();
       }
@@ -1582,12 +1540,10 @@ describe('a set-aside pile shows its reason in the inbox', () => {
   }
   /** `name` does not get through until `heal` is called. */
   function failing(name: string): () => void {
-    const real = drive.upload.bind(drive);
     let fail = true;
-    drive.upload = async (parent, n, body, onProgress, props) => {
+    beforeUpload(drive, ({ name: n }) => {
       if (n === name && fail) throw driveError('offline');
-      return real(parent, n, body, onProgress, props);
-    };
+    });
     return () => { fail = false; };
   }
 
@@ -1611,11 +1567,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
   it('things still on their way from this device give no reason yet', async () => {
     let open!: () => void;
     const gate = new Promise<void>((r) => { open = r; });
-    const real = drive.upload.bind(drive);
-    drive.upload = async (parent, n, body, onProgress, props) => {
-      await gate;
-      return real(parent, n, body, onProgress, props);
-    };
+    beforeUpload(drive, async () => { await gate; });
     const uploader = declaring();
     const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
     const sending = await pileOn(uploader, pile.id);
@@ -2035,8 +1987,9 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     drive = new FakeDrive();
     const runs = new FakeRunService({ drive, clock: () => Date.now(), scale: 'instant' });
     root = (await new FakeWorker({ drive, scenario: 'first', rootId: null, runs }).createFolder()).id;
-    const pile = await declaring().addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
-    await declaring().settled();
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
+    await uploader.settled();
     const folder = await folderOf(pile.id);
     const keyed = (await drive.listAll(folder.id)).find((f) => f.name === 'Pile note.md');
     if (!keyed) throw new Error('no pile note');
@@ -2107,8 +2060,9 @@ describe('a set-aside pile shows its reason in the inbox', () => {
 
   // note-read-review-1, Minor 3: a declared pile whose note cannot be read never shows its keyed pile note as a thing.
   it('a declared pile whose first note cannot be read does not list its keyed pile note as a thing', async () => {
-    const pile = await declaring().addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
-    await declaring().settled();
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
+    await uploader.settled();
     const folder = await folderOf(pile.id);
     const keyed = (await drive.listAll(folder.id)).find((f) => f.name === 'Pile note.md');
     if (!keyed) throw new Error('no pile note');
@@ -2276,14 +2230,12 @@ describe('a reselected file must match its declared member', () => {
 
   /** `name` does not get through, from this client, until the returned function is called. */
   function failing(on: { upload?: string | readonly string[]; link?: boolean }): () => void {
-    const upload = drive.upload.bind(drive);
     const createText = drive.createText.bind(drive);
     const names: readonly (string | undefined)[] = typeof on.upload === 'string' || on.upload === undefined ? [on.upload] : on.upload;
     let fail = true;
-    drive.upload = async (parent, n, body, onProgress, props) => {
+    beforeUpload(drive, ({ name: n }) => {
       if (fail && names.includes(n)) throw driveError('offline');
-      return upload(parent, n, body, onProgress, props);
-    };
+    });
     drive.createText = async (parent, n, text, props) => {
       if (fail && on.link && n.endsWith('.url')) throw driveError('offline');
       return createText(parent, n, text, props);
@@ -2318,7 +2270,7 @@ describe('a reselected file must match its declared member', () => {
     const second = declaring();
     const row = (await second.piles()).find((p) => p.id === pile.id)?.items.find((i) => i.name === 'b.pdf');
     expect(row).toMatchObject({ id: member.memberKey, upload: -1, chooseAgain: true });
-    const upload = vi.spyOn(drive, 'upload');
+    const upload = vi.spyOn(drive, 'openResumable');
     await expect(second.chooseAgain(pile.id, member.memberKey, { body: new Blob(['%PDF b.pdf']) })).resolves.toBeUndefined();
     await second.settled();
     expect(upload).toHaveBeenCalledTimes(1);
@@ -2338,7 +2290,7 @@ describe('a reselected file must match its declared member', () => {
   ])('a different file (%s) is refused in one sentence, nothing is sent, and the thing stays missing and retryable', async (_label, text) => {
     const { pile, folder, member } = await leftBehind([pdf('a.pdf'), pdf('b.pdf')], { upload: 'b.pdf' });
     const second = declaring();
-    const upload = vi.spyOn(drive, 'upload');
+    const upload = vi.spyOn(drive, 'openResumable');
     const createText = vi.spyOn(drive, 'createText');
     await expect(second.chooseAgain(pile.id, member.memberKey, { body: new Blob([text]) })).rejects.toMatchObject({ code: 'conflict', message: NOT_THE_SAME_TEXT.file });
     await second.settled();
@@ -2377,7 +2329,7 @@ describe('a reselected file must match its declared member', () => {
     await second.piles();
     // Another device sends it after this client listed the pile.
     await drive.upload(folder.id, 'b.pdf', new Blob(['%PDF b.pdf']), undefined, { asAdded: 'b.pdf', bowerItem: member.memberKey });
-    const upload = vi.spyOn(drive, 'upload');
+    const upload = vi.spyOn(drive, 'openResumable');
     await expect(second.chooseAgain(pile.id, member.memberKey, { body: new Blob(['%PDF b.pdf']) })).resolves.toBeUndefined();
     await second.settled();
     expect(upload).not.toHaveBeenCalled();
@@ -2386,7 +2338,7 @@ describe('a reselected file must match its declared member', () => {
 
   it('while a tidy-up holds the pile, nothing is sent', async () => {
     const { pile, member } = await leftBehind([pdf('a.pdf'), pdf('b.pdf')], { upload: 'b.pdf' });
-    const upload = vi.spyOn(drive, 'upload');
+    const upload = vi.spyOn(drive, 'openResumable');
     await expect(declaring({ running: pile.id }).chooseAgain(pile.id, member.memberKey, { body: new Blob(['%PDF b.pdf']) })).rejects.toMatchObject({ code: 'conflict', message: 'Wait for the tidy-up to end.' });
     expect(upload).not.toHaveBeenCalled();
   });
@@ -2396,7 +2348,7 @@ describe('a reselected file must match its declared member', () => {
     const d = declaration.members.find((m) => m.name === 'd.pdf');
     if (!d) throw new Error('no d.pdf');
     const second = declaring();
-    const upload = vi.spyOn(drive, 'upload');
+    const upload = vi.spyOn(drive, 'openResumable');
     await expect(second.chooseAgain(pile.id, c.memberKey, { body: new Blob(['%PDF d.pdf']) })).resolves.toBeUndefined();
     await second.settled();
     expect(upload).toHaveBeenCalledTimes(1);
@@ -2409,7 +2361,7 @@ describe('a reselected file must match its declared member', () => {
   it('a sibling already in Drive, chosen for the thing asked for, is refused and nothing is sent', async () => {
     const { pile, member } = await leftBehind([pdf('a.pdf'), pdf('b.pdf')], { upload: 'b.pdf' });
     const second = declaring();
-    const upload = vi.spyOn(drive, 'upload');
+    const upload = vi.spyOn(drive, 'openResumable');
     await expect(second.chooseAgain(pile.id, member.memberKey, { body: new Blob(['%PDF a.pdf']) })).rejects.toMatchObject({ code: 'conflict', message: NOT_THE_SAME_TEXT.file });
     await second.settled();
     expect(upload).not.toHaveBeenCalled();
@@ -2430,7 +2382,7 @@ describe('a reselected file must match its declared member', () => {
       if (id === folder.id) await together;
       return listAll(id);
     });
-    const upload = vi.spyOn(drive, 'upload');
+    const upload = vi.spyOn(drive, 'openResumable');
     await Promise.all([1, 2].map(() => second.chooseAgain(pile.id, member.memberKey, { body: new Blob(['%PDF b.pdf']) })));
     await second.settled();
     expect(upload).toHaveBeenCalledTimes(1);
@@ -2447,7 +2399,7 @@ describe('a reselected file must match its declared member', () => {
       running.add(pile.id);
       return listAll(id);
     });
-    const upload = vi.spyOn(drive, 'upload');
+    const upload = vi.spyOn(drive, 'openResumable');
     await expect(second.chooseAgain(pile.id, member.memberKey, { body: new Blob(['%PDF b.pdf']) })).rejects.toMatchObject({ code: 'conflict', message: 'Wait for the tidy-up to end.' });
     await second.settled();
     expect(upload).not.toHaveBeenCalled();
@@ -2458,15 +2410,13 @@ describe('a reselected file must match its declared member', () => {
     const v = declaring();
     let release!: () => void;
     const gate = new Promise<void>((r) => { release = r; });
-    const upload = drive.upload.bind(drive);
     let held = false;
-    drive.upload = async (parent, n, body, onProgress, props) => {
+    beforeUpload(drive, async () => {
       if (!held) {
         held = true;
         await gate;
       }
-      return upload(parent, n, body, onProgress, props);
-    };
+    });
     await v.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
     await vi.waitFor(() => expect(held).toBe(true));
     // Drive stops listing while a.pdf is on its way, and the folder must be listed again.

@@ -149,35 +149,6 @@ describe('DriveHttp', () => {
     await expect(d.readText('gone')).rejects.toMatchObject({ code: 'not-found' });
   });
 
-  it('upload over 5 MB is resumable in chunks and reports progress', async () => {
-    const size = 10 * 1024 * 1024;
-    const s = stub((c) => {
-      if (c.method === 'POST') return new Response('', { status: 200, headers: { location: 'https://upload.example/session/1' } });
-      const range = c.headers.get('content-range') ?? '';
-      if (range.startsWith('bytes 0-')) return new Response('', { status: 308 });
-      return json(file('up1', 'video.mp4', 'ROOT'));
-    });
-    const d = new DriveHttp({ token: tokens().token, fetch: s.fetch });
-    const seen: number[] = [];
-    const out = await d.upload('ROOT', 'video.mp4', new Blob([new Uint8Array(size)]), (p) => seen.push(p));
-    expect(out.id).toBe('up1');
-    expect(s.calls[0]?.url.searchParams.get('uploadType')).toBe('resumable');
-    expect(s.calls.slice(1).map((c) => c.headers.get('content-range'))).toEqual([
-      `bytes 0-${8 * 1024 * 1024 - 1}/${size}`,
-      `bytes ${8 * 1024 * 1024}-${size - 1}/${size}`,
-    ]);
-    expect(seen).toEqual([0.8, 1]);
-  });
-
-  it('a small upload is one multipart request', async () => {
-    const s = stub(() => json(file('up2', 'photo.jpg', 'ROOT')));
-    const d = new DriveHttp({ token: tokens().token, fetch: s.fetch });
-    await d.upload('ROOT', 'photo.jpg', new Blob(['jpeg']));
-    expect(s.calls).toHaveLength(1);
-    expect(s.calls[0]?.url.searchParams.get('uploadType')).toBe('multipart');
-    expect(s.calls[0]?.headers.get('content-type')).toMatch(/^multipart\/related; boundary=/);
-  });
-
   it('writeText checks modifiedTime and rejects conflict', async () => {
     const s = stub(() => json({ ...file('f1', 'a.md', 'ROOT'), modifiedTime: '2026-10-04T11:00:00.000Z' }));
     const d = new DriveHttp({ token: tokens().token, fetch: s.fetch });
@@ -379,8 +350,7 @@ describe('DriveHttp', () => {
   it('full-text search sees new uploads and relists after binning or restoring them', async () => {
     const sends: Array<(drive: DriveHttp) => Promise<unknown>> = [
       (d) => d.createText('ROOT', 'Created.md', 'matching words'),
-      (d) => d.upload('ROOT', 'Small.txt', new Blob(['matching words'])),
-      (d) => d.upload('ROOT', 'Large.txt', new Blob([new Uint8Array(6 * 1024 * 1024)])),
+      (d) => d.putChunk('https://www.googleapis.com/upload/session', 0, new Blob(['matching words']), 14),
     ];
     for (const send of sends) {
       const made = file('added', 'Thing.md', 'ROOT');

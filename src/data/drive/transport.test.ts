@@ -138,8 +138,8 @@ describe('the Drive transport', () => {
       return new Promise<Response>((resolve) => setTimeout(() => resolve(json({ ...file, id: 'F1', name: 'Photo.jpg' })), 90_000));
     }) as unknown as typeof fetch;
     const drive = new DriveHttp({ token: async () => 'TOKEN', fetch: slow });
-    const outcome = await after(drive.upload('FOLDER_ID', 'Photo.jpg', new Blob([new Uint8Array(4 * 1024 * 1024)])), 100_000);
-    expect(outcome).toMatchObject({ state: 'ok', value: { id: 'F1' } });
+    const outcome = await after(drive.putChunk('https://www.googleapis.com/upload/session', 0, new Blob([new Uint8Array(4 * 1024 * 1024)]), 4 * 1024 * 1024), 100_000);
+    expect(outcome).toMatchObject({ state: 'ok', value: { kind: 'done', file: { id: 'F1' } } });
     expect(sends).toBe(1);
   });
 

@@ -5,7 +5,7 @@
  * writes one journal line for each change you make, so the next tidy-up
  * knows what happened. It never writes Bower's own sections of a note.
  */
-import { type DriveApi, type DriveFile, type ResumableDrive } from '../drive/drive-api';
+import { type DriveApi, type DriveFile } from '../drive/drive-api';
 import { ReadCache, type Version } from '../drive/read-cache';
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
 import type { Unsubscribe, VaultSource } from '../sources';
@@ -42,7 +42,8 @@ import { noteRefusal, parseNote, toggleTaskInText, type ParsedNote } from './not
 import { parseRules } from './rules-format';
 import { isSeen, markSeen } from './seen';
 import { VaultIndex } from './vault-index';
-import { NOT_SENT_TEXT, PERSIST_REFUSED_TEXT, UNREADABLE_TEXT, stoppedText, type QueueItem, type UploadQueue } from '../upload-queue';
+import { NOT_SENT_TEXT, PERSIST_REFUSED_TEXT, UNREADABLE_TEXT, createUploadQueue, stoppedText, type QueueItem, type UploadQueue } from '../upload-queue';
+import { memoryUploadStore } from '../upload-store';
 import { notAsSeen, notAsSeenError, type SeenExpectation } from '../contracts/still-as-seen';
 
 export interface DriveVaultOptions {
@@ -55,7 +56,7 @@ export interface DriveVaultOptions {
   device?: string;
   /** Writes an immutable declaration before a pile folder and its things (off until every reader understands it). */
   declarePiles?: boolean;
-  /** Files go through the persistent upload queue, so a reload only pauses them. */
+  /** The upload queue every file goes through, so a reload only pauses them (none: one over this page's memory). */
   uploads?: DriveVaultUploads;
 }
 
@@ -142,7 +143,7 @@ export class DriveVault implements VaultSource {
   private answering = new Map<string, Promise<void>>();
   private sending = new Set<Promise<void>>();
   private disposed = false;
-  private readonly queued: DriveVaultUploads | null;
+  private readonly queued: DriveVaultUploads;
   private queueStart: Promise<void> | null = null;
   private unqueue: () => void = () => undefined;
   /** Queue items whose file is already in this vault's index. */
@@ -158,8 +159,8 @@ export class DriveVault implements VaultSource {
     this.rootId = opts.rootId;
     this.runningPiles = opts.runningPiles;
     this.declarePiles = opts.declarePiles ?? false;
-    this.queued = opts.uploads ?? null;
-    if (this.queued) this.unqueue = this.queued.queue.subscribe(() => this.fromQueue());
+    this.queued = opts.uploads ?? { queue: createUploadQueue({ drive: opts.drive, store: memoryUploadStore() }), account: async () => 'this page' };
+    this.unqueue = this.queued.queue.subscribe(() => this.fromQueue());
     this.journal = new Journal(
       this.drive,
       {
@@ -1071,7 +1072,7 @@ export class DriveVault implements VaultSource {
 
   async retryPile(id: string): Promise<void> {
     // The queue tries again what waited for a connection or stopped, this page's or a reload's.
-    if (this.queued?.queue.items().some((i) => i.pileId === id && i.state !== 'done' && !i.gone)) this.queued.queue.retry();
+    if (this.queued.queue.items().some((i) => i.pileId === id && i.state !== 'done' && !i.gone)) this.queued.queue.retry();
     const held = this.queuedItems(id);
     const u = this.uploads.get(id);
     if (!u) {
@@ -1186,8 +1187,7 @@ export class DriveVault implements VaultSource {
 
   /** One plain sentence about keeping uploads on this device, or `null`. */
   uploadNotice(): string | null {
-    const queue = this.queued?.queue;
-    if (!queue) return null;
+    const queue = this.queued.queue;
     const told = queue.notice();
     // What this device could not read stays said: those things must be chosen again.
     if (told === UNREADABLE_TEXT) return told;
@@ -1475,13 +1475,7 @@ export class DriveVault implements VaultSource {
         const made = e.url
           ? await this.drive.createText(u.parent, name, shortcut(e.url), props)
           : e.body
-              ? this.queued
-                ? await this.sendQueued(pileId, u, e, e.body, name, props)
-                : await this.drive.upload(u.parent, name, e.body, (p) => {
-                  if (!this.current()) return;
-                  e.item.upload = Math.min(p, 0.99);
-                  this.emit();
-                }, props)
+            ? await this.sendQueued(pileId, u, e, e.body, name, props)
             : await this.drive.createText(u.parent, name, '', props);
         if (!this.current()) return;
         if (this.uploads.get(pileId) !== u) {
@@ -1512,7 +1506,6 @@ export class DriveVault implements VaultSource {
   /** Starts the upload queue for this person and folder, once: it resumes what a reload left. */
   private startQueue(): Promise<void> {
     const q = this.queued;
-    if (!q) return Promise.resolve();
     if (!this.queueStart) {
       const p = (async () => {
         // Who it is first: signed out, the queue is never started.
@@ -1532,8 +1525,7 @@ export class DriveVault implements VaultSource {
 
   /** The queue's things not yet in Drive and not sent by this page, for one pile or all. */
   private queuedItems(pileId?: string): QueueItem[] {
-    const queue = this.queued?.queue;
-    if (!queue) return [];
+    const queue = this.queued.queue;
     const mine = new Set<string>();
     for (const u of this.uploads.values()) for (const e of u.entries) if (e.queued) mine.add(e.queued);
     return queue.items().filter((i) => (pileId === undefined || i.pileId === pileId) && (i.state === 'waiting' || i.state === 'uploading' || i.state === 'failed') && !i.gone && !mine.has(i.id));
@@ -1541,8 +1533,7 @@ export class DriveVault implements VaultSource {
 
   /** Sends one thing through the upload queue and waits for Drive to have it. */
   private async sendQueued(pileId: string, u: Upload, e: Sending, body: Blob, name: string, props: Record<string, string>): Promise<DriveFile> {
-    const queue = this.queued?.queue;
-    if (!queue) throw new BowerError('unknown', NOT_SENT_TEXT);
+    const queue = this.queued.queue;
     await this.startQueue();
     const added = await queue.add({ declarationId: u.declaration ?? pileId, memberKey: e.key, sha256: e.sha256 ?? (await sha256(body)), pileId, parentId: u.parent, name, body, type: body.type, appProperties: props });
     e.queued = added.id;
@@ -1578,8 +1569,8 @@ export class DriveVault implements VaultSource {
 
   /** The queue finished something, perhaps one a reload left: it is in Drive now. */
   private fromQueue(): void {
-    const queue = this.queued?.queue;
-    if (!queue || !this.current()) return;
+    const queue = this.queued.queue;
+    if (!this.current()) return;
     const items = queue.items();
     // A new notice about this device's storage is news for the inbox, even with nothing held.
     const notice = this.uploadNotice();
@@ -1642,7 +1633,7 @@ export class DriveVault implements VaultSource {
     if (!item.reserved) return null;
     let file: DriveFile;
     try {
-      file = hasUploadedLookup(this.drive) ? await this.drive.getUploaded(item.reserved) : await this.drive.get(item.reserved);
+      file = await this.drive.getUploaded(item.reserved);
     } catch (err) {
       // Not made: nothing to bin. Unknown: it stays, where the person sees it.
       if (!(err instanceof BowerError && err.code === 'not-found')) console.error(err);
@@ -1848,9 +1839,6 @@ async function inBatches<T, R>(list: readonly T[], fn: (x: T) => Promise<R>, siz
 function refuseReserved(path: string): void {
   if (!path.includes('/') && (HIDDEN_AT_ROOT as readonly string[]).includes(path.toLowerCase())) throw new BowerError('conflict', "That name is kept for Bower's own files. Choose another.");
 }
-
-/** A Drive client that can read a file back with its content's checksum. */
-const hasUploadedLookup = (drive: object): drive is Pick<ResumableDrive, 'getUploaded'> => typeof (drive as { getUploaded?: unknown }).getUploaded === 'function';
 
 /** A thing the upload queue holds, as the inbox shows it while it is on its way. */
 function queuedRow(i: QueueItem): PileItem {

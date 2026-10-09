@@ -47,7 +47,7 @@ export interface BinnedItem {
   sha256: string | null;
 }
 
-export interface DriveApi {
+export interface DriveApi extends ResumableDrive {
   /** Every file and folder under `rootId`, at any depth, not in the Bin. */
   listAll(rootId: string): Promise<DriveFile[]>;
   get(id: string): Promise<DriveFile>;
@@ -56,7 +56,6 @@ export interface DriveApi {
   readBytes(id: string): Promise<Uint8Array>;
   createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile>;
   createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>): Promise<DriveFile>;
-  upload(parentId: string, name: string, body: Blob, onProgress?: (fraction: number) => void, appProperties?: Record<string, string>): Promise<DriveFile>;
   /** Writes only if the file still has `ifModified`; otherwise rejects `conflict`. */
   writeText(id: string, text: string, ifModified: string): Promise<DriveFile>;
   /** Renames, moves, or sets appProperties (a null value removes one). */
@@ -78,8 +77,11 @@ export interface DriveApi {
   /**
    * Bin entries under `rootId` whose `bowerItem` is one of `keys`, in one call: Drive's `files.list` with
    * `trashed = true` and an `appProperties has` for each key (https://developers.google.com/workspace/drive/api/guides/search-files).
+   * A file in a folder that is itself in the Bin is trashed too (`files.list`, `trashed`), so its place is found by walking
+   * up its folders; `beforeGet`, when given, is called before each such `files.get` and may throw to stop the look (the
+   * Worker's subrequest grant).
    */
-  binnedByItem(rootId: string, keys: readonly string[]): Promise<BinnedItem[]>;
+  binnedByItem(rootId: string, keys: readonly string[], beforeGet?: () => void): Promise<BinnedItem[]>;
 }
 
 /** `files.list` pageSize (https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list), the largest a page holds. */
@@ -164,14 +166,13 @@ export const DRIVE_OPS = {
   generateIds: 'write', // reserves an id the upload keeps: a write, fenced like the rest
   createFolder: 'write',
   createText: 'write',
-  upload: 'write',
   writeText: 'write',
   update: 'write',
   trash: 'write',
   untrash: 'write',
   openResumable: 'write',
   putChunk: 'write',
-} as const satisfies Record<keyof (DriveApi & ResumableDrive), 'read' | 'write'>;
+} as const satisfies Record<keyof DriveApi, 'read' | 'write'>;
 
 export const isDriveWrite = (key: PropertyKey): boolean => (DRIVE_OPS as Record<PropertyKey, string>)[key] !== 'read';
 

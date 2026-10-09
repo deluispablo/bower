@@ -78,14 +78,6 @@ export function describeDriveContract(name: string, make: () => Promise<DriveUnd
       expect((await drive.listAll(root)).filter((x) => x.name === 'Lease.pdf')).toHaveLength(2);
     });
 
-    it('upload stores a blob and reports progress', async () => {
-      const { drive, root } = await make();
-      const seen: number[] = [];
-      const f = await drive.upload(root, 'photo.jpg', new Blob(['jpeg bytes']), (p) => seen.push(p));
-      expect(f).toMatchObject({ name: 'photo.jpg', folder: false, size: 10 });
-      expect(seen.at(-1)).toBe(1);
-    });
-
     it('fullText finds text inside files only under root', async () => {
       const { drive, root } = await make();
       const outside = await drive.createFolder(root, 'Outside');

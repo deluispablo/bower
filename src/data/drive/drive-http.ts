@@ -10,7 +10,7 @@ import type { Digest } from '../pile-readiness';
 import { sha256 } from '../vault/hashes';
 import { noAnswer, send, type Context, type Fetch, type Pacing } from './transport';
 import { confirmedFrom, chunkRange } from './resumable-upload';
-import { BIN_KEYS, DRIVE_MESSAGES, driveError, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type ResumableDrive, type ResumableTarget, type SessionStatus } from './drive-api';
+import { BIN_KEYS, DRIVE_MESSAGES, driveError, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type ResumableTarget, type SessionStatus } from './drive-api';
 
 const API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
@@ -25,8 +25,6 @@ export const FOLDER = 'application/vnd.google-apps.folder';
 const BATCH = SEARCH_FOLDERS;
 /** How many folders up a binned file's place is looked for. */
 const BIN_DEPTH = 8;
-const SMALL = 5 * 1024 * 1024;
-const CHUNK = 8 * 1024 * 1024;
 
 /** A file as Drive v3 answers it (`FIELDS`, and the checksums when asked); the one wire type of every client. */
 export interface WireFile {
@@ -83,7 +81,7 @@ async function isRateLimit(res: Response): Promise<boolean> {
   }
 }
 
-export class DriveHttp implements DriveApi, ResumableDrive {
+export class DriveHttp implements DriveApi {
   private readonly token: (fresh: boolean) => Promise<string>;
   private readonly fetchFn: Fetch;
   private readonly context: Context;
@@ -163,33 +161,6 @@ export class DriveHttp implements DriveApi, ResumableDrive {
     return this.multipart(meta, new Blob([text], { type: mimeOf(name) }));
   }
 
-  async upload(parentId: string, name: string, body: Blob, onProgress?: (fraction: number) => void, appProperties?: Record<string, string>): Promise<DriveFile> {
-    const meta = { name, parents: [parentId], ...(appProperties ? { appProperties } : {}) };
-    if (body.size <= SMALL) {
-      const f = await this.multipart(meta, body);
-      onProgress?.(1);
-      return f;
-    }
-    const start = await this.call(`${UPLOAD}/files?uploadType=resumable&fields=${FIELDS}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json; charset=UTF-8', 'x-upload-content-length': String(body.size) },
-      body: JSON.stringify(meta),
-    });
-    const session = start.headers.get('location');
-    if (!session) throw driveError('unknown');
-    for (let at = 0; at < body.size; at += CHUNK) {
-      const end = Math.min(at + CHUNK, body.size);
-      const res = await this.call(session, {
-        method: 'PUT',
-        headers: { 'content-range': `bytes ${at}-${end - 1}/${body.size}` },
-        body: body.slice(at, end),
-      });
-      onProgress?.(Math.round((end / body.size) * 100) / 100);
-      if (res.status !== 308) return this.changed(toFile((await res.json()) as WireFile));
-    }
-    throw driveError('unknown');
-  }
-
   /** Drive v3 has no If-Match on files: this reads, then writes, which leaves a short window. */
   /**
    * `appProperties`, when given, go in the same request: a multipart `files.update`, metadata then media
@@ -245,7 +216,7 @@ export class DriveHttp implements DriveApi, ResumableDrive {
    * 20 keys (an `appProperties has` for each), with Drive's own checksums. A file Drive keeps no checksum of is listed
    * with a null size and hash.
    */
-  async binnedByItem(rootId: string, keys: readonly string[]): Promise<BinnedItem[]> {
+  async binnedByItem(rootId: string, keys: readonly string[], beforeGet?: () => void): Promise<BinnedItem[]> {
     if (!keys.length) return [];
     const inside = new Set(this.known.get(rootId) ?? (await this.listAll(rootId)).map((f) => f.id)).add(rootId);
     const hits = new Map<string, BinnedItem>();
@@ -258,6 +229,7 @@ export class DriveHttp implements DriveApi, ResumableDrive {
       let known = placed.get(id);
       if (!known) {
         known = (async () => {
+          beforeGet?.();
           let res: Response;
           try {
             res = await this.call(`${API}/files/${id}?fields=id,parents`);
