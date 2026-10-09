@@ -6,10 +6,6 @@
 .rowText { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .rowTitle { color: var(--heading); font-weight: 600; }
 .rowSub { font-size: 14px; color: var(--text-muted); }
-.toggle { flex: none; position: relative; width: 50px; height: 30px; border: 0; border-radius: 999px; background: var(--surface-strong); cursor: pointer; transition: background 0.2s; }
-.toggle span { position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: var(--heading); transition: transform 0.2s var(--ease-out); }
-.toggle[aria-checked='true'] { background: var(--brand); }
-.toggle[aria-checked='true'] span { transform: translateX(20px); background: #fff; }
 .seg { display: flex; gap: 3px; padding: 3px; border-radius: 999px; background: var(--bg-alt); box-shadow: inset 0 0 0 1px var(--line); }
 .seg button { min-height: 34px; padding: 0 12px; border: 0; border-radius: 999px; background: none; color: var(--text-muted); font-weight: 600; cursor: pointer; }
 .seg button[aria-checked='true'] { background: var(--surface-strong); color: var(--heading); }

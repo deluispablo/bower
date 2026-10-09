@@ -113,3 +113,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `54291695` | c3-state-mark | Lenient on read (TL-P4-19 addendum 22): a stored manifest with a sourceless news line parses again; writes and plans still refuse one. A non-clash refusal of a granted write (addendum 21) adds one answered row (`refused`, existing shape) and keeps the answer; nothing stored changes shape. |
 | `54629de1` | c4-focus-return | none: where focus lands after a sheet or the tree menu closes; the tree menu returns the keyboard to the tree at once. No stored data, no strings. |
 | `e1c6b698` | c4-focus-return | none: a field the next sheet took keeps the keyboard; the rename box keeps it. Focus only, no stored data, no strings. |
+| `c1e57875` | v2-field | none: markup and styles only (fields, switch, task box); no stored format, route or data changes. |

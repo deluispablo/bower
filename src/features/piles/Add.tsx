@@ -8,6 +8,7 @@ import { useUi } from '@/app/ui-store';
 import { plural } from '@/app/words';
 import { BowerLayer, type BowerController } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
+import { FieldError, fieldBox, Input, Textarea } from '@/ui/Field';
 import { Icon } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
 import s from './piles.module.css';
@@ -187,7 +188,7 @@ export function Add() {
 
       <label className={s.what}>
         <span>What is this?</span>
-        <textarea rows={2} placeholder="Receipts from the Saltmere weekend" value={text} disabled={busy} onChange={(e) => { if (!saving.current) setText(e.target.value); }} />
+        <Textarea rows={2} placeholder="Receipts from the Saltmere weekend" value={text} disabled={busy} onChange={(e) => { if (!saving.current) setText(e.target.value); }} />
       </label>
 
       <div
@@ -221,14 +222,15 @@ export function Add() {
         <input ref={files} type="file" multiple disabled={busy} hidden onChange={(e) => fromFiles(e.target.files, 'From this device')} />
         <input ref={camera} type="file" accept="image/*" capture="environment" disabled={busy} hidden onChange={(e) => fromFiles(e.target.files, 'From the camera')} />
         <form
-          className={s.linkRow}
+          className={`${s.linkRow} ${fieldBox()}`}
           onSubmit={(e) => {
             e.preventDefault();
             addLink();
           }}
         >
           <Icon name="link" size={18} />
-          <input
+          <Input
+            inBox
             type="text"
             inputMode="url"
             autoCapitalize="off"
@@ -236,8 +238,8 @@ export function Add() {
             spellCheck={false}
             placeholder="Paste a link"
             aria-label="Paste a link"
-            aria-invalid={badLink || undefined}
-            aria-describedby={badLink ? 'bad-link' : undefined}
+            invalid={badLink}
+            errorId="bad-link"
             value={link}
             disabled={busy}
             onChange={(e) => {
@@ -251,9 +253,7 @@ export function Add() {
           </Button>
         </form>
         {badLink && (
-          <p id="bad-link" className={s.badLink} role="alert">
-            That is not a web address. Check it and try again.
-          </p>
+          <FieldError id="bad-link">That is not a web address. Check it and try again.</FieldError>
         )}
       </div>
 

@@ -65,7 +65,7 @@
 .keeper { margin-top: 8px; font-size: 13px; color: var(--text-muted); }
 .body :global(.md-task) { list-style: none; margin-left: -22px; }
 .body :global(.md-task) label { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
-.body :global(.md-task) input { flex: none; width: 18px; height: 18px; margin-top: 4px; accent-color: var(--brand); cursor: pointer; }
+.body :global(.md-task) input { margin-top: 2px; }
 .body :global(.md-done) span { color: var(--text-muted); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--text-muted) 60%, transparent); }
 
 .empty { margin: 18px 0; padding: 14px 16px; border-radius: 12px; background: var(--surface); color: var(--muted); }

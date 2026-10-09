@@ -7,6 +7,7 @@ import { startRun } from '@/features/tidy/start-run';
 import { useRequests, useRules, useRun, useSources } from '@/data/provider';
 import { PoseBower, type Pose } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
+import { fieldBox, Textarea } from '@/ui/Field';
 import { Icon } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
 import { useUi } from '@/app/ui-store';
@@ -87,7 +88,7 @@ export function BowerScreen() {
       <LoadError state={runState} />
       {!desktop && <FailedChanges />}
       <form
-        className={s.composer}
+        className={`${s.composer} ${fieldBox({ stack: true })}`}
         onSubmit={(e) => {
           e.preventDefault();
           void send();
@@ -101,7 +102,8 @@ export function BowerScreen() {
             A rule
           </button>
         </div>
-        <textarea
+        <Textarea
+          inBox
           ref={composerRef}
           rows={3}
           aria-label={kind === 'rule' ? 'The rule' : 'Your request'}

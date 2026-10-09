@@ -175,3 +175,5 @@ Staging 55ea8194 (version d3d26e5f), bower-home 1af1684, Claude Sonnet 5.5, acco
 **Home after the runs** (not an empty Inbox: 3 open questions and 6 recent files): 21 Drive calls (8 media), the last ending at 6.2 s. The old q-state card shows no "Bower's update" list, since it was asked before `shown` existed (expected).
 
 Planner-split smoke on a0a0c1a7, for comparison: garden 0:51, offer-and-flat 1:01, c05 0:55. This smoke is 15–35 s slower on every case. The extra time is in reads (offer-and-flat 29.4 vs 11.2), apply (+8–10 s) and garden's checkpoints (13.6 s).
+
+**Reading (stage-3-live-slower, TL-P4-22 addendum 2):** the 55ea8194 slowdown came from the runner's region and per-call latency (a0a0c1a7 ran in eastus; 55ea8194 ran in the US west and in Mexico). The Drive-call goldens are the same at both SHAs, and c05 was not like-for-like. Compare like-for-like cases only. From c4-run-counts on, the timing line also carries calls, bytes and region.

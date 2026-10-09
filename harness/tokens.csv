@@ -168,3 +168,6 @@ c3-state-mark round4b,implementer,claude,bower-escalated,,7,165601,,,,,,73,12.5,
 c3-state-mark round4c,implementer,claude,bower-escalated,,8,136684,,,,,,58,7.6,delivered,2026-10-09
 P4-47c,reviewer,claude,bower-reviewer,,1,62297,,,,,,15,1.5,PASS (5 minor),2026-10-09
 stop-gate live check 2,implementer,claude,bower-implementer,,1,52308,,,,,,2,1.4,refused dirty stop (ok),2026-10-09
+stage-3-live-slower,diagnoser,claude,bower-diagnoser,,1,130060,,,,,,40,5.7,diagnosed (runner region),2026-10-09
+v2-field,implementer,claude,bower-implementer,,1,159295,,,,,,75,32.1,delivered,2026-10-09
+c4-focus-return,implementer,claude,bower-implementer,,1,135926,,,,,,50,39.8,delivered,2026-10-09

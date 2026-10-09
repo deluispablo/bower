@@ -10,6 +10,7 @@ import { afterOverlaysClosed } from '@/ui/back';
 import { report } from '@/ui/report';
 import { toast } from '@/ui/toast';
 import { Sheet } from '@/ui/Sheet';
+import { Input } from '@/ui/Field';
 import { useFileActions } from './file-actions';
 import s from './files.module.css';
 
@@ -69,7 +70,7 @@ function NameForm({ start, label, onSave }: { start: string; label: string; onSa
         onSave(name);
       }}
     >
-      <input autoFocus aria-label="Name" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+      <Input autoFocus aria-label="Name" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
       <Button type="submit" disabled={!name.trim()}>
         {label}
       </Button>

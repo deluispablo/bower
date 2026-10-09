@@ -16,6 +16,7 @@ import { ago, greeting, plural } from '@/app/words';
 import { crumbs, noteRoute, paraColor, routeFor } from '@/app/paths';
 import { PoseBower } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
+import { fieldBox } from '@/ui/Field';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
 import { filedWords, hasReplay, notesUpdated, replayWaiting, isRunning, landedSummary, PHASE_POSE, runDetail, runTitle, stoppedUnseen } from '@/features/tidy/run-words';
@@ -249,7 +250,7 @@ function YourChanges({ running }: { running: boolean }) {
 function SearchField() {
   const { setPalette } = useUi();
   return (
-    <button type="button" className={s.search} onClick={() => setPalette(true)}>
+    <button type="button" className={`${s.search} ${fieldBox({ pill: true })}`} onClick={() => setPalette(true)}>
       <Icon name="search" />
       <span>Search your notes and files</span>
       <kbd>⌘K</kbd>
