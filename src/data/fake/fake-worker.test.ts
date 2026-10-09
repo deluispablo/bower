@@ -4351,37 +4351,47 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(viewOf(w)?.run.report?.updated).toMatchObject(rest.map((path) => ({ path, what: whatOf(path) })));
     });
 
-    // The ten notes just under 1 MiB are the heaviest run in the suite. Its time bound is CPU seconds (the clock of this
-    // process), so a busy machine does not move it: the run took 14.1 CPU seconds (11.4 s of wall time) on an idle machine when every note was
-    // parsed with a prefix re-encode per span, and 9.5 (6.8 s) with one byte table per note; the bound sits between.
+    // The ten notes just under 1 MiB are the heaviest run in the suite. Its time bound is a bound on the work that took
+    // the time, so a busy machine cannot move it (CPU seconds did: 9.5 alone, 15.8 inside the full run): the characters
+    // handed to the UTF-8 encoder. Measured here with no load, the run encoded 5.96 billion characters (11.4 s of wall
+    // time) when every span of a note re-encoded its prefix, and 1.51 billion (6.8 s) with one byte table per note.
+    const ENCODE_BOUND = 3_000_000_000;
     it('the size-cap run fits its time bound with no load', async () => {
-      const before = process.cpuUsage();
-      // Ten notes just under 1 MiB, full of quotes and backslashes that JSON escapes: 8 would pass the guard's 8 MiB,
-      // so each run takes fewer, from the start of the path order, stays on the B path, and later runs converge.
-      const filler = 'She wrote "keep C:\\notes\\flats" and \\"quoted\\" it twice.\n';
-      const personal = filler.repeat(Math.floor((EDIT_FILE_LIMIT - FLAT_BEFORE.length - 1024) / filler.length));
-      const big = FLAT_BEFORE.replace('Your own words about the flats.\n', `Your own words about the flats.\n${personal}`);
-      expect(new TextEncoder().encode(big).byteLength).toBeLessThan(EDIT_FILE_LIMIT);
-      expect(new TextEncoder().encode(big).byteLength).toBeGreaterThan(EDIT_FILE_LIMIT - 2048);
-      const large = await hubs(['Big 07', 'Big 02', 'Big 10', 'Big 05', 'Big 01', 'Big 09', 'Big 04', 'Big 08', 'Big 03', 'Big 06'], big);
-      const done: string[] = [];
-      for (let n = 0; done.length < large.sorted.length && n < 10; n++) {
-        const run = await tidy(large.w, n);
-        expect(run.manifest?.v).toBe(2);
-        expect(run.paths.length).toBeGreaterThan(0);
-        expect(run.paths.length).toBeLessThan(8);
-        expect(run.paths).toEqual(large.sorted.filter((p) => !done.includes(p)).slice(0, run.paths.length));
-        expect(new TextEncoder().encode(JSON.stringify(run.manifest)).byteLength).toBeLessThanOrEqual(MANIFEST_V2_LIMIT);
-        done.push(...run.paths);
-        for (const path of large.sorted.filter((p) => !done.includes(p))) expect(writesTo(large.w.calls, large.idOf(path))).toEqual([]);
+      let encoded = 0;
+      const encode = TextEncoder.prototype.encode;
+      TextEncoder.prototype.encode = function (this: TextEncoder, input?: string): Uint8Array<ArrayBuffer> {
+        encoded += input?.length ?? 0;
+        return encode.call(this, input);
+      };
+      try {
+        // Ten notes just under 1 MiB, full of quotes and backslashes that JSON escapes: 8 would pass the guard's 8 MiB,
+        // so each run takes fewer, from the start of the path order, stays on the B path, and later runs converge.
+        const filler = 'She wrote "keep C:\\notes\\flats" and \\"quoted\\" it twice.\n';
+        const personal = filler.repeat(Math.floor((EDIT_FILE_LIMIT - FLAT_BEFORE.length - 1024) / filler.length));
+        const big = FLAT_BEFORE.replace('Your own words about the flats.\n', `Your own words about the flats.\n${personal}`);
+        expect(new TextEncoder().encode(big).byteLength).toBeLessThan(EDIT_FILE_LIMIT);
+        expect(new TextEncoder().encode(big).byteLength).toBeGreaterThan(EDIT_FILE_LIMIT - 2048);
+        const large = await hubs(['Big 07', 'Big 02', 'Big 10', 'Big 05', 'Big 01', 'Big 09', 'Big 04', 'Big 08', 'Big 03', 'Big 06'], big);
+        const done: string[] = [];
+        for (let n = 0; done.length < large.sorted.length && n < 10; n++) {
+          const run = await tidy(large.w, n);
+          expect(run.manifest?.v).toBe(2);
+          expect(run.paths.length).toBeGreaterThan(0);
+          expect(run.paths.length).toBeLessThan(8);
+          expect(run.paths).toEqual(large.sorted.filter((p) => !done.includes(p)).slice(0, run.paths.length));
+          expect(new TextEncoder().encode(JSON.stringify(run.manifest)).byteLength).toBeLessThanOrEqual(MANIFEST_V2_LIMIT);
+          done.push(...run.paths);
+          for (const path of large.sorted.filter((p) => !done.includes(p))) expect(writesTo(large.w.calls, large.idOf(path))).toEqual([]);
+        }
+        expect(done).toEqual(large.sorted);
+        for (const path of large.sorted) {
+          expect(writesTo(large.w.calls, large.idOf(path))).toHaveLength(1);
+          expect(textAt(large.w, path)?.split(large.whatOf(path))).toHaveLength(2);
+        }
+      } finally {
+        TextEncoder.prototype.encode = encode;
       }
-      expect(done).toEqual(large.sorted);
-      for (const path of large.sorted) {
-        expect(writesTo(large.w.calls, large.idOf(path))).toHaveLength(1);
-        expect(textAt(large.w, path)?.split(large.whatOf(path))).toHaveLength(2);
-      }
-      const used = process.cpuUsage(before);
-      expect((used.user + used.system) / 1e6).toBeLessThan(12);
+      expect(encoded).toBeLessThan(ENCODE_BOUND);
     }, 30_000);
 
     // TL-P2-20 R3-7 m9: a build that reads manifest versions names a later one plainly, and leaves the run saving;
