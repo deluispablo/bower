@@ -152,6 +152,8 @@ P3-9 is closed.
 
 - 2026-10-09 stage 3 end: suites on 55ea8194 with E2E_BATCH=1: check 3905 + api 235 + runner 259, e2e 226, e2e:fake 263, e2e:pwa 4; no flaky. main = backup = 55ea8194 (scan clean). Live push hook check: the exact backup command alone is allowed; a chained command with it is refused (fail-safe). SHA sent to the lead for deploy and smoke.
 
+- 2026-10-09 stage 4 opened (lead: stage 3 closed, smoke OK). The first-batch smoke is covered by the four suites on 55ea8194, an hour before; only docs merged since. c4-focus-return dispatched (designer signed off). v2-field is signed off and goes out when the stage-3-live-slower diagnoser frees its slot (2-worker cap).
+
 ## P4 ([TL-P4-01](2026-10-07-tl-p4-01-p4-start.md), [P4_PLAN](../P4_PLAN.md))
 
 - Owner authorized P4 (main fb33b21). HANDOFF restored to the docs-test headings (0dc5fde).
