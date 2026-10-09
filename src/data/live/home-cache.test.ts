@@ -10,8 +10,9 @@ let live: LiveSources | null = null;
 /** Each file's modifiedTime when a cold load began. */
 let versions = new Map<string, string>();
 /**
- * The pretend Drive answers after a modelled delay (300 ms a call). That time is the fake clock's: it moves 10 ms on each
- * turn of the event loop, so a test measures modelled latency (Date.now is the fake clock too) and waits for nothing real.
+ * The pretend Drive answers after a modelled delay (300 ms a call). That time is the fake clock's: once the event loop has
+ * gone quiet for a few turns, the clock jumps to the next timer. So virtual time passes only in the modelled waits, never
+ * in the test's own work, and a loaded machine cannot change what a test measures (Date.now is the fake clock too).
  * https://vitest.dev/guide/mocking/timers
  */
 let ticking = false;
@@ -20,8 +21,8 @@ beforeEach(() => {
   ticking = true;
   void (async () => {
     while (ticking) {
-      await new Promise<void>((resolve) => { setImmediate(resolve); });
-      if (ticking && vi.isFakeTimers()) vi.advanceTimersByTime(10);
+      for (let turn = 0; turn < 5; turn++) await new Promise<void>((resolve) => { setImmediate(resolve); });
+      if (ticking && vi.isFakeTimers() && vi.getTimerCount() > 0) vi.advanceTimersToNextTimer();
     }
   })();
 });
