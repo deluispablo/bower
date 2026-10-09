@@ -158,3 +158,4 @@ c3-agent-defs,implementer,claude,bower-implementer,,1,194033,,,,,,48,9.6,deliver
 rolecheck reviewer,reviewer,claude,bower-reviewer,,1,57528,,,,,,2,0.2,ok,2026-10-09
 rolecheck design-checker,design-checker,claude,bower-design-checker,,1,19841,,,,,,3,0.1,ok,2026-10-09
 rolecheck diagnoser,diagnoser,claude,bower-diagnoser,,1,11674,,,,,,2,0.1,ok,2026-10-09
+c3-stop-gate,implementer,claude,bower-implementer,,1,79885,,,,,,12,4.0,delivered,2026-10-09
