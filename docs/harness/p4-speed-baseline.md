@@ -160,3 +160,18 @@ Staging a0a0c1a7 (version b2b8627d), bower-home 7cea21a, Claude Sonnet 5.5. Each
 **Home on an empty Inbox:** the Inbox showed in 4.5 s, with 15 Drive calls (2 media). After 25 s there were 17 calls in all, the last ending at 5.1 s. `.bower` was unchanged. `.bower/runs` holds 74 folders: 6 carry the Bower mark and are ended; the older unmarked ones are kept by the ruling.
 
 Stage 2 smoke on c9d20a67, for comparison: garden 0:55, offer-and-flat 1:21, c05 1:12; Home 4.1 s with 15 calls.
+
+## Stage 3 smoke on `55ea8194` (2026-10-09)
+
+Staging 55ea8194 (version d3d26e5f), bower-home 1af1684, Claude Sonnet 5.5, account A. Each run was reset first: outputs binned, hubs restored with Bower's mark, Inbox emptied. For c05, the Job hunt hand edit was added.
+
+| Case | Run | Press → done | reads | model (in/out) | apply | checkpoints | report (s) | Result |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| garden | `aAQA9cHu` (37943293492) | 1:06 | 14.9 | 11.2 (7497 / 839) | 12.0 | 13.6 | 13.3 | pass. Five dates, the fee and the shed code. PDF and note renamed. No question. |
+| offer-and-flat | `pG4oY1SZ` (37943770442) | 1:36 | 29.4 | 15.6 (7623 / 1982) | 23.6 | 7.8 | 9.0 | pass. Offer and payslip renamed, a Money area, the photo asked. Each hub got 1 line and 1 row, each citing the offer note. New mark on Job hunt's new line only (Flat hunt's note had been opened once before checking, so it was already seen). |
+| c05-hub-lines | `sahn5Inn` (37944364582) | 1:19 | 16.3 | 13.8 (7642 / 1657) | 22.3 | 7.7 | 9.8 | pass. Hand edit kept, the open q-state not asked again, both hubs got a cited line. |
+| Write it (old q-state, no `shown`) | `qhpcBoL3` (37944694250) | 1:01 | 10.1 | 6.4 (7555 / 591) | 19.1 | 6.2 | 7.6 | pass. Scoped "instructions" run on the old path. The state was written and the hand edit kept. The new no-model path was not reached: this scenario asks no new q-state. |
+
+**Home after the runs** (not an empty Inbox: 3 open questions and 6 recent files): 21 Drive calls (8 media), the last ending at 6.2 s. The old q-state card shows no "Bower's update" list, since it was asked before `shown` existed (expected).
+
+Planner-split smoke on a0a0c1a7, for comparison: garden 0:51, offer-and-flat 1:01, c05 0:55. This smoke is 15–35 s slower on every case. The extra time is in reads (offer-and-flat 29.4 vs 11.2), apply (+8–10 s) and garden's checkpoints (13.6 s).
