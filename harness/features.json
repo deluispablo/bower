@@ -6307,5 +6307,19 @@
     ],
     "verify": "",
     "note": "TL-P4-22 addendum 18 (main 5083a711); split from c4-test-timers (P4-52 BLOCK b1; load-timeouts diagnosis b1, 13 parseOwnership call sites, ~850 parses in the size-cap run). Escalated. After the TL-P4-24 entries. Red: a spy counting at most one parse per unchanged note per run. Packet to write."
+  },
+  {
+    "id": "c4-api-audit",
+    "task": "p4-consolidation",
+    "category": "security",
+    "passes": false,
+    "ui": null,
+    "what": "api dev tooling clears its audit: raise wrangler and @cloudflare/vitest-pool-workers to the newest releases at least two weeks old that clear sharp and undici advisories; else exact pnpm overrides.",
+    "steps": [
+      "api pnpm audit is clean, or each remaining advisory is listed with its reason.",
+      "api tests green; wrangler deploy --dry-run runs."
+    ],
+    "verify": "",
+    "note": "TL-P4-22 addendum 19 (main 5944ce2d); defect api-dev-audit-advisories. Low priority. Mechanical rung or Codex, after c4-app-fence merges (both touch the lockfile). Packet to write."
   }
 ]
