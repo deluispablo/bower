@@ -258,6 +258,33 @@ describe("the engine's named actions", () => {
     expect(listed.filter((n) => !labelled.includes(n)), 'allowlisted names that have a reference').toEqual([]);
   });
 
+  it('a wake startle with a focus gaze holds the head at −10 ±2', () => {
+    // TL-P4-25 addendum 4: the step owns the head while it plays; the gaze moves only the iris, then eases back.
+    for (const at of [{ x: 200, y: -100 }, { x: 200, y: 250 }]) {
+      const cell = `(${at.x}, ${at.y})`;
+      const { engine, frames, read } = mount('idle');
+      frames.run(61 * FPS);
+      expect(read().tuft, cell).toBeCloseTo(-26, 0);
+      engine.look(at, 'focus');
+      const heads: number[] = [];
+      const irises: number[] = [];
+      for (let i = 0; i < 3 * FPS; i++) {
+        frames.run(1);
+        heads.push(read().head);
+        irises.push(read().iris);
+      }
+      // The hold: from the end of the rise (0.15 s) to the start of the fall (0.75 s).
+      const hold = heads.slice(Math.ceil(0.15 * FPS), Math.floor(0.75 * FPS));
+      expect(Math.min(...hold), cell).toBeGreaterThanOrEqual(-12);
+      expect(Math.max(...hold), cell).toBeLessThanOrEqual(-8);
+      // The gaze still moves the iris toward the focused control.
+      expect(irises[Math.floor(0.75 * FPS)] ?? 0, cell).toBeGreaterThan(0.8);
+      // After the step the gaze's head offset comes back eased: no frame jumps more than 3 degrees.
+      const jumps = heads.slice(1).map((h, i) => Math.abs(h - (heads[i] ?? h)));
+      expect(Math.max(...jumps), cell).toBeLessThanOrEqual(3);
+    }
+  });
+
   it('the wake startle stays within its reference range', () => {
     const ref = ACTION_REFERENCE.startle;
     expect(ref, 'the startle has a reference row').toBeDefined();
