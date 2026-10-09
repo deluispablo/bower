@@ -418,3 +418,4 @@ P3-9 is closed.
 - keepFinished removal held: it is TL-P3-21 retention, promised by closed entry spine-operations-checkpoints and never wired (retention-never-wired logged).
 - retention-never-wired ruled (a) (main f9e2515): spine-operations-checkpoints reopened; escalated wiring round dispatched. 421/427.
 - c2-create-by-id closed (8322ae27, P4-37b PASS). 422/427. Two P4-37b minors asked of the lead (journal 4xx reserved id waits forever; pile-note retry with new words makes a second note). Waiting: retention wiring (spine-operations-checkpoints), then the stage 2 suites.
+- Two P4-37b defects ruled (main cb4f7c8); c2-create-by-id reopened; implementer round queued after the retention round. 421/427.
