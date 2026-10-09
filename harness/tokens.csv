@@ -197,3 +197,5 @@ c4-undo-withdraw contract,reviewer,claude,bower-reviewer,,1,56424,,,,,,11,1.1,CH
 c4-app-fence contract,reviewer,claude,bower-reviewer,,1,62588,,,,,,14,1.4,CHANGES (9),2026-10-09
 v2-move-here,implementer,codex,codex,medium,1,525472,518185,0,467456,7287,,,,delivered,2026-10-09
 c4-app-fence review,reviewer,codex,codex,medium,1,282286,280167,0,229760,2119,,,,3 Important,2026-10-09
+c4-app-fence P4-50,reviewer,claude,bower-reviewer,,1,46179,,,,,,7,3.6,PASS (4 minor),2026-10-09
+v2-move-here test fix,implementer,codex,codex,medium,2,57222,56968,0,44928,254,,,,delivered,2026-10-09
