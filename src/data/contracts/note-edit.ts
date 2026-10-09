@@ -14,7 +14,7 @@ import { displayName, nameOf } from './tree';
 import type { ChangeEntry, Rule } from './types';
 import { sha256 } from './hashes';
 import { parseNote } from './note-format';
-import { fenceAfter, parseOwnership, type ByteSpan, type Fence, type Layout, type OwnershipFailure } from './ownership-format';
+import { fenceAfter, parseOwnership, type ByteSpan, type Fence, type Layout, type OwnershipFailure, type FetchedOwnership } from './ownership-format';
 import { parseTimelineLine, timelineLine } from './timeline-line';
 import { parseRules } from './rules-format';
 import type { Change, EditEntry, EditText, Rename, RuleAdd, RuleRemove } from './run-manifest';
@@ -179,23 +179,23 @@ const spanOf = (bytes: Uint8Array, span: ByteSpan): { start: number; end: number
  */
 interface Sections { frontEnd: number; front: Span | null; current: Span | null; timeline: Span | null; bowerNote: Span | null }
 interface Span { start: number; end: number }
-function sectionsOf(text: string): Sections | null {
+function sectionsOf(text: string, fetched?: FetchedOwnership): Sections | null {
   const bytes = encoder.encode(text);
-  const own = parseOwnership(bytes);
+  const own = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
   if (own.status === 'invalid') return null;
   const at = (span: ByteSpan | null): Span | null => (span ? spanOf(bytes, span) : null);
   const layout: Layout = own.layout;
   return { frontEnd: charAt(bytes, layout.frontEnd), front: at(layout.front), current: at(layout.current), timeline: at(layout.timeline), bowerNote: at(layout.bowerNote) };
 }
 /** The lines between a note's `---` fences; none when it has no frontmatter. */
-function frontmatterLines(text: string): Line[] {
-  const front = sectionsOf(text)?.front;
+function frontmatterLines(text: string, fetched?: FetchedOwnership): Line[] {
+  const front = sectionsOf(text, fetched)?.front;
   return front ? linesOf(text, front.start, front.end) : [];
 }
 /** Where the line break before a heading that starts at `at` begins (a CRLF is one break). */
 const breakBefore = (text: string, at: number): number => (text[at - 2] === '\r' ? at - 2 : at - 1);
-function byBower(text: string): boolean {
-  try { return parseNote('note.md', text).byBower; }
+function byBower(text: string, fetched?: FetchedOwnership): boolean {
+  try { return parseNote('note.md', text, fetched).byBower; }
   catch (error) {
     // expected: an unreadable note is not Bower's; logged here, its cause says why.
     console.error('A note could not be read for an edit:', error);
@@ -209,11 +209,11 @@ function byBower(text: string): boolean {
 
 type Step = { text: string; added: EditEntry[]; rules: Pick<Rule, 'text' | 'yourWords' | 'since'>[] | null } | { refused: EditRefusal };
 
-function appendLines(text: string, change: Extract<Change, { kind: 'timeline-append' }>, authors: Authors): Step {
+function appendLines(text: string, change: Extract<Change, { kind: 'timeline-append' }>, authors: Authors, fetched?: FetchedOwnership): Step {
   const bytes = encoder.encode(text);
-  const own = parseOwnership(bytes);
+  const own = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
   if (own.status === 'invalid') return { refused: own.reason };
-  if (own.status === 'plain' || (own.status === 'legacy' && !byBower(text))) return { refused: 'not-bower' };
+  if (own.status === 'plain' || (own.status === 'legacy' && !byBower(text, fetched))) return { refused: 'not-bower' };
   const eol = eolOf(text);
   let region = '';
   let at: number;
@@ -224,7 +224,7 @@ function appendLines(text: string, change: Extract<Change, { kind: 'timeline-app
     at = span.end;
     insert = (lines) => lines.map((line) => line + eol).join('');
   } else {
-    const legacy = sectionsOf(text);
+    const legacy = sectionsOf(text, fetched);
     if (!legacy) return { refused: 'not-bower' };
     if (legacy.timeline) {
       const sectionEnd = legacy.timeline.end;
@@ -297,12 +297,12 @@ export function stateMark(lines: readonly string[]): string {
  * section, where `start` = `end` is where one goes (after the blank lines that follow the front matter).
  */
 interface StateSection { lines: string[]; start: number; end: number; open: 'heading' | 'tail' | null; eol: string; mark: Line | null; close: Line; missing: boolean }
-function stateSection(text: string): StateSection | EditRefusal {
+function stateSection(text: string, fetched?: FetchedOwnership): StateSection | EditRefusal {
   const bytes = encoder.encode(text);
-  const own = parseOwnership(bytes);
+  const own = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
   if (own.status === 'invalid') return own.reason;
-  if (own.status === 'plain' || (own.status === 'legacy' && !byBower(text))) return 'not-bower';
-  const sections = sectionsOf(text);
+  if (own.status === 'plain' || (own.status === 'legacy' && !byBower(text, fetched))) return 'not-bower';
+  const sections = sectionsOf(text, fetched);
   const close = sections?.front ? linesOf(text, sections.front.end)[0] : undefined;
   if (!sections?.front || !close) return 'not-bower';
   const marks = linesOf(text, sections.front.start, sections.front.end).filter((line) => line.text.startsWith(`${STATE_KEY}:`));
@@ -350,14 +350,14 @@ const sameLines = (a: readonly string[], b: readonly string[]): boolean => a.len
  * Null when there is none Bower could write (not Bower's note, a form it does not write, not UTF-8).
  */
 export type StateOwner = 'bower' | 'person' | 'unmarked' | 'missing';
-export function currentStateOf(bytes: Uint8Array): { owner: StateOwner; lines: string[] } | null {
+export function currentStateOf(bytes: Uint8Array, fetched?: FetchedOwnership): { owner: StateOwner; lines: string[] } | null {
   let text: string;
   try { text = decoder.decode(bytes); }
   catch {
     // expected: a file that is not UTF-8 has no Current state Bower can read; nothing is planned for it.
     return null;
   }
-  const section = stateSection(text);
+  const section = stateSection(text, fetched);
   if (typeof section === 'string') return null;
   const mark = markOf(section);
   const owner: StateOwner = section.missing ? 'missing' : mark === null ? 'unmarked' : mark === stateMark(section.lines) ? 'bower' : 'person';
@@ -365,9 +365,9 @@ export function currentStateOf(bytes: Uint8Array): { owner: StateOwner; lines: s
 }
 
 /** The mark a note's Current state carries (what Bower last wrote there), or null when it has none. */
-export function stateMarkOf(bytes: Uint8Array): string | null {
+export function stateMarkOf(bytes: Uint8Array, fetched?: FetchedOwnership): string | null {
   try {
-    const section = stateSection(decoder.decode(bytes));
+    const section = stateSection(decoder.decode(bytes), fetched);
     return typeof section === 'string' || section.missing ? null : markOf(section);
   } catch {
     // expected: a file that is not UTF-8 has no mark to read.
@@ -407,8 +407,8 @@ export function stateNewsLine(lines: readonly string[], existing: readonly strin
   return `${lead}${cut || first.slice(0, room)}…`;
 }
 
-function rewriteState(text: string, change: Extract<Change, { kind: 'state-rewrite' }>): Step | { refused: EditRefusal } {
-  const section = stateSection(text);
+function rewriteState(text: string, change: Extract<Change, { kind: 'state-rewrite' }>, fetched?: FetchedOwnership): Step | { refused: EditRefusal } {
+  const section = stateSection(text, fetched);
   if (typeof section === 'string') return { refused: section };
   const mark = markOf(section);
   // A section the person edited is written over only by their yes to it (`granted`), under the mark it had when asked.
@@ -553,31 +553,31 @@ function fenced(text: string, start: number, end: number, renames: ReadonlyMap<s
   }
 }
 /** Frontmatter values: after a key's first `:`, or the whole line (YAML list items); never `bower_format`. */
-function values(text: string, renames: ReadonlyMap<string, string>, out: Replacement[]): void {
-  for (const line of frontmatterLines(text)) {
+function values(text: string, renames: ReadonlyMap<string, string>, out: Replacement[], fetched?: FetchedOwnership): void {
+  for (const line of frontmatterLines(text, fetched)) {
     if (/^\s*bower_format\s*:/.test(line.text)) continue;
     const colon = line.text.indexOf(':');
     tokens(text, colon > 0 ? line.start + colon + 1 : line.start, line.end, renames, out);
   }
 }
 
-function relink(text: string, change: Extract<Change, { kind: 'link-rewrite' }>): Step {
+function relink(text: string, change: Extract<Change, { kind: 'link-rewrite' }>, fetched?: FetchedOwnership): Step {
   const bytes = encoder.encode(text);
-  const own = parseOwnership(bytes);
+  const own = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
   if (own.status === 'invalid') return { refused: own.reason };
   const renames = new Map(change.renames.map((item) => [item.from.toLowerCase(), item.to]));
   const out: Replacement[] = [];
   if (own.status === 'v2') {
-    values(text, renames, out);
+    values(text, renames, out, fetched);
     for (const owner of ['current', 'personal', 'timeline', 'bower-note'] as const) {
       const span = spanOf(bytes, own.payloads[owner]);
       fenced(text, span.start, span.end, renames, out);
     }
   } else if (own.status === 'plain') fenced(text, 0, text.length, renames, out);
   else {
-    const legacy = sectionsOf(text);
+    const legacy = sectionsOf(text, fetched);
     if (!legacy) return { refused: 'invariant' };
-    values(text, renames, out);
+    values(text, renames, out, fetched);
     fenced(text, legacy.frontEnd, text.length, renames, out);
   }
   // One simultaneous pass: each target is replaced once, right to left so earlier offsets hold.
@@ -618,11 +618,12 @@ function removeRule(text: string, wording: string): string {
   return next;
 }
 
-function wordRules(text: string, change: Extract<Change, { kind: 'rules-wording' }>, authors: Authors): Step {
-  const own = parseOwnership(encoder.encode(text));
+function wordRules(text: string, change: Extract<Change, { kind: 'rules-wording' }>, authors: Authors, fetched?: FetchedOwnership): Step {
+  const bytes = encoder.encode(text);
+  const own = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
   if (own.status === 'invalid') return { refused: own.reason };
   if (own.status === 'v2') return { refused: 'unsupported' };
-  if (own.status === 'plain' || !byBower(text)) return { refused: 'not-bower' };
+  if (own.status === 'plain' || !byBower(text, fetched)) return { refused: 'not-bower' };
   const eol = eolOf(text);
   const removed = new Set(change.remove.map((item) => item.text));
   let next = [...removed].reduce(removeRule, text);
@@ -760,7 +761,7 @@ function holds(before: string, after: string, change: Change, step: Exclude<Step
 const refuse = (reason: EditRefusal): EditResult => ({ ok: false, reason });
 
 /** `applyChanges` with a replaceable splice; only tests pass anything but the real one. */
-export function applyChangesUsing(before: Uint8Array, changes: readonly Change[], authors: Authors): EditResult {
+export function applyChangesUsing(before: Uint8Array, changes: readonly Change[], authors: Authors, fetched?: FetchedOwnership): EditResult {
   if (before.byteLength > EDIT_FILE_LIMIT) return refuse('too-large');
   let text: string;
   try { text = decoder.decode(before); }
@@ -768,15 +769,18 @@ export function applyChangesUsing(before: Uint8Array, changes: readonly Change[]
     // expected: fatal UTF-8 validation is the refusal itself (rule 6); nothing is edited.
     return refuse('invalid-encoding');
   }
-  const own = parseOwnership(before);
+  const own = fetched ? fetched.context.read(fetched.fileId, before) : parseOwnership(before);
   if (own.status === 'invalid') return refuse(own.reason);
   if (!ordered(changes)) return refuse('order');
   if (!changes.every(fieldsOk)) return refuse('field');
   let current = text;
+  let source = fetched;
   for (const change of changes) {
-    const step = change.kind === 'state-rewrite' ? rewriteState(current, change)
-      : change.kind === 'link-rewrite' ? relink(current, change)
-        : change.kind === 'timeline-append' ? appendLines(current, change, authors) : wordRules(current, change, authors);
+    // Intermediate text is generated, even when it carries the source file id.
+    const step = change.kind === 'state-rewrite' ? rewriteState(current, change, source)
+      : change.kind === 'link-rewrite' ? relink(current, change, source)
+        : change.kind === 'timeline-append' ? appendLines(current, change, authors, source) : wordRules(current, change, authors, source);
+    source = undefined;
     if ('refused' in step) return refuse(step.refused);
     const kept = change.kind === 'state-rewrite' ? stateHolds(current, step.text, change) : holds(current, step.text, change, step);
     if (step.text !== current && !kept) return refuse('invariant');
@@ -787,8 +791,8 @@ export function applyChangesUsing(before: Uint8Array, changes: readonly Change[]
 }
 
 /** The one author of an edit's after-text: the bytes after every change in order, or why it is refused. */
-export function applyChanges(before: Uint8Array, changes: readonly Change[]): EditResult {
-  return applyChangesUsing(before, changes, { splice: (text, at, insert) => text.slice(0, at) + insert + text.slice(at) });
+export function applyChanges(before: Uint8Array, changes: readonly Change[], fetched?: FetchedOwnership): EditResult {
+  return applyChangesUsing(before, changes, { splice: (text, at, insert) => text.slice(0, at) + insert + text.slice(at) }, fetched);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -798,9 +802,9 @@ export function applyChanges(before: Uint8Array, changes: readonly Change[]): Ed
 const digest = (bytes: Uint8Array): Promise<string> => sha256(new Blob([bytes.slice().buffer]));
 
 /** Rule 1: the file as re-read still hashes to `beforeContent`, recomputes to `text`, and `content` describes it. */
-export async function recheckEdit(effect: EditText, bytes: Uint8Array): Promise<'ok' | 'conflict'> {
+export async function recheckEdit(effect: EditText, bytes: Uint8Array, fetched?: FetchedOwnership): Promise<'ok' | 'conflict'> {
   if (bytes.byteLength !== effect.beforeContent.size || await digest(bytes) !== effect.beforeContent.sha256) return 'conflict';
-  const result = applyChanges(bytes, effect.changes);
+  const result = applyChanges(bytes, effect.changes, fetched);
   if (!result.ok || result.text !== effect.text) return 'conflict';
   const { content } = effect;
   if (content.encoding !== 'utf8' || content.size !== result.bytes.byteLength || content.sha256 !== await digest(result.bytes)) return 'conflict';

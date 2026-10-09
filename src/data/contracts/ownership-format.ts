@@ -1,5 +1,6 @@
 /** Pure internal raw-byte ownership boundary. No provider or public Sources API. */
 import { TASK_LINE } from './tasks';
+import { sha256Sync } from './hashes';
 export interface ByteSpan { readonly start: number; readonly end: number }
 export type Owner = 'current' | 'personal' | 'timeline' | 'bower-note';
 export type OwnershipFailure = 'unsupported-version' | 'damaged-boundary' | 'invalid-encoding';
@@ -27,6 +28,31 @@ export type OwnershipResult =
   | { readonly status: 'invalid'; readonly reason: OwnershipFailure }
   | { readonly status: 'plain' | 'legacy'; readonly personal: ByteSpan; readonly layout: Layout; readonly tasks: readonly PersonalTask[] }
   | { readonly status: 'v2'; readonly personal: ByteSpan; readonly layout: Layout; readonly payloads: Readonly<Record<Owner, ByteSpan>>; readonly tasks: readonly PersonalTask[] };
+/** A fetched version's ownership table, retained only by its execution attempt. */
+export interface OwnershipContext {
+  read(fileId: string, bytes: Uint8Array): OwnershipResult;
+}
+export interface FetchedOwnership { fileId: string; context: OwnershipContext }
+
+/** Memoise the pure parser by file id and exact byte hash, never by name or place. */
+export function createOwnershipContext(
+  parser: (bytes: Uint8Array, key: { fileId: string; hash: string }) => OwnershipResult = parseOwnership,
+): OwnershipContext {
+  const files = new Map<string, Map<string, OwnershipResult>>();
+  return {
+    read(fileId, bytes) {
+      const hash = sha256Sync(bytes);
+      let versions = files.get(fileId);
+      const found = versions?.get(hash);
+      if (found) return found;
+      const result = parser(bytes, { fileId, hash });
+      if (!versions) { versions = new Map(); files.set(fileId, versions); }
+      versions.set(hash, result);
+      return result;
+    },
+  };
+}
+
 export interface TaskRequest {
   readonly index: number;
   readonly label: string;

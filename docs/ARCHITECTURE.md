@@ -95,7 +95,7 @@ Each mechanism has one home in the code ([TL-P4-15](harness/2026-10-08-tl-p4-15-
 | Current state bounds (strict on write, lenient on read) | `src/data/contracts/note-edit.ts` | Done: Bower writes at most 8 × 200 and reads up to 20 × 400; every stored manifest still parses (`c3-reply-schema`) |
 | Model input fingerprint and section hashes | `runner/src/claude.ts` | Done: canonical JSON per RFC 8785 (JCS); input= values before `c3-fingerprint` do not compare (`c3-fingerprint`) |
 | Question subject and identity | `src/data/contracts/` | Done: one subject; a yes to "Write it" applies the stored shown text with no model call (`c3-subject`) |
-| Note sections (Current state, Timeline, Bower's sections) | `src/data/contracts/ownership-format.ts` | Done (`c3-note-sections`); one byte table per note (`c4-test-timers`) |
+| Note sections (Current state, Timeline, Bower's sections) | `src/data/contracts/ownership-format.ts` | Done (`c3-note-sections`); one byte table per note (`c4-test-timers`); one parse per read note per attempt (`c4-parse-once`) |
 | Pile readiness accounting (declarations, dispositions, which pile a record belongs to) | `src/data/pile-readiness.ts` | Done: records stamped with their pile id, read for the Inbox's piles only (`c2-pile-records`) |
 | Planning: capture, decide, build operations | `src/data/spine/` | In progress: part 1 done (report rows by op id, one record→operations map, no fixture on the model path, enforced by dependency-cruiser); part 2 splits capture, decide and build (`c3-planner-split`) |
 | Worker deadlines (alarms) | `api/src` deadlines table | Done: one deadlines table; only the alarm dispatches (`c1-worker-deadlines`, `c2-worker-dispatch`) |

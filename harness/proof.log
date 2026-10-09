@@ -521,3 +521,4 @@ c2-create-by-id	3bc3c81c51ca9e82	2026-10-09	known-green: verify renamed by c4-cr
 c4-precheck-runner	8cc553b4ddfb3fcb	2026-10-09	red (fixed in 835eb3f5)
 c4-create-landed	dab17277f4906797	2026-10-09	red (fixed in 3022e9df)
 p4-corpus-driver	b67e90f4068fe9ac	2026-10-09	red (fixed in 0b77422f)
+c4-parse-once	a473bf6c3bd4ae48	2026-10-10	red (fixed in eb909a67)

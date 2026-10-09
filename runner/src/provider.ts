@@ -29,7 +29,7 @@ export function providerNamed(name: string | undefined): ProviderName {
  */
 export function runnerScripted(drive: RunnerDrive): ScriptedRead & { aim(scope: AdmissionScope): void } {
   const reads = drive.planReads();
-  return { ...reads, piles: (rootId) => listedPiles(reads, rootId), provenance: 'adapter-read', aim: (scope) => { reads.scope = scope; } };
+  return { ...reads, piles: (rootId, context) => listedPiles(reads, rootId, undefined, undefined, context), provenance: 'adapter-read', aim: (scope) => { reads.scope = scope; } };
 }
 
 /** A provider that aims the reads at the scope of the set the run took, then plans. */
