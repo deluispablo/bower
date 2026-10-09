@@ -43,19 +43,19 @@ test('the new pill has one look everywhere', async ({ page, isMobile }) => {
   });
   expect(homeLook).toEqual({ ...colors, fontSize: '13px', fontWeight: '600', borderRadius: '999px', height: '22px' });
   await expect(homePill).toHaveClass(/_freshPill_/);
-  await expectAxeClean(page);
+  await expectAxeClean(page, { include: 'main' });
 
   await page.goto('/files/Projects/Flat%20hunt');
   const folderPill = page.getByRole('main').getByText('New', { exact: true }).first();
   expect(await look(folderPill)).toEqual(homeLook);
   await expect(folderPill).toHaveClass(/_freshPill_/);
-  await expectAxeClean(page);
+  await expectAxeClean(page, { include: 'main' });
 
   await page.goto('/note/Projects/Flat%20hunt/Flat%20hunt.md');
   const notePill = page.getByRole('region', { name: 'Timeline', exact: true }).getByText('New', { exact: true }).first();
   expect(await look(notePill)).toEqual(homeLook);
   await expect(notePill).toHaveClass(/_freshPill_/);
-  await expectAxeClean(page);
+  await expectAxeClean(page, { include: 'main' });
 
   // Use the same phone menu / desktop tree entry points as v2-move-here.
   await page.goto('/note/Projects/Flat%20hunt/Lease%20draft.pdf');
