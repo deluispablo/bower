@@ -194,4 +194,20 @@ describe('tidy.yml', () => {
     expect(steps[path]).not.toContain('cache-hit');
     expect(at(/name: Tidy up with Claude\n/)).toBeGreaterThan(Math.max(install, path));
   });
+  it('the workflow records the runner region and never fails on it', () => {
+    const tidy = readFileSync(join(ROOT, 'runner', 'workflows', 'tidy.yml'), 'utf8');
+    const steps = tidy.split(/\n(?= {6}- )/).slice(1);
+    const region = steps.findIndex((s) => /name: Record the runner region\n/.test(s));
+    expect(region, 'the Record the runner region step exists').toBeGreaterThanOrEqual(0);
+    const runner = steps.findIndex((s) => /run: node runner\/dist\/runner\.mjs/.test(s));
+    expect(region, 'before the runner step').toBeLessThan(runner);
+    const step = steps[region] ?? '';
+    // Azure IMDS compute/location, text format, with the Metadata header and a 2 second cap (Azure docs: instance metadata service).
+    expect(step).toContain('curl -s -m 2 -H Metadata:true');
+    expect(step).toContain('http://169.254.169.254/metadata/instance/compute/location?api-version=2021-02-01&format=text');
+    expect(step).toContain('>> "$GITHUB_ENV"');
+    expect(step).toContain('BOWER_RUNNER_REGION=');
+    // It cannot fail the job.
+    expect(step).toMatch(/\n {8}continue-on-error: true\n/);
+  });
 });
