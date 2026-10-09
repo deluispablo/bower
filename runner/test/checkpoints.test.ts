@@ -141,7 +141,9 @@ const appliedIn = (c: Checkpoint | undefined): number => c?.outcomes.filter((o) 
  * Run folders in `.bower/runs` as listed (each with its stamp, if any, made at `created`, else at `at`); then this run (`RUN_ID`) ends at `at`. Gives the
  * names of the folders it put in the Bin, as it said and as Drive holds them.
  */
-async function keptAt(folders: { name: string; props?: Record<string, string>; created?: number; files?: string[] }[], at: number): Promise<{ binned: string[]; trashed: string[] }> {
+type Inside = { name: string; folder?: boolean; props?: Record<string, string> };
+
+async function keptAt(folders: { name: string; props?: Record<string, string>; created?: number; files?: string[]; inside?: Inside[] }[], at: number): Promise<{ binned: string[]; trashed: string[] }> {
   const drive = fixedDrive();
   const root = (await drive.createFolder('root', 'Bower')).id;
   const sys = (await drive.createFolder(root, '.bower')).id;
@@ -152,6 +154,7 @@ async function keptAt(folders: { name: string; props?: Record<string, string>; c
     drive.setTimes(folder.id, f.created ?? at, f.created ?? at);
     made.push(folder);
     for (const name of f.files ?? []) made.push(await drive.createText(folder.id, name, `${name} by Alex`));
+    for (const c of f.inside ?? []) made.push(c.folder ? await drive.createFolder(folder.id, c.name, c.props) : await drive.createText(folder.id, c.name, `${c.name} text`, c.props));
   }
   const wire = driveV3(drive);
   const token = new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: wire.fetch, now: () => wire.now });
@@ -439,6 +442,51 @@ describe('runner checkpoints', () => {
     const young = { name: 'run-young', props: { bowerRun: 'run-young' }, created: AT + 5000 - 3_600_000 };
     const others = Array.from({ length: 20 }, (_, i) => ({ name: `run-${String(i).padStart(2, '0')}`, props: endedStamp(`run-${String(i).padStart(2, '0')}`, AT + 100 + i) }));
     const { binned, trashed } = await keptAt([young, ...others, { name: RUN_ID }], AT + 5000);
+    expect(binned).toEqual(['run-00']);
+    expect(trashed).toEqual(['run-00']);
+  });
+
+  it('a run folder holding a file the person moved in is kept', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // P4-38d: Alex moved a note into the oldest run's folder. 21 ended runs, so run-00 is the one beyond 20; its own
+    // record carries its mark, the note does not, so the folder and the note stay, and the skip is logged.
+    const mine = { name: 'manifest-a.json', props: { bowerRun: 'run-00' } };
+    const others = Array.from({ length: 20 }, (_, i) => ({ name: `run-${String(i).padStart(2, '0')}`, props: endedStamp(`run-${String(i).padStart(2, '0')}`, AT + 100 + i) }));
+    const { binned, trashed } = await keptAt([...others.map((f, i) => (i === 0 ? { ...f, inside: [mine, { name: 'Ideas.md' }] } : f)), { name: RUN_ID }], AT + 5000);
+    expect(binned).toEqual([]);
+    expect(trashed).toEqual([]);
+    expect(logged.mock.calls.some((c) => String(c[0]).includes('kept'))).toBe(true);
+  });
+
+  it('a run folder holding a folder the person moved in is kept', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // The same with a folder of Alex's (with a note in it) moved into the oldest run's folder.
+    const others = Array.from({ length: 20 }, (_, i) => ({ name: `run-${String(i).padStart(2, '0')}`, props: endedStamp(`run-${String(i).padStart(2, '0')}`, AT + 100 + i) }));
+    const moved: Inside[] = [{ name: 'manifest-a.json', props: { bowerRun: 'run-00' } }, { name: 'Trips', folder: true }];
+    const { binned, trashed } = await keptAt([...others.map((f, i) => (i === 0 ? { ...f, inside: moved } : f)), { name: RUN_ID }], AT + 5000);
+    expect(binned).toEqual([]);
+    expect(trashed).toEqual([]);
+  });
+
+  it('a clean marked run folder beyond 20 is binned', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // 22 ended runs: run-00 holds a note of Alex's and is kept; run-01, every record inside marked as its own, goes.
+    // The skipped folder still counts among the runs, so none of the 20 newest is reached.
+    const others = Array.from({ length: 21 }, (_, i) => ({ name: `run-${String(i).padStart(2, '0')}`, props: endedStamp(`run-${String(i).padStart(2, '0')}`, AT + 100 + i) }));
+    const own = (run: string): Inside[] => ['manifest-a.json', 'checkpoint-0-a.json', 'report-a.json', 'dispositions.json'].map((name) => ({ name, props: { bowerRun: run } }));
+    const inside = (i: number): Inside[] | undefined => (i === 0 ? [...own('run-00'), { name: 'Ideas.md' }] : i === 1 ? own('run-01') : undefined);
+    const { binned, trashed } = await keptAt([...others.map((f, i) => ({ ...f, inside: inside(i) ?? [] })), { name: RUN_ID }], AT + 5000);
+    expect(binned).toEqual(['run-01']);
+    expect(trashed).toEqual(['run-01']);
+  });
+
+  it('a marked run folder renamed at rest is kept', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // The oldest run's folder renamed by Alex while no run was going: its mark no longer names it, so it is not counted
+    // nor binned; of 20 stamped runs and this run only the oldest stamped one goes.
+    const renamed = { name: 'Old trips', props: endedStamp('run-old', AT), created: AT - 2 * 24 * 3_600_000 };
+    const others = Array.from({ length: 20 }, (_, i) => ({ name: `run-${String(i).padStart(2, '0')}`, props: endedStamp(`run-${String(i).padStart(2, '0')}`, AT + 100 + i) }));
+    const { binned, trashed } = await keptAt([renamed, ...others, { name: RUN_ID }], AT + 5000);
     expect(binned).toEqual(['run-00']);
     expect(trashed).toEqual(['run-00']);
   });
