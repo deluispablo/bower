@@ -6259,7 +6259,7 @@
     "steps": [
       "Each app write with its target changed elsewhere is refused, Drive unchanged."
     ],
-    "verify": "pnpm vitest run -t \"every app write of an existing file refuses one that changed name or place elsewhere\"",
-    "note": "TL-P4-24 finding 2 (a); defect app-bin-skips-read-check; after c4-undo-withdraw. Escalated + Codex review pass. Packet 2026-10-09-c4-app-fence-packet.md."
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"every app write of an existing file refuses one that changed name or place elsewhere|every app write of a file reads it fresh in the same call|a fence read with no answer refuses with notReadError|a lost answer whose file already holds the write resolves without a resend|unbin expects the file in the Bin\"",
+    "note": "TL-P4-24 finding 2 (a); defect app-bin-skips-read-check; after c4-undo-withdraw. Escalated + Codex review pass. Packet 2026-10-09-c4-app-fence-packet.md. TL-P4-24 addendum 4: one checkStillAsSeen(seen, read, message) helper; SeenFiles folds in."
   }
 ]

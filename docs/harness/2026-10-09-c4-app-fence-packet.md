@@ -10,20 +10,33 @@
 - **Review:** an escalated Claude reviewer plus one Codex read-only review pass (TL-P4-23 ruling 6).
 - **Starting model:** `bower-escalated`.
 
-## Contract
+## Contract (TL-P4-24 addenda 2 and 4, main 1e7fb4dc)
 
-1. **`once` checks every send** (drive-vault), the Bin included. It reads the target and refuses when the target is not as seen.
-2. **One helper.** The read-then-notAsSeen helper is written once, in `src/data/contracts/still-as-seen.ts`. `once` and `removeNow` both use it.
-3. **Fold in the existing checks.** `stillAsSeen` and the hand checks at `drive-vault.ts:1078` and `:1708` fold into it, and so do the seven class sites in the note (`drive-vault.ts:703, 1089, 1078/1112, 1708, 453-466, 467`; `journal.ts:505`).
-4. **No second fence.**
+1. **One helper.** `checkStillAsSeen(seen, read, message)` lives in `src/data/contracts/still-as-seen.ts`. It takes the reader, so contracts stays pure. Callers:
+   - `SeenFiles.assert` and `read` (`seen-files.ts:65-90`) keep their map and folder case, but call it. Runner behaviour and runner tests stay the same.
+   - DriveVault `once` and the Journal (removeNow) call it.
+   - Its shape serves c4-retry-fence as a `() => Promise<void>` closure (no refresh inside) and c4-undo-withdraw's Bin.
+2. **`SeenExpectation` gains an optional `trashed`** (default false). `notAsSeen` returns 'gone' when the file is missing or its trashed state differs. Unbin expects `trashed: true`. Fence reads use `byId`, never `get`: `get` throws not-found and forces `trashed:false` (`drive-vault.ts:1722`).
+3. **A read with no answer** throws `notReadError`.
+4. **Lost answer.** If the file already `holds` the write, the fence resolves as landed and nothing is sent again. The three lost-answer tests (drive-vault.test ~3081, ~3099, ~535) stay green.
+5. **`once` checks every send,** the Bin included. `stillAsSeen` and the hand checks at `drive-vault.ts:1078` and `:1708` fold into the helper, and so do the seven class sites: `703, 1089, 1078/1112, 1708, 453-466, 467`, `404/1030`, and `journal.ts:505`.
+   - The check at `:1078` gains name and place: one predicate, the same one the runner's content writes use.
+6. **No second fence.** The Bin's extra `get` is accepted. The app golden (`drive-vault.test.ts:2855`) is updated, with a `tests changed:` line.
 
-## Red (class test, from the note)
+## Red and verify (exact names)
 
-`every app write of an existing file refuses one that changed name or place elsewhere` (drive-vault.test.ts, FakeDrive). It is a table of app writes (trash, removePile, restore, journal Undo, move, rename, content write). Each target is changed in Drive first, and the test expects a refusal with Drive unchanged. A suite-wide check also verifies that each write of a file is preceded by a fresh read of it in the same call. It fails today for trash, removePile, restore and Undo.
-
-## Verify
-
-The red; `pnpm check`; the touched e2e on fake; the goldens. Any extra read must not raise the goldens; if it would, stop and report.
+- `every app write of an existing file refuses one that changed name or place elsewhere` (`src/data/vault/drive-vault.test.ts`, FakeDrive).
+  - It is a table with one row per class site above.
+  - In each row, the target is changed in Drive first: renamed, moved, edited, binned or unbinned. The write must be refused and Drive left unchanged.
+  - It fails today for trash, removePile, restore and Undo.
+- `every app write of a file reads it fresh in the same call`: a spy proves a `byId` of that id after the last mutation, inside the same call.
+- `a fence read with no answer refuses with notReadError`
+- `a lost answer whose file already holds the write resolves without a resend`
+- `unbin expects the file in the Bin`
+- Runner: `SeenFiles` tests are unchanged and green.
+- Goldens: the app golden at `drive-vault.test.ts:2855` (updated for the Bin's `get`); C04 78 and 25-runs 88 (`runner/test/drive-calls-golden.test.ts:21,69`) must not rise.
+- e2e on fake, phone and desktop: qa9 and qa10 (Bin and Undo), capabilities.
+- `pnpm check`.
 
 ## Commits
 
