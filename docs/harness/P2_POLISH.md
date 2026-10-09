@@ -318,3 +318,9 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - scripted.ts:455 would swallow a budget NotReadHere to the fallback instead of deferring it (unreachable today);
   - displayName strips only .md;
   - no unit test shows drive.get is skipped when no pair row is made.
+- 2026-10-09 P4-47b (c3-state-mark), Minors (the first three go to the lead as a possible loop):
+  - api/src/person.ts:762 resets tries to 0 on each answersStayed, so a repeated failure of the same write has no cap;
+  - barrier.ts:281: answersStayed fires for any granted edit that was not applied, not only a clash;
+  - barrier.ts:281: a non-clash rejection does not use the answer up, so the run is left to re-run;
+  - e2e `test.skip(!isFake)` is a conditional skip, which is the file's existing pattern;
+  - fake-run-service: the taken-once flag is lost on reload.
