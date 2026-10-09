@@ -6394,12 +6394,12 @@
     "category": "refactor",
     "passes": false,
     "ui": true,
-    "what": "Undo as a compensating line (TL-P4-27): the client never changes a journal file; Undo appends undo(X) (offline too); one pure fold(lines) in contracts cancels X with undo(X) for list, contextRemoved, admission and journalOf; the run settles pairs and gives a late undo its own row; lenient reads, two-step release.",
+    "what": "Undo is the inverse forward change (TL-P4-27 addendum 2): under the outbox lock an unreserved line drops locally, otherwise the inverse forward line is recorded; the lock covers storing the reserved id before any send; sends go in order per folder; no journal file is ever deleted; no new kind, no fold, no tooLate.",
     "steps": [
       "fold is idempotent, order-independent and inert on a missing target.",
       "No run applies X while it can see undo(X); every late undo has a report row."
     ],
     "verify": "",
-    "note": "TL-P4-27 (main 802ac116); replaces c4-undo-withdraw (parked at 70a2b0da) and closes TL-P4-24 #3. Escalated, Opus plus a Codex pass; contract sign-off trial; designer copy pending. Packet 2026-10-09-c4-undo-compensate-packet.md."
+    "note": "TL-P4-27 (main 802ac116); replaces c4-undo-withdraw (parked at 70a2b0da) and closes TL-P4-24 #3. Escalated, Opus plus a Codex pass; contract sign-off trial; designer copy pending. Packet 2026-10-09-c4-undo-compensate-packet.md. Re-planned by TL-P4-27 addendum 2 (main c7a6556c): design (B) and tooLate withdrawn."
   }
 ]
