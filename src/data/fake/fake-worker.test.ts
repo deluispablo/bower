@@ -4296,32 +4296,33 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
     // note-edit-consumer-limits (TL-P2-29 (1), corrected): at most 8 edit-text per run in code-point path order, then
     // fewer from the end of that order until the manifest fits the guard's 8 MiB; the rest wait for the next run.
-    it('note edits past the size cap wait for the next run', async () => {
-      /** Code-point order, the same everywhere (not the locale's). */
-      const byCodePoint = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
-      /** A world with these hub notes to bring up to date, each with these bytes. */
-      async function hubs(names: string[], text: string) {
-        const updates = names.map((n) => ({ path: `Projects/${n}/${n}.md`, what: `${n} brought up to date.` }));
-        const w = await bWorld({ updates });
-        const files = new Map<string, DriveFile>();
-        for (const u of updates) files.set(u.path, await hub(w, u.path, text));
-        const sorted = updates.map((u) => u.path).sort(byCodePoint);
-        return { w, sorted, idOf: (path: string): string => files.get(path)?.id ?? '', whatOf: (path: string): string => updates.find((u) => u.path === path)?.what ?? '' };
+    /** Code-point order, the same everywhere (not the locale's). */
+    const byCodePoint = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+    /** A world with these hub notes to bring up to date, each with these bytes. */
+    async function hubs(names: string[], text: string) {
+      const updates = names.map((n) => ({ path: `Projects/${n}/${n}.md`, what: `${n} brought up to date.` }));
+      const w = await bWorld({ updates });
+      const files = new Map<string, DriveFile>();
+      for (const u of updates) files.set(u.path, await hub(w, u.path, text));
+      const sorted = updates.map((u) => u.path).sort(byCodePoint);
+      return { w, sorted, idOf: (path: string): string => files.get(path)?.id ?? '', whatOf: (path: string): string => updates.find((u) => u.path === path)?.what ?? '' };
+    }
+    /** One more full tidy-up, with a pile to take: done on the B path, its v2 manifest's edit paths. */
+    async function tidy(w: World, n: number): Promise<{ manifest: ManifestV2 | undefined; paths: string[] }> {
+      if (n) {
+        await w.uploader.addPile({ text: '', items: [pdf(`third ${n}.pdf`), pdf(`fourth ${n}.pdf`)] });
+        await w.uploader.settled();
       }
-      /** One more full tidy-up, with a pile to take: done on the B path, its v2 manifest's edit paths. */
-      async function tidy(w: World, n: number): Promise<{ manifest: ManifestV2 | undefined; paths: string[] }> {
-        if (n) {
-          await w.uploader.addPile({ text: '', items: [pdf(`third ${n}.pdf`), pdf(`fourth ${n}.pdf`)] });
-          await w.uploader.settled();
-        }
-        const admitted = (await w.worker.process('all')).run;
-        await w.runs.settled();
-        expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
-        const manifest = (await manifestsV2(w)).find((m) => m.runId === admitted.id);
-        expect(manifest, 'the run took the B path').toBeDefined();
-        return { manifest, paths: editsOf(manifest).map((o) => o.effect.path) };
-      }
+      const admitted = (await w.worker.process('all')).run;
+      await w.runs.settled();
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
+      const manifest = (await manifestsV2(w)).find((m) => m.runId === admitted.id);
+      expect(manifest, 'the run took the B path').toBeDefined();
+      return { manifest, paths: editsOf(manifest).map((o) => o.effect.path) };
+    }
 
+
+    it('note edits past the size cap wait for the next run', async () => {
       // Ten small notes: exactly the first 8 in code-point path order ('Hub B' before 'Hub a').
       const names = ['Hub d', 'Hub 03', 'Hub a', 'Hub 01', 'Hub c', 'Hub 05', 'Hub 02', 'Hub B', 'Hub 04', 'Hub 06'];
       const { w, sorted, idOf, whatOf } = await hubs(names, FLAT_BEFORE);
@@ -4348,7 +4349,13 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         expect(textAt(w, path)?.split(whatOf(path))).toHaveLength(2);
       }
       expect(viewOf(w)?.run.report?.updated).toMatchObject(rest.map((path) => ({ path, what: whatOf(path) })));
+    });
 
+    // The ten notes just under 1 MiB are the heaviest run in the suite. Its time bound is CPU seconds (the clock of this
+    // process), so a busy machine does not move it: the run took 14.1 CPU seconds (11.4 s of wall time) on an idle machine when every note was
+    // parsed with a prefix re-encode per span, and 9.5 (6.8 s) with one byte table per note; the bound sits between.
+    it('the size-cap run fits its time bound with no load', async () => {
+      const before = process.cpuUsage();
       // Ten notes just under 1 MiB, full of quotes and backslashes that JSON escapes: 8 would pass the guard's 8 MiB,
       // so each run takes fewer, from the start of the path order, stays on the B path, and later runs converge.
       const filler = 'She wrote "keep C:\\notes\\flats" and \\"quoted\\" it twice.\n';
@@ -4373,7 +4380,8 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         expect(writesTo(large.w.calls, large.idOf(path))).toHaveLength(1);
         expect(textAt(large.w, path)?.split(large.whatOf(path))).toHaveLength(2);
       }
-      // Several runs over ten notes of about 1 MiB, each manifest near 8 MiB: hashing takes seconds.
+      const used = process.cpuUsage(before);
+      expect((used.user + used.system) / 1e6).toBeLessThan(12);
     }, 30_000);
 
     // TL-P2-20 R3-7 m9: a build that reads manifest versions names a later one plainly, and leaves the run saving;
