@@ -272,6 +272,7 @@ describe("the engine's named actions", () => {
       const { engine, frames, read } = mount('idle');
       frames.run(61 * FPS);
       expect(read().tuft, cell).toBeCloseTo(-26, 0);
+      const before = read().head;
       engine.look(at, 'focus');
       const heads: number[] = [];
       const irises: number[] = [];
@@ -286,10 +287,21 @@ describe("the engine's named actions", () => {
       expect(Math.max(...hold), cell).toBeLessThanOrEqual(-8);
       // The gaze still moves the iris toward the focused control.
       expect(irises[Math.floor(0.75 * FPS)] ?? 0, cell).toBeGreaterThan(0.8);
-      // After the step the gaze's head offset comes back on the gaze's own spring (about 5 degrees a frame at its
-      // fastest), never in one frame: no frame moves the head 6 degrees or more of its 7 to 12 degree offset.
-      const jumps = heads.slice(1).map((h, i) => Math.abs(h - (heads[i] ?? h)));
-      expect(Math.max(...jumps), cell).toBeLessThan(6);
+      // TL-P4-25 addendum 5, two rules by move class. Speed is the head's change per frame, in degrees.
+      const speeds = heads.map((h, i) => h - (i === 0 ? before : (heads[i - 1] ?? h)));
+      // The startle's rise is a snap: exempt from the ramp, at most 6 degrees a frame, no overshoot past 2 degrees.
+      const rise = speeds.slice(0, Math.ceil(0.15 * FPS));
+      expect(Math.max(...rise.map(Math.abs)), `${cell} rise speed`).toBeLessThanOrEqual(6);
+      expect(Math.min(...heads.slice(0, Math.floor(0.75 * FPS))), `${cell} rise overshoot`).toBeGreaterThanOrEqual(-12);
+      // The returns (the step's head easing back, then the gaze settling) are ease-in-out: the speed starts and ends
+      // near 0 (within one 1.5 step of it), changes by at most 1.5 a frame, and never goes above 6.
+      const from = Math.floor(0.75 * FPS);
+      const back = speeds.slice(from);
+      const ramp = back.map((v, i) => Math.abs(v - (speeds[from + i - 1] ?? v)));
+      expect(Math.abs(back[0] ?? 0), `${cell} return starts`).toBeLessThanOrEqual(1.5);
+      expect(Math.abs(back[back.length - 1] ?? 0), `${cell} return ends`).toBeLessThanOrEqual(1.5);
+      expect(Math.max(...ramp), `${cell} return speed change`).toBeLessThanOrEqual(1.5);
+      expect(Math.max(...back.map(Math.abs)), `${cell} return speed`).toBeLessThanOrEqual(6);
     }
   });
 
