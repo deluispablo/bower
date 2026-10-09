@@ -23,14 +23,14 @@ import { PROP, RUNNER_WRITES, SYSTEM, isRunnerFile, type HashesFile, type Questi
 import { ruleLike } from '../rules';
 import { savedLinkAddress } from '../search-text';
 import { EMPTY_MD5, md5Hex } from '../contracts/hashes';
-import { STATE_ASK, STATE_ASK_AGAIN, answeredGone, askId, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
+import { STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
 import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
 import { parseTimelineLine } from '../contracts/timeline-line';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
 import { grounded, groundedKeys, seen } from './grounded';
-import { canonical } from './records';
+import { RUNS_NAME, canonical, isManifestName } from './records';
 import { NOT_FILED } from './report';
 import { SET_ASIDE, capturePiles, listedPiles, pileShape } from './plan';
 import { duplicatesOf, wordsSaved, type Duplicate } from './duplicates';
@@ -867,13 +867,19 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
    * (retention binned that run, or the mark is older than its manifest): then nothing is taken as said, and the line
    * names all that the section lacks. A manifest that cannot be read or parsed is passed over (lenient read).
    */
-  const manifestPaths = listing.filter((x) => !x.folder && MANIFEST_PATH.test(ix.pathOf(x.id) ?? ''))
+  const manifestPaths = listing.filter((x) => !x.folder && isManifestName(x.name) && parentOf(parentOf(ix.pathOf(x.id) ?? '')) === RUNS_PATH)
     .sort((a, b) => byCodePoint(b.modifiedTime, a.modifiedTime) || byCodePoint(a.id, b.id));
   const stateChanges = new Map<string, Promise<Array<{ fileId: string; lines: string[] }>>>();
   const changesIn = (file: DriveFile): Promise<Array<{ fileId: string; lines: string[] }>> => {
     let got = stateChanges.get(file.id);
     if (!got) {
-      got = drive.readText(file.id).then((text) => stateChangesOf(JSON.parse(text))).catch((e: unknown) => {
+      // Read by the one manifest reader (`parseRunManifestV2`), as the engine reads it; one it refuses is passed over.
+      got = drive.readBytes(file.id).then(async (bytes) => {
+        const read = await parseRunManifestV2(bytes, rootId, RUNNER_WRITES);
+        if (read.ok) return stateChangesOf(read.value);
+        console.error(`A run manifest could not be read for what Bower last wrote (${file.name}): ${read.reason}`);
+        return [];
+      }).catch((e: unknown) => {
         console.error(`A run manifest could not be read for what Bower last wrote (${file.name})`, e);
         return [];
       });
@@ -1070,25 +1076,32 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // precondition, RFC 9110 13.1.1).
     const shown = grant?.question.shown;
     const update = shown?.lines ?? w.state?.lines;
-    const changed = grant?.seen === null || (!!section && grant?.seen !== stateMark(section.lines));
+    const granted = grant && section?.owner === 'person' ? grant : undefined;
+    const changed = granted?.seen === null || (!!section && granted?.seen !== stateMark(section.lines));
     const held = !shown || (stamp === shown.stamp && md5Hex(bytes) === shown.md5);
-    if (grant && section?.owner === 'person' && (changed || !held)) {
-      // Changed since the question (or asked before questions kept what they saw): the yes was not to these lines. It
-      // is asked again, the reason first, with the same update and the note as it reads now. SEAM (c3-state-mark card):
-      // a change elsewhere in the note has no approved reason yet, so it is asked as it was first asked.
-      const q: Question = { id: stateQuestionId(f.id), text: changed ? STATE_ASK_AGAIN(name) : STATE_ASK(name), yes: 'Write it', no: 'Keep mine', about: w.path, state: stateMark(section.lines), ...(shown ? { shown: asRead(shown.lines) } : {}), askedAt: opts.requestedAt };
+    // Nothing to write: the section already reads as the update (the person wrote it themselves), or there is none
+    // (an older question's run had no update, or the note has no mark to grant under). Settled, with its answered row.
+    const already = !!update && !!section && section.lines.join('\n') === update.join('\n');
+    const change: StateRewrite | null = granted && !already && !changed && held && mark !== null && update ? { kind: 'state-rewrite', recordIds: [granted.answer], previous: section?.lines ?? [], lines: update, granted: { answer: granted.answer, mark } } : null;
+    const result = change ? applyChanges(bytes, [change]) : null;
+    // A clash: the write's own check finds the section is not as read (`person-edited`, `state-changed`).
+    const clash = !!result && !result.ok && (result.reason === 'person-edited' || result.reason === 'state-changed');
+    if (granted && section && !already && (changed || !held || clash)) {
+      // The note changed after Bower showed its update (the section, or the note's stamp or checksum: the one check),
+      // or the write found it so: the yes was not to this note. It is asked again, in the one re-ask wording
+      // (TL-P4-19 addendum 12), with the same update and the note as it reads now; it needs a new answer.
+      const q: Question = { id: stateQuestionId(f.id), text: STATE_ASK_AGAIN(name), yes: 'Write it', no: 'Keep mine', about: w.path, state: stateMark(section.lines), ...(shown ? { shown: asRead(shown.lines) } : {}), askedAt: opts.requestedAt };
       reasked.push(q);
       stateAsks.set(f.id, q);
-    } else if (grant && section?.owner === 'person' && mark !== null && update && section.lines.join('\n') !== update.join('\n')) {
+    } else if (change && result?.ok) {
       // The person's yes grants this one write over their lines, as read now; the answer goes with the edit.
-      const change: StateRewrite = { kind: 'state-rewrite', recordIds: [grant.answer], previous: section.lines, lines: update, granted: { answer: grant.answer, mark } };
-      const result = applyChanges(bytes, [change]);
-      if (result.ok) state = change;
-      // SEAM (TL-P4-19 addendum 10, `answered`): a refused write is a yes with no effect; its answered row goes here.
-      else console.error(`A note's Current state was refused (${result.reason}); none is planned for it`);
-    } else if (grant && section?.owner === 'person') {
-      // SEAM (TL-P4-19 addendum 10, `answered`): nothing to write for this yes (the section reads as the update already,
-      // carries no mark, or an older question's run had no update); its answered row goes here.
+      state = change;
+    } else if (granted && result && !result.ok && result.reason !== 'unchanged') {
+      // Refused for good: the answer settles, nothing is written, and its answered row says so, here and on the note.
+      console.error(`A note's Current state was refused (${result.reason}); none is planned for it`);
+      answeredRows.set(granted.answer, answeredState(granted.question.id, 'refused', w.path));
+    } else if (granted) {
+      answeredRows.set(granted.answer, answeredState(granted.question.id, 'nothing-to-write', w.path));
     } else if (w.state && !(grant && section?.owner === 'person')) {
       const now = currentStateOf(bytes);
       const adopt = now?.owner === 'unmarked' && (await adopting());
@@ -2174,23 +2187,17 @@ const citeName = (name: string): string => name.replace(/\.md$/i, '');
 /** Paths in code-point order, the same everywhere (TL-P2-29). */
 const byCodePoint = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
-/** A run's manifest in `.bower/runs`, by its path. */
-const MANIFEST_PATH = /^\.bower\/runs\/[^/]+\/manifest-[0-9a-f]{64}\.json$/;
-const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string');
-const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+/** Where the runs' folders are: a run's manifest is in its own folder there (`records.ts`). */
+const RUNS_PATH = `${SYSTEM.dir}/${RUNS_NAME}`;
 /**
- * The Current state changes a stored manifest records, each with its note's file id and the lines it wrote (an undo
- * that gives lines back under the mark they had says so: its lines are not Bower's). Read leniently: anything else in
- * it, of any version, is passed over.
+ * The Current state changes a manifest records, each with its note's file id and the lines it wrote (an undo that gives
+ * lines back under the mark they had says so: its lines are not Bower's).
  */
-function stateChangesOf(value: unknown): Array<{ fileId: string; lines: string[] }> {
-  const ops = record(value) && Array.isArray(value.operations) ? value.operations : [];
-  return ops.flatMap((op: unknown) => {
-    const e = record(op) && record(op.effect) ? op.effect : null;
-    const before = e?.kind === 'edit-text' && record(e.before) ? e.before : null;
-    if (!e || !before || typeof before.fileId !== 'string' || !Array.isArray(e.changes)) return [];
-    const fileId = before.fileId;
-    return e.changes.flatMap((c: unknown) => (record(c) && c.kind === 'state-rewrite' && strings(c.lines) && c.release === undefined && c.mark === undefined ? [{ fileId, lines: c.lines }] : []));
+function stateChangesOf(m: Manifest | ManifestV2): Array<{ fileId: string; lines: string[] }> {
+  return m.operations.flatMap((op) => {
+    const e = op.effect;
+    if (e.kind !== 'edit-text') return [];
+    return e.changes.flatMap((c) => (c.kind === 'state-rewrite' && c.release === undefined && c.mark === undefined ? [{ fileId: e.before.fileId, lines: [...c.lines] }] : []));
   });
 }
 

@@ -96,7 +96,10 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
   // The pretend Worker's session lease, shared by this browser's tabs as devices share the real Worker's.
   const world = `fake:${scenario}`;
   const lease = new FakeLease({ key: leaseKey(world, await uploadAccount(ALEX.email)) });
-  const worker = new FakeWorker({ drive, scenario, rootId, fresh, offline: scenario === 'offline', runs, lease });
+  // The write-it situation: the scripted reply updates two Current states, and the page may change a note elsewhere.
+  const writeIt = scenario === 'write-it' ? await import('./fake/write-it') : null;
+  const worker = new FakeWorker({ drive, scenario, rootId, fresh, offline: scenario === 'offline', runs, lease, ...(writeIt ? { states: writeIt.WRITE_IT_STATES } : {}) });
+  if (writeIt && rootId) (window as unknown as { __editElsewhere: (path: string, from: string, to: string) => Promise<void> }).__editElsewhere = writeIt.editElsewhere(drive, rootId);
   // The notes of changes find no network until the page says Drive now refuses them for good (the test's hook).
   if (scenario === 'journal-refused') {
     let refuses = false;

@@ -47,8 +47,11 @@ export const askId = (pileOrFileId: string): string => `${ASK}${pileOrFileId}`;
 
 /** The question about a note's Current state the person edited, word for word: `name` is the note's display name. */
 export const STATE_ASK = (name: string): string => `You changed the current state of ${name}. Should Bower write its update there?`;
-/** The same question asked again because the person changed that section after it was asked (its reason, said first). */
-export const STATE_ASK_AGAIN = (name: string): string => `You changed the current state of ${name} again. Should Bower still write its update there?`;
+/**
+ * The one re-ask of that question (TL-P4-19 addendum 12, the designer's words): the note changed after Bower showed its
+ * update (the section, or anything else in the note: its stamp and checksum say so), so nothing was written.
+ */
+export const STATE_ASK_AGAIN = (name: string): string => `The current state of ${name} changed after Bower showed you its update, so nothing was written. Should Bower write its update there now?`;
 /** The id of the question about a note's Current state the person edited, by the note's file id. */
 export const stateQuestionId = (noteFileId: string): string => `${STATE}${noteFileId}`;
 
@@ -135,18 +138,20 @@ export function openQuestions<Q extends Asked>(all: readonly Q[], answered: Read
 }
 
 /**
- * What became of an answer that settled with no effect (TL-P4-19 addendum 10), the report's `answered` rows. Not a
- * thing set aside, and never counted as one. `subject-gone`: what the question was about had gone (left the inbox,
- * or a note in the Bin) before Bower's run, so nothing was done.
+ * What became of an answer that settled with no effect (TL-P4-19 addenda 10 and 12), the report's `answered` rows. Not
+ * a thing set aside, and never counted as one. `subject-gone`: what the question was about had gone (left the inbox,
+ * or a note in the Bin) before Bower's run, so nothing was done; `refused`: a "Write it" whose write was refused for
+ * good; `nothing-to-write`: a "Write it" whose note already said what Bower would have written. A stored row is read
+ * by `isAnsweredRow`, so rows written before these outcomes still read (strict on write, lenient on read).
  */
-export const ANSWERED_OUTCOMES = ['subject-gone'] as const;
+export const ANSWERED_OUTCOMES = ['subject-gone', 'refused', 'nothing-to-write'] as const;
 export type AnsweredOutcome = (typeof ANSWERED_OUTCOMES)[number];
 /** Which kind of question a row answers: a pair of notes, a thing or pile in the inbox, a note's Current state. */
 export const ANSWERED_KINDS = ['pair', 'ask', 'state'] as const;
 export type AnsweredKind = (typeof ANSWERED_KINDS)[number];
 /**
  * One answered row: the question it answered, by id; its kind; what came of it; the sentence the person reads; and,
- * for a pair, the path of the note that stays, where the row shows too.
+ * for a pair, the path of the note that stays, and for a "Write it" with no effect, its note: the row shows there too.
  */
 export type AnsweredRow = { questionId: string; kind: AnsweredKind; outcome: AnsweredOutcome; why: string; note?: string };
 
@@ -156,6 +161,22 @@ export const askGone = (thing: string | null): string => (thing === null ? ASK_G
 /** A "Write it" whose note had gone, by the note's name when the question says it. */
 export const STATE_GONE = 'Not written: the note had moved or gone to the Bin.';
 export const stateGone = (note: string | null): string => (note === null ? STATE_GONE : `Not written: ${note} had moved or gone to the Bin before Bower got to it.`);
+/** A "Write it" refused for good (not a clash, which asks again), by the note's name when it is known. */
+export const stateRefused = (note: string | null): string => `Not written: Drive would not let Bower change ${note ?? 'the note'}. Your current state is as you left it.`;
+/** A "Write it" with nothing to write: the note already said it. */
+export const STATE_NOTHING = 'Nothing to write: the note already said it.';
+export const stateNothing = (note: string | null): string => (note === null ? STATE_NOTHING : `Nothing to write: ${note} already said what Bower would have written.`);
+
+/**
+ * The answered row of a "Write it" that settled with no effect in the run that tried it (TL-P4-19 addendum 12): its
+ * write refused for good, or nothing to write. `notePath` is the note's path now: the row names it and shows on it, as
+ * a pair's row shows on the note that stays; with none, the row says "the note" and shows under the result only.
+ */
+export function answeredState(questionId: string, outcome: Exclude<AnsweredOutcome, 'subject-gone'>, notePath: string | null): AnsweredRow {
+  const name = notePath === null ? null : displayName(nameOf(notePath));
+  const why = outcome === 'refused' ? stateRefused(name) : stateNothing(name);
+  return { questionId, kind: 'state', outcome, why, ...(notePath === null ? {} : { note: notePath }) };
+}
 
 /**
  * The answered row of an answer whose subject is gone, or null when its subject is there (or has no kind of its own):

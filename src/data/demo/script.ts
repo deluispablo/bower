@@ -8,7 +8,7 @@ import { BowerError } from '../types';
 import { linkTitle, savedLinkUrl } from '../search-text';
 import type { RunProvider } from '../spine/provider';
 import type { ScriptedRead } from '../spine/read';
-import { generatedName, planScripted, runKeys, type Decisions, type HubLine, type ScriptedRun } from '../spine/scripted';
+import { generatedName, planScripted, runKeys, type AuthoredState, type Decisions, type HubLine, type ScriptedRun } from '../spine/scripted';
 import { DISAGREEMENTS, FILING, HUB_UPDATES, MERGES, NOT_LOOKED_UP, askAbout, citedName, disagreement, disagreementAnswer, guessFolder, saltmereQuestion, scriptedRequest, seedPiles, wordRule, type HubUpdate } from './fixture';
 
 export type { HubUpdate };
@@ -25,10 +25,11 @@ const PLAN_BY_NAME = new Map(
 
 /**
  * The scripted reply: things filed where the fixture's plan sends them, else a guess from the pile's words; the hub
- * notes a full tidy-up brings up to date (`updates`, the demo's by default); merges, questions, request answers and
- * rule wordings as the fixture has them. It acts on every answer and takes every request.
+ * notes a full tidy-up brings up to date (`updates`, the demo's by default); the Current states it updates (`states`,
+ * none by default: a situation's, as the model's would be); merges, questions, request answers and rule wordings as the
+ * fixture has them. It takes every request, and acts on every answer unless it updates Current states.
  */
-export function scriptedDecisions(updates: readonly HubUpdate[] = HUB_UPDATES): Decisions {
+export function scriptedDecisions(updates: readonly HubUpdate[] = HUB_UPDATES, states: readonly AuthoredState[] = []): Decisions {
   return {
     thing: (t) => {
       const plan = PLAN_BY_NAME.get(t.name);
@@ -41,10 +42,12 @@ export function scriptedDecisions(updates: readonly HubUpdate[] = HUB_UPDATES): 
     thingAsk: () => null,
     note: () => null,
     lines: [],
-    states: [],
+    states,
     areas: new Map(),
     keep: [],
-    settles: () => true,
+    // It acts on every answer; with Current states to update (a situation's), the plan settles answers on its own, as
+    // for the model's reply, so a yes to "Write it" grants its one write (`c3-state-mark`, TL-P4-19 addendum 13).
+    ...(states.length ? {} : { settles: () => true }),
     merge: (item, yes) => MERGES.find((m) => m.item === item.name && yes(m.question)) ?? null,
     ownNote: (name) => PLAN_BY_NAME.get(name)?.note ?? null,
     hubLines: updates.map((u): HubLine => {

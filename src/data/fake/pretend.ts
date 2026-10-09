@@ -30,6 +30,8 @@ export async function pretendDrive(scenario: Scenario): Promise<{ drive: FakeDri
     if (scenario === 'slow-report' && rootId) await (await import('./live-shape')).liveShape(drive, rootId);
     // Answers whose subjects went since (TL-P4-19 addendum 10), for the rows a tidy-up gives them.
     if (scenario === 'gone-answers' && rootId) await (await import('./gone-answers')).goneAnswers(drive, rootId);
+    // Current states changed by hand since Bower wrote them (TL-P4-19 addendum 13), for "Write it".
+    if (scenario === 'write-it' && rootId) await (await import('./write-it')).writeIt(drive, rootId);
   }
   const d = drive;
   const saver = new Saver(scenario, d);
