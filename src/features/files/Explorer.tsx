@@ -126,18 +126,6 @@ export function Explorer({ variant }: Props) {
     if (ui.restored && desktop && (!document.activeElement || document.activeElement === document.body)) treeRef.current?.focus();
   }, [ui.restored, desktop]);
 
-  // A dialog opened from the tree (Move to…, the Bin question) gives the keyboard back to the tree.
-  const dialogOpen = !!ui.moveFor || !!ui.confirmBin;
-  const wasOpen = useRef(false);
-  useEffect(() => {
-    if (wasOpen.current && !dialogOpen && desktop) {
-      setTimeout(() => {
-        if (!document.activeElement || document.activeElement === document.body) treeRef.current?.focus();
-      }, 0);
-    }
-    wasOpen.current = dialogOpen;
-  }, [dialogOpen, desktop]);
-
   // A row moved into a closed folder: open the way to it, so focus can stay on it.
   useEffect(() => {
     if (!focus || visible(focus)) return;
@@ -534,18 +522,15 @@ export function Explorer({ variant }: Props) {
           onOpenChange={(o) => {
             if (o) return;
             setMenuNode(null);
-            // A name box or a dialog opened by the menu keeps the keyboard; otherwise it goes back to the tree.
-            setTimeout(() => {
-              const st = useUi.getState();
-              const lost = !document.activeElement || document.activeElement === document.body;
-              if (lost && !st.renaming && !st.moveFor && !st.confirmBin) treeRef.current?.focus();
-            }, 30);
+            // The keyboard goes back to the tree at once, so a key pressed right after Escape reaches it.
+            // A name box the menu opened keeps it; a sheet takes it from the tree and gives it back (Sheet remembers its opener).
+            if (!useUi.getState().renaming) treeRef.current?.focus();
           }}
         >
           <ContextMenu.Trigger asChild>{treeEl}</ContextMenu.Trigger>
           <ContextMenu.Portal>
             <ContextMenu.Content className={menuCls.content} hidden={!menuNode} onCloseAutoFocus={(e) => e.preventDefault()}>
-              {menuNode && <NodeMenuItems node={menuNode} Item={ContextMenu.Item} Separator={ContextMenu.Separator} />}
+              {menuNode && <NodeMenuItems node={menuNode} Item={ContextMenu.Item} Separator={ContextMenu.Separator} beforeRun={() => treeRef.current?.focus()} />}
             </ContextMenu.Content>
           </ContextMenu.Portal>
         </ContextMenu.Root>
@@ -647,7 +632,7 @@ export function useNodeMenu(node: TreeNode) {
   return items;
 }
 
-function NodeMenuItems({ node, Item, Separator }: { node: TreeNode; Item: ItemComp; Separator: SepComp }) {
+function NodeMenuItems({ node, Item, Separator, beforeRun }: { node: TreeNode; Item: ItemComp; Separator: SepComp; beforeRun?: () => void }) {
   const items = useNodeMenu(node);
   return (
     <>
@@ -655,7 +640,11 @@ function NodeMenuItems({ node, Item, Separator }: { node: TreeNode; Item: ItemCo
         it === 'sep' ? (
           <Separator key={`s${i}`} className={menuCls.sep} />
         ) : (
-          <Item key={it.key} className={it.danger ? menuCls.danger : menuCls.item} onSelect={it.run} disabled={!!it.disabled}>
+          <Item key={it.key} className={it.danger ? menuCls.danger : menuCls.item} onSelect={() => {
+              // The keyboard goes back to the tree before the action runs, so a sheet it opens remembers the tree, not this menu.
+              beforeRun?.();
+              it.run();
+            }} disabled={!!it.disabled}>
             <Icon name={it.icon} size={16} />
             {it.label}
           </Item>

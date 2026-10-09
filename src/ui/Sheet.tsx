@@ -1,8 +1,8 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import s from './ui.module.css';
 import { useBackCloses } from './back';
-import { focusMain } from './focus';
+import { closeFocus, openerNow } from './focus';
 
 interface Props {
   open: boolean;
@@ -18,6 +18,11 @@ interface Props {
 /** A bottom sheet on a phone, a centred dialog on a desktop. */
 export function Sheet({ open, onOpenChange, title, hideTitle, description, children, className = '' }: Props) {
   useBackCloses(open, () => onOpenChange(false));
+  // The control that held the keyboard when the sheet opened; read before the sheet takes it.
+  const opener = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (open) opener.current = openerNow();
+  }, [open]);
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -26,8 +31,8 @@ export function Sheet({ open, onOpenChange, title, hideTitle, description, child
         <Dialog.Content
           className={`${s.sheet} ${className}`}
           {...(description ? {} : { 'aria-describedby': undefined })}
-          // Back to what opened it; when that is gone (a sheet opened by the app), to the page.
-          onCloseAutoFocus={focusMain}
+          // Back to what opened it; when that is gone (a sheet opened by the app), to the page's heading.
+          onCloseAutoFocus={(e) => closeFocus(e, opener.current)}
         >
           <div className={s.grab} aria-hidden="true" />
           <Dialog.Title className={hideTitle ? 'sr-only' : s.sheetTitle}>{title}</Dialog.Title>

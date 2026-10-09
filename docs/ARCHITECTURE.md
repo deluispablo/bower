@@ -102,7 +102,7 @@ Each mechanism has one home in the code ([TL-P4-15](harness/2026-10-08-tl-p4-15-
 | Worker route helpers (person RPC, errors, JSON body) | `api/src` middleware | Done (`c1-worker-routes`) |
 | Contracts shared by app, Worker and runner (wire, phases, lease, template) | `src/data/contracts/` | Done (`c1-shared-contracts`) |
 | UI data loading (one store, loading, error or ready) | `src/data/provider.tsx` | Target: per-component loads (`c4-query-store`, `c4-resource`) |
-| Focus return after a menu, sheet, toast or palette closes | `src/ui/focus.ts` | Target: 7 sites with their own timers (`c4-focus-return`) |
+| Focus return after a menu, sheet, toast or palette closes | `src/ui/focus.ts` | Done: `closeFocus` (Radix `onCloseAutoFocus`) and `returnFocusTo`, no timers; `Sheet` records its opener; the tree menu returns to the tree at once. The route-heading rule keeps its polling until `c4-test-timers` (`c4-focus-return`) |
 | UI actions (busy, error, double press) | `src/ui/` `useAction` | Target: hand-written per screen (`c4-use-action`) |
 | Run status words | `src/features/tidy/run-words.ts` | Six surfaces decide alone (`c4-run-view`) |
 | App copy | one copy file keyed by id | Target (`c4-copy`) |

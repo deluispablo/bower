@@ -23,32 +23,60 @@ export function focusHeading(): void {
   } else document.getElementById('main')?.focus({ preventScroll: true });
 }
 
+/** What holds the keyboard now, if it is a control: the opener a layer about to open will give it back to. */
+export function openerNow(): HTMLElement | null {
+  const at = typeof document === 'undefined' ? null : document.activeElement;
+  return at instanceof HTMLElement && at !== document.body ? at : null;
+}
+
+let endWatch: (() => void) | null = null;
+
 /**
- * Back to what opened a dialog (WAI-ARIA APG, modal dialog). When the opener goes
- * away a moment later (a card that closing the dialog dismisses), focus goes to the
- * page's heading instead of the body.
+ * Back to what opened a dialog (WAI-ARIA APG, modal dialog: on close, focus returns to the
+ * element that opened it). With no opener, or one that has left the page, focus goes to the
+ * page's heading. When the opener goes away a moment later (a card that closing the dialog
+ * dismisses), it goes to the heading then. No timer: the watch ends when the opener goes, or
+ * when focus lands on anything else.
  */
 export function returnFocusTo(opener: HTMLElement | null): void {
+  endWatch?.();
   if (!opener || !document.contains(opener) || opener === document.body) {
     focusHeading();
     return;
   }
   opener.focus();
+  const onIn = (e: FocusEvent): void => {
+    if (e.target !== opener) end();
+  };
   const watch = new MutationObserver(() => {
     if (typeof document === 'undefined') {
-      watch.disconnect();
+      end();
       return;
     }
     if (document.contains(opener)) return;
-    watch.disconnect();
-    clearTimeout(stop);
+    end();
     focusHeading();
   });
-  const stop = setTimeout(() => {
-    if (typeof document === 'undefined') return;
+  const end = (): void => {
     watch.disconnect();
-  }, 3000);
+    if (typeof document !== 'undefined') document.removeEventListener('focusin', onIn, true);
+    if (endWatch === end) endWatch = null;
+  };
+  endWatch = end;
+  document.addEventListener('focusin', onIn, true);
   watch.observe(document.body, { childList: true, subtree: true });
+}
+
+/**
+ * The close-focus hook for a layer (Radix `onCloseAutoFocus`): the library's own guess is
+ * stopped, and focus goes back to what opened the layer through `returnFocusTo`. Only when focus
+ * has fallen to nothing: a field in the next sheet this one made room for keeps the keyboard.
+ */
+export function closeFocus(e: Event, opener: HTMLElement | null): void {
+  e.preventDefault();
+  const at = document.activeElement;
+  if (at && at !== document.body && at.isConnected) return;
+  returnFocusTo(opener);
 }
 
 /** A menu, sheet or dialog open on screen owns the keyboard; the route rule leaves it alone. */
