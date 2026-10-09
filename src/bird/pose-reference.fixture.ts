@@ -131,7 +131,7 @@ export const POSE_REFERENCE: Record<Pose, PoseRef> = {
       stretch: { peak: 1.08, rest: 1, restAt: 0.72, range: [0.96, 1.08] },
       wing: { peak: -38, rest: 0, restAt: 0.8, range: [-38, 18] },
       wingScale: { peak: 0.7, rest: 1, restAt: 0.8, range: [0.7, 1] },
-      legs: { peak: 0.55, rest: 1, restAt: 0.8, range: [0.55, 1] },
+      legs: { peak: 0.55, rest: 1, restAt: 0.8, range: [0.55, 1], hold: [0.22, 0.48] },
       tail: { peak: -16, rest: 0, restAt: 0.3, range: [-16, 0] },
     },
   },
