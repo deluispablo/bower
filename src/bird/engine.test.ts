@@ -1,6 +1,7 @@
 import { createElement } from 'react';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import fc from 'fast-check';
 import { BirdEngine, type ActName, type EngineOptions } from './engine';
 import { Rig, type RigPart } from './Rig';
 import type { Pose } from './Bower';
@@ -326,6 +327,100 @@ describe("the engine's named actions", () => {
     expect(Math.max(...ramp), 'return speed change').toBeLessThanOrEqual(1.5);
     expect(Math.max(...back.map(Math.abs)), 'return speed').toBeLessThanOrEqual(6);
     expect(Math.abs(back[back.length - 1] ?? 0), 'return ends').toBeLessThanOrEqual(1.5);
+  });
+
+  it('every frame keeps the addendum 5 bounds under random focus, pointer, touch, step and wake events', () => {
+    // TL-P4-25 addendum 5 (6): returns change speed by at most 1.5 a frame and stay at or under 6; snaps and the
+    // startle rise stay at or under 6 with no overshoot past 2. Speed is the head's change per frame, in degrees.
+    const RISE = Math.ceil(0.15 * FPS);
+    const STEP = Math.ceil((0.15 + 0.6 + 0.4 + 0.4) * FPS); // rise, hold, fall, then the gaze settling back
+    const event = fc.record({
+      gap: fc.integer({ min: 0, max: 200 }),
+      kind: fc.constantFrom('pointer', 'touch', 'focus', 'blur', 'nudge', 'sleep'),
+      x: fc.integer({ min: -100, max: 300 }),
+      y: fc.integer({ min: -150, max: 300 }),
+    });
+    fc.assert(
+      fc.property(fc.constantFrom('idle' as const, 'wait' as const), fc.array(event, { minLength: 1, maxLength: 10 }), (pose, events) => {
+        cleanup();
+        const { engine, frames, read } = mount(pose);
+        let focus: { x: number; y: number } | null = null;
+        let head = read().head;
+        let speed = 0;
+        let stepAt = -Infinity;
+        let gazeUntil = -Infinity;
+        let inputAt = 0;
+        let snapFrom = head;
+        let wasSnap = false;
+        let frame = 0;
+        const problems: string[] = [];
+        const tick = (n: number) => {
+          for (let i = 0; i < n; i++) {
+            frames.run(1);
+            frame++;
+            const now = read().head;
+            const v = now - head;
+            const asleep = frame - inputAt >= 60 * FPS;
+            const rising = frame - stepAt <= RISE;
+            const gazing = (focus !== null || frame <= gazeUntil) && frame - stepAt > STEP;
+            const snap = rising || gazing;
+            if (snap && !wasSnap) snapFrom = head;
+            if (Math.abs(v) > 6) problems.push(`frame ${frame}: speed ${v.toFixed(2)}`);
+            if (snap && (now < -12 - 2 || now > Math.max(7, snapFrom) + 2)) problems.push(`frame ${frame}: overshoot ${now.toFixed(2)}`);
+            if (!snap && !asleep && Math.abs(v - speed) > 1.5) problems.push(`frame ${frame}: return speed change ${(v - speed).toFixed(2)}`);
+            wasSnap = snap;
+            head = now;
+            speed = v;
+          }
+        };
+        const input = () => {
+          if (frame - inputAt >= 60 * FPS) stepAt = frame; // an input wakes a sleeping bird with the startle
+          inputAt = frame;
+        };
+        for (const e of events) {
+          tick(e.gap);
+          const at = { x: e.x, y: e.y };
+          if (e.kind === 'pointer' || e.kind === 'touch') {
+            input();
+            engine.look(at, e.kind);
+            gazeUntil = frame + Math.floor(2.5 * FPS);
+          } else if (e.kind === 'focus') {
+            input();
+            focus = at;
+            engine.look(() => focus, 'focus');
+          } else if (e.kind === 'blur') focus = null;
+          else if (e.kind === 'nudge') {
+            input();
+            stepAt = frame;
+          } else {
+            focus = null;
+            tick(61 * FPS);
+            continue;
+          }
+          if (e.kind === 'nudge') engine.nudge();
+        }
+        tick(4 * FPS);
+        expect(problems.slice(0, 5), JSON.stringify({ pose, events })).toEqual([]);
+      }),
+      { seed: 2610, numRuns: 40 },
+    );
+  });
+
+  it('every ENGINE_MEMBERS key needs a reference row or an allowlist entry, whatever its tag', () => {
+    // TL-P4-22 addendum 21, over every key: a new name with any tag that is not a row of its own fails.
+    const known = new Set(Object.keys(ENGINE_MEMBERS));
+    fc.assert(
+      fc.property(
+        fc.oneof(fc.constantFrom('toString', 'constructor', 'stretch', 'glide'), fc.stringMatching(/^[a-z][A-Za-z]{2,10}$/)),
+        fc.constantFrom('control' as const, 'script' as const, 'acts' as const, 'poses' as const),
+        (name, kind) => {
+          fc.pre(!known.has(name));
+          const missing = unreferencedMembers({ ...ENGINE_MEMBERS, [name]: kind });
+          expect(missing.some((m) => m.startsWith(name)), `${name}: ${kind}`).toBe(true);
+        },
+      ),
+      { seed: 2610, numRuns: 60 },
+    );
   });
 
   it('the wake startle stays within its reference range', () => {
