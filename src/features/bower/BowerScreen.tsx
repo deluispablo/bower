@@ -6,6 +6,7 @@ import { focusMain } from '@/ui/focus';
 import { startRun } from '@/features/tidy/start-run';
 import { useRequests, useRules, useRun, useSources } from '@/data/provider';
 import { PoseBower, type Pose } from '@/bird/Bower';
+import { Segmented } from '@/ui/Segmented';
 import { Button } from '@/ui/Button';
 import { fieldBox, Textarea } from '@/ui/Field';
 import { Icon } from '@/ui/Icon';
@@ -94,14 +95,15 @@ export function BowerScreen() {
           void send();
         }}
       >
-        <div className={s.kinds} role="radiogroup" aria-label="What is it?">
-          <button type="button" role="radio" aria-checked={kind === 'request'} onClick={() => setKind('request')}>
-            A request
-          </button>
-          <button type="button" role="radio" aria-checked={kind === 'rule'} onClick={() => setKind('rule')}>
-            A rule
-          </button>
-        </div>
+        <Segmented
+          label="What is it?"
+          value={kind}
+          onChange={setKind}
+          options={[
+            { value: 'request', label: 'A request' },
+            { value: 'rule', label: 'A rule' },
+          ]}
+        />
         <Textarea
           inBox
           ref={composerRef}

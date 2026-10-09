@@ -154,7 +154,7 @@ export function DesktopShell() {
                     if (x) nav(x.route);
                   }}
                 >
-                  <Icon name="x" size={13} />
+                  <Icon name="x" size={16} />
                 </button>
               </div>
             ))}

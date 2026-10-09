@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { useSources, useRules, useUser } from '@/data/provider';
-import { usePrefs, type Theme } from '@/app/prefs';
+import { usePrefs } from '@/app/prefs';
 import { plural } from '@/app/words';
 import { Button } from '@/ui/Button';
 import { Switch } from '@/ui/Field';
+import { Segmented } from '@/ui/Segmented';
 import { toast } from '@/ui/toast';
 import { afterOverlaysClosed } from '@/ui/back';
 import { Sheet } from '@/ui/Sheet';
@@ -13,15 +14,17 @@ import { useUi } from '@/app/ui-store';
 import { Link, useNavigate } from 'react-router';
 import s from './settings.module.css';
 
-function Row({ title, sub, children }: { title: string; sub?: string; children: ReactNode }) {
+/** `asLabel`: the whole row is its switch's label, so a tap anywhere on it toggles the switch. */
+function Row({ title, sub, asLabel, children }: { title: string; sub?: string; asLabel?: boolean; children: ReactNode }) {
+  const Tag = asLabel ? 'label' : 'div';
   return (
-    <div className={s.row}>
+    <Tag className={s.row}>
       <div className={s.rowText}>
         <span className={s.rowTitle}>{title}</span>
         {sub && <span className={s.rowSub}>{sub}</span>}
       </div>
       {children}
-    </div>
+    </Tag>
   );
 }
 
@@ -82,7 +85,7 @@ export function Settings() {
       </Row>
 
       <h2 className={s.h2}>Tidying up</h2>
-      <Row title="Look things up on the web" sub="Fill in what a document leaves out, with sources">
+      <Row asLabel title="Look things up on the web" sub="Fill in what a document leaves out, with sources">
         <Switch
           on={prefs.lookUpWeb}
           label="Look things up on the web"
@@ -90,6 +93,7 @@ export function Settings() {
         />
       </Row>
       <Row
+        asLabel
         title="Tell me when a tidy-up ends"
         sub={
           blocked
@@ -106,27 +110,19 @@ export function Settings() {
 
       <h2 className={s.h2}>This device</h2>
       <Row title="Appearance">
-        <div className={s.seg} role="radiogroup" aria-label="Appearance">
-          {(
-            [
-              ['system', 'System'],
-              ['dark', 'Dark'],
-              ['light', 'Light'],
-            ] as Array<[Theme, string]>
-          ).map(([v, l]) => (
-            <button
-              key={v}
-              type="button"
-              role="radio"
-              aria-checked={prefs.theme === v}
-              onClick={() => prefs.set({ theme: v })}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="Appearance"
+          value={prefs.theme}
+          onChange={(theme) => prefs.set({ theme })}
+          options={[
+            { value: 'system', label: 'System' },
+            { value: 'dark', label: 'Dark' },
+            { value: 'light', label: 'Light' },
+          ]}
+        />
       </Row>
       <Row
+        asLabel
         title="Bower moves"
         sub="Hops, flies and carries things around the app. Off keeps Bower still."
       >
