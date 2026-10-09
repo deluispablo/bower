@@ -351,7 +351,7 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   const read = await journalOf(drive, ix);
   const lines = opts.taken ? tookLines(read, opts.taken) : read;
   // An instructions run takes no pile: it reads only your changes.
-  const inbox = all ? await drive.piles(rootId) : [];
+  const inbox = all ? await drive.piles(rootId, opts.context) : [];
   // Bower's own files (TL-P2-17): a failed read refuses before admission and any effect; a malformed one is
   // replaced when the run writes it, its old entries never claimed; a missing one is made again.
   const sys = ix.file(SYSTEM.dir);
@@ -367,7 +367,7 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   if (all && !inbox.length && !opts.taken) throw new BowerError('conflict', NOTHING_WAITING);
   const piles = opts.taken ? tookPiles(inbox, opts.taken) : inbox;
   // The capture the Worker's admission shares (TL-P3-21), with the one pile note each pile records read and checked.
-  const readiness = await capturePiles(drive, rootId, piles.map(pileShape), { notes: true });
+  const readiness = await capturePiles(drive, rootId, piles.map(pileShape), { notes: true, context: opts.context });
   // Things already saved (`duplicates.ts`, TL-P4-10 addendum 2), by their content.
   const dups = duplicatesOf(listing, ix, piles.flatMap((p) => p.items.map((i) => i.id)));
   return { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups };

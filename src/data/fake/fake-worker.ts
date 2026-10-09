@@ -263,8 +263,9 @@ export class FakeWorker implements WorkerApi {
   private async begin(scope: 'all' | 'instructions', opts: ProcessOptions & { subjects?: readonly string[] }): Promise<RunWire> {
     const root = this.rootId;
     if (!root) throw new BowerError('not-found', 'Your Bower folder is not there any more.');
+    const context = createOwnershipContext();
     const vault = new DriveVault({ drive: this.drive, rootId: async () => root, runningPiles: () => new Set(), device: 'worker' });
-    if (scope === 'all' && !(await vault.piles()).reduce((n, p) => n + thingsIn(p), 0)) throw new BowerError('conflict', 'Nothing is waiting in the inbox.');
+    if (scope === 'all' && !(await vault.piles(context)).reduce((n, p) => n + thingsIn(p), 0)) throw new BowerError('conflict', 'Nothing is waiting in the inbox.');
     // Planned once, before any effect, and admitted whole on the B path, the only one (TL-P2-38): planning holds the
     // piles it cannot take and refuses, before admission, what Bower's own checks refuse.
     const minted = this.runs.ids();
@@ -272,9 +273,8 @@ export class FakeWorker implements WorkerApi {
     const requestId = opts.requestId ?? minted.requestId;
     // An answer's run takes only the pile that holds its subject (TL-P4-08 addendum 8), admitted as the Worker does.
     const subjects = [...(opts.subject !== undefined ? [opts.subject] : []), ...(opts.subjects ?? [])];
-    const scoped = !subjects.length ? null : await planAdmission(fakeRead(this.drive), root, { scope, subjects, clock: () => Date.now(), newId: () => requestId });
+    const scoped = !subjects.length ? null : await planAdmission(fakeRead(this.drive), root, { context, scope, subjects, clock: () => Date.now(), newId: () => requestId });
     if (scoped?.kind === 'nothing') throw new BowerError('conflict', NOTHING[scoped.cause]);
-    const context = createOwnershipContext();
     const plan = await planRun(this.drive, root, { context, scope, allowWeb: !!opts.allowWeb, runId, requestId, requestedAt: Date.now(), ...(scoped ? { taken: scoped.manifest } : {}), ...(this.updates ? { updates: this.updates } : {}), ...(this.states ? { states: this.states } : {}) });
     const failAt = this.failOnce;
     this.failOnce = false;
