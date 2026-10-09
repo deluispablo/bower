@@ -159,3 +159,35 @@
 - tests changed: src/data/contracts/questions.test.ts: tests added in round 3, none changed.
 - Gates: `pnpm check` exit 0 (/tmp/csm3b-check.log); e2e:fake capabilities and capabilities-b 26 passed, phone and
   desktop (/tmp/csm3b-e2e.log).
+
+## Round 4 (TL-P4-19 addenda 16, 17, 18)
+
+- Commits: red d4d2de42, fix d5c9042d (addendum 16); red a7f7c938, fix f3db5b5b (addendum 17).
+- Addendum 16, done: `Finished.answersStayed` (barrier.ts `grantedClashed`) is true only when the granted edit was
+  rejected with failure code `conflict` (the engine's clash: NOTE_CHANGED, NOT_AS_SEEN, and STAYED). person.ts
+  `answersStayed()` keeps the waiting entry's `tries` instead of setting 0. No new table, counter or dispatch path.
+  Red `only a clash keeps an answer for a re-ask` (runner): Drive answers 503 to the write every time; failed with
+  dispatched length 3, expected 2 (the loop's next run). Green after the fix.
+- Addendum 16, stalled: the class test `the same non-clash refusal never starts more runs than the cap, then shows
+  the not-written row` is not added. A refusal at the write is known only to the runner at run time, and answered rows
+  are made only at plan time (scripted.ts); the Worker's `tries` (AnswersWaiting) is lost when a run takes the entry
+  (`takeWaiting`) and never reaches the runner. Settling the row at the cap or at once (permanent kind; today a
+  permanent error stops the run, it is never `done`) needs a channel the lead must rule on: e.g. a field in the
+  admission manifest, or the runner reading earlier runs' outcomes. After this round a non-clash refusal starts no
+  run on its own (bounded: 0 runs) and the answer waits in your changes for the next press, with no row.
+- Addendum 17, done: Home's question card shows "Bower's update" (`tidy.module.css` `linksLabel`, the New notes
+  label) then `shown.lines` as a bullet list in the Current state panel (`note.module.css` `state`). No new component.
+  Red `the write it card shows every line of Bower's update` (Home.test.tsx) failed: card text lacked
+  'Insurance runs until 30 June.'. `a yes writes only the update that was shown` (write-it.test.ts) passes before
+  and after: scripted.ts writes `shown.lines` over the run's own update. The e2e write-it test checks the list and
+  runs axe (WCAG 2.2 tags, target-size) on the questions section.
+- Addendum 18, not done (stalled): neither home refuses a news line with no source today. note-edit.ts
+  `entryOk` allows `source === null`; the zod reply schema (runner/src/claude.ts) has `cites` optional on lines and
+  states. `cites` on WRITE_IT_STATES must be an inbox thing's file id (scripted.ts matches states by id), which the
+  fake seed makes at run time, so a static fixture cannot name one without matching by name. Needs a ruling on the
+  home and on how the fixture names its thing.
+- tests changed: runner/test/ask-answer-loop.test.ts: one test added, none changed.
+- tests changed: src/features/home/Home.test.tsx: one test added, none changed.
+- tests changed: src/data/fake/write-it.test.ts: one test added, none changed.
+- tests changed: e2e/capabilities.spec.ts: the write-it test gains the update list and axe checks; nothing removed.
+- No `.only` or `.skip` added.
