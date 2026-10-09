@@ -59,3 +59,14 @@ Reviewers are read-only. They never move the main checkout in any form.
   - The zod reply schema's refinement calls the same note-edit predicate; it does not restate the rule.
   - The fake seed returns a map from fixture key to the id it created. WRITE_IT_STATES cites that key, which is resolved when the scenario runs, never by name.
   - Red: `a timeline news line with no source is refused`.
+
+## Round 4c (TL-P4-19 addenda 21 and 22, main 35ee5926)
+
+- **a21** replaces addendum 19's "used up". The engine is untouched: the archive keeps waiting for its write (TL-P2-20 rule 7).
+  - A non-clash refusal keeps the answer in .bower/changes and starts no automatic run. `answersStayed` stays clash-only.
+  - The next tidy-up tries the write once more under the stamp-plus-checksum check. If the section changed, it re-asks.
+  - The row is the `when: 'rejected'` contribution on the edit: one row per answer, under "Answers Bower could not act on", not counted as set aside.
+  - The row's copy is the failure sentence plus "Bower will try again in the next tidy-up." The designer confirms it at the design check.
+  - Class test (`the same non-clash refusal never starts more runs than the cap, then shows the not-written row`): no further run, the answer is kept, the row shows, and the next press tries once.
+- **a22:** the stored-manifest guard uses note-edit's existing read mode. The uncited refusal applies to writes and plans only.
+  - Add a fixture test, `an old manifest with a sourceless news line still reads`, and a compatibility row.
