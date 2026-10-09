@@ -163,3 +163,4 @@ The lock scope used here is the explicit Addenda 4 and 5 packet contract and the
 ## Property amended (TL-P4-27 addendum 6)
 
 tests changed: src/data/vault/undo-compensate.property.test.ts: a kept inverse (thrown with the waits sentence, line still in the outbox) is pending and resolved by the flush; only a refusal with nothing kept is unresolved, classified by the outbox and failed list after the call; adds: the sentence promises "later" exactly when kept; seed 427285 x30 plus 300 random runs; oracle unchanged (TL-P4-27 addendum 6, amended by a fresh Codex session).
+tests changed: src/data/vault/undo-compensate.property.test.ts: the model tracks each kept inverse until it is sent or refused; a later refusal leaves the original in force and the inverse must show on the failed list (journal.ts:421); report and recovery expectations use the tracked outcome; seeds, counts and oracle unchanged (TL-P4-27 addendum 7, Codex property session).
