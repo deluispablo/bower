@@ -9,10 +9,24 @@ export interface PersonalTask {
   readonly done: boolean;
   readonly checkboxByte: number;
 }
+/**
+ * Where each part of a note is, in bytes of the file as read, for v2, legacy and plain notes alike. A section runs
+ * from its `## ` heading (ATX heading, CommonMark 0.31) to the end of its text: a v2 payload is framed by its markers, a
+ * legacy section ends where the next one starts (Current state: after its last `- ` line). `front` is the lines
+ * between the `---` fences (YAML front matter), `frontEnd` the first byte after the closing fence. A section the note
+ * lacks is null; a note with no frontmatter has none. A repeated heading is the last one.
+ */
+export interface Layout {
+  readonly front: ByteSpan | null;
+  readonly frontEnd: number;
+  readonly current: ByteSpan | null;
+  readonly timeline: ByteSpan | null;
+  readonly bowerNote: ByteSpan | null;
+}
 export type OwnershipResult =
   | { readonly status: 'invalid'; readonly reason: OwnershipFailure }
-  | { readonly status: 'plain' | 'legacy'; readonly personal: ByteSpan; readonly tasks: readonly PersonalTask[] }
-  | { readonly status: 'v2'; readonly personal: ByteSpan; readonly payloads: Readonly<Record<Owner, ByteSpan>>; readonly tasks: readonly PersonalTask[] };
+  | { readonly status: 'plain' | 'legacy'; readonly personal: ByteSpan; readonly layout: Layout; readonly tasks: readonly PersonalTask[] }
+  | { readonly status: 'v2'; readonly personal: ByteSpan; readonly layout: Layout; readonly payloads: Readonly<Record<Owner, ByteSpan>>; readonly tasks: readonly PersonalTask[] };
 export interface TaskRequest {
   readonly index: number;
   readonly label: string;
@@ -24,7 +38,7 @@ export type TaskResult =
   | { readonly kind: 'changed'; readonly bytes: Uint8Array; readonly label: string; readonly done: boolean };
 
 interface Line { start: number; after: number; text: string }
-interface Fence { character: string; length: number }
+export interface Fence { character: string; length: number }
 const OWNERS: readonly Owner[] = ['current', 'personal', 'timeline', 'bower-note'];
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
@@ -44,8 +58,8 @@ function lines(bytes: Uint8Array, span: ByteSpan): Line[] {
   return out;
 }
 
-/** Both v2 framing and v2 task indexing use this exact fence transition. */
-function fenceAfter(text: string, open: Fence | null): Fence | null {
+/** Both v2 framing and v2 task indexing use this exact fence transition, and so does every reader of a note. */
+export function fenceAfter(text: string, open: Fence | null): Fence | null {
   if (open) {
     const close = /^ {0,3}(`+|~+)[ \t]*$/.exec(text);
     return close?.[1]?.[0] === open.character && close[1].length >= open.length ? null : open;
@@ -79,28 +93,36 @@ function tasks(bytes: Uint8Array, personal: ByteSpan, v2: boolean): PersonalTask
   return out;
 }
 
+const NO_LAYOUT: Layout = { front: null, frontEnd: 0, current: null, timeline: null, bowerNote: null };
+
 function legacyNote(bytes: Uint8Array, raw: string): OwnershipResult {
   const text = raw.replace(/\r\n/g, '\n');
   const close = text.startsWith('---\n') ? text.indexOf('\n---', 3) : -1;
   if (close < 0) {
     const personal = { start: 0, end: bytes.length };
-    return { status: 'plain', personal, tasks: tasks(bytes, personal, false) };
+    return { status: 'plain', personal, layout: NO_LAYOUT, tasks: tasks(bytes, personal, false) };
   }
   const lineEnd = text.indexOf('\n', close + 1);
-  let start = lineEnd < 0 ? text.length : lineEnd + 1;
+  const frontEnd = lineEnd < 0 ? text.length : lineEnd + 1;
+  let start = frontEnd;
   while (text[start] === '\n') start++;
+  let current: { start: number; end: number } | null = null;
   if (text.startsWith('## Current state\n', start)) {
+    const from = start;
     start += '## Current state\n'.length;
     while (text.startsWith('- ', start)) {
       const end = text.indexOf('\n', start);
       start = end < 0 ? text.length : end + 1;
     }
+    current = { start: from, end: start };
   }
   let end = text.length;
   const bower = text.lastIndexOf("\n## Bower's note\n");
-  if (bower >= start - 1) end = bower;
+  const hasBower = bower >= start - 1;
+  if (hasBower) end = bower;
   const timeline = text.lastIndexOf('\n## Timeline\n', end);
-  if (timeline >= start - 1) end = timeline;
+  const hasTimeline = timeline >= start - 1;
+  if (hasTimeline) end = timeline;
   end = Math.max(start, end);
   // Canonical legacy payload excludes empty separator lines before personal prose.
   while (start < end && text[start] === '\n') start++;
@@ -109,8 +131,17 @@ function legacyNote(bytes: Uint8Array, raw: string): OwnershipResult {
     for (let n = 0; n < offset; n++, at++) if (raw[at] === '\r' && raw[at + 1] === '\n') at++;
     return encoder.encode(raw.slice(0, at)).length;
   };
-  const personal = { start: rawByteAt(start), end: rawByteAt(end) };
-  return { status: 'legacy', personal, tasks: tasks(bytes, personal, false) };
+  const span = (from: number, to: number): ByteSpan => ({ start: rawByteAt(from), end: rawByteAt(to) });
+  const personal = span(start, end);
+  const layout: Layout = {
+    front: span(4, close + 1),
+    frontEnd: rawByteAt(frontEnd),
+    current: current && span(current.start, current.end),
+    // A heading follows the line break before it; a section ends where the next heading starts.
+    timeline: hasTimeline ? span(timeline + 1, hasBower ? bower + 1 : text.length) : null,
+    bowerNote: hasBower ? span(bower + 1, text.length) : null,
+  };
+  return { status: 'legacy', personal, layout, tasks: tasks(bytes, personal, false) };
 }
 
 export function parseOwnership(bytes: Uint8Array): OwnershipResult {
@@ -162,7 +193,12 @@ export function parseOwnership(bytes: Uint8Array): OwnershipResult {
   }
   const { current, personal, timeline, 'bower-note': bowerNote } = spans;
   if (active || fence || next !== OWNERS.length || !current || !personal || !timeline || !bowerNote) return damaged();
-  return { status: 'v2', personal, payloads: { current, personal, timeline, 'bower-note': bowerNote }, tasks: tasks(bytes, personal, true) };
+  const closing = sourceLines[close];
+  const layout: Layout = {
+    front: { start: first.after, end: closing?.start ?? first.after }, frontEnd: closing?.after ?? first.after,
+    current, timeline, bowerNote,
+  };
+  return { status: 'v2', personal, layout, payloads: { current, personal, timeline, 'bower-note': bowerNote }, tasks: tasks(bytes, personal, true) };
 }
 
 /** Reparse the supplied source each time; derived/previous spans are no authority. */

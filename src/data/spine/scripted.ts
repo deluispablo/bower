@@ -25,7 +25,8 @@ import { savedLinkAddress } from '../search-text';
 import { EMPTY_MD5, md5Hex } from '../contracts/hashes';
 import { askId, openQuestions, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen } from '../contracts/questions';
 import { sha256 } from '../vault/hashes';
-import { parseNote, serializeNote, type ParsedNote } from '../vault/note-format';
+import { parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
+import { parseTimelineLine } from '../contracts/timeline-line';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
 import { grounded, groundedKeys, seen } from './grounded';
@@ -994,9 +995,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // Each line on its own: one already there (from any day) is dropped; a person's note takes none.
     const lines: WantedLine[] = [];
     // A hub line with nothing to cite is there already when its words are, with or without a source (C06).
-    const said = new Set(new TextDecoder().decode(bytes).split(/\r?\n/).flatMap((x) => {
-      const m = /^- .*? · (.*?)(?: · \[\[[^\]]+\]\])?$/.exec(x);
-      return m?.[1] === undefined ? [] : [m[1]];
+    const said = new Set(timelineBullets(new TextDecoder().decode(bytes)).flatMap((x) => {
+      const m = parseTimelineLine(x);
+      return m ? [m.text] : [];
     }));
     for (const l of w.lines) {
       if (l.record === null && l.entry.source === null && said.has(l.entry.text)) {

@@ -4,13 +4,14 @@
 // own selectors and allowlist; a file one rule allows still gets the others' selectors.
 import { questionKeyConfig } from './eslint-question-key.mjs';
 import { reservationConfig } from './eslint-reservation.mjs';
+import { timelineLineConfig } from './eslint-timeline-line.mjs';
 
 const selectorsOf = (block) => block.rules['no-restricted-syntax'].slice(1);
 const rulesOf = (blocks) => ({ 'no-restricted-syntax': ['error', ...blocks.flatMap(selectorsOf)] });
 
 /** The flat-config blocks for one package: every rule outside every allowlist, then each allowed file with the rest. */
 export function syntaxConfig(pkg) {
-  const blocks = [reservationConfig(pkg), questionKeyConfig(pkg)];
+  const blocks = [reservationConfig(pkg), questionKeyConfig(pkg), timelineLineConfig(pkg)];
   const ignored = [...new Set(blocks.flatMap((b) => b.ignores))];
   const byAll = ignored.filter((p) => blocks.every((b) => b.ignores.includes(p)));
   return [

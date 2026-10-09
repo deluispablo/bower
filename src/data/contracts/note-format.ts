@@ -20,7 +20,7 @@
  * A file without frontmatter is a plain note of yours: all of it is body.
  */
 import { BowerError, type Note, type Property, type SourceKind, type TimelineEntry } from './types';
-import { TASK_LINE } from './tasks';
+import { timelineLine, parseTimelineLine } from './timeline-line';
 import { parseOwnership, togglePersonalTask, type ByteSpan } from './ownership-format';
 
 /** Frontmatter keys that are not properties. */
@@ -90,28 +90,12 @@ function payloadDisplay(bytes: Uint8Array, span: ByteSpan, heading?: string): st
   return heading && text.startsWith(`${heading}\n`) ? trimLines(text.slice(heading.length + 1)) : text;
 }
 
-interface Parts {
-  front: Map<string, string> | null;
-  current: string[];
-  /** Where the body starts and ends in the text. */
-  bodyStart: number;
-  bodyEnd: number;
-  timeline: string;
-  bowerNote: string | null;
-}
-
-function split(raw: string): Parts {
-  const text = raw.replace(/\r\n/g, '\n');
-  const none: Parts = { front: null, current: [], bodyStart: 0, bodyEnd: text.length, timeline: '', bowerNote: null };
-  if (!text.startsWith('---\n')) return none;
-  const close = text.indexOf('\n---', 3);
-  if (close < 0) return none;
-  const lineEnd = text.indexOf('\n', close + 1);
-  const fmEnd = lineEnd < 0 ? text.length : lineEnd + 1;
+/** The properties between the fences: `key: value` lines, and the YAML block lists Obsidian writes for tags. */
+function frontOf(block: string): Map<string, string> {
   const front = new Map<string, string>();
   let listKey: string | null = null;
   const unquote = (v: string): string => (/^(["']).*\1$/.test(v) ? v.slice(1, -1) : v);
-  for (const line of text.slice(4, close).split('\n')) {
+  for (const line of block.split('\n')) {
     // A YAML block list, as Obsidian writes tags: "tags:" then "  - a" lines.
     const item = /^\s*-\s+(.*)$/.exec(line);
     if (item && listKey) {
@@ -126,43 +110,30 @@ function split(raw: string): Parts {
     listKey = value ? null : key;
     front.set(key, unquote(value));
   }
-  let at = fmEnd;
-  while (text[at] === '\n') at++;
-  const current: string[] = [];
-  if (text.startsWith(`${CURRENT}\n`, at)) {
-    at += CURRENT.length + 1;
-    while (text.startsWith('- ', at)) {
-      const end = text.indexOf('\n', at);
-      current.push(text.slice(at + 2, end < 0 ? text.length : end));
-      at = end < 0 ? text.length : end + 1;
-    }
-  }
-  const bodyStart = at;
-  let bodyEnd = text.length;
-  let bowerNote: string | null = null;
-  let timeline = '';
-  const b = text.lastIndexOf(`\n${BOWER_NOTE}\n`);
-  if (b >= bodyStart - 1) {
-    bowerNote = trimLines(text.slice(b + BOWER_NOTE.length + 2));
-    bodyEnd = b;
-  }
-  const t = text.lastIndexOf(`\n${TIMELINE}\n`, bodyEnd);
-  if (t >= bodyStart - 1) {
-    timeline = text.slice(t + TIMELINE.length + 2, bodyEnd);
-    bodyEnd = t;
-  }
-  return { front, current, bodyStart, bodyEnd: Math.max(bodyStart, bodyEnd), timeline, bowerNote };
+  return front;
 }
 
+/** The bullets of a Timeline block, each read by the one Timeline-line pattern. */
 function timelineOf(block: string): TimelineEntry[] {
   return block
     .split('\n')
     .filter((l) => l.startsWith('- '))
     .map((l) => {
-      const m = /^- (.*?) · (.*?)(?: · \[\[([^\]]+)\]\])?$/.exec(l);
+      const m = parseTimelineLine(l);
       if (!m) return { date: '', text: l.slice(2) };
-      return { date: m[1] ?? '', text: m[2] ?? '', ...(m[3] ? { source: m[3] } : {}) };
+      return { date: m.date, text: m.text, ...(m.source ? { source: m.source } : {}) };
     });
+}
+
+/**
+ * The `- ` lines of a note's Timeline section as the one parser frames it (the last `## Timeline` of a legacy note,
+ * the framed payload of a v2 one); none for a note without one or that cannot be read.
+ */
+export function timelineBullets(raw: string): string[] {
+  const bytes = encoder.encode(raw);
+  const own = parseOwnership(bytes);
+  if (own.status === 'invalid' || !own.layout.timeline) return [];
+  return payloadDisplay(bytes, own.layout.timeline, TIMELINE).split('\n').filter((l) => l.startsWith('- '));
 }
 
 function linksIn(text: string): string[] {
@@ -177,19 +148,19 @@ function linksIn(text: string): string[] {
 export function parseNote(path: string, raw: string): ParsedNote {
   const { bytes, ownership } = ownershipOf(raw);
   const text = raw.replace(/\r\n/g, '\n');
-  const p = split(ownership.status === 'v2' ? text.replace(/^\ufeff/, '') : text);
   const title = nameOf(path);
-  let body = trimLines(text.slice(p.bodyStart, p.bodyEnd));
-  if (ownership.status === 'v2') {
-    body = payloadDisplay(bytes, ownership.personal);
-    p.current = payloadDisplay(bytes, ownership.payloads.current, CURRENT)
-      .split('\n').filter(Boolean).map((line) => line.startsWith('- ') ? line.slice(2) : line);
-    p.timeline = payloadDisplay(bytes, ownership.payloads.timeline, TIMELINE);
-    p.bowerNote = payloadDisplay(bytes, ownership.payloads['bower-note'], BOWER_NOTE) || null;
-    p.front?.delete('bower_format');
-  }
-  if (!p.front) return { path, title, summary: '', properties: [], tags: [], currentState: [], body, timeline: [], links: linksIn(text), byBower: false };
-  const f = p.front;
+  const { layout } = ownership;
+  const body = payloadDisplay(bytes, ownership.personal);
+  const front = layout.front ? frontOf(payloadDisplay(bytes, layout.front)) : null;
+  const sectionOf = (span: ByteSpan | null, heading: string): string | null => (span ? payloadDisplay(bytes, span, heading) : null);
+  const current = (sectionOf(layout.current, CURRENT) ?? '').split('\n').filter(Boolean).map((line) => line.startsWith('- ') ? line.slice(2) : line);
+  const timeline = sectionOf(layout.timeline, TIMELINE) ?? '';
+  // A v2 note with nothing in Bower's note has none; a legacy heading with nothing under it keeps an empty one.
+  const note = sectionOf(layout.bowerNote, BOWER_NOTE);
+  const bowerNote = ownership.status === 'v2' ? note || null : note;
+  front?.delete('bower_format');
+  if (!front) return { path, title, summary: '', properties: [], tags: [], currentState: [], body, timeline: [], links: linksIn(text), byBower: false };
+  const f = front;
   const properties: Property[] = [];
   for (const [key, value] of f) {
     if ((BOWER_KEYS as readonly string[]).includes(key)) continue;
@@ -212,10 +183,10 @@ export function parseNote(path: string, raw: string): ParsedNote {
     properties,
     ...(status ? { status } : {}),
     tags,
-    currentState: p.current,
+    currentState: current,
     body,
-    timeline: timelineOf(p.timeline),
-    ...(p.bowerNote !== null ? { bowerNote: { text: p.bowerNote, source: src } } : {}),
+    timeline: timelineOf(timeline),
+    ...(bowerNote !== null ? { bowerNote: { text: bowerNote, source: src } } : {}),
     links: linksIn(text),
     ...(original ? { original } : {}),
     byBower: f.get('by') === 'bower',
@@ -234,7 +205,7 @@ export function serializeNote(n: NoteFile): string {
   const out = ['---', ...front, '---', ''];
   if (n.currentState.length) out.push(CURRENT, ...n.currentState.map((l) => `- ${oneLine(l)}`), '');
   if (n.body) out.push(n.body, '');
-  if (n.timeline.length) out.push(TIMELINE, ...n.timeline.map((t) => `- ${t.date} · ${oneLine(t.text)}${t.source ? ` · [[${t.source}]]` : ''}`), '');
+  if (n.timeline.length) out.push(TIMELINE, ...n.timeline.map((t) => timelineLine({ ...t, text: oneLine(t.text) })), '');
   if (n.bowerNote) out.push(BOWER_NOTE, n.bowerNote.text, '');
   return out.join('\n');
 }
@@ -242,32 +213,9 @@ export function serializeNote(n: NoteFile): string {
 /** Ticks or unticks the n-th task of the body; Bower's sections are never touched. */
 export function toggleTaskInText(raw: string, index: number): { text: string; label: string; done: boolean } {
   const { bytes, ownership } = ownershipOf(raw);
-  if (ownership.status === 'v2') {
-    const task = ownership.tasks.find((candidate) => candidate.index === index);
-    if (!task) throw new BowerError('not-found', 'That line is no longer in the note.');
-    const result = togglePersonalTask(bytes, { index, label: task.label, previousDone: task.done, done: !task.done });
-    if (result.kind === 'refused') throw ownershipError(result.reason);
-    return { text: decoder.decode(result.bytes), label: result.label, done: result.done };
-  }
-  const text = raw.replace(/\r\n/g, '\n');
-  const p = split(text);
-  let i = -1;
-  let at = p.bodyStart;
-  for (const line of text.slice(p.bodyStart, p.bodyEnd).split('\n')) {
-    const m = TASK_LINE.exec(line);
-    if (m && ++i === index) {
-      const label = m[4] ?? '';
-      if (!label) break;
-      const done = m[2] !== 'x';
-      const checkbox = at + (m[1]?.length ?? 0);
-      // Parser offsets count each CRLF as one character; map only this checkbox back to the original source.
-      let rawAt = 0;
-      for (let n = 0; n < checkbox; n++, rawAt++) {
-        if (raw[rawAt] === '\r' && raw[rawAt + 1] === '\n') rawAt++;
-      }
-      return { text: raw.slice(0, rawAt) + (done ? 'x' : ' ') + raw.slice(rawAt + 1), label, done };
-    }
-    at += line.length + 1;
-  }
-  throw new BowerError('not-found', 'That line is no longer in the note.');
+  const task = ownership.tasks.find((candidate) => candidate.index === index);
+  if (!task) throw new BowerError('not-found', 'That line is no longer in the note.');
+  const result = togglePersonalTask(bytes, { index, label: task.label, previousDone: task.done, done: !task.done });
+  if (result.kind === 'refused') throw ownershipError(result.reason);
+  return { text: decoder.decode(result.bytes), label: result.label, done: result.done };
 }
