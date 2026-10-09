@@ -157,10 +157,11 @@ export const stateGone = (note: string | null): string => (note === null ? STATE
  * The answered row of an answer whose subject is gone, or null when its subject is there (or has no kind of its own):
  * the one writer of the row, for every kind (TL-P4-19 addenda 8 and 10). Names are display names: a thing's or a
  * note's from the path the question was asked about, never a file name or extension; a pair's other note by the
- * name an older question links it by. `at` gives the path now of the pair note that stays (a file id, or an older
- * question's name).
+ * name an older question links it by, or a pair asked by ids by the name its file keeps in the Bin (`binnedName`, by
+ * file id, from `binnedPairNote`; TL-P4-19 addendum 14). `at` gives the path now of the pair note that stays (a file
+ * id, or an older question's name).
  */
-export function answeredGone(q: Asked & Partial<Pick<Question, 'about'>>, inbox: InboxSeen | null, notes: NotesSeen | null, at: (note: string) => string | undefined): AnsweredRow | null {
+export function answeredGone(q: Asked & Partial<Pick<Question, 'about'>>, inbox: InboxSeen | null, notes: NotesSeen | null, at: (note: string) => string | undefined, binnedName: (id: string) => string | undefined = () => undefined): AnsweredRow | null {
   if (!subjectLeft(q, inbox, notes)) return null;
   const s = subjectOf(q);
   const about = q.about === undefined ? null : nameOf(q.about);
@@ -171,7 +172,20 @@ export function answeredGone(q: Asked & Partial<Pick<Question, 'about'>>, inbox:
   const gone = notesGone(q, notes);
   const stays = gone.length === 1 ? s.notes.find((n) => !gone.includes(n)) : undefined;
   const note = stays === undefined ? undefined : at(stays);
-  return { ...row, kind: 'pair', why: keepAlreadyBinned(s.by === 'name' && gone.length === 1 ? (gone[0] ?? null) : null), ...(note !== undefined ? { note } : {}) };
+  const one = gone.length === 1 ? gone[0] : undefined;
+  const other = one === undefined ? undefined : s.by === 'name' ? one : binnedName(one);
+  return { ...row, kind: 'pair', why: keepAlreadyBinned(other ?? null), ...(note !== undefined ? { note } : {}) };
+}
+
+/**
+ * The file id of a pair's one note gone from the listing, for a pair asked by ids: the one file its answered row reads
+ * for a name (TL-P4-19 addendum 14). Null for any other question, or when no note or both notes are gone.
+ */
+export function binnedPairNote(q: Asked, notes: NotesSeen | null): string | null {
+  const s = subjectOf(q);
+  if (s.kind !== 'pair' || s.by !== 'id') return null;
+  const gone = notesGone(q, notes);
+  return gone.length === 1 ? (gone[0] ?? null) : null;
 }
 
 /** An answered row as the wire holds it, the one validator of it (manifest, checkpoint and the run's view). */
