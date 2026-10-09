@@ -49,6 +49,7 @@ You are the one explicitly assigned integration coordinator for this batch. Foll
   - fill every agent run's row in `harness/tokens.csv`, with tokens, tool uses and minutes;
   - filter reviewer findings on two questions: is it a correctness or contract gap, and is it a second way?
   - in trial: an escalated entry's reviewer signs off its acceptance contract before implementation starts.
+  - plugin agents are not roles: use `pr-review-toolkit:silent-failure-hunter` and `pr-test-analyzer` only as extra passes on escalated entries, when the packet names them (addendum 1).
 - Research first, always (owner rule, 2026-10-06). Every packet tells the worker to look up the standard solution, recommended practice and specifications before designing a fix. The worker cites them in its delivery. A worker's own mechanism needs a stated reason why no standard approach fits.
 - Freeze evaluator targets and serialize shared browser resources. Return integrated/closure SHAs, evidence, remaining findings and next assignment. A documentation maintenance request authorizes its narrow files, not takeover of an implementation batch.
 
