@@ -337,6 +337,45 @@ describe("the engine's named actions", () => {
     expect(Math.abs(back[back.length - 1] ?? 0), 'return ends').toBeLessThanOrEqual(1.5);
   });
 
+  it('gaze after a snap stays within 5400 degrees per second squared', () => {
+    const { engine, frames, read } = mount('idle', { random: () => 0.5 });
+    let target = { x: 200, y: -100 };
+    engine.look(() => target, 'focus');
+    frames.run(180);
+    engine.act('snap');
+    frames.run(4);
+    const before = read().head;
+    frames.run(1);
+    let head = read().head;
+    let speed = (head - before) * FPS;
+    expect(head).toBeCloseTo(-5, 4);
+    target = { x: 200, y: 250 };
+    for (let i = 0; i < FPS; i++) {
+      frames.run(1);
+      const now = read().head;
+      const nextSpeed = (now - head) * FPS;
+      expect(Math.abs(nextSpeed - speed) * FPS, `gaze frame ${i + 1}`).toBeLessThanOrEqual(5400);
+      head = now;
+      speed = nextSpeed;
+    }
+  });
+
+  it('a nudge during a preen lands the startle within 2 degrees', () => {
+    const { engine, frames, read } = mount('idle');
+    frames.run(1);
+    engine.act('preen');
+    frames.run(36);
+    expect(read().head).toBeCloseTo(42, 0);
+    engine.nudge();
+    const heads: number[] = [];
+    for (let i = 0; i < Math.floor(0.75 * FPS); i++) {
+      frames.run(1);
+      heads.push(read().head);
+    }
+    expect(Math.min(...heads), 'startle overshoot').toBeGreaterThanOrEqual(-12);
+    expect(heads[heads.length - 1], 'startle lands').toBeLessThanOrEqual(-8);
+  });
+
   // TL-P4-25 addendum 8: rates are measured from delivered frames; gaze is always a return.
   it.each([
     { name: '30 fps', ms: [1000 / 30] },
@@ -346,7 +385,7 @@ describe("the engine's named actions", () => {
   ])('every frame keeps the addendum 5 bounds under random focus, pointer, touch, step and wake events: $name', (schedule) => {
     const event = fc.record({
       gap: fc.integer({ min: 0, max: 200 }),
-      kind: fc.constantFrom('pointer', 'touch', 'focus', 'blur', 'nudge', 'sleep'),
+      kind: fc.constantFrom('pointer', 'touch', 'focus', 'blur', 'nudge', 'sleep', 'snapGaze', 'preenNudge'),
       x: fc.integer({ min: -100, max: 300 }),
       y: fc.integer({ min: -150, max: 300 }),
     });
@@ -354,7 +393,10 @@ describe("the engine's named actions", () => {
       fc.property(fc.constantFrom('idle' as const, 'wait' as const), fc.array(event, { minLength: 1, maxLength: 10 }), (pose, events) => {
         cleanup();
         let callback: ((ts: number) => void) | undefined;
+        const random = fakeFrames(11).options.random;
+        let choosingSnap = false;
         const { engine, headPart } = mount(pose, {
+          random: () => choosingSnap ? 0.5 : random(),
           frame: (cb) => {
             callback = cb;
             return 1;
@@ -369,6 +411,7 @@ describe("the engine's named actions", () => {
         let inputAt = 0;
         let snapFrom = head;
         let wasSnap = false;
+        let actSnapUntil = -Infinity;
         let frame = 0;
         let time = 0;
         const problems: string[] = [];
@@ -383,7 +426,7 @@ describe("the engine's named actions", () => {
             const v = (now - head) / dt;
             const asleep = time - inputAt >= 60;
             const rising = time - stepAt < 0.15;
-            const snap = rising;
+            const snap = rising || time < actSnapUntil;
             if (snap && !wasSnap) snapFrom = head;
             if (Math.abs(v) > 360) problems.push(`frame ${frame}: speed ${v.toFixed(2)} deg/s`);
             if (snap && (now < -12 - 2 || now > Math.max(7, snapFrom) + 2)) problems.push(`frame ${frame}: overshoot ${now.toFixed(2)}`);
@@ -401,7 +444,25 @@ describe("the engine's named actions", () => {
         for (const e of events) {
           tick(e.gap / FPS);
           const at = { x: e.x, y: e.y };
-          if (e.kind === 'pointer' || e.kind === 'touch') {
+          if (e.kind === 'snapGaze') {
+            input();
+            focus = { x: 200, y: -100 };
+            engine.look(() => focus, 'focus');
+            tick(180 / FPS);
+            choosingSnap = true;
+            engine.act('snap');
+            choosingSnap = false;
+            actSnapUntil = time + 0.6;
+            tick(5 / FPS);
+            focus = { x: 200, y: 250 };
+            actSnapUntil = -Infinity; // this retarget is gaze, so every following frame uses return bounds
+          } else if (e.kind === 'preenNudge') {
+            engine.act('preen');
+            tick(36 / FPS);
+            input();
+            stepAt = time;
+            engine.nudge();
+          } else if (e.kind === 'pointer' || e.kind === 'touch') {
             input();
             engine.look(at, e.kind);
           } else if (e.kind === 'focus') {
