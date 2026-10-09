@@ -5670,8 +5670,9 @@
       "Open the tree menu on a folder, press Escape, then Delete at once: the Delete question shows.",
       "Close a sheet, the palette or the replay: focus returns where it was, with no delay."
     ],
-    "verify": "pnpm vitest run -t \"focus returns on close with no timer\" && pnpm e2e:fake -g \"Delete on a folder asks before the Bin\"",
-    "note": "Defect qa10-toast-flake, ruling (b) (main 7a708aa); docs/harness/defects/2026-10-09-qa10-toast-flake.md. Opens stage 4. Sites: Explorer.tsx:125,130,532-547; focus.ts:5,80; Sheet.tsx:30; toast.tsx:73; Palette.tsx:107; Replay.tsx:146. Tests wait for focus, never for time; the mechanism map gets a row. Starting model: bower-implementer."
+    "verify": "pnpm vitest run -t \"focus returns on close with no timer\" && bash scripts/e2e-both.sh e2e/focus-after-close.spec.ts e2e/qa10.spec.ts -g \"Delete on a folder asks before the Bin|closing the tidy sheet returns focus to its opener|closing the tidy sheet with not now returns focus to its opener\"",
+    "note": "Defect qa10-toast-flake, ruling (b) (main 7a708aa); docs/harness/defects/2026-10-09-qa10-toast-flake.md. Opens stage 4. Sites: Explorer.tsx:125,130,532-547; focus.ts:5,80; Sheet.tsx:30; toast.tsx:73; Palette.tsx:107; Replay.tsx:146. Tests wait for focus, never for time; the mechanism map gets a row. Starting model: bower-implementer. TL-P4-21: carries d-v2-04 (Sheet opener, all 8 sheets); ui: true. Packet 2026-10-09-c4-focus-return-packet.md. The e2e file may differ; the worker names it.",
+    "ui": true
   },
   {
     "id": "c3-reservation-home",
@@ -6078,5 +6079,19 @@
     ],
     "verify": "pnpm exec vitest run src/hooks.test.ts -t \"a worker stop with a dirty worktree is refused for that tree, not for main|a worker stop with a clean worktree and a green mark on its head is allowed|a final reply without a worktree line is refused|pnpm check writes the green mark for its tree and head|a stop hook already active lets the worker stop\"",
     "note": "TL-P4-20 addendum 3 (main bd1e6d53), option (b); defect stop-gate-wrong-tree. Owner authorized config changes in the coordinator chat 2026-10-09. Packet 2026-10-09-c3-stop-gate-packet.md."
+  },
+  {
+    "id": "v2-field",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "ui": true,
+    "what": "New token control-line (3:1 on every ground) and one field rule in src/ui/ that every field, switch and task box uses (d-v2-08); screens drop their own field CSS.",
+    "steps": [
+      "control-line is at least 3:1 on bg, bg-alt and surface in both themes.",
+      "Every listed field, switch and task box draws its edge with control-line; placeholders use --text-muted."
+    ],
+    "verify": "pnpm vitest run -t \"every control edge is at least 3:1 on its ground\" && bash scripts/e2e-both.sh e2e/capabilities.spec.ts -g \"fields and switches draw their edge with the control line\"",
+    "note": "TL-P4-21 order 1 (P2 one field rule); spec d-v2-08; impact finding 3. Starting model bower-implementer. Packet 2026-10-09-v2-field-packet.md. The e2e file may differ; the worker names it."
   }
 ]
