@@ -6416,5 +6416,18 @@
     "verify": "pnpm exec vitest run src/harness.test.ts -t \"an empty holder file and a second caller: the second waits|a held lockf blocks the caller and a killed holder frees it|six callers started together alternate strictly|uses the same re-entry rule as with-lock|two checks started together run one after the other\"",
     "note": "TL-P4-22 addendum 23 (main 28ff2f23); defect check-lock-order-flaky. Ahead of other heavy work. Codex (TL-P4-23). Packet 2026-10-09-c4-lockf-packet.md. implementer: codex.",
     "review": "P4-62 PASS"
+  },
+  {
+    "id": "c4-precheck-runner",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": false,
+    "what": "done.sh precheck detects the e2e runner from the command words, never from text in a test name (defect done-precheck-matches-words).",
+    "steps": [
+      "A vitest verify whose -t names mention e2e is read as unit.",
+      "A playwright, e2e-both.sh or pnpm e2e* verify is still e2e."
+    ],
+    "verify": "pnpm exec vitest run src/harness.test.ts -t \"a test name that mentions e2e does not make a vitest verify an e2e one|a playwright verify is still e2e\"",
+    "note": "Lead ruling 2026-10-09 (message; DEFECT_LOG done-precheck-matches-words): detect the runner from the command, never from a test name. Codex, then a Claude review. Packet 2026-10-09-c4-precheck-runner-packet.md."
   }
 ]
