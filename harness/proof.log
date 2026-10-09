@@ -490,3 +490,4 @@ c3-planner-split	fc8aa32a0e6ea2d2	2026-10-09	known-green: red at f9b658c6/c1de99
 c3-note-sections	dd52f59d42e4d429	2026-10-09	red (fixed in 8233a111)
 c3-design-gate	5b1b929d75b55243	2026-10-09	red (fixed in fc044c95)
 c3-test-tamper	686a68f501d1f38f	2026-10-09	red (fixed in 95e7f290)
+c3-hooks	d44545e753e65f42	2026-10-09	known-green: red proved by hand at a695ad3b: 3 verify tests fail on assertions (/tmp/c3hooks-handred.log)

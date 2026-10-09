@@ -6028,7 +6028,7 @@
     "id": "c3-hooks",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "Hook denials exit 2; every hook script path exists; SessionStart on resume; a PreCompact hook that never blocks. (The Stop gate moved to c3-stop-gate, TL-P4-20 addendum 3.)",
     "steps": [
       "A fixture stop input with a dirty tree is refused.",
