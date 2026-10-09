@@ -11,6 +11,8 @@ import { ago, plural, agoInSentence } from '@/app/words';
 import { useIsDesktop } from '@/ui/media';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { IconButton } from '@/ui/Button';
+import { Segmented } from '@/ui/Segmented';
+import ui from '@/ui/ui.module.css';
 import { Explorer } from './Explorer';
 import { useFileActions } from './file-actions';
 import s from './folder.module.css';
@@ -141,14 +143,15 @@ function Folder({ path }: { path: string }) {
           {/* What is directly here, as the list shows it: a subfolder counts once, the folder's own note not at all. */}
           <p className="muted">{plural(folderCount(node), 'thing')}</p>
         </div>
-        <div className={s.views} role="radiogroup" aria-label="View">
-          <button type="button" role="radio" aria-checked={view === 'list'} onClick={() => changeView('list')}>
-            <Icon name="list" size={18} /> List
-          </button>
-          <button type="button" role="radio" aria-checked={view === 'table'} onClick={() => changeView('table')}>
-            <Icon name="table" size={18} /> Table
-          </button>
-        </div>
+        <Segmented<View>
+          label="View"
+          value={view}
+          onChange={changeView}
+          options={[
+            { value: 'list', label: <><Icon name="list" size={18} /> List</> },
+            { value: 'table', label: <><Icon name="table" size={18} /> Table</> },
+          ]}
+        />
       </header>
       {hub && <HubSummary hub={hub} />}
       {children.length === 0 ? (
@@ -193,7 +196,7 @@ function PhoneBookmarks() {
         const node = findNode(tree, b);
         if (!node) return null;
         return (
-          <button key={b} type="button" onClick={() => act.open(node)}>
+          <button key={b} type="button" className={ui.small} onClick={() => act.open(node)}>
             <Icon name="bookmark" size={14} />
             {node.type === 'folder' ? node.name : thingName(node.name)}
           </button>
