@@ -6,6 +6,7 @@ import { relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { quarantineFileProblems } from './e2e-flaky.mjs';
 import { e2eTitles } from './harness-tests.mjs';
+import { hookScriptProblems } from './check-hook-scripts.mjs';
 import { historyTips } from './harness-git.mjs';
 import { apiTests, conflictMarkers, hashOf, LEGACY_HASH, nextProblems, problems, readProofs, runnerTests, slowReport, testsChangedProblems, timerListProblems } from './harness-rules.mjs';
 
@@ -32,6 +33,11 @@ if (tampered.length) {
   process.exit(1);
 }
 if (flag >= 0) process.exit(0);
+const missingHooks = hookScriptProblems(fileURLToPath(root));
+if (missingHooks.length) {
+  console.error(`The harness is not honest yet:\n  ${missingHooks.join('\n  ')}`);
+  process.exit(1);
+}
 const features = JSON.parse(readFileSync(new URL('harness/features.json', root), 'utf8'));
 const proofFile = new URL('harness/proof.log', root);
 const proofs = readProofs(existsSync(proofFile) ? readFileSync(proofFile, 'utf8') : '');

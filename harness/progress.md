@@ -245,3 +245,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: c3-note-sections passes — One section parser gives every section's position; the Timeline-line pattern exists once (TL-P4-14 stage 3)
 - 2026-10-09: c3-design-gate passes — A ui entry passes only with a verified design check (TL-P4-18 add. 3)
 - 2026-10-09: c3-test-tamper passes — test-tamper gate: tests-changed lines, forbidOnly, no focused or skipped unit tests
+- 2026-10-09: c3-hooks passes — hook audit: exit 2 denials, script-path check, SessionStart resume, PreCompact

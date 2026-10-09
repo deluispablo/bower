@@ -6028,15 +6028,15 @@
     "id": "c3-hooks",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
-    "what": "Implementers and escalated workers cannot stop with a dirty tree or without a green check mark on HEAD (frontmatter Stop hook, honours stop_hook_active); hook denials exit 2; every hook script path exists; SessionStart on resume; a PreCompact hook that never blocks.",
+    "passes": true,
+    "what": "Hook denials exit 2; every hook script path exists; SessionStart on resume; a PreCompact hook that never blocks. (The Stop gate moved to c3-stop-gate, TL-P4-20 addendum 3.)",
     "steps": [
       "A fixture stop input with a dirty tree is refused.",
       "stop_hook_active lets it stop.",
       "A missing hook path fails check-harness."
     ],
-    "verify": "pnpm exec vitest run src/harness.test.ts -t \"a worker cannot stop with a dirty tree or without a green check on its HEAD|a stop hook already active lets the worker stop|a hook denial exits 2|every hook script named in settings exists|the main-checkout guard uses the hook input cwd\"",
-    "note": "TL-P4-20 rows 2-3. Owner authorized the config changes in the coordinator chat 2026-10-09. Packet 2026-10-09-c3-hooks-packet.md."
+    "verify": "pnpm exec vitest run src/hooks.test.ts -t \"a hook denial exits 2|every hook script named in settings exists|the main-checkout guard uses the hook input cwd\"",
+    "note": "TL-P4-20 rows 2-3. Owner authorized the config changes in the coordinator chat 2026-10-09. Packet 2026-10-09-c3-hooks-packet.md. Red a695ad3b, fix 1345dd13, Stop gate dropped f91584a3 (addendum 3), merged b2620a1e. Red proved by hand at a695ad3b: the 3 kept verify tests fail on assertions (/tmp/c3hooks-handred.log); the revert cannot apply (gate files deleted later)."
   },
   {
     "id": "c3-permissions",
@@ -6063,5 +6063,19 @@
     ],
     "verify": "pnpm exec vitest run src/harness.test.ts -t \"every worker agent has a turn cap and read-only roles list their tools\"",
     "note": "TL-P4-20 rows 5-6. Owner authorized the config changes in the coordinator chat 2026-10-09. Packet 2026-10-09-c3-agent-defs-packet.md."
+  },
+  {
+    "id": "c3-stop-gate",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": false,
+    "what": "Implementers and escalated workers cannot stop with a dirty worktree or without a green pnpm check mark on its HEAD; the gate judges the tree named by the card's strict worktree line, pnpm check writes the mark, and stop_hook_active frees a second try.",
+    "steps": [
+      "Prove SubagentStop carries last_assistant_message (docs and one live stop).",
+      "A dirty worktree stop is refused for that tree, not main.",
+      "A clean tree with a mark passes."
+    ],
+    "verify": "pnpm exec vitest run src/hooks.test.ts -t \"a worker stop with a dirty worktree is refused for that tree, not for main|a worker stop with a clean worktree and a green mark on its head is allowed|a final reply without a worktree line is refused|pnpm check writes the green mark for its tree and head|a stop hook already active lets the worker stop\"",
+    "note": "TL-P4-20 addendum 3 (main bd1e6d53), option (b); defect stop-gate-wrong-tree. Owner authorized config changes in the coordinator chat 2026-10-09. Packet 2026-10-09-c3-stop-gate-packet.md."
   }
 ]
