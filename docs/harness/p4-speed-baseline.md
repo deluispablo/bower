@@ -130,3 +130,17 @@ Hubs restored with Bower's `bower_state` mark (Bower-owned), then hand-edited fo
 | c05 clean | 1:36 | 38.3 | 13.3 | 18.4 | 13.0 | pass; Job hunt state rewritten, both hubs got cited lines |
 | c05 after hand edit | 1:18 | 16.8 | 11.6 | 23.5 | 11.1 | edit kept, one question; Job hunt offer line twice (model line + "New:" line) |
 | c05 third run | 1:21 | 24.7 | 14.8 | 15.4 | 10.8 | pass; edit kept, no adoption, no new question |
+
+## Stage 2 smoke on `c9d20a67` (2026-10-09)
+
+Staging c9d20a67 (version 1c2f9b49), bower-home edc9c39, Claude Sonnet 5.5. Before the runs, 129 unstamped `.bower/piles` records in account A's folder went to the Bin (none stamped were left). Each run was reset first: outputs binned, hubs restored with Bower's mark, Inbox emptied. The runner logs no Drive-call count.
+
+| Case | Run | Press → done | reads | model (in/out) | apply | report (s) | Result |
+| --- | --- | --- | ---: | ---: | ---: | ---: | --- |
+| garden | `h35vnXfd` (37889339478) | 0:55 | 13.2 | 6.3 (7303 / 800) | 14.2 | 8.0 | pass; 5 dates, fee and shed code; PDF and note renamed; no question |
+| offer-and-flat | `Qk4IDeXs` (37889576104) | 1:21 | 20.3 | 14.8 (7432 / 1870) | 22.0 | 9.3 | pass; offer and payslip renamed, Money area, photo asked, both hubs got a line |
+| c05-hub-lines | `CbTN5Md_` (37889848483) | 1:12 | 13.7 | 11.4 (7279 / 1413) | 20.9 | 8.9 | pass; hand edit kept, the open q-state not asked again; Flat hunt line unreported (report-misses-hub-line) |
+
+Stage 1 on 9265d860, for comparison: garden 57 s, offer-and-flat 75 s (attempt 2), c05 76 s; Home 59 s with 144 calls.
+
+**Home on an empty Inbox:** the Inbox showed in 4.1 s, with 15 Drive calls (2 media). After 25 s it had made 17 calls (4 media), the last ending at 4.8 s. `.bower` was unchanged before and after (no history growth); `.bower/runs` holds 71 folders.
