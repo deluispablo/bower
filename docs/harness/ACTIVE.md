@@ -156,6 +156,8 @@ P3-9 is closed.
 
 - 2026-10-09: v2-field is verified by the designer (fa1d6258), but its close is deferred until the workers finish. done.sh failed twice on load: an e2e port clash, then the per-thing-ask timeout at load 20. Run `bash harness/done.sh v2-field ... --known-green` on an idle machine.
 
+- 2026-10-09: ready for the third restart (subagent cap 4). Resume order in HANDOFF.
+
 ## P4 ([TL-P4-01](2026-10-07-tl-p4-01-p4-start.md), [P4_PLAN](../P4_PLAN.md))
 
 - Owner authorized P4 (main fb33b21). HANDOFF restored to the docs-test headings (0dc5fde).

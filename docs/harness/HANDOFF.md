@@ -2,33 +2,31 @@
 
 Coordinator: the Claude Code session named "Orquestador". It integrates in `/Users/deluisp/Projects/bower-app` on branch `claude/p3`; P4 continues on it. Lead: the Planificador session ([DECISIONS.md](DECISIONS.md)). Output rule: [TL-P3-29](2026-10-07-tl-p3-29-output-rule-survives-compaction.md), in AGENTS.md. Minors: [P2_POLISH.md](P2_POLISH.md). Earlier handoffs: git history of this file.
 
-## Resume after the restart (2026-10-09, second: make the stop gate and agent caps live)
+## Resume after the restart (2026-10-09, third: subagent cap 4, TL-P4-23 addendum 1)
 
-Read this first. **Every stage 3 entry is closed** (c3-pair-ask, c3-state-mark, c3-test-tamper, c3-hooks, c3-flaky-policy, c3-permissions, c3-agent-defs, c3-stop-gate). No worker is running and no worktree is open except the role worktrees.
+Read this first. Stage 4 is in progress, following the TL-P4-21 order, with TL-P4-24's data-safety fixes inserted ahead of V2. No worker is running.
 
-Order after the restart (lead, TL-P4-20 addendum 3 and its message):
-1. **Live stop-gate check first** (DEFECT_LOG `agent-defs-not-live-mid-session`).
-   - Create a scratch detached worktree of claude/p3 and run pnpm install.
-   - Dispatch a bower-implementer that creates an untracked file there and tries to stop with `status: done` + `worktree: <path>`.
-   - It must be refused. Record the outcome, then remove the worktree.
-   - If it is still not refused, log it and diagnose before the suites.
-2. **The four suites** under `bash harness/with-lock.sh`, on an idle machine, with logs to /tmp:
-   - check;
-   - e2e, e2e:fake and e2e:pwa, all with `E2E_BATCH=1` (c3-flaky-policy).
-   - A retry-passed test enters the defect flow.
-3. **Main:** `git fetch -q . claude/p3:main`. Then the secret and personal-data scan. Then the backup per BACKUP.md, with Bash outside the sandbox: `git push backup refs/heads/main:refs/heads/main`, then verify the remote SHA. This is also the live check of the c3-permissions push hook.
-4. **The SHA to the lead.** Then the staging smoke after the lead deploys (procedure in [p4-speed-baseline.md](p4-speed-baseline.md)).
-5. **Then stage 4** in TL-P4-21 order: c4-focus-return (with d-v2-04) ∥ v2-field first. Carry-overs are in [2026-10-09-stage4-packet-notes.md](2026-10-09-stage4-packet-notes.md); d-v2-02 carries the c3-state-mark copy and the answer-only Home card. Then p4-rate-limits, and the open entries report-kept-your-change and type-proposals.
-
-Rules now live:
-- WORKER cards carry `worktree: <absolute path>`.
-- `pnpm check` writes the green mark.
-- integrate.sh needs `tests changed:` lines.
-- Agents have maxTurns (80 for implementers) and `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2`.
-- The push hook allows only the backup push, and it also refuses prose that mentions the push command (`push-guard-matches-quoted-text`, minor).
-- The typescript-lsp tsserver keeps worktrees "in use", so integrate.sh keeps them. Remove them by hand after checking the tree is clean.
-
-Open defects (stage-end list): size-cap-test-timeout-under-load, per-thing-ask-timeout-under-load (load flakes, to diagnose), agent-defs-not-live-mid-session.
+- **Closed in stage 4:** c4-focus-return, v2-field, v2-dock, v2-name-sheet, v2-targets, c4-run-counts, c4-runner-region, c4-e2e-port.
+- **Merged, waiting for the designer's check** (sent): v2-perched-bower (P4-48 PASS, 6011b407) and c4-segmented-one (Codex, P4-49 PASS, 21c97eba). Close each on "verified":
+  - v2-perched-bower with `--known-green` if needed (red 26b4b60d);
+  - c4-segmented-one with `--fixed-in 04a74af6` or `--known-green` (red 8456c48e failed on control height, /tmp/seg-red.log).
+- **Next, in this order** (packets on claude/p3; escalated; each gets one Codex read-only review pass beside the Claude reviewer; TL-P4-20 contract-sign-off trial):
+  1. c4-retry-fence and c4-undo-withdraw, in parallel. c4-undo-withdraw is `ui: true`: send the designer its "What the person sees" table (copy from TL-P4-24 addendum 1) for sign-off before dispatch.
+  2. Then c4-app-fence (it shares journal.ts with c4-undo-withdraw).
+  3. Then c4-test-timers (TL-P4-22 addendum 13 scope; part 1 gets an escalated review).
+  4. Then d-v2-07 (signed off; it needs its contract sign-off pass first), then 24a/24b and d-v2-06, d-v2-02, as TL-P4-21 orders.
+- **Codex (TL-P4-23):**
+  - Its sandbox cannot write the git index. The coordinator commits for it, in order (red, fix, notes), and runs its `pnpm check` and e2e under the lock. Prompts say "no git writes".
+  - Run: `codex exec --json --sandbox workspace-write -C <wt> -c model_reasoning_effort=medium - < prompt`, outside the Bash sandbox.
+  - Log its tokens from turn.completed.
+- **Rules now live:**
+  - every heavy run goes through `harness/with-lock.sh` (TL-P4-22 addendum 11);
+  - a port per worktree (`E2E_PORT` override);
+  - cap: 4 subagents; 2 Claude implementers plus 1 Codex;
+  - a UI packet gets "What the person sees", signed off before dispatch;
+  - UI-only fix rounds of non-escalated entries skip the re-review (pruning trial).
+- **Open defects:** the load flakes are ruled into c4-test-timers. The Codex findings are ruled into the three c4 fix entries.
+- **Sessions:** lead Planificador; Designer (worktree `/private/tmp/bower-design`); lead planning worktree `/private/tmp/bower-tl-planning`. Never remove role worktrees.
 
 ## Where things stand
 
