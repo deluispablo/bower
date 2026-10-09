@@ -29,13 +29,15 @@ export function undoCommit(sha, paths, cwd = process.cwd()) {
 }
 
 /** Where code lives for done.sh's red step (everything else is a record or a test). */
-export const CODE_PATHS = ['api', 'runner', 'src', 'public', 'index.html', 'vite.config.ts', 'scripts', 'package.json', 'AGENTS.md', 'docs'];
+export const CODE_PATHS = ['api', 'runner', 'src', 'public', 'index.html', 'vite.config.ts', 'scripts', 'harness', 'package.json', 'AGENTS.md', 'docs'];
+/** Scripts under harness/ are code; its JSON, Markdown and data files are records. */
+const HARNESS_SCRIPT = /^harness\/.+\.(sh|mjs|ts)$/;
 /** Tests stay in place while the code is set aside. */
 export const TEST_PATTERN = /\.test\.tsx?$|^api\/test\/|^runner\/test\/|^e2e\/|^src\/data\/contract\/|^src\/testing\//;
 
 /** The files of `files` that are code: under CODE_PATHS and not a test. */
 export function selectCode(files) {
-  return files.filter((f) => CODE_PATHS.some((p) => f === p || f.startsWith(`${p}/`)) && !TEST_PATTERN.test(f));
+  return files.filter((f) => (HARNESS_SCRIPT.test(f) || (!f.startsWith('harness/') && CODE_PATHS.some((p) => f === p || f.startsWith(`${p}/`)))) && !TEST_PATTERN.test(f));
 }
 
 /** Code changed or new in the working tree (staged or not). */
