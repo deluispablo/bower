@@ -15,7 +15,6 @@ import { afterNotFound, type FailureKind } from '../drive/transport';
 import type { FailedChange } from '../sources';
 
 export type { JournalExtra, JournalRecord } from '../contracts/journal-record';
-export { isJournalRecord } from '../contracts/journal-record';
 import type { JournalExtra, JournalRecord } from '../contracts/journal-record';
 import { isJournalRecord } from '../contracts/journal-record';
 

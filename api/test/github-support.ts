@@ -130,10 +130,3 @@ export async function dispatchOf(gh: PretendGitHub, runId: string, attempt = 1):
     return found;
   }, WAIT);
 }
-
-/** Waits until GitHub has received `n` dispatches. */
-export async function dispatchesReach(gh: PretendGitHub, n: number): Promise<void> {
-  await vi.waitFor(() => {
-    if (gh.dispatched.length < n) throw new Error(`${gh.dispatched.length} of ${n} dispatches`);
-  }, WAIT);
-}
