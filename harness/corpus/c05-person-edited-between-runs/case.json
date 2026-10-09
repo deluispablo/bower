@@ -1,0 +1,22 @@
+{
+  "id": "c05-person-edited-between-runs",
+  "capability": "C05",
+  "title": "A later personal edit survives the next semantic update",
+  "covers": "model",
+  "source": "new (TL-P4-28 ruling 4: C05 preparation; scripted proposal pending lead review)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "Update the garden plot from this committee letter.",
+      "files": [
+        "Water butt update.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Areas/Home/Garden plot.md"
+  ]
+}

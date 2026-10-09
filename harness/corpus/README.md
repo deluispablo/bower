@@ -23,6 +23,9 @@ Made-up cases for the capabilities C04 to C11, C13 and C15 (Alex, Larkspur Lane,
 | c05-hub-lines | C05 | scripted | p2-journey:C05, the hub lines of the same press as C04 |
 | c05-keep-one-note | C05 | model | p2-journey:C05 (fake only today: the merge question q1) |
 | c05-line-not-repeated | C05 | scripted | p2-journey:C05 (idempotence: the same line twice is written once) |
+| c05-person-edited-between-runs | C05 | model | new (second-run snapshot; scripted two-run proof pending) |
+| c05-merge-question-first | C05 | model | new (ask before merge; typed pair and follow-up proof pending) |
+| c05-merge-answer-no | C05 | model | new (keep both; scripted answer lifecycle proof pending) |
 | c06-clipping-compared | C06 | model | bench:1-job-offer-clipping, adapted (made-up company; the original is in bench-1-job-offer-clipping) |
 | c06-offer-and-listing-linked | C06 | scripted | p2-journey:C06 |
 | c07-answer-yes | C07 | scripted | p2-journey:C07 (the answer run) |
