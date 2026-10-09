@@ -154,6 +154,8 @@ P3-9 is closed.
 
 - 2026-10-09 stage 4 opened (lead: stage 3 closed, smoke OK). The first-batch smoke is covered by the four suites on 55ea8194, an hour before; only docs merged since. c4-focus-return dispatched (designer signed off). v2-field is signed off and goes out when the stage-3-live-slower diagnoser frees its slot (2-worker cap).
 
+- 2026-10-09: v2-field is verified by the designer (fa1d6258), but its close is deferred until the workers finish. done.sh failed twice on load: an e2e port clash, then the per-thing-ask timeout at load 20. Run `bash harness/done.sh v2-field ... --known-green` on an idle machine.
+
 ## P4 ([TL-P4-01](2026-10-07-tl-p4-01-p4-start.md), [P4_PLAN](../P4_PLAN.md))
 
 - Owner authorized P4 (main fb33b21). HANDOFF restored to the docs-test headings (0dc5fde).
