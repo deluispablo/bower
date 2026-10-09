@@ -258,9 +258,12 @@ test('write it shows the state written, re-asks on a clash and settles as an ans
   await expect(page.getByRole('region', { name: 'Current state' })).toContainText('MOT booked for 14 January.');
 });
 
-test('a clash at write time leads to the re-ask with the new sentence and no extra press', async ({ page }) => {
+test('a clash at write time leads to the re-ask with the new sentence and no extra press', async ({ page, allowConsole }) => {
   test.skip(!isFake, FAKE_ONLY);
   test.setTimeout(120_000);
+  // The write's own fence refuses it, and says so in the log: that is the clash this test makes.
+  allowConsole(/Refused a write to target \w+: modified/, 'the write-time clash this test makes');
+  allowConsole(/This changed somewhere else while Bower was tidying/, 'the write-time clash this test makes');
   // TL-P4-19 addendum 15: Money changes on another device right before Bower's write is sent. Nothing is written, and
   // the question comes back in the one re-ask wording with no other press.
   const MONEY = 'Areas/Money/Money.md';
