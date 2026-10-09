@@ -429,3 +429,4 @@ P3-9 is closed.
 - spine-operations-checkpoints closed again (cebd0800, P4-38 PASS; retention wired; C04 78). 422/427. c2-create-by-id round 4 delivered; merging next.
 - c2-create-by-id round 4 merged (red 14983272, fix 9b8bf954; rate limit keeps the id; honest refusal sentences; background refusal in what failed; pile-note fence on the last confirmed version; check green). Open: phone has no side panel, so a background refusal is desktop-only (lead asked). P4-37d check dispatched.
 - Rulings main e1c4a22: phone "what failed" in the side sheet; retention covers every terminal run (spine-operations-checkpoints reopened). One round (escalated: it bins) after P4-37d. 421/427.
+- P4-37d BLOCK (create-by-id round 4): quota/daily-limit/408 treated as refused (line lost); refused move/rename has no applied path; failed-in-memory survives sign-out when storage refuses. Round 5 (escalated, app) and retention terminal-runs round (escalated, runner) dispatched in parallel.
