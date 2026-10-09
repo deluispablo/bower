@@ -2,6 +2,45 @@
 
 Coordinator: the Claude Code session named "Orquestador". It integrates in `/Users/deluisp/Projects/bower-app` on branch `claude/p3`; P4 continues on it. Lead: the Planificador session ([DECISIONS.md](DECISIONS.md)). Output rule: [TL-P3-29](2026-10-07-tl-p3-29-output-rule-survives-compaction.md), in AGENTS.md. Minors: [P2_POLISH.md](P2_POLISH.md). Earlier handoffs: git history of this file.
 
+## Resume after the restart (2026-10-09, plugins load)
+
+Read this first. Stage 3 (TL-P4-14) has two entries left (c3-pair-ask and c3-state-mark), and TL-P4-20 (method refinements) applies to every next dispatch.
+
+- **Open entries:**
+  - `c3-pair-ask` (ui: true, escalated). Merged at bdc08775 with review P4-46b PASS. The designer did not verify it (DEFECT_LOG `not-merged-never-shown`; TL-P4-19 addendum 10: an `answered` report row).
+    - Round 2 was **stopped mid-fix** at the restart. Worktree `/private/tmp/bower-c3-pair2`, branch `c3-pair-ask`.
+    - Red committed at c29a2862, with the fix uncommitted in the tree. Progress note: `/private/tmp/bower-c3-pair2-progress.md`. Packet: `2026-10-09-c3-pair-ask-round2-packet.md`, with the designer's copy for all three kinds.
+    - Resume:
+      1. Dispatch bower-escalated on the same worktree, with the progress note.
+      2. Review it.
+      3. Run `integrate.sh c3-pair-ask`.
+      4. Send the designer a design check.
+      5. Close only on "verified", with `--known-green` (reds bcfdaacf, 09f64090, c29a2862).
+  - `c3-state-mark` (ui: true, escalated). **Stopped mid-fix.** Worktree `/private/tmp/bower-c3-state`, branch `c3-state-mark`.
+    - Red committed at 1299ca14, with the fix uncommitted. Progress note: `/private/tmp/bower-c3-state-progress.md`.
+    - It must use pair-ask's `answered` row for a no-effect yes. The q-state copy is in the round 2 packet. Any other no-effect case has no approved copy: keep it on a seam and ask the designer.
+    - It integrates **after** pair-ask: merge claude/p3 into its branch first.
+    - Then review it, send the design check and close it. Both reds must be green: the state mark and write-it-silent.
+- **Stage 3 end:** after both entries close:
+  1. Run the four suites under with-lock.
+  2. Move main and push the backup.
+  3. Send the SHA to the lead.
+  4. Run a staging smoke (procedure in [p4-speed-baseline.md](p4-speed-baseline.md)).
+- **Queued (TL-P4-20, all on Sonnet):**
+  - `c3-test-tamper` and `c3-flaky-policy` can go.
+  - `c3-hooks`, `c3-agent-defs` and `c3-permissions` touch settings, hooks and agent frontmatter. Dispatch them only after the owner authorizes it in the coordinator's own chat (asked of the lead).
+  - Then p4-rate-limits, then stage 4.
+- **TL-P4-20 rules, from the next dispatch on:**
+  - before a batch's first dispatch, run `harness/init.sh` plus a fast e2e smoke;
+  - fill a tokens.csv row for every agent run;
+  - in trial: an escalated entry's reviewer signs off its acceptance contract before implementation;
+  - WORKER notes carry `tests changed:` lines.
+- **Sessions:**
+  - the lead, Planificador;
+  - the Designer, in worktree `/private/tmp/bower-design`;
+  - the lead's planning worktree, `/private/tmp/bower-tl-planning`.
+  Never remove a role's worktree.
+
 ## Where things stand
 
 - **P3 is accepted** by the owner (GOVERNANCE, main `88bb7de`). Dossier: [2026-10-07-p3-dossier.md](2026-10-07-p3-dossier.md).
