@@ -15,3 +15,5 @@
   - Nit: the "Bower's update" label uses the heading colour, while "New notes" is muted. Make them match.
 - **For the lead (designer):** if "Let Bower read them now" shows on Home for a kept answer, it must run the retry. Otherwise the row's "next tidy-up" waits for a new inbox thing (P4-47c minor).
 - **Next smoke (lead):** add a case where a new q-state is asked and then "Write it" is pressed, so the no-model path (`shown`) is seen live.
+
+- **c4-resource carries d-v2-13's loading copy, word for word** (the designer's condition for the split, 2026-10-09): "Looking at your inbox…" in the inbox card while loading, and after 3 s a muted line under the card: "Taking longer than usual. Your Drive is answering slowly." The 3 s uses the `<Resource>` loading slot's one slow rule on the injected clock, never a Home timer.

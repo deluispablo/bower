@@ -6294,8 +6294,9 @@
       "No visual change on the three screens (designer check)."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/c4-new-pill-one.spec.ts -g \"the new pill has one look everywhere\"",
-    "note": "TL-P4-22 addendum 16 (main b8b21a8b); defect new-pill-three-copies. UI-only, so the pruning trial applies (no re-review). Codex after v2-move-here merges, and it folds that entry use in. Packet 2026-10-09-c4-new-pill-one-packet.md (designer signed off with the .newtag shape). implementer: codex. Red 588023ab, fix 01fc4694, test scope 75a1a4ce. P4-54 PASS (2 minors).",
-    "review": "P4-54 PASS"
+    "note": "TL-P4-22 addendum 16 (main b8b21a8b); defect new-pill-three-copies. UI-only, so the pruning trial applies (no re-review). Codex after v2-move-here merges, and it folds that entry use in. Packet 2026-10-09-c4-new-pill-one-packet.md (designer signed off with the .newtag shape). implementer: codex. Red 588023ab, fix 01fc4694, test scope 75a1a4ce. P4-54 PASS (2 minors). Designer verified at e9af106f.",
+    "review": "P4-54 PASS",
+    "design": "verified"
   },
   {
     "id": "c4-parse-once",
@@ -6338,5 +6339,18 @@
     ],
     "verify": "",
     "note": "TL-P4-24 addendum 10 (main 4dfe148a); defect pile-note-lost-create-moved (diagnosis docs/harness/defects/2026-10-09-pile-note-lost-create-moved.md). Folds c4-reconcile-guard (addendum 9 (1)). Escalated, Opus plus a Codex pass, after c4-undo-withdraw merges. Packet to write."
+  },
+  {
+    "id": "v2-still-marks",
+    "task": "p4-consolidation",
+    "category": "ui",
+    "passes": false,
+    "ui": true,
+    "what": "d-v2-13 CSS part: the running tidy-up live dot and current step are still (no pulse); dead CSS (.skeleton shimmer, .rbBusy, unused tidy props) goes. No strings change; the loading copy goes with c4-resource.",
+    "steps": [
+      "getAnimations() is empty on the live dot and the current step mark while a tidy-up runs."
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/v2-still-marks.spec.ts -g \"nothing pulses in the running tidy-up\"",
+    "note": "TL-P4-21 order 8; spec d-v2-13 (CSS part); impact block d-v2-13 split. Codex slot (TL-P4-23); fresh Claude reviewer. Designer signed off at 6df210b0. Packet 2026-10-09-d-v2-13-css-packet.md. implementer: codex."
   }
 ]
