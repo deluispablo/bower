@@ -6413,7 +6413,7 @@
       "An empty holder file and a second caller: the second waits.",
       "Six callers alternate strictly."
     ],
-    "verify": "pnpm exec vitest run src/harness.test.ts -t \"an empty holder file and a second caller: the second waits|a held lockf blocks the caller and a killed holder frees it|six callers started together alternate strictly, and no exit removes another's lock|e2e-both uses the same re-entry rule as with-lock|two checks started together run one after the other\"",
+    "verify": "pnpm exec vitest run src/harness.test.ts -t \"an empty holder file and a second caller: the second waits|a held lockf blocks the caller and a killed holder frees it|six callers started together alternate strictly|e2e-both uses the same re-entry rule as with-lock|two checks started together run one after the other\"",
     "note": "TL-P4-22 addendum 23 (main 28ff2f23); defect check-lock-order-flaky. Ahead of other heavy work. Codex (TL-P4-23). Packet 2026-10-09-c4-lockf-packet.md. implementer: codex.",
     "review": "P4-62 PASS"
   }
