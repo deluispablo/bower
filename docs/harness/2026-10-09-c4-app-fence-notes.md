@@ -67,3 +67,31 @@ load sends no write, so the Bin's extra `get` cannot reach it; it stays green as
 
 - `pnpm check`: /tmp/c4-fence-check.log
 - e2e fake, phone and desktop, qa9, qa10, capabilities, capabilities-b: /tmp/c4-fence-e2e.log
+
+## Fix round (addendum 6)
+
+red: 76f37dfc (tests only); fix: b829a69a. Source: docs/harness/2026-10-09-codex-c4-app-fence-review.md (3 Important).
+
+tests changed: src/data/vault/drive-vault.test.ts: added round-2 reds (restore rename, updatePile folder rename,
+clearing words: note Bin and declared empty note, journal Undo lost answer) and gap rows 404/1030/1708, 467, 1544;
+no existing test was edited or removed.
+
+- Red today: the restore rename, the updatePile folder rename, and both clearing-words cells (refused as changed).
+- Green before the fix (round 1 already fenced them): held upload 404/1030/1708 (stays where filed), restore rename
+  467 refused after a rename elsewhere, late upload 1544 left where filed, journal Undo lost answer (no resend).
+- `checkStillAsSeen` asks `landed` before `notAsSeen`. It answers synchronously when its reader does, so
+  `SeenFiles.assert` calls it inside FakeDrive's one-step fence. `refuseUnlessAsSeen` is gone. `SeenFiles.read` still
+  calls `readForFence`, the helper's read step: it also guards the attempt read, which is no file check.
+- `landedAs(f, intent)` is every app fence's landed test: `holds`, plus name and place for a rename.
+- Restore keeps the file it took out of the Bin and the free name it chose (`gone.back`). A second press renames
+  that file, and `once` recognises the landed rename by its stamp.
+- The updatePile folder precheck accepts its own landed rename (the name it computes) or move (the kept folder id).
+  The note precheck accepts its own landed text (empty included) or Bin.
+- `CHANGED_ELSEWHERE` lives in contracts/still-as-seen.ts and is shared by DriveVault and the Journal; the Journal
+  cannot import DriveVault (cycle).
+
+| Area | Round 1 | Round 2 |
+| --- | --- | --- |
+| Retry after a landed restore rename, pile rename, cleared words | refused as changed elsewhere | resolves as landed |
+| Drive calls | unchanged | unchanged (the prechecks read once, as before) |
+| Stored formats, strings | none | none |
