@@ -36,7 +36,16 @@
 5. **Lead.** The lead merges the spec into `main` and rules on how and when each fix is built: entries in the stage plan, packets, and the coordinator. It records each ruling as a TL-P4-18 addendum. It asks the designer technical questions, and the designer takes questions of taste to the owner.
 6. **Build and verify.** The coordinator implements under the usual rules. When a fix is on staging or `main`, the lead tells the designer. The designer checks it against the spec, writes `verified` or `not as specified`, and tells the owner and the lead. A "not as specified" result is a defect (TL-P4-15).
 
-The designer keeps `docs/design/STATE.md` in its worktree (TL-P2-43) and never messages the coordinator.
+The designer keeps `docs/design/STATE.md` in its worktree (TL-P2-43).
+
+**Addendum 2 (owner, 2026-10-09).** The lead consults the designer before ruling on any defect, issue or feature that touches the UI.
+
+**Addendum 3 (owner, 2026-10-09).** Every built change that touches the UI is checked by the designer before its entry closes:
+- the packet marks it `ui: true`;
+- after the review PASS and the merge, the coordinator asks the designer for a design check;
+- `done.sh` closes it only after `verified`.
+
+The coordinator may consult the designer directly on UI questions. A design choice outside an agreed spec still goes to the lead, and new designs still reach the lead only after the owner's OK. A machine check follows (entry `c3-design-gate`): `features.json` gains `ui` and `design` fields, and harness-rules refuses `passes: true` for a `ui: true` entry without `design: verified`, the same way an escalated entry needs its review PASS.
 
 **Timing.** Feature work is paused during the consolidation (TL-P4-14). Design review can start now. Agreed fixes are built in stage 4, which already covers the screen layer (focus return, run view, copy), or right after it. Before then, only a severity-4 fix (a catastrophe) jumps the queue, and only by the lead's ruling.
 
