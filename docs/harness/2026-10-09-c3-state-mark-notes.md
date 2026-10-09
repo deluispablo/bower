@@ -65,3 +65,68 @@
 - tests changed: runner/test/ask-answer-loop.test.ts: one test and one helper added, no existing test changed.
 - Gates: `pnpm check` exit 0 (/tmp/csm2-check.log; unit 3868, api 234, runner 250); goldens C04 78, 25 runs 88
   unchanged; e2e:fake capabilities and capabilities-b 22 passed (/tmp/csm2-e2e.log).
+
+## Round 3 (one re-ask, answered rows of Write it; TL-P4-19 addenda 12 and 13; P4-47 fold-in)
+
+- Merge `c861afa6` (claude/p3 at `ee761276`, pair-ask round 3). One conflict, the `scripted.ts` import from
+  `contracts/questions`: kept this entry's `STATE_ASK`, `STATE_ASK_AGAIN` and pair-ask's `binnedPairNote`.
+- Red `e5301fc3` (tests only), fix `d824059e`, compatibility rows `cdad1b12`.
+- One re-ask (`scripted.ts`, the Write it branch): re-asked when the section changed, when the note's stamp or md5
+  differ from `shown` (`held`), or when the write's own check refuses as a clash (`person-edited`, `state-changed`);
+  always `STATE_ASK_AGAIN`, now the designer's sentence. The first-ask wording on a re-ask (the round 1 seam) is gone.
+- Answered rows: `answeredState` (`contracts/questions.ts`, beside `answeredGone`, same `AnsweredRow` and validator)
+  with outcomes `refused` and `nothing-to-write`, kind `state`, `note` = the note's path now; copy word for word,
+  fallback "the note". Nothing to write is checked first: a section that already reads as the update settles with the
+  row, never a re-ask. A refused write is any refusal of `applyChanges` that is not a clash (`too-large` in the test).
+- Manifest reader: `lastWritten` reads earlier manifests with `parseRunManifestV2` (bytes, root, `RUNNER_WRITES`), the
+  engine's reader; one it refuses or cannot read is passed over with `console.error`. `stateChangesOf` now walks the
+  typed manifest; the lenient regex `MANIFEST_PATH` is gone (`records.ts` exports `isManifestName`).
+- Scripted provider (addendum 13): `scriptedDecisions(updates, states)`; with states (only the fake `write-it`
+  situation, `src/data/fake/write-it.ts`, chosen in `choose.ts`) it leaves out `settles`, so the plan grants Write it
+  as for the model's reply. The runner's `scriptedProvider` and the Claude provider never pass states; the
+  dependency-cruiser rule passes. The situation's page hook `__editElsewhere` changes a note as another device would.
+- Tests (red then green, `runner/test/ask-answer-loop.test.ts` unless named):
+  - "write it re-asks when the note changed elsewhere since it was shown": red, the re-ask had the first-ask words.
+    With `held` replaced by `true` it fails: Bower writes over the note (`expected '---\nsummary…' to be …`,
+    /tmp/csm3-held-probe.log).
+  - "a write it refused for good writes one answered row on Home and on the note": red `expected [] to deeply equal
+    [ { questionId: 'q-state-f13', …(4) } ]` (refusal `too-large`).
+  - "a write it with nothing to write writes one answered row": red, the question was asked again (`expected true to
+    be false`).
+  - Minors, green on the red tree: "a lone no to write it closes the question with no model call", "a yes to write it
+    beside a pile asks the model" (claude.ts no-model branch); `runner/test/state-rewrite.test.ts` "a run manifest that
+    cannot be read is passed over, and every line the section lacks is news".
+  - `src/data/contracts/questions.test.ts`: "asks again in one sentence that says why", "a refused write and nothing
+    to write name the note, or say "the note", and show on it", "rows stored before still read, and the new rows read
+    too" (red: `answeredState` not exported).
+  - `src/data/fake/write-it.test.ts`: "asks Write it about each note with the update shown, and a yes writes it",
+    "a change elsewhere asks again, and the update typed by hand settles as an answered row".
+  - e2e:fake `e2e/capabilities.spec.ts` "write it shows the state written, re-asks on a clash and settles as an
+    answered row" (Money written; Car changed elsewhere, re-asked; Car typed by hand, row on the note, axe WCAG 2.2
+    with target-size).
+- tests changed: runner/test/ask-answer-loop.test.ts: "a person edit after the question stops Write it" and "write it
+  re-asks when the section changed since it was shown" expect the one re-ask sentence (addendum 12 replaces the old
+  words); `stateWorld` takes an optional pad; the app vault type adds `addPile`, `settled`; five tests added.
+- tests changed: runner/test/earlier-runs.ts: `planned` takes an optional edit; `stateWrittenBefore` records a
+  one-edit manifest the one reader accepts (the note a captured place, real digests); its zero digests and uncaptured
+  note were refused by `parseRunManifestV2` (seen: `one-per-file`, then `target`). Same lines recorded.
+- tests changed: runner/test/state-rewrite.test.ts: one test added, none changed.
+- tests changed: src/data/contracts/questions.test.ts, e2e/capabilities.spec.ts: tests added, none changed.
+- tests changed: src/testing/tidy-up.ts: optional `states` passed to `planRun`; default unchanged.
+- No `.only` or `.skip` added.
+- Blocked (lead ruling): a clash Drive finds at the write itself (the fence's read differs: engine `NOTE_CHANGED`).
+  Probe on the runner: the edit and the questions write are rejected, the answer stays in `.bower/changes`, the
+  question stays in `questions.json` as it was; the app hides it (its answer is in the journal) and no run follows (a
+  press with an empty inbox answers 409 nothing). The next run of your changes re-asks through `held` with the new
+  sentence, so the one path is ready; what starts that run is not. Options: (a) the runner's end status tells the
+  Worker an answer stayed and `Person.wake` starts its run, as for answers that waited (TL-P4-13 addendum); (b) the
+  app starts it when the answer's run ends with the answer still waiting; (c) the question shows as waiting until the
+  next tidy-up. The re-ask uses the answer up, so none loops. The packet's red "a clash on write it re-asks with the
+  reason" is not added until then.
+- Open for the designer: an answer's own run (scope instructions, nothing filed) has no Home result card
+  (`hasReplay` needs a full run that filed things), so its answered row shows on the note, and under Home's result
+  only after a full tidy-up. The `raced` path (the note changed while the run read it) still re-asks as first asked.
+- Gates: `pnpm check` exit 0 (/tmp/csm3-check.log; unit 3893, api 234, runner 256); goldens C04 78, 25 runs 88
+  unchanged; e2e:fake capabilities and capabilities-b 24 passed, phone and desktop (/tmp/csm3-e2e.log).
+- Sources: RFC 9110 section 13.1.1 (https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1); Drive `md5Checksum`,
+  `appProperties` (https://developers.google.com/drive/api/reference/rest/v3/files).
