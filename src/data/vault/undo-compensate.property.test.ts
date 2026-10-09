@@ -7,16 +7,18 @@ import { isJournalRecord, pairsOf, type JournalRecord } from '../contracts/journ
 import { BowerError } from '../types';
 import { DriveVault } from './drive-vault';
 import { Journal, outboxKey } from './journal';
+import { SYSTEM } from './layout';
 
 // TL-P4-28(2): the implementer must not change this adversarial red.
 // Standard model runner: https://fast-check.dev/docs/advanced/model-based-testing/
 // fakeLocks in upload-queue.test.ts is local, not exported. Reuse its held/waiting/wake
 // stub here, adapting request's two-argument form and preserving the callback result.
-function webLocks() {
+function webLocks(requested: () => void = () => undefined) {
   const held = new Set<string>();
   const waiting = new Map<string, Array<() => void>>();
   return {
     async request<T>(name: string, callback: () => Promise<T>): Promise<T> {
+      requested();
       if (held.has(name)) await new Promise<void>((resolve) => {
         waiting.set(name, [...(waiting.get(name) ?? []), resolve]);
       });
@@ -33,6 +35,11 @@ function webLocks() {
 class Tab extends DriveVault {
   // Expose the real port for direct record/retract commands, not Journal internals.
   port(): Journal { return this.journal; }
+  folderGate?: () => Promise<void>;
+  protected override async systemFolder(path: string): Promise<string> {
+    if (path === SYSTEM.changes) await this.folderGate?.();
+    return super.systemFolder(path);
+  }
 }
 
 type Outcome = 'landed' | 'refused' | 'unknown' | 'offline' | 'signin' | 'permission';
@@ -62,6 +69,10 @@ interface Real {
   baselineThings: Map<string, string>;
   decisions: Array<{ id: string; result: 'dropped' | 'sent' }>;
   reserveGate?: () => Promise<void>;
+  reserveWhileOffline?: boolean;
+  refuseId?: string;
+  ownerGates: Array<(() => Promise<void>) | undefined>;
+  lockRequested?: () => void;
 }
 
 function tabAt(r: Real, tab: number): Tab { return tab % 2 === 0 ? r.tabs[0] : r.tabs[1]; }
@@ -297,12 +308,83 @@ async function oracle(m: Model, r: Real): Promise<void> {
     .toEqual(m.changes.filter((c) => !undone(c)).map((c) => c.line.id).sort());
 }
 
+// Addendum 9(5): each command builds the whole adversarial interleaving; shrinking cannot remove its race.
+async function refusedDuringInverse(m: Model, r: Real, tab: number): Promise<void> {
+  r.outcome = 'landed';
+  await transport(() => tabAt(r, tab).port().flush());
+  r.outcome = 'offline';
+  r.reserveWhileOffline = true;
+  await change(m, r, 'add', tab, false);
+  delete r.reserveWhileOffline;
+  const c = m.changes.at(-1);
+  if (!c) throw new Error('Missing reserved original');
+  const j = tabAt(r, tab).port();
+  const result = await j.retract(c.line.id);
+  expect(result).toBe('sent');
+  r.refuseId = c.line.id;
+  r.outcome = 'landed';
+  try {
+    await transport(() => j.record('rule', 'Removed the rule',
+      { path: 'Rules.md', removes: c.line.text, undoes: c.line.id }));
+  } finally { delete r.refuseId; }
+  // The original is never in force. The independent replay must therefore keep the baseline rule state.
+  c.cancelled = r.refused.has(c.line.id);
+}
+
+async function ownerWaitingRace(m: Model, r: Real, tab: number): Promise<void> {
+  r.outcome = 'landed';
+  await transport(() => tabAt(r, tab).port().flush());
+  let ownerEntered!: () => void;
+  let ownerRelease!: () => void;
+  let folderEntered!: () => void;
+  let folderRelease!: () => void;
+  const ownerReached = new Promise<void>((done) => { ownerEntered = done; });
+  const ownerGate = new Promise<void>((done) => { ownerRelease = done; });
+  const folderReached = new Promise<void>((done) => { folderEntered = done; });
+  const folderGate = new Promise<void>((done) => { folderRelease = done; });
+  const earlierTab = tab;
+  const laterTab = 1 - tab;
+  r.ownerGates[earlierTab] = async () => { ownerEntered(); await ownerGate; };
+  const a = tabAt(r, laterTab);
+  a.folderGate = async () => { folderEntered(); await folderGate; };
+  const n = r.observed.size;
+  const earlierText = `Keep earlier category ${n} together`;
+  const laterText = `Keep later category ${n} together`;
+  r.outcome = 'offline';
+  const earlier = tabAt(r, earlierTab).port().record('rule', earlierText, { path: 'Rules.md', text: earlierText });
+  await ownerReached;
+  const later = a.port().record('rule', laterText, { path: 'Rules.md', text: laterText });
+  await folderReached;
+  let lockRequested!: () => void;
+  const lockReached = new Promise<void>((done) => { lockRequested = done; });
+  r.lockRequested = lockRequested;
+  ownerRelease();
+  await Promise.race([earlier, lockReached]);
+  delete r.lockRequested;
+  // Observe the earlier waiting line before the later send, without Journal.list taking the paused lock.
+  const waiting = JSON.parse(localStorage.getItem(outboxKey(r.root)) ?? '[]') as Array<{ line: JournalRecord }>;
+  for (const w of waiting) r.observed.set(w.line.id, w.line);
+  r.outcome = 'landed';
+  folderRelease();
+  try {
+    const lines = await Promise.all([earlier, later]);
+    lines.forEach((line, index) => {
+      r.observed.set(line.id, line);
+      m.changes.push({ line, kind: 'add', tab: index === 0 ? earlierTab : laterTab, cancelled: false, inverses: [] });
+    });
+  } finally {
+    r.ownerGates[earlierTab] = undefined;
+    delete a.folderGate;
+  }
+}
+
 type Action = { op: 'change'; kind: Kind; tab: number; api: boolean } |
-  { op: 'undo' | 'race'; index: number; tab: number; api: boolean } |
+  { op: 'undo' | 'race' | 'refused-inverse' | 'owner-waiting'; index: number; tab: number; api: boolean } |
   { op: 'send'; outcome: Outcome; tab: number };
 class Command implements fc.AsyncCommand<Model, Real> {
   constructor(readonly action: Action) {}
-  check(m: Readonly<Model>): boolean { return this.action.op === 'change' || this.action.op === 'send' || m.changes.length > 0; }
+  check(m: Readonly<Model>): boolean { return this.action.op === 'change' || this.action.op === 'send' || this.action.op === 'refused-inverse' ||
+    this.action.op === 'owner-waiting' || m.changes.length > 0; }
   toString(): string { return JSON.stringify(this.action); }
   async run(m: Model, r: Real): Promise<void> {
     const a = this.action;
@@ -310,7 +392,9 @@ class Command implements fc.AsyncCommand<Model, Real> {
     else if (a.op === 'send') {
       r.outcome = a.outcome;
       await transport(() => tabAt(r, a.tab).port().flush());
-    } else if (a.op === 'undo') await undo(m, r, a.index, a.tab, a.api);
+    } else if (a.op === 'refused-inverse') await refusedDuringInverse(m, r, a.tab);
+    else if (a.op === 'owner-waiting') await ownerWaitingRace(m, r, a.tab);
+    else if (a.op === 'undo') await undo(m, r, a.index, a.tab, a.api);
     else {
       // Addendum 4(6),(7): another tab presses Undo while the locked retry reserves ids.
       r.outcome = 'offline';
@@ -336,18 +420,22 @@ class Command implements fc.AsyncCommand<Model, Real> {
 
 async function setup(): Promise<Real> {
   localStorage.clear();
-  vi.stubGlobal('navigator', { locks: webLocks() });
+  const real: { current?: Real } = {};
+  vi.stubGlobal('navigator', { locks: webLocks(() => real.current?.lockRequested?.()) });
   let now = Date.parse('2026-10-09T10:00:00Z');
   vi.spyOn(Date, 'now').mockImplementation(() => ++now);
   const drive = new FakeDrive({ clock: () => ++now });
   const root = await seedFakeDrive(drive, 'default', now);
   if (!root) throw new Error('Missing fake root');
+  const ownerGates: Real['ownerGates'] = [];
   const tabs: [Tab, Tab] = [0, 1].map((tab) => new Tab({ drive, rootId: async () => root,
-    device: `tab-${tab}`, runningPiles: () => new Set() })) as [Tab, Tab];
+    device: `tab-${tab}`, runningPiles: () => new Set() }, () => true,
+    async () => { await ownerGates[tab]?.(); return root; })) as [Tab, Tab];
   const baselineRules = new Set((await tabs[0].rules()).map((rule) => rule.text));
   const r: Real = { drive, root, tabs, baselineRules, baselineThings: new Map(), outcome: 'landed',
     observed: new Map(), arrivals: [], attempts: [], dropped: new Set(), refused: new Set(),
-    confirmed: new Set(), fifoViolations: [], decisions: [] };
+    confirmed: new Set(), fifoViolations: [], decisions: [], ownerGates };
+  real.current = r;
   const create = drive.createText.bind(drive);
   const reserve = drive.generateIds.bind(drive);
   const get = drive.get.bind(drive);
@@ -355,7 +443,7 @@ async function setup(): Promise<Real> {
   const recordOfFile = new Map<string, string>();
   vi.spyOn(drive, 'generateIds').mockImplementation(async (count) => {
     await r.reserveGate?.();
-    if (r.outcome === 'offline') throw driveError('offline');
+    if (r.outcome === 'offline' && !r.reserveWhileOffline) throw driveError('offline');
     return reserve(count);
   });
   vi.spyOn(drive, 'get').mockImplementation(async (...args) => {
@@ -379,7 +467,7 @@ async function setup(): Promise<Real> {
       blind.delete(args[4] ?? '');
       return create(...args);
     }
-    if (r.outcome === 'refused') { r.refused.add(line.id); throw driveFailure('unknown', 'permanent'); }
+    if (r.outcome === 'refused' || r.refuseId === line.id) { r.refused.add(line.id); throw driveFailure('unknown', 'permanent'); }
     if (r.outcome === 'offline') throw driveError('offline');
     if (r.outcome === 'signin' || r.outcome === 'permission') throw driveFailure('auth', 'wait');
     blind.delete(args[4] ?? '');
@@ -418,7 +506,7 @@ it.each([
   const command = fc.oneof(
     fc.record({ op: fc.constant('change' as const), kind: fc.constantFrom<Kind>('bin', 'move', 'add', 'remove'),
       tab: fc.integer({ min: 0, max: 1 }), api: fc.boolean() }),
-    fc.record({ op: fc.constantFrom('undo' as const, 'race' as const), index: fc.nat(30),
+    fc.record({ op: fc.constantFrom('undo' as const, 'race' as const, 'refused-inverse' as const, 'owner-waiting' as const), index: fc.nat(30),
       tab: fc.integer({ min: 0, max: 1 }), api: fc.boolean() }),
     fc.record({ op: fc.constant('send' as const), outcome: fc.constantFrom<Outcome>('landed', 'refused', 'unknown',
       'offline', 'signin', 'permission'), tab: fc.integer({ min: 0, max: 1 }) }),

@@ -805,3 +805,64 @@ describe('note edits change only what the contract allows', () => {
     });
   });
 });
+
+// TL-P4-27 addendum 9(4): literal bytes from pre-entry c5e8093a (1d70a38f^).
+// git show into /tmp/compensate-a9-baseline; execute its applyChanges/wordRules, never HEAD.
+it.each([
+  {
+    "label": "your words are not an exact removal",
+    "before": "---\nsummary: 1 rule Bower follows in every tidy-up.\nby: bower\nkind: Rules\n---\n\n## Rules\n\n- Keep PDFs whole. <!-- since 2026-09-30 -->\n  *You wrote: \"dont split pdfs\"*\n\n## Notes from you\nLeave [[Old]] alone.\n",
+    "add": [],
+    "remove": [
+      {
+        "recordId": "REMOVE_ID",
+        "text": "dont split pdfs"
+      }
+    ],
+    "expected": "---\nsummary: 1 rule Bower follows in every tidy-up.\nby: bower\nkind: Rules\n---\n\n## Rules\n\n- Keep PDFs whole. <!-- since 2026-09-30 -->\n  *You wrote: \"dont split pdfs\"*\n\n## Notes from you\nLeave [[Old]] alone.\n"
+  },
+  {
+    "label": "exact removal then add, newest first",
+    "before": "---\nsummary: 1 rule Bower follows in every tidy-up.\nby: bower\nkind: Rules\n---\n\n## Rules\n\n- Keep PDFs whole. <!-- since 2026-09-30 -->\n  *You wrote: \"dont split pdfs\"*\n\n## Notes from you\nLeave [[Old]] alone.\n",
+    "add": [
+      {
+        "recordId": "ADD_ID",
+        "text": "Keep PDFs whole.",
+        "yourWords": "dont split pdfs",
+        "since": 1791244800000
+      },
+      {
+        "recordId": "ADD_2",
+        "text": "Name scans by date.",
+        "yourWords": "scans by date",
+        "since": 1791331200000
+      }
+    ],
+    "remove": [
+      {
+        "recordId": "REMOVE_ID",
+        "text": "Keep PDFs whole."
+      }
+    ],
+    "expected": "---\nsummary: 2 rules Bower follows in every tidy-up.\nby: bower\nkind: Rules\n---\n\n## Rules\n\n- Name scans by date. <!-- since 2026-10-07 -->\n  *You wrote: \"scans by date\"*\n- Keep PDFs whole. <!-- since 2026-10-06 -->\n  *You wrote: \"dont split pdfs\"*\n\n## Notes from you\nLeave [[Old]] alone.\n"
+  },
+  {
+    "label": "normalised wording is not an exact removal",
+    "before": "---\nsummary: 1 rule Bower follows in every tidy-up.\nby: bower\nkind: Rules\n---\n\n## Rules\n\n- Keep PDFs whole. <!-- since 2026-09-30 -->\n  *You wrote: \"dont split pdfs\"*\n\n## Notes from you\nLeave [[Old]] alone.\n",
+    "add": [],
+    "remove": [
+      {
+        "recordId": "REMOVE_ID",
+        "text": "keep pdfs whole"
+      }
+    ],
+    "expected": "---\nsummary: 1 rule Bower follows in every tidy-up.\nby: bower\nkind: Rules\n---\n\n## Rules\n\n- Keep PDFs whole. <!-- since 2026-09-30 -->\n  *You wrote: \"dont split pdfs\"*\n\n## Notes from you\nLeave [[Old]] alone.\n"
+  }
+])('an old manifest without since words rules byte for byte as before ($label)', ({ before, add, remove, expected }) => {
+  for (const eol of ['\n', '\r\n']) {
+    const bytes = enc(before.replace(/\n/g, eol));
+    const out = applyChanges(bytes, [word(add, remove)]);
+    if (!out.ok) expect(out.reason).toBe('unchanged');
+    expect(out.ok ? out.bytes : bytes).toEqual(enc(expected.replace(/\n/g, eol)));
+  }
+});

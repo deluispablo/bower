@@ -386,3 +386,120 @@ describe('round 2 compensating lines', () => {
     expect(run.report.updated).toEqual([expect.objectContaining({ path: 'Rules.md', what: `Removed the rule "${words}"` })]);
   });
 });
+
+// TL-P4-27 addendum 9: round-2 findings 1 to 3, through the production Journal and run path.
+describe('addendum 9 re-plan', () => {
+  it.each([
+    { label: 'move', kind: 'move', inverseKind: 'move', original: { path: 'Areas/Lease draft.pdf', from: 'Projects/Flat hunt/Lease draft.pdf', fileId: 'FILE_ID' }, inverse: { path: 'Projects/Flat hunt/Lease draft.pdf', from: 'Areas/Lease draft.pdf', fileId: 'FILE_ID' }, what: 'Moved Lease draft to Flat hunt' },
+    { label: 'Bin/restore', kind: 'trash', inverseKind: 'move', original: { path: 'Projects/Flat hunt/Lease draft.pdf', fileId: 'FILE_ID' }, inverse: { path: 'Projects/Flat hunt/Lease draft.pdf', from: 'Projects/Flat hunt/Lease draft.pdf', fileId: 'FILE_ID' }, what: 'Put back Lease draft' },
+    { label: 'restore/Bin', kind: 'move', inverseKind: 'trash', original: { path: 'Projects/Flat hunt/Lease draft.pdf', from: 'Projects/Flat hunt/Lease draft.pdf', fileId: 'FILE_ID' }, inverse: { path: 'Projects/Flat hunt/Lease draft.pdf', fileId: 'FILE_ID' }, what: 'Put Lease draft in the Bin' },
+    { label: 'rename', kind: 'rename', inverseKind: 'rename', original: { path: 'Projects/Flat hunt/Lease.pdf', from: 'Projects/Flat hunt/Lease draft.pdf', fileId: 'FILE_ID' }, inverse: { path: 'Projects/Flat hunt/Lease draft.pdf', from: 'Projects/Flat hunt/Lease.pdf', fileId: 'FILE_ID' }, what: 'Renamed Lease to Lease draft' },
+    { label: 'rule add/remove', kind: 'rule', inverseKind: 'rule', original: { path: 'Rules.md', text: 'Keep recipes together.' }, inverse: { path: 'Rules.md', removes: 'Keep recipes together.' }, what: 'Removed the rule "Keep recipes together."' },
+    { label: 'rule remove/add', kind: 'rule', inverseKind: 'rule', original: { path: 'Rules.md', removes: 'Keep recipes together.' }, inverse: { path: 'Rules.md', text: 'Keep recipes together.' }, what: 'New rule: "Keep recipes together."' },
+  ])('a later inverse of every kind gives its own report row ($label)', async ({ kind, inverseKind, original, inverse, what }) => {
+    const at = Date.parse('2026-10-10T10:00:00Z');
+    const id = await lineInDrive(kind, 'Original change', original, at);
+    expect((await tidyUp(drive, root, 'instructions')).phase).toBe('done');
+    const back = await lineInDrive(inverseKind, what, { ...inverse, undoes: id }, at + 1);
+    const run = await tidyUp(drive, root, 'instructions');
+    expect(run.phase).toBe('done');
+    if (run.phase !== 'done') throw new Error(run.failure);
+    expect(run.manifest.capture.journal.map((j) => j.recordId)).toEqual([back]);
+    const rows = [...run.report.filed, ...run.report.created, ...run.report.updated,
+      ...run.report.setAside, ...run.report.questions, ...(run.report.alreadySaved ?? []),
+      ...(run.report.unconfirmed ?? []), ...(run.report.answered ?? [])];
+    expect(rows).toEqual([expect.objectContaining({ path: inverse.path, what })]);
+  });
+
+  it('an inverse whose original was refused while it was recorded is never sent', async () => {
+    const changes = (await drive.listAll(root)).find((f) => f.folder && f.name === 'changes');
+    if (!changes) throw new Error('no changes folder');
+    const j = new Journal(drive, { owner: async () => root, folder: async () => changes.id,
+      files: async () => (await drive.listAll(changes.id)).filter((f) => !f.folder) }, 'tab-a');
+    const create = drive.createText.bind(drive);
+    let originalId = '';
+    let offline = true;
+    const attempted: string[] = [];
+    drive.createText = async (...args) => {
+      const line = JSON.parse(args[2]) as { id: string };
+      attempted.push(line.id);
+      if (offline) throw driveError('offline');
+      if (line.id === originalId) throw driveFailure('unknown', 'permanent');
+      return create(...args);
+    };
+    const original = await j.record('rule', 'New rule', { path: 'Rules.md', text: 'Keep recipes together.' });
+    originalId = original.id;
+    const stored = JSON.parse(localStorage.getItem(`bower:outbox:${root}`) ?? '[]') as Array<{ reserved?: string }>;
+    expect(stored[0]?.reserved).toBeDefined();
+    expect(await j.retract(original.id)).toBe('sent');
+    offline = false;
+    const inverse = await j.record('rule', 'Removed the rule', { path: 'Rules.md', removes: 'Keep recipes together.', undoes: original.id });
+    expect((await j.failed()).map((f) => f.id)).toEqual([original.id]);
+    expect.soft(attempted).not.toContain(inverse.id);
+    await j.flush();
+    expect(linesInDrive()).toEqual([]);
+  });
+
+  it('a later line from another tab never overtakes an earlier waiting line', async () => {
+    class RaceTab extends DriveVault {
+      folderGate?: () => Promise<void>;
+      port(): Journal { return this.journal; }
+      protected override async systemFolder(path: string): Promise<string> {
+        if (path === SYSTEM.changes) await this.folderGate?.();
+        return super.systemFolder(path);
+      }
+    }
+    let ownerEntered!: () => void;
+    let ownerRelease!: () => void;
+    const ownerReached = new Promise<void>((done) => { ownerEntered = done; });
+    const ownerGate = new Promise<void>((done) => { ownerRelease = done; });
+    const options = { drive, rootId: async () => root, runningPiles: () => new Set<string>() };
+    const b = new RaceTab(options, () => true, async () => { ownerEntered(); await ownerGate; return root; });
+    const a = new RaceTab(options);
+    let folderEntered!: () => void;
+    let folderRelease!: () => void;
+    const folderReached = new Promise<void>((done) => { folderEntered = done; });
+    const folderGate = new Promise<void>((done) => { folderRelease = done; });
+    a.folderGate = async () => { folderEntered(); await folderGate; };
+    const arrivalOrder: string[] = [];
+    const create = drive.createText.bind(drive);
+    drive.createText = async (...args) => {
+      const result = await create(...args);
+      if (LINE.test(args[1])) arrivalOrder.push((JSON.parse(args[2]) as { what: string }).what);
+      return result;
+    };
+    const ids = drive.generateIds.bind(drive);
+    let reserveOffline = true;
+    drive.generateIds = async (count) => { if (reserveOffline) throw driveError('offline'); return ids(count); };
+    let at = Date.parse('2026-10-10T10:00:00Z');
+    vi.spyOn(Date, 'now').mockImplementation(() => ++at);
+    const earlier = b.port().record('request', 'Earlier request', { text: 'Earlier request' });
+    await ownerReached;
+    const later = a.port().record('request', 'Later request', { text: 'Later request' });
+    await folderReached;
+    // Old path: B finishes its offline reservation. Locked relay: B waits to enter the lock.
+    // Release A at either observable boundary, so this test cannot deadlock after the re-plan.
+    let lockRequested!: () => void;
+    const lockReached = new Promise<void>((done) => { lockRequested = done; });
+    const locks = navigator.locks;
+    vi.stubGlobal('navigator', { locks: {
+      request: <T,>(name: string, work: () => Promise<T>): Promise<T> => {
+        lockRequested();
+        return locks.request(name, work);
+      },
+    } });
+    ownerRelease();
+    await Promise.race([earlier, lockReached]);
+    reserveOffline = false;
+    folderRelease();
+    const [first, second] = await Promise.all([earlier, later]);
+    const waiting = JSON.parse(localStorage.getItem(`bower:outbox:${root}`) ?? '[]') as Array<{ line: { id: string } }>;
+    expect.soft(waiting.some((w) => w.line.id === first.id) && linesInDrive().some((l) => l.id === second.id)).toBe(false);
+    await a.flushJournal();
+    await b.flushJournal();
+    // Both eventually arrive once. The FIFO assertion above applies when the earlier line was actually waiting.
+    expect(arrivalOrder.slice().sort()).toEqual(['Earlier request', 'Later request']);
+    a.dispose();
+    b.dispose();
+  });
+});
