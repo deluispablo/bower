@@ -53,7 +53,7 @@ describe('the change journal', () => {
 });
 
 describe('when Drive does not answer', () => {
-  it.each(['direct', 'archive'])('waiting changes require matching valid Drive contents (%s)', async (location) => {
+  it.each(['direct', 'archive'])("a waiting change is acknowledged by its line key, never by a lookalike's name or contents (%s)", async (location) => {
     const archive = (await drive.createFolder(changes, 'archive')).id;
     const files = vi.fn(async (_fresh?: boolean, archived?: boolean) => (await drive.listAll(changes)).filter((f) => !f.folder && (archived || f.parents.includes(changes))));
     journal = new Journal(drive, { owner: async () => root, folder: async () => changes, files }, 'device-a');

@@ -2487,7 +2487,7 @@
       "Flush or start a tidy-up: explain the problem and retain the valid waiting instruction.",
       "An exact matching copy is acknowledged without creating another copy."
     ],
-    "verify": "pnpm vitest run src/data/vault/journal.test.ts -t \"waiting changes require matching valid Drive contents\"",
+    "verify": "pnpm vitest run src/data/vault/journal.test.ts -t \"a waiting change is acknowledged by its line key, never by a lookalike's name or contents\"",
     "passes": true
   },
   {
