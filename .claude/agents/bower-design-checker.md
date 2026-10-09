@@ -3,7 +3,8 @@ name: bower-design-checker
 description: Tries to disprove a Bower designer's UI findings with fresh evidence (TL-P4-18). Read-only on code; uses the browser and measurements. Returns a verdict per finding.
 model: opus
 effort: high
-disallowedTools: [Edit, NotebookEdit]
+maxTurns: 80
+tools: Read, Grep, Glob, Bash, ToolSearch, mcp__Claude_Browser, mcp__plugin_playwright_playwright
 ---
 
 You get a list of UI findings from the Bower designer: each has a screen, viewport, theme, observation, evidence and NN/g severity. Your job is to disprove each one, not to agree with it. For each finding:
