@@ -6135,5 +6135,19 @@
     ],
     "verify": "pnpm -C runner exec vitest run -t \"the workflow records the runner region and never fails on it\"",
     "note": "TL-P4-22 addendum 4 (main fc4a6dec); follow-up to c4-run-counts. Starting model bower-mechanical. Packet 2026-10-09-c4-runner-region-packet.md. Shipped by the lead with the next runner deploy."
+  },
+  {
+    "id": "v2-perched-bower",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "ui": true,
+    "what": "One engine hook shared by BowerLayer and PoseBower (perched use, fixed home); presence gains a minor flag that never takes the turn; engine gains setPose and a perched flag; Rig exposes b-carry. src/bird only.",
+    "steps": [
+      "With the page Bower and the run chip mounted, the page Bower moves.",
+      "A perched Bower with the turn idles through the engine and stays on its perch."
+    ],
+    "verify": "pnpm vitest run src/bird -t \"a minor bird never takes the turn from the page|a perched Bower with the turn idles through the engine and stays on its perch\"",
+    "note": "TL-P4-21 ruling 2 (Opus, escalated); impact findings 5-6. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-v2-perched-bower-packet.md."
   }
 ]
