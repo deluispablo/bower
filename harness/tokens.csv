@@ -308,3 +308,6 @@ d-v2-07,implementer,codex,gpt-5-codex,medium,7,823923,817524,,764672,6399,,,,don
 p4-corpus-driver,implementer,codex,gpt-5-codex,medium,2,2189226,2170150,,2069760,19076,,,,blocked on case 6,2026-10-09
 c4-parse-once,implementer,codex,gpt-5-codex,medium,2,303318,300592,,253696,2726,,,,blocked: script.ts not owned,2026-10-09
 d-v2-07,reviewer,codex,gpt-5-codex,medium,7,368379,364616,,322048,3763,,,,1 Important (stop rule),2026-10-09
+c4-undo-compensate,property-red,codex,gpt-5-codex,medium,4,523129,518169,,481664,4960,,,,amended (addendum 7),2026-10-09
+c4-parse-once,implementer,codex,gpt-5-codex,medium,3,1247053,1237534,,1154688,9519,,,,done,2026-10-09
+p4-corpus-driver,implementer,codex,gpt-5-codex,low,3,248061,245037,,210432,3024,,,,case 6 deferred,2026-10-09
