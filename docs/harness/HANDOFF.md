@@ -2,17 +2,16 @@
 
 Coordinator: the Claude Code session named "Orquestador". It integrates in `/Users/deluisp/Projects/bower-app` on branch `claude/p3`; P4 continues on it. Lead: the Planificador session ([DECISIONS.md](DECISIONS.md)). Output rule: [TL-P3-29](2026-10-07-tl-p3-29-output-rule-survives-compaction.md), in AGENTS.md. Minors: [P2_POLISH.md](P2_POLISH.md). Earlier handoffs: git history of this file.
 
-## Resume (2026-10-09 late night)
+## Resume (2026-10-10 early)
 
-Read this first. TL-P4-29 (Codex first): Codex implements everything, including escalated entries and fix rounds. Claude keeps the final review (a fresh bower-reviewer), the designer, and the lead. The cap is 1 Claude plus 3 Codex. Codex cannot write the git index or open ports, so the coordinator commits for it (red, fix, notes) and runs its pnpm check and e2e under `harness/with-lock.sh` (lock /tmp/bower-heavy.lockf). TL-P4-29 ruling 4 was withdrawn. Escalated data entries use three Codex sessions: the red, the implementation, and a read-only adversarial pass. Prompts sit in the scratchpad (`codex-*-prompt.md`); never put the word for sending to a remote in a Bash command line, because the guard hook blocks it.
-- **Closed tonight:** c4-lockf, c4-precheck-runner, c4-create-landed (472/482).
-- **d-v2-07:** on hold at aa95b666 (`/private/tmp/bower-d-v2-07b`). The round-7 Codex pass found 1 Important, which triggered the stop rule. The lead is re-planning with the designer (TL-P4-25 addendum 10 lifts the hold).
-- **c4-undo-compensate** (`/private/tmp/bower-c4-compensate`): the Opus implementation and the merge with create-landed are done. The property is amended by addendum 6, split into batches, and is now being amended for addendum 7 by Codex. Next: pnpm check and e2e under the lock, the Codex adversarial pass, a Claude review, then the designer checks the Undo toasts.
-- **c4-parse-once** (`/private/tmp/bower-c4-parse-once`): red b48a7655 plus 573c4bfd (addendum 26); Codex implementation session 2 is running. Then gates, the adversarial pass, and a Claude review.
-- **p4-corpus-driver** (`/private/tmp/bower-p4-c05-prep`, carries the C05 prep): case 6 is removed per TL-P4-28 addendum 2 and goes to an open-question file. Commit in the groups Codex lists, then gates and a Claude review.
-- **Next on Codex:** d-v2-24a (Opus is no longer used). Then the queue: 24b ∥ d-v2-06, d-v2-02, the c4 data entries, then P4-C.
+Read this first. TL-P4-29 (Codex first): Codex implements everything. Escalated data entries use three Codex sessions: the red, the implementation, and a read-only adversarial pass. A fresh Claude bower-reviewer gives the closing PASS. Codex cannot write git or open ports, so the coordinator commits (red, fix, notes) and runs pnpm check and e2e under `harness/with-lock.sh` (/tmp/bower-heavy.lockf). Prompts sit in the scratchpad (`codex-*-prompt.md`). The lead's sends are paused (10 without an owner message): rulings arrive on main in DECISIONS, and questions go to `docs/harness/LEAD_QUESTIONS.md`.
+- **Closed:** c4-lockf, c4-precheck-runner, c4-create-landed, p4-corpus-driver, c4-parse-once (474/482).
+- **d-v2-07:** merged at 86b4fe3e (P4-58h PASS). It waits for the designer's verification (asked by message), then `harness/done.sh d-v2-07 --known-green`. Lead question: the rate-property 30 s timeout. The worktree `/private/tmp/bower-d-v2-07b` was kept, because a process ran in it; clean it up.
+- **c4-undo-compensate** (`/private/tmp/bower-c4-compensate`): re-plan reds at 8da56079 (addendum 9). The Codex implementation is partial and uncommitted (patch in the scratchpad), blocked on the volatile-outbox question in LEAD_QUESTIONS. After the ruling: a fresh Codex implementation, then gates, the adversarial pass, a Claude review and the designer. If that pass finds another Important, it goes to the owner through the lead.
+- **d-v2-24a** (`/private/tmp/bower-d-v2-24a`): the Codex implementation is running. Then gates with e2e and axe, a Codex pass, a Claude review and the designer.
+- **Queue:** 24b ∥ d-v2-06, d-v2-02, the c4 data entries, then P4-C. C05 has an open question: `2026-10-09-c05-open-question-person-notes.md`.
 - **Parked:** c4-undo-withdraw at 70a2b0da. Delete it after c4-undo-compensate merges.
-- **Sessions:** lead Planificador; Designer (`/private/tmp/bower-design`); lead planning worktree `/private/tmp/bower-tl-planning`. Never remove role worktrees.
+- **Sessions:** lead Planificador; Designer; lead planning worktree `/private/tmp/bower-tl-planning`. Never remove role worktrees.
 
 ## Where things stand
 
