@@ -81,23 +81,23 @@ interface HeadProfile {
   gaze: number;
 }
 /**
- * The caps per move class, in degrees a frame at 60 fps (TL-P4-25 addendum 5): returns and the gaze ramp; the idle
- * snaps and the startle's rise are sudden. The drawn angle has two decimals, so a measured speed can read 0.01 over
- * the profile's and a measured speed change 0.02 over: the caps keep that margin under the bound.
+ * Time-based caps (TL-P4-25 addendum 8), in degrees/second and degrees/second².
+ * Keep the existing 60 fps rounding reserve as rates. Four decimal places on
+ * the drawn head preserve that reserve when measuring 120 fps or jittered frames.
  */
+const FRAME = 1 / 60;
 const DRAWN = 0.02;
 const HEAD_MOVES = {
-  glide: { speed: 6 - DRAWN, accel: 1.5 - DRAWN },
-  snap: { speed: 6 - DRAWN, accel: Infinity },
+  glide: { speed: 360 - DRAWN / FRAME, accel: 5400 - DRAWN / (FRAME * FRAME) },
+  snap: { speed: 360 - DRAWN / FRAME, accel: Infinity },
 } as const;
-const FRAME = 1 / 60;
 /** One frame of the head's profile, `dt` seconds long. */
 const follow = (h: HeadProfile, dt: number, move: (typeof HEAD_MOVES)[keyof typeof HEAD_MOVES]): void => {
   if (dt <= 0) return;
-  const f = dt / FRAME;
-  const top = move.speed * f;
+  const top = move.speed * dt;
   const d = h.t + h.gaze - h.v;
-  const a = move.accel * f * f;
+  // Express the acceleration-limited velocity change as this frame's displacement.
+  const a = move.accel * dt * dt;
   const was = h.vel * dt;
   if (!Number.isFinite(a)) {
     // A sudden move: at the speed cap, straight onto the target.
@@ -932,11 +932,12 @@ export class BirdEngine {
 
   private loop = (ts: number): void => {
     if (!this.running) return;
-    const dt = Math.min(0.033, (ts - (this.last || ts)) / 1000);
+    const elapsed = (ts - (this.last || ts)) / 1000;
+    const dt = Math.min(0.033, elapsed);
     this.last = ts;
     this.S.t += dt;
     this.think(dt);
-    this.step(dt);
+    this.step(dt, elapsed);
     this.apply();
     this.raf = this.frame(this.loop);
   };
@@ -1218,7 +1219,7 @@ export class BirdEngine {
     C.iy.t = (1.4 * dy) / m;
   }
 
-  private step(dt: number): void {
+  private step(dt: number, headDt: number): void {
     const C = this.C;
     const B = this.B;
     const S = this.S;
@@ -1240,7 +1241,7 @@ export class BirdEngine {
     }
     // The idle snaps and the startle's rise are sudden; every other head move ramps (TL-P4-25 addendum 5).
     const rising = S.startleT > STARTLE_TOTAL - STARTLE.rise;
-    follow(this.H, dt, this.doing === 'snap' || rising ? HEAD_MOVES.snap : HEAD_MOVES.glide);
+    follow(this.H, headDt, this.doing === 'snap' || rising ? HEAD_MOVES.snap : HEAD_MOVES.glide);
     if (B.flying) {
       B.ph += dt * Math.PI * 2 * (B.flare ? 6 : 10);
       const s = Math.sin(B.ph);
@@ -1315,7 +1316,7 @@ export class BirdEngine {
       'transform',
       `rotate(${C.pitch.v.toFixed(2)} 50 92) translate(50 92) scale(${sx.toFixed(3)} ${sy.toFixed(3)}) translate(-50 -92)`,
     );
-    P.head.setAttribute('transform', `rotate(${this.H.v.toFixed(2)} 60 50)${B.headY ? ` translate(0 ${B.headY})` : ''}`);
+    P.head.setAttribute('transform', `rotate(${this.H.v.toFixed(4)} 60 50)${B.headY ? ` translate(0 ${B.headY})` : ''}`);
     P.tail.setAttribute('transform', `rotate(${C.tail.v.toFixed(2)} 32 70)`);
     P.wing.setAttribute(
       'transform',
