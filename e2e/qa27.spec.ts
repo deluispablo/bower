@@ -8,7 +8,7 @@
  * Drive. Phone and desktop, on demo and on fake.
  */
 import type { Page } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
+import { expectAxeClean } from './axe';
 import { expect, isFake, test, withSource } from './fixtures';
 
 const BLOCKED = 'Bower is open in another window.';
@@ -47,8 +47,7 @@ test('a second page asks before taking over, and the first keeps working', async
   // Only the screen shows: one Bower, no tabs or other screens behind it.
   await expect(second.locator('[data-bird]')).toHaveCount(1);
   await expect(second.getByRole('navigation')).toHaveCount(0);
-  const axe = await new AxeBuilder({ page: second }).include('main').analyze();
-  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+  await expectAxeClean(second, { include: 'main' });
   // The first page was never asked: it goes on as before.
   await expect(blocked(page)).toHaveCount(0);
   await page.getByRole('navigation', { name: 'Main' }).locator('a[href="/add"]').click();

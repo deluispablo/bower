@@ -61,7 +61,7 @@ cp scripts/harness-git.mjs "$(dirname "$HARNESS_RULES")/harness-git.mjs"
 export HARNESS_GIT="$(dirname "$HARNESS_RULES")/harness-git.mjs"
 code=$(node --input-type=module -e 'const { codeInWorktree } = await import(process.env.HARNESS_GIT); console.log(codeInWorktree().join("\n"));')
 expect_red() {
-  if bash -c "$verify" >"$log" 2>&1; then
+  if bash harness/with-lock.sh bash -c "$verify" >"$log" 2>&1; then
     echo "The verify passes without the change: it does not pin it. Fix the test."; exit 1
   fi
   kind=$(node --input-type=module -e 'const { redKind } = await import(process.env.HARNESS_RULES); import { readFileSync } from "node:fs"; console.log(redKind(readFileSync(process.argv[1], "utf8")));' "$log")
@@ -105,7 +105,7 @@ esac
 
 # 3. Gates.
 echo "check…"; bash harness/with-lock.sh bash -c 'pnpm check >"$1" 2>&1' _ "$log" || { tail -40 "$log"; echo "pnpm check failed: $id stays open"; exit 1; }
-echo "verify: $verify"; bash -c "$verify" >"$log" 2>&1 || { tail -40 "$log"; echo "verify failed: $id stays open"; exit 1; }
+echo "verify: $verify"; bash harness/with-lock.sh bash -c "$verify" >"$log" 2>&1 || { tail -40 "$log"; echo "verify failed: $id stays open"; exit 1; }
 if grep -qE "No test files? found|No tests found|Tests +0 passed|^ +0 passed" "$log" || ! grep -qE "[1-9][0-9]* passed" "$log"; then
   tail -20 "$log"; echo "verify ran no test: $id stays open"; exit 1
 fi

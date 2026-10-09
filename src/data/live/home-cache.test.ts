@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
 import { FakeWorker } from '../fake/fake-worker';
 import { FakeRunService } from '../fake/fake-run-service';
@@ -9,7 +9,26 @@ import { makeLiveSources, type LiveSources } from './index';
 let live: LiveSources | null = null;
 /** Each file's modifiedTime when a cold load began. */
 let versions = new Map<string, string>();
+/**
+ * The pretend Drive answers after a modelled delay (300 ms a call). That time is the fake clock's: once the event loop has
+ * gone quiet for a few turns, the clock jumps to the next timer. So virtual time passes only in the modelled waits, never
+ * in the test's own work, and a loaded machine cannot change what a test measures (Date.now is the fake clock too).
+ * https://vitest.dev/guide/mocking/timers
+ */
+let ticking = false;
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+  ticking = true;
+  void (async () => {
+    while (ticking) {
+      for (let turn = 0; turn < 5; turn++) await new Promise<void>((resolve) => { setImmediate(resolve); });
+      if (ticking && vi.isFakeTimers() && vi.getTimerCount() > 0) vi.advanceTimersToNextTimer();
+    }
+  })();
+});
 afterEach(() => {
+  ticking = false;
+  vi.useRealTimers();
   live?.dispose();
   live = null;
   vi.restoreAllMocks();

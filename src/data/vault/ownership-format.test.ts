@@ -145,6 +145,28 @@ describe('ownership/2 raw byte authority', () => {
     expect(togglePersonalTask(input, { ...request, previousDone: true })).toEqual({ kind: 'refused', reason: 'task-changed' });
   });
 
+  // One byte table per note: every span of a legacy note is where the text says it is, in bytes, whatever the line
+  // endings and however wide the characters before it (the table replaced a prefix re-encode per span).
+  it.for([['LF', '\n'], ['CRLF', '\r\n']] as const)('legacy spans are byte-exact with %s and wide characters', ([, eol]) => {
+    const lines = [
+      '---', 'by: bower', 'note: caf\u00e9 \u{1F426}', '---', '## Current state', '- one \u00f1', '', 'Alex wrote \u65e5\u672c\u8a9e here.',
+      '- [ ] Task \u{1F331}', '', '## Timeline', '- 2026-10-09 \u00e9 done', '', "## Bower's note", 'Hello \u{1F426}.', '',
+    ];
+    const text = lines.join(eol);
+    const bytes = encode(text);
+    const parsed = parseOwnership(bytes);
+    expect(parsed.status).toBe('legacy');
+    if (parsed.status === 'invalid') return;
+    const slice = (span: { start: number; end: number } | null) => (span ? decode(bytes.slice(span.start, span.end)) : null);
+    expect(slice(parsed.layout.front)).toBe(['by: bower', 'note: caf\u00e9 \u{1F426}', ''].join(eol));
+    expect(slice(parsed.layout.current)).toBe(['## Current state', '- one \u00f1', ''].join(eol));
+    expect(slice(parsed.personal)).toBe(['Alex wrote \u65e5\u672c\u8a9e here.', '- [ ] Task \u{1F331}', ''].join(eol));
+    expect(slice(parsed.layout.timeline)).toBe(['## Timeline', '- 2026-10-09 \u00e9 done', '', ''].join(eol));
+    expect(slice(parsed.layout.bowerNote)).toBe(["## Bower's note", 'Hello \u{1F426}.', ''].join(eol));
+    expect(decode(bytes.slice(0, parsed.layout.frontEnd))).toBe(lines.slice(0, 4).join(eol) + eol);
+    expect(parsed.tasks[0]?.label).toBe('Task \u{1F331}');
+  });
+
   it('retains legacy fence/empty task indexing, unterminated frontmatter and legacy BOM behavior', () => {
     const legacy = encode('---\nby: bower\n---\n```\n- [ ] Example\n```\n- [ ] \n- [ ] Personal task\n');
     const parsed = parseOwnership(legacy); expect(parsed.status).toBe('legacy');

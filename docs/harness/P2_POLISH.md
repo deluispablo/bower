@@ -340,3 +340,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - `.small` gives the chips a base min-height of 40 at 900 px and wider;
   - the Segmented doc comment names only Settings and Tell Bower.
 - 2026-10-09 v2-move-here (P4-51 minors): an Inbox item typing "inbox" + Enter says "It is already in Inbox" though Inbox is never listed (MovePicker.tsx:90); ArrowDown with only disabled rows after it focuses nothing (no-op, :56); the current-name "Several folders match" branch has no test.
+- 2026-10-09 v2-perched-bower (P4-53 minors): girth default -0.7 repeated three times in engine.ts (201, 282, 617), name it; carry/idle/land tails write .v and zero .vel but leave .t stale (752-756); notes Round 2 text predates addendum 17; only proud and carry legs carry `hold` in the fixture (idle head, read, alarm holds untested).

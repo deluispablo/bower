@@ -114,9 +114,13 @@ export interface ShowOffOptions {
   pitch?: number;
   /** Chest out: the body's vertical scale while showing off. */
   swell?: number;
+  /** The body's width at the swell (without it the body narrows as it grows tall). */
+  wide?: number;
   seconds?: number;
   /** Seconds to grow into the display (0: at once). */
   rise?: number;
+  /** Seconds to ease back to rest after `seconds` (0: let go at once). */
+  fall?: number;
   turn?: boolean;
   chirp?: boolean;
   sparkle?: boolean;
@@ -143,12 +147,17 @@ const held = (p: number, steps: ReadonlyArray<readonly [number, number]>): numbe
   for (const [at, value] of steps) if (p >= at) v = value;
   return v;
 };
-/** Straight lines between keyframes, as CSS plays them. */
-const keyed = (p: number, keys: ReadonlyArray<readonly [number, number]>): number => {
+/** An eased step from 0 to 1 (smoothstep), clamped. */
+const smooth = (u: number): number => {
+  const x = clamp(u, 0, 1);
+  return x * x * (3 - 2 * x);
+};
+/** Straight lines between keyframes, as CSS plays them; `eased` eases in and out of each key instead. */
+const keyed = (p: number, keys: ReadonlyArray<readonly [number, number]>, eased = false): number => {
   for (let i = 1; i < keys.length; i++) {
     const [a, va] = keys[i - 1] ?? [0, 0];
     const [b, vb] = keys[i] ?? [1, 0];
-    if (p <= b) return b === a ? vb : va + ((vb - va) * (p - a)) / (b - a);
+    if (p <= b) return b === a ? vb : va + (vb - va) * (eased ? smooth((p - a) / (b - a)) : (p - a) / (b - a));
   }
   return keys[keys.length - 1]?.[1] ?? 0;
 };
@@ -188,6 +197,8 @@ export class BirdEngine {
     headY: 0,
     tuftY: 0,
     opacity: 1,
+    /** How the body's width follows its height: -0.7 keeps its volume. */
+    girth: -0.7,
   };
   private S = {
     t: 0,
@@ -268,6 +279,7 @@ export class BirdEngine {
     this.B.headY = 0;
     this.B.tuftY = 0;
     this.B.opacity = 1;
+    this.B.girth = -0.7;
     if (pose === 'carry') this.holding(true);
   }
   private rand(a: number, b: number): number {
@@ -564,7 +576,7 @@ export class BirdEngine {
   showOff(o: ShowOffOptions = {}): this {
     const B = this.B;
     const C = this.C;
-    const { tail = 32, wing = 42, tuft = -26, head = -18, pitch, swell, seconds = 2.8, rise = 0, turn = true, chirp = true, sparkle = true, kick = 2 } = o;
+    const { tail = 32, wing = 42, tuft = -26, head = -18, pitch, swell, wide, seconds = 2.8, rise = 0, fall = 0, turn = true, chirp = true, sparkle = true, kick = 2 } = o;
     const hello = (): void => {
       if (chirp) this.chirp(0.5);
       if (sparkle) this.sparkle();
@@ -575,9 +587,11 @@ export class BirdEngine {
     return this.act({
       start: () => {
         if (turn) B.face = 1;
+        if (swell !== undefined && wide !== undefined && swell !== 1) B.girth = (wide - 1) / (swell - 1);
       },
       update: (el) => {
-        const q = rise > 0 ? Math.min(1, el / rise) : 1;
+        const back = fall > 0 && el > seconds ? smooth((el - seconds) / fall) : 0;
+        const q = (rise > 0 ? Math.min(1, el / rise) : 1) * (1 - back);
         C.tail.t = tail * q;
         C.wing.t = wing * q;
         C.tuft.t = tuft * q;
@@ -597,9 +611,10 @@ export class BirdEngine {
           c3 = true;
           if (turn) B.face = 1;
         }
-        return el > seconds;
+        return el > seconds + fall;
       },
       end: () => {
+        B.girth = -0.7;
         C.tail.t = 0;
         C.wing.t = 0;
         C.tuft.t = 0;
@@ -705,7 +720,8 @@ export class BirdEngine {
     switch (pose) {
       case 'idle':
         C.head.t = snaps(p);
-        C.tail.t = keyed(p, [[0, 0], [0.72, 0], [0.74, -14], [0.77, 4], [0.8, 0], [1, 0]]);
+        C.tail.v = keyed(p, [[0, 0], [0.72, 0], [0.74, -14], [0.77, 4], [0.8, 0], [1, 0]], true);
+        C.tail.vel = 0;
         break;
       case 'wait':
         C.head.t = snaps(p);
@@ -733,16 +749,20 @@ export class BirdEngine {
         C.wing.v = keyed(p, [[0, 0], [0.12, 0], ...beat([0.2, 0.36], [0.28, 0.44], -38, 18, 0.6, 0)]);
         C.wing.vel = 0;
         B.ws = keyed(p, [[0, 1], [0.12, 1], [0.2, 0.7], [0.28, 1], [0.36, 0.7], [0.44, 1], [1, 1]]);
-        C.legs.t = keyed(p, [[0, 1], [0.12, 1], [0.22, 0.55], [0.48, 0.55], [0.58, 1], [1, 1]]);
-        C.tail.t = keyed(p, [[0, 0], [0.58, 0], [0.64, -16], [1, 0]]);
+        C.legs.v = keyed(p, [[0, 1], [0.12, 1], [0.22, 0.55], [0.48, 0.55], [0.58, 1], [1, 1]], true);
+        C.legs.vel = 0;
+        C.tail.v = keyed(p, [[0, 0], [0.58, 0], [0.64, -16], [1, 0]], true);
+        C.tail.vel = 0;
         break;
       case 'proud':
         if (!this.poseActed) {
           this.poseActed = true;
-          this.showOff({ tail: -22, wing: 0, tuft: 16, head: 0, pitch: -4, swell: 1.03, seconds: 1.5, rise: 0.6, turn: false, chirp: false, sparkle: false, kick: 0 });
+          this.showOff({ tail: -22, wing: 0, tuft: 16, head: 0, pitch: -4, swell: 1.03, wide: 1.05, seconds: 1.5, rise: 0.6, fall: 1.4, turn: false, chirp: false, sparkle: false, kick: 0 });
         }
         break;
       case 'sleep':
+        // breathe: scale(1.035, .97), so the body widens 7/6 of what it sinks.
+        B.girth = -7 / 6;
         C.head.t = 20;
         B.headY = 3;
         C.tuft.t = -26;
@@ -765,7 +785,8 @@ export class BirdEngine {
         C.wing.vel = 0;
         B.ws = keyed(p, beat(ups, downs, 0.6, 1, 0.24, 1));
         C.legs.t = keyed(p, [[0, 0.5], [0.19, 0.5], [0.24, 1], [1, 1]]);
-        C.tail.t = keyed(p, [[0, 0], [0.3, 0], [0.33, -18], [0.36, 5], [0.4, 0], [1, 0]]);
+        C.tail.v = keyed(p, [[0, 0], [0.3, 0], [0.33, -18], [0.36, 5], [0.4, 0], [1, 0]], true);
+        C.tail.vel = 0;
         C.head.t = held(p, [[0, 0], [0.445, -12], [0.625, 8], [0.805, 0]]);
         break;
       }
@@ -871,7 +892,7 @@ export class BirdEngine {
     let px = 60 + dx * Math.cos(a) - dy * Math.sin(a);
     let py = 50 + dx * Math.sin(a) + dy * Math.cos(a);
     const sy = C.squash.v;
-    const sx = 1 + (1 - sy) * 0.7;
+    const sx = 1 + (sy - 1) * B.girth;
     px = 50 + (px - 50) * sx;
     py = 92 + (py - 92) * sy;
     a = (C.pitch.v * Math.PI) / 180;
@@ -898,7 +919,7 @@ export class BirdEngine {
     if (this.pose === 'land') P.bird.style.opacity = B.opacity.toFixed(2);
     // A flier breathes on its own; a perched pose breathes only in its script (sleep).
     const sy = C.squash.v * (this.pose ? 1 : 1 + 0.014 * Math.sin(this.S.t * 2.6));
-    const sx = 1 + (1 - sy) * 0.7;
+    const sx = 1 + (sy - 1) * B.girth;
     P.rig.setAttribute(
       'transform',
       `rotate(${C.pitch.v.toFixed(2)} 50 92) translate(50 92) scale(${sx.toFixed(3)} ${sy.toFixed(3)}) translate(-50 -92)`,

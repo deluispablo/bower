@@ -125,67 +125,74 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
     }
   });
 
-  it('every validation refusal is retried once with its reason', async () => {
-    const c = await offerAndFlat();
-    const offer = (i: Intent): Thing => i.things[0] as Thing;
-    const without = (i: Intent, id: Id, name: string): Intent => ({ ...i, things: i.things.filter((t) => t.fileId !== id(name)) });
-    const ask = (fileId: string, extra: Record<string, unknown> = {}) => ({ fileId, text: 'Is the photo from the viewing?', yes: 'Yes', no: 'No', ...extra });
-    const line = (id: Id, extra: Record<string, unknown> = {}) => ({ note: 'Projects/Job hunt/Job hunt.md', text: 'A new offer from Ferrowick.', cites: id('Offer_letter_final(2).pdf'), ...extra });
-    const state = (id: Id) => ({ note: 'Projects/Job hunt/Job hunt.md', lines: ['An offer from Ferrowick to answer.'], cites: id('Offer_letter_final(2).pdf') });
-    const noted = (i: Intent, note: Record<string, unknown>): Intent => {
-      offer(i).note = { ...(offer(i).note ?? {}), ...note };
-      return i;
-    };
-    const edit = (change: (i: Intent, id: Id) => unknown) => (_ctx: Context, id: Id): string => envelope(JSON.stringify(change(filed(id), id)));
-    // One bad reply per refusal kind; the record makes the compiler and the check below list every kind.
-    const bad: Record<RefusalKind, (ctx: Context, id: Id) => string> = {
-      notJson: () => envelope('Here is my plan: file everything.'),
-      noText: () => envelope(null),
-      notIntent: edit((i) => ({ ...i, v: 2 })),
-      thingKeys: edit((i) => ((offer(i).extra = 1), i)),
-      thingNotAdmitted: edit((i) => ((offer(i).fileId = 'f-none'), i)),
-      thingTwice: edit((i) => ({ ...i, things: [...i.things, offer(i)] })),
-      placeOutside: edit((i) => ((offer(i).to = 'Inbox'), i)),
-      nameChangesKind: edit((i) => ((offer(i).name = 'Offer.jpg'), i)),
-      rawName: edit((i) => ((offer(i).name = 'Offer_letter_final(2).pdf'), i)),
-      numbers: edit((i) => noted(i, { body: 'Keep to the 30-minute commute limit.' })),
-      newFolder: edit((i) => ((offer(i).to = 'Projects/Community garden'), i)),
-      noteForNote: edit((i) => (((i.things[1] as Thing).note = { name: 'Flat.md', summary: 'A flat.', body: 'A flat.' }), i)),
-      noteKeys: edit((i) => noted(i, { extra: 1 })),
-      noteName: edit((i) => noted(i, { name: 'Offer.txt' })),
-      noteSummary: edit((i) => noted(i, { summary: 'one\ntwo' })),
-      noteBody: edit((i) => noted(i, { body: 'x'.repeat(8_001) })),
-      noteSections: edit((i) => noted(i, { body: '## Timeline\n- a line' })),
-      noteLink: edit((i) => noted(i, { body: 'See [[Nowhere at all]].' })),
-      noteMdLink: edit((i) => noted(i, { body: 'See [the post](https://elsewhere.example/post).' })),
-      noteWeb: edit((i) => noted(i, { body: 'See www.elsewhere.example for more.' })),
-      pileNotAdmitted: edit((i) => ({ ...i, notes: [{ pileId: 'p-none', to: 'Resources', name: 'Other.md' }] })),
-      pileTwice: edit((i) => ({ ...i, notes: [{ pileId: 'p-1', to: 'Resources', name: 'One.md' }, { pileId: 'p-1', to: 'Resources', name: 'Two.md' }] })),
-      tooManyLines: edit((i, id) => ({ ...i, lines: Array.from({ length: 21 }, () => line(id)) })),
-      lineKeys: edit((i, id) => ({ ...i, lines: [line(id, { extra: 1 })] })),
-      lineNote: edit((i, id) => ({ ...i, lines: [line(id, { note: 'Projects/None.md' })] })),
-      lineText: edit((i, id) => ({ ...i, lines: [line(id, { text: 'one\ntwo' })] })),
-      lineCites: edit((i, id) => ({ ...i, lines: [line(id, { cites: 'f-none' })] })),
-      lineUncited: edit((i) => ({ ...i, lines: [{ note: 'Projects/Job hunt/Job hunt.md', text: 'New: an offer from Ferrowick to answer.' }] })),
-      noNote: edit((i) => (delete offer(i).note, i)),
-      stateKeys: edit((i, id) => ({ ...i, states: [{ ...state(id), extra: 1 }] })),
-      stateNote: edit((i, id) => ({ ...i, states: [{ ...state(id), note: 'Projects/None.md' }] })),
-      stateTwice: edit((i, id) => ({ ...i, states: [state(id), state(id)] })),
-      stateText: edit((i, id) => ({ ...i, states: [{ ...state(id), lines: ['one\ntwo'] }] })),
-      stateCites: edit((i, id) => ({ ...i, states: [{ ...state(id), cites: 'f-none' }] })),
-      askKeys: edit((i, id) => ({ ...without(i, id, 'IMG_2301.jpg'), asks: [ask(id('IMG_2301.jpg'), { pileId: 'p-1' })] })),
-      askNotAdmitted: edit((i) => ({ ...i, asks: [ask('f-none')] })),
-      askNotes: edit((i) => ({ ...i, asks: [{ notes: ['Projects/Job hunt/Job hunt.md', 'Projects/None.md'], text: 'Are these one thing?', yes: 'Yes', no: 'No' }] })),
-      askTwice: edit((i, id) => ({ ...without(i, id, 'IMG_2301.jpg'), asks: [ask(id('IMG_2301.jpg')), ask(id('IMG_2301.jpg'))] })),
-      askAlsoFiles: edit((i, id) => ({ ...i, asks: [ask(id('IMG_2301.jpg'))] })),
-      askText: edit((i, id) => ({ ...without(i, id, 'IMG_2301.jpg'), asks: [ask(id('IMG_2301.jpg'), { text: 'one\ntwo' })] })),
-      keepKeys: edit((i) => ({ ...i, keep: [{ kept: 'Projects/Job hunt/Job hunt.md', extra: 1 }] })),
-      keepNote: edit((i) => ({ ...i, keep: [{ kept: 'Projects/Job hunt/Job hunt.md', other: 'Projects/None.md' }] })),
-      keepNotAsked: edit((i) => ({ ...i, keep: [{ kept: 'Projects/Job hunt/Job hunt.md', other: 'Projects/Flat hunt/Flat hunt.md' }] })),
-    };
-    expect(Object.keys(bad).sort()).toEqual(Object.keys(REFUSALS).sort());
-    const good = intentReply((_ctx, id) => filed(id));
-    for (const kind of Object.keys(bad) as RefusalKind[]) {
+  const offer = (i: Intent): Thing => i.things[0] as Thing;
+  const without = (i: Intent, id: Id, name: string): Intent => ({ ...i, things: i.things.filter((t) => t.fileId !== id(name)) });
+  const ask = (fileId: string, extra: Record<string, unknown> = {}) => ({ fileId, text: 'Is the photo from the viewing?', yes: 'Yes', no: 'No', ...extra });
+  const line = (id: Id, extra: Record<string, unknown> = {}) => ({ note: 'Projects/Job hunt/Job hunt.md', text: 'A new offer from Ferrowick.', cites: id('Offer_letter_final(2).pdf'), ...extra });
+  const state = (id: Id) => ({ note: 'Projects/Job hunt/Job hunt.md', lines: ['An offer from Ferrowick to answer.'], cites: id('Offer_letter_final(2).pdf') });
+  const noted = (i: Intent, note: Record<string, unknown>): Intent => {
+    offer(i).note = { ...(offer(i).note ?? {}), ...note };
+    return i;
+  };
+  const edit = (change: (i: Intent, id: Id) => unknown) => (_ctx: Context, id: Id): string => envelope(JSON.stringify(change(filed(id), id)));
+  // One bad reply per refusal kind; the record makes the compiler and the check below list every kind.
+  const bad: Record<RefusalKind, (ctx: Context, id: Id) => string> = {
+    notJson: () => envelope('Here is my plan: file everything.'),
+    noText: () => envelope(null),
+    notIntent: edit((i) => ({ ...i, v: 2 })),
+    thingKeys: edit((i) => ((offer(i).extra = 1), i)),
+    thingNotAdmitted: edit((i) => ((offer(i).fileId = 'f-none'), i)),
+    thingTwice: edit((i) => ({ ...i, things: [...i.things, offer(i)] })),
+    placeOutside: edit((i) => ((offer(i).to = 'Inbox'), i)),
+    nameChangesKind: edit((i) => ((offer(i).name = 'Offer.jpg'), i)),
+    rawName: edit((i) => ((offer(i).name = 'Offer_letter_final(2).pdf'), i)),
+    numbers: edit((i) => noted(i, { body: 'Keep to the 30-minute commute limit.' })),
+    newFolder: edit((i) => ((offer(i).to = 'Projects/Community garden'), i)),
+    noteForNote: edit((i) => (((i.things[1] as Thing).note = { name: 'Flat.md', summary: 'A flat.', body: 'A flat.' }), i)),
+    noteKeys: edit((i) => noted(i, { extra: 1 })),
+    noteName: edit((i) => noted(i, { name: 'Offer.txt' })),
+    noteSummary: edit((i) => noted(i, { summary: 'one\ntwo' })),
+    noteBody: edit((i) => noted(i, { body: 'x'.repeat(8_001) })),
+    noteSections: edit((i) => noted(i, { body: '## Timeline\n- a line' })),
+    noteLink: edit((i) => noted(i, { body: 'See [[Nowhere at all]].' })),
+    noteMdLink: edit((i) => noted(i, { body: 'See [the post](https://elsewhere.example/post).' })),
+    noteWeb: edit((i) => noted(i, { body: 'See www.elsewhere.example for more.' })),
+    pileNotAdmitted: edit((i) => ({ ...i, notes: [{ pileId: 'p-none', to: 'Resources', name: 'Other.md' }] })),
+    pileTwice: edit((i) => ({ ...i, notes: [{ pileId: 'p-1', to: 'Resources', name: 'One.md' }, { pileId: 'p-1', to: 'Resources', name: 'Two.md' }] })),
+    tooManyLines: edit((i, id) => ({ ...i, lines: Array.from({ length: 21 }, () => line(id)) })),
+    lineKeys: edit((i, id) => ({ ...i, lines: [line(id, { extra: 1 })] })),
+    lineNote: edit((i, id) => ({ ...i, lines: [line(id, { note: 'Projects/None.md' })] })),
+    lineText: edit((i, id) => ({ ...i, lines: [line(id, { text: 'one\ntwo' })] })),
+    lineCites: edit((i, id) => ({ ...i, lines: [line(id, { cites: 'f-none' })] })),
+    lineUncited: edit((i) => ({ ...i, lines: [{ note: 'Projects/Job hunt/Job hunt.md', text: 'New: an offer from Ferrowick to answer.' }] })),
+    noNote: edit((i) => (delete offer(i).note, i)),
+    stateKeys: edit((i, id) => ({ ...i, states: [{ ...state(id), extra: 1 }] })),
+    stateNote: edit((i, id) => ({ ...i, states: [{ ...state(id), note: 'Projects/None.md' }] })),
+    stateTwice: edit((i, id) => ({ ...i, states: [state(id), state(id)] })),
+    stateText: edit((i, id) => ({ ...i, states: [{ ...state(id), lines: ['one\ntwo'] }] })),
+    stateCites: edit((i, id) => ({ ...i, states: [{ ...state(id), cites: 'f-none' }] })),
+    askKeys: edit((i, id) => ({ ...without(i, id, 'IMG_2301.jpg'), asks: [ask(id('IMG_2301.jpg'), { pileId: 'p-1' })] })),
+    askNotAdmitted: edit((i) => ({ ...i, asks: [ask('f-none')] })),
+    askNotes: edit((i) => ({ ...i, asks: [{ notes: ['Projects/Job hunt/Job hunt.md', 'Projects/None.md'], text: 'Are these one thing?', yes: 'Yes', no: 'No' }] })),
+    askTwice: edit((i, id) => ({ ...without(i, id, 'IMG_2301.jpg'), asks: [ask(id('IMG_2301.jpg')), ask(id('IMG_2301.jpg'))] })),
+    askAlsoFiles: edit((i, id) => ({ ...i, asks: [ask(id('IMG_2301.jpg'))] })),
+    askText: edit((i, id) => ({ ...without(i, id, 'IMG_2301.jpg'), asks: [ask(id('IMG_2301.jpg'), { text: 'one\ntwo' })] })),
+    keepKeys: edit((i) => ({ ...i, keep: [{ kept: 'Projects/Job hunt/Job hunt.md', extra: 1 }] })),
+    keepNote: edit((i) => ({ ...i, keep: [{ kept: 'Projects/Job hunt/Job hunt.md', other: 'Projects/None.md' }] })),
+    keepNotAsked: edit((i) => ({ ...i, keep: [{ kept: 'Projects/Job hunt/Job hunt.md', other: 'Projects/Flat hunt/Flat hunt.md' }] })),
+  };
+
+  const good = intentReply((_ctx, id) => filed(id));
+
+  // The name stays the one the harness entries verify; each kind is a test of its own inside it.
+  describe('every validation refusal is retried once with its reason', () => {
+    it('every refusal kind has a bad reply here', () => {
+      expect(Object.keys(bad).sort()).toEqual(Object.keys(REFUSALS).sort());
+    });
+
+    // One test for each kind (vitest's test.for), so each takes its own few milliseconds and names itself when it fails.
+    it.for(Object.keys(bad) as RefusalKind[])('a %s refusal is retried once with its reason', async (kind) => {
+      const c = await offerAndFlat();
       const calls: ClaudeCall[] = [];
       const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
       const run = await runWithClaude(c, answering([bad[kind], good], calls));
@@ -196,14 +203,18 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
       expect({ kind, told: /Your reply was refused: .+\. Reply again/.test(calls[1]?.input ?? '') }).toEqual({ kind, told: true });
       expect({ kind, code: run.code, filed: 'Projects/Flat hunt/Wrenfield Road, kitchen.jpg' in run.after }).toEqual({ kind, code: 0, filed: true });
       errors.mockRestore();
-    }
-    // The reply is read from the result text only (TL-P4-14 addendum 22): claude gets no --json-schema, and a
-    // structured_output beside a bad result is not taken as the reply; the result is refused and asked again.
-    const calls: ClaudeCall[] = [];
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    const structured = (_ctx: Context, id: Id): string => JSON.stringify({ ...(JSON.parse(envelope('Here is my plan.')) as object), structured_output: filed(id) });
-    const run = await runWithClaude(c, answering([structured, good], calls));
-    expect({ calls: calls.length, code: run.code, schema: calls.some((call) => call.args.includes('--json-schema')) }).toEqual({ calls: 2, code: 0, schema: false });
-    expect(calls[1]?.input).toContain(`Your reply was refused: ${REFUSALS.notJson}. Reply again`);
+    });
+
+    it('a structured output beside a bad result is refused and asked again', async () => {
+      const c = await offerAndFlat();
+      // The reply is read from the result text only (TL-P4-14 addendum 22): claude gets no --json-schema, and a
+      // structured_output beside a bad result is not taken as the reply; the result is refused and asked again.
+      const calls: ClaudeCall[] = [];
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const structured = (_ctx: Context, id: Id): string => JSON.stringify({ ...(JSON.parse(envelope('Here is my plan.')) as object), structured_output: filed(id) });
+      const run = await runWithClaude(c, answering([structured, good], calls));
+      expect({ calls: calls.length, code: run.code, schema: calls.some((call) => call.args.includes('--json-schema')) }).toEqual({ calls: 2, code: 0, schema: false });
+      expect(calls[1]?.input).toContain(`Your reply was refused: ${REFUSALS.notJson}. Reply again`);
+    });
   });
 });

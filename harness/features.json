@@ -5921,13 +5921,13 @@
     "id": "c4-test-timers",
     "task": "p4-consolidation",
     "category": "test",
-    "passes": false,
+    "passes": true,
     "what": "Load-proof tests: one byte table per note (rawByteAt), a re-entrant heavy-run lock around check and every e2e (done.sh too), Vite optimizeDeps include and warmup, the shared axe helper waits for animations, the real-timer allowlist empty, a CPU report and a map row.",
     "steps": [
       "harness/real-timers.json is empty and the ceiling is 0."
     ],
-    "verify": "pnpm vitest run -t \"the size-cap run fits its time bound with no load|a second heavy run waits for the first\" && pnpm exec vitest run src/timer-gate.test.ts -t \"the timer allowlist may only shrink\" && bash scripts/e2e-both.sh -g \"axe runs after the sheet.s animations end\"",
-    "note": "TL-P4-17 addendum 10 (main 56dd8d86); stage 4. Starting model: bower-implementer. TL-P4-22 addenda 11 and 13 (main f01eda6c) widen the scope; part 1 gets an escalated review. Packet 2026-10-09-c4-test-timers-packet.md. Goes after the Codex-finding fixes."
+    "verify": "pnpm vitest run -t \"the size-cap run fits its time bound with no load|a second heavy run waits for the first\" && pnpm exec vitest run src/harness.test.ts -t \"the timer allowlist may only shrink\" && bash scripts/e2e-both.sh -g \"axe runs after the sheet.s animations end\"",
+    "note": "TL-P4-17 addendum 10 (main 56dd8d86); stage 4. Starting model: bower-implementer. TL-P4-22 addenda 11 and 13 (main f01eda6c) widen the scope; part 1 gets an escalated review. Packet 2026-10-09-c4-test-timers-packet.md. Goes after the Codex-finding fixes. P4-52 BLOCK only on b1 (parse once); split released by TL-P4-22 addendum 18 (main 5083a711): b1 is c4-parse-once. Part 1 byte table passed review."
   },
   {
     "id": "c3-done-harness-paths",
@@ -6149,8 +6149,8 @@
       "A perched Bower with the turn idles through the engine and stays on its perch."
     ],
     "verify": "pnpm vitest run src/bird -t \"a minor bird never takes the turn from the page|a minor bird steps out of sight under an overlay bird|a perched Bower with the turn idles through the engine and stays on its perch|with Bower moves off or reduced motion|minor entries are ignored|the carry group exists, is hidden and reaches onPart|each pose loop matches its CSS reference\" && bash scripts/e2e-both.sh e2e/bird-engine.spec.ts -g \"no CSS animation runs on a bird part while the engine runs\"",
-    "note": "TL-P4-21 ruling 2 (Opus, escalated); impact findings 5-6. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-v2-perched-bower-packet.md. Contract per TL-P4-22 addenda 6-7. Addendum 8: nine poses through the engine; random blink. Addendum 9; contract trial: 3 passes, dispatched without a 4th. Red 26b4b60d, fix e2038262; P4-48 PASS. Designer check at 21c97eba: proud fails addendum 7 (DEFECT_LOG perched-proud-shape); eight poses pass.",
-    "review": "P4-48 PASS"
+    "note": "TL-P4-21 ruling 2 (Opus, escalated); impact findings 5-6. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-v2-perched-bower-packet.md. Contract per TL-P4-22 addenda 6-7. Addendum 8: nine poses through the engine; random blink. Addendum 9; contract trial: 3 passes, dispatched without a 4th. Red 26b4b60d, fix e2038262; P4-48 PASS. Designer check at 21c97eba: proud fails addendum 7 (DEFECT_LOG perched-proud-shape); eight poses pass. Proud round (addenda 14, 15, 17): red c58dc1c9/8f75c915, fix 619b8640/b1606f7d; P4-53 PASS (4 minors).",
+    "review": "P4-53 PASS"
   },
   {
     "id": "v2-targets",
@@ -6267,7 +6267,7 @@
     "id": "v2-move-here",
     "task": "p4-consolidation",
     "category": "ui",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "The Move sheet shows the current folder in place, dimmed with a \"Now here\" pill, not choosable (aria-disabled, skipped by tap, Enter and arrows); 52 px rows; a full-width ghost Cancel (d-v2-18).",
     "steps": [
@@ -6276,8 +6276,9 @@
       "Cancel closes the sheet and returns focus to the opener."
     ],
     "verify": "pnpm vitest run src/features/files/MovePicker.test.tsx -t \"the move sheet's arrows step over the current folder\" && bash scripts/e2e-both.sh e2e/v2-move-here.spec.ts -g \"the move sheet shows where the thing is now and it cannot be chosen|the move sheet has a cancel that returns focus to its opener\"",
-    "note": "TL-P4-21 order 8; spec d-v2-18; impact block d-v2-18. Codex slot (TL-P4-23, lead 2026-10-09); a fresh Claude reviewer reviews it. Designer signed off at 59c72856 with the badge row. Packet 2026-10-09-d-v2-18-packet.md. implementer: codex. Red 3a16e205, fix 137b59dd; round 2 (Enter on the current folder, designer) red 72ad0e8f, fix 65425820. P4-51 PASS (4 minors).",
-    "review": "P4-51 PASS"
+    "note": "TL-P4-21 order 8; spec d-v2-18; impact block d-v2-18. Codex slot (TL-P4-23, lead 2026-10-09); a fresh Claude reviewer reviews it. Designer signed off at 59c72856 with the badge row. Packet 2026-10-09-d-v2-18-packet.md. implementer: codex. Red 3a16e205, fix 137b59dd; round 2 (Enter on the current folder, designer) red 72ad0e8f, fix 65425820. P4-51 PASS (4 minors). Designer verified at bee8a889.",
+    "review": "P4-51 PASS",
+    "design": "verified"
   },
   {
     "id": "c4-new-pill-one",
@@ -6290,7 +6291,35 @@
       "One src/ui home for the pill look; the three module copies are gone.",
       "No visual change on the three screens (designer check)."
     ],
+    "verify": "bash scripts/e2e-both.sh e2e/c4-new-pill-one.spec.ts -g \"the new pill has one look everywhere\"",
+    "note": "TL-P4-22 addendum 16 (main b8b21a8b); defect new-pill-three-copies. UI-only, so the pruning trial applies (no re-review). Codex after v2-move-here merges, and it folds that entry use in. Packet 2026-10-09-c4-new-pill-one-packet.md (designer signed off with the .newtag shape). implementer: codex."
+  },
+  {
+    "id": "c4-parse-once",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "ui": null,
+    "what": "One ownership parse per note per run through the existing parse home: a per-run memo keyed by file id plus the md5 that was read, so a changed note is parsed again.",
+    "steps": [
+      "A run parses each unchanged note at most once.",
+      "A note whose md5 changed is parsed again."
+    ],
     "verify": "",
-    "note": "TL-P4-22 addendum 16 (main b8b21a8b); defect new-pill-three-copies. UI-only, so the pruning trial applies (no re-review). Codex after v2-move-here merges, and it folds that entry use in. Packet to write."
+    "note": "TL-P4-22 addendum 18 (main 5083a711); split from c4-test-timers (P4-52 BLOCK b1; load-timeouts diagnosis b1, 13 parseOwnership call sites, ~850 parses in the size-cap run). Escalated. After the TL-P4-24 entries. Red: a spy counting at most one parse per unchanged note per run. Packet to write."
+  },
+  {
+    "id": "c4-api-audit",
+    "task": "p4-consolidation",
+    "category": "security",
+    "passes": false,
+    "ui": null,
+    "what": "api dev tooling clears its audit: raise wrangler and @cloudflare/vitest-pool-workers to the newest releases at least two weeks old that clear sharp and undici advisories; else exact pnpm overrides.",
+    "steps": [
+      "api pnpm audit is clean, or each remaining advisory is listed with its reason.",
+      "api tests green; wrangler deploy --dry-run runs."
+    ],
+    "verify": "",
+    "note": "TL-P4-22 addendum 19 (main 5944ce2d); defect api-dev-audit-advisories. Low priority. Mechanical rung or Codex, after c4-app-fence merges (both touch the lockfile). Packet to write."
   }
 ]

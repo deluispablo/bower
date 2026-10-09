@@ -14,10 +14,13 @@ import { driveFolder, type DriveFolder } from './drive-v3.js';
 /** The GitHub the alarm reaches: each press dispatches its run from the alarm. */
 const gh = pressGitHub();
 
-/** About what one Drive call took in the live tail. */
-const DRIVE_MS = 150;
-/** The budget for admission's reads on a folder like staging's. */
-const BUDGET_MS = 3000;
+/**
+ * About what one Drive call took in the live tail (150 ms), and the budget for admission's reads on a folder like
+ * staging's (3 s), both at a tenth of their size so that a call's wait is below the timer gate's 100 ms: the reads
+ * go in rounds, so the budget keeps its ratio to the call time.
+ */
+const DRIVE_MS = 15;
+const BUDGET_MS = 300;
 
 /** A folder like staging's: five piles added in the app, ten notes in the areas, two of your changes. */
 async function stagingLike(): Promise<DriveFolder> {

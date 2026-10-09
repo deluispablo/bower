@@ -1,7 +1,7 @@
 // Keeps the harness honest (docs/harness/METHOD.md); the rules are in harness-rules.mjs.
 // Run after `pnpm test` (which writes test-results/unit.json): it also checks that every
 // pattern a verify names still matches a test that exists.
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { quarantineFileProblems } from './e2e-flaky.mjs';
@@ -9,7 +9,7 @@ import { e2eTitles } from './harness-tests.mjs';
 import { agentDefProblems } from './check-agent-defs.mjs';
 import { hookScriptProblems } from './check-hook-scripts.mjs';
 import { historyTips } from './harness-git.mjs';
-import { apiTests, conflictMarkers, hashOf, LEGACY_HASH, nextProblems, problems, readProofs, runnerTests, slowReport, testsChangedProblems, timerListProblems } from './harness-rules.mjs';
+import { apiTests, conflictMarkers, cpuReport, hashOf, LEGACY_HASH, nextProblems, problems, readProofs, runnerTests, slowReport, testsChangedProblems, timerListProblems } from './harness-rules.mjs';
 
 const root = new URL('..', import.meta.url);
 // Before anything slow: a committed conflict marker breaks the build in ways that read as something else.
@@ -64,4 +64,7 @@ if (bad.length) {
 }
 // Wall-clock time is a report, never a failure (TL-P4-17 addendum 9).
 if (unit.length) console.log(`slowest unit tests (report only):\n  ${slowReport(unit).join('\n  ')}`);
+const cpuDir = new URL('test-results/cpu/', root);
+const cpuRows = existsSync(cpuDir) ? readdirSync(cpuDir).flatMap((f) => JSON.parse(readFileSync(new URL(f, cpuDir), 'utf8'))) : [];
+if (cpuRows.length) console.log(`most CPU used by a unit test (report only):\n  ${cpuReport(cpuRows).join('\n  ')}`);
 console.log(`harness ok: ${features.filter((f) => f.passes).length}/${features.length} entries pass, each with its proof and a test its verify names`);

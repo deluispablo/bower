@@ -63,6 +63,8 @@ class FakeGoogle {
   failUploadNamed: string | null = null;
   /** Answer the marker search this many ms late (two calls overlap). */
   markedListDelayMs = 0;
+  /** The marked-folder list stays unanswered until this settles (an answer held back by the test, not by the clock). */
+  markedListHold: Promise<void> | null = null;
   /** The marker search finds nothing (Drive's search lags behind a create). */
   searchBlind = false;
   /** Hold the next upload of a file with this name until `release` is called; `stalled` resolves when it is held. */
@@ -96,6 +98,7 @@ class FakeGoogle {
       const q = url.searchParams.get('q') ?? '';
       // The answer is what Drive held when asked, delivered late.
       const answer = this.list(q);
+      if (q.includes('appProperties has') && this.markedListHold) await this.markedListHold;
       if (q.includes('appProperties has') && this.markedListDelayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, this.markedListDelayMs));
       }
@@ -615,11 +618,14 @@ describe('POST /vault after a lapsed claim', () => {
   it('a call whose claim lapsed before reserving makes no second folder', async () => {
     const { sub, cookie } = await someone();
     const g = new FakeGoogle();
-    g.markedListDelayMs = 300;
+    let answer: () => void = () => undefined;
+    g.markedListHold = new Promise<void>((resolve) => { answer = resolve; });
     const a = post(g, cookie);
     await until(() => g.calls.some((c) => c.url.includes('appProperties')));
     await lapse(sub);
+    g.markedListHold = null;
     const b = await body(await post(g, cookie));
+    answer();
     expect((await a).status).toBe(200);
     expect(g.marked).toHaveLength(1);
     expect(await person(sub).folderId()).toBe(b.folderId);

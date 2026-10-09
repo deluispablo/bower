@@ -9,7 +9,8 @@
 .bmRow > button:first-child { flex: 1; }
 .unmark { flex: none !important; width: 30px !important; height: 30px; display: grid !important; place-items: center; color: var(--text-muted); }
 .pickList { list-style: none; margin: 12px 0 0; padding: 0; max-height: 52dvh; overflow: auto; }
-.pickList button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 0 8px; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; cursor: pointer; color: var(--heading); }
+.pickList button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 0 8px; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; cursor: pointer; color: var(--heading); }
+.pickList button[aria-disabled="true"] .dot, .pickList button[aria-disabled="true"] .pickName { opacity: .5; }
 .pickList button:hover { background: var(--hover); }
 .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 .pickName { font-weight: 600; white-space: nowrap; }
