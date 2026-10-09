@@ -50,3 +50,13 @@ Also:
 3. A notes addendum ("Round 3 (addendum 12)") with compatibility rows and `tests changed:` lines.
 
 Then a Claude delta re-review, a Codex pass on the delta, and the designer's check.
+
+## Addendum 13 (main 04a05499), added to round 3
+
+1. **Accepted:** a confirmed line also drops on a byId read that shows a 404, the file in the Bin, or the change archived. This is liveness: an archived change can't be undone.
+2. **Not accepted: the residual.** When Undo finds no line under the lock, it decides on a **fresh listing taken under that lock**, never the memo:
+   - a found file is binned, through the fence;
+   - a failed listing is refused, with the existing sentence;
+   - only a confirmed absence counts as success.
+
+Red: `tab B drops the line, then tab A's Undo with a stale memo bins the file`.
