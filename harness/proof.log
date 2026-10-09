@@ -483,3 +483,4 @@ c3-fingerprint	a894a70a61a4344d	2026-10-09	red (fixed in df2bfc88)
 fingerprint-normalised	d9421e6532f8bc06	2026-10-09	known-green: verify passes at 7c370372 under the renamed test; behaviour unchanged
 c3-timer-gate	4f947bdd521d20a2	2026-10-09	known-green: red at b6e01216 and ff34204c (/tmp/c3timer-handred*.log); green at baadeb7d
 c3-test-time	103288c755edf8b5	2026-10-09	known-green: verify passes at 0110ebab after c3-timer-gate
+c3-alone-margin	09e27ecc04e4bb7e	2026-10-09	known-green: verify passes at 0110ebab after c3-timer-gate

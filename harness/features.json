@@ -5875,7 +5875,7 @@
     "id": "c3-alone-margin",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "Temporary (TL-P4-17 addendum 9): a unit test over 1000 ms in the full run fails the slow ratchet only if its alone rerun takes over 2000 ms; lifted by c3-timer-gate.",
     "steps": [
       "A test 1500 ms alone passes; 2500 ms alone fails."
