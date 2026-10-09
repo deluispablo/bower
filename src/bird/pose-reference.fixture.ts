@@ -232,22 +232,20 @@ export function actProblems(name: ActName, samples: ReadonlyArray<Record<PartKey
 export type ActionName = 'startle';
 
 export interface ActionRef {
-  /** The part the action moves. */
-  part: PartKey;
-  /** The value it eases to and holds, within 2. */
-  peak: number;
-  /** Seconds the peak is held (within 2). */
+  /** Each part the action moves, and the value it eases to and holds (within 2). */
+  parts: Partial<Record<PartKey, number>>;
+  /** Seconds every part holds its value (within 2). */
   hold: number;
-  /**
-   * The lowest and highest value once the peak is reached, through the return
-   * to rest, for a part resting at 0; the low end moves up with a higher rest.
-   */
-  range: [number, number];
 }
 
+/**
+ * The bound, as for the acts: once a part reaches its value it stays within 2
+ * of the span from its rest to that value until it is back at rest.
+ */
 export const ACTION_REFERENCE: Partial<Record<ActionName, ActionRef>> = {
-  // TL-P4-25 addendum 1 (6): on waking or a nudge the tuft eases up to 18deg, holds 0.6 s and eases back (addendum 20)
-  startle: { part: 'tuft', peak: 18, hold: 0.6, range: [-2, 20] },
+  // TL-P4-25 addendum 1 (6), TL-P4-26 addendum 1: on waking or a nudge one step eases the tuft to 18deg and the head
+  // to -10deg, holds them 0.6 s and eases back (idle's range: tuft -2..20, head -12..2; TL-P4-22 addendum 20)
+  startle: { parts: { tuft: 18, head: -10 }, hold: 0.6 },
 };
 
 /**

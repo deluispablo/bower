@@ -247,36 +247,42 @@ describe("the engine's named actions", () => {
     const ref = ACTION_REFERENCE.startle;
     expect(ref, 'the startle has a reference row').toBeDefined();
     if (!ref) return;
+    const parts = Object.entries(ref.parts) as Array<[PartKey, number]>;
+    expect(parts.map(([k]) => k).sort()).toEqual(['head', 'tuft']);
     for (const pose of ['idle', 'wait'] as const) {
-      // Asleep after 60 s with no input (tuft down at -26deg), then an input with no place wakes it.
+      // Asleep after 60 s with no input (tuft down at -26deg, head 20deg), then an input with no place wakes it.
       const { engine, frames, read } = mount(pose);
       frames.run(61 * FPS);
-      const from = read()[ref.part];
-      expect(from, pose).toBeCloseTo(-26, 0);
+      expect(read().tuft, pose).toBeCloseTo(-26, 0);
       engine.nudge();
-      const seen: number[] = [];
+      const seen: Array<Record<PartKey, number>> = [];
       for (let i = 0; i < 3 * FPS; i++) {
         frames.run(1);
-        seen.push(read()[ref.part]);
+        seen.push(read());
       }
-      const rest = POSE_REFERENCE[pose].parts.tuft?.rest ?? 0;
-      const top = seen.indexOf(Math.max(...seen));
       const problems: string[] = [];
-      // Eases up: never back down on the way to the peak, never past it.
-      const rise = seen.slice(0, top + 1);
-      if (rise.some((v, i) => i > 0 && v < (rise[i - 1] ?? v) - 0.01)) problems.push('the tuft dips on its way up');
-      if (Math.abs((seen[top] ?? 0) - ref.peak) > 2) problems.push(`peak ${(seen[top] ?? 0).toFixed(2)}, reference ${ref.peak} ± 2`);
-      // Holds the peak for its seconds.
-      const held = seen.filter((v) => Math.abs(v - ref.peak) <= 2).length / FPS;
-      if (held < ref.hold) problems.push(`held ${held.toFixed(2)}s, reference ${ref.hold}s`);
-      // From the peak back to rest: within the range, and at rest at the end.
-      const [lo, hi] = ref.range;
-      const back = seen.slice(top);
-      const min = Math.min(...back);
-      const max = Math.max(...back);
-      if (min < lo + rest || max > hi) problems.push(`returns over ${min.toFixed(2)}..${max.toFixed(2)}, range ${lo + rest}..${hi}`);
-      const end = seen[seen.length - 1] ?? 0;
-      if (Math.abs(end - rest) > 1) problems.push(`ends at ${end.toFixed(2)}, rest ${rest}`);
+      for (const [k, peak] of parts) {
+        const values = seen.map((s) => s[k]);
+        const rest = POSE_REFERENCE[pose].parts[k]?.rest ?? NEUTRAL[k];
+        const toward = Math.sign(peak - rest);
+        const top = values.reduce((best, v, i) => ((v - (values[best] ?? v)) * toward > 0 ? i : best), 0);
+        // Eases toward its value: never backs away on the way, never past it.
+        const go = values.slice(0, top + 1);
+        if (go.some((v, i) => i > 0 && (v - (go[i - 1] ?? v)) * toward < -0.01)) problems.push(`${k} backs away on its way to ${peak}`);
+        if (Math.abs((values[top] ?? 0) - peak) > 2) problems.push(`${k} peaks at ${(values[top] ?? 0).toFixed(2)}, reference ${peak} ± 2`);
+        // Holds it for its seconds.
+        const held = values.filter((v) => Math.abs(v - peak) <= 2).length / FPS;
+        if (held < ref.hold) problems.push(`${k} held ${held.toFixed(2)}s, reference ${ref.hold}s`);
+        // From there back to rest: within 2 of the span from rest to its value, and at rest at the end.
+        const lo = Math.min(rest, peak) - 2;
+        const hi = Math.max(rest, peak) + 2;
+        const back = values.slice(top);
+        const min = Math.min(...back);
+        const max = Math.max(...back);
+        if (min < lo || max > hi) problems.push(`${k} returns over ${min.toFixed(2)}..${max.toFixed(2)}, range ${lo}..${hi}`);
+        const end = values[values.length - 1] ?? 0;
+        if (Math.abs(end - rest) > 1) problems.push(`${k} ends at ${end.toFixed(2)}, rest ${rest}`);
+      }
       expect(problems, pose).toEqual([]);
     }
   });
