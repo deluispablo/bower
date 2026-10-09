@@ -20,7 +20,8 @@ function bareImports(): string[] {
   for (const file of sources(join(process.cwd(), 'src'))) {
     for (const line of readFileSync(file, 'utf8').split('\n')) {
       if (/^\s*(import|export)\s+type\b/.test(line)) continue;
-      const match = /(?:\bfrom|\bimport\()\s*['"]([^'"]+)['"]/.exec(line) ?? /^\s*import\s+['"]([^'"]+)['"]/.exec(line);
+      // A statement's own line (not prose that happens to say "from '…'"): import … from, export … from, } from, import(…).
+      const match = /^\s*(?:(?:import|export)\b|\}).*?\bfrom\s*['"]([^'"]+)['"]/.exec(line) ?? /\bimport\(['"]([^'"]+)['"]\)/.exec(line) ?? /^\s*import\s+['"]([^'"]+)['"]/.exec(line);
       const name = match?.[1];
       if (name && !/^(\.|@\/|node:)/.test(name) && name !== 'vitest') found.add(name);
     }
