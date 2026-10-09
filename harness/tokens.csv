@@ -247,3 +247,5 @@ c4-api-audit P4-59,reviewer,claude,bower-reviewer,,1,39155,,,,,,10,0.6,PASS (4 m
 d-v2-07 round 3,implementer,claude,bower-escalated,,3,99658,,,,,,28,9.3,delivered,2026-10-09
 c4-undo-withdraw round 2,implementer,claude,bower-escalated,,2,357247,,,,,,140,48.5,delivered (2 sessions),2026-10-09
 v2-boot-states test fix 2,implementer,codex,codex,medium,3,58778,58519,0,44928,259,,,,delivered (still red),2026-10-09
+d-v2-07 P4-58c,reviewer,claude,bower-reviewer,,3,34407,,,,,,8,0.3,PASS (4 minor),2026-10-09
+c4-undo-withdraw P4-56b,reviewer,claude,bower-reviewer,,2,50237,,,,,,11,0.8,PASS (4 minor),2026-10-09
