@@ -130,3 +130,29 @@
   unchanged; e2e:fake capabilities and capabilities-b 24 passed, phone and desktop (/tmp/csm3-e2e.log).
 - Sources: RFC 9110 section 13.1.1 (https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1); Drive `md5Checksum`,
   `appProperties` (https://developers.google.com/drive/api/reference/rest/v3/files).
+
+## Round 3b: write-time clash (TL-P4-19 addendum 15, option a)
+
+- Commits: merge d3977010 (claude/p3), red dcb46f11, fix abca07ea.
+- Path reused: the waiting-answers alarm (`ANSWERS_WAITING`, `wakeForWaiting`, `startWaiting` in `api/src/person.ts`).
+  A `done` report with `answersStayed: true` adds a waiting entry with no requestId or subject; the run's end arms
+  the `answers` deadline now; only the alarm admits (`answers-after-<run>`) and dispatches. No new dispatch path.
+- Runner: `finishRun` (barrier.ts, shared by the runner and the fake run service) returns `answersStayed` when an
+  edit holding a granted state-rewrite did not land; `runTidy` sends it with `done`. The fake Worker starts the
+  same run at the next status (its stand-in for the alarm), as for answers that waited.
+- Raced clash (note changed while the run read it) re-asks with `STATE_ASK_AGAIN`, the held clash's sentence.
+- Reds: runner `a clash at write time leads to the re-ask with the new sentence and no extra press` (failed: dispatched
+  length 2, expected 3); same name in `src/data/fake/write-it.test.ts` (failed: expected null not to be null) and
+  e2e:fake (failed: `__editAtWrite` missing); `a clash while the run reads the note re-asks with the new sentence`
+  (failed: first-ask text); api `a report says an answer stayed only with done` (failed: 200, expected 415).
+- Page hook (fake only, write-it situation): `__editAtWrite` arms one edit right before Bower's write to that note.
+- Home result card unchanged (designer's answer pending via the lead).
+- Left out: the app sees the re-ask run at its next status poll (slow poll after a run ends, up to 60 s on the real
+  Worker); the fake's taken-once flag is not kept across a reload (the answer then waits for the next tidy-up).
+- tests changed: runner/test/ask-answer-loop.test.ts: one test added; in the fix commit its alarm step reads the
+  dispatch the in-process host's due alarm already made (re-checked red without the fix: length 2, expected 3).
+- tests changed: src/data/fake/write-it.test.ts: two tests added; the fix commit swaps the test's own hook for the
+  `editAtWrite` seam it adds.
+- tests changed: api/test/runner.test.ts: one test added, none changed.
+- tests changed: e2e/capabilities.spec.ts: one test added, none changed.
+- tests changed: src/data/contracts/questions.test.ts: tests added in round 3, none changed.
