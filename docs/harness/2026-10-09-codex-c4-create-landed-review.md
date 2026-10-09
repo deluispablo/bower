@@ -9,3 +9,9 @@ Read-only, medium effort. Scope `b2b815a8..cbf9be5f` in /private/tmp/bower-c4-cr
    **Mechanism home violated:** `spine/write-once.ts` must judge `landed` against the name and place originally sent with the reserved id. Keep that intent across retries. This makes a recoverable lost answer a permanent refusal outside the accepted journal exception.
 
 findings: 1
+
+## Fix round 1 pass (scope 666c5a82..65844336)
+
+Read-only, medium effort. Tokens: input 375931 (cached 318080), output 1072.
+
+findings: 0
