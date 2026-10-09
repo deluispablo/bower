@@ -554,7 +554,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const pileOf = new Map(inbox.flatMap((p) => p.items.map((i) => [i.id, p.id] as const)));
   const related = (x: string | undefined, y: string | undefined): boolean => x !== undefined && y !== undefined && (x === y || pileOf.get(x) === y || pileOf.get(y) === x);
   /** Equal content is the same subject only for the same thing uploaded again: not the empty file, and not while both are in the inbox. */
-  const sameContent = (a: Question, b: Question): boolean => !!a.hash && a.hash === b.hash && a.hash !== EMPTY_MD5 && !inInbox.has(subjectKey(a) ?? '');
+  const sameContent = (a: Question, b: Pick<Question, 'hash'>): boolean => !!a.hash && a.hash === b.hash && a.hash !== EMPTY_MD5 && !inInbox.has(subjectKey(a) ?? '');
   const sameThing = (a: Question, b: Question): boolean => a.id === b.id || related(subjectKey(a), subjectKey(b)) || sameContent(a, b) || sameContent(b, a);
   /** A list too small to hold a question (`{"v":1,"questions":[]}` is 24 bytes, one question over 100) is not read. */
   const mayHold = (f: DriveFile): boolean => f.size === undefined || f.size > 40;
@@ -1446,10 +1446,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       ...disagreeing.filter((d) => fresh.some((q) => q.id === d.question.id)).flatMap((d) => notesOf.get(d.pileId) ?? []),
       // A question about a saved copy (by its id, its pile's or its content) closes once its Bin is done: a refused Bin
       // leaves the thing in the inbox, and its question open (P4-17).
-      ...savedBins.filter(({ s }) => closing.some((q) => {
-        const key = subjectKey(q);
-        return key === s.file.id || key === s.pile.id || (!!q.hash && q.hash === s.file.md5Checksum);
-      })).map(({ op }) => op),
+      ...savedBins.filter(({ s }) => closing.some((q) => related(subjectKey(q), s.file.id) || sameContent(q, { hash: s.file.md5Checksum }))).map(({ op }) => op),
     ];
     if (questionsFile) {
       const before = await ownVerified(questionsFile);
