@@ -287,3 +287,4 @@ d-v2-07,reviewer,claude,bower-reviewer,,7,44389,,,,,,8,0.5,PASS (P4-58g),2026-10
 d-v2-07,reviewer,codex,gpt-5-codex,medium,5,421012,417809,,361344,3203,,,,2 Important,2026-10-09
 c4-parse-once,signoff,codex,gpt-5-codex,medium,1,285627,282718,,229504,2909,,,,CHANGES (8 Important),2026-10-09
 c4-precheck-runner,implementer,codex,gpt-5-codex,medium,1,432245,428449,,399872,3796,,,,delivered (precheck run by coordinator),2026-10-09
+p4-c05-prep,prep,codex,gpt-5-codex,medium,1,436073,427328,,380800,8745,,,,draft for lead review,2026-10-09
