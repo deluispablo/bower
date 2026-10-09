@@ -12,6 +12,8 @@ Adopted under [TL-P4-15](2026-10-08-tl-p4-15-defect-workflow.md), at the owner's
 
 A review finding inside the entry's contract, about its own new code, is still fixed in a fix round of that entry under the same design.
 
+**A test that passed only on retry** (TL-P4-20): batch and freeze runs set `E2E_BATCH=1` (for example `E2E_BATCH=1 bash harness/with-lock.sh pnpm e2e`), which retries once and fails the run naming each such test, its project and the first failure's error; the coordinator logs one DEFECT_LOG line from that output, and a test that must keep running meanwhile gets an entry in `harness/e2e-quarantine.json` (`test`, `owner`, `expires`, `defect` = the logged id; check-harness enforces it, and a quarantined test still runs).
+
 ## The flow
 
 1. **Log it; don't fix it.** The coordinator adds one line to [DEFECT_LOG.md](DEFECT_LOG.md): the date, a short id, what was seen (evidence: SHAs, run ids, log lines), its severity, and `status: diagnosing`. It starts no fix.

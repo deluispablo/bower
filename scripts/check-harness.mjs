@@ -4,6 +4,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { quarantineFileProblems } from './e2e-flaky.mjs';
 import { e2eTitles } from './harness-tests.mjs';
 import { historyTips } from './harness-git.mjs';
 import { apiTests, conflictMarkers, hashOf, LEGACY_HASH, nextProblems, problems, readProofs, runnerTests, slowReport, testsChangedProblems, timerListProblems } from './harness-rules.mjs';
@@ -15,6 +16,14 @@ if (markers.length) {
   console.error(`The harness is not honest yet:\n  ${markers.join('\n  ')}`);
   process.exit(1);
 }
+// The e2e quarantine (TL-P4-20): every entry has an owner, an unexpired date and a logged defect. `--quarantine <file> [--defect-log <file>]` runs only this rule.
+const arg = (name) => (process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : undefined);
+const quarantine = quarantineFileProblems(arg('--quarantine'), arg('--defect-log'));
+if (quarantine.length) {
+  console.error(`The harness is not honest yet:\n  ${quarantine.join('\n  ')}`);
+  process.exit(1);
+}
+if (arg('--quarantine')) process.exit(0);
 // A changed test needs its own line (TL-P4-20). `--tests-changed <base>` runs only this rule, for integrate.sh, before its slow check.
 const flag = process.argv.indexOf('--tests-changed');
 const tampered = testsChangedProblems(flag >= 0 ? process.argv[flag + 1] : 'claude/p3', historyTips());
