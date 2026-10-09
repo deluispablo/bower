@@ -31,3 +31,18 @@ No pair-name code or test is in this branch. The named reds `a pair whose other 
 - Goldens: no Drive path was touched (UI only).
 
 tests changed: e2e/capabilities.spec.ts: the gone-answers journey also checks the answered rows' own label, that they are not under "Brought up to date", and runs axe (WCAG 2.2, target-size) on the sheet and Home; no assertion removed
+
+## Addendum: part 2 under TL-P4-19 addendum 14 (option a)
+
+Merged `claude/p3` (eb9bc185), which carries the ruling. The "blocked" section above is superseded by what follows.
+
+- Commits: `1a8cc05a` red (tests only); `294c7140` fix; `4762c9fa` compatibility rows.
+- The plan's read interface (`SpineRead`, `src/data/spine/plan.ts`) gains `binned(id)`, one `files.get` with the Bin included. The adapters are `driveRead`, `fakeRead`, `admissionRead` (granted as one budgeted read, `g:<id>`) and the runner's `planReads` (`runner/src/drive.ts`). It is the one transport for every read of the plan; no second path.
+- The planner (`src/data/spine/scripted.ts`) asks `binned` once for each distinct gone pair note, and only for a yes whose answered row it makes (`binnedPairNote` in `src/data/contracts/questions.ts`: a pair asked by ids with exactly one note gone). The name is `displayName` of the file name, so no extension. Any error (a 404 or any refusal) is logged with `console.error` and leaves the fallback "the other note".
+- Reds: `a note binned in Drive itself shows its name in the row` (it also asserts that the only get of that file is `[id, { binned: true }]`) and `a pair whose other note cannot be read uses the fallback` (it failed on its `console.error` assertion). Both are in `src/data/fake/fake-runner.test.ts`.
+- Goldens: `runner/test/drive-calls-golden.test.ts` pass, C04 78 and 25 runs 88 (log `/tmp/c3-pair3-goldens.log`).
+- Gates: `pnpm check` pass after this commit (log `/tmp/c3-pair3-check.log`). e2e:fake gone-answers and C11 pass on phone and desktop, 4/4, with axe (log `/tmp/c3-pair3-e2e.log`).
+
+tests changed: src/data/fake/fake-runner.test.ts: the gone-subject row now names the other note (Bin name, addendum 14); two tests added
+tests changed: runner/test/ask-answer-loop.test.ts: a note binned in Drive is now named in its row ("Flat 3 (second)"), not the fallback
+tests changed: e2e/capabilities.spec.ts: the gone-answers pair row now reads "Not merged: Flat 2, 40 Tanners Walk was already in the Bin."
