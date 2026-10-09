@@ -11,14 +11,14 @@
  * a run took (`taken`), it plans only those piles, those things and those journal lines.
  */
 import type { DriveFile } from '../drive/drive-api';
-import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate } from '../contracts/note-edit';
+import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import { PILE_NOTE, safeInboxName } from '../piles';
 import { recordablePile, sameText, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
 import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type Request, type StateShown } from '../types';
-import { isJournalRecord, type JournalRecord } from '../contracts/journal-record';
+import { isJournalRecord, pairsOf, type JournalRecord } from '../contracts/journal-record';
 import { PROP, RUNNER_WRITES, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
 import { ruleLike } from '../rules';
 import { savedLinkAddress } from '../search-text';
@@ -1829,6 +1829,8 @@ export async function build(decided: Decided): Promise<Ended> {
   }
   /** What each record's archive waits for: the plan's `needs`. */
   const archives = new Map<string, readonly string[]>();
+  // An original and its inverse taken together give no row and no count (`pairsOf`, TL-P4-27 addendum 3); both apply.
+  const paired = pairsOf(journal.map((l) => l.rec));
   for (const line of journal) {
     // Unreachable: a captured line has its changes folder, so its archive is there or planned above.
     if (!archiveTo) throw new BowerError('unknown', OWN_FILES);
@@ -1838,7 +1840,9 @@ export async function build(decided: Decided): Promise<Ended> {
     archives.set(line.rec.id, derived);
     const moves: string[] = [];
     for (const f of line.files) moves.push(await add({ kind: 'move', before: seen(f), parent: archiveTo, name: f.name, properties: {} }, derived));
-    if (rulesOp && rules.worded.has(line.rec.id)) {
+    if (paired.has(line.rec.id)) {
+      reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: 0 } });
+    } else if (rulesOp && rules.worded.has(line.rec.id)) {
       // A rule this run words: counted once it and its line's archive applied.
       reportPlan.push({ requires: [rulesOp, ...moves, ...archiveChain], when: 'applied', value: { ...empty(), rulesWorded: 1 } });
     } else if (line.rec.kind === 'request' && requestsOp) {
@@ -1986,7 +1990,7 @@ function ruleChangesOf(lines: readonly JournalLine[], wordRule: (words: string) 
   for (const { rec } of lines) {
     if (rec.kind !== 'rule') continue;
     if (rec.removes) {
-      const out: RuleRemove = { recordId: rec.id, text: rec.removes };
+      const out: RuleRemove = { recordId: rec.id, text: rec.removes, since: rec.at };
       if (ruleRemoveOk(out)) remove.push(out);
       else left.add(rec.id);
       continue;
@@ -2013,20 +2017,15 @@ function relinkedRemovals(change: RulesWording, renames: Rename[]): RulesWording
 }
 
 /**
- * The rule lines an applied change words, as `applyChanges` decides them: removals first, then each add unless it
- * repeats a rule (an add that repeats one is satisfied and not counted). Null when the text after it would not hold
+ * The rule lines an applied change words, as `applyChanges` decides them (`ruleSequence`, the one home): each add unless
+ * it repeats a rule or a later removal takes it out (an add that repeats one is satisfied and not counted). Null when the text after it would not hold
  * exactly those rules (R3-4: what is counted is what the written text holds).
  */
 function wordedBy(before: string, change: RulesWording, after: string): ReadonlySet<string> | null {
-  const removed = new Set(change.remove.map((r) => r.text));
-  const known = parseRules(before).filter((r) => !removed.has(r.text));
-  const kept = known.length;
-  const worded = new Set<string>();
-  for (const a of [...change.add].sort((x, y) => x.since - y.since)) {
-    if (ruleLike(known, a.text) || (a.yourWords.trim() && ruleLike(known, a.yourWords))) continue;
-    known.push({ id: '', text: a.text, yourWords: a.yourWords, since: a.since });
-    worded.add(a.recordId);
-  }
+  const rules = parseRules(before);
+  const { removed, accepted } = ruleSequence(rules, change.add, change.remove);
+  const kept = rules.filter((r) => !removed.has(r.text)).length;
+  const worded = new Set(accepted.map((a) => a.recordId));
   return parseRules(after).length === kept + worded.size ? worded : null;
 }
 
@@ -2069,9 +2068,9 @@ function rulesPlanBy(
   // A missing Rules.md has no rule to take out; it is made only to word new ones.
   if (!change.add.length) return none;
   const empty = serializeRules([]);
-  const adds: RulesWording = { ...change, remove: [] };
-  const result = applyChanges(new TextEncoder().encode(empty), [adds]);
-  const made = result.ok ? wordedBy(empty, adds, result.text) : null;
+  // Its removals have nothing to take out, but still take back an add before them (`ruleSequence`).
+  const result = applyChanges(new TextEncoder().encode(empty), [change]);
+  const made = result.ok ? wordedBy(empty, change, result.text) : null;
   if (!result.ok || !made) {
     console.error(`${RULES_PATH} could not be made (${result.ok ? 'count' : result.reason})`);
     return { ...none, left: new Set([...left, ...change.add.map((r) => r.recordId)]) };

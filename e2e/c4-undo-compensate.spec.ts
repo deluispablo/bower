@@ -20,31 +20,35 @@ async function open(page: Page, path: string): Promise<void> {
 }
 
 /** The note goes to the Bin from its own page's menu, on the phone and on the desktop alike. */
-async function binTheNote(page: Page): Promise<void> {
-  await open(page, NOTE_URL);
-  await page.getByRole('button', { name: `More for ${NOTE}` }).click();
+async function binTheNote(page: Page, isMobile: boolean): Promise<void> {
+  if (isMobile) {
+    await open(page, NOTE_URL);
+    await page.getByRole('button', { name: `More for ${NOTE}` }).click();
+  } else {
+    await open(page, '/');
+    await page.getByRole('tree', { name: 'Your Bower folder' }).getByRole('treeitem', { name: new RegExp(NOTE) }).click({ button: 'right' });
+  }
   await page.getByRole('menuitem', { name: 'Move to Bin', exact: true }).or(page.getByRole('dialog').getByRole('button', { name: 'Move to Bin', exact: true })).click();
   await expect(page.getByRole('status').getByText(`${NOTE} is in your Drive's Bin.`)).toBeVisible();
 }
 
-test('the dock Undo of a Bin brings the note back, and Since the last tidy-up shows neither line', async ({ page }) => {
+test('the dock Undo of a Bin brings the note back, and Since the last tidy-up shows neither line', async ({ page, isMobile }) => {
   test.skip(!isFake, 'the pretend Drive keeps the change journal');
-  await binTheNote(page);
+  await binTheNote(page, isMobile);
   const dock = page.getByRole('status');
   await dock.getByRole('button', { name: 'Undo' }).click();
   await expect(dock.getByText(`${NOTE} is back`)).toBeVisible();
-  await page.goto('/?scenario=withdraw-unreached&time=instant');
-  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Home', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Inbox' }).first()).toBeVisible();
   await expect(page.getByText(`Put ${NOTE} in the Bin`)).toHaveCount(0);
   await expect(page.getByText(`Put back ${NOTE}`)).toHaveCount(0);
   await expectAxeClean(page);
 });
 
-test('the dock Undo of a Bin while offline says Not undone yet in place, with Try again', async ({ page, allowConsole }) => {
+test('the dock Undo of a Bin while offline says Not undone yet in place, with Try again', async ({ page, allowConsole, isMobile }) => {
   test.skip(!isFake, 'the pretend Drive stops answering in this situation');
   allowConsole(/offline|Google Drive didn't answer|could not reach Drive/i, 'the situation finds no network for the restore');
-  await binTheNote(page);
+  await binTheNote(page, isMobile);
   await page.evaluate(() => (window as unknown as { __driveOffline: () => void }).__driveOffline());
   const dock = page.getByRole('status');
   await dock.getByRole('button', { name: 'Undo' }).click();

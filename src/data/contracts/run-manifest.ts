@@ -49,7 +49,8 @@ export type EditEntry = { date: string; text: string; source: string | null };
 /** Display names: a link to `from` (compared lowercased) is written with `to`. */
 export type Rename = { from: string; to: string };
 export type RuleAdd = { recordId: string; text: string; yourWords: string; since: number };
-export type RuleRemove = { recordId: string; text: string };
+/** `since`: the line's `at`, so removals and adds apply as one sequence (TL-P4-27 addendum 4 (1)); a manifest without it keeps removals first. */
+export type RuleRemove = { recordId: string; text: string; since?: number };
 /**
  * The closed change union of manifest v2; an edit holds at most one of each, in this order. `state-rewrite`
  * (TL-P4-08 addendum 1 point 1) replaces the lines of Bower's own `## Current state`, which must read `previous`,
@@ -312,7 +313,7 @@ function ruleAdd(value: unknown): value is RuleAdd {
     && text(value.yourWords) && integer(value.since) && ruleAddOk(value as RuleAdd);
 }
 function ruleRemove(value: unknown): value is RuleRemove {
-  return closed(value, ['recordId', 'text']) && recordId(value.recordId) && text(value.text) && ruleRemoveOk(value as RuleRemove);
+  return closed(value, ['recordId', 'text'], ['since']) && recordId(value.recordId) && text(value.text) && (value.since === undefined || integer(value.since)) && ruleRemoveOk(value as RuleRemove);
 }
 /** A Current state's mark (`stateMark`): 16 lowercase hex digits. */
 const stateMarkText = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{16}$/.test(value);

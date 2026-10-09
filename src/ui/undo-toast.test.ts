@@ -18,7 +18,7 @@ describe('undoToast offline', () => {
   it('an Undo refused offline replaces its message with Not undone yet and Try again', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const done = vi.fn();
-    const undo = vi.fn(async () => { throw new BowerError('offline', "You're offline. Changes wait until you're back."); });
+    const undo = vi.fn<() => Promise<void>>(async () => { throw new BowerError('offline', "You're offline. Changes wait until you're back."); });
     undoToast("Lease draft is in your Drive's Bin.", undo, done);
     const [first] = useToasts.getState().list;
     if (!first) throw new Error('no toast');

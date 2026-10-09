@@ -8,19 +8,23 @@ export function report(e: unknown, sentence: string): void {
   toast(e instanceof BowerError ? e.message : sentence);
 }
 
+/** An Undo that found no network (a Bin restore offline, TL-P4-27 addenda 4 (4) and 5): a restore checks nothing. */
+export const NOT_UNDONE_OFFLINE = 'Not undone yet: Bower could not reach Drive. Try again when you are back online.';
+
 /**
- * The dock's Undo (TL-P4-24 addendum 1). Refused because Drive did not answer whether the change's create landed
- * (`unreached`, write-once's `withdraw`), the same message says so in place, with Try again running the same Undo;
- * any other failure is reported as ever. `done` runs once it is undone.
+ * The dock's Undo (TL-P4-24 addendum 1, TL-P4-27 addenda 4 (4) and 5). Refused because Drive did not answer, offline
+ * or a check of a create that may have landed (`unreached`, write-once's `withdraw`), the same message says so in
+ * place, with Try again running the same Undo; any other failure is reported as ever. `done` runs once it is undone.
  */
 export function undoToast(text: string, undo: () => Promise<unknown>, done?: () => void): void {
   const attempt = (): Promise<void> =>
     undo().then(
       () => done?.(),
       (e: unknown) => {
-        if (!(e instanceof BowerError && e.code === 'unreached')) return report(e, 'That did not work. Try again.');
+        if (!(e instanceof BowerError && (e.code === 'unreached' || e.code === 'offline'))) return report(e, 'That did not work. Try again.');
         console.error(e);
-        useToasts.getState().replace(id, `Not undone yet: ${e.message}`, { label: 'Try again', run: attempt });
+        const said = e.code === 'offline' ? NOT_UNDONE_OFFLINE : `Not undone yet: ${e.message}`;
+        useToasts.getState().replace(id, said, { label: 'Try again', run: attempt });
       },
     );
   const id = toast(text, { label: 'Undo', run: attempt });

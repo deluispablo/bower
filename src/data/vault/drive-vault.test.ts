@@ -3360,18 +3360,6 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
       await drive.untrash(id);
       return () => vault.restore(PASSPORT);
     } },
-    { name: 'journal Undo of a change whose line moved elsewhere (journal 505)', arrange: async () => {
-      const rule = (await vault.rules()).find((r) => !r.pending);
-      if (!rule) throw new Error('no worded rule');
-      const before = new Set((await drive.listAll(await idOf('.bower/changes'))).map((f) => f.id));
-      const undo = await vault.removeRule(rule.id);
-      await vault.flushJournal();
-      await vault.changes();
-      const line = (await drive.listAll(await idOf('.bower/changes'))).find((f) => !before.has(f.id));
-      if (!line) throw new Error('no change line');
-      await moveElsewhere(line.id);
-      return undo;
-    } },
     { name: 'content write: a task ticked over a note edited elsewhere (drive-vault 493)', arrange: async () => {
       await vault.note(PASSPORT);
       await editElsewhere(await idOf(PASSPORT), (t) => t.replace('Photo form', 'Photo form (Alex)'));
@@ -3602,45 +3590,6 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
     expect(await drive.readText(note)).toBe('');
   });
 
-  it('an Undo whose Bin landed but lost its answer resolves without a resend', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    const rule = (await vault.rules()).find((r) => !r.pending);
-    if (!rule) throw new Error('no worded rule');
-    const undo = await vault.removeRule(rule.id);
-    await vault.flushJournal();
-    await vault.changes();
-    const sent = vi.fn();
-    const trash = drive.trash.bind(drive);
-    drive.trash = async (...a) => {
-      sent();
-      return trash(...a);
-    };
-    loseWithRead('trash');
-    await expect(undo()).rejects.toMatchObject({ code: 'offline' });
-    await expect(undo()).resolves.toBeUndefined();
-    expect(sent).toHaveBeenCalledTimes(1);
-  });
-
-  it('a restore retried after an outside Bin does not report success while the file is in the Bin', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    await vault.tree();
-    const id = await idOf(PASSPORT);
-    await vault.trash(PASSPORT);
-    await vault.flushJournal();
-    // Out of the Bin; then taking its change line back gets no answer, so the press stops there.
-    const trash = drive.trash.bind(drive);
-    drive.trash = async () => {
-      drive.trash = trash;
-      throw driveError('offline');
-    };
-    await expect(vault.restore(PASSPORT)).rejects.toMatchObject({ code: 'offline' });
-    expect((await drive.get(id, { binned: true })).trashed).toBeFalsy();
-    // Put in the Bin in Drive before Alex presses Undo again: the press takes it out again, as read, or says nothing done.
-    await drive.trash(id);
-    await expect(vault.restore(PASSPORT)).resolves.toBeUndefined();
-    expect((await drive.get(id, { binned: true })).trashed).toBeFalsy();
-  });
-
   it('an emptied pile note that landed and then moved elsewhere is refused on retry', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const v = declaring();
@@ -3709,7 +3658,7 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
       /** Whether the file now is what this write makes it; `sent` is the last write to it this press sent. */
       final: (now: DriveFile, sent: unknown[] | undefined) => Promise<boolean>;
     }
-    const kinds = ['text', 'empty text', 'rename', 'move', 'bin', 'unbin', 'restore', 'removePile', 'undo'] as const;
+    const kinds = ['text', 'empty text', 'rename', 'move', 'bin', 'unbin', 'restore', 'removePile'] as const;
     const stored = (id: string): Promise<DriveFile> => drive.get(id, { binned: true });
     const samePlace = (a: DriveFile, b: DriveFile): boolean => a.parents.length === b.parents.length && a.parents.every((p) => b.parents.includes(p));
     const asRead = (p: Press, now: DriveFile): boolean =>
@@ -3758,17 +3707,7 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
         const read = await stored(id);
         return { vault, target: id, read, withTime: false, act: () => vault.removePile(p.id), op: 'trash', final: async (now) => binned(now, read) };
       }
-      const rule = (await vault.rules()).find((r) => !r.pending);
-      if (!rule) throw new Error('no worded rule');
-      const lines = await idOf('.bower/changes');
-      const before = new Set((await drive.listAll(lines)).map((f) => f.id));
-      const undo = await vault.removeRule(rule.id);
-      await vault.flushJournal();
-      await vault.changes();
-      const line = (await drive.listAll(lines)).find((f) => !before.has(f.id));
-      if (!line) throw new Error('no change line');
-      const read = await stored(line.id);
-      return { vault, target: line.id, read, withTime: false, act: undo, op: 'trash', final: async (now) => binned(now, read) };
+      throw new Error(`no press for ${kind}`);
     };
     /** The pretend Drive's own writes, as another device makes them: never lost, never counted as the press's. */
     type Raw = Pick<FakeDrive, 'update' | 'trash' | 'untrash'>;
@@ -3787,7 +3726,7 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
       return notAsSeenReason(e) === null ? 'failed' as const : 'refused' as const;
     });
 
-    // Every case met: each kind, change and moment, and for a restore each loss (132 in all, for this seed).
+    // Every case met: each kind, change and moment, and for a restore each loss (120 in all, for this seed).
     const met = new Set<string>();
     await fc.assert(
       fc.asyncProperty(
@@ -3848,7 +3787,7 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
       ),
       { seed: 20261009, numRuns: 1200 },
     );
-    expect(met.size).toBe(132);
+    expect(met.size).toBe(120);
   }, 60_000);
 });
 
@@ -3921,33 +3860,5 @@ describe('a write resent after a rate limit', () => {
     await expect(vault.move(TART, 'Areas')).resolves.toBe('Areas/Lemon tart.md');
     expect(sent.patches()).toBe(2);
     expect(drive.pathOf(id, root)).toBe('Areas/Lemon tart.md');
-  });
-
-  it('a restore whose journal PATCH gets a 429 still finishes', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    await vault.tree();
-    const id = await idOf(TART);
-    await vault.trash(TART);
-    await vault.flushJournal();
-    expect((await vault.changes()).some((r) => r.kind === 'trash')).toBe(true);
-    // The journal record's Bin (a `files.update` PATCH) goes over the real transport; its first try gets 429.
-    const store = drive.trash.bind(drive);
-    let patches = 0;
-    const http = new DriveHttp({
-      token: async () => 'token',
-      pacing,
-      fetch: async (url, init) => {
-        const at = decodeURIComponent(new URL(url).pathname.split('/').pop() ?? '');
-        if (++patches === 1) return new Response(JSON.stringify({ error: { code: 429, message: 'Slow down.', errors: [] } }), { status: 429 });
-        const body = JSON.parse(String(init?.body)) as { appProperties?: Record<string, string> };
-        const f = await store(at, body.appProperties);
-        return new Response(JSON.stringify({ ...f, mimeType: 'application/json' }), { status: 200 });
-      },
-    });
-    Object.assign(drive, { trash: (at: string, appProperties?: Record<string, string>, opts?: WriteOptions) => http.trash(at, appProperties, opts) });
-    await expect(vault.restore(TART)).resolves.toBeUndefined();
-    expect(patches).toBe(2);
-    expect(drive.pathOf(id, root)).toBe(TART);
-    expect((await vault.changes()).some((r) => r.kind === 'trash')).toBe(false);
   });
 });

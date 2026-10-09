@@ -104,10 +104,10 @@ describe('round 1 #1: two pages on one outbox, an Undo during the reserve', () =
     const ids = drive.generateIds.bind(drive);
     let reserving: () => void = () => undefined;
     const reserved = new Promise<void>((done) => (reserving = done));
-    drive.generateIds = async (n, signal) => {
+    drive.generateIds = async (n: number) => {
       reserving();
       await gate;
-      return ids(n, signal);
+      return ids(n);
     };
     const flushing = a.flushJournal();
     await reserved;

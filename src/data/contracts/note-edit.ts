@@ -94,7 +94,7 @@ export function ruleAddOk(add: RuleAdd): boolean {
   return Number.isSafeInteger(add.since) && add.since > 0 && add.text.trim().length > 0 && !controls(add.text) && !controls(add.yourWords);
 }
 export function ruleRemoveOk(remove: RuleRemove): boolean {
-  return remove.text.trim().length > 0 && !controls(remove.text);
+  return remove.text.trim().length > 0 && !controls(remove.text) && (remove.since === undefined || (Number.isSafeInteger(remove.since) && remove.since > 0));
 }
 /**
  * A Current state's two bounds, in lines and characters per line, one home (TL-P4-14 addenda 20 and 22): strict on
@@ -147,7 +147,8 @@ const ordered = (changes: readonly Change[]): boolean => changes.length > 0
 
 /** The renames a run's moves and renames imply, as the resolver's `formerNames` follows them (chains, `taken`). */
 export function renamesFor(changes: readonly ChangeEntry[], taken: ReadonlySet<string> = new Set()): Rename[] {
-  return [...formerNames(changes, taken)].map(([from, path]) => ({ from, to: displayName(nameOf(path)) }));
+  // A name a note has again (a move and its move back, TL-P4-27 addendum 4 (2)) renames nothing: links stay as written.
+  return [...formerNames(changes, taken)].map(([from, path]) => ({ from, to: displayName(nameOf(path)) })).filter((r) => r.from !== r.to.toLowerCase());
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -618,22 +619,45 @@ function removeRule(text: string, wording: string): string {
   return next;
 }
 
+/**
+ * Your rule lines as Rules.md takes them, the one home for their order (TL-P2-26, TL-P4-27 addendum 4 (1)), used by
+ * wordRules, the planner's count and the app's list of rules. Adds and removals apply as one sequence by since (stable,
+ * adds first at equal times): a removal takes out the worded rule with exactly its text and any add before it that it
+ * repeats; an add that repeats a rule there is skipped. `removed`: the texts taken out of Rules.md; `accepted`: the adds
+ * written, oldest first. A removal without since (a manifest from before) keeps the old order: removals first.
+ */
+export function ruleSequence(rules: readonly Rule[], add: readonly RuleAdd[], remove: readonly RuleRemove[]): { removed: ReadonlySet<string>; accepted: RuleAdd[] } {
+  const removed = new Set<string>();
+  let accepted: RuleAdd[] = [];
+  const asRule = (a: RuleAdd): Rule => ({ id: '', text: a.text, ...(a.yourWords ? { yourWords: a.yourWords } : {}), since: a.since });
+  const inOrder = remove.every((r) => r.since !== undefined);
+  // TL-P2-26: adds are processed in ascending since (stable for equal times), whatever order the change lists them in.
+  const adds = [...add].sort((a, b) => a.since - b.since).map((a) => ({ add: a, since: a.since }));
+  const removes = remove.map((r) => ({ remove: r, since: r.since ?? 0 }));
+  const steps: Array<{ add: RuleAdd; since: number } | { remove: RuleRemove; since: number }> = inOrder
+    ? [...adds, ...removes].sort((a, b) => a.since - b.since)
+    : [...removes, ...adds];
+  for (const step of steps) {
+    if ('remove' in step) {
+      removed.add(step.remove.text);
+      accepted = accepted.filter((a) => !ruleLike([asRule(a)], step.remove.text));
+      continue;
+    }
+    const known = [...rules.filter((r) => !removed.has(r.text)), ...accepted.map(asRule)];
+    if (ruleLike(known, step.add.text) || (step.add.yourWords.trim() && ruleLike(known, step.add.yourWords))) continue;
+    accepted.push(step.add);
+  }
+  return { removed, accepted };
+}
+
 function wordRules(text: string, change: Extract<Change, { kind: 'rules-wording' }>, authors: Authors): Step {
   const own = parseOwnership(encoder.encode(text));
   if (own.status === 'invalid') return { refused: own.reason };
   if (own.status === 'v2') return { refused: 'unsupported' };
   if (own.status === 'plain' || !byBower(text)) return { refused: 'not-bower' };
   const eol = eolOf(text);
-  const removed = new Set(change.remove.map((item) => item.text));
+  const { removed, accepted } = ruleSequence(parseRules(text), change.add, change.remove);
   let next = [...removed].reduce(removeRule, text);
-  const known: Rule[] = parseRules(next);
-  const accepted: RuleAdd[] = [];
-  // TL-P2-26: adds are processed in ascending since (stable for equal times), whatever order the change lists them in.
-  for (const add of [...change.add].sort((a, b) => a.since - b.since)) {
-    if (ruleLike(known, add.text) || (add.yourWords.trim() && ruleLike(known, add.yourWords))) continue;
-    known.push({ id: '', text: add.text, ...(add.yourWords ? { yourWords: add.yourWords } : {}), since: add.since });
-    accepted.push(add);
-  }
   // Each new rule goes to the top in turn, so the newest by since ends first.
   const newest = [...accepted].reverse();
   if (newest.length) {

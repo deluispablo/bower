@@ -5,7 +5,7 @@
  * writes one journal line for each change you make, so the next tidy-up
  * knows what happened. It never writes Bower's own sections of a note.
  */
-import { driveError, type DriveApi, type DriveFile, type Fence } from '../drive/drive-api';
+import { DRIVE_MESSAGES, driveError, type DriveApi, type DriveFile, type Fence } from '../drive/drive-api';
 import { ReadCache, type Version } from '../drive/read-cache';
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
 import { Intended, STAMP, byId, confirms, heldAs, landing, makeFolder, makeOnce, makeText, unbins, updateByStamp, withdraw, type Holder, type Intent, type Withdrawn } from '../spine/write-once';
@@ -35,7 +35,8 @@ import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, declarationC
 import { Journal, type JournalRecord } from './journal';
 import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
-import { ADOPT_STATES_ID, ADOPT_STATES_RULE } from '../contracts/note-edit';
+import { ADOPT_STATES_ID, ADOPT_STATES_RULE, ruleSequence } from '../contracts/note-edit';
+import { pairsOf } from '../contracts/journal-record';
 import { HIDDEN_AT_ROOT, PROP, SYSTEM, isRunnerFile, recordStamp, type RunnerFiles, type LastRunFile } from './layout';
 import { md5Hex, sha256 } from './hashes';
 import { placeOf, plainSnippet, plainText, savedLinkAddress, savedLinkUrl, searchLines } from '../search-text';
@@ -45,7 +46,7 @@ import { isSeen, markSeen } from './seen';
 import { VaultIndex } from './vault-index';
 import { NOT_SENT_TEXT, PERSIST_REFUSED_TEXT, UNREADABLE_TEXT, createUploadQueue, stoppedText, type QueueItem, type UploadQueue } from '../upload-queue';
 import { memoryUploadStore } from '../upload-store';
-import { CHANGED_ELSEWHERE, checkStillAsSeen, notAsSeen, notAsSeenError, notAsSeenReason, type Landing, type SeenExpectation } from '../contracts/still-as-seen';
+import { CHANGED_ELSEWHERE, checkStillAsSeen, notAsSeen, notAsSeenError, notAsSeenReason, notRead, type Landing, type SeenExpectation } from '../contracts/still-as-seen';
 import { openQuestions } from '../contracts/questions';
 
 export interface DriveVaultOptions {
@@ -182,7 +183,6 @@ export class DriveVault implements VaultSource {
         reads: this.reads,
         files: async () => (await this.index()).journalFiles(),
         wrote: (f) => { if (this.current()) void this.ix?.then((ix) => { if (this.current()) ix.put(f); }); },
-        removed: (id) => { if (this.current()) void this.ix?.then((ix) => { if (this.current()) ix.drop(id); }); },
         waiting: () => this.emit(),
         // The changes folder Drive no longer knows: the next send lists the folder again (and makes it, if gone).
         stale: () => { if (this.current()) this.ix = null; },
@@ -326,13 +326,22 @@ export class DriveVault implements VaultSource {
     const name = nameOf(out);
     const patch = { ...(name !== f.name ? { name } : {}), addParent: to, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}) };
     ix.put(this.keepSeen(f, await this.once(f, `move:${to}:${name}`, (op, fence) => this.drive.update(f.id, { ...patch, appProperties: op }, { fence }))));
-    let removed = false;
-    if (last) {
-      try { await this.journal.remove(last.id); removed = true; } catch (e) { console.error(e); }
-    }
-    if (!removed) await this.journal.record('move', `Moved ${(f.folder ? nameOf(path) : thingName(nameOf(path)))} to ${where(toFolder)}`, { path: out, from: path, fileId: f.id });
+    // The Undo of a move (TL-P4-27 addendum 4 (3)): its line dropped when never sent, otherwise the move back is recorded
+    // as its inverse; a line no longer listed, or a drop that failed, is answered by the forward move as ever.
+    const taken = last ? await this.retracted(last.id) : null;
+    if (taken !== 'dropped') await this.journal.record('move', `Moved ${(f.folder ? nameOf(path) : thingName(nameOf(path)))} to ${where(toFolder)}`, { path: out, from: path, fileId: f.id, ...(last && taken === 'sent' ? { undoes: last.id } : {}) });
     this.emit();
     return out;
+  }
+
+  /** `retract` for a line-folding site: a decision that failed is logged, and the site records its forward line. */
+  private async retracted(id: string): Promise<'dropped' | 'sent'> {
+    try {
+      return await this.journal.retract(id);
+    } catch (e) {
+      console.error(e);
+      return 'sent';
+    }
   }
 
   async rename(path: string, name: string): Promise<string> {
@@ -345,11 +354,8 @@ export class DriveVault implements VaultSource {
     const made = (await this.journal.list()).find((c) => c.kind === 'create' && c.path === path);
     ix.put(this.keepSeen(f, await this.once(f, `rename:${nameOf(out)}`, (op, fence) => this.drive.update(f.id, { name: nameOf(out), appProperties: op }, { fence }))));
     // A thing made since the last tidy-up and named now is one change: its making, under its name.
-    let removed = false;
-    if (made) {
-      try { await this.journal.remove(made.id); removed = true; } catch (e) { console.error(e); }
-    }
-    if (removed) {
+    // Its making never sent: one line under the new name; otherwise the rename is its own forward line.
+    if (made && (await this.retracted(made.id)) === 'dropped') {
       await this.journal.record('create', `New ${f.folder ? 'folder' : 'note'} "${(f.folder ? nameOf(out) : thingName(nameOf(out)))}" in ${where(parentOf(out))}`, { path: out, fileId: f.id });
     } else await this.journal.record('rename', `Renamed ${(f.folder ? nameOf(path) : thingName(nameOf(path)))} to ${(f.folder ? nameOf(out) : thingName(nameOf(out)))}`, { path: out, from: path, fileId: f.id });
     this.emit();
@@ -429,11 +435,8 @@ export class DriveVault implements VaultSource {
     this.bin.set(path, { file: binned, change: null });
     // Something made and binned before any tidy-up saw it leaves no trace.
     let change: string | null = null;
-    let removed = false;
-    if (made) {
-      try { await this.journal.remove(made.id); removed = true; } catch (e) { console.error(e); }
-    }
-    if (!removed) {
+    // Its making never sent: it leaves no trace; otherwise the Bin is its own forward line.
+    if (!made || (await this.retracted(made.id)) !== 'dropped') {
       try {
         change = (await this.journal.record('trash', `Put ${(f.folder ? nameOf(path) : thingName(nameOf(path)))} in the Bin`, { path, fileId: f.id })).id;
       } catch (e) {
@@ -458,15 +461,29 @@ export class DriveVault implements VaultSource {
     const ix = await this.index();
     // The name may have been taken since: come back under a free one, never over it.
     // A pile goes back whole, under its own folder's name.
-    const at = gone.top ?? path;
+    const at0 = gone.top ?? path;
     // Out of the Bin and under that name in one write, fenced on a fresh read every press (`once`): a press after a lost
     // answer finds it by its stamp only while it is still out of the Bin, there, under that name. Only the name chosen
     // is kept across presses (once taken by the file itself, it is no longer free), never what the file was.
-    const want = gone.back ?? freeName(ix.entries(), parentOf(at), nameOf(at));
+    const want = gone.back ?? freeName(ix.entries(), parentOf(at0), nameOf(at0));
     gone.back = want;
-    await this.fromBin(gone.file, want);
-    for (const f of gone.late ?? []) await this.fromBin(f);
-    if (gone.change) await this.journal.remove(gone.change);
+    let back: DriveFile;
+    try {
+      back = await this.fromBin(gone.file, want);
+      for (const f of gone.late ?? []) await this.fromBin(f);
+    } catch (e) {
+      // No network for the restore or its check (TL-P4-27 addenda 4 (4) and 5): said as offline, so the Undo says it
+      // is not undone yet, in place; any other refusal is its own.
+      const read = notRead(e) ? (e as BowerError & { cause: { error: unknown } }).cause.error : e;
+      if (isNoAnswer(read)) throw new BowerError('offline', DRIVE_MESSAGES.offline, undefined, { cause: e });
+      throw e;
+    }
+    // Its Bin line dropped when never sent; otherwise a move line back from the Bin, where it came back, is its inverse
+    // (TL-P4-27 addendum 4 (2)): a run sees both, and the thing as it is.
+    if (gone.change && (await this.journal.retract(gone.change)) === 'sent') {
+      const at = join(parentOf(at0), want);
+      await this.journal.record('move', `Put back ${back.folder ? want : thingName(want)}`, { path: at, from: at, fileId: back.id, undoes: gone.change });
+    }
     this.bin.delete(path);
     await this.refresh();
     if (gone.pending && gone.pileKey) {
@@ -550,7 +567,10 @@ export class DriveVault implements VaultSource {
   }
 
   async changes(): Promise<ChangeEntry[]> {
-    return (await this.journal.list()).map(toChange);
+    // An original and its inverse are hidden as a pair (`pairsOf`, TL-P4-27 addendum 3): presentation only.
+    const lines = await this.journal.list();
+    const paired = pairsOf(lines);
+    return lines.filter((l) => !paired.has(l.id)).map(toChange);
   }
 
   // ---------- the inbox
@@ -1287,12 +1307,15 @@ export class DriveVault implements VaultSource {
     const ix = await this.index();
     const file = ix.file('Rules.md');
     const worded = file ? parseRules(await this.text(file)) : [];
-    const lines = await this.journal.list();
-    const removed = new Set(lines.filter((r) => r.kind === 'rule' && r.removes).map((r) => r.removes));
-    const pending = lines
-      .filter((r) => r.kind === 'rule' && !r.removes)
-      .reverse()
-      .map((r): Rule => ({ id: r.id, text: r.text ?? r.what, yourWords: r.text ?? r.what, since: r.at, pending: true }));
+    const lines = (await this.journal.list()).filter((r) => r.kind === 'rule');
+    // Your rule lines in line order, as the next tidy-up words them (`ruleSequence`, the one home): an add taken out
+    // by a later line is not listed.
+    const { removed, accepted } = ruleSequence(
+      worded,
+      lines.filter((r) => !r.removes).map((r) => ({ recordId: r.id, text: r.text ?? r.what, yourWords: r.text ?? r.what, since: r.at })),
+      lines.flatMap((r) => (r.removes ? [{ recordId: r.id, text: r.removes, since: r.at }] : [])),
+    );
+    const pending = [...accepted].reverse().map((a): Rule => ({ id: a.recordId, text: a.text, yourWords: a.yourWords, since: a.since, pending: true }));
     return [...pending, ...worded.filter((r) => !removed.has(r.text))];
   }
 
@@ -1309,19 +1332,33 @@ export class DriveVault implements VaultSource {
     const r = (await this.rules()).find((x) => x.id === id);
     if (!r) throw new BowerError('not-found', 'That rule is no longer there.');
     if (r.pending) {
-      // Not worded yet: its line goes, and Undo writes it again.
-      await this.journal.remove(r.id);
+      // Not worded yet: its line goes when never sent, and Undo writes it again. Sent, it is taken out by a forward
+      // line that undoes it (TL-P4-27 addendum 4 (3)), and Undo takes that line back in turn.
+      if ((await this.journal.retract(r.id)) === 'dropped') {
+        this.emit();
+        return async () => {
+          await this.addRule(r.yourWords ?? r.text);
+        };
+      }
+      const out = await this.journal.record('rule', `Removed the rule "${r.text}"`, { path: 'Rules.md', removes: r.text, undoes: r.id });
       this.emit();
-      return async () => {
-        await this.addRule(r.yourWords ?? r.text);
-      };
+      return () => this.undoRuleLine(out.id, r.text);
     }
     const line = await this.journal.record('rule', `Removed the rule "${r.text}"`, { path: 'Rules.md', removes: r.text });
     this.emit();
-    return async () => {
-      await this.journal.remove(line.id);
-      this.emit();
-    };
+    return () => this.undoRuleLine(line.id, r.text);
+  }
+
+  /**
+   * The Undo of a rule line (TL-P4-27 addenda 2 and 4 (3)): dropped when never sent; otherwise its inverse is recorded,
+   * the rule again for a removal, its removal for a rule kept.
+   */
+  private async undoRuleLine(id: string, text: string, kept = false): Promise<void> {
+    if ((await this.journal.retract(id)) === 'sent') {
+      if (kept) await this.journal.record('rule', `Removed the rule "${text}"`, { path: 'Rules.md', removes: text, undoes: id });
+      else await this.journal.record('rule', `New rule: "${text}"`, { path: 'Rules.md', text, undoes: id });
+    }
+    this.emit();
   }
 
   async requests(): Promise<Request[]> {
@@ -1399,8 +1436,8 @@ export class DriveVault implements VaultSource {
     this.emit();
     return async () => {
       undismiss(id);
-      if (line) await this.journal.remove(line.id);
-      this.emit();
+      if (line && s) await this.undoRuleLine(line.id, s.title, true);
+      else this.emit();
     };
   }
 

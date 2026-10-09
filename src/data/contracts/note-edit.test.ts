@@ -706,9 +706,8 @@ describe('note edits change only what the contract allows', () => {
     // inverse removal after its add, in one run, leaves no rule; a manifest without since keeps removals first.
     it('applies an add and its later removal in line order: no rule is written', () => {
       const before = rules('\n', count(1), ...R1);
-      const out = applyChanges(enc(before), [word([rule('Name scans by date.', 'scans by date', Date.UTC(2026, 9, 6, 10))], [{ recordId: 'REMOVE_ID', text: 'scans by date', since: Date.UTC(2026, 9, 6, 11) }])]);
-      expect(out.ok).toBe(true);
-      if (out.ok) expect(parseRules(out.text).map((r) => r.text)).toEqual(['File receipts under Areas/Home.']);
+      // Nothing to write: Rules.md stays byte for byte as it was (the author's own "unchanged").
+      expectRefusal(before, [word([rule('Name scans by date.', 'scans by date', Date.UTC(2026, 9, 6, 10))], [{ recordId: 'REMOVE_ID', text: 'scans by date', since: Date.UTC(2026, 9, 6, 11) }])], 'unchanged');
     });
 
     it('applies a removal and its later add again in line order: the rule is there once', () => {

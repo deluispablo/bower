@@ -114,12 +114,14 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
       throw refuses ? driveFailure('unknown', 'permanent') : driveError('offline');
     };
   }
-  // c4-undo-withdraw's named trigger (`window.__unreachDrive`): from then on, the notes of changes and the things of a pile
+  // c4-undo-withdraw's named triggers (`window.__unreachDrive`, `window.__driveOffline`): from the first on, the notes of changes and the things of a pile
   // find no network when sent, and the reads by the ids reserved for them find none either; everything else answers.
   if (scenario === 'withdraw-unreached') {
     let unreached = false;
     const reserved = new Set<string>();
     (window as unknown as { __unreachDrive: () => void }).__unreachDrive = () => { unreached = true; };
+    // c4-undo-compensate's offline Bin Undo: from then on, the pretend Drive finds no network at all.
+    (window as unknown as { __driveOffline: () => void }).__driveOffline = () => { drive.offline = true; };
     const line = /^\d{4}-\d{2}-\d{2}T[\d-]+\.\d{3}Z-[a-z0-9]{6}\.json$/;
     const create = drive.createText.bind(drive);
     drive.createText = async (...a: Parameters<typeof drive.createText>) => {
