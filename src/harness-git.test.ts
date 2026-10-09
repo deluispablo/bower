@@ -1,12 +1,12 @@
 /// <reference types="node" />
 /** done.sh's git steps (scripts/harness-git.mjs), on a throwaway repository. */
-import { execSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { execSync, spawn, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module, checked by these tests
-import { codeInCommit, codeInWorktree, commitsSince, historyTips, statusPaths, undoCommit } from '../scripts/harness-git.mjs';
+import { codeInCommit, codeInWorktree, commitsSince, historyTips, protectedReason, statusPaths, undoCommit } from '../scripts/harness-git.mjs';
 
 const repo = (): { dir: string; git: (c: string) => string } => {
   const dir = mkdtempSync(join(tmpdir(), 'harness-'));
@@ -128,6 +128,72 @@ describe('the harness and git', () => {
     expect(out).toContain('The tree has changes');
     expect(existsSync(join(dir, 'good.txt'))).toBe(false);
     expect(git('log --oneline').trim().split('\n')).toHaveLength(1);
+  });
+
+  // A fixture repo with a worker branch checked out in its own worktree (never the real repositories).
+  const cleanupFixture = (branch: string) => {
+    const { dir, git } = repo();
+    writeFileSync(join(dir, 'a.txt'), 'one\n');
+    git('add -A && git commit -qm base');
+    git('branch -M main');
+    const wt = join(realpathSync(mkdtempSync(join(tmpdir(), 'harness-wt-'))), 'wt');
+    git(`worktree add -q -b ${branch} ${wt}`);
+    writeFileSync(join(wt, 'b.txt'), 'two\n');
+    execSync('git add -A && git commit -qm "worker change"', { cwd: wt });
+    const run = () => {
+      const r = spawnSync('bash', [join(process.cwd(), 'harness/integrate.sh'), branch], { cwd: dir, encoding: 'utf8', env: { ...process.env, INTEGRATE_CHECK: 'true', HARNESS_LOCK: join(dir, '.git/heavy.lock') } });
+      return r.stdout + r.stderr;
+    };
+    return { dir, git, wt, run };
+  };
+
+  it('integrate removes a merged branch and its clean worktree', () => {
+    const { dir, git, wt, run } = cleanupFixture('worker');
+    const out = run();
+    expect(git('log -1 --format=%s').trim()).toBe("Merge branch 'worker'");
+    expect(existsSync(wt)).toBe(false);
+    expect(git('branch --list worker').trim()).toBe('');
+    expect(git('worktree list --porcelain')).not.toContain('worker');
+    expect(out).toContain('Removed worktree and branch worker.');
+    expect(existsSync(dir)).toBe(true);
+  });
+
+  it('a dirty worktree is kept with its branch and a printed line', () => {
+    const { git, wt, run } = cleanupFixture('worker');
+    writeFileSync(join(wt, 'b.txt'), 'edited\n');
+    const out = run();
+    expect(existsSync(wt)).toBe(true);
+    expect(git('branch --list worker').trim()).toContain('worker');
+    expect(out).toContain('Kept worker: its worktree has changes.');
+  });
+
+  it('a merged claude/design worktree survives integrate', () => {
+    const { git, wt, run } = cleanupFixture('claude/design');
+    const out = run();
+    expect(git('log -1 --format=%s').trim()).toBe("Merge branch 'claude/design'");
+    expect(existsSync(wt)).toBe(true);
+    expect(git('branch --list claude/design').trim()).toContain('claude/design');
+    expect(out).toContain('Kept claude/design: it is a protected branch.');
+  });
+
+  it('protected names and the deploy worktree are kept, whatever the merge state', () => {
+    for (const b of ['main', 'claude/p3', 'claude/tl-planning', 'claude/design', 'archive/old', 'codex/x']) expect(protectedReason(b, '/tmp/x')).not.toBeNull();
+    expect(protectedReason('worker', '/private/tmp/bower-deploy')).not.toBeNull();
+    expect(protectedReason('worker', '/tmp/x')).toBeNull();
+  });
+
+  it('a worktree with a running process survives integrate', async () => {
+    const { git, wt, run } = cleanupFixture('worker');
+    const child = spawn('sleep', ['30'], { cwd: wt, stdio: 'ignore' });
+    try {
+      await new Promise<void>((resolve) => child.once('spawn', () => resolve()));
+      const out = run();
+      expect(existsSync(wt)).toBe(true);
+      expect(git('branch --list worker').trim()).toContain('worker');
+      expect(out).toContain('Kept worker: a process is running in its worktree.');
+    } finally {
+      child.kill();
+    }
   });
 
   it('a branch commit with no compatibility row fails the check under a no-commit merge', () => {
