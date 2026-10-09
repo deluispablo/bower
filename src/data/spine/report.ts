@@ -77,6 +77,14 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
   return { v: 1, kind: 'run-report', scope: { rootId: manifest.scope.rootId }, runId: manifest.runId, captureId: manifest.captureId, manifestHash, report };
 }
 
+/**
+ * The notes a run's rows name, once each, in report order (P4-45 m4): a note with N new Timeline lines has N rows
+ * and is one note. The one count of distinct paths, for Home, Replay, the run links and the corpus scorer.
+ */
+export function distinctPaths(rows: readonly { path: string }[]): string[] {
+  return [...new Set(rows.flatMap((r) => (r.path ? [r.path] : [])))];
+}
+
 /** A filing move: a captured member going to another place (a cleared "new" mark stays where it is). */
 export function filingMove(manifest: RunManifest, op: OperationV2): boolean {
   const e = op.effect;
