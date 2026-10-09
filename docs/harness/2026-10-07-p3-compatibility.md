@@ -118,3 +118,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `a4aaa42c` | v2-targets | none: styles and markup only (tab close, phone target sizes, one segmented control, switch rows as labels); no stored data, route, format or string changes. |
 | `51978d36` | v2-name-sheet | none: the name sheet is styled by the field rule and FolderScreen's New note opens it; two new lines ("Links to this note keep working.", "Links to this file keep working."). No stored data, route or format changes. |
 | `04a74af6` | c4-segmented-one | none: markup and styles only (folder view toggle, bookmark chips); no stored format, route or data changes. |
+| `e2038262` | v2-perched-bower | UI only: the run chip's bird gains `minor` (it never takes Bower's turn and shows its still frame); the perched Bower moves through the engine instead of CSS keyframes. No stored format, wire, manifest or device-store field changed; nothing to deploy together |

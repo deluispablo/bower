@@ -5922,12 +5922,12 @@
     "task": "p4-consolidation",
     "category": "test",
     "passes": false,
-    "what": "The 22 unit tests on harness/real-timers.json move to fake timers or event waits, so the real-timer allowlist reaches its empty target.",
+    "what": "Load-proof tests: one byte table per note (rawByteAt), a re-entrant heavy-run lock around check and every e2e (done.sh too), Vite optimizeDeps include and warmup, the shared axe helper waits for animations, the real-timer allowlist empty, a CPU report and a map row.",
     "steps": [
       "harness/real-timers.json is empty and the ceiling is 0."
     ],
-    "verify": "pnpm exec vitest run src/timer-gate.test.ts -t \"the timer allowlist may only shrink\"",
-    "note": "TL-P4-17 addendum 10 (main 56dd8d86); stage 4. Starting model: bower-implementer."
+    "verify": "pnpm vitest run -t \"the size-cap run fits its time bound with no load|a second heavy run waits for the first\" && pnpm exec vitest run src/timer-gate.test.ts -t \"the timer allowlist may only shrink\" && bash scripts/e2e-both.sh -g \"axe runs after the sheet.s animations end\"",
+    "note": "TL-P4-17 addendum 10 (main 56dd8d86); stage 4. Starting model: bower-implementer. TL-P4-22 addenda 11 and 13 (main f01eda6c) widen the scope; part 1 gets an escalated review. Packet 2026-10-09-c4-test-timers-packet.md. Goes after the Codex-finding fixes."
   },
   {
     "id": "c3-done-harness-paths",
@@ -6149,7 +6149,8 @@
       "A perched Bower with the turn idles through the engine and stays on its perch."
     ],
     "verify": "pnpm vitest run src/bird -t \"a minor bird never takes the turn from the page|a minor bird steps out of sight under an overlay bird|a perched Bower with the turn idles through the engine and stays on its perch|with Bower moves off or reduced motion|minor entries are ignored|the carry group exists, is hidden and reaches onPart|each pose loop matches its CSS reference\" && bash scripts/e2e-both.sh e2e/bird-engine.spec.ts -g \"no CSS animation runs on a bird part while the engine runs\"",
-    "note": "TL-P4-21 ruling 2 (Opus, escalated); impact findings 5-6. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-v2-perched-bower-packet.md. Contract per TL-P4-22 addenda 6-7. Addendum 8: nine poses through the engine; random blink. Addendum 9; contract trial: 3 passes, dispatched without a 4th."
+    "note": "TL-P4-21 ruling 2 (Opus, escalated); impact findings 5-6. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-v2-perched-bower-packet.md. Contract per TL-P4-22 addenda 6-7. Addendum 8: nine poses through the engine; random blink. Addendum 9; contract trial: 3 passes, dispatched without a 4th. Red 26b4b60d, fix e2038262; P4-48 PASS.",
+    "review": "P4-48 PASS"
   },
   {
     "id": "v2-targets",
@@ -6205,8 +6206,9 @@
       "The toggle is Segmented at 44 px.",
       "Chips are 44 px at 375."
     ],
-    "verify": "bash scripts/e2e-both.sh -g \"the folder view toggle is the one segmented control|the files bookmark chips are at least 44 px on the phone\"",
-    "note": "TL-P4-22 addendum 10 (a); defect second-segmented-list-table. Starting model bower-implementer; pruning trial (no re-review). Packet 2026-10-09-c4-segmented-one-packet.md."
+    "verify": "bash scripts/e2e-both.sh e2e/c4-segmented-one.spec.ts -g \"the folder view toggle is the one segmented control|the files bookmark chips are at least 44 px on the phone\"",
+    "note": "TL-P4-22 addendum 10 (a); defect second-segmented-list-table. Starting model bower-implementer; pruning trial (no re-review). Packet 2026-10-09-c4-segmented-one-packet.md. implementer: codex. Red 8456c48e, fix 04a74af6, test correction e3b7d900 (coordinator commits; the sandbox cannot write the git index). P4-49 PASS.",
+    "review": "P4-49 PASS"
   },
   {
     "id": "d-v2-07",
@@ -6222,5 +6224,42 @@
     ],
     "verify": "pnpm vitest run src/bird -t \"the perched Bower follows the pointer|a focused control turns the gaze|after 60 s with no input the bird sleeps|with reduced motion or moves off no transform changes over 5 s|preen and snap never run while input is recent|the run chip bird only blinks|a sleeping bird does not blink|Bower is aria-hidden and out of the tab order\"",
     "note": "TL-P4-21 order 4 (Opus, after v2-perched-bower). Contract sign-off trial and designer sign-off before dispatch. Packet 2026-10-09-d-v2-07-packet.md."
+  },
+  {
+    "task": "p4-consolidation",
+    "passes": false,
+    "id": "c4-retry-fence",
+    "category": "fix",
+    "what": "A resend of a write to an existing file runs the caller's fence first (one retry home, drive-http.ts:461); unfenced existing-file writes fail retry-kind; reserved-id creates keep their resend.",
+    "steps": [
+      "Each resendable refusal then a changed target: the resend is refused, Drive unchanged."
+    ],
+    "verify": "pnpm vitest run -t \"a resent write to an existing file runs its fence first|creates by reserved id are still resent after a rate limit\"",
+    "note": "TL-P4-24 finding 1 (a); defect transport-retry-skips-fence. Escalated + Codex review pass. Packet 2026-10-09-c4-retry-fence-packet.md."
+  },
+  {
+    "task": "p4-consolidation",
+    "passes": false,
+    "id": "c4-undo-withdraw",
+    "category": "fix",
+    "ui": true,
+    "what": "write-once withdraw on the Holder port (404 lets go, found is binned, unknown refuses) runs under acrossTabs before a journal line drops; Sending and reservedFile use it.",
+    "steps": [
+      "Every create outcome x withdrawal: reserved id 404 or trashed, or the holder kept."
+    ],
+    "verify": "pnpm vitest run -t \"a withdrawn intended create never leaves a live file\"",
+    "note": "TL-P4-24 finding 3 (a); defect undo-drops-reserved-create. Escalated + Codex review pass; refusal sentence from the designer. Packet 2026-10-09-c4-undo-withdraw-packet.md."
+  },
+  {
+    "task": "p4-consolidation",
+    "passes": false,
+    "id": "c4-app-fence",
+    "category": "fix",
+    "what": "DriveVault.once checks every send (the Bin too) through one read-then-notAsSeen helper in contracts/still-as-seen.ts; stillAsSeen and the hand checks fold in.",
+    "steps": [
+      "Each app write with its target changed elsewhere is refused, Drive unchanged."
+    ],
+    "verify": "pnpm vitest run -t \"every app write of an existing file refuses one that changed name or place elsewhere\"",
+    "note": "TL-P4-24 finding 2 (a); defect app-bin-skips-read-check; after c4-undo-withdraw. Escalated + Codex review pass. Packet 2026-10-09-c4-app-fence-packet.md."
   }
 ]

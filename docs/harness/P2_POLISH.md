@@ -331,3 +331,11 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - A pretend Drive kept in sessionStorage by an older build has no keys, so write-it throws on load.
   - newsLineCited relies on the "New: " prefix (ruled; heuristic).
 - 2026-10-09 v2-name-sheet (designer nit, severity 1; lead's call whether to log as a defect): the slash case is not an error. Rename still goes ahead with a dash, so a red edge and aria-invalid send the wrong signal; a muted notice would fit better.
+- 2026-10-09 P4-48 (v2-perched-bower), Minors:
+  - no unit test checks that the caller's className and style stay on the outer div;
+  - the engine mounts in useEffect, so a bird that gains the turn can paint one bare frame (sleep with eyes open);
+  - proud's chest width (1.05) is not reproduced (disclosed for the design check);
+  - the perched script never reads the document pointer listener (left for d-v2-07).
+- 2026-10-09 P4-49 (c4-segmented-one, Codex), Minors:
+  - `.small` gives the chips a base min-height of 40 at 900 px and wider;
+  - the Segmented doc comment names only Settings and Tell Bower.

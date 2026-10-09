@@ -1,70 +1,23 @@
-/* Looping poses, CSS only. Used when Bower stays in one place. */
+/*
+ * Still frames, CSS only: what a bird without the turn shows (and every bird
+ * with "Bower moves" off or reduced motion). The bird with the turn carries no
+ * `posed` class: the engine moves it (engine.ts), the one animation home.
+ */
 
 .bird{position:relative;flex:none}
+/* The engine's own wrapper inside the caller's box; the engine sets its size and transform while it runs. */
+.bird-perch{position:absolute;left:0;top:0;width:100%;height:100%;transform-origin:50% 92%}
 .posed svg g{transform-box:view-box}
-.posed.still *{animation:none!important}
 .posed .b-rig{transform-origin:50px 92px}.posed .b-head{transform-origin:60px 50px}.posed .b-wing{transform-origin:56px 55px}
 .posed .b-tail{transform-origin:32px 70px}.posed .b-legs{transform-origin:50px 82px}.posed .b-jaw{transform-origin:78px 38px}
 .posed .b-tuft{transform-origin:61px 23px}.posed .b-eye{transform-origin:70px 34px}
-.posed .b-eye{animation:blink 5.2s infinite}
-@keyframes blink{0%,94%,100%{transform:scaleY(1)}96%{transform:scaleY(.08)}}
-/* idle: the head moves in snaps, the tail flicks now and then */
-.posed.idle .b-head{animation:snaps 6s infinite}
-.posed.idle .b-tail{animation:flick 6s infinite}
-@keyframes snaps{0%,22%{transform:rotate(0)}23%,46%{transform:rotate(-12deg)}47%,70%{transform:rotate(7deg) translateX(1px)}71%,100%{transform:rotate(0)}}
-@keyframes flick{0%,72%,80%,100%{transform:rotate(0)}74%{transform:rotate(-14deg)}77%{transform:rotate(4deg)}}
-/* wait: idle with the tuft up a little, looking about */
-.posed.wait .b-head{animation:snaps 4s infinite}
+/* wait: the tuft up a little */
 .posed.wait .b-tuft{transform:rotate(8deg)}
-.posed.wait .b-iris{animation:look 4s infinite}
-@keyframes look{0%,40%{transform:translateX(0)}42%,70%{transform:translateX(-2.2px)}72%,100%{transform:translateX(1px)}}
-/* read: pecks at the pile, then looks up */
-.posed.read .b-rig{animation:peck 2.2s infinite cubic-bezier(.5,0,.3,1)}
-.posed.read .b-head{animation:peckhead 2.2s infinite}
-.posed.read .b-tail{animation:pecktail 2.2s infinite}
-@keyframes peck{0%,30%,100%{transform:rotate(0)}40%,48%{transform:rotate(24deg)}52%{transform:rotate(18deg)}58%,64%{transform:rotate(25deg)}74%{transform:rotate(0)}}
-@keyframes peckhead{0%,30%{transform:rotate(0)}40%,64%{transform:rotate(14deg)}76%,88%{transform:rotate(-10deg)}90%,100%{transform:rotate(0)}}
-@keyframes pecktail{0%,30%,100%{transform:rotate(0)}44%{transform:rotate(-18deg)}74%{transform:rotate(0)}}
-/* write: head down over a note, quick nods, the note fills line by line */
-.posed.write .b-head{animation:nod 1.4s infinite}
-.posed.write .b-jaw{animation:chirp 2.8s infinite}
-@keyframes nod{0%,100%{transform:rotate(16deg)}20%{transform:rotate(22deg)}26%{transform:rotate(16deg)}55%{transform:rotate(21deg)}61%{transform:rotate(16deg)}}
-@keyframes chirp{0%,80%,100%{transform:rotate(0)}84%,90%{transform:rotate(14deg)}}
-/* carry: hops with something in the beak, wings beat in the air */
-.posed.carry .b-rig{animation:hop 1.3s infinite}
-.posed.carry .b-wing{animation:beat 1.3s infinite}
-.posed.carry .b-legs{animation:tuck 1.3s infinite}
-.posed.carry .b-tail{animation:flick2 1.3s infinite}
-@keyframes hop{0%,100%{transform:translateY(0) scale(1.06,.92)}12%{transform:translateY(0) scale(.96,1.06)}35%{transform:translateY(-16px) rotate(-6deg)}58%{transform:translateY(0) scale(1.08,.9)}72%{transform:translateY(0) scale(1)}}
-@keyframes beat{0%,12%,60%,100%{transform:rotate(0)}20%,36%{transform:rotate(-38deg) scaleY(.7)}28%,44%{transform:rotate(18deg)}}
-@keyframes tuck{0%,12%,58%,100%{transform:scaleY(1)}22%,48%{transform:scaleY(.55)}}
-@keyframes flick2{0%,58%,100%{transform:rotate(0)}64%{transform:rotate(-16deg)}}
-/* sleep: eyes shut, head down, breathing, tuft flat */
-.posed.sleep .b-eye{animation:none;transform:scaleY(.08)}
+/* carry: something in the beak */
+.posed.carry .b-carry{display:inline}
+/* sleep: eyes shut, head down, tuft flat */
+.posed.sleep .b-eye{transform:scaleY(.08)}
 .posed.sleep .b-head{transform:rotate(20deg) translateY(3px)}
 .posed.sleep .b-tuft{transform:rotate(-26deg)}
-.posed.sleep .b-rig{animation:breathe 3.6s infinite ease-in-out}
-@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.035,.97)}}
-/* alarm: tuft up, head back */
+/* alarm: tuft up */
 .posed.alarm .b-tuft{transform:rotate(18deg) translateY(-2px)}
-.posed.alarm .b-head{animation:startle 4s infinite}
-@keyframes startle{0%,10%{transform:rotate(0)}12%,60%{transform:rotate(-10deg) translateX(-1px)}62%,100%{transform:rotate(0)}}
-/* proud: tail fans, chest out (done) */
-.posed.proud .b-rig{animation:proud 3s infinite}
-.posed.proud .b-tail{animation:fan 3s infinite}
-.posed.proud .b-tuft{animation:tuftup 3s infinite}
-@keyframes proud{0%,100%{transform:scale(1)}20%,50%{transform:scale(1.05,1.03) rotate(-4deg)}}
-@keyframes fan{0%,100%{transform:rotate(0)}20%,50%{transform:rotate(-22deg)}}
-@keyframes tuftup{0%,100%{transform:rotate(0)}20%,50%{transform:rotate(16deg)}}
-/* land: flies in, squashes on the twig, flicks, then idles (6 s cycle on the canvas) */
-.posed.land .b-rig{animation:landin 6s infinite}
-.posed.land .b-wing{animation:landwing 6s infinite}
-.posed.land .b-legs{animation:landlegs 6s infinite}
-.posed.land .b-tail{animation:landtail 6s infinite}
-.posed.land .b-head{animation:landhead 6s infinite}
-@keyframes landin{0%{transform:translate(-120px,-150px) rotate(-18deg);opacity:0}4%{opacity:1}22%{transform:translate(0,-6px) rotate(-6deg)}26%{transform:translate(0,0) scale(1.12,.86)}31%{transform:scale(.97,1.04)}35%,100%{transform:scale(1)}}
-@keyframes landwing{0%,2%,6%,10%,14%,18%{transform:rotate(-46deg) scaleY(.6)}4%,8%,12%,16%,20%{transform:rotate(22deg)}24%,100%{transform:rotate(0)}}
-@keyframes landlegs{0%,19%{transform:scaleY(.5)}24%,100%{transform:scaleY(1)}}
-@keyframes landtail{0%,30%,40%,100%{transform:rotate(0)}33%{transform:rotate(-18deg)}36%{transform:rotate(5deg)}}
-@keyframes landhead{0%,44%{transform:rotate(0)}45%,62%{transform:rotate(-12deg)}63%,80%{transform:rotate(8deg)}81%,100%{transform:rotate(0)}}
-@media (prefers-reduced-motion:reduce){.bird *,.bird{animation:none!important}.land .b-rig{transform:none}}
