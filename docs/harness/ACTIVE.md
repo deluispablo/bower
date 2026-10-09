@@ -459,3 +459,4 @@ P3-9 is closed.
 - Addendum 21 (main 43a0289a): c3-fingerprint round 2 queued (JCS, golden regenerated, raw-input golden). Running: c3-reply-schema, c3-subject.
 - P4-44 BLOCK (c3-reply-schema: structured_output branch untested; CLI give-up skips retry) → fix round per addendum 22 (read/write bounds, --json-schema off) running. c3-subject fix round (rule to ESLint) running. c3-fingerprint round 2 queued.
 - Addendum 10 (main 56dd8d86): c3-timer-gate fix round (shared check lock) running; c3-test-time/c3-alone-margin to be re-proved after it. c4-test-timers registered. c3-planner-split running. Lead near send pause: questions go to LEAD_QUESTIONS.md if sends stop.
+- Lead at 9 sends without an owner message: questions go to docs/harness/LEAD_QUESTIONS.md; answers come through DECISIONS on main (check after each main merge). Addendum 24 confirms live rule wording. P4-45 (planner-split part 1) running.
