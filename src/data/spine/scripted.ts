@@ -842,9 +842,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       const about = subjectOf({ id });
       const path = about.kind === 'state' ? ix.pathOf(about.id) : undefined;
       const f = path === undefined ? undefined : ix.file(path);
-      // SEAM (TL-P4-19 addendum 10, `answered`): a yes whose note had moved or gone to the Bin writes nothing; its
-      // answered row goes here once the subject home has the field ("Not written: <note> had moved or gone to the Bin
-      // before Bower got to it.").
+      // A yes whose note is not in the folder now (the Bin) writes nothing: its answer settles, and its answered row
+      // comes from `answeredRows` above (`answeredGone`, kind state), the one writer of that row (TL-P4-19 addendum 10).
       if (l.rec.text !== 'yes' || !q || !f || f.folder || path === undefined) continue;
       grants.set(f.id, { answer: l.rec.id, seen: q.state ?? null, question: q });
       want(f, path);
