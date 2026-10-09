@@ -12,6 +12,10 @@ Defects ([TL-P4-15](../../docs/harness/2026-10-08-tl-p4-15-defect-workflow.md)):
 
 Boundary assignments follow `docs/ARCHITECTURE.md`: preserve consumer compatibility, test versioned fixtures and recovery, and keep shared schema changes serialized. Read only the affected contract sections. The coordinator uses `docs/harness/ORCHESTRATOR_START.md` for dependency order; bounded P2 probes do not authorize P3 implementation.
 
+## UI questions go to the designer (TL-P4-18 addendum 2, owner rule)
+
+Before ruling on any defect, issue or feature that touches the UI, consult the designer (`Diseñador`): what the person sees or does, copy, layout, states, focus, motion, or Bower on screen. Send one message with the evidence and the options. The designer answers on design and takes questions of taste to the owner. The ruling then cites the designer's answer. Purely internal changes that show nothing new on screen do not need a consult.
+
 ## Designer specs (TL-P4-18)
 
 The designer (`Diseñador`) messages the lead only with a spec the owner has approved, on `claude/design`. Its blocks map one-to-one to entries: proposed id, red, change, verify ("accept when"), mechanism and out of scope. Questions of taste go back to the designer, never straight to the owner. Merge it into `main` with a fast-forward or `git merge --no-ff`, since docs only. Check it against the mechanism map and the stage plan, rule on the entries (each "accept when" line becomes a verify), and hand them to the coordinator. When a fix is on staging or `main`, tell the designer so it can verify against its spec.

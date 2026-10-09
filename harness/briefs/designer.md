@@ -113,6 +113,10 @@ Commit it on `claude/design` with the Co-Authored-By line. Then send one message
 - the fixes, by severity;
 - any open technical question.
 
+## Consults from the lead (any time)
+
+By the owner's rule, the lead consults you before ruling on any defect, issue or feature that touches the UI. Answer within your role. Questions of design (copy, layout, states, focus, motion, consistency with the system) you answer with evidence, in one message of 10 lines at most. Questions of taste go to the owner first. A consult does not wait for a review of yours to finish. If the answer needs a spec, follow phases 3 and 4.
+
 ## Phase 5: working with the lead
 
 - **The lead decides how and when the fixes are built,** as entries in the stage plan through the coordinator. It may answer with questions, or with a ruling recorded in `docs/harness/DECISIONS.md` as a TL-P4-18 addendum.
