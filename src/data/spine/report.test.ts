@@ -7,7 +7,7 @@ import { planAdmission } from './plan';
 import { fakeRead } from './read';
 import type { RunManifest } from './records';
 import { runDetail } from '@/features/tidy/run-words';
-import { itemDispositions, materialize, reportContradictions, UNCONFIRMED_GONE } from './report';
+import { itemDispositions, materialize, NOT_FILED, reportContradictions, UNCONFIRMED_GONE } from './report';
 import { scriptedProvider } from './scripted';
 
 const AT = Date.UTC(2026, 9, 7, 9);
@@ -75,5 +75,32 @@ describe('dispositions and the report', () => {
     const words = runDetail({ id: RUN, scope: 'all', phase: 'done', requestedAt: AT, phaseAt: AT, seen: false, report });
     expect(words).toContain("Bower couldn't confirm 1 thing");
     expect(words).not.toContain('set aside');
+  });
+
+  it('a run with confirmed and unconfirmed moves counts each on its own line', async () => {
+    const drive = new FakeDrive({ clock: () => 0 });
+    const root = (await seedFakeDrive(drive, 'default', AT)) ?? '';
+    const admission = await planAdmission(fakeRead(drive), root, { scope: 'all', clock: () => AT, newId: () => 'request-report' });
+    if (admission.kind !== 'manifest') throw new Error(`nothing admitted: ${admission.cause}`);
+    const planned = await scriptedProvider(fakeScripted(drive), { rootId: root, runId: RUN, allowWeb: false })({ taken: admission.manifest, deferred: [] });
+    // Two filing moves set aside together by one contribution: one refused as it is (confirmed), the other's answer
+    // lost and its thing then emptied from the Bin before Bower read it back (unconfirmed).
+    const asides = planned.reportPlan.filter((c) => c.when === 'rejected' && c.requires.length === 1
+      && planned.operations.some((o) => o.operationId === c.requires[0] && o.effect.kind === 'move'));
+    const [a, b] = asides;
+    if (!a || !b) throw new Error('two filing moves needed');
+    const together = { requires: [...a.requires, ...b.requires], when: 'rejected' as const, value: { ...a.value, setAside: [...a.value.setAside, ...b.value.setAside] } };
+    const manifest: RunManifest = { ...planned, reportPlan: [...planned.reportPlan.filter((c) => c !== a && c !== b), together] };
+    const [gone, kept] = [a.requires[0] ?? '', b.requires[0] ?? ''];
+    const outcomes = settle(manifest, new Set([gone, kept])).map((o): Outcome => (o.operationId === gone
+      ? { operationId: o.operationId, state: 'rejected', failure: { code: 'unknown', message: UNCONFIRMED_GONE } }
+      : o));
+    const report = materialize(manifest, 'a'.repeat(64), outcomes)?.report;
+    if (!report) throw new Error('no report');
+    expect(report.unconfirmed).toEqual([{ name: a.value.setAside[0]?.name, why: UNCONFIRMED_GONE }]);
+    expect(report.setAside).toEqual([{ name: b.value.setAside[0]?.name, why: NOT_FILED }]);
+    const words = runDetail({ id: RUN, scope: 'all', phase: 'done', requestedAt: AT, phaseAt: AT, seen: false, report });
+    expect(words).toContain("Bower couldn't confirm 1 thing");
+    expect(words).toContain('1 thing set aside');
   });
 });
