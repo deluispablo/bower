@@ -2,31 +2,18 @@
 
 Coordinator: the Claude Code session named "Orquestador". It integrates in `/Users/deluisp/Projects/bower-app` on branch `claude/p3`; P4 continues on it. Lead: the Planificador session ([DECISIONS.md](DECISIONS.md)). Output rule: [TL-P3-29](2026-10-07-tl-p3-29-output-rule-survives-compaction.md), in AGENTS.md. Minors: [P2_POLISH.md](P2_POLISH.md). Earlier handoffs: git history of this file.
 
-## Resume (2026-10-09 evening)
+## Resume (2026-10-09 late evening)
 
 Read this first. Stage 4 follows the TL-P4-21 order, with TL-P4-24's data-safety fixes ahead of V2.
 
-- **Closed in stage 4:** c4-focus-return, v2-field, v2-dock, v2-name-sheet, v2-targets, c4-run-counts, c4-runner-region, c4-e2e-port, c4-segmented-one, c4-test-timers, v2-move-here, v2-perched-bower, c4-app-fence (4 rounds; re-planned by TL-P4-24 addendum 9).
-- **Merged, waiting for the designer:** c4-new-pill-one (e9af106f, P4-54 PASS). It closes on "verified".
-- **Running:**
-  - c4-retry-fence (`/private/tmp/bower-c4-retry`) and c4-undo-withdraw (`/private/tmp/bower-c4-undo`): both escalated, then a Claude review plus one Codex pass;
-  - the diagnoser on `pile-note-lost-create-moved`.
-- **Ready to dispatch when a Claude slot frees:** d-v2-07. Packet signed: 3 contract passes, TL-P4-25 and addenda 1–3, and the designer's re-sign at a2453704. Worktree `/private/tmp/bower-d-v2-07`, on Opus.
-- **Codex slot:** d-v2-13 CSS (`v2-still-marks`) is waiting for the designer's sign-off of its table.
-- **Queue, after the TL-P4-24 pair:**
-  - c4-parse-once (escalated);
-  - the pile-note-lost-create fix (after its ruling);
-  - c4-reconcile-guard (mechanical or Codex; it touches write-once, so it goes after undo-withdraw);
-  - c4-api-audit (mechanical; it needs network, so not Codex);
-  - then 24a/24b, d-v2-06, d-v2-02, and the c4 data entries.
-- **Codex (TL-P4-23):**
-  - the coordinator commits for it (red, fix, notes) and runs its gates under the lock;
-  - every src commit, the red included, needs a compatibility row;
-  - every Codex entry gets a fresh Claude reviewer.
-- **Rules:**
-  - every heavy run goes through `harness/with-lock.sh` (re-entrant);
-  - cap 4 subagents (2 Claude implementers plus 1 Codex);
-  - a UI packet's table is signed off before dispatch.
+- **Closed in stage 4:** c4-focus-return, v2-field, v2-dock, v2-name-sheet, v2-targets, c4-run-counts, c4-runner-region, c4-e2e-port, c4-segmented-one, c4-test-timers, v2-move-here, v2-perched-bower, c4-app-fence, c4-new-pill-one, v2-still-marks, c4-retry-fence, c4-api-audit, v2-boot-states.
+- **d-v2-07** is merged at 7860f261, and the designer verified every row except the wake startle. Its fix round is at `/private/tmp/bower-d-v2-07b`: the startle step plus TL-P4-22 addendum 21 (closed allowlist) and TL-P4-25 addendum 4 (the step owns the head). Then delta reviews, a merge, and the designer's re-check.
+- **Running:** c4-create-landed (`/private/tmp/bower-c4-create`; TL-P4-24 addendum 10).
+- **Parked:** c4-undo-withdraw, branch at 70a2b0da (`/private/tmp/bower-c4-undo`). The lead is re-planning it from a Plan-agent design note. Do not merge.
+- **Ready:** d-v2-24a. Its packet is signed: TL-P4-26 with addendum 1, and the designer re-signed. It goes on Opus with a Codex pass once the d-v2-07 startle round merges.
+- **Queue:** c4-parse-once, 24b ∥ d-v2-06, d-v2-02, then the c4 data entries.
+- **Codex:** the coordinator commits for it. Every src commit, the red included, needs a compatibility row. A fresh Claude reviewer reviews every Codex entry. Codex can't run e2e, so a Claude implementer finishes e2e when needed.
+- **Rules:** with-lock.sh for every heavy run; cap 4 subagents (2 Claude implementers plus 1 Codex); every UI table is signed off before dispatch; every escalated entry gets one Codex pass per round.
 - **Sessions:** lead Planificador; Designer (`/private/tmp/bower-design`); lead planning worktree `/private/tmp/bower-tl-planning`. Never remove role worktrees.
 
 ## Where things stand
