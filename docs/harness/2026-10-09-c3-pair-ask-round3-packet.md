@@ -40,3 +40,11 @@
 The red (tests only), then the fix, then the notes in their own commit (`docs/harness/2026-10-09-c3-pair-ask-round3-notes.md`), with `tests changed:` lines. Add compatibility rows for non-merge commits under src/features or src/data/contracts.
 
 Reviewers are read-only. They never move the main checkout in any form.
+
+## Part 2 resumed (TL-P4-19 addendum 14, main 134c5d59: option a)
+
+The premise of addendum 11(b) was wrong: the subject-gone check never reads the trashed item, because the listing uses trashed=false.
+
+- One `drive.get` per gone pair note, made only when a pair row is made, through the one transport. The goldens C04 78 and 25-runs 88 hold.
+- A 404 or any refusal falls back to "the other note".
+- Red: `a note binned in Drive itself shows its name in the row`, plus `a pair whose other note cannot be read uses the fallback`. These replace the two part-2 reds named above.

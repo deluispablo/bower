@@ -37,7 +37,11 @@
 
 - The three reds.
 - Kept: every c3-state-mark verify.
-- An e2e for "Write it" follows the P4-47 reviewer's ruling.
+- **Real entry point (TL-P4-19 addendum 13, main 6d29cfa5):**
+  - Give the scripted provider a scenario that grants a state update. It stays in the scripted provider, never on the live path (addendum 23; dependency-cruiser rule).
+  - Add one e2e:fake test, `write it shows the state written, re-asks on a clash and settles as an answered row`. It presses "Write it" and sees the state written, then a clash re-ask, then an answered row.
+  - The runner tests stay for the branches.
+- **The second manifest reader:** use `parseRunManifestV2` unless the review shows a real reason not to (lead).
 - Goldens never rise.
 - `pnpm check` passes, and e2e:fake passes on the touched screens, with axe.
 
