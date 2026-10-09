@@ -118,8 +118,9 @@ export const LEGACY_HASH = '837283d24771c394';
 /** The review a closed escalated consolidation entry must name: "P4-NN PASS". */
 const REVIEW_PASS = /^P4-\S+ PASS$/;
 
-/** One sentence when an escalated p4-consolidation entry passes (or is about to) with no review PASS, else null. */
+/** One sentence when an entry passes (or is about to) without what its kind needs: an escalated p4-consolidation entry a review PASS, a `ui: true` entry `design: "verified"` (TL-P4-18 addendum 3); else null. */
 export function reviewProblem(f) {
+  if (f.ui === true && f.design !== 'verified') return `${f.id}: a UI entry passes without a verified design check (set "design": "verified" after the designer's check)`;
   const escalated = f.task === 'p4-consolidation' && /Starting model: bower-escalated/.test(f.note ?? '');
   if (!escalated || REVIEW_PASS.test(f.review ?? '')) return null;
   return `${f.id}: escalated, passes without a review PASS (set "review": "P4-NN PASS" after the reviewer's PASS)`;
