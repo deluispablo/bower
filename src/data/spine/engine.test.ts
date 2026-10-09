@@ -163,6 +163,33 @@ describe('the runner and the fake run the same engine', () => {
     expect(view).not.toContain("Bower couldn't reach Google Drive");
   });
 
+  it('a run move with a lost answer, then binned by the person, is reported as unconfirmed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    let binned: string | null = null;
+    const isMove = (call: FencedCall): boolean => call.op === 'update' && call.patch.addParent !== undefined;
+    const { manifest, chain, view } = await applied(
+      (call) => (binned === null && isMove(call) ? 'lose-reply' : 'pass'),
+      (call, drive) => {
+        if (binned !== null || !isMove(call) || call.op !== 'update') return;
+        // The move landed and its answer is lost; Alex then puts the thing in the Bin in the app, which stamps it.
+        binned = call.id;
+        const stored = (storedOf(drive) as unknown as Map<string, { trashed: boolean; meta: DriveFile }>).get(call.id);
+        if (!stored) return;
+        stored.trashed = true;
+        stored.meta.appProperties = { ...stored.meta.appProperties, bowerOp: sha256Sync('app-bin').slice(0, 32) };
+      },
+    );
+    const op = manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === binned);
+    if (op?.effect.kind !== 'move') throw new Error('no move');
+    expect(chain.at(-1)?.phase).toBe('done');
+    const outcome = chain.at(-1)?.outcomes.find((o) => o.operationId === op.operationId);
+    // Neither applied nor set aside: another writer's stamp says nothing of whether the move landed.
+    expect(outcome?.state).toBe('rejected');
+    const report = (JSON.parse(view) as { run?: { report?: { setAside: Array<{ name: string }>; unconfirmed?: Array<{ name: string; why: string }> } } }).run?.report;
+    expect(report?.unconfirmed ?? []).toContainEqual({ name: op.effect.before.name, why: expect.stringMatching(/^Bower couldn't confirm/) });
+    expect(report?.setAside.map((r) => r.name)).not.toContain(op.effect.before.name);
+  });
+
   it('a move into a folder binned since the run read it is refused', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     // Right before the first move into another folder is sent, the person puts that folder in the Bin.

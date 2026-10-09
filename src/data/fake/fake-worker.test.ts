@@ -3,7 +3,7 @@ import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
-import { PROP, SYSTEM } from '../vault/layout';
+import { BOWER_FOLDER, PROP, SYSTEM } from '../vault/layout';
 import { FakeWorker } from './fake-worker';
 import { seedFakeDrive } from './seed';
 import { DriveVault } from '../vault/drive-vault';
@@ -63,6 +63,27 @@ describe('the fake Worker', () => {
     expect(await drive.readText(rules?.id ?? '')).toBe(RULES_TEMPLATE.text);
     expect(rules?.appProperties).toEqual(RULES_TEMPLATE.appProperties);
     expect(Object.keys(RULES_TEMPLATE.appProperties)).toEqual([PROP.by]);
+  });
+
+  it('the fake Worker makes its template by reserved ids, as the Worker', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { drive, worker } = await world('first');
+    const reserve = vi.spyOn(drive, 'generateIds');
+    const folders = vi.spyOn(drive, 'createFolder');
+    const texts = vi.spyOn(drive, 'createText');
+    // The Bower folder lands and its answer is lost: found again by the id reserved for it, never made twice.
+    drive.loseNextReply();
+    await expect(worker.createFolder()).resolves.toMatchObject({ found: false });
+    const id = (await worker.me())?.folderId ?? '';
+    // One call reserves the folder's id and one per template folder and file.
+    expect(reserve).toHaveBeenCalledTimes(1);
+    expect(folders.mock.calls.every((a) => typeof a[3] === 'string')).toBe(true);
+    expect(texts.mock.calls.every((a) => typeof a[4] === 'string')).toBe(true);
+    expect(folders.mock.calls.filter((a) => a[1] === BOWER_FOLDER)).toHaveLength(2);
+    expect(folders.mock.calls[1]?.[3]).toBe(folders.mock.calls[0]?.[3]);
+    expect(id).toBe(folders.mock.calls[0]?.[3]);
+    const names = (await drive.listAll(id)).filter((f) => f.parents[0] === id).map((f) => f.name).sort();
+    expect(names).toEqual(['.bower', 'About me.md', 'Archive', 'Areas', 'Inbox', 'Projects', 'Resources', 'Rules.md']);
   });
 
   it('makes the Bower folder with the five main folders', async () => {

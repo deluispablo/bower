@@ -330,4 +330,35 @@ describe('runner checkpoints', () => {
     expect(folders.map((f) => f.name).sort()).toEqual(Array.from({ length: 25 }, (_, i) => `run-${String(i).padStart(2, '0')}`).filter((n) => !oldest.includes(n)).sort());
     expect(writes(wire)).toBe(3);
   });
+
+  it('a run folder let go of whose Bin answer was lost is resolved by its stamp', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const drive = fixedDrive();
+    const root = (await drive.createFolder('root', 'Bower')).id;
+    const records = new RunRecords(drive, root);
+    const w = drive.fenced(() => {});
+    for (let i = 0; i < 3; i++) {
+      const manifest = await plan(root, `run-${i}`);
+      const m = await canonical(manifest);
+      const where = { runId: manifest.runId };
+      await records.put(w, where, manifestName(m.hash), m.text);
+      const mark = { attemptId: `attempt-${i}`, epoch: 1 };
+      const first = firstCheckpoint(manifest, m.hash, mark, AT + i);
+      const c0 = await canonical(first);
+      await records.put(w, where, checkpointName(0, c0.hash), c0.text);
+      const last = nextCheckpoint(first, c0.hash, mark, { phase: 'failed', phaseAt: AT + 1000 + i });
+      const c1 = await canonical(last);
+      await records.putNew(w, where, checkpointName(1, c1.hash), c1.text);
+    }
+    const wire = driveV3(drive);
+    const token = new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: wire.fetch, now: () => wire.now });
+    const adapter = new RunnerDrive({ token, attempt: 1, fetch: wire.fetch });
+    // The oldest folder goes to the Bin and the answer is lost.
+    adapter.fault = { before: (call) => (call.op === 'trash' ? 'lose-reply' : 'pass') };
+    const letGo = keepFinished(new RunRecords(runnerReads(adapter), root), await adapter.batch(), adapter, 2);
+    await expect(letGo).resolves.toHaveLength(1);
+    const [id] = await letGo;
+    expect((await drive.evidence(id ?? ''))?.trashed).toBe(true);
+    expect((await drive.evidence(id ?? ''))?.file.name).toBe('run-0');
+  });
 });

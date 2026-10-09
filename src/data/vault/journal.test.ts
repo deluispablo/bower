@@ -246,3 +246,44 @@ describe('c2-create-by-id: a change taken back', () => {
     expect((await journal.list()).map((r) => r.what)).toEqual([]);
   });
 });
+
+describe('c2-create-by-id fix round: a waiting line', () => {
+  it('a journal line keeps its reserved id until confirmed and needs no key lookup', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const files = vi.fn(async () => (await drive.listAll(changes)).filter((f) => !f.folder));
+    journal = new Journal(drive, { owner: async () => root, folder: async () => changes, files }, 'device-a');
+    const create = drive.createText.bind(drive);
+    const get = drive.get.bind(drive);
+    const sentWith: Array<string | undefined> = [];
+    let lose = true;
+    // The line lands and its answer is lost; the read by its id that follows gets no answer either.
+    drive.createText = async (...a: Parameters<FakeDrive['createText']>) => {
+      sentWith.push(a[4]);
+      const f = await create(...a);
+      if (lose) {
+        lose = false;
+        drive.get = async () => {
+          drive.get = get;
+          throw driveError('offline');
+        };
+        throw driveError('offline');
+      }
+      return f;
+    };
+    const one = await journal.record('move', 'one');
+    expect(localStorage.getItem(`bower:outbox:${root}`)).toContain(one.id);
+    // A tidy-up archives it meanwhile, stamping its own operation on it.
+    const archive = (await drive.createFolder(changes, 'archive')).id;
+    const line = (await drive.listAll(changes)).find((f) => f.name === `${one.id}.json`);
+    await drive.update(line?.id ?? '', { addParent: archive, removeParent: changes, appProperties: { bowerOp: 'RUN_STAMP' } });
+    files.mockClear();
+    await expect(journal.flush()).resolves.toBeUndefined();
+    // Sent again with the id reserved for it, and found by that id: no listing, no second line.
+    expect(sentWith).toHaveLength(2);
+    expect(sentWith[0]).toBeDefined();
+    expect(sentWith[1]).toBe(sentWith[0]);
+    expect(files).not.toHaveBeenCalled();
+    expect((await drive.listAll(changes)).filter((f) => f.name === `${one.id}.json`)).toHaveLength(1);
+    expect(localStorage.getItem(`bower:outbox:${root}`)).toBeNull();
+  });
+});

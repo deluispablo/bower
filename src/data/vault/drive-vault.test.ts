@@ -2860,6 +2860,35 @@ describe('c2-create-by-id: an app write whose answer was lost is found again by 
     expect(await named('Resources/Cooking', 'Shopping')).toEqual(['Shopping.md']);
   });
 
+  it("a person's retry after a double failure makes one file", async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    /** The next read by id gets no answer: the read-back of a create whose answer was lost fails too. */
+    const blind = (): true => {
+      const real = drive.get.bind(drive);
+      drive.get = async () => {
+        drive.get = real;
+        throw driveError('offline');
+      };
+      return true;
+    };
+    await vault.tree();
+    lose('createText', (a) => a[1] === 'Untitled.md' && blind());
+    await expect(vault.create('Resources/Cooking', 'note')).rejects.toMatchObject({ code: 'offline' });
+    // Alex tries again: the same intended note, sent with the same reserved id, is found, not made twice.
+    await expect(vault.create('Resources/Cooking', 'note')).resolves.toBe('Resources/Cooking/Untitled.md');
+    expect(await named('Resources/Cooking', 'Untitled')).toEqual(['Untitled.md']);
+    // A pile with no note given words: the same for its note.
+    const pile = (await vault.piles()).find((p) => p.path && p.text.startsWith('Job offer'));
+    if (!pile?.path) throw new Error('no pile');
+    const folder = await idOf(pile.path);
+    for (const n of (await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md')) await drive.trash(n.id);
+    await vault.refresh();
+    lose('createText', (a) => a[1] === 'Pile note.md' && blind());
+    await expect(vault.updatePile(pile.id, 'Job offer papers')).rejects.toMatchObject({ code: 'offline' });
+    await expect(vault.updatePile(pile.id, 'Job offer papers')).resolves.toMatchObject({ text: 'Job offer papers' });
+    expect((await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md')).toHaveLength(1);
+  });
+
   it('a create whose answer is lost and that never landed never takes an older file of that name', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await vault.tree();

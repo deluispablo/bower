@@ -10,6 +10,7 @@ import { SESSION_COOKIE, signSession } from '../src/session.js';
 import { allowKey } from '../src/store.js';
 import { OLD_RULES_TEMPLATE, VAULT_TEMPLATE } from '../src/vault.js';
 import { RULES_TEMPLATE } from '../../src/data/contracts/rules-format.js';
+import { md5Hex } from '../../src/data/contracts/hashes.js';
 
 const env = testEnv as unknown as Env;
 const kv = env.BOWER_KV;
@@ -104,7 +105,7 @@ class FakeGoogle {
         hook?.();
         return new Response(text);
       }
-      return Response.json(item);
+      return Response.json(answered(item));
     }
     if (url.pathname.startsWith('/upload/drive/v3/files/') && method === 'PATCH') {
       const item = this.items.get(decodeURIComponent(url.pathname.split('/').pop() ?? ''));
@@ -113,7 +114,7 @@ class FakeGoogle {
       item.content = content;
       item.appProperties = { ...item.appProperties, ...metadata.appProperties };
       item.modifiedTime = this.tick();
-      return Response.json(item);
+      return Response.json(answered(item));
     }
     if (url.pathname === '/drive/v3/files' && method === 'POST') {
       const body = JSON.parse(String(init?.body)) as Partial<Item>;
@@ -210,6 +211,9 @@ class FakeGoogle {
     return out;
   }
 }
+
+/** A file as Drive answers it when `fields` asks for its `md5Checksum` (every write and read of a text does). */
+const answered = (item: Item): Item & { md5Checksum?: string } => (item.content === undefined ? item : { ...item, md5Checksum: md5Hex(new TextEncoder().encode(item.content)) });
 
 /** The metadata and the text of a Drive multipart upload. */
 function parseMultipart(raw: string): { metadata: Partial<Item>; content: string } {
@@ -630,6 +634,31 @@ describe('POST /vault repairs Rules without a blind resend', () => {
     await post(g, cookie);
     expect(rules.content).toBe(`${RULES_TEMPLATE.text}\n- Typed on another device.\n`);
     expect(patches).toBe(1);
+  });
+});
+
+describe('c2-create-by-id fix round: the Worker repair by its stamp', () => {
+  it("the Worker's Rules.md repair whose answer was lost is resolved by its stamp", async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { cookie } = await someone();
+    const g = new FakeGoogle();
+    const { folderId } = await body(await post(g, cookie));
+    const rules = [...g.items.values()].find((i) => i.name === 'Rules.md' && i.parents.includes(folderId));
+    if (rules === undefined) throw new Error('Rules.md missing');
+    rules.content = OLD_RULES_TEMPLATE;
+    rules.appProperties = {};
+    const inner = g.fetchImpl;
+    let patches = 0;
+    (g as unknown as { fetchImpl: typeof inner }).fetchImpl = async (input, init) => {
+      const res = await inner(input, init);
+      // The repair lands and its answer is lost.
+      if ((init?.method ?? 'GET') === 'PATCH' && (patches += 1) === 1) throw new TypeError('network lost');
+      return res;
+    };
+    expect((await post(g, cookie)).status).toBe(200);
+    expect(patches).toBe(1);
+    expect(rules.content).toBe(RULES_TEMPLATE.text);
+    expect(rules.appProperties).toMatchObject({ by: 'bower', bowerOp: expect.any(String) });
   });
 });
 
