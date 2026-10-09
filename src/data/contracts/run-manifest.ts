@@ -34,8 +34,14 @@ export type Effect =
   | { kind: 'create-text'; parent: Target; name: string; createKey: string; text: string; content: Content;
     purpose: 'generated' | 'runner-json' }
   | { kind: 'write-runner-json'; before: SeenFile; beforeContent: VerifiedContent;
-    path: '.bower/questions.json' | '.bower/requests.json' | '.bower/hashes.json'; text: string; content: Content }
+    /** One of the runner-writable files the reader is given (`RUNNER_WRITES` in `vault/layout.ts`). */
+    path: RunnerWrite; text: string; content: Content }
   | { kind: 'bin'; before: SeenFile; capturedChildIds: string[] };
+/**
+ * The type of a runner-writable file (TL-P4-14 addendum 20): `RUNNER_WRITES` in `vault/layout.ts` is the one list and
+ * is typed by it; the contracts cannot import the layout (architecture.test.ts), so the path's type lives here.
+ */
+export type RunnerWrite = '.bower/questions.json' | '.bower/requests.json' | '.bower/hashes.json';
 export type Operation = { operationId: string; ordinal: number; dependsOn: string[]; effect: Effect };
 /** One Timeline line: `- <date> · <text>` plus ` · [[<source>]]` when there is a source (TL-P2-20). */
 export type EditEntry = { date: string; text: string; source: string | null };
@@ -188,7 +194,6 @@ function rfc3339(value: unknown): value is string {
 }
 
 const fileKinds = ['note', 'pdf', 'image', 'link', 'doc', 'sheet', 'audio', 'other'] as const;
-const runnerPaths = ['.bower/questions.json', '.bower/requests.json', '.bower/hashes.json'] as const;
 
 function content(value: unknown): value is Content {
   return closed(value, ['encoding', 'size', 'sha256']) && oneOf(value.encoding, ['utf8', 'blob']) && integer(value.size) && hash(value.sha256);
@@ -277,7 +282,7 @@ function effect(value: unknown): value is Effect {
       && target(value.parent) && name(value.name) && id(value.createKey) && text(value.text) && content(value.content)
       && oneOf(value.purpose, ['generated', 'runner-json']);
     case 'write-runner-json': return closed(value, ['kind', 'before', 'beforeContent', 'path', 'text', 'content'])
-      && seenFile(value.before) && verifiedContent(value.beforeContent) && oneOf(value.path, runnerPaths)
+      && seenFile(value.before) && verifiedContent(value.beforeContent) && text(value.path)
       && text(value.text) && content(value.content);
     case 'bin': return closed(value, ['kind', 'before', 'capturedChildIds'])
       && seenFile(value.before) && list(value.capturedChildIds, driveId) && unique(value.capturedChildIds);
@@ -401,18 +406,22 @@ async function digest(value: unknown): Promise<string> {
   return result.value;
 }
 
-/** Compare independently supplied scope; a matching root or digest grants no access or dispatch. */
-export async function parseRunManifest(bytes: Uint8Array, expectedRootId: string): Promise<ManifestResult> {
+/**
+ * Compare independently supplied scope; a matching root or digest grants no access or dispatch. `writes` is the list of
+ * Bower's files a `write-runner-json` may name (`RUNNER_WRITES` in `vault/layout.ts`); any other path is refused as `shape`.
+ */
+export async function parseRunManifest(bytes: Uint8Array, expectedRootId: string, writes: readonly RunnerWrite[]): Promise<ManifestResult> {
   const parsed = parseRecordJson(bytes);
   if (!parsed.ok) return parsed;
-  return admit(parsed.value, expectedRootId, manifest);
+  return admit(parsed.value, expectedRootId, manifest, writes);
 }
 
 /** The guards every manifest version shares, in the v1 order; identities are computed as in v1. */
 async function admit<M extends Manifest | ManifestV2>(
-  parsed: unknown, expectedRootId: string, guard: (value: unknown) => value is M,
+  parsed: unknown, expectedRootId: string, guard: (value: unknown) => value is M, writes: readonly RunnerWrite[],
 ): Promise<{ ok: true; value: M; sha256: string } | { ok: false; reason: ManifestRefusal }> {
   if (!guard(parsed)) return { ok: false, reason: 'shape' };
+  if (parsed.operations.some(({ effect: e }) => e.kind === 'write-runner-json' && !writes.includes(e.path))) return { ok: false, reason: 'shape' };
   const value = parsed;
   if (!driveId(expectedRootId) || expectedRootId !== value.scope.rootId) return { ok: false, reason: 'scope' };
   for (const item of texts(value)) {
@@ -523,14 +532,14 @@ function edits(value: ManifestV2): EditGuardRule | null {
  * Reads v1 exactly as `parseRunManifest` (same path, digests and identities) and v2: v1's guards plus `edit-text`.
  * A later version refuses as `version`, so a build that reads v2 can say it needs a newer Bower (R3-7 m9).
  */
-export async function parseRunManifestV2(bytes: Uint8Array, expectedRootId: string): Promise<ManifestV2Result> {
+export async function parseRunManifestV2(bytes: Uint8Array, expectedRootId: string, writes: readonly RunnerWrite[]): Promise<ManifestV2Result> {
   const parsed = parseRecordJson(bytes);
   if (!parsed.ok) return parsed;
   const v = record(parsed.value) ? parsed.value.v : undefined;
-  if (v === 1) return parseRunManifest(bytes, expectedRootId);
+  if (v === 1) return parseRunManifest(bytes, expectedRootId, writes);
   if (integer(v) && v > 2) return { ok: false, reason: 'version' };
   if (v === 2 && bytes.byteLength > MANIFEST_V2_LIMIT) return { ok: false, reason: 'edit', rule: 'size' };
-  const admitted = await admit(parsed.value, expectedRootId, manifestV2);
+  const admitted = await admit(parsed.value, expectedRootId, manifestV2, writes);
   if (!admitted.ok) return admitted;
   const broken = edits(admitted.value);
   return broken === null ? admitted : { ok: false, reason: 'edit', rule: broken };

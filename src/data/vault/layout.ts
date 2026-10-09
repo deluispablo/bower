@@ -13,6 +13,7 @@
  * the runner moves them to `changes/archive/` after reading them; `piles/`,
  * one immutable declaration per pile, written before any of its things.
  */
+import type { RunnerWrite } from '../contracts/run-manifest';
 import { isRunWire } from '../contracts/run-wire';
 import type { Question, Request, RunState, Suggestion } from '../types';
 
@@ -30,6 +31,13 @@ export const SYSTEM = {
   /** Immutable pile declarations: `declaration-<declarationId>-<sha256>.json`. */
   piles: '.bower/piles',
 } as const;
+
+/**
+ * The files of Bower's own that a run's manifest may write (`write-runner-json`), the one list (TL-P4-14 addendum 20):
+ * the manifest contract (`parseRunManifestV2`, given it by every caller) and the runner's admitted check both judge by
+ * it. `suggestions.json` and `last-run.json` are written by the barrier after the run, never through the manifest.
+ */
+export const RUNNER_WRITES = [SYSTEM.questions, SYSTEM.requests, SYSTEM.hashes] as const satisfies readonly RunnerWrite[];
 
 export const HIDDEN_AT_ROOT = ['index.md', 'hot.md', 'log.md'] as const;
 

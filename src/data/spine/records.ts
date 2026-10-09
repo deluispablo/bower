@@ -16,7 +16,7 @@ import { parseRunCheckpoint, verifyCheckpointChain, type Checkpoint, type Outcom
 import { parseRunManifestV2, type Manifest, type OperationV2 } from '../contracts/run-manifest';
 import { BowerError } from '../types';
 import { sha256 } from '../vault/hashes';
-import { PROP, SYSTEM, recordStamp } from '../vault/layout';
+import { PROP, RUNNER_WRITES, SYSTEM, recordStamp } from '../vault/layout';
 
 /** `.bower/runs`, as Drive names it. */
 export const RUNS_NAME = 'runs';
@@ -186,7 +186,7 @@ export class RunRecords {
   /** The verified manifest the control row names, v1 or v2; anything else refuses. */
   async manifest(runId: string, hash: string): Promise<RunManifest> {
     const bytes = await this.read({ runId }, manifestName(hash));
-    const parsed = bytes ? await parseRunManifestV2(bytes, this.rootId) : null;
+    const parsed = bytes ? await parseRunManifestV2(bytes, this.rootId, RUNNER_WRITES) : null;
     if (!parsed?.ok || parsed.sha256 !== hash || parsed.value.runId !== runId) {
       console.error(`The manifest of run ${runId} is ${parsed ? (parsed.ok ? 'another run' : parsed.reason) : 'missing'}`);
       // A later version is named only for the very bytes the run recorded; damaged bytes stay a read failure.
@@ -216,7 +216,7 @@ export class RunRecords {
     const manifestHash = only ? MANIFEST_FILE.exec(only)?.[1] : undefined;
     if (!manifestHash || more.length) return broken(`Run ${runId} has ${manifests.length} manifests or a misnamed one`);
     const bytes = await this.readIn(folders, manifestName(manifestHash));
-    const parsed = bytes ? await parseRunManifestV2(bytes, this.rootId) : null;
+    const parsed = bytes ? await parseRunManifestV2(bytes, this.rootId, RUNNER_WRITES) : null;
     if (!parsed?.ok || parsed.sha256 !== manifestHash || parsed.value.runId !== runId) {
       return broken(`The manifest of run ${runId} is ${parsed ? (parsed.ok ? 'another run' : parsed.reason) : 'missing'}`);
     }
