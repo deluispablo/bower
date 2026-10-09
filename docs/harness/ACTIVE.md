@@ -465,3 +465,4 @@ P3-9 is closed.
 - TL-P4-19 add. 3: 57 superseded branches deleted with -D (tips recorded in harness/deleted-branches.txt, local, excluded), corpuspdf worktree removed (its 16 untracked fragments copied to the coordinator scratchpad), c1-dupgate removed. 39 branches, 8 worktrees left. c3-branch-cleanup closed (5dda3a7f, after fix round for harness-git-cli-on-import). 440/448.
 - c3-planner-split part 2 merged (a7c2ee04, P4-45c PASS, net -381); part 3 dispatched (split, op-id wire field, last capture tie).
 - Addendum 4 (main 49fb0270): op id + line accepted as the ordinal among the op's own lines; part 3's line is 'counted from the end of the Timeline' (a note position) → change in the P4-45d fix round. P4-45d running.
+- c3-planner-split part 3 fix round blocked: line ordinal has no anchor in the note (no per-line op); lead asked (options 1-4). No worker running.
