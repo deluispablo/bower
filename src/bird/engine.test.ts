@@ -59,7 +59,7 @@ function mount(pose: Pose | null, options: EngineOptions = {}, seed = 11) {
   );
   if (pose) engine.setPose(pose);
   engine.start();
-  return { engine, frames, read: readRig(bird, (part) => g[part], Z), glyph: g.carry ?? null };
+  return { engine, frames, read: readRig(bird, (part) => g[part], Z), glyph: g.carry ?? null, headPart: need('head') };
 }
 
 const tolerance = (key: PartKey, excursion: number): number =>
@@ -337,11 +337,13 @@ describe("the engine's named actions", () => {
     expect(Math.abs(back[back.length - 1] ?? 0), 'return ends').toBeLessThanOrEqual(1.5);
   });
 
-  it('every frame keeps the addendum 5 bounds under random focus, pointer, touch, step and wake events', () => {
-    // TL-P4-25 addendum 5 (6): returns change speed by at most 1.5 a frame and stay at or under 6; snaps and the
-    // startle rise stay at or under 6 with no overshoot past 2. Speed is the head's change per frame, in degrees.
-    const RISE = Math.ceil(0.15 * FPS);
-    const STEP = Math.ceil((0.15 + 0.6 + 0.4 + 0.4) * FPS); // rise, hold, fall, then the gaze settling back
+  // TL-P4-25 addendum 8: rates are measured from delivered frames; gaze is always a return.
+  it.each([
+    { name: '30 fps', ms: [1000 / 30] },
+    { name: '60 fps', ms: [1000 / 60] },
+    { name: '120 fps', ms: [1000 / 120] },
+    { name: 'jittered', ms: [1000 / 120, 1000 / 30, 1000 / 90, 1000 / 60, 25] },
+  ])('every frame keeps the addendum 5 bounds under random focus, pointer, touch, step and wake events: $name', (schedule) => {
     const event = fc.record({
       gap: fc.integer({ min: 0, max: 200 }),
       kind: fc.constantFrom('pointer', 'touch', 'focus', 'blur', 'nudge', 'sleep'),
@@ -351,47 +353,57 @@ describe("the engine's named actions", () => {
     fc.assert(
       fc.property(fc.constantFrom('idle' as const, 'wait' as const), fc.array(event, { minLength: 1, maxLength: 10 }), (pose, events) => {
         cleanup();
-        const { engine, frames, read } = mount(pose);
+        let callback: ((ts: number) => void) | undefined;
+        const { engine, headPart } = mount(pose, {
+          frame: (cb) => {
+            callback = cb;
+            return 1;
+          },
+          cancelFrame: () => { callback = undefined; },
+        });
+        const readHead = () => Number(headPart.getAttribute('transform')?.match(/rotate\((-?\d+(?:\.\d+)?)/)?.[1] ?? 0);
         let focus: { x: number; y: number } | null = null;
-        let head = read().head;
+        let head = readHead();
         let speed = 0;
         let stepAt = -Infinity;
-        let gazeUntil = -Infinity;
         let inputAt = 0;
         let snapFrom = head;
         let wasSnap = false;
         let frame = 0;
+        let time = 0;
         const problems: string[] = [];
-        const tick = (n: number) => {
-          for (let i = 0; i < n; i++) {
-            frames.run(1);
+        const tick = (seconds: number) => {
+          const until = time + seconds;
+          while (time < until) {
+            const dt = (schedule.ms[frame % schedule.ms.length] ?? 1000 / FPS) / 1000;
+            time += dt;
+            callback?.(time * 1000);
             frame++;
-            const now = read().head;
-            const v = now - head;
-            const asleep = frame - inputAt >= 60 * FPS;
-            const rising = frame - stepAt <= RISE;
-            const gazing = (focus !== null || frame <= gazeUntil) && frame - stepAt > STEP;
-            const snap = rising || gazing;
+            const now = readHead();
+            const v = (now - head) / dt;
+            const asleep = time - inputAt >= 60;
+            const rising = time - stepAt < 0.15;
+            const snap = rising;
             if (snap && !wasSnap) snapFrom = head;
-            if (Math.abs(v) > 6) problems.push(`frame ${frame}: speed ${v.toFixed(2)}`);
+            if (Math.abs(v) > 360) problems.push(`frame ${frame}: speed ${v.toFixed(2)} deg/s`);
             if (snap && (now < -12 - 2 || now > Math.max(7, snapFrom) + 2)) problems.push(`frame ${frame}: overshoot ${now.toFixed(2)}`);
-            if (!snap && !asleep && Math.abs(v - speed) > 1.5) problems.push(`frame ${frame}: return speed change ${(v - speed).toFixed(2)}`);
+            const acceleration = (v - speed) / dt;
+            if (!snap && !asleep && Math.abs(acceleration) > 5400) problems.push(`frame ${frame}: return acceleration ${acceleration.toFixed(2)} deg/s^2`);
             wasSnap = snap;
             head = now;
             speed = v;
           }
         };
         const input = () => {
-          if (frame - inputAt >= 60 * FPS) stepAt = frame; // an input wakes a sleeping bird with the startle
-          inputAt = frame;
+          if (time - inputAt >= 60) stepAt = time; // an input wakes a sleeping bird with the startle
+          inputAt = time;
         };
         for (const e of events) {
-          tick(e.gap);
+          tick(e.gap / FPS);
           const at = { x: e.x, y: e.y };
           if (e.kind === 'pointer' || e.kind === 'touch') {
             input();
             engine.look(at, e.kind);
-            gazeUntil = frame + Math.floor(2.5 * FPS);
           } else if (e.kind === 'focus') {
             input();
             focus = at;
@@ -399,20 +411,21 @@ describe("the engine's named actions", () => {
           } else if (e.kind === 'blur') focus = null;
           else if (e.kind === 'nudge') {
             input();
-            stepAt = frame;
+            stepAt = time;
           } else {
             focus = null;
-            tick(61 * FPS);
+            tick(61);
             continue;
           }
           if (e.kind === 'nudge') engine.nudge();
         }
-        tick(4 * FPS);
-        expect(problems.slice(0, 5), JSON.stringify({ pose, events })).toEqual([]);
+        tick(4);
+        expect(problems.slice(0, 5), JSON.stringify({ schedule: schedule.name, pose, events })).toEqual([]);
+        engine.stop();
       }),
       { seed: 2610, numRuns: 40 },
     );
-  });
+  }, 30_000);
 
   it('every ENGINE_MEMBERS key needs a reference row or an allowlist entry, whatever its tag', () => {
     // TL-P4-22 addendum 21, over every key: a new name with any tag that is not a row of its own fails.
