@@ -238,3 +238,4 @@ c4-retry-fence delta review,reviewer,codex,codex,medium,2,230623,229676,0,196480
 d-v2-07 P4-58,reviewer,claude,bower-reviewer,,1,52179,,,,,,9,0.7,BLOCK (1 Important),2026-10-09
 d-v2-07 review,reviewer,codex,codex,medium,1,284842,282881,0,231936,1961,,,,5 Important,2026-10-09
 v2-boot-states,implementer,codex,codex,medium,1,707635,699051,0,649856,8584,,,,delivered,2026-10-09
+d-v2-07 round 2,implementer,claude,bower-escalated,,2,109828,,,,,,24,12.1,delivered,2026-10-09
