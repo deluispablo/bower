@@ -19,7 +19,7 @@ Each line: id, severity, what, evidence, then the suggested fix entry.
 - F7 Minor `new-instance.sh` updates an existing repository without checking that it is private (`scripts/new-instance.sh:110`): pointed at a public repository by mistake, it pushes the runner there, and every later tidy-up's log is public. Fix: refuse unless `gh repo view --json visibility` says `PRIVATE`; entry: `instance-private-check`
 - F8 Minor After "Delete my account" the person's address stays on the KV allowlist (`allow:<address>`, `api/src/store.ts:14`; `api/src/me.ts:40` empties only the person object). That is the operator's invitation, not the person's data, but the runbook's "Deletion" (`docs/runbook.md:108-114`) and "Accounts" (`:16`) say nothing else is kept. Fix: say so in the runbook (the operator removes the invitation by hand); entry: `deletion-allowlist-doc`
 
-Known, not a new finding: `scripts/deploy-staging.sh:177` refuses when wrangler's output contains `bower-api` anywhere, which false-alarms on the account's `bower-api.workers.dev` subdomain (STAGING.md, deploy of `5a4ab04`). The entry `deploy-staging-production-check` is fixing it in another checkout.
+Known, not a new finding: `scripts/deploy-staging.sh:177` refuses when wrangler's output contains `bower-api` anywhere, which false-alarms on the account's `<account>.workers.dev` subdomain (STAGING.md, deploy of `5a4ab04`). The entry `deploy-staging-production-check` is fixing it in another checkout.
 
 ## ASVS 5.0 requirements checked
 

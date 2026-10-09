@@ -4,7 +4,7 @@ Starting model: `bower-mechanical` (Haiku): a one-script fix with a clear failin
 
 - **Entry:** `deploy-staging-upload-line`. Checkout `/private/tmp/bower-p3-upline`, branch `claude/p3-upline`, from the commit named in your prompt. Never run `wrangler`, `gh`, a real deploy or any network call, and never push.
 - **Read:** `docs/harness/WORKER.md`, this packet, `scripts/deploy-staging.sh` (the upload-line check) and `runner/test/deploy-staging.test.ts`.
-- **Real wrangler output** (shape of a `wrangler deploy` with static assets; use it verbatim in the test, replacing the account host with `example.workers.dev` except for one line kept as `bower-staging.bower-api.workers.dev`):
+- **Real wrangler output** (shape of a `wrangler deploy` with static assets; use it verbatim in the test, replacing the account host with `example.workers.dev` except for one line kept as `bower-staging.<account>.workers.dev`):
   ```
   🌀 Building list of assets...
   🌀 Starting asset upload...
@@ -16,10 +16,10 @@ Starting model: `bower-mechanical` (Haiku): a one-script fix with a clear failin
   Total Upload: 412.33 KiB / gzip: 98.10 KiB
   Your Worker has access to the following bindings:
   - Vars:
-    - APP_ORIGIN: "https://bower-staging.bower-api.workers.dev"
+    - APP_ORIGIN: "https://bower-staging.<account>.workers.dev"
   Uploaded bower-staging (4.21 sec)
   Deployed bower-staging triggers (0.31 sec)
-    https://bower-staging.bower-api.workers.dev
+    https://bower-staging.<account>.workers.dev
   Current Version ID: 00000000-0000-0000-0000-000000000000
   ```
 - **Acceptance contract:**

@@ -7,7 +7,7 @@
 Staging serves the app and the Worker from **one Worker on one origin**, the existing `bower-staging`. Its static assets are the app build, and `assets.run_worker_first` lists the Worker's paths (`/auth/*`, `/me`, `/drive/*`, `/vault`, `/process`, `/status`, `/session`), so only those run the script. Everything else is served as the single-page app ([Workers static assets, Worker script routing](https://developers.cloudflare.com/workers/static-assets/routing/worker-script/)).
 
 - **Why.** The contract allows one origin and says what it needs: the service worker's `navigateFallbackDenylist` lists those paths. One origin needs no CORS or cross-site cookie, and one deploy covers both.
-- **Same site.** `workers.dev` is on the [Public Suffix List](https://publicsuffix.org/list/public_suffix_list.dat), so `*.bower-api.workers.dev` hosts already share a site. One origin is simply the smaller choice.
+- **Same site.** `workers.dev` is on the [Public Suffix List](https://publicsuffix.org/list/public_suffix_list.dat), so `*.<account>.workers.dev` hosts already share a site. One origin is simply the smaller choice.
 - **The real source on staging** uses its own origin as the API base (`VITE_API_URL` empty, or the origin). Demo and fake keep working through `?source=`.
 - **Production** keeps the contract's `api.<app domain>` option, decided in P4 when the original is replaced.
 
