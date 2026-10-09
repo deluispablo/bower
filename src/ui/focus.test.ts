@@ -52,14 +52,14 @@ describe('close focus (one home, no timer)', () => {
     // A sheet takes the keyboard, then closes: the handler runs once Radix has removed it.
     document.body.focus();
     const event = closing();
-    closeFocus(() => was)(event);
+    closeFocus(event, was);
     expect(event.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(opener);
     // The opener gone: the heading, again with no timer.
     opener?.remove();
     document.body.focus();
     const again = closing();
-    closeFocus(() => was)(again);
+    closeFocus(again, was);
     expect(document.activeElement?.tagName).toBe('H1');
     expect(timers).not.toHaveBeenCalled();
     timers.mockRestore();
@@ -68,7 +68,7 @@ describe('close focus (one home, no timer)', () => {
   it('falls to the heading when the opener left before the close, and when there was none', () => {
     document.body.innerHTML = '<main id="main" tabindex="-1"><h1>Home</h1></main>';
     expect(openerNow()).toBeNull();
-    closeFocus(() => null)(closing());
+    closeFocus(closing(), null);
     expect(document.activeElement?.tagName).toBe('H1');
   });
 
