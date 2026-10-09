@@ -46,3 +46,11 @@ findings: 2
 2. **Important — `src/bird/engine.test.ts:285`: the fix weakens its red threshold from ≤3° to <6° per frame.** Replaying the test’s injected frames gives a 4.98° wake-rise jump; the upward focus gaze also returns with a 3.35° jump. Both fail the original assertion and pass the replacement. **Violated home:** the startle/gaze regression test and WORKER’s rule against weakening tests to reach green.
 
 findings: 2
+
+## Own-property and bound pass (167b093d..66bf6930)
+
+1. **Important — `src/bird/engine.ts:1139`: gaze return breaks the 1.5°/frame speed-change bound when focus disappears.** Sleep idle Bower for 61 s, wake using `look(() => target, 'focus')` at `(200,-100)`, then set `target = null` after 80 injected frames. The return continues toward the captured −12° target before handing back to the spring. At 1.583 s, head speed jumps from 0 to 3°/frame. **Violated home:** BirdEngine’s gaze return, packet TL-P4-25 addendum 5.
+
+2. **Important — `src/bird/pose-reference.fixture.ts:333`: a new public action can bypass reference coverage by being tagged `acts`.** Add `stretch()` and register `stretch: 'acts'` in `ENGINE_MEMBERS`, without a reference row. `unreferencedMembers` returns `[]`: it checks existing `ACT_NAMES`, ignoring the new member’s name, and the allowlist growth check also passes. **Violated home:** the reference meta-test’s requirement that every exposed act or action have a row.
+
+findings: 2
