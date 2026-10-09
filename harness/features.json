@@ -6326,17 +6326,17 @@
     "note": "TL-P4-22 addendum 19 (main 5944ce2d); defect api-dev-audit-advisories. Low priority. Mechanical rung or Codex, after c4-app-fence merges (both touch the lockfile). Packet to write."
   },
   {
-    "id": "c4-reconcile-guard",
+    "id": "c4-create-landed",
     "task": "p4-consolidation",
     "category": "refactor",
     "passes": false,
     "ui": null,
-    "what": "write-once names its two questions, happened (did this write run: stamp) and landed (is the file as intended); the runner reconcile (engine.ts stampSays) uses happened, with a test that after a lost answer and an outside move the run reports applied and sends nothing.",
+    "what": "write-once names happened (did this write run) and landed (is the file as intended), both covering creates; engine reconcile and upload use happened, app creates use landed; a create that happened but was moved elsewhere is refused with CHANGED_ELSEWHERE, nothing sent or made again, the id let go, the file left where the person put it.",
     "steps": [
-      "write-once exports happened and landed; stampSays uses happened.",
-      "After a lost answer and an outside move, reconcile reports applied and sends nothing."
+      "Each of the 5 class sites calls happened or landed, named in the inventory.",
+      "The 2 reproduced cases and the reconcile guard pass; the fast-check property gains create intents."
     ],
     "verify": "",
-    "note": "TL-P4-24 addendum 9 (main 78f23312) point 1. Mechanical rung or Codex. Add the reason to the c4-app-fence notes inventory. Packet to write."
+    "note": "TL-P4-24 addendum 10 (main 4dfe148a); defect pile-note-lost-create-moved (diagnosis docs/harness/defects/2026-10-09-pile-note-lost-create-moved.md). Folds c4-reconcile-guard (addendum 9 (1)). Escalated, Opus plus a Codex pass, after c4-undo-withdraw merges. Packet to write."
   }
 ]
