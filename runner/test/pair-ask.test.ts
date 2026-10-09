@@ -112,7 +112,9 @@ describe('two notes for one thing (keep-one-not-asked)', () => {
     // The answer settles: its question is closed, and the report says nothing was merged, and why.
     expect(questionsOf(run)).toEqual([]);
     expect(Object.keys(run.after).filter((p) => /^\.bower\/changes\/[^/]+\.json$/.test(p))).toEqual([]);
-    const report = (run.lastRun as { run: { report: { setAside: unknown[] } } }).run.report;
-    expect(report.setAside).toEqual([{ name: 'Flat 3, 12 Larkspur Lane', why: 'Not merged: Flat 3 (second) was already in the Bin.' }]);
+    // Not set aside (TL-P4-19 addendum 10): an answered row, on the note that stays.
+    const report = (run.lastRun as { run: { report: { setAside: unknown[]; answered?: unknown[] } } }).run.report;
+    expect(report.setAside).toEqual([]);
+    expect(report.answered).toEqual([{ questionId: 'q-merge-flat-3', kind: 'pair', outcome: 'subject-gone', why: 'Not merged: Flat 3 (second) was already in the Bin.', note: KEPT }]);
   });
 });
