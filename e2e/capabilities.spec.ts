@@ -258,6 +258,32 @@ test('write it shows the state written, re-asks on a clash and settles as an ans
   await expect(page.getByRole('region', { name: 'Current state' })).toContainText('MOT booked for 14 January.');
 });
 
+test('a clash at write time leads to the re-ask with the new sentence and no extra press', async ({ page }) => {
+  test.skip(!isFake, FAKE_ONLY);
+  test.setTimeout(120_000);
+  // TL-P4-19 addendum 15: Money changes on another device right before Bower's write is sent. Nothing is written, and
+  // the question comes back in the one re-ask wording with no other press.
+  const MONEY = 'Areas/Money/Money.md';
+  const REASK = 'The current state of Money changed after Bower showed you its update, so nothing was written. Should Bower write its update there now?';
+  await open(page, '/', 'write-it');
+  await tidyUp(page);
+  await page.getByRole('dialog').getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const questions = page.getByRole('region', { name: /questions? for you/ });
+  const asked = (text: string): Locator => questions.getByRole('listitem').filter({ hasText: text });
+  await page.evaluate(async ([path, a, b]) => {
+    (window as unknown as { __editAtWrite: (p: string, x: string, y: string) => void }).__editAtWrite(path, a, b);
+  }, [MONEY, 'for the monthly plan.', 'for the yearly plan.'] as const);
+  const money = asked('You changed the current state of Money.');
+  await money.getByRole('button', { name: 'Write it' }).click();
+  await expect(money).toHaveCount(0);
+  await expect(asked(REASK)).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('region', { name: 'Recent' }).getByRole('link', { name: /^Money/ }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Money' })).toBeVisible();
+  await expect(page.getByRole('main')).toContainText('for the yearly plan.');
+  await expect(page.getByRole('region', { name: 'Current state' })).not.toContainText('October is on budget so far.');
+});
+
 test('a refused merge shows as an answered row on the note that stays and under the Home result, and is not counted as set aside', async ({ page }) => {
   test.skip(!isFake, FAKE_ONLY);
   test.setTimeout(90_000);

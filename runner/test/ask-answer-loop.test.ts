@@ -21,7 +21,7 @@ import type { ClaudeCall, ClaudeSpawn } from '../src/claude';
 import { loadCorpus, type LoadedCase } from '../src/corpus';
 import { seedCase } from './corpus-run';
 import { ORIGIN, realWorld } from './real-world';
-import type { RealWorld } from './real-world-types';
+import type { Hop, RealWorld } from './real-world-types';
 
 vi.mock('cloudflare:workers', () => ({
   DurableObject: class {
@@ -681,6 +681,51 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     expect(await answersWaiting(w, `q-state-${id}`)).toEqual([]);
     const rows = await reportRowsAll(w);
     expect(rows.answered).toEqual([]);
+  });
+
+  it('a clash at write time leads to the re-ask with the new sentence and no extra press', async () => {
+    // TL-P4-19 addendum 15 (option a): the note changes on another device after the run planned the write and before
+    // the write's own read (the engine's NOTE_CHANGED). The edit is refused, the answer stays in your changes, and the
+    // runner's end status says so: the Worker's alarm starts the run that asks again, with no press.
+    const w = await shownWorld();
+    expect(await press(w)).toBe(true);
+    expect(await w.runJob(0)).toBe(0);
+    const id = await hubId(w);
+    const { vault, answerQuestion } = await vaultOf(w);
+    const done = await answerQuestion(vault, runsOf(w), `q-state-${id}`, true, { allowWeb: false });
+    expect(done?.outcome.kind).toBe('now');
+    // Once the run's records start (its plan made), the next read of the note finds it changed on another device.
+    let planned = false;
+    let changed = false;
+    const elsewhere: Hop = async (url, init, next) => {
+      if (!changed && (init.method ?? 'GET') === 'POST' && url.pathname === '/upload/drive/v3/files') planned = true;
+      if (planned && !changed && url.pathname === `/drive/v3/files/${id}` && url.searchParams.get('alt') === 'media') {
+        changed = true;
+        const text = await textAt(w, HUB) ?? '';
+        await w.drive.writeText(id, text.replace('## Timeline\n', '## Timeline\n- 2026-10-08 · Called the recruiter.\n'), (await w.drive.get(id)).modifiedTime);
+      }
+      return await next();
+    };
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await w.runJob(1, elsewhere)).toBe(0);
+    expect(changed).toBe(true);
+    const before = await textAt(w, HUB) ?? '';
+    expect(parseNote(HUB, before).currentState).toEqual(PERSON);
+    expect(await answersWaiting(w, `q-state-${id}`)).toHaveLength(1);
+    // No press: the Worker's own alarm starts the next run of your changes, once.
+    const dispatched = w.dispatched.length;
+    expect(await w.api.fireAlarm()).toBe(true);
+    expect(w.dispatched).toHaveLength(dispatched + 1);
+    expect(w.dispatched.at(-1)?.scope).toBe('instructions');
+    expect(await w.runJob(dispatched)).toBe(0);
+    // Asked again in the one re-ask wording, about the same update and the note as it reads now; nothing written.
+    expect(await textAt(w, HUB)).toBe(before);
+    const q = questionsNow(await textAt(w, '.bower/questions.json')).find((x) => x.id === `q-state-${id}`);
+    expect(q).toEqual(expect.objectContaining({ text: REASK, state: stateMark(PERSON) }));
+    expect(q?.shown).toEqual(expect.objectContaining({ lines: UPDATE, md5: md5(before) }));
+    expect(await answersWaiting(w, `q-state-${id}`)).toEqual([]);
+    // The re-ask used the answer up: nothing more starts on its own.
+    expect(await w.api.fireAlarm().then(() => w.dispatched.length)).toBe(dispatched + 1);
   });
 
   it('a write it refused for good writes one answered row on Home and on the note', async () => {
