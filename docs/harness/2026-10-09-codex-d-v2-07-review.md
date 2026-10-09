@@ -64,3 +64,13 @@ Read-only, medium effort, after P4-58g PASS. Tokens: input 417809 (cached 361344
 2. **Important — `src/bird/engine.test.ts:374`: the property exempts gaze from its acceleration assertion.** `snap = rising || gazing` means ordinary focus, pointer and touch gaze frames never reach the ≤1.5°/frame speed-change check at line 378. Concrete scenario: focus at `(200,−100)` after 30 idle frames; a faulty gaze implementation could move 0→−5.98° on the next frame and pass this property’s checks. Its speed is below 6°, its angle is inside the permitted range, and its acceleration assertion is skipped. Contract item 3 and addendum 7 explicitly classify gaze as acceleration-capped. The property also uses only fixed 60 fps callbacks, leaving finding 1 undetected.
 
 findings: 2
+
+## Round 6 pass (rates, TL-P4-25 addendum 8; scope f7e2c413..54ede22a -- src/bird)
+
+Read-only, medium effort. Tokens: input 364182 (cached 320128), output 3434.
+
+1. **Important — src/bird/engine.ts:1244:** Gaze inherits the snap’s unlimited acceleration. At 60 fps, hold focus at `(200, −100)` for 180 frames, call `act('snap')` with random returning `0.5`, then run five frames. The head rests at −5°. Change the focus callback’s point to `(200, 250)`: the next frame moves to 0.98°, changing velocity from 0 to 358.8°/s—**21,528°/s²**. Breaks round 6 item 2: gaze is always a return, capped at 5400°/s².
+
+2. **Important — src/bird/engine.ts:1243–1244:** The startle switches to the return profile before landing, retaining velocity that carries it past the 2° bound. At 60 fps, run `act('preen')` for 36 frames until the head reaches 42°, then call `nudge()`. Startle frames 9–12 draw −10.34°, −13.36°, −14.90° and −14.96°. The overshoot reaches **4.96°** past −10°. Breaks round 6 item 1: startle landing must not overshoot by more than 2°.
+
+findings: 2

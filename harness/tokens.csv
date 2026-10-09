@@ -296,3 +296,4 @@ c4-undo-compensate,implementer,claude,bower-escalated,,1,340716,,,,,,162,37.6,tu
 d-v2-07,implementer,codex,gpt-5-codex,medium,6,1955943,1942151,,1854976,13792,,,,done; git and gates blocked by sandbox (trial),2026-10-09
 p4-corpus-driver,implementer,codex,gpt-5-codex,medium,1,95195,94714,,81152,481,,,,blocked: merge lock denied (trial),2026-10-09
 c4-undo-compensate,implementer,claude,bower-escalated,,1,350765,,,,,,8,10.0,delivered; blocked on property,2026-10-09
+d-v2-07,reviewer,codex,gpt-5-codex,medium,6,367616,364182,,320128,3434,,,,2 Important,2026-10-09

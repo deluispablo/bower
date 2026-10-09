@@ -75,3 +75,10 @@ Why: the Codex round-5 pass found 2 Important after P4-58g PASS (`2026-10-09-cod
 3. **Red first:** the tightened property commits on its own, and must fail at f7e2c413 (Codex's two scenarios). Then the fix, then a notes section "Round 6 (addendum 8)" with a `tests changed:` line for the property.
 
 After this round: a Codex delta pass, the merge, and the designer's re-check of the nine poses plus gaze.
+
+## Round 7 (the Codex round-6 pass: 2 Important, both against addendum 8 as written; no new ruling)
+
+1. **Gaze inherits a snap's unlimited acceleration** (`engine.ts:1244`). Scenario at 60 fps: hold focus at (200, −100) for 180 frames, `act('snap')` with random 0.5, five frames (head at −5°), then move the focus point to (200, 250). The next frame goes from 0 to 358.8°/s, which is 21,528°/s². Gaze is always a return, capped at 5400°/s², even right after a snap.
+2. **The startle hands over to the return profile before it lands** (`engine.ts:1243-1244`), keeping its velocity, so it overshoots by 4.96° (the bound is 2°). Scenario at 60 fps: `act('preen')` for 36 frames (head at 42°), then `nudge()`. Startle frames 9–12 draw −10.34, −13.36, −14.90 and −14.96°.
+
+**Reds:** one test per scenario, using the exact sequences above. Also extend the addendum 6 property's event generator so that a snap followed by a gaze retarget, and a nudge during a preen, are both reachable. Keep its seed and numRuns, and loosen nothing (TL-P4-22 addendum 22). The reds commit first, then the fix, then a notes section "Round 7".
