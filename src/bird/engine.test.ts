@@ -1,54 +1,34 @@
 import { createElement } from 'react';
 import { cleanup, render } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
-import { BirdEngine } from './engine';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { BirdEngine, type ActName, type EngineOptions } from './engine';
 import { Rig, type RigPart } from './Rig';
 import type { Pose } from './Bower';
-import { FPS, NEUTRAL, PART_KIND, POSE_REFERENCE, fakeFrames, type PartKey } from './pose-reference.fixture';
+import {
+  ACT_REFERENCE,
+  FPS,
+  NEUTRAL,
+  PART_KIND,
+  POSE_REFERENCE,
+  actProblems,
+  fakeFrames,
+  readRig,
+  type PartKey,
+} from './pose-reference.fixture';
 
 const Z = 100;
 const POSES = Object.keys(POSE_REFERENCE) as Pose[];
 const KEYS = Object.keys(NEUTRAL) as PartKey[];
+const ACTS = Object.keys(ACT_REFERENCE) as ActName[];
 
 afterEach(cleanup);
 
-const nums = (s: string | null | undefined): number[] => (s ?? '').match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
-
-/** Reads every part the engine moves, in the drawing's units. */
-function reader(bird: HTMLElement, g: Partial<Record<RigPart, SVGGElement | null>>) {
-  const at = (part: RigPart): number[] => nums(g[part]?.getAttribute('transform'));
-  return (): Record<PartKey, number> => {
-    const [tx = 0, ty = 0] = nums(bird.style.transform);
-    const rig = at('rig');
-    const head = at('head');
-    const wing = at('wing');
-    const tuft = at('tuft');
-    return {
-      dx: (tx * 100) / Z,
-      dy: (ty * 100) / Z,
-      pitch: rig[0] ?? 0,
-      squash: rig[6] ?? 1,
-      stretch: rig[5] ?? 1,
-      head: head[0] ?? 0,
-      headY: head[4] ?? 0,
-      tail: at('tail')[0] ?? 0,
-      wing: wing[0] ?? 0,
-      wingScale: wing[6] ?? 1,
-      legs: at('legs')[3] ?? 1,
-      jaw: at('jaw')[0] ?? 0,
-      tuft: tuft[0] ?? 0,
-      tuftY: tuft[4] ?? 0,
-      eye: at('eye')[3] ?? 1,
-      iris: at('iris')[0] ?? 0,
-    };
-  };
-}
-
-function mount(pose: Pose) {
+/** One engine on a drawn rig. The mind is on, with no input; `acts: false` unless the test asks for acts. */
+function mount(pose: Pose | null, options: EngineOptions = {}, seed = 11) {
   const g: Partial<Record<RigPart, SVGGElement | null>> = {};
   render(createElement(Rig, { onPart: (part: RigPart, el: SVGGElement | null) => void (g[part] = el) }));
   const bird = document.createElement('div');
-  const frames = fakeFrames(11);
+  const frames = fakeFrames(seed);
   const need = (part: RigPart): SVGGElement => {
     const el = g[part];
     if (!el) throw new Error(`no ${part}`);
@@ -70,11 +50,11 @@ function mount(pose: Pose) {
     },
     () => ({ x: Z / 2, y: 0.92 * Z }),
     Z,
-    frames.options,
+    { ...frames.options, sleeps: true, acts: false, ...options },
   );
-  engine.setPose(pose);
+  if (pose) engine.setPose(pose);
   engine.start();
-  return { frames, read: reader(bird, g), glyph: g.carry ?? null };
+  return { engine, frames, read: readRig(bird, (part) => g[part], Z), glyph: g.carry ?? null };
 }
 
 const tolerance = (key: PartKey, excursion: number): number =>
@@ -115,7 +95,8 @@ describe('the engine plays the perched poses', () => {
         best = lag;
       }
     }
-    if (Math.abs(best - per) > per * 0.1) problems.push(`period ${(best / FPS).toFixed(2)}s, reference ${ref.period}s`);
+    // idle and wait hold still between acts: no loop, so no period to find.
+    if (moving.some((k) => ref.parts[k]?.peak !== ref.parts[k]?.rest) && Math.abs(best - per) > per * 0.1) problems.push(`period ${(best / FPS).toFixed(2)}s, reference ${ref.period}s`);
 
     // Each part's peak and rest, over one loop.
     const loop = samples.slice(0, per);
@@ -153,8 +134,98 @@ describe('the engine plays the perched poses', () => {
       }
     }
 
+    // idle and wait: each of the mind's acts, fired on its own, against its reference (TL-P4-25).
+    for (const name of ACTS.filter((a) => ACT_REFERENCE[a].pose === pose)) {
+      const one = mount(pose);
+      one.frames.run(FPS);
+      const rest = one.read();
+      const seen: Array<Record<PartKey, number>> = [];
+      one.engine.act(name);
+      for (let i = 0; i < 1.5 * FPS; i++) {
+        one.frames.run(1);
+        seen.push(one.read());
+      }
+      problems.push(...actProblems(name, seen, rest));
+    }
+
     // Only carry holds the thing in the beak, through holding().
     expect(glyph?.getAttribute('display')).toBe(pose === 'carry' ? 'inline' : 'none');
     expect(problems).toEqual([]);
+  });
+});
+
+describe("the engine's idle mind", () => {
+  /** The engine time of each act the mind fires, over `seconds`. */
+  function draws(engine: BirdEngine, frames: ReturnType<typeof fakeFrames>, seconds: number, each?: (t: number) => void) {
+    const fired: Array<{ t: number; name: ActName }> = [];
+    let t = 0;
+    const spy = vi.spyOn(engine, 'act').mockImplementation(function (this: BirdEngine, name: ActName) {
+      fired.push({ t, name });
+    });
+    for (let i = 0; i < seconds * FPS; i++) {
+      t = i / FPS;
+      each?.(t);
+      frames.run(1);
+    }
+    spy.mockRestore();
+    return fired;
+  }
+
+  it('the idle timer fires every 0.8 to 2 s and blinks every 1.6 to 5.2 s', () => {
+    // 80 s with no input: kept awake so the blinks are counted throughout.
+    const { engine, frames, read } = mount('idle', { acts: true, sleeps: false });
+    const fired = draws(engine, frames, 40);
+    const gaps = fired.slice(1).map((f, i) => f.t - (fired[i]?.t ?? 0));
+    expect(gaps.length).toBeGreaterThan(15);
+    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(0.8 - 1 / FPS);
+    expect(Math.max(...gaps)).toBeLessThanOrEqual(2 + 1 / FPS);
+    // One draw in ten (by weight) is a pause.
+    expect(fired.some((f) => f.name === 'pause')).toBe(true);
+
+    const starts: number[] = [];
+    let shut = false;
+    for (let i = 0; i < 40 * FPS; i++) {
+      frames.run(1);
+      const closing = read().eye < 0.9;
+      // A double blink is one blink: a new one starts at least a second after the last.
+      if (closing && !shut && (starts.length === 0 || i / FPS - (starts[starts.length - 1] ?? 0) > 1)) starts.push(i / FPS);
+      shut = closing;
+    }
+    const blinkGaps = starts.slice(1).map((s, i) => s - (starts[i] ?? 0));
+    expect(blinkGaps.length).toBeGreaterThan(6);
+    expect(Math.min(...blinkGaps)).toBeGreaterThanOrEqual(1.6 - 2 / FPS);
+    expect(Math.max(...blinkGaps)).toBeLessThanOrEqual(5.2 + 2 / FPS);
+  });
+
+  it('preen and snap never run while input is recent', () => {
+    const { engine, frames } = mount('idle', { acts: true });
+    // The pointer moves in front of the bird every 2 s, so input is always within 2.5 s.
+    const fired = draws(engine, frames, 40, (t) => {
+      if (Math.abs(t % 2) < 1e-9 || t === 0) engine.look({ x: 300, y: 30 }, 'pointer');
+    });
+    expect(fired.length).toBeGreaterThan(15);
+    expect(fired.filter((f) => f.name === 'preen' || f.name === 'snap')).toEqual([]);
+  });
+
+  it('with the same seed and no input the bird preens and snaps', () => {
+    const { engine, frames } = mount('idle', { acts: true });
+    const fired = draws(engine, frames, 40);
+    expect(fired.some((f) => f.name === 'preen')).toBe(true);
+    expect(fired.some((f) => f.name === 'snap')).toBe(true);
+  });
+
+  it('a sleeping bird does not blink', () => {
+    for (const pose of ['idle', 'sleep'] as const) {
+      const { frames, read } = mount(pose);
+      // The mind sleeps 60 s after mount with no input; the sleep pose is asleep from the start.
+      frames.run(61 * FPS);
+      const eyes: number[] = [];
+      for (let i = 0; i < 12 * FPS; i++) {
+        frames.run(1);
+        eyes.push(read().eye);
+      }
+      expect(Math.max(...eyes), pose).toBeCloseTo(0.08, 2);
+      expect(Math.min(...eyes), pose).toBeCloseTo(0.08, 2);
+    }
   });
 });

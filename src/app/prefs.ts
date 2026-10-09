@@ -57,8 +57,3 @@ export function applyTheme(theme: Theme): void {
   if (theme === 'system') root.removeAttribute('data-theme');
   else root.setAttribute('data-theme', theme);
 }
-
-/** Whether the system asks for less motion. */
-export function prefersReducedMotion(): boolean {
-  return typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
