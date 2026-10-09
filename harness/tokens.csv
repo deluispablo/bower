@@ -190,3 +190,5 @@ transport-retry-skips-fence,diagnoser,claude,bower-diagnoser,,1,108426,,,,,,45,4
 app-bin-skips-read-check,diagnoser,claude,bower-diagnoser,,1,85040,,,,,,39,4.7,diagnosed,2026-10-09
 undo-drops-reserved-create,diagnoser,claude,bower-diagnoser,,1,92918,,,,,,35,4.0,diagnosed,2026-10-09
 c4-segmented-one fix+test,implementer,codex,codex-cli 0.160.1,medium,2,960000,479397,,416768,4032,,,,delivered (coordinator commits),2026-10-09
+P4-48,reviewer,claude,bower-reviewer,,1,66883,,,,,,8,1.1,PASS (4 minor),2026-10-09
+P4-49,reviewer,claude,bower-reviewer,,1,35117,,,,,,6,0.8,PASS (2 minor),2026-10-09

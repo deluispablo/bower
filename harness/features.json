@@ -6149,7 +6149,8 @@
       "A perched Bower with the turn idles through the engine and stays on its perch."
     ],
     "verify": "pnpm vitest run src/bird -t \"a minor bird never takes the turn from the page|a minor bird steps out of sight under an overlay bird|a perched Bower with the turn idles through the engine and stays on its perch|with Bower moves off or reduced motion|minor entries are ignored|the carry group exists, is hidden and reaches onPart|each pose loop matches its CSS reference\" && bash scripts/e2e-both.sh e2e/bird-engine.spec.ts -g \"no CSS animation runs on a bird part while the engine runs\"",
-    "note": "TL-P4-21 ruling 2 (Opus, escalated); impact findings 5-6. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-v2-perched-bower-packet.md. Contract per TL-P4-22 addenda 6-7. Addendum 8: nine poses through the engine; random blink. Addendum 9; contract trial: 3 passes, dispatched without a 4th."
+    "note": "TL-P4-21 ruling 2 (Opus, escalated); impact findings 5-6. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-v2-perched-bower-packet.md. Contract per TL-P4-22 addenda 6-7. Addendum 8: nine poses through the engine; random blink. Addendum 9; contract trial: 3 passes, dispatched without a 4th. Red 26b4b60d, fix e2038262; P4-48 PASS.",
+    "review": "P4-48 PASS"
   },
   {
     "id": "v2-targets",
@@ -6205,8 +6206,9 @@
       "The toggle is Segmented at 44 px.",
       "Chips are 44 px at 375."
     ],
-    "verify": "bash scripts/e2e-both.sh -g \"the folder view toggle is the one segmented control|the files bookmark chips are at least 44 px on the phone\"",
-    "note": "TL-P4-22 addendum 10 (a); defect second-segmented-list-table. Starting model bower-implementer; pruning trial (no re-review). Packet 2026-10-09-c4-segmented-one-packet.md."
+    "verify": "bash scripts/e2e-both.sh e2e/c4-segmented-one.spec.ts -g \"the folder view toggle is the one segmented control|the files bookmark chips are at least 44 px on the phone\"",
+    "note": "TL-P4-22 addendum 10 (a); defect second-segmented-list-table. Starting model bower-implementer; pruning trial (no re-review). Packet 2026-10-09-c4-segmented-one-packet.md. implementer: codex. Red 8456c48e, fix 04a74af6, test correction e3b7d900 (coordinator commits; the sandbox cannot write the git index). P4-49 PASS.",
+    "review": "P4-49 PASS"
   },
   {
     "id": "d-v2-07",
