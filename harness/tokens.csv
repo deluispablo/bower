@@ -147,3 +147,4 @@ c3-state-mark (seams),implementer,claude,bower-escalated,,3,97271,,,,,,26,4.8,de
 P4-47,reviewer,claude,bower-reviewer,,1,113469,,,,,,21,2.3,BLOCK (1 important 5 minor),2026-10-09
 c3-hooks,implementer,claude,bower-implementer,,1,90943,,,,,,17,4.6,delivered (held: stop-gate-wrong-tree),2026-10-09
 stop-gate-wrong-tree,diagnoser,claude,bower-diagnoser,,1,138419,,,,,,33,5.1,diagnosed,2026-10-09
+c3-pair-ask round3,implementer,claude,bower-escalated,,1,114837,,,,,,48,6.7,blocked (label done; pair name needs ruling),2026-10-09
