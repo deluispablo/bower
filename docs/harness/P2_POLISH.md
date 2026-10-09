@@ -312,3 +312,9 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
 - P4-46/46b (c3-pair-ask) minors: the app reader passes no NotesSeen, so a binned pair stays listed until the next run (drive-vault.ts:1353); runDetail upper-cases the first character of every finished sentence (run-words.ts:131); the liveness test runs the whole world twice rather than the planner on a frozen input; a words-pile whose lines are all present is held (fixed); a "no" pair can be asked again; a refused words-line edit leaves no report row.
 - 2026-10-09 P4-46c (c3-pair-ask round 2), Minor: no unit test that runDetail ignores `answered` (only the e2e and a setAside assertion cover it).
 - 2026-10-09 P4-46c, Minor: the pair row's note path is read at plan time, so a rename of the staying note in the same run would miss it.
+- 2026-10-09 P4-46d (c3-pair-ask round 3), Minors:
+  - read.ts:212 has an unreachable budget branch of admissionRead.binned;
+  - plan.ts:399 passes `binned` on but never calls it;
+  - scripted.ts:455 would swallow a budget NotReadHere to the fallback instead of deferring it (unreachable today);
+  - displayName strips only .md;
+  - no unit test shows drive.get is skipped when no pair row is made.
