@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { BirdEngine } from './engine';
 import { Rig, type RigPart } from './Rig';
 import type { Pose } from './Bower';
-import { FPS, NEUTRAL, PART_KIND, POSE_REFERENCE, fakeFrames, type PartKey } from './pose-reference';
+import { FPS, NEUTRAL, PART_KIND, POSE_REFERENCE, fakeFrames, type PartKey } from './pose-reference.fixture';
 
 const Z = 100;
 const POSES = Object.keys(POSE_REFERENCE) as Pose[];

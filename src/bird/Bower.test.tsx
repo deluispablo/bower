@@ -3,7 +3,7 @@ import { afterEach, expect, it } from 'vitest';
 import { usePrefs } from '@/app/prefs';
 import { PoseBower } from './Bower';
 import { activeHandle } from './presence';
-import { fakeFrames } from './pose-reference';
+import { fakeFrames } from './pose-reference.fixture';
 
 const realMatchMedia = window.matchMedia;
 afterEach(() => {

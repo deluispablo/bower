@@ -5,7 +5,7 @@ import { usePrefs } from '@/app/prefs';
 import { PoseBower } from './Bower';
 import { BirdEngine } from './engine';
 import { activeHandle, useBirdTurn, useOutranked } from './presence';
-import { fakeFrames } from './pose-reference';
+import { fakeFrames } from './pose-reference.fixture';
 
 afterEach(() => {
   cleanup();
