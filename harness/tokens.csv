@@ -311,3 +311,4 @@ d-v2-07,reviewer,codex,gpt-5-codex,medium,7,368379,364616,,322048,3763,,,,1 Impo
 c4-undo-compensate,property-red,codex,gpt-5-codex,medium,4,523129,518169,,481664,4960,,,,amended (addendum 7),2026-10-09
 c4-parse-once,implementer,codex,gpt-5-codex,medium,3,1247053,1237534,,1154688,9519,,,,done,2026-10-09
 p4-corpus-driver,implementer,codex,gpt-5-codex,low,3,248061,245037,,210432,3024,,,,case 6 deferred,2026-10-09
+p4-corpus-driver,reviewer,claude,bower-reviewer,,1,61849,,,,,,13,0.8,PASS (P4-64),2026-10-09
