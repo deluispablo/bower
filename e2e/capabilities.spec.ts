@@ -4,7 +4,8 @@
  * them. `run-result-links` runs on demo and fake; the C04, C05 and C11
  * journeys run on the pretend Drive, where the effects are files.
  */
-import type { Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import type { Locator, Page } from '@playwright/test';
 import { expect, isFake, test } from './fixtures';
 
 const NOTE_WORDS = 'Ask the landlord about the heating';
@@ -19,6 +20,17 @@ const open = async (page: Page, path: string, scenario = 'empty', time = 'instan
 const inbox = (page: Page) => page.getByRole('region', { name: 'Inbox' });
 const home = (page: Page) => page.getByRole('link', { name: /^Home/ }).first().click();
 const timeline = (page: Page) => page.getByRole('region', { name: 'Timeline' }).getByRole('listitem');
+/** The answered rows' own label (TL-P4-19 addendum 11). */
+const ANSWERED_LABEL = 'Answers Bower could not act on';
+/** The answered rows sit in their own labelled list, never under "Brought up to date", and pass axe (WCAG 2.2, target size). */
+async function answeredListed(page: Page, within: Locator, selector: string, rows: readonly string[]): Promise<void> {
+  const list = within.getByRole('list', { name: ANSWERED_LABEL });
+  for (const row of rows) await expect(list.getByText(row, { exact: true })).toBeVisible();
+  const updated = within.getByRole('list', { name: 'Brought up to date' });
+  for (const row of rows) await expect(updated.getByText(row, { exact: true })).toHaveCount(0);
+  const axe = await new AxeBuilder({ page }).include(selector).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).options({ rules: { 'target-size': { enabled: true } } }).analyze();
+  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+}
 const FAKE_ONLY = 'the journey checks what the tidy-up wrote into the pretend Drive (TL-P2-40)';
 
 /** Puts a note with no things in the inbox, from Add. */
@@ -211,6 +223,7 @@ test('a refused merge shows as an answered row on the note that stays and under 
   await tidyUp(page);
   const sheet = page.getByRole('dialog');
   for (const row of [PAIR, ASKED, STATE]) await expect(sheet.getByText(row, { exact: true })).toBeVisible();
+  await answeredListed(page, sheet, 'dialog, [role="dialog"]', [PAIR, ASKED, STATE]);
   await expect(sheet).not.toContainText('set aside');
   // The note that stays says so too.
   await sheet.getByRole('list', { name: 'Brought up to date' }).getByRole('link', { name: 'Flat hunt', exact: true }).click();
@@ -224,5 +237,6 @@ test('a refused merge shows as an answered row on the note that stays and under 
   await home(page);
   const card = page.getByRole('region', { name: /things? filed/ });
   for (const row of [PAIR, ASKED, STATE]) await expect(card.getByText(row, { exact: true })).toBeVisible();
+  await answeredListed(page, card, 'main', [PAIR, ASKED, STATE]);
   await expect(card).not.toContainText('set aside');
 });
