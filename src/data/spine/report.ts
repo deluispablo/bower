@@ -45,17 +45,21 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
     report.created.push(...c.value.created);
     report.updated.push(...c.value.updated);
     const moves = c.when === 'rejected' && c.requires.every((id) => ops.get(id)?.effect.kind === 'move');
-    const moved = c.requires.every((id) => {
-      const o = byId.get(id);
-      return o?.state === 'rejected' && o.failure.code === 'conflict' && o.failure.message === SOURCE_NOT_AS_SEEN;
-    });
-    const gone = c.requires.some((id) => {
-      const o = byId.get(id);
-      return o?.state === 'rejected' && o.failure.code === 'unknown' && o.failure.message === UNCONFIRMED_GONE;
-    });
-    // A thing Bower couldn't confirm is on its own line, never counted as set aside (TL-P4-14 addendum 8).
-    if (moves && gone) report.unconfirmed = [...(report.unconfirmed ?? []), ...c.value.setAside.map((row) => ({ ...row, why: UNCONFIRMED_GONE }))];
-    else report.setAside.push(...(moves ? c.value.setAside.map((row) => ({ ...row, why: moved ? MOVED_AWAY : NOT_FILED })) : c.value.setAside));
+    if (!moves) report.setAside.push(...c.value.setAside);
+    for (const row of moves ? c.value.setAside : []) {
+      // Each row by its own move's outcome: the move of the thing it names (rows carry only the captured name, as the
+      // grounding ties them); every move of the contribution when none names it.
+      const named = c.requires.filter((id) => {
+        const e = ops.get(id)?.effect;
+        return e?.kind === 'move' && e.before.name === row.name;
+      });
+      const own = (named.length ? named : c.requires).map((id) => byId.get(id));
+      const moved = own.every((o) => o?.state === 'rejected' && o.failure.code === 'conflict' && o.failure.message === SOURCE_NOT_AS_SEEN);
+      const gone = own.every((o) => o?.state === 'rejected' && o.failure.code === 'unknown' && o.failure.message === UNCONFIRMED_GONE);
+      // A thing Bower couldn't confirm is on its own line, never counted as set aside (TL-P4-14 addendum 8).
+      if (gone) report.unconfirmed = [...(report.unconfirmed ?? []), { ...row, why: UNCONFIRMED_GONE }];
+      else report.setAside.push({ ...row, why: moved ? MOVED_AWAY : NOT_FILED });
+    }
     report.questions.push(...c.value.questions);
     if (c.value.requests) report.requests = [...(report.requests ?? []), ...c.value.requests];
     if (c.value.yourChanges !== undefined) report.yourChanges = (report.yourChanges ?? 0) + c.value.yourChanges;

@@ -45,7 +45,7 @@ import type { AdmissionScope } from '../../src/data/spine/admission';
 import { admissionRead } from '../../src/data/spine/read';
 import { md5Hex, sha256, sha256Hex } from '../../src/data/contracts/hashes';
 import { ReadCache } from '../../src/data/drive/read-cache';
-import { destinationOf, SeenFiles, targetOf, type StoredNow } from '../../src/data/drive/seen-files';
+import { destinationOf, SeenFiles, targetOf, type FenceTarget, type StoredNow } from '../../src/data/drive/seen-files';
 import { staleAttempt, type RunnerToken } from './token';
 
 export interface RunnerDriveOptions {
@@ -380,12 +380,10 @@ export class RunnerDrive implements RunDrive {
         this.confirmed.delete(call.id);
         this.answered.delete(call.id);
       }
-      // Read now, right before the send, never from an earlier read; only a record going into one of this run's own
-      // record folders takes that folder as its create answered (`ownFolder`). A move's folder is read with its target.
-      // A read that fails here is no change found: thrown as not read, so the attempt stops for recovery.
-      const own = target.part === 'parent' ? await this.seen.read(this.ownFolder(target.id)) : null;
+      // Every read of the fence goes through the one cannot-read handling (`SeenFiles.read`): a read that gets no
+      // answer is no change found, thrown as not read, so the attempt stops for recovery.
       const into = destinationOf(call);
-      const [, now, intoNow] = await Promise.all([this.stillCurrent(), own ?? this.seen.read(this.peek(target.id)), into ? this.seen.read(this.peek(into.id)) : null]);
+      const { now, intoNow } = await this.seen.read(this.fenceReads(target, into));
       if (into) this.seen.assert(into, intoNow);
       this.seen.assert(target, now);
       this.peeked = now?.file ?? null;
@@ -424,6 +422,17 @@ export class RunnerDrive implements RunDrive {
     });
     this.queue = run.catch(() => undefined);
     return run;
+  }
+
+  /**
+   * The fence's reads, right before the send, never from an earlier read: the attempt, the target, and the folder a
+   * move goes into. Only a record going into one of this run's own record folders takes that folder as its create
+   * answered (`ownFolder`).
+   */
+  private async fenceReads(target: FenceTarget, into: FenceTarget | null): Promise<{ now: StoredNow | null; intoNow: StoredNow | null }> {
+    const own = target.part === 'parent' ? await this.ownFolder(target.id) : null;
+    const [, now, intoNow] = await Promise.all([this.stillCurrent(), own ?? this.peek(target.id), into ? this.peek(into.id) : null]);
+    return { now, intoNow };
   }
 
   private async peek(id: string): Promise<StoredNow | null> {

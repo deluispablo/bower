@@ -79,6 +79,8 @@ interface Attempt {
   afterIntent?: (op: OperationV2) => Promise<void>;
   /** Drive reads that fail as with no network. */
   failRead?: (url: URL) => boolean;
+  /** Asks of the Worker's attempt route that fail as with no network. */
+  failAttempt?: () => boolean;
   /** Told right after someone renamed `RENAMED`. */
   onRename?: () => void;
 }
@@ -97,6 +99,7 @@ function tidy(w: World, attempt: number, opts: Attempt = {}): Promise<TidyEnd> {
     if (process.killed) throw new TypeError('The runner was killed.');
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
     if (url.origin !== API && (init.method ?? 'GET').toUpperCase() === 'GET' && opts.failRead?.(url)) throw new TypeError('fetch failed');
+    if (url.origin === API && (init.method ?? 'GET').toUpperCase() === 'GET' && url.pathname.endsWith('/attempt') && opts.failAttempt?.()) throw new TypeError('fetch failed');
     return wire.fetch(input, init);
   };
   const effects = (drive: Parameters<typeof driveEffects>[0]): Effects => {
@@ -661,6 +664,39 @@ describe('recovery without the browser', () => {
     expect(last?.outcomes.find((o) => o.operationId === f.op)?.state).toBe('applied');
     expect(w.sends.get(f.op)).toBe(1);
     expect((await w.wire.drive.evidence(f.thing))?.file.parents).toEqual([f.folder]);
+  });
+
+  it('a fence whose attempt check cannot read stops the attempt for recovery', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const w = await world();
+    // Right after the first operation's intent is committed, the Worker's attempt route gives no answer for a few asks
+    // (more than the transport retries): the fence cannot read the attempt. Drive answers throughout. Nothing is
+    // refused as offline; the attempt stops, and the next one reads back what it opened and sends each once.
+    let left = -1;
+    const first = await tidy(w, 1, {
+      afterIntent: async () => {
+        if (left < 0) left = 4;
+      },
+      failAttempt: () => left > 0 && left-- > 0,
+    });
+    expect(left).toBe(0);
+    expect(first.phase).toBe('saving');
+    const stopped = (await chainOf(w.wire, w.root)).at(-1);
+    expect(stopped?.outcomes.some((o) => o.state === 'rejected' && o.failure.code === 'offline')).toBe(false);
+    const opened = (stopped?.outcomes ?? []).filter((o) => o.state === 'possible-effect').map((o) => o.operationId);
+    expect(opened.length).toBeGreaterThan(0);
+
+    const second = await tidy(w, 2);
+    expect(second.phase).toBe('done');
+    const last = (await chainOf(w.wire, w.root)).at(-1);
+    expect(last?.outcomes.map((o) => o.state)).not.toContain('possible-effect');
+    expect(last?.outcomes.some((o) => o.state === 'rejected' && o.failure.code === 'offline')).toBe(false);
+    // Each opened operation read back or sent once: applied, or set aside as the person's rename of `RENAMED` asks.
+    for (const op of opened) {
+      const o = last?.outcomes.find((x) => x.operationId === op);
+      expect(['applied', 'conflict']).toContain(o?.state === 'rejected' ? o.failure.code : o?.state);
+      expect(w.sends.get(op) ?? 0).toBeLessThanOrEqual(1);
+    }
   });
 
   it('a fence that reads a real change sets the operation aside', async () => {
