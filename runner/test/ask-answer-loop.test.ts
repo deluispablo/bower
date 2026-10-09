@@ -12,6 +12,7 @@
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyChanges, currentStateOf, stateMark, undoChanges, undoEdit } from '../../src/data/contracts/note-edit';
+import { pairQuestionId } from '../../src/data/contracts/questions';
 import type { Change, EditText, ManifestV2 } from '../../src/data/contracts/run-manifest';
 import type { FakeDrive } from '../../src/data/drive/fake-drive';
 import { parseNote } from '../../src/data/vault/note-format';
@@ -192,6 +193,47 @@ async function hubEdits(w: RealWorld): Promise<EditText[]> {
 }
 const hubChanges = async (w: RealWorld): Promise<Change[]> => (await hubEdits(w)).flatMap((e) => e.changes);
 
+const PAIR_ASK = { text: 'Flat 3, 12 Larkspur Lane and Flat 3 (second) look like one flat. Keep one note?', yes: 'Yes, keep one', no: 'No, keep both' };
+const NEWS = 'Second viewing booked for Saturday.';
+const fileNothing: ClaudeSpawn = async () => ({ code: 0, stderr: '', cut: null, stdout: envelope({ kind: 'tidy-intent', v: 1, things: [] }) });
+/** The model: the pile of words shown is news about the kept note, a Timeline line citing it. */
+const citeNews: ClaudeSpawn = async (call) => {
+  const pile = shownOf(call).piles[0]?.pileId;
+  return { code: 0, stderr: '', cut: null, stdout: envelope({ kind: 'tidy-intent', v: 1, things: [], ...(pile ? { lines: [{ note: KEPT, text: NEWS, cites: pile }] } : {}) }) };
+};
+
+/**
+ * The keep-one-note folder with a pair question asked by the notes' file ids, the other note in the Bin since. With
+ * `stuck`, also your yes to it (a change of yours) and a pile of words whose news the kept note holds already.
+ */
+async function pairGoneSeed(drive: FakeDrive, stuck: boolean): Promise<string> {
+  const c = await corpusCase('c05-keep-one-note');
+  const kept = stuck ? (c.folder[KEPT] ?? '').replace(/\n*$/, `\n- 2026-10-07 · ${NEWS}\n`) : c.folder[KEPT] ?? '';
+  const root = await seedCase(drive, { ...c, scope: 'all', folder: { ...c.folder, [KEPT]: kept }, journal: [], questions: [], inbox: stuck ? [{ line: `Flat 3 at 12 Larkspur Lane: ${NEWS.toLowerCase()}`, files: [] }] : [] });
+  const all = await drive.listAll(root);
+  const idOf = (path: string): string => all.find((f) => drive.pathOf(f.id, root) === path)?.id ?? '';
+  const id = pairQuestionId(idOf(KEPT), idOf(OTHER));
+  const q = all.find((f) => drive.pathOf(f.id, root) === '.bower/questions.json');
+  if (q) await drive.writeText(q.id, JSON.stringify({ v: 1, questions: [{ id, ...PAIR_ASK, about: KEPT, askedAt: 1 }] }), q.modifiedTime);
+  if (stuck) await drive.createText(idOf('.bower/changes'), 'change-1.json', `${JSON.stringify({ v: 1, id: 'change-1', device: 'device-1', at: 1, kind: 'answer', what: 'Answered a question', text: 'yes', questionId: id })}\n`);
+  await drive.trash(idOf(OTHER));
+  pairIdSeen = id;
+  return root;
+}
+let pairIdSeen = '';
+
+/** A press of Tidy up; false when the Worker finds nothing waiting (no run). */
+async function press(w: RealWorld): Promise<boolean> {
+  const lease = (await (await w.api.browser(`${ORIGIN}/session`, { method: 'POST', headers: json, body: JSON.stringify({ place: 'tab-1', action: 'check', gen: 0 }) })).json()) as { epoch: number };
+  const res = await w.api.browser(`${ORIGIN}/process`, { method: 'POST', headers: { ...json, 'x-bower-place': 'tab-1', 'x-bower-epoch': String(lease.epoch) }, body: JSON.stringify({ scope: 'all', allowWeb: false, requestId: crypto.randomUUID() }) });
+  return res.status === 200;
+}
+
+/** The report of the last run, as the Worker's status gives it. */
+async function reportOf(w: RealWorld): Promise<{ setAside: unknown[] } | undefined> {
+  return ((await (await w.api.browser(`${ORIGIN}/status`)).json()) as { run: { report?: { setAside: unknown[] } } | null }).run?.report;
+}
+
 describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
   it('a yes to keep one note starts a scoped run that merges', async () => {
     const w = await keepWorld();
@@ -268,6 +310,36 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     expect(await textAt(w, KEPT)).toContain('The listing says the lease is twelve months.');
     expect(await openQuestions(w)).toEqual([]);
     expect(await answersWaiting(w, asked?.id ?? '')).toEqual([]);
+  });
+
+  it('a yes to a pair whose other note is in the Bin settles and says nothing was merged', async () => {
+    const w = await realWorld({ seed: (drive) => pairGoneSeed(drive, false), claude: fileNothing });
+    const runs = runsOf(w);
+    const { vault, answerQuestion } = await vaultOf(w);
+    const asked = (await vault.questions()).find((q) => q.text === PAIR_ASK.text);
+    expect(asked).toBeDefined();
+    const done = await answerQuestion(vault, runs, asked?.id ?? '', true, { allowWeb: false });
+    expect(done?.outcome.kind).toBe('now');
+    expect(await w.runJob(0)).toBe(0);
+    // The answer settles: its question closed, the answer read, the note kept as it was, and the report says why.
+    expect(await openQuestions(w)).toEqual([]);
+    expect(await answersWaiting(w, asked?.id ?? '')).toEqual([]);
+    expect(await w.paths()).toContain(KEPT);
+    expect((await reportOf(w))?.setAside).toEqual([{ name: 'Flat 3, 12 Larkspur Lane', why: 'Not merged: the other note was already in the Bin.' }]);
+  });
+
+  it('with no new input a second run leaves nothing held or waiting for the same reason', async () => {
+    // Both stuck cases at once: a pile of words whose line its note holds already, and a yes to a pair whose other
+    // note is in the Bin. A run, then a second press with nothing new: whatever the first left held or waiting, the
+    // second must not leave so again.
+    const w = await realWorld({ seed: (drive) => pairGoneSeed(drive, true), claude: citeNews });
+    const left: string[][] = [];
+    for (const i of [0, 1]) {
+      if (await press(w)) expect(await w.runJob(i)).toBe(0);
+      left.push([...(await w.paths()).filter((p) => p.startsWith('Inbox/')), ...(await answersWaiting(w, pairIdSeen)).map(() => 'answer')]);
+    }
+    expect(left[1]?.filter((x) => left[0]?.includes(x))).toEqual([]);
+    expect(left[0]).toEqual([]);
   });
 
   it('answering twice starts one run', async () => {

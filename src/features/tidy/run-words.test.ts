@@ -74,6 +74,13 @@ describe('how long a run takes', () => {
     const two = [{ name: 'a.pdf', as: 'A.pdf' }, { name: 'b.pdf', as: 'B.pdf' }];
     expect(runDetail({ ...base, phase: 'done', report: { ...empty, alreadySaved: two } })).toBe('2 things already saved.');
   });
+  it('a pile of words already saved says its lines were already in its note', () => {
+    const empty = { filed: [], created: [], updated: [], setAside: [], questions: [] };
+    const one = [{ name: 'Flat 3 news', as: 'Flat 3, 12 Larkspur Lane.md', notes: 1 }];
+    expect(runDetail({ ...base, phase: 'done', report: { ...empty, alreadySaved: one } })).toBe('Your lines were already in Flat 3, 12 Larkspur Lane.');
+    const several = [{ name: 'Flat 3 news', as: 'Flat 3, 12 Larkspur Lane.md', notes: 2 }];
+    expect(runDetail({ ...base, phase: 'done', report: { ...empty, alreadySaved: several } })).toBe('Your lines were already in your notes.');
+  });
   it('a run that only found things already saved never says 0 things filed', () => {
     const empty = { filed: [], created: [], updated: [], setAside: [], questions: [] };
     const done = { ...base, phase: 'done' as const, report: { ...empty, alreadySaved: [{ name: 'Offer copy.pdf', as: 'Offer letter.pdf' }] } };

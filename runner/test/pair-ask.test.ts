@@ -81,4 +81,38 @@ describe('two notes for one thing (keep-one-not-asked)', () => {
     expect(held.after[KEPT]).toBe(theirs.folder[KEPT]);
     expect(Object.keys(held.after).filter((p) => p.startsWith('Inbox/'))).toContainEqual(expect.stringMatching(/^Inbox\//));
   });
+
+  it('a words-only pile whose lines are all in its note already is already saved', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const c = await flatCase();
+    const cite = reply((s) => ({ kind: 'tidy-intent', v: 1, things: [], lines: [{ note: KEPT, text: NEWS, cites: s.piles[0]?.pileId ?? '' }] }));
+    // The same news again, on a note that holds its line already: nothing is new, so it is saved already, as that note.
+    const first = await runWithClaude(c, cite);
+    const again = { ...c, folder: { ...c.folder, [KEPT]: first.after[KEPT] ?? '' } };
+    const run = await runWithClaude(again, cite);
+    expect(run.code).toBe(0);
+    expect(run.after[KEPT]).toBe(again.folder[KEPT]);
+    expect(Object.keys(run.after).filter((p) => p.startsWith('Inbox/'))).toEqual([]);
+    const report = (run.lastRun as { run: { report: { filed: unknown[]; alreadySaved?: unknown[] } } }).run.report;
+    expect(report.alreadySaved).toEqual([{ name: WORDS.slice(0, 40), as: 'Flat 3, 12 Larkspur Lane.md', notes: 1 }]);
+    expect(report.filed).toEqual([]);
+  });
+
+  it('a yes to an older pair question whose note is in the Bin settles and names it', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // The accepted app's question, in its words (two links), answered yes; the other note went to the Bin since.
+    const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c05-keep-one-note');
+    if (!c) throw new Error('no c05-keep-one-note case');
+    const binOther = async (drive: Parameters<NonNullable<Parameters<typeof runWithClaude>[3]>>[0], root: string): Promise<void> => {
+      const other = (await drive.listAll(root)).find((f) => drive.pathOf(f.id, root) === OTHER);
+      if (other) await drive.trash(other.id);
+    };
+    const run = await runWithClaude(c, reply(() => ({ kind: 'tidy-intent', v: 1, things: [] })), undefined, binOther);
+    expect(run.code).toBe(0);
+    // The answer settles: its question is closed, and the report says nothing was merged, and why.
+    expect(questionsOf(run)).toEqual([]);
+    expect(Object.keys(run.after).filter((p) => /^\.bower\/changes\/[^/]+\.json$/.test(p))).toEqual([]);
+    const report = (run.lastRun as { run: { report: { setAside: unknown[] } } }).run.report;
+    expect(report.setAside).toEqual([{ name: 'Flat 3, 12 Larkspur Lane', why: 'Not merged: Flat 3 (second) was already in the Bin.' }]);
+  });
 });
