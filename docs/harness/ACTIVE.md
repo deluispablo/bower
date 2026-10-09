@@ -403,3 +403,4 @@ P3-9 is closed.
 - c2-one-engine closed (b0d56509, P4-35d PASS). 421/426. c2-write-once (escalated) dispatched; last of stage 2.
 - Lead: the report-row-by-name minor moves from polish to c3-planner-split (named test), recorded in docs/harness/2026-10-09-stage3-carryover.md until stage 3 is registered.
 - Lead quality check: production net since 9265d860 is +307 (engine -356, drive-http +21, person.ts +118). c2-write-once told to remove the six recovery methods fully, report production-only lines, and remove what is dead in drive-http. Stage end: send the production-only net and why drive-http did not shrink.
+- c2-write-once merged (red ce4ae5e8, fix b1bceabf; prod -214; C04 82→76; check green on merged tree; e2e:fake 256). Rulings asked: `ended` patch log kept (removing costs 76→126); journal outbox recovery kept (by name + field, archive move overwrites bowerOp); barrier test title kept but body changed. P4-36 review dispatched.
