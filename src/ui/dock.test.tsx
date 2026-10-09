@@ -40,8 +40,7 @@ describe('the dock', () => {
       act(() => seen([], {} as ResizeObserver));
     };
     size(60);
-    expect(document.documentElement.style.getPropertyValue('--dock-h')).toMatch(/^\d+px$/);
-    expect(parseFloat(document.documentElement.style.getPropertyValue('--dock-h'))).toBeGreaterThan(60);
+    expect(document.documentElement.style.getPropertyValue('--dock-h')).toBe('60px');
     size(0);
     expect(document.documentElement.style.getPropertyValue('--dock-h')).toBe('0px');
   });

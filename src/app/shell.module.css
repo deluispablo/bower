@@ -49,7 +49,7 @@
 .resizer:hover { background: linear-gradient(90deg, transparent 2px, var(--brand) 2px, var(--brand) 4px, transparent 4px); }
 .resizerLeft { left: -3px; right: auto; }
 
-.center { grid-area: center; min-width: 0; display: flex; flex-direction: column; }
+.center { grid-area: center; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .tabstrip { display: flex; align-items: flex-end; gap: 4px; height: 42px; padding: 0 6px; background: var(--chrome); border-bottom: 1px solid var(--line); }
 .tabstrip > button { margin-bottom: 6px; }
 .tabs { display: flex; align-items: flex-end; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
@@ -62,10 +62,10 @@
 .tabOn .tabLabel { font-weight: 600; }
 .tabX { display: grid; place-items: center; width: 22px; height: 22px; border: 0; border-radius: 6px; background: none; color: var(--text-muted); cursor: pointer; opacity: 0.6; }
 .tabX:hover { opacity: 1; background: var(--hover); }
-.view { flex: 1; min-height: 0; overflow: auto; outline: none; position: relative; }
+.view { flex: 1; min-height: 0; overflow: auto; outline: none; position: relative; padding-bottom: var(--dock-h, 0px); }
 
 /* ---------- phone */
-.phone { min-height: 100dvh; padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom)); }
+.phone { min-height: 100dvh; padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + var(--dock-h, 0px)); }
 .tabbar {
   position: fixed;
   left: 0;

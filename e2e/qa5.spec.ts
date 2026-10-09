@@ -330,5 +330,5 @@ test('binning a folder with things asks first', async ({ page, isMobile }) => {
   await tree.getByRole('treeitem', { name: /^Cooking/ }).click();
   await page.keyboard.press('Delete');
   await page.getByRole('dialog', { name: 'Put Cooking in the Bin?' }).getByRole('button', { name: 'Put it in the Bin' }).click();
-  await expect(page.getByRole('status').getByText(/Cooking is in the Bin/)).toBeVisible();
+  await expect(page.getByRole('status').getByText(/Cooking is in your Drive's Bin/)).toBeVisible();
 });

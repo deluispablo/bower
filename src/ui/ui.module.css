@@ -106,23 +106,34 @@
 .check { margin-left: auto; color: var(--brand-line); }
 .label { padding: 6px 10px 4px; font-size: 13px; color: var(--text-muted); }
 
-/* toasts */
-.toasts { position: fixed; left: 50%; bottom: calc(var(--toast-bottom, 24px) + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 60; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
+/* the dock: messages above the run chip, one place per shell (d-v2-01). Its height is `--dock-h` (ui/Dock.tsx). */
+.dock { position: fixed; left: 16px; right: 16px; bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 12px); --dock-gap: 12px; z-index: 60; display: flex; justify-content: center; pointer-events: none; }
+.dockStack { width: 100%; display: flex; flex-direction: column; align-items: stretch; }
+.dockStack > :not(:empty) + :not(:empty) { margin-top: 8px; }
+.dockStack > * { pointer-events: auto; }
+.dockStack > :not(.toasts) { animation: dockRise 0.22s var(--ease-out); }
+@media (min-width: 900px) {
+  .dock { position: absolute; left: 16px; right: 16px; bottom: 24px; --dock-gap: 24px; }
+  .dockStack { width: min(100%, 520px); }
+}
+.toasts { display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
 .toast {
   pointer-events: auto;
   display: flex;
   align-items: center;
   gap: 14px;
-  max-width: min(520px, 92vw);
-  padding: 10px 10px 10px 16px;
-  border-radius: 12px;
-  background: var(--surface-strong);
+  min-height: 52px;
+  padding: 4px 8px 4px 16px;
+  border-radius: 16px;
+  background: var(--raised);
   color: var(--heading);
-  font-size: 15px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
-  animation: rise 0.22s var(--ease-out);
+  font-size: 16px;
+  box-shadow: var(--shadow-pop), inset 0 0 0 1px var(--line);
+  animation: dockRise 0.22s var(--ease-out);
 }
-.toast button { border: 0; background: none; color: var(--brand-line); font: 600 15px var(--font-body); cursor: pointer; min-height: 32px; padding: 0 8px; border-radius: 6px; }
+@keyframes dockRise { from { transform: translateY(12px); opacity: 0; } }
+.toast > span { flex: 1; min-width: 0; }
+.toast button { flex: none; border: 0; background: none; color: var(--brand-line); font: 600 16px var(--font-body); white-space: nowrap; cursor: pointer; min-height: 44px; min-width: 44px; padding: 0 12px; border-radius: 8px; }
 
 /* rows */
 .row { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line); text-decoration: none; color: inherit; }

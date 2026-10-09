@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router';
 import { useIsDesktop } from '@/ui/media';
 import { useUser } from '@/data/provider';
 import { useTabs } from './tabs-store';
-import { Toasts } from '@/ui/toast';
 import { DesktopShell } from './DesktopShell';
 import { PhoneShell } from './PhoneShell';
 import { useUi } from './ui-store';
@@ -50,7 +49,6 @@ export function Shell() {
       <ConfirmBin />
       <NameSheet />
       <Replay />
-      <Toasts />
     </>
   );
 }

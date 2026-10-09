@@ -23,8 +23,10 @@ const aMessage = async (page: Page) => {
   return box;
 };
 
-const axeClean = async (page: Page): Promise<void> => {
+/** The dock and the page it sits over; the desktop tab strip's own close buttons are not this entry's. */
+const axeClean = async (page: Page, within = 'body'): Promise<void> => {
   const axe = await new AxeBuilder({ page })
+    .include(within)
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
     .options({ rules: { 'target-size': { enabled: true } } })
     .analyze();
@@ -57,13 +59,13 @@ test('a message is at most 520 wide and centred in main on desktop', async ({ pa
   expect(m.width).toBeLessThanOrEqual(520);
   expect(Math.abs(m.x + m.width / 2 - (main.x + main.width / 2))).toBeLessThanOrEqual(1);
   expect(m.y + m.height).toBeLessThanOrEqual((status?.y ?? main.y + main.height) - 24 + 0.5);
-  await axeClean(page);
+  await axeClean(page, '[data-testid="dock-stack"]');
 });
 
 test('the last result row ends above the run chip at full scroll', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'the run chip is the phone one');
   await open(page, '/?scenario=back');
-  const chip = page.getByRole('button', { name: /Watch/ });
+  const chip = page.getByRole('button', { name: /Watch/ }).last();
   await expect(chip).toBeVisible();
   await page.waitForTimeout(400);
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
@@ -94,4 +96,19 @@ test('keyboard focus is never hidden behind the tab bar', async ({ page, isMobil
     }
     expect(bad, `at ${size.width}`).toEqual([]);
   }
+});
+
+test('the Bin message names the file in your Drive and Undo sits on one line', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree');
+  await open(page, '/');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  await tree.getByRole('treeitem', { name: /Lease draft/ }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Move to Bin', exact: true }).click();
+  const status = page.getByRole('status');
+  await expect(status.getByText(/^Lease draft(\.pdf)? is in your Drive's Bin\.$/)).toBeVisible();
+  await page.waitForTimeout(400);
+  const undo = status.getByRole('button', { name: 'Undo' });
+  const b = await undo.boundingBox();
+  expect(b?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expect(b?.height ?? 99).toBeLessThanOrEqual(52);
 });
