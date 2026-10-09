@@ -13,7 +13,7 @@
  */
 import { BowerError } from '../types';
 import { md5Hex, sha256Sync } from '../contracts/hashes';
-import type { Landing, WriteIntent } from '../contracts/still-as-seen';
+import { notAsSeen, type Landing, type SeenExpectation } from '../contracts/still-as-seen';
 import { driveError, type DriveApi, type DriveFile, type FencedDrive } from '../drive/drive-api';
 import { failureKind, isNoAnswer, isUnconfirmedWrite, marked, type FailureKind } from '../drive/transport';
 
@@ -68,7 +68,7 @@ export const byId = (drive: Gets, id: string): Promise<DriveFile | null> =>
   });
 
 /** What one write to a file does: a change named by its intent, or a text (whose bytes are checked too). */
-export type Intent = WriteIntent;
+export type Intent = string | { text: string };
 
 /** The stamp of one write to `f`: the version it read and what it does, so a retry of the same change is the same write. */
 const stampFor = (f: DriveFile, intent: Intent): string => stampOf(f.id, `${f.modifiedTime}:${typeof intent === 'string' ? intent : `text:${sha256Sync(intent.text)}`}`);
@@ -76,16 +76,43 @@ const stampFor = (f: DriveFile, intent: Intent): string => stampOf(f.id, `${f.mo
 /** An unbin: out of the Bin as it was (`unbin`), or under a free name in the same write (`unbin:<name>`). */
 export const unbins = (intent: Intent): boolean => intent === 'unbin' || (typeof intent === 'string' && intent.startsWith('unbin:'));
 
-/**
- * Whether `now` holds that write to `f`: it carries its stamp and, for text, Drive's checksum of the text sent; a Bin
- * or a restore, only while it is still in the Bin or out of it (a restore in Drive's own page keeps the stamp).
- */
-export const holds = (f: DriveFile, intent: Intent, now: DriveFile): boolean =>
-  now.appProperties?.[STAMP] === stampFor(f, intent) &&
-  (intent === 'bin' ? now.trashed === true : unbins(intent) ? now.trashed !== true : typeof intent === 'string' || confirms(now, new TextEncoder().encode(intent.text)));
+/** Whether `now` carries the stamp of that write to `f` and, for text, Drive's checksum of the text sent. */
+const stamped = (f: DriveFile, intent: Intent, now: DriveFile): boolean =>
+  now.appProperties?.[STAMP] === stampFor(f, intent) && (typeof intent === 'string' || confirms(now, new TextEncoder().encode(intent.text)));
 
-/** That write to `f` as the fence's landed case (`checkStillAsSeen`): its intent, and its stamp (`holds`). */
-export const landing = (f: DriveFile, intent: Intent): Landing<DriveFile> => ({ intent, stamped: (now) => holds(f, intent, now) });
+/**
+ * The file as that write to `f` leaves it: what it read, with the write's own change applied (TL-P4-24 addendum 7). Its
+ * modifiedTime is left out, since the write itself changes it.
+ * - a rename (`rename:<name>`): that name; a move (`move:<folder>` or `move:<folder>:<name>`): that folder, and name;
+ * - a Bin: in the Bin; an unbin (`unbin`, or `unbin:<name>` back under a free name): out of it, under that name;
+ * - a text, or a change of properties only: the name and place it read, out of the Bin for a text.
+ */
+function expectedAfter(f: DriveFile, intent: Intent): SeenExpectation {
+  const read: SeenExpectation = { id: f.id, name: f.name, parents: f.parents, trashed: f.trashed === true };
+  if (typeof intent !== 'string') return { ...read, trashed: false };
+  const [kind = '', ...rest] = intent.split(':');
+  const arg = rest.join(':');
+  if (kind === 'bin') return { ...read, trashed: true };
+  if (kind === 'unbin') return { ...read, trashed: false, ...(arg ? { name: arg } : {}) };
+  if (kind === 'rename') return { ...read, name: arg };
+  if (kind === 'move') {
+    const [to = '', ...name] = rest;
+    // Drive's move: the folder it read goes (`removeParent`, its one parent), the new one comes (`addParent`).
+    return { ...read, parents: [...f.parents.slice(1), to], ...(name.length ? { name: name.join(':') } : {}) };
+  }
+  return read;
+}
+
+/**
+ * The one definition of "landed" (TL-P4-24 addenda 7 and 8): `now` carries the stamp of that write to `f` (and, for
+ * text, the checksum of the text sent) **and** is exactly what the write makes it (`expectedAfter`, by `notAsSeen`,
+ * modifiedTime ignored). A file renamed, moved or put in or out of the Bin since, elsewhere, is not this write landed.
+ * The fence (`checkStillAsSeen`, through `landing`) and a lost answer's read (`updateByStamp`) both ask it.
+ */
+export const landedAs = (f: DriveFile, intent: Intent, now: DriveFile): boolean => stamped(f, intent, now) && notAsSeen(expectedAfter(f, intent), now) === null;
+
+/** That write to `f` as the fence's landed case (`checkStillAsSeen`): `landedAs`. */
+export const landing = (f: DriveFile, intent: Intent): Landing<DriveFile> => (now) => landedAs(f, intent, now);
 
 /**
  * Case 2: an update or a move of a file read as `f`, sent once with its stamp and found again by reading `f` by its id;
@@ -95,7 +122,7 @@ export async function updateByStamp(reads: Gets, f: DriveFile, intent: Intent, s
   const out = await once(stampFor(f, intent), (s) => send({ [STAMP]: s }), async () => {
     const now = await byId(reads, f.id);
     read?.(now);
-    return now && holds(f, intent, now) ? now : null;
+    return now && landedAs(f, intent, now) ? now : null;
   });
   return typeof intent === 'string' ? out : confirmed(out, intent.text);
 }

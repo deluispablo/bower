@@ -45,7 +45,7 @@ import { isSeen, markSeen } from './seen';
 import { VaultIndex } from './vault-index';
 import { NOT_SENT_TEXT, PERSIST_REFUSED_TEXT, UNREADABLE_TEXT, createUploadQueue, stoppedText, type QueueItem, type UploadQueue } from '../upload-queue';
 import { memoryUploadStore } from '../upload-store';
-import { CHANGED_ELSEWHERE, checkStillAsSeen, notAsSeen, notAsSeenReason, type Landing, type SeenExpectation } from '../contracts/still-as-seen';
+import { CHANGED_ELSEWHERE, checkStillAsSeen, notAsSeen, notAsSeenError, notAsSeenReason, type Landing, type SeenExpectation } from '../contracts/still-as-seen';
 import { openQuestions } from '../contracts/questions';
 
 export interface DriveVaultOptions {
@@ -1758,9 +1758,11 @@ export class DriveVault implements VaultSource {
     } catch (e) {
       if (!isNoAnswer(e) && !isUnconfirmedWrite(e)) throw e;
       if (now === undefined) throw isUnconfirmedWrite(e) ? e : new BowerError('offline', "Bower isn't sure that saved. Check again when you're back online.");
-      if (now && notAsSeen(seen, now) === null) throw e;
+      // Changed or gone since it was read (a lost answer's read found it so): the fence's refusal, with its reason.
+      const reason = notAsSeen(seen, now);
+      if (reason === null) throw e;
       void this.refresh();
-      throw new BowerError('conflict', CHANGED_ELSEWHERE);
+      throw notAsSeenError(reason, CHANGED_ELSEWHERE);
     }
   }
 

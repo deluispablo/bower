@@ -11,7 +11,7 @@
  * The fence of both apply engine adapters (`RunnerDrive` on Google Drive,
  * `FakeRunDrive` on the pretend one), so both refuse the same writes.
  */
-import { notAsSeen, notAsSeenError, readForFence } from '../contracts/still-as-seen';
+import { notAsSeenError, readForFence, refuseNotAsSeen } from '../contracts/still-as-seen';
 import type { DriveFile, FencedCall, FencedDrive } from './drive-api';
 import { isNoAnswer } from './transport';
 
@@ -83,10 +83,7 @@ export class SeenFiles {
     }
     // A folder's own modifiedTime is no version of what is in it; a move or a Bin keeps it '' (`expectPlace`).
     const withTime = seen.modifiedTime !== '';
-    const reason = notAsSeen({ id: seen.id, name: seen.name, parents: seen.parents, ...(withTime ? { modifiedTime: seen.modifiedTime } : {}) }, now && { ...now.file, trashed: now.trashed });
-    if (reason === null) return;
-    console.error(`Refused a write to ${target.part} ${target.id}: ${reason}`);
-    throw notAsSeenError(reason, NOT_AS_SEEN);
+    refuseNotAsSeen({ id: seen.id, name: seen.name, parents: seen.parents, ...(withTime ? { modifiedTime: seen.modifiedTime } : {}) }, now && { ...now.file, trashed: now.trashed }, NOT_AS_SEEN, undefined, `${target.part} ${target.id}`);
   }
 
   /**

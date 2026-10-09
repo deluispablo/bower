@@ -3817,7 +3817,7 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
           if (change === 'none') expect(retried).toBe('done');
         },
       ),
-      { seed: 20261009, numRuns: 500 },
+      { seed: 20261009, numRuns: 1200 },
     );
     expect(met.size).toBe(132);
   }, 60_000);

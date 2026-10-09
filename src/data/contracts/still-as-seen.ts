@@ -105,38 +105,11 @@ export async function readForFence<T>(reading: Promise<T>, unanswered: (e: unkno
   }
 }
 
-/** What one write does to a file (write-once's `Intent`): a change named by its intent, or a text. */
-export type WriteIntent = string | { text: string };
-
 /**
- * The file as this write leaves it: what it read, with the write's own change applied (TL-P4-24 addendum 7). Its
- * modifiedTime is left out, since the write itself changes it.
- * - a rename (`rename:<name>`): that name; a move (`move:<folder>` or `move:<folder>:<name>`): that folder, and name;
- * - a Bin: in the Bin; an unbin (`unbin`, or `unbin:<name>` back under a free name): out of it, under that name;
- * - a text: the name and place it read, out of the Bin.
+ * A write that may already have landed: whether the stored file is now exactly what this very write makes it. Its one
+ * definition is write-once's `landedAs` (`landing` there), never stated here or at a call site (TL-P4-24 addendum 8).
  */
-function expectedAfter(seen: SeenExpectation, intent: WriteIntent): SeenExpectation {
-  const read: SeenExpectation = { id: seen.id, name: seen.name, parents: seen.parents, trashed: seen.trashed === true };
-  if (typeof intent !== 'string') return { ...read, trashed: false };
-  const [kind = '', ...rest] = intent.split(':');
-  const arg = rest.join(':');
-  if (kind === 'bin') return { ...read, trashed: true };
-  if (kind === 'unbin') return { ...read, trashed: false, ...(arg ? { name: arg } : {}) };
-  if (kind === 'rename') return { ...read, name: arg };
-  if (kind === 'move') {
-    const [to = '', ...name] = rest;
-    // Drive's move: the folder it read goes (`removeParent`, its one parent), the new one comes (`addParent`).
-    return { ...read, parents: [...seen.parents.slice(1), to], ...(name.length ? { name: name.join(':') } : {}) };
-  }
-  return read;
-}
-
-/** A write that may already have landed: its intent, and whether the stored file carries its write-once stamp. */
-export interface Landing<T> {
-  intent: WriteIntent;
-  /** Write-once `holds`: its stamp, and for text the checksum of the text sent. */
-  stamped: (now: T) => boolean;
-}
+export type Landing<T> = (now: T) => boolean;
 
 /** What one fence accepts besides "still as seen", and how it says a refusal. */
 export interface FenceOptions<T> {
@@ -145,9 +118,8 @@ export interface FenceOptions<T> {
   /** The refusal's code; `conflict` when left out. */
   code?: ErrorCode;
   /**
-   * This very write, landed though its answer was lost: the stored file carries its stamp **and** is exactly what the
-   * write makes it (`expectedAfter`, built here once from the intent). Then the fence resolves and nothing is sent
-   * again. Asked first, on the same fresh read.
+   * This very write, landed though its answer was lost (write-once's `landing`: its stamp, and the file exactly what the
+   * write makes it). Then the fence resolves and nothing is sent again. Asked first, on the same fresh read.
    */
   landed?: Landing<T>;
 }
@@ -165,10 +137,19 @@ export interface FenceOptions<T> {
  */
 export async function checkStillAsSeen<T extends StoredNow>(seen: SeenExpectation, read: () => Promise<T | null>, message: string, opts: FenceOptions<T>): Promise<T | null> {
   const now = await readForFence(read(), opts.unanswered);
-  const landed = opts.landed;
-  if (now && landed && landed.stamped(now) && notAsSeen(expectedAfter(seen, landed.intent), now) === null) return now;
+  if (now && opts.landed?.(now)) return now;
+  refuseNotAsSeen(seen, now, message, opts.code);
+  return null;
+}
+
+/**
+ * The fence's tail, on a file already read: returns while `now` is still as `seen` says, and otherwise logs the reason
+ * and throws `notAsSeenError(reason, message, code)`. `checkStillAsSeen` ends with it, and so does the run's synchronous
+ * check (`SeenFiles.assert`), so both refuse alike. `what` names the file in the log.
+ */
+export function refuseNotAsSeen(seen: SeenExpectation, now: StoredNow | null, message: string, code?: ErrorCode, what: string = seen.id): void {
   const reason = notAsSeen(seen, now);
-  if (reason === null) return null;
-  console.error(`Refused a write to ${seen.id}: ${reason}`);
-  throw notAsSeenError(reason, message, opts.code);
+  if (reason === null) return;
+  console.error(`Refused a write to ${what}: ${reason}`);
+  throw notAsSeenError(reason, message, code);
 }
