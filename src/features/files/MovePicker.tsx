@@ -88,6 +88,9 @@ export function MovePicker() {
               const exact = choices.filter((f) => nameOf(f).toLowerCase() === want);
               const one = choices.length === 1 ? choices[0] : exact.length === 1 ? exact[0] : undefined;
               if (!want) setHint('Type a folder name, or pick one with the arrows.');
+              else if (want === nameOf(from).toLowerCase()) setHint(exact.length
+                ? 'Several folders match. Pick one with the arrows, or type more.'
+                : `It is already in ${nameOf(from)}. Pick another folder with the arrows, or type another name.`);
               else if (one) pick(one);
               else if (choices.length > 1) setHint('Several folders match. Pick one with the arrows, or type more.');
               else setHint('No folder has that name. Type another, or clear the box to see them all.');
