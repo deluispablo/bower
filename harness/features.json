@@ -5921,7 +5921,7 @@
     "id": "c4-test-timers",
     "task": "p4-consolidation",
     "category": "test",
-    "passes": false,
+    "passes": true,
     "what": "Load-proof tests: one byte table per note (rawByteAt), a re-entrant heavy-run lock around check and every e2e (done.sh too), Vite optimizeDeps include and warmup, the shared axe helper waits for animations, the real-timer allowlist empty, a CPU report and a map row.",
     "steps": [
       "harness/real-timers.json is empty and the ceiling is 0."
