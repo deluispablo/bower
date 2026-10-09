@@ -36,6 +36,11 @@ export interface SpineRead {
   warm?(reads: ReadonlyArray<{ id: string; as: 'text' | 'bytes' }>): void;
   /** Bin entries by item key below `rootId`: asked only for a declared member that is not in the listing. */
   binnedByItem(rootId: string, keys: readonly string[]): Promise<BinnedItem[]>;
+  /**
+   * One file by its id, the Bin included (`files.get`): asked only for the note of a pair that is gone from the
+   * listing, when its answered row is made, for the name it keeps in the Bin (TL-P4-19 addendum 14).
+   */
+  binned(id: string): Promise<DriveFile>;
 }
 
 /** Why a declared pile waits for a later tidy-up, and what you can do about it. */
@@ -391,6 +396,7 @@ export async function planAdmission(source: SpineRead, rootId: string, opts: Adm
     readText: (id) => source.readText(id),
     digest: (f) => source.digest(f),
     binnedByItem: (id, keys) => source.binnedByItem(id, keys),
+    binned: (id) => source.binned(id),
   };
   const ix = VaultIndex.build(rootId, listing);
   const journal = (await journalOf(read, ix)).map(admitted).sort((a, b) => byCodePoint(a.fileId, b.fileId));

@@ -23,7 +23,7 @@ import { PROP, RUNNER_WRITES, SYSTEM, isRunnerFile, type HashesFile, type Questi
 import { ruleLike } from '../rules';
 import { savedLinkAddress } from '../search-text';
 import { EMPTY_MD5, md5Hex } from '../contracts/hashes';
-import { STATE_ASK, STATE_ASK_AGAIN, answeredGone, askId, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
+import { STATE_ASK, STATE_ASK_AGAIN, answeredGone, askId, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
 import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
 import { parseTimelineLine } from '../contracts/timeline-line';
@@ -445,9 +445,20 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const had = lastAnswer.get(l.rec.questionId ?? '');
     if (!had || had.rec.at <= l.rec.at) lastAnswer.set(l.rec.questionId ?? '', l);
   }
-  const answeredRows = new Map([...lastAnswer.values()].flatMap((l) => {
-    if (l.rec.text === 'no') return [];
-    const row = answeredGone(listed.find((x) => x.id === l.rec.questionId) ?? { id: l.rec.questionId ?? '' }, seenFirst, notesSeen, notePath);
+  const yesAnswers = [...lastAnswer.values()].filter((l) => l.rec.text !== 'no').map((l) => ({ l, q: listed.find((x) => x.id === l.rec.questionId) ?? { id: l.rec.questionId ?? '' } }));
+  // A pair asked by ids whose other note is gone is named by the name its file keeps in the Bin: one read of that file,
+  // only for a row made here (TL-P4-19 addendum 14). A file that cannot be read (a 404 or any refusal) leaves the row
+  // its fallback words.
+  const binnedNames = new Map<string, string>();
+  for (const id of new Set(yesAnswers.flatMap(({ q }) => binnedPairNote(q, notesSeen) ?? []))) {
+    try {
+      binnedNames.set(id, displayName((await drive.binned(id)).name));
+    } catch (e) {
+      console.error('The other note of a pair could not be read; its answered row says "the other note"', e);
+    }
+  }
+  const answeredRows = new Map(yesAnswers.flatMap(({ l, q }) => {
+    const row = answeredGone(q, seenFirst, notesSeen, notePath, (id) => binnedNames.get(id));
     return row ? [[l.rec.id, row] as const] : [];
   }));
   let journal = lines.filter((l) => (l.rec.kind === 'request' ? !!d.request : l.rec.kind === 'answer' ? (d.settles?.(l.rec.questionId ?? '') ?? settled.has(l.rec.questionId ?? '')) : true));

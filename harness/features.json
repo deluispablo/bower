@@ -5466,7 +5466,7 @@
     "id": "c3-pair-ask",
     "task": "p4-consolidation",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "what": "A typed two-note ask (keep one note), lines that may cite a words-only pile so the value gate covers words, and the merge reusing keep-one-note-merge. Live proof on the real path.",
     "steps": [
       "After c3-subject and c3-reply-schema.",
@@ -5474,11 +5474,11 @@
       "Words-only piles may be cited by a Timeline line.",
       "Yes reuses keep-one-note-merge through the answer loop."
     ],
-    "verify": "pnpm -C runner exec vitest run -t \"two notes for one thing are asked as a pair|a words-only pile can become a Timeline line|keep-one says what happened when the other note moved or was binned|a yes to a pair ask merges through keep-one-note-merge|with no new input a second run leaves nothing held or waiting for the same reason\" && pnpm vitest run -t \"a pair question has a typed two-note subject\" && bash scripts/e2e-both.sh e2e/capabilities.spec.ts -g \"C11: a kept rule and a merge answer are applied\"",
-    "note": "TL-P4-16 addendum (main e44eeed), defect keep-one-not-asked. Escalated. Stage 3. Sweep before dispatch (TL-P4-19 addendum 7): TL-P4-16 addendum (keep-one-not-asked, option b: typed pair, words-only cites under the value gate, merge reuses keep-one-note-merge; option c rejected; live proof on the real path) and safety-polish carry-over row 3 / TL-P4-14 addendum 3 (KEEP_CHANGED after a move or Bin, P4-19b). Packet docs/harness/2026-10-09-c3-pair-ask-packet.md. TL-P4-19 addendum 8 (main 52161896): fix round before merge: words-pile-held-forever settles through duplicates.ts alreadySaved {name, as}; pair-yes-waits-forever: the subject home settles a gone subject for every kind (copy: The other note was already in the Bin, so nothing was merged.); liveness class test. TL-P4-19 addendum 9: final copy from the designer (words-only row \"Your lines were already in <note>.\" / \"... in your notes.\"; \"Not merged: <other note> was already in the Bin.\" / fallback \"the other note\"). UI entry (TL-P4-18 addendum 3): design check before close (ui field arrives with c3-design-gate). P4-46 PASS; fix round (red 09f64090, fix dfac85e6) per addenda 8-9; P4-46b PASS, second way? no. Merge waits for the lead on alreadySaved.notes; close waits for the designer verified. Merged bdc08775. Designer: not verified (not-merged-never-shown, DEFECT_LOG); waits for the lead. Round 2 (addendum 10): red c29a2862, fix 26ff7d54; P4-46c PASS, second way? no; merged 6f7c2ae2; design check sent.",
+    "verify": "pnpm -C runner exec vitest run -t \"two notes for one thing are asked as a pair|a words-only pile can become a Timeline line|keep-one says what happened when the other note moved or was binned|a yes to a pair ask merges through keep-one-note-merge|with no new input a second run leaves nothing held or waiting for the same reason\" && pnpm vitest run -t \"a pair question has a typed two-note subject|a gone subject writes one answered row for each question kind|a pair question whose other note is in the Bin is not listed|an old run report with no answered field still reads|the answered rows have their own label and never sit under brought up to date|a note binned in Drive itself shows its name in the row|a pair whose other note cannot be read uses the fallback\" && bash scripts/e2e-both.sh e2e/capabilities.spec.ts -g \"C11: a kept rule and a merge answer are applied\"",
+    "note": "TL-P4-16 addendum (main e44eeed), defect keep-one-not-asked. Escalated. Stage 3. Sweep before dispatch (TL-P4-19 addendum 7): TL-P4-16 addendum (keep-one-not-asked, option b: typed pair, words-only cites under the value gate, merge reuses keep-one-note-merge; option c rejected; live proof on the real path) and safety-polish carry-over row 3 / TL-P4-14 addendum 3 (KEEP_CHANGED after a move or Bin, P4-19b). Packet docs/harness/2026-10-09-c3-pair-ask-packet.md. TL-P4-19 addendum 8 (main 52161896): fix round before merge: words-pile-held-forever settles through duplicates.ts alreadySaved {name, as}; pair-yes-waits-forever: the subject home settles a gone subject for every kind (copy: The other note was already in the Bin, so nothing was merged.); liveness class test. TL-P4-19 addendum 9: final copy from the designer (words-only row \"Your lines were already in <note>.\" / \"... in your notes.\"; \"Not merged: <other note> was already in the Bin.\" / fallback \"the other note\"). UI entry (TL-P4-18 addendum 3): design check before close (ui field arrives with c3-design-gate). P4-46 PASS; fix round (red 09f64090, fix dfac85e6) per addenda 8-9; P4-46b PASS, second way? no. Merge waits for the lead on alreadySaved.notes; close waits for the designer verified. Merged bdc08775. Designer: not verified (not-merged-never-shown, DEFECT_LOG); waits for the lead. Round 2 (addendum 10): red c29a2862, fix 26ff7d54; P4-46c PASS, second way? no; merged 6f7c2ae2; design check sent. Designer round 2: 3 checks pass, 2 gaps (DEFECT_LOG); waits for the lead. Round 3 (addenda 11, 14): label red aa83f697 fix 759f1fdd; name red 1a8cc05a fix 294c7140; P4-46d PASS; merged 049e07d9; design check sent. Designer verified round 3 at 049e07d9. Reds proved by hand: c29a2862 (2 fail), aa83f697 (1, role list not found), 1a8cc05a (2) in /tmp/c3pair-handred-*.log.",
     "ui": true,
-    "review": "P4-46c PASS",
-    "design": "pending (round 2 at 6f7c2ae2)"
+    "review": "P4-46d PASS",
+    "design": "verified"
   },
   {
     "id": "c1-digest-library",
@@ -5979,8 +5979,9 @@
       "If the section changed since it was shown, the question is asked again with the reason."
     ],
     "verify": "pnpm vitest run -t \"Bower's last state is read from the previous state change, not searched\" && pnpm -C runner exec vitest run -t \"a yes to write it applies the shown text with no model call|write it re-asks when the section changed since it was shown\"",
-    "note": "TL-P4-14 stage 3 row; TL-P4-19 addendum 7 (main 85fb052b): write-it-silent folds in (TL-P4-16 addendum 2; DEFECT_LOG write-it-silent; docs/harness/defects/2026-10-08-write-it-again.md). Both reds must be green before close. Starting model: bower-escalated (it writes). ui: true (the q-state question shows the stored text; the re-ask carries a reason; copy goes through the designer). Packet docs/harness/2026-10-09-c3-state-mark-packet.md.",
-    "ui": true
+    "note": "TL-P4-14 stage 3 row; TL-P4-19 addendum 7 (main 85fb052b): write-it-silent folds in (TL-P4-16 addendum 2; DEFECT_LOG write-it-silent; docs/harness/defects/2026-10-08-write-it-again.md). Both reds must be green before close. Starting model: bower-escalated (it writes). ui: true (the q-state question shows the stored text; the re-ask carries a reason; copy goes through the designer). Packet docs/harness/2026-10-09-c3-state-mark-packet.md. Round 1 red 1299ca14 fix d36ba829; round 2 (answered seams) 11e79dc6; P4-47 BLOCK: the held re-ask is untested; round 3 per TL-P4-19 addendum 12 folds it in.",
+    "ui": true,
+    "review": "P4-47 BLOCK (held re-ask untested)"
   },
   {
     "id": "c3-design-gate",
@@ -5999,21 +6000,21 @@
     "id": "c3-test-tamper",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "A branch that modifies or deletes an existing test needs a tests-changed line per file in its notes, checked by one rule that integrate.sh and check-harness share; playwright forbids only; a focused or skipped unit test fails the check.",
     "steps": [
       "A fixture branch editing a test without a line fails integration.",
       "A line per file passes.",
       "A .only or .skip fails pnpm check."
     ],
-    "verify": "pnpm exec vitest run src/harness.test.ts -t \"a branch that changes an existing test without a tests-changed line fails integration|a tests-changed line for each changed test lets the branch pass|a deleted test needs its own tests-changed line|a focused or skipped unit test fails the check|both playwright configs forbid only\"",
-    "note": "TL-P4-20 row 1. Packet 2026-10-09-c3-test-tamper-packet.md. Starting model bower-implementer. The test file may move; the worker names it."
+    "verify": "pnpm exec vitest run src/harness-git.test.ts src/harness.test.ts -t \"a branch that changes an existing test without a tests-changed line fails integration|a tests-changed line for each changed test lets the branch pass|a deleted test needs its own tests-changed line|a focused or skipped unit test fails the check|both playwright configs forbid only\"",
+    "note": "TL-P4-20 row 1. Packet 2026-10-09-c3-test-tamper-packet.md. Starting model bower-implementer. The test file may move; the worker names it. Red 3e9b95f6, fix 95e7f290, notes 6a65533e. Adds @vitest/eslint-plugin (no-focused-tests, no-disabled-tests)."
   },
   {
     "id": "c3-flaky-policy",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "Batch and freeze e2e runs use one retry and failOnFlakyTests, so a retry-passed test fails and is named; a quarantine file (owner, expiry, logged defect) reports instead of failing and is checked; no test is ever skipped.",
     "steps": [
       "A fixture test passing only on retry fails a batch run.",
@@ -6021,34 +6022,34 @@
       "A bad quarantine entry fails the check."
     ],
     "verify": "pnpm exec vitest run src/harness.test.ts -t \"a test that passes only on retry fails a batch run|a quarantined test that passes on retry is reported, not failed|a quarantine entry without an owner or past its expiry fails the check|a quarantine entry must name a logged defect\"",
-    "note": "TL-P4-20 row 9. Packet 2026-10-09-c3-flaky-policy-packet.md. Starting model bower-implementer."
+    "note": "TL-P4-20 row 9. Packet 2026-10-09-c3-flaky-policy-packet.md. Starting model bower-implementer. Red 028910f1, fix 866c64bb, notes e9bbbbec, merged ca334fe2. Batch switch E2E_BATCH=1. Red proved by hand at 028910f1: 4 verify tests fail on assertions (/tmp/c3flaky-handred.log); the revert cannot apply (check-harness.mjs touched later)."
   },
   {
     "id": "c3-hooks",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
-    "what": "Implementers and escalated workers cannot stop with a dirty tree or without a green check mark on HEAD (frontmatter Stop hook, honours stop_hook_active); hook denials exit 2; every hook script path exists; SessionStart on resume; a PreCompact hook that never blocks.",
+    "passes": true,
+    "what": "Hook denials exit 2; every hook script path exists; SessionStart on resume; a PreCompact hook that never blocks. (The Stop gate moved to c3-stop-gate, TL-P4-20 addendum 3.)",
     "steps": [
       "A fixture stop input with a dirty tree is refused.",
       "stop_hook_active lets it stop.",
       "A missing hook path fails check-harness."
     ],
-    "verify": "pnpm exec vitest run src/harness.test.ts -t \"a worker cannot stop with a dirty tree or without a green check on its HEAD|a stop hook already active lets the worker stop|a hook denial exits 2|every hook script named in settings exists|the main-checkout guard uses the hook input cwd\"",
-    "note": "TL-P4-20 rows 2-3. Owner authorized the config changes in the coordinator chat 2026-10-09. Packet 2026-10-09-c3-hooks-packet.md."
+    "verify": "pnpm exec vitest run src/hooks.test.ts -t \"a hook denial exits 2|every hook script named in settings exists|the main-checkout guard uses the hook input cwd\"",
+    "note": "TL-P4-20 rows 2-3. Owner authorized the config changes in the coordinator chat 2026-10-09. Packet 2026-10-09-c3-hooks-packet.md. Red a695ad3b, fix 1345dd13, Stop gate dropped f91584a3 (addendum 3), merged b2620a1e. Red proved by hand at a695ad3b: the 3 kept verify tests fail on assertions (/tmp/c3hooks-handred.log); the revert cannot apply (gate files deleted later)."
   },
   {
     "id": "c3-permissions",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "Settings deny edits to public/landing, reads of .env files and git push; a hook allows only the BACKUP.md push of main to backup.",
     "steps": [
       "Fixture inputs: only the exact backup push is allowed.",
       "A forced or other-ref push is refused."
     ],
-    "verify": "pnpm exec vitest run src/harness.test.ts -t \"only the backup push of main is allowed|a forced or other-ref push is refused|settings deny edits to the landing export and reads of env files\"",
-    "note": "TL-P4-20 row 4. Owner authorized the config changes in the coordinator chat 2026-10-09. The coordinator checks the live backup push once after merge. Packet 2026-10-09-c3-permissions-packet.md."
+    "verify": "pnpm exec vitest run src/guard-push.test.ts -t \"only the backup push of main is allowed|a forced or other-ref push is refused|settings deny edits to the landing export and reads of env files\"",
+    "note": "TL-P4-20 row 4. Owner authorized the config changes in the coordinator chat 2026-10-09. The coordinator checks the live backup push once after merge. Packet 2026-10-09-c3-permissions-packet.md. Red d36e52d9, fix 387af2de, merged cbbc3c8c. Pushes are refused by the hook only (a deny rule would beat the hook allow). Live backup checked at the stage 3 end."
   },
   {
     "id": "c3-agent-defs",
@@ -6062,5 +6063,19 @@
     ],
     "verify": "pnpm exec vitest run src/harness.test.ts -t \"every worker agent has a turn cap and read-only roles list their tools\"",
     "note": "TL-P4-20 rows 5-6. Owner authorized the config changes in the coordinator chat 2026-10-09. Packet 2026-10-09-c3-agent-defs-packet.md."
+  },
+  {
+    "id": "c3-stop-gate",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": false,
+    "what": "Implementers and escalated workers cannot stop with a dirty worktree or without a green pnpm check mark on its HEAD; the gate judges the tree named by the card's strict worktree line, pnpm check writes the mark, and stop_hook_active frees a second try.",
+    "steps": [
+      "Prove SubagentStop carries last_assistant_message (docs and one live stop).",
+      "A dirty worktree stop is refused for that tree, not main.",
+      "A clean tree with a mark passes."
+    ],
+    "verify": "pnpm exec vitest run src/hooks.test.ts -t \"a worker stop with a dirty worktree is refused for that tree, not for main|a worker stop with a clean worktree and a green mark on its head is allowed|a final reply without a worktree line is refused|pnpm check writes the green mark for its tree and head|a stop hook already active lets the worker stop\"",
+    "note": "TL-P4-20 addendum 3 (main bd1e6d53), option (b); defect stop-gate-wrong-tree. Owner authorized config changes in the coordinator chat 2026-10-09. Packet 2026-10-09-c3-stop-gate-packet.md."
   }
 ]
