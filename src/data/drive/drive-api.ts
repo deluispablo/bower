@@ -220,8 +220,6 @@ export interface RunDrive {
   readonly provenance: 'fake-stored' | 'adapter-read';
   /** A file as it is now for a check, read from Drive; null when it is gone or in the Bin. */
   recheck(id: string): Promise<DriveFile | null>;
-  /** The folder a move goes into, for its check (it may be one this attempt made or read); null when gone or in the Bin. */
-  folder(id: string): Promise<DriveFile | null>;
   /** What Drive stores for a file now, in the Bin or not; null when it is gone. */
   evidence(id: string): Promise<StoredEvidence | null>;
   readBytes(id: string): Promise<Uint8Array>;

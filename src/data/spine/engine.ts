@@ -50,7 +50,7 @@ import type { DriveFile, FencedDrive, RunDrive, StoredEvidence } from '../drive/
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
 import { savedTwins } from './duplicates';
 import { canonical, checkpointName, firstCheckpoint, manifestName, nextCheckpoint, type AttemptMark, type CheckpointPatch, type RunManifest, type RunRecords } from './records';
-import { SOURCE_NOT_AS_SEEN, materialize } from './report';
+import { SOURCE_NOT_AS_SEEN, UNCONFIRMED_GONE, materialize } from './report';
 import { conflicts, needsOf } from './schedule';
 /**
  * How one operation ended once sent: `rejected` only when its precondition refused it before anything was sent, or
@@ -63,7 +63,7 @@ export type Settled = { state: 'applied'; evidence: EffectEvidence } | { state: 
  * does): it landed (with its stored evidence), it did not (the folder still shows what the plan saw), or neither can
  * be told (a read failed, or the folder shows something else).
  */
-export type ReadBack = { state: 'landed'; evidence: EffectEvidence } | { state: 'not-landed' } | { state: 'unreadable'; why: string };
+export type ReadBack = { state: 'landed'; evidence: EffectEvidence } | { state: 'not-landed' } | { state: 'gone' } | { state: 'unreadable'; why: string };
 
 /** The effects of operations on the folder: the adapter's sends and evidence reads. */
 export interface Effects {
@@ -109,7 +109,6 @@ export interface SpineRun {
 /** Settled: every operation applied or rejected (or the run already ended), with its verified manifest. */
 export type RunEnd = { state: 'settled'; chain: Checkpoint[]; manifest: RunManifest; manifestHash: string } | { state: 'failed'; why: string };
 
-/** One sentence for a run that stopped on an operation it cannot tell was applied. */
 /** Why an operation whose prerequisites did not all happen is not sent. */
 const STAYED: Failure = { code: 'conflict', message: 'Some of its things stayed where they were, so it stays too.' };
 
@@ -212,6 +211,10 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
       const back = await run.effects.readBack(op, working(), manifest);
       if (back.state === 'landed') {
         settle({ operationId, state: 'applied', evidence: back.evidence });
+        return;
+      }
+      if (back.state === 'gone') {
+        settle({ operationId, state: 'rejected', failure: { code: 'unknown', message: UNCONFIRMED_GONE } });
         return;
       }
       if (back.state === 'unreadable') {
@@ -467,8 +470,7 @@ export function driveEffects(drive: RunDrive): Effects {
         const taken = (await drive.list(parentId)).some((f) => f.name.toLowerCase() === e.name.toLowerCase());
         return taken ? { refused: refused('conflict', e.purpose === 'generated' ? NOTE_THERE : NAME_TAKEN) } : { parentId, modifiedTime: null };
       }
-      // A move's folder is not the fence's target (the thing moved is), so it is read here.
-      if (!(await drive.folder(parentId))?.folder) return { refused: refused('not-found', NO_FOLDER) };
+      // A move's folder is read by the fence with the thing moved, right before the send: that read is its check.
       // The note a saved link goes beside (TL-P2-20 R4-2): still where it was captured, and still that link's note.
       const reused = reusedNoteOf(manifest, op);
       if (reused) {
@@ -588,7 +590,8 @@ export function driveEffects(drive: RunDrive): Effects {
    *   evidence is what Drive stores now;
    * - no stamp: it never landed. The caller sends it only if its checks still pass, so a thing the person changed
    *   meanwhile is set aside with the same words an uninterrupted run would use;
-   * - a thing it changes is gone from Drive: not landed, so it is set aside, as an uninterrupted run would;
+   * - a thing it changes is gone from Drive (purged): gone. Drive keeps nothing to tell a change that landed before
+   *   the purge from one never sent, so it is reported as not confirmed (TL-P4-14 addendum 7), never sent again;
    * - a read fails, or a made thing has a lookalike with its create key and no stamp (made before
    *   stamps, or by something else): unreadable, since making it again could make it twice.
    */
@@ -615,10 +618,9 @@ export function driveEffects(drive: RunDrive): Effects {
         if (!one) return { state: 'not-landed' };
         return !others.length && stampSays(one.appProperties?.[STAMP], head.runId, op, manifest) === 'landed' ? landed(one.id) : other();
       }
-      // Gone from Drive (the person emptied the Bin): no stamp to read, and nothing left to send to. Not landed, so its
-      // checks refuse it and it is set aside with the words an uninterrupted run would use.
+      // Gone from Drive (the person emptied the Bin): no stamp to read, and nothing left to send to.
       const ev = await drive.evidence(e.before.fileId);
-      if (!ev) return { state: 'not-landed' };
+      if (!ev) return { state: 'gone' };
       const says = stampSays(ev.file.appProperties?.[STAMP], head.runId, op, manifest);
       if (says === 'landed') return { state: 'landed', evidence: toEvidence(ev, encoding) };
       return says === 'unknown' ? other() : { state: 'not-landed' };
@@ -642,10 +644,11 @@ export function driveEffects(drive: RunDrive): Effects {
         answer = await send(op.effect, w, ok.parentId, ok.modifiedTime, stamp);
       } catch (e) {
         // Refused by the fence's own read before anything was sent: an honest rejection.
-        if (e instanceof BowerError && e.code === 'conflict' && (notAsSeenReason(e) !== null || op.effect.kind === 'write-runner-json' || op.effect.kind === 'edit-text')) {
+        const k = op.effect.kind;
+        if (e instanceof BowerError && (notAsSeenReason(e) !== null || (e.code === 'conflict' && (k === 'write-runner-json' || k === 'edit-text')))) {
           console.error(e);
-          const k = op.effect.kind;
-          if (k === 'create-folder' || k === 'create-text') return refused('not-found', NO_FOLDER);
+          // The folder it goes into is gone (a create's, or a move's, told by its code).
+          if (k === 'create-folder' || k === 'create-text' || (k === 'move' && e.code === 'not-found')) return refused('not-found', NO_FOLDER);
           return refused('conflict', k === 'edit-text' ? NOTE_CHANGED : k === 'write-runner-json' ? LIST_CHANGED : NOT_AS_SEEN);
         }
         // No answer kept (a network error, or Google's 5xx): read back once, never sent again blindly (TL-P3-28).
@@ -654,6 +657,7 @@ export function driveEffects(drive: RunDrive): Effects {
           const back = await reconcile(op, head, manifest);
           if (back.state === 'landed') return { state: 'applied', evidence: back.evidence };
           if (back.state === 'not-landed') return refused('offline', NOT_REACHED);
+          if (back.state === 'gone') return refused('unknown', UNCONFIRMED_GONE);
           console.error(back.why);
         }
         throw e;

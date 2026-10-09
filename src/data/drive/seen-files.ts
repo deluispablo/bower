@@ -3,8 +3,10 @@
  * still so: the target's name, parents and Bin state, and (for a content
  * write) its modifiedTime. A file the run never read is never written.
  *
- * A create's folder is checked only for being there, a folder, and out of
- * the Bin: where it is and what it is called are no version of what is in it.
+ * A create's folder, and the folder a move goes into, are checked only for
+ * being there, a folder, and out of the Bin: where it is and what it is called
+ * are no version of what is in it. Both are read right before the send, as the
+ * target is, never kept from an earlier read.
  *
  * The fence of both apply engine adapters (`RunnerDrive` on Google Drive,
  * `FakeRunDrive` on the pretend one), so both refuse the same writes.
@@ -18,13 +20,17 @@ export interface StoredNow {
   trashed: boolean;
 }
 
-/** The file a write's check reads: the file itself, or the folder a create goes into. */
+/** The file a write's check reads: the file itself, the folder a create goes into, or the folder a move goes into. */
 export interface FenceTarget {
   id: string;
-  part: 'target' | 'parent';
+  part: 'target' | 'parent' | 'destination';
 }
 
 export const targetOf = (call: FencedCall): FenceTarget => ('id' in call ? { id: call.id, part: 'target' } : { id: call.parentId, part: 'parent' });
+
+/** The folder a move puts its target into, read by the same fence right before the send; null for any other write. */
+export const destinationOf = (call: FencedCall): FenceTarget | null =>
+  call.op === 'update' && call.patch.addParent !== undefined ? { id: call.patch.addParent, part: 'destination' } : null;
 
 /** The runner's sentence for a write its fence refused; code tells the refusal by its reason (`notAsSeenReason`). */
 const NOT_AS_SEEN = 'This changed somewhere else while Bower was tidying.';
@@ -57,12 +63,12 @@ export class SeenFiles {
 
   /** Throws a `conflict` unless the stored file is still as the run saw it (`notAsSeen`, the one check). */
   assert(target: FenceTarget, now: StoredNow | null): void {
-    // A create needs its folder there and out of the Bin; where that folder is, or what it is called, is no version of
-    // what it holds, so it need not have been read before.
-    if (target.part === 'parent') {
+    // A create or a move needs its folder there and out of the Bin; where that folder is, or what it is called, is no
+    // version of what it holds, so it need not have been read before. A move's folder gone is told by its code.
+    if (target.part !== 'target') {
       if (now && !now.trashed && now.file.folder) return;
       console.error(`Refused a write into folder ${target.id}: gone`);
-      throw notAsSeenError('gone', NOT_AS_SEEN);
+      throw notAsSeenError('gone', NOT_AS_SEEN, target.part === 'destination' ? 'not-found' : 'conflict');
     }
     const seen = this.seen.get(target.id);
     // A folder's own modifiedTime is no version of what is in it; a move or a Bin keeps it '' (`expectPlace`).

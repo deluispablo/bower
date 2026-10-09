@@ -637,7 +637,9 @@ describe('recovery without the browser', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const w = await world();
     let purged: string | null = null;
-    const isMove = (call: FencedCall): boolean => call.op === 'update' && call.patch.addParent !== undefined;
+    // The payslip's filing move: a thing the report names.
+    const payslip = (await w.wire.drive.listAll(w.root)).find((f) => f.name === 'Payslip_Aug.pdf')?.id;
+    const isMove = (call: FencedCall): boolean => call.op === 'update' && call.id === payslip && call.patch.addParent !== undefined;
     const end = await tidy(w, 1, {
       loseReply: (call) => purged === null && isMove(call),
       applied: (call) => {
@@ -654,8 +656,8 @@ describe('recovery without the browser', () => {
     const outcome = (await chainOf(w.wire, w.root)).at(-1)?.outcomes.find((o) => o.operationId === move?.operationId);
     // Neither applied nor moved away: Bower cannot tell whether it landed, and says so.
     expect(outcome?.state === 'rejected' ? outcome.failure : outcome?.state).toEqual({ code: 'unknown', message: UNCONFIRMED_GONE });
-    expect(JSON.stringify(end.view)).toContain(UNCONFIRMED_GONE);
-    expect(JSON.stringify(end.view)).not.toContain(MOVED_AWAY);
+    const view = (await endOf(w)).view as { run: { report: { setAside: Array<{ name: string; why: string }> } } };
+    expect(view.run.report.setAside.find((r) => r.name === 'Payslip_Aug.pdf')?.why).toBe(UNCONFIRMED_GONE);
   });
 
   it('the bowerOp stamp is never accumulated', async () => {
