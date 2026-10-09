@@ -1,0 +1,38 @@
+{
+  "files": {
+    "present": [
+      "Areas/Home/Garden plot.md",
+      "Areas/Home/Water butt update.txt"
+    ],
+    "absent": [
+      "Inbox/*",
+      "Areas/Home/Water butt update.md"
+    ]
+  },
+  "notes": [
+    {
+      "path": "Areas/Home/Garden plot.md",
+      "contains": [
+        "summary: Alex's plot at the Larkspur Lane community garden.",
+        "## Current state\n- Alex will keep the shared water butt until the replacement arrives.\n\n## My plans\nAlex wants to paint the water butt amber."
+      ],
+      "timeline": [
+        "2026-09-12 \u00b7 Planted garlic.",
+        "2026-10-07 \u00b7 The committee will replace the shared water butt.",
+        "The replacement water butt has arrived.",
+        "[[Water butt update.txt]]"
+      ],
+      "timelineCount": 3
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "created": [],
+    "updated": [
+      "Areas/Home/Garden plot.md"
+    ],
+    "questionsAtMost": 1,
+    "questionsExactly": 1
+  }
+}

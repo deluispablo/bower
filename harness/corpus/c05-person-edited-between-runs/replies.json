@@ -1,0 +1,57 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Committee notice.txt",
+        "to": "Areas/Home",
+        "name": "Committee notice.txt"
+      }
+    ],
+    "states": [
+      {
+        "note": "Areas/Home/Garden plot.md",
+        "lines": [
+          "The committee will replace the shared water butt."
+        ],
+        "cites": "$file:Committee notice.txt"
+      }
+    ],
+    "lines": [
+      {
+        "note": "Areas/Home/Garden plot.md",
+        "text": "The committee will replace the shared water butt.",
+        "cites": "$file:Committee notice.txt"
+      }
+    ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Water butt update.txt",
+        "to": "Areas/Home",
+        "name": "Water butt update.txt"
+      }
+    ],
+    "lines": [
+      {
+        "note": "Areas/Home/Garden plot.md",
+        "text": "The replacement water butt has arrived. The committee asks Alex to return the shared water butt.",
+        "cites": "$file:Water butt update.txt"
+      }
+    ],
+    "states": [
+      {
+        "note": "Areas/Home/Garden plot.md",
+        "lines": [
+          "The replacement water butt has arrived.",
+          "The committee asks Alex to return the shared water butt."
+        ],
+        "cites": "$file:Water butt update.txt"
+      }
+    ]
+  }
+]

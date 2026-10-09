@@ -1,0 +1,31 @@
+{
+  "id": "c05-merge-answer-no",
+  "capability": "C05",
+  "title": "Keep both notes when Alex declines the merge",
+  "covers": "scripted",
+  "source": "new (C05 preservation through scripted intent replies and the existing planner)",
+  "scope": "instructions",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "answer",
+      "text": "no",
+      "questionId": "q-c05-larkspur-pair"
+    }
+  ],
+  "questions": [
+    {
+      "id": "q-c05-larkspur-pair",
+      "text": "These notes describe the same Larkspur Lane flat. Keep one note?",
+      "yes": "Yes, keep one",
+      "no": "No, keep both",
+      "askedAt": 1791453600000
+    }
+  ],
+  "bowerOwned": [
+    "Projects/Flat hunt/Larkspur Lane flat.md",
+    "Projects/Flat hunt/Larkspur Lane flat, second listing.md",
+    "Projects/Flat hunt/Flat hunt.md"
+  ]
+}

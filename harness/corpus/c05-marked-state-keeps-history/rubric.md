@@ -1,0 +1,1 @@
+Establish the first state through a real Bower write. Replace only its unchanged marked state from the new letter; preserve Alex's prose and both old Timeline entries. Keep the previous state in undo evidence.
