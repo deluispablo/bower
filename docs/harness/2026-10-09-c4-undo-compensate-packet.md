@@ -59,7 +59,7 @@ Update the mechanism map row.
 
 | Situation | What shows |
 | --- | --- |
-| Undo of a change (Bin, rule, restore), online or offline | Nothing new in the dock. The Undo keeps today's confirmation, replaced in place, and the change leaves "Since the last tidy-up" as it does today. Undo always works, offline too. There is no "Not undone yet" for journal Undos. |
+| Undo of a change (Bin, rule, restore), online or offline | No promise line. Today's confirmation is kept and replaced in place: "The rule is back.", "<name> is back", or "The pile is back in the inbox". The change leaves "Since the last tidy-up" as it does today, and there is no "Not undone yet" for journal Undos. **The line must stay true.** If a Bin Undo while offline can only record the line, so the file is still in the Drive Bin and not in the tree, it reads "<name> comes back when you are online." It never says "is back" before it is. |
 | A late undo (a run that started elsewhere had already taken the change) | A labelled list, "Too late to undo", in the "New notes" style, on the Home card and the done sheet. It is not counted. Its rows use display names only:<br>- Bin: "<name> was already in the Bin before your Undo.", with the link "Open the Bin in Drive";<br>- Restore: "<name> was already back before your Undo.", with the link "Open <name>";<br>- Rule: "The rule "<words>" was already added before your Undo.", with the link "Open Your rules". |
 | Remove the pile, when Drive can't be reached to check | As in TL-P4-24 addendum 5: the confirm box's line, "Not removed yet: …", unchanged. |
 
@@ -73,7 +73,7 @@ Update the mechanism map row.
 - **One red for each of the 12 Codex findings,** named in the notes against the review sections.
 - **The version-skew test and the old-line and old-report fixtures,** including a report without `tooLate`.
 - **e2e:** the "Too late to undo" list on the Home card and the done sheet, from a scripted late undo on fake, phone and desktop, with axe.
-- **e2e:** the dock Undo (online and offline) and removePile, on fake, phone and desktop, with axe.
+- **e2e:** the dock Undo online ("is back") and offline ("comes back when you are online" when the file is still in the Bin), and removePile, on fake, phone and desktop, with axe.
 
 ## Verify
 
@@ -88,5 +88,7 @@ Update the mechanism map row.
 2. The red.
 3. The fix.
 4. The notes, with compatibility rows (the new line kind and the version skew) and `tests changed:` lines.
+
+**Signed off** by the designer on 2026-10-09 (7e329e48), with the copy above (TL-P4-27 addendum 1), including the offline condition on "is back".
 
 A worker may not loosen its own red (TL-P4-22 addendum 22).
