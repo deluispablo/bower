@@ -8,6 +8,7 @@ import {
   ACTION_REFERENCE,
   ACT_REFERENCE,
   ENGINE_MEMBERS,
+  EXEMPT_MEMBERS,
   FPS,
   NEUTRAL,
   PART_KIND,
@@ -243,6 +244,18 @@ describe("the engine's named actions", () => {
       'glide: not referenced and not on the allowlist',
       'preen: not referenced and not on the allowlist',
     ]);
+  });
+
+  it('the allowlist only shrinks and names only unreferenced members', () => {
+    // Frozen at TL-P4-22 addendum 21: a name may leave this list, never join it.
+    const atAddendum21 = [
+      'speed', 'start', 'stop', 'release', 'setSize', 'setHome', 'snapHome', 'look', 'busy', 'settled', 'interrupt',
+      'then', 'wait', 'chirp', 'flyTo', 'hopTo', 'peck', 'face', 'study', 'scribble', 'holding', 'showOff', 'poke',
+    ];
+    const listed = Object.keys(EXEMPT_MEMBERS);
+    expect(listed.filter((n) => !atAddendum21.includes(n)), 'names added to the allowlist').toEqual([]);
+    const labelled = Object.entries(ENGINE_MEMBERS).filter(([, k]) => k === 'script' || k === 'control').map(([n]) => n);
+    expect(listed.filter((n) => !labelled.includes(n)), 'allowlisted names that have a reference').toEqual([]);
   });
 
   it('the wake startle stays within its reference range', () => {
