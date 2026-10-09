@@ -6368,6 +6368,6 @@
       "A failed boot shows Bower could not open and Try again."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/v2-boot-states.spec.ts -g \"the boot says still opening after 3 s|a failed boot says it could not open and offers try again\"",
-    "note": "TL-P4-21 order 8; spec d-v2-12; impact block d-v2-12. Codex slot (TL-P4-23); fresh Claude reviewer. Packet 2026-10-09-d-v2-12-packet.md, waiting for the designer sign-off. implementer: codex."
+    "note": "TL-P4-21 order 8; spec d-v2-12; impact block d-v2-12. Codex slot (TL-P4-23); fresh Claude reviewer. Packet 2026-10-09-d-v2-12-packet.md, designer signed off at 24e5b923. implementer: codex."
   }
 ]
