@@ -7,8 +7,9 @@ import { tidyUp } from '@/testing/tidy-up';
 import { FakeDrive } from '../drive/fake-drive';
 import { DriveVault } from '../vault/drive-vault';
 import { parseNote } from '../vault/note-format';
-import { seedFakeDrive } from './seed';
-import { WRITE_IT_STATES, editAtWrite, editElsewhere, writeIt } from './write-it';
+import { seedFixture } from './seed';
+import { editAtWrite, editElsewhere, writeIt, writeItStates } from './write-it';
+import type { AuthoredState } from '../spine/scripted';
 import { FakeRunService } from './fake-run-service';
 import { FakeWorker } from './fake-worker';
 
@@ -16,6 +17,8 @@ const MONEY = 'Areas/Money/Money.md';
 const CAR = 'Areas/Car/Car.md';
 let drive: FakeDrive;
 let root: string;
+/** The updates, each citing its thing by the id the seed gave it. */
+let WRITE_IT_STATES: AuthoredState[];
 const vault = (): DriveVault => new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
 /** Your answer, kept in the folder's changes as the app keeps it. */
 const answer = async (id: string): Promise<void> => {
@@ -29,7 +32,9 @@ const REASK = (name: string): string => `The current state of ${name} changed af
 beforeEach(async () => {
   localStorage.clear();
   drive = new FakeDrive();
-  root = (await seedFakeDrive(drive, 'write-it', Date.now())) ?? '';
+  const seeded = await seedFixture(drive, 'write-it', Date.now());
+  root = seeded?.root ?? '';
+  WRITE_IT_STATES = writeItStates(seeded?.keys ?? new Map());
   await writeIt(drive, root);
 });
 

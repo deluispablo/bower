@@ -369,6 +369,16 @@ export interface SamplePile {
   setAside?: SetAside;
 }
 
+/** A pile about the car's insurance renewal; the write-it situation seeds it, so Car's news line cites its renewal notice. */
+export const CAR_RENEWAL: SamplePile = {
+  label: 'Car insurance renewal',
+  text: 'Car insurance renewal, the new policy starts in July',
+  items: [
+    { name: 'Renewal_notice_2027.pdf', kind: 'pdf', origin: 'From Mail', title: 'Insurance renewal 2027.pdf', to: 'Areas/Car' },
+    { name: 'Policy schedule.pdf', kind: 'pdf', origin: 'From Mail', title: 'Policy schedule 2027.pdf', to: 'Areas/Car' },
+  ],
+};
+
 export const SAMPLE_PILES: SamplePile[] = [
   {
     label: 'Just a note',
@@ -376,14 +386,7 @@ export const SAMPLE_PILES: SamplePile[] = [
     items: [],
     note: { title: 'Bins and recycling.md', to: 'Areas/Home' },
   },
-  {
-    label: 'Car insurance renewal',
-    text: 'Car insurance renewal, the new policy starts in July',
-    items: [
-      { name: 'Renewal_notice_2027.pdf', kind: 'pdf', origin: 'From Mail', title: 'Insurance renewal 2027.pdf', to: 'Areas/Car' },
-      { name: 'Policy schedule.pdf', kind: 'pdf', origin: 'From Mail', title: 'Policy schedule 2027.pdf', to: 'Areas/Car' },
-    ],
-  },
+  CAR_RENEWAL,
   {
     label: 'Letters from the GP',
     text: 'Blood test results and the referral the GP sent',

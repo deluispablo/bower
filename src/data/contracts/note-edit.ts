@@ -70,8 +70,15 @@ export function timelineDate(requestedAt: number): string | null {
   if (Number.isNaN(at.getTime()) || at.getUTCFullYear() > 9999) return null;
   return at.toISOString().slice(0, 10);
 }
+/** How a news line starts: what Bower would have written in a Current state it may not rewrite (`stateNewsLine`). */
+export const NEWS_LEAD = 'New: ';
+/**
+ * Every Timeline line cites its source (TL-P4-19 addendum 20): a news line with none is refused. The one home of the
+ * rule: `entryOk` gates every writer with it, and the Claude reply's check calls it on the reply's Timeline lines.
+ */
+export const newsLineCited = (entry: Pick<EditEntry, 'text' | 'source'>): boolean => entry.source !== null || !entry.text.startsWith(NEWS_LEAD);
 export function entryOk(entry: EditEntry): boolean {
-  return dateOk(entry.date) && lineFieldOk(entry.text) && (entry.source === null || displayNameOk(entry.source));
+  return dateOk(entry.date) && lineFieldOk(entry.text) && (entry.source === null || displayNameOk(entry.source)) && newsLineCited(entry);
 }
 /** Display names only: path forms and `.md` forms are never rewritten. */
 export function renameOk(rename: Rename): boolean {
@@ -371,7 +378,7 @@ export function stateMarkOf(bytes: Uint8Array): string | null {
  * when nothing is new, so no line is written.
  */
 export function stateNewsLine(lines: readonly string[], existing: readonly string[], said: readonly string[] = []): string | null {
-  const lead = 'New: ';
+  const lead = NEWS_LEAD;
   const plain = (line: string): string => line.replace(/ · /g, ', ').replace(/\[\[|\]\]/g, '').replace(/;/g, ',').trim().replace(/[.!?]+$/, '');
   const held = new Set(existing.map((line) => plain(line).toLowerCase()));
   // Plain news: the new lines joined by commas, the sentence taking one full stop at its end. A later line starts in
