@@ -6199,7 +6199,7 @@
     "id": "c4-segmented-one",
     "task": "p4-consolidation",
     "category": "ui",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "A folder List / Table toggle uses the one Segmented; Files bookmark chips reach 44 px on the phone through the src/ui rule.",
     "steps": [
