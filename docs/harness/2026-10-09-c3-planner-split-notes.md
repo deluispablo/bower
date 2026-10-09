@@ -148,3 +148,29 @@ line per row, so an earlier line with the same words is no longer marked New.
 - Functional core, imperative shell: the report rows are data the core builds from operations; the check is
   structural (https://www.destroyallsoftware.com/screencasts/catalog/functional-core-imperative-shell).
 - jscpd ratchet as the repo's gate (`scripts/check-duplication-gate.mjs`).
+
+## Part 2 fix round (P4-45b BLOCK, finding 1 Important; Minors 3 and 5)
+
+Merge of claude/p3: 2a77dcaf (no conflict). Red 91e7663f, fix 7037f139.
+
+- `grounded()` structure now includes multiplicity and identity. A row names each op once. Per op: a captured thing's
+  move or Bin with rows has exactly one filed (or already saved) row and one set-aside row; an edit has one row per
+  Timeline line it writes (one for a Current state alone; a kept note may have fewer, its carried lines are the keep's
+  one row); a generated note has one created row, and one set-aside row unless a filing move or the requests.json
+  write waits for it (a link's note, a request's note); a kept-as-one note's Bin one set-aside row; an archive move
+  one row. Every other op has no set-aside row. A filed row's `to` is its member move's place (or its note's create's),
+  its `note` the note made or edited (else in `to`); a created or updated row's path is its first op's note.
+- report.ts: the "rows naming several moves" branch goes; a set-aside row with one move gets the move's cause, any
+  other (ungrounded) contribution's rows are pushed as they are (`a set-aside row names its op` still holds).
+- Compatibility rows for 09d0127d and 167297dc (src/data only, no wire change).
+- Left as is: the New-mark tie by words (wire-field ruling pending with the lead).
+
+New tests (src/data/spine/grounded.test.ts): `grounded refuses a missing Timeline-line row`, `grounded refuses a
+missing generated-note set-aside row` (default seed plus a pile of words), `grounded refuses a duplicated filed row`,
+`grounded refuses a row whose path disagrees with its op` (filed `to`, updated path, created path, filed `note`).
+
+Gates: `pnpm check` pass (/tmp/c3p2r-check.log; runner 236/236, goldens C04 78 and 25 runs 88 green); unit
+src/data + src/features 3712/3712 (/tmp/c3p2r-unit.log); C05 e2e desktop and phone pass (/tmp/c3p2r-e2e-c05.log).
+
+Production lines this round: grounded.ts +69 -24, report.ts +10 -10 (+79 -34). Part 2 after the round:
++199 / -580, net -381.
