@@ -287,3 +287,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
 - P4-32 (c2-pile-records) minors: retire-by-stamp restates disposedKeys loosely (pile-readiness.ts:197); questions about a vanished loose thing close while Home still lists it (drive-vault.ts:1272).
 - P4-31b minors: fake-runner.test.ts:923 spy still checks typeof binnedByItem; Bin query searches all of Drive (drive-http.ts:278, from round 1).
 - P4-31c (c2-fake-parity round 3) minors: admission-budget.test.ts:194 `granted` not asserted; check-then-fetch not atomic across Promise.all(parents) (drive-http.ts:261, multi-parent only); two imports from budget.js (admission-budget.test.ts:14).
+- Post-P4 feature idea (lead): parallel uploads, 2–3 at once like Drive's web app; not now.
