@@ -138,6 +138,8 @@ P3-9 is closed.
 
 - 2026-10-09: c3-pair-ask merged bdc08775 (P4-46b PASS); design check sent to the Designer. c3-state-mark dispatched (bower-escalated, /private/tmp/bower-c3-state).
 
+- 2026-10-09: c3-pair-ask design not verified (not-merged-never-shown); TL-P4-19 addendum 10; round 2 dispatched (/private/tmp/bower-c3-pair2, designer copy in packet). c3-state-mark told to use the answered row; integrates after pair-ask.
+
 ## P4 ([TL-P4-01](2026-10-07-tl-p4-01-p4-start.md), [P4_PLAN](../P4_PLAN.md))
 
 - Owner authorized P4 (main fb33b21). HANDOFF restored to the docs-test headings (0dc5fde).
