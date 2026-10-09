@@ -34,6 +34,7 @@ import * as runner from './fake-runner';
 import * as runManifest from '../contracts/run-manifest';
 import * as runRecords from '../spine/grounded';
 import { beforeUpload } from '@/testing/upload-hook';
+import { newLineIndexes } from '@/features/note/new-lines';
 
 afterEach(() => vi.useRealTimers());
 
@@ -4050,6 +4051,49 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         expect(row).toEqual({ path: row.path, what: row.what, op: edit?.operationId, line: 0 });
         expect(manifest?.reportPlan.filter((c) => c.value.updated.length && c.requires[0] === edit?.operationId).flatMap((c) => c.value.updated)).toEqual([row]);
       }
+    });
+
+    // TL-P4-19 addenda 4 and 5: a row's line is its ordinal among the lines its op wrote, and the note screen marks it
+    // New only while the note is as the op left it (its stamp and its checksum), read through the app's own note read.
+    const NOTE_READ = (w: Where) => new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' });
+    const SECOND = 'The shortlist cut to two flats near the station.';
+
+    it("with no edit the New mark is on the op's line by its ordinal", async () => {
+      const w = await bWorld({ updates: [{ path: FLAT, what: FLAT_WHAT }, { path: FLAT, what: SECOND }] });
+      await hub(w, FLAT, FLAT_BEFORE);
+      await w.worker.process('all');
+      await w.runs.settled();
+      const rows = (viewOf(w)?.run.report?.updated ?? []).filter((r) => r.path === FLAT);
+      // The smoke's shape: two Timeline lines on Flat hunt, two rows, each its own line counted among the op's lines.
+      expect(rows.map((r) => [r.what, r.line])).toEqual([[FLAT_WHAT, 0], [SECOND, 1]]);
+      const note = await NOTE_READ(w).note(FLAT);
+      const at = (what: string): number => note.timeline.findIndex((t) => t.text === what);
+      expect(note.timeline.length).toBe(3);
+      for (const row of rows) expect([...newLineIndexes(note.timeline, [row])]).toEqual([at(row.what)]);
+      expect([...newLineIndexes(note.timeline, rows)].sort()).toEqual([1, 2]);
+    });
+
+    it("a person's edit after the run drops the New mark and keeps the row", async () => {
+      const w = await bWorld({ updates: [{ path: FLAT, what: FLAT_WHAT }] });
+      const flat = await hub(w, FLAT, FLAT_BEFORE);
+      await w.worker.process('all');
+      await w.runs.settled();
+      const rows = (viewOf(w)?.run.report?.updated ?? []).filter((r) => r.path === FLAT);
+      expect(rows).toHaveLength(1);
+      expect([...newLineIndexes((await NOTE_READ(w).note(FLAT)).timeline, rows)]).toEqual([1]);
+      // The person adds a line of their own below Bower's, in another app (no stamp of theirs): the mark is dropped,
+      // never moved onto their line.
+      const text = textAt(w, FLAT) ?? '';
+      const lines = text.split('\n');
+      const i = lines.findIndex((l) => l.includes(FLAT_WHAT));
+      lines.splice(i + 1, 0, '- 2026-10-09 · Called the agent about the deposit.');
+      const now = (await w.drive.listAll(w.rootId)).find((f) => f.id === flat.id);
+      await w.drive.writeText(flat.id, lines.join('\n'), now?.modifiedTime ?? '');
+      const note = await NOTE_READ(w).note(FLAT);
+      expect(note.timeline.map((t) => t.text)).toContain('Called the agent about the deposit.');
+      expect([...newLineIndexes(note.timeline, rows)]).toEqual([]);
+      // The report row stays as the run wrote it.
+      expect((viewOf(w)?.run.report?.updated ?? []).filter((r) => r.path === FLAT)).toEqual(rows);
     });
 
     it('skips a line already in the Timeline, even from another day', async () => {
