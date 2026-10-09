@@ -1,6 +1,6 @@
 /** Immutable run manifest validation only; no claim, dispatch, readiness or permission authority. */
 import { sha256 } from './hashes';
-import type { ReportQuestion } from './questions';
+import { isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
 import type { UpdatedRow } from './types';
 import { EDIT_FILE_LIMIT, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
@@ -86,6 +86,8 @@ export type ManifestRunReport = {
   yourChanges?: number; requests?: string[]; rulesWorded?: number;
   /** A thing whose content was already filed, binned (TL-P4-10 addendum 2): its name and the saved file's name. */
   alreadySaved?: { name: string; as: string; notes?: number }[];
+  /** Answers that settled with no effect, their subject gone (TL-P4-19 addendum 10): never set aside. */
+  answered?: AnsweredRow[];
 };
 export type ReportContribution = { requires: string[]; when: 'applied' | 'rejected'; value: ManifestRunReport };
 export type Manifest = {
@@ -372,7 +374,7 @@ export const isUpdatedRow = (row: unknown): row is UpdatedRow => closed(row, ['p
 export const isSavedRow = (row: unknown): row is { name: string; as: string; notes?: number } => closed(row, ['name', 'as'], ['notes'])
   && text(row.name) && text(row.as) && (!has(row, 'notes') || (integer(row.notes) && (row.notes as number) >= 1));
 function runReport(value: unknown): value is ManifestRunReport {
-  if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded', 'alreadySaved'])) return false;
+  if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded', 'alreadySaved', 'answered'])) return false;
   return list(value.filed, (row) => closed(row, ['name', 'title', 'kind', 'to'], ['note', 'area']) && text(row.name) && text(row.title)
       && oneOf(row.kind, fileKinds) && text(row.to) && (!Object.hasOwn(row, 'note') || text(row.note)) && (!Object.hasOwn(row, 'area') || text(row.area)))
     && rows(value.created, ['path', 'what']) && list(value.updated, isUpdatedRow) && rows(value.setAside, ['name', 'why'])
@@ -382,7 +384,8 @@ function runReport(value: unknown): value is ManifestRunReport {
     && (!Object.hasOwn(value, 'yourChanges') || integer(value.yourChanges))
     && (!Object.hasOwn(value, 'requests') || list(value.requests, text))
     && (!Object.hasOwn(value, 'rulesWorded') || integer(value.rulesWorded))
-    && (!Object.hasOwn(value, 'alreadySaved') || (list(value.alreadySaved, isSavedRow) && (value.alreadySaved as unknown[]).length > 0));
+    && (!Object.hasOwn(value, 'alreadySaved') || (list(value.alreadySaved, isSavedRow) && (value.alreadySaved as unknown[]).length > 0))
+    && (!Object.hasOwn(value, 'answered') || (list(value.answered, isAnsweredRow) && (value.answered as unknown[]).length > 0));
 }
 function contribution(value: unknown): value is ReportContribution {
   return closed(value, ['requires', 'when', 'value']) && list(value.requires, hash) && value.requires.length > 0

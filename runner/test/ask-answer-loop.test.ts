@@ -232,7 +232,7 @@ const citeNews: ClaudeSpawn = async (call) => {
  * The keep-one-note folder with a pair question asked by the notes' file ids, the other note in the Bin since. With
  * `stuck`, also your yes to it (a change of yours) and a pile of words whose news the kept note holds already.
  */
-async function pairGoneSeed(drive: FakeDrive, stuck: boolean): Promise<string> {
+async function pairGoneSeed(drive: FakeDrive, stuck: boolean, bin = true): Promise<string> {
   const c = await corpusCase('c05-keep-one-note');
   const kept = stuck ? (c.folder[KEPT] ?? '').replace(/\n*$/, `\n- 2026-10-07 · ${NEWS}\n`) : c.folder[KEPT] ?? '';
   const root = await seedCase(drive, { ...c, scope: 'all', folder: { ...c.folder, [KEPT]: kept }, journal: [], questions: [], inbox: stuck ? [{ line: `Flat 3 at 12 Larkspur Lane: ${NEWS.toLowerCase()}`, files: [] }] : [] });
@@ -242,7 +242,7 @@ async function pairGoneSeed(drive: FakeDrive, stuck: boolean): Promise<string> {
   const q = all.find((f) => drive.pathOf(f.id, root) === '.bower/questions.json');
   if (q) await drive.writeText(q.id, JSON.stringify({ v: 1, questions: [{ id, ...PAIR_ASK, about: KEPT, askedAt: 1 }] }), q.modifiedTime);
   if (stuck) await drive.createText(idOf('.bower/changes'), 'change-1.json', `${JSON.stringify({ v: 1, id: 'change-1', device: 'device-1', at: 1, kind: 'answer', what: 'Answered a question', text: 'yes', questionId: id })}\n`);
-  await drive.trash(idOf(OTHER));
+  if (bin) await drive.trash(idOf(OTHER));
   pairIdSeen = id;
   return root;
 }
@@ -256,8 +256,8 @@ async function press(w: RealWorld): Promise<boolean> {
 }
 
 /** The report of the run, as its last checkpoint in `.bower/runs` holds it. */
-async function reportOf(w: RealWorld): Promise<{ setAside: unknown[] } | undefined> {
-  let found: { setAside: unknown[] } | undefined;
+async function reportOf(w: RealWorld): Promise<{ setAside: unknown[]; answered?: unknown[] } | undefined> {
+  let found: { setAside: unknown[]; answered?: unknown[] } | undefined;
   for (const f of await w.drive.listAll(w.rootId)) {
     if (f.folder || !w.drive.pathOf(f.id, w.rootId).startsWith('.bower/runs/')) continue;
     const text = await w.drive.readText(f.id);
@@ -346,19 +346,24 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
   });
 
   it('a yes to a pair whose other note is in the Bin settles and says nothing was merged', async () => {
-    const w = await realWorld({ seed: (drive) => pairGoneSeed(drive, false), claude: fileNothing });
+    // Answered yes while both notes were there; the other note went to the Bin before the run.
+    const w = await realWorld({ seed: (drive) => pairGoneSeed(drive, false, false), claude: fileNothing });
     const runs = runsOf(w);
     const { vault, answerQuestion } = await vaultOf(w);
     const asked = (await vault.questions()).find((q) => q.text === PAIR_ASK.text);
     expect(asked).toBeDefined();
     const done = await answerQuestion(vault, runs, asked?.id ?? '', true, { allowWeb: false });
     expect(done?.outcome.kind).toBe('now');
+    const other = (await w.drive.listAll(w.rootId)).find((f) => w.drive.pathOf(f.id, w.rootId) === OTHER);
+    await w.drive.trash(other?.id ?? '');
     expect(await w.runJob(0)).toBe(0);
     // The answer settles: its question closed, the answer read, the note kept as it was, and the report says why.
     expect(await openQuestions(w)).toEqual([]);
     expect(await answersWaiting(w, asked?.id ?? '')).toEqual([]);
     expect(await w.paths()).toContain(KEPT);
-    expect((await reportOf(w))?.setAside).toEqual([{ name: 'Flat 3, 12 Larkspur Lane', why: 'Not merged: the other note was already in the Bin.' }]);
+    // Not set aside (TL-P4-19 addendum 10): an answered row, on the note that stays.
+    expect((await reportOf(w))?.setAside).toEqual([]);
+    expect((await reportOf(w))?.answered).toEqual([{ questionId: asked?.id, kind: 'pair', outcome: 'subject-gone', why: 'Not merged: the other note was already in the Bin.', note: KEPT }]);
   });
 
   it('with no new input a second run leaves nothing held or waiting for the same reason', async () => {

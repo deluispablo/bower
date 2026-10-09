@@ -79,6 +79,7 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
     if (c.value.yourChanges !== undefined) report.yourChanges = (report.yourChanges ?? 0) + c.value.yourChanges;
     if (c.value.rulesWorded !== undefined) report.rulesWorded = (report.rulesWorded ?? 0) + c.value.rulesWorded;
     if (c.value.alreadySaved?.length) report.alreadySaved = [...(report.alreadySaved ?? []), ...c.value.alreadySaved];
+    if (c.value.answered?.length) report.answered = [...(report.answered ?? []), ...c.value.answered];
   }
   // No other change is said by leaving the count out (TL-P2-23): a claimed line may count 0.
   if (report.yourChanges === 0) delete report.yourChanges;
@@ -248,16 +249,11 @@ export function reportContradictions(admission: AdmissionManifest, manifest: Run
   };
   // A keep's other note that stayed (C05) is a note of the folder, not an item the run took: its row names no item.
   const keptBin = (id: string): boolean => keptOther(ops.get(id), manifest);
-  // So is a row about one of your changes (a yes that merged nothing, its other note already in the Bin): it is
-  // grounded on that change's archive, and names no item either.
-  const lines = new Set(manifest.capture.journal.flatMap((j) => j.fileIds));
-  const yours = (c: RunManifest['reportPlan'][number]): boolean => c.requires.some((id) => { const e = ops.get(id)?.effect; return e?.kind === 'move' && lines.has(e.before.fileId); })
-    && c.requires.every((id) => { const e = ops.get(id)?.effect; return (e?.kind === 'move' && lines.has(e.before.fileId)) || e?.kind === 'create-folder'; });
   // Each row through the contribution that gave it, by its operations: never by the name or fields it carries.
   for (const c of given) {
     for (const row of c.value.filed) trace(`filed ${row.name}`, [c], ['filed'], named.filed);
     for (const row of c.value.alreadySaved ?? []) trace(`already saved ${row.name}`, [c], ['filed'], named.filed);
-    if (c.requires.every(keptBin) || yours(c)) continue;
+    if (c.requires.every(keptBin)) continue;
     for (const row of c.value.setAside) trace(`set aside ${row.name}`, [c], ['filed', 'set-aside'], named.setAside);
   }
   const pileNamed = (set: ReadonlySet<string>, pileId: string | null): boolean => pileId !== null && (pileItems.get(pileId) ?? []).some((f) => set.has(f));

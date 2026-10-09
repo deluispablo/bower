@@ -3,7 +3,7 @@ import { report } from '@/ui/report';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { useNote, useRun, useSources, useTree } from '@/data/provider';
 import { thingName, findNode, nameOf, parentOf } from '@/data/tree';
-import type { Note, TreeNode, UpdatedRow } from '@/data/types';
+import type { Note, RunReport, TreeNode, UpdatedRow } from '@/data/types';
 import { crumbs, decodeSplat, folderRoute, noteRoute, paraColor } from '@/app/paths';
 import { NodeMenuButton } from '@/features/files/Explorer';
 import { ago } from '@/app/words';
@@ -17,6 +17,7 @@ import { Inline, Markdown } from './markdown';
 import { useResolver } from './resolve';
 import { webSource } from './web-source';
 import { useFileActions } from '@/features/files/file-actions';
+import { AnsweredRows } from '@/features/tidy/RunLinks';
 import { newLineIndexes } from './new-lines';
 import { LinkedList } from './RightPanel';
 import { inAppHistory } from '@/app/paths';
@@ -77,6 +78,7 @@ function NoteView({ path }: { path: string }) {
   const { vault } = useSources();
   const folder = parentOf(path);
   const fresh = useNewLines(path);
+  const answered = useAnsweredHere(path);
   const opened = fresh?.path === path;
   useEffect(() => {
     // Seen once what was new in it is known, so its new Timeline lines stay marked while it is open.
@@ -130,6 +132,7 @@ function NoteView({ path }: { path: string }) {
         </p>
       )}
       <Properties note={note} />
+      <AnsweredRows rows={answered} />
       {note.currentState.length > 0 && (
         <section className={s.state} aria-labelledby="cs">
           <h2 id="cs">Current state</h2>
@@ -223,6 +226,12 @@ function useNewLines(path: string): { path: string; rows: readonly UpdatedRow[] 
     setKept({ path, rows });
   }
   return kept;
+}
+
+/** The last tidy-up's answered rows about this note, the one that stays of a pair (TL-P4-19 addendum 10). */
+function useAnsweredHere(path: string): NonNullable<RunReport['answered']> {
+  const { data: run } = useRun();
+  return run?.phase === 'done' ? (run.report?.answered ?? []).filter((a) => a.note === path) : [];
 }
 
 function Properties({ note }: { note: Note }) {

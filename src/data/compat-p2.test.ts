@@ -85,6 +85,25 @@ describe('the accepted app files, kept from the P2 freeze', () => {
     }
   });
 
+  it('an old run report with no answered field still reads', async () => {
+    // TL-P4-19 addendum 10: `answered` is optional. The accepted app's report has none, and still reads...
+    const record = only('run-report').content as { report: Record<string, unknown> };
+    expect(Object.hasOwn(record.report, 'answered')).toBe(false);
+    const lastRun = only('last-run').content as { run: { report: Record<string, unknown> } };
+    expect(Object.hasOwn(lastRun.run.report, 'answered')).toBe(false);
+    expect(isRunnerFile(SYSTEM.lastRun, lastRun)).toBe(true);
+    // ...and a report that has one reads too, with the note that stays on a pair's row.
+    const row = { questionId: 'q-pair-a.b', kind: 'pair', outcome: 'subject-gone', why: 'Not merged: the other note was already in the Bin.', note: 'Projects/Flat hunt/Flat 7, Cobble Row.md' };
+    expect(isRunnerFile(SYSTEM.lastRun, { ...lastRun, run: { ...lastRun.run, report: { ...lastRun.run.report, answered: [row] } } })).toBe(true);
+    expect(isRunnerFile(SYSTEM.lastRun, { ...lastRun, run: { ...lastRun.run, report: { ...lastRun.run.report, answered: [{ ...row, kind: 'folder' }] } } })).toBe(false);
+    // The run's own report record, as the checkpoint reader reads it: without the field, and with it.
+    const at = record as unknown as { runId: string; captureId: string; manifestHash: string; scope: { rootId: string } };
+    const expected = { rootId: at.scope.rootId, runId: at.runId, captureId: at.captureId, manifestHash: at.manifestHash };
+    expect((await parseRunReport(recordBytes(record), expected)).ok).toBe(true);
+    expect((await parseRunReport(recordBytes({ ...record, report: { ...record.report, answered: [row] } }), expected)).ok).toBe(true);
+    expect((await parseRunReport(recordBytes({ ...record, report: { ...record.report, answered: [{ ...row, outcome: '' }] } }), expected)).ok).toBe(false);
+  });
+
   it('old questions without a subject still read', async () => {
     // The accepted app's questions (ids like `q1`, no subject) and an older ask that carries its thing in its id only.
     const drive = new FakeDrive();

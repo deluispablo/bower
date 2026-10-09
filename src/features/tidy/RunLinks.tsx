@@ -11,14 +11,35 @@ import s from './tidy.module.css';
  * its note: native links in a list named by its visible label (WAI-ARIA
  * APG link pattern; WAI tutorials, content structure: lists).
  */
-export function RunLinks({ report, onOpen }: { report: Pick<RunReport, 'created' | 'updated'>; onOpen?: () => void }) {
+export function RunLinks({ report, onOpen }: { report: Pick<RunReport, 'created' | 'updated' | 'answered'>; onOpen?: () => void }) {
   const { made, updated } = runLinkRows(report);
-  if (!made.length && !updated.length) return null;
+  const answered = report.answered ?? [];
+  if (!made.length && !updated.length && !answered.length) return null;
   return (
     <div className={s.links}>
       <LinkList label="New notes" rows={made} {...(onOpen ? { onOpen } : {})} />
       <LinkList label="Brought up to date" rows={updated} {...(onOpen ? { onOpen } : {})} />
+      <AnsweredRows rows={answered} />
     </div>
+  );
+}
+
+type AnsweredRow = NonNullable<RunReport['answered']>[number];
+
+/**
+ * Answers that did nothing because what they were about had gone (TL-P4-19 addendum 10), one row each in the run
+ * result's row style, all kinds in one list. The note that stays shows its pair's row with it.
+ */
+export function AnsweredRows({ rows }: { rows: readonly AnsweredRow[] }) {
+  if (!rows.length) return null;
+  return (
+    <ul className={s.linkList}>
+      {rows.map((r) => (
+        <li key={r.questionId}>
+          <span className="muted">{r.why}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

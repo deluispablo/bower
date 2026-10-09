@@ -1,6 +1,6 @@
 ---
 name: Bower quiet
-description: For the coordinator and workers (TL-P3-17, TL-P4-12). Nobody reads this session's text; it writes almost none.
+description: For the coordinator's main session (TL-P3-17, TL-P4-12). Output styles reach only the main session and forks, not subagents, so worker brevity lives in the agent definitions (TL-P4-20).
 keep-coding-instructions: true
 ---
 

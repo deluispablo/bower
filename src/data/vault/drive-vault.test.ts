@@ -19,6 +19,7 @@ import { createUploadQueue, type StorageLike, type UploadQueue } from '../upload
 import { indexedDbUploadStore, memoryUploadStore } from '../upload-store';
 import { makeLiveSources, uploadAccount } from '../live';
 import { FakeWorker } from '../fake/fake-worker';
+import { pairQuestionId } from '../contracts/questions';
 
 const PASSPORT = 'Areas/Documents/Passport renewal.md';
 let drive: FakeDrive;
@@ -2769,6 +2770,22 @@ describe('a question about a thing that is gone (TL-P4-11 addendum)', () => {
     expect((await vault.questions()).map((q) => q.id)).toEqual([ask.id]);
     await vault.removePile((await vault.piles())[0]?.id ?? '');
     expect(await vault.piles()).toEqual([]);
+    expect(await vault.questions()).toEqual([]);
+  });
+});
+
+describe('a question whose subject is gone is not listed (TL-P4-19 addendum 10)', () => {
+  it('a pair question whose other note is in the Bin is not listed', async () => {
+    const OTHER = 'Resources/Cooking/Lemon tart.md';
+    const pair = pairQuestionId(await idOf(PASSPORT), await idOf(OTHER));
+    const file = (await drive.listAll(root)).find((f) => drive.pathOf(f.id, root) === '.bower/questions.json');
+    if (!file) throw new Error('no questions.json');
+    const ask = { id: pair, text: 'Passport renewal and Lemon tart look like one note. Keep one note?', yes: 'Yes, keep one', no: 'No, keep both', about: PASSPORT, askedAt: 1 };
+    await drive.writeText(file.id, JSON.stringify({ v: 1, questions: [ask] }), (await drive.get(file.id)).modifiedTime);
+    await vault.refresh();
+    expect((await vault.questions()).map((q) => q.id)).toEqual([pair]);
+    // The other note goes to the Bin from the app: nothing can be kept as one, so the question is not shown.
+    await vault.trash(OTHER);
     expect(await vault.questions()).toEqual([]);
   });
 });

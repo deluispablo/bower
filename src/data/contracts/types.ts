@@ -4,6 +4,7 @@
  * adds adapters behind the same interfaces.
  */
 import type { RunPhase } from './run-phases';
+import type { AnsweredRow } from './questions';
 
 
 export type ParaRoot = 'Inbox' | 'Projects' | 'Areas' | 'Resources' | 'Archive';
@@ -251,6 +252,12 @@ export interface RunReport {
    * back. Never counted as set aside. Left out when there are none.
    */
   unconfirmed?: Array<{ name: string; why: string }>;
+  /**
+   * Answers that settled with no effect (TL-P4-19 addendum 10): their subject had gone before the run. Never counted
+   * as set aside; a pair's row also shows on the note that stays. Left out when there are none; a report from before
+   * it has none.
+   */
+  answered?: AnsweredRow[];
   /** How many of your changes (the journal) the run read. */
   yourChanges?: number;
   /** What you asked Bower that this run did, in your words. */
