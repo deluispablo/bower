@@ -9,6 +9,6 @@ One page. Workers read `WORKER.md` and the packet only.
 - **Checklist (TL-P4-13, from WORKER.md):** every Bin, move or write passes what it read (bytes, modifiedTime or md5), tested by changing the file between read and act; match by id, never by name or substring; every new sentence in the app is backed by a test of what it promises; the red reproduces the live evidence; the card names the exact verify tests.
 - **Research first:** cite the standard solution.
 - **Fixtures:** a change to corpus, demo or fake fixtures runs the full `pnpm e2e:fake` before delivery.
-- **Reviewers:** read-only, unit and contract tests only; never start a server or run e2e.
+- **Reviewers:** read-only, unit and contract tests only; never start a server or run e2e; never `git checkout` in the main repo (use `git show`, `git diff` or a scratch worktree).
 - **Fix rounds:** a fresh session with the packet, the finding and the diff range; never resume a finished worker.
 - **Reply:** the WORKER.md card, lines under 120 characters; details in a notes file.
