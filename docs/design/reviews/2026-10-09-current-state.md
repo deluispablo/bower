@@ -74,6 +74,7 @@ Text contrast passes axe in both themes on every screen. No page scrolls sideway
    - **Where.** `runLinkRows` in `src/features/tidy/run-words.ts` keeps the first row per path (`once`); `RunLinks.tsx` renders it.
    - **Not a defect.** Bower's report keeps both lines, so this is a presentation choice.
    - **Options.** (a) Keep it as it is. (b) One row per note, with its changes joined in report order (my recommendation). (c) One row per change, with the note's name repeated.
+   - **Owner's decision, 2026-10-09:** (b).
 
 ## Nit
 

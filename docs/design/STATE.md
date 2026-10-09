@@ -8,4 +8,5 @@ Updated 2026-10-09.
 - Serving: Vite from this worktree on a spare port for one script run (never the main checkout, which belongs to the coordinator).
 - 2026-10-09: the owner asked for the target design of every screen with all fixes, and for Bower's landings fixed (E5). The canvas "Bower App V2" is on claude.ai (link not stored here). It has 31 boards: phone, desktop, tablet, light, "Where Bower lands", "What changed" and the parts.
 - My calls inside it, for the owner to confirm: tablet in a centred 600 px column; desktop right panel with no repeated questions; a note icon instead of Bower's head in lists; 44 px phone targets; a new `control-line` colour for 3:1 field edges; answers confirmed in place, with no toast.
+- 2026-10-09: the owner chose (b) for question 5: one row per note under "Brought up to date", with its changes joined in report order. The V2 board "Home after a tidy-up" shows it.
 - Waits on the owner: OK on V2 (phase 3), then the spec for the lead. Waits on the lead: nothing.
