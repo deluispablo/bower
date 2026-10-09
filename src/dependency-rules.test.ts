@@ -46,4 +46,10 @@ describe('dependency rules', () => {
       for (const t of k.to) expect(own.every((r) => (r.to.pathNot ?? []).some((re) => hits(re, t))), `${k.from} may import ${t}`).toBe(true);
     }
   });
+
+  it('the live path imports no demo fixture', () => {
+    // The planner the Claude provider runs (TL-P4-14 stage 3, addendum 23): fixtures live only on the scripted side.
+    expect(readFileSync(join(ROOT, 'src/data/spine/scripted.ts'), 'utf8')).not.toMatch(/from '[^']*demo\/[^']*'/);
+    expect(KNOWN.filter((k) => k.from === 'src/data/spine/scripted.ts')).toEqual([]);
+  });
 });

@@ -209,6 +209,29 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     expect(await answersWaiting(w, KEEP_Q)).toEqual([]);
   });
 
+  // c3-planner-split: the answer the app stored reaches the model's input and the plan built from its reply, through
+  // the Claude provider, with no scripted stand-in on the way.
+  it('answers reach the model path', async () => {
+    const c = await corpusCase('c05-keep-one-note');
+    const shown: Shown[] = [];
+    const w = await realWorld({ seed: (drive) => seedCase(drive, { ...c, journal: [] }), claude: async (call) => {
+      shown.push(shownOf(call));
+      return keepWhenAnswered(call);
+    } });
+    const { vault, answerQuestion } = await vaultOf(w);
+    await answerQuestion(vault, runsOf(w), KEEP_Q, true, { allowWeb: false });
+    expect(await w.runJob(0)).toBe(0);
+    // The model was shown the person's yes...
+    expect(shown.flatMap((s) => s.answers ?? [])).toEqual([expect.objectContaining({ answer: 'Yes, keep one' })]);
+    // ...the plan took that answer's record and archived it with the merge it asked for.
+    const path = (await w.drive.listAll(w.rootId)).map((f) => w.drive.pathOf(f.id, w.rootId)).find((p) => /^\.bower\/runs\/[^/]+\/manifest-[0-9a-f]{64}\.json$/.test(p));
+    const m = JSON.parse((path ? await textAt(w, path) : null) ?? '{}') as ManifestV2;
+    expect(m.capture.journal).toHaveLength(1);
+    expect(m.operations.some((o) => o.effect.kind === 'bin' && o.effect.before.name === 'Flat 3 (second).md')).toBe(true);
+    expect(await answersWaiting(w, KEEP_Q)).toEqual([]);
+    expect(await openQuestions(w)).toEqual([]);
+  });
+
   it('answering twice starts one run', async () => {
     const w = await keepWorld();
     const { vault, answerQuestion } = await vaultOf(w);

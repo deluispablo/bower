@@ -33,6 +33,15 @@ describe('the shape of the code', () => {
     expect(run(fixture({ ...base, 'src/data/provider.tsx': 'export const q = 1;\n', 'src/features/a/Screen.ts': "import { q } from '../../data/provider';\n" })).code).toBe(0);
   });
 
+  it('the claude provider path cannot reach the fixture modules', () => {
+    // Even through a module that may import the demo (a wiring root such as choose.ts), the model path never reaches it.
+    const base = { 'src/data/demo/fixture.ts': 'export const f = 1;\n', 'src/data/choose.ts': "import { f } from './demo/fixture';\nexport const c = f;\n" };
+    const r = run(fixture({ ...base, 'runner/src/claude.ts': "import { c } from '../../src/data/choose';\nexport const x = c;\n" }));
+    expect(r.code).not.toBe(0);
+    expect(r.out).toContain('claude-provider-reaches-no-fixture');
+    expect(run(fixture({ ...base, 'runner/src/claude.ts': 'export const x = 1;\n' })).code).toBe(0);
+  });
+
   it('screens never import a data source directly', () => {
     // The rule list (dependency-cruiser itself runs once, on the real tree, in pnpm check).
     const { forbidden } = createRequire(import.meta.url)(join(ROOT, '.dependency-cruiser.cjs')) as { forbidden: { name: string; from: { path: string }; to: { path: string } }[] };

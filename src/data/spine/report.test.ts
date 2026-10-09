@@ -103,4 +103,33 @@ describe('dispositions and the report', () => {
     expect(words).toContain("Bower couldn't confirm 1 thing");
     expect(words).toContain('1 thing set aside');
   });
+
+  // Stage 3 carry-over (P4-35d): a set-aside row is tied to its move by op id, never by the name it carries.
+  it('two moves with the same name get their own rows by op id', async () => {
+    const drive = new FakeDrive({ clock: () => 0 });
+    const root = (await seedFakeDrive(drive, 'default', AT)) ?? '';
+    const admission = await planAdmission(fakeRead(drive), root, { scope: 'all', clock: () => AT, newId: () => 'request-report' });
+    if (admission.kind !== 'manifest') throw new Error(`nothing admitted: ${admission.cause}`);
+    const planned = await scriptedProvider(fakeScripted(drive), { rootId: root, runId: RUN, allowWeb: false })({ taken: admission.manifest, deferred: [] });
+    const asides = planned.reportPlan.filter((c) => c.when === 'rejected' && c.requires.length === 1
+      && planned.operations.some((o) => o.operationId === c.requires[0] && o.effect.kind === 'move'));
+    const [a, b] = asides;
+    if (!a || !b) throw new Error('two filing moves needed');
+    const [gone, kept] = [a.requires[0] ?? '', b.requires[0] ?? ''];
+    // Two things added under one name, each moved by its own operation, set aside together by one contribution.
+    const SAME = 'Scan.pdf';
+    const operations = planned.operations.map((o) => (o.operationId === gone || o.operationId === kept) && o.effect.kind === 'move'
+      ? { ...o, effect: { ...o.effect, before: { ...o.effect.before, name: SAME } } }
+      : o);
+    const together = { requires: [gone, kept], when: 'rejected' as const, value: { ...a.value, setAside: [{ name: SAME, why: NOT_FILED }, { name: SAME, why: NOT_FILED }] } };
+    const manifest = { ...planned, operations, reportPlan: [...planned.reportPlan.filter((c) => c !== a && c !== b), together] } as RunManifest;
+    const outcomes = settle(manifest, new Set([gone, kept])).map((o): Outcome => (o.operationId === gone
+      ? { operationId: o.operationId, state: 'rejected', failure: { code: 'unknown', message: UNCONFIRMED_GONE } }
+      : o));
+    const report = materialize(manifest, 'a'.repeat(64), outcomes)?.report;
+    if (!report) throw new Error('no report');
+    // The first row is its own move's: unconfirmed. The second is the other move's: set aside.
+    expect(report.unconfirmed).toEqual([{ name: SAME, why: UNCONFIRMED_GONE }]);
+    expect(report.setAside.filter((r) => r.name === SAME)).toEqual([{ name: SAME, why: NOT_FILED }]);
+  });
 });
