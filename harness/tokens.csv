@@ -326,3 +326,4 @@ c4-undo-compensate,implementer,codex,gpt-5-codex,medium,3,1278905,1271968,,11989
 c4-parse-once,implementer,codex,gpt-5-codex,medium,5,907001,901665,,840576,5336,,,,round 2 done,2026-10-09
 d-v2-07,implementer,codex,gpt-5-codex,medium,9,552035,547428,,495616,4607,,,,blocked: contract conflict,2026-10-09
 c4-parse-once,adversarial,codex,gpt-5-codex,medium,2,346578,345203,,290432,1375,,,,0 findings,2026-10-10
+c4-undo-compensate,adversarial,codex,gpt-5-codex,medium,2,989895,983128,,892032,6767,,,,4 Important (round 2),2026-10-10
