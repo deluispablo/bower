@@ -5895,7 +5895,7 @@
       "A slow compute-bound test is reported, not failed."
     ],
     "verify": "pnpm exec vitest run src/harness.test.ts src/timer-gate.test.ts -t \"a real wait of 100 ms or more fails the unit run|a wait under fake timers passes the timer gate|the timer allowlist may only shrink|wall-clock times are reported, never failed|two checks started together run one after the other|a second check waits and prints who holds the lock|a lock whose holder is gone is taken over with a printed line\"",
-    "note": "TL-P4-17 addendum 9 (main 925d3fbb); defect slow-ratchet-alone-under-load. Starting model: bower-implementer. TL-P4-17 addendum 10 (main 56dd8d86): a timer counts when it fires (a cleared timer never waited); fix round: done.sh and integrate.sh share one mkdir-based lock around pnpm check and the e2e suites, a second caller waits and prints who holds it (red: two checks started together run one after the other); the 22-name allowlist goes to c4-test-timers in stage 4."
+    "note": "TL-P4-17 addendum 9 (main 925d3fbb); defect slow-ratchet-alone-under-load. Starting model: bower-implementer. TL-P4-17 addendum 10 (main 56dd8d86): a timer counts when it fires (a cleared timer never waited); fix round: done.sh and integrate.sh share one mkdir-based lock around pnpm check and the e2e suites, a second caller waits and prints who holds it (red: two checks started together run one after the other); the 22-name allowlist goes to c4-test-timers in stage 4. Red proved by hand: b6e01216 timer gate test fails (/tmp/c3timer-handred0.log); ff34204c lock test fails (/tmp/c3timer-handred.log). done.sh sees no code in 2bec3895 (harness/*.sh is outside CODE_PATHS)."
   },
   {
     "id": "c3-planner-split",
