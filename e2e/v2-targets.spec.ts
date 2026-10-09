@@ -3,7 +3,7 @@
  * button is 24 square, and on the phone every listed control is at least 44 px. Fake Drive, phone and desktop.
  */
 import type { Locator, Page } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
+import { expectAxeClean } from './axe';
 import { expect, test } from './fixtures';
 
 const open = async (page: Page, path: string): Promise<void> => {
@@ -31,12 +31,7 @@ async function atLeast(name: string, loc: Locator, min: number, both = false): P
 }
 
 const axeTargets = async (page: Page, within: string): Promise<void> => {
-  const axe = await new AxeBuilder({ page })
-    .include(within)
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-    .options({ rules: { 'target-size': { enabled: true } } })
-    .analyze();
-  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+  await expectAxeClean(page, { include: within, wcag22: true });
 };
 
 test('the desktop tab close button is at least 24 square', async ({ page, isMobile }) => {

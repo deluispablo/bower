@@ -123,3 +123,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `137b59dd` | v2-move-here | none: markup and styles only (current folder row, reused pill, 52 px rows, Cancel); adds "Now here" and "Cancel". No stored data, route, format or move protocol changes. |
 | `72ad0e8f` | v2-move-here | none: tests only (Enter on the current folder name). |
 | `65425820` | v2-move-here | none: one hint line in the Move sheet; no stored data, route or format changes. |
+| `65ceae64` | c4-test-timers | none: the legacy ownership parse builds one byte table per note instead of re-encoding a prefix per span; the spans are the same bytes (a test compares them with LF and CRLF, accents, CJK and emoji). No stored format, wire or string changes. |
+| `2b0c9552` | c4-test-timers | none: tests only under src/features (the palette and Home focus tests use fake time or an event instead of a real wait); no app code, stored format, route or string changes. |

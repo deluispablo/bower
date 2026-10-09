@@ -11,7 +11,7 @@
  * thing as another device would see it.
  */
 import type { Page } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
+import { expectAxeClean } from './axe';
 import { expect, isFake, test } from './fixtures';
 
 const NOT_ARRIVED = 'Some of its things have not arrived yet.';
@@ -28,8 +28,7 @@ const toast = (page: Page, text: string | RegExp) => page.getByRole('status').ge
 const inbox = (page: Page) => page.getByRole('region', { name: 'Inbox' });
 const rowOf = (page: Page, name: RegExp) => inbox(page).getByRole('listitem').filter({ has: page.getByRole('link', { name }) });
 const axeClean = async (page: Page): Promise<void> => {
-  const axe = await new AxeBuilder({ page }).include('main').analyze();
-  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+  await expectAxeClean(page, { include: 'main' });
 };
 const pdf = (name: string, text = `%PDF ${name}`) => ({ name, mimeType: 'application/pdf', buffer: Buffer.from(text) });
 

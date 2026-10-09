@@ -51,7 +51,9 @@ function headers(token: string): Record<string, string> {
 const RETRY_BASE_MS = 200;
 const RETRIES = 2;
 
-const sleepFor = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms));
+/** Tests set `scale` to 0 so a retry's wait takes no real time; the waits themselves (200 and 400 ms) are tested through `sleep`. */
+export const backoffPace = { scale: 1 };
+const sleepFor = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms * backoffPace.scale));
 
 /** What became of a dispatch: accepted; lost to the network or a 5xx after the retries (worth a quick look); or refused (a 4xx, or no token). */
 export type DispatchOutcome = 'sent' | 'lost' | 'refused';

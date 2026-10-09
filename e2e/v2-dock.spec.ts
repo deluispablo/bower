@@ -4,7 +4,7 @@
  * the main column. The page keeps room for it, and keyboard focus never ends under the tab bar.
  */
 import type { Page } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
+import { expectAxeClean } from './axe';
 import { expect, test } from './fixtures';
 
 const open = async (page: Page, path: string): Promise<void> => {
@@ -25,12 +25,7 @@ const aMessage = async (page: Page) => {
 
 /** The dock and the page it sits over; the desktop tab strip's own close buttons are not this entry's. */
 const axeClean = async (page: Page, within = 'body'): Promise<void> => {
-  const axe = await new AxeBuilder({ page })
-    .include(within)
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-    .options({ rules: { 'target-size': { enabled: true } } })
-    .analyze();
-  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+  await expectAxeClean(page, { include: within, wcag22: true });
 };
 
 test('a message spans the phone width above the tab bar', async ({ page, isMobile }) => {

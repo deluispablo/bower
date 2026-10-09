@@ -1,5 +1,5 @@
 import { expect, isFake, test } from './fixtures';
-import AxeBuilder from '@axe-core/playwright';
+import { axeScan } from './axe';
 
 const open = async (page: import('@playwright/test').Page, path: string, scenario = 'default', time = 'instant') => {
   const sep = path.includes('?') ? '&' : '?';
@@ -97,7 +97,7 @@ test.describe('desktop explorer', () => {
 for (const path of ['/', '/files', '/add', '/bower', '/settings', '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Larkspur%20Lane.md', '/files/Projects/Flat%20hunt']) {
   test(`no serious accessibility problems on ${path}`, async ({ page }) => {
     await open(page, path);
-    const r = await new AxeBuilder({ page }).disableRules(['region']).analyze();
+    const r = await axeScan(page, { disableRules: ['region'] });
     const serious = r.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
     expect(serious.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([]);
   });

@@ -95,6 +95,25 @@ function tasks(bytes: Uint8Array, personal: ByteSpan, v2: boolean): PersonalTask
 
 const NO_LAYOUT: Layout = { front: null, frontEnd: 0, current: null, timeline: null, bowerNote: null };
 
+/**
+ * One table for the whole note: entry n is the UTF-8 length of the raw text before the n-th character of the text with
+ * CRLF read as LF. It replaces re-encoding a prefix for each span, which cost a full pass over the note every time.
+ */
+function byteTable(raw: string, textLength: number): Uint32Array {
+  const table = new Uint32Array(textLength + 1);
+  let at = 0;
+  let bytes = 0;
+  for (let n = 0; n <= textLength; n++) {
+    table[n] = bytes;
+    if (n === textLength) break;
+    if (raw[at] === '\r' && raw[at + 1] === '\n') { bytes++; at++; }
+    const code = raw.charCodeAt(at);
+    bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code >= 0xd800 && code < 0xdc00 ? 4 : code >= 0xdc00 && code < 0xe000 ? 0 : 3;
+    at++;
+  }
+  return table;
+}
+
 function legacyNote(bytes: Uint8Array, raw: string): OwnershipResult {
   const text = raw.replace(/\r\n/g, '\n');
   const close = text.startsWith('---\n') ? text.indexOf('\n---', 3) : -1;
@@ -126,11 +145,8 @@ function legacyNote(bytes: Uint8Array, raw: string): OwnershipResult {
   end = Math.max(start, end);
   // Canonical legacy payload excludes empty separator lines before personal prose.
   while (start < end && text[start] === '\n') start++;
-  const rawByteAt = (offset: number): number => {
-    let at = 0;
-    for (let n = 0; n < offset; n++, at++) if (raw[at] === '\r' && raw[at + 1] === '\n') at++;
-    return encoder.encode(raw.slice(0, at)).length;
-  };
+  const byteAt = byteTable(raw, text.length);
+  const rawByteAt = (offset: number): number => byteAt[offset] ?? 0;
   const span = (from: number, to: number): ByteSpan => ({ start: rawByteAt(from), end: rawByteAt(to) });
   const personal = span(start, end);
   const layout: Layout = {

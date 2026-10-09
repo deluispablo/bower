@@ -5921,13 +5921,13 @@
     "id": "c4-test-timers",
     "task": "p4-consolidation",
     "category": "test",
-    "passes": false,
+    "passes": true,
     "what": "Load-proof tests: one byte table per note (rawByteAt), a re-entrant heavy-run lock around check and every e2e (done.sh too), Vite optimizeDeps include and warmup, the shared axe helper waits for animations, the real-timer allowlist empty, a CPU report and a map row.",
     "steps": [
       "harness/real-timers.json is empty and the ceiling is 0."
     ],
-    "verify": "pnpm vitest run -t \"the size-cap run fits its time bound with no load|a second heavy run waits for the first\" && pnpm exec vitest run src/timer-gate.test.ts -t \"the timer allowlist may only shrink\" && bash scripts/e2e-both.sh -g \"axe runs after the sheet.s animations end\"",
-    "note": "TL-P4-17 addendum 10 (main 56dd8d86); stage 4. Starting model: bower-implementer. TL-P4-22 addenda 11 and 13 (main f01eda6c) widen the scope; part 1 gets an escalated review. Packet 2026-10-09-c4-test-timers-packet.md. Goes after the Codex-finding fixes."
+    "verify": "pnpm vitest run -t \"the size-cap run fits its time bound with no load|a second heavy run waits for the first\" && pnpm exec vitest run src/harness.test.ts -t \"the timer allowlist may only shrink\" && bash scripts/e2e-both.sh -g \"axe runs after the sheet.s animations end\"",
+    "note": "TL-P4-17 addendum 10 (main 56dd8d86); stage 4. Starting model: bower-implementer. TL-P4-22 addenda 11 and 13 (main f01eda6c) widen the scope; part 1 gets an escalated review. Packet 2026-10-09-c4-test-timers-packet.md. Goes after the Codex-finding fixes. P4-52 BLOCK only on b1 (parse once); split released by TL-P4-22 addendum 18 (main 5083a711): b1 is c4-parse-once. Part 1 byte table passed review."
   },
   {
     "id": "c3-done-harness-paths",
@@ -6276,6 +6276,35 @@
       "Cancel closes the sheet and returns focus to the opener."
     ],
     "verify": "pnpm vitest run src/features/files/MovePicker.test.tsx -t \"the move sheet's arrows step over the current folder\" && bash scripts/e2e-both.sh e2e/v2-move-here.spec.ts -g \"the move sheet shows where the thing is now and it cannot be chosen|the move sheet has a cancel that returns focus to its opener\"",
-    "note": "TL-P4-21 order 8; spec d-v2-18; impact block d-v2-18. Codex slot (TL-P4-23, lead 2026-10-09); a fresh Claude reviewer reviews it. Designer signed off at 59c72856 with the badge row. Packet 2026-10-09-d-v2-18-packet.md. implementer: codex."
+    "note": "TL-P4-21 order 8; spec d-v2-18; impact block d-v2-18. Codex slot (TL-P4-23, lead 2026-10-09); a fresh Claude reviewer reviews it. Designer signed off at 59c72856 with the badge row. Packet 2026-10-09-d-v2-18-packet.md. implementer: codex. Red 3a16e205, fix 137b59dd; round 2 (Enter on the current folder, designer) red 72ad0e8f, fix 65425820. P4-51 PASS (4 minors).",
+    "review": "P4-51 PASS"
+  },
+  {
+    "id": "c4-new-pill-one",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "ui": true,
+    "what": "The New pill look has one home in src/ui; folder, home and note (and the Move sheet Now here pill) use it, and each caller keeps its own placement. No visual change.",
+    "steps": [
+      "One src/ui home for the pill look; the three module copies are gone.",
+      "No visual change on the three screens (designer check)."
+    ],
+    "verify": "",
+    "note": "TL-P4-22 addendum 16 (main b8b21a8b); defect new-pill-three-copies. UI-only, so the pruning trial applies (no re-review). Codex after v2-move-here merges, and it folds that entry use in. Packet to write."
+  },
+  {
+    "id": "c4-parse-once",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "ui": null,
+    "what": "One ownership parse per note per run through the existing parse home: a per-run memo keyed by file id plus the md5 that was read, so a changed note is parsed again.",
+    "steps": [
+      "A run parses each unchanged note at most once.",
+      "A note whose md5 changed is parsed again."
+    ],
+    "verify": "",
+    "note": "TL-P4-22 addendum 18 (main 5083a711); split from c4-test-timers (P4-52 BLOCK b1; load-timeouts diagnosis b1, 13 parseOwnership call sites, ~850 parses in the size-cap run). Escalated. After the TL-P4-24 entries. Red: a spy counting at most one parse per unchanged note per run. Packet to write."
   }
 ]

@@ -19,6 +19,7 @@
   },
   "include": [
     "vite.config.ts",
+    "vite.deps.ts",
     "playwright.config.ts",
     "e2e"
   ],

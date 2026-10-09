@@ -1,5 +1,5 @@
 import { env as testEnv, runInDurableObject } from 'cloudflare:test';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { encrypt, importEncryptionKey } from '../src/crypto.js';
 import type { Env } from '../src/env.js';
@@ -185,8 +185,11 @@ describe('runner wire', () => {
     // The alarm is set at the earliest expiry.
     const alarm = await runInDurableObject(p, (_i, state) => state.storage.getAlarm());
     expect(alarm).not.toBeNull();
-    // The alarm fires by itself and prunes: no access in between.
-    for (let i = 0; i < 100 && (await kept()) !== undefined; i++) await new Promise((resolve) => setTimeout(resolve, 100));
+    // The alarm does its work at the expiry and prunes: no access in between. Its handler is run at that moment
+    // (a time 3.2 s on), since waiting out the real clock only tests the runtime's alarm clock, not Bower.
+    await runInDurableObject(p, async (instance: Person) => {
+      await instance.wake(Date.now() + 3200, { repo: 'owner/repo', token: undefined, fetchImpl: () => Promise.reject(new Error('no network in this test')) });
+    });
     expect(await kept()).toBeUndefined();
     expect((await runner.token()).status).toBe(401);
 
@@ -194,8 +197,14 @@ describe('runner wire', () => {
     const next = await aRun(Date.now() + 3000);
     const q = person(next.sub);
     await q.forget();
-    await new Promise((resolve) => setTimeout(resolve, 3200));
-    expect((await next.runner.token()).status).toBe(401);
+    // 3.2 s on: the clock is faked for Date only, so nothing waits.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(Date.now() + 3200);
+      expect((await next.runner.token()).status).toBe(401);
+    } finally {
+      vi.useRealTimers();
+    }
     expect(await runInDurableObject(q, (_i, state) => state.storage.sql.exec('SELECT hash FROM run_ticket').toArray())).toEqual([]);
   }, 20_000);
 

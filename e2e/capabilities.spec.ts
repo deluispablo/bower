@@ -4,7 +4,7 @@
  * them. `run-result-links` runs on demo and fake; the C04, C05 and C11
  * journeys run on the pretend Drive, where the effects are files.
  */
-import AxeBuilder from '@axe-core/playwright';
+import { expectAxeClean } from './axe';
 import type { Locator, Page } from '@playwright/test';
 import { expect, isFake, test } from './fixtures';
 
@@ -28,8 +28,7 @@ async function answeredListed(page: Page, within: Locator, selector: string, row
   for (const row of rows) await expect(list.getByText(row, { exact: true })).toBeVisible();
   const updated = within.getByRole('list', { name: 'Brought up to date' });
   for (const row of rows) await expect(updated.getByText(row, { exact: true })).toHaveCount(0);
-  const axe = await new AxeBuilder({ page }).include(selector).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).options({ rules: { 'target-size': { enabled: true } } }).analyze();
-  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+  await expectAxeClean(page, { include: selector, wcag22: true });
 }
 const FAKE_ONLY = 'the journey checks what the tidy-up wrote into the pretend Drive (TL-P2-40)';
 
@@ -233,8 +232,7 @@ test('write it shows the state written, re-asks on a clash and settles as an ans
   // The card shows Bower's update, every line, under its own label, and passes axe (TL-P4-19 addendum 17).
   const update = money.getByRole('list', { name: "Bower's update" });
   await expect(update.getByRole('listitem')).toHaveText([MONEY_UPDATE, 'Receipts are filed by month, as your rule says.']);
-  const axe = await new AxeBuilder({ page }).include('section[aria-labelledby="qs"]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).options({ rules: { 'target-size': { enabled: true } } }).analyze();
-  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+  await expectAxeClean(page, { include: 'section[aria-labelledby="qs"]', wcag22: true });
   await money.getByRole('button', { name: 'Write it' }).click();
   await expect(money).toHaveCount(0);
   await page.getByRole('region', { name: 'Recent' }).getByRole('link', { name: /^Money/ }).click();

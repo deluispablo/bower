@@ -1,7 +1,8 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
-import { afterEach, describe, expect, it } from 'vitest';
+import { act } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DataProvider } from '@/data/provider';
 import type { Sources } from '@/data/sources';
 import { BowerError } from '@/data/types';
@@ -10,6 +11,7 @@ import { loadingSources } from '@/testing/loading-sources';
 import { Palette } from './Palette';
 
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   useUi.setState({ paletteOpen: false });
 });
@@ -28,8 +30,11 @@ describe('the palette', () => {
         </DataProvider>
       </MemoryRouter>,
     );
-    await userEvent.type(screen.getByRole('combobox'), 'Tally');
-    expect(await screen.findByText(/Search did not answer/)).toBeInTheDocument();
+    // The search waits 200 ms after typing stops: fake time moves it, no real wait.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Tally' } });
+    await act(async () => { await vi.advanceTimersByTimeAsync(200); });
+    expect(screen.getByText(/Search did not answer/)).toBeInTheDocument();
   });
 
   it('the palette names things as the tree does: no .pdf or .url after a name', async () => {

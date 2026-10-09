@@ -5,7 +5,7 @@
  * `aria-describedby`) and passes axe with the WCAG 2.2 tags and target size.
  */
 import type { Locator, Page } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
+import { animationsEnd, expectAxeClean } from './axe';
 import { expect, isFake, test } from './fixtures';
 
 const THEMES = ['dark', 'light'] as const;
@@ -38,14 +38,7 @@ const placeholder = (el: Locator): Promise<string> =>
   el.evaluate((n) => getComputedStyle(n, '::placeholder').color);
 
 const axeClean = async (page: Page, within = 'main'): Promise<void> => {
-  const axe = await new AxeBuilder({ page })
-    .include(within)
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-    .options({ rules: { 'target-size': { enabled: true } } })
-    .analyze();
-  expect(
-    axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`),
-  ).toEqual([]);
+  await expectAxeClean(page, { include: within, wcag22: true });
 };
 
 /** A field whose own box (or its wrapper's) is the control edge. */
@@ -57,14 +50,7 @@ async function checkField(
   radius?: number,
 ): Promise<void> {
   // A sheet pops in; measure once it has settled.
-  await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
-        .map((a) => a.finished.catch(() => undefined)),
-    ),
-  );
+  await animationsEnd(page);
   const line = await resolved(page, '--control-line');
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   const e = await edge(box);

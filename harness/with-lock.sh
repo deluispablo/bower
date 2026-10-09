@@ -2,10 +2,14 @@
 # The one lock for heavy runs (pnpm check, e2e suites): done.sh and integrate.sh both call this.
 # mkdir is atomic and macOS has no flock. A second caller waits and says who holds the lock
 # (pid, command, start time); a lock whose holder is gone is taken over, with a line saying so.
+# Callers: pnpm check and every e2e script (package.json, scripts/e2e-both.sh), done.sh and integrate.sh.
 # usage: bash harness/with-lock.sh <command> [args...]      HARNESS_LOCK overrides the lock directory.
 set -uo pipefail
 [ $# -eq 0 ] && { echo "usage: with-lock.sh <command> [args...]"; exit 2; }
 lock=${HARNESS_LOCK:-/tmp/bower-heavy.lock}
+# Re-entrant: a call made inside a run that already holds this lock (pnpm check inside done.sh, an e2e script inside
+# pnpm check) passes through. The flag is the lock's path, so only a child of the holder skips the wait.
+[ "${HARNESS_LOCK_HELD:-}" = "$lock" ] && exec "$@"
 told=""; ownerless=0
 until mkdir "$lock" 2>/dev/null; do
   if [ -f "$lock/holder" ]; then
@@ -33,6 +37,7 @@ until mkdir "$lock" 2>/dev/null; do
   fi
   sleep 0.2
 done
+export HARNESS_LOCK_HELD="$lock"
 printf '%s\n%s\n%s\n' "$$" "$(date '+%F %T')" "$*" > "$lock/holder"
 trap 'rm -rf "$lock"' EXIT
 trap 'exit 130' INT TERM HUP
