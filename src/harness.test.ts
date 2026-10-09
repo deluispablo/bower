@@ -252,7 +252,7 @@ describe('the harness', () => {
     git('config', 'user.name', 'Alex');
     mkdirSync(join(dir, 'scripts'));
     mkdirSync(join(dir, 'harness'));
-    for (const f of ['harness-rules.mjs', 'harness-tests.mjs', 'harness-alone.mjs', 'check-harness.mjs']) copyFileSync(join(process.cwd(), 'scripts', f), join(dir, 'scripts', f));
+    for (const f of ['harness-rules.mjs', 'harness-tests.mjs', 'check-harness.mjs']) copyFileSync(join(process.cwd(), 'scripts', f), join(dir, 'scripts', f));
     copyFileSync(join(process.cwd(), 'harness/done.sh'), join(dir, 'harness/done.sh'));
     writeFileSync(join(dir, 'harness/features.json'), '[]\n');
     writeFileSync(join(dir, 'harness/proof-legacy.txt'), readFileSync(join(process.cwd(), 'harness/proof-legacy.txt')));

@@ -5709,7 +5709,7 @@
       "harness/slow-tests.json may only shrink.",
       "dependency-cruiser runs only in pnpm check."
     ],
-    "verify": "pnpm exec vitest run src/harness.test.ts src/dependency-rules.test.ts src/unused-gate.test.ts src/data/spine/write-once.test.ts src/data/upload-queue-real.test.ts -t \"a unit test over 1000 ms not on the slow list fails the harness check|a test slow in the full run and fast alone passes the slow ratchet|the slow list may only shrink|the rule list names every forbidden import|a new unused export fails the unused-code gate|the rule targets the primitive, not the names of what holds an id|lost bytes ask to choose the file again\"",
+    "verify": "pnpm exec vitest run src/harness.test.ts src/dependency-rules.test.ts src/unused-gate.test.ts src/data/spine/write-once.test.ts src/data/upload-queue-real.test.ts -t \"the timer allowlist may only shrink|wall-clock times are reported, never failed|the rule list names every forbidden import|a new unused export fails the unused-code gate|the rule targets the primitive, not the names of what holds an id|lost bytes ask to choose the file again\"",
     "note": "TL-P4-17 entry 3 (main e1bbf010). Closes dependency-rules-timeout (ruled here) and the lost-bytes-slow class (docs/harness/defects/2026-10-09-lost-bytes-slow.md). qa10 stays with c4-focus-return. Baseline: the tests over 1000 ms in test-results/unit.json today (16 at 0cc1247a), each sped up or listed. Starting model: bower-implementer. TL-P4-17 addendum 4 (main bed5503b): reservation-rule-test-slow folds in; syntax rules have one home, ESLint (no-restricted-syntax / no-restricted-imports with per-file overrides for allowed sites); the generateIds rule and dependency-rules keep only a fast fixture test of the rule, never a repo scan inside vitest; red: current timings on the slow list, then gone. TL-P4-17 addendum 6 (main 7f5fa754): a test over 1000 ms in the full run is rerun alone and only its alone time counts; the list is rebuilt from alone times; the knip gate test keeps a fixture only; the ESLint reservation rule targets the primitive (generateIds and write-once reserve/create calls outside the allowed files), never holder names."
   },
   {
@@ -5880,8 +5880,8 @@
     "steps": [
       "A test 1500 ms alone passes; 2500 ms alone fails."
     ],
-    "verify": "pnpm exec vitest run src/harness.test.ts -t \"a test under 2000 ms alone passes the temporary alone margin|a test over 2000 ms alone fails the slow ratchet\"",
-    "note": "TL-P4-17 addendum 9 (main 925d3fbb). scripts/harness-rules.mjs:272 compares the alone time with SLOW_MS; a separate ALONE_MS = 2000 with a comment naming c3-timer-gate. Starting model: bower-mechanical."
+    "verify": "pnpm exec vitest run src/harness.test.ts -t \"wall-clock times are reported, never failed\"",
+    "note": "TL-P4-17 addendum 9 (main 925d3fbb). scripts/harness-rules.mjs:272 compares the alone time with SLOW_MS; a separate ALONE_MS = 2000 with a comment naming c3-timer-gate. Starting model: bower-mechanical. Retired by c3-timer-gate: the alone margin and its tests are gone; the verify names the report test."
   },
   {
     "id": "c3-timer-gate",
