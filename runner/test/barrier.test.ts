@@ -388,15 +388,16 @@ describe('the report barrier', () => {
     const { wire, root } = await demo();
     const projects = (await wire.drive.listAll(root)).find((f) => f.folder && f.name === 'Projects');
     if (!projects) throw new Error('no Projects');
-    // The real effects, whose check before the first move cannot read the folder it moves to.
+    // The real effects, whose fence right before each move into Projects cannot read that folder: nothing is sent, the
+    // move is read back by its stamp (not there), and it stays as it was, as any write refused before Drive.
     const end = await tidy(wire, root, 1, new StubEffects(), [], () => false, {
       effects: driveEffects,
       fetch: noDrive(wire, (url, method) => method === 'GET' && url.pathname.endsWith(`/files/${projects.id}`)),
     });
-    expect((await chainOf(wire, root)).at(-1)?.outcomes.map((o) => o.state)).not.toContain('possible-effect');
-    expect(end.phase).toBe('failed');
-    expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'failed']);
-    expect(wire.statuses.at(-1)?.failure).toBe(B_FAILURE);
+    const last = (await chainOf(wire, root)).at(-1);
+    expect(last?.outcomes.map((o) => o.state)).not.toContain('possible-effect');
+    expect(end.phase).toBe('done');
+    expect(last?.outcomes.filter((o) => o.state === 'rejected' && o.failure.code === 'offline').length).toBeGreaterThan(0);
     expect((await wire.drive.listAll(projects.id)).filter((f) => f.parents[0] === projects.id)).toEqual([]);
   });
 

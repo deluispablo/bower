@@ -6,7 +6,7 @@
  */
 import type { DriveFile, FencedDrive, RunDrive, StoredEvidence } from '../drive/drive-api';
 import type { FakeDrive } from '../drive/fake-drive';
-import { SeenFiles, targetOf } from '../drive/seen-files';
+import { destinationOf, SeenFiles, targetOf } from '../drive/seen-files';
 import type { RecordReads } from '../spine/records';
 import { BowerError } from '../types';
 
@@ -22,6 +22,8 @@ export class FakeRunDrive implements RunDrive {
     return this.seen.wrap(this.drive.fenced((peek, call) => {
       this.authority();
       const target = targetOf(call);
+      const into = destinationOf(call);
+      if (into) this.seen.assert(into, peek(into.id));
       this.seen.assert(target, peek(target.id));
     }));
   }
@@ -41,10 +43,6 @@ export class FakeRunDrive implements RunDrive {
       if (e instanceof BowerError && e.code === 'not-found') return null;
       throw e;
     }
-  }
-
-  folder(id: string): Promise<DriveFile | null> {
-    return this.recheck(id);
   }
 
   async evidence(id: string): Promise<StoredEvidence | null> {

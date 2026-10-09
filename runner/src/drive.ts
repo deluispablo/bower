@@ -8,7 +8,8 @@
  * (ARCHITECTURE, "Safety at the actual storage boundary"):
  *
  * - Still as seen: right before each write, the target (or, for a create, its
- *   folder) is read again and compared with what this run read (`SeenFiles`).
+ *   folder; for a move, the folder it goes into too) is read again and compared
+ *   with what this run read (`SeenFiles`).
  *   Drive v3 has no conditional write on files, so another client can still
  *   change the file in the window between that read and the write; the
  *   window is kept short (writes go one at a time) but it is not closed.
@@ -44,7 +45,7 @@ import type { AdmissionScope } from '../../src/data/spine/admission';
 import { admissionRead } from '../../src/data/spine/read';
 import { md5Hex, sha256, sha256Hex } from '../../src/data/contracts/hashes';
 import { ReadCache } from '../../src/data/drive/read-cache';
-import { SeenFiles, targetOf, type StoredNow } from '../../src/data/drive/seen-files';
+import { destinationOf, SeenFiles, targetOf, type StoredNow } from '../../src/data/drive/seen-files';
 import { staleAttempt, type RunnerToken } from './token';
 
 export interface RunnerDriveOptions {
@@ -164,7 +165,7 @@ export class RunnerDrive implements RunDrive {
 
   // --- Evidence reads: each file read is what later writes are checked against. ---
 
-  /** A folder as this runner last made or read it, kept in the one read cache by id and modifiedTime (`read-cache.ts`). */
+  /** A record folder as this runner made it, kept in the one read cache by id and modifiedTime (`read-cache.ts`). */
   private kept(id: string): Promise<DriveFile> | undefined {
     return this.reads.keptFile<DriveFile>({ id, modifiedTime: this.seen.version(id) });
   }
@@ -172,24 +173,11 @@ export class RunnerDrive implements RunDrive {
   /**
    * One of this run's own record folders (`.bower/runs`, the run's folder), as its create answered: it stands for the
    * read the fence would make before a record goes into it, since only Bower writes there. Every other folder a create
-   * goes into, one this run made for the person's things too, is read from Drive right before the write.
+   * or a move goes into, one this run made for the person's things too, is read from Drive right before the write.
    */
   private async ownFolder(id: string): Promise<StoredNow | null> {
     const kept = this.records.has(id) ? this.kept(id) : undefined;
     return kept ? { file: await kept, trashed: false } : null;
-  }
-
-  /**
-   * The folder a move goes into, for its check: as this runner made or last read it while that is still the latest
-   * version it saw (no clock: a read that shows it changed replaces it), otherwise read from Drive. Null when it is gone
-   * or in the Bin. The move's own fence reads the thing moved.
-   */
-  async folder(id: string): Promise<DriveFile | null> {
-    const kept = this.kept(id);
-    if (kept) return kept;
-    const file = await this.recheck(id);
-    if (file?.folder) this.reads.keep(file);
-    return file;
   }
 
   /** A file as it is now for an effect's check, read from Drive; null when it is gone or in the Bin. */
@@ -393,9 +381,11 @@ export class RunnerDrive implements RunDrive {
         this.answered.delete(call.id);
       }
       // Read now, right before the send, never from an earlier read; only a record going into one of this run's own
-      // record folders takes that folder as its create answered (`ownFolder`).
+      // record folders takes that folder as its create answered (`ownFolder`). A move's folder is read with its target.
       const own = target.part === 'parent' ? await this.ownFolder(target.id) : null;
-      const [, now] = await Promise.all([this.stillCurrent(), own ?? this.peek(target.id)]);
+      const into = destinationOf(call);
+      const [, now, intoNow] = await Promise.all([this.stillCurrent(), own ?? this.peek(target.id), into ? this.peek(into.id) : null]);
+      if (into) this.seen.assert(into, intoNow);
       this.seen.assert(target, now);
       this.peeked = now?.file ?? null;
       if ('id' in call) {
@@ -416,10 +406,10 @@ export class RunnerDrive implements RunDrive {
           // Noted here too, before the next queued write asks: the wrap notes it only after this promise has resolved.
           const file = this.seen.note(answer as DriveFile);
           this.answers.set(file.id, { file, trashed: false });
-          // A folder this run made, kept by the version its create answered; with no operation's stamp, a record folder.
-          if (call.op === 'create-folder') {
+          // A record folder this run made (a folder with no operation's stamp), kept by the version its create answered.
+          if (call.op === 'create-folder' && call.appProperties?.bowerOp === undefined) {
             this.reads.keep(file);
-            if (call.appProperties?.bowerOp === undefined) this.records.add(file.id);
+            this.records.add(file.id);
           }
         }
         return answer;

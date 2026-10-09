@@ -45,12 +45,12 @@ export class ReadCache {
     return entry && entry.modifiedTime === v.modifiedTime ? (entry.reads.get('text') as Promise<string> | undefined) : undefined;
   }
 
-  /** A file's metadata, under the version it shows (a folder the runner made or read). */
+  /** A file's metadata, under the version it shows (a record folder the runner made). */
   keep<T extends Version>(file: T): void {
     this.once('file', file, () => Promise.resolve(file));
   }
 
-  /** The file kept for this version by `made`. */
+  /** The file kept for this version by `keep`. */
   keptFile<T>(v: Version): Promise<T> | undefined {
     const entry = this.kept.get(v.id);
     return entry && entry.modifiedTime === v.modifiedTime ? (entry.reads.get('file') as Promise<T> | undefined) : undefined;

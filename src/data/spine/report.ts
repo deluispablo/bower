@@ -16,6 +16,11 @@ import type { RunManifest } from './records';
 export const MOVED_AWAY = 'It was moved, renamed or removed before Bower could file it.';
 /** Why it stays for any other rejection, a failed dependency included: a sentence that promises nothing. */
 export const NOT_FILED = "It couldn't be filed this time.";
+/**
+ * A thing possibly changed (its answer lost, or named as possibly sent by an attempt that stopped), then emptied from
+ * the Bin before Bower read it back: Drive keeps nothing to tell landed from never sent (TL-P4-14 addendum 7).
+ */
+export const UNCONFIRMED_GONE = "Bower couldn't confirm this; the file is gone.";
 /** The failure a move's own precondition gives when its source is not as captured; the service is its only author. */
 export const SOURCE_NOT_AS_SEEN = 'It was moved, renamed or removed before Bower could get to it.';
 
@@ -44,7 +49,11 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
       const o = byId.get(id);
       return o?.state === 'rejected' && o.failure.code === 'conflict' && o.failure.message === SOURCE_NOT_AS_SEEN;
     });
-    report.setAside.push(...(moves ? c.value.setAside.map((row) => ({ ...row, why: moved ? MOVED_AWAY : NOT_FILED })) : c.value.setAside));
+    const gone = c.requires.some((id) => {
+      const o = byId.get(id);
+      return o?.state === 'rejected' && o.failure.code === 'unknown' && o.failure.message === UNCONFIRMED_GONE;
+    });
+    report.setAside.push(...(moves ? c.value.setAside.map((row) => ({ ...row, why: gone ? UNCONFIRMED_GONE : moved ? MOVED_AWAY : NOT_FILED })) : c.value.setAside));
     report.questions.push(...c.value.questions);
     if (c.value.requests) report.requests = [...(report.requests ?? []), ...c.value.requests];
     if (c.value.yourChanges !== undefined) report.yourChanges = (report.yourChanges ?? 0) + c.value.yourChanges;
