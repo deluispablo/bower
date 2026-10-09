@@ -503,3 +503,4 @@ c4-runner-region	8d6acaf1211fa36b	2026-10-09	red (fixed in cca37279)
 c4-focus-return	d3fd79f206fddd68	2026-10-09	known-green: unit red at f0df8925 by hand (/tmp/c4focus-handred.log); e2e reds at f98ae699 and f0df8925 in worker logs /tmp/c4f-*.log, /tmp/c4f2-*.log; designer verified 75db570f
 v2-dock	f55e0d4ac23dedd4	2026-10-09	known-green: e2e red by hand at 7cf3cbc9: phone width and focus tests fail on assertions (/tmp/v2dock-handred.log); designer verified 75db570f
 v2-name-sheet	a01e11b18ad36c86	2026-10-09	red (fixed in 51978d36)
+v2-targets	9394b92ee2bfd64a	2026-10-09	known-green: e2e reds at cbb0e7bf fail on assertions (/tmp/v2t-red.log: tab close 22, answers 40, row tap, desktop 22); designer verified 189cc311

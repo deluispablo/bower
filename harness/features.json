@@ -6155,7 +6155,7 @@
     "id": "v2-targets",
     "task": "p4-consolidation",
     "category": "ui",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "Desktop tab close is a 24x24 button (d-v2-05); on the phone every listed control is at least 44 px through one rule in src/ui, one Segmented control, and switch rows as labels (d-v2-10).",
     "steps": [

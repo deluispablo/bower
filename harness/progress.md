@@ -258,3 +258,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: c4-focus-return passes — one focus home: sheets return focus to their opener, then the menu opener, then the heading (d-v2-04)
 - 2026-10-09: v2-dock passes — one bottom dock with --dock-h; messages and chip above the tab bar; focus never hidden (d-v2-01, d-v2-03)
 - 2026-10-09: v2-name-sheet passes — NameSheet on the field rule; name selected without extension; folder New note uses it (d-v2-09)
+- 2026-10-09: v2-targets passes — desktop tab close 24x24; phone controls 44 px through one rule, one Segmented, switch rows as labels (d-v2-05, d-v2-10)
