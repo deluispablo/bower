@@ -61,3 +61,31 @@ Branch `c3-subject` from `claude/p3` e48bd296. Red 856cde1e (tests only), fix dc
 
 - TypeScript handbook, discriminated unions:
   https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions
+
+## Fix round (P4-43 minors; TL-P4-17 addendum 4), 2026-10-09
+
+Merge of `claude/p3`: 33963342 (no conflict). Red 7a7895ed (tests only), fix 0378e601.
+
+- The rule "only `contracts/questions.ts` builds or reads a `q-ask-`/`q-state-` id" moved out of vitest into ESLint:
+  `scripts/eslint-question-key.mjs` (`no-restricted-syntax`, allowlist: the home alone). It targets the key's
+  construction: the prefix in any string or template piece, a bare `q`/`q-` piece, and a template that starts `q-`
+  followed by a constant or a literal. Other question ids (`q-${rule.id}-…`, `q-adopt-states`) stay allowed.
+- `scripts/eslint-syntax.mjs` joins it with the reservation rule. ESLint keeps only the last options a file gets for
+  one rule, so two `no-restricted-syntax` blocks would silence each other; each allowed file gets the other rules'
+  selectors. The app's, the Worker's and the runner's configs use `syntaxConfig(pkg)`.
+- `src/data/one-question-key.test.ts` is now a fixture test of the configs ESLint runs (app and runner), never a repo
+  scan; it proves a copy built from other constants (`const Q = 'q-'`, `'q' + '-' + KIND`, `` `q-${KIND}-` ``) is found,
+  that the home is allowed, and that the reservation rule still holds in the home and this rule in `write-once.ts`.
+  Same verify name: "one key and one open-questions function serve the reader and the planner".
+- The repo-scan checks of imports of `contracts/questions` and `openQuestions(` calls were removed (no repo scan in
+  vitest); the key rule and the reader's and planner's behaviour tests cover them.
+- `scripted.ts`: the saved-Bin match is `related(subjectKey(q), s.file.id) || sameContent(q, { hash })`. It now also
+  skips the empty file's hash and a question whose subject is still in the inbox, as `sameContent` does elsewhere.
+
+Gates: `pnpm check` pass (/tmp/c3s-check.log); verify app /tmp/c3s-verify-app.log, runner /tmp/c3s-verify-runner.log.
+
+Left out: a template that starts `q-` followed by a member expression (`q-${K.ask}-`) has the disagreement ids' shape
+and is not caught; nor is a prefix computed at run time.
+
+Sources: ESLint no-restricted-syntax, https://eslint.org/docs/latest/rules/no-restricted-syntax ; flat config rule
+merging, https://eslint.org/docs/latest/use/configure/configuration-files#cascading-configuration-objects
