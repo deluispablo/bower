@@ -6093,5 +6093,18 @@
     ],
     "verify": "pnpm vitest run -t \"every control edge is at least 3:1 on its ground\" && bash scripts/e2e-both.sh e2e/capabilities.spec.ts -g \"fields and switches draw their edge with the control line\"",
     "note": "TL-P4-21 order 1 (P2 one field rule); spec d-v2-08; impact finding 3. Starting model bower-implementer. Packet 2026-10-09-v2-field-packet.md. The e2e file may differ; the worker names it."
+  },
+  {
+    "id": "c4-run-counts",
+    "task": "p4-consolidation",
+    "category": "perf",
+    "passes": false,
+    "what": "The runner transport counts Drive calls and bytes under the current timing phase (timing.ts the one phase home); the timing line prints them plus the runner's region; the Drive-call golden asserts timing's counts instead of inferring phases.",
+    "steps": [
+      "The timing line shows calls and bytes per phase and the region.",
+      "The goldens keep 78 and 88 through timing's counts."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"the timing line counts calls and bytes per phase and names the region\"",
+    "note": "TL-P4-22 addendum 2 (main b61acefe), option (b); defect stage-3-live-slower. Starting model bower-implementer. Packet 2026-10-09-c4-run-counts-packet.md."
   }
 ]
