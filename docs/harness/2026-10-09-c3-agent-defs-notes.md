@@ -35,3 +35,10 @@ tests changed: src/harness.test.ts: the scratch fixture copies the scripts check
 - bower-design-checker: `Open ?source=demo in the browser pane and report one measured value (getBoundingClientRect of the first button) as a finding line.`
 
 Each run passes if the role finishes without a "tool not available" or zero-tools error and returns its card.
+
+## Addendum: research tools (coordinator check)
+
+- Diagnoser, impact and reviewer now also list WebFetch, WebSearch, ToolSearch and `mcp__plugin_context7_context7`. The coordinator named the first three; I added the context7 server because ToolSearch cannot load a tool that is not in the allowlist.
+- Evaluator and design-checker also list WebFetch and WebSearch.
+- Server prefixes confirmed in https://code.claude.com/docs/en/sub-agents (Available tools): "Both fields accept MCP server-level patterns in addition to exact tool names: `mcp__<server>` or `mcp__<server>__*` grants or removes every tool from the named server." So `mcp__Claude_Browser` and `mcp__plugin_playwright_playwright` grant all of their tools.
+- The sensor pins no tool names beyond the no-Edit and no-Agent rules, so it is unchanged.
