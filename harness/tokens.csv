@@ -195,3 +195,4 @@ P4-49,reviewer,claude,bower-reviewer,,1,35117,,,,,,6,0.8,PASS (2 minor),2026-10-
 c4-retry-fence contract,reviewer,claude,bower-reviewer,,1,59323,,,,,,9,1.0,CHANGES (6),2026-10-09
 c4-undo-withdraw contract,reviewer,claude,bower-reviewer,,1,56424,,,,,,11,1.1,CHANGES (7),2026-10-09
 c4-app-fence contract,reviewer,claude,bower-reviewer,,1,62588,,,,,,14,1.4,CHANGES (9),2026-10-09
+v2-move-here,implementer,codex,codex,medium,1,525472,518185,0,467456,7287,,,,delivered,2026-10-09
