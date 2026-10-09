@@ -8,7 +8,7 @@
 import { driveError, type DriveApi, type DriveFile } from '../drive/drive-api';
 import { ReadCache, type Version } from '../drive/read-cache';
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
-import { Intended, byId, confirms, holds, makeFolder, makeText, reserveId, updateByStamp, type Intent } from '../spine/write-once';
+import { Intended, byId, confirms, holds, makeFolder, makeOnce, makeText, updateByStamp, type Holder, type Intent } from '../spine/write-once';
 import type { FailedChange, Unsubscribe, VaultSource } from '../sources';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName } from '../piles';
 import { buildTree, checkCreationName, displayName, thingName, freeName, join, kindOf, moveEntry, nameOf, parentOf, removeEntry, renameEntry } from '../tree';
@@ -1528,9 +1528,8 @@ export class DriveVault implements VaultSource {
         // The session fence (live/index.ts) recognises a pile's thing by PROP.asAdded: it waits for Use here.
         const props: Record<string, string> = { [PROP.asAdded]: e.item.name, [PROP.origin]: e.item.origin, [PROP.kind]: e.item.kind, [PROP.item]: e.key, ...(u.lone ? { [PROP.pile]: pileId } : {}), ...(u.declaration ? { [PROP.declaration]: u.declaration } : {}) };
         e.item.upload = 0;
-        // A link or an empty thing keeps the id reserved for it: a try after a lost answer is that same file.
-        if (!e.body) e.reserved ??= await reserveId(this.addedDrive);
-        const made = e.body ? await this.sendQueued(pileId, u, e, e.body, name, props) : await makeText(this.addedDrive, this.addedDrive, { parent: u.parent, name, props, ...(e.reserved ? { id: e.reserved } : {}) }, e.url ? shortcut(e.url) : '');
+        // A link or an empty thing keeps the id reserved for it (`write-once.ts`): a try after a lost answer is that same file.
+        const made = e.body ? await this.sendQueued(pileId, u, e, e.body, name, props) : await makeOnce(e, this.addedDrive, (id) => makeText(this.addedDrive, this.addedDrive, { parent: u.parent, name, props, id }, e.url ? shortcut(e.url) : ''));
         if (!this.current()) return;
         if (this.uploads.get(pileId) !== u) {
           // The pile was removed while this was on its way: it follows the pile to the Bin,
@@ -1813,7 +1812,7 @@ export class DriveVault implements VaultSource {
   }
 }
 
-interface Sending {
+interface Sending extends Holder {
   /** Set on the file as appProperties.bowerItem: the thing as the pile declares it. */
   key: string;
   /** A link's or an empty thing's id, reserved for its create (`spine/write-once.ts`): every try makes that one file. */
