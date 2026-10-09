@@ -363,28 +363,21 @@ export function stateMarkOf(bytes: Uint8Array): string | null {
   }
 }
 
-/** The proposed lines minus any subset in order whose mark is `mark`: what Bower last wrote there, so not news. */
-function withoutSaid(lines: readonly string[], mark: string | null): string[] {
-  if (mark === null || lines.length === 0 || lines.length > 12) return [...lines];
-  for (let bits = (1 << lines.length) - 1; bits > 0; bits--) {
-    const subset = lines.filter((_, i) => (bits >> i) & 1);
-    if (stateMark(subset) === mark) return lines.filter((_, i) => !((bits >> i) & 1));
-  }
-  return [...lines];
-}
-
 /**
  * What Bower would have written in a Current state, as one Timeline line within an authored line's limits, naming
- * only what the section does not already hold (`existing`): as many whole lines as fit, or the first one cut at a word
- * with an ellipsis. Null when nothing is new, so no line is written.
+ * only what the section does not already hold (`existing`) nor Bower last wrote there (`said`: the lines of the state
+ * change whose mark the section carries, read from its run's manifest; none when that change cannot be read, so
+ * nothing is left out on a guess): as many whole lines as fit, or the first one cut at a word with an ellipsis. Null
+ * when nothing is new, so no line is written.
  */
-export function stateNewsLine(lines: readonly string[], existing: readonly string[], mark: string | null = null): string | null {
+export function stateNewsLine(lines: readonly string[], existing: readonly string[], said: readonly string[] = []): string | null {
   const lead = 'New: ';
   const plain = (line: string): string => line.replace(/ · /g, ', ').replace(/\[\[|\]\]/g, '').replace(/;/g, ',').trim().replace(/[.!?]+$/, '');
   const held = new Set(existing.map((line) => plain(line).toLowerCase()));
   // Plain news: the new lines joined by commas, the sentence taking one full stop at its end. A later line starts in
   // lower case (not an acronym), so the sentence reads as one.
-  const clean = withoutSaid(lines, mark).map(plain).filter((line) => line && !held.has(line.toLowerCase()))
+  const old = new Set(said);
+  const clean = lines.filter((line) => !old.has(line)).map(plain).filter((line) => line && !held.has(line.toLowerCase()))
     .map((line, i) => (i && /^[A-Z][a-z]/.test(line) ? `${line[0]?.toLowerCase() ?? ''}${line.slice(1)}` : line))
     // After the person's own lines, an article opener reads on from "New:"; a name keeps its capital.
     .map((line, i) => (i === 0 && existing.length > 0 && /^(A|An|The) /.test(line) ? `${line[0]?.toLowerCase() ?? ''}${line.slice(1)}` : line));

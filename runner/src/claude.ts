@@ -435,18 +435,26 @@ interface TakenAnswer {
   note?: { fileId: string; path: string };
   /** For keeping one note (a pair question by file ids, c3-pair-ask): the two notes, by those ids, and their paths now. */
   pair?: { fileIds: readonly [string, string]; paths: readonly [string, string] };
+  /** For "Write it": its question keeps the update it showed, which the plan writes with no model (`c3-state-mark`). */
+  shown?: true;
+}
+
+/** Your answers a run took, and whether they are all it took of your changes and each one's question kept what it showed. */
+interface Taken {
+  answers: TakenAnswer[];
+  alone: boolean;
 }
 
 /**
  * Your answers among the changes this run took, each with the open question it answers (TL-P4-08 addendum 8): read
  * once, for what the model is shown and for the notes kept as one. None when the run took no change of yours.
  */
-async function answersTaken(read: ScriptedRead, run: ScriptedRun, took: Admitted): Promise<TakenAnswer[]> {
-  if (!took.taken.journal.length) return [];
+async function answersTaken(read: ScriptedRead, run: ScriptedRun, took: Admitted): Promise<Taken> {
+  if (!took.taken.journal.length) return { answers: [], alone: false };
   const listing = await read.listAll(run.rootId);
   const ix = VaultIndex.build(run.rootId, listing);
   const file = ix.file(SYSTEM.questions);
-  if (!file || file.folder) return [];
+  if (!file || file.folder) return { answers: [], alone: false };
   const json = (text: string): unknown => {
     try {
       return JSON.parse(text);
@@ -461,10 +469,14 @@ async function answersTaken(read: ScriptedRead, run: ScriptedRun, took: Admitted
   const questions = Array.isArray(open?.questions) ? (open.questions as Array<Record<string, unknown>>) : [];
   const text = (v: unknown): string => (typeof v === 'string' ? v : '');
   const out: Array<{ answer: TakenAnswer; at: number }> = [];
+  // A change of yours that is not an answer to a question that kept what it showed needs the model.
+  let others = 0;
   for (const line of took.taken.journal) {
     const rec = json(await read.readText(line.fileId)) as { id?: unknown; kind?: unknown; text?: unknown; questionId?: unknown; at?: unknown } | null;
+    const q = questions.find((x) => x.id === rec?.questionId);
+    const shown = !!q && subjectOf({ id: typeof q.id === 'string' ? q.id : '' }).kind === 'state' && isRecord(q.shown) && Array.isArray(q.shown.lines);
+    if (rec?.kind !== 'answer' || !shown) others++;
     if (rec?.kind !== 'answer' || (rec.text !== 'yes' && rec.text !== 'no') || typeof rec.id !== 'string') continue;
-    const q = questions.find((x) => x.id === rec.questionId);
     if (!q || typeof q.id !== 'string' || typeof q.text !== 'string') continue;
     const at = typeof rec.at === 'number' ? rec.at : 0;
     // One answer per question: of two (another device's), the later one is the person's answer (P4-20 M1).
@@ -482,12 +494,15 @@ async function answersTaken(read: ScriptedRead, run: ScriptedRun, took: Admitted
       id: rec.id, yes: rec.text === 'yes', question: { id: q.id, text: q.text, yes: text(q.yes), no: text(q.no), ...(typeof q.subject === 'string' ? { subject: q.subject } : {}) },
       ...(noteId !== undefined && notePath !== undefined ? { note: { fileId: noteId, path: notePath } } : {}),
       ...(pairIds && pathA !== undefined && pathB !== undefined ? { pair: { fileIds: pairIds, paths: [pathA, pathB] } } : {}),
+      ...(shown ? { shown: true as const } : {}),
     };
     if (before >= 0) out.splice(before, 1);
     out.push({ answer, at });
   }
-  return out.map((a) => a.answer);
+  return { answers: out.map((a) => a.answer), alone: others === 0 && out.length > 0 };
 }
+
+const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
 /**
  * The pairs of notes shown that the person said yes to keeping as one (`keep-one-note-merge`): a yes answer among the
@@ -1140,7 +1155,26 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const { model, maxTurns } = claudeLimits(setup.env);
     // The model never sees a thing already saved: the plan bins it (`duplicates.ts`).
     const shownTook = await forModel(read, run, took);
-    const answers = await answersTaken(read, run, shownTook);
+    const taken = await answersTaken(read, run, shownTook);
+    const answers = taken.answers;
+    // The runner builds the manifest, every id, hash and digest its own, exactly as the scripted provider does.
+    const plannedWith = async (filing: Filing, held: ReadonlySet<string> | undefined, own: string | undefined, by: string): Promise<RunManifest> => {
+      const t = took.taken;
+      const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), decisions: modelDecisions(filing) }, undefined, held);
+      const manifest: RunManifest = plan.manifest;
+      const parsed = await parseRunManifestV2((await canonical(manifest)).bytes, run.rootId, RUNNER_WRITES);
+      if (!parsed.ok) return refuse(`outside the run manifest contract (${parsed.reason})`);
+      const stray = outsideAdmitted(manifest, took, own, new Set((filing.keep ?? []).map((k) => k.other)));
+      if (stray) return refuse(stray);
+      console.log(`The Claude provider planned ${manifest.operations.length} operations ${by}.`);
+      return manifest;
+    };
+    // Only your yes or no to "Write it" questions that kept the update they showed, and no pile: the plan writes that
+    // update as shown, and the model is not asked (`c3-state-mark`, TL-P4-16 addendum 2).
+    if (taken.alone && !shownTook.taken.piles.length) {
+      const listing = await read.listAll(run.rootId);
+      return plannedWith({ thing: () => null, words: () => null }, undefined, VaultIndex.build(run.rootId, listing).file(SYSTEM.dir)?.id, 'with no model, from the updates shown');
+    }
     // A note a yes to "Write it" is about is always shown, so the model can write its update; so are two notes to keep as one.
     const shown = await shownOf(read, run, shownTook, new Set(answers.flatMap((a) => (!a.yes ? [] : [...(a.note ? [a.note.fileId] : []), ...(a.pair?.fileIds ?? [])]))));
     if (answers.length) shown.answers = answersShown(answers, shown.piles);
@@ -1222,15 +1256,6 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     }
     if (!checked.ok) return refuse(`${checked.why} (${checked.kind}, after one retry)`);
     const intent = checked.intent;
-    // The runner builds the manifest, every id, hash and digest its own, exactly as the scripted provider does.
-    const t = took.taken;
-    const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), decisions: modelDecisions(intent.filing) }, undefined, intent.held);
-    const manifest: RunManifest = plan.manifest;
-    const parsed = await parseRunManifestV2((await canonical(manifest)).bytes, run.rootId, RUNNER_WRITES);
-    if (!parsed.ok) return refuse(`outside the run manifest contract (${parsed.reason})`);
-    const stray = outsideAdmitted(manifest, took, shown.own, new Set((intent.filing.keep ?? []).map((k) => k.other)));
-    if (stray) return refuse(stray);
-    console.log(`The Claude provider planned ${manifest.operations.length} operations with ${model}.`);
-    return manifest;
+    return plannedWith(intent.filing, intent.held, shown.own, `with ${model}`);
   };
 }

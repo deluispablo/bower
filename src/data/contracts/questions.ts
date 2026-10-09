@@ -43,6 +43,10 @@ export type Asked = Pick<Question, 'id'> & Partial<Pick<Question, 'subject' | 'h
 /** The id of the question asked about a pile, or about one thing by its file id: one each. */
 export const askId = (pileOrFileId: string): string => `${ASK}${pileOrFileId}`;
 
+/** The question about a note's Current state the person edited, word for word: `name` is the note's display name. */
+export const STATE_ASK = (name: string): string => `You changed the current state of ${name}. Should Bower write its update there?`;
+/** The same question asked again because the person changed that section after it was asked (its reason, said first). */
+export const STATE_ASK_AGAIN = (name: string): string => `You changed the current state of ${name} again. Should Bower still write its update there?`;
 /** The id of the question about a note's Current state the person edited, by the note's file id. */
 export const stateQuestionId = (noteFileId: string): string => `${STATE}${noteFileId}`;
 
@@ -128,11 +132,11 @@ export function openQuestions<Q extends Asked>(all: readonly Q[], answered: Read
   return all.filter((q) => !answered.has(q.id) && !subjectLeft(q, inbox, notes));
 }
 
-/** A question as a run's report row has it: what the person reads, never its subject, hash or mark. */
+/** A question as a run's report row has it: what the person reads, never its subject, hash, mark or shown update. */
 export type ReportQuestion = Pick<Question, 'id' | 'text' | 'yes' | 'no' | 'askedAt' | 'about'>;
 
 /** Its fields in the order the question has them, so a report reads as before. */
 export function reportRowOf(q: Question): ReportQuestion {
-  const { subject: _subject, hash: _hash, state: _state, ...row } = q;
+  const { subject: _subject, hash: _hash, state: _state, shown: _shown, ...row } = q;
   return row;
 }

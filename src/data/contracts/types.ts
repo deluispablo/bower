@@ -142,7 +142,22 @@ export interface Question {
    * writes over them only while they still read so (`state-yes-writes`).
    */
   state?: string;
+  /**
+   * A question about a Current state you edited: the update Bower showed (`lines`, what a yes writes, with no model
+   * asked again) and the note as the run that asked left it, Drive's `md5Checksum` and `bowerOp` stamp (none when the
+   * note carried none). A yes writes only while the note still carries both (write-once's stamp-plus-checksum
+   * comparison, as the New mark's, TL-P4-19 addendum 5); otherwise it is asked again. A question from before has none
+   * and keeps the earlier path (`c3-state-mark`).
+   */
+  shown?: StateShown;
   askedAt: number;
+}
+
+/** What a question about a Current state showed, and the note as it was left then (`Question.shown`). */
+export interface StateShown {
+  lines: string[];
+  md5: string;
+  stamp?: string;
 }
 
 export interface Rule {

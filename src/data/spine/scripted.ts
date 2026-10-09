@@ -17,13 +17,13 @@ import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as M
 import { PILE_NOTE, safeInboxName } from '../piles';
 import { recordablePile, sameText, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
-import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type Request } from '../types';
+import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type Request, type StateShown } from '../types';
 import { isJournalRecord, type JournalRecord } from '../contracts/journal-record';
 import { PROP, RUNNER_WRITES, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
 import { ruleLike } from '../rules';
 import { savedLinkAddress } from '../search-text';
 import { EMPTY_MD5, md5Hex } from '../contracts/hashes';
-import { askId, notesGone, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
+import { STATE_ASK, STATE_ASK_AGAIN, askId, notesGone, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
 import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
 import { parseTimelineLine } from '../contracts/timeline-line';
@@ -36,7 +36,7 @@ import { SET_ASIDE, capturePiles, listedPiles, pileShape } from './plan';
 import { duplicatesOf, wordsSaved, type Duplicate } from './duplicates';
 import type { AdmissionManifest } from './admission';
 import type { ScriptedRead } from './read';
-import { stampOf } from './write-once';
+import { STAMP, stampOf } from './write-once';
 
 export { SET_ASIDE, listedPiles };
 
@@ -841,11 +841,43 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       const about = subjectOf({ id });
       const path = about.kind === 'state' ? ix.pathOf(about.id) : undefined;
       const f = path === undefined ? undefined : ix.file(path);
+      // SEAM (TL-P4-19 addendum 10, `answered`): a yes whose note had moved or gone to the Bin writes nothing; its
+      // answered row goes here once the subject home has the field ("Not written: <note> had moved or gone to the Bin
+      // before Bower got to it.").
       if (l.rec.text !== 'yes' || !q || !f || f.folder || path === undefined) continue;
       grants.set(f.id, { answer: l.rec.id, seen: q.state ?? null, question: q });
       want(f, path);
     }
   }
+  /**
+   * What Bower last wrote in a note's Current state (`c3-state-mark`): the lines of the earlier state change whose mark
+   * the section carries (`stateMark` of its `lines`), by the note's file id, from the run manifests the listing shows in
+   * `.bower/runs`, newest first; read only for a section the person edited, each manifest once. Empty when none says so
+   * (retention binned that run, or the mark is older than its manifest): then nothing is taken as said, and the line
+   * names all that the section lacks. A manifest that cannot be read or parsed is passed over (lenient read).
+   */
+  const manifestPaths = listing.filter((x) => !x.folder && MANIFEST_PATH.test(ix.pathOf(x.id) ?? ''))
+    .sort((a, b) => byCodePoint(b.modifiedTime, a.modifiedTime) || byCodePoint(a.id, b.id));
+  const stateChanges = new Map<string, Promise<Array<{ fileId: string; lines: string[] }>>>();
+  const changesIn = (file: DriveFile): Promise<Array<{ fileId: string; lines: string[] }>> => {
+    let got = stateChanges.get(file.id);
+    if (!got) {
+      got = drive.readText(file.id).then((text) => stateChangesOf(JSON.parse(text))).catch((e: unknown) => {
+        console.error(`A run manifest could not be read for what Bower last wrote (${file.name})`, e);
+        return [];
+      });
+      stateChanges.set(file.id, got);
+    }
+    return got;
+  };
+  const lastWritten = async (fileId: string, mark: string | null): Promise<string[]> => {
+    if (mark === null) return [];
+    for (const file of manifestPaths) {
+      const found = (await changesIn(file)).find((c) => c.fileId === fileId && stateMark(c.lines) === mark);
+      if (found) return found.lines;
+    }
+    return [];
+  };
   // A model's Current states (C05): planned below on the bytes read, only where Bower still owns the section, or the
   // person's yes grants it. A run of your changes only (no pile) writes only a granted one.
   for (const st of date ? d.states : []) {
@@ -857,7 +889,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     want(f, st.path).state = { lines: st.lines, source: asked === undefined ? null : citeName(asked), thing: asked === undefined ? null : (thing?.file.id ?? null) };
   }
   /** Current states the person edited: what Bower would write goes on the Timeline as a line, and they are asked. */
-  const personStates: Array<{ line: WantedLine; file: DriveFile; path: string; seen: string }> = [];
+  const personStates: Array<{ line: WantedLine; file: DriveFile; path: string; seen: string; shown: StateShown }> = [];
+  /** Each question about a Current state this run asks, by its note's file id: the build sets the note as left on it. */
+  const stateAsks = new Map<string, Question>();
   /** Granted sections the person changed again since they were asked: nothing is written, and they are asked again. */
   const reasked: Question[] = [];
   /** Unmarked Current states Bower may not adopt: a line each, and one question for the whole folder (TL-P4-10). */
@@ -1014,15 +1048,36 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const grant = grants.get(f.id);
     const section = grant ? currentStateOf(bytes) : null;
     const mark = stateMarkOf(bytes);
-    if (grant && section?.owner === 'person' && (grant.seen === null || grant.seen !== stateMark(section.lines))) {
-      // Changed since the question (or asked before questions kept what they saw): the yes was not to these lines.
-      reasked.push({ id: stateQuestionId(f.id), text: `You changed the current state of ${displayName(nameOf(w.path))} again. Should Bower still write its update there?`, yes: 'Write it', no: 'Keep mine', about: w.path, state: stateMark(section.lines), askedAt: opts.requestedAt });
-    } else if (grant && section?.owner === 'person' && mark !== null && w.state && section.lines.join('\n') !== w.state.lines.join('\n')) {
+    const name = displayName(nameOf(w.path));
+    // The note as read now: its checksum and stamp, what a question asked now records as the note was left.
+    const stamp = f.appProperties?.[STAMP];
+    const asRead = (lines: string[]): StateShown => ({ lines, md5: md5Hex(bytes), ...(stamp === undefined ? {} : { stamp }) });
+    // A yes to "Write it" writes the update it was shown (`c3-state-mark`, TL-P4-16 addendum 2), with no model asked; a
+    // question from before (no `shown`) writes the model's update computed in this run. Either only while the section
+    // reads as asked about (its `state` mark), and the update shown only while the note still carries the stamp and
+    // checksum it had when it was asked (write-once's comparison, as the New mark's, TL-P4-19 addendum 5: an If-Match
+    // precondition, RFC 9110 13.1.1).
+    const shown = grant?.question.shown;
+    const update = shown?.lines ?? w.state?.lines;
+    const changed = grant?.seen === null || (!!section && grant?.seen !== stateMark(section.lines));
+    const held = !shown || (stamp === shown.stamp && md5Hex(bytes) === shown.md5);
+    if (grant && section?.owner === 'person' && (changed || !held)) {
+      // Changed since the question (or asked before questions kept what they saw): the yes was not to these lines. It
+      // is asked again, the reason first, with the same update and the note as it reads now. SEAM (c3-state-mark card):
+      // a change elsewhere in the note has no approved reason yet, so it is asked as it was first asked.
+      const q: Question = { id: stateQuestionId(f.id), text: changed ? STATE_ASK_AGAIN(name) : STATE_ASK(name), yes: 'Write it', no: 'Keep mine', about: w.path, state: stateMark(section.lines), ...(shown ? { shown: asRead(shown.lines) } : {}), askedAt: opts.requestedAt };
+      reasked.push(q);
+      stateAsks.set(f.id, q);
+    } else if (grant && section?.owner === 'person' && mark !== null && update && section.lines.join('\n') !== update.join('\n')) {
       // The person's yes grants this one write over their lines, as read now; the answer goes with the edit.
-      const change: StateRewrite = { kind: 'state-rewrite', recordIds: [grant.answer], previous: section.lines, lines: w.state.lines, granted: { answer: grant.answer, mark } };
+      const change: StateRewrite = { kind: 'state-rewrite', recordIds: [grant.answer], previous: section.lines, lines: update, granted: { answer: grant.answer, mark } };
       const result = applyChanges(bytes, [change]);
       if (result.ok) state = change;
+      // SEAM (TL-P4-19 addendum 10, `answered`): a refused write is a yes with no effect; its answered row goes here.
       else console.error(`A note's Current state was refused (${result.reason}); none is planned for it`);
+    } else if (grant && section?.owner === 'person') {
+      // SEAM (TL-P4-19 addendum 10, `answered`): nothing to write for this yes (the section reads as the update already,
+      // carries no mark, or an older question's run had no update); its answered row goes here.
     } else if (w.state && !(grant && section?.owner === 'person')) {
       const now = currentStateOf(bytes);
       const adopt = now?.owner === 'unmarked' && (await adopting());
@@ -1039,14 +1094,14 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
         // Same news twice in one run: a line this run adds to the note citing the same thing already says it.
         const cited = w.state.thing === null ? undefined : w.lines.find((l) => l.after === w.state?.thing && l.entry.source !== null);
         // The person is still asked, once that line is there.
-        if (cited && now?.owner === 'person') personStates.push({ line: cited, file: f, path: w.path, seen: stateMark(now.lines) });
+        if (cited && now?.owner === 'person') personStates.push({ line: cited, file: f, path: w.path, seen: stateMark(now.lines), shown: asRead(w.state.lines) });
         if (cited && now?.owner === 'unmarked') unmarkedStates.push(cited);
-        const text = cited ? null : stateNewsLine(w.state.lines, now?.lines ?? [], stateMarkOf(bytes));
+        const text = cited ? null : stateNewsLine(w.state.lines, now?.lines ?? [], now?.owner === 'person' ? await lastWritten(f.id, mark) : []);
         if (text !== null) {
           const line: WantedLine = { entry: { date: date ?? '', text, source: w.state.source }, record: null, what: text, after: w.state.thing };
           w.lines.push(line);
           lineState.set(line, 'refused');
-          if (now?.owner === 'person') personStates.push({ line, file: f, path: w.path, seen: stateMark(now.lines) });
+          if (now?.owner === 'person') personStates.push({ line, file: f, path: w.path, seen: stateMark(now.lines), shown: asRead(w.state.lines) });
           if (now?.owner === 'unmarked') unmarkedStates.push(line);
           if (w.state.thing !== null && w.state.source !== null) modelLines.push({ line, cites: w.state.thing });
         }
@@ -1129,7 +1184,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   for (const p of personStates) {
     const kept = lineState.get(p.line);
     if (kept !== 'planned' && kept !== 'present') continue;
-    askedPiles.push({ id: stateQuestionId(p.file.id), text: `You changed the current state of ${displayName(nameOf(p.path))}. Should Bower write its update there?`, yes: 'Write it', no: 'Keep mine', about: p.path, state: p.seen, askedAt: opts.requestedAt });
+    const q: Question = { id: stateQuestionId(p.file.id), text: STATE_ASK(displayName(nameOf(p.path))), yes: 'Write it', no: 'Keep mine', about: p.path, state: p.seen, shown: p.shown, askedAt: opts.requestedAt };
+    askedPiles.push(q);
+    stateAsks.set(p.file.id, q);
   }
   // Summaries Bower did not write: one question for the folder, however many there are (TL-P4-10 point 3); a yes
   // becomes ADOPT_STATES_RULE (C11), and Bower then adopts them.
@@ -1342,6 +1399,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     .filter((q, i, all) => (again.has(q.id) || !answered.has(q.id)) && all.findIndex((x) => x.id === q.id) === i);
   const questionsFile = ix.file(SYSTEM.questions);
   let questionsText: string | null = null;
+  /** The questions that write holds: written by the build, once it has set on each one asked now the note as left. */
+  let questionsList: Question[] | null = null;
   let fresh: Question[] = [];
   /** The questions this write closes because their thing or pile left the inbox. */
   const closing: Question[] = [];
@@ -1361,10 +1420,14 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // A question closed because its thing goes to the Bin now (a saved copy) closes only once that Bin is done (P4-17).
     closing.push(...all.filter((q) => !answered.has(q.id) && !open.includes(q)));
     const left = [...open.map(retarget), ...fresh];
-    if (!readable || left.length !== all.length || fresh.length || left.some((q, i) => q.subject !== all[i]?.subject)) questionsText = questionsJson(left);
+    if (!readable || left.length !== all.length || fresh.length || left.some((q, i) => q.subject !== all[i]?.subject)) {
+      questionsList = left;
+      questionsText = questionsJson(left);
+    }
   } else if (toAsk.length && sys?.folder) {
     // A missing list is made again in `.bower` with the question (TL-P2-33 §2a).
     fresh = toAsk;
+    questionsList = fresh;
     questionsText = questionsJson(fresh);
   } else if (toAsk.length) {
     // No `.bower` yet: the run's own records make it; there is no list to ask in, so the question is not asked.
@@ -1439,7 +1502,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     kind: 'decided' as const, run: { runId: opts.runId, requestId: opts.requestId, scope: opts.scope, allowWeb: opts.allowWeb, requestedAt: opts.requestedAt },
     rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas: d.areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
-    requestsBroken, requestsDone, sys, questionsText, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
+    requestsBroken, requestsDone, sys, questionsList, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
     rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, keepGone,
   };
 }
@@ -1452,7 +1515,7 @@ type Decided = Extract<Awaited<ReturnType<typeof decide>>, { kind: 'decided' }>;
 export async function build(decided: Decided): Promise<Ended> {
   const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
-    requestsBroken, requestsDone, sys, questionsText, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
+    requestsBroken, requestsDone, sys, questionsList, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
     rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, keepGone } = decided;
 
   // The fixed operations, in order: clear last run's marks, make folders, file, the note edits, the merges, Bin the piles,
@@ -1590,7 +1653,13 @@ export async function build(decided: Decided): Promise<Ended> {
     const appended = edit.changes.reduce((n, c) => n + (c.kind === 'timeline-append' ? c.entries.length : 0), 0);
     // A line's row says how the note is as the run leaves it: the edit's bytes, and the stamp of its last write there,
     // the New mark's (`write-once`), so the screen marks the line only while the note is still so (addendum 5).
-    const left = appended ? { lines: appended, md5: md5Hex(new TextEncoder().encode(edit.text)), stamp: stampOf(opts.runId, await add({ kind: 'move', before: seen(edit.file), parent: { fileId: edit.file.parents[0] ?? '' }, name: edit.file.name, properties: { bowerNew: '1' } }, [op])) } : null;
+    const marked = appended ? await add({ kind: 'move', before: seen(edit.file), parent: { fileId: edit.file.parents[0] ?? '' }, name: edit.file.name, properties: { bowerNew: '1' } }, [op]) : null;
+    const asLeft = { md5: md5Hex(new TextEncoder().encode(edit.text)), stamp: stampOf(opts.runId, marked ?? op) };
+    const left = marked ? { lines: appended, ...asLeft } : null;
+    // A question about this note's Current state asked now records the note as this run leaves it: the same two
+    // things the New mark compares (`c3-state-mark`).
+    const asked = stateAsks.get(edit.file.id);
+    if (asked?.shown) asked.shown = { lines: asked.shown.lines, ...asLeft };
     for (const row of edit.rows) reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), updated: [{ path: edit.path, what: row.what, op, ...(row.line === undefined || left === null ? {} : { line: row.line, ...left }) }] } });
   }
   // What a disagreement's answer derives (R4-1): its Timeline line, which the question's removal waits for.
@@ -1690,6 +1759,7 @@ export async function build(decided: Decided): Promise<Ended> {
     }
   }
   let questionsOp: string | null = null;
+  const questionsText = questionsList === null ? null : questionsJson(questionsList);
   if (questionsText !== null) {
     // It waits for every operation derived from the answers it drops (R4-1), so a question stays until its work is done,
     // and for the moves of the piles its new question is about, so it is asked once they are filed.
@@ -2092,6 +2162,26 @@ type MergeState = Omit<Merge, 'line'> & { line: 'planned' | 'present' };
 const citeName = (name: string): string => name.replace(/\.md$/i, '');
 /** Paths in code-point order, the same everywhere (TL-P2-29). */
 const byCodePoint = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/** A run's manifest in `.bower/runs`, by its path. */
+const MANIFEST_PATH = /^\.bower\/runs\/[^/]+\/manifest-[0-9a-f]{64}\.json$/;
+const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string');
+const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+/**
+ * The Current state changes a stored manifest records, each with its note's file id and the lines it wrote (an undo
+ * that gives lines back under the mark they had says so: its lines are not Bower's). Read leniently: anything else in
+ * it, of any version, is passed over.
+ */
+function stateChangesOf(value: unknown): Array<{ fileId: string; lines: string[] }> {
+  const ops = record(value) && Array.isArray(value.operations) ? value.operations : [];
+  return ops.flatMap((op: unknown) => {
+    const e = record(op) && record(op.effect) ? op.effect : null;
+    const before = e?.kind === 'edit-text' && record(e.before) ? e.before : null;
+    if (!e || !before || typeof before.fileId !== 'string' || !Array.isArray(e.changes)) return [];
+    const fileId = before.fileId;
+    return e.changes.flatMap((c: unknown) => (record(c) && c.kind === 'state-rewrite' && strings(c.lines) && c.release === undefined && c.mark === undefined ? [{ fileId, lines: c.lines }] : []));
+  });
+}
 
 /**
  * Whether a note may link to a former name, read leniently (any encoding, any format): a note that does but cannot
