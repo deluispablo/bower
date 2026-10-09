@@ -81,6 +81,17 @@ describe('model input fingerprint', () => {
     expect(normalized).toBe(readFileSync(goldenPath, 'utf8'));
   });
 
+  it('the raw model input on the C04 fixture equals its golden copy', async () => {
+    // Pins the prompt bytes the model reads (not the fingerprint form): a fingerprint change must not move them.
+    const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-garden-newsletter');
+    if (!c) throw new Error('the C04 garden newsletter case is missing');
+    const calls: ClaudeCall[] = [];
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await runWithClaude(c, async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit));
+    const rawGoldenPath = resolve(import.meta.dirname, 'fixtures/model-input-c04.raw.golden.txt');
+    expect(calls[0]?.input ?? '').toBe(readFileSync(rawGoldenPath, 'utf8'));
+  });
+
   it('the timing line carries the model input fingerprint', async () => {
     const g = await gardenFolder();
     const admitted = await planAdmission(fakeRead(g.drive), g.root, { scope: 'all', clock: () => AT, newId: () => 'admission-1' });
@@ -144,7 +155,7 @@ describe('model input fingerprint', () => {
     expect(fingerprint1).toBe(fingerprint2);
   });
 
-  it('two fresh folders with different Drive and admission ids give the same fingerprint', async () => {
+  it('the same case with other ids has the same fingerprint', async () => {
     const fingerprintOf = async (spare: number, admission: string, runId: string): Promise<{ fingerprint: string; input: string }> => {
       const g = await gardenFolder(spare);
       const admitted = await planAdmission(fakeRead(g.drive), g.root, { scope: 'all', clock: () => AT, newId: () => admission });
@@ -163,10 +174,12 @@ describe('model input fingerprint', () => {
     expect(b.fingerprint).toBe(a.fingerprint);
   });
 
-  it('an id written inside a note still changes the fingerprint', () => {
+  it('a value that looks like an id inside text is kept', () => {
     const input = (text: string): string => `{"runId":"r","admission":"a","piles":[{"things":[{"fileId":"f1","text":${JSON.stringify(text)}}]}]}`;
     expect(normalizeModelInput(input('"id":"x"'))).not.toBe(normalizeModelInput(input('"id":"y"')));
     expect(normalizeModelInput(input('"fileId":"x"'))).not.toBe(normalizeModelInput(input('"fileId":"y"')));
+    // A line of prompt text (not JSON) holding the same words is kept as written.
+    expect(normalizeModelInput('Note reads "id":"x" here')).not.toBe(normalizeModelInput('Note reads "id":"y" here'));
   });
 
   it('two fresh fake folders on the same case give the same input fingerprint through main', async () => {
@@ -252,35 +265,6 @@ describe('model input fingerprint', () => {
 
     // After normalization, they should be identical
     expect(run1.normalized).toBe(run2.normalized);
-
-    // Fingerprints should also be identical
-    const fingerprint1 = createHash('sha256').update(run1.normalized).digest('hex').slice(0, 12);
-    const fingerprint2 = createHash('sha256').update(run2.normalized).digest('hex').slice(0, 12);
-    expect(fingerprint1).toBe(fingerprint2);
-  });
-
-  it('two fresh fake folders on the same case give the same input fingerprint through main', async () => {
-    const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-garden-newsletter');
-    if (!c) throw new Error('the C04 garden newsletter case is missing');
-
-    // Run the case twice through main() to verify fingerprints are stable
-    const captureInputViaMain = async (): Promise<{ input: string; normalized: string }> => {
-      const calls: ClaudeCall[] = [];
-      const fakeSpawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('{"kind":"tidy-intent","v":1,"things":[],"notes":[],"lines":[],"asks":[]}') } satisfies ClaudeExit);
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-
-      await runWithClaude(c, fakeSpawn);
-
-      const input = calls[0]?.input ?? '';
-      const normalized = normalizeModelInput(input);
-      return { input, normalized };
-    };
-
-    const run1 = await captureInputViaMain();
-    const run2 = await captureInputViaMain();
-
-    // Two deterministic runs of the same case with fixed drives produce identical inputs
-    expect(run1.input).toBe(run2.input);
 
     // Fingerprints should also be identical
     const fingerprint1 = createHash('sha256').update(run1.normalized).digest('hex').slice(0, 12);

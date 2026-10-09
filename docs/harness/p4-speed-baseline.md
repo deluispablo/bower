@@ -144,3 +144,5 @@ Staging c9d20a67 (version 1c2f9b49), bower-home edc9c39, Claude Sonnet 5.5. Befo
 Stage 1 on 9265d860, for comparison: garden 57 s, offer-and-flat 75 s (attempt 2), c05 76 s; Home 59 s with 144 calls.
 
 **Home on an empty Inbox:** the Inbox showed in 4.1 s, with 15 Drive calls (2 media). After 25 s it had made 17 calls (4 media), the last ending at 4.8 s. `.bower` was unchanged before and after (no history growth); `.bower/runs` holds 71 folders.
+
+Fingerprint change (c3-fingerprint, df2bfc88): input= and sections= hashes from before df2bfc88 do not compare with later ones; the model input itself is unchanged (raw golden model-input-c04.raw.golden.txt).
