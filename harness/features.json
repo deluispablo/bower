@@ -6163,7 +6163,7 @@
       "At 375 every listed control is at least 44 px; a tap on a switch row toggles it."
     ],
     "verify": "pnpm vitest run src/ui/segmented.test.tsx -t \"one segmented control serves settings and tell bower\" && bash scripts/e2e-both.sh e2e/v2-targets.spec.ts -g \"the desktop tab close button is at least 24 square|every listed phone control is at least 44 px|a tap on a switch row toggles it|desktop control sizes stay at least 24\"",
-    "note": "TL-P4-21 order 3; spec d-v2-05, d-v2-10. Starting model bower-implementer. Packet 2026-10-09-v2-targets-packet.md; e2e file may differ. Red cbb0e7bf, fix a4aaa42c. Designer verified 189cc311.",
+    "note": "TL-P4-21 order 3; spec d-v2-05, d-v2-10. Starting model bower-implementer. Packet 2026-10-09-v2-targets-packet.md; e2e file may differ. Red cbb0e7bf, fix a4aaa42c. Designer verified 189cc311. The fix revert cannot load (Segmented.tsx is new); e2e reds at cbb0e7bf in the worker log /tmp/v2t-red.log (4 assertions).",
     "design": "verified"
   },
   {
