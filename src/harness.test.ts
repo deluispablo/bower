@@ -296,6 +296,31 @@ describe('the harness', () => {
     expect(run.stderr + run.stdout).toContain('e1: escalated, passes without a review PASS');
     expect(run.stderr + run.stdout).toContain('e1 stays open');
   });
+  const uiEntry = (over: Record<string, unknown> = {}): Record<string, unknown> => ({ id: 'u1', task: 'p4-consolidation', steps: S, verify: V, passes: true, ui: true, note: 'Starting model: bower-implementer.', ...over });
+
+  it('a ui entry cannot pass without a verified design check', () => {
+    const check = (e: Record<string, unknown>): string[] => problems([e], readProofs(`u1\t${hashOf(V)}\t2026-10-09\tred\n`), undefined, new Set()) as string[];
+    expect(check(uiEntry())).toEqual([expect.stringContaining('u1: a UI entry passes without a verified design check')]);
+    expect(check(uiEntry({ design: 'pending' }))).toHaveLength(1);
+    expect(check(uiEntry({ design: 'verified' }))).toEqual([]);
+    expect(check(uiEntry({ passes: false }))).toEqual([]);
+  });
+
+  it('done.sh refuses to close a ui entry with no verified design check', () => {
+    const entry = uiEntry({ passes: false });
+    const dir = scratch({ 'harness/features.json': JSON.stringify([entry]), 'scripts/harness-rules.mjs': readFileSync(join(process.cwd(), 'scripts/harness-rules.mjs'), 'utf8') });
+    const run = spawnSync('bash', ['harness/done.sh', 'u1', 'close u1'], { cwd: dir, encoding: 'utf8' });
+    expect(run.status).toBe(1);
+    expect(run.stderr + run.stdout).toContain('u1: a UI entry passes without a verified design check');
+    expect(run.stderr + run.stdout).toContain('u1 stays open');
+  });
+
+  it('an entry without ui needs no design check', () => {
+    const check = (e: Record<string, unknown>): string[] => problems([e], readProofs(`u1\t${hashOf(V)}\t2026-10-09\tred\n`), undefined, new Set()) as string[];
+    expect(check(uiEntry({ ui: undefined }))).toEqual([]);
+    expect(check(uiEntry({ ui: false }))).toEqual([]);
+  });
+
   it('the timer allowlist may only shrink', () => {
     const names = ['a', 'b'];
     expect(timerListProblems(names, ['a', 'b'], 2)).toEqual([]);
