@@ -17,6 +17,7 @@
    - uses the real app on phone and desktop, in both themes.
 
    It measures what it sees (WCAG 2.2 AA, axe, keyboard, states), backs every finding with evidence and an NN/g severity, and has `bower-design-checker` challenge the findings.
+
 2. **Show the owner, then wait.** The designer writes a current-state review: what matches, errors, improvements and questions. It gives the owner the top three, then asks. Nothing is designed until the owner says what to work on.
 3. **Design until OK.** The designer designs only the agreed items, from the existing tokens and components, and shows before and after (a mockup Artifact or screenshots). Anything new needs a reason and the owner's yes.
 4. **Spec to the lead, only after the owner's OK.** The spec has one block per fix, in the shape the lead plans with:
@@ -31,6 +32,7 @@
    - severity and the owner's OK.
 
    The designer commits it on `claude/design` and sends one message of 10 lines at most to the lead.
+
 5. **Lead.** The lead merges the spec into `main` and rules on how and when each fix is built: entries in the stage plan, packets, and the coordinator. It records each ruling as a TL-P4-18 addendum. It asks the designer technical questions, and the designer takes questions of taste to the owner.
 6. **Build and verify.** The coordinator implements under the usual rules. When a fix is on staging or `main`, the lead tells the designer. The designer checks it against the spec, writes `verified` or `not as specified`, and tells the owner and the lead. A "not as specified" result is a defect (TL-P4-15).
 
