@@ -42,9 +42,9 @@ const main = async () => {
   for await (const chunk of process.stdin) raw += chunk;
   const reason = guardMainCheckout(JSON.parse(raw), { subagent: process.argv.includes('--subagent') });
   if (reason === null) return;
-  process.stdout.write(
-    JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } }),
-  );
+  // Exit 2 blocks the call and feeds stderr to the model (https://code.claude.com/docs/en/hooks, exit codes).
+  process.stderr.write(`${reason}\n`);
+  process.exit(2);
 };
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) await main();
