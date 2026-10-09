@@ -57,8 +57,15 @@ export function grounded(manifest: RunManifest): boolean {
   const applied = new Map<string, ReportContribution[]>();
   const rejected = new Map<string, number>();
   const lines = new Set(manifest.capture.journal.flatMap((j) => j.fileIds));
+  // An answer whose granted write was refused keeps it, in one answered row on that edit, rejected (TL-P4-19 addendum 21).
+  const notWritten = (c: ReportContribution): boolean => {
+    const e = c.requires.length === 1 ? ops.get(c.requires[0] ?? '')?.effect : undefined;
+    return c.when === 'rejected' && !c.value.setAside.length && !c.value.filed.length && !c.value.updated.length && c.value.answered?.length === 1 && e?.kind === 'edit-text'
+      && e.changes.some((x) => x.kind === 'state-rewrite' && x.granted !== undefined);
+  };
   for (const c of manifest.reportPlan) {
     if (!c.requires.length || new Set(c.requires).size !== c.requires.length || !c.requires.every((id) => ops.has(id))) return false;
+    if (notWritten(c)) continue;
     if (c.when === 'rejected' && (c.requires.length !== 1 || c.value.setAside.length !== 1)) return false;
     // An updated row names the operation that wrote it: its contribution's first (TL-P4-19 addendum 3).
     if (c.value.updated.some((r) => r.op !== c.requires[0])) return false;

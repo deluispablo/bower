@@ -302,7 +302,7 @@ const CHANGE_ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite'
 const recordIds = (value: unknown): value is string[] => list(value, recordId) && unique(value);
 function editEntry(value: unknown): value is EditEntry {
   return closed(value, ['date', 'text', 'source']) && text(value.date) && text(value.text)
-    && (value.source === null || text(value.source)) && entryOk(value as EditEntry);
+    && (value.source === null || text(value.source)) && entryOk(value as EditEntry, 'read');
 }
 function rename(value: unknown): value is Rename {
   return closed(value, ['from', 'to']) && text(value.from) && text(value.to) && renameOk(value as Rename);

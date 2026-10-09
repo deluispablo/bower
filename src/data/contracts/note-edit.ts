@@ -77,8 +77,13 @@ export const NEWS_LEAD = 'New: ';
  * rule: `entryOk` gates every writer with it, and the Claude reply's check calls it on the reply's Timeline lines.
  */
 export const newsLineCited = (entry: Pick<EditEntry, 'text' | 'source'>): boolean => entry.source !== null || !entry.text.startsWith(NEWS_LEAD);
-export function entryOk(entry: EditEntry): boolean {
-  return dateOk(entry.date) && lineFieldOk(entry.text) && (entry.source === null || displayNameOk(entry.source)) && newsLineCited(entry);
+/**
+ * A Timeline line's field rules, strict on write and lenient on read, as a Current state's bounds are (`STATE_READ`):
+ * `read` is how a stored manifest is read, so one stored before the uncited refusal still parses (TL-P4-19 addendum
+ * 22); a write or a plan (the default) also refuses a news line with no source.
+ */
+export function entryOk(entry: EditEntry, mode: 'write' | 'read' = 'write'): boolean {
+  return dateOk(entry.date) && lineFieldOk(entry.text) && (entry.source === null || displayNameOk(entry.source)) && (mode === 'read' || newsLineCited(entry));
 }
 /** Display names only: path forms and `.md` forms are never rewritten. */
 export function renameOk(rename: Rename): boolean {
@@ -133,7 +138,7 @@ function fieldsOk(change: Change): boolean {
     case 'state-rewrite': return stateLinesOk(change.previous, change.lines);
     case 'link-rewrite': return change.renames.length > 0 && change.renames.every(renameOk)
       && new Set(change.renames.map((item) => item.from.toLowerCase())).size === change.renames.length;
-    case 'timeline-append': return change.entries.length > 0 && change.entries.every(entryOk);
+    case 'timeline-append': return change.entries.length > 0 && change.entries.every((entry) => entryOk(entry));
     case 'rules-wording': return change.add.length + change.remove.length > 0 && change.add.every(ruleAddOk) && change.remove.every(ruleRemoveOk);
   }
 }

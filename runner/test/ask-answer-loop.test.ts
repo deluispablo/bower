@@ -791,7 +791,9 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     const rows = await reportRowsAll(w);
     expect(rows.setAside).toEqual([]);
     expect(rows.answered).toEqual([{ questionId: `q-state-${id}`, kind: 'state', outcome: 'refused', why: "Not written: Bower couldn't reach Drive to change Job hunt. Bower will try again in the next tidy-up.", note: HUB }]);
-    // The next press tries the write once, under the stamp-plus-checksum check, and it lands.
+    // The next tidy-up (something new in the inbox) tries the write once, under the stamp-plus-checksum check, and it lands.
+    const inbox = (await w.drive.listAll(w.rootId)).find((f) => f.folder && w.drive.pathOf(f.id, w.rootId) === 'Inbox');
+    await w.drive.createText(inbox?.id ?? '', 'Call back.md', 'Call Alex back on Monday.\n');
     const tries: Hop = async (url, init, next) => {
       if ((init.method ?? 'GET') === 'PATCH' && url.pathname === `/upload/drive/v3/files/${id}`) writes.tried += 1;
       return await next();
