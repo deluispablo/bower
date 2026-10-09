@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import { setTimeout as realSleep } from 'node:timers/promises';
 import type { Checkpoint } from '../../src/data/contracts/run-checkpoint';
 import { loadCorpus } from '../src/corpus';
-import { runScripted } from './corpus-run';
+import { runScripted, type Before } from './corpus-run';
 import { API, paging } from './drive-v3';
 
 const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
@@ -26,8 +26,9 @@ export interface Call {
  * A run of the C04 case where every call takes its modelled latency on a clock of its own: a call waits until the run
  * has nothing else to do, then the clock jumps to the earliest due call. Calls the runner makes at the same time
  * overlap as they would on the wire, and the run's time is the clock's. No real waiting beyond a few milliseconds.
+ * `before` changes the folder before the run (earlier runs' records, for a variant).
  */
-export async function modelled(): Promise<{ calls: Call[]; ms: number; code: number; checkpoints: Checkpoint[] }> {
+export async function modelled(before?: Before): Promise<{ calls: Call[]; ms: number; code: number; checkpoints: Checkpoint[] }> {
   const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-offer-and-flat');
   if (!c) throw new Error('the C04 case is missing');
   // Drive's own page size, so a listing is the one call it is on Drive.
@@ -71,7 +72,7 @@ export async function modelled(): Promise<{ calls: Call[]; ms: number; code: num
       if (named) call.name = named;
     }
     return res;
-  }, true).finally(() => {
+  }, true, before).finally(() => {
     settled = true;
   });
   let waiting = -1;

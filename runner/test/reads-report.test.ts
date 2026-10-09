@@ -46,7 +46,10 @@ describe('the runner plan reads and report', () => {
     expect(code).toBe(0);
     // The barrier's order (TL-P3-22): the report record, the dispositions, dispositions.json, then last-run.json,
     // confirmed by its answer, and only then the closing checkpoint.
-    const writes = p.report.filter((c) => c.kind === 'write').map((c) => c.name ?? '?');
+    // After the barrier, the ended stamp on the run's own folder (`retention.ts`), then done.
+    const all = p.report.filter((c) => c.kind === 'write').map((c) => c.name ?? '?');
+    expect(all.at(-1)).toBe(RUN_ID);
+    const writes = all.slice(0, -1);
     const at = (re: RegExp): number => writes.findIndex((n) => re.test(n));
     expect(at(/^report-/)).toBeGreaterThanOrEqual(0);
     expect(at(/^report-/)).toBeLessThan(at(/^dispositions\.json$/));

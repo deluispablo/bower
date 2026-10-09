@@ -12,6 +12,7 @@ import { SYSTEM, isRunnerFile } from '../../src/data/vault/layout';
 import { B_FAILURE } from '../../src/data/spine/scripted';
 import { runTidy, type TidyEnd, type TidyOptions } from '../src/main';
 import type { Admitted } from '../src/spine/admitted';
+import { finishedBefore, runFolders } from './earlier-runs';
 import { driveEffects, type Effects, type ReadBack, type Settled } from '../../src/data/spine/engine';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 
@@ -279,14 +280,15 @@ describe('the report barrier', () => {
     const sent = new Map(effects.sent);
     expect([...sent.values()].every((n) => n === 1)).toBe(true);
 
-    // The redispatch reads that checkpoint, applies no effect and writes only the report, then its last checkpoint.
+    // The redispatch reads that checkpoint, applies no effect and writes only the report, then its last checkpoint,
+    // then the ended stamp on its run's folder (`retention.ts`).
     const writes: Write[] = [];
     const second = await tidy(wire, root, 2, effects, writes);
     expect(second.phase).toBe('done');
     expect(effects.sent).toEqual(sent);
     expect(effects.observed).toBe(0);
     const names = await Promise.all(writes.map((w) => nameOf(wire, w.call)));
-    expect(names).toEqual(['last-run.json', expect.stringMatching(/^checkpoint-\d+-[0-9a-f]{64}\.json$/)]);
+    expect(names).toEqual(['last-run.json', expect.stringMatching(/^checkpoint-\d+-[0-9a-f]{64}\.json$/), RUN_ID]);
     expect((await stored(wire, root, SYSTEM.lastRun))?.value).toMatchObject({ v: 1, run: { id: RUN_ID, phase: 'done' } });
     expect(wire.statuses.at(-1)).toMatchObject({ attempt: 2, phase: 'done' });
   });
@@ -439,7 +441,8 @@ describe('the report barrier', () => {
     expect((await tidy(wire, root, 1, effects, writes)).phase).toBe('done');
     expect(effects.sent).toEqual(sent);
     const names = await Promise.all(writes.map((w) => nameOf(wire, w.call)));
-    expect(names).toEqual([expect.stringMatching(/^checkpoint-\d+-[0-9a-f]{64}\.json$/)]);
+    // Its done checkpoint, then the ended stamp on its run's folder (`retention.ts`).
+    expect(names).toEqual([expect.stringMatching(/^checkpoint-\d+-[0-9a-f]{64}\.json$/), RUN_ID]);
     expect((await chainOf(wire, root)).at(-1)).toMatchObject({ phase: 'done', report: { state: 'published' } });
     const done = wire.statuses.at(-1);
     expect(done).toMatchObject({ attempt: 1, seq: 4, phase: 'done' });
@@ -518,5 +521,77 @@ describe('how an attempt ends (TL-P4-16 addendum 4)', () => {
     const error = await tidy(unread.wire, unread.root, 1, new StubEffects(), [], () => false, { fetch: noDrive(unread.wire, () => true) }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(Error);
     expect(unread.wire.statuses).toEqual([]);
+  });
+});
+
+describe('the run folders a run keeps', () => {
+  it('after 21 finished runs, 20 run folders remain and the oldest is in the Bin', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, root } = await demo();
+    const earlier = await finishedBefore(wire.drive, root, 20);
+    const oldest = earlier.get('run-00');
+    if (!oldest) throw new Error('no run-00');
+
+    const end = await tidy(wire, root, 1, new StubEffects());
+
+    expect(end.phase).toBe('done');
+    expect(wire.statuses.at(-1)?.phase).toBe('done');
+    const kept = await runFolders(wire.drive, root);
+    expect(kept.size).toBe(20);
+    expect(kept.has(RUN_ID)).toBe(true);
+    expect(kept.has('run-00')).toBe(false);
+    // In the Bin, never deleted: Drive still keeps it, with the stamp of the Bin that put it there.
+    const binned = await wire.drive.evidence(oldest.id);
+    expect(binned?.trashed).toBe(true);
+    expect(binned?.file.appProperties?.bowerOp).toMatch(/^[0-9a-f]{32}$/);
+  });
+
+  it('a run whose retention Bin fails still ends done and logs it', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, root } = await demo();
+    const earlier = await finishedBefore(wire.drive, root, 20);
+    const oldest = earlier.get('run-00');
+    if (!oldest) throw new Error('no run-00');
+    // The oldest run folder is renamed after the run read it and before its Bin: the Bin checks the name and place it
+    // read (`stillAsSeen`), so it is refused, and nothing is put in the Bin.
+    let renamed = false;
+    const fetchFn: typeof fetch = async (input, init = {}) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      if (!renamed && (init.method ?? 'GET').toUpperCase() === 'GET' && url.pathname.endsWith(`/files/${oldest.id}`)) {
+        renamed = true;
+        await wire.drive.update(oldest.id, { name: 'run-00 kept by Alex' });
+      }
+      return wire.fetch(input, init);
+    };
+
+    const end = await tidy(wire, root, 1, new StubEffects(), [], () => false, { fetch: fetchFn });
+
+    expect(renamed).toBe(true);
+    expect(end.phase).toBe('done');
+    expect(wire.statuses.at(-1)?.phase).toBe('done');
+    expect((await stored(wire, root, SYSTEM.lastRun))?.value).toMatchObject({ v: 1, run: { id: RUN_ID, phase: 'done' } });
+    expect((await wire.drive.evidence(oldest.id))?.trashed).not.toBe(true);
+    expect(errors.mock.calls.some((c) => String(c[0]).includes('could not go to the Bin'))).toBe(true);
+  });
+
+  it('a backlog of run folders drains at most 3 per run', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, root } = await demo();
+    const earlier = await finishedBefore(wire.drive, root, 25);
+
+    const end = await tidy(wire, root, 1, new StubEffects());
+
+    expect(end.phase).toBe('done');
+    expect(wire.statuses.at(-1)?.phase).toBe('done');
+    // 26 ended runs, 6 beyond the newest 20: this run puts the 3 oldest in the Bin, the next run the rest.
+    const kept = await runFolders(wire.drive, root);
+    expect(kept.size).toBe(23);
+    for (const name of ['run-00', 'run-01', 'run-02']) {
+      expect(kept.has(name)).toBe(false);
+      expect((await wire.drive.evidence(earlier.get(name)?.id ?? ''))?.trashed).toBe(true);
+    }
+    for (const name of ['run-03', 'run-04', 'run-05']) expect(kept.has(name)).toBe(true);
+    // This run's own folder is stamped as ended, so the next run knows it without reading its records.
+    expect(kept.get(RUN_ID)?.appProperties).toMatchObject({ bowerRun: RUN_ID, bowerRunEnded: expect.stringMatching(/^\d+$/) });
   });
 });

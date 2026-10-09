@@ -55,6 +55,7 @@ import { admittedPlan } from './spine/admitted';
 import type { ClaudeSpawn } from './claude';
 import { providerFor, providerNamed, type ProviderName } from './provider';
 import { runnerReads } from './spine/records';
+import { keepFinishedAtEnd } from './spine/retention';
 import { repairRules } from './rules-repair';
 import { RunTiming } from './timing';
 
@@ -170,6 +171,8 @@ async function tidyRun(opts: TidyOptions, timing: RunTiming, status: RunnerStatu
     end = { phase: 'stopped', why: e instanceof Error ? e.message : String(e), error: e };
   }
   if (end.phase === 'done') {
+    // Retention, once, after the report barrier: a Bin that fails is logged and never fails the run (`retention.ts`).
+    await seen.retain?.();
     // 5. Status, only after the report is read back; refused, it throws.
     await status.post('done', totalOf(seen.total));
     return end;
@@ -194,6 +197,8 @@ interface Seen {
   saving: boolean;
   /** The admitted things (pile members; your changes are not things), on every report from `reading` (undefined until known). */
   total: number | undefined;
+  /** At done: puts the oldest ended run folders beyond the newest 20 in the Bin and stamps this run's folder as ended; set once the run's records are known. */
+  retain?: () => Promise<unknown>;
 }
 
 const totalOf = (total: number | undefined): { total?: number } => (total === undefined ? {} : { total });
@@ -215,6 +220,10 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   const reads = runnerReads(drive, opts.runId);
   const records = new RunRecords(reads, rootId);
   timeCheckpoints(records, timing);
+  seen.retain = async () => {
+    const ended = seen.chain?.at(-1);
+    if (ended?.phase === 'done') await keepFinishedAtEnd(drive, records, opts.runId, ended.phaseAt);
+  };
   const barrier = { rootId, runId: opts.runId, attempt: opts.attempt, records, reads, batch: () => drive.batch(), fenced: () => drive.fencedWrites(), admission: grant.manifest, clock, newId };
 
   // 2. This run's report already in the folder: nothing is repeated. Its chain says done before the Worker hears it.
@@ -224,6 +233,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
     if (found.kind === 'run') seen.total ??= found.manifest.capture.members.length;
     if (found.kind === 'run' && found.chain.length) {
       const finished = await finishRun(barrier, found.manifest, found.manifestHash, found.chain);
+      seen.chain = finished.chain;
       return { phase: 'done', dispositions: finished.dispositions };
     }
     // No chain to say it in (its records already let go of): the report itself is what landed.
@@ -277,6 +287,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
     end.manifestHash,
     end.chain,
   ));
+  seen.chain = finished.chain;
   return { phase: 'done', dispositions: finished.dispositions };
 }
 

@@ -200,7 +200,10 @@ async function stateOf(drive: FakeDrive, root: string): Promise<Entry[]> {
     if (path === null || /\/checkpoint-\d+-[0-9a-f]{64}\.json$/.test(path)) continue;
     const c = f.content;
     const sha256 = c === null ? null : createHash('sha256').update('text' in c ? c.text : Buffer.from(c.b64, 'base64')).digest('hex');
-    out.push({ path, folder: f.meta.folder, trashed: f.trashed, sha256, appProperties: f.meta.appProperties ?? {} });
+    // A run folder's write-once key names the folder version its ended stamp was sent on, which differs by attempt.
+    const { bowerOp: _key, ...ended } = f.meta.appProperties ?? {};
+    const appProperties = f.meta.folder && /^\.bower\/runs\/[^/]+$/.test(path) ? ended : (f.meta.appProperties ?? {});
+    out.push({ path, folder: f.meta.folder, trashed: f.trashed, sha256, appProperties });
   }
   return out.sort((a, b) => (a.path + String(a.trashed)).localeCompare(b.path + String(b.trashed)));
 }
