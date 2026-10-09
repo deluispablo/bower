@@ -174,6 +174,7 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
       stateCites: edit((i, id) => ({ ...i, states: [{ ...state(id), cites: 'f-none' }] })),
       askKeys: edit((i, id) => ({ ...without(i, id, 'IMG_2301.jpg'), asks: [ask(id('IMG_2301.jpg'), { pileId: 'p-1' })] })),
       askNotAdmitted: edit((i) => ({ ...i, asks: [ask('f-none')] })),
+      askNotes: edit((i) => ({ ...i, asks: [{ notes: ['Projects/Job hunt/Job hunt.md', 'Projects/None.md'], text: 'Are these one thing?', yes: 'Yes', no: 'No' }] })),
       askTwice: edit((i, id) => ({ ...without(i, id, 'IMG_2301.jpg'), asks: [ask(id('IMG_2301.jpg')), ask(id('IMG_2301.jpg'))] })),
       askAlsoFiles: edit((i, id) => ({ ...i, asks: [ask(id('IMG_2301.jpg'))] })),
       askText: edit((i, id) => ({ ...without(i, id, 'IMG_2301.jpg'), asks: [ask(id('IMG_2301.jpg'), { text: 'one\ntwo' })] })),

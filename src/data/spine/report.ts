@@ -9,6 +9,8 @@ import type { Disposition } from '../contracts/pile-disposition';
 import type { EffectEvidence, Outcome, ReportRecord } from '../contracts/run-checkpoint';
 import type { OperationV2 } from '../contracts/run-manifest';
 import type { RunReport } from '../types';
+import { KEEP_REFUSED } from '../contracts/note-edit';
+import { savedWordsPile } from './duplicates';
 import type { AdmissionManifest } from './admission';
 import type { RunManifest } from './records';
 
@@ -29,6 +31,12 @@ export const UNCONFIRMED_CHANGED = "Bower couldn't confirm this; it was changed 
 const UNCONFIRMED = [UNCONFIRMED_GONE, UNCONFIRMED_CHANGED];
 /** The failure a move's own precondition gives when its source is not as captured; the service is its only author. */
 export const SOURCE_NOT_AS_SEEN = 'It was moved, renamed or removed before Bower could get to it.';
+
+/** The other note of two kept as one (C05): a note captured as a place, which the plan bins, never a pile's thing. */
+export function keptOther(op: OperationV2 | undefined, manifest: RunManifest): boolean {
+  const e = op?.effect;
+  return e?.kind === 'bin' && !e.before.folder && !manifest.capture.members.some((m) => m.file.fileId === e.before.fileId) && manifest.capture.places.some((p) => p.file.fileId === e.before.fileId);
+}
 
 /**
  * The report from the fixed plan and the resolved outcomes: each contribution
@@ -53,7 +61,10 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
     // A set-aside row is its contribution's one move's (`grounded`): by op id, never by the name a row carries (two
     // things may share one) nor by position.
     const own = c.when === 'rejected' && c.requires.length === 1 ? byId.get(c.requires[0] ?? '') : undefined;
-    if (own?.state !== 'rejected' || ops.get(own.operationId)?.effect.kind !== 'move') report.setAside.push(...c.value.setAside);
+    // A keep's other note that stayed says what its Bin's refusal found (P4-19b): moved, binned by the person, or changed.
+    const kept = own?.state === 'rejected' && keptOther(ops.get(own.operationId), manifest) && KEEP_REFUSED.includes(own.failure.message) ? own.failure.message : null;
+    if (kept !== null) report.setAside.push(...c.value.setAside.map((row) => ({ ...row, why: kept })));
+    else if (own?.state !== 'rejected' || ops.get(own.operationId)?.effect.kind !== 'move') report.setAside.push(...c.value.setAside);
     else {
       const moved = own.failure.code === 'conflict' && own.failure.message === SOURCE_NOT_AS_SEEN;
       const why = own.failure.code === 'unknown' ? own.failure.message : null;
@@ -152,7 +163,9 @@ export function itemDispositions(admission: AdmissionManifest, manifest: RunMani
   const whole = (pileId: string): boolean => {
     const things = manifest.capture.members.filter((m) => m.pileId === pileId);
     const notes = wordsNotes(manifest, pileId);
-    return things.length + notes.length > 0 && things.every((m) => filed.has(m.file.fileId)) && notes.every((id) => applied.has(id));
+    // A pile of words already saved (`duplicates.ts`) is filed once its Bin is done, as a copy is.
+    if (!things.length && !notes.length) return manifest.operations.some((o) => applied.has(o.operationId) && savedWordsPile(manifest, o) === pileId);
+    return things.every((m) => filed.has(m.file.fileId)) && notes.every((id) => applied.has(id));
   };
   const out: ItemDisposition[] = [];
   const done = new Set<string>();
@@ -178,8 +191,8 @@ export function itemDispositions(admission: AdmissionManifest, manifest: RunMani
 }
 
 /**
- * The notes a pile's words are written into (a pile of words only): the made notes its folder, or its pile note, go
- * to the Bin after. None for a pile of things.
+ * The notes a pile's words are written into (a pile of words only): the made notes, or the notes whose Timeline lines
+ * carry its news (c3-pair-ask), its folder or its pile note go to the Bin after. None for a pile of things.
  */
 function wordsNotes(manifest: RunManifest, pileId: string): string[] {
   const pile = manifest.capture.piles.find((p) => p.pileId === pileId);
@@ -187,7 +200,7 @@ function wordsNotes(manifest: RunManifest, pileId: string): string[] {
   const binned = new Set([pile.anchor?.fileId, pile.context.kind === 'text' ? pile.context.file.fileId : undefined].filter((id): id is string => id !== undefined));
   const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
   const notes = manifest.operations.flatMap((o) => (o.effect.kind === 'bin' && binned.has(o.effect.before.fileId) ? o.dependsOn : []));
-  return [...new Set(notes)].filter((id) => ops.get(id)?.effect.kind === 'create-text');
+  return [...new Set(notes)].filter((id) => ops.get(id)?.effect.kind === 'create-text' || ops.get(id)?.effect.kind === 'edit-text');
 }
 
 /**
@@ -212,7 +225,9 @@ export function reportContradictions(admission: AdmissionManifest, manifest: Run
   };
   const subjects = (c: RunManifest['reportPlan'][number]): Set<string> => new Set(c.requires.flatMap((id) => {
     const op = ops.get(id);
-    if (op?.effect.kind !== 'create-text') return thingOf(id);
+    const saved = op ? savedWordsPile(manifest, op) : null;
+    if (saved !== null) return (pileItems.get(saved) ?? []).filter((f) => !members.has(f));
+    if (op?.effect.kind !== 'create-text' && op?.effect.kind !== 'edit-text') return thingOf(id);
     const piles = [...notesOf].filter(([, notes]) => notes.includes(id)).map(([pileId]) => pileId);
     return [...piles.flatMap((p) => (pileItems.get(p) ?? []).filter((f) => !members.has(f))), ...op.dependsOn.flatMap(thingOf)];
   }));
@@ -232,15 +247,17 @@ export function reportContradictions(admission: AdmissionManifest, manifest: Run
     }
   };
   // A keep's other note that stayed (C05) is a note of the folder, not an item the run took: its row names no item.
-  const keptBin = (id: string): boolean => {
-    const e = ops.get(id)?.effect;
-    return e?.kind === 'bin' && !e.before.folder && !members.has(e.before.fileId) && manifest.capture.places.some((p) => p.file.fileId === e.before.fileId);
-  };
+  const keptBin = (id: string): boolean => keptOther(ops.get(id), manifest);
+  // So is a row about one of your changes (a yes that merged nothing, its other note already in the Bin): it is
+  // grounded on that change's archive, and names no item either.
+  const lines = new Set(manifest.capture.journal.flatMap((j) => j.fileIds));
+  const yours = (c: RunManifest['reportPlan'][number]): boolean => c.requires.some((id) => { const e = ops.get(id)?.effect; return e?.kind === 'move' && lines.has(e.before.fileId); })
+    && c.requires.every((id) => { const e = ops.get(id)?.effect; return (e?.kind === 'move' && lines.has(e.before.fileId)) || e?.kind === 'create-folder'; });
   // Each row through the contribution that gave it, by its operations: never by the name or fields it carries.
   for (const c of given) {
     for (const row of c.value.filed) trace(`filed ${row.name}`, [c], ['filed'], named.filed);
     for (const row of c.value.alreadySaved ?? []) trace(`already saved ${row.name}`, [c], ['filed'], named.filed);
-    if (c.requires.every(keptBin)) continue;
+    if (c.requires.every(keptBin) || yours(c)) continue;
     for (const row of c.value.setAside) trace(`set aside ${row.name}`, [c], ['filed', 'set-aside'], named.setAside);
   }
   const pileNamed = (set: ReadonlySet<string>, pileId: string | null): boolean => pileId !== null && (pileItems.get(pileId) ?? []).some((f) => set.has(f));

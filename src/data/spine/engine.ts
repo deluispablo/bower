@@ -41,7 +41,7 @@
 import { BowerError } from '../types';
 import { sha256Hex } from '../contracts/hashes';
 import type { Checkpoint, EffectEvidence, Failure, Outcome } from '../contracts/run-checkpoint';
-import { recheckEdit, savedLinkKey } from '../contracts/note-edit';
+import { keepRefused, recheckEdit, savedLinkKey } from '../contracts/note-edit';
 import { RUNNER_WRITES } from '../vault/layout';
 import { parseRunManifestV2, type Effect as ManifestEffect, type OperationV2, type SeenFile } from '../contracts/run-manifest';
 import { notAsSeen, notAsSeenReason, notRead } from '../contracts/still-as-seen';
@@ -49,7 +49,7 @@ import { UNCONFIRMED_WRITE_MESSAGE, type DriveFile, type FencedDrive, type RunDr
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
 import { savedTwins } from './duplicates';
 import { canonical, checkpointName, firstCheckpoint, manifestName, nextCheckpoint, type AttemptMark, type CheckpointPatch, type RunManifest, type RunRecords } from './records';
-import { SOURCE_NOT_AS_SEEN, UNCONFIRMED_CHANGED, UNCONFIRMED_GONE, materialize } from './report';
+import { SOURCE_NOT_AS_SEEN, UNCONFIRMED_CHANGED, UNCONFIRMED_GONE, keptOther, materialize } from './report';
 import { conflicts, needsOf } from './schedule';
 import { STAMP, confirms, createById, reserveId, stampOf } from './write-once';
 /**
@@ -492,7 +492,7 @@ export function driveEffects(drive: RunDrive): Effects {
     }
     // The other note of two kept as one (C05): a note captured as a place, binned only while it is still as the plan
     // read it, its modifiedTime too, so a line the person added since is never binned unread (P4-19 I1).
-    if (e.kind === 'bin' && !e.before.folder && manifest.capture.places.some((p) => p.file.fileId === e.before.fileId)) {
+    if (keptOther(op, manifest)) {
       drive.expectSeen(e.before, true);
       return (await drive.list(e.before.fileId)).length ? { refused: refused('conflict', ARRIVED) } : { parentId, modifiedTime: null };
     }
@@ -616,6 +616,12 @@ export function driveEffects(drive: RunDrive): Effects {
           console.error(e);
           // The folder it goes into is gone (a create's, or a move's, told by its code).
           if (k === 'create-folder' || k === 'create-text' || (k === 'move' && e.code === 'not-found')) return refused('not-found', NO_FOLDER);
+          // The other note of two kept as one says what the person did to it meanwhile, never that both stay when one
+          // went to the Bin (P4-19b): its reason, from the fence's own read.
+          if (keptOther(op, manifest)) {
+            const reason = notAsSeenReason(e);
+            return refused('conflict', keepRefused(reason === 'gone' ? 'gone' : reason === 'name' || reason === 'parents' ? 'moved' : 'changed'));
+          }
           return refused('conflict', k === 'edit-text' ? NOTE_CHANGED : k === 'write-runner-json' ? LIST_CHANGED : NOT_AS_SEEN);
         }
         // No answer kept (a network error, or Google's 5xx): read back once, never sent again blindly (TL-P3-28).

@@ -85,7 +85,7 @@ export type ManifestRunReport = {
   setAside: { name: string; why: string }[]; questions: ReportQuestion[];
   yourChanges?: number; requests?: string[]; rulesWorded?: number;
   /** A thing whose content was already filed, binned (TL-P4-10 addendum 2): its name and the saved file's name. */
-  alreadySaved?: { name: string; as: string }[];
+  alreadySaved?: { name: string; as: string; notes?: number }[];
 };
 export type ReportContribution = { requires: string[]; when: 'applied' | 'rejected'; value: ManifestRunReport };
 export type Manifest = {
@@ -364,6 +364,13 @@ export const isUpdatedRow = (row: unknown): row is UpdatedRow => closed(row, ['p
   && ['lines', 'md5', 'stamp'].every((k) => !has(row, k) || has(row, 'line'))
   && (!has(row, 'lines') || (integer(row.lines) && (row.line as number) < row.lines))
   && (!has(row, 'md5') || hex32(row.md5)) && (!has(row, 'stamp') || hex32(row.stamp));
+/**
+ * A thing already saved, the one validator of it for the manifest and the checkpoint: its name and the name it is
+ * saved as; `notes` (a pile of words whose lines were in its notes already, c3-pair-ask) a count of at least one. A
+ * row from before it still reads.
+ */
+export const isSavedRow = (row: unknown): row is { name: string; as: string; notes?: number } => closed(row, ['name', 'as'], ['notes'])
+  && text(row.name) && text(row.as) && (!has(row, 'notes') || (integer(row.notes) && (row.notes as number) >= 1));
 function runReport(value: unknown): value is ManifestRunReport {
   if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded', 'alreadySaved'])) return false;
   return list(value.filed, (row) => closed(row, ['name', 'title', 'kind', 'to'], ['note', 'area']) && text(row.name) && text(row.title)
@@ -375,7 +382,7 @@ function runReport(value: unknown): value is ManifestRunReport {
     && (!Object.hasOwn(value, 'yourChanges') || integer(value.yourChanges))
     && (!Object.hasOwn(value, 'requests') || list(value.requests, text))
     && (!Object.hasOwn(value, 'rulesWorded') || integer(value.rulesWorded))
-    && (!Object.hasOwn(value, 'alreadySaved') || (rows(value.alreadySaved, ['name', 'as']) && (value.alreadySaved as unknown[]).length > 0));
+    && (!Object.hasOwn(value, 'alreadySaved') || (list(value.alreadySaved, isSavedRow) && (value.alreadySaved as unknown[]).length > 0));
 }
 function contribution(value: unknown): value is ReportContribution {
   return closed(value, ['requires', 'when', 'value']) && list(value.requires, hash) && value.requires.length > 0

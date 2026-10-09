@@ -98,6 +98,20 @@ export const STATE_UPDATED = 'Current state brought up to date.';
 export const keptLine = (other: string): string => `Kept as one note with ${other}, which went to the Bin.`;
 /** Why the other note of a keep stays: the person changed it while the run worked; the next tidy-up carries it all. */
 export const KEEP_CHANGED = 'It changed while Bower worked, so both notes stay; the next tidy-up keeps one.';
+/** Why the other note of a keep stays: the person moved or renamed it while the run worked (P4-19b). */
+export const KEEP_MOVED = 'It was moved or renamed while Bower worked, so both notes stay; the next tidy-up keeps one.';
+/** Why the other note of a keep was not binned by Bower: the person put it in the Bin while the run worked (P4-19b). */
+export const KEEP_BINNED = 'It went to the Bin while Bower worked, so only the kept note stays.';
+/** What a keep's other note says when its Bin was refused, by why the note was not as the run read it. */
+export const keepRefused = (reason: 'gone' | 'moved' | 'changed'): string => (reason === 'gone' ? KEEP_BINNED : reason === 'moved' ? KEEP_MOVED : KEEP_CHANGED);
+/** Every sentence `keepRefused` gives: a refused keep's report row says the one its refusal carries. */
+export const KEEP_REFUSED: readonly string[] = [KEEP_CHANGED, KEEP_MOVED, KEEP_BINNED];
+/**
+ * A yes to keeping one note whose other note was already in the Bin before Bower's run (c3-pair-ask, TL-P4-19
+ * addenda 8 and 9): nothing is merged, and the answer is settled. By the other note's name when it is known.
+ */
+export const KEEP_ALREADY_BINNED = 'Not merged: the other note was already in the Bin.';
+export const keepAlreadyBinned = (other: string | null): string => (other === null ? KEEP_ALREADY_BINNED : `Not merged: ${other} was already in the Bin.`);
 /**
  * Current state lines: `lines` each one trimmed line, none only to take back a rewrite of an empty section (TL-P4-10
  * point 4; a model always writes 1+); `previous` as read (one line each, no control character).
