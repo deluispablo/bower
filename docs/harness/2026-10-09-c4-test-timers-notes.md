@@ -83,3 +83,10 @@ Worktree `/private/tmp/bower-c4-timers`, branch `c4-test-timers`.
 - tests changed: e2e/v2-field.spec.ts: axe scans go through `e2e/axe.ts` (same includes, tags and rules; now after animations end).
 - tests changed: e2e/v2-name-sheet.spec.ts: axe scans go through `e2e/axe.ts` (same includes, tags and rules; now after animations end).
 - tests changed: e2e/v2-targets.spec.ts: axe scans go through `e2e/axe.ts` (same includes, tags and rules; now after animations end).
+
+## Coordinator addendum (TL-P4-22 addendum 18, main 5083a711)
+
+- **The split is released.** b1 (parse once per note per run) is now its own escalated entry, `c4-parse-once`, after the TL-P4-24 entries. The P4-52 BLOCK on it is resolved by that ruling. There is no re-review.
+- **Why a3 fits the empty allowlist.** The timer gate (`harness/timer-gate.ts`) counts only in-process timers of 100 ms or more. The import-rule test (`src/architecture.test.ts:26`) and the provider test schedule no such timer. Their time goes to child processes (dependency-cruiser) and CPU, so they never belonged on `real-timers.json`. The load timeout they showed came from concurrent heavy runs, and the re-entrant lock now prevents those. a3 (one fixture tree and one gate run) remains a speed-up only, not a timer-gate item.
+- **Map row.** The ARCHITECTURE row now names `check:run` and `e2e:pwa:run` as the unlocked bodies, called only through the lock.
+- review: P4-52 BLOCK (b1 only), released by TL-P4-22 addendum 18.

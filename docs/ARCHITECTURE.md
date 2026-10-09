@@ -105,5 +105,5 @@ Each mechanism has one home in the code ([TL-P4-15](harness/2026-10-08-tl-p4-15-
 | Focus return after a menu, sheet, toast or palette closes | `src/ui/focus.ts` | Done: `closeFocus` (Radix `onCloseAutoFocus`) and `returnFocusTo`, no timers; `Sheet` records its opener; the tree menu returns to the tree at once. The route-heading rule keeps its polling until `c4-test-timers` (`c4-focus-return`) |
 | UI actions (busy, error, double press) | `src/ui/` `useAction` | Target: hand-written per screen (`c4-use-action`) |
 | Run status words | `src/features/tidy/run-words.ts` | Six surfaces decide alone (`c4-run-view`) |
-| Heavy-run lock and timer gate | `harness/with-lock.sh` (re-entrant through `HARNESS_LOCK_HELD`; around `pnpm check`, every e2e script and done.sh), `harness/timer-gate*.ts` with `real-timers.json` (empty) | Done (`c4-test-timers`); CPU report in check-harness, report only |
+| Heavy-run lock and timer gate | `harness/with-lock.sh` (re-entrant through `HARNESS_LOCK_HELD`; around `pnpm check`, every e2e script and done.sh; the unlocked bodies are `check:run` and `e2e:pwa:run`, called only through the lock), `harness/timer-gate*.ts` with `real-timers.json` (empty) | Done (`c4-test-timers`); CPU report in check-harness, report only |
 | App copy | one copy file keyed by id | Target (`c4-copy`) |
