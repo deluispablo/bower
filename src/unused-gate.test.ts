@@ -19,8 +19,10 @@ function sampleTree(): string {
   return root;
 }
 
-function runGate(root: string, baseline: string) {
-  return spawnSync('node', [gate, '--root', root, '--baseline', baseline], { encoding: 'utf8' });
+function runGate(root: string, baseline: string, production?: string) {
+  const args = [gate, '--root', root, '--baseline', baseline];
+  if (production) args.push('--production-baseline', production);
+  return spawnSync('node', args, { encoding: 'utf8' });
 }
 
 describe('unused-code gate', () => {
@@ -52,6 +54,51 @@ describe('unused-code gate', () => {
       const result = runGate(root, baseline);
       expect(result.status).not.toBe(0);
       expect(result.stderr).toContain('Baseline lists code that is no longer unused');
+      expect(result.stderr).toContain('exports src/lib.ts gone');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it('an export only tests call fails the production unused-code gate', () => {
+    const root = sampleTree();
+    try {
+      // Tests are entries of the normal pass only; production marks its entries with "!".
+      fs.writeFileSync(
+        path.join(root, 'knip.json'),
+        JSON.stringify({ entry: ['src/index.ts!', 'src/**/*.test.ts'], project: ['src/**/*.ts!'], ignoreExportsUsedInFile: true }),
+      );
+      fs.appendFileSync(path.join(root, 'src', 'lib.ts'), 'export const keepFinished = () => 3;\n');
+      fs.writeFileSync(path.join(root, 'src', 'lib.test.ts'), "import { keepFinished } from './lib';\nkeepFinished();\n");
+      const baseline = path.join(root, 'baseline.json');
+      const prod = path.join(root, 'production.json');
+      fs.writeFileSync(baseline, JSON.stringify({ findings: [] }));
+      fs.writeFileSync(prod, JSON.stringify({ findings: [] }));
+
+      const failed = runGate(root, baseline, prod);
+      expect(failed.status).not.toBe(0);
+      expect(failed.stderr).toContain('New unused production code');
+      expect(failed.stderr).toContain('exports src/lib.ts keepFinished');
+      // The normal pass alone accepts it (a test calls it).
+      expect(runGate(root, baseline).status).toBe(0);
+
+      fs.writeFileSync(prod, JSON.stringify({ findings: ['exports src/lib.ts keepFinished'] }));
+      expect(runGate(root, baseline, prod).status).toBe(0);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it('the production unused baseline may only shrink', () => {
+    const root = sampleTree();
+    try {
+      const baseline = path.join(root, 'baseline.json');
+      const prod = path.join(root, 'production.json');
+      fs.writeFileSync(baseline, JSON.stringify({ findings: [] }));
+      fs.writeFileSync(prod, JSON.stringify({ findings: ['exports src/lib.ts gone'] }));
+      const result = runGate(root, baseline, prod);
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain('Production baseline lists code that is no longer unused');
       expect(result.stderr).toContain('exports src/lib.ts gone');
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
