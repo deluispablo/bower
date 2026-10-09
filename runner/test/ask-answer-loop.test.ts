@@ -267,6 +267,21 @@ async function reportOf(w: RealWorld): Promise<{ setAside: unknown[]; answered?:
   return found;
 }
 
+/** Every set-aside and answered row of every run, as each run's last checkpoint in `.bower/runs` holds its report. */
+async function reportRowsAll(w: RealWorld): Promise<{ setAside: unknown[]; answered: unknown[] }> {
+  const byRun = new Map<string, { setAside: unknown[]; answered?: unknown[] }>();
+  for (const f of await w.drive.listAll(w.rootId)) {
+    const run = /^\.bower\/runs\/([^/]+)\//.exec(w.drive.pathOf(f.id, w.rootId))?.[1];
+    if (f.folder || run === undefined) continue;
+    const text = await w.drive.readText(f.id);
+    const m = /"kind":\s*"run-report"/.test(text) ? (JSON.parse(text) as { report?: { setAside: unknown[]; answered?: unknown[] }; reportRecord?: { report: { setAside: unknown[]; answered?: unknown[] } } }) : null;
+    const report = m?.report ?? m?.reportRecord?.report;
+    if (report) byRun.set(run, report);
+  }
+  const all = [...byRun.values()];
+  return { setAside: all.flatMap((r) => r.setAside), answered: all.flatMap((r) => r.answered ?? []) };
+}
+
 describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
   it('a yes to keep one note starts a scoped run that merges', async () => {
     const w = await keepWorld();
@@ -607,6 +622,28 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     expect(q).toEqual(expect.objectContaining({ text: 'You changed the current state of Job hunt again. Should Bower still write its update there?', state: stateMark(again) }));
     expect(q?.shown?.lines).toEqual(UPDATE);
     expect(await answersWaiting(w, `q-state-${id}`)).toEqual([]);
+  });
+
+  it('a write it yes whose note is gone writes one answered row', async () => {
+    const w = await shownWorld();
+    expect(await press(w)).toBe(true);
+    expect(await w.runJob(0)).toBe(0);
+    const id = await hubId(w);
+    // Write it, answered while the note was there; the note went to the Bin before Bower's run.
+    const { vault, answerQuestion } = await vaultOf(w);
+    const done = await answerQuestion(vault, runsOf(w), `q-state-${id}`, true, { allowWeb: false });
+    expect(done?.outcome.kind).toBe('now');
+    await w.drive.trash(id);
+    const calls = proposed.length;
+    expect(await w.runJob(1)).toBe(0);
+    // Nothing written, no model asked, the answer settled and its question closed; one answered row says why.
+    expect(proposed.length).toBe(calls);
+    expect((await changesOfRun(w, 1)).some((c) => c.kind === 'state-rewrite')).toBe(false);
+    expect(questionsNow(await textAt(w, '.bower/questions.json')).some((q) => q.id === `q-state-${id}`)).toBe(false);
+    expect(await answersWaiting(w, `q-state-${id}`)).toEqual([]);
+    const rows = await reportRowsAll(w);
+    expect(rows.setAside).toEqual([]);
+    expect(rows.answered).toEqual([{ questionId: `q-state-${id}`, kind: 'state', outcome: 'subject-gone', why: 'Not written: Job hunt had moved or gone to the Bin before Bower got to it.' }]);
   });
 
   it('of two answers to one question, the later one counts', async () => {
