@@ -175,15 +175,17 @@ for (const item of ['Rename', 'Move to…']) {
   test(`a sheet opened from a menu sheet returns focus to the menu's opener: ${item} on a file row`, async ({ page, isMobile }) => {
     test.skip(!isMobile, 'the phone');
     await open(page, '/files');
-    const row = page.getByRole('tree', { name: 'Your Bower folder' }).getByRole('treeitem', { name: /^Flat hunt/ });
-    await row.focus();
+    // The tree holds the keyboard; its active row is the one the menu opened from.
+    const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+    const row = tree.getByRole('treeitem', { name: /^Flat hunt/ });
+    await tree.focus();
     await row.dispatchEvent('contextmenu');
     await page.getByRole('dialog').getByRole('button', { name: item }).click();
     const sheet = page.getByRole('dialog', { name: item === 'Rename' ? 'Rename' : /^Move/ });
     await expect(sheet).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(sheet).toHaveCount(0);
-    expect(await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.textContent?.trim().slice(0, 30))).toMatch(/Flat hunt/);
+    await expect(tree).toBeFocused();
     await axeClean(page);
   });
 }

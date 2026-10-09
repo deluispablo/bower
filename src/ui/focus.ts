@@ -23,10 +23,38 @@ export function focusHeading(): void {
   } else document.getElementById('main')?.focus({ preventScroll: true });
 }
 
-/** What holds the keyboard now, if it is a control: the opener a layer about to open will give it back to. */
+const LAYER = '[role="dialog"], [role="alertdialog"], [role="menu"]';
+
+/** The opener last handed out; the control last focused inside a layer; for each such control, its layer's opener. */
+let lastOpener: HTMLElement | null = null;
+let inLayer: HTMLElement | null = null;
+const layerOpener = new WeakMap<HTMLElement, HTMLElement>();
+
+if (typeof document !== 'undefined') {
+  document.addEventListener(
+    'focusin',
+    (e) => {
+      const at = e.target instanceof HTMLElement ? e.target : null;
+      if (at?.closest(LAYER)) {
+        inLayer = at;
+        if (lastOpener && lastOpener !== at && lastOpener.isConnected) layerOpener.set(at, lastOpener);
+      } else inLayer = null;
+    },
+    true,
+  );
+}
+
+/**
+ * What holds the keyboard now, if it is a control: the opener a layer about to open will give it
+ * back to. A control inside an open layer (a menu sheet's Rename) keeps the opener of that layer,
+ * and when that control left with its layer a moment before (focus fell to the body), it is still
+ * the opener: `returnFocusTo` then falls back to the layer's opener.
+ */
 export function openerNow(): HTMLElement | null {
   const at = typeof document === 'undefined' ? null : document.activeElement;
-  return at instanceof HTMLElement && at !== document.body ? at : null;
+  if (!(at instanceof HTMLElement) || at === document.body) return inLayer && !inLayer.isConnected && layerOpener.has(inLayer) ? inLayer : null;
+  lastOpener = at;
+  return at;
 }
 
 let endWatch: (() => void) | null = null;
@@ -38,8 +66,11 @@ let endWatch: (() => void) | null = null;
  * dismisses), it goes to the heading then. No timer: the watch ends when the opener goes, or
  * when focus lands on anything else.
  */
-export function returnFocusTo(opener: HTMLElement | null): void {
+export function returnFocusTo(first: HTMLElement | null): void {
   endWatch?.();
+  // The opener, else the opener of the layer it was in, else the heading.
+  const outer = first ? layerOpener.get(first) : undefined;
+  const opener = first && document.contains(first) ? first : outer;
   if (!opener || !document.contains(opener) || opener === document.body) {
     focusHeading();
     return;

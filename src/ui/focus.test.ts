@@ -124,6 +124,16 @@ describe('a sheet opened from a menu sheet', () => {
     expect(document.activeElement?.tagName).toBe('H1');
   });
 
+  it('keeps the menu opener when the menu sheet left with its Rename button before the next sheet opened', () => {
+    const { more, rename } = openMenuThenRename();
+    document.querySelector('[role="dialog"]')?.remove();
+    document.body.focus();
+    const was = openerNow();
+    expect(was).toBe(rename);
+    closeFocus(closing(), was);
+    expect(document.activeElement).toBe(more);
+  });
+
   it('prefers the opener itself while it is on the page', () => {
     document.body.innerHTML = page + '<button id="again">Again</button>';
     document.getElementById('more')?.focus();
