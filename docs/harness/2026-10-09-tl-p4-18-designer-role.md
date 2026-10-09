@@ -41,6 +41,7 @@ The designer keeps `docs/design/STATE.md` in its worktree (TL-P2-43).
 **Addendum 2 (owner, 2026-10-09).** The lead consults the designer before ruling on any defect, issue or feature that touches the UI.
 
 **Addendum 3 (owner, 2026-10-09).** Every built change that touches the UI is checked by the designer before its entry closes:
+
 - the packet marks it `ui: true`;
 - after the review PASS and the merge, the coordinator asks the designer for a design check;
 - `done.sh` closes it only after `verified`.
