@@ -71,4 +71,20 @@ describe('the scripted provider', () => {
       for (const o of archive) expect([...o.dependsOn].sort()).toEqual([...(plan.needs.get(j.recordId) ?? [])].sort());
     }
   });
+
+  // P4-45 m1: a rule waits for the Rules.md this run makes through the same one map, not a list of its own.
+  it('a rule waits in the one map for the Rules.md it makes', async () => {
+    const { drive, root, admitted } = await seeded();
+    const rules = (await drive.listAll(root)).find((f) => !f.folder && f.name === 'Rules.md' && f.parents[0] === root);
+    if (rules) await drive.trash(rules.id);
+    const vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    await vault.addRule('anything from the dentist goes in health');
+    const plan = await planRun(drive, root, { scope: 'all', allowWeb: false, runId: RUN, requestId: admitted.id, requestedAt: admitted.at, mintKey: await runKeys(RUN) });
+    const m = plan.manifest;
+    const made = m.operations.find((o) => o.effect.kind === 'create-text' && o.effect.name === 'Rules.md');
+    expect(made).toBeDefined();
+    const rule = m.capture.journal.find((j) => m.reportPlan.some((c) => c.value.rulesWorded === 1 && c.requires.some((id) => m.operations.some((o) => o.operationId === id && o.effect.kind === 'move' && j.fileIds.includes(o.effect.before.fileId)))));
+    expect(rule).toBeDefined();
+    expect(plan.needs.get(rule?.recordId ?? '')).toContain(made?.operationId);
+  });
 });

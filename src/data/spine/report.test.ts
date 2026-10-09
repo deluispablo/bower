@@ -9,6 +9,7 @@ import type { RunManifest } from './records';
 import { runDetail } from '@/features/tidy/run-words';
 import { itemDispositions, materialize, NOT_FILED, reportContradictions, UNCONFIRMED_GONE } from './report';
 import { scriptedProvider } from '../demo/script';
+import { grounded } from './grounded';
 
 const AT = Date.UTC(2026, 9, 7, 9);
 const RUN = 'run-report';
@@ -131,5 +132,31 @@ describe('dispositions and the report', () => {
     // The first row is its own move's: unconfirmed. The second is the other move's: set aside.
     expect(report.unconfirmed).toEqual([{ name: SAME, why: UNCONFIRMED_GONE }]);
     expect(report.setAside.filter((r) => r.name === SAME)).toEqual([{ name: SAME, why: NOT_FILED }]);
+  });
+
+  // c3-planner-split part 2 (P4-45 m2): a set-aside row is its one operation's, never paired with one by position.
+  it('a set-aside row names its op', async () => {
+    const drive = new FakeDrive({ clock: () => 0 });
+    const root = (await seedFakeDrive(drive, 'default', AT)) ?? '';
+    const admission = await planAdmission(fakeRead(drive), root, { scope: 'all', clock: () => AT, newId: () => 'request-report' });
+    if (admission.kind !== 'manifest') throw new Error(`nothing admitted: ${admission.cause}`);
+    const planned = await scriptedProvider(fakeScripted(drive), { rootId: root, runId: RUN, allowWeb: false })({ taken: admission.manifest, deferred: [] });
+    const asides = planned.reportPlan.filter((c) => c.when === 'rejected' && c.requires.length === 1
+      && planned.operations.some((o) => o.operationId === c.requires[0] && o.effect.kind === 'move'));
+    const [a, b] = asides;
+    if (!a || !b) throw new Error('two filing moves needed');
+    // Two moves set aside by one contribution, its rows listed in the other order: no row carries its own operation.
+    const swapped = { requires: [...a.requires, ...b.requires], when: 'rejected' as const, value: { ...a.value, setAside: [...b.value.setAside, ...a.value.setAside] } };
+    const manifest: RunManifest = { ...planned, reportPlan: [...planned.reportPlan.filter((c) => c !== a && c !== b), swapped] };
+    const [gone, kept] = [a.requires[0] ?? '', b.requires[0] ?? ''];
+    const outcomes = settle(manifest, new Set([gone, kept])).map((o): Outcome => (o.operationId === gone
+      ? { operationId: o.operationId, state: 'rejected', failure: { code: 'unknown', message: UNCONFIRMED_GONE } }
+      : o));
+    const report = materialize(manifest, 'a'.repeat(64), outcomes)?.report;
+    if (!report) throw new Error('no report');
+    // No row is said to be what another row's operation did.
+    expect(report.unconfirmed ?? []).toEqual([]);
+    // And a plan whose set-aside row does not name its one operation is not grounded.
+    expect(grounded(manifest)).toBe(false);
   });
 });
