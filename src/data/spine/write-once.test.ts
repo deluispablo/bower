@@ -34,7 +34,9 @@ describe('one write-once rule', () => {
     // The run engine and the Worker make theirs through the helper itself.
     // The Worker's repair of Rules.md is sent by the helper too.
     expect(read('api/src/vault.ts').some((line) => line.includes('updateByStamp('))).toBe(true);
-    for (const p of ['src/data/spine/engine.ts', 'api/src/vault.ts']) expect(read(p).some((line) => line.includes('createById(')), p).toBe(true);
+    expect(read('src/data/spine/engine.ts').some((line) => line.includes('createById(')), 'engine.ts').toBe(true);
+    // The Worker's template, as the fake Worker's: each create through the home's makers, its id kept on the holder.
+    for (const maker of ['makeOnce(', 'makeFolder(', 'makeText(']) expect(read('api/src/vault.ts').some((line) => line.includes(maker)), maker).toBe(true);
     for (const p of CREATES) expect(read(p).some((line) => /from '[./a-z]*spine\/write-once(\.js)?'|from '\.\/write-once'/.test(line)), p).toBe(true);
   });
 });
@@ -58,7 +60,7 @@ describe('one home for an intended create', () => {
     const paths = Object.entries(lists).flatMap(([pkg, files]) => files.map((f) => (pkg === 'root' ? f : `${pkg}/${f}`)));
     expect(paths.filter((p) => !existsSync(join(ROOT, p))), 'A file that is gone: delete its line from ALLOWED').toEqual([]);
     expect(paths.length, 'The allowlist may only shrink: lower ALLOWED_MAX with it').toBeLessThanOrEqual(ALLOWED_MAX as number);
-    expect(ALLOWED_MAX).toBeLessThanOrEqual(8);
+    expect(ALLOWED_MAX).toBeLessThanOrEqual(7);
   });
 
   it('the rule targets the primitive, not the names of what holds an id', () => {

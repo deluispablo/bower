@@ -69,6 +69,12 @@ class FakeGoogle {
   stallUploadNamed: string | null = null;
   release: () => void = () => undefined;
   stalled: Promise<void> = Promise.resolve();
+  /** Refuse the next upload of a file with this name outright, once (Drive's 400 for an id it will not take). */
+  refuseUploadNamed: string | null = null;
+  /** Make the next upload of a file with this name, then lose its answer and fail its read-back by id, once. */
+  loseUploadReplyNamed: string | null = null;
+  /** Refuse the next read of this id (403), once: a lost answer's read-back fails too. */
+  refuseNextGetOf: string | null = null;
   /** Runs once, right after a file's text is read: another device changes it between our read and our write. */
   afterMediaRead: (() => void) | null = null;
   private n = 0;
@@ -96,7 +102,12 @@ class FakeGoogle {
       return answer;
     }
     if (url.pathname.startsWith('/drive/v3/files/') && method === 'GET') {
-      const item = this.items.get(decodeURIComponent(url.pathname.split('/').pop() ?? ''));
+      const asked = decodeURIComponent(url.pathname.split('/').pop() ?? '');
+      if (this.refuseNextGetOf === asked) {
+        this.refuseNextGetOf = null;
+        return Response.json({ error: { code: 403, errors: [{ reason: 'forbidden' }] } }, { status: 403 });
+      }
+      const item = this.items.get(asked);
       if (item === undefined) return Response.json({ error: { code: 404 } }, { status: 404 });
       if (url.searchParams.get('alt') === 'media') {
         const text = item.content ?? '';
@@ -145,7 +156,18 @@ class FakeGoogle {
         this.failUploadNamed = null;
         return Response.json({ error: { code: 503 } }, { status: 503 });
       }
-      return Response.json(this.add({ ...metadata, content, mimeType: metadata.mimeType ?? 'text/plain' }));
+      if (this.refuseUploadNamed !== null && metadata.name === this.refuseUploadNamed) {
+        this.refuseUploadNamed = null;
+        return Response.json({ error: { code: 400, errors: [{ reason: 'badRequest' }] } }, { status: 400 });
+      }
+      const item = this.add({ ...metadata, content, mimeType: metadata.mimeType ?? 'text/plain' });
+      if (this.loseUploadReplyNamed !== null && metadata.name === this.loseUploadReplyNamed) {
+        this.loseUploadReplyNamed = null;
+        // Its read-back by id fails once too, so the call cannot tell whether it landed.
+        this.refuseNextGetOf = item.id;
+        throw new TypeError('network lost');
+      }
+      return Response.json(answered(item));
     }
     return Response.json({ error: 'unexpected' }, { status: 500 });
   };
@@ -432,6 +454,49 @@ describe('POST /vault', () => {
     const retry = await body(await post(g, cookie));
     expect(g.calls.filter((c) => c.url.startsWith('/drive/v3/files/generateIds'))).toHaveLength(1);
     expect(g.paths(retry.folderId).sort()).toEqual(expectedPaths().sort());
+    expect((await person(sub).vaultState()).templateIds).toBeNull();
+  });
+
+  it('the Worker template retried after a lost answer makes one file per intent', async () => {
+    const { sub, cookie } = await someone();
+    const g = new FakeGoogle();
+    // Rules.md is made but its answer is lost, and the read-back by its reserved id fails too: not known whether it landed.
+    g.loseUploadReplyNamed = 'Rules.md';
+    expect((await post(g, cookie)).status).toBe(500);
+    const kept = (await person(sub).vaultState()).templateIds?.ids['Rules.md'];
+    expect(kept).toBeDefined();
+    expect(g.created.filter((i) => i.name === 'Rules.md').map((i) => i.id)).toEqual([kept]);
+    // The retry sends that same id: Drive's 409 says it is there, found by its id, so one file per path.
+    const retry = await body(await post(g, cookie));
+    const paths = g.paths(retry.folderId);
+    expect(paths.sort()).toEqual(expectedPaths().sort());
+    expect(new Set(paths).size).toBe(paths.length);
+    expect(g.created.filter((i) => i.name === 'Rules.md').map((i) => i.id)).toEqual([kept]);
+    expect(g.calls.filter((c) => c.url.startsWith('/drive/v3/files/generateIds'))).toHaveLength(1);
+  });
+
+  it('the Worker keeps reserved ids in Durable Object storage through the write-once port', async () => {
+    const { sub, cookie } = await someone();
+    const g = new FakeGoogle();
+    // Every id is kept in the person object before the first create; a create refused outright (a permanent 4xx)
+    // lets its own id go there, and only that one: the next call reserves anew for it and keeps the others.
+    g.refuseUploadNamed = 'Rules.md';
+    expect((await post(g, cookie)).status).toBe(500);
+    const after = await person(sub).vaultState();
+    expect(after.pending).toBe('reserved-1');
+    const ids = after.templateIds?.ids ?? {};
+    expect(ids['Rules.md']).toBeUndefined();
+    expect(Object.keys(ids).sort()).toEqual(expectedPaths().filter((p) => p !== 'Rules.md').sort());
+    const retry = await body(await post(g, cookie));
+    const generate = g.calls.filter((c) => c.url.startsWith('/drive/v3/files/generateIds'));
+    expect(generate).toHaveLength(2);
+    expect(new URLSearchParams(generate[1]?.url.split('?')[1]).get('count')).toBe('1');
+    const rules = g.created.filter((i) => i.name === 'Rules.md');
+    expect(rules).toHaveLength(1);
+    expect(Object.values(ids)).not.toContain(rules[0]?.id);
+    const paths = g.paths(retry.folderId);
+    expect(paths.sort()).toEqual(expectedPaths().sort());
+    expect(new Set(paths).size).toBe(paths.length);
     expect((await person(sub).vaultState()).templateIds).toBeNull();
   });
 
