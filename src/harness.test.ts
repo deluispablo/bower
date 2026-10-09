@@ -319,6 +319,19 @@ describe('the harness', () => {
     expect(reran).toEqual([]);
   });
 
+  it('a test under 2000 ms alone passes the temporary alone margin', () => {
+    const tests = [{ name: 'margin one', file: 'src/a.test.ts', duration: 3200 }];
+    const alone = (): number => 1500;
+    expect(slowProblems(tests, [], 0, alone)).toEqual([]);
+  });
+
+  it('a test over 2000 ms alone fails the slow ratchet', () => {
+    const tests = [{ name: 'margin two', file: 'src/a.test.ts', duration: 3200 }];
+    const alone = (): number => 2500;
+    expect(slowProblems(tests, [], 0, alone)).toEqual([expect.stringContaining('margin two')]);
+    expect(slowProblems(tests, [], 0, alone)[0]).toContain('2500 ms alone');
+  });
+
   it('the slow list may only shrink', () => {
     const tests = [{ name: 'a', file: 'x', duration: 2000 }, { name: 'b', file: 'x', duration: 2000 }];
     expect(slowProblems(tests, ['a', 'b'], 2)).toEqual([]);
