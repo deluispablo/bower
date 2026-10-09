@@ -6099,7 +6099,7 @@
     "id": "c4-run-counts",
     "task": "p4-consolidation",
     "category": "perf",
-    "passes": false,
+    "passes": true,
     "what": "The runner transport counts Drive calls and bytes under the current timing phase (timing.ts the one phase home); the timing line prints them plus the runner's region; the Drive-call golden asserts timing's counts instead of inferring phases.",
     "steps": [
       "The timing line shows calls and bytes per phase and the region.",
