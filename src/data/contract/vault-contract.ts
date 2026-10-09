@@ -247,7 +247,7 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
 
       // TL-P4-27 addendum 4 (3): one line when its making was never sent; once sent, history is kept: the making, then
       // the rename, never a deleted line.
-      it('a new thing named straight away: one line under its name, or its making and then its rename', async () => {
+      it('one line for a new thing named straight away, or its making and then its rename once sent', async () => {
         const { vault } = await open();
         const n = (await vault.changes()).length;
         const p = await vault.create('Resources', 'note');

@@ -87,7 +87,7 @@ tests changed: src/data/vault/drive-vault.test.ts: answer-lost property loses ki
 tests changed: src/data/vault/drive-vault.test.ts: "a restore whose journal PATCH gets a 429 still finishes" deleted: a restore sends no journal PATCH.
 tests changed: src/data/vault/drive-vault.test.ts: added the kept upload withdraw it.each from the parked branch.
 tests changed: src/data/contract/vault-contract.ts: "undo of a move removes its entry" renamed "undo of a move or a Bin shows no entry for either" (pairs hidden, not removed).
-tests changed: src/data/contract/vault-contract.ts: "one line for a new thing named straight away" and "made and binned straight away leaves no trace" accept the kept history when the making was already sent (create then rename / create then trash).
+tests changed: src/data/contract/vault-contract.ts: "one line for a new thing named straight away" (name kept, "or its making and then its rename once sent" added) and "made and binned straight away leaves no trace" accept the kept history when the making was already sent (create then rename / create then trash).
 tests changed: src/data/live/live.test.ts: after restore the outbox is empty and the rule line arrived once: the inverse line sends the waiting line first, in order.
 tests changed: src/data/spine/write-once.test.ts: kept from the parked branch without its journal-keeper and confirmed-line describes.
 tests changed: src/ui/toast.test.ts: kept from the parked branch (toast replace and press).
@@ -108,3 +108,8 @@ tests changed: src/ui/undo-toast.test.ts: my own red: typing of the mock only.
 - Event sourcing, compensating actions: https://learn.microsoft.com/en-us/azure/architecture/patterns/compensating-transaction
 - Web Locks API: https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API
 - fast-check model-based testing: https://fast-check.dev/docs/advanced/model-based-testing/
+
+## For the coordinator
+
+- check-harness: features.json entry `c2-create-by-id` names "taking a change back whose Bin answer was lost is resolved
+  by its stamp", deleted here (no journal Bin). Workers do not edit features.json: its verify needs the coordinator.
