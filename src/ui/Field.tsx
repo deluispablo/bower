@@ -98,5 +98,5 @@ export function Checkbox({
   className = '',
   ...rest
 }: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>) {
-  return <input {...rest} type="checkbox" className={`${s.check} ${className}`} />;
+  return <input {...rest} type="checkbox" className={`${s.taskBox} ${className}`} />;
 }

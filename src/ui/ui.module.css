@@ -176,6 +176,9 @@ textarea.field { padding: 12px 14px; resize: vertical; }
 .fieldBox:has(input:focus-visible, textarea:focus-visible) { outline: 2px solid var(--accent-line); outline-offset: 3px; }
 .field[aria-invalid='true'],
 .fieldBox:has([aria-invalid='true']) { border-color: var(--danger); }
+/* an error edge outranks the focus edge (same specificity, later wins); the focus ring stays */
+.field[aria-invalid='true']:focus-visible,
+.fieldBox:has([aria-invalid='true']):has(input:focus-visible, textarea:focus-visible) { border-color: var(--danger); }
 .fieldError { margin: 6px 0 0; color: var(--danger); font-size: 13px; }
 
 .switch {
@@ -195,7 +198,7 @@ textarea.field { padding: 12px 14px; resize: vertical; }
 .switch[aria-checked='true'] span { transform: translateX(20px); background: #fff; }
 
 /* a native checkbox, drawn by us so its unticked edge can be an inset ring; keyboard, name and state stay the browser's */
-.check {
+.taskBox {
   appearance: none;
   -webkit-appearance: none;
   position: relative;
@@ -208,8 +211,8 @@ textarea.field { padding: 12px 14px; resize: vertical; }
   box-shadow: inset 0 0 0 2px var(--control-line);
   cursor: pointer;
 }
-.check:checked { background: var(--brand); box-shadow: none; }
-.check:checked::after {
+.taskBox:checked { background: var(--brand); box-shadow: none; }
+.taskBox:checked::after {
   content: '';
   position: absolute;
   left: 8px;
@@ -220,4 +223,4 @@ textarea.field { padding: 12px 14px; resize: vertical; }
   border-width: 0 2.5px 2.5px 0;
   transform: rotate(45deg);
 }
-.check:disabled { cursor: default; }
+.taskBox:disabled { cursor: default; }
