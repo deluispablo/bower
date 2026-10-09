@@ -43,8 +43,8 @@ must match, only the callback's second parameter is new.
 
 | Caller | Before | Now |
 | --- | --- | --- |
-| `src/data/spine/barrier.ts:193` (app, write by stamp) | resent after 429/401 | sent once, fails `retry` (its retry path: not checked here) |
-| `src/data/vault/journal.ts:509` (app, Bin by stamp, finding 2) | resent | sent once, fails `retry` (outbox handling: not checked here) |
+| `src/data/spine/barrier.ts:193` (runner, write by stamp; corrected in the fix round) | resent, no new check | fenced through `RunnerDrive.fenced` (`save.batch()` is the runner's `FencedDrive`) |
+| `src/data/vault/journal.ts:512` (app, Undo's Bin by stamp; fixed in the fix round) | resent, no new check | fenced: its `checkStillAsSeen` is the `fence` |
 | `src/data/fake/fake-worker.ts:337`, `fake/*.ts` | FakeDrive, no transport | unchanged |
 | runner `engine.ts`, `retention.ts`, `rules-repair.ts` | resent, no new check | fenced through `RunnerDrive.fenced` |
 | app `once` (move, rename, Bin, unbin, text, pile note) | resent, no new check | fenced |
@@ -61,4 +61,49 @@ Goldens: `runner/test/drive-calls-golden.test.ts` C04 78 and 25-runs 88 pass unc
 
 ## Left out
 
-- The two unfenced app writes (barrier, journal Bin) get no fence here; journal is finding 2, logged separately.
+- (Superseded by the fix round below: barrier was already fenced; the journal Bin is now fenced.)
+
+## Fix round (P4-55)
+
+implementer: claude (bower-escalated, fresh session); red: de8a7c82 (tests only); fix: 6fafcc84
+
+tests changed: src/data/vault/journal.test.ts: added `c4-retry-fence fix round: an Undo resent after a rate limit`
+(two tests) and the `WriteOptions`, `notAsSeenReason` imports; no existing test edited or removed.
+tests changed: src/data/vault/drive-vault.test.ts: added `a restore whose journal PATCH gets a 429 still finishes` to
+`a write resent after a rate limit`; no existing test edited or removed.
+
+1. `vault/journal.ts` (Undo's Bin, `removeNow`): its one `checkStillAsSeen` (place as listed, `landing(file, 'bin')`)
+   runs before the first send, as before, and the same function is passed as `fence` on `trash` through
+   `WriteOptions`. A 429, a 403 rate limit or a 401 refresh runs it again before the resend: moved, renamed or binned
+   elsewhere, nothing is resent and Undo fails with `CHANGED_ELSEWHERE`; still as listed, the resend lands. No second
+   check and no second retry path (the resend stays in the transport). A restore whose journal PATCH gets a 429 now
+   finishes: the item is unbinned and its record leaves.
+2. `spine/barrier.ts:193`: the round-1 row was wrong. `save.batch()` is the runner's `FencedDrive`
+   (`runner/src/drive.ts` `batch()`, `RunnerDrive.fenced`), so that write already carries its fence. Row corrected.
+3. Other callers that can hit a retryable refusal, swept by `grep` of `.trash(`, `.untrash(`, `.update(`, `.writeText(`
+   and every `PATCH` in `src`, `runner/src`, `api/src`: none left unfenced on the transport.
+   - App `once` (move, rename, Bin, unbin, text, pile note: `drive-vault.ts` 328, 346, 494, 1101, 1105, 1111, 1113,
+     1141, 1773, 1776): fenced. `SeenFiles.wrap` forwards the options.
+   - Runner `spine/engine.ts` 512-525, `rules-repair.ts` 56-57, `spine/retention.ts` 133-142, `barrier.ts` 193: through
+     `RunnerDrive` (`runner/src/drive.ts` 110-114), fenced.
+   - Worker `replaceText` (`api/src/vault.ts` 182): fenced.
+   - `fake/fake-worker.ts` 337, `fake/fake-run-service.ts` `batch`: FakeDrive, no transport, no resend.
+   - `drive/drive-contract.ts`: the drive contract tests' own direct writes (no fence: sent once). Not a production
+     caller.
+   - Creates (by reserved id, without id) and `raw()` uploads: unchanged, as in round 1.
+
+### Compatibility rows (fix round)
+
+| Caller | Before (round 1) | Now |
+| --- | --- | --- |
+| `vault/journal.ts` Undo's Bin | sent once, a 429/403 rate limit or 401 fails `retry` | resent after its fence passes; refused `CHANGED_ELSEWHERE` |
+| `DriveVault.restore` (journal record's Bin) | a 429 left the item unbinned and its record kept | finishes |
+| `spine/barrier.ts:193` | (row was wrong) fenced through `RunnerDrive.fenced` | unchanged |
+
+Verify: the three reds; round-1 files `drive-http.test.ts` (136), `drive-vault.test.ts` (215), `write-once.test.ts`,
+`runner/test/drive.test.ts`, `runner/test/main.test.ts`, `api/test/vault.test.ts`; goldens
+`runner/test/drive-calls-golden.test.ts` C04 78 and 25-runs 88 pass unchanged.
+
+Sources: Drive "Resolve errors" (retry 429/403 rate limits with backoff),
+https://developers.google.com/workspace/drive/api/guides/handle-errors ; RFC 9110 9.2.2,
+https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2
