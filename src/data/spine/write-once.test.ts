@@ -165,7 +165,7 @@ const count = (sites: readonly string[]): Record<string, number> =>
 
 /**
  * Who may reserve a Drive id outside the home (TL-P4-17 addendum 1), and at how many sites: the ruled batch sites
- * (TL-P4-14 addendum 11), the Drive adapters that pass the call on, and the upload queue until c3-reservation-upload.
+ * (TL-P4-14 addendum 11), and the Drive adapters that pass the call on.
  * A ratchet, as the duplication baseline: a site more fails, and a site fewer fails until its number is lowered here.
  * This list may only shrink.
  */
@@ -174,7 +174,6 @@ const ALLOWED: Record<string, number> = {
   'runner/src/drive.ts': 3, // a per-attempt pool none outlives, and the fenced create that carries its id
   'src/data/fake/fake-worker.ts': 1, // the template's batch
   'api/src/vault.ts': 5, // the Worker's template, which fake-worker stands in for (the lead rules on it)
-  'src/data/upload-queue.ts': 4, // until c3-reservation-upload
   'src/data/drive/seen-files.ts': 1, // passes the call on
   'src/data/fake/fake-run-drive.ts': 1, // passes the call on
   'src/data/drive/fake-drive.ts': 6, // the pretend Drive: its reserved ids and the creates that carry them

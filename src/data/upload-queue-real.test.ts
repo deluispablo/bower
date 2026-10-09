@@ -12,9 +12,17 @@ import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RESUMABLE_UNIT } from './drive/drive-api';
 import { DriveHttp } from './drive/drive-http';
+import { makeOnce } from './spine/write-once';
+import type * as WriteOnce from './spine/write-once';
 import { createUploadQueue, type AddUpload, type UploadQueue } from './upload-queue';
-import { indexedDbUploadStore, type UploadStore } from './upload-store';
+import { indexedDbUploadStore, type PendingUpload, type UploadStore } from './upload-store';
 import { sha256 } from './vault/hashes';
+
+// The write-once home as it is, watched: an upload's id must be reserved through it (TL-P4-17 addendum 1).
+vi.mock('./spine/write-once', async (importOriginal) => {
+  const actual = await importOriginal<typeof WriteOnce>();
+  return { ...actual, makeOnce: vi.fn(actual.makeOnce) };
+});
 
 const ACCOUNT = 'account-a';
 const FOLDER = 'FOLDER_ID';
@@ -247,6 +255,71 @@ describe('the upload queue on the real Drive client', () => {
     expect([...env.drive.files.keys()]).toEqual([reserved.id]);
     expect(env.drive.files.get(reserved.id)?.bytes).toEqual(added.bytes);
     expect(second.queue.items()[0]).toMatchObject({ state: 'done', file: { id: reserved.id } });
+  });
+
+  it('an upload reserves its file id through the write-once home and keeps it on the device', async () => {
+    vi.mocked(makeOnce).mockClear();
+    const env = setup();
+    const added = await member(1);
+    const real = indexedDbUploadStore(env.idb);
+    // Where Drive stood when the device first kept a reserved id.
+    let keptAt: { fileId: string; ops: string[] } | null = null;
+    const watched: UploadStore = {
+      ...real,
+      save: async (r: PendingUpload) => {
+        if (keptAt === null && r.fileId !== null) keptAt = { fileId: r.fileId, ops: env.drive.opsFrom(0) };
+        return real.save(r);
+      },
+    };
+    const lost = env.drive.loseReplyAt(UNIT);
+    const first = device(env, watched);
+    await first.queue.start(ACCOUNT, FOLDER);
+    await first.queue.add(added);
+    await lost;
+    first.queue.stop();
+    await first.queue.idle();
+
+    // One create, through the home: its holder carries the id Drive reserved, and nothing else asked Drive for one.
+    expect(vi.mocked(makeOnce)).toHaveBeenCalledTimes(1);
+    expect(env.drive.ops.filter((o) => o.op === 'ids')).toHaveLength(1);
+    const open = env.drive.ops.find((o) => o.op === 'open');
+    if (open?.op !== 'open') throw new Error('no session');
+    expect(vi.mocked(makeOnce).mock.calls[0]?.[0]).toEqual({ reserved: open.id });
+    // The device kept that id before the first byte went: only the reservation had been asked for.
+    expect(keptAt).toEqual({ fileId: open.id, ops: ['ids'] });
+    expect((await real.list(ACCOUNT, FOLDER)).map((r) => r.fileId)).toEqual([open.id]);
+  });
+
+  it('an upload whose reply was lost is found again by its kept id after a reload', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const env = setup();
+    const added = await member(1);
+    // Drive made the file with the last chunk; its reply never came, and the page went away.
+    const lost = env.drive.loseReplyAt((CHUNKS - 1) * UNIT);
+    const first = device(env);
+    await first.queue.start(ACCOUNT, FOLDER);
+    await first.queue.add(added);
+    await lost;
+    first.queue.stop();
+    await first.queue.idle();
+    env.drive.afterChunk = null;
+    const [kept] = await indexedDbUploadStore(env.idb).list(ACCOUNT, FOLDER);
+    const id = kept?.fileId;
+    if (!id) throw new Error('no id kept on the device');
+    expect([...env.drive.files.keys()]).toEqual([id]);
+    for (const s of env.drive.sessions.values()) s.expired = true;
+
+    const from = env.drive.ops.length;
+    const second = device(env);
+    await second.queue.start(ACCOUNT, FOLDER);
+    await second.queue.idle();
+
+    // Sent again under the id the device kept: Drive refuses a second file with it, and the one there is read by it.
+    expect(env.drive.opsFrom(from)).toEqual(['status', `open:${id}`, `get:${id}`]);
+    expect(env.drive.ops.filter((o) => o.op === 'ids')).toHaveLength(1);
+    expect([...env.drive.files.keys()]).toEqual([id]);
+    expect(second.queue.items()[0]).toMatchObject({ state: 'done', file: { id } });
+    expect(await second.store.list(ACCOUNT, FOLDER)).toEqual([]);
   });
 
   it('lost bytes ask to choose the file again', async () => {
