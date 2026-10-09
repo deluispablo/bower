@@ -408,4 +408,82 @@ describe('the harness', () => {
   it('both playwright configs forbid only', () => {
     for (const f of ['playwright.config.ts', 'e2e/pwa.config.ts']) expect(readFileSync(f, 'utf8')).toMatch(/forbidOnly:\s*true/);
   });
+  // A flaky e2e (TL-P4-20): a batch run (E2E_BATCH=1) retries once and fails what passes only on retry, unless quarantined.
+  // The fixture is written here, under test-results/, so no normal suite ever runs it. It uses the real playwright.config.ts.
+  const flakyRun = (quarantine: unknown, batch = true): { status: number | null; out: string } => {
+    mkdirSync(join(process.cwd(), 'test-results'), { recursive: true });
+    const dir = mkdtempSync(join(process.cwd(), 'test-results/fx-'));
+    const counter = join(dir, 'attempts.txt');
+    writeFileSync(join(dir, 'once.spec.ts'), [
+      "import { test, expect } from '@playwright/test';",
+      "import { appendFileSync, readFileSync, existsSync } from 'node:fs';",
+      `const counter = ${JSON.stringify(counter)};`,
+      "test('fixture fails once then passes', () => {",
+      "  appendFileSync(counter, 'x');",
+      "  expect(readFileSync(counter, 'utf8').length, 'first attempt fails on purpose').toBeGreaterThan(1);",
+      '});',
+      "test('fixture always passes', () => { expect(existsSync(counter) || true).toBe(true); });",
+      '',
+    ].join('\n'));
+    writeFileSync(join(dir, 'fixture.config.ts'), [
+      `import base from ${JSON.stringify(join(process.cwd(), 'playwright.config.ts'))};`,
+      `export default { ...base, testDir: ${JSON.stringify(dir)}, outputDir: ${JSON.stringify(join(dir, 'out'))}, testIgnore: [], webServer: undefined, projects: base.projects?.slice(0, 1) };`,
+      '',
+    ].join('\n'));
+    const quarantineFile = join(dir, 'quarantine.json');
+    writeFileSync(quarantineFile, JSON.stringify(quarantine));
+    const env: Record<string, string | undefined> = { ...process.env, E2E_QUARANTINE: quarantineFile, E2E_BATCH: '1' };
+    if (!batch) delete env.E2E_BATCH;
+    const r = spawnSync('pnpm', ['exec', 'playwright', 'test', '-c', join(dir, 'fixture.config.ts')], { cwd: process.cwd(), encoding: 'utf8', env });
+    return { status: r.status, out: `${r.stdout}${r.stderr}` };
+  };
+
+  it('a test that passes only on retry fails a batch run', () => {
+    const batch = flakyRun([]);
+    expect(batch.status).not.toBe(0);
+    // The run names the test, the project and the first failure's error, for the DEFECT_LOG line.
+    expect(batch.out).toMatch(/passed only on retry/);
+    expect(batch.out).toContain('fixture fails once then passes');
+    expect(batch.out).toContain('first attempt fails on purpose');
+    expect(batch.out).toMatch(/phone/);
+    // A per-entry run is unchanged: no retry, so the first failure fails it as before.
+    const perEntry = flakyRun([], false);
+    expect(perEntry.status).not.toBe(0);
+    expect(perEntry.out).not.toMatch(/passed only on retry/);
+  }, 120_000);
+
+  it('a quarantined test that passes on retry is reported, not failed', () => {
+    const run = flakyRun([{ test: 'fixture fails once then passes', owner: 'Alex', expires: '2999-01-01', defect: 'deadlines-test-flake' }]);
+    expect(run.status).toBe(0);
+    expect(run.out).toMatch(/quarantined/);
+    expect(run.out).toContain('fixture fails once then passes');
+    // Still run, never skipped.
+    expect(run.out).not.toMatch(/skipped/i);
+  }, 120_000);
+
+  const quarantineCheck = (entries: unknown, defectLog = '- 2026-10-09 deadlines-test-flake | Minor | seen | fixed abc | -\n'): { status: number | null; out: string } => {
+    const dir = mkdtempSync(join(tmpdir(), 'quarantine-'));
+    writeFileSync(join(dir, 'q.json'), JSON.stringify(entries));
+    writeFileSync(join(dir, 'log.md'), defectLog);
+    const r = spawnSync('node', ['scripts/check-harness.mjs', '--quarantine', join(dir, 'q.json'), '--defect-log', join(dir, 'log.md')], { encoding: 'utf8' });
+    return { status: r.status, out: `${r.stdout}${r.stderr}` };
+  };
+  const good = { test: 'a flaky one', owner: 'Alex', expires: '2999-01-01', defect: 'deadlines-test-flake' };
+
+  it('a quarantine entry without an owner or past its expiry fails the check', () => {
+    expect(quarantineCheck([good]).status).toBe(0);
+    const noOwner = quarantineCheck([{ ...good, owner: '' }]);
+    expect(noOwner.status).toBe(1);
+    expect(noOwner.out).toMatch(/a flaky one.*owner/);
+    const expired = quarantineCheck([{ ...good, expires: '2020-01-01' }]);
+    expect(expired.status).toBe(1);
+    expect(expired.out).toMatch(/a flaky one.*expired/);
+  });
+
+  it('a quarantine entry must name a logged defect', () => {
+    const unknown = quarantineCheck([{ ...good, defect: 'not-in-the-log' }]);
+    expect(unknown.status).toBe(1);
+    expect(unknown.out).toMatch(/a flaky one.*not-in-the-log/);
+    expect(quarantineCheck([{ ...good, defect: '' }]).status).toBe(1);
+  });
 });
