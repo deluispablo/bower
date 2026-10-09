@@ -6,6 +6,7 @@
  */
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { STATE_LINE_MAX, STATE_LINES_MAX, stateLinesOk } from '../../src/data/contracts/note-edit';
 import { REFUSALS, type ClaudeCall, type ClaudeSpawn, type RefusalKind } from '../src/claude';
 import { loadCorpus, type LoadedCase } from '../src/corpus';
 import { runWithClaude } from './corpus-run';
@@ -92,6 +93,32 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
     const again = await runWithClaude({ ...c, questions: open as never, inbox: c.inbox }, answering([intentReply((_ctx, id) => ({ kind: 'tidy-intent', v: 1, things: [], asks: [{ fileId: id('IMG_2301.jpg'), ...question }] }))]));
     expect(again.code).toBe(0);
     expect((JSON.parse(again.after['.bower/questions.json'] ?? '{}') as { questions: unknown[] }).questions).toHaveLength(1);
+  });
+
+  it('the reply schema takes its state limits from note-edit', async () => {
+    // One home for the Current state's limits (TL-P4-14 addendum 20): the method's short state, 8 lines of 200.
+    expect({ lines: STATE_LINES_MAX, line: STATE_LINE_MAX }).toEqual({ lines: 8, line: 200 });
+    const c = await offerAndFlat();
+    const long = (n: number, size: number): string[] => Array.from({ length: n }, (_, k) => `${'Offer to answer, '.repeat(20)}${'abcdefgh'[k] ?? 'z'}`.slice(0, size - 1) + 'x');
+    const stated = (lines: string[]) => intentReply((_ctx, id) => ({ ...filed(id), states: [{ note: 'Projects/Job hunt/Job hunt.md', lines, cites: id('Offer_letter_final(2).pdf') }] }));
+    // The manifest contract and the reply judge the same state alike.
+    expect(stateLinesOk([], long(STATE_LINES_MAX, STATE_LINE_MAX))).toBe(true);
+    expect(stateLinesOk([], long(STATE_LINES_MAX + 1, STATE_LINE_MAX))).toBe(false);
+    expect(stateLinesOk([], long(1, STATE_LINE_MAX + 1))).toBe(false);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const calls: ClaudeCall[] = [];
+    const ok = await runWithClaude(c, answering([stated(long(STATE_LINES_MAX, STATE_LINE_MAX))], calls));
+    expect({ code: ok.code, calls: calls.length }).toEqual({ code: 0, calls: 1 });
+    // The prompt prints the limits it checks.
+    expect(calls[0]?.input).toContain(`at most ${STATE_LINES_MAX} lines of at most`);
+    expect(calls[0]?.input).toContain(`  ${STATE_LINE_MAX} characters with no link, only for a note below whose state`);
+    for (const over of [long(STATE_LINES_MAX + 1, STATE_LINE_MAX), long(1, STATE_LINE_MAX + 1)]) {
+      const asked: ClaudeCall[] = [];
+      const run = await runWithClaude(c, answering([stated(over), intentReply((_ctx, id) => filed(id))], asked));
+      // Refused as a state, asked again with today's words, and the second reply files the pile.
+      expect({ calls: asked.length, code: run.code }).toEqual({ calls: 2, code: 0 });
+      expect(asked[1]?.input).toContain(`Your reply was refused: ${REFUSALS.stateText}. Reply again`);
+    }
   });
 
   it('every validation refusal is retried once with its reason', async () => {

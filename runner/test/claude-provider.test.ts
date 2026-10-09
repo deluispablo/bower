@@ -15,6 +15,7 @@ import { fakeRead } from '../../src/data/spine/read';
 import { hashRecordJson } from '../../src/data/contracts/record-json';
 import type { RunManifest } from '../../src/data/spine/records';
 import { B_FAILURE } from '../../src/data/spine/scripted';
+import * as layout from '../../src/data/vault/layout';
 import { SYSTEM } from '../../src/data/vault/layout';
 import { serializeNote } from '../../src/data/vault/note-format';
 import { FakeDrive } from '../../src/data/drive/fake-drive';
@@ -552,6 +553,28 @@ describe('the Claude provider contract (TL-P4-01 P4-2)', () => {
     expect(planned.capture.piles.map((p) => p.pileId)).toEqual(['p-payslip']);
     const alone = await scriptedProvider(fakeScripted(left.wire.drive), run)({ taken: { ...left.admission, piles: left.admission.piles.filter((p) => p.pileId === 'p-payslip') }, deferred: [] });
     expect(effects(planned)).toEqual(effects(alone));
+  });
+
+  it('a write the two runner lists judged differently is judged once by RUNNER_WRITES', async () => {
+    // One list (TL-P4-14 addendum 20): the manifest contract and the runner's admitted check judge by the same files.
+    const { wire, admission } = await wired();
+    const own = (await wire.drive.listAll(wire.folderId)).find((f) => f.name === SYSTEM.dir)?.id ?? '';
+    // suggestions.json and last-run.json there in Bower's own folder: the manifest contract never admitted a write to them.
+    for (const name of ['suggestions.json', 'last-run.json', 'requests.json', 'hashes.json']) await wire.drive.createText(own, name, '{}\n');
+    const listing = await wire.drive.listAll(wire.folderId);
+    const run = { rootId: wire.folderId, runId: RUN_ID, allowWeb: false };
+    const took = { taken: admission, deferred: [] };
+    const planned = await scriptedProvider(fakeScripted(wire.drive), run)(took);
+    const writing = (name: string): RunManifest => {
+      const f = listing.find((x) => x.name === name && x.parents.includes(own));
+      if (!f) throw new Error(`no ${name}`);
+      const content = { encoding: 'utf8' as const, size: 3, sha256: 'a'.repeat(64), provenance: 'fake-stored' as const, observedModifiedTime: f.modifiedTime };
+      const effect = { kind: 'write-runner-json' as const, before: { fileId: f.id, name: f.name, parents: f.parents, folder: f.folder, modifiedTime: f.modifiedTime }, beforeContent: content, path: `${SYSTEM.dir}/${name}` as typeof SYSTEM.questions, text: '{}', content: { encoding: 'utf8' as const, size: 2, sha256: 'b'.repeat(64) } };
+      return { ...planned, operations: [...planned.operations, { operationId: 'x', ordinal: planned.operations.length, dependsOn: [], effect }] };
+    };
+    const judged = Object.fromEntries(['questions.json', 'requests.json', 'hashes.json', 'suggestions.json', 'last-run.json'].map((name) => [name, outsideAdmitted(writing(name), took, own)]));
+    expect(judged).toEqual({ 'questions.json': null, 'requests.json': null, 'hashes.json': null, 'suggestions.json': "a write to a file that is not Bower's own", 'last-run.json': "a write to a file that is not Bower's own" });
+    expect((layout as Record<string, unknown>).RUNNER_WRITES).toEqual([SYSTEM.questions, SYSTEM.requests, SYSTEM.hashes]);
   });
 
   it('a Claude reply that targets a thing not admitted is refused and writes nothing', async () => {

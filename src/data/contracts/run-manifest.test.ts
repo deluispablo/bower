@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { parseRunManifest, type Content, type Manifest, type ManifestRefusal, type Operation, type ReportContribution, type SeenFile, type VerifiedContent } from './run-manifest';
+import { parseRunManifest, parseRunManifestV2, type Content, type Manifest, type ManifestRefusal, type Operation, type ReportContribution, type SeenFile, type VerifiedContent } from './run-manifest';
 
 const dir = 'docs/harness/evidence/2026-10-05-local-prerequisites/run-recovery-contract/';
 const fixture = (file: string): Record<string, unknown> => JSON.parse(readFileSync(dir + file, 'utf8')) as Record<string, unknown>;
@@ -752,5 +752,20 @@ describe('run manifests keep captured and written text consistent', () => {
     const value = rich();
     op(value, 0).effect = { ...op(value, 0).effect, parent: { createdBy: op(value, 1).operationId } } as Operation['effect'];
     await refuse(bytes(seal(value)), 'order');
+  });
+});
+
+describe('runner-writable files (runner-paths-disagree, TL-P4-14 addendum 20)', () => {
+  const writes = ['.bower/questions.json', '.bower/requests.json', '.bower/hashes.json'] as const;
+  const writing = (path: string): Manifest => variant((value) => { set(value, ['operations', 3, 'effect', 'path'], path); });
+  it('the manifest takes the runner-writable files as a parameter', async () => {
+    // The list it is given decides, for both versions' reader: a path outside it is refused, one inside it admitted.
+    const suggestions = writing('.bower/suggestions.json');
+    expect(await parseRunManifestV2(bytes(suggestions), 'fake-root', writes)).toEqual({ ok: false, reason: 'shape' });
+    expect(await parseRunManifestV2(bytes(suggestions), 'fake-root', [...writes, '.bower/suggestions.json'])).toMatchObject({ ok: true });
+    const questions = rich();
+    expect(await parseRunManifestV2(bytes(questions), 'fake-root', writes)).toMatchObject({ ok: true });
+    expect(await parseRunManifestV2(bytes(questions), 'fake-root', ['.bower/requests.json'])).toEqual({ ok: false, reason: 'shape' });
+    expect(await parseRunManifest(bytes(questions), 'fake-root', ['.bower/hashes.json'])).toEqual({ ok: false, reason: 'shape' });
   });
 });
