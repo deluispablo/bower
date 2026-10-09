@@ -8,7 +8,7 @@
 import { driveError, type DriveApi, type DriveFile } from '../drive/drive-api';
 import { ReadCache, type Version } from '../drive/read-cache';
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
-import { Intended, STAMP, byId, confirms, holds, makeFolder, makeOnce, makeText, updateByStamp, type Holder, type Intent } from '../spine/write-once';
+import { Intended, STAMP, byId, confirms, landing, makeFolder, makeOnce, makeText, unbins, updateByStamp, type Holder, type Intent } from '../spine/write-once';
 import type { FailedChange, Unsubscribe, VaultSource } from '../sources';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName } from '../piles';
 import { buildTree, checkCreationName, displayName, thingName, freeName, join, kindOf, moveEntry, nameOf, parentOf, removeEntry, renameEntry } from '../tree';
@@ -45,7 +45,7 @@ import { isSeen, markSeen } from './seen';
 import { VaultIndex } from './vault-index';
 import { NOT_SENT_TEXT, PERSIST_REFUSED_TEXT, UNREADABLE_TEXT, createUploadQueue, stoppedText, type QueueItem, type UploadQueue } from '../upload-queue';
 import { memoryUploadStore } from '../upload-store';
-import { notAsSeen, notAsSeenError, type SeenExpectation } from '../contracts/still-as-seen';
+import { CHANGED_ELSEWHERE, checkStillAsSeen, notAsSeen, notAsSeenError, notAsSeenReason, type Landing, type SeenExpectation } from '../contracts/still-as-seen';
 import { openQuestions } from '../contracts/questions';
 
 export interface DriveVaultOptions {
@@ -144,7 +144,7 @@ export class DriveVault implements VaultSource {
   /** Declaration copies a Remove of this pile sent to the Bin before it stopped: Undo restores them with the rest. */
   private removing = new Map<string, DriveFile[]>();
   /** What went to the Bin, as each Bin answered it, so Undo takes each back by the stamp of its own write. */
-  private bin = new Map<string, { file: DriveFile | null; change: string | null; top?: string; late?: DriveFile[]; pending?: Upload; pileKey?: string; declarations?: DriveFile[] }>();
+  private bin = new Map<string, { file: DriveFile | null; change: string | null; top?: string; late?: DriveFile[]; pending?: Upload; pileKey?: string; declarations?: DriveFile[]; back?: string }>();
   /** Things on their way into the inbox, by pile; a failed one stays with upload -1. */
   private uploads = new Map<string, Upload>();
   private sendingPiles = new Set<string>();
@@ -323,7 +323,6 @@ export class DriveVault implements VaultSource {
     const to = ix.idOf(toFolder);
     if (!to) throw new BowerError('not-found', 'That folder is no longer there.');
     const last = opts?.undo ? [...(await this.journal.list())].reverse().find((c) => c.kind === 'move' && c.path === path) : undefined;
-    await this.stillAsSeen(f);
     const name = nameOf(out);
     const patch = { ...(name !== f.name ? { name } : {}), addParent: to, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}) };
     ix.put(this.keepSeen(f, await this.once(f, `move:${to}:${name}`, (op) => this.drive.update(f.id, { ...patch, appProperties: op }))));
@@ -344,7 +343,6 @@ export class DriveVault implements VaultSource {
     refuseReserved(out);
     // Read before the mutation: unreadable device storage must not leave an unjournaled rename.
     const made = (await this.journal.list()).find((c) => c.kind === 'create' && c.path === path);
-    await this.stillAsSeen(f);
     ix.put(this.keepSeen(f, await this.once(f, `rename:${nameOf(out)}`, (op) => this.drive.update(f.id, { name: nameOf(out), appProperties: op }))));
     // A thing made since the last tidy-up and named now is one change: its making, under its name.
     let removed = false;
@@ -461,10 +459,13 @@ export class DriveVault implements VaultSource {
     // The name may have been taken since: come back under a free one, never over it.
     // A pile goes back whole, under its own folder's name.
     const at = gone.top ?? path;
-    const want = freeName(ix.entries(), parentOf(at), nameOf(at));
-    const back = await this.fromBin(gone.file);
+    // Out of the Bin and under that name in one write, fenced on a fresh read every press (`once`): a press after a lost
+    // answer finds it by its stamp only while it is still out of the Bin, there, under that name. Only the name chosen
+    // is kept across presses (once taken by the file itself, it is no longer free), never what the file was.
+    const want = gone.back ?? freeName(ix.entries(), parentOf(at), nameOf(at));
+    gone.back = want;
+    await this.fromBin(gone.file, want);
     for (const f of gone.late ?? []) await this.fromBin(f);
-    if (want !== nameOf(at) || back.name !== want) await this.once(back, `rename:${want}`, (op) => this.drive.update(back.id, { name: want, appProperties: op }));
     if (gone.change) await this.journal.remove(gone.change);
     this.bin.delete(path);
     await this.refresh();
@@ -1063,7 +1064,11 @@ export class DriveVault implements VaultSource {
     const ix = await this.index();
     const f = pile.path ? ix.file(pile.path) : undefined;
     if (!f || !pile.path) throw new BowerError('not-found', 'That pile is already filed.');
-    await this.stillAsSeen(f);
+    // The folder as listed, unless it already holds this very edit's rename or move (its answer lost): then the retry
+    // goes on, and `once` takes that landed write as done.
+    const keptFolder = this.intended.kept(`pile-folder:${id}`);
+    const folderIntent = f.folder ? (text ? `rename:${freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text }), pile.path)}` : null) : keptFolder !== undefined ? `move:${keptFolder}` : null;
+    await this.fence(seenPlace(f), f.id, folderIntent === null ? undefined : landing(f, folderIntent));
     const note = ix.file(join(pile.path, PILE_NOTE));
     // A note listed is the one this pile has: an id kept for an earlier create of it is no longer needed.
     if (note) {
@@ -1072,13 +1077,12 @@ export class DriveVault implements VaultSource {
     }
     // Words Bower could not read are never saved over: the note must read back first.
     if (note) await this.text(note);
-    // Check the context before a rename or removal can partially apply a stale edit.
-    // Changed since, unless by this very write already landed (a retry of the person's own unknown write, `once`).
-    const now = note ? await this.drive.get(note.id, { checksums: !!text }) : null;
-    if (note && now && now.modifiedTime !== note.modifiedTime && !(text && holds(note, { text }, now))) {
-      void this.refresh();
-      throw new BowerError('conflict', 'This changed somewhere else. Look again and try once more.');
-    }
+    // Check the context before a rename or removal can partially apply a stale edit: its name, place and words as
+    // read (the one fence, as every content write), unless this very write already landed (a retry of the person's own
+    // unknown write, `once`).
+    // What this edit does to the note decides what "landed" means: its words, a declared pile's empty note, or the Bin.
+    const declared = f.folder && f.appProperties?.[PROP.declaration] ? await this.declarationOf(f, this.known(ix)) : null;
+    if (note) await this.fence({ ...seenPlace(note), modifiedTime: note.modifiedTime }, note.id, landing(note, text ? { text } : declared ? { text: '' } : 'bin'));
     let folderPath = pile.path;
     if (!f.folder) {
       // A lone thing that gets a note becomes a pile folder; the pile keeps its id.
@@ -1103,7 +1107,6 @@ export class DriveVault implements VaultSource {
       }
     }
     const folderId = ix.idOf(folderPath);
-    const declared = f.folder && f.appProperties?.[PROP.declaration] ? await this.declarationOf(f, this.known(ix)) : null;
     const contextKey = declared?.state === 'found' && declared.declaration.context.kind === 'text' ? declared.declaration.context.memberKey : null;
     if (note && text) ix.put(await this.once(note, { text }, (op) => this.drive.writeText(note.id, text, note.modifiedTime, op)));
     // A declared pile's note stays, empty: its context arrived, and only your words changed.
@@ -1705,7 +1708,8 @@ export class DriveVault implements VaultSource {
       console.error('A reserved upload holds other bytes; it stays where it is');
       return null;
     }
-    if (file.parents.includes(item.parentId)) return { file, inPlace: true };
+    // Still where it was sent (`notAsSeen`, the one check, on its place): binned there; filed elsewhere, it stays.
+    if (notAsSeen({ id: item.fileId, name: file.name, parents: [item.parentId] }, file) === null) return { file, inPlace: true };
     console.error('A reserved upload was filed elsewhere; it stays where it is');
     return { file, inPlace: false };
   }
@@ -1720,32 +1724,53 @@ export class DriveVault implements VaultSource {
 
   /** Refuses to change a file that changed name or place elsewhere since the folder was listed (`notAsSeen`, the one check). */
   protected async stillAsSeen(f: DriveFile): Promise<void> {
-    const reason = notAsSeen(seenPlace(f), { ...(await this.drive.get(f.id)), trashed: false });
-    if (reason === null) return;
-    void this.refresh();
-    throw notAsSeenError(reason, 'This changed somewhere else. Look again and try once more.');
+    await this.fence(seenPlace(f), f.id);
   }
 
   /**
-   * One of the person's writes to `f`, sent once with its stamp (`updateByStamp`): with its answer lost and the file
-   * read by id not holding it, still as read the error stands; changed or gone since, it is a change elsewhere.
+   * The app's still-as-seen fence (`checkStillAsSeen`, the one helper): reads the file by its id, the Bin included,
+   * right before a write. Resolves with the file when it already holds that write (`landed`), null when still as
+   * `seen`; a refusal shows the new version (`refresh`) and says it changed somewhere else.
+   */
+  private async fence(seen: SeenExpectation, id: string, landed?: Landing<DriveFile>): Promise<DriveFile | null> {
+    try {
+      return await checkStillAsSeen(seen, () => byId(this.drive, id), CHANGED_ELSEWHERE, { unanswered: isNoAnswer, ...(landed ? { landed } : {}) });
+    } catch (e) {
+      if (notAsSeenReason(e) !== null) void this.refresh();
+      throw e;
+    }
+  }
+
+  /**
+   * One of the person's writes to `f`, every one fenced first (`fence`): changed name or place since it was read (its
+   * words too, for text), or in or out of the Bin against what the write expects, nothing is sent; already holding this
+   * write (a second press after a lost answer), it is that landed write, not sent again. Then sent once with its stamp
+   * (`updateByStamp`): with its answer lost and the file read by id not holding it, still as read the error stands;
+   * changed or gone since, it is a change elsewhere.
    */
   private async once(f: DriveFile, intent: Intent, write: (op: Record<string, string>) => Promise<DriveFile>): Promise<DriveFile> {
+    const seen: SeenExpectation = { ...seenPlace(f), ...(typeof intent !== 'string' ? { modifiedTime: f.modifiedTime } : {}), ...(unbins(intent) ? { trashed: true } : {}) };
+    const landed = await this.fence(seen, f.id, landing(f, intent));
+    if (landed) return landed;
     let now: DriveFile | null | undefined;
     try {
       return await updateByStamp(this.drive, f, intent, write, (read) => (now = read));
     } catch (e) {
       if (!isNoAnswer(e) && !isUnconfirmedWrite(e)) throw e;
       if (now === undefined) throw isUnconfirmedWrite(e) ? e : new BowerError('offline', "Bower isn't sure that saved. Check again when you're back online.");
-      if (now && notAsSeen({ ...seenPlace(f), ...(typeof intent !== 'string' ? { modifiedTime: f.modifiedTime } : {}) }, { ...now, trashed: false }) === null) throw e;
+      // Changed or gone since it was read (a lost answer's read found it so): the fence's refusal, with its reason.
+      const reason = notAsSeen(seen, now);
+      if (reason === null) throw e;
       void this.refresh();
-      throw new BowerError('conflict', 'This changed somewhere else. Look again and try once more.');
+      throw notAsSeenError(reason, CHANGED_ELSEWHERE);
     }
   }
 
   /** `f` to the Bin, once; the answer is what Undo takes back out (`fromBin`), once too. */
   private toBin = (f: DriveFile): Promise<DriveFile> => this.once(f, 'bin', (op) => this.drive.trash(f.id, op));
-  private fromBin = (f: DriveFile): Promise<DriveFile> => this.once(f, 'unbin', (op) => this.drive.untrash(f.id, op));
+  /** Out of the Bin; with `name` (a free name other than its own), under it in the same write. */
+  private fromBin = (f: DriveFile, name: string = f.name): Promise<DriveFile> =>
+    name === f.name ? this.once(f, 'unbin', (op) => this.drive.untrash(f.id, op)) : this.once(f, `unbin:${name}`, (op) => this.drive.untrash(f.id, op, name));
 
   /** Your own write changes the file's time; if you had seen it, it stays seen. */
   protected keepSeen(before: DriveFile, after: DriveFile): DriveFile {

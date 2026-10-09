@@ -66,7 +66,8 @@ export interface DriveApi extends ResumableDrive {
   update(id: string, patch: DrivePatch): Promise<DriveFile>;
   /** To Drive's Bin; the app never deletes for good. */
   trash(id: string, appProperties?: Record<string, string>): Promise<DriveFile>;
-  untrash(id: string, appProperties?: Record<string, string>): Promise<DriveFile>;
+  /** Out of the Bin; with `name`, under that name in the same `files.update` (one write, so one stamp). */
+  untrash(id: string, appProperties?: Record<string, string>, name?: string): Promise<DriveFile>;
   /**
    * Files under `rootId` whose name or text has every word of `query` (Drive's `fullText contains`: whole words, any
    * order, case-insensitive), at most `SEARCH_MAX_PAGES` pages of `SEARCH_PAGE_SIZE` for each batch of `SEARCH_FOLDERS`
