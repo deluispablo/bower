@@ -1,7 +1,7 @@
 /// <reference types="node" />
 /** The hook audit (TL-P4-20 row 3, c3-hooks; the stop gate moved to c3-stop-gate). Hooks run on fixture inputs only. */
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -69,5 +69,98 @@ describe('the hook audit', () => {
       const r = spawnSync('node', [script('pre-compact.mjs')], { input, encoding: 'utf8' });
       expect(r.status, input).toBe(0);
     }
+  });
+});
+
+/** The stop gate (TL-P4-20 addendum 3, c3-stop-gate). Inputs copy the SubagentStop shape recorded from a live stop. */
+const git = (cwd: string, ...args: string[]): string =>
+  spawnSync('git', ['-c', 'user.name=Alex', '-c', 'user.email=you@example.com', ...args], { cwd, encoding: 'utf8' }).stdout.trim();
+
+const fixture = () => {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'bower-stop-')));
+  const main = join(base, 'main');
+  const worker = join(base, 'worker');
+  mkdirSync(main);
+  git(main, 'init', '-q', '-b', 'trunk');
+  writeFileSync(join(main, 'a.txt'), 'one\n');
+  git(main, 'add', '.');
+  git(main, 'commit', '-q', '-m', 'first');
+  git(main, 'worktree', 'add', '-q', '-b', 'work', worker);
+  return { main, worker };
+};
+
+const mark = (tree: string) => node(script('write-check-mark.mjs'), [], undefined, tree);
+
+const stopInput = (cwd: string, reply: string, active = false) => ({
+  session_id: 'sess-1',
+  transcript_path: '/tmp/sess-1.jsonl',
+  cwd,
+  scratchpad_dir: '/tmp/scratch',
+  prompt_id: 'prompt-1',
+  permission_mode: 'bypassPermissions',
+  agent_id: 'agent-1',
+  agent_type: 'bower-implementer',
+  effort: { level: 'medium' },
+  hook_event_name: 'SubagentStop',
+  stop_hook_active: active,
+  agent_transcript_path: '/tmp/sess-1/subagents/agent-agent-1.jsonl',
+  last_assistant_message: reply,
+  background_tasks: [],
+  session_crons: [],
+});
+
+const card = (worktree: string) => `status: done\ncommits: abc123\nred: t\ngreen: pass\nworktree: ${worktree}\nfiles: a.txt\n`;
+const gate = (cwd: string, reply: string, active = false) => node(script('stop-gate.mjs'), [], stopInput(cwd, reply, active), '/');
+
+describe('the stop gate', () => {
+  it('a worker stop with a dirty worktree is refused for that tree, not for main', () => {
+    const { main, worker } = fixture();
+    expect(mark(main).status).toBe(0);
+    writeFileSync(join(worker, 'stray.txt'), 'x');
+    const r = gate(main, card(worker));
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain(worker);
+    expect(r.stderr).not.toContain(main);
+  });
+
+  it('a worker stop with a clean worktree and a green mark on its head is allowed', () => {
+    const { main, worker } = fixture();
+    writeFileSync(join(main, 'coordinator-edit.txt'), 'x');
+    expect(gate(main, card(worker)).status).toBe(2);
+    expect(mark(worker).status).toBe(0);
+    expect(gate(main, card(worker)).status).toBe(0);
+    writeFileSync(join(worker, 'a.txt'), 'two\n');
+    git(worker, 'commit', '-q', '-am', 'second');
+    const r = gate(main, card(worker));
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain(worker);
+  });
+
+  it('a final reply without a worktree line is refused', () => {
+    const { main, worker } = fixture();
+    expect(mark(worker).status).toBe(0);
+    for (const reply of ['status: done\ncommits: abc123\n', `status: done\nworktree: relative/path\n`, `status: done\nworktree: ${worker}-gone\n`, '']) {
+      const r = gate(main, reply);
+      expect(r.status, reply).toBe(2);
+      expect(r.stderr).toMatch(/worktree:/);
+    }
+  });
+
+  it('pnpm check writes the green mark for its tree and head', () => {
+    const { main, worker } = fixture();
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as { scripts: { check: string } };
+    expect(pkg.scripts.check.trim().endsWith('node scripts/write-check-mark.mjs')).toBe(true);
+    expect(mark(worker).status).toBe(0);
+    const path = join(git(worker, 'rev-parse', '--absolute-git-dir'), 'bower-check-green');
+    expect(readFileSync(path, 'utf8').trim()).toBe(git(worker, 'rev-parse', 'HEAD'));
+    expect(git(main, 'rev-parse', '--git-path', 'bower-check-green')).not.toContain('worktrees');
+    expect(gate(main, card(main)).status).toBe(2);
+  });
+
+  it('a stop hook already active lets the worker stop', () => {
+    const { main, worker } = fixture();
+    writeFileSync(join(worker, 'stray.txt'), 'x');
+    expect(gate(main, card(worker), true).status).toBe(0);
+    expect(gate(main, 'no worktree line', true).status).toBe(0);
   });
 });

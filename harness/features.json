@@ -6055,20 +6055,20 @@
     "id": "c3-agent-defs",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "Every worker agent has maxTurns and no nested dispatch; read-only roles use tools allowlists; the concurrency cap is set if the docs offer it; a sensor checks the frontmatter.",
     "steps": [
       "The sensor fails on the current agents.",
       "Each changed role runs once after merge."
     ],
-    "verify": "pnpm exec vitest run src/harness.test.ts -t \"every worker agent has a turn cap and read-only roles list their tools\"",
-    "note": "TL-P4-20 rows 5-6. Owner authorized the config changes in the coordinator chat 2026-10-09. Packet 2026-10-09-c3-agent-defs-packet.md."
+    "verify": "pnpm exec vitest run src/agents.test.ts -t \"every worker agent has a turn cap and read-only roles list their tools\"",
+    "note": "TL-P4-20 rows 5-6. Owner authorized the config changes in the coordinator chat 2026-10-09. Packet 2026-10-09-c3-agent-defs-packet.md. Red ceef07f7, fix 31817d33, research tools d27bf91c. Concurrency env CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=2. Live role checks after merge: reviewer (Bash, ToolSearch, WebFetch), design-checker (browser MCP prefix, WebFetch), diagnoser (Write, context7) all ok; impact and evaluator share those lists."
   },
   {
     "id": "c3-stop-gate",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "Implementers and escalated workers cannot stop with a dirty worktree or without a green pnpm check mark on its HEAD; the gate judges the tree named by the card's strict worktree line, pnpm check writes the mark, and stop_hook_active frees a second try.",
     "steps": [
       "Prove SubagentStop carries last_assistant_message (docs and one live stop).",

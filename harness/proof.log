@@ -494,3 +494,5 @@ c3-hooks	d44545e753e65f42	2026-10-09	known-green: red proved by hand at a695ad3b
 c3-flaky-policy	386bd37b30029839	2026-10-09	known-green: red proved by hand at 028910f1: 4 verify tests fail on assertions (/tmp/c3flaky-handred.log)
 c3-permissions	e1bd4934ec69cfec	2026-10-09	red (fixed in 387af2de)
 c3-pair-ask	d40d3a2eb6329797	2026-10-09	known-green: reds proved by hand at c29a2862, aa83f697, 1a8cc05a (/tmp/c3pair-handred-*.log); earlier rounds bcfdaacf, 09f64090; P4-46d PASS; designer verified 049e07d9
+c3-agent-defs	c3d1d73daf940221	2026-10-09	red (fixed in 31817d33)
+c3-stop-gate	e663e5785c3734c0	2026-10-09	red (fixed in 7c0e9f32)

@@ -50,3 +50,10 @@
 Merge claude/p3 first: pair-ask round 3 adds the label. Then commit the red (tests only), then the fix, then the notes in their own commit, with `tests changed:` lines and compatibility rows.
 
 Reviewers are read-only. They never move the main checkout in any form.
+
+## Round 3b: write-time clash (TL-P4-19 addendum 15, main 8148660b: option a; escalated)
+
+- **Run status:** the runner's end status says an answer stayed. The Worker then schedules a dispatch-now deadline through the existing admission path. Only the alarm dispatches, the same way as for answers that waited (TL-P4-13 addendum). No new dispatch path.
+- **Raced clash:** a raced clash re-asks with the same new sentence as a held clash, through the same path. Never the first-ask words.
+- **Red:** `a clash at write time leads to the re-ask with the new sentence and no extra press`. Add it at the Worker or fake-worker level, and on e2e:fake if the fake reaches it.
+- **Home card:** the designer's answer on the Home result card for answer-only runs comes through the lead. Do not change the card until it arrives.
