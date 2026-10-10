@@ -1,0 +1,6 @@
+Alex CV
+Updated 2026-10-06.
+you@example.com
+Stack: TypeScript and SQL.
+Experience: built map tools at Ferrowick in 2026.
+Achievement: shipped an offline map editor.

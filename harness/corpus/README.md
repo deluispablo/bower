@@ -1,5 +1,6 @@
 # Capability corpus (P4-A)
 
+Made-up cases for the capabilities C04 to C11, C13, C15 and C17 (Alex, Larkspur Lane, Saltmere, Ferrowick; nothing personal). Each folder holds:
 Made-up cases for the capabilities C04 to C13 and C15 (Alex, Larkspur Lane, Saltmere, Ferrowick; nothing personal). Each folder holds:
 Made-up cases for the capabilities C04 to C11, C13, C15 and proposed C17 / B1–B3 (Alex, Larkspur Lane, Saltmere, Ferrowick; nothing personal). Each folder holds:
 
@@ -79,6 +80,16 @@ Made-up cases for the capabilities C04 to C11, C13, C15 and proposed C17 / B1–
 | b1-index-no-change | C17 / B1 | model | TL-P4-39 F9; reused made-up B123 exclusions and unchanged-index fixture |
 | c05-conflicting-fact-kept | C05 | scripted | new (preservation through the existing planner) |
 | c05-marked-state-keeps-history | C05 | scripted | new (preservation through the existing planner) |
+| c17-b56-personal-sale-project | C17 B5/B6 | model | new (TL-P4-38 personal-sale project fit; scripted intent pending) |
+| c17-b56-cv-profile | C17 B5 | model | new (TL-P4-38 CV originals and C05 profile update; scripted intent pending) |
+| c17-b56-offer-job-search | C17 B5/B6 | model | new (TL-P4-38 offer before generic project material; scripted intent pending) |
+| c17-b56-clear-topic-templates | C17 B6 | model | new (TL-P4-38 clear topic with Source, Concept and MOC; contract and scripted intent pending) |
+
+The C17 B5/B6 cases are preparation fixtures for lead review, all `covers: model`.
+C17 is not yet registered in the capability union or the method-test id filter; general
+loading and grounding checks still read these cases. Their type tables are synthetic
+mechanism specimens, not an approved stored-row grammar. Exact top-three intent replies
+and outstanding contract/driver decisions live in `docs/harness/2026-10-10-b56-prep.md`.
 | b23-summary-person-lint | C17 / B2 | model | TL-P4-39 R2; quoted summary and personal-note preservation; B8 lint dependency |
 | b23-hot-question-answer | C17 / B3 | model | TL-P4-39 F3; reused real generated question → app answer → hot settlement |
 | b23-summary-words | C17 / B2 | model | TL-P4-39 B2; multiline words body and quoted scalar summary |
