@@ -6447,5 +6447,31 @@
     "verify": "pnpm -C runner exec vitest run -t \"the scorer counts questions exactly and checks a pair.s subject|a case.s between step runs between two runs|the C05 corpus cases score green with scripted proposals\"",
     "note": "TL-P4-28 addendum 1 (main 2dd78c84): C05 prep accepted; Codex (TL-P4-29). Branch carries the prep (537859e7). Packet 2026-10-09-p4-corpus-driver-packet.md.",
     "review": "P4-64 PASS"
+  },
+  {
+    "id": "c4-sheet-settle",
+    "task": "p4-consolidation",
+    "category": "fix",
+    "passes": false,
+    "what": "Sheet geometry tests read boxes only after the shared animationsEnd; their axe scans go through expectAxeClean (defect move-sheet-cancel-width-flaky).",
+    "steps": [
+      "The move sheet cancel matches its container width on every desktop run.",
+      "The name sheet field and buttons are measured after the sheet settles."
+    ],
+    "verify": "pnpm exec playwright test e2e/v2-move-here.spec.ts e2e/v2-name-sheet.spec.ts --project=desktop -g \"the move sheet has a cancel that returns focus to its opener\"",
+    "note": "DEFECTS move-sheet-cancel-width-flaky (lead 2026-10-10): proposal (a). Codex, then a Claude review. Packet 2026-10-10-c4-sheet-settle-packet.md.",
+    "review": "P4-66 PASS"
+  },
+  {
+    "id": "c4-create-resume",
+    "task": "p4-consolidation",
+    "category": "fix",
+    "passes": false,
+    "what": "A pending pile-folder create resumes through its stored intent after a refresh, never renamed by a recomputed name; tests that seed with the wall clock use fixed clocks with a midnight case (defect create-property-time-dependent).",
+    "steps": [
+      "A pile whose folder was being made when the answers were lost, refreshed across UTC midnight, keeps its first name and holds its file."
+    ],
+    "verify": "pnpm exec vitest run src/data/vault/drive-vault.test.ts -t \"a pile-folder create resumed after a refresh across UTC midnight keeps its first name\"",
+    "note": "TL-P4-24 addendum 17 (main): (a) plus fixed clocks; first in the next batch; stage 4 may close with it open. Codex (three sessions), then a Claude review. Packet 2026-10-10-c4-create-resume-packet.md."
   }
 ]
