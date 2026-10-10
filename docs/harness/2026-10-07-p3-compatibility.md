@@ -173,3 +173,6 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `0c696a61` | smoke-request-report-hidden | none for stored data: Home and the reopened sheet show a finished report whenever it has any row, whatever its scope; replay rules unchanged. |
 | `5fcfd208` | smoke-request-report-hidden | none: tests only (the designer's findings: first press asks; today's card when hasReplay; no fallback detail above Left rows). |
 | `14f1392b` | smoke-request-report-hidden | none for stored data: a Tidy up press always asks; only the status bar reopens an unseen report; today's card words when hasReplay. |
+| `7dc863b6` | smoke-request-report-hidden | none: tests only (no fallback detail above Left rows in the reopened sheet and the right panel). |
+| `7044a492` | smoke-request-report-hidden | none for stored data: runDetail leaves out its fallback when the report has Left rows, everywhere it shows. |
+| `b8f1ad03` | smoke-request-report-hidden | none: tests only (an empty runDetail asserted explicitly). |

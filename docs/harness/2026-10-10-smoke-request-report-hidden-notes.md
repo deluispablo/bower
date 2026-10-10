@@ -213,6 +213,8 @@ The coordinator retains the packet's full check, e2e and designer verification g
 
 ## Red repair (designer check 2)
 
+tests changed: src/features/tidy/request-report-hidden.test.tsx: preserve filing-card detail absence when non-empty; explicitly assert empty detail after 7044a492 to avoid an empty-string query.
+
 Red-owning session, 2026-10-10, HEAD `4845a5ab`, branch `smoke-request-report-hidden`.
 The designer's new finding supersedes the earlier Home-only omission ruling:
 "Everything has its place." must be absent with leftAsWritten rows everywhere runDetail
