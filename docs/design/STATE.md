@@ -76,3 +76,4 @@ Phase 4/5. The owner approved V2 on 2026-10-09.
   - Several questions: one at a time, "1 of 3", "Skip for now", with skipped ones waiting on Home. The done sheet shortens its lists to "See all".
   - Phone P1–P9: bottom sheets, the keyboard view for Something else…, and the same rules.
   - Waiting on the owner's OK.
+- **Questions canvas:** added B5 (desktop) and P10 (phone): Something else… on Home after the tidy-up. "Tell Bower" makes the card go, a small tidy-up start, and the dock say "You told Bower. Bower is doing it now."
