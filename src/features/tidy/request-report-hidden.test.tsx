@@ -117,7 +117,9 @@ it('request report: all with filings retains Home replay and status bar replay',
   assertLeft(card);
   expect(within(card).getByText('Home got 1.', { exact: true })).toBeVisible();
   expect(within(card).queryByText(runTitle(run), { exact: true })).toBeNull();
-  expect(within(card).queryByText(runDetail(run), { exact: true })).toBeNull();
+  const detail = runDetail(run);
+  if (detail) expect(within(card).queryByText(detail, { exact: true })).toBeNull();
+  else expect(detail).toBe('');
   expect(within(card).getByRole('button', { name: 'Watch what Bower did' })).toBeVisible();
   expect(within(card).getByRole('button', { name: 'Got it' })).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: /1 thing filed\. Watch what Bower did/ }));
