@@ -5300,7 +5300,7 @@
     "id": "c2-pile-records",
     "task": "p4-b",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "what": "One pile-records query: declarations and dispositions stamped with their pile id; Home reads only the records of piles in the inbox; questions() no longer waits for piles(); the latency fake gains leftover declarations. Home's calls do not grow with earlier runs.",
     "steps": [
       "Stamp declarations and dispositions with their pile id; unstamped older records keep working.",
