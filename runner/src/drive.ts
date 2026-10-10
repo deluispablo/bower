@@ -33,13 +33,14 @@ import type { Pacing } from '../../src/data/drive/transport';
 import { DriveHttp, FIELDS, quote, toFile, type WireFile } from '../../src/data/drive/drive-http';
 import type { SpineRead } from '../../src/data/spine/plan';
 import type { AdmissionScope } from '../../src/data/spine/admission';
-import { admissionRead } from '../../src/data/spine/read';
+import { admissionRead, type AdmissionRead } from '../../src/data/spine/read';
 import { sha256 } from '../../src/data/contracts/hashes';
 import { ReadCache } from '../../src/data/drive/read-cache';
 import { destinationOf, SeenFiles, targetOf, type FenceTarget, type StoredNow } from '../../src/data/drive/seen-files';
 import { staleAttempt, type RunnerToken } from './token';
 import type { RunTiming } from './timing';
 import { decodePrefix } from '../../src/data/drive/drive-api';
+import { indexedFront, type IndexedFront } from '../../src/data/contracts/note-format';
 
 export interface RunnerDriveOptions {
   token: RunnerToken;
@@ -57,6 +58,7 @@ const API = 'https://www.googleapis.com/drive/v3';
 const ID_POOL = 50;
 /** What one of this run's own writes did to a folder listing: the file as Drive answered, or the file put in the Bin. */
 export type Change = { file: DriveFile } | { gone: string };
+type PlanningRead = Omit<SpineRead, 'listAll'> & { scope: AdmissionScope; listAll(rootId: string, opts?: { readAhead: boolean }): Promise<DriveFile[]>; indexedFront(file: DriveFile): Promise<IndexedFront | undefined> };
 
 export class RunnerDrive implements RunDrive {
   readonly provenance = 'adapter-read';
@@ -81,7 +83,7 @@ export class RunnerDrive implements RunDrive {
   private readonly ended: Array<{ end: number; change: Change | null }> = [];
   /** What the plan read of each file, by id and the modifiedTime its listing gave (the one read cache, `read-cache.ts`). */
   private readonly reads = new ReadCache();
-  private planning: (SpineRead & { scope: AdmissionScope }) | undefined;
+  private planning: PlanningRead | undefined;
   /** Ids Drive reserved for this attempt's creates and not used yet (`reserve`). */
   private readonly ids: string[] = [];
   /** The record folders this run made (`ownFolder`). */
@@ -216,6 +218,14 @@ export class RunnerDrive implements RunDrive {
     });
   }
 
+  /** Reuse this exact version's ordinary index prefix or provider text; never discover by fetching. */
+  keptPrefix(file: DriveFile): Promise<string | null> | undefined {
+    const prefix = this.reads.keptPrefix(file);
+    if (prefix) return prefix;
+    const text = this.reads.keptText(file);
+    return text?.then((value) => decodePrefix(new TextEncoder().encode(value)));
+  }
+
   /** Maintenance shares the planner's versioned content; live fence reads remain fresh. */
   readListedText(file: DriveFile): Promise<string> {
     return this.reads.text(file, () => this.http.readText(file.id));
@@ -240,27 +250,41 @@ export class RunnerDrive implements RunDrive {
    *   kept until this runner sends a write (`generation`), then read again; a file it shows changed is read afresh.
    *   Nothing here stands in for the fence's read before a write (`fenced`).
    */
-  planReads(): SpineRead & { scope: AdmissionScope } {
+  planReads(): PlanningRead {
     if (this.planning) return this.planning;
-    let listed: { generation: number; reads: SpineRead; listings: Map<string, Promise<DriveFile[]>> } | null = null;
+    let listed: { generation: number; scope: AdmissionScope; reads: AdmissionRead; listings: Map<string, Promise<DriveFile[]>>; warmed: Set<string> } | null = null;
     /** The modifiedTime each file had in the latest listing: the version its reads are kept under. */
     const versions = new Map<string, string>();
     const current = (): NonNullable<typeof listed> => {
-      if (!listed || listed.generation !== this.generation) listed = { generation: this.generation, reads: admissionRead(this.http, out.scope), listings: new Map() };
+      if (!listed || listed.generation !== this.generation) listed = { generation: this.generation, scope: out.scope, reads: admissionRead(this.http, out.scope), listings: new Map(), warmed: new Set() };
       return listed;
     };
     const at = (id: string): { id: string; modifiedTime: string | undefined } => ({ id, modifiedTime: versions.get(id) });
-    const out: SpineRead & { scope: AdmissionScope } = {
+    const out: PlanningRead = {
       scope: 'all',
-      listAll: async (rootId) => {
+      indexedFront: async (file) => {
+        const text = await this.keptPrefix(file);
+        return text === undefined || text === null ? undefined : indexedFront(text);
+      },
+      listAll: async (rootId, opts) => {
         const now = current();
         let listing = now.listings.get(rootId);
         if (!listing) {
-          listing = now.reads.listAll(rootId);
+          listing = now.reads.listAll(rootId, { readAhead: false });
           now.listings.set(rootId, listing);
           listing.then((files) => { for (const f of files) versions.set(f.id, f.modifiedTime); }, () => now.listings.delete(rootId));
         }
-        return [...(await listing)];
+        const files = await listing;
+        if (opts?.readAhead !== false && !now.warmed.has(rootId)) {
+          // The metadata probe ran before scope aiming; warm the same listing under the provider's scope.
+          if (now.scope !== out.scope) {
+            now.reads = admissionRead(this.http, out.scope);
+            now.scope = out.scope;
+          }
+          now.reads.warmListing(rootId, files);
+          now.warmed.add(rootId);
+        }
+        return [...files];
       },
       readBytes: async (id) => {
         const version = at(id);

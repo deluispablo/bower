@@ -383,6 +383,7 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
       ...(opts.pacing ? { pacing: opts.pacing } : {}),
       provider: (drive, rootId, context) => {
         return async (admitted) => {
+          drive.planReads().scope = admitted.taken.scope;
           const index = await planningIndex(drive, rootId);
           const provider = providerFor(name, drive, { rootId, runId, allowWeb, context, index }, { env, timing, ...(opts.claude ? { spawn: opts.claude } : {}) });
           return withMaintenance(drive, await provider(admitted));

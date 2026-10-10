@@ -19,7 +19,7 @@ import { parseTimelineLine, timelineLine, type TimelineMarker } from './timeline
 import { parseRules } from './rules-format';
 import type { Change, EditEntry, EditText, Rename, RuleAdd, RuleRemove, TimelineConsent, MaintenanceNote } from './run-manifest';
 import { isHub } from './hub';
-import { BowerError } from '../types';
+import { BowerError } from './types';
 
 /** Files larger than 1 MiB are never edited (TL-P2-20 rule 6). */
 export const EDIT_FILE_LIMIT = 1024 * 1024;
@@ -1033,6 +1033,8 @@ export function savedLinkKey(fileId: string): Promise<string> {
 
 // Shared MOC projection: the runner and settled report use the same exact author inputs.
 export type Notes = Record<string, MaintenanceNote>;
+/** Prefix metadata selects a map; only its fully parsed snapshot grants edit authority. */
+export const isBowerMoc = (note: MaintenanceNote): boolean => note.owner === 'bower' && note.type === 'moc' || note.moc !== undefined;
 const folderOf = (path: string): string => path.slice(0, Math.max(0, path.lastIndexOf('/')));
 const stem = (path: string): string => path.replace(/\.md$/, '');
 
@@ -1057,7 +1059,7 @@ export function noteLinks(files: Notes): Map<string, string> {
 }
 
 export function mocMembership(files: Notes): Map<string, string[]> {
-  const maps = Object.entries(files).filter(([, f]) => f.moc);
+  const maps = Object.entries(files).filter(([, f]) => isBowerMoc(f));
   const roots = new Map<string, string>();
   const members = new Map<string, string[]>();
   const claimed = new Set<string>();
@@ -1068,11 +1070,11 @@ export function mocMembership(files: Notes): Map<string, string[]> {
       continue;
     }
     // Existing peer maps encode the ruled split. Resolve each old link once to one stable id.
-    const ids = f.members ? f.members.filter((member) => member !== id && files[member] && !files[member]?.moc)
+    const ids = f.members ? f.members.filter((member) => member !== id && files[member] && !isBowerMoc(files[member]))
       : [...(f.moc?.regions['moc-members'] ?? '').matchAll(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g)]
       .flatMap((match) => {
         const link = match[1] ?? '';
-        const matches = Object.entries(files).filter(([other, note]) => other !== id && !note.moc
+        const matches = Object.entries(files).filter(([other, note]) => other !== id && !isBowerMoc(note)
           && (stem(note.path) === link || stem(note.path).endsWith(`/${link}`)));
         return matches.length === 1 ? [matches[0]?.[0] ?? ''] : [];
       });

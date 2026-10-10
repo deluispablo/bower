@@ -465,6 +465,8 @@ async function notesShown(read: ScriptedRead, listing: readonly DriveFile[], ix:
   const notes: Shown['notes'] = [];
   for (const { f, path } of candidates) {
     if (room <= 0) break;
+    // The canonical projection already represents maps; only an explicit target needs their complete text.
+    if (!named.has(f.id) && !first.has(f.id) && (await read.indexedFront?.(f))?.type === 'moc') continue;
     const text = await read.readText(f.id);
     const shown = bounded(text, Math.min(CONTEXT_BOUNDS.perNote, room));
     if (shown.text === null) break;

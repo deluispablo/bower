@@ -10,8 +10,7 @@ import type { EffectEvidence, Outcome, ReportRecord } from '../contracts/run-che
 import type { OperationV2, Maintain } from '../contracts/run-manifest';
 import type { RunReport } from '../types';
 import { KEEP_REFUSED, mocEdit, mocMembership, mocSnapshot, type Notes } from '../contracts/note-edit';
-import { parseNote } from '../contracts/note-format';
-import { parseOwnership } from '../contracts/ownership-format';
+import { indexedFront } from '../contracts/note-format';
 import { VaultIndex } from '../vault/vault-index';
 import { isHidden, type RetrievalFile } from '../vault/layout';
 import type { DriveFile } from '../drive/drive-api';
@@ -304,11 +303,8 @@ export function reportContradictions(admission: AdmissionManifest, manifest: Run
 export type MaintenanceState = Omit<RetrievalFile, 'files'> & { files: Notes; listing?: DriveFile[] };
 const file = (f: SeenFile): DriveFile => ({ id: f.fileId, name: f.name, parents: f.parents, folder: f.folder, modifiedTime: f.modifiedTime, createdTime: f.modifiedTime });
 
-export function retrievalSummary(path: string, text: string): string {
-  // Validate full ownership framing, while only indexing front matter covered by Q3's prefix.
-  const note = parseNote(path, text);
-  const ownership = parseOwnership(new TextEncoder().encode(text));
-  return ownership.status !== 'invalid' && ownership.layout.frontEnd <= 4096 ? note.summary || '(no summary)' : '(no summary)';
+export function retrievalSummary(_path: string, text: string): string {
+  return indexedFront(text).summary;
 }
 
 /** Whole projections from frozen input versions plus successful settled effects; refused effects add nothing. */
@@ -326,7 +322,7 @@ export function refreshed(inputs: Maintain['inputs'], outcomes: readonly Outcome
     if (effect.kind === 'create-text' || effect.kind === 'edit-text') {
       const path = ix.pathOf(f.fileId);
       if (path && !isHidden(path) && path.endsWith('.md') && path.split('/')[0] !== 'Inbox') files[f.fileId] = {
-        path, version: f.modifiedTime, summary: retrievalSummary(path, effect.text), mocChecked: true, coverage: { kind: 'prefix', bytes: 4096 },
+        path, version: f.modifiedTime, ...indexedFront(effect.text), coverage: { kind: 'prefix', bytes: 4096 },
         ...(mocSnapshot(effect.text) ? { moc: mocSnapshot(effect.text) ?? undefined } : {}),
       };
     }

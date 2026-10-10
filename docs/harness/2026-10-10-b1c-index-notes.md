@@ -1636,3 +1636,149 @@ violations of the accepted addendum; no call count, tolerance or media-read proh
 | B1a contract: round 4 2: a folder moved outside drops its indexed subtree and commits the cursor | runner/test/b1a-contract.test.ts:814 | Live control makes 7 discovery calls rather than the unchanged bound of 3; four ownership-discovery media reads remain. |
 | B1a contract: round 4 3: a renamed folder updates descendant paths and index order without media reads | runner/test/b1a-contract.test.ts:814 | Live control makes 7 discovery calls rather than the unchanged bound of 3; four ownership-discovery media reads remain. |
 | B1a contract: round 4 4: an inside folder move updates recursive paths and regroups without media reads | runner/test/b1a-contract.test.ts:814 | Live control makes 7 discovery calls rather than the unchanged bound of 3; four ownership-discovery media reads remain. |
+
+
+## Addendum 10
+
+Implementation session, round 3, 2026-10-11. Read WORKER.md, the packet, Fix round 2 and
+Addendum 10 red repair. The retained five-file production diff was the starting point.
+No network, writing git command, commit, test edit, dependency replacement or node_modules symlink.
+The coordinator owns commits. Stopped under TL-P4-51 after the complete runner failure audit below;
+the unchanged Drive-call goldens and all existing bounds are preserved, not repaired by this worker.
+
+### Changes in the existing homes
+
+- The ordinary index prefix now supplies summary, owner (`bower` or `person`) and type (`string` or
+  `null`) through note-format.ts's existing frontOf parser. Metadata is stored with the note id and
+  exact version in the existing retrieval/maintain snapshot. A changed version cannot inherit it.
+  Closed front matter beyond 4096 bytes remains a v1 limit; incomplete prefixes grant no ownership.
+- snapshotNotes no longer checks mocChecked, Drive ownership properties or an unchecked-note discovery
+  predicate. Old same-version B1a state remains readable without extra media requests. Cold/missing
+  projections use their ordinary prefix reads, including unchanged notes; maintain reuses those same
+  cached prefixes. An existing provider full read can supply the same bounded prefix without a new
+  request. The versioned ReadCache is still the single cache; no discovery pass or metadata store was added.
+- MOC selection/folding uses the parsed owner/type. Complete MOC bytes are fetched by withMaintenance
+  for candidate maps, validated by the existing mocSnapshot author, frozen in the existing manifest,
+  and written through the existing modifiedTime guard. Prefix metadata grants no mutation authority.
+  Peer membership is resolved after complete snapshots are available, preserving the existing links,
+  ids and hierarchy rather than replacing them with empty prefix-only membership.
+- ReadCache.keptPrefix only observes an existing promise. RunnerDrive.keptPrefix can also derive a
+  bounded prefix from the versioned provider text already read. ScriptedRead's optional indexedFront
+  view lets Claude skip implicit MOC context downloads when the canonical prefix already identified
+  a map; explicit targets retain their existing path. No new media read comes from this view.
+- Finding 2's retained scope aiming, deferred shared listing and original provider read-ahead remain.
+  Both repaired warm instructions/all controls pass with metadata-only planningIndex requests.
+  The retained direct BowerError import is unchanged.
+- The manifest reader accepts optional owner/type fields, and still tolerates old mocChecked:true
+  in an already-stored immutable manifest. There is no typed marker, writer, check or discovery path.
+  New retrieval snapshots and settled effects never emit mocChecked.
+
+removed: the mocChecked ownership-discovery predicate, typed field and snapshot/report writers.
+removed: extra same-version media reads for unchecked B1a state.
+removed: index-time full downloads and full ownership validation of truncated prefix bodies.
+removed: implicit provider MOC downloads when an ordinary canonical prefix already identifies the map.
+tests changed: none
+
+Production files (including the retained fix): runner/src/{claude,drive,index,main}.ts;
+src/data/contracts/{note-edit,note-format,run-manifest}.ts; src/data/drive/read-cache.ts;
+src/data/spine/{read,report}.ts. This notes file is the only non-production edit.
+
+### Compatibility row drafts for the contract homes
+
+| Contract home | Compatibility draft |
+| --- | --- |
+| Retrieval v1 / MaintenanceNote / manifest snapshot | Additive optional owner: bower or person and type: string or null, beside the existing id-keyed version. Old entries lacking them remain readable and cause zero discovery reads. Existing complete MOC snapshots remain accepted. Old stored mocChecked:true manifests still parse; new snapshots omit the field. |
+| note-format.ts / indexedFront | The existing frontOf scalar/property reader serves the bounded index prefix as well as normal notes. Closed front matter must fit in 4096 bytes. Body framing is not checked on a partial prefix; full mutation authority remains with parseOwnership and mocSnapshot. |
+| ReadCache / RunnerDrive / ScriptedRead | Additive cache-observation methods return only promises already held for the exact id/version, or derive a prefix from the provider's existing full text. No fetch, new cache, publication mechanism or wire change. ScriptedRead's method is optional for existing adapters. |
+| MOC projection and author | Parsed owner/type can select a folded map. Membership, region author, original byte preservation, full-snapshot validation and content-write fencing keep their existing homes. Prefixes never stand in for full edit evidence. |
+| Settled maintenance report | New/edited text gains the same bounded owner/type metadata through indexedFront. Old state and frozen manifests remain readable; summary, coverage, ids and existing regions retain their contracts. |
+| Warm planning / admissionRead | Retained additive readAhead:false option delays the existing warming policy over the shared listing until the provider's admitted scope is set. The default still warms, and there is no second listing or policy. |
+| contracts/note-edit.ts BowerError | Retained direct contracts/types.ts import is the same class, identity, constructor and existing re-export; no wire, error-code or behaviour change. |
+
+### Red and green evidence
+
+Before source edits, the complete two-file targeted sweep reproduced **41 pass, 6 assertion reds,
+47 total**: the cut test, fix-3 prefix test and all four B1a round-4 folder refresh tests.
+Reports: /tmp/b1c-add10-red.{json,log}. No test was changed to obtain these reds.
+
+Final full runner sweep: **618 pass, 10 fail, 628 total; 46 files**.
+Reports: /tmp/b1c-add10-runner-final2.{json,log}. Final b1-index: 27 pass/2 fail;
+b1a-contract: 17 pass/1 fail. All six original reds now pass, including the exact fix-3 ownership,
+prefix cardinality, prefix phase, full-read phase and absence-of-mocChecked assertions.
+Both legacy migration reds and both warm scope controls pass. The corpus hierarchy/member control,
+personal MOC, replay, hidden paths and no-change controls pass. Model-input fingerprints remain 9/9.
+
+### TL-P4-51: complete remaining runner audit
+
+Each remaining failing test is listed, including dependent budget/latency failures rather than
+claiming those are independent ownership contradictions. No assertion, golden, count or tolerance changed.
+
+| Exact test | File:line | Evidence / reconciliation needed |
+| --- | --- | --- |
+| B1c index: existing MOC at 40 direct members folds and rebuilds complete regions by id | runner/test/b1-index.test.ts:310 | Pins at most one media request for the MOC. The addendum's ordinary prefix plus the full read inside maintain are two requests. Region, id, leaf count and preservation assertions pass. This conflicts directly with the repaired fix-3 control, which explicitly requires both requests and their phases. |
+| B1c index: existing MOC at 41 direct members folds and rebuilds complete regions by id | runner/test/b1-index.test.ts:310 | Same at-most-one request conflict with the prefix plus maintain full read. All region/member assertions pass. |
+| B1a contract: round 3 1: vanished indexed notes drop without failing and ordinary edits refresh | runner/test/b1a-contract.test.ts:621 | Requires a physical 404 when the ordinary changed note disappears after the feed. The prefix reader's existing metadata check observes trashed:true and raises not-found before a media request, so its wire response is 200 rather than the full reader's 404. A full non-MOC download solely to reproduce that 404 would contradict the bounded-read ruling. |
+| C05 bounded reads: golden: 50 archived requests and 25 kept runs cost no historical media | runner/test/c05-bounded-reads.test.ts:262, test :268 | Baseline plan reads are 24, pinned to 22. Cold ordinary note prefixes are now fetched before model context; the existing context still needs full ordinary-note text. Historical media policy is unchanged. The worker cannot alter the baseline pin or add a second provider policy. |
+| C05 bounded reads: pending: a clash moves by run id and retries only its bound evidence | runner/test/c05-bounded-reads.test.ts:262, test :305 | Same shared 24-versus-22 baseline; the later pending assertions are not reached. |
+| the C04 run makes the golden number of Drive calls per step | runner/test/drive-calls-golden.test.ts:26 | 92 calls versus the unchanged 90. The cold prefix uses the existing metadata precheck plus Range request; ordinary model context still downloads complete text. The old implementation read that context text fully during projection instead. No extra ownership-discovery request exists. Goldens stay untouched for the lead to reconcile. |
+| the C04 run past 20 earlier runs: with 25 earlier runs a run makes 99 Drive calls | runner/test/drive-calls-golden.test.ts:82 | Same initial C04 92-versus-90 pin; later retained-history assertions are not reached. |
+| the runner plan reads and report: plan reads finish under the budget with modelled Drive latency | runner/test/reads-report.test.ts:40 | 2730 ms versus <2675 ms. Dependent cold-prefix/context cost; original bound is untouched. |
+| the runner plan reads and report: with 25 earlier runs plan reads stay within their measured maintenance delta | runner/test/reads-report.test.ts:47 | 3180 ms versus <=3030 ms. Dependent cold-prefix/context cost; original bound is untouched. |
+| timing counts: the timing line counts calls and bytes per phase and names the region | runner/test/timing-counts.test.ts:14 | Same C04 92-versus-90 total; no timing counter or phase attribution changed. |
+
+A warm B1a upgrade makes no ownership-discovery reads: known provider bytes/prefixes are reused,
+and untouched unknown entries are left unknown. That does not remove the cold ordinary-note context
+cost above. The two direct at-most-one-MOC pins and the new fix-3 control cannot both be met by
+promoting prefix bytes to full evidence: the existing ReadCache explicitly forbids that, and fix-3
+requires the actual full request inside maintain. Stopped for lead reconciliation, with all goldens intact.
+
+### Verification (OS-temp only)
+
+Verification tree: /tmp/b1c-add10-verify-uo9il6t6. Tracked inputs were copied, and installed
+node_modules directories cloned into fresh OS-temp destinations with cp -cR. No existing dependency
+directory was replaced or symlinked. Scratch .git metadata came from the prior isolated verification
+copy; session git calls were read-only. Suites' disposable git fixtures, transform/module caches,
+CPU reports, bundles, fixtures, all reports and all logs stay in OS temp. No pnpm check/e2e or repository
+mark is claimed: those repository-writing gates are outside this session's requested constraints.
+
+The requested source command was run through installed pnpm with offline:true and
+verifyDepsBeforeRun:false in the scratch workspace config. First full source sweep: 5574 pass,
+1 fail, 5575 total; 167 files, at src/e2e-port.test.ts:37 (sandbox listener timeout). The unchanged
+loopback listener probe returns EPERM: /tmp/b1c-add10-port-probe.log. No timeout was raised.
+Reports: /tmp/b1c-add10-src.{json,log}. The final full source sweep after the last cache/interface edit
+is also **5574 pass, 1 fail, 5575 total; 167 files**, with only the same unchanged
+src/e2e-port.test.ts:37 sandbox listener timeout. Reports: /tmp/b1c-add10-src-final.{json,log}.
+Every source contract, data, architecture and application assertion passes.
+
+App/node tsc and touched-file app/runner ESLint pass:
+/tmp/b1c-add10-tsc-{app,node}-final.log;
+/tmp/b1c-add10-eslint-{app,runner}-final.log.
+Requested runner tsc fails only in the committed addendum-10 red repair:
+runner/test/b1a-contract.test.ts:812:96 and :825:80, TS2345: toMatchObject receives a possibly undefined
+prior-state entry. No production TypeScript error is reported. Tests cannot be edited in this session.
+Log: /tmp/b1c-add10-tsc-runner-final.log. Supplementary production-only runner tsc passes using an OS-temp config that includes only src/;
+/tmp/b1c-add10-tsc-runner-production.log. It does not replace the requested whole-runner failure.
+
+Offline research: reused frontOf, the existing Range prefix reader and the single versioned ReadCache,
+MOC region author, stable projection traversal and shortest unique suffixes. Reference URLs are
+citations only, never fetched: RFC 9110 versioned caching
+(https://www.rfc-editor.org/rfc/rfc9110.html#section-8.8.3), ECMAScript stable sort
+(https://tc39.es/ecma262/#sec-array.prototype.sort), and Obsidian internal links
+(https://help.obsidian.md/links).
+
+Commands (runner commands from the verification tree's runner directory):
+
+```sh
+node ../node_modules/vitest/vitest.mjs run test/b1-index.test.ts test/b1a-contract.test.ts --maxWorkers=2 --config=../runner-config.mjs --configLoader=runner --reporter=json --outputFile=/tmp/b1c-add10-red.json > /tmp/b1c-add10-red.log 2>&1
+PATH=/tmp/b1c-add10-verify-uo9il6t6/bin:$PATH node ../node_modules/vitest/vitest.mjs run --maxWorkers=2 --config=../runner-config.mjs --configLoader=runner --reporter=json --outputFile=/tmp/b1c-add10-runner-final2.json > /tmp/b1c-add10-runner-final2.log 2>&1
+/opt/homebrew/bin/pnpm exec vitest run src --maxWorkers=2 --config=src-config.mjs --configLoader=runner --reporter=json --outputFile=/tmp/b1c-add10-src-final.json > /tmp/b1c-add10-src-final.log 2>&1
+node node_modules/typescript/bin/tsc --noEmit -p tsconfig.app.json > /tmp/b1c-add10-tsc-app-final.log 2>&1
+node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json > /tmp/b1c-add10-tsc-node-final.log 2>&1
+node ../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json > /tmp/b1c-add10-tsc-runner-final.log 2>&1
+node node_modules/eslint/bin/eslint.js src/data/contracts/note-edit.ts src/data/contracts/note-format.ts src/data/contracts/run-manifest.ts src/data/drive/read-cache.ts src/data/spine/report.ts src/data/spine/read.ts > /tmp/b1c-add10-eslint-app-final.log 2>&1
+node ../node_modules/eslint/bin/eslint.js src/index.ts src/drive.ts src/main.ts src/claude.ts > /tmp/b1c-add10-eslint-runner-final.log 2>&1
+```
+
+Final source/test/corpus/script byte audit: 1710 tracked input files, zero mismatches between worktree
+and verification tree: /tmp/b1c-add10-audit-final.log. Test/fixture/golden diff is empty:
+/tmp/b1c-add10-test-diff.log. Read-only git diff --check passes. No commit was made.
