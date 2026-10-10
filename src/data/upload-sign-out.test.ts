@@ -342,6 +342,48 @@ it.each([false, true])(
   },
 );
 
+it('upload-sign-out-forget: addendum 9: a retried offline sign-out still purges only the last known account', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  const f = await unreadableAccountFixture(true);
+  const fresh = indexedDbUploadStore(f.idb);
+  const otherRecords = await fresh.list(ACCOUNT_B, f.rootA);
+  const otherBytes = await keptBytes(fresh, otherRecords);
+  expect(otherRecords).toHaveLength(1);
+  expect(otherBytes).toEqual([[1, 2, 3, 4, 5, 6, 7, 8, 9, 1]]);
+
+  await expect(f.live.session.signOut()).rejects.toBe(f.remoteError);
+  expect({
+    firstFolder: await fresh.list(f.accountA, f.rootA),
+    secondFolder: await fresh.list(f.accountA, f.rootB),
+    bytes: await keptBytes(fresh, f.records.slice(0, 2)),
+  }).toEqual({ firstFolder: [], secondFolder: [], bytes: [null, null] });
+  expect(await fresh.list(ACCOUNT_B, f.rootA)).toEqual(otherRecords);
+  expect(await keptBytes(fresh, otherRecords)).toEqual(otherBytes);
+
+  await expect(f.live.session.signOut()).rejects.toBe(f.remoteError);
+  expect({
+    count: (await fresh.list(ACCOUNT_B, f.rootA)).length,
+    bytes: await keptBytes(fresh, otherRecords),
+  }, 'an offline retry must retain the other account\'s pending count and bytes').toEqual({
+    count: otherRecords.length, bytes: otherBytes,
+  });
+});
+
+it('upload-sign-out-forget: addendum 9: a retried offline sign-out purges every account when no identity was ever known', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  const f = await unreadableAccountFixture(false);
+  const fresh = indexedDbUploadStore(f.idb);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await expect(f.live.session.signOut()).rejects.toBe(f.remoteError);
+    expect({
+      firstFolder: await fresh.list(f.accountA, f.rootA),
+      secondFolder: await fresh.list(f.accountA, f.rootB),
+      otherAccount: await fresh.list(ACCOUNT_B, f.rootA),
+      bytes: await keptBytes(fresh, f.records),
+    }).toEqual({ firstFolder: [], secondFolder: [], otherAccount: [], bytes: [null, null, null] });
+  }
+});
+
 it.each([false, true])(
   'upload-sign-out-forget: addendum 9: a purge failure shows the sign-out sentence and logs both failures (remote fails: %s)',
   async (remoteFails) => {

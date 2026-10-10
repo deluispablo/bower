@@ -1547,3 +1547,44 @@ removed: per-account memory-store and queue staging-cleanup version maps.
 removed: identity-read prerequisite and unknown-identity purge skip at sign-out.
 removed: finally-path masking of the remote sign-out error when local purge also fails.
 tests changed: none
+
+
+## Addendum 9 red 2
+
+tests changed: src/data/upload-sign-out.test.ts: added the offline retry red and never-known-identity control; no existing assertion changed.
+
+Assigned evidence: `2026-10-11-codex-upload-sign-out-forget-adversarial-5.md`,
+Blocking at `src/data/live/index.ts:364`. Only tests and this notes append changed.
+
+- Red: `upload-sign-out-forget: addendum 9: a retried offline sign-out still purges only the last known account`.
+  The real live session knows account A. Real queue/store uploads span A's two folders
+  and account B (one pending upload, ten bytes). Remote sign-out rejects offline.
+  After the first attempt both A folders and their bytes are absent, while B is intact.
+  The same session retries with its account read and remote sign-out still offline.
+  At `src/data/upload-sign-out.test.ts:367`, B's count is 0 instead of 1 and its body
+  is null instead of `[1,2,3,4,5,6,7,8,9,1]`.
+- Passing control: `upload-sign-out-forget: addendum 9: a retried offline sign-out purges every account when no identity was ever known`.
+  With identity unreadable from the first session read, all three stored uploads and
+  their bytes are absent after both attempts.
+
+Verification (whole file, no name filter):
+
+```sh
+pnpm exec vitest run src/data/upload-sign-out.test.ts --maxWorkers=2 --config /private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/upload-a9-red2-e7a9j2_b/vitest.config.mjs --configLoader runner
+```
+
+Exit 1: 50 tests, 49 passed, only the new named red failed on the intended assertion.
+Log: `/private/tmp/upload-a9-red2.log` (copy of the OS-temp run log).
+The temporary config imports the real Vite config and app setup, redirects cache,
+uses canonical absolute paths, and copies timer setup with imports and CPU report
+output redirected to OS temp. Timer checks remain active. An initial invocation
+using the noncanonical `/var/folders` alias failed setup resolution before tests;
+the canonical-path invocation above is the complete assertion run.
+Read-only `git diff --check` passed. No repository test outputs, network, Git writes,
+production edits, node_modules changes, or existing assertion changes.
+
+Standard solution/reuse: reused `unreadableAccountFixture`, actual live session,
+actual upload queue, and fake IndexedDB store; no helper purge or second mechanism.
+Inherited offline source: [IndexedDB transaction lifecycle](https://www.w3.org/TR/IndexedDB/#transaction-lifecycle).
+No source fetched. Implementation, commits, pnpm check and e2e remain with the coordinator;
+this assignment owns only the red and control.
