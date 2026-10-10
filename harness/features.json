@@ -6984,7 +6984,7 @@
     "id": "upload-sign-out-forget",
     "task": "p4-c02",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "Signing out forgets that account's pending uploads on the device, even if the remote sign-out fails; the queue exposes the still-sending count (TL-P4-53 Q1, addendum 1).",
     "steps": [
