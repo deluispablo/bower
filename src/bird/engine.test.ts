@@ -407,10 +407,10 @@ describe("the engine's named actions", () => {
       startle(): void;
       step(dt: number, headDt: number): void;
     };
-    const entries = [...POSES, 'preen phase', 'preen at 0.6 s', 'minded doze'];
+    const entries = [...POSES, 'preen phase', 'preen at 0.6 s', 'minded doze', 'error while asleep', 'offline while asleep'];
     const batches = schedules.flatMap((schedule) => entries.map((name, entryIndex) => ({ schedule, name, entryIndex })));
-    // 20 generated phases × four cadences × all poses and the three extra entries, exactly once.
-    expect(batches.length * 20).toBe(960);
+    // 960 existing cases + two reactions × four cadences × 20 phases = 1120, exactly once.
+    expect(batches.length * 20).toBe(1120);
     it.each(batches)('$schedule.name: $name', ({ schedule, entryIndex }) => {
       let runs = 0;
       fc.assert(
@@ -423,6 +423,7 @@ describe("the engine's named actions", () => {
             { pose: 'idle' as const, act: true, seconds: 0.75 * phase },
             { pose: 'idle' as const, act: true, seconds: 0.6 }, // The round-7 witness: preen at 42°.
             { pose: 'idle' as const, act: false, seconds: 0.2, doze: true },
+            ...(['error', 'offline'] as const).map((reaction) => ({ pose: 'sleep' as const, act: false, seconds: 0.2, reaction })),
           ];
           const selected = cases[entryIndex];
           if (!selected) throw new Error('Missing startle case');
@@ -436,7 +437,7 @@ describe("the engine's named actions", () => {
               cancelFrame: () => { callback = undefined; },
             });
             const internals = engine as unknown as ProfileProbe;
-            const startling = internals.heard() && internals.minded();
+            const startling = 'reaction' in entry || (internals.heard() && internals.minded());
             let time = 1;
             let frame = offset;
             callback?.(time * 1000); // Prime the clock: the first animation frame has zero elapsed time.
@@ -557,7 +558,10 @@ describe("the engine's named actions", () => {
               head = now;
             };
             try {
-              engine.nudge();
+              if ('reaction' in entry) {
+                const port = engine as unknown as { play?: (kind: 'error' | 'offline') => void };
+                port.play?.(entry.reaction as 'error' | 'offline');
+              } else engine.nudge();
               // Sample the deadlines exactly; other frames retain the selected cadence (including its jitter).
               advance(0.15, sample);
               advance(Math.max(...schedule.dt), sample);
@@ -585,7 +589,7 @@ describe("the engine's named actions", () => {
     { name: '60 fps', ms: [1000 / 60] },
     { name: '120 fps', ms: [1000 / 120] },
     { name: 'jittered', ms: [1000 / 120, 1000 / 30, 1000 / 90, 1000 / 60, 25] },
-  ])('every frame keeps the addendum 5 bounds under random focus, pointer, touch, step and wake events: $name', (schedule) => {
+  ].flatMap((schedule) => Array.from({ length: 8 }, (_, batch) => ({ ...schedule, batch }))))('every frame keeps the addendum 5 bounds under random focus, pointer, touch, step and wake events: $name batch $batch', (schedule) => {
     const event = fc.record({
       gap: fc.integer({ min: 0, max: 200 }),
       kind: fc.constantFrom('pointer', 'touch', 'focus', 'blur', 'nudge', 'sleep', 'snapGaze', 'preenNudge'),
@@ -693,9 +697,9 @@ describe("the engine's named actions", () => {
         expect(problems.slice(0, 5), JSON.stringify({ schedule: schedule.name, pose, events })).toEqual([]);
         engine.stop();
       }),
-      { seed: 2610, numRuns: 40 },
+      { seed: 2610, numRuns: 5, path: String(schedule.batch * 5) },
     );
-  }, 30_000);
+  });
 
   it('every ENGINE_MEMBERS key needs a reference row or an allowlist entry, whatever its tag', () => {
     // TL-P4-22 addendum 21, over every key: a new name with any tag that is not a row of its own fails.
