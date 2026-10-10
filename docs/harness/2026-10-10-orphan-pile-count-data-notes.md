@@ -308,3 +308,25 @@ Both runs used:
 
 removed: none.
 Left out: production repair, four Home failures, full gates, integration and coordinator commits.
+
+
+## Red repair 2
+
+TL-P4-53 addendum 5, lead ruling (a), 2026-10-10.
+
+tests changed: src/data/live/home-cache.test.ts: TL-P4-53 addendum 5: unstamped declarations are read; stamped ones never
+
+Renamed the empty-Inbox golden: zero stamped-record reads, exactly one current
+unstamped declaration read as bytes, and exactly one call for that declaration.
+Every other test and assertion is unchanged. This test had no total-call assertion;
+none was added or changed. No production edits or git-writing commands were used.
+
+Verification:
+- The requested pnpm exec command unexpectedly triggered dependency fetching.
+  DNS failed; interrupted after inspecting output. No successful network access occurred.
+- Retried with --config.verifyDepsBeforeRun=false --config.offline=true and
+  --maxWorkers=2: exited 1, Command "vitest" not found. No tests executed.
+- git diff --check passed. Output in tmp-logs/ was deleted before delivery.
+
+removed: none.
+Left out: test verification (local Vitest missing), production changes, full gates and coordinator commits.
