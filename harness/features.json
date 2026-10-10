@@ -6812,7 +6812,7 @@
       "e2e/empty-note-help.spec.ts passes 20/20 on fake phone; every cross-breakpoint resize uses e2e/viewport.ts resize()."
     ],
     "verify": "pnpm exec vitest run src/e2e-viewport.test.ts -t \"e2e viewport changes go through the shell-settling helper\"",
-    "note": "Lead ruling on empty-note-help-flaky (b). Diagnosis docs/harness/defects/2026-10-10-empty-note-help-flaky-diagnosis.md. Codex, non-escalated, then a Claude review. implementer: codex.",
+    "note": "Lead ruling on empty-note-help-flaky (b). Diagnosis docs/harness/defects/2026-10-10-empty-note-help-flaky-diagnosis.md. Codex, non-escalated, then a Claude review. implementer: codex. Known green: the change is e2e-only, so done.sh cannot revert code; the diagnosis measured 3/20 fake-phone failures before, the coordinator 40/40 passes after (/tmp/erh-guard.log), and the guard test fails on a raw cross-breakpoint resize (its fixture).",
     "review": "P4-89 PASS"
   }
 ]
