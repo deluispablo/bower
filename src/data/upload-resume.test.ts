@@ -234,14 +234,14 @@ async function reloadCase(count: number, offset: number, staleOffset: boolean): 
     await hold.reached;
     const record = (await first.store.list(ACCOUNT, env.root)).find((record) => record.memberKey === pile.items[0]?.id);
     expect(record).toMatchObject({ confirmed: offset, session: expect.any(String), fileId: expect.any(String) });
-    const version = await first.store.captureForgetVersion(present(record));
+    const generation = await first.store.captureForgetVersion(present(record));
     const reserved = present(present(record).fileId);
     first.queue.stop();
     first.vault.dispose();
     hold.open();
     await first.queue.idle();
     await first.vault.settled();
-    if (staleOffset) await first.store.save({ ...present(record), confirmed: 0 }, version);
+    if (staleOffset) await first.store.save({ ...present(record), confirmed: 0 }, generation);
     const from = env.drive.resumableCalls.length;
     second = page(env);
     await second.vault.piles();

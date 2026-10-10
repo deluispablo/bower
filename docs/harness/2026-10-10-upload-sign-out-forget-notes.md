@@ -1323,3 +1323,117 @@ An initial run could not resolve the macOS /var path alias; using its canonical 
 path fixed setup loading. Final evidence is an assertion red, not an import failure.
 Read-only git diff --check passed. No pnpm check or e2e: assignment is tests-only reds.
 Production fix and integration remain with their assigned sessions.
+
+## Addendum 10 reds
+
+Red-owning session for TL-P4-53 addendum 10, defect sign-out-forget-marker.
+Read WORKER and the latest Fix round 3 sections and Addendum 9 reds. Only tests and
+this notes append changed. No network, production edit, Git-writing command or commit.
+The coordinator owns commits. No repository test artifacts were written.
+
+tests changed: src/data/upload-sign-out.test.ts: add twelve production sign-out/auth-expiry cases for identity-free device fencing, raw IndexedDB retention, stale add/save across accounts, and fresh-generation write controls; preserve all existing tests and assertions.
+tests changed: src/data/upload-store.test.ts: replace separate account/folder/member captures with one shared generation; rename the remaining capture locals to generation; preserve all assertions, test names, bodies and bounds.
+tests changed: src/data/upload-resume.test.ts: name the existing reloadCase capture generation and forward that same value to save; preserve all behaviour, assertions, generated examples and bounds.
+
+### Exact new test names
+
+All twelve names start with `upload-sign-out-forget: addendum 10: `:
+
+1. `no account-derived IndexedDB key or value remains after sign-out`
+2. `no account-derived IndexedDB key or value remains after auth expiry`
+3. `pre-sign-out add capture is refused (other account: false)`
+4. `pre-sign-out add capture is refused (other account: true)`
+5. `pre-auth expiry add capture is refused (other account: false)`
+6. `pre-auth expiry add capture is refused (other account: true)`
+7. `pre-sign-out save capture is refused (other account: false)`
+8. `pre-sign-out save capture is refused (other account: true)`
+9. `pre-auth expiry save capture is refused (other account: false)`
+10. `pre-auth expiry save capture is refused (other account: true)`
+11. `a write captured after sign-out still lands`
+12. `a write captured after auth expiry still lands`
+
+The existing liveFixture seeds the signed-in account in two folders and another account
+in one folder, using the real upload store, queue and live sources. Both endings run the
+production entry point: session.signOut(), or Drive auth refusal through vault.tree().
+The pending real transfer settles before any post-forget observation or direct write.
+
+The raw scan opens every object store in bower-uploads and reads every cursor key/value,
+without list() filtering or assumptions about the fence key name. It checks the raw
+synthetic email and independently computed SHA-256 hex in each key and value, including
+text decoded from stored ArrayBuffers. Pre-forget controls prove both keys and values
+really contain the signed-in scope hash. Post-forget reads use a fresh connection.
+The unrelated account's upload remains a positive isolation control.
+
+Stale-write cases capture before the production ending on one connection and attempt
+add or save through another. Both the signed-out account and another account must reject
+with UploadForgottenError; retained other-account metadata and bytes stay unchanged.
+Fresh controls require exactly one generation increment, then successfully add and save
+with the new capture and read back the exact record/progress and three-byte body.
+
+### Complete existing-test sweep
+
+Searched existing test/spec files for forgotten: and captureForgetVersion and inspected
+the capture consumers. No existing test reads or asserts the forgotten: marker itself.
+Every existing direct capture site follows, with pre-edit lines and current test locations:
+
+- src/data/upload-store.test.ts:33-36, test at :27, keeps bytes/progress apart:
+  four per-member/account/folder captures become one generation reused across all four
+  additions and the progress save. Current capture is :33.
+- src/data/upload-store.test.ts:54, removed-one-stays-removed test (now :48):
+  the same single capture becomes generation; add and late save keep that value (:51).
+- src/data/upload-store.test.ts:67-69, folder/account-clear test (now :59):
+  three per-scope captures become one generation for all three adds (:64). Folder and
+  account deletion assertions, including retention of the other account, are unchanged.
+- src/data/upload-store.test.ts:91, no-IndexedDB test (now :81):
+  the same attempted capture becomes generation (:86); rejection assertion is unchanged.
+- src/data/upload-store.test.ts:102-103, database-replacement test (now :92):
+  both members use one device generation (:97), including the post-reopen addition.
+- src/data/upload-store.test.ts:118, malformed-record cleanup test (now :108):
+  the same single capture becomes generation (:112); fixture and cleanup checks unchanged.
+- src/data/upload-resume.test.ts:237, reloadCase used by tests at :220 and :706:
+  the same single capture becomes generation and is passed unchanged to save at :244.
+  This covers both the ordinary reload cases and all generated stale-offset cases.
+- src/data/upload-queue.test.ts:108 forwards captureForgetVersion in brokenStore;
+  it neither captures an account fence nor asserts one. Forwarding is already transparent;
+  no rewrite or change to that file is needed.
+
+The existing mandatory production capture API still takes a record argument. This
+red-only change preserves that signature; the tests treat the returned number as one
+device generation and no longer allocate a distinct capture for each account or folder.
+The new cross-account cases reject the old per-account behaviour without a missing-API
+error, a test-specific store or a production edit. No other contradictory assertion was
+found in the complete touched-file run. The two existing addendum 9 reds remain unchanged.
+
+### Verification and evidence
+
+Evidence directory: `/private/tmp/upload-addendum-10-lnapc844/`.
+
+Command (offline, output redirected to reds.log):
+
+```sh
+npm_config_offline=true npm_config_verify_deps_before_run=false pnpm exec vitest run --config /private/tmp/upload-addendum-10-lnapc844/vitest.config.mjs --configLoader runner --maxWorkers=2
+```
+
+The OS-temp config selects all three touched test files, imports the real Vite config and
+app setup, and sets cacheDir to OS temp. The timer setup copy changes only absolute
+import resolution and CPU-report destination; the original timer gate remains active.
+All logs, cache, CPU reports and TypeScript build info are outside the repository.
+
+- Full touched-file run: exit 1; 3 files, 67 tests, 59 pass and 8 assertion failures.
+- Six intended addendum 10 reds: names 1-2 fail at upload-sign-out.test.ts:1011 because
+  bytes still holds forgotten:<email hash>; names 4, 6, 8, 10 fail at :1047 because
+  the other account's stale add/save succeeds rather than throwing UploadForgottenError.
+- All six new controls pass: same-account stale add/save cases 3, 5, 7, 9, plus both
+  fresh-generation controls 11-12. Both touched store/resume files pass in full.
+- Existing addendum 9 failures are unchanged: unreadable account (known identity: false)
+  at upload-sign-out.test.ts:335 and dual purge/remote failure (remote fails: true) at :364.
+  All other existing cases pass. No import error, timeout or unhandled rejection.
+- App tsc --noEmit with OS-temp build info: exit 0; types.log.
+- ESLint on all three touched tests, no fix/cache: exit 0; lint.log.
+- Read-only git diff --check: pass. No pnpm check, e2e, server or integration for test-only reds.
+
+Research: reuse the existing live/IndexedDB test fixtures and the inherited official
+[IndexedDB transaction lifecycle](https://www.w3.org/TR/IndexedDB/#transaction-lifecycle)
+reference for atomic fence/write ordering. No source was fetched and no dependency added.
+Production implementation and integration remain with their assigned sessions.
+removed: no existing assertion, test, bound or example; only redundant per-scope capture calls.

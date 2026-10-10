@@ -941,3 +941,136 @@ it.each(['new add', 'queue reselection'] as const)(
     } finally { release.open(); await adding; }
   },
 );
+
+// Read every store directly: list() filters by scope and cannot reveal retained fence keys.
+async function rawUploadEntries(idb: IDBFactory): Promise<Array<{ store: string; key: IDBValidKey; value: unknown }>> {
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const opening = idb.open('bower-uploads');
+    opening.onsuccess = () => resolve(opening.result);
+    opening.onerror = () => reject(opening.error);
+  });
+  try {
+    const names = Array.from(db.objectStoreNames);
+    return await new Promise((resolve, reject) => {
+      const entries: Array<{ store: string; key: IDBValidKey; value: unknown }> = [];
+      const transaction = db.transaction(names, 'readonly');
+      for (const store of names) {
+        const cursor = transaction.objectStore(store).openCursor();
+        cursor.onsuccess = () => {
+          const entry = cursor.result;
+          if (entry === null) return;
+          entries.push({ store, key: entry.primaryKey, value: entry.value });
+          entry.continue();
+        };
+      }
+      transaction.oncomplete = () => resolve(entries);
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+    });
+  } finally { db.close(); }
+}
+
+function rawUploadText(value: unknown): string {
+  return JSON.stringify(value, (_key, part: unknown) => {
+    if (Object.prototype.toString.call(part) === '[object ArrayBuffer]') {
+      const bytes = new Uint8Array(part as ArrayBuffer);
+      return { bytes: [...bytes], text: new TextDecoder().decode(bytes) };
+    }
+    return part;
+  }) ?? '';
+}
+
+async function finishAddendum10(f: Awaited<ReturnType<typeof liveFixture>>, ending: 'sign-out' | 'auth expiry') {
+  if (ending === 'sign-out') await f.active.session.signOut();
+  else {
+    f.drive.failNext('auth');
+    await expect(f.active.vault.tree()).rejects.toMatchObject({ code: 'auth' });
+  }
+  f.release.open();
+  await f.q.idle();
+}
+
+it.each(['sign-out', 'auth expiry'] as const)(
+  'upload-sign-out-forget: addendum 10: no account-derived IndexedDB key or value remains after %s',
+  async (ending) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const f = await liveFixture();
+    try {
+      const email = 'you@example.com';
+      const emailHash = await sha256(new Blob([email]));
+      expect(f.accountA).toBe(emailHash);
+      const before = await rawUploadEntries(f.idb);
+      expect(rawUploadText(before.map((entry) => entry.key))).toContain(emailHash);
+      expect(rawUploadText(before.map((entry) => entry.value))).toContain(emailHash);
+      await finishAddendum10(f, ending);
+      const after = await rawUploadEntries(f.idb);
+      for (const entry of after) {
+        for (const [kind, value] of [['key', entry.key], ['value', entry.value]] as const) {
+          const text = rawUploadText(value);
+          expect(text, `${entry.store} ${kind} must forget the raw email`).not.toContain(email);
+          expect(text, `${entry.store} ${kind} must forget the unsalted email hash`).not.toContain(emailHash);
+        }
+      }
+      expect(await indexedDbUploadStore(f.idb).list(ACCOUNT_B, f.rootA)).toHaveLength(1);
+    } finally { f.release.open(); f.active.dispose(); await f.q.idle(); }
+  },
+);
+
+it.each([
+  { ending: 'sign-out', otherAccount: false, write: 'add' },
+  { ending: 'sign-out', otherAccount: true, write: 'add' },
+  { ending: 'auth expiry', otherAccount: false, write: 'add' },
+  { ending: 'auth expiry', otherAccount: true, write: 'add' },
+  { ending: 'sign-out', otherAccount: false, write: 'save' },
+  { ending: 'sign-out', otherAccount: true, write: 'save' },
+  { ending: 'auth expiry', otherAccount: false, write: 'save' },
+  { ending: 'auth expiry', otherAccount: true, write: 'save' },
+] as const)(
+  'upload-sign-out-forget: addendum 10: pre-$ending $write capture is refused (other account: $otherAccount)',
+  async ({ ending, otherAccount, write }) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const f = await liveFixture();
+    try {
+      const fresh = indexedDbUploadStore(f.idb);
+      const original = f.records[otherAccount ? 2 : 0];
+      expect(original).toBeDefined();
+      if (original === undefined) throw new Error('Synthetic upload is missing');
+      // Capture on one connection and write on another, so the fence must belong to the device.
+      const version = await f.store.captureForgetVersion(original);
+      const before = await fresh.list(original.account, original.folder);
+      const beforeBytes = await keptBytes(fresh, before);
+      await finishAddendum10(f, ending);
+      const record = write === 'add' ? { ...original, memberKey: 'LATE_MEMBER' } : { ...original, confirmed: 9 };
+      const result = await outcome(write === 'add'
+        ? fresh.add(record, new Blob([new Uint8Array([7, 8, 9])]), version)
+        : fresh.save(record, version));
+      expect(result, 'a device-wide generation must refuse every older capture').toMatchObject({ error: expect.any(UploadForgottenError) });
+      expect(await fresh.list(original.account, original.folder)).toEqual(otherAccount ? before : []);
+      expect(await keptBytes(fresh, before)).toEqual(otherAccount ? beforeBytes : before.map(() => null));
+      if (write === 'add') expect(await fresh.body(record)).toBeNull();
+    } finally { f.release.open(); f.active.dispose(); await f.q.idle(); }
+  },
+);
+
+it.each(['sign-out', 'auth expiry'] as const)(
+  'upload-sign-out-forget: addendum 10: a write captured after %s still lands',
+  async (ending) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const f = await liveFixture();
+    try {
+      const original = f.records[0];
+      expect(original).toBeDefined();
+      if (original === undefined) throw new Error('Synthetic upload is missing');
+      const before = await f.store.captureForgetVersion(original);
+      await finishAddendum10(f, ending);
+      const fresh = indexedDbUploadStore(f.idb);
+      const version = await fresh.captureForgetVersion(original);
+      expect(version).toBe(before + 1);
+      const record = { ...original, memberKey: 'AFTER_MEMBER', confirmed: 0, session: null, fileId: null };
+      await fresh.add(record, new Blob([new Uint8Array([7, 8, 9])]), version);
+      await fresh.save({ ...record, confirmed: 2 }, version);
+      expect(await fresh.list(record.account, record.folder)).toEqual([{ ...record, confirmed: 2 }]);
+      expect(await keptBytes(fresh, [record])).toEqual([[7, 8, 9]]);
+    } finally { f.release.open(); f.active.dispose(); await f.q.idle(); }
+  },
+);

@@ -30,17 +30,14 @@ describe('the upload store', () => {
     const first = pending();
     const otherAccount = pending({ account: 'account-b' });
     const otherFolder = pending({ folder: 'OTHER_FOLDER_ID' });
-    const laterVersion = await store.captureForgetVersion(later);
-    const firstVersion = await store.captureForgetVersion(first);
-    const otherAccountVersion = await store.captureForgetVersion(otherAccount);
-    const otherFolderVersion = await store.captureForgetVersion(otherFolder);
-    await store.add(later, body(), laterVersion);
-    await store.add(first, body(), firstVersion);
-    await store.add(otherAccount, body(), otherAccountVersion);
-    await store.add(otherFolder, body(), otherFolderVersion);
+    const generation = await store.captureForgetVersion(first);
+    await store.add(later, body(), generation);
+    await store.add(first, body(), generation);
+    await store.add(otherAccount, body(), generation);
+    await store.add(otherFolder, body(), generation);
     expect((await store.list('account-a', 'FOLDER_ID')).map((r) => r.memberKey)).toEqual(['member-1', 'member-2']);
 
-    await store.save({ ...later, session: 'SESSION', confirmed: 2, fileId: 'RESERVED_ID' }, laterVersion);
+    await store.save({ ...later, session: 'SESSION', confirmed: 2, fileId: 'RESERVED_ID' }, generation);
     const again = await store.list('account-a', 'FOLDER_ID');
     expect(again.find((record) => record.memberKey === later.memberKey)).toMatchObject({ session: 'SESSION', confirmed: 2, fileId: 'RESERVED_ID' });
     const bytes = await store.body(later);
@@ -51,10 +48,10 @@ describe('the upload store', () => {
   it('a removed one stays removed, even if a late save arrives', async () => {
     const store = indexedDbUploadStore(new IDBFactory());
     const r = pending();
-    const version = await store.captureForgetVersion(r);
-    await store.add(r, body(), version);
+    const generation = await store.captureForgetVersion(r);
+    await store.add(r, body(), generation);
     await store.remove(r);
-    await store.save({ ...r, confirmed: 2 }, version);
+    await store.save({ ...r, confirmed: 2 }, generation);
     expect(await store.list('account-a', 'FOLDER_ID')).toEqual([]);
     expect(await store.body(r)).toBeNull();
   });
@@ -64,12 +61,10 @@ describe('the upload store', () => {
     const r = pending();
     const otherFolder = pending({ folder: 'OTHER_FOLDER_ID' });
     const otherAccount = pending({ account: 'account-b' });
-    const version = await store.captureForgetVersion(r);
-    const otherFolderVersion = await store.captureForgetVersion(otherFolder);
-    const otherAccountVersion = await store.captureForgetVersion(otherAccount);
-    await store.add(r, body(), version);
-    await store.add(otherFolder, body(), otherFolderVersion);
-    await store.add(otherAccount, body(), otherAccountVersion);
+    const generation = await store.captureForgetVersion(r);
+    await store.add(r, body(), generation);
+    await store.add(otherFolder, body(), generation);
+    await store.add(otherAccount, body(), generation);
     await store.clear('account-a', 'OTHER_FOLDER_ID');
     expect(await store.list('account-a', 'FOLDER_ID')).toHaveLength(1);
     expect(await store.list('account-a', 'OTHER_FOLDER_ID')).toEqual([]);
@@ -88,8 +83,8 @@ describe('the upload store', () => {
     await expect(store.list('account-a', 'FOLDER_ID')).rejects.toBeInstanceOf(Error);
     const r = pending();
     const adding = (async () => {
-      const version = await store.captureForgetVersion(r);
-      await store.add(r, body(), version);
+      const generation = await store.captureForgetVersion(r);
+      await store.add(r, body(), generation);
     })();
     await expect(adding).rejects.toBeInstanceOf(Error);
   });
@@ -99,15 +94,14 @@ describe('the upload store', () => {
     const store = indexedDbUploadStore(idb);
     const r = pending();
     const next = pending({ memberKey: 'member-2' });
-    const version = await store.captureForgetVersion(r);
-    const nextVersion = await store.captureForgetVersion(next);
-    await store.add(r, body(), version);
+    const generation = await store.captureForgetVersion(r);
+    await store.add(r, body(), generation);
     const deleting = new Promise<string>((resolve) => {
       const r = idb.deleteDatabase('bower-uploads');
       r.onsuccess = () => resolve('deleted');
     });
     expect(await Promise.race([deleting, new Promise<string>((r) => setTimeout(() => r('blocked'), 200))])).toBe('deleted');
-    await store.add(next, body(), nextVersion);
+    await store.add(next, body(), generation);
     expect((await store.list('account-a', 'FOLDER_ID')).map((r) => r.memberKey)).toEqual(['member-2']);
   });
 
@@ -115,8 +109,8 @@ describe('the upload store', () => {
     const idb = new IDBFactory();
     const store = indexedDbUploadStore(idb);
     const r = pending();
-    const version = await store.captureForgetVersion(r);
-    await store.add(r, body(), version);
+    const generation = await store.captureForgetVersion(r);
+    await store.add(r, body(), generation);
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const db = await new Promise<IDBDatabase>((resolve) => {
       const r = idb.open('bower-uploads');
