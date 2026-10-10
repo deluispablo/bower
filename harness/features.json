@@ -6860,7 +6860,7 @@
     "id": "smoke-request-report-hidden",
     "task": "p4-c05",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "A finished report with any row is reachable on Home and from the status bar, whatever its scope (restores the C05 spec run result; designer confirmed).",
     "steps": [

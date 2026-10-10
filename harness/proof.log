@@ -558,3 +558,4 @@ e2e-resize-helper	eaad5e5f9fbb2890	2026-10-10	known-green: e2e-only change; 3/20
 pwa-update	d24660e7c07047a7	2026-10-10	known-green: e2e:pwa red at 2cab69f6 (one reload kept build A), green 6/6 after; unit reds failed before cf7cf957 (Codex red evidence); a later commit touched main.tsx
 b2a-summary-format	cc4c662c47468f48	2026-10-10	red (fixed in d5dacc77)
 p4-rate-limits	e7f5632e71024d7c	2026-10-10	known-green: reds proven by the coordinator at 4dd6b6e2, 98174541 and 07ee5644 before each fix
+smoke-request-report-hidden	b09f658f85a5f4b8	2026-10-10	known-green: e2e red 16 at fcd23584 proven by the coordinator; component reds before each fix

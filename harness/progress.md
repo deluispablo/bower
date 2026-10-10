@@ -313,3 +313,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-10: pwa-update passes — pwa-update passes: a reload after a deploy runs the new build; a missing lazy chunk reloads once (P4-92 PASS)
 - 2026-10-10: b2a-summary-format passes — b2a-summary-format passes: a note summary is a safe one-line YAML scalar, read back exactly (P4-91 PASS)
 - 2026-10-10: p4-rate-limits passes — p4-rate-limits passes: /auth 20, /drive/token 30, /vault 60 per minute; stale logout keeps 204 (P4-90b PASS)
+- 2026-10-10: smoke-request-report-hidden passes — smoke-request-report-hidden passes: a finished report with any row is reachable, whatever its scope (P4-93 PASS, designer verified)
