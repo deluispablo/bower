@@ -551,7 +551,7 @@ export class FakeDrive implements DriveApi {
     this.find(parentId);
     const at = this.stamp();
     const id = reservedId ?? `f${++this.seq}`;
-    const size = content === null ? undefined : typeof content === 'string' ? content.length : content.size;
+    const size = content === null ? undefined : typeof content === 'string' ? new TextEncoder().encode(content).byteLength : content.size;
     const meta: DriveFile = { id, name, folder, parents: [parentId], modifiedTime: at, createdTime: at, ...(size !== undefined ? { size } : {}), ...(appProperties ? { appProperties: { ...appProperties } } : {}) };
     this.files.set(id, { meta, trashed: false, content });
     return this.copy(meta);
@@ -652,7 +652,7 @@ export class FakeDrive implements DriveApi {
     f.content = text;
     delete f.bytesUnavailable;
     delete f.sha256;
-    f.meta = { ...f.meta, ...(appProperties ? { appProperties: { ...f.meta.appProperties, ...appProperties } } : {}), modifiedTime: this.stamp(), size: text.length };
+    f.meta = { ...f.meta, ...(appProperties ? { appProperties: { ...f.meta.appProperties, ...appProperties } } : {}), modifiedTime: this.stamp(), size: new TextEncoder().encode(text).byteLength };
     return this.changed(this.copy(f.meta));
   }
 
