@@ -536,8 +536,8 @@ export class BirdEngine {
     this.S.doing.el = 0;
     this.H.gaze = 0;
   }
-  /** One arrival-based step, shared by wake, nudge and reaction timelines. */
-  private makeStartle(): Action {
+  /** One arrival-based step; an alarm keeps the reached values instead of returning through rest. */
+  private makeStartle(holdAlarm = false): Action {
     const from = this.C.tuft.v;
     let hold = -1;
     let fall = 0;
@@ -548,10 +548,10 @@ export class BirdEngine {
         const restTuft = this.C.tuft.t;
         if (hold < 0 && el >= STARTLE.rise && !this.S.startleRising) hold = 0;
         else if (hold >= 0) hold += dt;
-        if (hold < STARTLE.seconds) {
+        if (hold < STARTLE.seconds || holdAlarm) {
           this.H.t = STARTLE.head;
           pin(this.C.tuft, from + (STARTLE.tuft - from) * smooth(el / STARTLE.rise));
-          return false;
+          return holdAlarm && hold >= STARTLE.seconds;
         }
         fall += dt;
         pin(this.C.tuft, STARTLE.tuft + (restTuft - STARTLE.tuft) * smooth(fall / STARTLE.fall));
@@ -649,7 +649,8 @@ export class BirdEngine {
     const C = this.C;
     const B = this.B;
     const needsStartle = kind !== 'moves-off' && (waking || kind === 'bin' || kind === 'error' || kind === 'offline');
-    const startle = needsStartle ? this.makeStartle() : null;
+    const holdAlarm = kind === 'offline' || (kind === 'error' && this.pose === 'sleep');
+    const startle = needsStartle ? this.makeStartle(holdAlarm) : null;
     let startleDone = !startle;
     let startleClock = 0;
     let clock = 0;
@@ -1496,7 +1497,8 @@ export class BirdEngine {
     const eye = { x: B.x + (C.face.v * 20 * Z) / 100, y: B.y - (58 * Z) / 100 };
     const dx = (p.x - eye.x) * B.face;
     const dy = p.y - eye.y;
-    if (dx < -30) {
+    // A reaction or startle owns the body too: gaze may only move the iris.
+    if (dx < -30 && !this.reaction && !S.doing?.ownsHead) {
       S.behindT += dt;
       if (S.behindT > 0.5) {
         S.behindT = 0;
