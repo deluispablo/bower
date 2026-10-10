@@ -6605,7 +6605,21 @@
       "Each split part runs in at most 1 s alone at idle.",
       "The total case count is unchanged."
     ],
-    "verify": "pnpm exec vitest run src/bird/engine.test.ts src/data/vault/undo-compensate.property.test.ts src/codex-run.test.ts",
+    "verify": "pnpm exec vitest run src/bird/engine.test.ts src/data/vault/undo-compensate.property.test.ts src/codex-run.test.ts -t \"the startle settles within|compensating Undo preserves FIFO|refuses guarded paths, secrets and addresses\"",
     "note": "TL-P4-31 addendum 1. Codex, then a Claude review. Packet 2026-10-10-c5-test-margin-packet.md. implementer: codex. Tests only: closes with --known-green."
+  },
+  {
+    "id": "c5-empty-note-help",
+    "task": "p4-polish",
+    "category": "fix",
+    "passes": false,
+    "ui": true,
+    "what": "The empty-note line says how to write in a note (Google Drive for desktop and any notes app) with the existing Open in Drive action beside it; the later-version promise is gone (TL-P4-33 addenda 1 and 2).",
+    "steps": [
+      "An empty note shows the designer copy and Open in Drive.",
+      "On a phone the row wraps and the button keeps a 44 px target."
+    ],
+    "verify": "pnpm exec vitest run src/features/note -t \"an empty note says how to write in it and offers Open in Drive\"",
+    "note": "TL-P4-33 addenda 1 and 2. Codex, then a Claude review and the designer. Packet 2026-10-10-c5-empty-note-help-packet.md. implementer: codex."
   }
 ]
