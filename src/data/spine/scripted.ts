@@ -745,7 +745,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     thingAsk: (id) => chosen.has(id) ? null : opts.decisions.thingAsk(id) ?? reaskOf(id) ?? null,
     pileAsk: (p) => {
       if (chosen.has(p.id) || p.items.some((i) => chosen.has(i.id))) return null;
-      return opts.decisions.pileAsk(p) ?? (p.items.some((i) => i.name !== PILE_NOTE) ? null : reaskOf(p.id) ?? null);
+      const subjects = subjectMembers({ id: askId(p.id), subject: p.id }, [p], PILE_NOTE, inboxHashes);
+      return opts.decisions.pileAsk(p) ?? (subjects.length === 1 && subjects[0] === p.id ? reaskOf(p.id) ?? null : null);
     },
     ...(opts.decisions.merge ? { merge: (item, yes) => chosen.has(item.id) || reaskOf(item.id) ? null : opts.decisions.merge?.(item, yes) ?? null } : {}),
   };
@@ -987,7 +988,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     }
     if (subjects.length === 1 && subjects[0] === pile.id && exhausted(pile.id)) continue;
     // Things the model asks about: each stays where it is, named by its question; the rest of the pile goes on.
-    const thingAsk = (fileId: string): Ask | undefined => (loose ? undefined : d.thingAsk(fileId) ?? undefined);
+    const thingAsk = (fileId: string): Ask | undefined => d.thingAsk(fileId) ?? undefined;
     for (const item of pile.items) {
       const q = thingAsk(item.id);
       const hash = listing.find((f) => f.id === item.id)?.md5Checksum;

@@ -1304,3 +1304,54 @@ Offline research reuses the existing production-main/in-process fixtures and the
 [Hono testing](https://hono.dev/docs/guides/testing) reference already recorded under Research.
 No new execution driver, store or counter is added. No test/ruling contradiction was found.
 Left out: implementation, full check/e2e, commits and integration; this is the authorized red-only round.
+
+## Fix round 4
+
+2026-10-10. Codex implementer; supplied HEAD `c94b6be42bc104ddd9a5e8e3147fa6f0a0e03a7f`.
+Read WORKER, the assigned packet, these notes and adversarial pass 3, BLOCK 1.
+Applied the lead-approved narrow loose-Inbox unavailable-folder re-ask fix in scripted.ts.
+The coordinator owns commits. No network or writing git command was issued.
+
+The pile-asking fallback now uses the existing subjectMembers policy: a loose Inbox file,
+like words alone, is its own member subject and can reuse its retained re-ask wording.
+The member-asking caller also admits a loose file through the existing d.thingAsk path.
+The existing chosen/reask placement and merge guards keep it untouched before its new asking.
+The existing fresh-asking write advances the same durable member history to count two and
+clears reask; the unchanged tidy retains that asking without another increment.
+No new store, counter, writer, schema, scheduler, model-input format or effect path was added.
+Folder members and words-only piles keep their existing subject and asking paths.
+
+Offline research reused subjectMembers, roundFor, the Decisions asking wrapper and the
+fresh-asking writer, plus the local [TypeScript discriminated-union reference](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions)
+already cited in questions.ts and these notes. No online verification is claimed.
+
+removed: src/data/spine/scripted.ts: 2 lines; content-presence fallback and loose-member suppression replaced.
+removed: notes: none (append only).
+tests changed: none
+
+### Validation and TL-P4-51
+
+All requested test suites ran to completion with --maxWorkers=2. Output and generated fixtures
+were under tmp-logs/; only failures and aggregate results were read. The baseline reproduced
+both committed loose-file reds at runner/test/q1-continuation.test.ts:1470, :1471, :1473 and :1485.
+There are no remaining test/ruling contradictions; the complete requested sweep is green.
+
+| Command | Result |
+| --- | --- |
+| Q1 baseline: `pnpm -C runner exec vitest run test/q1-continuation.test.ts --maxWorkers=2` | 41 pass / 2 fail of 43. Only fix 4.1 and the fix 4.2 loose-Inbox row fail on missing re-asking/round two. |
+| Q1 final: same command | 43/43 pass, including `Q1a fix 4.1: a loose Inbox file whose chosen folder is gone is asked again as the next round` and every `Q1a fix 4.2: every member-subject path re-asks once after an unavailable folder` row. |
+| `pnpm exec vitest run src/data --maxWorkers=2` | 4,141/4,141 pass. |
+| `pnpm -C runner exec vitest run --maxWorkers=2` | 599/599 pass, including corpus, Drive call goldens and raw/normalized model-input fingerprints. |
+| `pnpm exec tsc --noEmit -p tsconfig.app.json` | Pass, no diagnostics. |
+| `pnpm exec tsc --noEmit -p tsconfig.node.json` | Pass, no diagnostics. |
+| `pnpm -C runner exec tsc --noEmit -p .` | Pass, no diagnostics. |
+| `pnpm exec eslint src/data/spine/scripted.ts` | Pass, no diagnostics. |
+| Read-only preservation/diff checks | Only scripted.ts and this notes appendix changed; tests, fixtures, goldens and fingerprints unchanged. No whitespace errors; HEAD unchanged. |
+
+Evidence used the q1a-fix-round-4-before, -q1, -data and -runner JSON/log files, plus the
+-tsc-app, -tsc-node, -tsc-runner and -eslint logs. All tmp-logs/ output and generated fixtures
+were deleted before delivery as requested; durable results remain in this appendix.
+No screen was touched (ui: false). Full check/e2e were not repeated in this narrow round;
+the previous whole-gate failures and listener refusals remain recorded under Fix round 3.
+No full-check mark, acceptance, commit or integration is claimed.
+Left out: full-gate repair, Q1b/Q1c, which-note, B12, commits and integration.
