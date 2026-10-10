@@ -471,7 +471,6 @@ export class BirdEngine {
     }
     P.glyph?.setAttribute('display', 'none');
     for (const k of ['transform', 'width', 'height', 'opacity'] as const) P.bird.style[k] = '';
-    P.bird.style.removeProperty('--bower-engine-transform');
     this.drawnSize = null;
     this.drawnPlace = null;
     this.drawnGlyph = null;
@@ -684,13 +683,15 @@ export class BirdEngine {
     const partStarts: Partial<Record<SpringName, number>> = {};
     const partEnds: Partial<Record<SpringName, number>> = {};
     const heldCarry = B.carrying;
-    const fromX = B.x;
-    const fromY = B.y + B.hopY;
-    const fromHead = this.H.v;
-    const fromEye = this.asleep ? 0.08 : 1 - 0.92 * this.S.blink;
-    const fromParts = Object.fromEntries(Object.entries(C).map(([name, c]) => [name, c.v])) as Record<SpringName, number>;
-    const fromHeadY = B.headY;
-    const fromTuftY = B.tuftY;
+    let fromX = B.x;
+    let fromY = B.y + B.hopY;
+    let fromHead = this.H.v;
+    let fromEye = this.asleep ? 0.08 : 1 - 0.92 * this.S.blink;
+    let fromParts = Object.fromEntries(Object.entries(C).map(([name, c]) => [name, c.v])) as Record<SpringName, number>;
+    let fromHeadY = B.headY;
+    let fromTuftY = B.tuftY;
+    /** The still frame the settle is heading for; a pose change restarts the settle from where the bird is. */
+    let settlingTo = this.pose;
     const proud = kind === 'done' ? this.makeShowOff({ tail: -22, wing: 0, tuft: 16, head: 0,
       pitch: -4, swell: 1.03, wide: 1.05, seconds: 1.5, rise: 0.6, fall: 1.4,
       turn: false, chirp: false, sparkle: false, kick: 0 }) : null;
@@ -804,6 +805,17 @@ export class BirdEngine {
             return clock >= (kind === 'tap' ? 0.6 : 0.3);
           case 'moves-off': {
             B.bob = 0;
+            if (this.pose !== settlingTo) {
+              settlingTo = this.pose;
+              clock = 0;
+              fromX = B.x;
+              fromY = B.y + B.hopY;
+              fromHead = this.H.v;
+              fromEye = this.eyeOpen ?? fromEye;
+              fromParts = Object.fromEntries(Object.entries(C).map(([name, c]) => [name, c.v])) as Record<SpringName, number>;
+              fromHeadY = B.headY;
+              fromTuftY = B.tuftY;
+            }
             const q = 1 - Math.pow(1 - clamp(clock / 0.6, 0, 1), 3);
             const still = this.pose;
             const head = this.settings ? 8 : still === 'sleep' ? 20 : 0;
@@ -821,7 +833,9 @@ export class BirdEngine {
             B.x = fromX + (this.home().x - fromX) * q;
             B.y = fromY + (this.home().y - fromY) * q;
             B.hopY = 0;
-            if (clock >= 0.6 - 1e-9) {
+            // Done on arrival at the still frame: the head moves by its profile, so it may still be on its way at 0.6 s.
+            const arrived = Math.abs(this.H.v - head) <= 0.01 && Math.abs(this.H.vel) * FRAME <= 0.01;
+            if (clock >= 0.6 - 1e-9 && arrived) {
               this.motion = 'still';
               this.notifyStill = true;
               return true;
@@ -966,7 +980,7 @@ export class BirdEngine {
     }
     this.S.chirpT = d;
     this.S.chirpLength = d;
-    this.C.tuft.vel -= 120;
+    if (this.mayWrite('tuft', this.writer)) this.C.tuft.vel -= 120;
   }
   private turn(): void {
     if (!this.mayWrite('face') || !this.mayWrite('hop')) return;
@@ -1704,10 +1718,7 @@ export class BirdEngine {
     if (Math.abs(f) < 0.06) f = f < 0 ? -0.06 : 0.06;
     const place = `translate(${(B.x - Z / 2).toFixed(1)}px,${(B.y + B.hopY + B.bob - 0.92 * Z).toFixed(1)}px) scaleX(${f.toFixed(3)})`;
     if (this.drawnPlace !== place) {
-      // A var fallback preserves the authored numeric transform in CSSOM (ordinary translate adds a comma space).
-      // initial makes the custom property invalid, so only this engine's fallback can supply the transform.
-      P.bird.style.setProperty('--bower-engine-transform', 'initial');
-      P.bird.style.transform = `var(--bower-engine-transform,${place})`;
+      P.bird.style.transform = place;
       this.drawnPlace = place;
     }
     if (this.pose === 'land') P.bird.style.opacity = B.opacity.toFixed(2);
