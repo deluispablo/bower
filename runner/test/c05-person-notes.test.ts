@@ -806,6 +806,8 @@ describe('C05 person notes through runner main', () => {
 
   async function round4Pending() {
     const c = await fixture(); const drive = fixedDrive(); const root = await seedCase(drive, c);
+    const requestId = (await drive.listAll(root)).find((f) => f.name === 'change-1.json')?.id ?? '';
+    const requestBytes = await drive.readText(requestId);
     const noteId = (await drive.listAll(root)).find((f) => f.name === 'Garden plot.md')?.id ?? '';
     let clashes = 0;
     const first = await runOnDrive(c, drive, root, { claude: appendReply(), around: (fetch) => async (input, init) => {
@@ -821,7 +823,8 @@ describe('C05 person notes through runner main', () => {
     } }, 1);
     expect(first.code).toBe(0); expect(clashes).toBe(1);
     expect(first.after[PATH]).not.toContain(` · ${NEWS} · [[${SOURCE}]]`);
-    expect(first.after[`${SYSTEM.changes}/change-1.json`]).toBeDefined();
+    expect.soft(first.after[`${SYSTEM.changes}/pending/abc123-run1/change-1.json`]).toBe(requestBytes);
+    expect.soft(first.after[`${SYSTEM.changes}/change-1.json`]).toBeUndefined();
     const sourceId = idOf(first, `Areas/Home/${SOURCE}`) ?? '';
     expect(sourceId).toBeTruthy();
     const stored = await round4Records(first, 'abc123-run1');
@@ -1259,7 +1262,8 @@ describe('C05 person notes through runner main', () => {
     expect(stored.chain.at(-1)?.outcomes.find((o) => o.operationId === clashed?.operationId)).toEqual(expect.objectContaining({
       state: 'rejected', failure: expect.objectContaining({ code: 'conflict' }),
     }));
-    expect.soft(first.after[`${SYSTEM.changes}/change-1.json`], 'one clashed target keeps the request active').toBe(requestBytes);
+    expect.soft(first.after[`${SYSTEM.changes}/pending/abc123-run1/change-1.json`], 'one clashed target keeps the request active').toBe(requestBytes);
+    expect.soft(first.after[`${SYSTEM.changes}/change-1.json`]).toBeUndefined();
     expect.soft(first.after[`${SYSTEM.archive}/change-1.json`], 'the other completion cannot archive the request early').toBeUndefined();
     const archive = stored.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === requestId);
     expect(archive).toBeDefined();

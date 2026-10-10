@@ -326,6 +326,9 @@ it('C05 bounded reads: pending: a clash moves by run id and retries only its bou
   expect(first.result.after[PATH]).toBe(fresh);
   expect(reportOf(first.result).leftAsWritten).toEqual([expect.objectContaining({ fileId: idOf(first.result, OTHER), why: why('NOTHING_FOUND_WHY') })]);
   const original = await records(first.result, RUN_ID);
+  // This fixture has one manifest and four checkpoint files; RunRecords verifies every link.
+  const ownRunRecordCount = 5;
+  expect(1 + original.chain.length, 'pin the waiting fixture manifest plus checkpoint count').toBe(ownRunRecordCount);
   expect(original.chain.at(-1)?.completedAppends ?? []).toEqual([]);
   const rejected = original.manifest.operations.find((o) => o.effect.kind === 'edit-text' && o.effect.before.fileId === noteId);
   expect(original.chain.at(-1)?.outcomes.find((o) => o.operationId === rejected?.operationId)).toEqual(expect.objectContaining({
@@ -370,8 +373,8 @@ it('C05 bounded reads: pending: a clash moves by run id and retries only its bou
   expect.soft(next.trace.media.filter((p) => p.startsWith(`${SYSTEM.archive}/`)), 'settled requests are never scanned').toEqual([]);
   const ownRun = `.bower/runs/${RUN_ID}/`;
   expect.soft(next.trace.media.filter((p) => p.startsWith('.bower/runs/') && !p.startsWith(ownRun)), 'waiting request reads only its own run').toEqual([]);
-  expect.soft(next.trace.media.filter((p) => p.startsWith(ownRun)).length, 'one waiting request costs at most one record media read').toBeLessThanOrEqual(1);
-  expect.soft(next.trace.reads, 'one waiting request: pile baseline plus at most one').toBeLessThanOrEqual(baseline.trace.reads + 1);
+  expect.soft(next.trace.media.filter((p) => p.startsWith(ownRun)).length, 'one waiting request reads at most its five-file run chain').toBeLessThanOrEqual(ownRunRecordCount);
+  expect.soft(next.trace.reads, 'one waiting request: pile baseline plus its five-file run chain').toBeLessThanOrEqual(baseline.trace.reads + ownRunRecordCount);
 });
 
 it('C05 bounded reads: horizon: past 20 runs uses listing age and TOO_OLD_WHY without a chain walk', async () => {

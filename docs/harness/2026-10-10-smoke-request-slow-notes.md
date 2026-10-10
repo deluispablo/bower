@@ -269,3 +269,43 @@ Compatibility row drafts, not completed implementation claims:
 Sources remain the official Drive list/search/fields references above, cited without fetching under
 the no-network instruction. Existing VaultIndex containment points to RunRecords evidence; no
 additional index or storage mechanism was introduced.
+
+## Red repair round 2 — lead ruling 2026-10-10
+
+Tests only; coordinator owns commits. No production edit, git write or network access.
+Only the two named pending locations and waiting-run read bounds changed. Every other existing
+assertion remains, including target/source ids, unchanged bytes, archive after settlement,
+the exact 20-read pile control and zero archive/other-run media reads.
+The round4Pending location checks use soft assertions so the existing retry and retention
+assertions still execute while pending implementation is absent. Bytes are captured before the run.
+
+tests changed: runner/test/c05-person-notes.test.ts:826: rule 1: unchanged request bytes belong in pending/abc123-run1, for round 4 2 and round 5 3.
+tests changed: runner/test/c05-person-notes.test.ts:827: rule 1: a waiting request must be absent directly in changes.
+tests changed: runner/test/c05-person-notes.test.ts:1265: rule 1: the clashed target keeps unchanged request bytes in pending/abc123-run1.
+tests changed: runner/test/c05-person-notes.test.ts:1266: rule 1: the clashed request leaves the direct changes inbox.
+tests changed: runner/test/c05-bounded-reads.test.ts:331: rule 2: pin one manifest plus four verified checkpoint links to five files.
+tests changed: runner/test/c05-bounded-reads.test.ts:376: rule 2: one run means its full five-file chain, with no wider bound.
+tests changed: runner/test/c05-bounded-reads.test.ts:377: rule 2: baseline plus one contradicts the five-file chain; pin baseline plus five (25).
+
+Run: `pnpm -C runner exec vitest run test/c05-person-notes.test.ts test/c05-bounded-reads.test.ts --maxWorkers=2`.
+Output: `tmp-logs/red-repair-round2.log`.
+Sources: existing official Drive list/search/fields citations above; no network fetch.
+
+Result: exit 1; 47 tests, 41 passed, six failed (three bounded reads, three person notes).
+The affected person-notes tests fail only on the new pending-byte/direct-inbox location assertions:
+- `C05 person notes: round 4 2: pending retries keep target and source ids`.
+- `C05 person notes: round 5 3: a request past retention is left as written and archived without an append`.
+- `C05 person notes: round 5 5: only a clashed target retries on bound ids before archive`.
+All other person-notes assertions pass, including the retry, byte and settlement controls.
+Bounded golden and horizon retain their archive/history, no-migration and horizon reds.
+Bounded pending fails its pending location checks and the unchanged gone-target ASK_GONE check.
+That hard gone-target assertion stops the test before the retry read bounds; those bounds are
+rewritten but not reached by this implementation. Nothing was weakened to get past that failure.
+The exact 20-read pile control passes. A focused pending rerun after moving the five-file fixture
+pin before the gone-target control verifies one manifest plus four checkpoint links equals five;
+it has the same three assertion failures, with no load error.
+Command: `pnpm -C runner exec vitest run test/c05-bounded-reads.test.ts --maxWorkers=2 -t
+'C05 bounded reads: pending: a clash moves by run id and retries only its bound evidence'`.
+Output: `tmp-logs/red-repair-round2-chain.log` (exit 1).
+No check/e2e run for this red-only repair; production implementation and full gates remain pending.
+removed: only the four superseded test assertion lines; no production lines.
