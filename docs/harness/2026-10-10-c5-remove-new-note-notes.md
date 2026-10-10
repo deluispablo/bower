@@ -128,3 +128,57 @@ notes:
 ## Left out
 
 Coordinator full checks/e2e, fresh Claude review, designer check and the three commits.
+
+## Fix round 1
+
+The coordinator reported `heading-order: section:nth-child(1) > h3` in the new
+whole-page scan on `/files`. Static comparison with `claude/p3` identifies a
+pre-existing finding: `FolderScreen.RootOverview` renders the h1 "Your Bower
+folder" with no h2; `DesktopShell` renders `RightPanel` after main, outside it;
+on a files route `RightPanel` selects Bower, whose first section has the h3 "Now".
+`DesktopShell.tsx`, `RightPanel.tsx` and `BowerPanel.tsx` have no entry diff.
+The root overview's markup is also unchanged. No heading was removed by this entry;
+the removed New note controls were buttons/menu items, not headings.
+This establishes the same heading-order mechanism on the base's same page from
+markup; no browser or axe execution on either revision was possible here.
+
+Scoped the initial scan to `main`, matching `shell-page-column.spec.ts` and
+`folder-table.spec.ts` for files pages. WCAG 2.2 and target-size remain enabled;
+the opened tree menu/phone dialog and the final empty-folder main retain their
+separate scans. The unrelated right-panel heading-order finding is recorded here
+and remains outside this entry's scope.
+Local primary reference: `node_modules/@axe-core/playwright/README.md`,
+`AxeBuilder#include`, which defines including elements by CSS selector;
+https://github.com/dequelabs/axe-core-npm/tree/develop/packages/playwright#axebuilderincludeselector-string--string
+No network request was made.
+
+tests changed: e2e/no-new-note.spec.ts: Scope the initial files-page axe scan to main, as existing folder specs do, excluding the unchanged pre-existing right-panel heading-order finding; preserve all absence, menu, sheet, empty-folder and WCAG 2.2 target-size checks.
+tests changed: e2e/qa7.spec.ts: Restore create-name-speed's still-required New folder half as a desktop test on explicit source=fake; type immediately after the tree menu action with no field wait/fill, press Enter, and assert the exact full folder path and displayed name.
+
+new test: New folder from the tree keeps the first letters typed
+The new test skips only the phone project because it requires the desktop tree;
+its explicit `source=fake` makes the desktop check use the pretend Drive in either suite.
+
+Verified the remaining `v2-name-sheet` test, "the rename field spans the sheet and
+selects the name", still exists and its file is byte-for-byte unchanged from HEAD
+by this fix round. Its earlier desktop setup adaptation remains as documented above;
+it is not identical to claude/p3. `capabilities.spec.ts` is byte-for-byte identical
+to HEAD and claude/p3, including c4-e2e-sync's "write it shows the state written,
+re-asks on a clash and settles as an answered row" test. Neither file was edited.
+
+Coordinator verify replacements (features.json was not edited):
+- create-name-speed: `-g "New folder from the tree keeps the first letters typed"`
+  in `bash scripts/e2e-both.sh e2e/qa7.spec.ts` (qa5's removed note-only name goes).
+- v2-name-sheet: `-g "the rename field spans the sheet and selects the name"`
+  with the existing source and spec command.
+- c4-e2e-sync: `-g "New folder from the tree keeps the first letters typed|write it shows the state written"`
+  with its existing fake desktop command and qa7/capabilities spec list. The second
+  unique substring selects the unchanged full capabilities test name above.
+
+Offline validation, output redirected; only failures read:
+- `pnpm exec tsc -p tsconfig.app.json`: exit 0; /tmp/rnn-fix1-tsc-app.log.
+- `pnpm exec tsc -p tsconfig.node.json`: exit 0; /tmp/rnn-fix1-tsc-node.log (includes e2e).
+- `pnpm exec eslint e2e/no-new-note.spec.ts e2e/qa7.spec.ts`: exit 0; /tmp/rnn-fix1-eslint.log.
+Red evidence is the coordinator's axe failure and missing New folder coverage;
+the new e2e cannot be run here (no ports). Coordinator must run the revised e2e
+and full gates. No server, e2e, pnpm check, network, commit or git write was run.
