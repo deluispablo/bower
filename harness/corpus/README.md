@@ -178,6 +178,18 @@ The four `b23-*` cases are pending B2/B3 preparation fixtures, with exact execut
 They need C17 admission, scalar/context/maintenance oracles and B1’s step-aware driver before scripted acceptance.
 See `docs/harness/2026-10-10-b23-prep.md`; hot is hidden maintenance, not authoritative pending state.
 
+The four `c17-b4-*` cases are pending C17/B4 preparations. New memory reply keys,
+JSONL events and About me marks are proposed specimens, not supported production formats.
+Exact binding/structured oracles are required before switching coverage; see
+`docs/harness/2026-10-10-b4-prep.md`. Internal archives stay under `.bower/` (TL-P4-45).
+
+| Case | Capability | Covers | Source |
+| --- | --- | --- | --- |
+| c17-b4-forget-no-return | C17 / B4 | model | TL-P4-39; F4: trusted Forget, source-keyed tombstone and archive non-resurrection; scripted proof pending |
+| c17-b4-origin-not-authority | C17 / B4 | model | TL-P4-39; F7: qualified person preference versus instruction-shaped offer; scripted proof pending |
+| c17-b4-gate-archive-first | C17 / B4 | model | TL-P4-39; F4: over-budget gate at four/five and archive before replacement; scripted proof pending |
+| c17-b4-own-text-deletion | C17 / B4 | model | TL-P4-39; F4/F2/R1: supported own prose deletion; no new-region edit recovery; scripted proof pending |
+
 ## B11 preparation cases — 2026-10-10
 
 | Case | Capability | Covers | Source |

@@ -1,0 +1,26 @@
+{
+  "id": "c17-b4-gate-archive-first",
+  "capability": "C17",
+  "title": "An over-budget section waits at four new observations and consolidates at five",
+  "covers": "model",
+  "source": "new: TL-P4-39 B4/F4/F7; proposed contracts and scripted proof pending",
+  "scope": "instructions",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Refresh About me from the recorded observations without adding any new facts."
+    }
+  ],
+  "questions": [],
+  "bowerOwned": [],
+  "presses": [
+    {
+      "request": {
+        "kind": "tidy",
+        "text": "I prefer keeping the amber gate clear when I plan garden work in Saltmere. Remember this additional preference."
+      }
+    }
+  ]
+}

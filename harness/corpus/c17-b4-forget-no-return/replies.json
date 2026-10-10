@@ -1,0 +1,17 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [],
+    "forget": [
+      {
+        "factId": "fact-remote"
+      }
+    ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": []
+  }
+]

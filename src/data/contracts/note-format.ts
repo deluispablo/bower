@@ -167,7 +167,7 @@ function frontOf(block: string): Map<string, string> {
 function timelineOf(block: string): TimelineEntry[] {
   return block
     .split('\n')
-    .filter((l) => l.startsWith('- '))
+    .filter((l) => l.startsWith('- ') || l.startsWith('* '))
     .map((l) => {
       const m = parseTimelineLine(l);
       if (!m) return { date: '', text: l.slice(2) };
@@ -176,7 +176,7 @@ function timelineOf(block: string): TimelineEntry[] {
 }
 
 /**
- * The `- ` lines of a note's Timeline section as the one parser frames it (the last `## Timeline` of a legacy note,
+ * The `- ` and `* ` lines of a note's Timeline section as the one parser frames it (the last `## Timeline` of a legacy note,
  * the framed payload of a v2 one); none for a note without one or that cannot be read.
  */
 export function timelineBullets(raw: string, fetched?: FetchedOwnership): string[] {
@@ -184,7 +184,7 @@ export function timelineBullets(raw: string, fetched?: FetchedOwnership): string
   const own = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
   // This legacy extraction API reports framed/legacy Timelines, not sections in plain prose.
   if (own.status === 'invalid' || own.status === 'plain' || !own.layout.timeline) return [];
-  return payloadDisplay(bytes, own.layout.timeline, TIMELINE).split('\n').filter((l) => l.startsWith('- '));
+  return payloadDisplay(bytes, own.layout.timeline, TIMELINE).split('\n').filter((l) => l.startsWith('- ') || l.startsWith('* '));
 }
 
 /**
