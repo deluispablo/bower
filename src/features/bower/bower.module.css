@@ -27,5 +27,5 @@
 .pending { background: var(--fresh); border-radius: 10px; padding: 11px 12px !important; border-bottom: 0 !important; margin-bottom: 6px; }
 .pendingNote { font-size: 14px; color: var(--brand-line); }
 
-.waits { display: block; margin-top: 2px; font-size: 13px; color: var(--muted); }
+.waits { display: block; margin-top: 2px; font-size: 13px; color: var(--text-muted); }
 .panelCardMain { display: flex; flex-direction: column; gap: 2px; text-align: left; background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; }

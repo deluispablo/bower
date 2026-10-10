@@ -152,3 +152,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `ce1eb3cd` | folder-header-wrap | none: the folder table header cells stay on one line (CSS only); no data or file change |
 | `b8555ada` | c5-empty-note-help | none: tests only (the empty-note copy and Open in Drive red). |
 | `c1f845cc` | c5-empty-note-help | none for stored data: the empty-note line says how to write in a note (Drive for desktop, any notes app) with the existing Open in Drive action; copy only. |
+| `ace15da0` | c5-css-tokens | none for stored data: two CSS colours use the defined --text-muted token instead of the undefined --muted. |
