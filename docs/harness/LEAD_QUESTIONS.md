@@ -80,3 +80,7 @@ The C06 preparation draft is ready for your review (TL-P4-31 ruling 1): branch `
 - C07: branch `p4-c07-prep` at 68187f0e (`/private/tmp/bower-p4-c07-prep`): c07-same-period-rent, c07-tentative-closure, c07-dated-rent-change; corpus 13 pass; 5 open questions.
 - C11: branch `p4-c11-prep` at 2a677072 (`/private/tmp/bower-p4-c11-prep`): c11-request-is-one-time, c11-source-cannot-answer, c11-source-cannot-override-rule; corpus 13 pass; 5 open questions.
 The three README rows conflict only by adjacency; I merge them in order.
+
+## 2026-10-10 d-v2-24a-round-3 (re-plan rule)
+
+Fix round 2 (b44b2dea) fixed the three adversarial findings (layer home at release, size in the blend, queued pose when moves return); check green, the 6-spec e2e 122/122 on demo and fake. The Codex adversarial round 2 found one more Important (branch 2026-10-10-codex-d-v2-24a-adversarial.md): the layer's resize handler calls `snapHome()`, which reaches `apply()` outside addendum 7's single output gate, so a resize after release (moves off, or reduced motion turned on mid-settle) redraws live or blended values over the held still frame. A third round needs your ruling (re-plan rule). Proposal: the same mechanism, one more writer: every path that reaches `apply()` (resize included) goes through the one gate; a Codex red (resize after release with moves off, and with reduced motion turned on mid-settle, through BowerLayer) then a Codex fix, the gates, a Codex pass, the Claude review and the designer.

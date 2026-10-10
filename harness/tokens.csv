@@ -399,3 +399,7 @@ p4-c07-prep,drafter,codex,gpt-5-codex,medium,1,964301,952171,,874112,12130,,,,3 
 p4-corpus-answers,implementer,codex,gpt-5-codex,high,1,2738493,2714883,,2602496,23610,,,,delivered,2026-10-10
 p4-c11-prep,drafter,codex,gpt-5-codex,medium,1,1516829,1505021,,1398016,11808,,,,3 cases + doc,2026-10-10
 shell-page-column,implementer,codex,gpt-5-codex,high,1,2130647,2104851,,2013056,25796,,,,delivered,2026-10-10
+p4-corpus-answers,reviewer,claude,bower-reviewer,,1,49637,,,,,,7,0.6,BLOCK (P4-74: corpus loop scores with pure score),2026-10-10
+shell-page-column,reviewer,claude,bower-reviewer,,1,41553,,,,,,5,0.4,BLOCK (P4-75: Sheet still not gated on placement),2026-10-10
+d-v2-24a,adversarial (round 2),codex,gpt-5-codex,high,1,1091840,1082619,,984576,9221,,,,1 Important,2026-10-10
+landing-csp,implementer,codex,gpt-5-codex,high,1,1012001,998901,,923008,13100,,,,delivered (packet error corrected),2026-10-10
