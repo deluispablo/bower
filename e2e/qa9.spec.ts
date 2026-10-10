@@ -11,6 +11,45 @@ const open = async (page: Page, path: string, scenario = 'default', time = 'inst
 };
 const toast = (page: Page, text: string | RegExp) => page.getByRole('status').getByText(text);
 
+test('the rename name sheet keeps one note extension', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 900 });
+  await open(page, '/note/Resources/Cooking/Lemon%20tart.md');
+  await page.getByRole('button', { name: 'More for Lemon tart', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Rename', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: 'Rename', exact: true });
+  await sheet.getByRole('textbox', { name: 'Name', exact: true }).fill('Tyres.md');
+  await sheet.getByRole('button', { name: 'Rename', exact: true }).click();
+  await expect(sheet).toBeHidden();
+  await expect(page).toHaveURL(/\/note\/Resources\/Cooking\/Tyres\.md(?:\?|$)/);
+  await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText('Tyres');
+  await page.getByRole('button', { name: 'More for Tyres', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Rename', exact: true }).click();
+  await expect(sheet.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Tyres');
+});
+
+test('the New folder name sheet preserves dots and explains slashes', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 900 });
+  await open(page, '/files/Resources/Cooking');
+  await page.getByRole('button', { name: 'More for Cooking', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'New folder', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: 'New folder', exact: true });
+  const name = sheet.getByRole('textbox', { name: 'Name', exact: true });
+  const make = sheet.getByRole('button', { name: 'Make the folder', exact: true });
+  await name.fill('Tyres.md');
+  await make.click();
+  await expect(page).toHaveURL(/\/files\/Resources\/Cooking\/Tyres\.md(?:\?|$)/);
+  await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText('Tyres.md');
+  await page.getByRole('button', { name: 'More for Tyres.md', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'New folder', exact: true }).click();
+  await name.fill('a/b');
+  await expect(name).toHaveAttribute('aria-invalid', 'true');
+  await expect(sheet.getByText('Names cannot have slashes; Bower used a dash.', { exact: true })).toBeVisible();
+  await make.click();
+  await expect(page).toHaveURL(/\/files\/Resources\/Cooking\/Tyres\.md\/a-b(?:\?|$)/);
+  await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText('a-b');
+  await expect(page.getByRole('status').getByText('Names cannot have slashes; Bower used a dash.', { exact: true })).toBeVisible();
+});
+
 test('on screen: answering a question is confirmed in the words of the choice', async ({ page }) => {
   await open(page, '/');
   const q = page.locator('section[aria-labelledby="qs"] li').filter({ hasText: /Keep both\?/ });

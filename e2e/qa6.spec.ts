@@ -11,6 +11,25 @@ const open = async (page: Page, path: string, scenario = 'default', time = 'inst
 };
 void isFake;
 
+test("Escape on a new folder's name takes it back", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await open(page, '/files');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  await tree.locator('[data-path="Resources"]').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'New folder', exact: true }).click();
+  const draft = tree.locator('[data-path="Resources/New folder"]');
+  const name = draft.getByRole('textbox', { name: 'New name for New folder', exact: true });
+  await expect(name).toBeVisible();
+  await name.fill('Soup ideas');
+  await name.press('Escape');
+  await expect(draft).toHaveCount(0);
+  await expect(tree.locator('[data-path="Resources/Soup ideas"]')).toHaveCount(0);
+  await expect(tree.getByRole('textbox')).toHaveCount(0);
+  await expect(tree).toBeFocused();
+  await expect(page).toHaveURL(/\/files(?:\?|$)/);
+  await expect(page.getByRole('main').getByRole('heading', { name: 'Your Bower folder', exact: true })).toBeVisible();
+});
+
 test('one counting rule for folders', async ({ page, isMobile }) => {
   test.skip(isMobile, 'the folder cards of the desktop');
   await open(page, '/files');

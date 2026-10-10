@@ -9,6 +9,7 @@ async function noNewNote(page: Page): Promise<void> {
 
 test('no New note control on desktop or phone', async ({ page }) => {
   for (const width of [1280, 375]) {
+    const folderName = `Empty at ${width}`;
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/files?scenario=default&time=instant');
     await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
@@ -25,16 +26,19 @@ test('no New note control on desktop or phone', async ({ page }) => {
     await actions.getByRole(width === 1280 ? 'menuitem' : 'button', { name: 'New folder', exact: true }).click();
     if (width === 1280) {
       const name = page.getByRole('tree').getByRole('textbox', { name: /^New name for / });
-      await name.fill('Empty one');
+      await name.fill(folderName);
       await name.press('Enter');
-      await page.getByRole('tree').locator('[data-path="Resources/Empty one"]').click({ button: 'right' });
+      await page.getByRole('tree').locator(`[data-path="Resources/${folderName}"]`).click({ button: 'right' });
       await page.getByRole('menuitem', { name: 'Open as a list or table', exact: true }).click();
     } else {
       const sheet = page.getByRole('dialog', { name: 'New folder', exact: true });
-      await sheet.getByRole('textbox', { name: 'Name', exact: true }).fill('Empty one');
+      await sheet.getByRole('textbox', { name: 'Name', exact: true }).fill(folderName);
       await sheet.getByRole('button', { name: 'Make the folder', exact: true }).click();
     }
-    await expect(page.getByRole('main').getByRole('heading', { name: 'Empty one', exact: true })).toBeVisible();
+    const headingName = width === 1280 ? folderName : `${folderName} More for ${folderName}`;
+    const heading = page.getByRole('main').getByRole('heading', { name: headingName, exact: true });
+    await expect(heading).toBeVisible();
+    await expect(heading).toHaveText(folderName);
     await expect(page.getByText('Nothing in here yet.', { exact: true })).toBeVisible();
     await noNewNote(page);
     await expectAxeClean(page, { include: 'main', wcag22: true });

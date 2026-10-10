@@ -73,3 +73,29 @@ test('New folder from the tree keeps the first letters typed', async ({ page, is
   await expect(folder).toBeVisible();
   await expect(folder.getByText('Garden plans', { exact: true })).toBeVisible();
 });
+
+test('New folder in an empty folder asks for a name, then opens the folder', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 900 });
+  await open(page, '/files/Resources/Cooking');
+  await page.getByRole('button', { name: 'More for Cooking', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'New folder', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: 'New folder', exact: true });
+  const name = sheet.getByRole('textbox', { name: 'Name', exact: true });
+  const make = sheet.getByRole('button', { name: 'Make the folder', exact: true });
+  await name.fill('Empty garden');
+  await make.click();
+  await expect(page).toHaveURL(/\/files\/Resources\/Cooking\/Empty%20garden(?:\?|$)/);
+  await expect(page.getByText('Nothing in here yet.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'More for Empty garden', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'New folder', exact: true }).click();
+  await expect(name).toBeFocused();
+  await expect(name).toHaveValue('');
+  await expect(make).toBeDisabled();
+  await expect(page).toHaveURL(/\/files\/Resources\/Cooking\/Empty%20garden(?:\?|$)/);
+  await name.fill('Plans');
+  await make.click();
+  await expect(sheet).toBeHidden();
+  await expect(page).toHaveURL(/\/files\/Resources\/Cooking\/Empty%20garden\/Plans(?:\?|$)/);
+  await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText('Plans');
+  await expect(page.getByText('Nothing in here yet.', { exact: true })).toBeVisible();
+});

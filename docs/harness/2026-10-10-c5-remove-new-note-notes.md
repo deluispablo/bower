@@ -182,3 +182,111 @@ Offline validation, output redirected; only failures read:
 Red evidence is the coordinator's axe failure and missing New folder coverage;
 the new e2e cannot be run here (no ports). Coordinator must run the revised e2e
 and full gates. No server, e2e, pnpm check, network, commit or git write was run.
+
+## Fix round 2
+
+### Evidence and test fixes
+
+Read the coordinator's /tmp/rnn-r1-demo.log and /tmp/rnn-r1-fake.log failures.
+Both sources failed the no-new-note heading assertion in both projects. The
+remaining desktop and phone error-context.md files both show the second-width
+heading "Empty one (2) More for Empty one (2)". The two widths share the page's
+kept data, so making "Empty one" again correctly picks a free name. Each width
+now makes its own name, "Empty at 1280" or "Empty at 375". All absence, menu,
+sheet, New folder, empty-state and WCAG 2.2/target-size checks remain. The phone
+heading's exact accessible name includes its nested "More for" button, as the
+snapshot and FolderScreen's h1 show. Its exact visible text is also asserted.
+
+tests changed: e2e/no-new-note.spec.ts: Give each width its own folder name and assert the exact desktop/phone heading name plus exact visible folder text; retain every existing check.
+tests changed: e2e/qa6.spec.ts: Add the surviving New folder Escape cancellation test; leave all existing tests unchanged.
+tests changed: e2e/qa7.spec.ts: Add the surviving empty-folder New folder naming test; leave the immediate-typing test and all other existing tests unchanged.
+tests changed: e2e/qa9.spec.ts: Add New folder dot/slash and note rename extension coverage through the existing name sheet; leave all existing tests unchanged.
+
+### qa7 immediate typing: blocked pending missing snapshot
+
+The demo log fails "New folder from the tree keeps the first letters typed" at
+the exact path Resources/Garden plans; the fake log passes that same test. Both
+runs use the test's explicit source=fake. The demo log names
+test-results/qa7-New-folder-from-the-tree-keeps-the-first-letters-typed-desktop/error-context.md,
+but that snapshot is absent from this worktree and the available local results.
+The later fake run passed and left only the no-new-note snapshots. No snapshot
+showing the actual failed folder name was available. A preserved local path was
+requested; do not infer lost letters or change the test from the timeout alone.
+
+Static diagnosis: the tree row menu passes node.path (Resources) to act.create;
+that awaits vault.create, then opens ancestors(path), sets justMade and renaming.
+The inline RenameInput keeps the typed name and quiet rename retains its parent.
+The expected path is correct; creation explicitly opens Resources, so there is
+no demonstrated path/expansion error to repair in the test. NameSheet is used
+for phone creation, whereas this desktop action uses the inline input.
+Before asynchronous creation finishes, the tree retains focus and its printable
+key handler does type-ahead rather than buffering a pending name. This is a
+possible product race, not proof of what happened in this failed run. The full
+failed snapshot (especially the created row's name, input and expanded state)
+is required to distinguish that from another failure. The existing test stays
+unchanged: no field wait, fill, delay, retry or relaxed path assertion was added.
+No product code was changed. If the snapshot shows a truncated name, stop and
+send this product finding to the lead for a ruling; do not mask it in this entry.
+
+Local primary reference: Playwright's installed playwright-core/types/types.d.ts,
+Keyboard.type: sends keyboard events to the focused element, with zero delay by
+default. https://playwright.dev/docs/api/class-keyboard#keyboard-type
+The reference was read locally; no network request was made.
+
+### Closed-entry verify replacements for the coordinator
+
+features.json was not edited. The current check-harness failure is recorded in
+/tmp/rnn-r1-check.log: each of the four old greps matches no test. Replace the
+whole verify string with the commands below, preserving weak-tests' unit half.
+These are proposed commands, not green evidence; the coordinator must run them.
+
+- new-note-opens: creating/opening a note from New note and its creation toast
+  are withdrawn. Help for an empty note remains on NoteScreen and is already
+  pinned by "empty-note help and Open in Drive at 375px" and its 1440px case,
+  seeded through Add. The existing no-new-note test pins the withdrawn controls.
+  Replacement:
+  `bash scripts/e2e-both.sh e2e/no-new-note.spec.ts e2e/empty-note-help.spec.ts -g "no New note control on desktop or phone|empty-note help and Open in Drive"`
+- new-note-escape: the note action is withdrawn, but Escape discarding a newly
+  made folder remains in Explorer's RenameInput and act.discard. No surviving
+  e2e pinned it. Added "Escape on a new folder's name takes it back": type a
+  name, Escape, assert both provisional and typed paths absent, no input,
+  tree focus and the unchanged root page. This test waits for its input because
+  its subject is cancellation; the distinct immediate-typing test does not.
+  Replacement:
+  `bash scripts/e2e-both.sh e2e/qa6.spec.ts -g "Escape on a new folder's name takes it back"`
+- weak-tests: its note creation case is withdrawn. Asking for a name before
+  creation and then opening the result survives on the empty folder's New folder
+  menu through NameSheet. Added "New folder in an empty folder asks for a name,
+  then opens the folder": real empty-folder setup, blank focused name, disabled
+  submit, parent route unchanged before naming, exact child route/title after.
+  Replacement:
+  `pnpm vitest run src/features/files src/data/demo src/data/live src/data/vault/drive-vault.test.ts -t "ConfirmBin|repeats a rule|toured|late file" && bash scripts/e2e-both.sh e2e/qa7.spec.ts -g "New folder in an empty folder asks for a name, then opens the folder"`
+- namesheet-names: creation of notes is withdrawn. A folder keeps its complete
+  dotted name, slashes are explained and replaced with dashes, and note rename
+  still avoids doubling .md. Existing v2-name-sheet covers the slash error while
+  renaming, qa12 covers leading-dot rejection and dotted folder creation, and
+  qa8 covers plain note rename. None pins all the typed .md/save/slash results.
+  Added "the New folder name sheet preserves dots and explains slashes" and
+  "the rename name sheet keeps one note extension": exact saved paths, visible
+  titles, inline slash explanation, aria-invalid, save toast and reopened rename
+  stem. Both exercise the real phone sheet on each project and source.
+  Replacement:
+  `bash scripts/e2e-both.sh e2e/qa9.spec.ts -g "the New folder name sheet preserves dots and explains slashes|the rename name sheet keeps one note extension"`
+
+The new Escape test exercises desktop width in both projects; the three new
+sheet tests exercise phone width in both projects. None adds skip/only.
+Round 1's create-name-speed/c4-e2e-sync grep replacements still apply, but their
+immediate-typing check is unresolved until the failed demo snapshot is restored.
+
+### Offline validation
+
+All output was redirected; only exit status and failures were read.
+- `pnpm exec tsc -p tsconfig.app.json`: exit 0; /tmp/rnn-fix2-tsc-app.log.
+- `pnpm exec tsc -p tsconfig.node.json`: exit 0; /tmp/rnn-fix2-tsc-node.log.
+- `pnpm exec eslint e2e/no-new-note.spec.ts e2e/qa6.spec.ts e2e/qa7.spec.ts e2e/qa9.spec.ts`:
+  exit 0; /tmp/rnn-fix2-eslint.log.
+- `git diff --check`: exit 0 (read-only).
+
+No server, e2e, pnpm check, network, commit or git write was run. No new test is
+claimed green without the coordinator's run. Commits, verify replacements,
+full checks, e2e and the missing qa7 snapshot diagnosis remain with coordinator.
