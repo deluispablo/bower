@@ -1688,13 +1688,14 @@ describe('person cleanup forgets pending draft bytes and keeps the folder outbox
     forgotten();
     expect(sessionStorage.getItem('bower:bye')).toBeNull();
   });
-  it('failed remote logout retains bytes and metadata until the successful retry', async () => {
-    const { s, selected, orphan, retained, forgotten } = await draft();
+  it('failed remote logout forgets bytes and metadata before the successful retry', async () => {
+    const { s, retained, forgotten } = await draft();
     vi.spyOn(s.worker, 'signOut').mockRejectedValueOnce(new BowerError('offline', 'Signing out did not finish. Try again.'));
-    await expect(s.session.signOut()).rejects.toMatchObject({ code: 'offline' });
-    expect(getDraft('LIVE_DRAFT_A')).toBe(selected); expect(getDraft('LIVE_ORPHAN_A')).toBe(orphan);
-    for (const key of personLocal) expect(localStorage.getItem(key), key).toBe('[]');
-    for (const key of personSession) expect(sessionStorage.getItem(key), key).not.toBeNull();
+    await expect(s.session.signOut()).rejects.toMatchObject({ code: 'offline', message: 'Signing out did not finish. Try again.' });
+    expect((await s.session.current())?.name).toBe('Alex');
+    expect(getDraft('LIVE_DRAFT_A')).toBeUndefined(); expect(getDraft('LIVE_ORPHAN_A')).toBeUndefined();
+    for (const key of personLocal) expect(localStorage.getItem(key), key).toBeNull();
+    for (const key of personSession) expect(sessionStorage.getItem(key), key).toBeNull();
     expect(sessionStorage.getItem('bower:bye')).toBeNull(); retained();
     await s.session.signOut(); expect(await s.session.current()).toBeNull(); forgotten();
   });

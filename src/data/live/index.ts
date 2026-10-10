@@ -10,7 +10,8 @@ import type { WorkerApi } from '../worker/worker-api';
 import { BowerError } from '../types';
 import { broadcastBus, createUploadQueue, type QueueRole, type UploadQueue } from '../upload-queue';
 import { indexedDbUploadStore, memoryUploadStore } from '../upload-store';
-import { sha256 } from '../vault/hashes';
+import { sha256Sync } from '../vault/hashes';
+import { forgetThisPerson } from '../device';
 import { LiveRuns } from './runs';
 import { LiveSession } from './session';
 import { createPlaceGuard, drivePolicy, fenceDrive, fenceWorker, isOpenElsewhere, leavingLetsGo, placeId, sessionBus, type ActiveHow, type PlaceGuard, type PlaceOptions } from '../session';
@@ -40,7 +41,7 @@ export interface LiveOptions {
 
 /** How the upload queue keys a person on this device: a hash of their email, never the email. */
 export async function uploadAccount(email: string): Promise<string> {
-  return sha256(new Blob([email.trim().toLowerCase()]));
+  return sha256Sync(email.trim().toLowerCase());
 }
 
 /**
@@ -68,7 +69,7 @@ export interface LiveSources extends Sources {
  * The same client, but an `auth` refusal from any call also runs `onAuth`,
  * so an ended session reaches the sign-in screen from whatever screen hit it.
  */
-export function watchAuth<T extends object>(api: T, onAuth: () => void, lifetime: () => number = () => 0): T {
+export function watchAuth<T extends object>(api: T, onAuth: () => void | Promise<void>, lifetime: () => number = () => 0, onReply?: (key: PropertyKey, reply: unknown) => void): T {
   return new Proxy(api, {
     get(target, prop, receiver) {
       const value: unknown = Reflect.get(target, prop, receiver);
@@ -77,8 +78,11 @@ export function watchAuth<T extends object>(api: T, onAuth: () => void, lifetime
         const before = lifetime();
         const out: unknown = Reflect.apply(value, target, args);
         if (out instanceof Promise)
-          return out.catch((e: unknown) => {
-            if (before === lifetime() && e instanceof BowerError && e.code === 'auth') onAuth();
+          return out.then((reply: unknown) => {
+            if (before === lifetime()) onReply?.(prop, reply);
+            return reply;
+          }, async (e: unknown) => {
+            if (before === lifetime() && e instanceof BowerError && e.code === 'auth') await onAuth();
             throw e;
           });
         return out;
@@ -119,16 +123,28 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
   let epoch = 0;
   let disposed = false;
   let expiredFrom = -1;
+  let expiryFailure: unknown = null;
   let session: LiveSession | null = null;
+  let knownAccount: Promise<string> | null = null;
   // The person is gone: this place starts again when someone signs in.
-  const expire = (): void => { expiredFrom = epoch; session?.expire(); guard?.reset(); };
+  const expire = async (): Promise<void> => {
+    expiredFrom = epoch;
+    try { await session?.expire(); }
+    catch (e) { expiryFailure = e; throw e; }
+    finally { guard?.reset(); }
+  };
   const drive = watchAuth(opts.drive, expire, () => epoch);
   const account = async (): Promise<string> => {
     const user = await session?.current();
     if (!user) throw new BowerError('auth', 'Sign in again to keep going.');
-    return uploadAccount(user.email);
+    return knownAccount ?? uploadAccount(user.email);
   };
-  const authed = watchAuth(opts.worker, expire, () => epoch);
+  // Keep the accepted identity in this lifetime's memory, before expiry erases the session cache.
+  const authed = watchAuth(opts.worker, expire, () => epoch, (key, reply) => {
+    if (key !== 'me') return;
+    const me = reply as Awaited<ReturnType<WorkerApi['me']>>;
+    if (me !== null) knownAccount = uploadAccount(me.user.email);
+  });
   const waitingHere: WaitingHere = { count: 0, listeners: new Set() };
   // One active place per person (TL-P2-13): built here, started by the screens once someone is signed in.
   const guard = opts.place ? placeGuard(opts.place === true ? {} : opts.place) : null;
@@ -227,7 +243,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
             try { result = await Reflect.apply(fn, instance, args); }
             catch (e) {
               // The current call's auth refusal causes this reset; preserve its readable auth meaning.
-              if (!(e instanceof BowerError && e.code === 'auth' && expiredFrom === at && epoch === at + 1)) check(at, closedSnapshot);
+              if (!(e instanceof BowerError && (e.code === 'auth' || e === expiryFailure) && expiredFrom === at && epoch === at + 1)) check(at, closedSnapshot);
               throw e;
             }
             check(at, closedSnapshot);
@@ -331,7 +347,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
   }
   const invalidate = (): void => {
     epoch++;
-    // Signed out, or someone else: stop sending; what this device kept stays for that person.
+    // Fence the old lifetime immediately; explicit forgetting below also purges its device records.
     queue.stop();
     detachVault();
     detachRuns();
@@ -343,6 +359,33 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
     connectRuns();
   };
   session = new LiveSession(worker, drive, () => undefined, invalidate);
+  async function forgetPerson(who: Promise<string> | null): Promise<void> {
+    forgetThisPerson();
+    try { await queue.forgetAccount(who === null ? undefined : await who); }
+    catch (e) {
+      console.error(e);
+      throw new BowerError('unknown', 'Signing out did not finish. Try again.');
+    }
+  }
+  {
+    const signOut = session.signOut.bind(session);
+    session.signOut = async (): Promise<void> => {
+      const who = knownAccount;
+      let failure: { cause: unknown } | undefined;
+      try { await signOut(); }
+      catch (cause) { console.error(cause); failure = { cause }; }
+      // Every attempt forgets locally with the session's last known identity, including retries.
+      await forgetPerson(who);
+      if (failure) throw failure.cause;
+    };
+    const ended = session.expire.bind(session);
+    session.expire = async (): Promise<void> => {
+      if (disposed) return;
+      const who = knownAccount;
+      ended();
+      await forgetPerson(who);
+    };
+  }
   {
     const leave = session.deleteAccount.bind(session);
     // Leaving Bower removes the uploads this device kept for that person, once the Worker agreed.

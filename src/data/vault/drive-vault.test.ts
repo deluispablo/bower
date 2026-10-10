@@ -925,7 +925,7 @@ describe('things that arrive late', () => {
     const keeping = new Promise<void>((r) => (kept = r));
     let letKeep: () => void = () => undefined;
     const keepGate = new Promise<void>((r) => (letKeep = r));
-    const store = { ...base, add: async (rec: Parameters<typeof base.add>[0], body: Blob) => { kept(); await keepGate; return base.add(rec, body); } };
+    const store = { ...base, add: async (...args: Parameters<typeof base.add>) => { kept(); await keepGate; return base.add(...args); } };
     const queue = createUploadQueue({ drive, store });
     const v = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set(), uploads: { queue, account: async () => 'ACCOUNT_A' } });
     const realTrash = drive.trash.bind(drive);
@@ -1496,31 +1496,48 @@ describe('uploads survive a reload, through the vault', () => {
     expect([...(await again.readBytes(reserved ?? ''))]).toEqual([...BYTES]);
   });
 
-  it('sign-out keeps the bytes for that account and folder; another account never sees or sends them', async () => {
+  it('sign-out forgets the bytes for that account and folder; another account never sees or sends them', async () => {
     const { d, idb } = await fresh();
     const hold = holdAt(d, 4);
     const first = page(d, idb);
-    const pile = await first.vault.addPile({ text: 'Receipts', items: [scan()] });
-    await reached(d, 4);
-    // Signing out stops the queue; what it kept stays on the device.
-    first.queue.stop();
-    first.vault.dispose();
-    hold.open();
-    d.beforeChunk = null;
-    expect(await indexedDbUploadStore(idb).list(ACCOUNT_A, root)).toHaveLength(1);
+    const live = makeLiveSources({ drive: d, worker: new FakeWorker({ drive: d, runs: new FakeRunService({ drive: d, scale: 'instant' }), rootId: root, scenario: 'default' }), declarePiles: true, uploadQueue: first.queue });
+    try {
+      const account = await uploadAccount((await live.session.current())?.email ?? '');
+      const pile = await live.vault.addPile({ text: 'Receipts', items: [scan()] });
+      await reached(d, 4);
+      const store = indexedDbUploadStore(idb);
+      const kept = (await store.list(account, root))[0];
+      expect(kept).toBeDefined();
+      expect(kept && await store.body(kept)).toBeInstanceOf(Blob);
+      await live.session.signOut();
+      hold.open();
+      await first.queue.idle();
+      d.beforeChunk = null;
+      expect(await store.list(account, root)).toEqual([]);
+      expect(kept && await store.body(kept)).toBeNull();
 
-    const calls = d.resumableCalls.length;
-    const other = page(d, idb, ACCOUNT_B);
-    const rows = await rowsOf(other.vault, pile.id);
-    await other.queue.idle();
-    expect(rows.filter(([, upload]) => upload !== undefined && upload >= 0)).toEqual([]);
-    expect(other.queue.items()).toEqual([]);
-    expect(d.resumableCalls).toHaveLength(calls);
-    other.queue.stop();
+      const calls = d.resumableCalls.length;
+      const other = page(d, idb, ACCOUNT_B);
+      const rows = await rowsOf(other.vault, pile.id);
+      await other.queue.idle();
+      expect(rows.filter(([, upload]) => upload !== undefined && upload >= 0)).toEqual([]);
+      expect(other.queue.items()).toEqual([]);
+      expect(d.resumableCalls).toHaveLength(calls);
+      other.queue.stop();
 
-    const back = page(d, idb, ACCOUNT_A);
-    await back.vault.piles();
-    await vi.waitFor(async () => expect(await scans(d)).toHaveLength(1));
+      const back = page(d, idb, account);
+      await back.vault.piles();
+      await back.queue.idle();
+      expect(await scans(d)).toHaveLength(0);
+      expect(back.queue.items()).toEqual([]);
+      expect(d.resumableCalls).toHaveLength(calls);
+      back.queue.stop();
+    } finally {
+      hold.open();
+      first.vault.dispose();
+      live.dispose();
+      sessionStorage.clear();
+    }
   });
 
   it('leaving Bower removes the bytes this device kept', async () => {

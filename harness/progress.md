@@ -326,3 +326,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-11: c2-pile-records passes — re-proved after orphan-pile-count-data renamed the empty-inbox golden (TL-P4-53 addendum 5)
 - 2026-10-11: orphan-pile-count-data passes — the vault gives a known count and completeness of piles that didn't finish arriving; unknown is never zero (P4-101 PASS)
 - 2026-10-11: c2-pile-records passes — re-proved after orphan-pile-count-data renamed the empty-inbox golden (TL-P4-53 addendum 5)
+- 2026-10-11: upload-sign-out-forget passes — sign-out forgets this device's pending uploads with no trace of the person; retries purge the last known account (P4-102, P4-103 PASS)
