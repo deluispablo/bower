@@ -531,112 +531,139 @@ Left out: production fix, full check/e2e, commits and integration.
 
 ## Fix round 2
 
-Implementer: codex, 2026-10-10. Base HEAD
-`6490d5e200a56b757e83e6f1e8e0ec3796181a3d`.
-Status: **blocked under TL-P4-51** after the whole targeted suite completed.
-The scoped production fix remains uncommitted. No network, git-writing command,
-test edit, dependency install, server, or e2e run was used. Coordinator owns commits.
+Implementer: codex, 2026-10-10. Follow-up base HEAD
+`e36f5f7100b72c4da48c67defe5bc9f25fd68e79`.
+Final status: **blocked under TL-P4-51** after the whole targeted suite completed.
+The scoped production fix remains uncommitted for `harness/codex-run.sh`.
+No network, git-writing command, test edit, dependency install, server, or e2e run.
 
-### Fix and cache reuse
+### Ruling and existing mechanism
 
-`src/data/vault/drive-vault.ts:621` now passes `ix.journalFiles()` to the existing
-lazy journal reader in `piles()`. Anchored missing-context classification through
-`setAsideFor` (`:938`, predicate `:944`) therefore uses current lines only, just as
-unanchored classification already does in `declarationsFor` (`:755`).
-`orphanSummary` calls `piles()` (`:731`), so both cold entry points receive the fix.
-The existing versioned `ReadCache`, per-listing lazy promise, declaration and
-accounting caches, and cached full-read summary are reused unchanged. There is no
-new store, scanner, wire format, mutation, or automatic context recreation.
+TL-P4-53 addendum 6 (lead, 2026-10-10), supplied in the assignment: a missing
+context gets one Bin lookup by identity through the existing c2-pile-records
+"binned counts as removed" lookup. Binned means removed; with nothing left the
+reason is "Nothing is left in it. Remove it from your inbox." Cost stays flat
+with history; no archive scan. The earlier round-2 stop at
+`src/data/fake/fake-runner.test.ts:1018-1024` is resolved and that test now passes.
+The earlier current-only journal fix remains in HEAD unchanged.
 
-removed: src/data/vault/drive-vault.ts:621 (base): archived changes from anchored missing-context reads.
-removed: src/data/vault/drive-vault.ts:618 (base): generic journal comment, replaced with current-line scope.
-removed: no files, tests, formats, cache mechanisms, upload mechanisms, or numeric bounds.
+`declaredState` extends its existing `binnedByItem` callback: the missing
+context's exact declaration member key joins missing member keys in one query.
+The returned file identity is established through `PROP.item`, never its name
+or path. Its one promise supplies both row accounting and `contextBinned`,
+including the repeated accounting after queue hydration. `setAsideFor` consumes
+that fact through the existing `setAsideOf`; no removal line is required for a
+context whose identity is in the Bin. An empty pile therefore gets `empty`;
+a pile with ready things still in it gets no missing-context reason.
+
+The existing `fullDeclarations` snapshot also retains these Bin promises by
+folder identity and queried identities. `declarationSnapshot` extracts the
+existing listing/evidence identity check without changing its invalidation
+criteria. Row reads and repeated `orphanSummary` reads reuse the same promise;
+refresh and changed listing/journal evidence replace the snapshot as before.
+No persistent table, second Bin scanner, new Drive API, archive scan, shared
+contract, upload protocol, automatic recreation, or runner change was added.
+
+removed: src/data/vault/drive-vault.ts:739-741 (follow-up base): inline snapshot check, extracted unchanged.
+removed: src/data/vault/drive-vault.ts:778 (follow-up base): separate snapshot assignment, replaced by its shared initializer.
+removed: src/data/vault/drive-vault.ts:869-870 (follow-up base): member-only Bin callback, replaced by the combined lookup.
+removed: no files, tests, formats, upload mechanisms, or numeric bounds.
 tests changed: none.
 
-### Complete journalFiles(true) caller audit
+### Red and green evidence
 
-Search: `rg -n 'journalFiles\(true\)' src --glob '*.ts' --glob '*.tsx'`.
-There are **zero** remaining callers on `piles()` or `orphanSummary()` paths.
-All remaining production matches are listed here:
+Baseline focused run completed: 3 files, 99 passed, one failed (100 tests).
+All 18 orphan tests and all 10 Home cache tests passed. The sole assertion red:
+`src/data/fake/fake-runner.test.ts:1018`,
+`a pile left with nothing is offered for removal, never filed`, at `:1024`:
+expected "Nothing is left in it. Remove it from your inbox." but received
+"Some of its things have not arrived yet." It passes after this fix.
 
-- `src/data/vault/drive-vault.ts:1009`: `restoreContext`, invoked by the explicit
-  `retryPile` action at `:1288`. Neither read entry point calls it; its existing
-  write/retry behavior is outside this fix and remains unchanged.
-- `src/data/spine/plan.ts:134`: `capturePiles`, the separate tidy-up admission
-  capture. Neither `DriveVault.piles()` nor `orphanSummary()` calls it. Its
-  existing archive evidence and shared planning behavior remain unchanged.
+An intermediate focused run exposed repeated Bin reads on summaries. Those
+were corrected by sharing the existing full-read snapshot before the final
+runs below. Neither cache assertion nor any other test was edited.
 
-Current-line callers on the read paths are `drive-vault.ts:621` (anchored),
-`:755` (unanchored), `:740` (full-read evidence signature), and `:191`
-(the existing Journal adapter). `journalValues` at `pile-readiness.ts:561`
-reads only its supplied files; accounting and declaration discovery introduce
-no further journal scan. `orphanSummary` reuses `piles` and `declarationsFor`.
+Final commands use `pnpm --config.verifyDepsBeforeRun=false --config.offline=true`:
 
-### Red and verification evidence
-
-Baseline file run: 18 tests, 16 passed, two assertion reds. Exact names:
-
-- `orphan-pile-count-data: fix 2: anchored missing context through cold piles`
-- `orphan-pile-count-data: fix 2: anchored missing context through cold orphanSummary`
-
-Both fail at `src/data/orphan-pile-count.test.ts:362` (archived reads `[2, 200]`
-instead of `[0, 0]`) and `:365` (4 versus 202 total Drive calls). All committed
-positive controls, read-only snapshots, and other orphan assertions passed.
-
-After the fix, the **whole** requested data and architecture target completed:
-80 files, 4,184 passed, one failed (4,185 tests), exit 1. All 18 orphan tests,
-including the six fix-round-2 cases and the fix-round-1 regression, pass.
-All Home cache tests pass with unchanged goldens. Architecture tests pass.
-The one remaining contradiction is enumerated below; there are no other failures.
-
-Commands use `pnpm --config.verifyDepsBeforeRun=false --config.offline=true`:
-
-- `exec vitest run src/data/orphan-pile-count.test.ts --maxWorkers=2`: baseline red, exit 1.
-- `exec vitest run src/data src/architecture.test.ts --maxWorkers=2`: exit 1 as above.
+- `exec vitest run src/data/orphan-pile-count.test.ts --maxWorkers=2`: exit 0;
+  all 18 reds/control tests pass. Both exact anchored history-flat regressions
+  pass: `orphan-pile-count-data: fix 2: anchored missing context through cold piles`
+  and `orphan-pile-count-data: fix 2: anchored missing context through cold orphanSummary`.
+  The four other fix-2 controls, fix-1 history-flat regression, shared-cache
+  assertions and both pinned properties also pass unchanged.
+- `exec vitest run src/data src/architecture.test.ts --maxWorkers=2`: exit 1;
+  80 files, 4,181 passed, four failed (4,185 tests). Every failure is listed
+  below. All Home goldens and architecture tests pass unchanged.
 - `exec tsc -p tsconfig.app.json --noEmit --incremental false`: exit 0.
 - `exec tsc -p tsconfig.node.json --noEmit --incremental false`: exit 0.
 - `exec eslint src/data/vault/drive-vault.ts`: exit 0.
 - Read-only `git diff --check`: pass.
 
-Vitest is installed (5.0.3); offline installation was unnecessary. Both Vitest
-runs additionally use the OS-temp config wrapper, `--configLoader runner`, and
-`--fsModuleCachePath`. The wrapper imports the unchanged app config and redirects
-Vite/module caches into OS temp. A temp setup moves only the worker process cwd
-there, keeping the existing CPU reporter outside the repository. Temp `src` and
-`docs` symlinks serve existing relative fixture reads; no test writes to them.
-No test, config, or setup file in the repository changed. Typechecks disable
-incremental output. Only test failures and aggregate results were inspected.
+Vitest 5.0.3 was installed; offline installation was unnecessary. Each Vitest
+command also uses `--configLoader runner`, an OS-temp config wrapper, and an
+OS-temp `--fsModuleCachePath`. The wrapper imports the unchanged app config,
+redirects Vite/module caches, and prepends a temp setup that moves only worker
+cwd into OS temp. Temp `src` and `docs` symlinks support existing relative
+fixture reads. CPU reports stay in OS temp; no test writes into the repository.
+No repository test/config/setup file changed. Only failure sections and
+aggregate results were read; successful typecheck/lint logs are empty.
 
-Logs and temporary configuration: `/private/tmp/orphan-pile-count-fix2-impl-01ykhxzq/`
-(`red.log`, `data.log`, `tsc-app.log`, `tsc-node.log`, `eslint.log`).
-`pnpm check` was not run: the remaining contradiction requires the TL-P4-51 stop,
-and its standard test command writes repository artifacts prohibited by this
-assignment. E2e does not apply (`ui: false`). No check mark is claimed.
+Logs/config: `/private/tmp/orphan-pile-count-fix2-final-1kdlgoa4/`:
+`baseline.log`, `focused.log` (intermediate), `reds.log`, `data.log`,
+`tsc-app.log`, `tsc-node.log`, `eslint.log`, `vitest.config.ts`, `cwd.ts`.
+`pnpm check` was not run: its standard tests write repository artifacts,
+prohibited by this assignment, and the completed target requires the TL-P4-51
+stop. No full check mark is claimed. E2e does not apply (`ui: false`).
 
 ### Every contradicting test (whole target completed before stopping)
 
-Exactly one:
+Exactly four tests fail against the supplied addendum-6 rule:
 
-1. `src/data/fake/fake-runner.test.ts:1018` —
-   `an incomplete pile retains every member across tidy-up and retry > a pile left with nothing is offered for removal, never filed`.
-   Its assertion at `:1024` expects `Nothing is left in it. Remove it from your inbox.`,
-   but receives `Some of its things have not arrived yet.`.
-   `noteBinnedByYou` (`:995-1003`) removes the context and writes the current trash
-   line. After `tidyUp` (`:1022`) archives that line, `heldWith` (`:21-25`) asks a
-   fresh `DriveVault.piles()` for the reason. The assertion requires the archived
-   removal fact to keep the empty-pile reason. The assigned ruling requires that
-   read to use current journal lines only, leaving missing context `not-arrived`.
-   Reinstating an archive scan would contradict the ruling and committed fix-2 reds.
-   No test was changed or weakened, and no alternate evidence mechanism was added.
+1. `src/data/fake/fake-runner.test.ts:1031` —
+   `a note missing for no reason you gave holds the pile until it is written again`.
+   Assertion `:1043` expects "Some of its things have not arrived yet.".
+   The fixture directly Bins the context (`:1036`); ready members remain live.
+   The new Bin fact removes the missing-context reason, so `heldWith` returns
+   "held, with no reason in the Inbox". The runner still holds this pile under
+   its older journal-only rule; runner files are outside the owned scope.
+2. `src/data/fake/fake-worker.test.ts:3636` —
+   `a pile waiting for its context note is held, never restored by the runner`.
+   Assertion `:3667` expects `not-arrived`, receives `undefined`. The fixture
+   directly Bins the context at `:3645`, with no removal line; its ready things
+   remain. Treating that exact Binned context as removed contradicts the old
+   missing-context expectation. The later retry assertions are not reached.
+3. `src/data/vault/drive-vault.test.ts:2026` —
+   `a note to write again is not an empty pile, for the inbox and the tidy-up alike`.
+   Assertion `:2030` expects `not-arrived`, receives `empty`. The helper at
+   `:2015-2023` moves its member out and directly Bins the context; nothing is
+   left. This is exactly the addendum-6 empty-pile case. The subsequent runner
+   expectation at `:2031` retains the older rule and is not reached.
+4. `src/data/vault/drive-vault.test.ts:2034` —
+   `your changes are read once per listing, and one that cannot be read affects only its pile`.
+   Assertion `:2044` expects two `not-arrived` reasons, receives two `empty`
+   reasons. Both fixtures use the same helper that Bins context after moving
+   all members out. Bin evidence now determines removal before journal reads.
+   Its later current-journal read-count (`:2045`) and refusal-based reasons
+   (`:2052-2053`) also assume journal evidence is required and are not reached.
+
+These are all failures from the whole requested target, not just the first
+one found. Reverting Bin removal to require a journal line would contradict
+the supplied ruling. No test was changed, weakened, skipped, or deleted.
+No fixture-specific branch or alternate retirement rule was added. Stopped
+with all four contradictions recorded for the lead under TL-P4-51.
 
 ### Standard approach and sources
 
-No network research was authorized or performed. Reused the established
-current-journal query and versioned read cache, already validated for unanchored
-piles in fix round 1. Packet/prep protocol and durability references are inherited:
+No network research was authorized or performed. Reused the existing c2 Bin
+lookup documented in `src/data/drive/drive-api.ts:132-138`, its real Drive
+implementation, and the existing full-read snapshot evidence check.
+Inherited standard reference:
+[Drive file search](https://developers.google.com/workspace/drive/api/guides/search-files)
+(`trashed = true` plus exact app-property identity predicates).
+Packet protocol/durability references remain
 [Google Drive resumable uploads](https://developers.google.com/workspace/drive/api/guides/manage-uploads#resumable)
-and [IndexedDB transaction model](https://www.w3.org/TR/IndexedDB/#transaction-concept).
+and [IndexedDB transactions](https://www.w3.org/TR/IndexedDB/#transaction-concept).
 No upload or device durability mechanism changed.
 
-Left out: ruling on the listed archived-context contradiction, full check mark,
-UI/e2e, test changes, commits, and integration.
+Left out: lead reconciliation of the four contradictory tests and runner
+expectations, full check mark, UI/e2e, test changes, commits, and integration.
