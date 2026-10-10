@@ -443,8 +443,8 @@ export class BirdEngine {
   private reaction: ReactionRequest | null = null;
   /**
    * The one gate: only a live engine runs its motion sources (the mind, acts,
-   * chirp, breathing, gaze, the pose script). While it settles, the loop draws
-   * only the blend; once still, nothing.
+   * chirp, breathing, gaze, the pose script, CSS decoration). While it settles,
+   * the loop draws only the blend; once still, nothing.
    */
   private motion: 'live' | 'settling' | 'still' = 'live';
   /** The moves-off blend: the drawn pose at react() time, its still frame, and when it began. */
@@ -523,6 +523,7 @@ export class BirdEngine {
    */
   release(): void {
     this.stop();
+    this.clearCssMotion();
     const P = this.parts;
     this.drawFrame(true);
     for (const g of [P.rig, P.head, P.tail, P.wing, P.legs, P.jaw, P.tuft, P.eye, P.iris]) {
@@ -724,6 +725,7 @@ export class BirdEngine {
    * drawing at release is the still frame by construction.
    */
   private beginSettle(): void {
+    this.clearCssMotion();
     this.interrupt({ now: true });
     this.S.pending = null;
     const from = this.drawn ?? this.drawing();
@@ -1371,7 +1373,12 @@ export class BirdEngine {
   poke(): void {
     this.play('tap');
   }
+  /** Decoration has no pose to blend: closing the gate hides it immediately. */
+  private clearCssMotion(): void {
+    this.parts.spark?.classList.remove('go');
+  }
   private sparkle(): void {
+    if (this.motion !== 'live') return;
     const el = this.parts.spark;
     if (!el) return;
     el.style.transform = `translate(${this.B.x}px,${this.B.y - this.size * 0.7}px)`;
