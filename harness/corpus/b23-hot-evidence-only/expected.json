@@ -1,0 +1,34 @@
+{
+  "files": {
+    "present": [
+      "hot.md"
+    ],
+    "absent": [
+      "Projects/Evergreen launch/*",
+      "Inbox/*"
+    ]
+  },
+  "notes": [
+    {
+      "path": "hot.md",
+      "contains": [
+        "# Hot",
+        "_Updated:",
+        "## Current focus",
+        "## Open threads",
+        "## Recent changes"
+      ],
+      "excludes": [
+        "Evergreen launch",
+        "Lost letter",
+        "Filed the Lost letter."
+      ]
+    }
+  ],
+  "report": {
+    "filed": 0,
+    "created": [],
+    "updated": [],
+    "questionsExactly": 0
+  }
+}

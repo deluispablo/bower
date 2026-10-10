@@ -1,6 +1,6 @@
 # Capability corpus (P4-A)
 
-Made-up cases for the capabilities C04 to C11, C13, C15 and proposed C17 / B1 (Alex, Larkspur Lane, Saltmere, Ferrowick; nothing personal). Each folder holds:
+Made-up cases for the capabilities C04 to C11, C13, C15 and proposed C17 / B1–B3 (Alex, Larkspur Lane, Saltmere, Ferrowick; nothing personal). Each folder holds:
 
 - `case.json`: the inputs (piles, requests, rules, answers, seeded questions), the scope and the web switch;
 - `inbox/`: the files of the piles; `folder/`: the starting folder (notes with their front matter, `Rules.md`);
@@ -60,6 +60,10 @@ Made-up cases for the capabilities C04 to C11, C13, C15 and proposed C17 / B1 (A
 | b1-index-no-change | C17 / B1 | model | TL-P4-39 F9; reused made-up B123 exclusions and unchanged-index fixture |
 | c05-conflicting-fact-kept | C05 | scripted | new (preservation through the existing planner) |
 | c05-marked-state-keeps-history | C05 | scripted | new (preservation through the existing planner) |
+| b23-summary-person-lint | C17 / B2 | model | TL-P4-39 R2; quoted summary and personal-note preservation; B8 lint dependency |
+| b23-hot-question-answer | C17 / B3 | model | TL-P4-39 F3; reused real generated question → app answer → hot settlement |
+| b23-summary-words | C17 / B2 | model | TL-P4-39 B2; multiline words body and quoted scalar summary |
+| b23-hot-evidence-only | C17 / B3 | model | TL-P4-39 §1.1/F7; instruction-only rebuild excludes unsupported prior-hot claims |
 
 `replies.json` supplies deterministic intent replies at the existing Claude provider boundary. `$file:NAME` binds an exact admitted name to its id. `between` edits or moves run on the same fake Drive between two production runner calls; an empty array runs twice without a personal edit. Existing cases keep their demo-provider path.
 
@@ -139,3 +143,7 @@ These expectations may also appear inside a `runs` item, where they compare that
 The four `b1-*` cases are preparation fixtures, not scripted success. Their execution replies use the existing intent
 shape; B1 needs a step-aware driver, changes-feed simulation and context/read/write oracles before coverage can change.
 The current C04–C15 method test does not select `b1-*` ids or admit C17. See `docs/harness/2026-10-10-b1-prep.md`.
+
+The four `b23-*` cases are pending B2/B3 preparation fixtures, with exact execution replies and existing scored keys.
+They need C17 admission, scalar/context/maintenance oracles and B1’s step-aware driver before scripted acceptance.
+See `docs/harness/2026-10-10-b23-prep.md`; hot is hidden maintenance, not authoritative pending state.
