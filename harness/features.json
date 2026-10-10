@@ -6791,7 +6791,7 @@
     "id": "b3a-hot-reduce",
     "task": "p4-b3",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "A pure script renders hot from open questions, hubs with settled changes and recent changes, bounded to 300 words (TL-P4-42 Q3, Q4, Q6).",
     "steps": [
