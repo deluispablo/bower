@@ -20,3 +20,6 @@ Source: the supplied diagnosis cites Playwright's official actionability guidanc
 https://playwright.dev/docs/actionability. No network access was used.
 The existing in-app Recent navigation is reused. No retry, bound change, or product change.
 No git writes or commits were made; the coordinator commits specs and notes separately.
+
+tests changed: e2e/qa7.spec.ts: "New note in an empty folder asks for a name, then opens the note" waits for the name box to be focused before typing (defect qa7-63-flaky); no bound changed.
+tests changed: e2e/capabilities.spec.ts: "write it shows the state written, re-asks on a clash and settles as an answered row" navigates to Car in the app instead of page.goto (defect capabilities-210-flaky); the assertion and its timeout are unchanged.
