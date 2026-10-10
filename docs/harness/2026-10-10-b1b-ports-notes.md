@@ -533,3 +533,47 @@ Requested checks all exited 0; output was redirected and inspected only for fail
 removed: src/data/drive/drive-contract.ts: fake-drive import and concrete adapter construction.
 left out: full pnpm check and e2e; requested targeted red repair checks only, no screen changes.
 No production adapter was changed. No network or git write command was run. The coordinator commits.
+
+## Fix round 2 red (TL-P4-41 addendum 1)
+
+Added `b1b fix 2: native fake sizes are UTF-8 bytes for Unicode creates and updates`
+to the existing B1 parity suite in `src/data/drive/parity.test.ts`, reproducing finding 1
+from `docs/harness/2026-10-10-codex-b1b-ports-adversarial-2.md`.
+
+The native fake uses no scripted change pages. Each operation captures both adapters' start
+tokens first. An ASCII note (`ASCII`, 5 bytes) is created and passes every size check as the
+positive control. Then a new note is created with `é🙂`, and the existing ASCII note is
+updated to `é🙂` with its freshly read modifiedTime. Both stored media reads contain the
+exact UTF-8 bytes, and both feed drains contain exactly the changed id. The real DriveHttp
+consumes recorded wire responses whose size is computed independently with TextEncoder;
+the native fake feed is never synthesized by this test.
+
+For each operation, feed size must equal stored media byteLength. Other fake size paths
+must agree: create/write response, get, checksum get, listing, search, storedDigest,
+evidence metadata and content, snapshot restoration, trash/untrash responses and both
+metadata and digest size from binnedByItem. All lookups match the note by id. Soft size
+assertions expose both create and update failures in the same run without stopping at
+the first defective metadata path. No existing assertion, test body or fixture changed.
+
+Verification (output redirected; only failures and aggregate results inspected):
+
+- `pnpm exec vitest run src/data/drive --maxWorkers=2 > tmp-logs/b1b-fr2-red.log 2>&1`:
+  exit 1, exactly **1 failed test and 279 passed**. Six assertion failures belong solely
+  to the new test: for each Unicode operation, fake feed size is **3 instead of 6**,
+  other fake metadata sizes are **3 instead of 6**, and Bin metadata sizes are
+  `[3, 3, 6, 3]` instead of `[6, 6, 6, 6]`. Stored digest/content sizes, HTTP feed sizes
+  and exact media checks pass for both operations. Every ASCII control passes.
+  No load error, unrelated failure or unhandled error was reported.
+- `pnpm exec tsc -p tsconfig.app.json --noEmit > tmp-logs/b1b-fr2-tsc.log 2>&1`: exit 0.
+- `pnpm exec eslint src/data/drive/parity.test.ts > tmp-logs/b1b-fr2-eslint.log 2>&1`: exit 0.
+- `git diff --check`: passed (read-only). The test diff is additions only.
+
+Research reused the review's locally supplied Drive files-resource reference, which defines
+size in bytes: https://developers.google.com/workspace/drive/api/reference/rest/v3/files.
+No online verification was performed, following the no-network instruction. The existing
+parity suite's recorded-transport pattern and native fake create/write methods were reused.
+
+removed: none.
+tests changed: none; one new parity test only.
+left out: production fix, pnpm check, e2e and commits; this assignment is red-only, coordinator commits.
+No network or git command that writes was run. Only parity.test.ts and this notes file changed.

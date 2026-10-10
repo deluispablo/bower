@@ -86,6 +86,73 @@ describe('B1b HTTP and fake port parity', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
+  it('b1b fix 2: native fake sizes are UTF-8 bytes for Unicode creates and updates', async () => {
+    const fake = new FakeDrive({ clock: () => Date.parse('2026-10-10T10:00:00.000Z'), latency: 0 });
+    const root = await fake.createFolder('root', 'Bower');
+    const changes: Array<{ fileId: string; removed: false; file: WireFile }> = [];
+    const media = new Map<string, string>();
+    const json = (body: unknown) => new Response(JSON.stringify(body));
+    const http = new DriveHttp({
+      token: async () => 'made-up-token', pacing: { baseMs: 0 },
+      fetch: async (input) => {
+        const url = new URL(String(input));
+        if (url.pathname.endsWith('/changes/startPageToken')) return json({ startPageToken: String(changes.length) });
+        if (url.pathname.endsWith('/changes')) return json({
+          changes: changes.slice(Number(url.searchParams.get('pageToken'))), newStartPageToken: String(changes.length),
+        });
+        const id = url.pathname.split('/').at(-1) ?? '';
+        if (url.searchParams.get('alt') === 'media' && media.has(id)) return new Response(media.get(id));
+        throw new Error('Unrecorded Unicode size request.');
+      },
+    });
+    const verify = async (text: string, existingId?: string) => {
+      const tokens = await Promise.all([http.getStartPageToken(), fake.getStartPageToken()]);
+      const written = existingId
+        ? await fake.writeText(existingId, text, (await fake.get(existingId)).modifiedTime)
+        : await fake.createText(root.id, 'Unicode.md', text, { bowerItem: 'SIZE_ITEM' });
+      const expected = new TextEncoder().encode(text);
+      // Drive's wire size is bytes, independently of the fake's native metadata calculation.
+      media.set(written.id, text);
+      changes.push({ fileId: written.id, removed: false, file: {
+        id: written.id, name: written.name, parents: written.parents, mimeType: 'text/markdown',
+        createdTime: written.createdTime, modifiedTime: written.modifiedTime, size: String(expected.byteLength),
+      } });
+      for (const [kind, drive, token] of [['http', http, tokens[0]], ['fake', fake, tokens[1]]] as const) {
+        const bytes = await drive.readBytes(written.id);
+        expect(Array.from(bytes), `${kind} stored media`).toEqual(Array.from(expected));
+        const feed = await drive.listChanges(token);
+        expect(feed.changes).toHaveLength(1);
+        expect(feed.changes[0]).toMatchObject({ fileId: written.id, removed: false });
+        expect.soft(feed.changes[0]?.file?.size, `${kind} native feed: ${existingId ? 'update' : 'create'} ${text}`)
+          .toBe(bytes.byteLength);
+      }
+      const evidence = await fake.evidence(written.id);
+      const restored = FakeDrive.restore(await fake.snapshot(), { latency: 0 });
+      const sizes = {
+        write: written.size,
+        get: (await fake.get(written.id)).size,
+        checksums: (await fake.get(written.id, { checksums: true })).size,
+        listing: (await fake.listAll(root.id)).find((file) => file.id === written.id)?.size,
+        search: (await fake.fullText(root.id, 'Unicode')).find((file) => file.id === written.id)?.size,
+        digest: (await fake.storedDigest(written.id))?.size,
+        evidenceFile: evidence?.file.size,
+        evidenceContent: evidence?.content?.size,
+        restored: (await restored.get(written.id)).size,
+      };
+      expect.soft(sizes, `fake size paths: ${existingId ? 'update' : 'create'} ${text}`)
+        .toEqual(Object.fromEntries(Object.keys(sizes).map((key) => [key, expected.byteLength])));
+      const trashed = await fake.trash(written.id);
+      const binned = (await fake.binnedByItem(root.id, ['SIZE_ITEM'])).find((item) => item.file.id === written.id);
+      const untrashed = await fake.untrash(written.id);
+      expect.soft([trashed.size, binned?.file.size, binned?.size, untrashed.size], `fake Bin size paths: ${text}`)
+        .toEqual(Array<number>(4).fill(expected.byteLength));
+      return written.id;
+    };
+    const asciiId = await verify('ASCII');
+    await verify('é🙂');
+    await verify('é🙂', asciiId);
+  });
+
   it('b1b fix 1 finding 1: inherited Bin status in prefix and feed', async () => {
     const u = makeFixRound1Drive();
     for (const drive of [u.http, u.fake]) {
