@@ -1,3 +1,4 @@
+import { resize } from './viewport';
 /**
  * Round six: what the review of round five found. Each test pins one entry of
  * harness/features.json with "task": "qa-6", on demo and on fake.
@@ -10,6 +11,50 @@ const open = async (page: Page, path: string, scenario = 'default', time = 'inst
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
 };
 void isFake;
+
+test("Escape on a new folder's name takes it back", async ({ page }) => {
+  await resize(page, { width: 1280, height: 900 });
+  await open(page, '/files');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  const resources = tree.locator('[data-path="Resources"]');
+  await expect(resources).toBeVisible();
+  const openerId = await resources.getAttribute('id');
+  expect(openerId).toBeTruthy();
+  await resources.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'New folder', exact: true }).click();
+  const name = tree.getByRole('textbox', { name: 'New folder in Resources', exact: true });
+  const draft = tree.getByRole('treeitem').filter({
+    has: page.getByRole('textbox', { name: 'New folder in Resources', exact: true }),
+  });
+  await expect(name).toBeVisible();
+  await expect(name).toBeFocused();
+  await expect(name).toHaveValue('');
+  await expect(name).toHaveAttribute('placeholder', 'Name');
+  await expect(draft).toHaveCount(1);
+  const rowsWithoutDraft = await tree.getByRole('treeitem').count() - 1;
+  await expect(tree.locator('[data-path="Resources/New folder"]')).toHaveCount(0);
+  await name.fill('Soup ideas');
+  await name.press('Escape');
+  await expect(draft).toHaveCount(0);
+  await expect(tree.getByRole('treeitem')).toHaveCount(rowsWithoutDraft);
+  await expect(tree.locator('[data-path="Resources/New folder"]')).toHaveCount(0);
+  await expect(tree.locator('[data-path="Resources/Soup ideas"]')).toHaveCount(0);
+  await expect(tree.getByRole('textbox')).toHaveCount(0);
+  await expect(tree).toBeFocused();
+  await expect(tree).toHaveAttribute('aria-activedescendant', openerId ?? '');
+  await expect(page).toHaveURL(/\/files(?:\?|$)/);
+  await expect(page.getByRole('main').getByRole('heading', { name: 'Your Bower folder', exact: true })).toBeVisible();
+  // Positive control: the same entry makes the named folder when Enter confirms it.
+  await resources.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'New folder', exact: true }).click();
+  await expect(name).toBeFocused();
+  await name.fill('Soup ideas');
+  await name.press('Enter');
+  await expect(tree.locator('[data-path="Resources/Soup ideas"]')).toHaveCount(1);
+  await expect(tree.getByRole('treeitem')).toHaveCount(rowsWithoutDraft + 1);
+  await expect(tree.getByRole('textbox')).toHaveCount(0);
+  await expect(page.getByRole('main').getByRole('heading', { name: 'Soup ideas', exact: true })).toBeVisible();
+});
 
 test('one counting rule for folders', async ({ page, isMobile }) => {
   test.skip(isMobile, 'the folder cards of the desktop');
@@ -164,17 +209,7 @@ test('a saved link in the timeline is a link', async ({ page }) => {
   await expect(link).toHaveAttribute('target', '_blank');
 });
 
-test("Escape on a new note's name takes it back", async ({ page, isMobile }) => {
-  test.skip(isMobile, 'the desktop tree');
-  await open(page, '/');
-  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
-  await tree.getByRole('treeitem', { name: /^Resources/ }).click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'New note' }).click();
-  await page.keyboard.type('Soup ideas');
-  await page.keyboard.press('Escape');
-  await expect(page).not.toHaveURL(/\/note\//);
-  await expect(tree.getByRole('treeitem', { name: /^(Untitled|Soup ideas)/ })).toHaveCount(0);
-});
+
 
 test('the notifications row says when they are blocked', async ({ page }) => {
   await page.addInitScript(() => {

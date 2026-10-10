@@ -1,0 +1,87 @@
+{
+  "files": {
+    "present": [
+      "Projects/Zinnia path/Ferrowick offer.txt",
+      "Projects/Zinnia path/Ferrowick offer.md",
+      "index.md"
+    ],
+    "absent": [
+      "Inbox/*",
+      "Projects/Alder bench/Ferrowick offer*"
+    ]
+  },
+  "placement": {
+    "files": [
+      "*Ferrowick offer*"
+    ],
+    "allowed": [
+      {
+        "under": "Projects/Zinnia path",
+        "linking": "Zinnia path"
+      }
+    ]
+  },
+  "unchanged": [
+    "Projects/Alder bench/Alder bench.md",
+    "Projects/Amber cupboard/Amber cupboard.md",
+    "Projects/Birch shelves/Birch shelves.md",
+    "Projects/Cedar stool/Cedar stool.md",
+    "Projects/Elm cabinet/Elm cabinet.md",
+    "Projects/Fir planter/Fir planter.md",
+    "Projects/Hazel desk/Hazel desk.md",
+    "Projects/Larch rack/Larch rack.md",
+    "Projects/Maple box/Maple box.md",
+    "Projects/Oak chair/Oak chair.md",
+    "Projects/Pine tray/Pine tray.md",
+    "Projects/Willow frame/Willow frame.md",
+    "Resources/Careers/Applications.md",
+    "hot.md"
+  ],
+  "protectedRanges": [
+    {
+      "path": "Projects/Zinnia path/Zinnia path.md",
+      "range": {
+        "heading": "My plans"
+      }
+    },
+    {
+      "path": "Projects/Zinnia path/Zinnia path.md",
+      "range": {
+        "frontMatter": true
+      }
+    }
+  ],
+  "notes": [
+    {
+      "path": "Projects/Zinnia path/Zinnia path.md",
+      "timeline": [
+        "Ferrowick offers Alex a remote developer role.",
+        "[[Ferrowick offer]]"
+      ],
+      "timelineCount": 1
+    },
+    {
+      "path": "Projects/Zinnia path/Ferrowick offer.md",
+      "contains": [
+        "summary: Ferrowick offers Alex a remote developer role.",
+        "[[Zinnia path]]",
+        "[[Applications]]"
+      ]
+    },
+    {
+      "path": "index.md",
+      "contains": [
+        "# Index",
+        "## Projects",
+        "### Zinnia path",
+        "- [[Ferrowick offer]] — Ferrowick offers Alex a remote developer role."
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "createdAtLeast": 1,
+    "questionsExactly": 0
+  }
+}

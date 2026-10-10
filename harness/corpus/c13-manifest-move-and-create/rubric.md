@@ -1,0 +1,3 @@
+Restore the source by its original id to the inbox under its original name, with exactly its original bytes. Put the unchanged generated note in the recoverable Drive Bin by its created id; never hard-delete. Report complete recovery only when both effects are confirmed.
+Rules.md and unrelated files are unchanged. This is an undo, so an inbox return needs no filing question (TL-P4-08 point 1 exception).
+The starting folder is a post-tidy-up snapshot, not proof that a run or manifest exists. Reconstruct the forward run using the exact proposal in the prep document, retain its actual manifest and checkpoint, then invoke the product undo entry point. Assert same ids, Bin recoverability, fences and the visible outcome separately from the existing folder scorer.

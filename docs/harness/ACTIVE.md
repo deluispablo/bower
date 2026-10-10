@@ -492,3 +492,4 @@ P3-9 is closed.
 - Planner-split smoke on staging a0a0c1a7: garden PASS 51 s, offer-and-flat PASS 61 s, c05-hub-lines PASS 55 s; rows per Timeline line and New marks correct; Home 4.5 s / 15 calls, no .bower growth. c3-note-sections delivered (red 650f1ac3, fix 8233a111).
 - c3-pair-ask dispatched (escalated, packet with ruling sweep). c3-state-mark (with write-it-silent, addendum 7) registered; dispatched after pair-ask (both touch scripted.ts and questions).
 - TL-P4-18 addendum 2 (main f6856abd): UI-touching questions/defects are flagged as UI in messages to the lead (lead consults the designer). c3-pair-ask copy may change before merge (lead sends final text).
+- 2026-10-10 Batch suites on claude/p3 6f9a38d2 (folder-header-wrap, c5-codex-run, p4-corpus-answers, shell-page-column, c5-test-margin, the C06/C07/C11 preps): pnpm check green; e2e 288 passed; e2e:fake 336 passed; e2e:pwa 4 passed (console-guard ✘ rows are its expected failures).

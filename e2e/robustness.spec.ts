@@ -127,17 +127,7 @@ test('a tab or newline in the sign-in address still lands on Home', async ({ pag
   }
 });
 
-test('New note from the right-click menu asks for its name', async ({ page, isMobile }) => {
-  test.skip(isMobile, 'desktop menu');
-  await open(page, '/files/Projects', 'default', 'instant');
-  await page.getByRole('tree', { name: 'Your Bower folder' }).getByRole('treeitem', { name: /^Job hunt/ }).click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'New note' }).click();
-  const box = page.getByLabel(/New name for Untitled/);
-  await expect(box).toBeFocused();
-  await box.fill('Interview questions');
-  await box.press('Enter');
-  await expect(page.getByRole('treeitem', { name: /Interview questions/ })).toBeVisible();
-});
+
 
 test('clicking away from a refused name cancels without a second toast', async ({ page, isMobile, allowConsole }) => {
   test.skip(isMobile, 'desktop tree');

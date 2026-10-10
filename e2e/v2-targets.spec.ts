@@ -1,3 +1,4 @@
+import { resize } from './viewport';
 /**
  * v2-targets (d-v2-05, d-v2-10; WCAG 2.5.8 target size minimum, 2.5.5 target size): the desktop tab close
  * button is 24 square, and on the phone every listed control is at least 44 px. Fake Drive, phone and desktop.
@@ -53,14 +54,14 @@ test('the desktop tab close button is at least 24 square', async ({ page, isMobi
 
 test('every listed phone control is at least 44 px', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'the phone shell');
-  await page.setViewportSize({ width: 375, height: 812 });
+  await resize(page, { width: 375, height: 812 });
 
   await open(page, '/');
   await atLeast('home answers', page.locator('section[aria-labelledby="qs"] button'), 44);
   await axeTargets(page, 'main');
 
   await open(page, '/files');
-  await atLeast('files toolbar', page.getByRole('button', { name: /^(New note|New folder|Change sort order)$/ }), 44, true);
+  await atLeast('files toolbar', page.getByRole('button', { name: /^(New folder|Change sort order)$/ }), 44, true);
   await axeTargets(page, 'main');
 
   await open(page, '/bower');
@@ -105,7 +106,7 @@ test('desktop control sizes stay at least 24', async ({ page, isMobile }) => {
   await open(page, '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Larkspur%20Lane.md');
   await axeTargets(page, 'main');
   await open(page, '/files/Projects/Flat%20hunt');
-  await atLeast('files toolbar', page.getByRole('button', { name: /^(New note|New folder|Change sort order)$/ }), 24, true);
+  await atLeast('files toolbar', page.getByRole('button', { name: /^(New folder|Change sort order)$/ }), 24, true);
   await axeTargets(page, 'main');
   await open(page, '/bower');
   await atLeast('tell bower segments', page.getByRole('radiogroup', { name: 'What is it?' }).getByRole('radio'), 24);

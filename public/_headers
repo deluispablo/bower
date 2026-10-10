@@ -17,8 +17,8 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
 
-# The landing is exported from the design canvas and runs its page script through new Function,
-# so it alone needs 'unsafe-eval'. It makes no calls and has no inline script. Detach, then set its own.
+# The landing's page script is precompiled by scripts/fix-landing.mjs after each design export.
+# It makes no calls and has no inline script. Detach, then set its own policy.
 /landing/*
   ! Content-Security-Policy
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'

@@ -8,8 +8,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { resolve } from 'node:path';
 import type { ClaudeSpawn } from '../src/claude';
-import { loadCorpus, score, type LoadedCase } from '../src/corpus';
-import { caseReplies, runWithClaude } from './corpus-run';
+import { loadCorpus, type LoadedCase } from '../src/corpus';
+import { caseReplies, runWithClaude, scoreCase } from './corpus-run';
 
 const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
 
@@ -69,7 +69,7 @@ describe('the C05 slice through the Claude provider', () => {
     const results: Record<string, unknown> = {};
     for (const c of cases) {
       const run = await runWithClaude(c, SCRIPTS[c.id] as ClaudeSpawn);
-      results[c.id] = { code: run.code, ...score({ expected: c.expected, before: c.folder, after: run.after, lastRun: run.lastRun, pathsById: run.pathsById }) };
+      results[c.id] = { code: run.code, ...scoreCase(c, run) };
     }
     expect(results).toEqual(Object.fromEntries(cases.map((c) => [c.id, { code: 0, pass: true, unmet: [] }])));
   });

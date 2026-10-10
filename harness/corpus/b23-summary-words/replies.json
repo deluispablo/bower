@@ -1,0 +1,14 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [],
+    "notes": [
+      {
+        "pileId": "p-1",
+        "to": "Resources/Gardening",
+        "name": "Garden bed.md"
+      }
+    ]
+  }
+]

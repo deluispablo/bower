@@ -1,0 +1,18 @@
+{
+  "id": "b23-hot-evidence-only",
+  "capability": "C17",
+  "covers": "model",
+  "allowWeb": false,
+  "questions": [],
+  "bowerOwned": [],
+  "title": "Hot drops its own unsupported claims on an instruction-only refresh",
+  "source": "TL-P4-39 §1.1, F3/F7/F10; primary-evidence rebuild; proof pending",
+  "scope": "instructions",
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Refresh the folder context without adding any knowledge notes."
+    }
+  ]
+}
