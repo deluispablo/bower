@@ -207,3 +207,65 @@ Pending proceeds beyond the repaired baseline and fails on the missing pending m
 control; horizon still fails on listing age and historical media. No other test expectations changed.
 No non-test source edits, network, git writes, full check or e2e. Existing notes were preserved;
 commits remain coordinator-owned.
+
+## Implementation — current attempt after red repair
+
+Stopped before production edits: the required unchanged C05 tests contradict the pending-location ruling
+and the committed pending red. This is the user's stop condition, not a request for implementation approval.
+No tests, production files, git state or network resources were changed.
+
+The stale B1a baseline is resolved in this checkout. The real C04 pile control now passes its exact
+20-read assertion in `runner/test/c05-bounded-reads.test.ts:262`. The three bounded-read tests still
+fail on behavioural assertions, with no load error: 50 archive media reads, 75 unrelated run media
+reads, 143 request reads against 20, no physical pending move, and manifest-age horizon selection.
+The golden also still finds five historical media reads for an old-format request directly in changes.
+Evidence: `tmp-logs/implementation-reds-current.log`.
+
+The incompatible location requirements are explicit:
+
+- `runner/test/c05-bounded-reads.test.ts:335` requires the clashed request in
+  `.bower/changes/pending/<run id>/`; line 336 requires its direct changes path to be absent.
+  These assertions match `docs/harness/DECISIONS.md:471` and packet contract 1.
+- `runner/test/c05-person-notes.test.ts:824`, in `round4Pending`, requires that same clashed
+  request directly in changes. The helper feeds round 4 2 and round 5 3.
+- `runner/test/c05-person-notes.test.ts:1262`, round 5 5, requires the unchanged clashed request
+  bytes directly in changes. A real move to pending necessarily makes this assertion fail.
+
+The unmodified round 4 2 and round 5 5 tests both pass on this checkout:
+`pnpm -C runner exec vitest run test/c05-person-notes.test.ts --maxWorkers=2 -t
+'C05 person notes: round 4 2: pending retries keep target and source ids|C05 person notes: round 5 5: only a clashed target retries on bound ids before archive'`.
+Exit 0; output: `tmp-logs/implementation-conflicting-c05.log`. No failure output to inspect.
+Keeping duplicate request copies to satisfy both locations would contradict the ruling that waiting
+requests leave the new-request inbox, as well as introduce unsupported discovery semantics.
+These tests need red-owner reconciliation before an implementation can make every gate green;
+this session has no authorization to change them.
+
+The notes' other listed conflicts remain relevant. The strict one-media-read assertion at
+`runner/test/c05-bounded-reads.test.ts:373` has not been widened or reinterpreted as a logical lookup.
+`RunRecords.found` currently verifies an originating manifest plus all checkpoint links
+(`src/data/spine/records.ts:231` onward); selecting one run alone does not make that five-file
+fixture cost one media read. No new store, index file or alternative provenance mechanism was added.
+No ruling beyond the packet and the cited decision was inferred.
+
+The full C05 runner/app, data and runner suites, typechecks, eslint, pnpm check and e2e were not run
+after the required stop. The targeted existing-test run above documents the contradiction; it is
+not a claim of full validation. All vitest invocations used `--maxWorkers=2` and wrote under tmp-logs/.
+
+removed: none; 0 production lines removed (stopped before implementation).
+tests changed: none.
+
+Compatibility row drafts, not completed implementation claims:
+
+| Fixture/format | Required outcome | Current result |
+| --- | --- | --- |
+| B1a C04 pile control | Preserve the authorized 20-read baseline. | Repaired control passes. |
+| New changes requests, including old-format staging | Zero record reads and no inherited binding. | Red; production unchanged. |
+| Waiting requests | Move unchanged bytes to pending/run id; retry bound ids. | Blocked by unchanged C05 location tests. |
+| Waiting-run evidence | One media read, with RunRecords as the only provenance home. | Strict bound unchanged; not implemented. |
+| Settled requests and interrupted moves | No archive scan; no second append or completion. | Recovery control passes before edits; not reimplemented. |
+| Run retention horizon | Listing creation time, no manifest/checkpoint walk. | Red; production unchanged. |
+| Stored v2 records and personal bytes | Existing parser/chain checks and TL-P4-32 addenda 2–6 outcomes. | Positive controls pass; full suites not run. |
+
+Sources remain the official Drive list/search/fields references above, cited without fetching under
+the no-network instruction. Existing VaultIndex containment points to RunRecords evidence; no
+additional index or storage mechanism was introduced.
