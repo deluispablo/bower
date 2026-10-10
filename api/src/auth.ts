@@ -290,10 +290,19 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
 
   // Signing out retires every session of the person (the stored generation moves on),
   // so a copied or forgotten cookie on another device stops working too.
-  auth.post('/auth/logout', requireSameOrigin, requireSession, rateLimit('AUTH_RATE_LIMIT'), async (c) => {
-    const sub = c.get('userId');
-    if (sub === undefined) throw new HttpError(500, 'internal');
-    await personFor(c.get('env'), sub).retireSessions();
+  auth.post('/auth/logout', requireSameOrigin, async (c) => {
+    const env = c.get('env');
+    let session: Authenticated | undefined;
+    try {
+      session = await authenticate(c.req.header('cookie'), env);
+    } catch (err) {
+      // Already signed out: there is nothing to retire, only the cookie to clear.
+      if (!(err instanceof HttpError && err.code === 'signed-out')) throw err;
+    }
+    if (session !== undefined) {
+      await enforceRateLimit(c, 'AUTH_RATE_LIMIT', clientIp(c));
+      await personFor(env, session.claims.sub).retireSessions();
+    }
     c.header('Set-Cookie', clearSessionCookie());
     return c.body(null, 204);
   });
