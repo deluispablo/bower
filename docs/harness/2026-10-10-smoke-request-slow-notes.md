@@ -968,3 +968,68 @@ tests changed: src/data/drive/fake-drive.test.ts: new red for DEFECT_LOG fake-dr
 - Touched-file ESLint and runner typecheck pass after the final test edit; outputs:
   `tmp-logs/smoke-request-slow-fix1-lint.log`, `tmp-logs/smoke-request-slow-fix1-typecheck.log`.
   `git diff --check` passes. No commits made; coordinator owns commits.
+
+## Fix round 1
+
+Authority: the owner's fix-round assignment and the Blocking finding in
+`docs/harness/2026-10-10-codex-smoke-request-slow-adversarial.md`.
+
+The committed red was run before the edit:
+`C05 bounded reads: fix 1: a waiting retry whose archive move failed completes once`.
+It failed on a second completion with unchanged wording, and a second completion, append,
+append effect and update with different wording. Evidence: `tmp-logs/fix1-red.log`.
+
+`src/data/spine/scripted.ts:2051` now includes waiting retries in the existing recovery-pointer
+publication. The in-place move carries the new run id before the append; that append depends on
+the pointer, and the existing pending move publishes the new physical run location before archive.
+When B completes but its archive PATCH does not land, the next tidy-up finds B's verified completion
+through the same RunRecords lookup. There is no new store, index or recovery path.
+
+removed: 1 production line replaced; the `!line.waitingRun` exclusion from pointer publication.
+tests changed: none.
+
+All requested explicit Vitest commands used `--maxWorkers=2`; output is under `tmp-logs/`.
+
+| Check | Result | Log |
+| --- | --- | --- |
+| Committed fix-round red before implementation | Expected assertion failure | fix1-red.log |
+| Bounded reads, including fix-round red and archive-lands control | 5 pass | fix1-bounded-green.log |
+| C05 person-notes, incorporation, between, marked-history runner tests | 64 pass | fix1-c05-runner.log |
+| Full src/data suite | 4141 pass, 77 files | fix1-data.log |
+| Full runner suite | 553 pass, 44 files | fix1-runner.log |
+| tsc app | Pass | fix1-tsc-app.log |
+| tsc node | Pass | fix1-tsc-node.log |
+| tsc runner | Pass | fix1-tsc-runner.log |
+| ESLint touched production file | Pass | fix1-eslint.log |
+| pnpm check, shared heavy lock | 5486 pass / 1 fail, server-listen EPERM | fix1-check.log |
+| c05-person-notes, capabilities, app e2e, demo and fake, shared heavy lock | Both blocked before tests, server-listen EPERM | fix1-e2e-demo.log, fix1-e2e-fake.log |
+
+No test in the requested suites contradicts the ruling (TL-P4-51).
+
+Every remaining gate failure:
+- `src/e2e-port.test.ts:37`: `a server from another worktree is never reused` times out after
+  its server cannot listen on 127.0.0.1 (uncaught EPERM). Check stops before API/runner/build/static
+  gates; the required full runner suite, typechecks and touched-file lint passed separately.
+- Demo and fake e2e cannot start the dev server on ::1:5301 (EPERM); no screen tests ran.
+  Both commands acquired the shared heavy lock. These environment failures do not contradict a ruling.
+  The app C05 tests also pass inside check: 12 person-note contracts, 5 reports and 1 tidy-screen test.
+
+| Compatibility / bound | Evidence |
+| --- | --- |
+| Completed waiting retry after failed archive | Red passes for unchanged and different wording; no second completion, append or update. |
+| Archive-lands behaviour | Positive control passes for both wording variants. |
+| Own-run reads and zero archive reads | Unchanged bounded golden, pending and horizon assertions all pass. |
+| Existing formats, binding and write-once recovery | Full data/runner and C05 suites pass; no format or reader change. |
+
+Research: no network used. Reused the packet's standard index-points-to-evidence pattern:
+Drive parent containment selects evidence, existing moves publish the pointer, and RunRecords
+verifies that run's manifest/checkpoints. References cited without fetching:
+[Drive files.list](https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list),
+[parent queries](https://developers.google.com/workspace/drive/api/guides/search-files), and
+[partial-response fields](https://developers.google.com/workspace/drive/api/guides/fields-parameter).
+
+The initial e2e invocation omitted the heavy lock and failed before tests on server-listen EPERM;
+its log is `tmp-logs/fix1-e2e-unlocked.log`. Both gate runs were repeated through the required lock.
+No test, contract bound or gate was weakened. No git write command was run.
+left out: full-check/e2e completion (sandbox server-listen EPERM); commits and integration
+(coordinator-owned); the unrelated minor plan.ts archive path.

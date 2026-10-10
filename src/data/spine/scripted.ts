@@ -2048,7 +2048,7 @@ export async function build(decided: Decided): Promise<Ended> {
   // Publish the recovery pointer with an in-place move before any personal append. A crash before the physical
   // pending/archive move can still select exactly this run. The physical move clears the temporary property.
   const pointers = new Map<string, string[]>();
-  for (const line of journal) if (line.rec.kind === 'request' && !line.waitingRun
+  for (const line of journal) if (line.rec.kind === 'request'
     && edits.some((e) => e.changes.some((c) => c.kind === 'timeline-append' && c.consent?.requestId === line.rec.id))) {
     const sources = settlement.sourcesOf(line.rec.id, runSources).flatMap((id) => moveOf.get(id) ?? []);
     const own: string[] = [];
