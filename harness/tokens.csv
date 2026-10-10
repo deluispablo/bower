@@ -517,3 +517,13 @@ pwa-update,reviewer (P4-92),claude,opus,,1,34209,,,,,,6,1,PASS,2026-10-10
 b2a-summary-format,adversarial pass 2,codex,gpt-5-codex,high,1,472890,467927,,419200,4963,,,,BLOCK 1 (limit),2026-10-10
 b2a-summary-format,reviewer (P4-91),claude,opus,,1,49537,,,,,,9,1,PASS,2026-10-10
 b1a-contract,implementer (round 3),codex,gpt-5-codex,high,1,1206300,1197364,,1128960,8936,,,,green but goldens,2026-10-10
+p4-rate-limits,red-owner (repair 3),codex,gpt-5-codex,medium,1,495494,491604,,454656,3890,,,,reds,2026-10-10
+p4-rate-limits,implementer (round 3),codex,gpt-5-codex,medium,1,176199,174912,,148736,1287,,,,green,2026-10-10
+p4-rate-limits,reviewer (P4-90b),claude,opus,,1,31974,,,,,,7,1,PASS,2026-10-10
+b1a-contract,red-owner (repair 4),codex,gpt-5-codex,medium,1,570400,566111,,529280,4289,,,,re-pinned,2026-10-10
+p4-b56-prep,drafter (refresh),codex,gpt-5-codex,high,1,1791799,1775007,,1664768,16792,,,,7 questions,2026-10-10
+b1a-contract,adversarial pass,codex,gpt-5-codex,high,1,4498126,4481371,,4304384,16755,,,,BLOCK 5,2026-10-10
+smoke-request-report-hidden,adversarial pass,codex,gpt-5-codex,high,1,320277,317639,,272384,2638,,,,PASS,2026-10-10
+smoke-request-report-hidden,reviewer (P4-93),claude,opus,,1,38168,,,,,,5,1,PASS,2026-10-10
+b1a-contract,red-owner (repair 5),codex,gpt-5-codex,high,1,1382900,1370515,,1236864,12385,,,,5 reds,2026-10-10
+b1a-contract,implementer (fix round 1),codex,gpt-5-codex,high,1,4628694,4603964,,4445568,24730,,,,green,2026-10-10

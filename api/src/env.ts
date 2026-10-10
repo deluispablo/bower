@@ -13,6 +13,11 @@ export interface Env {
   /** One Durable Object per person, addressed by `idFromName(sub)`. */
   PERSON: DurableObjectNamespace<Person>;
 
+  /** Rate Limiting bindings (`ratelimits` in `wrangler.jsonc`); absent where none is declared. */
+  AUTH_RATE_LIMIT?: RateLimit;
+  DRIVE_RATE_LIMIT?: RateLimit;
+  VAULT_RATE_LIMIT?: RateLimit;
+
   // Secrets (wrangler secret put / .dev.vars) — no defaults, ever.
   /** A secret on the staging Worker (the lead's setup), though it travels in every sign-in address. */
   GOOGLE_CLIENT_ID: string;
@@ -154,6 +159,11 @@ function requireCount(value: string, key: keyof Env): string {
   return value;
 }
 
+/** A Rate Limiting binding as given, or `undefined` when it is not an object with `limit`. */
+function rateLimiter(value: unknown): RateLimit | undefined {
+  return typeof value === 'object' && value !== null && 'limit' in value ? (value as RateLimit) : undefined;
+}
+
 /**
  * Validates the Worker's bindings and returns them typed as `Env`, throwing
  * `HttpError(500, 'internal')` whose cause (logged, never sent) names the first
@@ -230,6 +240,10 @@ export function assertEnv(env: unknown): Env {
     API_ORIGIN: requireString(source, 'API_ORIGIN'),
     GITHUB_REPO: requireString(source, 'GITHUB_REPO'),
     VAPID_SUBJECT: requireString(source, 'VAPID_SUBJECT'),
+
+    AUTH_RATE_LIMIT: rateLimiter(source.AUTH_RATE_LIMIT),
+    DRIVE_RATE_LIMIT: rateLimiter(source.DRIVE_RATE_LIMIT),
+    VAULT_RATE_LIMIT: rateLimiter(source.VAULT_RATE_LIMIT),
 
     DAILY_RUN_LIMIT: dailyRunLimit,
     DEFAULT_MAX_TURNS: defaultMaxTurns,

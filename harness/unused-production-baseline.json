@@ -5,12 +5,10 @@
     "duplicates src/data/contracts/run-phases.ts RUN_STEPS=ACTIVE_PHASES",
     "exports api/src/env.ts OPTIONAL_SECRETS",
     "exports api/src/github.ts dispatchTidy",
-    "exports api/src/security.ts COOKIE_ROUTES",
-    "exports api/src/security.ts genericRateLimit",
-    "exports api/src/security.ts rateLimit",
     "exports src/data/contracts/hashes.ts EMPTY_SHA256",
     "exports src/data/contracts/note-edit.ts undoChanges",
     "exports src/data/contracts/note-edit.ts undoEdit",
+    "exports src/data/contracts/note-format.ts validSummary",
     "exports src/data/contracts/run-checkpoint.ts parseRunReport",
     "exports src/data/fake/fake-runner.ts NOTE_NOT_WRITTEN",
     "exports src/data/fake/fake-runner.ts OWN_FILES",
@@ -33,6 +31,7 @@
     "types src/data/drive/fake-drive.ts FaultAction"
   ],
   "reasons": {
-    "files runner/src/hot.ts runner/src/hot.ts": "B3b wires it (TL-P4-42 addendum 1); B3b removes this line"
+    "files runner/src/hot.ts runner/src/hot.ts": "B3b wires it (TL-P4-42 addendum 1); B3b removes this line",
+    "exports src/data/contracts/note-format.ts validSummary": "B2b wires it (TL-P4-42 addendum 1); B2b removes this line"
   }
 }

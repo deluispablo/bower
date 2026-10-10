@@ -310,3 +310,5 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-10: b3a-hot-reduce passes — b3a-hot-reduce passes: a pure script renders hot's three sections within 300 words (P4-88 PASS)
 - 2026-10-10: new-note-opens passes — new-note-opens passes: re-proved after c5-remove-new-note (TL-P4-35)
 - 2026-10-10: e2e-resize-helper passes — e2e-resize-helper passes: cross-breakpoint resizes wait for the target shell (P4-89 PASS)
+- 2026-10-10: pwa-update passes — pwa-update passes: a reload after a deploy runs the new build; a missing lazy chunk reloads once (P4-92 PASS)
+- 2026-10-10: b2a-summary-format passes — b2a-summary-format passes: a note summary is a safe one-line YAML scalar, read back exactly (P4-91 PASS)

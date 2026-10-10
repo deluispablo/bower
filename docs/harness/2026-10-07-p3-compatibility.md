@@ -176,3 +176,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `7dc863b6` | smoke-request-report-hidden | none: tests only (no fallback detail above Left rows in the reopened sheet and the right panel). |
 | `7044a492` | smoke-request-report-hidden | none for stored data: runDetail leaves out its fallback when the report has Left rows, everywhere it shows. |
 | `b8f1ad03` | smoke-request-report-hidden | none: tests only (an empty runDetail asserted explicitly). |
+| `e3047855` | b2a-summary-format | Bower's new notes write `summary:` as one line, plain when YAML reads it back unchanged, else double-quoted with YAML escapes; old plain summaries parse as before. |
+| `d5dacc77` | b2a-summary-format | YAML 1.1-unsafe plain values are quoted on write; quoted values decode per YAML (TL-P4-42 addendum 2); person notes are never re-serialized (byte-range edits only). |
