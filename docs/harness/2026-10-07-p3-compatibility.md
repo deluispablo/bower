@@ -182,3 +182,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `b8f1ad03` | smoke-request-report-hidden | none: tests only (an empty runDetail asserted explicitly). |
 | `e3047855` | b2a-summary-format | Bower's new notes write `summary:` as one line, plain when YAML reads it back unchanged, else double-quoted with YAML escapes; old plain summaries parse as before. |
 | `d5dacc77` | b2a-summary-format | YAML 1.1-unsafe plain values are quoted on write; quoted values decode per YAML (TL-P4-42 addendum 2); person notes are never re-serialized (byte-range edits only). |
+| `e8ba5cc5` | b1a-contract | none for stored data: hub recognition moves into src/data/contracts/hub.ts (same rule), so contracts import only contracts. |

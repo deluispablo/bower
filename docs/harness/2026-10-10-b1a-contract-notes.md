@@ -1146,3 +1146,84 @@ atomic state/cursor commits, https://www.sqlite.org/atomiccommit.html;
 version-keyed response reuse, https://www.rfc-editor.org/rfc/rfc9110.html#section-8.8.3.
 No URL was fetched. VaultIndex, the local drop rule, versioned cache and fenced
 maintenance remain the single homes for their mechanisms.
+
+## Fix round 5 (P4-94)
+
+Implementer: Codex. Authority: the owner's mechanical repair request for P4-94.
+No network or writing git command was used; the coordinator owns any later commit.
+Inherited edits and the unrelated staged merge/conflict state remain intact.
+
+tests changed: none.
+removed: src/data/contracts/note-edit.ts: import of the browser-dependent VaultIndex and its hub call.
+removed: src/data/vault/vault-index.ts: local hub implementation, moved unchanged to contracts/hub.ts.
+removed: runner/src/index.ts: unguarded retrieval JSON.parse.
+removed: 8 source lines, including replacements; no test, assertion or fixture removed.
+
+### Implementation and compatibility
+
+The pure isHub function has one home in src/data/contracts/hub.ts and imports only
+contracts/tree.ts's existing nameOf. Its body, default name and explicit type handling
+are unchanged. VaultIndex.isHub references that function, preserving its existing
+call interface; note-edit imports the pure function directly. Contracts no longer
+reach browser code through VaultIndex. No second hub rule or path helper was added.
+
+Retrieval text is read outside the parse guard, so transport failures still propagate.
+Only malformed JSON's SyntaxError is handled: console.error reports a BowerError
+with the single sentence "Bower could not read its saved notes and will rebuild them."
+and the original error as cause. State remains absent, following the existing missing
+state bootstrap/snapshot path and the existing fenced maintenance targets. It does
+not add a recovery mechanism or weaken the stored-state validator.
+
+Compatibility row draft: contracts/hub.ts extraction only; no stored format or
+parser meaning changes. Old notes, manifests and checkpoints retain their meaning;
+unchanged app and runner B1a compatibility assertions pass. Commit SHA is pending
+because git writes are prohibited.
+
+Offline standard reused: isolate pure shared helpers from platform adapters (the
+existing src/architecture.test.ts contract); catch JSON.parse's SyntaxError at the
+parse boundary and retain the error as cause (standard ErrorOptions).
+Reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/parse
+No URL was fetched. The repository's existing BowerError and maintenance path are reused.
+
+### Red and green evidence
+
+Before the fix, "contracts import only themselves and allowlisted pure libraries"
+failed with twelve outside modules and the impure seen.ts dependency; six other
+architecture tests passed. Log: tmp-logs/b1a-fix5-red.log.
+
+All requested final commands exited 0. Output is under tmp-logs; only failure
+sections and aggregate results were read.
+
+| Command | Result | Log under tmp-logs/ |
+| --- | --- | --- |
+| pnpm exec vitest run src/architecture.test.ts --maxWorkers=2 | 7 tests pass | b1a-fix5-architecture.log |
+| pnpm exec vitest run src/data/contracts/b1a-contract.test.ts --maxWorkers=2 | 7 tests pass | b1a-fix5-app-reds.log |
+| pnpm -C runner exec vitest run test/b1a-contract.test.ts test/drive-calls-golden.test.ts --maxWorkers=2 | 18 B1a tests and 5 goldens pass | b1a-fix5-runner-reds.log |
+| pnpm exec vitest run src/data --maxWorkers=2 | 77 files, 4140 tests pass | b1a-fix5-data.log |
+| pnpm -C runner exec vitest run --maxWorkers=2 | 43 files, 532 tests pass | b1a-fix5-runner.log |
+| pnpm exec tsc -p tsconfig.app.json --noEmit | Pass | b1a-fix5-tsc-app.log |
+| pnpm exec tsc -p tsconfig.node.json --noEmit | Pass | b1a-fix5-tsc-node.log |
+| pnpm exec tsc -p runner/tsconfig.json --noEmit | Pass | b1a-fix5-tsc-runner.log |
+| pnpm exec eslint src/data/contracts/hub.ts src/data/contracts/note-edit.ts src/data/vault/vault-index.ts | Pass | b1a-fix5-eslint-app.log |
+| pnpm -C runner exec eslint src/index.ts | Pass | b1a-fix5-eslint-runner.log |
+
+An initial combined root/runner ESLint invocation failed on ambiguous tsconfigRootDir;
+separate invocations through each existing project configuration pass without any
+configuration change. Initial log: b1a-fix5-eslint.log.
+
+A disposable Node smoke invocation of the bundled production withMaintenance used
+malformed retrieval bytes and made-up listed files. It verified the reported
+BowerError, SyntaxError cause, bootstrap token, rebuilt note snapshot and reuse of
+existing retrieval/index fenced targets. No test file was created or changed.
+Log: tmp-logs/b1a-fix5-damaged-smoke.log. The first smoke assertion counted an
+unrelated browser-storage diagnostic; the final invocation supplies empty local
+storage and checks the BowerError by its type. No production change followed it.
+
+Read-only git diff --numstat over test paths is empty. Scoped git diff --check passes
+for this round's source and notes files. The broad check reports pre-existing
+conflict markers in docs/harness/2026-10-07-p3-compatibility.md; they are outside
+this assignment and were not changed.
+
+pnpm check was omitted because its root harness-git tests invoke writing git
+commands, prohibited by the owner. No UI screen changed (packet ui: false), so no
+e2e was run. No test, golden, threshold or fixture changed; no commit was made.
