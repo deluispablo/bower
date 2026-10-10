@@ -2,6 +2,7 @@
 import { sha256Hex } from '../../src/data/contracts/hashes';
 import type { Checkpoint } from '../../src/data/contracts/run-checkpoint';
 import { parseNote } from '../../src/data/contracts/note-format';
+import { parseOwnership } from '../../src/data/contracts/ownership-format';
 import type { EffectV2, Maintain, OperationV2, RunnerWrite, SeenFile } from '../../src/data/contracts/run-manifest';
 import type { DriveFile } from '../../src/data/drive/drive-api';
 import { driveEffects, type Effects } from '../../src/data/spine/engine';
@@ -16,6 +17,76 @@ const seen = (f: DriveFile): SeenFile => ({ fileId: f.id, name: f.name, parents:
 const file = (f: SeenFile): DriveFile => ({ id: f.fileId, name: f.name, parents: f.parents, folder: f.folder, modifiedTime: f.modifiedTime, createdTime: f.modifiedTime });
 const unavailable = (): BowerError => new BowerError('unknown', 'Bower could not update its notes. It will try again.');
 type RetrievalState = RetrievalFile & { listing?: DriveFile[] };
+
+function retrievalSummary(path: string, text: string): string {
+  // Validate full ownership framing, while only indexing front matter covered by Q3's prefix.
+  const note = parseNote(path, text);
+  const ownership = parseOwnership(new TextEncoder().encode(text));
+  return ownership.status !== 'invalid' && ownership.layout.frontEnd <= 4096 ? note.summary || '(no summary)' : '(no summary)';
+}
+
+/** Q8: stable folder traversal and shortest unique suffixes, without exposing Drive ids. */
+function projectIndex(files: RetrievalFile['files']): string {
+  const notes = Object.values(files).filter((f) => !isHidden(f.path));
+  const suffixes = new Map<string, number>();
+  for (const note of notes) {
+    const parts = note.path.replace(/\.md$/, '').split('/');
+    for (let i = 0; i < parts.length; i++) {
+      const suffix = parts.slice(i).join('/');
+      suffixes.set(suffix, (suffixes.get(suffix) ?? 0) + 1);
+    }
+  }
+  const link = (path: string): string => {
+    const parts = path.replace(/\.md$/, '').split('/');
+    for (let n = 1; n < parts.length; n++) {
+      const suffix = parts.slice(-n).join('/');
+      if (suffixes.get(suffix) === 1) return suffix;
+    }
+    return parts.join('/');
+  };
+  const direct = new Map<string, typeof notes>();
+  const children = new Map<string, Set<string>>();
+  for (const note of notes) {
+    const parts = note.path.split('/');
+    parts.pop();
+    const folder = parts.join('/');
+    const members = direct.get(folder) ?? [];
+    members.push(note);
+    direct.set(folder, members);
+    for (let i = 0; i < parts.length; i++) {
+      const parent = parts.slice(0, i).join('/');
+      const child = parts.slice(0, i + 1).join('/');
+      const siblings = children.get(parent) ?? new Set<string>();
+      siblings.add(child);
+      children.set(parent, siblings);
+    }
+  }
+  const para = ['Projects', 'Areas', 'Resources', 'Archive'];
+  const chunks: string[] = [];
+  const visit = (folder: string): void => {
+    const heading = folder ? `${'#'.repeat(Math.min(6, folder.split('/').length + 1))} ${folder.split('/').at(-1)}\n\n` : '';
+    const rows = (direct.get(folder) ?? []).sort((a, b) => a.path.localeCompare(b.path))
+      .map((f) => `- [[${link(f.path)}]] — ${f.summary}\n`).join('');
+    if (heading || rows) chunks.push(heading + rows + (rows ? '\n' : ''));
+    const subfolders = [...(children.get(folder) ?? [])].sort((a, b) => {
+      if (!folder) {
+        const rank = (p: string): number => para.includes(p) ? para.indexOf(p) : para.length;
+        const order = rank(a) - rank(b);
+        if (order) return order;
+      }
+      return a.localeCompare(b);
+    });
+    for (const child of subfolders) visit(child);
+  };
+  visit('');
+  let text = '# Index\n\n';
+  for (let i = 0; i < chunks.length; i++) {
+    const cut = `index cut: ${chunks.length - i} folders omitted\n`;
+    if (text.length + (chunks[i]?.length ?? 0) + (i + 1 < chunks.length ? cut.length : 0) > 32000) return text + cut;
+    text += chunks[i];
+  }
+  return text;
+}
 
 /** An ignored-feed cursor advance is an ordinary manifest write, never maintenance. */
 async function cursorOnly(drive: RunnerDrive, manifest: RunManifest, old: DriveFile, state: RetrievalFile, cursor: string): Promise<RunManifest> {
@@ -107,7 +178,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
     const path = pathOfChange(c);
     return path !== undefined && !isHidden(path);
   }).map((c) => c.fileId);
-  if (state && !changes.length && !manifest.operations.length) {
+  if (state && ix.file(SYSTEM.index) && !changes.length && !manifest.operations.length) {
     return old ? cursorOnly(drive, manifest, old, state, cursor) : manifest;
   }
   const snapshot: RetrievalFile['files'] = {};
@@ -124,7 +195,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
       continue;
     }
     snapshot[f.id] = cached?.version === f.modifiedTime ? { ...cached, path }
-      : { path, version: f.modifiedTime, summary: text === null ? '(no summary)' : parseNote(path, text).summary || '(no summary)', coverage: { kind: 'prefix', bytes: 4096 } };
+      : { path, version: f.modifiedTime, summary: text === null ? '(no summary)' : retrievalSummary(path, text), coverage: { kind: 'prefix', bytes: 4096 } };
   }
   listing = [...files.values()];
   const own = ix.file(SYSTEM.dir);
@@ -167,7 +238,7 @@ function refreshed(op: OperationV2, head: Checkpoint, manifest: RunManifest): Re
     if (effect.kind === 'create-text' || effect.kind === 'edit-text') {
       const path = ix.pathOf(f.fileId);
       if (path && !isHidden(path) && path.endsWith('.md') && path.split('/')[0] !== 'Inbox') files[f.fileId] = {
-        path, version: f.modifiedTime, summary: parseNote(path, effect.text).summary || '(no summary)', coverage: { kind: 'prefix', bytes: 4096 },
+        path, version: f.modifiedTime, summary: retrievalSummary(path, effect.text), coverage: { kind: 'prefix', bytes: 4096 },
       };
     }
   }
@@ -206,13 +277,21 @@ export function maintenanceEffects(drive: RunnerDrive): Effects {
     async apply(op, head, w, manifest, sending) {
       if (op.effect.kind !== 'maintain') throw unavailable();
       const state = refreshed(op, head, manifest);
-      const index = Object.values(state.files).sort((a, b) => a.path.localeCompare(b.path)).map((f) => `- [[${f.path.split('/').at(-1)?.replace(/\.md$/, '')}]] — ${f.summary}\n`).join('');
+      const index = projectIndex(state.files);
       const texts: Partial<Record<RunnerWrite, string>> = { [SYSTEM.index]: index, [SYSTEM.retrieval]: JSON.stringify(state) };
       let last;
       for (const target of op.effect.inputs.targets ?? []) {
         const text = texts[target.path];
         if (text === undefined || !(RUNNER_WRITES as readonly string[]).includes(target.path)) throw unavailable();
         const before = op.effect.inputs.listing?.find((f) => f.fileId === target.fileId);
+        // Versions and the feed cursor belong to state, not to the derived projection's date.
+        if (target.path === SYSTEM.index && before) {
+          const previous = (await drive.readListedText(file(before))).replace(/^> Generated by Bower[^\n]*\n/gm, '').trim();
+          const snapshot = op.effect.inputs.snapshot ?? {};
+          const legacy = Object.values(snapshot).sort((a, b) => a.path.localeCompare(b.path))
+            .map((f) => `- [[${f.path.split('/').at(-1)?.replace(/\.md$/, '')}]] — ${f.summary}\n`).join('').trim();
+          if (previous === index.trim() || (previous === legacy && projectIndex(snapshot) === index)) continue;
+        }
         const ev = before || replaying.has(op.operationId) ? await drive.evidence(target.fileId) : null;
         const content = { encoding: 'utf8' as const, size: new TextEncoder().encode(text).length, sha256: await rawHash(text) };
         const effect: EffectV2 = before && target.beforeContent ? { kind: 'write-runner-json' as const, before, path: target.path,

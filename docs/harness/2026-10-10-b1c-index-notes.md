@@ -226,3 +226,158 @@ No network, git writes, production edits, full suites, pnpm check or e2e. Offlin
 | `B1a contract: round 4 2: a folder moved outside drops its indexed subtree and commits the cursor` | AssertionError: live control: writes only a changed projection: expected [ { path: '.bower/index.md', …(2) } ] to have a length of +0 but got 1 |
 | `B1a contract: round 4 3: a renamed folder updates descendant paths and index order without media reads` | AssertionError: live control: writes only a changed projection: expected [ { path: '.bower/index.md', …(2) } ] to have a length of +0 but got 1 |
 | `B1a contract: round 4 4: an inside folder move updates recursive paths and regroups without media reads` | AssertionError: live control: writes only a changed projection: expected [ { path: '.bower/index.md', …(2) } ] to have a length of +0 but got 1 |
+
+
+## Implementation (partial; blocked)
+
+The index work is left in place for review. This entry is not complete: folding and MOC region maintenance remain red.
+No test, fixture, verdict, threshold or shared harness record was changed. No writing git command was run.
+The harness owns commits; these notes must remain separate from the source commit.
+
+### Offline research and implemented changes
+
+Research preceded the source edits. The references are stable offline references, not fetched in this session:
+
+- [ECMAScript Array.prototype.sort](https://tc39.es/ecma262/#sec-array.prototype.sort): stable traversal ordering.
+  The existing projection now uses PARA order, sorted children and direct notes before child folders.
+- [Obsidian internal links](https://help.obsidian.md/links): disambiguation by a path-qualified wiki link.
+  A suffix-frequency table chooses the shortest unique suffix of each visible note path.
+- The packet's existing made-up index and Gardening templates establish `- [[Note]] — summary`.
+  Q8 requires `→ [[MOC]] (N)` for folding; this part remains unimplemented, rather than guessing ownership.
+
+`runner/src/index.ts` keeps the existing maintain operation and writer. It renders headings and whole note rows,
+limits the projection to 32,000 characters, and names every omitted folder at the cut. It skips an index send
+when the existing projection matches after removing only the generation line and insignificant end spacing.
+An unchanged old flat projection remains readable and unchanged. Same-version input text uses B1a's read cache.
+The existing ownership layout supplies the front-matter byte boundary: a summary beyond 4,096 bytes is excluded,
+while a complete summary in a long, valid ownership note remains readable. No second front-matter parser was added.
+A missing index bypasses the cursor-only shortcut. Hidden-path eligibility still goes through layout.ts isHidden.
+
+`src/data/spine/scripted.ts` now uses its existing nothingReadyPlan for an already admitted instruction run whose
+lines remain held. The pre-admission empty-instruction refusal stays in its existing home. This makes the actual
+instruction corpus path reach maintenance instead of failing before it. The no-change instruction red is green.
+
+removed: runner/src/index.ts: old one-line flat index renderer; replaced in the same projection/writer home.
+removed: runner/src/index.ts: three old guard/summary expressions; replaced by missing-index and prefix-coverage checks.
+removed: src/data/spine/scripted.ts: two comment lines and the unconditional post-admission empty-instruction refusal.
+tests changed: none
+
+### Mechanism/ownership blocker
+
+This is a packet scope gap, not a reason to weaken the MOC reds:
+
+1. `src/data/contracts/run-manifest.ts:86` declares maintain targets as RunnerWrite only. Its guard at :555
+   rejects any MOC path outside RUNNER_WRITES. Its snapshot grammar at :386 has no ownership, region bytes or MOC
+   membership inputs. The optional log string is not an alternative MOC input envelope.
+2. `src/data/contracts/note-edit.ts:881–886` authors moc-rewrite only when that exact marked region already exists.
+   The committed Gardening/Soil/Water corpus is legacy; its MOCs have by:bower and type:moc but no framed regions.
+   The existing author therefore refuses each rewrite as not-bower. It cannot migrate those legacy MOCs to v2.
+3. Neither run-manifest.ts nor note-edit.ts is owned by B1c's prep row. A new moc.ts may render a list, but may not
+   create a second ownership author or bypass the fenced effect contract. MOC paths cannot be disguised as runner JSON.
+   Frozen reportPlan rows also need truthful grounding for actual MOC writes after settled refusals, not every candidate.
+
+A revised packet must allocate the necessary extension in these existing homes and specify the legacy region
+migration. The unchanged MOC tests are valid requested behaviour; they expose what the current homes cannot express.
+Folding, full MOC recovery, the per-MOC Updated rows, and a general enforced 300-call bootstrap ceiling are not delivered.
+The current before-provider planning order is also unchanged; no claim of rebuilding planning context before the model.
+
+The applied [bower-implement skill](../../.agents/skills/bower-implement/SKILL.md) directs the worker to WORKER.md.
+[WORKER.md](WORKER.md) explicitly says: "if it cannot do what you need, stop and report `blocked`."
+This is why this implementation stops with the edits retained, rather than adding another writer or editing unowned contracts.
+
+### Complete targeted failure audit (TL-P4-51)
+
+The entire B1c/B1a/corpus/method target was run after the source changes: 61 passed, 9 failed.
+All remaining B1c failures are missing implementation, not contradictory acceptance assertions:
+
+| Exact test | Assertion location |
+| --- | --- |
+| `B1c index: exact PARA order direct notes shortest duplicate paths and recursive folded count` | `runner/test/b1-index.test.ts:149` |
+| `B1c index: existing MOC at 40 direct members folds and rebuilds complete regions by id` | `runner/test/b1-index.test.ts:285` |
+| `B1c index: existing MOC at 41 direct members folds and rebuilds complete regions by id` | `runner/test/b1-index.test.ts:285` |
+| `B1c index: a personal MOC stays byte identical while the Bower MOC refreshes` | `runner/test/b1-index.test.ts:320` |
+| `B1c index: done replay keeps the folded projection and complete members without another write` | `runner/test/b1-index.test.ts:339` |
+| `B1c index: lost reply for .bower/index.md resumes the same maintain before the report barrier` | `runner/test/b1-index.test.ts:364` |
+| `B1c index: lost reply for Resources/Garden/Garden.md resumes the same maintain before the report barrier` | `runner/test/b1-index.test.ts:352` |
+| `B1c index: lost reply for .bower/retrieval.json resumes the same maintain before the report barrier` | `runner/test/b1-index.test.ts:364` |
+| `B1c index: corpus b1-moc-over-40 folds 41 leaves with complete reachable child maps` | `runner/test/b1-index.test.ts:408` |
+
+The two full-runner test conflicts with this session's no-repository-write rule are both listed:
+
+| Test | File:line | Conflict and disposition |
+| --- | --- | --- |
+| new-instance copies the built runner and tidy.yml and nothing secret | `runner/test/new-instance.test.ts:103` (assertion :107) | run() at :92 executes the real script with the source ROOT. scripts/new-instance.sh:104 runs a build there. The first full-suite attempt also triggered pnpm's dependency fetching. Retained unchanged; final verification is relocated to an OS-temp copy. |
+| new-instance refuses a public repository | `runner/test/new-instance.test.ts:156` (assertion :162) | The same real source-root build precedes its private-repository check. Retained unchanged; final verification is relocated to the same OS-temp copy. |
+
+No further packet/ruling contradiction was identified in the complete targeted or data suites. Earlier red-session
+conflicts superseded by red repair 1 were not reintroduced. No test repair is made in this implementation.
+
+### Compatibility row drafts
+
+| Contract / stored format | Draft result |
+| --- | --- |
+| B1a full and long ownership notes; changes cursor; folder moves/bins | 18/18 B1a contract tests pass; full region framing remains validated. |
+| Hidden paths and a hidden-only feed | Both B1c controls pass; no index/hot send, state differs only by cursor. |
+| Old flat index and stamped canonical index | Read leniently; unchanged projections keep their exact stored bytes. |
+| Q7 cut and unchanged-version cache | Exact bounded-index red passes at 32,000 characters and <=300 production calls; unchanged note media are not reread. |
+| Duplicate titles, PARA and nested order | Implemented; exact-byte test remains red solely because folded MOC rendering is missing. |
+| Ordinary root index and personal MOCs | Root content is preserved and indexed; personal MOC bytes/sends remain protected. Owned counterpart refresh remains red. |
+| Repeated instruction refresh | B1c real instruction corpus test passes; no second index send. |
+| Framed Bower MOCs, 40/41 direct notes | Not delivered; no region author or writer bypass. |
+| Legacy Gardening/Soil/Water hierarchy | Not delivered; requires the existing ownership author to gain an admitted migration. |
+| Replay and lost replies | Existing index/state recovery retained; complete folding/MOC assertions remain red. |
+| Corpus/method verdict rows | Unchanged; 33 corpus/driver/PDF and 5 method tests pass. |
+
+### Verification and environment
+
+All requested suite outputs/report files are under the OS temp folder, never tmp-logs/ or test-results/.
+The initial pnpm command tried automatic dependency installation. It was interrupted; offline installs failed because
+local tarballs were absent. Dependencies were copied from an existing local installation into /private/tmp/b1c-offline-deps.
+The worktree's ignored node_modules points there. Later commands invoke the same local Vitest/tsc/ESLint binaries with
+Node directly, bypassing pnpm's automatic installation. No successful network access or live service probe occurred.
+
+Commands (equivalent local binaries to the requested pnpm exec commands):
+
+```sh
+node ../node_modules/vitest/vitest.mjs run test/b1-index.test.ts test/b1a-contract.test.ts test/corpus test/second-brain-method.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=/tmp/b1c-targeted.json > /tmp/b1c-targeted.log 2>&1
+node node_modules/vitest/vitest.mjs run src/data --maxWorkers=2 --reporter=default --reporter=json --outputFile=/tmp/b1c-data.json > /tmp/b1c-data.log 2>&1
+node ../node_modules/vitest/vitest.mjs run --maxWorkers=2 --reporter=default --reporter=json --outputFile=/tmp/b1c-runner.json > /tmp/b1c-runner.log 2>&1
+node node_modules/typescript/bin/tsc --noEmit -p tsconfig.app.json > /tmp/b1c-tsc-app.log 2>&1
+node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json > /tmp/b1c-tsc-node.log 2>&1
+node ../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json > /tmp/b1c-tsc-runner.log 2>&1
+node node_modules/eslint/bin/eslint.js src/data/spine/scripted.ts > /tmp/b1c-eslint-data.log 2>&1
+node ../node_modules/eslint/bin/eslint.js src/index.ts > /tmp/b1c-eslint-runner.log 2>&1
+```
+
+B1c 5/14 pass; B1a 18/18 pass; corpus/driver/PDF/method 38/38 pass. Data suite: 4,160/4,160 pass.
+Node and runner tsc pass; touched-file ESLint passes in each package's own directory.
+App tsc has four out-of-scope implicit-any errors at Palette.tsx:119 (two), :123 and :127 with the copied local dependencies.
+A preserveSymlinks diagnostic produced broad dependency-type failures and is not a verification result.
+No app source or dependency declaration was changed to hide these errors.
+The first full runner suite had 602 passes and 11 failures: the nine MOC failures and the two build-environment failures above.
+Final full-suite results from the OS-temp copy are recorded below when the run finishes.
+No pnpm check mark or app/capabilities e2e is claimed: the entry is blocked, ui:false, and pnpm check's default test reports
+write inside the checkout. Test fixtures and tests remain exactly committed. Git diff --check passes.
+
+
+Final verification of the exact retained source files:
+
+- Full runner suite in `/private/tmp/b1c-verify`: **604 passed, 9 failed**, 613 tests total.
+  All nine failures are the MOC failures in the targeted audit above; both new-instance tests pass.
+  Log/report: `/tmp/b1c-runner-final.log`, `/tmp/b1c-runner-final.json`.
+- The temporary copy contains the unchanged tests and the final source bytes; both touched source SHA-256 digests
+  were compared with the worktree. The first temporary run lacked the API package links; those local links were
+  restored and the entire suite rerun. Its import failures are discarded as setup failures, not regressions.
+- The temporary PATH helper implements exactly runner/package.json's build command with the already installed
+  esbuild executable. It neither changes a test nor bypasses the build. Build outputs and fixture repositories
+  live under OS temp, and no dependency fetching is needed. The temporary root has no checkout Git metadata.
+
+```sh
+# cwd: /private/tmp/b1c-verify/runner
+PATH=/private/tmp/b1c-offline-bin:$PATH node ../node_modules/vitest/vitest.mjs run --maxWorkers=2 --reporter=default --reporter=json --outputFile=/tmp/b1c-runner-final.json > /tmp/b1c-runner-final.log 2>&1
+```
+
+No golden or time bound was raised. The final Drive-call test reports C04 88 (bound 91) and the 25-earlier-runs case
+99 (bound 102): each saves the unchanged index's three verification/fence/send calls. The goldens were not edited.
+Final status: blocked, with partial index and instruction-lifecycle edits retained. Baseline HEAD is
+`e1b0e3922f2345ab42eccc36c18aed54f4751cb3`; no commit was made by this worker.
