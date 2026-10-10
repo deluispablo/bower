@@ -43,16 +43,14 @@ export interface PendingUpload {
 export interface UploadStore {
   /** The account's things for this folder, oldest first. */
   list: (account: string, folder: string) => Promise<PendingUpload[]>;
-  /** Captures the forget fence at add admission, before room checks or reselection hashing. */
-  captureForgetVersion?: (record: PendingUpload) => Promise<void>;
+  /** Captures the account fence at the start of an operation that may write uploads. */
+  captureForgetVersion: (record: Pick<PendingUpload, 'account'>) => Promise<number>;
   /** Keeps a new one with its bytes, together. Rejects when it cannot (`QuotaExceededError`). */
-  add: (record: PendingUpload, body: Blob) => Promise<void>;
+  add: (record: PendingUpload, body: Blob, version: number) => Promise<void>;
   /** Keeps new progress; a removed one stays removed. */
-  save: (record: PendingUpload) => Promise<void>;
+  save: (record: PendingUpload, version: number) => Promise<void>;
   body: (record: PendingUpload) => Promise<Blob | null>;
   remove: (record: PendingUpload) => Promise<void>;
-  /** Retires this connection's staging through the queue's awaited cleanup, rather than rejecting it. */
-  retireStaging?: (records: readonly PendingUpload[]) => void;
   /** Removes the account's things in one folder, or in every folder. */
   clear: (account: string, folder?: string) => Promise<void>;
 }
@@ -83,10 +81,9 @@ interface StoredBytes {
   type: string;
 }
 
-interface StagedBytes {
-  record: PendingUpload;
-  retiring: boolean;
-  retiringVersion: number | null;
+/** Both backends refuse every upload write from an earlier account lifetime. */
+function assertForgetVersion(current: number, captured: number): void {
+  if (current !== captured) throw new UploadForgottenError('The account was forgotten during this upload.');
 }
 
 function request<T>(r: IDBRequest<T>): Promise<T> {
@@ -134,8 +131,6 @@ function under(key: IDBValidKey, prefix: string[]): boolean {
  */
 export function indexedDbUploadStore(factory: IDBFactory | null = typeof indexedDB === 'undefined' ? null : indexedDB, name = DB_NAME): UploadStore {
   let opening: Promise<IDBDatabase> | null = null;
-  const staging = new Set<StagedBytes>();
-  const admitted = new WeakMap<PendingUpload, Promise<number>>();
 
   /** Forgets the connection, so the next call opens a fresh one. */
   function forget(): void {
@@ -201,9 +196,6 @@ export function indexedDbUploadStore(factory: IDBFactory | null = typeof indexed
         marker.onsuccess = () => {
           const version = forgetVersion(marker.result) + 1;
           bytes.put(version, key);
-          for (const stage of staging) {
-            if (stage.record.account === account && stage.retiring) stage.retiringVersion = version;
-          }
         };
       }
       for (const storeName of [PENDING, BYTES]) {
@@ -217,22 +209,27 @@ export function indexedDbUploadStore(factory: IDBFactory | null = typeof indexed
     });
   }
 
-  /** The record identity carries its admission fence through wrappers around add. */
-  function capture(record: PendingUpload): Promise<number> {
-    const captured = admitted.get(record);
-    if (captured) return captured;
-    const version = run('readonly', async (t) => {
+  /** Every upload put checks its caller's fence in the same transaction as the write. */
+  function write(record: PendingUpload, version: number, put: (t: IDBTransaction) => void): Promise<void> {
+    return run('readwrite', async (t) => {
+      let current = 0;
+      const marker = t.objectStore(BYTES).get(forgetKey(record.account));
+      marker.onsuccess = () => {
+        current = forgetVersion(marker.result);
+        if (current === version) put(t);
+      };
+      await finished(t);
+      assertForgetVersion(current, version);
+    });
+  }
+
+  return {
+    captureForgetVersion: (record) => run('readonly', async (t) => {
       const [marker] = await Promise.all([
         request<unknown>(t.objectStore(BYTES).get(forgetKey(record.account))), finished(t),
       ]);
       return forgetVersion(marker);
-    });
-    admitted.set(record, version);
-    return version;
-  }
-
-  return {
-    captureForgetVersion: async (record) => { await capture(record); },
+    }),
     list: (account, folder) =>
       run('readwrite', async (t) => {
         const pending = t.objectStore(PENDING);
@@ -257,48 +254,22 @@ export function indexedDbUploadStore(factory: IDBFactory | null = typeof indexed
         return found.filter((r) => r.account === account && r.folder === folder).sort((a, b) => a.addedAt.localeCompare(b.addedAt));
       }),
 
-    async add(record, body) {
-      const stage: StagedBytes = { record, retiring: false, retiringVersion: null };
-      staging.add(stage);
-      try {
-        const version = await capture(record);
-        // Read before the write transaction: IndexedDB closes one that waits on other work.
-        const stored: StoredBytes = { buffer: await body.arrayBuffer(), type: body.type };
-        await run('readwrite', async (t) => {
-          let forgotten = false;
-          const bytes = t.objectStore(BYTES);
-          const marker = bytes.get(forgetKey(record.account));
-          marker.onsuccess = () => {
-            const current = forgetVersion(marker.result);
-            forgotten = current !== version && current !== stage.retiringVersion;
-            if (forgotten) return;
-            t.objectStore(PENDING).put({ ...record, appProperties: { ...record.appProperties } });
-            bytes.put(stored, uploadKey(record));
-          };
-          await finished(t);
-          if (forgotten) throw new UploadForgottenError('The account was forgotten while staging.');
-        });
-      } finally {
-        staging.delete(stage);
-        admitted.delete(record);
-      }
+    async add(record, body, version) {
+      // Read before the write transaction: IndexedDB closes one that waits on other work.
+      const stored: StoredBytes = { buffer: await body.arrayBuffer(), type: body.type };
+      await write(record, version, (t) => {
+        t.objectStore(PENDING).put({ ...record, appProperties: { ...record.appProperties } });
+        t.objectStore(BYTES).put(stored, uploadKey(record));
+      });
     },
 
-    retireStaging(records) {
-      // Only the queue that awaits these writes and their removal can take this cleanup path.
-      // Other connections still fail the shared transactional fence before writing either part.
-      for (const stage of staging) if (records.includes(stage.record)) stage.retiring = true;
-    },
-
-    save: (record) =>
-      run('readwrite', async (t) => {
-        const store = t.objectStore(PENDING);
-        const there = store.count(uploadKey(record));
-        there.onsuccess = () => {
-          if (there.result > 0) store.put({ ...record, appProperties: { ...record.appProperties } });
-        };
-        await finished(t);
-      }),
+    save: (record, version) => write(record, version, (t) => {
+      const store = t.objectStore(PENDING);
+      const there = store.count(uploadKey(record));
+      there.onsuccess = () => {
+        if (there.result > 0) store.put({ ...record, appProperties: { ...record.appProperties } });
+      };
+    }),
 
     body: (record) =>
       run('readonly', async (t) => {
@@ -323,13 +294,16 @@ export function indexedDbUploadStore(factory: IDBFactory | null = typeof indexed
  */
 export function memoryUploadStore(): UploadStore {
   const held = new Map<string, { record: PendingUpload; body: Blob }>();
+  const versions = new Map<string, number>();
+  const current = (account: string): number => versions.get(account) ?? 0;
   const mine = (r: PendingUpload, account: string, folder?: string): boolean => r.account === account && (folder === undefined || r.folder === folder);
   return {
+    captureForgetVersion: async (record) => current(record.account),
     list: async (account, folder) => [...held.values()].map((h) => ({ ...h.record, appProperties: { ...h.record.appProperties } })).filter((r) => mine(r, account, folder)).sort((a, b) => a.addedAt.localeCompare(b.addedAt)),
-    add: async (record, body) => { held.set(uploadId(record), { record: { ...record, appProperties: { ...record.appProperties } }, body }); },
-    save: async (record) => { const h = held.get(uploadId(record)); if (h) h.record = { ...record, appProperties: { ...record.appProperties } }; },
+    add: async (record, body, version) => { assertForgetVersion(current(record.account), version); held.set(uploadId(record), { record: { ...record, appProperties: { ...record.appProperties } }, body }); },
+    save: async (record, version) => { assertForgetVersion(current(record.account), version); const h = held.get(uploadId(record)); if (h) h.record = { ...record, appProperties: { ...record.appProperties } }; },
     body: async (record) => held.get(uploadId(record))?.body ?? null,
     remove: async (record) => { held.delete(uploadId(record)); },
-    clear: async (account, folder) => { for (const [k, h] of held) if (mine(h.record, account, folder)) held.delete(k); },
+    clear: async (account, folder) => { if (folder === undefined) versions.set(account, current(account) + 1); for (const [k, h] of held) if (mine(h.record, account, folder)) held.delete(k); },
   };
 }

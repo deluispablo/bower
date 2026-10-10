@@ -449,6 +449,7 @@ export class DriveVault implements VaultSource {
   async restore(path: string): Promise<void> {
     const gone = this.bin.get(path);
     if (!gone) throw new BowerError('not-found', 'It is no longer in the Bin.');
+    const version = gone.pending?.entries.some((e) => e.body) ? await this.captureUploadVersion() : null;
     for (const f of gone.declarations ?? []) await this.fromBin(f);
     if (gone.file === null) {
       // A loose thing that never arrived: its declaration was all there was of it.
@@ -485,9 +486,9 @@ export class DriveVault implements VaultSource {
     this.bin.delete(path);
     await this.refresh();
     if (gone.pending && gone.pileKey) {
-      for (const e of gone.pending.entries) e.item.upload = 0;
+      for (const e of gone.pending.entries) { e.item.upload = 0; e.forgetVersion = version; }
       this.uploads.set(gone.pileKey, gone.pending);
-      this.track(this.send(gone.pileKey));
+      this.track(this.send(gone.pileKey, version));
     }
   }
 
@@ -1002,6 +1003,7 @@ export class DriveVault implements VaultSource {
   async addPile(input: NewPile): Promise<Pile> {
     const text = input.text.trim();
     if (!input.items.length && !text) throw new BowerError('conflict', 'Add a file, a link or a line first.');
+    const version = input.items.some((it) => it.body) ? await this.captureUploadVersion() : null;
     const ix = await this.index();
     const inbox = ix.idOf('Inbox') ?? (await this.systemFolder('Inbox'));
     const createdAt = Date.now();
@@ -1038,7 +1040,7 @@ export class DriveVault implements VaultSource {
     const entries: Sending[] = input.items.map((it, i) => ({
       key: declared?.keys[i] ?? `${id}-${i}-${Math.random().toString(36).slice(2, 10)}`,
       item: { id: declared?.keys[i] ?? `${id}-${i}`, name: it.name, kind: it.kind, origin: it.origin, upload: 0 },
-      ...(it.body ? { body: it.body } : {}),
+      ...(it.body ? { body: it.body, forgetVersion: version } : {}),
       ...(it.url ? { url: it.url } : {}),
       ...(it.body && declared?.hashes[i] ? { sha256: declared.hashes[i] } : {}),
     }));
@@ -1051,10 +1053,10 @@ export class DriveVault implements VaultSource {
         await this.startQueue();
         this.checkCurrent();
         const { name, props } = this.sendTarget(ix, id, u, e);
-        await this.stageQueued(id, u, e, e.body, name, props);
+        await this.stageQueued(id, u, e, e.body, name, props, version);
         this.checkCurrent();
       }
-      this.track(this.send(id));
+      this.track(this.send(id, version));
     }
     this.emit();
     return { id, text, createdAt, items: entries.map((e) => ({ ...e.item })), ...(path ? { path } : {}) };
@@ -1222,8 +1224,9 @@ export class DriveVault implements VaultSource {
   }
 
   async retryPile(id: string): Promise<void> {
+    const version = await this.captureUploadVersion();
     // The queue tries again what waited for a connection or stopped, this page's or a reload's.
-    if (this.queued.queue.items().some((i) => i.pileId === id && i.state !== 'done' && !i.gone)) this.queued.queue.retry();
+    if (this.queued.queue.items().some((i) => i.pileId === id && i.state !== 'done' && !i.gone)) this.queued.queue.retry(undefined, version);
     const held = this.queuedItems(id);
     const u = this.uploads.get(id);
     if (!u) {
@@ -1244,9 +1247,9 @@ export class DriveVault implements VaultSource {
       return;
     }
     if (this.sendingPiles.has(id)) return;
-    for (const e of u.entries) e.item.upload = 0;
+    for (const e of u.entries) { e.item.upload = 0; e.forgetVersion = version; }
     this.emit();
-    this.track(this.send(id));
+    this.track(this.send(id, version));
   }
 
   /**
@@ -1260,6 +1263,7 @@ export class DriveVault implements VaultSource {
    */
   async chooseAgain(pileId: string, itemId: string, chosen: ChosenAgain): Promise<void> {
     this.refuseWhileHeld(pileId);
+    const version = chosen.body ? await this.captureUploadVersion() : null;
     const pile = await this.pile(pileId);
     const ix = await this.index();
     const folder = pile.path ? ix.file(pile.path) : undefined;
@@ -1304,13 +1308,13 @@ export class DriveVault implements VaultSource {
       key,
       sha256: member.content.sha256,
       item: { id: key, name: shownName(member), kind: member.kind, origin: member.origin ?? 'Added in Drive', upload: 0 },
-      ...(url === undefined ? { body: bytes } : { url }),
+      ...(url === undefined ? { body: bytes, forgetVersion: version } : { url }),
     };
     if (u) u.entries.push(entry);
     else this.uploads.set(pileId, { lone: false, createdAt: pile.createdAt, parent: folder.id, entries: [entry], declaration: found.declaration.declarationId });
     this.emit();
     // A send already going picks it up; otherwise one starts.
-    this.track(this.send(pileId));
+    this.track(this.send(pileId, version));
   }
 
   /** A tidy-up holds this pile: nothing is sent into it until it ends. */
@@ -1609,7 +1613,7 @@ export class DriveVault implements VaultSource {
   }
 
   /** Sends a pile's things one by one; a failure marks that thing and goes on. */
-  private async send(pileId: string): Promise<void> {
+  private async send(pileId: string, version: number | null): Promise<void> {
     const u = this.uploads.get(pileId);
     if (!u || this.sendingPiles.has(pileId)) return;
     this.sendingPiles.add(pileId);
@@ -1618,7 +1622,7 @@ export class DriveVault implements VaultSource {
       // failed (even before it was tried) waits for Try again, never looped on.
       const seen = new Set<Sending>();
       for (let next: Upload | undefined = u; next; next = this.uploads.get(pileId)) {
-        await this.sendAll(pileId, next, seen);
+        await this.sendAll(pileId, next, seen, version);
         if (!this.current() || !this.uploads.get(pileId)?.entries.some((e) => !seen.has(e))) break;
       }
     } finally {
@@ -1626,7 +1630,7 @@ export class DriveVault implements VaultSource {
     }
   }
 
-  private async sendAll(pileId: string, u: Upload, seen: Set<Sending>): Promise<void> {
+  private async sendAll(pileId: string, u: Upload, seen: Set<Sending>, version: number | null): Promise<void> {
     const next = (): Sending | undefined => u.entries.find((x) => !seen.has(x));
     // Each thing once, in order, those added while this runs included.
     for (let e = next(); e; e = next()) {
@@ -1641,7 +1645,7 @@ export class DriveVault implements VaultSource {
         e.item.upload = 0;
         // A link or an empty thing keeps the id reserved for it (`write-once.ts`): a try after a lost answer is that same file.
         const text = e.url ? shortcut(e.url) : '';
-        const made = e.body ? await this.sendQueued(pileId, u, e, e.body, name, props) : await makeOnce(e, this.addedDrive, sentAs(u.parent, name, text), (id, sent) => makeText(this.addedDrive, this.addedDrive, { ...sent, props, id }, text));
+        const made = e.body ? await this.sendQueued(pileId, u, e, e.body, name, props, e.forgetVersion === undefined ? version : e.forgetVersion) : await makeOnce(e, this.addedDrive, sentAs(u.parent, name, text), (id, sent) => makeText(this.addedDrive, this.addedDrive, { ...sent, props, id }, text));
         if (!this.current()) return;
         if (this.uploads.get(pileId) !== u) {
           // The pile was removed while this was on its way. A link or an empty thing: its removal waited for this create
@@ -1671,6 +1675,21 @@ export class DriveVault implements VaultSource {
     }
     if (!u.entries.length && this.uploads.get(pileId) === u) this.uploads.delete(pileId);
     this.emit();
+  }
+
+  /** Capture before an enclosing action hashes bytes or waits for Drive, including Undo. */
+  private async captureUploadVersion(): Promise<number | null> {
+    const account = await this.queued.account();
+    try {
+      const capture = this.queued.queue.captureForgetVersion;
+      if (!capture) throw new Error('The upload queue cannot capture its forget version.');
+      return await capture(account);
+    }
+    catch (error) {
+      // expected: the queue reports its established memory fallback and never writes without a version.
+      console.error(error);
+      return null;
+    }
   }
 
   /** Starts the upload queue for this person and folder, once: it resumes what a reload left. */
@@ -1717,17 +1736,17 @@ export class DriveVault implements VaultSource {
   }
 
   /** Retains one Blob through the queue's existing committed-device or memory-fallback boundary. */
-  private async stageQueued(pileId: string, u: Upload, e: Sending, body: Blob, name: string, props: Record<string, string>): Promise<void> {
+  private async stageQueued(pileId: string, u: Upload, e: Sending, body: Blob, name: string, props: Record<string, string>, version: number | null): Promise<void> {
     if (e.queued) return;
     const queue = this.queued.queue;
     await this.startQueue();
-    const added = await queue.add({ declarationId: u.declaration ?? pileId, memberKey: e.key, sha256: e.sha256 ?? (await sha256(body)), pileId, parentId: u.parent, name, body, type: body.type, appProperties: props });
+    const added = await queue.add({ declarationId: u.declaration ?? pileId, memberKey: e.key, sha256: e.sha256 ?? (await sha256(body)), pileId, parentId: u.parent, name, body, type: body.type, appProperties: props }, version);
     e.queued = added.id;
   }
 
   /** Waits for the already staged member; transfer remains the queue's one mechanism. */
-  private async sendQueued(pileId: string, u: Upload, e: Sending, body: Blob, name: string, props: Record<string, string>): Promise<DriveFile> {
-    await this.stageQueued(pileId, u, e, body, name, props);
+  private async sendQueued(pileId: string, u: Upload, e: Sending, body: Blob, name: string, props: Record<string, string>, version: number | null): Promise<DriveFile> {
+    await this.stageQueued(pileId, u, e, body, name, props, version);
     const queue = this.queued.queue;
     return new Promise<DriveFile>((resolve, reject) => {
       let off = (): void => undefined;
@@ -1985,6 +2004,8 @@ interface Sending extends Holder {
   queued?: string;
   item: PileItem;
   body?: Blob;
+  /** Its enclosing action's captured version, including additions picked up by an ongoing send. */
+  forgetVersion?: number | null;
   url?: string;
 }
 

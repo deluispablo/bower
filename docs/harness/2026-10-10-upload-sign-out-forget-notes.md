@@ -1122,3 +1122,147 @@ Research: reused the existing store and inherited official references, without n
 https://www.w3.org/TR/IndexedDB/#transaction-lifecycle and
 https://vitest.dev/config/#setupfiles. Argument forwarding uses the existing wrapper homes.
 Removed: none. Production repair and integration remain with the assigned sessions.
+
+
+## Fix round 3 (final)
+
+Fresh implementation session: read WORKER, the packet, all three adversarial reviews,
+the preparation and all entry notes, including Fix round 3 red repair 2. No network,
+Git-writing command, test edit, new store, dependency or stored member-format change.
+The coordinator owns commits. The production diff remains uncommitted in this worktree.
+
+### Implementation and every store write path
+
+The required store API now returns a number from captureForgetVersion and requires that
+number on both add and save. The IndexedDB write helper at upload-store.ts:213 checks
+that number against the account marker in the same transaction as every pending/bytes
+put. Transaction/connection retries retain the original argument. No capture occurs in
+add or save; no missing-version overload or local retirement exception remains.
+Both existing backends use assertForgetVersion; the memory backend advances its account
+version on account-wide clear and refuses stale add/save before mutating its held map.
+No object store, schema upgrade, alternate queue or retention home was introduced.
+
+Every production write route found by the add/save/put sweep:
+
+- src/data/upload-queue.ts:329, keepBytes -> store.add(record, body, version).
+  Direct add at :834 captures before estimation, persistence requests or Blob work;
+  chosenAgain at :765 receives that same capture before its hashing and room checks.
+  Enclosing vault operations supply their earlier version instead of recapturing here.
+- src/data/vault/drive-vault.ts:1743, stageQueued -> queue.add(input, version).
+  addPile at :1003 captures at :1006 before declaration hashing/index/Drive awaits,
+  then passes it to initial staging at :1056 and the tracked send. Undo/restore at :449
+  captures at :452 before untrash or journal/refresh awaits; :489 updates the retained
+  entries with that version before re-enqueue. retryPile at :1226 captures at :1227
+  and forwards it to queue.retry and retained entries. chooseAgain at :1264 captures
+  at :1266 before hashing and Drive reads. send (:1616), sendAll (:1633), sendQueued
+  (:1748) and stageQueued (:1739) carry the version through fallback hashing. A new
+  entry picked up by an ongoing send retains its own enclosing operation's version.
+- src/data/upload-queue.ts:448, keepFileId -> store.save(record, version): reserved ID.
+  :466, shared save -> store.save(record, version): onSession, onConfirmed and
+  letFileIdGo (permanent refusal releases the reservation/session/confirmation).
+  Both closures use the send's snapshot of the initiating entry's captured version.
+  Initial sends receive add's version; retry/offline retry captures at :923; explicit
+  resume captures at :969; start/reload hydration captures at :809 before list/lock
+  awaits; refresh captures at :343 before listing newly discovered records. Vault
+  retryPile supplies its own earlier capture to queue.retry. These versions survive
+  all transport callbacks and store transaction retries.
+- src/data/upload-store.ts:261-262: add's pending metadata and byte puts go through write.
+  :270: save's conditional pending put goes through the same write boundary, and a
+  removed record still stays removed. :303-304: memory add/save check the same rule
+  before changing the existing held map. Direct store fixtures now pass their versions.
+- src/data/upload-store.ts:198: the marker put is forgetting itself, not an upload write.
+  remove, clear and malformed-record cleanup only delete upload records/bytes. Vault
+  index.put calls update its listing; none writes to the upload store.
+
+Capture failures keep the existing explicit memory fallback without invoking a store write
+without a version. The concrete queue always exposes its capture method; its public port
+keeps that method optional for the older session queue stub, which never persists uploads.
+A missing port capture cannot supply a version for a store write. The UploadStore capture
+itself is mandatory. Same-queue forgetting still waits for staging and cleanup, including
+refused stale writes, and retains the purge BowerError/cause path. All 32 sign-out tests pass,
+including earlier reds, both repaired cleanup cases and the positive Undo/retry/resume controls.
+
+### Complete remaining contradiction list (TL-P4-51)
+
+The committed write-API repair missed the manually assembled brokenStore fixture at
+src/data/upload-queue.test.ts:104-115. Its returned UploadStore (:107) forwards six
+operations but omits captureForgetVersion. The mandatory store API cannot typecheck that
+object; actual app tsc reports exactly TS2741 at :107. No production typing error remains.
+There is no captured version available through this fixture. Making capture optional,
+inventing a default version or admitting a versionless write would violate addendum 8.
+Tests are frozen, so the missing fixture forwarding cannot be repaired in this session.
+
+Every affected test, with declaration, fixture use and final failing call:
+
+1. src/data/upload-queue.test.ts:582, `a storage failure mid-upload keeps sending from memory and says so, not as a Drive refusal`.
+   brokenStore at :585; start fails at :586. Its successful durable add expectation at :587
+   requires the actual store capture that this fixture omits.
+2. src/data/upload-queue.test.ts:595, `bytes that cannot be read back fail in words about this device, not Drive`.
+   brokenStore at :606; start fails at :607.
+3. src/data/upload-queue.test.ts:624, `kept uploads that cannot be read at start are told once`.
+   brokenStore at :627; start fails at :632.
+4. src/data/upload-queue.test.ts:686, `when the device can neither keep the reserved id nor let go of the file, the try fails in words about the device`.
+   brokenStore at :689; start fails at :690.
+
+All four actual failures are TypeError: store.captureForgetVersion is not a function.
+The whole requested data suite completed before stopping: no other failing test, behavioral
+contradiction, unhandled failure or timer-gate failure. No test-specific production fallback,
+cast, compiler suppression or fixture edit was added. Stopped under the explicit owner
+TL-P4-51 instruction; this is blocked delivery, not a claim that the entry is complete.
+
+### Research and verification
+
+No network. Reused inherited official references against the existing local mechanism:
+[IndexedDB transaction lifecycle](https://www.w3.org/TR/IndexedDB/#transaction-lifecycle)
+and [Drive resumable uploads](https://developers.google.com/workspace/drive/api/guides/manage-uploads#resumable).
+Atomic marker/write ordering belongs in the existing store; resumable session, status-query,
+308/range, bounded expiry and reserved-identity transport remain in their existing homes.
+
+Evidence directory: /private/tmp/uf3-b6wrc46k/. Every command redirected output there;
+only failures and aggregate results were read. pnpm used explicit offline=true and
+verifyDepsBeforeRun=false to prevent installs/network. The temporary Vitest config imports
+the original Vite config and original app setup; its timer setup copy changes only report
+paths/import resolution. Timer enforcement is intact. Caches, CPU reports, logs and both
+TypeScript build-info files are OS temp. Tests write no artifacts into the repository.
+
+- Before fix: requested reds, 32 tests, 24 pass and eight intended assertion failures;
+  reds-before.log. Exact failed names are both fix 1.2 remove-fails variants, and fix 3
+  Undo awaits untrash, addPile awaits declaration hashing, and chooseAgain awaits hashing,
+  each before sign-out and auth expiry. Failures at :424, :692, :720 and :762 restore
+  forgotten metadata and original bytes.
+- After fix: pnpm exec vitest run src/data/upload-sign-out.test.ts --maxWorkers=2,
+  with the OS-temp config: exit 0, 32/32 pass; reds.log. The subsequent whole-data run
+  also passes the entire sign-out file after the final production port typing adjustment.
+- pnpm exec vitest run src/data --maxWorkers=2, with the OS-temp config: exit 1;
+  79 files, 78 pass; 4,192 tests, 4,188 pass; only the four fixture failures above; data.log.
+- tsc -p tsconfig.app.json --noEmit, OS-temp build info: exit 2; only the missing
+  brokenStore capture at upload-queue.test.ts:107; tsc-app.log.
+- tsc -p tsconfig.node.json --noEmit, OS-temp build info: exit 0; tsc-node.log.
+- ESLint on upload-store.ts, upload-queue.ts and vault/drive-vault.ts: exit 0; eslint.log.
+- Read-only git diff --check: pass. No test-file diff. Only the three production homes
+  and this notes append are touched. No commit, integration, server, pnpm check or e2e
+  after the required contradiction stop; no green full-gate mark is claimed.
+
+removed: 122 original production lines replaced (upload-queue.ts 34; upload-store.ts 70; drive-vault.ts 18).
+removed: store retirement permission/state, record-identity admission WeakMap and versionless write signatures.
+removed: 0 test lines; no store, stored record field, journal line, Drive file or assertion removed.
+tests changed: none
+
+
+## Fix round 3 red repair 3
+
+tests changed: src/data/upload-queue.test.ts: TL-P4-53 addendum 8 write-API sweep: brokenStore forwards captureForgetVersion
+
+The fixture forwards captureForgetVersion to the real store unchanged. No assertion,
+expected value or test name changed. The retained production diff is byte-for-byte
+unchanged (read-only diff snapshots compared with cmp). No Git-writing command or network.
+
+- pnpm exec vitest run src/data --maxWorkers=2, with the OS-temp config and runner
+  config loader: exit 0; 79/79 files and 4,192/4,192 tests pass.
+- pnpm exec tsc -p tsconfig.app.json --noEmit, OS-temp build info: exit 0; no diagnostics.
+
+Logs: /private/tmp/uf3-red-repair-3/data.log and /private/tmp/uf3-red-repair-3/tsc-app.log.
+Reused the prior OS-temp config and timer setup with only temp paths changed; cache,
+CPU reports, logs and build info remain outside the repository. Offline pnpm settings
+prevent installs/network. Read only failures and aggregate results. No pnpm check or e2e
+was run for this explicitly scoped fixture repair. The coordinator owns commits.

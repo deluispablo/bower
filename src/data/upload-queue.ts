@@ -169,7 +169,9 @@ export interface UploadQueue {
   /** Loads this account's queue for this folder, asks for the lock and sends. */
   start: (account: string, folder: string) => Promise<QueueRole>;
   /** Keeps a member on the device (when it can) and starts sending it; the same member twice is one. */
-  add: (input: AddUpload) => Promise<QueueItem>;
+  add: (input: AddUpload, version?: number | null) => Promise<QueueItem>;
+  /** Starts an enclosing operation's fence; older injected ports never persist uploads. */
+  captureForgetVersion?: (account: string) => Promise<number>;
   items: () => QueueItem[];
   role: () => QueueRole;
   subscribe: (listener: () => void) => () => void;
@@ -179,7 +181,7 @@ export interface UploadQueue {
   pendingCount?: () => number;
   /** Tries again the ones that waited for a connection or failed. */
   /** With `'offline'`, only those that waited for a connection (coming back online). */
-  retry: (only?: 'offline') => void;
+  retry: (only?: 'offline', version?: number | null) => void;
   /** Settles once nothing is being sent. */
   idle: () => Promise<void>;
   /** The person removed this one: stop it, wait for its send to settle, and delete its bytes. */
@@ -209,6 +211,8 @@ export interface UploadQueue {
 interface Entry {
   item: QueueItem;
   record: PendingUpload;
+  /** Captured when this add, retry, resume or hydration began; never recaptured by its callbacks. */
+  version: Promise<number | null>;
   /** The bytes in memory: the only copy when not durable. */
   body: Blob | null;
   /** Its record may be on the device, so it is removed once Drive has the file. */
@@ -252,7 +256,6 @@ function itemOf(record: PendingUpload, durable: boolean): QueueItem {
 interface StagingUpload {
   account: string;
   done: Promise<void>;
-  record?: PendingUpload;
   failure?: { cause: unknown };
 }
 
@@ -310,17 +313,25 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     finally { staging.delete(stage); finish(); }
   }
 
-  /** A locally retired transaction may commit after clear; forgetting awaits this removal too. */
-  async function keepBytes(record: PendingUpload, body: Blob, version: number, stage: StagingUpload): Promise<void> {
-    if ((forgotten.get(record.account) ?? 0) !== version) return;
+  /** Storage refusal keeps the established explicit memory fallback, without a versionless write. */
+  function capture(account: string): Promise<number | null> {
+    return store.captureForgetVersion({ account }).catch((error: unknown) => {
+      console.error(error);
+      return null;
+    });
+  }
+
+  /** Forgetting awaits staging and this cleanup even when the store refuses the stale write. */
+  async function keepBytes(record: PendingUpload, body: Blob, localVersion: number, version: number, stage: StagingUpload): Promise<void> {
+    if ((forgotten.get(record.account) ?? 0) !== localVersion) return;
     let failure: { cause: unknown } | undefined;
     try {
-      await store.add(record, body);
+      await store.add(record, body, version);
     } catch (cause) {
       // expected: defer rethrow until the late-write cleanup has finished.
       failure = { cause };
     }
-    if ((forgotten.get(record.account) ?? 0) !== version) {
+    if ((forgotten.get(record.account) ?? 0) !== localVersion) {
       try { await store.remove(record); }
       catch (cause) { stage.failure = { cause }; throw cause; }
     }
@@ -329,6 +340,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
 
   /** Picks up what another tab, or an earlier visit, left on the device. */
   async function refresh(s: Scope, gen: number): Promise<void> {
+    const version = capture(s.account);
     const records = await store.list(s.account, s.folder);
     if (gen !== generation) return;
     const ids = new Set<string>();
@@ -337,7 +349,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
       if (tombstones.has(id)) continue;
       ids.add(id);
       const entry = entries.get(id);
-      if (!entry) entries.set(id, { item: itemOf(record, true), record, body: null, kept: true });
+      if (!entry) entries.set(id, { item: itemOf(record, true), record, version, body: null, kept: true });
       else if (entry.item.durable && entry.item.state !== 'uploading') {
         // Another tab may have sent more of it: carry on from where it stands.
         entry.record = record;
@@ -386,7 +398,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
   }
 
   async function send(entry: Entry, gen: number): Promise<void> {
-    const { item, record } = entry;
+    const { item, record, version: captured } = entry;
     const controller = new AbortController();
     let settle = (): void => undefined;
     const settled = new Promise<void>((resolve) => { settle = resolve; });
@@ -429,9 +441,11 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
      * reserve another and make a second file. If it cannot be kept, the kept
      * copy goes and this tab sends from memory; if that fails too, the try fails.
      */
+    let version: number | null = null;
     const keepFileId = async (id: string): Promise<void> => {
       try {
-        await store.save({ ...record, fileId: id });
+        if (version === null) throw new Error('The upload forget version could not be read.');
+        await store.save({ ...record, fileId: id }, version);
         return;
       } catch (error) {
         console.error(error);
@@ -447,9 +461,9 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
       demote(new Error('The reserved file id could not be kept; sending from memory'));
     };
     const save = async (): Promise<void> => {
-      if (!item.durable || gen !== generation) return;
+      if (!item.durable || gen !== generation || version === null) return;
       try {
-        await store.save(record);
+        await store.save(record, version);
       } catch (error) {
         // expected: demote logs the details with console.error and tells the person once.
         demote(error);
@@ -479,6 +493,9 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
       entry.body = null;
     };
     try {
+      version = await captured;
+      if (gen !== generation || controller.signal.aborted) return;
+      if (version === null) demote(new Error('The upload forget version could not be read.'));
       let body = entry.body;
       if (body === null) {
         try {
@@ -745,16 +762,16 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
    * reserved file id and session: Drive never gets a second file. The bytes
    * are kept on the device again when they can be.
    */
-  async function chosenAgain(entry: Entry, record: PendingUpload, body: Blob, gen: number, version: number, stage: StagingUpload): Promise<QueueItem> {
+  async function chosenAgain(entry: Entry, record: PendingUpload, body: Blob, gen: number, localVersion: number, version: number | null, stage: StagingUpload): Promise<QueueItem> {
     const { item } = entry;
     if (body.size !== record.size || (await sha256(body)) !== record.sha256) {
       console.error('Bytes chosen again differ from the pending upload');
       throw new BowerError('unknown', NOT_SENT_TEXT);
     }
-    let durable = await fits(record.size);
-    if (durable) {
+    let durable = version !== null && await fits(record.size);
+    if (durable && version !== null) {
       try {
-        await keepBytes(record, body, version, stage);
+        await keepBytes(record, body, localVersion, version, stage);
       } catch (error) {
         if (error instanceof UploadForgottenError) {
           console.error(error);
@@ -770,6 +787,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     }
     // Chosen twice at once: the first one already took its place.
     if (entries.get(item.id) !== entry || !item.gone) return { ...item };
+    entry.version = Promise.resolve(version);
     entry.body = body;
     entry.kept = entry.kept || durable;
     item.durable = durable;
@@ -788,6 +806,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
   return {
     async start(account, folder) {
       if (scope?.account === account && scope.folder === folder && role !== 'idle') return role;
+      const version = capture(account);
       // Paused for this account and folder: what waited only in this page's memory goes now; any other start drops it.
       const resuming = paused && scope?.account === account && scope.folder === folder;
       if (scope !== null && !resuming) stop();
@@ -803,7 +822,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
         return [];
       });
       if (gen !== generation) return 'idle';
-      for (const record of records) if (!tombstones.has(uploadId(record)) && !entries.has(uploadId(record))) entries.set(uploadId(record), { item: itemOf(record, true), record, body: null, kept: true });
+      for (const record of records) if (!tombstones.has(uploadId(record)) && !entries.has(uploadId(record))) entries.set(uploadId(record), { item: itemOf(record, true), record, version, body: null, kept: true });
       const got = await acquire(s, gen);
       if (gen !== generation) return 'idle';
       role = role === 'owner' ? role : got;
@@ -812,10 +831,10 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
       return role;
     },
 
-    async add(input) {
+    async add(input, suppliedVersion) {
       const s = scope;
       const gen = generation;
-      const version = s === null ? 0 : forgotten.get(s.account) ?? 0;
+      const localVersion = s === null ? 0 : forgotten.get(s.account) ?? 0;
       if (s === null) {
         console.error('An upload was added before the queue started');
         throw new BowerError('unknown', NOT_SENT_TEXT);
@@ -843,14 +862,9 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
         if (known && !known.item.gone) return { ...known.item };
         // Each admission has its own identity, even when two reselections overlap.
         const record = known ? { ...known.record, appProperties: { ...known.record.appProperties } } : candidate;
-        stage.record = record;
-        try { await store.captureForgetVersion?.(record); }
-        catch (error) {
-          // The store retains the failed capture, so add still uses the existing storage fallback.
-          console.error(error);
-        }
+        const version = suppliedVersion === undefined ? await capture(record.account) : suppliedVersion;
         // Its bytes are gone from this device: the same file, chosen again, takes their place.
-        if (known?.item.gone) return chosenAgain(known, record, input.body, gen, version, stage);
+        if (known?.item.gone) return chosenAgain(known, record, input.body, gen, localVersion, version, stage);
         if (!persistAsked) {
           persistAsked = true;
           void storage?.persist?.().then(
@@ -862,10 +876,10 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
             (error: unknown) => console.error(error),
           );
         }
-        let durable = await fits(record.size);
-        if (durable) {
+        let durable = version !== null && await fits(record.size);
+        if (durable && version !== null) {
           try {
-            await keepBytes(record, input.body, version, stage);
+            await keepBytes(record, input.body, localVersion, version, stage);
           } catch (error) {
             if (error instanceof UploadForgottenError) {
               console.error(error);
@@ -883,7 +897,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
         if (again) return { ...again.item };
         // Added again on purpose: no longer a discarded one.
         tombstones.delete(id);
-        const entry: Entry = { item: itemOf(record, durable), record, body: input.body, kept: durable };
+        const entry: Entry = { item: itemOf(record, durable), record, version: Promise.resolve(version), body: input.body, kept: durable };
         entries.set(id, entry);
         notify();
         if (durable && role !== 'owner') bus?.post();
@@ -891,6 +905,8 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
         return { ...entry.item };
       });
     },
+
+    captureForgetVersion: (account) => store.captureForgetVersion({ account }),
 
     items: () => [...entries.values()].map((e) => ({ ...e.item })),
     role: () => role,
@@ -903,10 +919,13 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     hasUnfinished: () => pendingCount() > 0,
     pendingCount,
 
-    retry(only) {
-      for (const { item } of entries.values()) {
+    retry(only, suppliedVersion) {
+      const version = suppliedVersion === undefined ? (scope === null ? Promise.resolve(null) : capture(scope.account)) : Promise.resolve(suppliedVersion);
+      for (const entry of entries.values()) {
+        const { item } = entry;
         if (item.error === undefined || item.gone) continue;
         if (only === 'offline' && item.error.code !== 'offline') continue;
+        entry.version = version;
         delete item.error;
         item.state = 'waiting';
       }
@@ -947,6 +966,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     resume(id) {
       const entry = entries.get(id);
       if (!entry?.halted) return;
+      entry.version = capture(entry.record.account);
       entry.halted = false;
       notify();
       void pump();
@@ -958,7 +978,6 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
       if (scope?.account === account) stop();
       const failures: unknown[] = [];
       try {
-        store.retireStaging?.(pending.flatMap((stage) => stage.record ? [stage.record] : []));
         await store.clear(account);
       } catch (error) {
         // expected: report and reject below, after every outstanding staging cleanup settles.
