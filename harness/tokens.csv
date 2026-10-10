@@ -383,3 +383,4 @@ d-v2-24a,implementer,claude,bower-escalated,,9,143162,,,,,,44,20.6,escalated rou
 d-v2-24a,reviewer,codex,gpt-5-codex,high,5,789695,784896,,692480,4799,,,,2 Important (escalated round 2),2026-10-10
 c4-e2e-sync,implementer,codex,gpt-5-codex,low,1,212776,211365,,192640,1411,,,,done,2026-10-10
 c4-e2e-sync,reviewer,claude,bower-reviewer,,1,28894,,,,,,5,0.3,PASS (P4-71),2026-10-10
+d-v2-24a,property-red,codex,gpt-5-codex,high,4,2448574,2425450,,2285952,23124,,,,re-plan red (addendum 7),2026-10-10
