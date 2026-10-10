@@ -903,3 +903,27 @@ corpus-driver replay tests, the c05 corpus case and fix 1 finding 2.
 
 Sources: Drive files resource and ids (https://developers.google.com/drive/api/reference/rest/v3/files),
 RFC 9110 If-Match (https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.1); local RunRecords and grounding.
+
+## Red amendment (TL-P4-32 addendum 4)
+
+Red-owning session, 2026-10-10, on HEAD `90a0b603ee57b1a589d9fa531169b365743b4556`.
+Addendum 4 resolves the round-4 implementation's contract conflict: the promise is the effect.
+A completed request, including a restored copy, may be admitted and reported, but settles as a no-op
+with no second append and no second completion.
+
+tests changed: runner/test/c05-person-notes.test.ts: TL-P4-32 addendum 4 drops the two restored-copy admission/capture exclusions in round 4 1 and the admission exclusion in fix 1 finding 4; all no-second-append, no-second-completion assertions and positive controls remain.
+
+Exactly three assertion lines removed; no other test or implementation changes. The archived-original
+admission exclusion in round 4 1's twenty-run loop remains. The earlier failing assertions are recorded
+in the Round 4 implementation verification above; this session applies the authorized contract amendment.
+
+Verification at HEAD with the amended reds:
+- `pnpm -C runner exec vitest run --maxWorkers=2`: 41 files, 373 tests passed;
+  `tmp-logs/c05-r4-redfix.log`.
+- `pnpm -C runner exec tsc --noEmit -p .`: passed; `tmp-logs/c05-r4-redfix-tsc.log`.
+- `pnpm exec eslint runner/test/c05-person-notes.test.ts`: passed;
+  `tmp-logs/c05-r4-redfix-eslint.log`.
+- `git diff --check`: passed.
+
+No network or git writes. Commits are left to the coordinator. Full `pnpm check` and screen e2e
+were not run for this narrowly assigned red amendment; no screen changed.

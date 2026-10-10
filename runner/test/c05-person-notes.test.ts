@@ -463,7 +463,6 @@ describe('C05 person notes through runner main', () => {
     const text = 'Alex has received the new instructions.';
     const r = await runOnDrive(c, drive, root, { request: { kind: 'replay', id: 'change-1' }, claude: nextReply(source, text) }, 2);
     expect(r.requests?.map((q) => q.id)).toContain('change-2');
-    expect.soft(r.requests?.map((q) => q.id)).not.toContain('change-1');
     expect(reportOf(r).filed).toHaveLength(1);
     expect(r.after[PATH]).toContain(` · ${text} · [[Next water butt update.txt]]`);
     expect(r.after[PATH]?.split(` · ${NEWS}`).length).toBe(2);
@@ -792,10 +791,8 @@ describe('C05 person notes through runner main', () => {
     expect(replay.requestAction).toEqual({ kind: 'replay', id: 'change-1', outcome: 'restored' });
     expect(replay.code).toBe(0);
     expect(reportOf(replay).filed).toHaveLength(1);
-    expect.soft(replay.requests?.map((q) => q.id)).not.toContain('change-1');
     expect.soft(replay.after[PATH]).toBe(first.after[PATH]);
     const replayRecords = await round4Records(replay, 'abc123-run1-22');
-    expect.soft(replayRecords.manifest.capture.journal.map((j) => j.recordId)).not.toContain('change-1');
     expect.soft(replayRecords.chain.at(-1)?.completedAppends ?? []).toEqual([]);
     assertPersonal(replay);
   }, 30_000);
