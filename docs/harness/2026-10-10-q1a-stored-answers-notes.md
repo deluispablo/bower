@@ -153,6 +153,145 @@ new corpus support, full gates and e2e. The timing retry accounting remains with
 
 ## Implementation
 
+### Round 2 — current delivery
+
+2026-10-10. Continued the retained production changes from the supplied red repair 1 HEAD
+`421764904128cbff0f1405cee47b0201c0d8a95b`. Status: **blocked on one request-decision contract mismatch**.
+All changes remain uncommitted. No network, writing git command, test/fixture edit or numeric loosening.
+The supplied TL-P4-44 addendum 3 governs this delivery; its listing timing supersedes the round 1 stop below.
+The local DECISIONS file still contains only the original ruling and addenda 1–2; addendum 3 was supplied by the owner.
+
+#### Red repair 2
+
+2026-10-10. Status: **blocked; the existing validated model path cannot carry a generic request decision**.
+The lead ruling preserves every assertion in the clear-work test, including request-1's completed archive,
+and permits only a fixture reply using an existing request field and planner handler. No such model path exists:
+`runner/src/claude.ts:1072–1077` declares the reply fields without a request decision;
+`:1084` constructs Filing without one; `src/data/spine/scripted.ts:552–565` constructs modelDecisions
+without the optional request handler. That handler exists only in the Decisions contract at `:543`;
+the planner's journal admission at `:827` consequently leaves this generic request pending.
+The production call at `runner/src/claude.ts:1231` passes modelDecisions directly to planScripted.
+An undeclared fixture property would not become a request decision. No field, inference, C05 named-note
+conversion, production edit or assertion change was made. All supplied uncommitted production changes remain.
+
+tests changed: runner/test/q1-continuation.test.ts:278: lead ruling 2026-10-10 (Q1a :278): unchanged; blocked because no existing validated model request path carries request-1's decision.
+
+The complete Q1 file ran with `--maxWorkers=2`: 27 pass, one fail. The sole contradiction remains
+`Q1a q1-clear-work-with-waiting-item: an option asking leaves its item and files clear work`,
+`runner/test/q1-continuation.test.ts:278`: request-1 remains pending rather than archived as completed.
+Runner tsc and ESLint on this test pass. Logs: `tmp-logs/q1-red-repair-2-vitest.log`,
+`tmp-logs/q1-red-repair-2-tsc.log`, `tmp-logs/q1-red-repair-2-eslint.log`.
+No network or writing git command was used. Full gates and e2e remain outside this stopped red repair.
+
+#### Implemented and preserved
+
+- `pilesListed()` starts no text, byte or checksum read and never waits for in-flight questions/journal media.
+  It projects completed questions, journal and pile-note reads from the existing versioned ReadCache.
+- `questions()` uses Home's existing read, applies the shared subject/asking policy, and emits through the vault's
+  existing subscription after the read and word policy land. Publication is marked on that cache version, before
+  notification, so subscribers can request questions again without a notification loop. Refresh/version replacement
+  and disposal retain the existing cache/session lifetime. No new store, scheduler or separate question source.
+- ReadCache adds completed-read and publication flags inside its existing per-version entry. Its digest, text,
+  bytes, prefix and file caches retain their meanings; publication is not stored in a digest slot.
+  Journal's existing list/parser gains a cache-only read mode, including its existing device outbox; its writer and
+  stored-line format are unchanged. These two supporting files extend the existing read-cache mechanism for addendum 3.
+- Full piles can read a nonempty questions file. A projection refusal is logged by the owning read and does not
+  refuse inbox readiness or runner admission; explicit questions and runner-owned-file readers retain their errors.
+  Cached projections do not repeat failures belonging to another reader.
+- Capture skips a proven empty questions file using the same existing 40-byte empty-file guard; answers still
+  trigger the normal read. Round history remains in questions.json. C04 Drive goldens (88 calls, 20 plan reads),
+  bounded-read fixtures and timing/latency bounds all pass unchanged.
+- Folder-candidate ids and the added prompt sentence appear only for 2–4 eligible existing folders beneath main
+  folders. Every model-input fingerprint test passes, including the old raw and normalized byte goldens and fresh ids.
+- Stored choices override the provider's omitted-item pile hold for their selected members through the existing
+  planner. Unselected omitted siblings stay. Readiness, retry holds, content evidence and name/place fences remain.
+  The duplicate-label/renamed-folder option red passes through the actual provider, main and effects.
+- Shared round policy reuses EMPTY_MD5. Answer controls use the repository's character-code predicate form.
+  Fake-worker recoverable paths, live isolation, DriveVault error isolation and all requested latency tests pass.
+  The retained additive answers/options/rounds implementation and retry usage aggregation remain in place.
+
+#### Stop: every current contradicting test (TL-P4-51)
+
+The whole Q1, data and runner suites completed before stopping. There is exactly one distinct failing test:
+
+| Exact test / location | Contract mismatch and evidence |
+| --- | --- |
+| `Q1a q1-clear-work-with-waiting-item: an option asking leaves its item and files clear work`, `runner/test/q1-continuation.test.ts:278` | Requires `request-1` to be archived as completed, although the fixture's validated model reply supplies only one filing and one asking, no request decision or request-bound line. It remains pending. Fails identically in the Q1 run and full runner run; all other assertions in that test and all other Q1 reds pass. |
+
+Diagnosis: the independent text is `Tidy the room papers.`. It names no stored note, so the existing C05
+`settleRequest` owns no target or fulfillment for it. The validated model reply has no generic request-answer field
+(`runner/src/claude.ts:1072–1084`), and `modelDecisions` provides no generic request handler
+(`src/data/spine/scripted.ts:552–564`). The existing decision contract explicitly says a missing request handler
+leaves requests waiting (`:518–519`, `:542–543`); the single journal-admission filter enforces that at `:827`.
+This is the accepted provider's “writes only what it proposed” boundary (P4-2 review I1,
+`runner/test/claude-provider.test.ts:734–770`), retained by Q1a contract 7/P9, rather than a hold caused by the asking.
+The original script's optional request responder is deliberately absent from the model path.
+
+Consequently the fixture's unconditional completion assertion conflicts with preserving that existing decision
+meaning: auto-archiving it would claim an unplanned request was done. A wording heuristic, automatic success for
+all generic requests, or a new request-response inference would change that contract. No such workaround was added.
+The existing named-note request settlement and scripted request handler remain green in the full suites.
+The lead needs to choose a handled independent-request fixture or allocate/rule the general model request-decision
+boundary. No test was changed and no contract number was loosened. This replaces round 1's provisional “gap” diagnosis.
+No other contradiction remains; the first-listing contradiction was resolved by addendum 3 and red repair 1.
+
+#### Final validation
+
+All output is under tmp-logs; only failure output or final result summaries were read.
+
+| Command / log | Result |
+| --- | --- |
+| `pnpm -C runner exec vitest run test/q1-continuation.test.ts --maxWorkers=2`; `tmp-logs/q1-r2-reds-final.log` | 27 pass, 1 fail / 28; assertion at :278 above. |
+| `pnpm exec vitest run src/data --maxWorkers=2`; `tmp-logs/q1-r2-data-final.log` | 4,141 pass / 4,141; 77 green files. |
+| `pnpm -C runner exec vitest run --maxWorkers=2`; `tmp-logs/q1-r2-runner-final.log` | 583 pass, 1 fail / 584; 44 green files, one failed. Includes the corpus, goldens and all bounded reads. |
+| App tsc; `tmp-logs/q1-r2-tsc-app-final.log` | Pass. |
+| Node tsc; `tmp-logs/q1-r2-tsc-node-final.log` | Pass. |
+| Runner tsc; `tmp-logs/q1-r2-tsc-runner-final.log` | Pass. |
+| ESLint on all 11 touched app TS files; `tmp-logs/q1-r2-eslint-app-final.log` | Pass. |
+| ESLint on runner/src/claude.ts; `tmp-logs/q1-r2-eslint-runner-final.log` | Pass. |
+| Read-only `git diff --check` | Pass. |
+| `pnpm check`; e2e app/capabilities demo/fake | Not run after the TL-P4-51 contract stop. No check mark or integration claim. |
+
+The first combined-root ESLint invocation failed on tsconfigRootDir discovery before linting; separate app and
+runner invocations above passed without configuration changes. Intermediate regression runs remain under tmp-logs.
+The final test diffs are empty; red repair 1's committed tests are preserved verbatim.
+
+#### Removed lines and tests — final production diff against the supplied HEAD
+
+removed: runner/src/claude.ts: 13 lines; boolean-only input, unconditional candidate prompt and last-call-only usage replaced.
+removed: src/data/answer-loop.ts: 3 lines; boolean-only signature/import widened at the same answer boundary.
+removed: src/data/contracts/journal-record.ts: 1 line; validator widened for optional asking identity and answer value.
+removed: src/data/contracts/questions.ts: 5 lines; id-only closure and report rest-spread replaced with explicit policy.
+removed: src/data/contracts/types.ts: 0 lines; additive fields only.
+removed: src/data/demo/world.ts: 2 lines; shared answer type replaces boolean map/signature.
+removed: src/data/drive/read-cache.ts: 5 lines; existing version entries gain completed-text and notification tracking.
+removed: src/data/sources.ts: 1 line; VaultSource.answer signature widened.
+removed: src/data/spine/scripted.ts: 30 lines; same planner handles additive values, stored choices and durable rounds.
+removed: src/data/vault/drive-vault.ts: 19 lines; shared cached projection/asking policy replaces id-only filtering.
+removed: src/data/vault/journal.ts: 2 lines; same list/parser can consume only completed cached reads.
+removed: src/data/vault/layout.ts: 3 lines; existing stored questions validator widened additively.
+tests changed: none
+
+#### Compatibility row drafts — current, not accepted
+
+| Boundary / files | Old reader / old meaning | New shape and validation evidence | Draft disposition |
+| --- | --- | --- | --- |
+| contracts/types.ts, questions.ts | Legacy yes/no and subjects still read; public reports preserve their old fields. | Optional stored file-to options/words and asking keys; explicit report projection; Q1 legacy reader/control reds pass. | Review pending; no contracts commit. |
+| contracts/journal-record.ts | Old text yes/no reads as boolean; new booleans mirror legacy text. | Optional askedAt/answer, strict object values, trim/length/controls; identity, later answer, legacy fixtures and data suite pass. | Review pending. |
+| vault/layout.ts | `{v:1,questions}` still reads; no mandatory field or new version. | Optional rounds in the same file; action/round validators; retries, reset, reupload and P2 reader reds pass. | Review pending; listing timing follows addendum 3. |
+| drive/read-cache.ts, vault/journal.ts, vault/drive-vault.ts | Ordinary reads, single-flight, version replacement, outbox and owned errors retain their meanings. | Completed-cache-only listing and one version notification; Q1 subscription, cache, live-isolation and latency suites pass. | Supporting read-cache extension under supplied addendum 3; review pending. |
+| sources.ts, answer-loop.ts, demo/world.ts | Boolean callers and continuation request identity still work. | Same ports accept typed text/option answers; real /process/main replay/batch/quota reds pass. | Review pending. |
+| Manifest/checkpoint/report contracts | No version, fixture or public format change. | Existing parsers, guarded writes and moves pass the Q1 controls and full runner suite except the request assertion above. | Draft unchanged-reader row. |
+| Features and model inputs | No feature/screen change. Existing prompts outside the 2–4 candidate path remain byte-identical. | App tsc, exact prompt goldens and fingerprint tests pass. | Q1b owns UI; no feature compatibility change. |
+| Generic model requests | A missing generic request decision remains pending, never marked complete. | Sole Q1 failure requires the opposite without providing a decision; no implicit completion added. | Lead ruling required; blocked. |
+
+Research remains the offline local references recorded below: tagged union widening, tolerant readers,
+idempotency by asking identity and the existing versioned read cache/single-flight subscription.
+Left out: the unresolved generic request-decision mismatch; Q1c publication, Q1b UI, which-note, B12, full gates/e2e,
+commits and integration. All 12 production changes and these notes remain for the coordinator.
+
+### Round 1 — historical implementation (superseded where round 2 says so)
+
 2026-10-10, Codex implementation session after the supplied integration of B1a, C05 and smoke-request-slow.
 Status: **blocked; production changes remain uncommitted and are not ready for integration**.
 No network call, git write, test edit, fixture edit, dependency addition or UI edit was made.
