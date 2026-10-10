@@ -6,6 +6,7 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 
 | Case | Verdict | Reason |
 | --- | --- | --- |
+| b1-maintenance-crash-resume | agrees | B1 prep case 6: derived maintenance resumes before the report, with no fabricated facts or rows; the person's bytes stay intact (method points 2, 3 and 7; TL-P4-41 Q4/Q5/Q11). Scripted recovery only, no model quality claim. |
 | c04-garden-newsletter | agrees | A garden topic in Resources is a fit when the note links the plot note and the plot note gets a line (points 1, 4, 7). |
 | c04-hardware-receipt | agrees | The person's rule decides the place (fit); the note states only the receipt's facts. |
 | c04-offer-and-flat | agrees | Each thing fits an existing project or a new Area said with its responsibility (point 1, addendum 3). |
@@ -62,6 +63,22 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c05-merge-answer-no | agrees | The person's no keeps both notes and their links; settling the answer does not authorize a merge. |
 | c05-conflicting-fact-kept | agrees | Point 3 keeps both claims attributed in history; C05 preservation never silently resolves a disagreement. |
 | c05-marked-state-keeps-history | agrees | Point 3 rewrites a genuinely Bower-owned state from evidence while Timeline only grows and personal prose survives. |
+| c17-b56-personal-sale-project | agrees | Rechecked 2026-10-10: points 1–4/7/8; existing sale project beats Ideas, source links/history and personal prose survive. TL-P4-41 requires candidate ids and complete retrieval; B2/B6 supply summary/Source construction, not a second writer. |
+| c17-b56-cv-profile | changed | Rechecked 2026-10-10: points 1/3/4/7/8; originals/profile fit remains. Clarified TL-P4-39 F2/F7/R2: short state through C05, full grounded profile through a new Bower region, never a larger state or About me preference. No new-region personal-edit handling; expected.json unchanged. |
+| c17-b56-offer-job-search | agrees | Rechecked 2026-10-10: points 1/3/4/7/8; offer fits Job hunt with factual profile comparison, no shared-word decoy or score. B1 selects hub/profile ids within five; F13 forbids inventing currency/column authority from the source. |
+| c17-b56-clear-topic-templates | agrees | Rechecked 2026-10-10: points 1–4/8; clear trusted reference creates Source/Concept/MOC. TL-P4-41 cut-index rule, B2 scalar summary, marked evergreen MOC and immutable Source apply. Ambiguous variants use TL-P4-44 stored file-to/option ids, not this clear case. |
+
+C17 rows were reread with every delivered input, expected.json and rubric against TL-P4-08,
+TL-P4-39/addenda 1–3, TL-P4-41/available addenda 1–3, TL-P4-42/addenda 1–2,
+TL-P4-44/addenda 1–2 and TL-P4-45. TL-P4-41 addendum 4 is absent from this checkout;
+the refresh records that source gap as Q7. All four rubrics clarify dependencies; only
+CV's old full-profile/state wording needed a changed verdict. No expected outcome, count,
+case metadata or test was changed or weakened. Legacy seeds are not new-format backfill
+fixtures. Script views use .bower/index.md, .bower/hot.md and .bower/log.md; none of these
+four cases relies on root reserved names or hidden maintenance report rows. The current
+method test selects c04–c15 ids and does not enforce C17. Registration stays H1 in
+2026-10-10-b56-prep.md; green is not C17 execution or semantic proof.
+
 | c05-note-not-written-by-bower | agrees | TL-P4-32: one requested sourced line; state asks once, protected bytes and ownership stay personal, replay adds nothing (points 1, 3, 7, 8). |
 
 | c15-ready-package-reused | agrees | Points 1, 2, 3, 7: a known fee fits the existing plot note and receives one sourced confirmation; preparation reuse changes no meaning or ownership. |
@@ -69,6 +86,14 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c15-context-budget-exhausted | agrees | Points 1, 3, 4, 7: explicit words establish fit, only shown evidence enters the linked source note and history, and unread content is disclosed without guessing. |
 
 ## Changes
+
+**B5/B6 refresh (2026-10-10): four C17 `rubric.md` files.** CV now distinguishes
+C05's short Current state from the new full-profile Bower region; its old reference to
+personal-edit variants is narrowed to Current state. Sale and offer add B1 id/budget and
+B2/B6 reuse boundaries; offer forbids inventing currency. Clear-topic requires complete
+retrieval before create, the marked MOC/summary contract and Q1 only for genuine ambiguity.
+No case.json or expected.json changed; no count or assertion was weakened. Verdicts above
+record the method re-check, not an executed model result.
 
 **C08 preparation: c08-report-with-sources, `rubric.md`.** The briefing adds table collection, watering-can and shelter facts, so "leave the hub byte identical" contradicted points 3 and 7. The rubric now requires updating the Bower-owned hub state where those facts change it, with sourced Timeline entries and personal text preserved. Only the rubric changed: `expected.json` still requires the hub unchanged and `report.updated` empty; those expectations need a separate lead ruling before the case can prove this behaviour.
 

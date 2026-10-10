@@ -320,7 +320,7 @@ const NOT_SAVED = 'It changed, or the copy Bower found was moved, so it stays in
 const LIST_CHANGED = "Bower's list of your files changed meanwhile.";
 const UNRESOLVED = 'Bower could not check one of the things it moved. It will look again later.';
 
-type Effect = OperationV2['effect'];
+type Effect = Exclude<OperationV2['effect'], { kind: 'maintain' }>;
 
 /** Whether stored evidence shows exactly this effect applied under `parentId` (null when the effect has no parent). */
 export function shows(effect: ManifestEffect, ev: StoredEvidence, parentId: string | null): boolean {
@@ -430,7 +430,7 @@ function stampSays(file: DriveFile, runId: string, op: OperationV2, manifest: Ru
   return waitsOn(manifest, op.operationId, id) ? 'not-landed' : 'unknown';
 }
 
-export function driveEffects(drive: RunDrive, context?: OwnershipContext): Effects {
+export function driveEffects(drive: RunDrive, context?: OwnershipContext, maintenance?: Effects): Effects {
   const toEvidence = (ev: StoredEvidence, encoding: 'utf8' | 'blob' = 'blob'): EffectEvidence => asEvidence(ev, encoding, drive.provenance);
 
   /**
@@ -439,6 +439,7 @@ export function driveEffects(drive: RunDrive, context?: OwnershipContext): Effec
    */
   const check = async (op: OperationV2, head: Checkpoint, manifest: RunManifest): Promise<{ refused: Settled } | { parentId: string; modifiedTime: string | null }> => {
     const e = op.effect;
+    if (e.kind === 'maintain') throw new BowerError('unknown', UNRESOLVED);
     const parentId = parentOf(head, e) ?? '';
     if (e.kind === 'create-folder' || e.kind === 'create-text' || e.kind === 'move') {
       if (!parentId) return { refused: refused('not-found', NO_FOLDER) };
@@ -475,8 +476,9 @@ export function driveEffects(drive: RunDrive, context?: OwnershipContext): Effec
     }
     if (e.kind === 'write-runner-json') {
       const ev = await drive.evidence(e.before.fileId);
-      if (!ev || ev.trashed || ev.content?.sha256 !== e.beforeContent.sha256) return { refused: refused('conflict', LIST_CHANGED) };
-      return inPlace(ev.file, e.before) ? { parentId, modifiedTime: ev.file.modifiedTime } : { refused: refused('conflict', LIST_CHANGED) };
+      if (!ev || ev.trashed || ev.content?.sha256 !== e.beforeContent.sha256 || ev.file.modifiedTime !== e.before.modifiedTime) return { refused: refused('conflict', LIST_CHANGED) };
+      drive.expectSeen(e.before, true);
+      return inPlace(ev.file, e.before) ? { parentId, modifiedTime: e.before.modifiedTime } : { refused: refused('conflict', LIST_CHANGED) };
     }
     // A thing already saved (review P4-17 I1, I2): decided by its content, so its Bin is sent only while it is still the
     // bytes the plan read, and the copy it stands on is still there, in its place, with those same bytes. The fence then
@@ -537,6 +539,7 @@ export function driveEffects(drive: RunDrive, context?: OwnershipContext): Effec
    */
   const answered = async (op: OperationV2, parentId: string, answer: DriveFile, stamp: string): Promise<EffectEvidence | null> => {
     const e = op.effect;
+    if (e.kind === 'maintain') throw new BowerError('unknown', UNRESOLVED);
     if (answer.appProperties?.[STAMP] !== stamp) return null;
     if (e.kind === 'bin' || e.kind === 'create-folder' || e.kind === 'move') {
       // A move or a Bin changes no bytes: the checksum the answer gives, if any, is the content's evidence.
@@ -566,6 +569,10 @@ export function driveEffects(drive: RunDrive, context?: OwnershipContext): Effec
    */
   const reconcile = async (op: OperationV2, head: Checkpoint, manifest: RunManifest, reserved = reservedIn(head, op.operationId)): Promise<ReadBack> => {
     const e = op.effect;
+    if (e.kind === 'maintain') {
+      if (!maintenance) throw new BowerError('unknown', UNRESOLVED);
+      return maintenance.readBack(op, head, manifest);
+    }
     const encoding = e.kind === 'create-folder' || e.kind === 'move' || e.kind === 'bin' ? 'blob' : 'utf8';
     try {
       if (e.kind === 'create-folder' || e.kind === 'create-text') {
@@ -593,6 +600,10 @@ export function driveEffects(drive: RunDrive, context?: OwnershipContext): Effec
   return {
     readBack: reconcile,
     async apply(op, head, w, manifest, sending) {
+      if (op.effect.kind === 'maintain') {
+        if (!maintenance) throw new BowerError('unknown', UNRESOLVED);
+        return maintenance.apply(op, head, w, manifest, sending);
+      }
       const stamp = stampOf(head.runId, op.operationId);
       const ok = await check(op, head, manifest);
       if ('refused' in ok) return ok.refused;
@@ -604,7 +615,7 @@ export function driveEffects(drive: RunDrive, context?: OwnershipContext): Effec
       let sent: Sent;
       try {
         const kind = op.effect.kind;
-        const go = async (id: string): Promise<Sent> => ({ answer: await send(op.effect, w, ok.parentId, ok.modifiedTime, stamp, id) });
+        const go = async (id: string): Promise<Sent> => ({ answer: await send(op.effect as Effect, w, ok.parentId, ok.modifiedTime, stamp, id) });
         sent = kind !== 'create-folder' && kind !== 'create-text' ? await go('') : await createById(reserved ?? (await reserveId(w)), go, async (id) => {
           back = await reconcile(op, head, manifest, id);
           return back.state === 'landed' ? { landed: back.evidence } : null;

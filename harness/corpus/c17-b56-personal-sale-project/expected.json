@@ -1,0 +1,57 @@
+{
+  "files": {
+    "present": [
+      "Projects/Bicycle sale/Bicycle sale details.txt",
+      "Projects/Bicycle sale/Bicycle sale details.md"
+    ],
+    "absent": [
+      "Inbox/*",
+      "Resources/Ideas/*sale*",
+      "Projects/*icycle*/Bicycle sale details (2).md"
+    ]
+  },
+  "unchanged": [
+    "Rules.md",
+    ".bower/type-table.md",
+    "Resources/Ideas/Ideas.md"
+  ],
+  "protectedRanges": [
+    {
+      "path": "Projects/Bicycle sale/Bicycle sale.md",
+      "range": {
+        "heading": "My notes"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "path": "Projects/Bicycle sale/Bicycle sale.md",
+      "timeline": [
+        "2026-10-02 \u00b7 Started the bicycle sale.",
+        "The bicycle asking price is 240; collection is in Saltmere; reply by 2026-10-12."
+      ],
+      "timelineCount": 2
+    },
+    {
+      "path": "Projects/Bicycle sale/Bicycle sale details.md",
+      "contains": [
+        "[[Projects/Bicycle sale/Bicycle sale]]",
+        "240",
+        "Saltmere",
+        "2026-10-12"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "created": [
+      "Projects/Bicycle sale/Bicycle sale details.md"
+    ],
+    "updated": [
+      "Projects/Bicycle sale/Bicycle sale.md"
+    ],
+    "questionsExactly": 0,
+    "setAside": 0
+  }
+}

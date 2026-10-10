@@ -173,6 +173,14 @@ async function answer(wire: DriveV3, method: string, url: URL, body: RequestInit
     return json(200, { ids: await drive.generateIds(count) });
   }
   if (method === 'GET' && path === '/drive/v3/files') return list(drive, url);
+  // B1b's existing feed port, over the same fake state; no independent feed simulator.
+  if (method === 'GET' && path === '/drive/v3/changes/startPageToken') return json(200, { startPageToken: await drive.getStartPageToken() });
+  if (method === 'GET' && path === '/drive/v3/changes') {
+    const feed = await drive.listChanges(url.searchParams.get('pageToken') ?? '');
+    return json(200, { newStartPageToken: feed.newStartPageToken, changes: feed.changes.map((change) => ({
+      fileId: change.fileId, removed: change.removed, ...(change.file ? { file: wireFile(change.file, change.file.trashed === true) } : {}),
+    })) });
+  }
   if (method === 'GET' && one) {
     const id = decodeURIComponent(one[2] ?? '');
     if (url.searchParams.get('alt') === 'media') return new Response((await drive.readBytes(id)).slice());

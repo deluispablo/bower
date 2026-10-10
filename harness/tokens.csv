@@ -497,3 +497,45 @@ p4-rate-limits,implementer (blocked),codex,gpt-5-codex,medium,1,695418,688886,,6
 pwa-update-stuck,diagnoser,codex,gpt-5-codex,high,1,450027,445060,,371200,4967,,,,3 options,2026-10-10
 b2a-summary-format,red-owner (repair),codex,gpt-5-codex,high,1,511172,502830,,440192,8342,,,,44 reds; 1 collision,2026-10-10
 p4-rate-limits,implementer,claude,opus,,1,99305,,,,,,19,3,green,2026-10-10
+smoke-request-slow,red-owner,codex,gpt-5-codex,high,1,2994367,2970325,,2831360,24042,,,,reds,2026-10-10
+p4-rate-limits,adversarial pass,codex,gpt-5-codex,high,1,307491,303481,,237184,4010,,,,BLOCK 3,2026-10-10
+p4-rate-limits,red-owner (repair),codex,gpt-5-codex,high,1,497634,489075,,441856,8559,,,,reds,2026-10-10
+smoke-request-report-hidden,implementer,codex,gpt-5-codex,medium,1,1227885,1215702,,1147520,12183,,,,green,2026-10-10
+smoke-request-report-hidden,red-owner (designer findings),codex,gpt-5-codex,medium,1,945789,937523,,882432,8266,,,,7 reds,2026-10-10
+b2a-summary-format,red-owner (ruling),codex,gpt-5-codex,medium,1,425530,422454,,371328,3076,,,,42 reds,2026-10-10
+b1a-contract,implementer (round 2),codex,gpt-5-codex,high,1,5546193,5520230,,5341824,25963,,,,blocked: rulings,2026-10-10
+pwa-update,implementer,codex,gpt-5-codex,medium,1,736016,724536,,679680,11480,,,,done,2026-10-10
+pwa-update,implementer (fix round 1),claude,opus,,1,79402,,,,,,20,3,test bug,2026-10-10
+p4-rate-limits,implementer (fix round 1),claude,opus,,1,92451,,,,,,21,6,green,2026-10-10
+pwa-update,red-owner (repair),codex,gpt-5-codex,medium,1,229304,227861,,204544,1443,,,,test bug fixed,2026-10-10
+smoke-request-report-hidden,implementer (fix round 1),codex,gpt-5-codex,medium,1,720178,716330,,671232,3848,,,,green,2026-10-10
+b2a-summary-format,implementer (fix round 1),codex,gpt-5-codex,high,1,681610,674851,,621952,6759,,,,green,2026-10-10
+b1a-contract,red-owner (repair 3),codex,gpt-5-codex,high,1,2147523,2131374,,2031104,16149,,,,goldens pinned,2026-10-10
+p4-rate-limits,adversarial pass 2,codex,gpt-5-codex,high,1,336070,334018,,269568,2052,,,,PASS,2026-10-10
+p4-rate-limits,reviewer (P4-90),claude,opus,,1,54007,,,,,,12,1,BLOCK 1,2026-10-10
+pwa-update,reviewer (P4-92),claude,opus,,1,34209,,,,,,6,1,PASS,2026-10-10
+b2a-summary-format,adversarial pass 2,codex,gpt-5-codex,high,1,472890,467927,,419200,4963,,,,BLOCK 1 (limit),2026-10-10
+b2a-summary-format,reviewer (P4-91),claude,opus,,1,49537,,,,,,9,1,PASS,2026-10-10
+b1a-contract,implementer (round 3),codex,gpt-5-codex,high,1,1206300,1197364,,1128960,8936,,,,green but goldens,2026-10-10
+p4-rate-limits,red-owner (repair 3),codex,gpt-5-codex,medium,1,495494,491604,,454656,3890,,,,reds,2026-10-10
+p4-rate-limits,implementer (round 3),codex,gpt-5-codex,medium,1,176199,174912,,148736,1287,,,,green,2026-10-10
+p4-rate-limits,reviewer (P4-90b),claude,opus,,1,31974,,,,,,7,1,PASS,2026-10-10
+b1a-contract,red-owner (repair 4),codex,gpt-5-codex,medium,1,570400,566111,,529280,4289,,,,re-pinned,2026-10-10
+p4-b56-prep,drafter (refresh),codex,gpt-5-codex,high,1,1791799,1775007,,1664768,16792,,,,7 questions,2026-10-10
+b1a-contract,adversarial pass,codex,gpt-5-codex,high,1,4498126,4481371,,4304384,16755,,,,BLOCK 5,2026-10-10
+smoke-request-report-hidden,adversarial pass,codex,gpt-5-codex,high,1,320277,317639,,272384,2638,,,,PASS,2026-10-10
+smoke-request-report-hidden,reviewer (P4-93),claude,opus,,1,38168,,,,,,5,1,PASS,2026-10-10
+b1a-contract,red-owner (repair 5),codex,gpt-5-codex,high,1,1382900,1370515,,1236864,12385,,,,5 reds,2026-10-10
+b1a-contract,implementer (fix round 1),codex,gpt-5-codex,high,1,4628694,4603964,,4445568,24730,,,,green,2026-10-10
+b1a-contract,adversarial pass 2,codex,gpt-5-codex,high,1,1757724,1748722,,1648384,9002,,,,BLOCK 1,2026-10-10
+b1a-contract,red-owner (repair 6),codex,gpt-5-codex,high,1,2232036,2219706,,2123648,12330,,,,2 reds,2026-10-10
+b1a-contract,implementer (round 3),codex,gpt-5-codex,high,1,866761,859337,,798720,7424,,,,green,2026-10-10
+b1a-contract,adversarial pass 3,codex,gpt-5-codex,high,1,1657541,1647134,,1560320,10407,,,,BLOCK 1,2026-10-10
+b1a-contract,red-owner (repair 7),codex,gpt-5-codex,high,1,1257779,1244698,,1142656,13081,,,,4 reds,2026-10-10
+b1a-contract,implementer (round 4),codex,gpt-5-codex,high,1,1132860,1124488,,1048448,8372,,,,green,2026-10-10
+b1a-contract,adversarial pass 4,codex,gpt-5-codex,high,1,280444,277894,,220672,2550,,,,PASS,2026-10-10
+b1a-contract,reviewer (P4-94),claude,opus,,1,81882,,,,,,20,1,BLOCK 1,2026-10-10
+b1a-contract,implementer (P4-94 fix),codex,gpt-5-codex,medium,1,674886,668542,,622208,6344,,,,green,2026-10-10
+c05-person-timeline-format,diagnoser,codex,gpt-5-codex,high,1,,,,,,,,,diagnosed,2026-10-10
+b1a-contract,reviewer (P4-94b),claude,opus,,1,33920,,,,,,8,1,PASS,2026-10-10
+c05-timeline-list,red-owner,codex,gpt-5-codex,high,1,1451255,1438254,,1362816,13001,,,,14 reds,2026-10-10

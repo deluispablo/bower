@@ -34,6 +34,9 @@ const BOWER_NOTE = "## Bower's note";
 export type ParsedNote = Omit<Note, 'backlinks'>;
 export type NoteFile = Omit<Note, 'backlinks' | 'path' | 'title' | 'links'>;
 
+// Retain source bytes for an untouched parsed personal note, outside its display model.
+const personalSources = new WeakMap<NoteFile, { raw: string; serialized: string }>();
+
 const labelOf = (key: string): string => {
   const words = key.replace(/_/g, ' ');
   return LABELS[key] ?? words.charAt(0).toUpperCase() + words.slice(1);
@@ -43,6 +46,53 @@ const nameOf = (path: string): string => path.slice(path.lastIndexOf('/') + 1).r
 const trimLines = (s: string): string => s.replace(/^\n+|\n+$/g, '');
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+
+/** TL-P4-42 Q1: the existing bound counts untrimmed JavaScript string units. */
+export function validSummary(value: string): boolean {
+  return value.length <= 200 && value.trim().length > 0 && !/[\p{Cc}\p{Cs}\u2028\u2029]/u.test(value);
+}
+
+// YAML 1.2.2 §§5.7, 7.3.1–7.3.3 and 10.3.2; also quote YAML 1.1 implicit types.
+const SUMMARY_ESCAPES: Readonly<Record<string, string>> = {
+  '0': '\0', a: '\x07', b: '\b', t: '\t', n: '\n', v: '\v', f: '\f', r: '\r', e: '\x1b',
+  ' ': ' ', '"': '"', '/': '/', '\\': '\\', '\t': '\t',
+  N: '\u0085', _: '\u00a0', L: '\u2028', P: '\u2029',
+};
+
+/** Decode only summary; other frontmatter retains its existing lenient reader. */
+function summaryOf(value: string): string {
+  if (!/^(["']).*\1$/s.test(value)) return value;
+  const inner = value.slice(1, -1);
+  if (value[0] === "'") return inner.replace(/''/g, "'");
+  return inner.replace(/\\(x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|.)/g, (escape, code: string) => {
+    if (/^[xuU][0-9a-fA-F]+$/.test(code)) {
+      const point = Number.parseInt(code.slice(1), 16);
+      return point <= 0x10ffff ? String.fromCodePoint(point) : escape;
+    }
+    // Keep unknown escapes verbatim, as the legacy reader did.
+    return SUMMARY_ESCAPES[code] ?? escape;
+  });
+}
+
+const SUMMARY_TYPES = [
+  /^(?:~|null|true|false|y|yes|n|no|on|off)$/i,
+  /^[-+]?(?:[0-9][0-9_]*(?:\.[0-9_]*)?|\.[0-9_]+)(?:[eE][-+]?[0-9]+)?$/,
+  /^(?:[-+]?0(?:b[01_]+|o[0-7]+|x[0-9a-fA-F_]+)|[-+]?\.(?:inf|Inf|INF)|\.nan|\.NaN|\.NAN)$/,
+  /^[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+(?:\.[0-9_]*)?$/,
+  // Dates are conservatively quoted too, for readers with the timestamp schema.
+  /^\d{4}-\d{1,2}-\d{1,2}(?:[Tt]|[ \t]+)\d{1,2}:\d{1,2}:\d{1,2}(?:\.\d+)?(?:[ \t]*(?:Z|[-+][012]?\d(?::\d{2})?))?$/,
+  /^\d{4}-\d{1,2}-\d{1,2}$/,
+];
+
+/** One physical line, without trimming or folding the summary's text. */
+function summaryScalar(value: string): string {
+  const quote = value !== value.trim() ||
+    /^[-?:,[\]{}#&*!|>'"%@`]/.test(value) || /:[ \t]|:$|[ \t]#|['"\\]/.test(value) ||
+    /[\p{Cc}\p{Cs}\u2028\u2029\ufeff\ufffe\uffff]/u.test(value) || SUMMARY_TYPES.some((type) => type.test(value));
+  // JSON escapes are YAML escapes; also escape characters YAML cannot keep literal.
+  return quote ? JSON.stringify(value).replace(/[\u007f-\u009f\u2028\u2029\ufeff\ufffe\uffff]/g,
+    (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`) : value;
+}
 
 /** The two refusals of a note Bower will not parse: a format it does not know yet, or a damaged one. */
 export const NOTE_REFUSED = { newer: 'This note uses an unsupported format.', damaged: 'This note cannot be read safely.' } as const;
@@ -108,7 +158,7 @@ function frontOf(block: string): Map<string, string> {
     const key = line.slice(0, i).trim();
     const value = line.slice(i + 1).trim();
     listKey = value ? null : key;
-    front.set(key, unquote(value));
+    front.set(key, key === 'summary' ? summaryOf(value) : unquote(value));
   }
   return front;
 }
@@ -169,7 +219,7 @@ export function parseNote(path: string, raw: string, fetched?: FetchedOwnership)
   const note = sectionOf(layout.bowerNote, BOWER_NOTE);
   const bowerNote = ownership.status === 'v2' ? note || null : note;
   front?.delete('bower_format');
-  if (!front) return { path, title, summary: '', properties: [], tags: [], currentState: [], body, timeline: [], links: linksIn(text), byBower: false };
+  if (!front) return retainPersonalSource({ path, title, summary: '', properties: [], tags: [], currentState: [], body, timeline: [], links: linksIn(text), byBower: false }, raw);
   const f = front;
   const properties: Property[] = [];
   for (const [key, value] of f) {
@@ -186,7 +236,7 @@ export function parseNote(path: string, raw: string, fetched?: FetchedOwnership)
   const src: SourceKind = source === 'web' || source === 'both' ? source : 'notes';
   const status = f.get('status');
   const original = f.get('original');
-  return {
+  return retainPersonalSource({
     path,
     title,
     summary: f.get('summary') ?? '',
@@ -200,12 +250,17 @@ export function parseNote(path: string, raw: string, fetched?: FetchedOwnership)
     links: linksIn(text),
     ...(original ? { original } : {}),
     byBower: f.get('by') === 'bower',
-  };
+  }, raw);
+}
+
+function retainPersonalSource(note: ParsedNote, raw: string): ParsedNote {
+  if (!note.byBower) personalSources.set(note, { raw, serialized: serializeNote(note) });
+  return note;
 }
 
 export function serializeNote(n: NoteFile): string {
   const front: string[] = [];
-  if (n.summary) front.push(`summary: ${oneLine(n.summary)}`);
+  if (n.summary) front.push(`summary: ${summaryScalar(n.summary)}`);
   if (n.status) front.push(`status: ${oneLine(n.status)}`);
   if (n.tags.length) front.push(`tags: [${n.tags.map(oneLine).join(', ')}]`);
   if (n.byBower) front.push('by: bower');
@@ -217,7 +272,9 @@ export function serializeNote(n: NoteFile): string {
   if (n.body) out.push(n.body, '');
   if (n.timeline.length) out.push(TIMELINE, ...n.timeline.map((t) => timelineLine({ ...t, text: oneLine(t.text) })), '');
   if (n.bowerNote) out.push(BOWER_NOTE, n.bowerNote.text, '');
-  return out.join('\n');
+  const serialized = out.join('\n');
+  const source = personalSources.get(n);
+  return source?.serialized === serialized ? source.raw : serialized;
 }
 
 /** Ticks or unticks the n-th task of the body; Bower's sections are never touched. */

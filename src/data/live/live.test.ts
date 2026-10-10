@@ -1675,6 +1675,19 @@ describe('person cleanup forgets pending draft bytes and keeps the folder outbox
     expect(await s.session.current()).toBeNull(); forgotten();
     expect(sessionStorage.getItem('bower:bye')).toBe(ending === 'delete' ? '1' : null);
   });
+  it('stale-session logout answering 204 forgets this person and keeps the folder outbox', async () => {
+    const { s, forgotten } = await draft();
+    await s.worker.signOut(); // The remote session ended while this page still kept the person's data.
+    const fetchLogout = vi.fn<typeof fetch>(async () => new Response(null, { status: 204 }));
+    const http = new WorkerHttp('https://worker.example', fetchLogout);
+    vi.spyOn(s.worker, 'signOut').mockImplementationOnce(() => http.signOut());
+    await expect(s.session.signOut()).resolves.toBeUndefined();
+    expect(fetchLogout).toHaveBeenCalledOnce();
+    expect(fetchLogout).toHaveBeenCalledWith('https://worker.example/auth/logout', expect.objectContaining({ method: 'POST' }));
+    expect(await s.session.current()).toBeNull();
+    forgotten();
+    expect(sessionStorage.getItem('bower:bye')).toBeNull();
+  });
   it('failed remote logout retains bytes and metadata until the successful retry', async () => {
     const { s, selected, orphan, retained, forgotten } = await draft();
     vi.spyOn(s.worker, 'signOut').mockRejectedValueOnce(new BowerError('offline', 'Signing out did not finish. Try again.'));

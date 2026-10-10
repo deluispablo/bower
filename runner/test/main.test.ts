@@ -12,6 +12,9 @@ import { scriptedProvider } from '../../src/data/demo/script';
 import { listedPiles } from '../../src/data/spine/scripted';
 import { SYSTEM, isRunnerFile } from '../../src/data/vault/layout';
 import { main } from '../src/main';
+import { RunnerDrive } from '../src/drive';
+import { withMaintenance } from '../src/index';
+import { RunnerToken } from '../src/token';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 
 const AT = Date.UTC(2026, 9, 7, 9);
@@ -136,13 +139,20 @@ describe('the runner process', () => {
     expect(errors.mock.calls.flat().map(String).join('\n')).toMatch(/model.*scripted|scripted.*model/);
     errors.mockRestore();
 
-    // Default and named: the scripted provider plans the run, exactly as it plans over the pretend Drive.
+    // Default and named: the scripted provider plans the run, with Q5's declared maintenance after its operations.
     for (const env of [{}, { BOWER_PROVIDER: 'scripted' }]) {
       const { wire, root, admission } = await wired();
       const twin = await seeded();
       const reads = fakeRead(twin.drive);
       const port = { ...reads, piles: (rootId: string) => listedPiles(reads, rootId), provenance: 'adapter-read' as const };
-      const expected = await scriptedProvider(port, { rootId: twin.root, runId: RUN_ID, allowWeb: false })({ taken: admission, deferred: [] });
+      const scripted = await scriptedProvider(port, { rootId: twin.root, runId: RUN_ID, allowWeb: false })({ taken: admission, deferred: [] });
+      const twinWire = driveV3(twin.drive);
+      twinWire.folderId = twin.root;
+      twinWire.manifest = twin.admission;
+      const token = new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: twinWire.fetch, now: () => twinWire.now });
+      const expected = await withMaintenance(new RunnerDrive({ token, attempt: 1, fetch: twinWire.fetch }), scripted);
+      expect(expected.operations.slice(0, -1)).toEqual(scripted.operations);
+      expect(expected.operations.at(-1)?.effect).toMatchObject({ kind: 'maintain', inputs: { operationIds: scripted.operations.map((o) => o.operationId) } });
       expect(expected.operations.map((o) => o.effect.kind).sort()).toEqual(expect.arrayContaining(['bin', 'create-folder', 'create-text', 'move']));
       expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...env }, { fetch: wire.fetch })).toBe(0);
       const files = await wire.drive.listAll(root);

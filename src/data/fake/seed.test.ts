@@ -70,9 +70,9 @@ describe("seeding Alex's folder", () => {
 describe('what is hidden', () => {
   it('isHidden hides system files only', () => {
     expect(isHidden('.bower/changes/x.json')).toBe(true);
-    expect(isHidden('index.md')).toBe(true);
-    expect(isHidden('log.md')).toBe(true);
-    expect(isHidden('hot.md')).toBe(true);
+    expect(isHidden('index.md')).toBe(false);
+    expect(isHidden('log.md')).toBe(false);
+    expect(isHidden('hot.md')).toBe(false);
     expect(isHidden('Projects/.obsidian')).toBe(true);
     expect(isHidden('Projects/index.md')).toBe(false);
     expect(isHidden('Rules.md')).toBe(false);

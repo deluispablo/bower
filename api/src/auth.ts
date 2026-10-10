@@ -30,7 +30,7 @@ import {
 } from './google.js';
 import type { FetchLike } from './google.js';
 import type { PersonAccount } from './person.js';
-import { requireSameOrigin } from './security.js';
+import { RateLimitUnavailable, clientIp, enforceRateLimit, rateLimit, requireSameOrigin } from './security.js';
 import {
   SESSION_TTL_SECONDS,
   SessionError,
@@ -195,7 +195,7 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
   const keys = deps.keys ?? googleKeys(deps.fetchImpl);
   const auth = new Hono<AppEnv>();
 
-  auth.get('/auth/login', async (c) => {
+  auth.get('/auth/login', rateLimit('AUTH_RATE_LIMIT'), async (c) => {
     const env = c.get('env');
     const state = createState();
     const nonce = createNonce();
@@ -231,6 +231,8 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     try {
       return await finishSignIn(c);
     } catch (err) {
+      // A refused request is not a failed sign-in: the person is told to wait, not sent back.
+      if (err instanceof HttpError && (err.code === 'rate-limited' || err.cause instanceof RateLimitUnavailable)) throw err;
       return backToSignIn('failed', err);
     }
   });
@@ -241,6 +243,8 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const state = c.req.query('state');
     if (code === undefined || code === '' || state === undefined) throw signedOut('callback without code or state');
     const { verifier, nonce } = await readOAuthCookie(c.req.header('cookie'), env.SESSION_SECRET, state);
+    // Counted only once the cookie proves a sign-in was begun here, and before Google is asked.
+    await enforceRateLimit(c, 'AUTH_RATE_LIMIT', clientIp(c));
 
     const tokens = await exchangeCode(
       {
@@ -296,8 +300,8 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       if (!(err instanceof HttpError && err.code === 'signed-out')) throw err;
     }
     if (session !== undefined) {
-      const sub = session.claims.sub;
-      await personFor(env, sub).retireSessions();
+      await enforceRateLimit(c, 'AUTH_RATE_LIMIT', clientIp(c));
+      await personFor(env, session.claims.sub).retireSessions();
     }
     c.header('Set-Cookie', clearSessionCookie());
     return c.body(null, 204);
