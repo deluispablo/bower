@@ -253,3 +253,57 @@ There is no other behavior change. Tests from both accepted branches remain unto
 tests changed: none in this merge-resolution session.
 sources: https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/files/browser/fileActions.ts
 Research reused the packet's cited standard under the explicit no-network constraint.
+
+
+## Red repair after the remove-new-note merge
+
+Red-owning repair session, 2026-10-10. Changed only the two authorized e2e files and these notes.
+The coordinator commits; no git writes, network requests, servers, e2e or pnpm check were run.
+Applied the packet's designer-signed rows 1 and 2, retaining the exact existing test names.
+
+### Coordinator red evidence
+
+Read `/tmp/tnf-demo.log`, `/tmp/tnf-fake.log`, `/tmp/tnf-qa6-err.txt` and the supplied
+error-context snapshots under `/tmp/tnf-demo-res` and `/tmp/tnf-fake-res`.
+Both source runs fail these two tests in both phone and desktop projects. Each test sets a desktop
+viewport for its affected path: no-new-note waits to fill `New name for ...`, and qa6 waits for
+`Resources/New folder` containing `New name for New folder`. The snapshots instead show a pending
+child of Resources with textbox `New folder in Resources`, placeholder `Name`; no-new-note's
+snapshot marks that box active. These are stale create-then-rename expectations, not grounds to
+restore that flow or loosen the signed contract.
+
+### Repair and preserved coverage
+
+- no-new-note uses the exact signed pending-box name and verifies initial focus, empty value and
+  `Name` placeholder before confirming with Enter. All original no-New-note assertions, both widths,
+  header/menu controls, menu/sheet axe scans, empty-folder checks and main axe scans remain intact.
+- qa6 locates the pending treeitem by its signed textbox rather than an already-created folder path.
+  It verifies an initially empty, focused box with `Name`, then fills Soup ideas and cancels.
+  Cancellation must remove the pending row and every tree textbox, leave neither an unnamed
+  New folder nor Soup ideas, and restore the tree's row count with no new row. Focus must return
+  to the tree with the Resources opener as its active descendant, preserving both original page
+  URL and heading checks. The active-descendant id is read from the actual opener and must exist.
+- qa6's positive control reopens the same entry and confirms the same name with Enter. Exactly one
+  Soup ideas row must appear, the row count rises by one, no textbox remains, and its folder page
+  opens. This prevents a disabled creation entry from satisfying the cancellation negatives.
+- No skips, timeout increases, weakened name matching or removed assertions. Other qa6 tests are unchanged.
+
+tests changed: e2e/no-new-note.spec.ts: replace obsolete rename locator with the signed pending name, focus and placeholder; preserve all existing checks.
+tests changed: e2e/qa6.spec.ts: assert signed pending-row cancellation and opener focus without creation; retain absence checks and add an Enter creation control.
+
+### Verification
+
+- `pnpm exec tsc -p tsconfig.app.json --noEmit`: exit 0; `/tmp/tnf-red-repair-tsc-app.log`.
+- `pnpm exec tsc -p tsconfig.node.json --noEmit`: exit 0; `/tmp/tnf-red-repair-tsc-node.log`.
+- `pnpm exec eslint e2e/no-new-note.spec.ts e2e/qa6.spec.ts`: exit 0; `/tmp/tnf-red-repair-eslint.log`.
+  Output was redirected; no failing output was produced or read.
+- Read-only diff inspection confirms the two authorized tests are the only test changes in this repair.
+- Browser green is unverified here: no ports are available. The coordinator must rerun the repaired
+  tests on demo and fake, in both projects, plus the remaining packet/integration gates.
+
+### Standard and reuse
+
+Reuse the packet's cited VS Code explorer name-first standard (`openExplorerAndCreate`/`setEditable`):
+https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/files/browser/fileActions.ts
+No network research under the owner's constraint. The repair reuses the existing Playwright
+role locators, the tree's active-descendant focus model and the existing axe helper; no new mechanism.
