@@ -353,3 +353,5 @@ c4-undo-compensate,implementer,codex,gpt-5-codex,high,6,711326,705077,,611072,62
 c4-create-resume,implementer,codex,gpt-5-codex,high,1,1045199,1034857,,970880,10342,,,,done,2026-10-10
 c4-create-resume,adversarial,codex,gpt-5-codex,medium,1,255621,254022,,209664,1599,,,,1 Important,2026-10-10
 c4-create-resume,property-red,codex,gpt-5-codex,medium,2,319832,317461,,290432,2371,,,,round 2 red,2026-10-10
+c4-undo-compensate,adversarial,codex,gpt-5-codex,high,4,1269350,1262448,,1155328,6902,,,,3 Important (known limits),2026-10-10
+d-v2-24a,reviewer,codex,gpt-5-codex,medium,1,1261701,1254936,,1166080,6765,,,,2 Important,2026-10-10
