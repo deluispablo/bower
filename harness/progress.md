@@ -305,3 +305,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-10: create-name-speed passes — create-name-speed passes: the tree's New folder names first and keeps every typed letter (P4-85 PASS, designer verified)
 - 2026-10-10: undo-miss-refresh passes — undo-miss-refresh passes: a missing rule id refreshes the listing once before not-found (P4-84 PASS)
 - 2026-10-10: q-ui-3 passes — q-ui-3 passes: the desktop sheet stays inside the window and scrolls (P4-86 PASS, designer verified)
+- 2026-10-10: new-note-escape passes — new-note-escape passes: re-proved after c5-remove-new-note (TL-P4-35)
