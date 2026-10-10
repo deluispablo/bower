@@ -398,3 +398,49 @@ Final verification (all exit 0):
 - `pnpm exec eslint src/data/drive/drive-contract.ts src/data/live/live.test.ts > tmp-logs/b1b-redfix2-eslint.log 2>&1`.
 - `git diff --check`: pass. Only the two test files and this notes file are modified;
   untracked tmp-logs contains local verification output.
+
+## Fix round 1 reds
+
+Red session for adversarial findings 1 and 2 (TL-P4-29/31). Added exactly two tests to the
+existing `B1b HTTP and fake port parity` suite in `src/data/drive/parity.test.ts`:
+
+- `b1b fix 1 finding 1: inherited Bin status in prefix and feed`:
+  Bower → Projects → Plan.md is readable on both adapters before Projects is binned.
+  An unrelated Control.md remains readable before and after the Bin operation. After the
+  child is touched, the recorded HTTP change has `trashed: true` and HTTP readPrefix rejects
+  with `code: not-found`. Two soft assertions expose both fake defects in the same red:
+  its child change omits `trashed`, and its prefix resolves to `A short note.` instead of rejecting.
+- `b1b fix 1 finding 2: Workspace change has the public HTTP shape`:
+  a touched ordinary note is the positive feed-shape control; both adapters exclude a restored
+  Workspace document from prefix reads. After touching the document, the exact public file
+  equality fails solely because fake metadata includes `mimeType: application/vnd.google-apps.document`.
+  HTTP metadata has no `mimeType` property.
+
+Fixtures use made-up IDs/text, restored fake storage, an injected fixed clock, zero latency,
+zero retry backoff and the suite's existing fake timers. The real DriveHttp consumes a test-local
+recorded transport; inherited trash and MIME metadata are explicit wire fixtures independent
+of fake normalization. Only modifiedTime is synchronized from the backing fake to match versions.
+No network or real timers were used. No existing assertion or test body changed.
+
+Research basis: the review's locally supplied Drive files-resource reference documents inherited
+trash; the existing HTTP `toFile` normalizer defines the public file shape. No online verification
+was performed, per the no-network instruction. References:
+
+- https://developers.google.com/workspace/drive/api/reference/rest/v3/files
+- https://developers.google.com/workspace/drive/api/reference/rest/v3/changes/list
+
+Verification:
+
+- `pnpm exec vitest run src/data/drive --maxWorkers=2 > tmp-logs/b1b-fr1-red.log 2>&1`:
+  exit 1, exactly **2 failed tests and 277 passed**; three assertion failures reproduce the
+  reasons above. Both tests' positive controls pass, including HTTP not-found and trashed feed.
+  No import error, unrelated failure or unhandled error was reported.
+- `pnpm exec tsc -p tsconfig.app.json --noEmit > tmp-logs/b1b-fr1-tsc.log 2>&1`: exit 0.
+  Initial fixture typing errors were corrected before final verification; the final log is clean.
+- `pnpm exec eslint src/data/drive/parity.test.ts > tmp-logs/b1b-fr1-eslint.log 2>&1`: exit 0.
+- `git diff --check`: pass (read-only).
+
+removed: none.
+tests changed: none; two new parity tests and their recorded fixture only.
+left out: production fixes, pnpm check, e2e and commits; this assignment is red-only, coordinator commits.
+No git command that writes was run. Only parity.test.ts and this notes file changed.
