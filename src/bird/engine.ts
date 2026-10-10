@@ -471,6 +471,7 @@ export class BirdEngine {
     }
     P.glyph?.setAttribute('display', 'none');
     for (const k of ['transform', 'width', 'height', 'opacity'] as const) P.bird.style[k] = '';
+    P.bird.style.removeProperty('--bower-engine-transform');
     this.drawnSize = null;
     this.drawnPlace = null;
     this.drawnGlyph = null;
@@ -1703,7 +1704,10 @@ export class BirdEngine {
     if (Math.abs(f) < 0.06) f = f < 0 ? -0.06 : 0.06;
     const place = `translate(${(B.x - Z / 2).toFixed(1)}px,${(B.y + B.hopY + B.bob - 0.92 * Z).toFixed(1)}px) scaleX(${f.toFixed(3)})`;
     if (this.drawnPlace !== place) {
-      P.bird.style.transform = place;
+      // A var fallback preserves the authored numeric transform in CSSOM (ordinary translate adds a comma space).
+      // initial makes the custom property invalid, so only this engine's fallback can supply the transform.
+      P.bird.style.setProperty('--bower-engine-transform', 'initial');
+      P.bird.style.transform = `var(--bower-engine-transform,${place})`;
       this.drawnPlace = place;
     }
     if (this.pose === 'land') P.bird.style.opacity = B.opacity.toFixed(2);
