@@ -161,3 +161,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `e8752c71` | c05-person-notes | none: tests only (fix round 1 reds) and two corpus fixtures without an extra EOF blank line. |
 | `b6fb31c0` | create-named | none: tests only (the createNamed red). |
 | `cf04e6ae` | create-named | none: refactor; NameSheet makes a folder through createNamed with the same call, strings and navigation. |
+| `99ade27a` | c05-person-notes | none: tests only (round 3 reds and amendments, TL-P4-32 addendum 2). |
+| `82cbd08c` | c05-person-notes | Manifests no longer accept completedAppends or appendEvidence (only unaccepted C05 drafts wrote them; such a manifest is refused, not read inertly); satisfiedAppends stays, proved by the manifest itself. Checkpoints keep optional appendBindings/completedAppends, now only the run's own applied bindings. Accepted manifests, checkpoints and reports never had these fields and parse unchanged (existing fixture tests). Plain notes are parsed as on main (whole note personal, no state); their layout gains only a Timeline span for a request's one line. App and runner deploy together. |

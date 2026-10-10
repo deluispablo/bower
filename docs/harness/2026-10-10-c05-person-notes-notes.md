@@ -682,3 +682,80 @@ The assigned corpus driver, fixedDrive, author byte oracles, recovery fixtures a
 check were reused locally. No external query was made under the owner's no-network instruction.
 compatibility: not applicable to test-only edits; the implementation session owns compatibility.
 Left out: implementation, commits, harness shared-state edits, full check, e2e, deployment and backup, as assigned.
+
+## Round 3 implementation (escalated)
+
+Claude (bower-escalated), on the round-3 reds at `99ade27a`/`13d093c4`. No test, fixture or corpus file changed.
+No commits, network, server, e2e or push. Logs under `/tmp/c05-r3e/`.
+
+### Changes per ruling (TL-P4-32 addendum 2)
+
+1. **One home.** `settleRequest` in `src/data/spine/scripted.ts` takes the run's request lines (oldest first), the
+   listing and the verified history, and decides from the request and its resolved notes only: which requests settle,
+   each note's binding, whole refusals, the "Left as you wrote them" rows, the sources an archive waits for, retries,
+   and satisfaction. `decide`/`build` only ask it (`consent`, `retries`, `refuse`, `present`, `named`, `unsettled`,
+   `rowsOf`, `sourcesOf`). Rows are planned per settling request in the journal loop: one contribution per filed
+   source (materialize dedupes), or with the request's archive when no source is filed. Every note a request binds is
+   read (`want`), so a missing or unreadable Timeline gets its row with no model line (`personalTimelineRefusal`,
+   exported from note-edit and used by `appendLines` itself: one home for that check).
+   `requestTargets` is the one verdict on what a request names (overflow, ambiguous); the planner's context in
+   `runner/src/claude.ts` reads it, so a refused request shows none of its notes.
+2. **One request per note per run.** A request naming a note an older unfinished request binds waits untouched (not
+   captured, not archived). A note a request already completed is not bound (a replay settles as a no-op).
+   A request settles only when each bound note has its line planned or present, or a row; otherwise it waits
+   (`unsettled`, added to the existing `waits`).
+3. **Refused whole, by source.** Overflow or ambiguity: every named note is blocked, and while such a request settles,
+   no line or state citing a thing this run files is planned anywhere, Bower's hubs included. A request is not tied to
+   one pile, so every thing the run files counts as its source (v1 limit, stated in the doc comment).
+4. **One provenance home.** `appendProvenance`, manifest `completedAppends` and `appendEvidence` are removed; the
+   manifest validator refuses both keys. `firstCheckpoint` carries no inherited completions, so each checkpoint's
+   `completedAppends` is only its own applied bindings. Earlier completions and waiting retries are read only through
+   `RunRecords.found` (its walk checks the first checkpoint against its originating manifest).
+   Known limit: completion is remembered while the run's records are retained (twenty runs); an exact replay after
+   that relies on the author's existing same-text-and-source dedupe.
+5. **State independent.** A personal state proposal is asked about only beside the request's line and only when it
+   changes exactly one bullet (`oneBulletOf`); otherwise it alone is dropped and the append stands (the `continue`
+   that skipped the note is gone). Plain notes: no state span; the append only.
+6. **Retry citation and satisfaction.** A retry is planned by `settleRequest.retries`, its citation the bound source
+   id's name in the listing now, its words the model's line on that note citing that id if any, else the original.
+   A bound line already present is decided after `madeAs`: same final name -> satisfied (archive binding);
+   another name -> appended now as its own edit under the final name.
+7. **The 2 regressions.** The plain-note layout change is reverted: a plain note's personal span is the whole note
+   again and `parseNote` returns no Current state or Timeline for it, as on main. Ruling (5) still needs the plain
+   append (fix 1 finding 7, round 3 5), so `ownership-format.ts` gives a plain note only a `timeline` span (its last
+   `## Timeline` to the end); `note-edit.holds` checks a plain append by the bytes before that section, the tasks,
+   insertion-only and the re-parsed entries (`timelineEntries`, exported from note-format, the one display parser).
+
+removed: appendProvenance and its inherited-chain verification in run-manifest.ts (satisfied check kept as satisfiedProven).
+removed: manifest completedAppends and appendEvidence (writer, validator keys, firstCheckpoint and nothingReadyPlan inheritance).
+removed: evidence collection and manifest-completion reading in personalAppendHistory; the unused runId on history lines.
+removed: requestsNamed, blocked/sourcesFor model-line rows, consentFor and the separate history retry loop in decide.
+removed: the model-line-dependent journal admission for requests and the build-time leftRows loop.
+removed: the `continue` that skipped a note's append on a refused personal state proposal.
+removed: plain-note personal span split and plain parseNote currentState/timeline (ownership-format, note-format).
+removed: `prior` retry entry reuse in the model-lines loop; `what` set to row 1 on the line (now set on the row).
+tests changed: none.
+compatibility: FIXSHA
+
+### Verification
+
+- Before: `/tmp/c05-r3e/r3e-base-app.log` 4 failed (2 C05 report reds, note-format, ownership-format);
+  `/tmp/c05-r3e/r3e-base-runner.log` 13 failed (the round-3 runner reds).
+- `pnpm exec vitest run src/data --maxWorkers=2`: 76 files / 3,871 pass (`r3e-app.log`).
+- `pnpm -C runner exec vitest run --maxWorkers=2`: 41 files / 370 pass, keep-one-note included (`r3e-runner.log`).
+- tsc app, node, runner: pass. ESLint on the 7 touched files: pass. `git diff --check`: pass.
+- `pnpm check` (once, under with-lock): fails only `src/docs.test.ts` "every change since the P2 freeze is listed":
+  the red commit `99ade27a` has no row in `docs/harness/2026-10-07-p3-compatibility.md` (a harness record the
+  coordinator writes; not product code). All 5,169 other tests passed (`r3e-check.log`). The steps after `pnpm test`
+  were then run directly under the lock: runner lint/build, app build, duplication, unused, dependency and bundle
+  gates all pass (`r3e-rest.log`).
+
+### Compatibility rows to add (coordinator)
+
+| Commit | Entry | What it changes for the accepted app's files |
+| --- | --- | --- |
+| `99ade27a` | c05-person-notes | none: tests only (round 3 reds and amendments, TL-P4-32 addendum 2). |
+| `FIXSHA` | c05-person-notes | Manifests no longer accept completedAppends or appendEvidence (only unaccepted C05 drafts wrote them; such a manifest is refused, not read inertly); satisfiedAppends stays, proved by the manifest itself. Checkpoints keep optional appendBindings/completedAppends, now only the run's own applied bindings. Accepted manifests, checkpoints and reports never had these fields and parse unchanged (existing fixture tests). Plain notes are parsed as on main (whole note personal, no state); their layout gains only a Timeline span for a request's one line. App and runner deploy together. |
+
+Sources: the existing RunRecords walk and checkpoint chain (local), timeline-line.ts, CommonMark ATX headings
+(https://spec.commonmark.org/0.31.2/#atx-headings), RFC 9110 If-Match (https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.1).
