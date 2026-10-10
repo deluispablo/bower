@@ -1418,6 +1418,84 @@ describe('Q1a fix round 3 through production entry points', () => {
   });
 });
 
+describe('Q1a fix round 4 through production entry points', () => {
+  type MemberPath = 'folder member' | 'loose Inbox file' | 'words-only pile';
+
+  async function unavailableFolderReasks(path: MemberPath): Promise<void> {
+    let placement = false;
+    let unchanged = false;
+    const wordsOnly = path === 'words-only pile';
+    const w = await world((w) => {
+      if (unchanged) return emptyIntent;
+      if (placement) return wordsOnly
+        ? { ...emptyIntent, notes: [{ pileId: 'pile-mixed', to: 'Projects/Job hunt', name: 'Room context.md' }] }
+        : { ...emptyIntent, things: [{ fileId: w.ids.unclear, to: 'Projects/Job hunt', name: 'Unclear.md' }] };
+      const ask = optionAsk(w);
+      return { ...emptyIntent, asks: [wordsOnly
+        ? { pileId: 'pile-mixed', ...yesNo, options: ask.options }
+        : ask] };
+    });
+    await w.drive.update(w.ids.clear, { addParent: w.ids.home, removeParent: w.ids.pile });
+    if (wordsOnly) await w.drive.trash(w.ids.unclear);
+    if (path === 'loose Inbox file') {
+      await w.drive.update(w.ids.unclear, { addParent: w.ids.inbox, removeParent: w.ids.pile });
+      expect((await w.drive.get(w.ids.unclear)).parents).toEqual([w.ids.inbox]);
+      expect(w.drive.pathOf(w.ids.unclear, w.rootId)).toBe('Inbox/Unclear.md');
+    }
+    const subject = wordsOnly ? 'pile-mixed' : w.ids.unclear;
+    const member = wordsOnly ? w.ids.anchor : w.ids.unclear;
+    await press(w);
+    expect(await run(w, 0)).toBe(0);
+    const first = (await questions(w))[0];
+    expect(first).toEqual(expect.objectContaining({ subject }));
+    if (!first) throw new Error('Missing fixture asking one');
+    expect(await roundHistory(w)).toEqual([expect.objectContaining({ subject, count: 1 })]);
+    const choice = first.options?.find((o) => o.action.folderId === w.ids.home);
+    expect(choice).toBeDefined();
+    tick();
+    expect((await answer(w, first, { option: choice?.id ?? '' }))?.outcome.kind).toBe('now');
+    await w.drive.trash(w.ids.home);
+    const before = await w.drive.evidence(member);
+    placement = true;
+    expect(await run(w, 1)).toBe(0);
+    expect(await w.drive.evidence(member), 'unavailable consent holds the continuation').toEqual(before);
+    expect(await questions(w), 'the continuation does not write a replacement asking').toEqual([]);
+    expect(await roundHistory(w)).toEqual([expect.objectContaining({ subject, count: 1 })]);
+    expect((await w.drive.get(w.ids.job)).parents).not.toContain(w.ids.inbox);
+    tick();
+    await press(w);
+    expect(await run(w, 2)).toBe(0);
+    const next = await questions(w);
+    expect.soft(next, `${path}: next tidy re-asks despite a valid alternative model placement`)
+      .toEqual([expect.objectContaining({ subject })]);
+    expect.soft(next[0]?.askedAt ?? first.askedAt, 'the next round is a newly written asking').toBeGreaterThan(first.askedAt);
+    expect.soft(await roundHistory(w), 'the same member reaches round two')
+      .toEqual([expect.objectContaining({ subject, count: 2 })]);
+    expect.soft(await w.drive.evidence(member), 'no placement before the replacement asking').toEqual(before);
+    expect.soft((await manifestOf(w, 2))?.operations.filter((o) =>
+      o.effect.kind === 'move' && o.effect.before?.fileId === member), 'no alternative move is planned').toEqual([]);
+    expect.soft(await fileAt(w, 'Projects/Job hunt/Room context.md'), 'no alternative generated note is filed').toBeUndefined();
+    expect(next.flatMap((q) => q.options ?? []).some((o) => o.action.folderId === w.ids.home)).toBe(false);
+    unchanged = true;
+    tick();
+    await press(w);
+    expect(await run(w, 3)).toBe(0);
+    expect.soft(await questions(w), 'an unchanged tidy retains exactly the same replacement asking').toEqual(next);
+    expect.soft(await roundHistory(w), 'an unchanged tidy cannot count a third round')
+      .toEqual([expect.objectContaining({ subject, count: 2 })]);
+    expect.soft(await w.drive.evidence(member), 'an unchanged tidy still leaves the member untouched').toEqual(before);
+  }
+
+  it('Q1a fix 4.1: a loose Inbox file whose chosen folder is gone is asked again as the next round', async () => {
+    await unavailableFolderReasks('loose Inbox file');
+  });
+
+  it.each<MemberPath>(['folder member', 'loose Inbox file', 'words-only pile'])(
+    'Q1a fix 4.2: every member-subject path re-asks once after an unavailable folder: %s',
+    unavailableFolderReasks,
+  );
+});
+
 async function runWithSpawn(w: World, index: number, spawn: ClaudeSpawn): Promise<number> {
   const { main } = await import('../src/main');
   const { writeFile, mkdir } = await import('node:fs/promises');

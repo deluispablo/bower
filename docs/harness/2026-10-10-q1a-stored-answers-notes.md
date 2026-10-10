@@ -1249,3 +1249,58 @@ Read-only diff checks again show only the three owning production files and this
 no test, golden or fingerprint change, no whitespace error, and HEAD unchanged.
 Implementation and the requested verification are complete. The full-check failures above prevent
 claiming a green whole gate; no acceptance, commit or integration is claimed.
+
+## Fix round 4 reds
+
+2026-10-10. Codex red owner; HEAD `a6bcf8a2d6b43ee062b9b9f702e4dc2d01463b46`.
+Read WORKER, these notes and adversarial pass 3, BLOCK 1. Scope is the lead-approved narrow
+unavailable-folder re-ask pin, within TL-P4-44 addendum 5. No network, production edits or git writes.
+The coordinator owns commits. Existing tests, assertions and bounds are preserved byte for byte.
+
+tests changed: runner/test/q1-continuation.test.ts: added loose-Inbox unavailable-folder reds and a three-path class table; no existing tests changed.
+removed: none
+
+Exact added test names:
+
+- `Q1a fix 4.1: a loose Inbox file whose chosen folder is gone is asked again as the next round`
+- `Q1a fix 4.2: every member-subject path re-asks once after an unavailable folder: folder member`
+- `Q1a fix 4.2: every member-subject path re-asks once after an unavailable folder: loose Inbox file`
+- `Q1a fix 4.2: every member-subject path re-asks once after an unavailable folder: words-only pile`
+
+All paths use the existing real /process, answerQuestion and runner main fixtures. Main writes the
+first option asking and its round history; the person chooses Home by stored option id, then Home
+is binned before the continuation. That continuation leaves the member untouched, removes its
+answered asking and retains count one. The next tidy proposes a valid placement in Job hunt without
+an asking. It must instead write a fresh asking for the same subject, count two, plan no alternative
+move or generated note, and preserve the member's evidence. A subsequent no-op tidy must retain
+exactly that asking and count two. The words-only row uses its context note as evidence; the loose
+row explicitly checks that the content file is directly in Inbox, outside the pile folder.
+
+Observed at HEAD: both loose-file cases fail with AssertionError at
+`runner/test/q1-continuation.test.ts:1470` (no asking, actual `[]`), `:1471` (no fresh askedAt),
+`:1473` (no round two), and `:1485` (still no round two on the no-op tidy).
+Their continuation prerequisites, held-file evidence and absence of alternative moves all pass.
+The folder-member and words-only rows pass, pinning the other member-subject paths once each.
+This reproduces pass-3 BLOCK 1 rather than a loading error, timeout or invalid fixture.
+
+Final targeted command (exit 1 is the requested red outcome):
+
+```sh
+TMPDIR=/private/tmp/bower-q1a-stored-answers/tmp-logs pnpm -C runner exec vitest run test/q1-continuation.test.ts --maxWorkers=2 --reporter=json --outputFile=../tmp-logs/q1a-fix-4-reds.json > tmp-logs/q1a-fix-4-reds.log 2>&1
+```
+
+- Whole file: 43 tests, 41 pass, 2 fail, zero skips. All 39 pre-existing tests pass.
+  Only the two new loose-file cases fail, for the reported missing re-ask and round-two assertions.
+- Runner tsc and touched-test ESLint pass with no diagnostics.
+- Read-only preservation comparison confirms the entire original test file is unchanged outside
+  the inserted round-4 block. `git diff --check` passes; no production diff; HEAD unchanged.
+- Only failure messages and aggregate results were read. The test log, JSON report and generated
+  fixtures were written under `tmp-logs/` and deleted before delivery as requested.
+- Initial fixture verification repeated a placement after the replacement asking and exposed
+  unrelated placement behaviour. The final fourth run is an explicit no-op model reply, isolating
+  the one-re-ask/count-two invariant. No assertion or bound was removed or loosened.
+
+Offline research reuses the existing production-main/in-process fixtures and the established
+[Hono testing](https://hono.dev/docs/guides/testing) reference already recorded under Research.
+No new execution driver, store or counter is added. No test/ruling contradiction was found.
+Left out: implementation, full check/e2e, commits and integration; this is the authorized red-only round.
