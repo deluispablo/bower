@@ -32,7 +32,7 @@ import {
 import type { OwnershipContext } from '../contracts/ownership-format';
 import type { Content, Declaration, DeclarationResult } from '../contracts/pile-declaration';
 import type { DispositionResult } from '../contracts/pile-disposition';
-import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, declarationCopies, declarationRecord, declaredName, findDeclaration, findLooseDeclarations, journalValues, looseSetAside, checkable, memberAsNote, recordablePile, recordedNote, sameText, setAsideOf, shownName, writable, type Blocked, type DeclarationLookup, type Digest } from '../pile-readiness';
+import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, declarationCopies, declarationRecord, declaredName, findDeclaration, findLooseDeclarations, findPileDeclarations, orphanState, pileRecords, journalValues, looseSetAside, checkable, memberAsNote, recordablePile, recordedNote, sameText, setAsideOf, shownName, writable, type Blocked, type DeclarationLookup, type Digest, type LooseDeclaration } from '../pile-readiness';
 import { Journal, type JournalRecord } from './journal';
 import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
@@ -120,6 +120,12 @@ export class DriveVault implements VaultSource {
   /** Declarations never change: each copy is read once, by file id and modified time. */
   private declarationCache = new Map<string, DeclarationResult>();
   private dispositionCache = new Map<string, DispositionResult>();
+  /** The general declaration classification from the current full-read snapshot, never persisted. */
+  private fullDeclarations: {
+    ix: VaultIndex;
+    files: readonly DriveFile[];
+    read: Promise<{ declarations: LooseDeclaration[]; summary: { count: number; complete: boolean } }>;
+  } | null = null;
   /**
    * What files hold, by id and the modifiedTime the listing gives (`read-cache.ts`, shared with the journal). A refresh
    * lists again and nothing else: a file whose version moved is read at its new one, the others and the reads on
@@ -199,6 +205,7 @@ export class DriveVault implements VaultSource {
     this.disposed = true;
     this.reads.clear();
     this.listed = null;
+    this.fullDeclarations = null;
     this.unqueue();
     for (const u of this.uploads.values()) for (const e of u.entries) { delete e.body; delete e.url; }
     this.uploads.clear();
@@ -240,6 +247,7 @@ export class DriveVault implements VaultSource {
 
   /** Lists the folder again (after a tidy-up, or when another device may have changed it). */
   async refresh(): Promise<void> {
+    this.fullDeclarations = null;
     this.ix = null;
     await this.index();
     if (!this.current()) return;
@@ -719,6 +727,49 @@ export class DriveVault implements VaultSource {
     return out.sort((a, b) => b.createdAt - a.createdAt);
   }
 
+  async orphanSummary(): Promise<{ count: number; complete: boolean }> {
+    await this.piles();
+    const result = await this.declarationsFor(await this.index());
+    this.checkCurrent();
+    return { ...result.summary };
+  }
+
+  /** The same cached record query used by a full piles read, including its unknown evidence. */
+  private async declarationsFor(ix: VaultIndex): Promise<{ declarations: LooseDeclaration[]; summary: { count: number; complete: boolean } }> {
+    const files = this.known(ix);
+    const evidence = [...files, ...ix.journalFiles(true)];
+    const kept = this.fullDeclarations;
+    if (kept?.ix === ix && evidence.length === kept.files.length && evidence.every((f, i) => f === kept.files[i])) return kept.read;
+    const read = (async () => {
+      const inbox = ix.file('Inbox');
+      if (!inbox?.folder) return { declarations: [], summary: { count: 0, complete: false } };
+      const root = await this.rootId();
+      const found = await findPileDeclarations(files, root, inbox.id, (id) => this.readBytesOnce(id), this.declarationCache);
+      const summary = { count: 0, complete: found.complete };
+      let journal: Promise<unknown[]> | null = null;
+      const removed = async (path: string): Promise<boolean> => contextRemoved(
+        await (journal ??= journalValues(ix.journalFiles(true), (id) => this.readTextOnce(id))), path);
+      for (const declaration of found.declarations) {
+        try {
+          const state = await orphanState(declaration, inbox, files, (id) => this.readBytesOnce(id),
+            (f) => this.digestOf(f), (keys) => this.drive.binnedByItem(root, keys), this.dispositionCache, removed);
+          if (state === 'orphan') summary.count++;
+          if (state === 'unknown') summary.complete = false;
+        } catch (e) {
+          if ((e instanceof BowerError && e.code === 'auth') || !this.current()) throw e;
+          console.error(e);
+          summary.complete = false;
+        }
+      }
+      this.checkCurrent();
+      return { declarations: found.declarations, summary };
+    })();
+    this.fullDeclarations = { ix, files: evidence, read };
+    // A session refusal reaches its caller; it must not poison later reads of this snapshot.
+    read.catch(() => { if (this.fullDeclarations?.read === read) this.fullDeclarations = null; });
+    return read;
+  }
+
   /** Sends a removed pile's declaration copies to the Bin, remembering each one in case the Remove stops halfway. */
   private async binDeclarations(pileKey: string, copies: readonly DriveFile[]): Promise<void> {
     const ix = await this.index();
@@ -771,9 +822,12 @@ export class DriveVault implements VaultSource {
     const files = this.known(ix);
     const drive = this.drive;
     const root = await this.rootId();
-    // A declaration a live folder or file carries is that pile's: the loose scan never reads it.
     const marked = new Set(files.flatMap((f) => f.appProperties?.[PROP.declaration] ?? []));
-    const found = await findLooseDeclarations(files, root, inbox.id, (id) => this.readBytesOnce(id), this.declarationCache, marked);
+    // Recovery and loose discovery use this one full-read classification. Keep the discovery contract:
+    // stamped dispositions and live anchors are omitted from its rows, but are validated for the summary.
+    const retired = new Set(pileRecords(files, root, 'disposition').flatMap((f) => f.appProperties?.[PROP.recordPile] ?? []));
+    const found = (await this.declarationsFor(ix)).declarations.filter(({ declaration: d }) =>
+      d.anchor.kind === 'loose' && !marked.has(d.declarationId) && !retired.has(d.pileId));
     this.checkCurrent();
     const out: Pile[] = [];
     for (const { declaration, sha256: hash } of found) {
