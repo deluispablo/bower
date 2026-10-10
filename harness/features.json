@@ -7104,7 +7104,7 @@
     "id": "delete-account-purge",
     "task": "p4-c02",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "Delete my account and a sign-out before the account is known use the one forget path: this device keeps nothing of the person.",
     "steps": [
