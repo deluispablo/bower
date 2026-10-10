@@ -89,3 +89,88 @@ Coordinator verification still required:
   Axe uses ./axe with WCAG 2.2 and target-size enabled for main and the open dialogs, as existing specs do.
   The existing shell's unrelated tab-strip targets are outside this axe scope.
 - Fresh review and designer UI verification remain coordinator work.
+
+## Fix round 1
+
+Fresh Codex implementer session; P4-75 Important finding and three Minor findings.
+Coordinator commits. No git command that writes, network request, server or e2e run was performed.
+
+Findings:
+- Sheet applied its still rule to centred and bottom callers, breaking their existing animation.
+  Its preference import crossed the UI boundary, and its JS reduced-motion subscription duplicated base.css.
+- The shell started at width zero and waited for ResizeObserver before establishing docking.
+  With a delayed observer, the page first mounted with both panels folded at every signed width.
+- Route dismissal called setOverlay during render.
+
+Changes:
+- Sheet accepts a still prop, default false. Only edge placements suppress dialog and scrim animation.
+  DesktopShell passes !birdMoves. Sheet no longer reads app preferences or subscribes to reduced motion.
+  The existing global base.css reduced-motion duration rule remains the only reduced-motion mechanism.
+- The existing shell layout effect immediately measures its own element, then subscribes to ResizeObserver.
+  An unmeasured shell mounts only its frame; its page and panels first mount with the signed docking state
+  before paint, without waiting for the observer. No viewport-width approximation is used.
+  The tab scroll effect also runs when the measured page first mounts.
+- Route-key effect cleanup invalidates the previous route's open overlay. The existing derived overlaySide
+  closes it immediately on navigation and retains the navigation reason for Sheet's heading-focus hook.
+  Back to the original route cannot reopen the dismissed overlay. No render-phase setter remains.
+- Added the exact animation regression test, edge-prop tests, and first-page-render tests at all five widths.
+  A delayed observer and shell-element rect reproduce real initial measurement ordering; Profiler captures
+  every mounted page commit. The initial observer delivery preserves the Explorer's mounted button.
+  Added production-shell tests for motion preference wiring and navigation followed by Back.
+  Existing assertions, tolerances and table values are unchanged. All timer advances use fake timers.
+
+Research (offline, before the fix):
+- Inspected the installed react-dom client implementation's flushLayoutEffects / commitLayoutEffectOnFiber
+  path. React's standard solution for measuring layout before paint is useLayoutEffect:
+  https://react.dev/reference/react/useLayoutEffect
+- Route lifetime cleanup uses the existing effect lifecycle, with immediate visibility derived from the
+  location key. React effect cleanup runs for the old dependency value before setup for the new value:
+  https://react.dev/reference/react/useEffect
+- Reused base.css:104 rather than introducing a second reduced-motion mechanism.
+  Official URLs are citations only; no remote documentation was fetched in this offline session.
+
+removed: Sheet's import of @/app/prefs and subscription to birdMoves.
+removed: Sheet's useMedia import and duplicate JS prefers-reduced-motion check.
+removed: animation suppression for Sheet callers without an edge placement.
+removed: the shell's synthetic initial width-zero page render and wait for first observer delivery.
+removed: render-phase setOverlay for route dismissal.
+removed: no existing assertion, test, component, preference or feature was deleted.
+
+tests changed: src/app/DesktopShell.test.tsx: added regressions and imports; all existing tests and assertions unchanged.
+
+Files per coordinator commit:
+1. red: src/app/DesktopShell.test.tsx; src/ui/Sheet.test.tsx.
+2. fix: src/app/DesktopShell.tsx; src/ui/Sheet.tsx.
+3. notes: docs/harness/2026-10-10-shell-page-column-notes.md.
+No src/features files changed; compatibility SHA is not applicable.
+
+Red evidence:
+- /tmp/spc-r1-red.log: pnpm exec vitest run src/app/DesktopShell.test.tsx src/ui/Sheet.test.tsx; exit 1.
+- a Sheet without placement keeps its animation when Bower moves is off:
+  expected the inline animation to be empty (leave the CSS animation in force), received none.
+- the first shell page render docks at 1024 / 1100 / 1280 / 1440 px without a fold-then-dock flip:
+  expected the signed table, received both panels folded. The 900 px case already passed.
+- an edge Sheet at left / right uses only the supplied still prop:
+  expected animation to remain enabled with still=false, received none from the internal preference read.
+- Seven assertions failed; the existing shell tests remained green.
+
+Green evidence (final code):
+- /tmp/spc-r1-unit.log: pnpm exec vitest run src/app src/ui; exit 0.
+  Includes the exact reds above, all five first-render cases, production-shell motion wiring and route Back.
+- /tmp/spc-r1-tsc.log: pnpm exec tsc -p tsconfig.app.json; exit 0.
+- /tmp/spc-r1-eslint.log: pnpm exec eslint src/app src/ui; exit 0.
+- Read only failures from command logs. git diff --check passes.
+- An intermediate tsc run found an indexed CSS-module class possibly undefined; the new test now guards
+  the class before its unchanged assertion. An intermediate eslint run rejected a synchronous effect-body
+  setter; route-lifetime cleanup replaced that setter. Final commands above were rerun after these fixes.
+- pnpm check was not rerun: its existing listener test opens a port, forbidden in this session
+  (the previous implementation notes record its EPERM failure). The requested three targeted gates passed.
+
+Coordinator verification and assertion conflict:
+- Rerun e2e/shell-page-column.spec.ts on demo and fake; this session cannot open ports.
+- The existing reduced-motion branch at e2e/shell-page-column.spec.ts:141 expects animationName=none
+  with birdMoves=true. After the required removal of the JS check, base.css keeps the edge animation name
+  and applies animation-duration:0.01ms !important. That existing assertion conflicts with the review's
+  direction to use the global reduced-motion mechanism. This is a static finding; e2e was not run.
+  No assertion was loosened or changed, and no duplicate CSS/JS reduced-motion mechanism was added.
+  The coordinator/lead must resolve that expectation before the e2e gate can be accepted.
