@@ -6950,5 +6950,18 @@
     ],
     "verify": "",
     "note": "TL-P4-44 Q2. Escalated; implementation after Q1a integrates. Packet 2026-10-10-q1c-live-questions-packet.md. implementer: codex."
+  },
+  {
+    "id": "b6a-templates",
+    "task": "p4-b6",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Bower notes follow five declared templates (Source, Concept, Project, Area, MOC) from one declaration home; person notes never gain Bower metadata (TL-P4-47 Q5).",
+    "steps": [
+      "The prep's B6a reds pass through note-format, ownership-format, note-edit and scripted planning."
+    ],
+    "verify": "",
+    "note": "TL-P4-47 Q5. Escalated; implementation after B5a integrates. Packet 2026-10-10-b6a-packet.md. implementer: codex."
   }
 ]
