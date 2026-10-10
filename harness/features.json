@@ -6614,7 +6614,7 @@
     "id": "c5-empty-note-help",
     "task": "p4-polish",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "The empty-note line says how to write in a note (Google Drive for desktop and any notes app) with the existing Open in Drive action beside it; the later-version promise is gone (TL-P4-33 addenda 1 and 2).",
     "steps": [
