@@ -6,6 +6,7 @@
 import { BowerError, type ErrorCode } from '../types';
 import { sha256 } from '../vault/hashes';
 import { md5Hex } from '../contracts/hashes';
+import { FOLDER, toFile } from './drive-http';
 import { ancestryLookup, changesError, decodePrefix, drainChanges, driveError, PREFIX_BYTES, resolveDriveScope, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveChange, type DriveChangePage, type DriveChanges, type DriveFile, type DrivePatch, type DriveScope, type FaultHook, type FencedCall, type FencedDrive, type ResumableTarget, type SessionStatus, type StoredEvidence } from './drive-api';
 /** The fence's types live with the Drive ports; kept here for the tests that import them from the fake. */
 export type { FaultAction, FaultHook, FencedCall, FencedDrive, StoredEvidence } from './drive-api';
@@ -179,7 +180,25 @@ export class FakeDrive implements DriveApi {
 
   /** A file as a listing gives it: its metadata, and whether a checksum of its content is kept (`unchecked`). */
   private listed(f: Stored): DriveFile {
-    return { ...this.copy(f.meta), ...(f.bytesUnavailable && f.sha256 === undefined ? { unchecked: true as const } : {}), ...(f.trashed ? { trashed: true as const } : {}) };
+    // Drive's trashed field includes inherited Bin status; keep the stored flag explicit for untrash.
+    const seen = new Set<string>();
+    const pending = [f];
+    let trashed = false;
+    while (pending.length) {
+      const current = pending.pop();
+      if (!current) break;
+      if (seen.has(current.meta.id)) continue;
+      seen.add(current.meta.id);
+      if (current.trashed) {
+        trashed = true;
+        break;
+      }
+      for (const id of current.meta.parents) {
+        const parent = this.files.get(id);
+        if (parent) pending.push(parent);
+      }
+    }
+    return { ...this.copy(f.meta), ...(f.bytesUnavailable && f.sha256 === undefined ? { unchecked: true as const } : {}), ...(trashed ? { trashed: true as const } : {}) };
   }
 
   async readText(id: string): Promise<string> {
@@ -207,6 +226,7 @@ export class FakeDrive implements DriveApi {
   async readPrefix(id: string): Promise<string | null> {
     await this.gate();
     const f = this.find(id);
+    if (this.listed(f).trashed) throw driveError('not-found');
     const mimeType = f.meta.mimeType ?? (f.content instanceof Blob ? f.content.type : undefined);
     if (f.meta.folder || mimeType?.startsWith('application/vnd.google-apps.')) return null;
     const status = this.prefixResponses[id] ?? 206;
@@ -237,7 +257,16 @@ export class FakeDrive implements DriveApi {
       }
       return {
         ...page,
-        changes: page.changes.map((c) => ({ fileId: c.fileId, removed: c.removed, ...(c.file ? { file: this.copy(c.file) } : {}) })),
+        changes: page.changes.map((c) => ({
+          fileId: c.fileId,
+          removed: c.removed,
+          ...(c.file ? { file: toFile({
+            ...this.copy(c.file),
+            mimeType: c.file.folder ? FOLDER : undefined,
+            size: c.file.size?.toString(),
+            sha256Checksum: c.file.sha256,
+          }) } : {}),
+        })),
       };
     });
   }
