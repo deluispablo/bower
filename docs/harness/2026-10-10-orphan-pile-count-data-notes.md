@@ -667,3 +667,82 @@ No upload or device durability mechanism changed.
 
 Left out: lead reconciliation of the four contradictory tests and runner
 expectations, full check mark, UI/e2e, test changes, commits, and integration.
+
+
+## Red sweep 3
+
+TL-P4-53 addendum 7, lead ruling 2026-10-10: missing contexts must be
+missing without binning. Addendum 6 still treats a binned context as removed.
+Changed only test fixtures and this requested record; no production change,
+network request, git write, commit, or integration.
+
+The fixtures reload FakeDrive snapshots with the exact context id absent
+from the stored files, including the Bin. This models a context write that
+never landed, or a context never created. The declaration, context key,
+original words, members and journal records remain as before. Reused the
+snapshot fixture approach already in drive-vault.test.ts (the vanished
+fixture), and FakeDrive.snapshot/restore. The Worker test rebuilds its
+consumers on the restored Drive and retains its injected clock and fenced
+write observers. Every existing assertion is unchanged: reasons, journal
+reads, retries, report rows, read bounds and no-write expectations.
+
+### Every changed test
+
+Each path below records one changed test, including each consumer of the
+shared missing-context helpers. Line references describe the resulting tree.
+
+- tests changed: src/data/fake/fake-runner.test.ts: TL-P4-53 addendum 7: `a note missing for no reason you gave holds the pile until it is written again` (:1037) now has an absent context, preserving the not-arrived sentence and all hold/no-write assertions.
+- tests changed: src/data/fake/fake-runner.test.ts: TL-P4-53 addendum 7: `a note written again by someone else during the run is not written twice` (:1102) starts with an absent context, preserving both runs and the single rewritten note assertion.
+- tests changed: src/data/fake/fake-worker.test.ts: TL-P4-53 addendum 7: `a pile waiting for its context note is held, never restored by the runner` (:3636) has an absent context, preserving capture exclusion, fenced writes, reports, not-arrived and Try again assertions.
+- tests changed: src/data/vault/drive-vault.test.ts: TL-P4-53 addendum 7: `a note to write again is not an empty pile, for the inbox and the tidy-up alike` (:2034) uses the absent-context helper, preserving empty items and both not-arrived reasons.
+- tests changed: src/data/vault/drive-vault.test.ts: TL-P4-53 addendum 7: `your changes are read once per listing, and one that cannot be read affects only its pile` (:2042) uses the absent-context helper twice, preserving journal-read counts and both refusal reasons.
+- tests changed: src/data/vault/drive-vault.test.ts: TL-P4-53 addendum 7: `Try again on another client writes a missing note again, then asks for the file` (:1342) models a never-created context, preserving the declared key, words, conflict and no-upload assertions.
+- tests changed: src/data/vault/drive-vault.test.ts: TL-P4-53 addendum 7: `Try again writes no note while a tidy-up holds the pile, nor one already written again elsewhere` (:1400) models a never-created context, preserving busy refusal, no writes, missing words and one-note retry assertions.
+- tests changed: src/data/vault/drive-vault.test.ts: TL-P4-53 addendum 7: `a person's retry after a double failure makes one file` (:3055) starts its pile-note case with no context ever created, preserving lost-reply recovery and one-note assertions.
+- tests changed: src/data/vault/drive-vault.test.ts: TL-P4-53 addendum 7: `a pile note retried with new words after a double failure is one note with the new words` (:3084) starts with no context ever created, preserving double-failure retries and final words.
+- tests changed: src/data/vault/drive-vault.test.ts: TL-P4-53 addendum 7: `a pile note retried after a double failure never overwrites an edit made between tries` (:3133) uses the converted lostPileNote fixture, preserving intervening-edit refusal and subsequent save assertions.
+- tests changed: src/data/vault/drive-vault.test.ts: TL-P4-53 addendum 7: `a pile note binned elsewhere after a double failure is refused first, then made with the new words` (:3148) uses the converted initial missing-context fixture; its later intentional Bin and refusal/retry assertions remain unchanged.
+- tests changed: src/data/vault/drive-vault.test.ts: TL-P4-53 addendum 7: `a missing pile note written again, its answer lost, is made once by its reserved id` (:3274) models a never-created context, preserving successful retry, one lost reply and one-note assertions.
+- tests changed: src/data/vault/drive-vault.test.ts: TL-P4-53 addendum 7: `a pile note whose create landed and then moved is refused on retry and not written in its new place` (:3904) starts with no context ever created, preserving the later move and all refusal, words and no-second-note assertions.
+- tests changed: src/data/vault/drive-vault.test.ts: TL-P4-53 addendum 7: `every app create, its answer lost, against a move, rename or Bin elsewhere: success only as it was made` (:4213) starts its pile-note variants with no context ever created; all matrix cases and assertions remain unchanged.
+
+### TL-P4-51 grep sweep
+
+Searched src test files for every trash call, missing-context/missing-note
+wording and context/Bin wording. Raw search records are in OS temp:
+`/tmp/orphan-all-bin-grep.txt`, `/tmp/orphan-missing-context-grep.txt`, and
+`/tmp/orphan-pile-context-grep.txt`. Besides the four named contradictions,
+converted ten more tests using Bin only to set up a missing-context create
+or retry. Left intentional removal fixtures intact, including noteBinnedByYou,
+new words after a declared note was removed, context replacement/reordering,
+and later Bin races: those points explicitly test removal or replacement,
+rather than a context missing for no reason the person gave.
+
+### Verification
+
+Whole requested target completed: **4 files, 513 tests passed**, with
+`--maxWorkers=2`. Exact files:
+`src/data/fake/fake-runner.test.ts`, `src/data/fake/fake-worker.test.ts`,
+`src/data/vault/drive-vault.test.ts`, `src/data/orphan-pile-count.test.ts`.
+Log: `/tmp/orphan-pile-red3.Lz0Hkv/verify.log`.
+No contradicting test remains in this target. The four prior failures are
+recorded in Fix round 2 above; no assertion was weakened to reconcile them.
+
+Used an OS-temp Vitest configuration with the original app configuration,
+original app setup and the same timer gate, excluding only its repository
+CPU-report writer. Cache and configuration artifacts stay in OS temp.
+An initial setup failed before tests because its temp module was outside
+Vite's allowed paths; a second start was stopped to ensure setup-file arrays
+could not include the repository report writer. The completed run uses
+explicit setup-file replacement and an allowed OS-temp path.
+`git diff --check` passed. Full check and e2e were not run: this task permits
+only test edits and explicitly forbids tests writing into the repository.
+No screen or production mechanism changed. Coordinator owns commits.
+
+Standard reference inherited from Fix round 2:
+[Drive file search](https://developers.google.com/workspace/drive/api/guides/search-files)
+(exact identity and distinct trashed evidence); no network used.
+
+Touched-test ESLint passed; log: `/tmp/orphan-pile-red3.Lz0Hkv/lint.log`.
+Final diff check passed; only the three test files and this requested notes
+record differ. All 14 changed tests are listed above.
