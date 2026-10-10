@@ -112,7 +112,7 @@ export class DriveVault implements VaultSource {
   protected readonly runningPiles: () => ReadonlySet<string>;
   protected readonly journal: Journal;
   /** The ids reserved for the creates a person means to make, until each intent is complete (`write-once.ts`). */
-  private readonly intended = new Intended<Holder & { loose?: DriveFile }>();
+  private readonly intended = new Intended();
   /** The words each try of a kept pile-note create sent, so a retry writes only over a note that still holds them. */
   private readonly pileNoteSent = new Map<string, string[]>();
   private readonly declarePiles: boolean;
@@ -1063,15 +1063,38 @@ export class DriveVault implements VaultSource {
     const text = input.trim();
     if (!pile.items.length && !text) throw new BowerError('conflict', 'A pile with no files needs its note.');
     const ix = await this.index();
-    const folderKey = `pile-folder:${id}`;
-    const pendingFolder = this.intended.holder(folderKey);
-    // A refresh may select the half-made folder: resume the loose thing this holder started converting instead.
-    const f = pendingFolder?.loose ?? (pile.path ? ix.file(pile.path) : undefined);
+    const conversionKey = `pile-conversion:${id}`;
+    const pending = this.intended.conversion(conversionKey);
+    // Resume the whole conversion before a refreshed folder can enter the ordinary edit branch.
+    const f = pending?.loose ?? (pile.path ? ix.file(pile.path) : undefined);
     if (!f || !pile.path) throw new BowerError('not-found', 'That pile is already filed.');
-    // The folder as listed, unless it already holds this very edit's rename or move (its answer lost): then the retry
+    if (pending || (!f.folder && text)) {
+      if (!pending) {
+        await this.stillAsSeen(f);
+        // A declared loose thing becomes an ordinary pile: its declaration copies go to the Bin first.
+        for (const copy of await this.declarationCopiesOf(id, f)) {
+          await this.toBin(copy);
+          ix.drop(copy.id);
+        }
+      }
+      const parent = f.parents[0] ?? (await this.rootId());
+      const converted = await this.intended.convert(conversionKey, this.drive, this.drive, () => ({
+        loose: f,
+        folder: sentAs(parent, freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text }))),
+        props: { [PROP.pile]: id },
+        noteName: PILE_NOTE,
+        text,
+      }), (loose, folder) => this.once(loose, `move:${folder.id}`, (op, fence) => this.drive.update(loose.id, { addParent: folder.id, ...(loose.parents[0] ? { removeParent: loose.parents[0] } : {}), appProperties: op }, { fence })));
+      ix.put(converted.folder);
+      ix.put(converted.loose);
+      ix.put(converted.note);
+      this.emit();
+      return this.pile(id);
+    }
+    if (!f.folder) return pile;
+    // The folder as listed, unless it already holds this very edit's rename (its answer lost): then the retry
     // goes on, and `once` takes that landed write as done.
-    const keptFolder = this.intended.kept(folderKey);
-    const folderIntent = f.folder ? (text ? `rename:${freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text }), pile.path)}` : null) : keptFolder !== undefined ? `move:${keptFolder}` : null;
+    const folderIntent = text ? `rename:${freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text }), pile.path)}` : null;
     await this.fence(seenPlace(f), f.id, folderIntent === null ? undefined : landing(f, folderIntent));
     const note = ix.file(join(pile.path, PILE_NOTE));
     // A note listed is the one this pile has: an id kept for an earlier create of it is no longer needed.
@@ -1088,25 +1111,7 @@ export class DriveVault implements VaultSource {
     const declared = f.folder && f.appProperties?.[PROP.declaration] ? await this.declarationOf(f, this.known(ix)) : null;
     if (note) await this.fence({ ...seenPlace(note), modifiedTime: note.modifiedTime }, note.id, landing(note, text ? { text } : declared ? { text: '' } : 'bin'));
     let folderPath = pile.path;
-    if (!f.folder) {
-      // A lone thing that gets a note becomes a pile folder; the pile keeps its id.
-      if (!text) return pile;
-      // A declared loose thing becomes an ordinary pile (TL-P2-31 amendment): its declaration copies go to the Bin
-      // first, so no device ever looks for it as a loose thing again.
-      for (const copy of await this.declarationCopiesOf(id, f)) {
-        await this.toBin(copy);
-        ix.drop(copy.id);
-      }
-      // Keep the conversion's original read with its create, in the existing holder. A retry uses its first intent.
-      const fresh = pendingFolder?.sent ?? sentAs(f.parents[0] ?? (await this.rootId()), freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text })));
-      this.intended.keep(folderKey, pendingFolder ?? { loose: f });
-      await this.intended.make(folderKey, this.drive, fresh, (made, sent) => makeFolder(this.drive, this.drive, { ...sent, props: { [PROP.pile]: id }, id: made }), async (folder) => {
-        folderPath = join('Inbox', folder.name);
-        ix.put(folder);
-        // The conversion's holder stays until its loose-file move lands, including a retry after a failed move.
-        ix.put(await this.once(f, `move:${folder.id}`, (op, fence) => this.drive.update(f.id, { addParent: folder.id, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}), appProperties: op }, { fence })));
-      });
-    } else if (text) {
+    if (text) {
       const name = freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text }), pile.path);
       if (name !== nameOf(pile.path)) {
         ix.put(await this.once(f, `rename:${name}`, (op, fence) => this.drive.update(f.id, { name, appProperties: op }, { fence })));

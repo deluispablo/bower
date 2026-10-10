@@ -304,13 +304,32 @@ export async function makeOnce(h: Holder, w: Pick<Makes, 'generateIds'>, fresh: 
   }
 }
 
+/** One pile conversion's first intent and its three landed steps (TL-P4-24 addendum 18). */
+interface Conversion {
+  loose: DriveFile;
+  text: string;
+  props: Record<string, string>;
+  folder: Holder & { landed?: DriveFile };
+  moved?: DriveFile;
+  note: Holder & { name: string; landed?: DriveFile };
+}
+
+/** The names and words chosen once, before the conversion's first send. */
+interface ConversionStart {
+  loose: DriveFile;
+  folder: Sent;
+  props: Record<string, string>;
+  noteName: string;
+  text: string;
+}
+
 /**
  * The memory port: what a person means to make, each kept by what is meant (its `key`) with the holder of its id until
  * it is settled. A try again after an answer lost and a read-back failed too is sent with the same id, so it makes one
  * file. There is no pool: each id is reserved for one create, when it is first tried.
  */
 export class Intended<H extends Holder = Holder> {
-  private readonly held = new Map<string, H>();
+  private readonly held = new Map<string, H & { conversion?: Conversion }>();
 
   /** The id kept for `key`, when an earlier try may have landed with its answer lost. */
   kept(key: string): string | undefined {
@@ -332,21 +351,56 @@ export class Intended<H extends Holder = Holder> {
     this.held.delete(key);
   }
 
-  /**
-   * One intended create kept in this page's memory, by its key (`makeOnce`), with what it was first sent as.
-   * When a following step completes the intent, keep its holder until that step succeeds too.
-   */
-  async make(this: Intended<Holder>, key: string, w: Pick<Makes, 'generateIds'>, fresh: Sent, create: (id: string, sent: Sent) => Promise<DriveFile>, finish?: (made: DriveFile) => Promise<void>): Promise<DriveFile> {
+  /** One intended create kept in this page's memory, by its key (`makeOnce`), with what it was first sent as. */
+  async make(this: Intended<Holder>, key: string, w: Pick<Makes, 'generateIds'>, fresh: Sent, create: (id: string, sent: Sent) => Promise<DriveFile>): Promise<DriveFile> {
     const h = this.held.get(key) ?? {};
     this.held.set(key, h);
     try {
       const made = await makeOnce(h, w, fresh, create);
-      await finish?.(made);
       this.held.delete(key);
       return made;
     } catch (e) {
-      // Create or following step still pending: the holder stays for the next try. A refused create lets it go.
+      // Create still pending: the holder stays for the next try. A refused create lets it go.
       if (h.reserved === undefined) this.held.delete(key);
+      throw e;
+    }
+  }
+
+  /** A refresh may list the half-made folder; the intent still names the original loose file. */
+  conversion(key: string): Conversion | undefined {
+    return this.held.get(key)?.conversion;
+  }
+
+  /**
+   * One held intent for folder, move and note. Both ids and first names stay until all three land. A retry reads
+   * creates by their reserved ids before sending anything, and the caller's stamped, fenced move skips its landing.
+   * Already confirmed steps are kept; the folder is still checked before moving into it or creating its note.
+   */
+  async convert(this: Intended<Holder>, key: string, w: Makes, reads: Gets, fresh: () => ConversionStart, move: (loose: DriveFile, folder: DriveFile) => Promise<DriveFile>): Promise<{ folder: DriveFile; loose: DriveFile; note: DriveFile }> {
+    let conversion = this.conversion(key);
+    if (!conversion) {
+      const first = fresh();
+      conversion = { loose: first.loose, text: first.text, props: first.props, folder: { sent: first.folder }, note: { name: first.noteName } };
+      this.held.set(key, { conversion });
+    }
+    try {
+      const { folder, note } = conversion;
+      await reserveFor(w, [folder, note]);
+      if (!folder.reserved || !folder.sent || !note.reserved) throw driveError('unknown');
+      // Set the note's place from the same reservation, before the first folder send; never from a refreshed listing.
+      note.sent ??= sentAs(folder.reserved, note.name, conversion.text);
+      const folderAt = { ...folder.sent, props: conversion.props, id: folder.reserved };
+      const there = await madeAt(reads, folderAt);
+      if (!there && folder.landed) throw notAsSeenError('gone', CHANGED_ELSEWHERE);
+      folder.landed = there ?? (await makeFolder(w, reads, folderAt));
+      conversion.moved ??= await move(conversion.loose, folder.landed);
+      const noteAt = { ...note.sent, id: note.reserved };
+      note.landed ??= (await madeAt(reads, noteAt, [conversion.text])) ?? (await makeText(w, reads, noteAt, conversion.text));
+      this.held.delete(key);
+      return { folder: folder.landed, loose: conversion.moved, note: note.landed };
+    } catch (e) {
+      // The existing terminal-refusal rule ends the intent; an unknown outcome keeps every step together.
+      if (releases(e, failureKind(e))) this.held.delete(key);
       throw e;
     }
   }
