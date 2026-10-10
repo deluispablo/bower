@@ -281,3 +281,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-10: d-v2-07 passes — feat(bird): d-v2-07 passes (P4-58h PASS, designer verified)
 - 2026-10-10: c4-sheet-settle passes — test(c4-sheet-settle): passes (P4-66 PASS)
 - 2026-10-10: c4-create-resume passes — fix(c4-create-resume): passes (P4-68 PASS)
+- 2026-10-10: c4-undo-compensate passes — fix(c4-undo-compensate): passes (P4-67, P4-67b PASS; designer verified)

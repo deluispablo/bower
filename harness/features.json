@@ -6395,7 +6395,7 @@
     "id": "c4-undo-compensate",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "Undo is the inverse forward change (TL-P4-27 addendum 2): under the outbox lock an unreserved line drops locally, otherwise the inverse forward line is recorded; the lock covers storing the reserved id before any send; sends go in order per folder; no journal file is ever deleted; no new kind, no fold, no tooLate.",
     "steps": [
