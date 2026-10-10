@@ -3,8 +3,10 @@
 // {{ placeholders }}, and logs an error for each; the runtime also reads
 // `sc-camel-<attr>`, which the browser ignores. Copy that the canvas keeps
 // but the app's copy rules do not allow is replaced too (COPY).
-// `--check` only says whether it is needed.
+// The page logic is plain JS: emit the same function body at fix time instead
+// of compiling a string in the browser. `--check` detects re-exports and drift.
 import { readFileSync, writeFileSync } from 'node:fs';
+import { Script } from 'node:vm';
 
 const file = new URL('../public/landing/index.html', import.meta.url);
 const html = readFileSync(file, 'utf8');
@@ -15,13 +17,36 @@ let fixed = html.replace(SVG_ATTRS, (_m, attr, value) => ` sc-camel-${attr}="${v
 for (const [from, to] of COPY) fixed = fixed.split(from).join(to);
 const n = (html.match(SVG_ATTRS) ?? []).length;
 const words = COPY.filter(([from]) => html.includes(from)).length;
+const supportFile = new URL('../public/landing/support.js', import.meta.url);
+const support = readFileSync(supportFile, 'utf8');
+const scripts = [...fixed.matchAll(/<script\b[^>]*\bdata-dc-script\b[^>]*>([\s\S]*?)<\/script\s*>/g)];
+if (scripts.length !== 1) throw new Error('Expected exactly one landing page script.');
+// The export's ze() applies no Babel/JSX transform (the separate x-import
+// loader does). Keep its three arguments and its return expression verbatim.
+const original = 'function ze(t){return new Function("DCLogic","StreamableLogic","React",t+`\n;return (typeof Component!=="undefined"&&Component)||undefined;`)(I,I,L())}';
+const start = '/* landing-precompiled:start */';
+const end = '/* landing-precompiled:end */';
+const source = scripts[0][1];
+const compiled = `${start}function ze(t){if(t!==${JSON.stringify(source)})throw new Error("Landing script changed; run scripts/fix-landing.mjs.");return(function(DCLogic,StreamableLogic,React){${source}\n;return (typeof Component!=="undefined"&&Component)||undefined;})(I,I,L())}${end}`;
+let old = original;
+if (support.includes(start)) {
+  const last = support.indexOf(end, support.indexOf(start));
+  if (last < 0) throw new Error('Incomplete precompiled landing script.');
+  old = support.slice(support.indexOf(start), last + end.length);
+}
+if (support.split(old).length !== 2) throw new Error('Unknown landing page-script loader; review the export before fixing it.');
+const fixedSupport = support.replace(old, () => compiled);
+// Parse the emitted asset without executing it; invalid new exports fail here.
+new Script(fixedSupport, { filename: 'landing/support.js' });
+const logic = fixedSupport !== support;
 if (process.argv.includes('--check')) {
-  if (n || words) {
-    console.error(`${n} placeholder attribute(s) the browser would parse, ${words} copy fix(es) to make: run node scripts/fix-landing.mjs`);
+  if (n || words || logic) {
+    console.error(`${n} placeholder attribute(s) the browser would parse, ${words} copy fix(es), ${Number(logic)} page script(s) needing precompilation: run node scripts/fix-landing.mjs`);
     process.exit(1);
   }
   console.log('landing ok');
 } else {
   writeFileSync(file, fixed);
-  console.log(`fixed ${n} attribute(s) and ${words} copy line(s)`);
+  writeFileSync(supportFile, fixedSupport);
+  console.log(`fixed ${n} attribute(s), ${words} copy line(s), and ${Number(logic)} page script(s)`);
 }

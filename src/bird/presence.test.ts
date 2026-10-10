@@ -34,8 +34,13 @@ it('the handle is set for the active bird, null for a still bird, and cleared on
   newer.unmount();
   expect(activeHandle()).toBeInstanceOf(BirdEngine);
 
-  // With "Bower moves" off the bird is still: no engine, no handle.
+  // TL-P4-26 point 3: keep the handle through the engine-time settle, then clear it.
+  const settling = activeHandle();
   act(() => usePrefs.setState({ birdMoves: false }));
+  expect(activeHandle()).toBe(settling);
+  act(() => frames.run(18));
+  expect(activeHandle()).toBe(settling);
+  act(() => frames.run(25));
   expect(activeHandle()).toBeNull();
   act(() => usePrefs.setState({ birdMoves: true }));
   expect(activeHandle()).toBeInstanceOf(BirdEngine);

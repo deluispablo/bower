@@ -1,11 +1,13 @@
 import { useRef } from 'react';
 import { BowerLayer, PoseBower, type BowerController, type Pose } from './Bower';
+import { react, REACTIONS, type Reaction, type ReactionKind } from './react';
 import { Button } from '@/ui/Button';
 
 const POSES: Pose[] = ['idle', 'wait', 'read', 'write', 'carry', 'proud', 'sleep', 'alarm', 'land'];
 
 /** An internal page to watch every pose and flight: /_bird. */
 export function BirdLab() {
+  const reaction = useRef<Reaction | null>(null);
   const stage = useRef<HTMLDivElement>(null);
   const bird = useRef<BowerController>(null);
   const spot = (id: string) => () => bird.current?.pointOn(stage.current?.querySelector(`[data-spot="${id}"]`) ?? null, 0.5) ?? { x: 0, y: 0 };
@@ -20,6 +22,14 @@ export function BirdLab() {
             <figcaption className="muted">{p}</figcaption>
           </figure>
         ))}
+      </div>
+      <h2 style={{ fontSize: 22, marginTop: 30 }}>Reactions</h2>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {(Object.keys(REACTIONS) as ReactionKind[]).map((kind) => (
+          <Button key={kind} size="sm" title={REACTIONS[kind]}
+            onClick={(event) => { reaction.current = react(kind, event.currentTarget); }}>{kind}</Button>
+        ))}
+        <Button size="sm" variant="ghost" onClick={() => reaction.current?.end()}>End reaction</Button>
       </div>
       <h2 style={{ fontSize: 22, marginTop: 30 }}>Flights</h2>
       <div ref={stage} style={{ position: 'relative', height: 300, marginTop: 10, borderRadius: 16, background: 'var(--bg-alt)' }}>

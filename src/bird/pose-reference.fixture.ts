@@ -16,6 +16,7 @@
  * Blink (5.2 s) is left out.
  */
 import type { Pose } from './Bower';
+import { REACTIONS, type ReactionKind } from './react';
 import { ACT_NAMES, POSE_NAMES, type ActName, type BirdEngine } from './engine';
 
 export type PartKey =
@@ -228,6 +229,33 @@ export function actProblems(name: ActName, samples: ReadonlyArray<Record<PartKey
   return problems;
 }
 
+/** Designer-signed reaction values. Angle/offset ranges are each value ±2. */
+export interface ReactionRef {
+  seconds: number;
+  parts: Partial<Record<PartKey, number[]>>;
+}
+export const REACTION_REFERENCE: Record<ReactionKind, ReactionRef> = {
+  yes: { seconds: 0.48, parts: { head: [18] } },
+  send: { seconds: 0.8, parts: { head: [18], jaw: [14] } },
+  no: { seconds: 0.42, parts: { head: [-14, 10] } },
+  duplicate: { seconds: 1, parts: { head: [-14], iris: [1.6] } },
+  'point-tidy': { seconds: 0.5, parts: { pitch: [10], tuft: [16], jaw: [0] } },
+  'drag-over': { seconds: 0.5, parts: { pitch: [6], tuft: [8], jaw: [14] } },
+  'moves-on': { seconds: 1.7, parts: { pitch: [-4, 4], tuft: [18, 8], head: [-10] } },
+  'moves-off': { seconds: 0.6, parts: { head: [0], eye: [1] } },
+  hide: { seconds: 0.5, parts: { wing: [-38] } },
+  done: { seconds: 3, parts: { pitch: [-4], tail: [-22], tuft: [16] } },
+  rule: { seconds: 1.2, parts: { dy: [-9] } },
+  bin: { seconds: 2.9, parts: { head: [-10], tuft: [18], iris: [1.6] } },
+  error: { seconds: 2.9, parts: { head: [-10], tuft: [18], iris: [1.6] } },
+  offline: { seconds: 1.5, parts: { head: [-10], tuft: [18] } },
+  'link-open': { seconds: 1.5, parts: { iris: [1.6] } },
+  'drop-folder': { seconds: 0.3, parts: { dy: [-9] } },
+  online: { seconds: 0.3, parts: { dy: [-9] } },
+  tap: { seconds: 0.6, parts: { dy: [-9], jaw: [14] } },
+  'task-done': { seconds: 0.4, parts: { jaw: [14] } },
+};
+
 /** The engine's named actions outside the act table, each with its reference row (TL-P4-22 addendum 20). */
 export type ActionName = 'startle';
 
@@ -250,14 +278,15 @@ export const ACTION_REFERENCE: Partial<Record<ActionName, ActionRef>> = {
 
 /**
  * Every public member of the engine, and how its motion is checked. `acts`
- * and `poses` are checked name by name (ACT_REFERENCE, POSE_REFERENCE); an
+ * and `poses` are checked name by name (ACT_REFERENCE, POSE_REFERENCE);
+ * `reactions` dispatches every REACTIONS kind through REACTION_REFERENCE; an
  * `action` names its ACTION_REFERENCE row; `script` is a layer script step
  * (the court's flights, pecks and displays), and `control` moves nothing.
  * A new public member fails to compile until it is listed here. A `script` or
  * `control` label is not an exemption: the member must also be on
  * EXEMPT_MEMBERS (TL-P4-22 addendum 21).
  */
-export type EngineMember = 'control' | 'script' | 'acts' | 'poses' | { action: ActionName };
+export type EngineMember = 'control' | 'script' | 'acts' | 'poses' | 'reactions' | { action: ActionName };
 
 export const ENGINE_MEMBERS: Record<keyof BirdEngine, EngineMember> = {
   speed: 'control',
@@ -273,6 +302,7 @@ export const ENGINE_MEMBERS: Record<keyof BirdEngine, EngineMember> = {
   busy: 'control',
   settled: 'control',
   act: 'acts',
+  play: 'reactions',
   interrupt: 'control',
   then: 'control',
   wait: 'control',
@@ -335,6 +365,9 @@ export function unreferencedMembers(
       const [dispatcher, names, rows] = kind === 'acts' ? (['act', ACT_NAMES, ACT_REFERENCE] as const) : (['setPose', POSE_NAMES, POSE_REFERENCE] as const);
       if (member !== dispatcher) missing.push(`${member}: ${kind}, but not the ${kind === 'acts' ? 'act' : 'pose'} dispatcher, so no reference row`);
       else missing.push(...names.filter((n) => !Object.hasOwn(rows, n)).map((n) => `${member}('${n}')`));
+    } else if (kind === 'reactions') {
+      if (member !== 'play') missing.push(`${member}: reactions, but not the reaction dispatcher, so no reference row`);
+      else missing.push(...Object.keys(REACTIONS).filter((n) => !Object.hasOwn(REACTION_REFERENCE, n)).map((n) => `${member}('${n}')`));
     }
     else if (typeof kind === 'object' && !ACTION_REFERENCE[kind.action]) missing.push(`${member}: ${kind.action}`);
   }

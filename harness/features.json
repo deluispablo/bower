@@ -6382,15 +6382,17 @@
     "id": "d-v2-24a",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "One react(kind) port in src/bird mapping each BowerMap reaction to engine actions (nod, tilt, lean, startle, settle, shake, wave), within 0.1 s via interrupt now, flights keep the latest, reduced motion and moves off respected.",
     "steps": [
       "Each kind queues its engine action.",
       "A reaction starts within 0.1 s; during a flight only the latest plays on landing."
     ],
-    "verify": "",
-    "note": "TL-P4-21 ruling 4 (24a, Opus, escalated); spec d-v2-24; bower-map.md. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-d-v2-24a-packet.md."
+    "verify": "pnpm exec vitest run src/bird -t \"apply has exactly one call site|settle begin clears every engine-toggled animated CSS class|a real tap on loaded Home goes through|a pose change during the moves-off settle waits until release|during moves-off gaze moves only the iris|turns first, then moves-off reaches x-scale|Settings draws the closing settle|a reaction starts within 0.1 s and cuts the running one|with moves off only the settle runs|a layer keeps its home position across moves-off release|rule carries the paper from the hop start\" && bash scripts/e2e-both.sh e2e/bird-engine.spec.ts -g \"a tap goes through react\"",
+    "note": "TL-P4-21 ruling 4 (24a, Opus, escalated); spec d-v2-24; bower-map.md. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-d-v2-24a-packet.md.",
+    "design": "verified",
+    "review": "P4-79 PASS (round 4); rule fix 4209d72f gated, designer verified"
   },
   {
     "id": "c4-undo-compensate",
@@ -6586,7 +6588,7 @@
     "id": "landing-csp",
     "task": "p4-production",
     "category": "security",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "The landing runs without unsafe-eval: fix-landing.mjs precompiles the exported page script, --check catches an export that still needs eval, and the /landing/* CSP drops unsafe-eval (P4-E landing-csp).",
     "steps": [
@@ -6594,7 +6596,9 @@
       "The landing loads under its CSP with no violation."
     ],
     "verify": "pnpm exec vitest run src/landing-csp.test.ts -t \"fix-landing removes the runtime eval from an export|the landing CSP has no unsafe-eval\"",
-    "note": "P4-E (TL-P4-31 ruling 2). Codex, then a Claude review and the designer. Packet 2026-10-10-landing-csp-packet.md. implementer: codex."
+    "note": "P4-E (TL-P4-31 ruling 2). Codex, then a Claude review and the designer. Packet 2026-10-10-landing-csp-packet.md. implementer: codex.",
+    "design": "verified",
+    "review": "P4-80 PASS"
   },
   {
     "id": "c5-test-margin",
@@ -6659,16 +6663,44 @@
     "id": "c5-css-tokens",
     "task": "p4-defects",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "Every var() in src CSS names a defined custom property (a guard test); the two var(--muted) uses become var(--text-muted) (DEFECTS css-unknown-token).",
     "steps": [
       "The guard fails on any undefined var() name.",
       "The empty-note line and the Bower waits line use --text-muted."
     ],
-    "verify": "pnpm exec vitest run src/styles/css-tokens.test.ts -t \"every var() in src CSS names a defined custom property\"",
-    "note": "DEFECTS css-unknown-token (lead ruling, designer). Codex, then a Claude review and the designer contrast check (verified 92feaf2b; re-check after merge). implementer: codex.",
+    "verify": "pnpm exec vitest run src/styles/css-tokens.test.ts -t \"in src CSS names a defined custom property\"",
+    "note": "DEFECTS css-unknown-token (lead ruling, designer). Codex, then a Claude review and the designer contrast check (verified 92feaf2b; re-check after merge). implementer: codex. Designer re-verified the merged box on claude/p3 b56e8ec2 (375, 1440).",
     "review": "P4-78 PASS",
     "design": "verified"
+  },
+  {
+    "id": "create-named",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "ui": false,
+    "what": "Naming a new thing has one home: createNamed(folder, name) in file-actions, which NameSheet uses with no behaviour change (DEFECTS new-folder-first-letters, ruling (b), entry 1).",
+    "steps": [
+      "createNamed calls vault.create(folder, folder, name) once and reports a refusal with NameSheet's sentence.",
+      "NameSheet behaves as before."
+    ],
+    "verify": "",
+    "note": "DEFECTS new-folder-first-letters (b). Codex, then a Claude review. Packet 2026-10-10-create-named-packet.md. implementer: codex."
+  },
+  {
+    "id": "tree-name-first",
+    "task": "p4-consolidation",
+    "category": "fix",
+    "passes": false,
+    "ui": true,
+    "what": "The tree's New folder (row menu and header) opens the name box before any await and creates once with the name, so no typed letter is lost (DEFECTS new-folder-first-letters, ruling (b), entry 2).",
+    "steps": [
+      "Typing at once after New folder keeps every letter (20/20).",
+      "Escape makes nothing; blur with a name makes it once; a failed create keeps the name."
+    ],
+    "verify": "",
+    "note": "After create-named. Codex red, Codex implementation, Claude review, designer check once (rows signed 2026-10-10). Packet 2026-10-10-tree-name-first-packet.md. Closes create-name-speed."
   }
 ]
