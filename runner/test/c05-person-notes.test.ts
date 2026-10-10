@@ -575,7 +575,7 @@ describe('C05 person notes through runner main', () => {
         rows = [expect.objectContaining({ why: OVERFLOW })];
       } else if (reason === 'missing Timeline') c.folder[PATH] = (c.folder[PATH] ?? '').replace(/## Timeline[\s\S]*$/, '');
       else {
-        c.folder[PATH] = (c.folder[PATH] ?? '').replace('- 2026-09-12 · Planted garlic.', '* September: planted garlic.');
+        c.folder[PATH] = (c.folder[PATH] ?? '').replace('- 2026-09-12 · Planted garlic.', 'September: planted garlic.');
         rows = [expect.objectContaining({ fileId: expect.any(String), why: UNREADABLE })];
       }
       const r = await runWithClaude(c, reply((_ctx, source) => ({ kind: 'tidy-intent', v: 1,
