@@ -1033,3 +1033,7 @@ its log is `tmp-logs/fix1-e2e-unlocked.log`. Both gate runs were repeated throug
 No test, contract bound or gate was weakened. No git write command was run.
 left out: full-check/e2e completion (sandbox server-listen EPERM); commits and integration
 (coordinator-owned); the unrelated minor plan.ts archive path.
+
+tests changed: runner/test/c05-person-notes.test.ts: red repairs 1-5 per the lead's smoke-request-slow rulings (pending location, own-run read, hand restores are a v1 limit, archive move after pending); per-assertion lines above.
+tests changed: runner/test/corpus-driver.test.ts: red round 5 (TL-P4-51): driver replay is a redispatch of the same run, never a hand restore.
+tests changed: runner/test/corpus-run.ts: red round 5 (TL-P4-51): addRequest({kind:"replay"}) no longer copies archived JSON into changes/.
