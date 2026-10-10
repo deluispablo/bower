@@ -409,3 +409,5 @@ p4-corpus-answers,reviewer (delta),claude,bower-reviewer,,2,38655,,,,,,6,0.4,PAS
 shell-page-column,implementer (fix round 1),codex,gpt-5-codex,high,2,879893,867790,,808832,12103,,,,P4-75 findings fixed,2026-10-10
 p4-c09-prep,drafter,codex,gpt-5-codex,medium,1,1061004,1051265,,892160,9739,,,,3 cases + doc,2026-10-10
 p4-c10-prep,drafter,codex,gpt-5-codex,medium,1,1011256,999928,,910976,11328,,,,3 cases + doc,2026-10-10
+shell-page-column,implementer (fix round 2),codex,gpt-5-codex,medium,3,519941,514085,,463232,5856,,,,ruled nits + drag guard,2026-10-10
+d-v2-24a,red (round 3),codex,gpt-5-codex,high,1,2095904,2079522,,1999104,16382,,,,resize + one apply() site,2026-10-10
