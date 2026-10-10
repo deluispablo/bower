@@ -1751,3 +1751,7 @@ Exact red/green verify names (all three pass after the change):
 - upload-sign-out-forget: addendum 11: successful retry forgets an upload added after failed sign-out
 - upload-sign-out-forget: addendum 11: every never-known sign-out attempt purges the same every-account scope
 - upload-sign-out-forget: addendum 11: a retried offline sign-out still purges only the last known account
+
+## Close (coordinator, 2026-10-11)
+
+known-green: every red was proved failing at its own tests-only commit (fix round 3 2da027eb, cc32a1b5, 1460ec96, 9427f824; addenda 9-11 9cae726c, 3b40b7ad, eac33b26, 00167580) and passes at HEAD; later rounds touched the same lines, so a single-commit revert cannot isolate them. Codex pass 7 PASS, P4-102 and P4-103 PASS, designer verified U3 (1621f004); check green, e2e app demo 31 / fake 33.
