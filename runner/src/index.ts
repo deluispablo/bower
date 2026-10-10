@@ -1,9 +1,12 @@
 /** Derived maintenance uses the manifest, its settled outcomes and the ordinary fenced effects. */
 import { sha256Hex } from '../../src/data/contracts/hashes';
+import { parseNote } from '../../src/data/contracts/note-format';
+import { parseOwnership } from '../../src/data/contracts/ownership-format';
 import type { EffectV2, Maintain, MaintenanceNote, SeenFile, VerifiedContent } from '../../src/data/contracts/run-manifest';
 import type { DriveFile } from '../../src/data/drive/drive-api';
 import { driveEffects, type Effects, type Settled } from '../../src/data/spine/engine';
 import { refreshed, retrievalSummary } from '../../src/data/spine/report';
+import { limiter, READ_AHEAD } from '../../src/data/spine/read';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { happened, reserveFor, stampOf, type Holder } from '../../src/data/spine/write-once';
 import { BowerError } from '../../src/data/types';
@@ -89,12 +92,7 @@ async function cursorOnly(drive: RunnerDrive, manifest: RunManifest, old: DriveF
 }
 const rawHash = (text: string): Promise<string> => sha256Hex(new TextEncoder().encode(text));
 
-/** Freeze declared inputs and reserved ids in the existing immutable manifest. */
-export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest): Promise<RunManifest> {
-  const rootId = manifest.scope.rootId;
-  let listing = await drive.planReads().listAll(rootId);
-  let ix = VaultIndex.build(rootId, listing);
-  const old = ix.file(SYSTEM.retrieval);
+async function readState(drive: RunnerDrive, rootId: string, old: DriveFile | undefined): Promise<RetrievalState | undefined> {
   let state: RetrievalState | undefined;
   if (old) {
     const text = await drive.readListedText(old);
@@ -119,10 +117,74 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
         && 'createdTime' in f && typeof f.createdTime === 'string')) state.listing = ancestry as DriveFile[];
     }
   }
-  const notesIn = (index: VaultIndex) => [...index.entries()].flatMap(([path]) => {
-    const f = index.file(path);
-    return f && !f.folder && path.endsWith('.md') && path.split('/')[0] !== 'Inbox' ? [{ path, file: f }] : [];
-  });
+  return state;
+}
+
+const notesIn = (index: VaultIndex) => [...index.entries()].flatMap(([path]) => {
+  const f = index.file(path);
+  return f && !f.folder && path.endsWith('.md') && path.split('/')[0] !== 'Inbox' ? [{ path, file: f }] : [];
+});
+
+/** Both projections read the same versions through B1a's cache; MOC discovery keeps full ownership bytes. */
+async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: RetrievalState | undefined, drop: (id: string) => void, prefix = false): Promise<Notes> {
+  const limit = limiter(prefix ? READ_AHEAD : 1);
+  const entries = await Promise.all(notesIn(ix).map(({ path, file: f }) => limit(async (): Promise<Array<readonly [string, MaintenanceNote]>> => {
+    const cached = state?.files[f.id];
+    let text: string | null;
+    let full = !prefix || f.appProperties?.by === 'bower' || cached?.moc !== undefined;
+    try {
+      const discover = cached?.moc === undefined && cached?.mocChecked !== true && f.appProperties?.by === 'bower';
+      text = cached?.version === f.modifiedTime && !discover ? null : full ? await drive.readListedText(f) : await drive.readPrefix(f);
+      if (!full && text !== null) {
+        const ownership = parseOwnership(new TextEncoder().encode(text));
+        const note = ownership.status === 'invalid' ? undefined : parseNote(path, text);
+        // A cut ownership frame must be validated against complete bytes, never accepted as a damaged note.
+        if (ownership.status === 'invalid' || (note?.byBower && note.properties.some((p) => p.key === 'type' && p.value === 'moc'))) {
+          text = await drive.readListedText(f);
+          full = true;
+        }
+      }
+    } catch (error) {
+      // Drive also reports a trashed media read as not-found; other failures still stop the run.
+      if (!(error instanceof BowerError) || error.code !== 'not-found') throw error;
+      console.error(error);
+      drop(f.id);
+      return [];
+    }
+    let entry: MaintenanceNote = cached?.version === f.modifiedTime ? { path, version: cached.version, summary: cached.summary, coverage: cached.coverage }
+      : { path, version: f.modifiedTime, summary: text === null ? '(no summary)' : retrievalSummary(path, text), coverage: { kind: 'prefix', bytes: 4096 } };
+    if ((full && text !== null) || cached?.mocChecked === true) entry = { ...entry, mocChecked: true };
+    // Optional metadata in an old retrieval file is never ownership authority: derive it again from its bytes.
+    const moc = text === null ? typeof cached?.moc?.text === 'string' && mocSnapshot(cached.moc.text) : mocSnapshot(text);
+    if (moc) entry = { ...entry, moc,
+      ...(text === null && Array.isArray(cached?.members) && cached.members.every((id) => typeof id === 'string')
+        ? { members: [...new Set(cached.members)] } : {}) };
+    return [[f.id, entry]];
+  })));
+  const snapshot: Notes = Object.fromEntries(entries.flat());
+  for (const [id, members] of mocMembership(snapshot)) {
+    const note = snapshot[id];
+    if (note) note.members = members;
+  }
+  return snapshot;
+}
+
+/** A cold plan receives the canonical projection in memory, without reserves or effects. */
+export async function planningIndex(drive: RunnerDrive, rootId: string): Promise<string | undefined> {
+  const ix = VaultIndex.build(rootId, await drive.planReads().listAll(rootId));
+  // A warm run keeps B1a's two discovery reads inside maintain, where they have always lived.
+  if (ix.file(SYSTEM.retrieval) && ix.file(SYSTEM.index)) return undefined;
+  const state = await readState(drive, rootId, ix.file(SYSTEM.retrieval));
+  return projectIndex(await snapshotNotes(drive, ix, state, (id) => ix.drop(id), true));
+}
+
+/** Freeze declared inputs and reserved ids in the existing immutable manifest. */
+export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest): Promise<RunManifest> {
+  const rootId = manifest.scope.rootId;
+  let listing = await drive.planReads().listAll(rootId);
+  let ix = VaultIndex.build(rootId, listing);
+  const old = ix.file(SYSTEM.retrieval);
+  const state = await readState(drive, rootId, old);
   // An empty first run has neither indexed changes nor effects to settle.
   if (!state && !notesIn(ix).length && !manifest.operations.length) return manifest;
   const feed = state ? await drive.listChanges(state.cursor) : undefined;
@@ -166,33 +228,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
   if (state && ix.file(SYSTEM.index) && !changes.length && !manifest.operations.length) {
     return old ? cursorOnly(drive, manifest, old, state, cursor) : manifest;
   }
-  const snapshot: Notes = {};
-  for (const { path, file: f } of notes) {
-    const cached = state?.files[f.id];
-    let text: string | null;
-    try {
-      const discover = cached?.moc === undefined && cached?.mocChecked !== true && f.appProperties?.by === 'bower';
-      text = cached?.version === f.modifiedTime && !discover ? null : await drive.readListedText(f);
-    } catch (error) {
-      // Drive also reports a trashed media read as not-found; other failures still stop the run.
-      if (!(error instanceof BowerError) || error.code !== 'not-found') throw error;
-      console.error(error);
-      drop(f.id);
-      continue;
-    }
-    snapshot[f.id] = cached?.version === f.modifiedTime ? { path, version: cached.version, summary: cached.summary, coverage: cached.coverage }
-      : { path, version: f.modifiedTime, summary: text === null ? '(no summary)' : retrievalSummary(path, text), coverage: { kind: 'prefix', bytes: 4096 } };
-    if (text !== null || cached?.mocChecked === true) snapshot[f.id] = { ...snapshot[f.id] as MaintenanceNote, mocChecked: true };
-    // Optional metadata in an old retrieval file is never ownership authority: derive it again from its bytes.
-    const moc = text === null ? typeof cached?.moc?.text === 'string' && mocSnapshot(cached.moc.text) : mocSnapshot(text);
-    if (moc) snapshot[f.id] = { ...snapshot[f.id] as MaintenanceNote, moc,
-      ...(text === null && Array.isArray(cached?.members) && cached.members.every((id) => typeof id === 'string')
-        ? { members: [...new Set(cached.members)] } : {}) };
-  }
-  for (const [id, members] of mocMembership(snapshot)) {
-    const note = snapshot[id];
-    if (note) note.members = members;
-  }
+  const snapshot = await snapshotNotes(drive, ix, state, drop, !state || !ix.file(SYSTEM.index));
   listing = [...files.values()];
   const own = ix.file(SYSTEM.dir);
   if (!own?.folder) throw unavailable();

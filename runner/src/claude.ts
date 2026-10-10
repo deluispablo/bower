@@ -332,7 +332,7 @@ function inStableOrder(piles: Shown['piles']): Shown['piles'] {
 function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
   return [
     promptInstructions(!!shown.folderCandidates),
-    JSON.stringify({ runId: run.runId, admission: took.taken.id, piles: inStableOrder(shown.piles), notes: shown.notes, folders: shown.folders, ...(shown.folderCandidates ? { folderCandidates: shown.folderCandidates } : {}), ...(shown.rules ? { rules: shown.rules } : {}), ...(shown.answers?.length ? { answers: shown.answers } : {}) }),
+    JSON.stringify({ runId: run.runId, admission: took.taken.id, ...(run.index !== undefined ? { index: run.index } : {}), piles: inStableOrder(shown.piles), notes: shown.notes, folders: shown.folders, ...(shown.folderCandidates ? { folderCandidates: shown.folderCandidates } : {}), ...(shown.rules ? { rules: shown.rules } : {}), ...(shown.answers?.length ? { answers: shown.answers } : {}) }),
   ].join('\n');
 }
 

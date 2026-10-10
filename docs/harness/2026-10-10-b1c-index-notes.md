@@ -1144,3 +1144,122 @@ node ../node_modules/vitest/vitest.mjs run test/b1-index.test.ts --maxWorkers=2 
 Offline reference reused: [Vitest setup files](https://vitest.dev/config/setupfiles), already
 recorded above; the existing real-main corpus helper, mutation observer and snapshot-string
 inspection were reused. No external source was fetched.
+
+
+## Addendum 9
+
+Implementation session, 2026-10-11, TL-P4-41 addendum 9 / finding 4.
+**Finding 4 is implemented in the worktree; delivery is blocked by seven unchanged test contracts below.**
+No test, fixture, golden, numerical bound or method verdict was edited. No writing git command or commit was run.
+The coordinator owns commits. This section supersedes Fix round 1's lifecycle blocker, not its earlier evidence.
+
+### Changes and reused mechanisms
+
+- `runner/src/index.ts` now exposes `planningIndex`: bootstrap or missing-index plans project the canonical
+  index in memory before invoking the provider. It uses the current listing, existing retrieval entries,
+  shared snapshot discovery, `projectIndex`, `mocMembership` and B1a's versioned read cache.
+- The same snapshot helper supplies maintain. Ordinary cold summaries use `readPrefix`; MOC discovery and
+  ownership frames cut by the prefix still require complete cached bytes through the existing parser.
+  A prefix never becomes full-content evidence. Missing reads use the existing not-found/drop handling.
+- Cold snapshot reads use the existing `READ_AHEAD` limiter (8), retaining listing order in the assembled
+  snapshot. Warm maintenance preserves serial snapshot reads and its original discovery phase:
+  when both stored projections exist, planning does not consume retrieval's maintenance read.
+- `runner/src/main.ts` calls the projection before constructing/invoking the planning provider.
+  `ScriptedRun.index` is optional in-memory context; `runner/src/claude.ts` includes it in the real provider's
+  JSON input. There is no fabricated Drive file, new durable format, alternate parser or preparation manifest.
+- `withMaintenance` still freezes inputs in the one immutable manifest. The existing final maintain effect
+  persists index.md and retrieval.json, followed by the existing report barrier. Both finding-4 cases prove
+  no Drive mutation at provider entry, manifest-first writes, final-maintain placement, one persistence of
+  each projection, and one total ordinary-note read shared by planning and maintain.
+
+removed: cold provider invocation before the canonical in-memory index is computed.
+removed: the separate inline snapshot loop in withMaintenance; both projections share snapshotNotes.
+removed: ordinary cold projection full downloads where a cached prefix is sufficient.
+tests changed: none
+
+### Compatibility
+
+| Contract | Compatibility / resulting behaviour |
+| --- | --- |
+| Retrieval v1, index bytes and immutable maintain manifests | Same existing formats and guards; no new preparation record or lifecycle. |
+| Provider run context | Optional index text only for bootstrap/missing-index plans; existing callers can omit it. |
+| B1a warm discovery and MOC discovery | Existing two/three-call discovery contracts and all B1a tests pass. |
+| Long ownership notes and MOCs | Full framing is still validated; a cut prefix is never mistaken for complete ownership bytes. |
+| Read cache | The original id/modifiedTime cache and prefix/text kinds remain unchanged; live fences remain fresh. |
+
+### TL-P4-51: every remaining contradicting test
+
+The entire runner suite ran after the final source change. These are all seven failures; there are no
+other assertion, import, runtime or setup failures. None was changed or bypassed. The two model-input
+fixtures are bootstrap runs without stored projections. Their exact old JSON lacks the index required
+by addendum 9. The five count failures pin the pre-addendum cold-run counts: two genuine prefix reads
+now precede planning, while maintain reuses them. Full provider text reads remain separate from prefix
+reads as B1a's cache contract requires. Warm discovery, recovery, hidden-path and report-barrier tests pass.
+
+| Test | File:line | Contradiction / final evidence |
+| --- | --- | --- |
+| `C05 bounded reads: golden: 50 archived requests and 25 kept runs cost no historical media` | `runner/test/c05-bounded-reads.test.ts:268`; shared assertion `:262` | Bootstrap baseline pins 20 reads; required cold projection makes 22. |
+| `C05 bounded reads: pending: a clash moves by run id and retries only its bound evidence` | `runner/test/c05-bounded-reads.test.ts:302`; baseline call `:305`, shared assertion `:262` | Same bootstrap baseline pins 20 reads; actual 22. |
+| `the C04 run makes the golden number of Drive calls per step` | `runner/test/drive-calls-golden.test.ts:25` | Exact total 88; actual 90 with the two cold source-prefix reads. |
+| `with 25 earlier runs a run makes 99 Drive calls` | `runner/test/drive-calls-golden.test.ts:80` | Its first C04-control assertion pins 88; actual 90. Later assertions are not reached. |
+| `the model input on the C04 fixture equals its golden copy` | `runner/test/model-input-fingerprint.test.ts:81` | Exact normalized provider input excludes the required bootstrap index. |
+| `the raw model input on the C04 fixture equals its golden copy` | `runner/test/model-input-fingerprint.test.ts:92` | Exact raw provider input excludes the required bootstrap index. |
+| `the timing line counts calls and bytes per phase and names the region` | `runner/test/timing-counts.test.ts:13` | Exact sum 88; actual 90 with the required cold reads. |
+
+Stopped under TL-P4-51 after listing the complete sweep. The lead owns reconciliation of these frozen
+expectations with the permitted cold-read delta and required provider context; this worker cannot edit tests.
+No weakened number, omitted index context, cache-evidence promotion or fixture-specific branch was added.
+
+### Verification
+
+- Pre-fix committed red reproduced: **23 pass, 2 assertion reds**, in `/tmp/b1c-a9-red.json`.
+  Exact cases: `B1c fix 1: 4 bootstrap plans with the in-memory index` and
+  `B1c fix 1: 4 missing-index plans with the in-memory index`.
+  Both failed at `runner/test/b1-index.test.ts:748` (index absent in provider input) and `:750` (no pre-plan note read).
+- Final `runner/test/b1-index.test.ts`: **25/25 pass**, including both exact finding-4 cases and all earlier controls.
+- Final full runner: **617 pass, 7 fail, 624 total; 46 files**. Final report/log:
+  `/tmp/b1c-a9-verified-runner.json`, `/tmp/b1c-a9-verified-runner.log`.
+- Both `reads-report.test.ts` timing bounds pass unchanged after using B1a's bounded cold read concurrency.
+- Requested `pnpm exec vitest run src/data --maxWorkers=2`: **4,178 pass, zero fail; 79 files**.
+  `/tmp/b1c-a9-data.json`, `/tmp/b1c-a9-data.log`.
+- App, node and runner tsc: **pass**. ESLint on all four touched production files: **pass**.
+  Logs: `/tmp/b1c-a9-tsc-app.log`, `/tmp/b1c-a9-tsc-node.log`, `/tmp/b1c-a9-verified-tsc-runner.log`,
+  `/tmp/b1c-a9-eslint-app.log`, `/tmp/b1c-a9-verified-eslint-runner.log`.
+- Read-only `git diff --check`: **pass**. Source/test/fixture byte audit has zero mismatches:
+  `/tmp/b1c-a9-source-audit.log`. No test changes appear in the worktree diff.
+- No pnpm check/e2e claim: the user specified narrower gates, no screen changed, and pnpm check's repository
+  mark would violate the session's test-write restriction.
+
+All final checks ran against exact source copies in `/private/tmp/b1c-a9-verify-fqucn31r`.
+The real installed dependency directories were copied into that fresh OS-temp tree, never replacing or
+symlinking a worktree node_modules directory. Configs, caches, runner builds, corpus scratch files, test
+fixture repositories, reports and logs stay in OS temp. The runner's new-instance test uses an OS-temp
+build wrapper over the installed esbuild binary; its git fixtures are disposable OS-temp repositories.
+
+Launcher incident: a pnpm probe in the earlier disposable verification tree ignored temporary `.npmrc`
+offline/verification settings and began automatic dependency setup, producing failed registry DNS requests.
+It was interrupted immediately on inspection; no download succeeded. This did affect that old temporary
+dependency copy, so it was not reused. The original worktree dependencies were untouched. The installed
+pnpm 11 binary reads these settings from `pnpm-workspace.yaml`: the final temp tree sets
+`verifyDepsBeforeRun: false`, `offline: true`, and `managePackageManagerVersions: false` there.
+Its installed-command probe and the requested real pnpm exec data invocation then completed without
+setup or registry access. Evidence: `/tmp/b1c-a9-pnpm-probe.log`, `/tmp/b1c-a9-pnpm-probe2.log`.
+No external research page was fetched.
+
+Final commands (cwd in the final OS-temp tree; runner commands in its `runner/`):
+
+```sh
+PATH=/private/tmp/b1c-a9-verify-fqucn31r/bin:$PATH node ../node_modules/vitest/vitest.mjs run --maxWorkers=2 --config=../runner-config.mjs --configLoader=runner --reporter=json --outputFile=/tmp/b1c-a9-verified-runner.json > /tmp/b1c-a9-verified-runner.log 2>&1
+/opt/homebrew/bin/pnpm exec vitest run src/data --maxWorkers=2 --config=data-config.mjs --configLoader=runner --reporter=json --outputFile=/tmp/b1c-a9-data.json > /tmp/b1c-a9-data.log 2>&1
+node node_modules/typescript/bin/tsc --noEmit -p tsconfig.app.json > /tmp/b1c-a9-tsc-app.log 2>&1
+node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json > /tmp/b1c-a9-tsc-node.log 2>&1
+node ../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json > /tmp/b1c-a9-verified-tsc-runner.log 2>&1
+node node_modules/eslint/bin/eslint.js src/data/spine/scripted.ts > /tmp/b1c-a9-eslint-app.log 2>&1
+node ../node_modules/eslint/bin/eslint.js src/index.ts src/main.ts src/claude.ts > /tmp/b1c-a9-verified-eslint-runner.log 2>&1
+```
+
+Offline research reused the existing ReadCache's versioned/prefix evidence contract and the established
+`READ_AHEAD` limiter, canonical index builder, MOC projection and ownership parser. Packet reference URLs
+were reused, not fetched: [ECMAScript stable sort](https://tc39.es/ecma262/#sec-array.prototype.sort),
+[Obsidian internal links](https://help.obsidian.md/links), and
+[Vitest setup files](https://vitest.dev/config/setupfiles).

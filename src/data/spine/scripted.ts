@@ -2878,6 +2878,8 @@ export async function runKeys(runId: string): Promise<(kind: string) => string> 
 
 /** Who a scripted run is: its folder, its id, and whether it may look things up on the web. */
 export interface ScriptedRun {
+  /** The canonical index rebuilt in memory for a bootstrap or missing-index plan. */
+  index?: string;
   context?: OwnershipContext;
   rootId: string;
   runId: string;

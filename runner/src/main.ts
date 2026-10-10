@@ -59,7 +59,7 @@ import { runnerReads } from './spine/records';
 import { keepFinishedAtEnd } from './spine/retention';
 import { repairRules } from './rules-repair';
 import { RunTiming } from './timing';
-import { withMaintenance, maintenanceEffects } from './index';
+import { planningIndex, withMaintenance, maintenanceEffects } from './index';
 
 export { RunnerDrive, type RunnerDriveOptions } from './drive';
 export { RunnerToken, isStaleAttempt, type RunnerTokenOptions, type TokenGrant } from './token';
@@ -382,8 +382,11 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
       ...(opts.fetch ? { fetch: opts.fetch } : {}),
       ...(opts.pacing ? { pacing: opts.pacing } : {}),
       provider: (drive, rootId, context) => {
-        const provider = providerFor(name, drive, { rootId, runId, allowWeb, context }, { env, timing, ...(opts.claude ? { spawn: opts.claude } : {}) });
-        return async (admitted) => withMaintenance(drive, await provider(admitted));
+        return async (admitted) => {
+          const index = await planningIndex(drive, rootId);
+          const provider = providerFor(name, drive, { rootId, runId, allowWeb, context, index }, { env, timing, ...(opts.claude ? { spawn: opts.claude } : {}) });
+          return withMaintenance(drive, await provider(admitted));
+        };
       },
       timing,
       effects: (drive, context) => driveEffects(drive, context, maintenanceEffects(drive)),
