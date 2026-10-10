@@ -35,6 +35,7 @@ The lead keeps this file current under [TL-P2-43](2026-10-06-tl-p2-43-session-st
   - after about 8 sends, tell the owner.
 - **Session rule:** never clear this session; the owner compacts by hand ([TL-P2-45](2026-10-06-tl-p2-45-manual-compact.md)). After a compaction, re-read this file.
 - **Recurring duties:**
+  - Keep the coordinator watchdog cron running (lead brief, TL-P4-46 addendum 1); after a compaction, check CronList and re-create it if missing.
   - Measure tokens per batch with `npx ccusage session`, reporting cache reads and cost by session, and log the lead's own row in `harness/tokens.csv` through the coordinator.
   - After every three comparable entries, compare medians with [token-baseline.md](token-baseline.md), fill its measurements table and add a refinement line ([TL-P2-44](2026-10-06-tl-p2-44-enforced-token-method.md)).
   - Keep `DECISIONS.md` to one line per ruling.
