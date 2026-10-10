@@ -822,3 +822,84 @@ No external lookup was made under the owner's no-network instruction.
 
 compatibility: tests only; no stored format, parser or production behavior changed.
 left out: implementation, additional findings, full suites, pnpm check, e2e, shared harness state, git writes and commits.
+
+## Round 4 implementation (escalated)
+
+Claude (bower-escalated), on the round-4 reds at `946eae84`. Only `src/data/spine/scripted.ts` changed. No test, fixture
+or corpus file changed. No commits, network, server, e2e or push. Logs under `/tmp/c05-r4e/`.
+
+**Status: blocked on one contract conflict in ruling (1)** (below). Rulings (2) and (3) are green; the data harm of
+(1) is fixed (no second append, no second completion); only the "not admitted / not captured" assertions stay red.
+
+### Changes per ruling (TL-P4-32 addendum 3)
+
+1. **(b) Settled requests stay settled.** `journalOf` marks a line `archived` when the same record id is already in
+   `changes/archive` (`archivedRecords`: an archived file sharing the line's name is read; its record id decides, so
+   no read happens unless a copy was restored). `settleRequest` treats such a request as completed for every note:
+   it binds nothing, plans no line and records no completion, whatever the age of the run records, and the run
+   archives it again. The crash case (completed, archive move lost) needed no change: the retained checkpoint's
+   `completedAppends` already settles it with no second append and archives it next run (the round-4 red's recovery
+   half was green at HEAD and stays green). No ledger was added. settleRequest already archives in the same
+   settlement that records completion (the request's archive waits for its append edits).
+2. **Pending binds by ids.** A request with a retained pending line (`!applied`, not completed) is bound only by the
+   persisted `targetFileId`, never by its words' titles. A target still listed (any name, any folder) gets the retry,
+   its citation the bound source id's current name (existing `retries`). A target gone or in the Bin gets a
+   "Left as you wrote them" row with the existing `ASK_GONE` why and its last path, and the request is archived.
+   A new note with the old title is never bound. One request per note still holds on the persisted target id.
+   The gone row has no source of this run, so it rides the request's one archive row: rows with no filed source are
+   now folded into that row (`withArchive`). Before, such a row was its own contribution on the archive move, which
+   `grounded` refuses (an archive move has exactly one row): the whole run would have been refused.
+3. **One settlement path.** Journal admission of a request: `settlement.owned` (it names a note or waits on a line)
+   decides by `settlement.admitted`; the scripted provider's generic `d.request` admits only requests settleRequest
+   does not own (lookups and comparisons that name no note). The younger request naming a busy note is no longer
+   captured or archived on the scripted path.
+
+removed: `!!d.request ||` as an admission of every request (scripted.ts journal filter).
+removed: the separate history retry loop after title binding (retries are now bound inside the per-request loop).
+removed: a no-source leftAsWritten row as its own contribution on the archive move.
+tests changed: none.
+
+### The contract conflict (needs the lead)
+
+`round 4 1` (replay half) and the amended `fix 1 finding 4` require a hand-restored copy of an archived request to be
+left out of admission (`replay.requests`) and of the capture journal. Implemented first as an admission filter in
+`plan.ts` (same `archivedRecords` check), it turned these existing tests red, all of which require the restored copy
+to be admitted and run (`/tmp/c05-r4e/runner.log`):
+- `runner/test/corpus-driver.test.ts`: "replays the original request id separately from a new tidy-up",
+  "reports a restored replay and a newly written tidy-up separately" (C09 replay, admission requests = change-1);
+- corpus `harness/corpus/c05-note-not-written-by-bower` run 2 (replay alone must produce a report), through
+  `corpus.test.ts` scorer, `c05-incorporation.test.ts` and `C05 person notes: corpus first append ...`;
+- `C05 person notes: fix 1 finding 2` (replay at press 24 must leave verified run records).
+A replay with nothing else to take has no run unless the restored line is admitted, so both cannot hold. The filter
+was reverted; the restored copy is admitted and captured, and settles as a no-op (bytes exact, no completion).
+Addendum 3 itself puts a hand restore outside supported use (TL-P4-39 addendum 2). Options for the lead: drop the
+three restored-copy admission/capture assertions (lines 795, 798 and fix 1 finding 4's exclusion), or amend the
+corpus-driver replay tests, the c05 corpus case and fix 1 finding 2.
+
+### New findings (not fixed, non-Blocking)
+
+- The planner context (`runner/src/claude.ts`) still lists a pending request's title-matched notes (a replacement
+  note with the old title is shown though it can take no line). Harmless: no consent is given.
+- A pending line older than the twenty retained runs falls back to title binding (no persisted binding is read).
+- `retries` drop a line whose bound source is gone, and the request then waits each run (pre-existing).
+
+### Verification
+
+- Before: `/tmp/c05-r4e/base-reds.log` 4 failed (the round-4 reds and fix 1 finding 4).
+- `pnpm exec vitest run src/data --maxWorkers=2`: 76 files / 3,871 pass (`app-2.log`).
+- `pnpm -C runner exec vitest run --maxWorkers=2`: 371 pass, 2 fail (`runner-3.log`): round 4 1 (assertions at lines
+  795 and 798, admission and capture of the restored copy) and fix 1 finding 4 (admission exclusion). Round 4 2,
+  round 4 3 and every other test pass.
+- tsc app, node, runner: pass. ESLint on scripted.ts: pass. `git diff --check`: pass.
+- `pnpm check` (once, under with-lock, `check.log`): app 159 files / 5,171 pass; runner fails only the 2 above, so
+  the later steps did not run.
+
+### Compatibility row draft (coordinator)
+
+| Commit | Entry | What it changes for the accepted app's files |
+| --- | --- | --- |
+| `946eae84` | c05-person-notes | none: tests only (round 4 reds, TL-P4-32 addendum 3). |
+| `FIXSHA` | c05-person-notes | none: no stored shape changes. A waiting append retries on its stored target and source ids; a request already archived binds nothing again. |
+
+Sources: Drive files resource and ids (https://developers.google.com/drive/api/reference/rest/v3/files),
+RFC 9110 If-Match (https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.1); local RunRecords and grounding.
