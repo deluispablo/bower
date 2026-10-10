@@ -355,5 +355,153 @@ describe('C05 person notes through runner main', () => {
     expect(replay.after[PATH]).toBe(resumed.after[PATH]);
     assertPersonal(replay);
   });
-});
 
+  it('C05 person notes: fix 1 finding 1: overflow blocks owned and personal note writes', async () => {
+    await positiveControl();
+    const c = await fixture();
+    const paths = [PATH, 'Areas/Home/Shed roof.md', 'Areas/Home/Apple tree.md', 'Areas/Home/Pond liner.md'];
+    for (const path of paths) c.folder[path] = c.folder[PATH] ?? '';
+    const owned = paths[1] ?? '';
+    c.bowerOwned = [owned]; c.folder[owned] = (c.folder[owned] ?? '').replace('summary:', 'by: bower\nsummary:');
+    const within = structuredClone(c);
+    const words = 'Update Garden plot, Shed roof and Apple tree from this letter.';
+    within.journal = [{ kind: 'request', text: words }];
+    const control = await runWithClaude(within, reply((_ctx, source) => ({ ...filing(source),
+      lines: paths.slice(0, 3).map((note) => ({ note, text: NEWS, cites: source })) })));
+    for (const path of paths.slice(0, 3)) expect(control.after[path]).toContain(NEWS);
+    c.journal = [{ kind: 'request', text: 'Update Garden plot, Shed roof, Apple tree and Pond liner from this letter.' }];
+    const r = await runWithClaude(c, reply((_ctx, source) => ({ ...filing(source),
+      lines: paths.map((note) => ({ note, text: NEWS, cites: source })) })));
+    expect(reportOf(r).filed).toHaveLength(1);
+    expect(reportOf(r).leftAsWritten).toEqual([expect.objectContaining({ why: OVERFLOW })]);
+    expect.soft(reportOf(r).updated).toEqual([]);
+    for (const path of paths) expect.soft(r.after[path]).toBe(c.folder[path]);
+  });
+
+  it('C05 person notes: fix 1 finding 2: a conflicted append survives twenty newer runs and retries its filed source', async () => {
+    await positiveControl();
+    const c = await fixture();
+    const drive = fixedDrive(); const root = await seedCase(drive, c);
+    const noteId = (await drive.listAll(root)).find((f) => f.name === 'Garden plot.md')?.id ?? '';
+    let clashes = 0;
+    const around: NonNullable<Parameters<typeof runOnDrive>[3]['around']> = (fetch) => async (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      const response = await fetch(input, init);
+      const body = init?.body ? await new Response(init.body).text() : '';
+      if (init?.method === 'POST' && url.pathname === '/upload/drive/v3/files' && body.includes('run-manifest')) {
+        const file = await drive.get(noteId);
+        const text = await drive.readText(noteId);
+        await drive.writeText(noteId, text.replace('## My words\n', `## My words\nAlex reminder ${++clashes}.\n`), file.modifiedTime);
+      }
+      return response;
+    };
+    let r = await runOnDrive(c, drive, root, { claude: appendReply(), around }, 1);
+    const source = idOf(r, `Areas/Home/${SOURCE}`);
+    expect(source).toBeTruthy(); expect(clashes).toBe(1);
+    const retry = reply(() => ({ kind: 'tidy-intent', v: 1, things: [], lines: [{ note: PATH, text: NEWS, cites: source }] }));
+    r = await runOnDrive(c, drive, root, { claude: retry, around }, 2);
+    // Positive retry control: the next manifest really carries the same binding and captured place.
+    const retryManifest = Object.entries(r.after).find(([path]) => path.includes('/abc123-run1-2/manifest-'));
+    expect(retryManifest?.[1]).toContain('"sourceFileId":"' + source + '"');
+    expect(clashes).toBe(2);
+    for (let press = 3; press <= 22; press++) r = await runOnDrive(c, drive, root, { claude: retry, around }, press);
+    expect(clashes).toBe(22);
+    expect(Object.keys(r.after).some((path) => path.includes('/abc123-run1/manifest-'))).toBe(false);
+    const fresh = r.after[PATH] ?? '';
+    const final = await runOnDrive(c, drive, root, { claude: retry }, 23);
+    expect(final.after[PATH]).toBe(fresh.replace('- 2026-10-07 · The committee will replace the shared water butt.',
+      `- 2026-10-07 · The committee will replace the shared water butt.\n- 2026-10-07 · ${NEWS} · [[${SOURCE}]]`));
+    expect(reportOf(final).updated).toEqual(expect.arrayContaining([expect.objectContaining({ path: PATH, what: APPENDED })]));
+    assertPersonal(final);
+  }, 30_000);
+
+  it('C05 person notes: fix 1 finding 3: article-equivalent titles stay ambiguous in context and writes', async () => {
+    await positiveControl();
+    const c = await fixture(); const second = 'Projects/Garden/The Garden plot.md';
+    c.folder[second] = c.folder[PATH] ?? '';
+    const shown: Context[] = [];
+    const r = await runWithClaude(c, reply((_ctx, source) => ({ ...filing(source),
+      lines: [PATH, second].map((note) => ({ note, text: NEWS, cites: source })) }), shown));
+    expect(reportOf(r).filed).toHaveLength(1);
+    expect.soft(shown[0]?.notes.map((n) => n.path)).not.toContain(PATH);
+    expect.soft(shown[0]?.notes.map((n) => n.path)).not.toContain(second);
+    expect.soft(reportOf(r).leftAsWritten).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fileId: idOf(r, PATH), why: whyDuplicate('Areas / Home') }),
+      expect.objectContaining({ fileId: idOf(r, second), why: whyDuplicate('Projects / Garden') }),
+    ]));
+    for (const path of [PATH, second]) expect.soft(r.after[path]).toBe(c.folder[path]);
+    expect(reportOf(r).updated).toEqual([]); expect(questionsOf(r)).toEqual([]);
+  });
+
+  async function addNextSource(r: CaseRun, withRequest: boolean): Promise<string> {
+    const inboxId = idOf(r, 'Inbox') ?? '';
+    const source = await r.drive.createText(inboxId, 'Next water butt update.txt', 'Alex received the next committee letter.', { pile: 'next-pile' });
+    if (withRequest) await r.drive.createText(idOf(r, SYSTEM.changes) ?? '', 'change-2.json', JSON.stringify({
+      v: 1, id: 'change-2', device: 'device-1', at: Date.UTC(2026, 9, 7, 10), kind: 'request',
+      what: 'Asked Bower to update Garden plot', text: 'Update Garden plot from the next committee letter.' }));
+    return source.id;
+  }
+  const nextReply = (source: string, text: string) => reply(() => ({ kind: 'tidy-intent', v: 1,
+    things: [{ fileId: source, to: 'Areas/Home', name: 'Next water butt update.txt' }], lines: [{ note: PATH, text, cites: source }] }));
+
+  it('C05 person notes: fix 1 finding 4: a completed replay cannot consume the new request for the same note', async () => {
+    await positiveControl();
+    const c = await fixture(); const drive = fixedDrive(); const root = await seedCase(drive, c);
+    const first = await runOnDrive(c, drive, root, { claude: appendReply() }, 1);
+    expect(first.after[PATH]).toContain(` · ${NEWS} · [[${SOURCE}]]`);
+    const source = await addNextSource(first, true);
+    const text = 'Alex has received the new instructions.';
+    const r = await runOnDrive(c, drive, root, { request: { kind: 'replay', id: 'change-1' }, claude: nextReply(source, text) }, 2);
+    expect(r.requests?.map((q) => q.id)).toEqual(expect.arrayContaining(['change-1', 'change-2']));
+    expect(reportOf(r).filed).toHaveLength(1);
+    expect(r.after[PATH]).toContain(` · ${text} · [[Next water butt update.txt]]`);
+    expect(r.after[PATH]?.split(` · ${NEWS}`).length).toBe(2);
+    assertPersonal(r);
+  });
+
+  it('C05 person notes: fix 1 finding 5: an already-present bound append completes the request before replay', async () => {
+    await positiveControl();
+    const c = await fixture();
+    c.folder[PATH] = (c.folder[PATH] ?? '').trimEnd() + `\n- 2026-10-07 · ${NEWS} · [[${SOURCE}]]\n`;
+    const drive = fixedDrive(); const root = await seedCase(drive, c);
+    const first = await runOnDrive(c, drive, root, { claude: appendReply() }, 1);
+    expect(first.after[PATH]).toBe(c.folder[PATH]);
+    expect(reportOf(first).filed).toHaveLength(1); expect(reportOf(first).updated).toEqual([]);
+    const source = await addNextSource(first, false);
+    const r = await runOnDrive(c, drive, root, { request: { kind: 'replay', id: 'change-1' },
+      claude: nextReply(source, 'The same requested update has different wording now.') }, 2);
+    expect(reportOf(r).filed).toHaveLength(1);
+    expect(r.after[PATH]).toBe(first.after[PATH]);
+    expect(reportOf(r).updated).toEqual([]); assertPersonal(r);
+  });
+
+  it('C05 person notes: fix 1 finding 8: an unrelated filing failure preserves the filed source refusal row', async () => {
+    await positiveControl();
+    const c = await fixture(); c.folder[PATH] = (c.folder[PATH] ?? '').replace(/## Timeline[\s\S]*$/, '');
+    const control = await runWithClaude(c, appendReply());
+    expect(reportOf(control).leftAsWritten).toEqual([expect.objectContaining({ why: NO_TIMELINE, fileId: idOf(control, PATH) })]);
+    const unrelated = 'Unrelated letter.txt';
+    c.inbox.push({ line: '', files: [unrelated] }); c.inboxFiles[unrelated] = 'Alex received an unrelated letter.';
+    const drive = fixedDrive(); const root = await seedCase(drive, c);
+    const unrelatedId = (await drive.listAll(root)).find((f) => f.name === unrelated)?.id ?? '';
+    let refused = 0;
+    const r = await runOnDrive(c, drive, root, { claude: reply((_ctx, source) => ({ kind: 'tidy-intent', v: 1,
+      things: [{ fileId: source, to: 'Areas/Home', name: SOURCE }, { fileId: unrelatedId, to: 'Areas/Home', name: unrelated,
+        note: { name: 'Unrelated letter.md', summary: 'Alex received an unrelated letter.', body: 'Alex received an unrelated letter.' } }],
+      lines: [{ note: PATH, text: NEWS, cites: source }] })), around: (fetch) => async (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      const response = await fetch(input, init);
+      const body = init?.body ? await new Response(init.body).text() : '';
+      if (!refused && init?.method === 'POST' && url.pathname === '/upload/drive/v3/files' && body.includes('run-manifest')) {
+        refused++;
+        // B's move must fail its real name/place fence; A's independently succeeds.
+        await drive.update(unrelatedId, { name: 'Unrelated letter, mine.txt' });
+      }
+      return response;
+    } }, 1);
+    expect(refused).toBeGreaterThan(0); expect(reportOf(r).filed).toHaveLength(1);
+    expect(r.after[`Areas/Home/${SOURCE}`]).toBe(c.inboxFiles[SOURCE]);
+    expect(r.after[PATH]).toBe(c.folder[PATH]); expect(reportOf(r).updated).toEqual([]);
+    expect(reportOf(r).leftAsWritten).toEqual([expect.objectContaining({ why: NO_TIMELINE, fileId: idOf(r, PATH) })]);
+  });
+});

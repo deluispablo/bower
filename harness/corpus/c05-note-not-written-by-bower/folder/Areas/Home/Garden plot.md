@@ -14,4 +14,3 @@ Alex keeps a handwritten planting diary.  Leave its spacing alone.
 ## Timeline
 - 2026-09-12 · Planted garlic.
 - 2026-10-07 · The committee will replace the shared water butt.
-

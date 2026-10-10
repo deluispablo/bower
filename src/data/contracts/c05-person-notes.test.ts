@@ -64,4 +64,26 @@ describe('C05 person notes author admission', () => {
     expect(applyChanges(source, [change], fetched())).toEqual({ ok: true, text: after, bytes: enc(after) });
     expect(source).toEqual(enc(text));
   });
+
+  it('C05 person notes: fix 1 finding 6: a granted state change preserves untouched mixed-ending bullet bytes', () => {
+    positiveControl();
+    const before = NOTE.replace('- Keep the shared water butt.\r\n',
+      '- Keep the shared water butt.\n- Alex grows garlic.  \n');
+    const change: Change = { kind: 'state-rewrite', recordIds: ['answer-1'],
+      previous: ['Keep the shared water butt.', 'Alex grows garlic.  '],
+      lines: ['Return the shared water butt.', 'Alex grows garlic.'], granted: { answer: 'answer-1', mark: null } };
+    const uniform = before.replace(/(?<!\r)\n/g, '\r\n');
+    const control = uniform.replace('Keep the shared water butt.', 'Return the shared water butt.');
+    expect(applyChanges(enc(uniform), [change], fetched())).toEqual({ ok: true, text: control, bytes: enc(control) });
+    const after = before.replace('Keep the shared water butt.', 'Return the shared water butt.');
+    expect(applyChanges(enc(before), [change], fetched())).toEqual({ ok: true, text: after, bytes: enc(after) });
+  });
+
+  it('C05 person notes: fix 1 finding 7: a valid Timeline in plain Markdown admits the bound append', () => {
+    positiveControl();
+    expect(applyChanges(enc(NOTE), [append()], fetched())).toEqual({ ok: true, text: AFTER, bytes: enc(AFTER) });
+    const before = NOTE.slice(NOTE.indexOf('## Current state'));
+    const after = AFTER.slice(AFTER.indexOf('## Current state'));
+    expect(applyChanges(enc(before), [append()], fetched())).toEqual({ ok: true, text: after, bytes: enc(after) });
+  });
 });
