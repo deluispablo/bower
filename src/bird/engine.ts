@@ -555,9 +555,17 @@ export class BirdEngine {
    */
   private startle(): void {
     this.endAct();
-    this.S.doing = this.makeStartle();
-    this.S.doing.el = 0;
+    this.doNow(this.makeStartle());
     this.H.gaze = 0;
+  }
+  /**
+   * Puts an act on the act channel and claims its channels at once, so no write
+   * between now and its first frame (a chirp, the mind) can reach them.
+   */
+  private doNow(a: Action): void {
+    a.el = 0;
+    this.S.doing = a;
+    this.claim(a);
   }
   /** One arrival-based step; an alarm keeps the reached values instead of returning through rest. */
   private makeStartle(holdAlarm = false): Action {
@@ -604,9 +612,7 @@ export class BirdEngine {
   act(name: ActName): void {
     if (!this.minded() || this.asleep) return;
     this.endAct();
-    const a = this.makeAct(name);
-    a.el = 0;
-    this.S.doing = a;
+    this.doNow(this.makeAct(name));
     this.doing = name;
   }
   private endAct(): void {
@@ -646,9 +652,8 @@ export class BirdEngine {
     this.eyeOpen = null;
     this.motion = request.kind === 'moves-off' ? 'settling' : 'live';
     this.reaction = request;
-    this.S.doing = this.makeAct(request.kind, request, waking);
+    this.doNow(this.makeAct(request.kind, request, waking));
     this.asleep = false;
-    this.S.doing.el = 0;
   }
   private updateReaction(dt: number): void {
     const a = this.S.doing;
@@ -690,6 +695,8 @@ export class BirdEngine {
     let fromParts = Object.fromEntries(Object.entries(C).map(([name, c]) => [name, c.v])) as Record<SpringName, number>;
     let fromHeadY = B.headY;
     let fromTuftY = B.tuftY;
+    let fromOpacity = B.opacity;
+    let fromGirth = B.girth;
     /** The still frame the settle is heading for; a pose change restarts the settle from where the bird is. */
     let settlingTo = this.pose;
     const proud = kind === 'done' ? this.makeShowOff({ tail: -22, wing: 0, tuft: 16, head: 0,
@@ -815,26 +822,42 @@ export class BirdEngine {
               fromParts = Object.fromEntries(Object.entries(C).map(([name, c]) => [name, c.v])) as Record<SpringName, number>;
               fromHeadY = B.headY;
               fromTuftY = B.tuftY;
+              fromOpacity = B.opacity;
+              fromGirth = B.girth;
             }
             const q = 1 - Math.pow(1 - clamp(clock / 0.6, 0, 1), 3);
             const still = this.pose;
             const head = this.settings ? 8 : still === 'sleep' ? 20 : 0;
             const tuft = still === 'sleep' ? -26 : still === 'alarm' ? 18 : still === 'wait' ? 8 : 0;
+            const eye = this.settings ? 0.08 : 1;
+            const h = this.home();
+            /** Every value the settle draws, with its still frame: the settle is done only when all of them arrive. */
+            const targets: Array<readonly [number, number]> = [];
+            const ease = (from: number, to: number): number => {
+              const v = from + (to - from) * q;
+              targets.push([v, to]);
+              return v;
+            };
             for (const name of Object.keys(C) as SpringName[]) {
               const target = name === 'squash' || name === 'legs' || name === 'face' ? 1 :
                 name === 'tuft' ? tuft : name === 'ix' ? IRIS_REST.x : 0;
-              pin(C[name], fromParts[name] + (target - fromParts[name]) * q);
+              pin(C[name], ease(fromParts[name], target));
             }
             this.H.t = fromHead + (head - fromHead) * q;
-            this.eyeOpen = fromEye + ((this.settings ? 0.08 : 1) - fromEye) * q;
-            B.headY = fromHeadY + ((still === 'sleep' ? 3 : 0) - fromHeadY) * q;
-            B.tuftY = fromTuftY + ((still === 'alarm' ? -2 : 0) - fromTuftY) * q;
+            this.eyeOpen = ease(fromEye, eye);
+            B.headY = ease(fromHeadY, still === 'sleep' ? 3 : 0);
+            B.tuftY = ease(fromTuftY, still === 'alarm' ? -2 : 0);
+            B.opacity = ease(fromOpacity, 1);
+            B.girth = ease(fromGirth, -0.7);
             B.ws += (1 - B.ws) * q;
-            B.x = fromX + (this.home().x - fromX) * q;
-            B.y = fromY + (this.home().y - fromY) * q;
+            targets.push([B.ws, 1]);
+            B.x = ease(fromX, h.x);
+            B.y = ease(fromY, h.y);
             B.hopY = 0;
-            // Done on arrival at the still frame: the head moves by its profile, so it may still be on its way at 0.6 s.
-            const arrived = Math.abs(this.H.v - head) <= 0.01 && Math.abs(this.H.vel) * FRAME <= 0.01;
+            // The head moves by its profile, so it may still be on its way at 0.6 s: it must be there and at rest.
+            targets.push([this.H.v, head]);
+            const arrived = Math.abs(this.H.vel) * FRAME <= 0.01 &&
+              targets.every(([v, to]) => Math.abs(v - to) <= 0.01);
             if (clock >= 0.6 - 1e-9 && arrived) {
               this.motion = 'still';
               this.notifyStill = true;
