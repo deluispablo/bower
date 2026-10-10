@@ -15,6 +15,7 @@ interface ReactionRequest {
   kind: ReactionKind;
   at?: Point;
   ended: boolean;
+  endedAt?: number;
   started: number;
 }
 
@@ -135,8 +136,10 @@ const follow = (
   h.vel = s / dt;
 };
 
+type Channel = SpringName | 'head' | 'gazeHead' | 'hop' | 'wingScale' | 'bob' | 'eye';
+
 interface Action {
-  ownsHead?: boolean;
+  channels?: readonly Channel[];
   el?: number;
   start?(): void;
   /** Returns true when done. */
@@ -302,6 +305,26 @@ const beat = (ups: number[], downs: number[], up: number, down: number, end: num
   );
 
 export class BirdEngine {
+  /** Claims survive action completion until this frame has been drawn. */
+  private owners = new Map<Channel, Action>();
+  private writer: Action | null = null;
+  private chirpOwner: Action | null = null;
+  private hopOwner: Action | null = null;
+  /** The one ownership check for every mind write, including delegated hop/chirp steps. */
+  private mayWrite(channel: Channel, writer: Action | null = null): boolean {
+    const owner = this.owners.get(channel);
+    return !owner || owner === writer;
+  }
+  private claim(a: Action): void {
+    for (const channel of a.channels ?? []) this.owners.set(channel, a);
+  }
+  private updateAction(a: Action, el: number, dt: number): boolean {
+    this.claim(a);
+    const previous = this.writer;
+    this.writer = a;
+    try { return a.update(el, dt); }
+    finally { this.writer = previous; }
+  }
   private C: Record<SpringName, Spring> = {
     tail: spring(0, 420, 14),
     wing: spring(0, 520, 22),
@@ -539,13 +562,13 @@ export class BirdEngine {
   /** One arrival-based step; an alarm keeps the reached values instead of returning through rest. */
   private makeStartle(holdAlarm = false): Action {
     const from = this.C.tuft.v;
+    const restTuft = this.pose === 'wait' ? 8 : 0;
     let hold = -1;
     let fall = 0;
     this.S.startleRising = true;
     return {
-      ownsHead: true,
+      channels: ['head', 'gazeHead', 'tuft', 'face', 'hop'],
       update: (el, dt) => {
-        const restTuft = this.C.tuft.t;
         if (hold < 0 && el >= STARTLE.rise && !this.S.startleRising) hold = 0;
         else if (hold >= 0) hold += dt;
         if (hold < STARTLE.seconds || holdAlarm) {
@@ -554,6 +577,7 @@ export class BirdEngine {
           return holdAlarm && hold >= STARTLE.seconds;
         }
         fall += dt;
+        this.H.t = 0;
         pin(this.C.tuft, STARTLE.tuft + (restTuft - STARTLE.tuft) * smooth(fall / STARTLE.fall));
         return fall >= STARTLE.fall;
       },
@@ -602,7 +626,7 @@ export class BirdEngine {
     this.S.quietT = this.S.t;
     if (kind !== 'moves-off' && kind !== 'moves-on' && !this.pose && !this.reaction && (this.busy || this.B.carrying)) this.S.pending = request;
     else this.beginReaction(request);
-    return { end: () => { request.ended = true; } };
+    return { end: () => { request.ended = true; request.endedAt ??= this.S.t; } };
   }
   private beginReaction(request: ReactionRequest): void {
     if (request.ended) return;
@@ -629,14 +653,14 @@ export class BirdEngine {
   private updateReaction(dt: number): void {
     const a = this.S.doing;
     if (!a) return;
-    this.rest(this.pose === 'wait' ? 'wait' : 'idle');
-    this.C.pitch.t = 0;
-    this.C.squash.t = 1;
-    this.C.legs.t = 1;
+    this.rest(this.pose === 'wait' ? 'wait' : 'idle', a);
+    if (this.mayWrite('pitch', a)) this.C.pitch.t = 0;
+    if (this.mayWrite('squash', a)) this.C.squash.t = 1;
+    if (this.mayWrite('legs', a)) this.C.legs.t = 1;
     this.H.gaze = 0;
     this.gaze(dt, null);
     a.el = (a.el ?? 0) + dt;
-    if (a.update(a.el, dt)) {
+    if (this.updateAction(a, a.el, dt)) {
       this.endAct();
       this.poseT0 = this.S.t;
       this.poseCycle = -1;
@@ -675,10 +699,23 @@ export class BirdEngine {
     const part = (name: SpringName, keys: ReadonlyArray<readonly [number, number]>): void => {
       pin(C[name], angle([[0, starting(name)], ...keys.slice(1)]));
     };
+    // The composite writes the rest baseline as well as its keyed parts.
+    const channels: Channel[] = ['head', 'gazeHead', 'hop',
+      ...(Object.keys(C) as SpringName[]).filter((name) => name !== 'ix' && name !== 'iy')];
+    switch (kind) {
+      case 'duplicate': case 'link-open': case 'bin': case 'error':
+        if (at) channels.push('ix', 'iy');
+        break;
+      case 'moves-off':
+        channels.push('ix', 'iy', 'wingScale', 'bob', 'eye');
+        break;
+    }
     return {
+      channels,
       update: (_el, dt) => {
         if (!startleDone && startle) {
           startleClock += dt;
+          // The composite owns its substep; it never enters the layer queue.
           startleDone = startle.update(startleClock, dt);
           if (startleDone) startle.end?.();
           return false;
@@ -703,7 +740,7 @@ export class BirdEngine {
           case 'point-tidy':
           case 'drag-over': {
             if ((request.ended || this.S.t - request.started >= 10) && ending < 0) {
-              ending = clock;
+              ending = clock - (this.S.t - Math.min(request.endedAt ?? Infinity, request.started + 10));
               for (const name of ['pitch', 'tuft', 'jaw'] as const) partEnds[name] = C[name].v;
             }
             const q = ending < 0 ? smooth(clock / 0.2) : 1 - smooth((clock - ending) / 0.25);
@@ -751,6 +788,7 @@ export class BirdEngine {
           case 'rule':
             if (clock <= dt + 1e-9) {
               B.hopKick = 0.16;
+              this.hopOwner = this.writer;
               if (kind === 'tap') {
                 this.chirp(0.3);
                 C.squash.vel += 2;
@@ -764,6 +802,7 @@ export class BirdEngine {
             }
             return clock >= (kind === 'tap' ? 0.6 : 0.3);
           case 'moves-off': {
+            B.bob = 0;
             const q = 1 - Math.pow(1 - clamp(clock / 0.6, 0, 1), 3);
             const still = this.pose;
             const head = this.settings ? 8 : still === 'sleep' ? 20 : 0;
@@ -815,6 +854,7 @@ export class BirdEngine {
       case 'snap': {
         const to = this.random() < 0.5 ? -12 : 7;
         return {
+          channels: ['head'],
           update: (el) => {
             this.H.t = to;
             return el >= 0.6;
@@ -823,6 +863,7 @@ export class BirdEngine {
       }
       case 'flick':
         return {
+          channels: ['tail'],
           update: (el) => {
             pin(C.tail, keyed(el, [[0, 0], [0.12, -14], [0.3, 4], [0.48, 0]], true));
             return el >= 0.48;
@@ -830,6 +871,7 @@ export class BirdEngine {
         };
       case 'chirp':
         return {
+          channels: ['jaw'],
           update: (el) => {
             C.jaw.t = el < 0.16 ? 14 : 0;
             return el >= 0.3;
@@ -838,6 +880,7 @@ export class BirdEngine {
       case 'wing':
         // The wing's target held at -10 for 0.22 s.
         return {
+          channels: ['wing'],
           update: (el) => {
             pin(C.wing, keyed(el, [[0, 0], [0.05, -10], [0.27, -10], [0.35, 0]], true));
             return el >= 0.35;
@@ -846,6 +889,7 @@ export class BirdEngine {
       case 'preen':
         // Head to the wing, 38 -> 42 -> 38 twice, the iris down; never the body's girth.
         return {
+          channels: ['head', 'iy'],
           update: (el) => {
             this.H.t = keyed(el, [[0, 0], [0.15, 38], [0.3, 42], [0.45, 38], [0.6, 42], [0.75, 38], [0.9, 0]], true);
             C.iy.t = el < 0.75 ? 1.2 : 0;
@@ -854,6 +898,7 @@ export class BirdEngine {
         };
       case 'look':
         return {
+          channels: ['ix'],
           update: (el) => {
             C.ix.t = el < 0.4 ? -2.2 : 1;
             return el >= 0.8;
@@ -913,11 +958,18 @@ export class BirdEngine {
     return this.enqueue({ update: (el) => el >= seconds });
   }
   chirp(d = 0.4): void {
+    this.chirpOwner = this.writer;
+    if (this.writer) {
+      this.writer.channels = [...this.writer.channels ?? [], 'jaw', 'tuft'];
+      this.claim(this.writer);
+    }
     this.S.chirpT = d;
     this.S.chirpLength = d;
     this.C.tuft.vel -= 120;
   }
   private turn(): void {
+    if (!this.mayWrite('face') || !this.mayWrite('hop')) return;
+    this.hopOwner = null;
     this.B.face *= -1;
     this.C.squash.vel += 1.6;
     this.B.hopKick = 0.16;
@@ -1231,6 +1283,9 @@ export class BirdEngine {
     const elapsed = (ts - (this.last || ts)) / 1000;
     const dt = Math.min(0.033, elapsed);
     this.last = ts;
+    this.owners.clear();
+    if (this.S.doing) this.claim(this.S.doing);
+    if (this.S.action) this.claim(this.S.action);
     this.S.t += dt;
     this.think(dt);
     this.step(dt, elapsed);
@@ -1261,7 +1316,7 @@ export class BirdEngine {
     }
     if (S.action) {
       S.action.el = (S.action.el ?? 0) + dt * this.speed;
-      if (S.action.update(S.action.el, dt)) {
+      if (this.updateAction(S.action, S.action.el, dt)) {
         S.action.end?.();
         S.action = null;
         // A pending reaction owns the next frame before the script continues.
@@ -1410,15 +1465,15 @@ export class BirdEngine {
   }
 
   /** The rest frame the mind's acts play on: idle's, wait's (tuft up, iris centred) or a layer bird's. */
-  private rest(who: Minded): void {
+  private rest(who: Minded, writer: Action | null = null): void {
     const C = this.C;
-    this.H.t = 0;
-    C.tail.t = 0;
-    C.wing.t = 0;
-    C.tuft.t = who === 'wait' ? 8 : 0;
-    if (this.S.chirpT <= 0) C.jaw.t = 0;
-    C.ix.t = who === 'wait' ? 0 : IRIS_REST.x;
-    C.iy.t = IRIS_REST.y;
+    if (this.mayWrite('head', writer)) this.H.t = 0;
+    if (this.mayWrite('tail', writer)) C.tail.t = 0;
+    if (this.mayWrite('wing', writer)) C.wing.t = 0;
+    if (this.mayWrite('tuft', writer)) C.tuft.t = who === 'wait' ? 8 : 0;
+    if (this.mayWrite('jaw', writer) && this.S.chirpT <= 0) C.jaw.t = 0;
+    if (this.mayWrite('ix', writer)) C.ix.t = who === 'wait' ? 0 : IRIS_REST.x;
+    if (this.mayWrite('iy', writer)) C.iy.t = IRIS_REST.y;
   }
 
   /** One draw of the act table by weight; no snap or preen while input is recent. */
@@ -1454,8 +1509,8 @@ export class BirdEngine {
       this.sleepFrame(el - Math.floor(el));
       return;
     }
-    this.rest(who);
-    if (this.acts && !S.doing?.ownsHead) {
+    this.rest(who, S.doing);
+    if (this.acts && this.mayWrite('gazeHead')) {
       S.nextIdle -= dt;
       if (S.nextIdle <= 0) {
         S.nextIdle = this.rand(0.8, 2);
@@ -1465,9 +1520,9 @@ export class BirdEngine {
     const a = S.doing;
     if (a) {
       a.el = (a.el ?? 0) + dt;
-      if (a.update(a.el, dt)) this.endAct();
+      if (this.updateAction(a, a.el, dt)) this.endAct();
     }
-    this.gaze(dt, S.doing?.ownsHead ? null : who === 'layer' ? LAYER_HEAD : PERCHED_HEAD);
+    this.gaze(dt, this.mayWrite('gazeHead') ? who === 'layer' ? LAYER_HEAD : PERCHED_HEAD : null);
 
   }
 
@@ -1488,8 +1543,8 @@ export class BirdEngine {
       S.behindT = 0;
       // A working pose never rests its parts (`rest()`), so the iris goes back to its rest here.
       if (!head) {
-        C.ix.t = IRIS_REST.x;
-        C.iy.t = IRIS_REST.y;
+        if (this.mayWrite('ix')) C.ix.t = IRIS_REST.x;
+        if (this.mayWrite('iy')) C.iy.t = IRIS_REST.y;
       }
       return;
     }
@@ -1497,8 +1552,7 @@ export class BirdEngine {
     const eye = { x: B.x + (C.face.v * 20 * Z) / 100, y: B.y - (58 * Z) / 100 };
     const dx = (p.x - eye.x) * B.face;
     const dy = p.y - eye.y;
-    // A reaction or startle owns the body too: gaze may only move the iris.
-    if (dx < -30 && !this.reaction && !S.doing?.ownsHead) {
+    if (dx < -30 && this.mayWrite('face') && this.mayWrite('hop')) {
       S.behindT += dt;
       if (S.behindT > 0.5) {
         S.behindT = 0;
@@ -1522,25 +1576,29 @@ export class BirdEngine {
     const dx = (p.x - eye.x) * B.face;
     const dy = p.y - eye.y;
     const m = Math.hypot(dx, dy) || 1;
-    C.ix.t = 0.3 + 1.3 * dx / m;
-    C.iy.t = 1.4 * dy / m;
+    if (this.mayWrite('ix', this.writer)) C.ix.t = 0.3 + 1.3 * dx / m;
+    if (this.mayWrite('iy', this.writer)) C.iy.t = 1.4 * dy / m;
   }
 
   private step(dt: number, headDt: number): void {
     const C = this.C;
     const B = this.B;
     const S = this.S;
-    C.face.t = B.face;
+    if (this.mayWrite('face')) C.face.t = B.face;
     if (B.hopKick > 0) {
       B.hopKick -= dt;
-      B.hopY = -9 * Math.sin(Math.PI * (1 - Math.max(0, B.hopKick) / 0.16));
-      if (B.hopKick <= 0) B.hopY = 0;
+      if (this.mayWrite('hop', this.hopOwner)) {
+        B.hopY = -9 * Math.sin(Math.PI * (1 - Math.max(0, B.hopKick) / 0.16));
+        if (B.hopKick <= 0) B.hopY = 0;
+      }
     }
     if (S.chirpT > 0) {
       S.chirpT -= dt;
       const p = 1 - S.chirpT / S.chirpLength;
-      pin(C.jaw, keyed(p, [[0, 0], [0.2, 14], [0.53, 14], [1, 0]], true));
-      if (S.chirpT <= 0) C.jaw.t = 0;
+      if (this.mayWrite('jaw', this.chirpOwner)) {
+        pin(C.jaw, keyed(p, [[0, 0], [0.2, 14], [0.53, 14], [1, 0]], true));
+        if (S.chirpT <= 0) C.jaw.t = 0;
+      }
     }
     for (const name in C) {
       const c = C[name as SpringName];
@@ -1577,15 +1635,16 @@ export class BirdEngine {
     if (B.flying) {
       B.ph += dt * Math.PI * 2 * (B.flare ? 6 : 10);
       const s = Math.sin(B.ph);
-      C.wing.v = B.flare ? 62 + 18 * s : 26 + 46 * s;
-      B.ws = 0.8 + 0.25 * Math.cos(B.ph);
-      B.bob = -2.5 * s;
-      C.tail.t = B.flare ? 26 : -6 + 4 * s;
+      if (this.mayWrite('wing')) C.wing.v = B.flare ? 62 + 18 * s : 26 + 46 * s;
+      if (this.mayWrite('wingScale')) B.ws = 0.8 + 0.25 * Math.cos(B.ph);
+      if (this.mayWrite('bob')) B.bob = -2.5 * s;
+      if (this.mayWrite('tail')) C.tail.t = B.flare ? 26 : -6 + 4 * s;
     } else {
       // A perched pose draws its own wing beat.
-      if (!this.pose) B.ws += (1 - B.ws) * 0.2;
-      B.bob = 0;
+      if (!this.pose && this.mayWrite('wingScale')) B.ws += (1 - B.ws) * 0.2;
+      if (this.mayWrite('bob')) B.bob = 0;
     }
+    if (!this.mayWrite('eye')) return;
     S.nextBlink -= dt;
     if (this.asleep) {
       // Asleep, the eyes stay shut: no blink.
