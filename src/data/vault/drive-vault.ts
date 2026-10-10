@@ -1086,9 +1086,12 @@ export class DriveVault implements VaultSource {
     const conversionKey = `pile-conversion:${id}`;
     const pending = this.intended.conversion(conversionKey);
     // Resume the whole conversion before a refreshed folder can enter the ordinary edit branch.
-    const f = pending?.loose ?? (pile.path ? ix.file(pile.path) : undefined);
+    let f = pending?.loose ?? (pile.path ? ix.file(pile.path) : undefined);
     if (!f || !pile.path) throw new BowerError('not-found', 'That pile is already filed.');
-    if (pending || (!f.folder && text)) {
+    let pilePath = pile.path;
+    const converting = pending !== undefined || (!f.folder && text !== '');
+    if (converting) {
+      const loose = f;
       if (!pending) {
         await this.stillAsSeen(f);
         // A declared loose thing becomes an ordinary pile: its declaration copies go to the Bin first.
@@ -1097,9 +1100,9 @@ export class DriveVault implements VaultSource {
           ix.drop(copy.id);
         }
       }
-      const parent = f.parents[0] ?? (await this.rootId());
+      const parent = loose.parents[0] ?? (await this.rootId());
       const converted = await this.intended.convert(conversionKey, this.drive, this.drive, () => ({
-        loose: f,
+        loose,
         folder: sentAs(parent, freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text }))),
         props: { [PROP.pile]: id },
         noteName: PILE_NOTE,
@@ -1108,15 +1111,21 @@ export class DriveVault implements VaultSource {
       ix.put(converted.folder);
       ix.put(converted.loose);
       ix.put(converted.note);
-      this.emit();
-      return this.pile(id);
+      if (!pending || text === pending.text) {
+        this.emit();
+        return this.pile(id);
+      }
+      // The first intent has fully landed. Newer words now use the ordinary fenced note update below,
+      // with the note's landed modifiedTime, while the conversion keeps its first folder name.
+      f = converted.folder;
+      pilePath = join('Inbox', f.name);
     }
     if (!f.folder) return pile;
     // The folder as listed, unless it already holds this very edit's rename (its answer lost): then the retry
     // goes on, and `once` takes that landed write as done.
-    const folderIntent = text ? `rename:${freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text }), pile.path)}` : null;
+    const folderIntent = text && !converting ? `rename:${freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text }), pilePath)}` : null;
     await this.fence(seenPlace(f), f.id, folderIntent === null ? undefined : landing(f, folderIntent));
-    const note = ix.file(join(pile.path, PILE_NOTE));
+    const note = ix.file(join(pilePath, PILE_NOTE));
     // A note listed is the one this pile has: an id kept for an earlier create of it is no longer needed.
     if (note) {
       this.intended.forget(`pile-note:${id}`);
@@ -1130,10 +1139,10 @@ export class DriveVault implements VaultSource {
     // What this edit does to the note decides what "landed" means: its words, a declared pile's empty note, or the Bin.
     const declared = f.folder && f.appProperties?.[PROP.declaration] ? await this.declarationOf(f, this.known(ix)) : null;
     if (note) await this.fence({ ...seenPlace(note), modifiedTime: note.modifiedTime }, note.id, landing(note, text ? { text } : declared ? { text: '' } : 'bin'));
-    let folderPath = pile.path;
-    if (text) {
-      const name = freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text }), pile.path);
-      if (name !== nameOf(pile.path)) {
+    let folderPath = pilePath;
+    if (text && !converting) {
+      const name = freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text }), pilePath);
+      if (name !== nameOf(pilePath)) {
         ix.put(await this.once(f, `rename:${name}`, (op, fence) => this.drive.update(f.id, { name, appProperties: op }, { fence })));
         folderPath = join('Inbox', name);
       }
