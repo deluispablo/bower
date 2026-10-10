@@ -240,3 +240,13 @@ Evidence and logs:
 - Read-only git diff --check: exit 0. Only failure sections of test logs were read.
 
 Status: implementation and the requested local runs are green; coordinator commits and independent review remain.
+
+## Tests changed, one line per file (coordinator; the per-line entries above give the detail)
+
+tests changed: src/data/contract/fake.contract.test.ts: seeds under a fixed clock (vi.setSystemTime) instead of the wall clock, per the packet item 2 and TL-P4-24 addendum 17; assertions unchanged; drive-vault.test.ts also gains the reds by the red-owning sessions.
+tests changed: src/data/fake/fake-runner.test.ts: seeds under a fixed clock (vi.setSystemTime) instead of the wall clock, per the packet item 2 and TL-P4-24 addendum 17; assertions unchanged; drive-vault.test.ts also gains the reds by the red-owning sessions.
+tests changed: src/data/fake/fake-worker.test.ts: seeds under a fixed clock (vi.setSystemTime) instead of the wall clock, per the packet item 2 and TL-P4-24 addendum 17; assertions unchanged; drive-vault.test.ts also gains the reds by the red-owning sessions.
+tests changed: src/data/fake/write-it.test.ts: seeds under a fixed clock (vi.setSystemTime) instead of the wall clock, per the packet item 2 and TL-P4-24 addendum 17; assertions unchanged; drive-vault.test.ts also gains the reds by the red-owning sessions.
+tests changed: src/data/live/home-cache.test.ts: seeds under a fixed clock (vi.setSystemTime) instead of the wall clock, per the packet item 2 and TL-P4-24 addendum 17; assertions unchanged; drive-vault.test.ts also gains the reds by the red-owning sessions.
+tests changed: src/data/vault/drive-vault.test.ts: seeds under a fixed clock (vi.setSystemTime) instead of the wall clock, per the packet item 2 and TL-P4-24 addendum 17; assertions unchanged; drive-vault.test.ts also gains the reds by the red-owning sessions.
+tests changed: src/data/vault/hashes.test.ts: seeds under a fixed clock (vi.setSystemTime) instead of the wall clock, per the packet item 2 and TL-P4-24 addendum 17; assertions unchanged; drive-vault.test.ts also gains the reds by the red-owning sessions.
