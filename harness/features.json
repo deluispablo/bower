@@ -6702,5 +6702,33 @@
     ],
     "verify": "",
     "note": "After create-named. Codex red, Codex implementation, Claude review, designer check once (rows signed 2026-10-10). Packet 2026-10-10-tree-name-first-packet.md. Closes create-name-speed."
+  },
+  {
+    "id": "b1b-ports",
+    "task": "p4-brain",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Drive ports for B1: a 4 KB prefix read (Range, tolerating 200) and the changes feed (start token, drained pages, parents lookup), with fake parity (TL-P4-41 Q3, Q10).",
+    "steps": [
+      "A prefix read returns at most 4,096 bytes on whole characters for 206 and 200 responses.",
+      "The feed drains every page to the new token; unknown ids resolve scope through parents."
+    ],
+    "verify": "",
+    "note": "Escalated (transport): Codex red, implementation, Codex pass, Claude review. Packet 2026-10-10-b1b-packet.md. Before B1a (lead)."
+  },
+  {
+    "id": "b1a-contract",
+    "task": "p4-brain",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "The B1 contract: MOC regions, the closed selection reply, retrieval.json with its cursor in one write, and the maintain effect (TL-P4-41 Q1, Q2, Q4, Q5).",
+    "steps": [
+      "A person's MOC is never edited except by the link rewrite.",
+      "maintain is idempotent, adds no rows for refused effects and is skipped on a done run."
+    ],
+    "verify": "",
+    "note": "Escalated (contracts): Codex red, implementation, Codex pass, Claude review. Packet 2026-10-10-b1a-packet.md. After c05-person-notes lands."
   }
 ]
