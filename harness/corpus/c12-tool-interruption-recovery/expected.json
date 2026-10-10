@@ -1,0 +1,44 @@
+{
+  "files": {
+    "present": [
+      "Areas/Home/Garden plot.md",
+      "Areas/Home/Water butt notice.txt",
+      "Areas/Home/Bench notice.txt"
+    ],
+    "absent": [
+      "Inbox/*",
+      "Areas/Home/Water butt notice.md",
+      "Areas/Home/Bench notice.md"
+    ]
+  },
+  "protectedRanges": [
+    {
+      "path": "Areas/Home/Garden plot.md",
+      "range": {
+        "heading": "My plans"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "path": "Areas/Home/Garden plot.md",
+      "timeline": [
+        "2026-09-12 \u00b7 Planted garlic.",
+        "The replacement water butt has arrived.",
+        "The shared bench has been delivered.",
+        "[[Water butt notice.txt]]",
+        "[[Bench notice.txt]]"
+      ],
+      "timelineCount": 3
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 2,
+    "created": [],
+    "updated": [
+      "Areas/Home/Garden plot.md"
+    ],
+    "questionsExactly": 0
+  }
+}
