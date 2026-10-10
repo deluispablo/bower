@@ -6504,5 +6504,18 @@
     "note": "DEFECTS undo-confirm-not-in-place (lead 2026-10-10). Codex, then a Claude review and the designer. Packet 2026-10-10-c4-undo-confirm-in-place-packet.md.",
     "review": "P4-69 PASS",
     "design": "verified"
+  },
+  {
+    "id": "c4-e2e-sync",
+    "task": "p4-consolidation",
+    "category": "fix",
+    "passes": false,
+    "what": "Two e2e specs wait for the state they act on: qa7:63 types after the name box is focused; capabilities:210 navigates in the app instead of reloading before the answer run is admitted (defects qa7-63-flaky, capabilities-210-flaky).",
+    "steps": [
+      "The new-folder name is typed into the name box, never the tree.",
+      "An answered row shows after Write it without a reload race."
+    ],
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/qa7.spec.ts e2e/capabilities.spec.ts --project=desktop -g \"New note in an empty folder asks for a name, then opens the note|write it shows the state written, re-asks on a clash and settles as an answered row\"",
+    "note": "Lead 2026-10-10 (stage-4 close): sync fixes. Codex, then a Claude review and repeat runs. Packet 2026-10-10-c4-e2e-sync-packet.md."
   }
 ]
