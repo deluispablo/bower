@@ -64,6 +64,10 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c05-marked-state-keeps-history | agrees | Point 3 rewrites a genuinely Bower-owned state from evidence while Timeline only grows and personal prose survives. |
 | c05-note-not-written-by-bower | agrees | TL-P4-32: one requested sourced line; state asks once, protected bytes and ownership stay personal, replay adds nothing (points 1, 3, 7, 8). |
 
+| c15-ready-package-reused | agrees | Points 1, 2, 3, 7: a known fee fits the existing plot note and receives one sourced confirmation; preparation reuse changes no meaning or ownership. |
+| c15-stale-package-rebuilt | agrees | Points 1, 2, 3, 7: current source evidence supplies the venue and sourced history; stale preparation cannot invent facts or authorize a write. |
+| c15-context-budget-exhausted | agrees | Points 1, 3, 4, 7: explicit words establish fit, only shown evidence enters the linked source note and history, and unread content is disclosed without guessing. |
+
 ## Changes
 
 **C08 preparation: c08-report-with-sources, `rubric.md`.** The briefing adds table collection, watering-can and shelter facts, so "leave the hub byte identical" contradicted points 3 and 7. The rubric now requires updating the Bower-owned hub state where those facts change it, with sourced Timeline entries and personal text preserved. Only the rubric changed: `expected.json` still requires the hub unchanged and `report.updated` empty; those expectations need a separate lead ruling before the case can prove this behaviour.

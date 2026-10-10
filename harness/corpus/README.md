@@ -70,6 +70,9 @@ Made-up cases for the capabilities C04 to C11, C13, C15 and proposed C17 / B1–
 | c13-manifest-state-with-personal-edit | C13 | model | new (C13 prep; scripted manifest lifecycle proof pending) |
 | c15-more-context-bounded | C15 | model | new |
 | c15-scanned-letter | C15 | model | bench:4-scanned-pdf, adapted (made-up; the original is in bench-4-scanned-pdf) |
+| c15-ready-package-reused | C15 | model | new (C15 preparation; scripted input and context proof pending) |
+| c15-stale-package-rebuilt | C15 | model | new (C15 preparation; scripted input and context proof pending) |
+| c15-context-budget-exhausted | C15 | model | new (C15 preparation; scripted input and context proof pending) |
 | b1-index-job-offer | C17 / B1 | model | TL-P4-39; reused made-up B123 indexed job-search fixture; scripted proof pending |
 | b1-changes-person-edit | C17 / B1 | model | TL-P4-39 §1.6, addendum 2; supported own-note edit on the same Drive |
 | b1-moc-over-40 | C17 / B1 | model | TL-P4-38 addenda 1–2; 41-item parent folds to existing child maps |
