@@ -15,7 +15,7 @@
 
 - A unit test of `fix-landing.mjs` on a small fixture export: before the fix it reports eval needed (`--check` exits 1); after, the output has no `new Function`/`eval(` on the page-script path, and `--check` passes.
 - A test that `public/_headers`' `/landing/*` CSP has no `'unsafe-eval'`.
-- An e2e (extend `e2e/qa5.spec.ts` or a new `e2e/landing-csp.spec.ts`) served with the real headers (`scripts/serve-dist-with-headers.mjs`, as the PWA config does): the landing loads with zero CSP violations (`securitypolicyviolation` listener) and zero console errors, and its main heading, the GitHub links and the sign-in link are present. Axe as other specs do.
+- An e2e (extend `e2e/qa5.spec.ts` or a new `e2e/landing-csp.spec.ts`) served with the real headers (`scripts/serve-dist-with-headers.mjs`, as the PWA config does): the landing loads with zero CSP violations (`securitypolicyviolation` listener) and zero console errors, and its main heading and the GitHub links are present (the landing has no sign-in link; the packet's earlier mention was the coordinator's error, corrected 2026-10-10). No axe scan here: the exported landing has pre-existing landmark/region findings (defect landing-axe-regions), outside this entry; qa5 does not scan it either (corrected 2026-10-10).
 
 ## What the person sees
 
