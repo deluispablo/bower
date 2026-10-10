@@ -6548,5 +6548,19 @@
     "note": "DEFECTS folder-table-header-wrap (lead ruling, owner-reported). Codex, then a Claude review and the designer. Packet 2026-10-10-folder-header-wrap-packet.md. implementer: codex. Designer verified ce1eb3cd: 43 px headers at 375-1440, table scrolls sideways.",
     "design": "verified",
     "review": "P4-72 PASS"
+  },
+  {
+    "id": "shell-page-column",
+    "task": "p4-defects",
+    "category": "fix",
+    "passes": false,
+    "ui": true,
+    "what": "The desktop page column never gets narrower than 560 px: docked(shellWidth, prefs) folds the right panel first, then the side panel; a folded panel opens as an overlay through Sheet from its button; prefs are never rewritten; dragging is clamped (DEFECTS shell-page-column-squeeze).",
+    "steps": [
+      "At 900 to 1440 px with both panels open the page column is at least 560 px.",
+      "A folded panel opens as an overlay and Escape returns focus to its button."
+    ],
+    "verify": "pnpm exec vitest run src/app/DesktopShell.test.tsx -t \"docked keeps the page column at least 560 px\"",
+    "note": "DEFECTS shell-page-column-squeeze (lead ruling, designer spec). Codex, then a Claude review and the designer. Packet 2026-10-10-shell-page-column-packet.md. implementer: codex."
   }
 ]

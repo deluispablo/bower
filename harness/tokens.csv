@@ -389,3 +389,5 @@ d-v2-24a,red-owner (a8 tests),codex,gpt-5-codex,high,1,517335,512336,,466432,499
 d-v2-24a,adversarial (a7),codex,gpt-5-codex,high,1,944754,937648,,853632,7106,,,,3 Important,2026-10-10
 folder-header-wrap,implementer,codex,gpt-5-codex,medium,1,336939,333037,,303616,3902,,,,delivered (red+fix+notes),2026-10-10
 folder-header-wrap,reviewer,claude,bower-reviewer,,1,26796,,,,,,2,0.2,PASS (P4-72),2026-10-10
+d-v2-24a,red (fix round 2),codex,gpt-5-codex,high,1,1092811,1082937,,1022464,9874,,,,3 reds (settle-blend),2026-10-10
+c05-person-notes,contract sign-off,codex,gpt-5-codex,medium,1,959713,955024,,857600,4689,,,,9 Important,2026-10-10
