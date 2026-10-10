@@ -482,3 +482,7 @@ b3a-hot-reduce,implementer (fix round 2),codex,gpt-5-codex,medium,1,338436,33654
 b3a-hot-reduce,reviewer (P4-88),claude,opus,,1,35988,,,,,,6,1,PASS,2026-10-10
 e2e-resize-helper,implementer,codex,gpt-5-codex,medium,1,918338,911223,,860416,7115,,,,done,2026-10-10
 e2e-resize-helper,reviewer (P4-89),claude,opus,,1,31379,,,,,,3,1,PASS,2026-10-10
+b1a-contract,red-owner,codex,gpt-5-codex,high,1,7719923,7676614,,7485184,43309,,,,12 reds,2026-10-10
+b1a-contract,red-owner (repair TL-P4-45),codex,gpt-5-codex,medium,1,291956,289200,,264064,2756,,,,2 tests,2026-10-10
+b2a-summary-format,red-owner,codex,gpt-5-codex,high,1,1218801,1203440,,1123200,15361,,,,152 reds,2026-10-10
+q1a-stored-answers,red-owner,codex,gpt-5-codex,high,1,8977712,8922272,,8701952,55440,,,,28 reds,2026-10-10
