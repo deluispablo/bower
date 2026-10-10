@@ -1,7 +1,175 @@
 import { describe, expect, it } from 'vitest';
+import fc from 'fast-check';
+import * as summaryFormat from '../contracts/note-format';
+import type { NoteFile } from '../contracts/note-format';
 import { NOTES } from '../demo/notes';
 import { BowerError } from '../types';
 import { noteRefusal, parseNote, serializeNote, toggleTaskInText } from './note-format';
+
+// B2a: YAML 1.2.2 §§5.7, 7.3.1–7.3.3. Exact scalar fixtures are independent of the reader/writer.
+// https://yaml.org/spec/1.2.2/#73-flow-scalar-styles
+const summaryNote = (summary: string, byBower = true): NoteFile => ({
+  summary, byBower, properties: [], tags: [], currentState: [], timeline: [], body: 'Alex keeps these words.',
+});
+const summaryRaw = (scalar: string): string => `---\nsummary: ${scalar}\nby: bower\n---\nAlex keeps these words.\n`;
+const summaryBytes = (summary: string): Uint8Array => new TextEncoder().encode(summary);
+const summaryControl = (): void => {
+  const summary = 'Alex keeps a gardening note.';
+  const raw = serializeNote(summaryNote(summary));
+  expect(raw.split('\n')[1]).toBe(`summary: ${summary}`);
+  expect(parseNote('Synthetic.md', raw).summary).toBe(summary);
+};
+// A new export must fail an assertion at HEAD, rather than fail module loading or TypeScript.
+const summaryValidator = (): ((value: string) => unknown) => {
+  const candidate: unknown = Reflect.get(summaryFormat, 'validSummary');
+  expect(candidate, 'note-format must export validSummary').toBeTypeOf('function');
+  return typeof candidate === 'function' ? candidate as (value: string) => unknown : () => false;
+};
+
+const summaryQuotingRows: { point: string; value: string; scalar: string }[] = [
+  { point: 'colon-space', value: 'Mulch: collection tomorrow.', scalar: '"Mulch: collection tomorrow."' },
+  { point: 'space-hash', value: 'Collection at #amber.', scalar: '"Collection at #amber."' },
+  { point: 'leading spaces', value: '  Alex keeps this.', scalar: '"  Alex keeps this."' },
+  { point: 'trailing spaces', value: 'Alex keeps this.  ', scalar: '"Alex keeps this.  "' },
+  { point: 'double quote', value: 'Alex said "keep it".', scalar: '"Alex said \\"keep it\\"."' },
+  { point: 'single quote', value: "Alex's note.", scalar: '"Alex\'s note."' },
+  { point: 'backslash', value: 'Keep \\notes\\today.', scalar: '"Keep \\\\notes\\\\today."' },
+  ...[...'-?:,[]{}#&*!|>\'"%@`'].map((indicator) => ({
+    point: `leading indicator ${indicator}`, value: `${indicator}Alex`, scalar: JSON.stringify(`${indicator}Alex`),
+  })),
+  ...['true', 'false', 'True', 'FALSE', 'null', 'Null', 'NULL', '~', '123', '-123', '+123', '1.5', '1e3',
+    '0x1f', '0o17', '.inf', '-.inf', '.NaN', '2026-10-10'].map((value) => ({
+    point: `typed-looking ${value}`, value, scalar: `"${value}"`,
+  })),
+];
+
+it.each(summaryQuotingRows)('B2a summary: 1 $point: writes one escaped double-quoted scalar', ({ value, scalar }) => {
+  summaryControl();
+  const raw = serializeNote(summaryNote(value));
+  expect(raw.split('\n').filter((line) => line.startsWith('summary:'))).toEqual([`summary: ${scalar}`]);
+  expect(raw.split('\n').slice(0, 5)).toEqual(['---', `summary: ${scalar}`, 'by: bower', '---', '']);
+  expect(summaryBytes(parseNote('Synthetic.md', raw).summary)).toEqual(summaryBytes(value));
+});
+
+it('B2a summary: 1 plain controls: keeps safe YAML text plain and unchanged', () => {
+  for (const summary of ['Alex keeps a note.', 'café 日本語 🙂 e\u0301', 'time 12:30', 'amber#label',
+    'inside [brackets], {braces}', 'https://example.com/path', 'yes', 'no', 'on', 'off']) {
+    const raw = serializeNote(summaryNote(summary));
+    expect(raw.split('\n')[1]).toBe(`summary: ${summary}`);
+    expect(parseNote('Synthetic.md', raw).summary).toBe(summary);
+  }
+});
+
+const summaryDecodingRows = [
+  { point: 'escaped double quote', scalar: '"Alex said \\"keep it\\"."', text: 'Alex said "keep it".' },
+  { point: 'escaped backslash', scalar: '"Keep \\\\notes\\\\today."', text: 'Keep \\notes\\today.' },
+  { point: 'doubled single quote', scalar: "'Alex''s note.'", text: "Alex's note." },
+  { point: 'multiple doubled single quotes', scalar: "'''Alex'' keeps ''notes''.'", text: "'Alex' keeps 'notes'." },
+  ...[
+    ['0', '\0'], ['a', '\u0007'], ['b', '\b'], ['t', '\t'], ['n', '\n'], ['v', '\v'], ['f', '\f'],
+    ['r', '\r'], ['e', '\u001b'], [' ', ' '], ['/', '/'], ['N', '\u0085'], ['_', '\u00a0'],
+    ['L', '\u2028'], ['P', '\u2029'], ['x41', 'A'], ['u03A9', 'Ω'], ['U0001F642', '🙂'],
+  ].map(([escape, text]) => ({ point: `YAML escape ${escape}`, scalar: `"before\\${escape}after"`, text: `before${text}after` })),
+];
+
+it.each(summaryDecodingRows)('B2a summary: 2 $point: decodes quoted text exactly', ({ scalar, text }) => {
+  summaryControl();
+  expect(parseNote('Synthetic.md', summaryRaw('"Alex keeps a note."')).summary).toBe('Alex keeps a note.');
+  expect(parseNote('Synthetic.md', summaryRaw("'Alex keeps a note.'")).summary).toBe('Alex keeps a note.');
+  expect(summaryBytes(parseNote('Synthetic.md', summaryRaw(scalar)).summary)).toEqual(summaryBytes(text));
+});
+
+it('B2a summary: 2 legacy fixtures: keeps old parsed summary bytes and personal text', () => {
+  summaryControl();
+  // Frozen source shapes from the pre-entry note-format tests, plus the old plain reader's type/comment cases.
+  const fixtures = [
+    { raw: '# Loose\n\nSome thoughts about [[Lemon tart]].\n- [ ] try it', text: '', body: '# Loose\n\nSome thoughts about [[Lemon tart]].\n- [ ] try it' },
+    { raw: '---\nsummary: "A note: with a colon"\ntags:\n  - flat\n  - shortlist\nagent: \'Kittiwake Lettings\'\n---\nbody', text: 'A note: with a colon', body: 'body' },
+    { raw: '---\nsummary: s\nagent: [[Kittiwake Lettings]]\n---\nbody', text: 's', body: 'body' },
+    { raw: '---\r\nsummary: Legacy café 🪶\r\nby: bower\r\n---\r\nbody', text: 'Legacy café 🪶', body: 'body' },
+    ...['true', 'null', '123', 'a # comment stays', 'x: y', '"unfinished', "'unfinished", '"literal\\q"'].map((scalar) => ({
+      raw: summaryRaw(scalar), text: scalar === '"literal\\q"' ? 'literal\\q' : scalar, body: 'Alex keeps these words.',
+    })),
+  ];
+  for (const { raw, text, body } of fixtures) {
+    const parsed = parseNote('Synthetic.md', raw);
+    expect(summaryBytes(parsed.summary)).toEqual(summaryBytes(text));
+    expect(parsed.body).toBe(body);
+  }
+  for (const [path, seed] of Object.entries(NOTES)) {
+    expect(summaryBytes(parseNote(path, serializeNote({ ...seed, byBower: true })).summary)).toEqual(summaryBytes(seed.summary));
+  }
+});
+
+it('B2a summary: 3 generated one-line strings: round-trips exact text within 200 characters', () => {
+  summaryControl();
+  const glyph = fc.oneof(
+    fc.integer({ min: 0x20, max: 0x7e }).map((code) => String.fromCodePoint(code)),
+    fc.constantFrom('é', '日', 'Ω', '🙂', '🪶', '\u0301', '\u00a0'),
+  );
+  const generated = fc.sample(fc.array(glyph, { maxLength: 100 }).map((parts) => parts.join('')), { seed: 422003, numRuns: 500 });
+  const examples = [...generated, '', 'Mulch: collection at #amber.', 'Alex said "keep \\notes".', '  café 日本語 🙂 e\u0301  ',
+    'x'.repeat(200), '🙂'.repeat(100), ' '.repeat(200)];
+  for (const summary of examples) {
+    expect(summary.length).toBeLessThanOrEqual(200);
+    const raw = serializeNote(summaryNote(summary));
+    expect(parseNote('Synthetic.md', raw).summary, JSON.stringify(summary)).toBe(summary);
+  }
+});
+
+const summaryAcceptRows = [
+  { point: 'ordinary text', value: 'Alex keeps a note.' },
+  { point: 'Unicode and emoji', value: 'café 日本語 🙂 e\u0301' },
+  { point: 'YAML punctuation', value: 'Mulch: #amber; "keep" \\notes.' },
+  { point: 'edge spaces', value: '  Alex keeps this.  ' },
+  { point: '200-character bound', value: 'x'.repeat(200) },
+  { point: 'bound counts untrimmed text', value: ` ${'x'.repeat(198)} ` },
+  { point: 'Unicode at existing string bound', value: '🙂'.repeat(100) },
+];
+it.each(summaryAcceptRows)('B2a summary: 4 $point: validSummary accepts valid one-line text', ({ value }) => {
+  summaryControl();
+  const validSummary = summaryValidator();
+  expect(validSummary('Alex keeps a note.')).toBe(true);
+  expect(validSummary(value)).toBe(true);
+  expect(parseNote('Synthetic.md', serializeNote(summaryNote(value))).summary).toBe(value);
+});
+
+const summaryRefuseRows = [
+  { point: 'empty', value: '' }, { point: 'only spaces', value: '   ' }, { point: 'only nonbreaking spaces', value: '\u00a0\u00a0' },
+  { point: '201-character bound', value: 'x'.repeat(201) },
+  { point: 'over bound before trimming', value: ` ${'x'.repeat(199)} ` },
+  { point: 'Unicode over existing string bound', value: '🙂'.repeat(101) },
+  ...[['LF', '\n'], ['CR', '\r'], ['CRLF', '\r\n'], ['NEL', '\u0085'], ['line separator', '\u2028'], ['paragraph separator', '\u2029']]
+    .map(([point, lineBreak]) => ({ point: `${point} never folded`, value: `Alex${lineBreak}keeps a note.` })),
+  ...Array.from({ length: 32 }, (_, code) => ({ point: `control U+${code.toString(16).padStart(4, '0')}`, value: `Alex${String.fromCharCode(code)}keeps a note.` })),
+  ...Array.from({ length: 33 }, (_, index) => {
+    const code = 0x7f + index;
+    return { point: `control U+${code.toString(16).padStart(4, '0')}`, value: `Alex${String.fromCharCode(code)}keeps a note.` };
+  }),
+];
+it.each(summaryRefuseRows)('B2a summary: 4 $point: validSummary refuses invalid text', ({ value }) => {
+  summaryControl();
+  const validSummary = summaryValidator();
+  expect(validSummary('Alex keeps a note.')).toBe(true);
+  expect(validSummary('x'.repeat(200))).toBe(true);
+  expect(validSummary(value)).toBe(false);
+});
+
+it('B2a summary: 5 Q2 scope controls: preserves absent personal metadata and Rules count summary', () => {
+  summaryControl();
+  const personal = parseNote('Personal.md', '# My notes\nAlex keeps these words.');
+  expect(personal).toMatchObject({ summary: '', byBower: false, properties: [], body: '# My notes\nAlex keeps these words.' });
+  expect(serializeNote(personal)).not.toMatch(/^summary:/m);
+  const withSummary = parseNote('Personal.md', '---\nsummary: Alex keeps this.\n---\nPersonal words.');
+  expect(parseNote('Personal.md', serializeNote(withSummary))).toMatchObject({ summary: 'Alex keeps this.', byBower: false, body: 'Personal words.' });
+  const rules = summaryNote('2 rules, 1 waiting.');
+  expect(parseNote('Rules.md', serializeNote(rules)).summary).toBe('2 rules, 1 waiting.');
+  expect(parseNote('Rules.md', serializeNote(summaryNote('My own rules.'))).summary).toBe('My own rules.');
+  for (const path of ['.bower/index.md', '.bower/hot.md', '.bower/log.md']) {
+    const raw = '# Generated view\nAlex keeps a note.\n';
+    expect(parseNote(path, raw)).toMatchObject({ summary: '', byBower: false, properties: [], body: raw.trimEnd() });
+  }
+});
 
 describe('the note file format', () => {
   it('round-trips every demo note', () => {
