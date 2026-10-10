@@ -447,3 +447,5 @@ create-named,implementer,codex,gpt-5-codex,medium,1,313360,308857,,272768,4503,,
 create-named,reviewer,claude,bower-reviewer,,1,31102,,,,,,5,0.3,PASS (P4-81),2026-10-10
 landing-csp,reviewer,claude,bower-reviewer,,1,35648,,,,,,9,0.4,PASS (P4-80),2026-10-10
 new-folder-first-letters,diagnoser,claude,bower-diagnoser,,1,90596,,,,,,43,5.8,diagnosed,2026-10-10
+c5-remove-new-note,reviewer,claude,bower-reviewer,,1,53898,,,,,,11,0.7,PASS (P4-82),2026-10-10
+p4-b1-prep,drafter,codex,gpt-5-codex,high,1,2511995,2489551,,2327680,22444,,,,4 cases + doc,2026-10-10
