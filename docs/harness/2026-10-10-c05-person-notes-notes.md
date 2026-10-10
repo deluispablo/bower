@@ -1173,3 +1173,146 @@ conflict injection, RunRecords originating-manifest validation and checkpoint-ch
 No external lookup or new identity/settlement mechanism.
 
 left out: implementation and NOTHING_FOUND_WHY export; full gates/e2e/git writes; a failing red for 5 (already green).
+
+## Round 5 implementation, addendum 6
+
+Codex implementer, 2026-10-10, baseline `8685f74d`, branch `c05-person-notes`, worktree
+`/private/tmp/bower-c05-person-notes`. Only `src/data/spine/scripted.ts` and this notes section changed.
+No network, git-writing command, test edit, server, e2e or pnpm check. The coordinator commits.
+
+### Implementation and current blocker
+
+The existing `settleRequest` binding map already resolves every named target from the request's words at
+first admission. Reused that map, its `given`/`rowed` sets, source dependencies, report contributions and
+the existing request archive path. Added the exact exported `NOTHING_FOUND_WHY` beside `TOO_OLD_WHY`.
+Before checking for unfinished targets, settlement gives every unblocked, unrowed target with no offered
+line its one linked nothing-found row. Persisted clash retries retain their original target/source ids
+and do not acquire a nothing-found row. No second binding store, completion ledger or archive path.
+Addendum 5's record-id lookup, retention refusal and no-title-resolution paths are unchanged.
+
+The new test's admitting run now passes: one append and completion, the other note byte-identical with
+its exact linked why, and the request's original bytes archived through its applied archive operation.
+Round 5 5 remains green, including only the clashed target retrying and the final archive.
+
+Delivery is **blocked** by fixed-test expectations; none was worked around with provider-specific
+settlement or an additional request handler:
+
+1. `C05 person notes: round 4 3: only settlement archives scripted requests`,
+   `runner/test/c05-person-notes.test.ts:916`, requires the oldest named request to remain active when
+   the scripted planner supplies no line. Addendum 6 explicitly requires every bound target without a
+   line to settle with its row and the request to archive. The younger request still remains untouched,
+   as required; it is the oldest request's active-byte assertion that fails. Both expectations cannot
+   hold for the same admitted named request without an extra exception to the ruling.
+2. `C05 person notes: round 5 4: one line and one nothing-found row settle two named targets` now fails
+   at `runner/test/c05-person-notes.test.ts:1181`, after all first-run assertions pass. Its next
+   `runOnDrive` call creates a fresh generic `Update these notes.` request (`corpus-run.ts`, `addRequest`)
+   and selects instructions scope because the Inbox is empty. This request names no target, and the
+   model decisions have no generic `request` handler. The existing journal filter therefore omits it,
+   and the existing instructions guard throws `NOTHING_TO_READ` before persisting a manifest.
+   `round4Records` consequently sees `new`, not `run`. This is a separate generic-request/no-op contract
+   question; changing it would extend the named-target settlement fix and its existing refusal behavior.
+3. The full runner suite also fails `reports an already-active replay without writing another request`,
+   `runner/test/corpus-driver.test.ts:239`. Its first empty model intent names a personal target through
+   the request words, so the request now gets the nothing-found row and archives. The test requires it
+   to remain active for its next replay. This is the same no-line settlement conflict as item 1, through
+   the model provider rather than the scripted provider.
+
+The lead/red owner needs to reconcile both active-request tests with addendum 6 and rule on the generic
+request used by the later-run check. Tests are fixed for this session; no test was weakened or changed.
+
+removed: the assumption in `settleRequest.unsettled` that a bound target without an offered line must wait.
+removed: the prior comment limiting row settlement to missing or unreadable Timelines.
+tests changed: none
+compatibility: no stored-format changes; unfinished implementation, not ready for integration.
+
+### Verification
+
+All commands redirect output under `tmp-logs/`; only failure blocks and aggregate counts were read.
+
+- Baseline addendum 6 filter: round 5 4 fails with nine assertions; round 5 5 passes (`c05-add6-red.log`).
+- C05 file: 42 pass, 2 fail as described above (`c05-add6-c05.log`).
+- Addendum 6 filter after the change: round 5 4 fails only at its later-run record lookup;
+  round 5 5 passes (`c05-add6-targeted.log`).
+- `src/data` vitest: 76 files, 3,871 tests pass (`c05-add6-data.log`).
+- App, node and runner tsc: pass (`c05-add6-tsc-app.log`, `c05-add6-tsc-node.log`,
+  `c05-add6-tsc-runner.log`); ESLint on scripted.ts: pass (`c05-add6-eslint.log`).
+- Runner suite: 39 files pass, 2 fail; 375 tests pass, 3 fail, all described above (`c05-add6-runner.log`).
+- Read-only `git diff --check`: pass.
+
+Offline research/reuse: the locally recorded official Drive file-id resource
+(https://developers.google.com/drive/api/reference/rest/v3/files) and conditional-write standard
+(https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.1), plus the existing `settleRequest`,
+RunRecords originating-manifest validation and request archive dependencies. No external lookup.
+
+left out: green delivery pending the contract conflicts; full gates/e2e/git writes, as instructed.
+
+## Round 5 red repair, addendum 6
+
+Codex red owner, 2026-10-10, worktree `/private/tmp/bower-c05-person-notes`, branch
+`c05-person-notes`. Read WORKER.md, the packet, TL-P4-32 addenda 2–6 and the implementation's
+three conflicts above. Addendum 6 alone authorizes these expectation and driver-input changes.
+No network or git-writing command; the coordinator commits. The implementer's existing
+`src/data/spine/scripted.ts` diff was read and left unchanged (12 added, 3 removed lines).
+
+### Repaired tests and preserved assertions
+
+1. `C05 person notes: round 4 3: only settlement archives scripted requests`:
+   the oldest admitted request supplies no line, so assert its linked nothing-found row, original
+   bytes archived and active copy absent. Also assert its archive operation applied and no append
+   completion. Every younger-request assertion stays: identical bytes and metadata, no archive,
+   no capture and no move. The test still distinguishes settlement from the generic scripted
+   request handler archiving a younger, unadmitted request.
+2. `C05 person notes: round 5 4: one line and one nothing-found row settle two named targets`:
+   both later calls use `runOnDrive`'s existing `answerStart` path, with scope `all` and distinct
+   run ids, to prevent `addRequest` from manufacturing a generic request. No answer is seeded.
+   The unchanged feed has no work: the driver returns its exact pre-run sentinel `-1`, no
+   request action, no captured requests, no report and no stored run; the entire file snapshot
+   equals the first run's snapshot. The unrelated Inbox item is filed in a successful later
+   production run, with no request action or captured request. That run retains the assertions
+   for no second note append, edit operation, row, update or completion. All first-run settlement
+   assertions and both positive controls are unchanged. An initial repair run exposed the
+   empty-feed admission sentinel; the final expectations pin it rather than require a run record.
+3. `reports a settled replay without writing another request` (formerly `reports an already-active
+   replay without writing another request`): keep the same input and request id. Addendum 6
+   archives its named target with no model line in the first run. Assert active copies absent,
+   original archived bytes preserved across replay, and the personal note byte-identical in both
+   runs. The exact one-record count and original request id/text assertions remain. The driver's
+   outcome is therefore `restored`, which is checked exactly, rather than `already-active`.
+
+tests changed: runner/test/c05-person-notes.test.ts: Addendum 6 settles the oldest no-line target; later checks create no new request and pin empty admission or a real unrelated-item run, preserving no-second-effect and younger-request assertions.
+tests changed: runner/test/corpus-driver.test.ts: Addendum 6 archives the no-line target before replay; assert restored original bytes, one record and the original id/text, preserving the no-second-request point.
+
+### Without-fix confirmation (read-only, no stash)
+
+Inspected `git diff -- src/data/spine/scripted.ts`, the repaired test diff and
+`git show HEAD:src/data/spine/scripted.ts`'s `settleRequest.unsettled`. This is static evidence,
+not a claim that the repaired tests were executed against a reverted implementation.
+
+- Round 4 3: HEAD's `unsettled` returns a bound no-line target as unfinished; it adds no row.
+  The request therefore remains active. The repaired active-copy-absent and archived-original
+  assertions fail without the fix; the exact row and applied archive assertions additionally pin it.
+- Round 5 4: HEAD exports no `NOTHING_FOUND_WHY`, and its omitted target stays unfinished.
+  The unchanged first-run export, exact row, archived bytes and applied archive assertions still
+  fail. The later no-new-request inputs preserve the original no-second-effect contract; they do
+  not compensate for an unfinished first settlement. Round 5 5 is unchanged and passes, preserving
+  the control that only a clash retries on bound ids before the final archive.
+- Corpus replay: HEAD likewise leaves the no-line named target active after the first run.
+  The repaired first-run active-copy-absent and archived-copy-present assertions fail, and the
+  exact `restored` action rejects the pre-fix `already-active` result. Its one-record and exact
+  request-id/text assertions continue to detect a driver that manufactures a second request.
+
+### Verification with the implementation fix in place
+
+Only the requested Vitest command was used, repeated after correcting the empty-admission assertion:
+`pnpm -C runner exec vitest run test/c05-person-notes.test.ts test/corpus-driver.test.ts --maxWorkers=2`.
+Final result: both files pass, all 62 tests pass, including all three repairs and unchanged round 5 5.
+Output: `tmp-logs/c05-add6-red-repair-vitest.log`; read only failure blocks and aggregate counts.
+
+`pnpm -C runner exec tsc --noEmit -p .`: pass, empty
+`tmp-logs/c05-add6-red-repair-tsc.log`.
+`pnpm exec eslint runner/test/c05-person-notes.test.ts runner/test/corpus-driver.test.ts`: pass,
+empty `tmp-logs/c05-add6-red-repair-eslint.log`. Read-only `git diff --check`: pass.
+
+Offline reuse: `runner/test/corpus-run.ts:241` supplies the existing no-new-request path;
+`RunRecords.found` is the existing home for proving no persisted run. No new helper or write path.
+left out: pnpm check, full suites, e2e, servers, git writes and any implementation edit, as instructed.
