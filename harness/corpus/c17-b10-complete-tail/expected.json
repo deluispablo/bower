@@ -1,0 +1,57 @@
+{
+  "files": {
+    "present": [
+      "Resources/Gardening/Seed order guide.txt",
+      "Resources/Gardening/Seed order guide.md"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "protectedRanges": [
+    {
+      "path": "Resources/Gardening/Gardening.md",
+      "range": {
+        "heading": "My thoughts"
+      }
+    },
+    {
+      "path": "Resources/Gardening/Gardening.md",
+      "range": {
+        "frontMatter": true
+      }
+    }
+  ],
+  "notes": [
+    {
+      "path": "Resources/Gardening/Seed order guide.md",
+      "contains": [
+        "Reply by 20 October 2026",
+        "Wren Hall",
+        "[[Resources/Gardening/Gardening]]"
+      ],
+      "excludes": [
+        "29 November"
+      ]
+    },
+    {
+      "path": "Resources/Gardening/Gardening.md",
+      "timeline": [
+        "2026-09-12 · Collected garden reference material.",
+        "reply by 20 October 2026"
+      ],
+      "timelineCount": 2
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "created": [
+      "Resources/Gardening/Seed order guide.md"
+    ],
+    "updated": [
+      "Resources/Gardening/Gardening.md"
+    ],
+    "questionsExactly": 0
+  }
+}

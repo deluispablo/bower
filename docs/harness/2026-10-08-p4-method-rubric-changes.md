@@ -259,3 +259,17 @@ C17; passing it does not prove maps, request answers, budgets or whole-request r
 | c17-b12-closed-ops | agrees | Points 1–8: reuse country destinations and grounded company names, apply only requested typed metadata/tags, preserve immutable originals and all non-link person bytes, combine the existing mechanical link consequence and report actual settled operations without schema invention (class F; TL-P4-32 addendum 1). |
 | c17-b12-large-first-part | agrees | Points 1–8: clear garden filing proceeds while a large typed set waits for one script-selected yes; frozen membership excludes later arrivals, a new rest request skips only matching recent successes, and subset counts never claim whole-request completion (TL-P4-39 addenda 2–3; TL-P4-44 Q4; F6/F8/U4). |
 | c17-b12-authority-person-boundary | agrees | Points 1–8: the trusted request fits Gardening and tags only the eligible compiled concept, keeps personal CRLF/metadata and Source evidence exact, rejects document-created policy/targets or private web context and exposes one unavailable member rather than silently claiming success (F7/R2; TL-P4-42 addendum 3). |
+
+## B10 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-50)
+
+Each new rubric agrees with TL-P4-08 points 1–8; these are method verdicts for lead
+review, not executed C17 acceptance. No earlier rubric or bound is changed. The current
+method id filter does not select these C17 cases; shared H1 adds that check once.
+C15 extraction/cache/expansion and B2's scalar path remain their accepted homes.
+
+| Case | Verdict | Reason |
+| --- | --- | --- |
+| c17-b10-partial-pdf | agrees | Points 1–8: clear Gardening fit, useful linked source note from read evidence, original retained and old hub preserved, classify/read within budget, state the limit and invent no hidden deadline; partial extraction below the visible word threshold grants no completeness (F12). |
+| c17-b10-complete-tail | agrees | Points 1–8: complete source fits Gardening, useful new material gets one linked source note and sourced deadline history, old personal prose/history survives, synopsis is bounded preparation and B2 scalar shares the create; cached derived words never become original authority (F12/F7). |
+| c17-b10-shared-budget | agrees | Points 1–8: five clear-fit originals remain intact with useful linked partial notes, no guessed tail facts, unnecessary asks, redundant copies or metadata repairs; all reading, summary calls and retries share the budget, and limits are visible honestly (F8). |
+| c17-b10-personal-original | agrees | Points 1–8 plus TL-P4-32/-42: the existing topic receives the unchanged personal Markdown, its metadata/prose/list/line endings are never re-serialized, no redundant summary note or false update appears, and quoted document instructions do not teach policy; read-only synopsis grants no edit. |
