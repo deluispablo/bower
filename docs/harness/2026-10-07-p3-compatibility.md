@@ -171,3 +171,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `0295e5f2` | tree-name-first | none for stored data: the tree's New folder asks for the name before making the folder, then makes it once; Escape makes nothing. |
 | `fcd23584` | smoke-request-report-hidden | none: tests only (a finished report with any row is reachable). |
 | `0c696a61` | smoke-request-report-hidden | none for stored data: Home and the reopened sheet show a finished report whenever it has any row, whatever its scope; replay rules unchanged. |
+| `5fcfd208` | smoke-request-report-hidden | none: tests only (the designer's findings: first press asks; today's card when hasReplay; no fallback detail above Left rows). |
+| `14f1392b` | smoke-request-report-hidden | none for stored data: a Tidy up press always asks; only the status bar reopens an unseen report; today's card words when hasReplay. |
