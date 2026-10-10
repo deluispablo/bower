@@ -6911,5 +6911,31 @@
     ],
     "verify": "",
     "note": "TL-P4-41. Escalated; red now, implementation after the scripted.ts/index.ts handoffs. Packet 2026-10-10-b1c-packet.md. implementer: codex."
+  },
+  {
+    "id": "b5a-contracts",
+    "task": "p4-b5",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Contracts for the type table, bounded property values, immutable proposals and profile regions (TL-P4-47 Q1, Q3, Q4).",
+    "steps": [
+      "Strict-write/lenient-read type-table.json with 8 seed rows; bounded values; proposals by id; a 400-word profile region."
+    ],
+    "verify": "",
+    "note": "TL-P4-47. Escalated; red now, implementation after the note-edit/questions handoffs. Packet 2026-10-10-b5a-packet.md. implementer: codex."
+  },
+  {
+    "id": "b3b-hot-maintain",
+    "task": "p4-b3",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Hot is read into the prompt at position 6 and written by maintain at .bower/hot.md only when more than its date changed (TL-P4-42 Q4, Q5, Q8).",
+    "steps": [
+      "Through runner main: hot written after a filing run and read on the next; unchanged hot not rewritten; failure or done redispatch writes nothing."
+    ],
+    "verify": "",
+    "note": "TL-P4-42. Escalated (hot target); red now, implementation after B1c and the scripted.ts handoff. Packet 2026-10-10-b3b-packet.md. implementer: codex."
   }
 ]
