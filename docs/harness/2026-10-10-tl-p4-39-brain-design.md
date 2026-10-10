@@ -162,3 +162,28 @@ The revision check is researched and confirmed in B1's packet before it is relie
 **U6 (no UI change).** Markers are plain text that reads well as rendered Markdown: "> Contradiction: …" and "(inferred)". No special rendering is promised.
 
 **R2.** Generated metadata (summary, type and the rest) is required only on Bower's notes. A note the person wrote never gains it, including in C05's named append.
+
+## Addendum 2: the owner's answers and the supported-use principle (2026-10-10)
+
+1. **Language.** Everything is English for now. Localization of the app, the notes and the model's writing will come later, so nothing new hard-codes the language in a second place:
+   - one setting, `language` in the folder's `.bower/` config (default `en`);
+   - prompts take the language as a parameter;
+   - section names and line grammar (Current state, Timeline, the B-regions) are stable internal keys with English labels, kept in one home (note-format, timeline-line, ownership-format), so a later localization maps labels without changing parsing.
+2. **The large-request limit is 200 items or 30 minutes.** Beyond it, "propose a split" means this:
+   - Bower runs nothing yet.
+   - Bower asks one yes/no question on Home that names a meaningful first part, chosen by the request's own set: the most recent, the active ones, or those in one folder. For example: "This needs about 500 company lookups; Bower does up to 200 at a time. Start with the 180 companies from your active offers?"
+   - Yes runs that part as a normal request with its result note. Afterwards the person can ask for the rest in their own words.
+   - No leaves everything unchanged.
+3. **The consolidation gate, from the research** (gated, delayed, rebuilt from the evidence). A section is consolidated when it is over its size budget and has at least 5 new observations since its last consolidation. It is always rebuilt from the observation log plus tombstones, never from its own previous text, and the previous version is archived first.
+4. **Supported use (the owner's principle).** Bower designs for normal use, not for unusual actions outside Bower:
+   - **Supported outside Bower:** writing in your own notes with any editor (TL-P4-33), and adding files to the Bower folder. Bower reads these on its next run.
+   - **Not designed for:** editing Bower's own notes, regions or files (MOCs, About me's Bower section, `index.md`, `hot.md`, `log.md`, `.bower/`), moving or renaming in Drive instead of in Bower, and editing a note during a tidy-up. If the person does these, Bower's next run may overwrite or ignore the change. That is documented, not engineered around.
+   - **Future:** a short "things to know" guide or tutorial in the app (a later UI item, not now).
+
+   Effect on addendum 1:
+   - **F1:** no revision-history check; the accepted limitation stands as documented.
+   - **F2 and R1:** the existing protections stay as already built (TL-P4-08 and TL-P4-10 for Current state), and the new B-regions are Bower's, with no personal-edit handling of their own.
+   - **F10 and §1.6:** the changes feed stays only to refresh the index and summaries efficiently. There is no repair of renames made outside Bower, and TL-P4-35 (2b) stays post-P4 backlog.
+   - **U5:** About me corrections happen through Forget in the person's words, or by editing their own text above Bower's section.
+
+   Everything else in addendum 1 stands. It covers what Bower itself does (recovery, provenance, budgets, merging, typing) or plain correctness.
