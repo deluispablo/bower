@@ -28,7 +28,7 @@ export type Capture = {
 export type Target = { fileId: string } | { createdBy: string };
 export type Properties = {
   by?: 'bower'; bowerNew?: '1' | null; asAdded?: string | null; origin?: string | null; kind?: string | null;
-  pile?: string | null; bowerItem?: string | null; bowerDeclaration?: string | null;
+  pile?: string | null; bowerItem?: string | null; bowerDeclaration?: string | null; bowerRun?: string | null;
 };
 export type Effect =
   | { kind: 'move'; before: SeenFile; parent: Target; name: string; properties: Properties }
@@ -291,12 +291,12 @@ function target(value: unknown): value is Target {
   return (closed(value, ['fileId']) && driveId(value.fileId)) || (closed(value, ['createdBy']) && hash(value.createdBy));
 }
 function properties(value: unknown): value is Properties {
-  const optional = ['by', 'bowerNew', 'asAdded', 'origin', 'kind', 'pile', 'bowerItem', 'bowerDeclaration'];
+  const optional = ['by', 'bowerNew', 'asAdded', 'origin', 'kind', 'pile', 'bowerItem', 'bowerDeclaration', 'bowerRun'];
   if (!closed(value, [], optional)) return false;
   const has = (key: string): boolean => Object.hasOwn(value, key);
   return (!has('by') || value.by === 'bower') && (!has('bowerNew') || value.bowerNew === '1' || value.bowerNew === null)
     && ['asAdded', 'origin', 'kind'].every((key) => !has(key) || nullable(text)(value[key]))
-    && ['pile', 'bowerItem', 'bowerDeclaration'].every((key) => !has(key) || nullable(id)(value[key]));
+    && ['pile', 'bowerItem', 'bowerDeclaration', 'bowerRun'].every((key) => !has(key) || nullable(id)(value[key]));
 }
 function effect(value: unknown): value is Effect {
   if (!record(value)) return false;
@@ -571,6 +571,22 @@ const recordsOf = (item: Change): string[] => item.kind === 'rules-wording'
   ? [...item.add, ...item.remove].map((entry) => entry.recordId) : item.recordIds;
 const appends = (item: EditText): boolean => item.changes.some((entry) => entry.kind === 'timeline-append');
 
+/** Request relocation uses ordinary moves: a temporary recovery pointer, then the physical pending folder. */
+export function requestMoveKind(value: { runId: string; capture: Capture; operations: readonly OperationV2[] }, item: OperationV2): 'pointer' | 'pending' | null {
+  const e = item.effect;
+  if (e.kind !== 'move' || !value.capture.journal.some((j) => j.fileIds.includes(e.before.fileId))) return null;
+  if ('fileId' in e.parent && e.parent.fileId === e.before.parents[0] && e.name === e.before.name
+    && Object.keys(e.properties).length === 1 && e.properties.bowerRun === value.runId) return 'pointer';
+  const pathOf = (target: Target): string | null => {
+    if ('fileId' in target) return value.capture.places.find((p) => p.file.fileId === target.fileId)?.path ?? null;
+    const made = value.operations.find((o) => o.operationId === target.createdBy);
+    if (made?.effect.kind !== 'create-folder') return null;
+    const parent = pathOf(made.effect.parent);
+    return parent === null ? null : `${parent}/${made.effect.name}`;
+  };
+  return pathOf(e.parent) === `.bower/changes/pending/${value.runId}` && e.properties.bowerRun === null ? 'pending' : null;
+}
+
 /**
  * TL-P2-20's rules across a v2 manifest: each target (rule 2, R3-7, ratification 5), one edit per file (rule 3),
  * the size limits (rule 6), records in capture.journal and archives held by every edit naming them (rule 7, R3-4),
@@ -636,7 +652,8 @@ function edits(value: ManifestV2): EditGuardRule | null {
     if ((marks.get(fileId) ?? 0) !== (appends(target.effect) ? 1 : 0)) return 'mark';
     for (const id of target.effect.changes.flatMap(recordsOf)) {
       const files = journal.get(id) ?? [];
-      const archives = operations.filter((item) => item.effect.kind === 'move' && files.includes(item.effect.before.fileId));
+      const archives = operations.filter((item) => item.effect.kind === 'move' && files.includes(item.effect.before.fileId)
+        && requestMoveKind(value, item) !== 'pointer');
       if (!archives.every((item) => item.dependsOn.includes(target.operationId))) return 'archive';
     }
   }

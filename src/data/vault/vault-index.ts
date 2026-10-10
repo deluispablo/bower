@@ -67,8 +67,24 @@ export class VaultIndex {
     const bower = new Set(all.filter((f) => f.folder && f.name === '.bower' && f.parents.includes(this.rootId)).map((f) => f.id));
     const changes = new Set(all.filter((f) => f.folder && f.name === 'changes' && f.parents.some((p) => bower.has(p))).map((f) => f.id));
     const parents = new Set(changes);
+    const pending = new Set(all.filter((f) => f.folder && f.name === 'pending' && f.parents.some((p) => changes.has(p))).map((f) => f.id));
+    for (const f of all) if (f.folder && f.parents.some((p) => pending.has(p))) parents.add(f.id);
     if (archived) for (const f of all) if (f.folder && f.name === 'archive' && f.parents.some((p) => changes.has(p))) parents.add(f.id);
     return all.filter((f) => !f.folder && f.parents.some((p) => parents.has(p)));
+  }
+
+  /** A waiting request's evidence pointer, by actual containment, including duplicate bookkeeping folders. */
+  waitingRun(fileId: string): string | null {
+    const file = this.files.get(fileId);
+    const run = file && this.files.get(file.parents[0] ?? '');
+    const pending = run && this.files.get(run.parents[0] ?? '');
+    const changes = pending && this.files.get(pending.parents[0] ?? '');
+    const bower = changes && this.files.get(changes.parents[0] ?? '');
+    if (run?.folder && pending?.folder && pending.name === 'pending' && changes?.folder && changes.name === 'changes'
+      && bower?.folder && bower.name === '.bower' && bower.parents.includes(this.rootId)) return run.name;
+    // The same move effect publishes a temporary pointer before an append. It is cleared by the physical move;
+    // an interrupted move can therefore recover through its own RunRecords, without scanning any other run.
+    return file?.appProperties?.[PROP.run] ?? null;
   }
 
   /** Everything the explorer shows. */
