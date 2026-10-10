@@ -6755,8 +6755,9 @@
       "A person's MOC is never edited except by the link rewrite.",
       "maintain is idempotent, adds no rows for refused effects and is skipped on a done run."
     ],
-    "verify": "",
-    "note": "Escalated (contracts): Codex red, implementation, Codex pass, Claude review. Packet 2026-10-10-b1a-packet.md. After c05-person-notes lands."
+    "verify": "pnpm -C runner exec vitest run test/b1a-contract.test.ts -t \"B1a contract:\"",
+    "note": "Escalated (contracts): Codex red, implementation, Codex pass, Claude review. Packet 2026-10-10-b1a-packet.md. After c05-person-notes lands.",
+    "review": "P4-94b PASS"
   },
   {
     "id": "q-ui-3",
