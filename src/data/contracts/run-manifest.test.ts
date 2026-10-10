@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { parseRunManifest, parseRunManifestV2, type Content, type Manifest, type ManifestRefusal, type Operation, type ReportContribution, type SeenFile, type VerifiedContent } from './run-manifest';
+import { parseRunCheckpoint } from './run-checkpoint';
 
 const dir = 'docs/harness/evidence/2026-10-05-local-prerequisites/run-recovery-contract/';
 const fixture = (file: string): Record<string, unknown> => JSON.parse(readFileSync(dir + file, 'utf8')) as Record<string, unknown>;
@@ -109,6 +110,77 @@ function rich(): Manifest {
   return value;
 }
 const variant = (change: (value: Manifest) => void): Manifest => { const value = rich(); change(value); return seal(value); };
+
+const b5Table = (): unknown => ({ v: 1, rows: [{ id: 'lease', match: ['lease'], template: 'source',
+  properties: { rent: { type: 'money' } }, table: ['rent'] }] });
+function b5RunnerWrite(path: string, payload: unknown): Manifest {
+  return variant((value) => {
+    const text = JSON.stringify(payload);
+    set(value, ['operations', 3, 'effect', 'path'], path);
+    set(value, ['operations', 3, 'effect', 'text'], text);
+    set(value, ['operations', 3, 'effect', 'content'], raw(text));
+    const fileName = path.slice(path.lastIndexOf('/') + 1);
+    set(value, ['operations', 3, 'effect', 'before', 'name'], fileName);
+  });
+}
+
+it('B5a contracts: versioned type table uses write-runner-json and rejects invalid new rows', async () => {
+  expect(await parseRunManifestV2(bytes(rich()), 'fake-root', RUNNER_WRITES)).toMatchObject({ ok: true });
+  const value = b5RunnerWrite('.bower/type-table.json', b5Table());
+  expect(op(value, 3).effect.kind).toBe('write-runner-json');
+  expect(await parseRunManifestV2(bytes(value), 'fake-root', RUNNER_WRITES)).toMatchObject({ ok: true, value });
+  const invalid = b5RunnerWrite('.bower/type-table.json', { v: 1, rows: [{ id: 'Invalid slug' }] });
+  expect((await parseRunManifestV2(bytes(invalid), 'fake-root', RUNNER_WRITES)).ok).toBe(false);
+  expect((await parseRunManifestV2(bytes(b5RunnerWrite('.bower/arbitrary.json', b5Table())),
+    'fake-root', RUNNER_WRITES)).ok).toBe(false);
+});
+
+it('B5a contracts: immutable proposal and stored question share one exact payload identity', async () => {
+  expect(await parseRunManifestV2(bytes(rich()), 'fake-root', RUNNER_WRITES)).toMatchObject({ ok: true });
+  const payload = { kind: 'type-row', row: (b5Table() as { rows: unknown[] }).rows[0] };
+  const proposal = { v: 1, id: 'lease-1', payload };
+  const question = { id: 'q-proposal-lease-1', text: 'Add a lease type?', yes: 'Add', no: 'Keep as is', askedAt: 1,
+    proposal: { id: 'lease-1', payload } };
+  const value = variant((manifest) => {
+    manifest.capture.places.push({ file: seen('proposals-dir', 'proposals', 'bower-system', true), path: '.bower/proposals' });
+    const text = JSON.stringify(proposal);
+    op(manifest, 3).effect = { kind: 'create-text', parent: { fileId: 'proposals-dir' }, name: 'lease-1.json',
+      createKey: 'proposal-lease-1', text, content: raw(text), purpose: 'runner-json' };
+    set(manifest, ['reportPlan', 2, 'value', 'questions'], [question]);
+  });
+  expect(await parseRunManifestV2(bytes(value), 'fake-root', RUNNER_WRITES)).toMatchObject({ ok: true, value });
+  // The artifact is create-once, never an overwrite of a previously proposed payload.
+  expect((await parseRunManifestV2(bytes(b5RunnerWrite('.bower/proposals/lease-1.json', proposal)),
+    'fake-root', RUNNER_WRITES)).ok).toBe(false);
+  const wrong = clone(value);
+  set(wrong, ['reportPlan', 2, 'value', 'questions', 0, 'proposal', 'payload'],
+    { kind: 'type-row', row: { id: 'different', table: [] } });
+  expect((await parseRunManifestV2(bytes(seal(wrong)), 'fake-root', RUNNER_WRITES)).ok).toBe(false);
+});
+
+it('B5a contracts: old manifest fixtures read with their original hashes and operations', async () => {
+  const value = manifest01();
+  expect(await parseRunManifest(bytes(value), 'fake-root', RUNNER_WRITES)).toEqual({
+    ok: true, value, sha256: manifest01Hash,
+  });
+  expect(await parseRunManifestV2(bytes(value), 'fake-root', RUNNER_WRITES)).toEqual({
+    ok: true, value, sha256: manifest01Hash,
+  });
+  expect(value.captureId).toBe(capture01Id);
+  expect(value.operations[0]?.operationId).toBe(operation01Id);
+});
+
+it('B5a contracts: old checkpoint fixture retains its run identity and operation outcome', async () => {
+  const value = manifest01();
+  expect((await parseRunManifest(bytes(value), 'fake-root', RUNNER_WRITES)).ok).toBe(true);
+  const checkpoint = input('01-admission-reopen.json').checkpoint0;
+  const result = await parseRunCheckpoint(bytes(checkpoint), {
+    rootId: 'fake-root', runId: 'run-one', captureId: capture01Id,
+    manifestHash: manifest01Hash, operationIds: [operation01Id],
+  });
+  expect(result).toEqual({ ok: true, value: checkpoint,
+    sha256: '2331ffc91a81ef0c0cb90aed68fd9f70263205cf6b99a9c6c22d6e9d27af287b' });
+});
 function op(value: Manifest, index: number): Operation {
   const found = value.operations[index];
   if (!found) throw new Error('Synthetic manifest must contain this operation');
