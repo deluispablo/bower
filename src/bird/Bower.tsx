@@ -87,7 +87,7 @@ function useBirdEngine(els: EngineEls, home: TargetFn, size: number, moves: bool
     const head = parts.current.head;
     const eye = parts.current.eye;
     if (head) { head.style.transform = closedStill ? 'rotate(8deg)' : ''; head.style.transformOrigin = closedStill ? '60px 50px' : ''; }
-    if (eye) { eye.style.transform = settingStill ? `scaleY(${settings ? '.08' : '1'})` : ''; eye.style.transformOrigin = settingStill ? '70px 34px' : ''; }
+    if (eye) { eye.style.transform = settingStill ? `scaleY(${settings ? '0.08' : '1'})` : ''; eye.style.transformOrigin = settingStill ? '70px 34px' : ''; }
   }, [closedStill, settingStill, settings]);
 
   useEffect(() => {

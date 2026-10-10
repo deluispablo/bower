@@ -136,7 +136,7 @@ const follow = (
   h.vel = s / dt;
 };
 
-type Channel = SpringName | 'head' | 'gazeHead' | 'hop' | 'wingScale' | 'bob' | 'eye';
+type Channel = SpringName | 'head' | 'gazeHead' | 'hop';
 
 interface Action {
   channels?: readonly Channel[];
@@ -155,6 +155,48 @@ const pin = (c: Spring, v: number): void => {
   c.t = v;
   c.vel = 0;
 };
+
+/**
+ * Every value apply() draws, as drawn: each number already rounded to the
+ * precision it is written with. The moves-off settle blends this one vector
+ * (the standard pose blend: snapshot the drawn pose, interpolate it to the
+ * target pose), so what it draws is exactly what the reader measures.
+ */
+interface Drawing {
+  /** The bird's place and facing (the wrapper's translate and scaleX), and its opacity. */
+  x: number;
+  y: number;
+  face: number;
+  opacity: number;
+  pitch: number;
+  sx: number;
+  sy: number;
+  head: number;
+  headY: number;
+  tail: number;
+  wing: number;
+  ws: number;
+  legs: number;
+  jaw: number;
+  tuft: number;
+  tuftY: number;
+  eye: number;
+  ix: number;
+  iy: number;
+  /** A layer's label chip; null where there is none. */
+  chip: { opacity: number; x: number; y: number; r: number } | null;
+  /** The Rig's thing in the beak: shown or not (a categorical value, never eased). */
+  glyph: boolean;
+}
+const DRAWN_NUMBERS = ['x', 'y', 'face', 'opacity', 'pitch', 'sx', 'sy', 'head', 'headY', 'tail', 'wing', 'ws',
+  'legs', 'jaw', 'tuft', 'tuftY', 'eye', 'ix', 'iy'] as const;
+/** A value as `toFixed(digits)` writes it. */
+const fixed = (v: number, digits: number): number => Number(v.toFixed(digits));
+/** An unrounded offset, written without exponent notation. */
+const offset = (v: number): string => (Math.abs(v) < 1e-6 ? '0' : String(v));
+/** The moves-off settle: 0.6 s, cubic ease-out (the packet's ease). */
+const SETTLE = 0.6;
+const settleEase = (u: number): number => 1 - (1 - u) ** 3;
 
 /** The engine owns transforms until release; retain each last rendered value. */
 const drawnTransforms = new WeakMap<SVGGElement, string>();
@@ -397,9 +439,19 @@ export class BirdEngine {
     behindT: 0,
   };
   private reaction: ReactionRequest | null = null;
+  /**
+   * The one gate: only a live engine runs its motion sources (the mind, acts,
+   * chirp, breathing, gaze, the pose script). While it settles, the loop draws
+   * only the blend; once still, nothing.
+   */
   private motion: 'live' | 'settling' | 'still' = 'live';
-  private eyeOpen: number | null = null;
+  /** The moves-off blend: the drawn pose at react() time, its still frame, and when it began. */
+  private blend: { from: Drawing; to: Drawing; t0: number } | null = null;
+  /** A pose change that arrives during the settle, applied after it. */
+  private queuedPose: { pose: PoseName | null } | null = null;
   private notifyStill = false;
+  /** What apply() drew last. */
+  private drawn: Drawing | null = null;
   private onStill?: () => void;
   private settings: boolean;
   private settingChanges: () => boolean;
@@ -407,6 +459,8 @@ export class BirdEngine {
   private drawnSize: number | null = null;
   private drawnPlace: string | null = null;
   private drawnGlyph: boolean | null = null;
+  private drawnOpacity: string | null = null;
+  private drawnChip: string | null = null;
   private last = 0;
   private running = false;
   private idleWaiters: Array<() => void> = [];
@@ -474,14 +528,15 @@ export class BirdEngine {
     this.drawnSize = null;
     this.drawnPlace = null;
     this.drawnGlyph = null;
+    this.drawnOpacity = null;
   }
   /**
    * Plays a pose in place, looping its fixed script, and never flies home or
    * idles at random; `null` gives the bird back to its layer's idle mind.
    */
   setPose(pose: PoseName | null): void {
-    // A screen may change its pose during the settle; the same act follows the new still target.
-    if (this.motion === 'settling') { this.pose = pose; return; }
+    // A pose change during the settle waits for its release: the blend's target never moves.
+    if (this.motion === 'settling') { this.queuedPose = { pose }; return; }
     this.interrupt();
     this.endAct();
     this.pose = pose;
@@ -610,7 +665,7 @@ export class BirdEngine {
    * act channel the mind owns (idle, wait, a layer's) and that is awake acts.
    */
   act(name: ActName): void {
-    if (!this.minded() || this.asleep) return;
+    if (!this.minded() || this.asleep || this.motion !== 'live') return;
     this.endAct();
     this.doNow(this.makeAct(name));
     this.doing = name;
@@ -628,9 +683,13 @@ export class BirdEngine {
     if (this.pose === 'sleep' && kind !== 'error' && kind !== 'offline' &&
       !((kind === 'moves-off' || kind === 'moves-on') && this.settingChanges())) return { end() {} };
     if (this.motion !== 'live' && kind !== 'moves-on') return { end() {} };
+    if (kind === 'moves-off') {
+      this.beginSettle();
+      return { end() {} };
+    }
     this.S.inputT = this.S.t;
     this.S.quietT = this.S.t;
-    if (kind !== 'moves-off' && kind !== 'moves-on' && !this.pose && !this.reaction && (this.busy || this.B.carrying)) this.S.pending = request;
+    if (kind !== 'moves-on' && !this.pose && !this.reaction && (this.busy || this.B.carrying)) this.S.pending = request;
     else this.beginReaction(request);
     return { end: () => { request.ended = true; request.endedAt ??= this.S.t; } };
   }
@@ -638,22 +697,84 @@ export class BirdEngine {
     if (request.ended) return;
     const waking = this.asleep || request.kind === 'moves-on';
     this.interrupt({ now: true });
-    const settling = request.kind === 'moves-off';
-    if (settling) { this.B.flying = false; this.B.flare = false; this.S.pending = null; }
-    if (!settling) {
-      this.B.headY = 0;
-      this.B.tuftY = 0;
-      this.B.girth = -0.7;
-      this.B.hopY = 0;
-    }
+    this.B.headY = 0;
+    this.B.tuftY = 0;
+    this.B.girth = -0.7;
+    this.B.hopY = 0;
     this.B.hopKick = 0;
     this.S.chirpT = 0;
     this.H.gaze = 0;
-    this.eyeOpen = null;
-    this.motion = request.kind === 'moves-off' ? 'settling' : 'live';
+    this.motion = 'live';
+    this.blend = null;
     this.reaction = request;
     this.doNow(this.makeAct(request.kind, request, waking));
     this.asleep = false;
+  }
+  /**
+   * Moves off: snapshot the whole drawn pose and blend it to the still frame
+   * (TL-P4-26 addendum 7). Every other motion source waits at the gate, so the
+   * drawing at release is the still frame by construction.
+   */
+  private beginSettle(): void {
+    this.interrupt({ now: true });
+    this.S.pending = null;
+    const from = this.drawn ?? this.drawing();
+    this.blend = { from, to: this.stillDrawing(from), t0: this.S.t };
+    this.motion = 'settling';
+  }
+  /** The still frame the drawing settles to: poses.css's still pose, Settings' closed eyes, at home. */
+  private stillDrawing(from: Drawing): Drawing {
+    const pose = this.pose ?? 'idle';
+    const h = this.home();
+    const Z = this.size;
+    const sleep = pose === 'sleep' && !this.settings;
+    return {
+      x: fixed(h.x - Z / 2, 1), y: fixed(h.y - 0.92 * Z, 1), face: 1, opacity: 1,
+      pitch: 0, sx: 1, sy: 1,
+      head: this.settings ? 8 : sleep ? 20 : 0, headY: sleep ? 3 : 0,
+      tail: 0, wing: 0, ws: 1, legs: 1, jaw: 0,
+      tuft: pose === 'sleep' ? -26 : pose === 'alarm' ? 18 : pose === 'wait' ? 8 : 0,
+      tuftY: pose === 'alarm' ? -2 : 0,
+      eye: this.settings ? 0.08 : 1, ix: 0, iy: 0,
+      chip: from.chip && { ...from.chip, opacity: 0 },
+      glyph: pose === 'carry',
+    };
+  }
+  /** The blend at engine time: each drawn value eased from its snapshot; the still frame itself at the end. */
+  private blendDrawing(blend: { from: Drawing; to: Drawing; t0: number }): Drawing {
+    const el = this.S.t - blend.t0;
+    if (el >= SETTLE - 1e-9) return blend.to;
+    // Summed frame times carry float noise; a 1e-9 grid keeps whole frames exact (0.75 is 0.75).
+    const q = settleEase(Math.round(clamp(el / SETTLE, 0, 1) * 1e9) / 1e9);
+    const { from, to } = blend;
+    const out = { ...from };
+    for (const key of DRAWN_NUMBERS) out[key] = from[key] + (to[key] - from[key]) * q;
+    if (from.chip && to.chip) out.chip = { opacity: from.chip.opacity + (to.chip.opacity - from.chip.opacity) * q,
+      x: from.chip.x, y: from.chip.y, r: from.chip.r };
+    return out;
+  }
+  /** The blend has ended: the state is the still frame it drew, and a queued pose applies. */
+  private endSettle(): void {
+    const C = this.C;
+    const B = this.B;
+    const H = this.H;
+    const to = this.blend?.to;
+    this.blend = null;
+    this.motion = 'still';
+    this.notifyStill = true;
+    if (!to) return;
+    for (const name of ['pitch', 'tail', 'wing', 'jaw', 'ix', 'iy'] as const) pin(C[name], 0);
+    for (const name of ['squash', 'legs', 'face'] as const) pin(C[name], 1);
+    pin(C.tuft, to.tuft);
+    Object.assign(H, { v: to.head, vel: 0, t: to.head, gaze: 0, actTarget: to.head, gazeTarget: 0, snapTarget: null });
+    const h = this.home();
+    Object.assign(B, { x: h.x, y: h.y, face: 1, hopY: 0, hopKick: 0, bob: 0, ws: 1, headY: to.headY, tuftY: to.tuftY,
+      opacity: 1, girth: -0.7, flying: false, flare: false, ruleCarry: false });
+    Object.assign(this.S, { chirpT: 0, blink: 0, blinkT: -1, startleRising: false });
+    this.drawn = to;
+    const queued = this.queuedPose;
+    this.queuedPose = null;
+    if (queued) this.setPose(queued.pose);
   }
   private updateReaction(dt: number): void {
     const a = this.S.doing;
@@ -677,7 +798,7 @@ export class BirdEngine {
     const { kind, at } = request;
     const C = this.C;
     const B = this.B;
-    const needsStartle = kind !== 'moves-off' && (waking || kind === 'bin' || kind === 'error' || kind === 'offline');
+    const needsStartle = waking || kind === 'bin' || kind === 'error' || kind === 'offline';
     const holdAlarm = kind === 'offline' || (kind === 'error' && this.pose === 'sleep');
     const startle = needsStartle ? this.makeStartle(holdAlarm) : null;
     let startleDone = !startle;
@@ -688,17 +809,7 @@ export class BirdEngine {
     const partStarts: Partial<Record<SpringName, number>> = {};
     const partEnds: Partial<Record<SpringName, number>> = {};
     const heldCarry = B.carrying;
-    let fromX = B.x;
-    let fromY = B.y + B.hopY;
-    let fromHead = this.H.v;
-    let fromEye = this.asleep ? 0.08 : 1 - 0.92 * this.S.blink;
-    let fromParts = Object.fromEntries(Object.entries(C).map(([name, c]) => [name, c.v])) as Record<SpringName, number>;
-    let fromHeadY = B.headY;
-    let fromTuftY = B.tuftY;
-    let fromOpacity = B.opacity;
-    let fromGirth = B.girth;
-    /** The still frame the settle is heading for; a pose change restarts the settle from where the bird is. */
-    let settlingTo = this.pose;
+    const fromX = B.x;
     const proud = kind === 'done' ? this.makeShowOff({ tail: -22, wing: 0, tuft: 16, head: 0,
       pitch: -4, swell: 1.03, wide: 1.05, seconds: 1.5, rise: 0.6, fall: 1.4,
       turn: false, chirp: false, sparkle: false, kick: 0 }) : null;
@@ -711,14 +822,7 @@ export class BirdEngine {
     // The composite writes the rest baseline as well as its keyed parts.
     const channels: Channel[] = ['head', 'gazeHead', 'hop',
       ...(Object.keys(C) as SpringName[]).filter((name) => name !== 'ix' && name !== 'iy')];
-    switch (kind) {
-      case 'duplicate': case 'link-open': case 'bin': case 'error':
-        if (at) channels.push('ix', 'iy');
-        break;
-      case 'moves-off':
-        channels.push('ix', 'iy', 'wingScale', 'bob', 'eye');
-        break;
-    }
+    if (at && (kind === 'duplicate' || kind === 'link-open' || kind === 'bin' || kind === 'error')) channels.push('ix', 'iy');
     return {
       channels,
       update: (_el, dt) => {
@@ -810,61 +914,9 @@ export class BirdEngine {
               if (at) B.x = fromX + clamp(at.x - fromX, -9, 9) * smooth(clock / 0.16);
             }
             return clock >= (kind === 'tap' ? 0.6 : 0.3);
-          case 'moves-off': {
-            B.bob = 0;
-            if (this.pose !== settlingTo) {
-              settlingTo = this.pose;
-              clock = 0;
-              fromX = B.x;
-              fromY = B.y + B.hopY;
-              fromHead = this.H.v;
-              fromEye = this.eyeOpen ?? fromEye;
-              fromParts = Object.fromEntries(Object.entries(C).map(([name, c]) => [name, c.v])) as Record<SpringName, number>;
-              fromHeadY = B.headY;
-              fromTuftY = B.tuftY;
-              fromOpacity = B.opacity;
-              fromGirth = B.girth;
-            }
-            const q = 1 - Math.pow(1 - clamp(clock / 0.6, 0, 1), 3);
-            const still = this.pose;
-            const head = this.settings ? 8 : still === 'sleep' ? 20 : 0;
-            const tuft = still === 'sleep' ? -26 : still === 'alarm' ? 18 : still === 'wait' ? 8 : 0;
-            const eye = this.settings ? 0.08 : 1;
-            const h = this.home();
-            /** Every value the settle draws, with its still frame: the settle is done only when all of them arrive. */
-            const targets: Array<readonly [number, number]> = [];
-            const ease = (from: number, to: number): number => {
-              const v = from + (to - from) * q;
-              targets.push([v, to]);
-              return v;
-            };
-            for (const name of Object.keys(C) as SpringName[]) {
-              const target = name === 'squash' || name === 'legs' || name === 'face' ? 1 :
-                name === 'tuft' ? tuft : name === 'ix' ? IRIS_REST.x : 0;
-              pin(C[name], ease(fromParts[name], target));
-            }
-            this.H.t = fromHead + (head - fromHead) * q;
-            this.eyeOpen = ease(fromEye, eye);
-            B.headY = ease(fromHeadY, still === 'sleep' ? 3 : 0);
-            B.tuftY = ease(fromTuftY, still === 'alarm' ? -2 : 0);
-            B.opacity = ease(fromOpacity, 1);
-            B.girth = ease(fromGirth, -0.7);
-            B.ws += (1 - B.ws) * q;
-            targets.push([B.ws, 1]);
-            B.x = ease(fromX, h.x);
-            B.y = ease(fromY, h.y);
-            B.hopY = 0;
-            // The head moves by its profile, so it may still be on its way at 0.6 s: it must be there and at rest.
-            targets.push([this.H.v, head]);
-            const arrived = Math.abs(this.H.vel) * FRAME <= 0.01 &&
-              targets.every(([v, to]) => Math.abs(v - to) <= 0.01);
-            if (clock >= 0.6 - 1e-9 && arrived) {
-              this.motion = 'still';
-              this.notifyStill = true;
-              return true;
-            }
-            return false;
-          }
+          case 'moves-off':
+            // Never an act: the settle is the one blend (beginSettle).
+            return true;
         }
       },
       end: () => {
@@ -996,6 +1048,7 @@ export class BirdEngine {
     return this.enqueue({ update: (el) => el >= seconds });
   }
   chirp(d = 0.4): void {
+    if (this.motion !== 'live') return;
     this.chirpOwner = this.writer;
     if (this.writer) {
       this.writer.channels = [...this.writer.channels ?? [], 'jaw', 'tuft'];
@@ -1325,9 +1378,13 @@ export class BirdEngine {
     if (this.S.doing) this.claim(this.S.doing);
     if (this.S.action) this.claim(this.S.action);
     this.S.t += dt;
-    this.think(dt);
-    this.step(dt, elapsed);
+    // The gate: while it settles, no motion source runs; apply() draws the blend alone.
+    if (this.motion === 'live') {
+      this.think(dt);
+      this.step(dt, elapsed);
+    }
     this.apply();
+    if (this.blend && this.S.t - this.blend.t0 >= SETTLE - 1e-9) this.endSettle();
     if (this.notifyStill) {
       this.notifyStill = false;
       this.onStill?.();
@@ -1338,7 +1395,6 @@ export class BirdEngine {
   private think(dt: number): void {
     const S = this.S;
     const B = this.B;
-    if (this.motion === 'still') return;
     if (this.reaction) {
       this.updateReaction(dt);
       return;
@@ -1674,15 +1730,14 @@ export class BirdEngine {
       B.ph += dt * Math.PI * 2 * (B.flare ? 6 : 10);
       const s = Math.sin(B.ph);
       if (this.mayWrite('wing')) C.wing.v = B.flare ? 62 + 18 * s : 26 + 46 * s;
-      if (this.mayWrite('wingScale')) B.ws = 0.8 + 0.25 * Math.cos(B.ph);
-      if (this.mayWrite('bob')) B.bob = -2.5 * s;
+      B.ws = 0.8 + 0.25 * Math.cos(B.ph);
+      B.bob = -2.5 * s;
       if (this.mayWrite('tail')) C.tail.t = B.flare ? 26 : -6 + 4 * s;
     } else {
       // A perched pose draws its own wing beat.
-      if (!this.pose && this.mayWrite('wingScale')) B.ws += (1 - B.ws) * 0.2;
-      if (this.mayWrite('bob')) B.bob = 0;
+      if (!this.pose) B.ws += (1 - B.ws) * 0.2;
+      B.bob = 0;
     }
-    if (!this.mayWrite('eye')) return;
     S.nextBlink -= dt;
     if (this.asleep) {
       // Asleep, the eyes stay shut: no blink.
@@ -1727,67 +1782,103 @@ export class BirdEngine {
     };
   }
 
-  private apply(): void {
+  /** The drawn pose from the state: every value apply() writes, at the precision it writes it. */
+  private drawing(): Drawing {
     const P = this.parts;
     const B = this.B;
     const C = this.C;
+    const Z = this.size;
+    let f = C.face.v;
+    if (Math.abs(f) < 0.06) f = f < 0 ? -0.06 : 0.06;
+    // A flier breathes on its own; a perched pose breathes only in its script (sleep).
+    const sy = C.squash.v * (this.pose ? 1 : 1 + 0.014 * Math.sin(this.S.t * 2.6));
+    const sx = 1 + (sy - 1) * B.girth;
+    let chip: Drawing['chip'] = null;
+    if (P.carry) {
+      const last = this.drawn?.chip ?? { x: 0, y: 0, r: 0 };
+      if (B.carrying) {
+        const p = this.beak();
+        // Hang the thing from the beak: its top edge a little above the tip.
+        const w = P.carry.offsetWidth || 26;
+        const h = P.carry.offsetHeight || 16;
+        chip = { opacity: 1, x: fixed(p.x - w * 0.35 + C.face.v * w * 0.25, 1), y: fixed(p.y - h * 0.3, 1),
+          r: fixed(C.pitch.v * C.face.v * 0.5, 1) };
+      } else chip = { opacity: 0, x: last.x, y: last.y, r: last.r };
+    }
+    return {
+      x: fixed(B.x - Z / 2, 1),
+      y: fixed(B.y + B.hopY + B.bob - 0.92 * Z, 1),
+      face: fixed(f, 3),
+      opacity: fixed(this.pose === 'land' ? B.opacity : 1, 2),
+      pitch: fixed(C.pitch.v, 2),
+      sx: fixed(sx, 3),
+      sy: fixed(sy, 3),
+      head: fixed(this.H.v, 4),
+      headY: B.headY,
+      tail: fixed(C.tail.v, 2),
+      wing: fixed(C.wing.v, 2),
+      ws: fixed(B.ws, 3),
+      legs: fixed(Math.max(0.2, C.legs.v), 3),
+      jaw: fixed(Math.max(0, C.jaw.v), 2),
+      tuft: fixed(C.tuft.v, 2),
+      tuftY: B.tuftY,
+      // Asleep, the eyes stay shut through the blink.
+      eye: fixed(this.asleep ? 0.08 : 1 - 0.92 * this.S.blink, 3),
+      ix: fixed(C.ix.v, 2),
+      iy: fixed(C.iy.v, 2),
+      chip,
+      glyph: B.ruleCarry || (B.carrying && !P.carry),
+    };
+  }
+
+  /** Draws one frame: the state's pose, or the settle's blend while it settles. */
+  private apply(): void {
+    const d = this.blend ? this.blendDrawing(this.blend) : this.drawing();
+    this.drawn = d;
+    const P = this.parts;
     const Z = this.size;
     if (this.drawnSize !== Z) {
       P.bird.style.width = `${Z}px`;
       P.bird.style.height = `${Z}px`;
       this.drawnSize = Z;
     }
-    let f = C.face.v;
-    if (Math.abs(f) < 0.06) f = f < 0 ? -0.06 : 0.06;
-    const place = `translate(${(B.x - Z / 2).toFixed(1)}px,${(B.y + B.hopY + B.bob - 0.92 * Z).toFixed(1)}px) scaleX(${f.toFixed(3)})`;
+    const place = `translate(${d.x.toFixed(1)}px,${d.y.toFixed(1)}px) scaleX(${d.face.toFixed(3)})`;
     if (this.drawnPlace !== place) {
       P.bird.style.transform = place;
       this.drawnPlace = place;
     }
-    if (this.pose === 'land') P.bird.style.opacity = B.opacity.toFixed(2);
-    // A flier breathes on its own; a perched pose breathes only in its script (sleep).
-    const sy = C.squash.v * (this.pose ? 1 : 1 + 0.014 * Math.sin(this.S.t * 2.6));
-    const sx = 1 + (sy - 1) * B.girth;
+    const opacity = d.opacity.toFixed(2);
+    if (this.drawnOpacity !== opacity) {
+      P.bird.style.opacity = opacity;
+      this.drawnOpacity = opacity;
+    }
     transform(
       P.rig,
-      `rotate(${C.pitch.v.toFixed(2)} 50 92) translate(50 92) scale(${sx.toFixed(3)} ${sy.toFixed(3)}) translate(-50 -92)`,
+      `rotate(${d.pitch.toFixed(2)} 50 92) translate(50 92) scale(${d.sx.toFixed(3)} ${d.sy.toFixed(3)}) translate(-50 -92)`,
     );
-    transform(
-      P.head,
-      `rotate(${this.H.v.toFixed(4)} 60 50)${B.headY ? ` translate(0 ${B.headY})` : ''}`,
-    );
-    transform(P.tail, `rotate(${C.tail.v.toFixed(2)} 32 70)`);
+    transform(P.head, `rotate(${d.head.toFixed(4)} 60 50)${d.headY ? ` translate(0 ${offset(d.headY)})` : ''}`);
+    transform(P.tail, `rotate(${d.tail.toFixed(2)} 32 70)`);
     transform(
       P.wing,
-      `rotate(${C.wing.v.toFixed(2)} 56 55) translate(56 55) scale(1 ${B.ws.toFixed(3)}) translate(-56 -55)`,
+      `rotate(${d.wing.toFixed(2)} 56 55) translate(56 55) scale(1 ${d.ws.toFixed(3)}) translate(-56 -55)`,
     );
-    transform(
-      P.legs,
-      `translate(50 82) scale(1 ${Math.max(0.2, C.legs.v).toFixed(3)}) translate(-50 -82)`,
-    );
-    transform(P.jaw, `rotate(${Math.max(0, C.jaw.v).toFixed(2)} 78 38)`);
-    transform(
-      P.tuft,
-      `rotate(${C.tuft.v.toFixed(2)} 61 23)${B.tuftY ? ` translate(0 ${B.tuftY})` : ''}`,
-    );
-    // Asleep, the eyes stay shut through the blink.
-    const open = this.eyeOpen ?? (this.asleep ? 0.08 : 1 - 0.92 * this.S.blink);
-    transform(P.eye, `translate(70 34) scale(1 ${open.toFixed(3)}) translate(-70 -34)`);
-    transform(P.iris, `translate(${C.ix.v.toFixed(2)} ${C.iy.v.toFixed(2)})`);
-    if (P.carry) {
-      if (B.carrying) {
-        const p = this.beak();
-        P.carry.style.opacity = '1';
-        // Hang the thing from the beak: its top edge a little above the tip.
-        const w = P.carry.offsetWidth || 26;
-        const h = P.carry.offsetHeight || 16;
-        P.carry.style.transform = `translate(${(p.x - w * 0.35 + C.face.v * w * 0.25).toFixed(1)}px,${(p.y - h * 0.3).toFixed(1)}px) rotate(${(C.pitch.v * C.face.v * 0.5).toFixed(1)}deg)`;
-      } else P.carry.style.opacity = '0';
+    transform(P.legs, `translate(50 82) scale(1 ${d.legs.toFixed(3)}) translate(-50 -82)`);
+    transform(P.jaw, `rotate(${d.jaw.toFixed(2)} 78 38)`);
+    transform(P.tuft, `rotate(${d.tuft.toFixed(2)} 61 23)${d.tuftY ? ` translate(0 ${offset(d.tuftY)})` : ''}`);
+    transform(P.eye, `translate(70 34) scale(1 ${d.eye.toFixed(3)}) translate(-70 -34)`);
+    transform(P.iris, `translate(${d.ix.toFixed(2)} ${d.iy.toFixed(2)})`);
+    if (P.carry && d.chip) {
+      P.carry.style.opacity = String(fixed(d.chip.opacity, 1));
+      const chip = `translate(${d.chip.x.toFixed(1)}px,${d.chip.y.toFixed(1)}px) rotate(${d.chip.r.toFixed(1)}deg)`;
+      // An unplaced chip (never carried) keeps the stylesheet's place.
+      if (this.drawnChip !== chip && (this.drawnChip !== null || d.chip.x || d.chip.y || d.chip.r)) {
+        P.carry.style.transform = chip;
+        this.drawnChip = chip;
+      }
     }
-    const glyph = B.ruleCarry || (B.carrying && !P.carry);
-    if (this.drawnGlyph !== glyph) {
-      P.glyph?.setAttribute('display', glyph ? 'inline' : 'none');
-      this.drawnGlyph = glyph;
+    if (this.drawnGlyph !== d.glyph) {
+      P.glyph?.setAttribute('display', d.glyph ? 'inline' : 'none');
+      this.drawnGlyph = d.glyph;
     }
   }
 }
