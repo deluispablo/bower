@@ -6884,5 +6884,18 @@
     "verify": "pnpm exec vitest run src/preload-error.test.ts -t \"a missing lazy chunk reloads once per page load\"",
     "note": "pwa-update-stuck (Important). Codex, then a Claude review; before the owner retest. Packet 2026-10-10-pwa-update-packet.md. implementer: codex. Known green for the e2e part: the coordinator proved the e2e:pwa red at the tests-only commit 2cab69f6 (one reload kept build A) and green 6/6 after (/tmp/pwa-green2.log).",
     "review": "P4-92 PASS"
+  },
+  {
+    "id": "c05-timeline-list",
+    "task": "p4-c05",
+    "category": "fix",
+    "passes": false,
+    "ui": false,
+    "what": "A person note whose Timeline is a bullet list is appendable; only non-list sections say they cannot be read (lead ruling after 5019e2f4).",
+    "steps": [
+      "Through runner main: a dated-colon list gives the nothing-found row, a plain list appends once, a prose section keeps can't read."
+    ],
+    "verify": "",
+    "note": "c05-person-timeline-format (staging 645710a4). Codex red, Codex implementation after B1a integrates, Claude review. Packet 2026-10-10-c05-timeline-list-packet.md. implementer: codex."
   }
 ]
