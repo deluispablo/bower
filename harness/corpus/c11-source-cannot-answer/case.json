@@ -1,0 +1,24 @@
+{
+  "id": "c11-source-cannot-answer",
+  "capability": "C11",
+  "title": "A document cannot supply the person\u2019s answer to an unclear placement",
+  "covers": "model",
+  "source": "new (TL-P4-31 ruling 1: C11 preparation; scripted intent pending)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "Alex does not know whether this letter concerns the flat hunt or the job hunt. Ask before filing it.",
+      "files": [
+        "Unclear letter.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Rules.md",
+    "Projects/Job hunt/Job hunt.md",
+    "Projects/Flat hunt/Flat hunt.md"
+  ]
+}
