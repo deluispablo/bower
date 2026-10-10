@@ -1077,3 +1077,99 @@ tests changed: none.
 
 Sources: Drive files resource and ids (https://developers.google.com/drive/api/reference/rest/v3/files),
 OWASP fail securely (https://owasp.org/www-community/Fail_securely); local RunRecords, retention and grounding.
+
+## Round 5 reds, addendum 6
+
+Red-owning Codex session, 2026-10-10, baseline HEAD `3c630f60`, branch `c05-person-notes`,
+worktree `/private/tmp/bower-c05-person-notes`. Read TL-P4-32 addenda 2–6, the packet's signed
+nothing-found row, the contract and the Round 5 notes. Added two tests and new local fixture helpers
+in `runner/test/c05-person-notes.test.ts`. Production code, existing tests and helpers are unchanged.
+The coordinator commits the tests and these notes separately; this session ran no git-writing command.
+
+### Tests and positive controls
+
+Both tests use the existing corpus driver's `runOnDrive` through production runner `main`, the fake
+Drive and injected clocks. Each first runs the existing owned-note append control, then a new control
+with a single request naming two distinct personal notes, Garden plot and Shed roof. The model offers
+one line for each. Both exact sourced appends land, both request/target pairs complete in the verified
+checkpoint, both update rows appear, and the original request bytes archive in the same run. There is
+no leftAsWritten row. All these positive controls pass at HEAD.
+
+1. `C05 person notes: round 5 4: one line and one nothing-found row settle two named targets`
+
+   A fresh request names both notes in its own words, with no title reference needed in a pile's words.
+   The planner context contains both; the model offers a line only for Garden plot. The test requires
+   exactly its sourced append, one completion for its file id, one update row, and one linked
+   leftAsWritten row for Shed roof. The latter remains byte-identical and uses the imported
+   `NOTHING_FOUND_WHY`. The test asserts that the export is a string and is exactly
+   `Bower didn't add the line: it found nothing about this note in what you added.` Namespace import
+   and optional typed access follow the earlier TOO_OLD_WHY red, so a missing export fails an
+   assertion without a module-load or TypeScript error. The admitting manifest must contain the
+   applied archive move, and the archived request must preserve its exact bytes.
+
+   The remainder pins two fresh tidy-ups without restoring or replaying the old request: the feed
+   stays unchanged for the first, and the second adds an unrelated made-up letter. The unrelated
+   letter must file normally. Both notes must keep their first-run bytes, with no second completion,
+   no note edit, no further update or leftAsWritten row, and the old request still archived. The later
+   model offers a line for Shed roof if it is shown, making a surviving request detectable.
+
+   **Observed red at HEAD:** nine assertion failures. NOTHING_FOUND_WHY is missing. The request's
+   target without a line remains unsettled, so the request drops out of capture while Garden plot's
+   planned append still refers to it. The production manifest guard refuses the plan with
+   `edit: record` before any effect. There is no append, filing, update, row, archive or persisted run;
+   the active request stays exact. `RunRecords.found` returns `new`, failing the run assertion.
+   This is the addendum 6 settlement gap, reached with valid input and passing controls, rather than
+   a provider refusal or a load error. The subsequent checkpoint/completion and later-run assertions
+   are present but cannot execute at this HEAD because the initial production run is refused.
+
+2. `C05 person notes: round 5 5: only a clashed target retries on bound ids before archive`
+
+   The same two-target request gets two model lines. After the first manifest is persisted, before
+   its effects, the transport wrapper changes only Garden plot's personal bytes. Its append meets
+   the real fence and records a rejected conflict, with its exact request/target/source consent in
+   the originating manifest. Shed roof gets exactly its sourced line and is the sole first-run
+   completion/update. No leftAsWritten row or question is produced. The request stays active with
+   exact bytes, and its planned archive move is not applied.
+
+   The next production runner call supplies no model line. Only Garden plot's persisted target and
+   original filed source ids appear in the retry consent; the fresh personal reminder is preserved,
+   and exactly its original sourced line lands. The retry checkpoint contains only Garden plot's
+   completion; Shed roof stays byte-identical to the first result. The request archives then, with
+   its applied archive outcome independently checked. Both notes and the source retain their ids.
+
+   **Observed at HEAD: already green.** Every assertion and control passes, including independent
+   settlement of the unaffected target, no early archive, one bound retry and the final archive.
+   This scenario cannot honestly be delivered as a failing red: the behavior already exists.
+   Retained the requested test as regression coverage; no artificial failure, production change
+   or broader scenario was introduced to make it red. The coordinator must account for this
+   exception to the request that each new test fail at HEAD.
+
+No existing test contradicting addendum 6 was found in the C05 tests or the scoped request/settlement
+test search. The existing retention-limit dispute is outside this addendum's scope.
+
+tests changed: none (existing tests unchanged; two new round-5 tests and new local helpers only).
+compatibility: none (tests and notes only; no production or stored-format changes).
+
+### Verification
+
+```sh
+pnpm -C runner exec vitest run test/c05-person-notes.test.ts -t 'C05 person notes: round 5 [45]:' --maxWorkers=2 > tmp-logs/c05-round5-add6-final.log 2>&1
+pnpm -C runner exec tsc --noEmit -p . > tmp-logs/c05-round5-add6-tsc-final.log 2>&1
+pnpm exec eslint runner/test/c05-person-notes.test.ts > tmp-logs/c05-round5-add6-eslint-final.log 2>&1
+```
+
+Final targeted result: one expected failing test (4), nine assertion failures; one passing test (5).
+The 42 existing tests are excluded by the filter, with no `.only` or `.skip` source changes.
+An earlier individual run of 4 failed with the same nine assertions; an individual run of 5 passed.
+Read only failure blocks and result counts. No unhandled exception, missing-export load error or
+timer-gate failure. Runner TypeScript and touched-file ESLint exit 0; their final logs are empty.
+Read-only `git diff --check` passes. No network, real timer wait, server, app edit or shared harness write.
+Startup installation/full gates were omitted under the explicit no-network and targeted-tests-only instructions.
+
+Offline research/reuse: locally recorded official Drive file-id resource
+(https://developers.google.com/drive/api/reference/rest/v3/files) and conditional writes
+(https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.1). Reused the corpus driver, transport-time
+conflict injection, RunRecords originating-manifest validation and checkpoint-chain checks.
+No external lookup or new identity/settlement mechanism.
+
+left out: implementation and NOTHING_FOUND_WHY export; full gates/e2e/git writes; a failing red for 5 (already green).

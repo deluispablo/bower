@@ -15,6 +15,9 @@ import * as c05Whys from '../../src/data/spine/scripted';
 // Namespace access lets the missing signed copy fail an assertion, rather than module loading or tsc.
 const { TOO_OLD_WHY } = c05Whys as typeof c05Whys & { TOO_OLD_WHY?: string };
 
+// Addendum 6's export is supplied by the implementer; absence must be an assertion failure.
+const { NOTHING_FOUND_WHY } = c05Whys as typeof c05Whys & { NOTHING_FOUND_WHY?: string };
+
 const PATH = 'Areas/Home/Garden plot.md';
 const SOURCE = 'Water butt update.txt';
 const NEWS = 'The replacement water butt has arrived.';
@@ -1101,5 +1104,169 @@ describe('C05 person notes through runner main', () => {
     expect.soft(reportOf(next).leftAsWritten, 'the stale request reports one Left as you wrote them row').toHaveLength(1);
     expect.soft(reportOf(next).leftAsWritten).toEqual([expect.objectContaining({ why: TOO_OLD_WHY })]);
   }, 30_000);
+
+  const round5Other = 'Areas/Home/Shed roof.md';
+  const round5OtherNews = 'Alex received the shed roof update.';
+  const round5NothingFound = "Bower didn't add the line: it found nothing about this note in what you added.";
+
+  async function round5TwoTargets() {
+    const c = await fixture();
+    c.folder[round5Other] = (c.folder[PATH] ?? '').replace('Alex keeps a handwritten planting diary.', 'Alex keeps a made-up shed diary.');
+    c.inboxFiles[SOURCE] += `\n${round5OtherNews}`;
+    c.journal = [{ kind: 'request', text: 'Update Garden plot and Shed roof from this committee letter.' }];
+    const drive = fixedDrive(); const root = await seedCase(drive, c);
+    const files = await drive.listAll(root);
+    const noteId = files.find((f) => f.name === 'Garden plot.md')?.id ?? '';
+    const otherId = files.find((f) => f.name === 'Shed roof.md')?.id ?? '';
+    const requestId = files.find((f) => f.name === 'change-1.json')?.id ?? '';
+    expect(noteId).toBeTruthy(); expect(otherId).toBeTruthy(); expect(requestId).toBeTruthy();
+    return { c, drive, root, noteId, otherId, requestId, requestBytes: await drive.readText(requestId) };
+  }
+
+  const round5TwoLines = () => reply((_ctx, source) => ({ ...filing(source), lines: [
+    { note: PATH, text: NEWS, cites: source },
+    { note: round5Other, text: round5OtherNews, cites: source },
+  ] }));
+
+  // Both named personal notes can append, complete and archive in one production run.
+  async function round5TwoTargetControl(): Promise<void> {
+    const { c, drive, root, noteId, otherId, requestBytes } = await round5TwoTargets();
+    const r = await runOnDrive(c, drive, root, { claude: round5TwoLines() }, 1);
+    expect(r.code).toBe(0);
+    expect(r.after[PATH]).toBe((c.folder[PATH] ?? '').trimEnd() + `\n- 2026-10-07 · ${NEWS} · [[${SOURCE}]]\n`);
+    expect(r.after[round5Other]).toBe((c.folder[round5Other] ?? '').trimEnd() + `\n- 2026-10-07 · ${round5OtherNews} · [[${SOURCE}]]\n`);
+    expect(reportOf(r).updated).toHaveLength(2);
+    expect(reportOf(r).leftAsWritten ?? []).toEqual([]);
+    const stored = await round4Records(r, 'abc123-run1');
+    expect(stored.chain.at(-1)?.completedAppends).toEqual(expect.arrayContaining([
+      { requestId: 'change-1', targetFileId: noteId }, { requestId: 'change-1', targetFileId: otherId },
+    ]));
+    expect(stored.chain.at(-1)?.completedAppends).toHaveLength(2);
+    expect(r.after[`${SYSTEM.archive}/change-1.json`]).toBe(requestBytes);
+    expect(r.after[`${SYSTEM.changes}/change-1.json`]).toBeUndefined();
+  }
+
+  it('C05 person notes: round 5 4: one line and one nothing-found row settle two named targets', async () => {
+    await positiveControl();
+    await round5TwoTargetControl();
+    expect.soft(typeof NOTHING_FOUND_WHY, 'the C05 nothing-found why must be exported without a load error').toBe('string');
+    expect.soft(NOTHING_FOUND_WHY, 'the nothing-found copy is the owner-signed sentence').toBe(round5NothingFound);
+    const { c, drive, root, noteId, otherId, requestId, requestBytes } = await round5TwoTargets();
+    const shown: Context[] = [];
+    const first = await runOnDrive(c, drive, root, { claude: reply((_ctx, source) => ({ ...filing(source),
+      lines: [{ note: PATH, text: NEWS, cites: source }] }), shown) }, 1);
+    expect(first.code).toBe(0);
+    expect(shown[0]?.notes.map((n) => n.path)).toEqual(expect.arrayContaining([PATH, round5Other]));
+    expect.soft(first.after[PATH], 'one offered line must append despite the other target getting no line').toBe(
+      (c.folder[PATH] ?? '').trimEnd() + `\n- 2026-10-07 · ${NEWS} · [[${SOURCE}]]\n`);
+    expect(first.after[round5Other]).toBe(c.folder[round5Other]);
+    expect.soft(reportOf(first).filed).toHaveLength(1);
+    expect.soft(reportOf(first).updated).toEqual([expect.objectContaining({ path: PATH, what: APPENDED })]);
+    expect(questionsOf(first)).toEqual([]);
+    expect.soft(reportOf(first).leftAsWritten, 'the target without a model line settles with its linked why').toEqual([
+      expect.objectContaining({ fileId: otherId, why: NOTHING_FOUND_WHY }),
+    ]);
+    expect.soft(first.after[`${SYSTEM.archive}/change-1.json`], 'all named targets settle in the admitting run').toBe(requestBytes);
+    expect.soft(first.after[`${SYSTEM.changes}/change-1.json`]).toBeUndefined();
+    const stored = await round4Records(first, 'abc123-run1');
+    expect(stored.chain.at(-1)?.completedAppends).toEqual([{ requestId: 'change-1', targetFileId: noteId }]);
+    expect(stored.manifest.operations.filter((o) => o.effect.kind === 'edit-text')).toHaveLength(1);
+    const archive = stored.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === requestId);
+    expect.soft(archive, 'the admitting manifest contains the request archive').toBeDefined();
+    expect.soft(stored.chain.at(-1)?.outcomes.find((o) => o.operationId === archive?.operationId)?.state).toBe('applied');
+
+    // No feed edit and no replay restore: a new tidy-up must not finish an omitted target later.
+    const unchanged = await runOnDrive(c, drive, root, { claude: reply(() => ({ kind: 'tidy-intent', v: 1, things: [] })) }, 2);
+    expect(unchanged.code).toBe(0);
+    const unchangedStored = await round4Records(unchanged, 'abc123-run1-2');
+    expect(unchanged.after[PATH]).toBe(first.after[PATH]);
+    expect(unchanged.after[round5Other]).toBe(first.after[round5Other]);
+    expect(unchangedStored.chain.at(-1)?.completedAppends ?? []).toEqual([]);
+    expect(unchangedStored.manifest.operations.filter((o) => o.effect.kind === 'edit-text')).toEqual([]);
+    expect(reportOf(unchanged).updated).toEqual([]);
+    expect(reportOf(unchanged).leftAsWritten ?? []).toEqual([]);
+    expect.soft(unchanged.after[`${SYSTEM.archive}/change-1.json`]).toBe(requestBytes);
+
+    const unrelated = await drive.createText(idOf(unchanged, 'Inbox') ?? '', 'Unrelated letter.txt',
+      'Alex received an unrelated made-up letter.', { pile: 'unrelated-letter' });
+    const later = await runOnDrive(c, drive, root, { claude: reply((ctx) => ({ kind: 'tidy-intent', v: 1,
+      things: [round4File(unrelated.id, 'Unrelated letter.txt', 'Alex received an unrelated made-up letter.')],
+      lines: ctx.notes.some((n) => n.path === round5Other)
+        ? [{ note: round5Other, text: 'Alex received an unrelated made-up letter.', cites: unrelated.id }] : [],
+    })) }, 3);
+    expect(later.code).toBe(0); expect(reportOf(later).filed).toHaveLength(1);
+    expect(later.after['Areas/Home/Unrelated letter.txt']).toBe('Alex received an unrelated made-up letter.');
+    const laterStored = await round4Records(later, 'abc123-run1-3');
+    expect(later.after[PATH]).toBe(first.after[PATH]);
+    expect(later.after[round5Other]).toBe(first.after[round5Other]);
+    expect(laterStored.chain.at(-1)?.completedAppends ?? []).toEqual([]);
+    expect(laterStored.manifest.operations.filter((o) => o.effect.kind === 'edit-text')).toEqual([]);
+    expect(reportOf(later).updated).toEqual([]);
+    expect(reportOf(later).leftAsWritten ?? []).toEqual([]);
+    expect(later.after[`${SYSTEM.archive}/change-1.json`]).toBe(requestBytes);
+    assertPersonal(first); assertPersonal(unchanged); assertPersonal(later);
+  });
+
+  it('C05 person notes: round 5 5: only a clashed target retries on bound ids before archive', async () => {
+    await positiveControl();
+    await round5TwoTargetControl();
+    const { c, drive, root, noteId, otherId, requestId, requestBytes } = await round5TwoTargets();
+    const fresh = (c.folder[PATH] ?? '').replace('## My words\n', '## My words\nAlex added a personal reminder.\n');
+    let clashes = 0;
+    const first = await runOnDrive(c, drive, root, { claude: round5TwoLines(), around: (fetch) => async (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      const response = await fetch(input, init);
+      const body = init?.body ? await new Response(init.body).text() : '';
+      if (!clashes && init?.method === 'POST' && url.pathname === '/upload/drive/v3/files' && body.includes('run-manifest')) {
+        clashes++;
+        const seen = await drive.get(noteId);
+        await drive.writeText(noteId, fresh, seen.modifiedTime);
+      }
+      return response;
+    } }, 1);
+    expect(first.code).toBe(0); expect(clashes).toBe(1);
+    expect(first.after[PATH]).toBe(fresh);
+    expect(first.after[round5Other]).toBe((c.folder[round5Other] ?? '').trimEnd() + `\n- 2026-10-07 · ${round5OtherNews} · [[${SOURCE}]]\n`);
+    expect(reportOf(first).updated).toEqual([expect.objectContaining({ path: round5Other, what: APPENDED })]);
+    expect(reportOf(first).leftAsWritten ?? []).toEqual([]);
+    expect(questionsOf(first)).toEqual([]);
+    const sourceId = idOf(first, `Areas/Home/${SOURCE}`) ?? '';
+    expect(sourceId).toBeTruthy();
+    const stored = await round4Records(first, 'abc123-run1');
+    expect(stored.chain.at(-1)?.completedAppends).toEqual([{ requestId: 'change-1', targetFileId: otherId }]);
+    const clashed = stored.manifest.operations.find((o) => o.effect.kind === 'edit-text' && o.effect.before.fileId === noteId);
+    expect(clashed?.effect.kind === 'edit-text' ? clashed.effect.changes : []).toEqual([expect.objectContaining({
+      kind: 'timeline-append', consent: { requestId: 'change-1', targetFileId: noteId, sourceFileId: sourceId },
+    })]);
+    expect(stored.chain.at(-1)?.outcomes.find((o) => o.operationId === clashed?.operationId)).toEqual(expect.objectContaining({
+      state: 'rejected', failure: expect.objectContaining({ code: 'conflict' }),
+    }));
+    expect.soft(first.after[`${SYSTEM.changes}/change-1.json`], 'one clashed target keeps the request active').toBe(requestBytes);
+    expect.soft(first.after[`${SYSTEM.archive}/change-1.json`], 'the other completion cannot archive the request early').toBeUndefined();
+    const archive = stored.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === requestId);
+    expect(archive).toBeDefined();
+    expect.soft(stored.chain.at(-1)?.outcomes.find((o) => o.operationId === archive?.operationId)?.state).not.toBe('applied');
+
+    // The model supplies no new line: only the persisted target/source pair can finish this request.
+    const next = await runOnDrive(c, drive, root, { claude: reply(() => ({ kind: 'tidy-intent', v: 1, things: [] })) }, 2);
+    expect(next.code).toBe(0);
+    expect.soft(next.after[PATH]).toBe(fresh.trimEnd() + `\n- 2026-10-07 · ${NEWS} · [[${SOURCE}]]\n`);
+    expect(next.after[round5Other]).toBe(first.after[round5Other]);
+    const retry = await round4Records(next, 'abc123-run1-2');
+    const consents = retry.manifest.operations.flatMap((o) => o.effect.kind === 'edit-text'
+      ? o.effect.changes.flatMap((change) => change.kind === 'timeline-append' && change.consent ? [change.consent] : []) : []);
+    expect.soft(consents).toEqual([{ requestId: 'change-1', targetFileId: noteId, sourceFileId: sourceId }]);
+    expect.soft(retry.chain.at(-1)?.completedAppends).toEqual([{ requestId: 'change-1', targetFileId: noteId }]);
+    expect.soft(reportOf(next).updated).toEqual([expect.objectContaining({ path: PATH, what: APPENDED })]);
+    expect(reportOf(next).leftAsWritten ?? []).toEqual([]);
+    expect.soft(next.after[`${SYSTEM.archive}/change-1.json`]).toBe(requestBytes);
+    expect.soft(next.after[`${SYSTEM.changes}/change-1.json`]).toBeUndefined();
+    const retryArchive = retry.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === requestId);
+    expect.soft(retryArchive, 'the retry archives the request after its last target settles').toBeDefined();
+    expect.soft(retry.chain.at(-1)?.outcomes.find((o) => o.operationId === retryArchive?.operationId)?.state).toBe('applied');
+    expect(idOf(next, PATH)).toBe(noteId); expect(idOf(next, round5Other)).toBe(otherId);
+    expect(idOf(next, `Areas/Home/${SOURCE}`)).toBe(sourceId);
+    assertPersonal(first); assertPersonal(next);
+  });
 
 });
