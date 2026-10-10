@@ -177,3 +177,44 @@ Shared-drive support, retrieval.json, cursor commit and index building are left 
 removed: none
 tests changed: no existing test body, assertion, name, bound or fixture was changed or deleted.
 Tests added only; imports and suite registration were extended in the four files listed above.
+
+## Implementation
+
+Status: blocked before product edits. The implementation assignment forbids changing any test, but
+`src/data/drive/drive-ops.test.ts:10–36` pins the complete existing DriveApi method set twice:
+`EXPECTED satisfies Record<keyof DriveApi, 'read' | 'write'>` and an exact equality assertion against
+`DRIVE_OPS`. The five required ports (`readPrefix`, `getStartPageToken`, `listChanges`, `parents`,
+`resolveScope`) are absent from that expected table. Adding them to DriveApi necessarily invalidates
+the test's TypeScript completeness check; registering them as reads in DRIVE_OPS necessarily breaks
+`the table classes each method as expected`. These are source-level consequences, not additional
+observed failures in the unchanged baseline.
+
+The coordinator needs an authorized red update for that existing table before implementation can
+meet both the public-port contract and the requested green gates. Its five new entries must be
+classified as reads. Omitting the ports from DriveApi, hiding their DRIVE_OPS entries, or weakening
+the table's completeness would evade the existing lease-policy contract. None was done.
+
+Changed: this notes file only. No product or test file was edited; no git command that writes was run.
+The committed reds were reproduced through the real HTTP/fake adapters and parity suite, with
+**54 missing-port assertion failures and 640 existing passing tests** across Drive and vault.
+The app, node and runner TypeScript checks passed on the unchanged product baseline.
+
+Logs (all commands redirected; only failure output was read):
+
+- `tmp-logs/b1b-before.log`: `pnpm exec vitest run src/data/drive src/data/vault --maxWorkers=2`;
+  54 failures, all the committed B1b reds, and 640 passing tests.
+- `tmp-logs/b1b-tsc-app.log`: `pnpm exec tsc -p tsconfig.app.json --noEmit`; exit 0.
+- `tmp-logs/b1b-tsc-node.log`: `pnpm exec tsc -p tsconfig.node.json --noEmit`; exit 0.
+- `tmp-logs/b1b-tsc-runner.log`: `pnpm -C runner exec tsc --noEmit`; exit 0.
+
+No TypeScript file was touched, so no touched-file eslint run was applicable. Runner Drive tests
+were not run because runner/src/drive.ts was not changed. No pnpm check, e2e, network or live probe
+was run. No src/data/contracts file changed; no compatibility-row draft is needed.
+
+Research basis: the official Drive download/Range, changes guide, getStartPageToken, changes.list
+and RFC 9110 links in the Drive docs section above, plus the packet's local Q3/Q10 rulings and B1b
+prep. References were read from those supplied local documents; no online verification is claimed.
+
+removed: none
+tests changed: none in this implementation session.
+left out: all product implementation pending the authorized Drive method-table red update.
