@@ -92,7 +92,6 @@ function AwayCard({ run, bird }: { run: RunState; bird: boolean }) {
   const end = run.finishedAt ?? run.phaseAt;
   const replay = hasReplay(run);
   const detail = replay ? landedSummary(run) : runDetail(run);
-  const showDetail = detail && !(run.report?.leftAsWritten?.length && detail === 'Everything has its place.');
   return (
     <section className={`${s.card} ${s.away}`} aria-labelledby="away">
       {bird && (
@@ -104,7 +103,7 @@ function AwayCard({ run, bird }: { run: RunState; bird: boolean }) {
       <h2 id="away" className={s.cardTitle}>
         {replay ? <>{filedWords(run.report)}{run.report?.updated.length ? `, ${plural(notesUpdated(run.report), 'note')} brought up to date` : ''}.</> : runTitle(run)}
       </h2>
-      {showDetail && <p className="muted">{detail}</p>}
+      {detail && <p className="muted">{detail}</p>}
       {run.report && <RunLinks report={run.report} />}
       <div className={s.row2}>
         {replay && <Button size="sm" onClick={() => startReplay(run.id)}>

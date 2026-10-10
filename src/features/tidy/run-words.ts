@@ -138,7 +138,8 @@ export function runDetail(r: RunState): string {
       if (rep.yourChanges) parts.push(`${rep.yourChanges} ${other}${rep.yourChanges === 1 ? 'change' : 'changes'} of yours read`);
       // Joined part by part: a name may hold a comma of its own.
       const said = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1) ?? ''}` : (parts[0] ?? '');
-      return said ? `${said.charAt(0).toUpperCase()}${said.slice(1)}.` : 'Everything has its place.';
+      if (said) return `${said.charAt(0).toUpperCase()}${said.slice(1)}.`;
+      return rep.leftAsWritten?.length ? '' : 'Everything has its place.';
     }
     case 'failed':
       return r.failure ?? 'Nothing was moved. Try again in a minute.';
