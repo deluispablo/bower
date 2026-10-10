@@ -20,3 +20,4 @@ Rules for every row: plain words, no file names in sentences (the `[[…]]` sour
 | Situation | What shows |
 | --- | --- |
 | A request to add a line is older than the history Bower keeps (20 tidy-ups), so Bower adds nothing and archives it | Under "Left as you wrote them", the note link and the muted line: "Bower didn't add the line: this request is too old for Bower to know if it already did. Ask again if you still want it." |
+| The request names two notes and the source has something for only one (TL-P4-32 addendum 6; owner OK 2026-10-10) | Under "Left as you wrote them", the other note's link and the muted line: "Bower didn't add the line: it found nothing about this note in what you added." |
