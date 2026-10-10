@@ -22,7 +22,10 @@ interface Section {
   thread: boolean;
 }
 
-const oneLine = (text: string): string => text.replace(/\s+/gu, ' ').trim();
+// CommonMark §2.4: escape block markers only after whitespace has collapsed.
+const oneLine = (text: string): string => text.replace(/\s+/gu, ' ').trim()
+  .replace(/^([#>*+`~_-])/u, '\\$1')
+  .replace(/^(\d{1,9})([.)])(?= |$)/u, '$1\\$2');
 const compareText = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
 
 // First occurrence wins; question order is the caller's authoritative order.
@@ -37,7 +40,8 @@ function unique<T>(items: readonly T[], identity: (item: T) => string): T[] {
 }
 
 function section(heading: string, rows: Row[], cap: number, thread = false): Section {
-  return { heading, rows: rows.slice(0, cap), total: rows.length, thread };
+  const capped = rows.slice(0, cap);
+  return { heading, rows: capped, total: thread ? rows.length : capped.length, thread };
 }
 
 function renderSection(value: Section): string[] {
@@ -82,7 +86,7 @@ export function renderHot(inputs: HotInputs): HotResult {
   ].join('\n');
 
   let text = render();
-  // Omission marks are included in the budget, including marks from row caps.
+  // Count thread cap marks and word-cut marks within the budget.
   for (const value of [recent, focus, threads]) {
     while (text.split(/\s+/u).length > 300 && value.rows.length > 0) {
       value.rows.pop();
