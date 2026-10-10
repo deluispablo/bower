@@ -831,3 +831,11 @@ Verification, output redirected to tmp-logs/:
 
 Research/reuse: existing QueueBus and browser broadcast forwarding in
 src/data/upload-queue.ts; no sources fetched and no second mechanism introduced.
+
+## Designer verified (TL-P4-18 addendum 3)
+
+Designer, on fake at 1440 and 375 (a1931e9e build 0824a800): a 2-PDF pile with each chunk slowed 1.5 s, reloaded mid-send; the pile showed "Sending…" for the unsent one for about 2 s, then "From this device"; no file picker (0 filechooser events), no "Choose the file again" or "Didn't arrive"; the storage wording unchanged. verified.
+
+## Known-green close (coordinator)
+
+done.sh could not revert dfa2f8de (fix rounds 1-3 touched the same lines of drive-vault.ts and upload-queue.ts). The red is proved by hand: at dd0b8dfb all five reds failed on their assertions (the Reds section), and each fix round committed a red that failed at its HEAD (fix 1, fix 2, fix 3; this notes file). After the fix: the 12 upload-resume reds pass, data 4152/4152; pnpm check green; e2e app/capabilities demo 35 and fake 59; Codex pass 4 PASS; P4-99 PASS; designer verified.

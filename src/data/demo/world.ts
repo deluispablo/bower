@@ -1,3 +1,4 @@
+import { checkedAnswer, type QuestionAnswer } from '../contracts/questions';
 /**
  * The demo: Alex's Bower folder in memory, behind the same doors the real
  * Drive and Worker will use. Moves and renames change the tree for real; a
@@ -97,7 +98,7 @@ export class DemoWorld {
   private pilePath = new Map<string, string>();
   private journal: ChangeEntry[] = [];
   /** Your answers to Bower's questions, read by the next tidy-up. */
-  private answers = new Map<string, boolean>();
+  private answers = new Map<string, QuestionAnswer>();
   /** Where each inbox thing goes in the next tidy-up (the demo's stand-in for Claude). */
   private plans = new Map<string, { title: string; to: string; note?: string }>(Object.entries(FILING));
   private run: RunState | null = null;
@@ -789,7 +790,7 @@ export class DemoWorld {
           const q = this.questions.find((x) => x.id === id);
           this.questions = this.questions.filter((x) => x.id !== id);
           if (q) {
-            this.answers.set(id, yes);
+            this.answers.set(id, checkedAnswer(q, yes));
             this.record('answer', `Answered "${yes ? q.yes : q.no}" to a question`);
           }
         }),

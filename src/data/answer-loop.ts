@@ -20,7 +20,7 @@
  * the daily quota, one run at a time (a run going is answered with `waits`, and the answer's run starts at its end).
  */
 import { sha256Hex } from './contracts/hashes';
-import { subjectOf } from './contracts/questions';
+import { checkedAnswer, type QuestionAnswer, subjectOf } from './contracts/questions';
 import type { RunSource, VaultSource } from './sources';
 import type { Question, RunState } from './types';
 
@@ -31,7 +31,7 @@ export type AnswerRun = { scope: 'all'; subject: string } | { scope: 'instructio
 const SUBJECT = /^[A-Za-z0-9_-]{1,128}$/;
 
 /** The run a yes starts at once, or null: a no, and a choice no run acts on, start none. */
-export function answerRun(q: Question, yes: boolean): AnswerRun | null {
+export function answerRun(q: Question, yes: QuestionAnswer): AnswerRun | null {
   if (!yes) return null;
   const about = subjectOf(q);
   if (about.kind === 'state' || about.kind === 'pair') return { scope: 'instructions' };
@@ -65,9 +65,10 @@ export interface Answered {
  * Records the answer, then asks for the run it starts, if any. Null when the question is no longer open (answered
  * already, here or elsewhere): nothing is recorded or started again.
  */
-export async function answerQuestion(vault: Pick<VaultSource, 'questions' | 'answer'>, runs: Pick<RunSource, 'start'>, id: string, yes: boolean, opts: { allowWeb: boolean }): Promise<Answered | null> {
+export async function answerQuestion(vault: Pick<VaultSource, 'questions' | 'answer'>, runs: Pick<RunSource, 'start'>, id: string, yes: QuestionAnswer, opts: { allowWeb: boolean }): Promise<Answered | null> {
   const question = (await vault.questions()).find((q) => q.id === id);
   if (!question) return null;
+  yes = checkedAnswer(question, yes);
   await vault.answer(id, yes);
   const plan = answerRun(question, yes);
   if (!plan) return { question, outcome: { kind: 'next' } };

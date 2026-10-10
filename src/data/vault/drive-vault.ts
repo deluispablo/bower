@@ -32,13 +32,13 @@ import {
 import type { OwnershipContext } from '../contracts/ownership-format';
 import type { Content, Declaration, DeclarationResult } from '../contracts/pile-declaration';
 import type { DispositionResult } from '../contracts/pile-disposition';
-import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, declarationCopies, declarationRecord, declaredName, findDeclaration, findLooseDeclarations, journalValues, looseSetAside, checkable, memberAsNote, recordablePile, recordedNote, sameText, setAsideOf, shownName, writable, type Blocked, type DeclarationLookup, type Digest } from '../pile-readiness';
+import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, declarationCopies, declarationRecord, declaredName, findDeclaration, findLooseDeclarations, findPileDeclarations, orphanState, journalValues, looseSetAside, checkable, memberAsNote, recordablePile, recordedNote, sameText, setAsideOf, shownName, writable, type Blocked, type DeclarationLookup, type Digest, type LooseDeclaration } from '../pile-readiness';
 import { Journal, type JournalRecord } from './journal';
 import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
 import { ADOPT_STATES_ID, ADOPT_STATES_RULE, ruleSequence } from '../contracts/note-edit';
 import { pairsOf } from '../contracts/journal-record';
-import { RUNNER_WRITES, PROP, SYSTEM, isRunnerFile, recordStamp, type RunnerFiles, type LastRunFile } from './layout';
+import { RUNNER_WRITES, PROP, SYSTEM, isRunnerFile, recordStamp, type RunnerFiles, type QuestionsFile, type LastRunFile } from './layout';
 import { md5Hex, sha256 } from './hashes';
 import { placeOf, plainSnippet, plainText, savedLinkAddress, savedLinkUrl, searchLines } from '../search-text';
 import { noteRefusal, parseNote, toggleTaskInText, type ParsedNote } from './note-format';
@@ -48,7 +48,7 @@ import { VaultIndex } from './vault-index';
 import { NOT_SENT_TEXT, PERSIST_REFUSED_TEXT, UNREADABLE_TEXT, createUploadQueue, stoppedText, type QueueItem, type UploadQueue } from '../upload-queue';
 import { memoryUploadStore } from '../upload-store';
 import { CHANGED_ELSEWHERE, checkStillAsSeen, notAsSeen, notAsSeenError, notAsSeenReason, notRead, type Landing, type SeenExpectation } from '../contracts/still-as-seen';
-import { openQuestions } from '../contracts/questions';
+import { answeredAskings, checkedAnswer, pileQuestion, subjectPile, type QuestionAnswer, type QuestionRound, openQuestions } from '../contracts/questions';
 
 export interface DriveVaultOptions {
   driveLinks?: boolean;
@@ -120,6 +120,13 @@ export class DriveVault implements VaultSource {
   /** Declarations never change: each copy is read once, by file id and modified time. */
   private declarationCache = new Map<string, DeclarationResult>();
   private dispositionCache = new Map<string, DispositionResult>();
+  /** The general declaration classification from the current full-read snapshot, never persisted. */
+  private fullDeclarations: {
+    ix: VaultIndex;
+    files: readonly DriveFile[];
+    read: Promise<{ declarations: Array<LooseDeclaration & { missingLoose: boolean }>; summary: { count: number; complete: boolean } }> | null;
+    binned: Map<string, ReturnType<DriveApi['binnedByItem']>>;
+  } | null = null;
   /**
    * What files hold, by id and the modifiedTime the listing gives (`read-cache.ts`, shared with the journal). A refresh
    * lists again and nothing else: a file whose version moved is read at its new one, the others and the reads on
@@ -199,6 +206,7 @@ export class DriveVault implements VaultSource {
     this.disposed = true;
     this.reads.clear();
     this.listed = null;
+    this.fullDeclarations = null;
     this.unqueue();
     for (const u of this.uploads.values()) for (const e of u.entries) { delete e.body; delete e.url; }
     this.uploads.clear();
@@ -240,6 +248,7 @@ export class DriveVault implements VaultSource {
 
   /** Lists the folder again (after a tidy-up, or when another device may have changed it). */
   async refresh(): Promise<void> {
+    this.fullDeclarations = null;
     this.ix = null;
     await this.index();
     if (!this.current()) return;
@@ -596,7 +605,8 @@ export class DriveVault implements VaultSource {
       const words = f.name.replace(/^\d{4}-\d{2}-\d{2} /, '');
       out.push({ id, path, text: words === 'Pile' ? '' : words, createdAt, items });
     }
-    return out.sort((a, b) => b.createdAt - a.createdAt);
+    out.sort((a, b) => b.createdAt - a.createdAt);
+    return ix.file(SYSTEM.questions) ? this.projectQuestions(out, ix, true) : out;
   }
 
   async piles(context?: OwnershipContext): Promise<Pile[]> {
@@ -608,10 +618,10 @@ export class DriveVault implements VaultSource {
     });
     const ix = await this.index();
     const out: Pile[] = [];
-    // Your changes, read at most once for this listing, and only if a pile needs them.
+    // Current context-removal lines, read at most once for this listing, only if a pile needs them.
     let journal: Promise<unknown[]> | null = null;
     const changes = (): Promise<unknown[]> =>
-      (journal ??= journalValues(ix.journalFiles(true), (id) => this.readTextOnce(id)).catch((e: unknown) => {
+      (journal ??= journalValues(ix.journalFiles(), (id) => this.readTextOnce(id)).catch((e: unknown) => {
         // Logged once for this listing; each pile that needed them says it could not be checked.
         console.error(e);
         throw e;
@@ -717,7 +727,72 @@ export class DriveVault implements VaultSource {
     // queued rows stayed consistent across the reads; otherwise reuse the listing and read caches.
     // The queue keeps read-back pending members in flight. A done file still needs its completion event here.
     if (this.arrived.size !== arrivals || this.queued.queue.items().some((i) => i.state === 'done' && i.file && !this.arrived.has(i.id))) return this.piles(context);
-    return out.sort((a, b) => b.createdAt - a.createdAt);
+    out.sort((a, b) => b.createdAt - a.createdAt);
+    return ix.file(SYSTEM.questions) ? this.projectQuestions(out, ix) : out;
+  }
+
+  async orphanSummary(): Promise<{ count: number; complete: boolean }> {
+    await this.piles();
+    const result = await this.declarationsFor(await this.index());
+    this.checkCurrent();
+    return { ...result.summary };
+  }
+
+  /** The same cached record query used by a full piles read, including its unknown evidence. */
+  private declarationsFor(ix: VaultIndex): Promise<{ declarations: Array<LooseDeclaration & { missingLoose: boolean }>; summary: { count: number; complete: boolean } }> {
+    const files = this.known(ix);
+    const kept = this.declarationSnapshot(ix);
+    if (kept.read) return kept.read;
+    const read = (async () => {
+      const inbox = ix.file('Inbox');
+      if (!inbox?.folder) return { declarations: [], summary: { count: 0, complete: false } };
+      const root = ix.idOf('');
+      if (!root) throw new BowerError('unknown', 'Bower could not find your folder.');
+      const found = await findPileDeclarations(files, root, inbox.id, (id) => this.readBytesOnce(id), this.declarationCache);
+      const summary = { count: 0, complete: found.complete };
+      const declarations: Array<LooseDeclaration & { missingLoose: boolean }> = [];
+      let journal: Promise<unknown[]> | null = null;
+      const journalFailure: { error?: unknown } = {};
+      // Only current context-removal lines apply; archived changes are not recovery evidence.
+      const removed = async (path: string): Promise<boolean> => contextRemoved(
+        await (journal ??= journalValues(ix.journalFiles(), (id) => this.readTextOnce(id)).catch((e: unknown) => {
+          if ((e instanceof BowerError && e.code === 'auth') || !this.current()) throw e;
+          // Every candidate shares this rejection and its one log for the snapshot.
+          console.error(e);
+          journalFailure.error = e;
+          throw e;
+        })), path);
+      for (const declaration of found.declarations) {
+        try {
+          const state = await orphanState(declaration, inbox, files, (id) => this.readBytesOnce(id),
+            (f) => this.digestOf(f), (keys) => this.drive.binnedByItem(root, keys), this.dispositionCache, removed);
+          declarations.push({ ...declaration, missingLoose: state.missingLoose });
+          if (state.state === 'orphan') summary.count++;
+          if (state.state === 'unknown') summary.complete = false;
+        } catch (e) {
+          if ((e instanceof BowerError && e.code === 'auth') || !this.current()) throw e;
+          if (!('error' in journalFailure) || journalFailure.error !== e) console.error(e);
+          summary.complete = false;
+        }
+      }
+      this.checkCurrent();
+      return { declarations, summary };
+    })();
+    kept.read = read;
+    // A session refusal reaches its caller; it must not poison later reads of this snapshot.
+    read.catch((e: unknown) => {
+      console.error(e);
+      if (this.fullDeclarations?.read === read) this.fullDeclarations = null;
+    });
+    return read;
+  }
+
+  /** Row accounting and the summary share the current full-read snapshot, invalidated by the same evidence. */
+  private declarationSnapshot(ix: VaultIndex): NonNullable<DriveVault['fullDeclarations']> {
+    const evidence = [...this.known(ix), ...ix.journalFiles()];
+    const kept = this.fullDeclarations;
+    if (kept?.ix === ix && evidence.length === kept.files.length && evidence.every((f, i) => f === kept.files[i])) return kept;
+    return (this.fullDeclarations = { ix, files: evidence, read: null, binned: new Map() });
   }
 
   /** Sends a removed pile's declaration copies to the Bin, remembering each one in case the Remove stops halfway. */
@@ -769,28 +844,13 @@ export class DriveVault implements VaultSource {
     const ix = await this.index();
     const inbox = ix.file('Inbox');
     if (!inbox?.folder) return [];
-    const files = this.known(ix);
-    const drive = this.drive;
-    const root = await this.rootId();
-    // A declaration a live folder or file carries is that pile's: the loose scan never reads it.
-    const marked = new Set(files.flatMap((f) => f.appProperties?.[PROP.declaration] ?? []));
-    const found = await findLooseDeclarations(files, root, inbox.id, (id) => this.readBytesOnce(id), this.declarationCache, marked);
+    // The full-read snapshot already excluded anchors and retired stamps and accounted for the Bin.
+    const found = (await this.declarationsFor(ix)).declarations.filter((d) => d.missingLoose);
     this.checkCurrent();
     const out: Pile[] = [];
-    for (const { declaration, sha256: hash } of found) {
+    for (const { declaration } of found) {
       const [member] = declaration.members;
       if (!member || listed.has(declaration.pileId)) continue;
-      // The accounting's one Bin lookup, kept: a copy Binned from the inbox is the person removing it.
-      let inBin = false;
-      const binned = async (keys: readonly string[]) => {
-        const hits = await drive.binnedByItem(root, keys);
-        inBin = hits.length > 0;
-        return hits;
-      };
-      // A consumed disposition retires it first: no digest and no lookup of its member.
-      const readiness = await accountPile(declaration, hash, inbox, files, (id) => this.readBytesOnce(id), (f) => this.digestOf(f), binned, this.dispositionCache);
-      this.checkCurrent();
-      if (readiness.members[0]?.state !== 'missing' || inBin) continue;
       // Only a missing-member decision waits for device hydration; an ordinary listing can finish before sign-in.
       await this.startQueue();
       this.checkCurrent();
@@ -813,12 +873,22 @@ export class DriveVault implements VaultSource {
   private async declaredState(folder: DriveFile, u: Upload | undefined, queued: readonly string[] = []): Promise<DeclaredState> {
     const ix = await this.index();
     const found = await this.declarationOf(folder, this.known(ix));
-    if (found.state !== 'found') return { rows: [], contextKey: null, changed: new Set(), lookup: found.state, blocked: null, missing: [], remaining: [] };
+    if (found.state !== 'found') return { rows: [], contextKey: null, contextBinned: false, changed: new Set(), lookup: found.state, blocked: null, missing: [], remaining: [] };
     const contextKey = found.declaration.context.kind === 'text' ? found.declaration.context.memberKey : null;
     const drive = this.drive;
     const root = await this.rootId();
-    // Only when a member is missing everywhere live: one Bin lookup for all of them.
-    const binned = (keys: readonly string[]) => drive.binnedByItem(root, keys);
+    const missingContext = contextKey && !this.known(ix).some((f) => f.appProperties?.[PROP.item] === contextKey) ? contextKey : null;
+    const snapshot = this.declarationSnapshot(ix);
+    // Missing context and members share one identity-based Bin lookup, including after queue hydration.
+    let binRead: ReturnType<DriveApi['binnedByItem']> | null = null;
+    const binned = (keys: readonly string[]) => {
+      if (binRead) return binRead;
+      const wanted = [...new Set([...keys, ...(missingContext ? [missingContext] : [])])].sort();
+      const key = JSON.stringify([folder.id, wanted]);
+      binRead = snapshot.binned.get(key) ?? drive.binnedByItem(root, wanted);
+      snapshot.binned.set(key, binRead);
+      return binRead;
+    };
     // The tidy-up's own accounting: a member a consumed disposition records is filed, the rest looked up.
     const account = async () => {
       // Take the file evidence and in-flight members together, before any accounting read can yield.
@@ -836,6 +906,8 @@ export class DriveVault implements VaultSource {
       ({ readiness, local } = await account());
       this.checkCurrent();
     }
+    const contextBinned = missingContext !== null && (await binned([])).some((b) => b.file.appProperties?.[PROP.item] === missingContext);
+    this.checkCurrent();
     const state = new Map(readiness.members.map((m) => [m.memberKey, m]));
     // Only a member with no file anywhere has not arrived; a changed or unchecked one is not sent again.
     const missing = found.declaration.members.filter((m) => state.get(m.memberKey)?.state === 'missing');
@@ -843,7 +915,7 @@ export class DriveVault implements VaultSource {
       .filter((m) => !local.has(m.memberKey))
       .map((m) => ({ id: m.memberKey, name: shownName(m), kind: m.kind, origin: m.origin ?? 'Added in Drive', upload: -1, chooseAgain: true as const }));
     const changed = new Set(readiness.members.flatMap((m) => (m.state === 'changed' ? m.fileIds : [])));
-    return { rows, contextKey, changed, lookup: found.state, blocked: readiness.blocked, missing: missing.map((m) => m.memberKey), remaining: readiness.remaining };
+    return { rows, contextKey, contextBinned, changed, lookup: found.state, blocked: readiness.blocked, missing: missing.map((m) => m.memberKey), remaining: readiness.remaining };
   }
 
   /**
@@ -883,7 +955,7 @@ export class DriveVault implements VaultSource {
     // A note missing though you never removed it has not arrived: the tidy-up holds the pile (TL-P2-32), and Try
     // again writes it again from its first words, so the pile is not empty either.
     const key = d.contextKey;
-    if (d.lookup !== 'found' || d.blocked || !key || kids.some((k) => k.appProperties?.[PROP.item] === key)) return setAsideOf(d.lookup, d.blocked, { things, text, restore: false });
+    if (d.lookup !== 'found' || d.blocked || !key || d.contextBinned || kids.some((k) => k.appProperties?.[PROP.item] === key)) return setAsideOf(d.lookup, d.blocked, { things, text, restore: false });
     let records: unknown[];
     try {
       records = await changes();
@@ -1447,35 +1519,100 @@ export class DriveVault implements VaultSource {
     return { id: r.id, text, at: r.at };
   }
 
-  async questions(): Promise<Question[]> {
-    const all = (await this.json(SYSTEM.questions))?.questions ?? [];
-    // Your changes and the inbox as the listing shows it are read together: neither needs the other, and the inbox's
-    // full read (each pile's note and records) is not what these questions wait on (TL-P4-16 b).
-    const [lines, inbox] = await Promise.all([this.journal.list(), this.pilesListed()]);
-    const answered = new Set(lines.filter((r) => r.kind === 'answer').map((r) => r.questionId));
-    // A question about a thing that is no longer in the inbox is closed, even when no tidy-up can run (an empty inbox
-    // has nothing to tidy): its subject is the thing's or pile's id (`contracts/questions.ts`, as the planner reads it).
+  /** Shared subject policy over one questions file and the existing versioned reads. */
+  private async questionSnapshot(inbox: Pile[], stored: QuestionsFile | null, lines: JournalRecord[], cachedOnly = false): Promise<{ open: Question[]; rounds: QuestionRound[]; piles: Pile[] }> {
+    const ix = await this.index();
+    inbox = await Promise.all(inbox.map(async (p) => {
+      if (!(stored?.rounds?.length || stored?.questions.some((q) => q.words !== undefined))) return p;
+      const note = p.path ? ix.file(join(p.path, PILE_NOTE)) : undefined;
+      if (!note) return p;
+      if (cachedOnly) {
+        const read = this.reads.keptText(note, true);
+        if (!read) return p;
+        try { return { ...p, text: parseNote(join(p.path ?? '', PILE_NOTE), await read).body.trim() }; }
+        catch (e) { console.error(e); return p; }
+      }
+      try { return { ...p, text: (await this.parsed(note, join(p.path ?? '', PILE_NOTE))).body.trim() }; }
+      catch (e) { console.error(e); return p; }
+    }));
     const here = new Set(inbox.flatMap((p) => [p.id, ...p.items.map((i) => i.id)]));
-    // Things still on their way from here have no file to list yet; their questions stay open.
     for (const [id, u] of this.uploads) for (const e of u.entries) here.add(id).add(e.item.id);
     for (const item of this.queuedItems()) here.add(item.pileId).add(item.memberKey);
-    // A question about a note that is not there now (a pair's other note in the Bin) is not shown either (TL-P4-19
-    // addendum 10): the notes as this page's listing has them, as the planner reads them.
-    return openQuestions(all, answered, { ids: here }, (await this.index()).notesSeen());
+    const inboxHashes = new Map(ix.filesIn('Inbox').flatMap((f) => f.md5Checksum ? [[f.id, f.md5Checksum] as const] : []));
+    const all = (stored?.questions ?? []).filter((q) => {
+      const pile = subjectPile(q, inbox, inboxHashes);
+      if (!pile) return true;
+      if (q.words !== undefined) return q.words === pile.text;
+      // Old askings have no words. A fenced edit of their pile after asking ends them too.
+      const folder = pile.path ? ix.file(pile.path) : undefined;
+      return !folder?.appProperties?.[STAMP] || Date.parse(folder.modifiedTime) <= q.askedAt;
+    });
+    const hashes = new Set(ix.filesIn('Inbox').flatMap((f) => f.md5Checksum ? [f.md5Checksum] : []));
+    return { open: openQuestions(all, answeredAskings(lines), { ids: here, hashes }, ix.notesSeen()), rounds: stored?.rounds ?? [], piles: inbox };
+  }
+
+  private async projectQuestions(piles: Pile[], ix: VaultIndex, cachedOnly = false): Promise<Pile[]> {
+    const file = ix.file(SYSTEM.questions);
+    if (!file) return piles;
+    const cached = this.reads.keptText(file, cachedOnly);
+    // The listing initiates no media or checksum read. Full piles may read a nonempty questions file.
+    if (!cached && (cachedOnly || (file.size !== undefined && file.size <= 40))) return piles;
+    let stored: QuestionsFile;
+    try {
+      const value: unknown = JSON.parse(await (cached ?? this.readTextOnce(file.id)));
+      if (!isRunnerFile(SYSTEM.questions, value)) {
+        if (!cached) console.error(new BowerError('unknown', 'Bower could not read its latest update. Try again.'), `${SYSTEM.questions} has an unsupported shape`);
+        return piles;
+      }
+      stored = value;
+    } catch (e) {
+      // The explicit questions reader owns its error; a marker cannot refuse the inbox or admission.
+      if (e instanceof BowerError && (e.code === 'auth' || !this.current())) throw e;
+      if (!cached) console.error(e);
+      return piles;
+    }
+    if (!stored.questions.length && !stored.rounds?.length) return piles;
+    const snapshot = await this.questionSnapshot(piles, stored, await this.journal.list(true), true);
+    const hashes = new Map(piles.flatMap((p) => p.items.flatMap((i) => {
+      const hash = ix.byId(i.id)?.md5Checksum;
+      return hash ? [[i.id, hash] as const] : [];
+    })));
+    if (!cachedOnly && snapshot.rounds.some((r) => r.hash)) for (const p of piles) for (const i of p.items) {
+      if (hashes.has(i.id)) continue;
+      const meta = await this.drive.get(i.id, { checksums: true });
+      if (meta.md5Checksum) hashes.set(i.id, meta.md5Checksum);
+    }
+    return piles.map((p) => {
+      const question = pileQuestion(snapshot.piles.find((x) => x.id === p.id) ?? p, snapshot.open, snapshot.rounds, hashes);
+      return { ...p, ...(question ? { question } : {}) };
+    });
+  }
+
+  async questions(): Promise<Question[]> {
+    const [stored, lines, inbox] = await Promise.all([this.json(SYSTEM.questions), this.journal.list(), this.pilesListed()]);
+    const snapshot = await this.questionSnapshot(inbox, stored, lines);
+    const file = (await this.index()).file(SYSTEM.questions);
+    // Publish once per questions version through the existing cache and subscription. A subscriber may read
+    // questions again; the cached publication prevents a refresh loop and belongs to this vault's lifetime.
+    if (file) this.reads.publishText(file, () => this.emit());
+    return snapshot.open;
   }
 
   /**
    * One answer per question (TL-P4-08 addendum 8): a question answered already, or being answered now on this page,
    * records nothing more. A yes to Bower keeping the summaries it did not write is also your rule saying so.
    */
-  async answer(id: string, yes: boolean): Promise<void> {
+  async answer(id: string, yes: QuestionAnswer): Promise<void> {
     const going = this.answering.get(id);
     if (going) return await going;
     const work = (async () => {
       const q = (await this.questions()).find((x) => x.id === id);
       if (!q) return;
-      await this.journal.record('answer', `Answered "${yes ? q.yes : q.no}" to a question`, { questionId: id, text: yes ? 'yes' : 'no' });
-      if (yes && id === ADOPT_STATES_ID && !ruleLike(await this.rules(), ADOPT_STATES_RULE)) {
+      const answer = checkedAnswer(q, yes);
+      const label = typeof answer === 'boolean' ? answer ? q.yes : q.no : 'text' in answer ? 'your words' : q.options?.find((o) => o.id === answer.option)?.label;
+      await this.journal.record('answer', `Answered "${label}" to a question`, { questionId: id, askedAt: q.askedAt, answer,
+        ...(typeof answer === 'boolean' ? { text: answer ? 'yes' : 'no' } : {}) });
+      if (yes === true && id === ADOPT_STATES_ID && !ruleLike(await this.rules(), ADOPT_STATES_RULE)) {
         await this.journal.record('rule', `New rule: "${ADOPT_STATES_RULE}"`, { path: 'Rules.md', text: ADOPT_STATES_RULE });
       }
       this.emit();
@@ -2034,6 +2171,8 @@ interface DeclaredState {
   rows: PileItem[];
   /** The member key of its context note, when it was added with words. */
   contextKey: string | null;
+  /** Its absent context is in the Bin, from the same lookup that accounted for its members. */
+  contextBinned: boolean;
   /** Files whose bytes differ from what was declared for them. */
   changed: Set<string>;
   lookup: DeclarationLookup['state'];

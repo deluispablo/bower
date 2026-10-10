@@ -1,3 +1,4 @@
+import type { QuestionAnswer } from './contracts/questions';
 import type {
   ChangeEntry,
   ChosenAgain,
@@ -62,6 +63,8 @@ export interface VaultSource {
   restore(path: string): Promise<void>;
   markSeen(path: string): Promise<void>;
   piles(): Promise<Pile[]>;
+  /** Known unanchored piles from the full read; incomplete zero means unknown. Sources without declarations omit it. */
+  orphanSummary?(): Promise<{ count: number; complete: boolean }>;
   /** The piles as the folder listing alone shows them, read before `piles()` finishes reading each one; only a source with a slow `piles()` has it. */
   pilesListed?(): Promise<Pile[]>;
   addPile(pile: NewPile): Promise<Pile>;
@@ -85,7 +88,7 @@ export interface VaultSource {
   /** For each file, where you already have it (its path), or null. */
   duplicates(files: Array<{ name: string; body?: Blob }>): Promise<Array<string | null>>;
   questions(): Promise<Question[]>;
-  answer(id: string, yes: boolean): Promise<void>;
+  answer(id: string, yes: QuestionAnswer): Promise<void>;
   rules(): Promise<Rule[]>;
   requests(): Promise<Request[]>;
   /** `intent`: one per intended request (a press whose words are sent again after a wait); sent again, it is that request. */
