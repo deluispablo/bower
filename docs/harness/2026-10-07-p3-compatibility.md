@@ -185,3 +185,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `e8ba5cc5` | b1a-contract | none for stored data: hub recognition moves into src/data/contracts/hub.ts (same rule), so contracts import only contracts. |
 | `cc7a8c69` | c05-timeline-list | none: tests only (round 3 unreadable-Timeline fixture is prose). |
 | `34cb7238` | c05-timeline-list | none for stored data: a person's Timeline written as any bullet list (- or *) is appendable; "can't read" stays only for non-list sections; existing appends keep their format. |
+| `4286793b` | smoke-request-slow | run-manifest: v2 moves gain an optional bowerRun field (the waiting request's run); older moves without it keep their shape and meaning. Waiting requests live in .bower/changes/pending/<run id>/; an old-format waiting request directly in changes/ counts as new (ruling (5), no migration). The fake Drive snapshot now carries the changes feed (test double). |

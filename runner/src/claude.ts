@@ -36,10 +36,12 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { normalizeModelInput } from './model-input';
-import { isJournalRecord } from '../../src/data/contracts/journal-record';
+import { type JournalRecord, isJournalRecord } from '../../src/data/contracts/journal-record';
 import { MANIFEST_V2_LIMIT, parseRunManifestV2, recordableName } from '../../src/data/contracts/run-manifest';
 import { z } from 'zod';
 import { AUTHORED_LINE_MAX, STATE_WRITE, newsLineCited } from '../../src/data/contracts/note-edit';
+import { timelineBullets } from '../../src/data/contracts/note-format';
+import { parseTimelineLine } from '../../src/data/contracts/timeline-line';
 import { PILE_NOTE } from '../../src/data/piles';
 import type { Admitted, RunProvider } from '../../src/data/spine/provider';
 import type { ScriptedRead } from '../../src/data/spine/read';
@@ -177,6 +179,7 @@ interface Shown {
   suppressed?: ReadonlySet<string>;
   personalNotes?: ReadonlySet<string>;
   retrySources?: ReadonlySet<string>;
+  presentLines?: ReadonlySet<string>;
   /** The person's `Rules.md`, bounded, when the folder has one. */
   rules?: string;
   /** Your answers this run took, each with its question and what it is about (TL-P4-08 addendum 8). */
@@ -399,9 +402,15 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
     : null;
   const named = new Set<string>();
   const suppressed = new Set<string>();
+  const waiting: Array<{ rec: JournalRecord; files: DriveFile[] }> = [];
   for (const line of took.taken.journal) {
     const rec: unknown = JSON.parse(await read.readText(line.fileId));
     if (!isJournalRecord(rec) || rec.kind !== 'request') continue;
+    const file = listing.find((f) => f.id === line.fileId);
+    if (file && ix.waitingRun(file.id)) {
+      waiting.push({ rec, files: [file] });
+      continue;
+    }
     // The plan's one verdict on what a request names: a request refused whole shows none of its notes.
     const { notes, refused } = requestTargets(listing, ix, rec.text ?? rec.what);
     for (const n of notes) {
@@ -409,10 +418,24 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
       else named.add(n.file.id);
     }
   }
-  const personalNamed = listing.some((f) => named.has(f.id) && f.appProperties?.by !== 'bower');
-  const history = personalNamed ? (await personalAppendHistory(read, run.rootId, listing, ix)).lines : [];
+  const history = waiting.length ? (await personalAppendHistory(read, run.rootId, listing, ix, waiting)).lines : [];
+  for (const h of history) named.add(h.consent.targetFileId);
   const retrySources = new Set(history.map((h) => h.consent.sourceFileId));
-  return { own: ix.file(SYSTEM.dir)?.id, piles, notes: await notesShown(read, listing, ix, first, named), folders, names, suppressed, retrySources, personalNotes: new Set(listing.flatMap((f) => {
+  const notes = await notesShown(read, listing, ix, first, named);
+  // Repeating a line already shown is valid input, but grants no fresh consent or source evidence.
+  // The planner's existing Timeline check still decides whether anything may be written.
+  const presentLines = new Set(notes.flatMap((note) => {
+    const file = ix.file(note.path);
+    if (note.cut || !file) return [];
+    const fetched = run.context ? { context: run.context, fileId: file.id } : undefined;
+    return timelineBullets(note.text, fetched).flatMap((bullet) => {
+      const line = parseTimelineLine(bullet);
+      if (!line?.source) return [];
+      return listing.filter((file) => !file.folder && file.name.replace(/\.md$/i, '') === line.source)
+        .map((file) => JSON.stringify([note.path, line.text, file.id]));
+    });
+  }));
+  return { own: ix.file(SYSTEM.dir)?.id, piles, notes, folders, names, suppressed, retrySources, presentLines, personalNotes: new Set(listing.flatMap((f) => {
     const path = ix.pathOf(f.id);
     return !f.folder && f.appProperties?.by !== 'bower' && path?.endsWith('.md') && MAIN_FOLDERS.includes(path.split('/')[0] ?? '') ? [path] : [];
   })), ...(rules ? { rules } : {}) };
@@ -680,6 +703,7 @@ export interface Seen {
   suppressed?: ReadonlySet<string>;
   personalNotes?: ReadonlySet<string>;
   retrySources?: ReadonlySet<string>;
+  presentLines?: ReadonlySet<string>;
   notes: ReadonlySet<string>;
   names?: ReadonlySet<string>;
   texts?: ReadonlyMap<string, string>;
@@ -942,7 +966,8 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   const Line = LineShape.superRefine(inOrder<z.output<typeof LineShape>>([
     rule('lineNote', (l) => notes.has(l.note) || !!seen.suppressed?.has(l.note)),
     rule('lineText', (l) => lineOk(l.text, AUTHORED.line) && unlinked(l.text)),
-    rule('lineCites', (l) => l.cites === undefined || placed.has(l.cites) || wordsPile(l.cites) || !!seen.retrySources?.has(l.cites)),
+    rule('lineCites', (l) => l.cites === undefined || placed.has(l.cites) || wordsPile(l.cites) || !!seen.retrySources?.has(l.cites)
+      || !!seen.presentLines?.has(JSON.stringify([l.note, l.text.trim(), l.cites]))),
     rule('lineUncited', (l) => newsLineCited({ text: l.text.trim(), source: l.cites ?? null })),
     rule('numbers', (l) => grounded(l.cites, [l.text], 'the Timeline line on')),
   ], (l) => {
@@ -1255,6 +1280,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       ...(shown.personalNotes ? { personalNotes: shown.personalNotes } : {}),
       ...(shown.suppressed ? { suppressed: shown.suppressed } : {}),
       ...(shown.retrySources ? { retrySources: shown.retrySources } : {}),
+      ...(shown.presentLines ? { presentLines: shown.presentLines } : {}),
       names: shown.names ?? new Set(),
       texts,
       folders: new Set(shown.folders),

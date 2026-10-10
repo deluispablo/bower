@@ -34,6 +34,17 @@ describe('keeping the pretend Drive across reloads', () => {
     expect(next.id).not.toBe(note.id);
   });
 
+  it('snapshot then restore preserves a previously stored changes page token and its feed', async () => {
+    const drive = new FakeDrive();
+    const root = await drive.createFolder('root', 'Bower');
+    const token = await drive.getStartPageToken();
+    const note = await drive.createText(root.id, 'a.md', 'hello');
+    const expected = await drive.listChanges(token);
+    expect(expected.changes.map((change) => change.fileId)).toEqual([note.id]);
+    const restored = FakeDrive.restore(await drive.snapshot());
+    await expect(restored.listChanges(token)).resolves.toEqual(expected);
+  });
+
   it('tells a listener after each change', async () => {
     const d = new FakeDrive();
     let n = 0;

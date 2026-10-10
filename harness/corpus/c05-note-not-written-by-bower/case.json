@@ -25,8 +25,8 @@
   "presses": [
     {
       "request": {
-        "kind": "replay",
-        "id": "change-1"
+        "kind": "tidy",
+        "text": "Update Garden plot."
       }
     },
     {
