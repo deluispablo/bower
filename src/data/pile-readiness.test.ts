@@ -5,6 +5,34 @@ import { SET_ASIDE } from './fake/fake-runner';
 import { SET_ASIDE_TEXT, declarationRecord, findLooseDeclarations, setAsideOf } from './pile-readiness';
 import { BowerError } from './types';
 import { recordStamp } from './vault/layout';
+import { FakeDrive } from './drive/fake-drive';
+import { seedFakeDrive } from './fake/seed';
+import { DriveVault } from './vault/drive-vault';
+import { capturePiles, pileShape } from './spine/plan';
+import { fakeRead } from './spine/read';
+
+it('pile-binned-context-hold: shared readiness never holds a Drive-binned note without an inbox reason', async () => {
+  localStorage.clear();
+  const drive = new FakeDrive();
+  const root = (await seedFakeDrive(drive, 'default', Date.UTC(2026, 9, 11))) ?? '';
+  const client = (): DriveVault => new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set(), declarePiles: true });
+  const uploader = client();
+  const pile = await uploader.addPile({ text: 'Papers from Alex', items: ['a.pdf', 'b.pdf'].map((name) => ({ name, kind: 'pdf' as const, origin: 'From this computer', body: new Blob([`%PDF ${name}`]) })) });
+  await uploader.settled();
+  const files = await drive.listAll(root);
+  const folder = files.find((f) => f.folder && f.appProperties?.pile === pile.id);
+  const note = files.find((f) => f.parents[0] === folder?.id && f.appProperties?.bowerItem && f.name === 'Pile note.md');
+  if (!note) throw new Error('no declared context');
+  await drive.trash(note.id);
+  const app = client();
+  expect(await app.changes()).toEqual([]);
+  const seen = (await app.piles()).find((p) => p.id === pile.id);
+  if (!seen) throw new Error('pile disappeared');
+  expect(seen.items.map((i) => i.name).sort()).toEqual(['a.pdf', 'b.pdf']);
+  const captured = (await capturePiles(fakeRead(drive), root, [pileShape(seen)], { notes: true })).get(pile.id);
+  expect(captured).toBeDefined();
+  expect(captured?.blocked).toBe(seen.setAside ? SET_ASIDE_TEXT[seen.setAside] : null);
+});
 
 describe('a set-aside pile shows its reason in the inbox', () => {
   it('in the same words as the tidy-up report', () => {

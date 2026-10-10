@@ -59,6 +59,8 @@ export interface Readiness {
   members: MemberState[];
   /** The declared context file, whatever its text now; null when absent or ambiguous. */
   context: DriveFile | null;
+  /** The missing context was found by the same Bin lookup as missing members. */
+  contextBinned: boolean;
 }
 
 const HASH = /^[0-9a-f]{64}$/;
@@ -285,7 +287,7 @@ async function readDeclarations(wanted: readonly DriveFile[], rootId: string, in
 export type OrphanState = { state: 'orphan' | 'retired' | 'unknown'; missingLoose: boolean };
 
 /** Unstamped unanchored work uses the existing member accounting and context-removal facts. */
-export async function orphanState(found: LooseDeclaration, inbox: DriveFile, files: readonly DriveFile[], read: ReadBytes, digest: DigestOf, binned: BinnedOf, cache: Map<string, DispositionResult>, removedContext: (path: string) => Promise<boolean>): Promise<OrphanState> {
+export async function orphanState(found: LooseDeclaration, inbox: DriveFile, files: readonly DriveFile[], read: ReadBytes, digest: DigestOf, binned: BinnedOf, cache: Map<string, DispositionResult>, removedContext: (path: string, binned: boolean) => Promise<boolean>): Promise<OrphanState> {
   const { declaration, sha256: hash } = found;
   const { anchor, context } = declaration;
   const anchors = files.filter((f) => f.appProperties?.[PROP.pile] === declaration.pileId
@@ -309,8 +311,7 @@ export async function orphanState(found: LooseDeclaration, inbox: DriveFile, fil
   const contexts = keyed(files, context.memberKey);
   if (contexts.length === 1) return result('retired');
   if (contexts.length > 1) return result('unknown');
-  if (anchor.kind === 'folder' && await removedContext(`Inbox/${anchor.name}`)) return result('retired');
-  if ((await binned([context.memberKey])).length === 1) return result('retired');
+  if (anchor.kind === 'folder' && await removedContext(`Inbox/${anchor.name}`, accounting.contextBinned)) return result('retired');
   return result('unknown');
 }
 
@@ -341,10 +342,8 @@ async function observe(member: Member, folder: DriveFile, files: readonly DriveF
  * arrived and left (it counts whether or not it is in the Bin); other bytes
  * are a change. One binned inside the folder is the person removing it.
  */
-async function resolveBinned(declaration: Declaration, folder: DriveFile, states: MemberState[], binned?: BinnedOf): Promise<MemberState[]> {
-  const missing = states.filter((s) => s.state === 'missing').map((s) => s.memberKey);
-  if (!binned || !missing.length) return states;
-  const found = (await binned(missing)).filter((b) => b.file.parents[0] !== folder.id);
+function resolveBinned(declaration: Declaration, folder: DriveFile, states: MemberState[], hits: Awaited<ReturnType<BinnedOf>>): MemberState[] {
+  const found = hits.filter((b) => b.file.parents[0] !== folder.id);
   return states.map((s) => {
     if (s.state !== 'missing') return s;
     const member = declaration.members.find((m) => m.memberKey === s.memberKey);
@@ -360,20 +359,21 @@ async function resolveBinned(declaration: Declaration, folder: DriveFile, states
   });
 }
 
-async function observeAll(declaration: Declaration, folder: DriveFile, files: readonly DriveFile[], digest: DigestOf, binned?: BinnedOf): Promise<MemberState[]> {
-  // Every member is looked up together (a pile of four is one wait on a slow Drive, not four); the order is kept.
-  const states = await Promise.all(declaration.members.map((m) => observe(m, folder, files, digest)));
-  return resolveBinned(declaration, folder, states, binned);
-}
-
 /** Each member's state; the pile waits while any member is missing, changed or unchecked. The context only has to be there. */
 export async function observePile(declaration: Declaration, folder: DriveFile, files: readonly DriveFile[], digest: DigestOf, binned?: BinnedOf): Promise<Readiness> {
-  const members = await observeAll(declaration, folder, files, digest, binned);
-  const contextFiles = declaration.context.kind === 'text' ? keyed(files, declaration.context.memberKey).filter((f) => f.parents[0] === folder.id) : [];
+  // Missing members and context share the one identity-based Bin lookup.
+  const states = await Promise.all(declaration.members.map((m) => observe(m, folder, files, digest)));
+  const contextKey = declaration.context.kind === 'text' ? declaration.context.memberKey : null;
+  const contextFiles = contextKey ? keyed(files, contextKey).filter((f) => f.parents[0] === folder.id) : [];
+  const missingContext = contextKey && !keyed(files, contextKey).length ? contextKey : null;
+  const keys = [...new Set([...states.filter((s) => s.state === 'missing').map((s) => s.memberKey), ...(missingContext ? [missingContext] : [])])];
+  const hits = binned && keys.length ? await binned(keys) : [];
+  const members = resolveBinned(declaration, folder, states, hits);
   const context = contextFiles.length === 1 ? (contextFiles[0] ?? null) : null;
+  const contextBinned = missingContext !== null && hits.some((b) => b.file.appProperties?.[PROP.item] === missingContext);
   const has = (state: MemberState['state']): boolean => members.some((m) => m.state === state);
   const blocked: Blocked = has('changed') ? 'changed' : has('missing') ? 'not-arrived' : has('unchecked') ? 'not-checked' : null;
-  return { blocked, members, context };
+  return { blocked, members, context, contextBinned };
 }
 
 /** What a declared pile's members come to, by the one accounting rule (`accountPile`). */
@@ -552,9 +552,9 @@ export function recordedNote(children: readonly DriveFile[], contextKey: string 
   return bound ?? children.find((f) => !f.folder && f.name === PILE_NOTE);
 }
 
-/** Whether the person put the pile's note in the Bin through Bower: a `trash` change for it in your changes. */
-export function contextRemoved(records: readonly unknown[], folderPath: string): boolean {
-  return records.some((r) => isJournalRecord(r) && r.kind === 'trash' && r.path === `${folderPath}/${PILE_NOTE}`);
+/** A context counts as removed by its trash line or evidence from the one shared Bin lookup. */
+export function contextRemoved(records: readonly unknown[], folderPath: string, contextBinned = false): boolean {
+  return contextBinned || records.some((r) => isJournalRecord(r) && r.kind === 'trash' && r.path === `${folderPath}/${PILE_NOTE}`);
 }
 
 /** Your changes, read for `contextRemoved`; a line that is not JSON says nothing and is logged. */

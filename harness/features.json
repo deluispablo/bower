@@ -7098,7 +7098,8 @@
       "One binned-counts-as-removed predicate in pile-readiness serves plan.ts and drive-vault; missing-only contexts stay not-arrived."
     ],
     "verify": "pnpm exec vitest run src/data/pile-readiness.test.ts src/data/spine/plan.test.ts src/data/vault/drive-vault.test.ts -t \"pile-binned-context-hold\"",
-    "note": "DEFECT_LOG pile-binned-context-hold; TL-P4-53 addendum 7. Packet 2026-10-11-pile-binned-context-hold-packet.md. Starts after upload-sign-out-forget (drive-vault.ts). implementer: codex."
+    "note": "DEFECT_LOG pile-binned-context-hold; TL-P4-53 addendum 7. Packet 2026-10-11-pile-binned-context-hold-packet.md. Starts after upload-sign-out-forget (drive-vault.ts). implementer: codex.",
+    "review": "P4-105 PASS"
   },
   {
     "id": "delete-account-purge",

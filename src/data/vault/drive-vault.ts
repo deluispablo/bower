@@ -754,14 +754,14 @@ export class DriveVault implements VaultSource {
       let journal: Promise<unknown[]> | null = null;
       const journalFailure: { error?: unknown } = {};
       // Only current context-removal lines apply; archived changes are not recovery evidence.
-      const removed = async (path: string): Promise<boolean> => contextRemoved(
+      const removed = async (path: string, contextBinned: boolean): Promise<boolean> => contextRemoved(
         await (journal ??= journalValues(ix.journalFiles(), (id) => this.readTextOnce(id)).catch((e: unknown) => {
           if ((e instanceof BowerError && e.code === 'auth') || !this.current()) throw e;
           // Every candidate shares this rejection and its one log for the snapshot.
           console.error(e);
           journalFailure.error = e;
           throw e;
-        })), path);
+        })), path, contextBinned);
       for (const declaration of found.declarations) {
         try {
           const state = await orphanState(declaration, inbox, files, (id) => this.readBytesOnce(id),
@@ -877,13 +877,12 @@ export class DriveVault implements VaultSource {
     const contextKey = found.declaration.context.kind === 'text' ? found.declaration.context.memberKey : null;
     const drive = this.drive;
     const root = await this.rootId();
-    const missingContext = contextKey && !this.known(ix).some((f) => f.appProperties?.[PROP.item] === contextKey) ? contextKey : null;
     const snapshot = this.declarationSnapshot(ix);
     // Missing context and members share one identity-based Bin lookup, including after queue hydration.
     let binRead: ReturnType<DriveApi['binnedByItem']> | null = null;
     const binned = (keys: readonly string[]) => {
       if (binRead) return binRead;
-      const wanted = [...new Set([...keys, ...(missingContext ? [missingContext] : [])])].sort();
+      const wanted = [...keys].sort();
       const key = JSON.stringify([folder.id, wanted]);
       binRead = snapshot.binned.get(key) ?? drive.binnedByItem(root, wanted);
       snapshot.binned.set(key, binRead);
@@ -906,8 +905,7 @@ export class DriveVault implements VaultSource {
       ({ readiness, local } = await account());
       this.checkCurrent();
     }
-    const contextBinned = missingContext !== null && (await binned([])).some((b) => b.file.appProperties?.[PROP.item] === missingContext);
-    this.checkCurrent();
+    const contextBinned = readiness.contextBinned;
     const state = new Map(readiness.members.map((m) => [m.memberKey, m]));
     // Only a member with no file anywhere has not arrived; a changed or unchecked one is not sent again.
     const missing = found.declaration.members.filter((m) => state.get(m.memberKey)?.state === 'missing');
@@ -955,7 +953,8 @@ export class DriveVault implements VaultSource {
     // A note missing though you never removed it has not arrived: the tidy-up holds the pile (TL-P2-32), and Try
     // again writes it again from its first words, so the pile is not empty either.
     const key = d.contextKey;
-    if (d.lookup !== 'found' || d.blocked || !key || d.contextBinned || kids.some((k) => k.appProperties?.[PROP.item] === key)) return setAsideOf(d.lookup, d.blocked, { things, text, restore: false });
+    if (d.lookup !== 'found' || d.blocked || !key || kids.some((k) => k.appProperties?.[PROP.item] === key)) return setAsideOf(d.lookup, d.blocked, { things, text, restore: false });
+    if (contextRemoved([], path, d.contextBinned)) return setAsideOf(d.lookup, d.blocked, { things, text, restore: false });
     let records: unknown[];
     try {
       records = await changes();
@@ -964,7 +963,7 @@ export class DriveVault implements VaultSource {
       return 'not-checked';
     }
     this.checkCurrent();
-    return contextRemoved(records, path) ? setAsideOf(d.lookup, d.blocked, { things, text, restore: false }) : 'not-arrived';
+    return contextRemoved(records, path, d.contextBinned) ? setAsideOf(d.lookup, d.blocked, { things, text, restore: false }) : 'not-arrived';
   }
 
   private async declarationOf(folder: DriveFile, files: readonly DriveFile[]): Promise<DeclarationLookup> {
@@ -1029,7 +1028,8 @@ export class DriveVault implements VaultSource {
     if (found.state !== 'found' || found.declaration.context.kind !== 'text') return;
     const context = found.declaration.context;
     if (ix.filesIn(pile.path).some((f) => f.appProperties?.[PROP.item] === context.memberKey)) return;
-    if (contextRemoved(await journalValues(ix.journalFiles(true), (id) => this.readTextOnce(id)), pile.path)) return;
+    const state = await this.declaredState(folder, this.uploads.get(pile.id));
+    if (contextRemoved(await journalValues(ix.journalFiles(true), (id) => this.readTextOnce(id)), pile.path, state.contextBinned)) return;
     // A tidy-up may be writing it too: wait for it; and look again right before writing, so it is written once.
     if (this.runningPiles().has(pile.id)) throw new BowerError('conflict', 'Wait for the tidy-up to end.');
     const now = (await this.drive.listAll(folder.id)).filter((f) => f.parents[0] === folder.id);
