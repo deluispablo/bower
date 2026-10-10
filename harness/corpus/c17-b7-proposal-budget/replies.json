@@ -1,0 +1,77 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Rain barrel guide.txt",
+        "to": "Resources/Gardening",
+        "name": "Rain barrel guide.txt",
+        "note": {
+          "name": "Rain barrel guide.md",
+          "summary": "Alex keeps rainwater for gardening.",
+          "body": "Alex keeps rainwater for gardening.\n\nRelated: [[Gardening]] and [[Seed packet]].",
+          "tags": [
+            "gardening"
+          ]
+        }
+      },
+      {
+        "fileId": "$file:Compost guide.txt",
+        "to": "Resources/Gardening",
+        "name": "Compost guide.txt",
+        "note": {
+          "name": "Compost guide.md",
+          "summary": "Alex adds compost to the garden soil.",
+          "body": "Alex adds compost to the garden soil.\n\nRelated: [[Gardening]] and [[Seed packet]].",
+          "tags": [
+            "gardening"
+          ]
+        }
+      },
+      {
+        "fileId": "$file:Seed saving guide.txt",
+        "to": "Resources/Gardening",
+        "name": "Seed saving guide.txt",
+        "note": {
+          "name": "Seed saving guide.md",
+          "summary": "Alex saves seeds for gardening.",
+          "body": "Alex saves seeds for gardening.\n\nRelated: [[Gardening]] and [[Seed packet]].",
+          "tags": [
+            "gardening"
+          ]
+        }
+      }
+    ],
+    "tagProposals": [
+      {
+        "pileId": "p-1",
+        "tag": "rainwater",
+        "text": "Add the tag rainwater for future notes?",
+        "yes": "Add tag",
+        "no": "Keep current tags"
+      },
+      {
+        "pileId": "p-1",
+        "tag": "rainwater",
+        "text": "Add the tag rainwater for future notes?",
+        "yes": "Add tag",
+        "no": "Keep current tags"
+      },
+      {
+        "pileId": "p-2",
+        "tag": "compost",
+        "text": "Add the tag compost for future notes?",
+        "yes": "Add tag",
+        "no": "Keep current tags"
+      },
+      {
+        "pileId": "p-3",
+        "tag": "seed-saving",
+        "text": "Add the tag seed-saving for future notes?",
+        "yes": "Add tag",
+        "no": "Keep current tags"
+      }
+    ]
+  }
+]
