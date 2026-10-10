@@ -6814,5 +6814,31 @@
     "verify": "pnpm exec vitest run src/e2e-viewport.test.ts -t \"e2e viewport changes go through the shell-settling helper\"",
     "note": "Lead ruling on empty-note-help-flaky (b). Diagnosis docs/harness/defects/2026-10-10-empty-note-help-flaky-diagnosis.md. Codex, non-escalated, then a Claude review. implementer: codex. Known green: the change is e2e-only, so done.sh cannot revert code; the diagnosis measured 3/20 fake-phone failures before, the coordinator 40/40 passes after (/tmp/erh-guard.log), and the guard test fails on a raw cross-breakpoint resize (its fixture).",
     "review": "P4-89 PASS"
+  },
+  {
+    "id": "b2a-summary-format",
+    "task": "p4-b2",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "A note summary is written as a safe one-line YAML scalar and read back exactly (TL-P4-42 Q1, Q2).",
+    "steps": [
+      "serialize then parse gives back any one-line summary of at most 200 characters; old notes parse as before; validSummary refuses empty, multi-line, control and over-200 text."
+    ],
+    "verify": "",
+    "note": "TL-P4-42. Escalated: Codex red, Codex implementation, Codex pass, Claude review. Packet 2026-10-10-b2a-summary-format-packet.md. implementer: codex."
+  },
+  {
+    "id": "q1a-stored-answers",
+    "task": "p4-q1",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Questions carry stored file-to options and text answers; two rounds per inbox subject; the continuation keeps today's subject scope (TL-P4-44).",
+    "steps": [
+      "The prep's Q1a reds pass through runner main, answerQuestion, the Worker and the vault."
+    ],
+    "verify": "",
+    "note": "TL-P4-44 and addenda 1-2. Escalated; implementation after B1a integrates. Packet 2026-10-10-q1a-stored-answers-packet.md. implementer: codex."
   }
 ]
