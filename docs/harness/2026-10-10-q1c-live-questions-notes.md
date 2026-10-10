@@ -142,3 +142,7 @@ barrier; API takeover/restarted persistence has its own production-route reds. I
 
 Q1c implementation waits for Q1a integration. Keep the new reds unchanged; any Q1a stored-schema fixture repair
 must remain on the red side with a specific ruling. The coordinator runs the API rows and integration gates.
+
+## API reds run by the coordinator
+
+`pnpm -C api exec vitest run test/q1-questions.test.ts --maxWorkers=2` at 4dc7f762: 23 of 23 fail as assertions (no load errors), each on the missing snapshot, revision or refusal it pins.
