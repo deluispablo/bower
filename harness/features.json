@@ -6748,7 +6748,7 @@
     "id": "b1a-contract",
     "task": "p4-brain",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "The B1 contract: MOC regions, the closed selection reply, retrieval.json with its cursor in one write, and the maintain effect (TL-P4-41 Q1, Q2, Q4, Q5).",
     "steps": [
