@@ -23,8 +23,8 @@ import { isJournalRecord, pairsOf, type JournalRecord } from '../contracts/journ
 import { PROP, RUNNER_WRITES, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
 import { ruleLike } from '../rules';
 import { savedLinkAddress } from '../search-text';
-import { EMPTY_MD5, md5Hex } from '../contracts/hashes';
-import { answeredAskings, answersAsking, journalAnswer, roundFor, type QuestionRound, ASK_GONE, STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
+import { md5Hex } from '../contracts/hashes';
+import { answeredAskings, answersAsking, journalAnswer, roundFor, relatedSubjects, sameSubjectContent, subjectPile, type QuestionRound, ASK_GONE, STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
 import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
 import { parseTimelineLine } from '../contracts/timeline-line';
@@ -691,8 +691,12 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
    * What the reply decided. A part it leaves out is not done (P4-2 review I1): your requests and answers then wait for
    * a run that can act on them, never archived unanswered.
    */
-  const rounds: QuestionRound[] = (questionState.rounds ?? []).map((r) => ({ ...r })).filter((r) => roundFor([r], { id: askId(r.subject), subject: r.subject, ...(r.hash ? { hash: r.hash } : {}) }, inbox));
-  const chosen = new Map<string, { place: Placement; record: string }>();
+  const inboxHashes = new Map(listing.flatMap((f) => f.md5Checksum ? [[f.id, f.md5Checksum] as const] : []));
+  const rounds: QuestionRound[] = (questionState.rounds ?? []).map((r) => ({ ...r })).filter((r) => !all
+    || roundFor([r], { id: askId(r.subject), subject: r.subject, ...(r.hash ? { hash: r.hash } : {}) }, inbox, inboxHashes));
+  // Presence is consent for this stored action only; null means its destination is unavailable, never a fallback.
+  const chosen = new Map<string, { place: Placement | null; record: string }>();
+  const hasChoice = (id: string): boolean => !!chosen.get(id)?.place;
   const latest = new Map<string, JournalLine>();
   for (const l of lines) {
     const q = questionState.questions.find((q) => answersAsking(l.rec, q));
@@ -708,23 +712,33 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const folder = action && ix.byId(action.folderId);
     const path = folder && ix.pathOf(folder.id);
     const subject = subjectKey(q);
-    if (!subject || !folder?.folder || !path || !MAIN_FOLDERS.includes(path.split('/')[0] ?? '')) continue;
-    for (const pile of piles) for (const item of pile.items) if ((subject === pile.id || subject === item.id) && item.name !== PILE_NOTE)
-      chosen.set(item.id, { place: { to: path, name: item.name }, record: l.rec.id });
+    if (!subject) continue;
+    const to = folder?.folder && path && MAIN_FOLDERS.includes(path.split('/')[0] ?? '') ? path : null;
+    if (to === null) console.error(new BowerError('conflict', 'The chosen folder is no longer available.'), action);
+    for (const pile of piles) {
+      if (subject === pile.id) chosen.set(pile.id, { place: to === null ? null : { to, name: '' }, record: l.rec.id });
+      for (const item of pile.items) if ((subject === pile.id || subject === item.id) && item.name !== PILE_NOTE)
+        chosen.set(item.id, { place: to === null ? null : { to, name: item.name }, record: l.rec.id });
+    }
   }
   const d: Decisions = { ...opts.decisions,
-    thing: (t) => chosen.get(t.fileId)?.place ?? opts.decisions.thing(t),
+    thing: (t) => chosen.has(t.fileId) ? chosen.get(t.fileId)?.place ?? null : opts.decisions.thing(t),
+    words: (id, words) => {
+      const place = opts.decisions.words(id, words);
+      if (!chosen.has(id)) return place;
+      const choice = chosen.get(id)?.place;
+      return choice && place ? { ...place, to: choice.to } : null;
+    },
     thingAsk: (id) => chosen.has(id) ? null : opts.decisions.thingAsk(id),
-    pileAsk: (p) => p.items.some((i) => chosen.has(i.id)) ? null : opts.decisions.pileAsk(p),
+    pileAsk: (p) => chosen.has(p.id) || p.items.some((i) => chosen.has(i.id)) ? null : opts.decisions.pileAsk(p),
+    ...(opts.decisions.merge ? { merge: (item, yes) => chosen.has(item.id) ? null : opts.decisions.merge?.(item, yes) ?? null } : {}),
   };
-  const exhausted = (id: string): boolean => {
+  const roundOf = (id: string): QuestionRound | undefined => {
     const hash = ix.byId(id)?.md5Checksum;
-    const r = roundFor(rounds, { id: askId(id), subject: id, ...(hash ? { hash } : {}) }, inbox);
-    if (!r) return false;
-    if (r.exhausted) return true;
-    const q = questionState.questions.find((q) => subjectKey(q) === r.subject || (!!r.hash && q.hash === r.hash));
-    return r.count >= 2 && !!q && latest.has(q.id) && !chosen.has(id);
+    return roundFor(rounds, { id: askId(id), subject: id, ...(hash ? { hash } : {}) }, inbox, inboxHashes);
   };
+  const exhausted = (id: string): boolean => !!roundOf(id)?.exhausted;
+  const mayAsk = (id: string): boolean => (roundOf(id)?.count ?? 0) < 2;
   const optionsOf = (ask: Ask): Pick<Question, 'options'> => {
     if (!ask.options) return {};
     if (ask.options.length < 2 || ask.options.length > 4 || new Set(ask.options.map((o) => o.folderId)).size !== ask.options.length)
@@ -880,7 +894,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const pileOfThing = new Map(piles.flatMap((p) => p.items.map((i) => [i.id, p] as const)));
   const filedHere = (id: string): boolean => {
     const p = pileOfThing.get(id);
-    if (!p || readiness.get(p.id)?.blocked !== null || (held.has(p.id) && !chosen.has(id))) return false;
+    if (!p || readiness.get(p.id)?.blocked !== null || (held.has(p.id) && !hasChoice(id)) || (chosen.has(id) && !hasChoice(id))) return false;
     if (d.pileAsk(p)) return false;
     return !d.thingAsk(id);
   };
@@ -901,7 +915,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
    * value gate for words): each goes to the Bin only once every line citing it is written, and waits whole otherwise.
    */
   const citedWords = new Map<string, { folder: DriveFile; context: DriveFile | null; lines: WantedLine[]; notes: Set<string> }>();
-  const citedByLine = (pileId: string): boolean => all && keepDay && d.lines.some((l) => l.cites === pileId);
+  const citedByLine = (pileId: string): boolean => all && keepDay && !chosen.has(pileId) && d.lines.some((l) => l.cites === pileId);
   /** Piles with things asked about (TL-P4-08 addendum 4): the rest is filed, the folder and its words stay. */
   const partly = new Set<string>();
   for (const pile of piles) {
@@ -931,7 +945,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // A pile the reply asks about: asked, never captured (TL-P4-08 point 1).
     const ask = d.pileAsk(pile);
     // A pile whose merge line waits past the edit cap waits whole, with its answer (planned again without it).
-    if (held.has(pile.id) && !ask && !pile.items.some((i) => chosen.has(i.id))) {
+    if (held.has(pile.id) && !ask && !hasChoice(pile.id) && !pile.items.some((i) => hasChoice(i.id))) {
       for (const item of pile.items) {
         const m = mergeOf(item);
         if (m) need(m.answer).held = true;
@@ -943,8 +957,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       hold('its id cannot be recorded');
       continue;
     }
+    if (chosen.has(pile.id) && !hasChoice(pile.id)) continue;
     if (ask || exhausted(pile.id)) {
-      if (ask && !exhausted(pile.id)) askedPiles.push({ id: askId(pile.id), text: ask.text, yes: ask.yes, no: ask.no, subject: pile.id, words: pile.text, ...optionsOf(ask), askedAt: opts.requestedAt });
+      if (ask && mayAsk(pile.id)) askedPiles.push({ id: askId(pile.id), text: ask.text, yes: ask.yes, no: ask.no, subject: pile.id, words: pile.text, ...optionsOf(ask), askedAt: opts.requestedAt });
       continue;
     }
     // Things the model asks about: each stays where it is, named by its question; the rest of the pile goes on.
@@ -952,10 +967,10 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     for (const item of pile.items) {
       const q = thingAsk(item.id);
       const hash = listing.find((f) => f.id === item.id)?.md5Checksum;
-      if (q && !exhausted(item.id)) askedPiles.push({ id: askId(item.id), text: q.text, yes: q.yes, no: q.no, about: join(pile.path ?? '', item.name), subject: item.id, words: pile.text, ...optionsOf(q), ...(hash ? { hash } : {}), askedAt: opts.requestedAt });
+      if (q && mayAsk(item.id)) askedPiles.push({ id: askId(item.id), text: q.text, yes: q.yes, no: q.no, about: join(pile.path ?? '', item.name), subject: item.id, words: pile.text, ...optionsOf(q), ...(hash ? { hash } : {}), askedAt: opts.requestedAt });
     }
     // What stays where it is: what is asked about, and a copy of a thing this run does not file.
-    const stays = (fileId: string): boolean => (chosen.size > 0 && !chosen.has(fileId) && fileId !== ix.file(join(pile.path ?? '', PILE_NOTE))?.id && !d.thing({ fileId, name: ix.byId(fileId)?.name ?? '', fileName: ix.byId(fileId)?.name ?? '', kind: kindOf(ix.byId(fileId)?.name ?? ''), words: pile.text, linkText: null })) || !!thingAsk(fileId) || (exhausted(fileId) && !chosen.has(fileId)) || staying.has(fileId);
+    const stays = (fileId: string): boolean => (chosen.has(fileId) && !hasChoice(fileId)) || (chosen.size > 0 && !chosen.has(fileId) && fileId !== ix.file(join(pile.path ?? '', PILE_NOTE))?.id && !d.thing({ fileId, name: ix.byId(fileId)?.name ?? '', fileName: ix.byId(fileId)?.name ?? '', kind: kindOf(ix.byId(fileId)?.name ?? ''), words: pile.text, linkText: null })) || !!thingAsk(fileId) || (exhausted(fileId) && !hasChoice(fileId)) || staying.has(fileId);
     // A pile whose only things are already saved keeps its folder and its words where they are (review P4-17 I3): the
     // copies go to the Bin, and the next tidy-up reads the words on their own, as any pile of words.
     const onlySaved = !loose && !!pile.text.trim() && pile.items.some((i) => dups.has(i.id) && !staying.has(i.id))
@@ -1104,10 +1119,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const seenNow: InboxSeen | null = all ? { ids: inInbox, hashes: hashesIn } : null;
   const gone = (q: Question): boolean => subjectLeft(q, seenNow, notesSeen);
   /** A pile and a thing in it are one subject (a pile ask then a thing ask about its photo adds nothing). */
-  const pileOf = new Map(inbox.flatMap((p) => p.items.map((i) => [i.id, p.id] as const)));
-  const related = (x: string | undefined, y: string | undefined): boolean => x !== undefined && y !== undefined && (x === y || pileOf.get(x) === y || pileOf.get(y) === x);
+  const related = (x: string | undefined, y: string | undefined): boolean => relatedSubjects(x, y, inbox);
   /** Equal content is the same subject only for the same thing uploaded again: not the empty file, and not while both are in the inbox. */
-  const sameContent = (a: Question, b: Pick<Question, 'hash'>): boolean => !!a.hash && a.hash === b.hash && a.hash !== EMPTY_MD5 && !inInbox.has(subjectKey(a) ?? '');
+  const sameContent = (a: Question, b: Pick<Question, 'hash'>): boolean => sameSubjectContent(a, b, { ids: inInbox });
   const sameThing = (a: Question, b: Question): boolean => a.id === b.id || related(subjectKey(a), subjectKey(b)) || sameContent(a, b) || sameContent(b, a);
   /** A list too small to hold a question (`{"v":1,"questions":[]}` is 24 bytes, one question over 100) is not read. */
   const mayHold = (f: DriveFile): boolean => f.size === undefined || f.size > 40;
@@ -1864,8 +1878,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (!readable) console.error(new BowerError('unknown', QUESTIONS_REPLACED), `${SYSTEM.questions} is not a valid questions file`);
     const all = readable ? value.questions : [];
     const open = openQuestions(all, answered, seenNow, notesSeen).filter((q) => {
-      const id = subjectKey(q);
-      const pile = inbox.find((p) => p.id === id || p.items.some((i) => i.id === id));
+      const pile = subjectPile(q, inbox, inboxHashes);
       return q.words === undefined || !pile || q.words === pile.text;
     });
     fresh = toAsk.filter((q) => again.has(q.id) || !open.some((x) => sameThing(x, q)));
@@ -1890,17 +1903,28 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // No `.bower` yet: the run's own records make it; there is no list to ask in, so the question is not asked.
     console.error(new BowerError('unknown', NOT_ASKED), `${SYSTEM.dir} is missing; the question is not asked`);
   }
+  // Only an answered second asking that still has no place exhausts. Decide this before counting new askings.
+  for (const r of rounds) {
+    if (!all || r.count < 2) continue;
+    const q = questionState.questions.find((q) => roundFor([r], q, inbox, inboxHashes) !== undefined);
+    const answer = q && latest.get(q.id);
+    if (!q || !answer || !journal.some((l) => l.rec.id === answer.rec.id)) continue;
+    const subject = subjectKey(q);
+    const filed = things.some((t) => related(subject, t.file.id)) || saved.some((s) => related(subject, s.file.id))
+      || fromWords.some((p) => related(subject, p.pileId)) || citedWords.has(subject ?? '');
+    if (!filed) r.exhausted = true;
+  }
   for (const q of fresh) {
     const subject = subjectKey(q);
-    const pile = inbox.find((p) => p.id === subject || p.items.some((i) => i.id === subject));
+    const pile = subjectPile(q, inbox, inboxHashes);
     if (!subject || !pile) continue;
-    const previous = roundFor(rounds, q, inbox);
-    if (previous) previous.count = Math.min(2, previous.count + 1);
+    const previous = roundFor(rounds, q, inbox, inboxHashes);
+    if (previous) {
+      previous.count = Math.min(2, previous.count + 1);
+      // The newest asking keeps the content evidence when a pile asking becomes a member asking.
+      if (q.hash) { previous.subject = subject; previous.hash = q.hash; }
+    }
     else rounds.push({ subject, pileId: pile.id, words: pile.text, count: 1, ...(q.hash ? { hash: q.hash } : {}) });
-  }
-  for (const r of rounds) {
-    const q = questionState.questions.find((q) => subjectKey(q) === r.subject || (!!r.hash && q.hash === r.hash));
-    if (r.count >= 2 && q && latest.has(q.id) && !things.some((t) => t.file.id === r.subject) && !chosen.has(r.subject)) r.exhausted = true;
   }
   const retained = rounds.filter((r) => !subjectLeft({ id: askId(r.subject), subject: r.subject, ...(r.hash ? { hash: r.hash } : {}) }, seenNow));
   rounds.splice(0, rounds.length, ...retained);
@@ -2094,7 +2118,11 @@ export async function build(decided: Decided): Promise<Ended> {
     const op = await add({ kind: 'create-text', parent: targetOf(note.to), name: note.name, createKey: newKey('note'), text: note.text, content: await utf8(note.text), purpose: 'generated' }, after ? [after] : []);
     const path = join(note.to, note.name);
     const filed = note.pileId === null ? [] : [{ name: 'Your note', title: thingName(note.name), kind: 'note' as const, to: note.to, note: path }];
-    if (note.pileId !== null) notesOf.set(note.pileId, op);
+    if (note.pileId !== null) {
+      notesOf.set(note.pileId, op);
+      const choice = chosen.get(note.pileId);
+      if (choice) derive(choice.record, op);
+    }
     // An observed pile's context note goes to the Bin once its words are written, so a folder kept by another
     // child (a second pile note, a late thing) never has the same words written again on the next run.
     if (note.context) await add({ kind: 'bin', before: seen(note.context), capturedChildIds: [] }, [op]);

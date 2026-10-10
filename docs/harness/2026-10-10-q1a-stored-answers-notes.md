@@ -798,3 +798,117 @@ TMPDIR=/private/tmp/bower-q1a-stored-answers/tmp-logs pnpm -C runner exec vitest
 
 The initial verification found two test-fixture mistakes (checksum reads and an evidence text lookup), both corrected before final delivery. The invalid-folder fixture initially retained an omitted clear sibling, which held the entire pile and masked the review finding; it now reproduces the normal continuation with clear siblings already filed. No existing assertions were edited or weakened.
 No test/ruling contradiction was found. Production fixes, full check/e2e, Q1b/Q1c, commits and integration remain outside this authorized red-only round.
+
+
+## Fix round 1
+
+2026-10-10. Codex implementer; base HEAD `5befaeea5add585812acc21acec0584f002bfbdc`.
+Implemented all seven Blocking findings from the assigned adversarial review in the existing mechanisms.
+No network, writing git command, test edit, golden edit, fingerprint edit, new store or new counter.
+The coordinator owns commits and integration. Production and these notes remain uncommitted.
+
+Rulings read: TL-P4-44 and DECISIONS addenda 1–2; addendum 3 is the supplied zero-read first-listing /
+questions-read subscription ruling preserved by the committed reds and the earlier notes above.
+The local DECISIONS still has no addendum 3 entry. No first-listing, cache or subscription contract changed.
+Offline research reused the local subject/open-question policy, stored choices, capture/decide/build lifecycle,
+and answersShown typed-data boundary. References remain [TypeScript discriminated unions](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions),
+[Tolerant Reader](https://martinfowler.com/bliki/TolerantReader.html), and the existing
+[stable request identity pattern](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/).
+No online verification is claimed.
+
+### Seven findings resolved
+
+| Finding / exact fix-red name | Production rule and evidence |
+| --- | --- |
+| `Q1a fix 1.1: second-answer placement precedes exhaustion after an unresolved second answer` | The planner holds only durable exhaustion during placement, suppresses askings past count two, and exhausts an unresolved answered second asking before incrementing fresh askings. Successful second-answer filing is considered first for both thing and pile; writing asking two alone never exhausts. |
+| `Q1a fix 1.2: instructions scope preserves inbox counters and exhausted subjects without a third asking` | Instructions scope has not observed any inbox departure or words change; it retains rounds unchanged and cannot mark inbox exhaustion. Both active and exhausted histories survive the state-only answer and later all-scope run. |
+| `Q1a fix 1.3: pile and member share two rounds and only changed words permit another asking` | The existing pile/member relation and nonempty reupload comparison now live in contracts/questions.ts. Dedup, round lookup and exhaustion use those rules. A subject switch increments the same record; a member asking retains its content evidence. Both switch directions exhaust without asking three and reset only after changed words. |
+| `Q1a fix 1.4: a same-bytes reupload retains hash history through the planner and writes no asking` | Shared subjectPile locates the current inbox subject by id or a gone item's nonempty hash. Round retention, lookup, words reset and vault projection use that policy. Planner history survives an id replacement with identical bytes; different bytes start at count one. |
+| `Q1a fix 1.5: missing or outside-root stored option folders cannot authorize alternative filing` | Existing chosen entries record unavailable destinations as null. Their presence restricts consent to the stored action; null holds the subject rather than delegating to the model. Valid consent still overrides model placement and uses the normal fences. No alternative item move is planned for either unavailable case. |
+| `Q1a fix 1.6: words-only pile consent places its generated note in the chosen stored folder` | The same chosen map includes the pile's words. Its stored destination overrides d.words while retaining the model's note name. Stored consent cannot take the unrelated cited-line path; the generated operation derives from the answer through existing archive dependencies. Conflicting and matching model destinations both create one note in the chosen folder. |
+| `Q1a fix 1.7: pending text from another pile never reaches this subject planner without provenance` | answersShown resolves the typed subject once and emits person text only with an admitted fileId or pileId. The unrelated journal remains admitted and pending as before, but its words never enter this model input. Own-subject text retains identity; legacy boolean inputs retain their bytes. |
+
+### Test preservation and removed lines
+
+removed: runner/src/claude.ts: 3 lines; anonymous text mapping replaced by subject-bound typed-data projection.
+removed: src/data/contracts/questions.ts: 6 lines; exact-id-only rounds and separate projection relation replaced by shared subject policy.
+removed: src/data/spine/scripted.ts: 34 lines; early exhaustion, blind inbox pruning, and permissive choice fallback replaced in the same planner.
+removed: src/data/vault/drive-vault.ts: 3 lines; local id-only words-reset lookup uses shared subjectPile.
+tests changed: none
+
+Stored versions and shapes are unchanged. Rounds remain only in questions.json; chosen remains the existing
+per-plan consent map. No manifest, checkpoint, report, journal, admission, scheduler or UI port was added.
+Existing content checks, modifiedTime and stillAsSeen fences remain in the normal effect path.
+Compatibility rows above remain drafts for review; this fix adds no stored schema requirement.
+
+### Validation
+
+Baseline whole Q1 file: 28 existing tests pass, all seven fix reds fail on their asserted defects;
+`tmp-logs/q1a-fix-round-1-before.json` and `.log`. No load errors, timeouts or contract contradiction.
+Final whole Q1 file: all 35 pass, including all seven fix reds and every original positive control;
+`tmp-logs/q1a-fix-round-1-targeted-final.json` and `.log`.
+Both runs use `--maxWorkers=2`, real production main and the existing in-process /process fixtures.
+Only failures or aggregate result counts are read from test output.
+
+| Command | Result / evidence |
+| --- | --- |
+| Whole Q1 reds and fix reds, `pnpm -C runner exec vitest run test/q1-continuation.test.ts --maxWorkers=2` | 35/35 pass; `tmp-logs/q1a-fix-round-1-targeted-final.json`, `.log`. |
+| `pnpm exec vitest run src/data --maxWorkers=2` | 4,141/4,141 pass; `tmp-logs/q1a-fix-round-1-data-final.json`, `.log`. |
+| Runner suite, `pnpm -C runner exec vitest run --maxWorkers=2` | 591/591 pass; `tmp-logs/q1a-fix-round-1-runner-final.json`, `.log`. Includes corpus, unchanged Drive call goldens, raw/normalized model-input fingerprints, bounded reads and timing. |
+| App tsc, `pnpm exec tsc -p tsconfig.app.json --noEmit` | Pass; `tmp-logs/q1a-fix-round-1-tsc-app-final.log`. |
+| Node tsc, `pnpm exec tsc -p tsconfig.node.json --noEmit` | Pass; `tmp-logs/q1a-fix-round-1-tsc-node-final.log`. |
+| Runner tsc, `pnpm -C runner exec tsc --noEmit -p .` | Pass; `tmp-logs/q1a-fix-round-1-tsc-runner-final.log`. |
+| ESLint on the three touched app TS files | Pass; `tmp-logs/q1a-fix-round-1-eslint-app-final.log`. |
+| Runner ESLint on `src/claude.ts` | Pass; `tmp-logs/q1a-fix-round-1-eslint-runner-final.log`. |
+| `pnpm check`, existing heavy-run lock | Exit 1: whole app suite 5,465 pass / 22 fail; `tmp-logs/q1a-fix-round-1-check.log`, `tmp-logs/q1a-fix-round-1-check-app.json`. Full lint/typecheck passed before app tests; subsequent check stages were not reached. |
+| App/capabilities/capabilities-b e2e, demo, existing heavy-run lock | Exit 1 before test cases: dev server listener EPERM on ::1:7047; `tmp-logs/q1a-fix-round-1-e2e-demo.log`. |
+| App/capabilities/capabilities-b e2e, fake, existing heavy-run lock | Exit 1 before test cases: dev server listener EPERM on ::1:7047; `tmp-logs/q1a-fix-round-1-e2e-fake.log`. |
+| Read-only `git diff --check`, test/golden/fingerprint diff, HEAD | Pass; no test/golden/fingerprint change; HEAD remains the base above. |
+
+No Q1 test/ruling contradiction remains. The whole targeted suites completed, and every requested red,
+legacy control, golden, fingerprint and data/runner test passed. No check mark or integration claim.
+The full check's 22 failures are outside the assigned planner/subject/provenance mechanisms: 21 existing
+harness-delivery tests returned codex-failed / unexpected exit 1, and the server-identity test timed out
+with its local listener refused. Their exact failure evidence is listed below; no cause is inferred for
+the harness-delivery failures from the generic Codex-failed message. Those tests and mechanisms are untouched.
+The check's existing harness fixtures create temporary repositories; no git write was issued in this worktree.
+
+### Whole-check failure ledger
+
+Every failed assertion from the completed whole app suite is listed, including each parameterized case.
+The suite prefix for the first 21 cases is `codex delivery entry point`; cases with identical printed
+parameter titles are distinguished by occurrence order. These are gate failures, not Q1 contract contradictions.
+
+| Test | File:line | Failure |
+| --- | --- | --- |
+
+| `codex delivery entry point commits a two-commit plan in order with implementer: codex` | `src/codex-run.test.ts:118` | Codex failed; unexpected exit 1. |
+| `codex delivery entry point refuses guarded paths, secrets and addresses: guarded settings` | `src/codex-run.test.ts:145` | Codex failed; unexpected exit 1. |
+| `codex delivery entry point refuses guarded paths, secrets and addresses: guarded script` | `src/codex-run.test.ts:145` | Codex failed; unexpected exit 1. |
+| `codex delivery entry point refuses guarded paths, secrets and addresses: guarded environment` | `src/codex-run.test.ts:145` | Codex failed; unexpected exit 1. |
+| `codex delivery entry point refuses guarded paths, secrets and addresses: secret` | `src/codex-run.test.ts:145` | Codex failed; unexpected exit 1. |
+| `codex delivery entry point refuses guarded paths, secrets and addresses: address` | `src/codex-run.test.ts:145` | Codex failed; unexpected exit 1. |
+| `codex delivery entry point validates the whole plan before changing HEAD ([ { message: 'one', files: [Array] } ]) [printed-title occurrence 1]` | `src/codex-run.test.ts:162` | AssertionError: expected 1 to be 3 // Object.is equality |
+| `codex delivery entry point validates the whole plan before changing HEAD ([ { message: 'one', files: [Array] } ]) [printed-title occurrence 2]` | `src/codex-run.test.ts:162` | AssertionError: expected 1 to be 3 // Object.is equality |
+| `codex delivery entry point validates the whole plan before changing HEAD ([ [Object], [Object] ]) [printed-title occurrence 1]` | `src/codex-run.test.ts:162` | AssertionError: expected 1 to be 3 // Object.is equality |
+| `codex delivery entry point validates the whole plan before changing HEAD ([ [Object], [Object] ]) [printed-title occurrence 2]` | `src/codex-run.test.ts:162` | AssertionError: expected 1 to be 3 // Object.is equality |
+| `codex delivery entry point validates the whole plan before changing HEAD ([ { message: 'one', files: [Array] } ]) [printed-title occurrence 3]` | `src/codex-run.test.ts:162` | AssertionError: expected 1 to be 3 // Object.is equality |
+| `codex delivery entry point validates the whole plan before changing HEAD ([ { message: '', files: [ 'a.txt' ] } ]) [printed-title occurrence 1]` | `src/codex-run.test.ts:162` | AssertionError: expected 1 to be 3 // Object.is equality |
+| `codex delivery entry point validates the whole plan before changing HEAD (not json) [printed-title occurrence 1]` | `src/codex-run.test.ts:162` | AssertionError: expected 1 to be 3 // Object.is equality |
+| `codex delivery entry point appends the last usage in column order and captures the JSON stream` | `src/codex-run.test.ts:170` | Codex failed; unexpected exit 1. |
+| `codex delivery entry point read-only writes the card without committing or running gates` | `src/codex-run.test.ts:183` | Codex failed; unexpected exit 1. |
+| `codex delivery entry point without a plan commits edits, additions and deletions once` | `src/codex-run.test.ts:193` | Codex failed; unexpected exit 1. |
+| `codex delivery entry point never commits the plan file, even when a previous plan is tracked` | `src/codex-run.test.ts:206` | Codex failed; unexpected exit 1. |
+| `codex delivery entry point records gate exits and runs both e2e sources ({ check: 1 })` | `src/codex-run.test.ts:221` | AssertionError: expected 'status: codex-failed\nbranch: worker\…' to contain 'status: check-failed' |
+| `codex delivery entry point records gate exits and runs both e2e sources ({ e2e: 1 })` | `src/codex-run.test.ts:221` | AssertionError: expected 'status: codex-failed\nbranch: worker\…' to contain 'status: e2e-failed' |
+| `codex delivery entry point records gate exits and runs both e2e sources ({ 'e2e:fake': 1 })` | `src/codex-run.test.ts:221` | AssertionError: expected 'status: codex-failed\nbranch: worker\…' to contain 'status: e2e-failed' |
+| `codex delivery entry point records gate exits and runs both e2e sources ({})` | `src/codex-run.test.ts:220` | Codex failed; unexpected exit 1. |
+| `the e2e port and server identity a server from another worktree is never reused` | `src/e2e-port.test.ts:37` | Error: Test timed out in 5000ms. |
+
+Full gate repair outside this entry, Q1c live publication, Q1b UI, which-note, B12, commits and integration
+remain left out. All seven requested production repairs are complete and reviewable in this worktree.
+
+Final status: implementation complete; full gate verification blocked by the 22 whole-check failures above
+and sandbox listener EPERM for both e2e sources. No permission escalation or alternate heavy-run lock was used.
+The existing global heavy-run lock was respected; both e2e attempts and the full check ran to completion.
+No additional run is needed to reproduce the unchanged listener refusal, and no gate success is claimed.

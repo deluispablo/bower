@@ -48,7 +48,7 @@ import { VaultIndex } from './vault-index';
 import { NOT_SENT_TEXT, PERSIST_REFUSED_TEXT, UNREADABLE_TEXT, createUploadQueue, stoppedText, type QueueItem, type UploadQueue } from '../upload-queue';
 import { memoryUploadStore } from '../upload-store';
 import { CHANGED_ELSEWHERE, checkStillAsSeen, notAsSeen, notAsSeenError, notAsSeenReason, notRead, type Landing, type SeenExpectation } from '../contracts/still-as-seen';
-import { answeredAskings, checkedAnswer, pileQuestion, subjectKey, type QuestionAnswer, type QuestionRound, openQuestions } from '../contracts/questions';
+import { answeredAskings, checkedAnswer, pileQuestion, subjectPile, type QuestionAnswer, type QuestionRound, openQuestions } from '../contracts/questions';
 
 export interface DriveVaultOptions {
   driveLinks?: boolean;
@@ -1429,9 +1429,9 @@ export class DriveVault implements VaultSource {
     const here = new Set(inbox.flatMap((p) => [p.id, ...p.items.map((i) => i.id)]));
     for (const [id, u] of this.uploads) for (const e of u.entries) here.add(id).add(e.item.id);
     for (const item of this.queuedItems()) here.add(item.pileId).add(item.memberKey);
+    const inboxHashes = new Map(ix.filesIn('Inbox').flatMap((f) => f.md5Checksum ? [[f.id, f.md5Checksum] as const] : []));
     const all = (stored?.questions ?? []).filter((q) => {
-      const id = subjectKey(q);
-      const pile = inbox.find((p) => p.id === id || p.items.some((i) => i.id === id));
+      const pile = subjectPile(q, inbox, inboxHashes);
       if (!pile) return true;
       if (q.words !== undefined) return q.words === pile.text;
       // Old askings have no words. A fenced edit of their pile after asking ends them too.

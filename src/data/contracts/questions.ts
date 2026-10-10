@@ -62,16 +62,36 @@ export function isQuestionOption(value: unknown): value is QuestionOption {
     && /^[A-Za-z0-9_-]{1,128}$/.test(o.id) && typeof o.label === 'string' && o.label.trim().length > 0 && o.label.length <= 40
     && !!a && Object.keys(a).length === 2 && a.kind === 'file-to' && typeof a.folderId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(a.folderId);
 }
-/** Existing inbox identity including reuploads, reset by changed pile words. */
-export function roundFor(rounds: readonly QuestionRound[], q: Asked, piles: readonly Pile[]): QuestionRound | undefined {
+/** A pile and its member are related; two different members remain different subjects. */
+export function relatedSubjects(x: string | undefined, y: string | undefined, piles: readonly Pile[]): boolean {
+  return x !== undefined && y !== undefined && (x === y || piles.some((p) =>
+    (p.id === x && p.items.some((i) => i.id === y)) || (p.id === y && p.items.some((i) => i.id === x))));
+}
+
+/** Equal nonempty content identifies a reupload only after the original thing has left. */
+export function sameSubjectContent(a: Asked, b: Pick<Question, 'hash'>, inbox: InboxSeen): boolean {
+  return !!a.hash && a.hash !== EMPTY_MD5 && a.hash === b.hash && !inbox.ids.has(subjectKey(a) ?? '');
+}
+
+/** Locate today's subject by id first, then by a gone thing's nonempty content hash. */
+export function subjectPile(q: Asked, piles: readonly Pile[], hashes: ReadonlyMap<string, string> = new Map()): Pile | undefined {
   const s = subjectOf(q);
   if (s.kind !== 'inbox') return undefined;
-  return rounds.find((r) => (r.subject === s.id || (!!s.hash && s.hash !== EMPTY_MD5 && r.hash === s.hash))
-    && piles.some((p) => (p.id === s.id || p.items.some((i) => i.id === s.id)) && p.text === r.words));
+  return piles.find((p) => relatedSubjects(s.id, p.id, [p]))
+    ?? (s.hash && s.hash !== EMPTY_MD5 ? piles.find((p) => p.items.some((i) => hashes.get(i.id) === s.hash)) : undefined);
+}
+
+/** Existing inbox identity including pile/member switches and reuploads, reset by changed pile words. */
+export function roundFor(rounds: readonly QuestionRound[], q: Asked, piles: readonly Pile[], hashes: ReadonlyMap<string, string> = new Map()): QuestionRound | undefined {
+  const pile = subjectPile(q, piles, hashes);
+  if (!pile) return undefined;
+  const inbox = { ids: new Set(piles.flatMap((p) => [p.id, ...p.items.map((i) => i.id)])) };
+  return rounds.find((r) => r.words === pile.text && (relatedSubjects(r.subject, subjectKey(q), piles)
+    || sameSubjectContent({ id: askId(r.subject), subject: r.subject, hash: r.hash }, q, inbox)
+    || sameSubjectContent(q, r, inbox)));
 }
 export function pileQuestion(pile: Pile, open: readonly Question[], rounds: readonly QuestionRound[], hashes: ReadonlyMap<string, string> = new Map()): Pile['question'] {
-  const belongs = (q: Asked): boolean => { const s = subjectOf(q); return s.kind === 'inbox'
-    && (s.id === pile.id || pile.items.some((i) => i.id === s.id || (!!s.hash && hashes.get(i.id) === s.hash))); };
+  const belongs = (q: Asked): boolean => subjectPile(q, [pile], hashes) !== undefined;
   if (open.some(belongs)) return 'waiting';
   return rounds.some((r) => r.exhausted && r.words === pile.text && belongs({ id: askId(r.subject), subject: r.subject, ...(r.hash ? { hash: r.hash } : {}) })) ? 'exhausted' : undefined;
 }

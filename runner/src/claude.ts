@@ -587,11 +587,13 @@ function mergesOf(answers: readonly TakenAnswer[], notes: readonly string[]): No
 function answersShown(answers: readonly TakenAnswer[], piles: Shown['piles']): NonNullable<Shown['answers']> {
   const things = new Set(piles.flatMap((p) => p.things.map((t) => t.fileId)));
   const pileIds = new Set(piles.map((p) => p.pileId));
-  return answers.slice(0, AUTHORED.lines).map((a) => {
+  return answers.flatMap((a) => {
     const subject = subjectKey(a.question);
     const about = subject === undefined ? {} : things.has(subject) ? { fileId: subject } : pileIds.has(subject) ? { pileId: subject } : {};
-    return { question: a.question.text.slice(0, ASK.text), answer: typeof a.value === 'boolean' ? (a.yes ? a.question.yes : a.question.no).slice(0, ASK.answer) || (a.yes ? 'Yes' : 'No') : 'text' in a.value ? a.value.text : a.question.options?.find((o) => typeof a.value !== 'boolean' && 'option' in a.value && o.id === a.value.option)?.label ?? '', ...about, ...(a.note ? { note: a.note.path } : {}), ...(a.pair ? { notes: [...a.pair.paths] } : {}) };
-  });
+    // Typed person text is admitted only with its own thing or pile; unrelated journal remains pending.
+    if (typeof a.value !== 'boolean' && 'text' in a.value && !('fileId' in about) && !('pileId' in about)) return [];
+    return [{ question: a.question.text.slice(0, ASK.text), answer: typeof a.value === 'boolean' ? (a.yes ? a.question.yes : a.question.no).slice(0, ASK.answer) || (a.yes ? 'Yes' : 'No') : 'text' in a.value ? a.value.text : a.question.options?.find((o) => typeof a.value !== 'boolean' && 'option' in a.value && o.id === a.value.option)?.label ?? '', ...about, ...(a.note ? { note: a.note.path } : {}), ...(a.pair ? { notes: [...a.pair.paths] } : {}) }];
+  }).slice(0, AUTHORED.lines);
 }
 
 /**
