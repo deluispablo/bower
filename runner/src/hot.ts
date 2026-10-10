@@ -24,7 +24,7 @@ interface Section {
 
 // CommonMark §2.4: escape block markers only after whitespace has collapsed.
 const oneLine = (text: string): string => text.replace(/\s+/gu, ' ').trim()
-  .replace(/^([#>*+`~_-])/u, '\\$1')
+  .replace(/^([<#>*+`~_-])/u, '\\$1')
   .replace(/^(\d{1,9})([.)])(?= |$)/u, '$1\\$2');
 const compareText = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
 
