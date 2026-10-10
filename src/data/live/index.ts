@@ -126,6 +126,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
   let expiryFailure: unknown = null;
   let session: LiveSession | null = null;
   let knownAccount: Promise<string> | null = null;
+  let signingOut = false;
   // The person is gone: this place starts again when someone signs in.
   const expire = async (): Promise<void> => {
     expiredFrom = epoch;
@@ -141,6 +142,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
   };
   // Keep the accepted identity in this lifetime's memory, before expiry erases the session cache.
   const authed = watchAuth(opts.worker, expire, () => epoch, (key, reply) => {
+    if (key === 'signIn') signingOut = false;
     if (key !== 'me') return;
     const me = reply as Awaited<ReturnType<WorkerApi['me']>>;
     if (me !== null) knownAccount = uploadAccount(me.user.email);
@@ -372,10 +374,13 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
     const signOut = session.signOut.bind(session);
     session.signOut = async (): Promise<void> => {
       const who = knownAccount;
+      const forget = !signingOut;
+      signingOut = true;
       let failure: { cause: unknown } | undefined;
       try { await signOut(); }
       catch (cause) { console.error(cause); failure = { cause }; }
-      await forgetPerson(who);
+      // A retry only repeats the remote call; this sign-out already forgot the device records.
+      if (forget) await forgetPerson(who);
       if (failure) throw failure.cause;
     };
     const ended = session.expire.bind(session);

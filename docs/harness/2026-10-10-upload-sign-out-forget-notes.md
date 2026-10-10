@@ -1588,3 +1588,45 @@ actual upload queue, and fake IndexedDB store; no helper purge or second mechani
 Inherited offline source: [IndexedDB transaction lifecycle](https://www.w3.org/TR/IndexedDB/#transaction-lifecycle).
 No source fetched. Implementation, commits, pnpm check and e2e remain with the coordinator;
 this assignment owns only the red and control.
+
+## Addendum 9 fix 2
+
+tests changed: none
+removed: unconditional local purge on every explicit sign-out retry in src/data/live/index.ts.
+removed: retry path that passed undefined after knownAccount was cleared, deleting another account's uploads.
+
+Implemented TL-P4-53 addendum 9, pass 5 with one in-memory sign-out flag.
+The first attempt captures the last known identity and uses the existing forgetPerson
+mechanism, including the every-account fallback when no identity was known. A retry
+only repeats the remote call; successful remote sign-in resets the flag for the next
+sign-out. The purge-failure sentence and both console.error paths remain unchanged.
+No upload-store, device-wide counter, IndexedDB format, or addendum 10 changes.
+No second purge mechanism. No contradictory tests found in the whole targeted suite.
+
+Red before edit: 50 tests, 49 passed; the committed retry red failed at
+src/data/upload-sign-out.test.ts:367 (other account count 0 instead of 1, bytes null).
+Green after edit: the same whole file passes all 50 tests.
+Full src/data suite: 80 files, 4228 tests passed.
+TypeScript app and node checks and eslint on src/data/live/index.ts: exit 0.
+Read-only git diff --check: passed.
+
+Commands (all run offline; output outside the repository):
+
+```sh
+pnpm exec vitest run src/data/upload-sign-out.test.ts --maxWorkers=2 --config /private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/upload-a9-red2-e7a9j2_b/vitest.config.mjs --configLoader runner
+pnpm exec vitest run src/data --maxWorkers=2 --config /private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/upload-a9-red2-e7a9j2_b/vitest.config.mjs --configLoader runner
+pnpm exec tsc -p tsconfig.app.json --noEmit
+pnpm exec tsc -p tsconfig.node.json --noEmit
+pnpm exec eslint src/data/live/index.ts
+```
+
+Logs: /private/tmp/upload-a9-fix2-{red,green,data,tsc-app,tsc-node,eslint}.log.
+Reused the red's existing OS-temp config: original Vite config and app setup,
+timer gate active, cache and CPU reports outside the repository. No test edited.
+No network, Git writes, commits, node_modules replacements or symlinks.
+Full pnpm check not run: its scripts write repository outputs and the check mark;
+used the owner's explicitly requested checks. No screen changed; no e2e run.
+
+Standard solution/reuse: existing live sign-out wrapper and forgetPerson mechanism,
+with a lifetime flag preventing repeated destructive cleanup. Inherited offline source:
+https://www.w3.org/TR/IndexedDB/#transaction-lifecycle (not fetched).
