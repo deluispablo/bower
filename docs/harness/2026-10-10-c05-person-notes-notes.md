@@ -275,3 +275,27 @@ RunLinks already uses the [WAI-ARIA link pattern](https://www.w3.org/WAI/ARIA/ap
 These references came from the assigned mechanisms; no network lookup was made.
 
 Left out: commits, shared harness records, test/fixture/corpus changes, e2e, pnpm check and any deployment.
+
+### Red repair
+
+Red-owner repair against implementation HEAD `87d61c421fc4d4b227a8237f314f73748b58f296`.
+The baseline reproduced exactly three state-answer failures at `src/data/vault/journal.ts:144`:
+state answer true, state answer false, and state changed before Write it re-asks.
+The other 16 tests passed. Baseline log: `/tmp/c05-redfix-before.log`.
+
+Installed fresh per-test localStorage with the existing Map-backed `vi.stubGlobal` pattern from
+`runner/test/corpus-driver.test.ts`, and removed the stub after each test with `vi.unstubAllGlobals`.
+`runner/test/ask-answer-loop.test.ts` uses the same storage installation and cleanup approach.
+These local tests are the offline research/reuse sources; no second storage mechanism was added.
+
+tests changed: runner/test/c05-person-notes.test.ts: install the existing browser-storage test pattern for real answers.
+
+Verification (output redirected; only failure details and test totals inspected):
+
+- `pnpm -C runner exec vitest run test/c05-person-notes.test.ts --maxWorkers=2 > /tmp/c05-redfix-runner.log 2>&1`: all 19 tests pass.
+- `pnpm -C runner exec tsc --noEmit -p . > /tmp/c05-redfix-tsc.log 2>&1`: pass.
+- `pnpm -C runner exec eslint test/c05-person-notes.test.ts > /tmp/c05-redfix-eslint.log 2>&1`: pass.
+- `git diff --check`: pass.
+
+No NODE_OPTIONS was supplied. No assertions, names, fixtures, corpus or product code changed.
+No network or git write command was used. No commits, pnpm check or e2e were requested or run.

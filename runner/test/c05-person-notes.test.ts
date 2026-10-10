@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as noteEdit from '../../src/data/contracts/note-edit';
 import type { ClaudeSpawn } from '../src/claude';
 import { loadCase, type LoadedCase } from '../src/corpus';
@@ -66,6 +66,16 @@ function assertPersonal(r: CaseRun): void {
 }
 
 describe('C05 person notes through runner main', () => {
+  beforeEach(() => {
+    const stored = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => void stored.set(key, value),
+      removeItem: (key: string) => void stored.delete(key),
+    });
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
   it.each([
     ['case and punctuation', 'Update (GARDEN PLOT) from this committee letter.', 'Garden plot'],
     ['the article', 'Update the garden plot from this committee letter.', 'Garden plot'],
