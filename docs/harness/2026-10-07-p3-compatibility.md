@@ -171,3 +171,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `0295e5f2` | tree-name-first | none for stored data: the tree's New folder asks for the name before making the folder, then makes it once; Escape makes nothing. |
 | `f9da5278` | b1a-contract | none: tests only (the B1 contract reds; a new corpus case with its method verdict row). |
 | `254e728f` | b1a-contract | ownership-format: plain, legacy and v2 notes keep their statuses and spans; three optional framed MOC regions are additive. note-edit: existing edits keep their meaning; a person's MOC or hub admits only the link rewrite. run-manifest: stored v1/v2 manifests and checkpoints keep their values; MOC changes and the maintain effect are additive. layout: root index.md, hot.md and log.md are ordinary notes; the runner's files live in .bower/ (TL-P4-45). |
+| `92219264` | b1a-contract | none: tests only (the Codex pass's five findings). |
+| `282d9c55` | b1a-contract | note-edit: a person's hub or MOC recognized by VaultIndex admits only the link rewrite; run-manifest: manifests written before B1a keep their satisfied-append meaning (versioned check). |

@@ -635,3 +635,163 @@ initial inherited dirty/untracked files confirms every implementation file is un
 No obsolete 91/102 Drive-call pin remains in test files. `git diff --check` passes.
 No full pnpm check or e2e was run within this explicitly runner-only validation scope.
 removed: none (assertions, tests or implementation).
+
+## Red repair 5 (Codex pass 1)
+
+Red-owning fix round 1 at committed HEAD `c100645d06b265df9567d81d5e991639559a8adb`.
+Authority: the five Blocking findings in `2026-10-10-codex-b1a-contract-adversarial.md`,
+restating packet points 1, 3, 4, 6 and the hidden-path addendum. Exactly five new tests;
+every pre-existing assertion is preserved. Only imports and appended tests change in
+the two test files. No non-test source, network, real timers or git write command.
+The coordinator owns commits. The fixture below is test data, not production source.
+
+tests changed: runner/test/b1a-contract.test.ts: append pass 1 findings 1, 4 and 5 through corpus runOnDrive and production main; retain all existing assertions.
+tests changed: src/data/contracts/b1a-contract.test.ts: append pass 1 findings 2 and 3 through note-edit recheckEdit and both manifest readers; retain all existing assertions.
+tests changed: src/data/contracts/fixtures/p2/b1a-personal-moc-satisfied.json: add a fixed pre-B1a v1-format satisfied-append manifest; independent canonical/raw hashes, personal type: moc text, captured request/source/target, and its archive operation.
+removed: none.
+
+### Exact reds and controls
+
+| Exact test name | Positive control | Assertion failure at HEAD |
+| --- | --- | --- |
+| B1a contract: pass 1 1: the committed cursor never passes an unreflected concurrent edit | Edit before planning refreshes the exact note id's version and summary. The wrapper observes the planner's cached listing; the race occurs immediately before the real changes request delegates to the existing fake transport. | A run reaches done with the old version/summary, while listChanges at the committed cursor no longer contains that id: the reflect-or-defer assertion receives false. |
+| B1a contract: pass 1 2: a personal path-recognized hub permits only link rewrites | Real VaultIndex marks Resources/Gardening/Gardening.md as a hub and Plot.md as ordinary. Hub link rewrite passes author and recheck; the ordinary note's consented append passes recheck. | recheckEdit receives the recognized hub's real path, same fetched bytes, matching version/content and consent, but returns ok instead of conflict for a Timeline append. No type: hub is fabricated. |
+| B1a contract: pass 1 3: stored personal MOC satisfied appends retain their read meaning | The same stored manifest with only the target text's type declaration removed and its raw text hash/size updated parses with exact value through both readers; its existing line is unchanged to the author. No production author builds the stored fixture. | Both parseRunManifest and parseRunManifestV2 refuse identical historical-format personal type: moc satisfaction bytes with reason: shape instead of retaining the row and archive completion id. |
+| B1a contract: pass 1 4: maintain bootstraps and refreshes full valid ownership notes beyond 4096 bytes | A short ownership/2 note bootstraps successfully. The entire 9,198-byte fixture parses as v2 with the expected summary before main; note bytes remain intact in all three runs. | Long bootstrap and long refresh end failed rather than done; bootstrap has no retrieval row, refresh retains its old version/summary. Console cause is damaged-boundary at runner/src/index.ts:80, where the prefix reaches parseNote. |
+| B1a contract: pass 1 5: newly discovered hidden descendants advance only the cursor | A workspace.json present in the cached listing advances the cursor only. isHidden recognizes its full .obsidian/workspace.json path and does not hide its basename. The race creates the child under the already cached .obsidian parent immediately before the real feed read. | The raced hidden-only feed schedules a maintain effect naming the hidden child and sends a .bower/index.md rewrite. State fields except cursor, index bytes, hot and log remain unchanged; the forbidden rewrite is observed even when it sends identical bytes. |
+
+All note text, ids and paths are made up. Existing fake clocks and vi fake timers are
+used throughout, with injected pacing that resolves immediately. The tests observe
+production sends and persisted manifests; they add no planner, hidden-path rule,
+parser, maintenance author or recovery engine.
+
+### Validation
+
+All command output is under tmp-logs. Vitest ran each touched file with --maxWorkers=2.
+Only failure sections, aggregate results and empty successful check logs were read.
+
+| Command | Result | Log |
+| --- | --- | --- |
+| pnpm exec vitest run src/data/contracts/b1a-contract.test.ts --maxWorkers=2 | exit 1; exactly 2 new assertion reds, all 5 existing tests pass | tmp-logs/b1a-pass1-app.log |
+| pnpm -C runner exec vitest run test/b1a-contract.test.ts --maxWorkers=2 | exit 1; exactly 3 new assertion reds, all 9 existing tests pass | tmp-logs/b1a-pass1-runner.log |
+| pnpm exec tsc -p tsconfig.app.json --noEmit | pass | tmp-logs/b1a-pass1-tsc-app.log |
+| pnpm exec tsc -p runner/tsconfig.json --noEmit | pass | tmp-logs/b1a-pass1-tsc-runner.log |
+| pnpm exec eslint src/data/contracts/b1a-contract.test.ts | pass | tmp-logs/b1a-pass1-eslint-app.log |
+| pnpm -C runner exec eslint test/b1a-contract.test.ts | pass | tmp-logs/b1a-pass1-eslint-runner.log |
+
+An initial combined-root ESLint invocation refused tsconfigRootDir inference;
+separate invocations from each existing configuration's own root both pass.
+Log of that tooling-only attempt: tmp-logs/b1a-pass1-eslint.log.
+The five failed tests are assertion failures, with no load, import, type or timer
+failures. Existing lost-reply tests deliberately log their simulated transport
+errors and still pass. The long-note red logs the production damaged-boundary
+refusal and fails its done/refreshed-state assertions, as the finding predicts.
+
+Offline standard: reuse the existing VaultIndex, note-edit, stored manifest readers,
+corpus driver, versioned read cache, changes feed, and fenced maintenance mechanisms.
+Existing packet references: https://developers.google.com/workspace/drive/api/guides/manage-changes,
+https://www.sqlite.org/atomiccommit.html and https://www.rfc-editor.org/rfc/rfc9110.html#section-9.2.2.
+No URL was fetched. Stored-format compatibility is strict on write and lenient on read;
+the fixed fixture pins the earlier satisfaction meaning without granting a new edit.
+
+Read-only git diff confirms the only deleted TypeScript lines are import replacements;
+all existing test bodies and assertions are byte-for-byte preserved. git diff --check
+passes. No full pnpm check, e2e, commit, branch change, push or deployment was run in
+this explicitly test-only red session.
+
+
+## Fix round 1
+
+Implementer: Codex. Authority: the owner's five pass 1 findings and the Red repair 5
+contract. Base HEAD: `922192647f666102c41b4f5d8ba8ea22197514e3`; changes remain uncommitted. No network,
+no git command that writes, and no test or stored fixture was changed. The inherited
+Red repair 5 notes are preserved above.
+
+tests changed: none.
+removed: runner/src/index.ts: prefix reads into the full ownership parser; basename-only hidden fallback.
+removed: runner/src/index.ts: stale planner metadata as the final retrieval snapshot when newer feed metadata exists.
+removed: src/data/vault/vault-index.ts: inline path/stem hub recognition, replaced by its shared isHub predicate.
+removed: src/data/contracts/note-edit.ts: separate type-only hub/MOC recognition, replaced by VaultIndex.isHub.
+removed: src/data/contracts/run-manifest.ts: unversioned current-author satisfaction proof.
+
+### Implementation and boundaries
+
+1. Maintenance folds the existing feed metadata into the listing by id and version;
+   older feed versions cannot replace newer listed versions. The existing ReadCache
+   reuses full byte reads as text only at the identical id/version. It never treats a
+   prefix as full evidence or reconstructs raw bytes from decoded text. Retrieval
+   cursor and the state it reflects still commit in one existing fenced write.
+2. VaultIndex.isHub owns path/stem and declared hub/MOC recognition. The explorer,
+   planner and effect recheck use it, including the original Drive name for duplicate
+   display paths. Plain or legacy personal maps refuse non-link changes. Valid
+   ownership/2 frames retain their existing Bower ownership meaning, including older
+   notes without a redundant by front-matter property. Personal bytes stay protected.
+3. Historical satisfied-append rows without editContract use author contract 1. New
+   planner rows write editContract: 2 and use the current refusal. The shared author
+   still proves unchanged after all original size, UTF-8, ownership, order, fields,
+   consent and reparse checks. The proof returns only a boolean and cannot grant an
+   edit. Manifest request/source/archive bindings, raw hashes and captured versions
+   remain mandatory in both readers; no recorded text or identity is migrated.
+4. Maintenance parses full note text from the existing versioned read cache. Long
+   ownership/2 framing no longer reaches the parser as a 4096-byte prefix. Retrieval's
+   existing summary coverage shape stays compatible.
+5. Feed metadata resolves newly discovered paths through VaultIndex, then layout.ts
+   isHidden judges the full path. Its basename fallback is removed. Hidden descendants
+   schedule only the existing cursor write. Visible notes absent from the cached
+   snapshot wait for a fresh listing: an old feed cannot resurrect a note now in the
+   Bin. Unresolved paths or missing feed metadata also defer the cursor. This is a
+   conservative, lossless retry using the existing listing/state mechanism, with no
+   ancestry lookup or additional Drive call.
+
+Production inventory: runner/src/index.ts; src/data/contracts/note-edit.ts;
+src/data/contracts/run-manifest.ts; src/data/drive/read-cache.ts;
+src/data/vault/vault-index.ts; src/data/spine/scripted.ts. This notes file is the
+only other tracked change in this fix round; its Red repair 5 section was inherited.
+
+### Compatibility row drafts
+
+| Contract commit | Existing proof | Read/write compatibility |
+| --- | --- | --- |
+| Fix round 1, SHA pending: note-edit.ts | B1a points 1/5/6; pass 1 2/3; all src/data tests, ownership and Current state fixtures | Current personal hub/MOC edits permit only link rewrites through the shared VaultIndex recognition. Existing ownership/2 notes retain their owned-payload meaning. Historical satisfaction uses the same author at contract 1, requiring unchanged; it grants no current write. Tests and fixtures unchanged. |
+| Fix round 1, SHA pending: run-manifest.ts | Both readers of the fixed historical personal MOC satisfied fixture; stored P2 manifests/checkpoints and chains | Absent editContract retains contract 1 meaning and exact parsed row values. New rows explicitly write 2 and prove the current contract. Unknown versions refuse. All captured bindings, completion operation ids and content hashes remain checked. No manifest or checkpoint bytes are rewritten. |
+
+### Verification
+
+The five original assertion reds reproduced before edits: app 2 failed/5 passed,
+runner 3 failed/9 passed. Exact names and assertions are the Red repair 5 table above.
+Logs: tmp-logs/b1a-fix1-before-app.log and b1a-fix1-before-runner.log.
+
+The first broad pass exposed three data and two runner regressions. Read-only HEAD
+source probes confirmed the two runner tests passed at the base. No test was changed.
+The fixes preserve valid ownership/2 marks and defer visible discoveries absent from
+snapshot membership, instead of attempting to read a note the older feed resurrected.
+Diagnostic logs: b1a-fix1-data.log, b1a-fix1-runner.log,
+b1a-fix1-baseline-regressions.log, b1a-fix1-cache-isolation.log and
+b1a-fix1-index-isolation.log under tmp-logs/.
+
+| Final command | Result | Log under tmp-logs/ |
+| --- | --- | --- |
+| pnpm exec vitest run src/data/contracts/b1a-contract.test.ts --maxWorkers=2 | 7 tests pass | b1a-fix1-app-reds-final.log |
+| pnpm -C runner exec vitest run test/b1a-contract.test.ts test/corpus-driver.test.ts test/drive-calls-golden.test.ts --maxWorkers=2 | 3 files, 35 tests pass; all 12 B1a tests; goldens 88/99 unchanged | b1a-fix1-runner-focus-final.log |
+| pnpm exec vitest run src/data --maxWorkers=2 | 77 files, 3937 tests pass | b1a-fix1-data-final.log |
+| pnpm -C runner exec vitest run --maxWorkers=2 | 43 files, 526 tests pass; goldens 88/99 unchanged | b1a-fix1-runner-green.log |
+| pnpm exec tsc -p tsconfig.app.json --noEmit | Pass | b1a-fix1-tsc-app.log |
+| pnpm exec tsc -p tsconfig.node.json --noEmit | Pass | b1a-fix1-tsc-node.log |
+| pnpm exec tsc -p runner/tsconfig.json --noEmit | Pass | b1a-fix1-tsc-runner.log |
+| ESLint, all six touched production files, from their own configuration roots | Pass | b1a-fix1-eslint-app.log; b1a-fix1-eslint-runner.log |
+| node scripts/check-dependencies.mjs | Pass | b1a-fix1-dependencies.log |
+
+Only failures and aggregate results were read. No call threshold changed or rose;
+there is no named additional-call delta. pnpm check was not run because its full root
+unit suite invokes writing git commands in src/harness-git.test.ts (init, add, commit,
+worktree and merge), prohibited by the owner. No UI screen was touched (ui: false),
+so no e2e was run. The coordinator owns any later commit; none was attempted.
+
+Offline standards reused from the packet and existing code: Drive's changes feed
+https://developers.google.com/workspace/drive/api/guides/manage-changes;
+version-keyed response reuse https://www.rfc-editor.org/rfc/rfc9110.html#section-8.8.3;
+atomic state/cursor commits https://www.sqlite.org/atomiccommit.html.
+No reference was fetched. These fixes reuse the existing cache, VaultIndex,
+versioned stored contracts, full-note parser, layout rule and fenced maintenance.
+
+Final read-only diff checks: git diff --check passes. The test/fixture diff is empty.
