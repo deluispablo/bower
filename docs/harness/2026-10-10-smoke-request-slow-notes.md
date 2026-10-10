@@ -309,3 +309,73 @@ Command: `pnpm -C runner exec vitest run test/c05-bounded-reads.test.ts --maxWor
 Output: `tmp-logs/red-repair-round2-chain.log` (exit 1).
 No check/e2e run for this red-only repair; production implementation and full gates remain pending.
 removed: only the four superseded test assertion lines; no production lines.
+
+
+## Implementation — round 2 repair audit
+
+Stopped under the implementation instruction: “if a red contradicts the packet or a ruling, stop and say so.”
+Round 2 repaired the helper's pending location, but left contradictory consumers in the same required C05 suite.
+No test was changed. All exploratory production edits were removed by restoring their original bytes using
+read-only `git show`; no git command that writes, network call, commit, or new store/index was used.
+Only this notes append remains as a tracked change. Line 3 remains `implementer: codex`.
+
+### Remaining hard location conflict
+
+`runner/test/c05-person-notes.test.ts:826–827`, `round4Pending`, now requires the clashed request's original
+bytes in `.bower/changes/pending/abc123-run1/change-1.json` and its direct changes path to be absent.
+This is the packet/ruling's required outcome, and the helper passed those location assertions in the experiment.
+
+But its round 5 3 consumer still reads `activeBytes` from that absent direct path at line 1084, falling back to
+an empty string. At line 1088 it requires the direct changes path to equal that empty string after newer runs.
+Line 1090 then parses that string as JSON. Even inserting an empty placeholder cannot make both assertions
+pass: JSON.parse('') throws, and such a placeholder is outside the ruled unchanged-byte move mechanism.
+Line 1110 also finds the archive move using the file id at the absent original direct path.
+These are unrepaired consumers of the very location round 2 changed; a conforming implementation cannot satisfy them.
+
+Reproduction: the experiment passed round4Pending's pending-byte and absent-direct-path checks, then the required
+C05 runner suite failed round 5 3 at line 1088, expected empty string, received undefined.
+Evidence: `tmp-logs/implement-c05-runner.log` (failure section, round 5 3).
+The earlier Reds section's other hand-restoration conflicts also remain in unchanged tests; round 5 1 still restores
+an archived request after retention and expects no second effect. No replacement identity/provenance store was inferred.
+
+### Checks actually run
+
+All Vitest commands used `--maxWorkers=2`. Output stayed under `tmp-logs/`; only failures were read.
+Results below describe the discarded experiment, not a delivered or validated implementation.
+
+| Check | Result | Log |
+| --- | --- | --- |
+| Committed bounded reds before changes | Three behavioural reds | tmp-logs/implement-reds.log |
+| Bounded reds, final experiment | Golden and horizon pass; pending stops at interrupted-move recovery control | tmp-logs/implement-green3.log |
+| C05 runner person-notes/incorporation/between/marked-history | 39 pass, 9 fail; includes the hard location contradiction | tmp-logs/implement-c05-runner.log |
+| C05 app contracts/reports/tidy | Pass | tmp-logs/implement-c05-app.log |
+| TypeScript app | Pass | tmp-logs/implement-tsc-app.log |
+| TypeScript node | Pass | tmp-logs/implement-tsc-node.log |
+| TypeScript runner | Pass | tmp-logs/implement-tsc-runner.log |
+
+The experiment moved planned append requests before the append so a crash could leave an evidence pointer.
+That ordering failed the pending red's recovery control, which interrupts the first parent-changing request move
+and expects the append already to have landed. This is an implementation failure, not the hard test contradiction above;
+it was not bypassed or accepted. All engine/guard/planner/index/provider changes were removed.
+The full data suite, full runner suite, eslint, pnpm check and e2e were not run after the required stop.
+No validation claim applies to the restored production tree.
+
+removed: 0 retained production lines; exploratory production edits removed completely.
+tests changed: none.
+left out: production implementation and remaining gates; requires red-owner repair of round 5 3's direct-path consumers.
+
+Compatibility row drafts for the next implementation, not completed validation:
+
+| Fixture/format | Required outcome | Status |
+| --- | --- | --- |
+| B1a pile control | Exact 20-read baseline | Control passed; preserved in restored source. |
+| New requests, including old-format staging | Zero run-record reads; no migration | Experiment passed bounded golden; implementation discarded. |
+| Waiting requests | Existing move to pending/run id, unchanged bytes, bound target/source ids | Pending helper passed; round 5 3 consumer remains contradictory. |
+| Waiting evidence | Own run only, full RunRecords.found chain | No alternative evidence mechanism delivered. |
+| Completed request recovery | No second append or completion after interrupted settlement move | Experiment failed recovery control; no change delivered. |
+| Retention horizon | Folder listing metadata, no chain walk, TOO_OLD_WHY | Experiment passed horizon red; implementation discarded. |
+| Stored v2 records/personal bytes | Parsers and TL-P4-32 addenda 2–6 outcomes unchanged | Required suites not all green; production restored. |
+
+Sources: the official Drive files.list, parent/search and partial-response references already cited above,
+without fetching under the no-network instruction. VaultIndex containment and RunRecords remain the intended
+“index points to evidence” homes. No store, index file or second move/evidence mechanism remains in the tree.
