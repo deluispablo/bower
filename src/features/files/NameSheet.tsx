@@ -14,7 +14,7 @@ import { FieldError, Input } from '@/ui/Field';
 import { useFileActions } from './file-actions';
 import s from './files.module.css';
 
-/** Rename, New note and New folder from a page: the name is asked here, then the thing opens. */
+/** Rename and New folder from a page share one name sheet. */
 export function NameSheet() {
   const { naming, setNaming } = useUi();
   const { vault } = useSources();
@@ -27,7 +27,7 @@ export function NameSheet() {
   const start = renaming ? (node?.type === 'folder' ? nameOf(renaming) : thingName(nameOf(renaming))) : '';
   // A note or a file says its links follow it; a folder says nothing.
   const links = renaming && node?.type === 'file' ? (node.kind === 'note' ? 'Links to this note keep working.' : 'Links to this file keep working.') : null;
-  const what = renaming ? 'Rename' : making?.type === 'folder' ? 'New folder' : 'New note';
+  const what = renaming ? 'Rename' : 'New folder';
   const where = renaming ? parentOf(renaming) : (making?.folder ?? '');
   const save = async (name: string): Promise<void> => {
     const n = name.trim();
@@ -44,19 +44,18 @@ export function NameSheet() {
     if (/[/\\]/.test(n)) toast('Names cannot have slashes; Bower used a dash.');
     const safe = n.replace(/[/\\]/g, '-');
     try {
-      // A note's name is typed without .md; typed with it, it is not doubled.
-      const path = await vault.create(making.folder, making.type, making.type === 'note' ? `${safe.replace(/\.md$/i, '')}.md` : safe);
-      act.open({ path, type: making.type === 'note' ? 'file' : 'folder' });
+      const path = await vault.create(making.folder, 'folder', safe);
+      act.open({ path, type: 'folder' });
     } catch (e) {
-      if (e instanceof BowerError && e.applied?.path) act.open({ path: e.applied.path, type: making.type === 'note' ? 'file' : 'folder' });
-      report(e, making.type === 'note' ? 'The note was not made. Try again.' : 'The folder was not made. Try again.');
+      if (e instanceof BowerError && e.applied?.path) act.open({ path: e.applied.path, type: 'folder' });
+      report(e, 'The folder was not made. Try again.');
     }
   };
   return (
     <Sheet open={!!naming} onOpenChange={(o) => !o && setNaming(null)} title={what} description={`In ${crumbs(where)}`}>
       {renaming && <LoadError state={treeState} />}
       {renaming && tree === undefined && !treeState.error && <p className="muted">Looking…</p>}
-      {naming && (!renaming || (tree !== undefined && !treeState.error)) && <NameForm key={JSON.stringify(naming)} start={start} links={links} label={renaming ? 'Rename' : making?.type === 'folder' ? 'Make the folder' : 'Make the note'} onSave={(n) => void save(n)} onCancel={() => setNaming(null)} />}
+      {naming && (!renaming || (tree !== undefined && !treeState.error)) && <NameForm key={JSON.stringify(naming)} start={start} links={links} label={renaming ? 'Rename' : 'Make the folder'} onSave={(n) => void save(n)} onCancel={() => setNaming(null)} />}
     </Sheet>
   );
 }

@@ -59,26 +59,3 @@ test('Move to: Enter in an empty box says what to do', async ({ page, isMobile }
   await page.keyboard.press('Enter');
   await expect(page.getByRole('dialog').getByRole('status')).toHaveText('Type a folder name, or pick one with the arrows.');
 });
-
-test('New note in an empty folder asks for a name, then opens the note', async ({ page, isMobile }) => {
-  test.skip(isMobile, 'the folder is made from the desktop tree; the folder screen is the same on a phone');
-  await open(page, '/');
-  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
-  await tree.getByRole('treeitem', { name: /^Resources/ }).click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'New folder' }).click();
-  await expect(tree.getByRole('textbox', { name: /^New name for / })).toBeFocused();
-  await page.keyboard.type('Empty one');
-  await page.keyboard.press('Enter');
-  // In the app, not a fresh address: that would start the situation again.
-  await tree.getByRole('treeitem', { name: /^Empty one/ }).click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Open as a list or table' }).click();
-  await page.getByRole('button', { name: 'New note in Empty one' }).click();
-  const sheet = page.getByRole('dialog', { name: 'New note' });
-  await expect(sheet).toBeVisible();
-  // The one name sheet (d-v2-09): its field is "Name", and it has the Cancel / Make the note pair.
-  await expect(sheet.getByRole('textbox', { name: 'Name', exact: true })).toBeFocused();
-  await expect(sheet.getByRole('button', { name: 'Make the note', exact: true })).toBeVisible();
-  await page.keyboard.type('Soup ideas');
-  await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/\/note\/Resources\/Empty%20one\/Soup%20ideas\.md/);
-});

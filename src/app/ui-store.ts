@@ -41,7 +41,7 @@ interface UiState {
   restored: { path: string; at: number } | null;
   setRestored: (path: string | null) => void;
   /** A name asked for in a sheet (from a page, where there is no tree row to type in). */
-  naming: { rename: string } | { folder: string; type: 'note' | 'folder' } | null;
+  naming: { rename: string } | { folder: string; type: 'folder' } | null;
   setNaming: (v: UiState['naming']) => void;
   /** Keeps only the bookmarks for which `exists` says yes (things gone from the folder are dropped). */
   pruneBookmarks: (exists: (path: string) => boolean) => void;
@@ -53,7 +53,7 @@ interface UiState {
   moved: Record<string, string>;
   /** The current path of something that was at `path`, if it moved this visit. */
   whereNow: (path: string) => string | null;
-  /** The note just made with New note, so Escape on its name takes it back. */
+  /** The folder just made with New folder, so Escape on its name takes it back. */
   justMade: string | null;
   setJustMade: (path: string | null) => void;
 }
