@@ -6481,7 +6481,7 @@
     "id": "c4-create-newer-words",
     "task": "p4-consolidation",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "what": "A pile retried with newer words while its conversion is pending gets the newer words once the conversion lands (TL-P4-24 addendum 19; P4-68 minor 1).",
     "steps": [
       "A person who changes a pile's words while it is still being made sees the newer words in its note."

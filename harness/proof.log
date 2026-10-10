@@ -528,3 +528,4 @@ c4-sheet-settle	6fc16b78602e736f	2026-10-10	known-green: flaky-timing fix, no de
 c4-create-resume	d77c326d47f1b182	2026-10-10	red (fixed in 56f529fd)
 c4-undo-compensate	a22105fcc6f50036	2026-10-10	known-green: reds by Opus and red-owning Codex sessions each failed before their fix (8d714c20, 0e6fde89, 8da56079, the addendum-11 reds); fixes across Opus, round 2, re-plan and last round (c9811c7e, 4953b1ae, d20eeaa3, gate fixes 59965218, 313d8dac, 958971be); merged 23d76507; designer verified 2026-10-10
 c4-undo-confirm-in-place	7e82f6bccd478a7a	2026-10-10	red (fixed in 20e76dc1)
+c4-create-newer-words	10a0c0413e516991	2026-10-10	red (fixed in ec30299d)
