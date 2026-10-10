@@ -186,8 +186,11 @@ export function Settings() {
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
           <Button variant="ghost" onClick={() => setSending(0)}>Keep sending</Button>
           <Button variant="danger" onClick={() => {
+            // Let the sheet's history entry close before sign-out changes the route.
             setSending(0);
-            signOut();
+            void new Promise<void>((resolve) => setTimeout(resolve, 0))
+              .then(() => afterOverlaysClosed())
+              .then(signOut);
           }}>Sign out</Button>
         </div>
       </Sheet>

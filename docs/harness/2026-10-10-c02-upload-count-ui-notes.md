@@ -290,3 +290,130 @@ No timeout, seed, bound, test assertion or fixture was changed.
 Final code also passed the 61 Home/Settings/demo tests, tsc, touched-file eslint and read-only diff whitespace check.
 Coordinator still owns pnpm check, demo/fake e2e and axe, and commits. The full-src command is not claimed green.
 tests changed: none
+
+## Fix round 1
+
+The coordinator reports four fake failures in `e2e/c02-upload-reload.spec.ts:97`: both widths (375 and 1440)
+in both phone and desktop projects. Pending records reach zero, but Continue with Google never shows;
+only Demo situations remains. Demo e2e and pnpm check were green before this round. The fake no-upload
+sign-out control passes. These are supplied browser reds; no browser/server was started in this round.
+
+### Diagnosis and smallest fix
+
+The sheet confirmation previously called `setSending(0); signOut();` in the same click. Closing Sheet
+starts an asynchronous `history.back()` through `useBackCloses` (`src/ui/back.ts:36` and its effect cleanup).
+`LiveSession.signOut` emits the signed-out session before the wrapper finishes queue cleanup
+(`src/data/live/session.ts:86`; `src/data/live/index.ts:377`). Gatekeeper consequently redirects from
+Settings to `/sign-in` (`src/app/App.tsx:133` and `ToSignIn` at 192) while the sheet's history entry can
+still be active. Its late back can undo that redirect. This ordering race fits the empty routed content,
+the zero kept count, the faster fake session and the passing no-sheet control.
+
+`src/features/settings/Settings.tsx:188` now reuses this screen's existing Delete-account ordering:
+close the sheet, give React the zero-delay turn to run its cleanup, await `afterOverlaysClosed`, then
+invoke the existing sign-out helper. The signed-out route is entered only after the overlay's own
+history back has landed. The no-upload direct sign-out path and the sign-out helper's error handling stay.
+No new history, upload, count or persistence mechanism is introduced.
+
+The count pass-through is sound: `VaultSource.pendingUploadCount` is the optional door in
+`src/data/sources.ts:53`; the stable live door's own method forwards directly to `queue.pendingCount`
+(`src/data/live/index.ts:408`). The door's proxy expressly returns own method overrides without resolving
+the folder or dispatching to a new lifetime (`src/data/live/index.ts:223`). It creates no additional wait.
+
+### Held-lock evidence; no impossible-wait contradiction
+
+`e2e/c02-upload-reload.spec.ts:7–18` returns null for the ifAvailable probe and a never-settling promise
+for a blocking upload-lock request; it also ignores that request's AbortSignal. This is artificial,
+but it does not block the sign-out wait in this case:
+
+- `src/data/upload-queue.ts:670–686`: `waitForTurn` launches the blocking request without awaiting it.
+- `src/data/upload-queue.ts:690–708`: `acquire` resolves its own boolean from the ifAvailable callback;
+  the fixture runs that callback with null immediately.
+- `src/data/upload-queue.ts:837–909`: `add` tracks staging through store work and returns after admission;
+  sending runs through `void pump()`. The lock wait is not a staging operation.
+- `src/data/upload-queue.ts:975–990`: `forgetAccount` clears the store and awaits stage.done, including
+  late-write cleanup and its failures. It does not await the blocking request or transfer-lock ownership.
+- `src/data/upload-queue.ts:712–726`: `stop` aborts the wait, fences generations and clears entries.
+- `src/data/live/index.ts:362–369,377–385`: sign-out still awaits `forgetAccount` and reports purge failures.
+
+The staging/cleanup guarantee (addenda 9–12) is preserved. There is no test/contract contradiction requiring
+the lock fixture to be changed. None of the four reported failures is dismissed as an impossible wait.
+
+removed: the sheet confirmation's immediate sign-out before overlay history cleanup.
+removed: none of the staging wait, cleanup wait, purge, count door, or signed-out UI behavior.
+tests changed: none
+
+### Offline reuse and verification
+
+Reused Settings' existing account-deletion pattern and `src/ui/back.ts:32` as the standard local navigation
+mechanism. Sheet uses the existing Radix Dialog. Reference (not fetched; network forbidden):
+https://www.radix-ui.com/primitives/docs/components/dialog
+
+No git write, test edit, node_modules replacement/symlink, network request or server launch was performed.
+The existing OS-temp Vitest config was reused: React/jsdom/aliases unchanged, cache in OS temp, and the
+repository-writing CPU report setup omitted. All logs go to OS temp. The full-src command includes the
+existing port-binding unit test; the environment denies its listen, as in the previous run.
+
+- Before the fix, existing Settings unit cases: 4 passed; `/tmp/c02-fix1-before.log`.
+  These MemoryRouter tests do not assert the BrowserRouter signed-out route after history cleanup.
+- Full src: `pnpm exec vitest run src --maxWorkers=2 --config /private/tmp/c02-upload-count-ui-all-vitest.mjs --configLoader native`.
+  Log: `/tmp/c02-fix1-src.log`; final results appended below.
+- TypeScript: `pnpm exec tsc -p tsconfig.app.json --incremental false`: passed; `/tmp/c02-fix1-tsc.log`.
+- Touched-file ESLint: `pnpm exec eslint src/features/settings/Settings.tsx`: passed; `/tmp/c02-fix1-eslint.log`.
+- pnpm check/e2e/axe: coordinator reruns these; repository-writing checks and server/port use are unavailable here.
+- Commits: none; all git writes forbidden. Changed files: Settings.tsx and this notes file.
+
+### Final results and blocking unit timing contract
+
+Full src completed: 167 files, 165 passed, 2 failed; 5,590 tests, 5,588 passed, 2 failed, one unhandled error.
+Failures:
+- `src/e2e-port.test.ts:37`: the unchanged port-identity case times out after `listen EPERM`;
+  the unhandled error is the same forbidden listen. No port was successfully bound.
+- `src/features/settings/Settings.test.tsx:89`: `c02-upload-count-ui: Sign out while 2 things send`
+  expects the signOut spy once after a single zero-time flush, but the corrected path is still waiting
+  for overlay history cleanup. This is a new failure from the necessary ordering change.
+
+Reran the whole Settings suite without changing any test: 3 passed, this one failed on the same assertion;
+`/tmp/c02-fix1-settings.log`. The four supplied fake browser reds remain unverified locally.
+TypeScript, touched-file ESLint and `git diff --check` passed. The full-src suite is not green.
+
+Every contradictory targeted case: `src/features/settings/Settings.test.tsx:89`, the two-file sign-out case.
+Its fixture uses fake timers (`:29`) and defines settle as only `vi.advanceTimersByTimeAsync(0)` (`:30`).
+It closes the first sheet with Keep sending at `:74`, then uses that zero flush at `:75`; Escape and
+confirmation also use the same flush. History is real jsdom history even though routing is MemoryRouter.
+The first close can leave the module's selfBacks promise unsettled across the later sheet presses.
+
+Installed-library evidence, read offline:
+- jsdom `lib/jsdom/living/window/SessionHistory.js:42–69` queues a task inside another task before traversal.
+- jsdom `lib/jsdom/living/nodes/Document-impl.js:641–654` implements each task with setImmediate.
+- Vitest `dist/chunks/index.C4tKZ0yW.js:4961` schedules an immediate created during a fake-clock tick
+  at clock.now + 1. A zero-only flush therefore cannot reach that nested traversal/popstate.
+- `src/ui/back.ts:23–29,32–33` resolves afterOverlaysClosed only when that popstate lands.
+
+This is a unit scheduling conflict with awaiting the existing overlay mechanism, not an upload-lock
+or staging-cleanup impossibility. The zero-time assertion previously passed because sign-out did not
+wait for history, which is precisely the browser race being fixed. No fake-timer duration or assertion
+was weakened, and no special production branch for a test router was added.
+
+Status: blocked on this unit timing contract. The minimal Settings fix remains in the working tree for
+review; the coordinator/lead must rule on the unit fixture, then rerun the four fake browser cases and
+the integration gates. No additional app change can make an awaited real popstate arrive during the
+fixture's zero-only clock advance without bypassing the existing history mechanism.
+removed: none of the existing tests or their assertions.
+tests changed: none
+
+
+## Red repair 2
+
+tests changed: src/features/settings/Settings.test.tsx: waits for overlay cleanup like Delete my account
+
+No Delete-account test exists in this file. Only the two-file sign-out case now advances fake time
+by 10 ms at its existing waits, allowing jsdom's nested setImmediate history traversal to finish.
+All expectations are unchanged, including exactly one sign-out after confirmation and none after
+Keep sending or Escape. Settings.tsx's retained ordering fix is untouched.
+Offline reuse: the nested jsdom/fake-clock scheduling evidence in Fix round 1 above.
+
+Verification: `pnpm exec vitest run src/features/settings/Settings.test.tsx --config /private/tmp/c02-upload-count-ui-vitest.mjs --configLoader native --maxWorkers=2`
+passed: 1 file, all 4 tests. Log: `/tmp/c02-red-repair2-settings.log`. `git diff --check` passed.
+The existing OS-temp config keeps caches outside the repository and omits the CPU-report-writing setup.
+No git writes, network requests, port binding or node_modules changes. pnpm check/e2e omitted under
+the explicit repository-write and port restrictions; coordinator owns commits and integration gates.
