@@ -6749,6 +6749,7 @@
     ],
     "verify": "pnpm exec playwright test e2e/q-ui-3.spec.ts --project=desktop -g \"tall desktop sheet stays inside the window and scrolls\"",
     "note": "TL-P4-43 item 1. Codex, then a Claude review and the designer. Packet 2026-10-10-q-ui-3-packet.md. implementer: codex.",
-    "review": "P4-86 PASS"
+    "review": "P4-86 PASS",
+    "design": "verified"
   }
 ]
