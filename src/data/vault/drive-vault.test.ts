@@ -3835,6 +3835,8 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
  * again on that press, and it stays where the person put it.
  */
 describe('c4-create-landed: an app create found by its reserved id counts only as it was made', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
   type Made = 'createText' | 'createFolder';
   /** The first create `when` picks lands; its answer is lost and so is the read that would find it (or, with `meanwhile`, that runs first). */
   function loseCreate(k: Made, when: (args: unknown[]) => boolean, meanwhile?: (id: string) => Promise<void>): { lost: () => number; id: () => string | undefined } {
@@ -3926,6 +3928,30 @@ describe('c4-create-landed: an app create found by its reserved id counts only a
     expect({ names: await untitled(), path: drive.pathOf(lost.id() ?? '', root) }).toEqual({ names: ['Untitled.md'], path: 'Resources/Cooking/Untitled.md' });
   });
 
+  it('a pile-folder create resumed after a refresh across UTC midnight keeps its first name', async () => {
+    vi.setSystemTime(new Date('2026-10-10T00:02:00Z'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    drive = new FakeDrive();
+    root = (await seedFakeDrive(drive, 'default', Date.now())) ?? '';
+    vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    await vault.tree();
+    const lone = (await vault.piles()).find((p) => p.path === 'Inbox/Dentist reminder.pdf');
+    if (!lone?.path) throw new Error('no lone pile');
+    const thing = await idOf(lone.path);
+    const lost = loseCreate('createFolder', (a) => typeof a[2] === 'object' && a[2] !== null && 'pile' in a[2]);
+    await expect(vault.updatePile(lone.id, 'Dentist papers')).rejects.toMatchObject({ code: 'offline' });
+    expect(lost.lost()).toBe(1);
+    const made = lost.id() ?? '';
+    const firstName = (await drive.get(made)).name;
+    expect(firstName).toBe('2026-10-09 Dentist papers');
+    await vault.refresh();
+    await expect(vault.updatePile(lone.id, 'Dentist papers')).resolves.toMatchObject({ text: 'Dentist papers' });
+    const folders = (await drive.listAll(root)).filter((f) => f.folder && f.appProperties?.pile === lone.id);
+    expect(folders.map((f) => ({ id: f.id, name: f.name }))).toEqual([{ id: made, name: firstName }]);
+    expect((await drive.get(thing)).parents).toEqual([made]);
+    expect(drive.pathOf(thing, root)).toBe(`Inbox/${firstName}/Dentist reminder.pdf`);
+  });
+
   it('a change line whose create landed and then moved is refused, never made again, and stays where it was put', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await vault.tree();
@@ -3953,6 +3979,7 @@ describe('c4-create-landed: an app create found by its reserved id counts only a
    * it is; a file changed elsewhere is never written to, nor anything moved into it; a refused press makes nothing.
    */
   it('every app create, its answer lost, against a move, rename or Bin elsewhere: success only as it was made', async () => {
+    vi.setSystemTime(new Date('2026-10-10T00:02:00Z'));
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     const kinds = ['note', 'folder', 'pile folder', 'pile note', 'pile note, new words', 'link'] as const;
     type Kind = (typeof kinds)[number];
