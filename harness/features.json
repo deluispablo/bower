@@ -6487,5 +6487,18 @@
     ],
     "verify": "",
     "note": "TL-P4-24 addendum 19 (main): Codex, escalated (red, implementation, adversarial pass), then a Claude review. Queued for the next batch, after c4-create-resume. Packet to write."
+  },
+  {
+    "id": "c4-undo-confirm-in-place",
+    "task": "p4-consolidation",
+    "category": "fix",
+    "passes": false,
+    "ui": true,
+    "what": "The online Undo confirmation replaces its toast in place through toast.replace, as the offline swap does (defect undo-confirm-not-in-place).",
+    "steps": [
+      "After Undo online, the toast changes its words in place and the button goes, with no rise or blank frame."
+    ],
+    "verify": "pnpm exec vitest run src -t \"an online Undo confirmation replaces its toast in place\"",
+    "note": "DEFECTS undo-confirm-not-in-place (lead 2026-10-10). Codex, then a Claude review and the designer. Packet 2026-10-10-c4-undo-confirm-in-place-packet.md."
   }
 ]
