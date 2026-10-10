@@ -84,8 +84,9 @@ export async function canonical(value: unknown): Promise<{ text: string; bytes: 
 
 /** A run's first checkpoint: queued, every operation not dispatched, written before any operation. */
 export function firstCheckpoint(manifest: RunManifest, manifestHash: string, mark: AttemptMark, at: number): Checkpoint {
-  const appendBindings = manifest.operations.flatMap((o) => o.effect.kind === 'edit-text' ? o.effect.changes.flatMap((c) =>
-    c.kind === 'timeline-append' && c.consent ? [{ operationId: o.operationId, requestId: c.consent.requestId, targetFileId: c.consent.targetFileId }] : []) : []);
+  const appendBindings = [...manifest.operations.flatMap((o) => o.effect.kind === 'edit-text' ? o.effect.changes.flatMap((c) =>
+    c.kind === 'timeline-append' && c.consent ? [{ operationId: o.operationId, requestId: c.consent.requestId, targetFileId: c.consent.targetFileId }] : []) : []),
+    ...(manifest.satisfiedAppends ?? []).map((s) => ({ operationId: s.operationId, requestId: s.consent.requestId, targetFileId: s.consent.targetFileId }))];
   return {
     v: 1, kind: 'run-checkpoint', scope: { rootId: manifest.scope.rootId }, runId: manifest.runId, manifestHash,
     revision: 0, previous: null, attemptId: mark.attemptId, epoch: mark.epoch, phase: 'queued', phaseAt: at,
@@ -318,6 +319,7 @@ function markOf(where: Where, stamp: Record<string, string> | undefined, text: s
   const object = (v: RecordJsonValue | undefined): v is { [key: string]: RecordJsonValue } => v !== null && typeof v === 'object' && !Array.isArray(v);
   const m = parsed.ok && object(parsed.value) ? parsed.value : null;
   const appends = m?.kind === 'run-manifest' && ((Array.isArray(m.completedAppends) && m.completedAppends.length > 0)
+    || (Array.isArray(m.satisfiedAppends) && m.satisfiedAppends.length > 0)
     || (Array.isArray(m.operations) && m.operations.some((o) => object(o) && object(o.effect) && o.effect.kind === 'edit-text'
       && Array.isArray(o.effect.changes) && o.effect.changes.some((c) => object(c) && c.kind === 'timeline-append' && object(c.consent)))));
   return { ...stamp, [PROP.run]: where.runId, ...(appends ? { [APPENDS_RECORD_KEY]: '1' } : {}) };

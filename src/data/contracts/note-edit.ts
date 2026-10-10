@@ -436,8 +436,14 @@ function rewriteState(text: string, change: Extract<Change, { kind: 'state-rewri
   if (!sameLines(section.lines, change.previous)) return { refused: 'state-changed' };
   // The same lines again change nothing, not even the mark (rule 5).
   if (sameLines(change.lines, change.previous)) return { text, added: [], rules: null };
+  if (personal) {
+    const index = section.lines.findIndex((line, i) => line.trim() !== change.lines[i]?.trim());
+    const bullet = linesOf(text, section.start, section.end)[index];
+    if (!bullet) return { refused: 'invariant' };
+    return { text: text.slice(0, bullet.start) + `- ${change.lines[index]}` + text.slice(bullet.end), added: [], rules: null };
+  }
   const { eol } = section;
-  const written = change.lines.map((line, i) => `- ${personal && section.lines[i]?.trim() === line.trim() ? section.lines[i] : line}`).join(eol);
+  const written = change.lines.map((line) => `- ${line}`).join(eol);
   let body: string;
   if (section.missing) {
     // A new section, its heading on a line of its own and a blank line before what follows (as `serializeNote`).
@@ -449,7 +455,6 @@ function rewriteState(text: string, change: Extract<Change, { kind: 'state-rewri
   const markLine = `${STATE_KEY}: ${change.mark ?? stateMark(change.lines)}`;
   // Right to left, so earlier offsets hold: the section first, then the mark in the front matter.
   let next = text.slice(0, section.start) + body + text.slice(section.end);
-  if (personal) return { text: next, added: [], rules: null };
   // Given back to the person: their lines again, with no mark (the section is not Bower's any more).
   if (change.release) return { text: section.mark ? next.slice(0, section.mark.start) + next.slice(section.mark.after) : next, added: [], rules: null };
   next = section.mark
@@ -480,9 +485,15 @@ function stateHolds(before: string, after: string, change: Extract<Change, { kin
   const b = parseOwnership(encoder.encode(after));
   if (a.status === 'invalid' || b.status !== a.status) return false;
   if (change.granted?.mark === null && !byBower(before)) {
+    const old = stateSection(before);
     const section = stateSection(after);
-    return outsideState(before) === outsideState(after) && typeof section !== 'string'
-      && sameLines(section.lines.map((x) => x.trim()), change.lines.map((x) => x.trim())) && markOf(section) === null;
+    if (typeof old === 'string' || typeof section === 'string' || markOf(section) !== null) return false;
+    const index = old.lines.findIndex((line, i) => line.trim() !== change.lines[i]?.trim());
+    const was = linesOf(before, old.start, old.end)[index];
+    const now = linesOf(after, section.start, section.end)[index];
+    return !!was && !!now && now.text === `- ${change.lines[index]}`
+      && before.slice(0, was.start) === after.slice(0, now.start)
+      && before.slice(was.end) === after.slice(now.end);
   }
   const old = stateSection(before);
   const added = typeof old !== 'string' && old.missing;

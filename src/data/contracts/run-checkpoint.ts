@@ -199,7 +199,7 @@ function checkpoint(value: unknown): value is Checkpoint {
       && unique((value.completedAppends as AppendCompletion[]).map((r) => JSON.stringify([r.requestId, r.targetFileId])))))
     && (value.appendBindings === undefined || (list(value.appendBindings, (r): r is NonNullable<Checkpoint['appendBindings']>[number] => closed(r, ['requestId', 'targetFileId', 'operationId'])
       && isAppendCompletion({ requestId: r.requestId, targetFileId: r.targetFileId }) && hash(r.operationId))
-      && unique((value.appendBindings as NonNullable<Checkpoint['appendBindings']>).map((r) => r.operationId))))
+      && unique((value.appendBindings as NonNullable<Checkpoint['appendBindings']>).map((r) => JSON.stringify([r.operationId, r.requestId, r.targetFileId])))))
     && list(value.retainedPileIds, id) && unique(value.retainedPileIds);
 }
 
@@ -334,8 +334,9 @@ export async function verifyCheckpointChain(chain: readonly Checkpoint[]): Promi
     const key = (r: AppendCompletion): string => JSON.stringify([r.requestId, r.targetFileId]);
     const prior = new Set((before.completedAppends ?? []).map(key));
     const completed = new Set((next.completedAppends ?? []).map(key));
-    if ([...prior].some((k) => !completed.has(k)) || (next.completedAppends ?? []).some((r) => !prior.has(key(r))
-      && !next.appendBindings?.some((b) => key(b) === key(r) && next.outcomes.some((o) => o.operationId === b.operationId && o.state === 'applied')))) return { ok: false, reason: 'transition', at };
+    const expected = new Set([...prior, ...(next.appendBindings ?? []).filter((b) =>
+      next.outcomes.some((o) => o.operationId === b.operationId && o.state === 'applied')).map(key)]);
+    if (completed.size !== expected.size || [...expected].some((k) => !completed.has(k))) return { ok: false, reason: 'transition', at };
     if (!forwardPhase(before.phase, next.phase)) return { ok: false, reason: 'phase', at };
     if (!forwardReport(before.report, next.report)) return { ok: false, reason: 'report', at };
     head = await digest(next);

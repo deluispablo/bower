@@ -1,8 +1,10 @@
 /** Immutable run manifest validation only; no claim, dispatch, readiness or permission authority. */
+import { createOwnershipContext } from './ownership-format';
 import { sha256 } from './hashes';
 import { isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
 import type { UpdatedRow } from './types';
-import { EDIT_FILE_LIMIT, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
+import { applyChanges, EDIT_FILE_LIMIT, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
+import { parseRunCheckpoint, verifyCheckpointChain, type Checkpoint } from './run-checkpoint';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 
 export type Scope = { rootId: string };
@@ -101,6 +103,14 @@ export type Manifest = {
   runScope: 'all' | 'instructions'; allowWeb: boolean; requestedAt: number;
   captureId: string; capture: Capture; operations: Operation[]; reportPlan: ReportContribution[];
   completedAppends?: AppendCompletion[];
+  /** Verified originating checkpoint chains, carried forward when old run folders retire. */
+  appendEvidence?: Checkpoint[][];
+  /** A bound append already present at planning; completion waits for the request's archive. */
+  satisfiedAppends?: SatisfiedAppend[];
+};
+export type SatisfiedAppend = {
+  consent: TimelineConsent; entry: EditEntry; before: SeenFile; path: string;
+  text: string; content: VerifiedContent; operationId: string;
 };
 /** v1 plus `edit-text`; a v2 manifest always holds at least one. */
 export type ManifestV2 = Omit<Manifest, 'v' | 'operations'> & { v: 2; operations: OperationV2[] };
@@ -409,12 +419,18 @@ function contribution(value: unknown): value is ReportContribution {
 export const isAppendCompletion = (row: unknown): row is AppendCompletion => closed(row, ['requestId', 'targetFileId'])
   && recordId(row.requestId) && driveId(row.targetFileId);
 function manifestOf(value: unknown, v: 1 | 2, item: (value: unknown) => boolean): boolean {
-  return closed(value, ['v', 'kind', 'scope', 'runId', 'requestId', 'runScope', 'allowWeb', 'requestedAt', 'captureId', 'capture', 'operations', 'reportPlan'], ['completedAppends'])
+  return closed(value, ['v', 'kind', 'scope', 'runId', 'requestId', 'runScope', 'allowWeb', 'requestedAt', 'captureId', 'capture', 'operations', 'reportPlan'], ['completedAppends', 'appendEvidence', 'satisfiedAppends'])
     && value.v === v && value.kind === 'run-manifest' && closed(value.scope, ['rootId']) && driveId(value.scope.rootId)
     && id(value.runId) && id(value.requestId) && oneOf(value.runScope, ['all', 'instructions'])
     && typeof value.allowWeb === 'boolean' && integer(value.requestedAt) && hash(value.captureId)
     && (value.completedAppends === undefined || (list(value.completedAppends, isAppendCompletion)
       && unique((value.completedAppends as AppendCompletion[]).map((r) => JSON.stringify([r.requestId, r.targetFileId])))))
+    && (value.appendEvidence === undefined || (Array.isArray(value.appendEvidence) && value.appendEvidence.every(Array.isArray)))
+    && (value.satisfiedAppends === undefined || list(value.satisfiedAppends, (r): r is SatisfiedAppend =>
+      closed(r, ['consent', 'entry', 'before', 'path', 'text', 'content', 'operationId'])
+      && closed(r.consent, ['requestId', 'targetFileId', 'sourceFileId']) && recordId(r.consent.requestId)
+      && driveId(r.consent.targetFileId) && driveId(r.consent.sourceFileId) && editEntry(r.entry)
+      && seenFile(r.before) && path(r.path) && text(r.text) && verifiedContent(r.content) && hash(r.operationId)))
     && capture(value.capture) && list(value.operations, item) && list(value.reportPlan, contribution);
 }
 function manifest(value: unknown): value is Manifest {
@@ -447,6 +463,49 @@ async function digest(value: unknown): Promise<string> {
   return result.value;
 }
 
+/** Inherited completions must be proved by local applied bindings in verified originating chains. */
+async function appendProvenance(value: Manifest | ManifestV2): Promise<boolean> {
+  const proven = new Set<string>();
+  const key = (r: AppendCompletion): string => JSON.stringify([r.requestId, r.targetFileId]);
+  for (const chain of value.appendEvidence ?? []) {
+    const first = chain[0];
+    if (!record(first) || !record(first.scope) || first.scope.rootId !== value.scope.rootId
+      || !id(first.runId) || !hash(first.manifestHash) || !Array.isArray(first.outcomes)
+      || !first.outcomes.every((o) => record(o) && hash(o.operationId))) return false;
+    const pending = chain.find((cp) => record(cp) && record(cp.report) && cp.report.state === 'pending')?.report;
+    if (pending?.state === 'pending' && (!record(pending.body) || !hash(pending.body.captureId))) return false;
+    const expected = { rootId: value.scope.rootId, runId: first.runId, manifestHash: first.manifestHash,
+      captureId: pending?.state === 'pending' ? pending.body.captureId : value.captureId,
+      operationIds: first.outcomes.map((o) => o.operationId) };
+    for (const cp of chain) {
+      const encoded = new TextEncoder().encode(JSON.stringify(cp));
+      if (!(await parseRunCheckpoint(encoded, expected)).ok) return false;
+    }
+    if (!(await verifyCheckpointChain(chain)).ok) return false;
+    const head = chain.at(-1);
+    for (const binding of head?.appendBindings ?? []) if (head?.outcomes.some((o) => o.operationId === binding.operationId && o.state === 'applied'))
+      proven.add(key(binding));
+  }
+  const inherited = new Set((value.completedAppends ?? []).map(key));
+  if (inherited.size !== proven.size || [...inherited].some((k) => !proven.has(k))) return false;
+  for (const row of value.satisfiedAppends ?? []) {
+    const c = row.consent;
+    const place = value.capture.places.find((p) => p.file.fileId === c.targetFileId);
+    const journal = value.capture.journal.find((j) => j.recordId === c.requestId);
+    const op = value.operations.find((o) => o.operationId === row.operationId);
+    const source = value.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === c.sourceFileId
+      && value.capture.members.some((m) => m.file.fileId === c.sourceFileId));
+    if (!place || place.path !== row.path || !sameSeen(place.file, row.before) || !journal
+      || op?.effect.kind !== 'move' || !journal.fileIds.includes(op.effect.before.fileId)
+      || (source ? !op.dependsOn.includes(source.operationId) : !value.capture.places.some((p) => p.file.fileId === c.sourceFileId))
+      || row.content.observedModifiedTime !== row.before.modifiedTime || !await describes(row.content, row.text)) return false;
+    const result = applyChanges(new TextEncoder().encode(row.text), [{ kind: 'timeline-append', recordIds: [c.requestId],
+      consent: c, entries: [row.entry] }], { fileId: c.targetFileId, context: createOwnershipContext(), consents: [c] });
+    if (result.ok || result.reason !== 'unchanged') return false;
+  }
+  return true;
+}
+
 /**
  * Compare independently supplied scope; a matching root or digest grants no access or dispatch. `writes` is the list of
  * Bower's files a `write-runner-json` may name (`RUNNER_WRITES` in `vault/layout.ts`); any other path is refused as `shape`.
@@ -465,6 +524,7 @@ async function admit<M extends Manifest | ManifestV2>(
   if (parsed.operations.some(({ effect: e }) => e.kind === 'write-runner-json' && !writes.includes(e.path))) return { ok: false, reason: 'shape' };
   const value = parsed;
   if (!driveId(expectedRootId) || expectedRootId !== value.scope.rootId) return { ok: false, reason: 'scope' };
+  if (!await appendProvenance(value)) return { ok: false, reason: 'shape' };
   for (const item of texts(value)) {
     if (!await describes(item.content, item.text)) return { ok: false, reason: 'content' };
   }

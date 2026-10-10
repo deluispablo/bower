@@ -14,7 +14,8 @@ import { createOwnershipContext, type OwnershipContext } from '../contracts/owne
 import type { DriveFile } from '../drive/drive-api';
 import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
-import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent, type TimelineConsent, type AppendCompletion, type LeftAsWritten } from '../contracts/run-manifest';
+import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent, type TimelineConsent, type AppendCompletion, type LeftAsWritten, type SatisfiedAppend } from '../contracts/run-manifest';
+import type { Checkpoint } from '../contracts/run-checkpoint';
 import { PILE_NOTE, safeInboxName } from '../piles';
 import { recordablePile, sameText, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
@@ -96,7 +97,7 @@ export interface PlanOptions {
 }
 
 /** Whole title references, longest overlapping match first; only admitted request words enter here. */
-export function namedNotes(listing: readonly DriveFile[], ix: VaultIndex, words: string): Array<{ file: DriveFile; path: string }> {
+export function namedNotes(listing: readonly DriveFile[], ix: VaultIndex, words: string): Array<{ file: DriveFile; path: string; titleKey: string }> {
   const normalize = (s: string): string => s.normalize('NFC').toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '').replace(/^(?:the|my)\s+/u, '');
   const request = words.normalize('NFC').toLowerCase();
   const word = (s: string | undefined): boolean => !!s && /[\p{L}\p{N}_]/u.test(s);
@@ -105,19 +106,19 @@ export function namedNotes(listing: readonly DriveFile[], ix: VaultIndex, words:
     if (!path || !path.endsWith('.md') || !MAIN_FOLDERS.includes(path.split('/')[0] ?? '')) return [];
     const title = normalize(displayName(file.name));
     if (!title) return [];
-    const found: Array<{ file: DriveFile; path: string; start: number; end: number }> = [];
+    const found: Array<{ file: DriveFile; path: string; titleKey: string; start: number; end: number }> = [];
     for (let at = request.indexOf(title); at >= 0; at = request.indexOf(title, at + 1)) {
-      if (!word([...request.slice(0, at)].at(-1)) && !word([...request.slice(at + title.length)][0])) found.push({ file, path, start: at, end: at + title.length });
+      if (!word([...request.slice(0, at)].at(-1)) && !word([...request.slice(at + title.length)][0])) found.push({ file, path, titleKey: title, start: at, end: at + title.length });
     }
     return found;
   }).sort((a, b) => (b.end - b.start) - (a.end - a.start) || byCodePoint(a.path, b.path));
   const kept: typeof matches = [];
   for (const m of matches) if (!kept.some((k) => m.start < k.end && m.end > k.start && (m.start !== k.start || m.end !== k.end))) kept.push(m);
-  return [...new Map(kept.map((m) => [m.file.id, { file: m.file, path: m.path }])).values()];
+  return [...new Map(kept.map((m) => [m.file.id, { file: m.file, path: m.path, titleKey: m.titleKey }])).values()];
 }
 
 /** A verified checkpoint outcome is the durable completion (or pending retry) of its manifest's request binding. */
-export async function personalAppendHistory(read: ScriptedRead, rootId: string, listing: readonly DriveFile[], ix: VaultIndex): Promise<{ completed: AppendCompletion[]; lines: Array<{ consent: TimelineConsent; entry: EditEntry; applied: boolean; runId: string }> }> {
+export async function personalAppendHistory(read: ScriptedRead, rootId: string, listing: readonly DriveFile[], ix: VaultIndex): Promise<{ completed: AppendCompletion[]; evidence: Checkpoint[][]; lines: Array<{ consent: TimelineConsent; entry: EditEntry; applied: boolean; runId: string }> }> {
   const records = new RunRecords({ listAll: async () => [...listing], readBytes: (id) => read.readBytes(id),
     get: async (id) => {
       const file = listing.find((f) => f.id === id);
@@ -128,29 +129,38 @@ export async function personalAppendHistory(read: ScriptedRead, rootId: string, 
     && parentOf(parentOf(ix.pathOf(f.id) ?? '')) === RUNS_PATH).map((f) => nameOf(parentOf(ix.pathOf(f.id) ?? ''))));
   const result: Array<{ consent: TimelineConsent; entry: EditEntry; applied: boolean; runId: string }> = [];
   const completed = new Map<string, AppendCompletion>();
+  const evidence = new Map<string, Checkpoint[]>();
   const complete = (r: AppendCompletion): void => { completed.set(JSON.stringify([r.requestId, r.targetFileId]), r); };
   for (const runId of runs) {
     const file = listing.find((f) => !f.folder && isManifestName(f.name) && nameOf(parentOf(ix.pathOf(f.id) ?? '')) === runId);
     const manifest = file ? await parseRunManifestV2(await read.readBytes(file.id), rootId, RUNNER_WRITES) : null;
-    if (!manifest?.ok || (!manifest.value.completedAppends?.length && !manifest.value.operations.some((o) => o.effect.kind === 'edit-text' && o.effect.changes.some((c) => c.kind === 'timeline-append' && c.consent)))) continue;
+    if (!manifest?.ok || (!manifest.value.completedAppends?.length && !manifest.value.satisfiedAppends?.length && !manifest.value.operations.some((o) => o.effect.kind === 'edit-text' && o.effect.changes.some((c) => c.kind === 'timeline-append' && c.consent)))) continue;
     const found = await records.found(runId);
     if (found.kind !== 'run') throw new BowerError('unknown', 'Bower could not read what it did.');
     const outcomes = found.chain.at(-1)?.outcomes ?? [];
     for (const r of found.chain.at(-1)?.completedAppends ?? []) complete(r);
+    for (const chain of found.manifest.appendEvidence ?? []) evidence.set(JSON.stringify([chain[0]?.runId, chain.at(-1)?.revision]), chain);
+    const applied = found.chain.at(-1)?.appendBindings?.filter((b) => outcomes.some((o) => o.operationId === b.operationId && o.state === 'applied')) ?? [];
+    if (applied.length) {
+      const at = found.chain.findIndex((cp) => applied.every((b) => cp.outcomes.some((o) => o.operationId === b.operationId && o.state === 'applied')));
+      const chain = found.chain.slice(0, at + 1);
+      evidence.set(JSON.stringify([runId, at]), chain);
+    }
     for (const op of found.manifest.operations) {
       if (op.effect.kind !== 'edit-text') continue;
       const outcome = outcomes.find((o) => o.operationId === op.operationId);
       for (const c of op.effect.changes) {
         if (c.kind !== 'timeline-append' || !c.consent || !c.entries[0]) continue;
         const filed = found.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === c.consent?.sourceFileId);
-        const sourceLanded = filed && outcomes.some((o) => o.operationId === filed.operationId && o.state === 'applied');
+        const sourceLanded = filed ? outcomes.some((o) => o.operationId === filed.operationId && o.state === 'applied')
+          : found.manifest.capture.places.some((p) => p.file.fileId === c.consent?.sourceFileId);
         if (outcome?.state === 'applied' || (sourceLanded && outcome?.state === 'rejected' && outcome.failure.code === 'conflict'))
           result.push({ consent: c.consent, entry: c.entries[0], applied: outcome.state === 'applied', runId });
         if (outcome?.state === 'applied') complete({ requestId: c.consent.requestId, targetFileId: c.consent.targetFileId });
       }
     }
   }
-  return { completed: [...completed.values()], lines: result };
+  return { completed: [...completed.values()], evidence: [...evidence.values()], lines: result };
 }
 
 /** A place in the folder (a path under a main folder) and a name, as a model proposes them. */
@@ -451,21 +461,27 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const history = appends.lines;
   const completed = (requestId: string, targetFileId: string): boolean => appends.completed.some((h) => h.requestId === requestId && h.targetFileId === targetFileId);
   const consents: TimelineConsent[] = [];
-  const leftAsWritten: LeftAsWritten[] = [];
+  const satisfied: Array<Omit<SatisfiedAppend, 'operationId'>> = [];
+  const leftAsWritten: Array<LeftAsWritten & { sourceFileIds: string[] }> = [];
+  const sourcesFor = (paths: string[]): string[] => [...new Set([
+    ...d.lines.filter((l) => paths.includes(l.path)).flatMap((l) => l.cites ?? []),
+    ...(d.hubLines ?? []).filter((l) => paths.includes(l.path)).flatMap((l) =>
+      piles.flatMap((p) => p.items.filter((i) => i.name === l.cites).map((i) => i.id))),
+  ])];
   const blocked = new Set<string>();
   for (const r of requestsNamed) {
     if (r.notes.length > 3) {
-      leftAsWritten.push({ name: 'Request', why: "Bower didn't update any note: this request names more than three. Ask for three at most at a time." });
+      leftAsWritten.push({ sourceFileIds: sourcesFor(r.notes.map((n) => n.path)), name: 'Request', why: "Bower didn't update any note: this request names more than three. Ask for three at most at a time." });
       for (const n of r.notes) blocked.add(n.file.id);
     } else {
       const titles = new Map<string, typeof r.notes>();
       for (const n of r.notes) {
-        const title = displayName(n.file.name).normalize('NFC').toLowerCase();
+        const title = n.titleKey;
         titles.set(title, [...(titles.get(title) ?? []), n]);
       }
       for (const group of titles.values()) if (group.length > 1) for (const n of group) {
         blocked.add(n.file.id);
-        leftAsWritten.push({ name: n.path, fileId: n.file.id,
+        leftAsWritten.push({ sourceFileIds: sourcesFor(group.map((m) => m.path)), name: n.path, fileId: n.file.id,
           why: `In ${parentOf(n.path).split('/').join(' / ')}. Bower didn't update it: more than one note has this name. Ask again with its folder.` });
       }
     }
@@ -481,7 +497,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const consentFor = (targetFileId: string, sourceFileId: string | null): TimelineConsent | undefined => {
     if (!sourceFileId || blocked.has(targetFileId)) return undefined;
     const retryRequest = history.find((h) => !h.applied && h.consent.targetFileId === targetFileId && h.consent.sourceFileId === sourceFileId);
-    const r = requestsNamed.find((r) => r.notes.some((n) => n.file.id === targetFileId) || r.id === retryRequest?.consent.requestId);
+    const r = requestsNamed.find((r) => !completed(r.id, targetFileId) && (r.notes.some((n) => n.file.id === targetFileId) || r.id === retryRequest?.consent.requestId));
     if (!r || completed(r.id, targetFileId)) return undefined;
     const c = { requestId: r.id, targetFileId, sourceFileId };
     const admitted = things.some((t) => t.file.id === sourceFileId && d.thing({ fileId: t.file.id, name: t.item.name, fileName: t.file.name, kind: t.item.kind, words: t.words, linkText: null }));
@@ -864,7 +880,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // its report saying nothing was ready yet, and every item it took waiting (TL-P3-25 point 2). It is no failure.
   // A thing that left the inbox closes its question, which is something to do.
   if (all && !capturedPiles.length && !journal.length && !askedPiles.length && !(await closable())) {
-    if (opts.taken) return { kind: 'plan' as const, plan: await nothingReadyPlan(rootId, opts, appends.completed) };
+    if (opts.taken) return { kind: 'plan' as const, plan: await nothingReadyPlan(rootId, opts, appends.completed, appends.evidence) };
     throw new BowerError('conflict', NOTHING_READY);
   }
 
@@ -1183,8 +1199,12 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // edited since is never rewritten: what Bower would write becomes a Timeline line, and the person is asked.
     // TL-P4-10: an unmarked one is the person's, unless a rule lets Bower adopt it (no write of Bower's ever does);
     // a Bower note with none gets one, with its mark.
-    const personal = !parseNote(w.path, new TextDecoder().decode(bytes), fetched(f.id)).byBower;
-    if (personal) w.lines = w.lines.filter((l) => l.consent && !blocked.has(f.id));
+    const ownership = context.read(f.id, bytes);
+    // Invalid layouts reach the author's existing typed refusal, never the display parser's exception.
+    const personal = ownership.status !== 'invalid' && ownership.status !== 'v2'
+      && !parseNote(w.path, new TextDecoder().decode(bytes), fetched(f.id)).byBower;
+    if (blocked.has(f.id)) { w.lines = []; w.state = null; }
+    else if (personal) w.lines = w.lines.filter((l) => l.consent);
     let state: StateRewrite | null = null;
     const grant = grants.get(f.id);
     const section = grant ? currentStateOf(bytes, fetched(f.id), true) : null;
@@ -1272,10 +1292,17 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       const twin = lines.find((x) => x.entry.text === l.entry.text);
       if (result.ok && twin) twins.set(l, twin);
       else if (result.ok) lines.push(l);
-      else if (!result.ok && result.reason === 'unchanged') lineState.set(l, 'present');
+      else if (!result.ok && result.reason === 'unchanged') {
+        lineState.set(l, 'present');
+        if (l.consent) {
+          satisfied.push({ consent: l.consent, entry: l.entry, before: seen(f), path: w.path,
+            text: new TextDecoder().decode(bytes), content: before });
+          places.set(f.id, f);
+        }
+      }
       else if (!result.ok && result.reason === 'not-bower') lineState.set(l, 'person');
       else if (!result.ok && personal && (result.reason === 'no-timeline' || result.reason === 'unreadable-timeline')) {
-        leftAsWritten.push({ name: w.path, fileId: f.id, why: result.reason === 'no-timeline' ? "Bower didn't add the line: this note has no Timeline." : "Bower didn't add the line: it can't read this note's Timeline." });
+        leftAsWritten.push({ sourceFileIds: l.consent ? [l.consent.sourceFileId] : [], name: w.path, fileId: f.id, why: result.reason === 'no-timeline' ? "Bower didn't add the line: this note has no Timeline." : "Bower didn't add the line: it can't read this note's Timeline." });
       }
       else if (!result.ok) console.error(`A note's Timeline line was refused (${result.reason}); none is planned for it`);
     }
@@ -1590,7 +1617,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // A run that only asks, about piles asked about already, has nothing new to do: nothing was ready yet.
   // A Timeline line the model added on a note is something to do, so a run with one is not "nothing ready".
   if (all && !capturedPiles.length && !journal.length && questionsText === null && ![...wanted.values()].some((w) => w.lines.length || w.state)) {
-    if (opts.taken) return { kind: 'plan' as const, plan: await nothingReadyPlan(rootId, opts, appends.completed) };
+    if (opts.taken) return { kind: 'plan' as const, plan: await nothingReadyPlan(rootId, opts, appends.completed, appends.evidence) };
     throw new BowerError('conflict', NOTHING_READY);
   }
   // Your changes go to the archive the legacy runner used, made in `.bower/changes` only when a line needs it
@@ -1653,7 +1680,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     hashesNew = { text, before: hashesFile && text !== hashesText ? await ownVerified(hashesFile) : null };
   }
   return {
-    kind: 'decided' as const, context, consents, leftAsWritten, completedAppends: appends.completed, run: { runId: opts.runId, requestId: opts.requestId, scope: opts.scope, allowWeb: opts.allowWeb, requestedAt: opts.requestedAt },
+    kind: 'decided' as const, context, consents, leftAsWritten, completedAppends: appends.completed, appendEvidence: appends.evidence, satisfied, run: { runId: opts.runId, requestId: opts.requestId, scope: opts.scope, allowWeb: opts.allowWeb, requestedAt: opts.requestedAt },
     rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas: d.areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
     requestsBroken, requestsDone, sys, questionsList, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
@@ -1671,7 +1698,7 @@ export async function build(decided: Decided): Promise<Ended> {
   const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
     requestsBroken, requestsDone, sys, questionsList, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, leftAsWritten, completedAppends } = decided;
+    rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, leftAsWritten, completedAppends, appendEvidence, satisfied } = decided;
 
   // The fixed operations, in order: clear last run's marks, make folders, file, the note edits, the merges, Bin the piles,
   // your changes, the hashes.
@@ -1697,7 +1724,7 @@ export async function build(decided: Decided): Promise<Ended> {
   }
   const chainOf = (path: string): string[] => (made.has(path) ? [made.get(path) ?? '', ...chainOf(parentOf(path))] : []);
   const reportPlan: ReportContribution[] = [];
-  const leftRows = [...new Map(leftAsWritten.map((r) => [r.fileId ?? r.why, r])).values()];
+  const leftRows = leftAsWritten;
   // A new Area the model gave a responsibility for: the first thing filed there says why it was made (TL-P4-07 addendum 3).
   const said = new Set<string>();
   const areaOf = (to: string): { area: string } | Record<string, never> => {
@@ -1795,9 +1822,11 @@ export async function build(decided: Decided): Promise<Ended> {
     if (!result.ok) throw new BowerError('unknown', B_FAILURE);
     edit.text = result.text;
   }
-  if (leftRows.length) {
-    const filed = [...moveOf.values()];
-    if (filed.length) reportPlan.push({ requires: filed, when: 'applied', value: { ...empty(), leftAsWritten: leftRows } });
+  for (const { sourceFileIds, ...row } of leftRows) {
+    for (const sourceId of sourceFileIds) {
+      const filed = moveOf.get(sourceId);
+      if (filed) reportPlan.push({ requires: [filed], when: 'applied', value: { ...empty(), leftAsWritten: [row] } });
+    }
   }
   // After the filing moves, each note edit (TL-P2-20), then the merges whose moves depend on their line. A Timeline
   // line's note is marked new in place after its edit, and gets its updated row once it applied.
@@ -1968,6 +1997,7 @@ export async function build(decided: Decided): Promise<Ended> {
   }
   /** What each record's archive waits for: the plan's `needs`. */
   const archives = new Map<string, readonly string[]>();
+  const satisfiedAppends: SatisfiedAppend[] = [];
   // An original and its inverse taken together give no row and no count (`pairsOf`, TL-P4-27 addendum 3); both apply.
   const paired = pairsOf(journal.map((l) => l.rec));
   for (const line of journal) {
@@ -1975,10 +2005,13 @@ export async function build(decided: Decided): Promise<Ended> {
     if (!archiveTo) throw new BowerError('unknown', OWN_FILES);
     const write = line.rec.kind === 'request' ? requestsOp : line.rec.kind === 'answer' ? questionsOp : null;
     const n = need(line.rec.id);
-    const derived = [...new Set([...(write ? [write] : []), ...n.edits, ...n.derived])];
+    const present = satisfied.filter((s) => s.consent.requestId === line.rec.id);
+    const derived = [...new Set([...(write ? [write] : []), ...n.edits, ...n.derived,
+      ...present.flatMap((s) => moveOf.get(s.consent.sourceFileId) ?? [])])];
     archives.set(line.rec.id, derived);
     const moves: string[] = [];
     for (const f of line.files) moves.push(await add({ kind: 'move', before: seen(f), parent: archiveTo, name: f.name, properties: {} }, derived));
+    for (const row of present) if (moves[0]) satisfiedAppends.push({ ...row, operationId: moves[0] });
     if (paired.has(line.rec.id)) {
       reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: 0 } });
     } else if (line.rec.undoes) {
@@ -2018,7 +2051,8 @@ export async function build(decided: Decided): Promise<Ended> {
   const head = {
     kind: 'run-manifest' as const, scope, runId: opts.runId, requestId: opts.requestId, runScope: opts.scope,
     allowWeb: opts.allowWeb, requestedAt: opts.requestedAt, captureId, capture: captureValue, reportPlan,
-    ...(completedAppends.length ? { completedAppends } : {}),
+    ...(completedAppends.length ? { completedAppends, appendEvidence } : {}),
+    ...(satisfiedAppends.length ? { satisfiedAppends } : {}),
   };
   // v1 whenever the plan has no edit (TL-P2-20 Format): its identities and bytes are exactly as before.
   const v1: Operation[] = operations.flatMap((o) => (o.effect.kind === 'edit-text' ? [] : [{ ...o, effect: o.effect }]));
@@ -2040,14 +2074,14 @@ const tryAgain = (attempt: Attempt): Ended => ({ kind: 'again', attempt });
  * The plan of an admitted full run that finds every pile it took held, and none of your changes: nothing captured,
  * no operation, no report row. Its report says nothing was ready yet (`materialize`).
  */
-async function nothingReadyPlan(rootId: string, opts: PlanOptions, completedAppends: AppendCompletion[]): Promise<RunPlan> {
+async function nothingReadyPlan(rootId: string, opts: PlanOptions, completedAppends: AppendCompletion[], appendEvidence: Checkpoint[][]): Promise<RunPlan> {
   const scope = { rootId };
   const capture: ManifestCapture = { piles: [], members: [], journal: [], places: [] };
   const captureId = (await canonical({ scope, runScope: opts.scope, capture })).hash;
   const manifest: Manifest = {
     v: 1, kind: 'run-manifest', scope, runId: opts.runId, requestId: opts.requestId, runScope: opts.scope,
     allowWeb: opts.allowWeb, requestedAt: opts.requestedAt, captureId, capture, reportPlan: [], operations: [],
-    ...(completedAppends.length ? { completedAppends } : {}),
+    ...(completedAppends.length ? { completedAppends, appendEvidence } : {}),
   };
   const checked = await parseRunManifestV2((await canonical(manifest)).bytes, rootId, RUNNER_WRITES);
   if (!checked.ok) return refused(`the manifest guard refused the plan (${checked.reason})`);

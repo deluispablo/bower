@@ -132,7 +132,8 @@ function timelineOf(block: string): TimelineEntry[] {
 export function timelineBullets(raw: string, fetched?: FetchedOwnership): string[] {
   const bytes = encoder.encode(raw);
   const own = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
-  if (own.status === 'invalid' || !own.layout.timeline) return [];
+  // This legacy extraction API reports framed/legacy Timelines, not sections in plain prose.
+  if (own.status === 'invalid' || own.status === 'plain' || !own.layout.timeline) return [];
   return payloadDisplay(bytes, own.layout.timeline, TIMELINE).split('\n').filter((l) => l.startsWith('- '));
 }
 
@@ -159,7 +160,7 @@ export function parseNote(path: string, raw: string, fetched?: FetchedOwnership)
   const note = sectionOf(layout.bowerNote, BOWER_NOTE);
   const bowerNote = ownership.status === 'v2' ? note || null : note;
   front?.delete('bower_format');
-  if (!front) return { path, title, summary: '', properties: [], tags: [], currentState: [], body, timeline: [], links: linksIn(text), byBower: false };
+  if (!front) return { path, title, summary: '', properties: [], tags: [], currentState: current, body, timeline: timelineOf(timeline), links: linksIn(text), byBower: false };
   const f = front;
   const properties: Property[] = [];
   for (const [key, value] of f) {

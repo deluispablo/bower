@@ -48,7 +48,7 @@ import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { subjectKey, subjectOf } from '../../src/data/contracts/questions';
 import type { Question } from '../../src/data/contracts/types';
 import { modelDecisions, namedNotes, personalAppendHistory, planScripted, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
-import { displayName, MAX_NAME } from '../../src/data/contracts/tree';
+import { MAX_NAME } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
 import { RUNNER_WRITES, SYSTEM } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
@@ -404,7 +404,7 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
     if (!isJournalRecord(rec) || rec.kind !== 'request') continue;
     const matches = namedNotes(listing, ix, rec.text ?? rec.what);
     for (const n of matches) {
-      if (matches.length > 3 || matches.filter((m) => displayName(m.file.name).normalize('NFC').toLowerCase() === displayName(n.file.name).normalize('NFC').toLowerCase()).length > 1) suppressed.add(n.path);
+      if (matches.length > 3 || matches.filter((m) => m.titleKey === n.titleKey).length > 1) suppressed.add(n.path);
       else named.add(n.file.id);
     }
   }

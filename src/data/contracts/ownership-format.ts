@@ -15,7 +15,7 @@ export interface PersonalTask {
  * from its `## ` heading (ATX heading, CommonMark 0.31) to the end of its text: a v2 payload is framed by its markers, a
  * legacy section ends where the next one starts (Current state: after its last `- ` line). `front` is the lines
  * between the `---` fences (YAML front matter), `frontEnd` the first byte after the closing fence. A section the note
- * lacks is null; a note with no frontmatter has none. A repeated heading is the last one.
+ * lacks is null; a plain note has no frontmatter span. A repeated heading is the last one.
  */
 export interface Layout {
   readonly front: ByteSpan | null;
@@ -119,8 +119,6 @@ function tasks(bytes: Uint8Array, personal: ByteSpan, v2: boolean): PersonalTask
   return out;
 }
 
-const NO_LAYOUT: Layout = { front: null, frontEnd: 0, current: null, timeline: null, bowerNote: null };
-
 /**
  * One table for the whole note: entry n is the UTF-8 length of the raw text before the n-th character of the text with
  * CRLF read as LF. It replaces re-encoding a prefix for each span, which cost a full pass over the note every time.
@@ -143,12 +141,8 @@ function byteTable(raw: string, textLength: number): Uint32Array {
 function legacyNote(bytes: Uint8Array, raw: string): OwnershipResult {
   const text = raw.replace(/\r\n/g, '\n');
   const close = text.startsWith('---\n') ? text.indexOf('\n---', 3) : -1;
-  if (close < 0) {
-    const personal = { start: 0, end: bytes.length };
-    return { status: 'plain', personal, layout: NO_LAYOUT, tasks: tasks(bytes, personal, false) };
-  }
-  const lineEnd = text.indexOf('\n', close + 1);
-  const frontEnd = lineEnd < 0 ? text.length : lineEnd + 1;
+  const lineEnd = close < 0 ? -1 : text.indexOf('\n', close + 1);
+  const frontEnd = close < 0 ? 0 : lineEnd < 0 ? text.length : lineEnd + 1;
   let start = frontEnd;
   while (text[start] === '\n') start++;
   let current: { start: number; end: number } | null = null;
@@ -163,10 +157,10 @@ function legacyNote(bytes: Uint8Array, raw: string): OwnershipResult {
   }
   let end = text.length;
   const bower = text.lastIndexOf("\n## Bower's note\n");
-  const hasBower = bower >= start - 1;
+  const hasBower = bower >= 0 && bower >= start - 1;
   if (hasBower) end = bower;
-  const timeline = text.lastIndexOf('\n## Timeline\n', end);
-  const hasTimeline = timeline >= start - 1;
+  const timeline = text.startsWith('## Timeline\n') ? -1 : text.lastIndexOf('\n## Timeline\n', end);
+  const hasTimeline = (timeline >= 0 || text.startsWith('## Timeline\n')) && timeline >= start - 1;
   if (hasTimeline) end = timeline;
   end = Math.max(start, end);
   // Canonical legacy payload excludes empty separator lines before personal prose.
@@ -176,14 +170,14 @@ function legacyNote(bytes: Uint8Array, raw: string): OwnershipResult {
   const span = (from: number, to: number): ByteSpan => ({ start: rawByteAt(from), end: rawByteAt(to) });
   const personal = span(start, end);
   const layout: Layout = {
-    front: span(4, close + 1),
+    front: close < 0 ? null : span(4, close + 1),
     frontEnd: rawByteAt(frontEnd),
     current: current && span(current.start, current.end),
     // A heading follows the line break before it; a section ends where the next heading starts.
     timeline: hasTimeline ? span(timeline + 1, hasBower ? bower + 1 : text.length) : null,
     bowerNote: hasBower ? span(bower + 1, text.length) : null,
   };
-  return { status: 'legacy', personal, layout, tasks: tasks(bytes, personal, false) };
+  return { status: close < 0 ? 'plain' : 'legacy', personal, layout, tasks: tasks(bytes, personal, false) };
 }
 
 export function parseOwnership(bytes: Uint8Array): OwnershipResult {
