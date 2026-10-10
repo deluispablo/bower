@@ -18,7 +18,10 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c07-answer-yes | agrees | Already asks a model run to rewrite the Current state and keep the old figure in the Timeline (point 3). |
 | c07-rent-disagrees | agrees | The disagreement is asked with both notes and both figures, never resolved silently (point 3). |
 | c08-compare-flats | agrees | A requested comparison is a new generated note linking its sources (point 4). |
+| c08-compare-missing-fact | agrees | Points 1, 3, 4 and 7: the requested comparison fits the existing project, links its hub and sources, states the missing deposit honestly, and its briefing changes no existing facts. |
+| c08-report-with-sources | changed | Points 3, 4 and 7: the sourced report links its hub, but the rubric must allow updating Bower-owned hub state where the briefing changes it; expected.json is unchanged and still pins the hub under this rubric-only scope. |
 | c08-revise-comparison | agrees | The same note is revised, not a second one made (value gate, point 2); the revision is a Timeline line. |
+| c08-revise-keeps-personal-text | agrees | Points 2, 3 and 4: revise the same sourced comparison, retain personal text and earlier history, append a truthful revision line, and preserve unchanged source notes. |
 | c09-burst-pipe | agrees | An answer from the notes; nothing filed or changed. |
 | c09-closest-flat | agrees | An answer from the notes; nothing filed or changed. |
 | c10-lookup-fails | agrees | Honest about a failed lookup; invents nothing. |
@@ -40,6 +43,8 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c05-marked-state-keeps-history | agrees | Point 3 rewrites a genuinely Bower-owned state from evidence while Timeline only grows and personal prose survives. |
 
 ## Changes
+
+**C08 preparation: c08-report-with-sources, `rubric.md`.** The briefing adds table collection, watering-can and shelter facts, so "leave the hub byte identical" contradicted points 3 and 7. The rubric now requires updating the Bower-owned hub state where those facts change it, with sourced Timeline entries and personal text preserved. Only the rubric changed: `expected.json` still requires the hub unchanged and `report.updated` empty; those expectations need a separate lead ruling before the case can prove this behaviour.
 
 1. **c05-hub-lines, `rubric.md`.** Was: "The person's earlier lines, the Current state and the summary are untouched."
    Now: the earlier lines and the summary are untouched; Bower may rewrite the Current state only where the pile
