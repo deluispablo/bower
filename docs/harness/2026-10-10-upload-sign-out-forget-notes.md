@@ -1694,3 +1694,60 @@ Inherited offline sources (not fetched):
 [IndexedDB transaction lifecycle](https://www.w3.org/TR/IndexedDB/#transaction-lifecycle)
 and [Vitest setupFiles](https://vitest.dev/config/#setupfiles), already cited by the
 existing notes and timer setup. No second cleanup mechanism introduced.
+
+## Addendum 11
+
+tests changed: none
+removed: signingOut flag and successful-sign-in reset in src/data/live/index.ts.
+removed: remote-only retry branch that skipped local forgetting.
+removed: clearing the session's last known identity during forgetPerson.
+
+Implemented TL-P4-53 addendum 11 in src/data/live/index.ts only. Each sign-out
+attempt snapshots the session's last known identity before the remote call and
+then invokes the existing forgetPerson helper, including retries and remote
+failures. The accepted identity stays in session memory; later accepted me
+replies replace it. Every-account scope applies only when no identity was ever
+known. Auth expiry uses the same retained identity and existing cleanup helper.
+No second purge mechanism was added.
+
+Addenda 8–10 remain unchanged: required captured write versions, device-wide
+counter, IndexedDB cleanup, purge-failure sentence and both error logs.
+No store, queue, device or test file changed.
+
+Before edit, the committed whole-file reds produced 49 passes and two intended
+failures: never-known retry purge calls at upload-sign-out.test.ts:386 (one
+instead of two), and successful retry after addPile at :823 (one retained
+record and its 15 bytes instead of no record/body). After edit all 51 pass.
+Logs: /private/tmp/upload-a11-before.log and /private/tmp/upload-a11-reds.log.
+
+Verification commands use pnpm --config.verifyDepsBeforeRun=false
+--config.offline=true exec. Vitest uses the existing OS-temp config
+/private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/upload-a9-red2-e7a9j2_b/vitest.config.mjs
+and --configLoader runner; it retains the real Vite configuration, app setup
+and timer gate and redirects cache/CPU reports outside the repository.
+
+- vitest run src/data/upload-sign-out.test.ts --maxWorkers=2: 51 passed.
+- tsc -p tsconfig.app.json --noEmit: exit 0; /private/tmp/upload-a11-tsc-app.log.
+- tsc -p tsconfig.node.json --noEmit: exit 0; /private/tmp/upload-a11-tsc-node.log.
+- eslint src/data/live/index.ts: exit 0; /private/tmp/upload-a11-eslint.log.
+
+No network, Git writes, commits, node_modules replacement/symlink or repository
+test outputs. Full pnpm check is omitted because it writes repository outputs
+and a check mark; the owner's expressly requested gates are used. No screen
+changed and no e2e run. The coordinator owns commits.
+
+Standard solution/reuse: the existing live sign-out wrapper, retained identity
+and forgetPerson helper over the real queue/store. Inherited offline reference
+(not fetched): https://www.w3.org/TR/IndexedDB/#transaction-lifecycle. Clearing
+on each attempt uses the existing transaction boundary and captured-version
+fence; no new persistence or cleanup implementation.
+
+- vitest run src/data --maxWorkers=2: exit 0; 80 files, 4229 tests passed;
+  /private/tmp/upload-a11-data.log. No contradictory tests found.
+- Read-only git diff --check: exit 0. Final scope is live/index.ts and this
+  notes file; every test file remains unchanged.
+
+Exact red/green verify names (all three pass after the change):
+- upload-sign-out-forget: addendum 11: successful retry forgets an upload added after failed sign-out
+- upload-sign-out-forget: addendum 11: every never-known sign-out attempt purges the same every-account scope
+- upload-sign-out-forget: addendum 11: a retried offline sign-out still purges only the last known account
