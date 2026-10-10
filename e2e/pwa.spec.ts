@@ -165,6 +165,10 @@ test.describe('a deployment on the same origin', () => {
     });
     await page.goto('/?source=demo&scenario=default&time=instant', { waitUntil: 'commit' });
     await started;
+    // Capture A's execution while its document still exists: coverage after the
+    // recovery reload only contains the current document's scripts.
+    expect(await executed(page)).toContain(mainA);
+    await page.coverage.startJSCoverage({ resetOnNavigation: false });
     // A's pending import can delay window.load, so use the browser's registration
     // API to install its real worker while that network request is held.
     await page.evaluate(async () => {
@@ -179,7 +183,6 @@ test.describe('a deployment on the same origin', () => {
     expect(missingStatus).toBe(404);
     expect(navigations).toBe(2);
     const bundles = await executed(page);
-    expect(bundles).toContain(mainA);
     expect(bundles).toContain(mainB);
     // Leave time for a second startup/import failure to reveal a reload loop.
     await page.waitForTimeout(1000);
