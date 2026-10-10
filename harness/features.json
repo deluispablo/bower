@@ -6509,7 +6509,7 @@
     "id": "c4-e2e-sync",
     "task": "p4-consolidation",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "what": "Two e2e specs wait for the state they act on: qa7:63 types after the name box is focused; capabilities:210 navigates in the app instead of reloading before the answer run is admitted (defects qa7-63-flaky, capabilities-210-flaky).",
     "steps": [
       "The new-folder name is typed into the name box, never the tree.",

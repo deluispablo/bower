@@ -284,3 +284,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-10: c4-undo-compensate passes — fix(c4-undo-compensate): passes (P4-67, P4-67b PASS; designer verified)
 - 2026-10-10: c4-undo-confirm-in-place passes — fix(c4-undo-confirm-in-place): passes (P4-69 PASS; designer verified)
 - 2026-10-10: c4-create-newer-words passes — fix(c4-create-newer-words): passes (P4-70 PASS)
+- 2026-10-10: c4-e2e-sync passes — test(c4-e2e-sync): passes (P4-71 PASS)
