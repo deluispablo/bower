@@ -624,13 +624,13 @@ function removeRule(text: string, wording: string): string {
  * wordRules, the planner's count and the app's list of rules. Adds and removals apply as one sequence by since (stable,
  * journal ids break equal-time ties): a removal resolves its words to the worded rule and takes out any add before it
  * that it repeats; an add that repeats a rule there is skipped. `removed`: the texts taken out of Rules.md; `accepted`: the adds
- * written, oldest first. A removal without since (a manifest from before) keeps the old order: removals first.
+ * written, oldest first. No removals, or any removal without since, keeps the old order: removals first, stable adds.
  */
 export function ruleSequence(rules: readonly Rule[], add: readonly RuleAdd[], remove: readonly RuleRemove[]): { removed: ReadonlySet<string>; accepted: RuleAdd[] } {
   const removed = new Set<string>();
   let accepted: RuleAdd[] = [];
   const asRule = (a: RuleAdd): Rule => ({ id: '', text: a.text, ...(a.yourWords ? { yourWords: a.yourWords } : {}), since: a.since });
-  const inOrder = remove.every((r) => r.since !== undefined);
+  const inOrder = remove.length > 0 && remove.every((r) => r.since !== undefined);
   // TL-P2-26: adds are processed in ascending since (stable for equal times), whatever order the change lists them in.
   const adds = [...add].sort((a, b) => a.since - b.since).map((a) => ({ add: a, since: a.since }));
   const removes = remove.map((r) => ({ remove: r, since: r.since ?? 0 }));

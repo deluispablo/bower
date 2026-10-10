@@ -381,6 +381,12 @@ export class Journal {
       // Storage under this lock is authoritative, including the reserved id and first intent.
       const r = this.waiting(key).find((r) => r.line.id === line.line.id);
       if (!r) continue;
+      // A failed-list entry is final even if removing its outbox copy failed on an earlier pass.
+      if (failed.has(r.line.id)) {
+        sent.add(r.line.id);
+        outcomes.set(r.line.id, 'refused');
+        continue;
+      }
       // A refused original never took effect, so its inverse is done without a send.
       if (r.line.undoes && failed.has(r.line.undoes)) {
         sent.add(r.line.id);
@@ -399,17 +405,18 @@ export class Journal {
       // Still waiting (later, or on the person): every line after it waits behind it.
       if (out !== 'sent' && out !== 'refused') break;
     }
-    // Only what was sent, or ended as failed, leaves; anything added meanwhile stays, and a 404 met is kept with its line.
     this.checkCurrent();
-    const metNotFound = new Set(waiting.filter((r) => r.notFound).map((r) => r.line.id));
-    this.keep(key, this.waiting(key).filter((r) => !sent.has(r.line.id)).map((r) => (metNotFound.has(r.line.id) ? { ...r, notFound: true as const } : r)));
-    // Nobody waits on a line that waited: it is kept among what failed, shown once until put away, never sent again.
+    // Keep permanent refusals before removing their outbox copies: a failed removal must never cause a resend.
+    // Nobody waits on a line that waited: it is shown once until put away.
     if (refused.length) {
       const folder = await this.place.owner();
       const known = failedOf(folder);
       keepFailed(folder, [...known, ...refused.filter((f) => !known.some((k) => k.id === f.id))]);
       this.place.failed?.();
     }
+    // Only what was sent, or ended as failed, leaves; anything added meanwhile stays, and a 404 met is kept with its line.
+    const metNotFound = new Set(waiting.filter((r) => r.notFound).map((r) => r.line.id));
+    this.keep(key, this.waiting(key).filter((r) => !sent.has(r.line.id)).map((r) => (metNotFound.has(r.line.id) ? { ...r, notFound: true as const } : r)));
     if (required && sent.size !== waiting.length) {
       readOutbox(key);
       throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');
@@ -543,7 +550,6 @@ export class Journal {
       const w = waiting.find((r) => r.line.id === id);
       if (!w || w.reserved !== undefined) return 'sent';
       if (!this.keep(key, waiting.filter((r) => r.line.id !== id))) {
-        this.volatile.set(key, waiting);
         throw new BowerError('unknown', 'Bower could not take that change back; keep this page open.');
       }
       return 'dropped';
