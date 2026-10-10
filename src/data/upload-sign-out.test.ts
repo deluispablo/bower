@@ -1165,3 +1165,112 @@ it.each(['sign-out', 'auth expiry'] as const)(
     } finally { f.release.open(); f.active.dispose(); await f.q.idle(); }
   },
 );
+
+
+it.each([false, true])(
+  'delete-account-purge: unreadable account uses the sign-out forget function (known identity: %s)',
+  async (knownIdentity) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const f = await unreadableAccountFixture(knownIdentity);
+    const forget = f.q.forgetAccount.bind(f.q);
+    const callers: string[] = [];
+    const purge = vi.spyOn(f.q, 'forgetAccount').mockImplementation(async (account) => {
+      // The shared function is private: observe its call frame through the real queue spy.
+      callers.push(new Error('Synthetic forget caller').stack ?? '');
+      await forget(account);
+    });
+    await expect(f.live.session.deleteAccount()).resolves.toBeUndefined();
+    const fresh = indexedDbUploadStore(f.idb);
+    expect({
+      firstFolder: await fresh.list(f.accountA, f.rootA),
+      secondFolder: await fresh.list(f.accountA, f.rootB),
+      otherAccount: await fresh.list(ACCOUNT_B, f.rootA),
+      bytes: await keptBytes(fresh, f.records),
+    }, 'Delete my account must purge even when /me cannot be read').toEqual(knownIdentity
+      ? { firstFolder: [], secondFolder: [], otherAccount: f.records.slice(2),
+        bytes: [null, null, [1, 2, 3, 4, 5, 6, 7, 8, 9, 1]] }
+      : { firstFolder: [], secondFolder: [], otherAccount: [], bytes: [null, null, null] });
+    await expect(f.live.session.signOut()).rejects.toBe(f.remoteError);
+    expect(purge.mock.calls).toEqual([[knownIdentity ? f.accountA : undefined], [knownIdentity ? f.accountA : undefined]]);
+    expect(callers).toHaveLength(2);
+    // Calling queue.forgetAccount from a copied delete implementation cannot satisfy this assertion.
+    for (const caller of callers) expect(caller).toMatch(/at forgetPerson\s*\(/);
+  },
+);
+
+it('delete-account-purge: sign-out before the new sign-in me resolves purges every account', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  const f = await unreadableAccountFixture(true);
+  const entered = barrier(), release = barrier();
+  vi.spyOn(f.live.worker, 'me').mockImplementation(async () => {
+    entered.open();
+    await release.promise;
+    return { user: { name: 'Alex', email: 'another@example.com' }, folderId: f.rootB };
+  });
+  vi.spyOn(f.live.worker, 'signOut').mockResolvedValue(undefined);
+  const purge = vi.spyOn(f.q, 'forgetAccount');
+  const signingIn = outcome(f.live.session.signIn());
+  try {
+    await entered.promise;
+    const fresh = indexedDbUploadStore(f.idb);
+    for (const record of f.records) expect(await fresh.list(record.account, record.folder)).toEqual([record]);
+    await f.live.session.signOut();
+    expect({
+      firstFolder: await fresh.list(f.accountA, f.rootA),
+      secondFolder: await fresh.list(f.accountA, f.rootB),
+      otherAccount: await fresh.list(ACCOUNT_B, f.rootA),
+      bytes: await keptBytes(fresh, f.records),
+    }, 'the previous sign-in identity must not scope a new unresolved sign-in').toEqual({
+      firstFolder: [], secondFolder: [], otherAccount: [], bytes: [null, null, null],
+    });
+    expect(purge.mock.calls).toEqual([[undefined]]);
+  } finally { release.open(); await signingIn; }
+  await expect(signingIn).resolves.toMatchObject({ error: { code: 'conflict' } });
+});
+
+it('delete-account-purge: Delete my account waits for Worker agreement before purging', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  const f = await unreadableAccountFixture(true);
+  const entered = barrier(), release = barrier();
+  const refusal = new BowerError('offline', 'Synthetic account deletion did not finish.');
+  vi.spyOn(f.live.worker, 'deleteAccount').mockImplementationOnce(async () => {
+    entered.open();
+    await release.promise;
+    throw refusal;
+  }).mockResolvedValue(undefined);
+  const purge = vi.spyOn(f.q, 'forgetAccount');
+  const deleting = outcome(f.live.session.deleteAccount());
+  const fresh = indexedDbUploadStore(f.idb);
+  try {
+    await entered.promise;
+    expect(purge).not.toHaveBeenCalled();
+    for (const record of f.records) expect(await fresh.list(record.account, record.folder)).toEqual([record]);
+    expect(await keptBytes(fresh, f.records)).toEqual(f.records.map(() => [1, 2, 3, 4, 5, 6, 7, 8, 9, 1]));
+  } finally { release.open(); }
+  await expect(deleting).resolves.toEqual({ error: refusal });
+  expect(purge).not.toHaveBeenCalled();
+  for (const record of f.records) expect(await fresh.list(record.account, record.folder)).toEqual([record]);
+  // Readable positive control proves that the Worker acceptance actually enables the purge.
+  vi.spyOn(f.live.worker, 'me').mockResolvedValue({ user: { name: 'Alex', email: 'you@example.com' }, folderId: f.rootA });
+  await f.live.session.deleteAccount();
+  expect(purge.mock.calls).toEqual([[f.accountA]]);
+  expect(await keptBytes(fresh, f.records)).toEqual([null, null, [1, 2, 3, 4, 5, 6, 7, 8, 9, 1]]);
+});
+
+it('delete-account-purge: addendum 11 retries purge the last known identity only', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  const f = await unreadableAccountFixture(true);
+  const purge = vi.spyOn(f.q, 'forgetAccount');
+  const fresh = indexedDbUploadStore(f.idb);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await expect(f.live.session.signOut()).rejects.toBe(f.remoteError);
+    expect({
+      firstFolder: await fresh.list(f.accountA, f.rootA),
+      secondFolder: await fresh.list(f.accountA, f.rootB),
+      otherAccount: await fresh.list(ACCOUNT_B, f.rootA),
+      bytes: await keptBytes(fresh, f.records),
+    }).toEqual({ firstFolder: [], secondFolder: [], otherAccount: f.records.slice(2),
+      bytes: [null, null, [1, 2, 3, 4, 5, 6, 7, 8, 9, 1]] });
+    expect(purge.mock.calls).toEqual(Array.from({ length: attempt + 1 }, () => [f.accountA]));
+  }
+});

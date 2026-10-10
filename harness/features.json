@@ -7099,5 +7099,19 @@
     ],
     "verify": "pnpm exec vitest run src/data/pile-readiness.test.ts src/data/spine/plan.test.ts src/data/vault/drive-vault.test.ts -t \"pile-binned-context-hold\"",
     "note": "DEFECT_LOG pile-binned-context-hold; TL-P4-53 addendum 7. Packet 2026-10-11-pile-binned-context-hold-packet.md. Starts after upload-sign-out-forget (drive-vault.ts). implementer: codex."
+  },
+  {
+    "id": "delete-account-purge",
+    "task": "p4-c02",
+    "category": "fix",
+    "passes": false,
+    "ui": false,
+    "what": "Delete my account and a sign-out before the account is known use the one forget path: this device keeps nothing of the person.",
+    "steps": [
+      "Delete my account offline still purges; a new sign-in resets the known identity, so an early sign-out purges everything."
+    ],
+    "verify": "pnpm exec vitest run src/data/upload-sign-out.test.ts src/data/live/live.test.ts -t \"delete-account-purge\"",
+    "note": "DEFECT_LOG delete-account-purge-skipped; TL-P4-53 addendum 12. Escalated (privacy). Packet 2026-10-11-delete-account-purge-packet.md. implementer: codex.",
+    "review": "P4-104 PASS"
   }
 ]

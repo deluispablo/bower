@@ -368,6 +368,11 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
     }
   }
   {
+    const signIn = session.signIn.bind(session);
+    session.signIn = () => {
+      knownAccount = null;
+      return signIn();
+    };
     const signOut = session.signOut.bind(session);
     session.signOut = async (): Promise<void> => {
       const who = knownAccount;
@@ -390,14 +395,9 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
     const leave = session.deleteAccount.bind(session);
     // Leaving Bower removes the uploads this device kept for that person, once the Worker agreed.
     session.deleteAccount = async (): Promise<void> => {
-      const who = await account().catch((e: unknown) => {
-        console.error(e);
-        return null;
-      });
+      const who = knownAccount;
       await leave();
-      if (who === null) return;
-      // The account is gone either way; a device that cannot forget the bytes says why in the console.
-      await queue.forgetAccount(who).catch((e: unknown) => console.error(e));
+      await forgetPerson(who);
     };
   }
   // Signing out and leaving Bower let the lease go as on every source.
