@@ -47,7 +47,7 @@ import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { subjectKey, subjectOf } from '../../src/data/contracts/questions';
 import type { Question } from '../../src/data/contracts/types';
-import { modelDecisions, namedNotes, personalAppendHistory, planScripted, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
+import { modelDecisions, namedNotes, personalAppendHistory, planScripted, requestTargets, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
 import { MAX_NAME } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
 import { RUNNER_WRITES, SYSTEM } from '../../src/data/vault/layout';
@@ -402,9 +402,10 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
   for (const line of took.taken.journal) {
     const rec: unknown = JSON.parse(await read.readText(line.fileId));
     if (!isJournalRecord(rec) || rec.kind !== 'request') continue;
-    const matches = namedNotes(listing, ix, rec.text ?? rec.what);
-    for (const n of matches) {
-      if (matches.length > 3 || matches.filter((m) => m.titleKey === n.titleKey).length > 1) suppressed.add(n.path);
+    // The plan's one verdict on what a request names: a request refused whole shows none of its notes.
+    const { notes, refused } = requestTargets(listing, ix, rec.text ?? rec.what);
+    for (const n of notes) {
+      if (refused) suppressed.add(n.path);
       else named.add(n.file.id);
     }
   }

@@ -13,7 +13,7 @@ import { ruleLike } from './rules';
 import { displayName, nameOf } from './tree';
 import type { ChangeEntry, Rule } from './types';
 import { sha256 } from './hashes';
-import { parseNote } from './note-format';
+import { parseNote, timelineEntries } from './note-format';
 import { fenceAfter, parseOwnership, type ByteSpan, type Fence, type Layout, type OwnershipFailure, type FetchedOwnership } from './ownership-format';
 import { parseTimelineLine, timelineLine } from './timeline-line';
 import { parseRules } from './rules-format';
@@ -210,6 +210,31 @@ function byBower(text: string, fetched?: FetchedOwnership): boolean {
 // timeline-append
 // ---------------------------------------------------------------------------------------------
 
+/** Why a person's note takes no sourced line (C05 rows 5 and 8): no Timeline, or one `timeline-line.ts` cannot read. */
+function timelineRefusal(text: string, sections: Sections): 'no-timeline' | 'unreadable-timeline' | null {
+  if (!sections.timeline) return 'no-timeline';
+  const lines = linesOf(text, sections.timeline.start, sections.timeline.end);
+  return lines.slice(1).some((line) => line.text.trim() && !parseTimelineLine(line.text)) ? 'unreadable-timeline' : null;
+}
+
+/**
+ * Whether a person's note can take a request's one sourced line, as `applyChanges` decides it: null when it can (or the
+ * note is Bower's, which takes lines as before), else why not. A request settles on this without any line proposed.
+ */
+export function personalTimelineRefusal(bytes: Uint8Array, fetched?: FetchedOwnership): 'no-timeline' | 'unreadable-timeline' | null {
+  let text: string;
+  try { text = decoder.decode(bytes); }
+  catch {
+    // expected: a note that is not UTF-8 has no Timeline Bower can read.
+    return 'unreadable-timeline';
+  }
+  const own = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
+  if (own.status === 'invalid') return 'unreadable-timeline';
+  if (own.status === 'v2' || byBower(text, fetched)) return null;
+  const sections = sectionsOf(text, fetched);
+  return sections ? timelineRefusal(text, sections) : 'unreadable-timeline';
+}
+
 type Step = { text: string; added: EditEntry[]; rules: Pick<Rule, 'text' | 'yourWords' | 'since'>[] | null } | { refused: EditRefusal };
 
 function appendLines(text: string, change: Extract<Change, { kind: 'timeline-append' }>, authors: Authors, fetched?: EditFetched): Step {
@@ -235,12 +260,12 @@ function appendLines(text: string, change: Extract<Change, { kind: 'timeline-app
   } else {
     const legacy = sectionsOf(text, fetched);
     if (!legacy) return { refused: 'not-bower' };
-    if (personal && !legacy.timeline) return { refused: 'no-timeline' };
+    const unwritable = personal ? timelineRefusal(text, legacy) : null;
+    if (unwritable) return { refused: unwritable };
     if (legacy.timeline) {
       const sectionEnd = legacy.timeline.end;
       const lines = linesOf(text, legacy.timeline.start, sectionEnd);
       region = text.slice(lines[0]?.start ?? sectionEnd, sectionEnd);
-      if (personal && lines.slice(1).some((line) => line.text.trim() && !parseTimelineLine(line.text))) return { refused: 'unreadable-timeline' };
       const last = [...lines].reverse().find((line) => line.text.trim());
       at = last?.end ?? sectionEnd;
       insert = (lines) => lines.map((line) => eol + line).join('');
@@ -730,7 +755,7 @@ function insertionOnly(before: string, after: string): boolean {
   return i === before.length;
 }
 function timelineOf(text: string): unknown[] | null {
-  try { return parseNote('note.md', text).timeline; }
+  try { return timelineEntries(text); }
   catch (error) {
     // expected: a result that cannot be read back fails the invariant; logged here, its cause says why.
     console.error('An edited note could not be read back:', error);
@@ -774,7 +799,14 @@ function holds(before: string, after: string, change: Change, step: Exclude<Step
     const at = spanOf(bytes, span);
     return text.slice(at.start, at.end);
   };
-  if (same(slice(before, beforeBytes, a.personal)) !== same(slice(after, afterBytes, b.personal))) return false;
+  // A plain note is wholly the person's; a request's one line goes in its Timeline, which ends the note: every byte
+  // before that section stays, and the section only gains (checked below).
+  const plainAppend = a.status === 'plain' && change.kind === 'timeline-append';
+  if (plainAppend) {
+    const was = sectionsOf(before)?.timeline;
+    const now = sectionsOf(after)?.timeline;
+    if (!was || !now || before.slice(0, was.start) !== after.slice(0, now.start)) return false;
+  } else if (same(slice(before, beforeBytes, a.personal)) !== same(slice(after, afterBytes, b.personal))) return false;
   if (tasksOf(a.tasks, same) !== tasksOf(b.tasks, same)) return false;
   if (a.status === 'v2' && b.status === 'v2') {
     const skeleton = (text: string, bytes: Uint8Array, payloads: Readonly<Record<string, ByteSpan>>): string => {

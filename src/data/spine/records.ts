@@ -93,7 +93,6 @@ export function firstCheckpoint(manifest: RunManifest, manifestHash: string, mar
     outcomes: manifest.operations.map((o): Outcome => ({ operationId: o.operationId, state: 'not-dispatched' })),
     report: { state: 'not-ready' }, retainedPileIds: [],
     ...(appendBindings.length ? { appendBindings } : {}),
-    ...(manifest.completedAppends?.length ? { completedAppends: manifest.completedAppends } : {}),
   };
 }
 
@@ -318,8 +317,7 @@ function markOf(where: Where, stamp: Record<string, string> | undefined, text: s
   const parsed = parseRecordJson(new TextEncoder().encode(text));
   const object = (v: RecordJsonValue | undefined): v is { [key: string]: RecordJsonValue } => v !== null && typeof v === 'object' && !Array.isArray(v);
   const m = parsed.ok && object(parsed.value) ? parsed.value : null;
-  const appends = m?.kind === 'run-manifest' && ((Array.isArray(m.completedAppends) && m.completedAppends.length > 0)
-    || (Array.isArray(m.satisfiedAppends) && m.satisfiedAppends.length > 0)
+  const appends = m?.kind === 'run-manifest' && ((Array.isArray(m.satisfiedAppends) && m.satisfiedAppends.length > 0)
     || (Array.isArray(m.operations) && m.operations.some((o) => object(o) && object(o.effect) && o.effect.kind === 'edit-text'
       && Array.isArray(o.effect.changes) && o.effect.changes.some((c) => object(c) && c.kind === 'timeline-append' && object(c.consent)))));
   return { ...stamp, [PROP.run]: where.runId, ...(appends ? { [APPENDS_RECORD_KEY]: '1' } : {}) };

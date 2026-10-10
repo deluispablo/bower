@@ -137,6 +137,15 @@ export function timelineBullets(raw: string, fetched?: FetchedOwnership): string
   return payloadDisplay(bytes, own.layout.timeline, TIMELINE).split('\n').filter((l) => l.startsWith('- '));
 }
 
+/**
+ * The entries of a note's Timeline section as the one parser frames it, for every kind of note: a plain note's too,
+ * which its display shows as part of its body instead (`parseNote`). The author's re-parse invariant reads this.
+ */
+export function timelineEntries(raw: string): TimelineEntry[] {
+  const { bytes, ownership } = ownershipOf(raw);
+  return ownership.layout.timeline ? timelineOf(payloadDisplay(bytes, ownership.layout.timeline, TIMELINE)) : [];
+}
+
 function linksIn(text: string): string[] {
   const out: string[] = [];
   for (const m of text.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)) {
@@ -160,7 +169,7 @@ export function parseNote(path: string, raw: string, fetched?: FetchedOwnership)
   const note = sectionOf(layout.bowerNote, BOWER_NOTE);
   const bowerNote = ownership.status === 'v2' ? note || null : note;
   front?.delete('bower_format');
-  if (!front) return { path, title, summary: '', properties: [], tags: [], currentState: current, body, timeline: timelineOf(timeline), links: linksIn(text), byBower: false };
+  if (!front) return { path, title, summary: '', properties: [], tags: [], currentState: [], body, timeline: [], links: linksIn(text), byBower: false };
   const f = front;
   const properties: Property[] = [];
   for (const [key, value] of f) {

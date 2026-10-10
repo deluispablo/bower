@@ -4,7 +4,6 @@ import { sha256 } from './hashes';
 import { isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
 import type { UpdatedRow } from './types';
 import { applyChanges, EDIT_FILE_LIMIT, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
-import { parseRunCheckpoint, verifyCheckpointChain, type Checkpoint } from './run-checkpoint';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 
 export type Scope = { rootId: string };
@@ -102,11 +101,15 @@ export type Manifest = {
   v: 1; kind: 'run-manifest'; scope: Scope; runId: string; requestId: string;
   runScope: 'all' | 'instructions'; allowWeb: boolean; requestedAt: number;
   captureId: string; capture: Capture; operations: Operation[]; reportPlan: ReportContribution[];
-  completedAppends?: AppendCompletion[];
-  /** Verified originating checkpoint chains, carried forward when old run folders retire. */
-  appendEvidence?: Checkpoint[][];
-  /** A bound append already present at planning; completion waits for the request's archive. */
+  /**
+   * A request's bound line already in its note as the run names its source (TL-P4-32 addendum 2 (6)): no edit, and the
+   * request's completion is its archive move (`operationId`), in the run's own checkpoint. Earlier runs' completions are
+   * read only from their own records (`RunRecords.walk`), never carried in a manifest.
+   */
   satisfiedAppends?: SatisfiedAppend[];
+  /** Fields of an unaccepted C05 draft: never written, and a manifest carrying either is refused (`manifestOf`). */
+  completedAppends?: unknown;
+  appendEvidence?: unknown;
 };
 export type SatisfiedAppend = {
   consent: TimelineConsent; entry: EditEntry; before: SeenFile; path: string;
@@ -419,13 +422,10 @@ function contribution(value: unknown): value is ReportContribution {
 export const isAppendCompletion = (row: unknown): row is AppendCompletion => closed(row, ['requestId', 'targetFileId'])
   && recordId(row.requestId) && driveId(row.targetFileId);
 function manifestOf(value: unknown, v: 1 | 2, item: (value: unknown) => boolean): boolean {
-  return closed(value, ['v', 'kind', 'scope', 'runId', 'requestId', 'runScope', 'allowWeb', 'requestedAt', 'captureId', 'capture', 'operations', 'reportPlan'], ['completedAppends', 'appendEvidence', 'satisfiedAppends'])
+  return closed(value, ['v', 'kind', 'scope', 'runId', 'requestId', 'runScope', 'allowWeb', 'requestedAt', 'captureId', 'capture', 'operations', 'reportPlan'], ['satisfiedAppends'])
     && value.v === v && value.kind === 'run-manifest' && closed(value.scope, ['rootId']) && driveId(value.scope.rootId)
     && id(value.runId) && id(value.requestId) && oneOf(value.runScope, ['all', 'instructions'])
     && typeof value.allowWeb === 'boolean' && integer(value.requestedAt) && hash(value.captureId)
-    && (value.completedAppends === undefined || (list(value.completedAppends, isAppendCompletion)
-      && unique((value.completedAppends as AppendCompletion[]).map((r) => JSON.stringify([r.requestId, r.targetFileId])))))
-    && (value.appendEvidence === undefined || (Array.isArray(value.appendEvidence) && value.appendEvidence.every(Array.isArray)))
     && (value.satisfiedAppends === undefined || list(value.satisfiedAppends, (r): r is SatisfiedAppend =>
       closed(r, ['consent', 'entry', 'before', 'path', 'text', 'content', 'operationId'])
       && closed(r.consent, ['requestId', 'targetFileId', 'sourceFileId']) && recordId(r.consent.requestId)
@@ -463,31 +463,11 @@ async function digest(value: unknown): Promise<string> {
   return result.value;
 }
 
-/** Inherited completions must be proved by local applied bindings in verified originating chains. */
-async function appendProvenance(value: Manifest | ManifestV2): Promise<boolean> {
-  const proven = new Set<string>();
-  const key = (r: AppendCompletion): string => JSON.stringify([r.requestId, r.targetFileId]);
-  for (const chain of value.appendEvidence ?? []) {
-    const first = chain[0];
-    if (!record(first) || !record(first.scope) || first.scope.rootId !== value.scope.rootId
-      || !id(first.runId) || !hash(first.manifestHash) || !Array.isArray(first.outcomes)
-      || !first.outcomes.every((o) => record(o) && hash(o.operationId))) return false;
-    const pending = chain.find((cp) => record(cp) && record(cp.report) && cp.report.state === 'pending')?.report;
-    if (pending?.state === 'pending' && (!record(pending.body) || !hash(pending.body.captureId))) return false;
-    const expected = { rootId: value.scope.rootId, runId: first.runId, manifestHash: first.manifestHash,
-      captureId: pending?.state === 'pending' ? pending.body.captureId : value.captureId,
-      operationIds: first.outcomes.map((o) => o.operationId) };
-    for (const cp of chain) {
-      const encoded = new TextEncoder().encode(JSON.stringify(cp));
-      if (!(await parseRunCheckpoint(encoded, expected)).ok) return false;
-    }
-    if (!(await verifyCheckpointChain(chain)).ok) return false;
-    const head = chain.at(-1);
-    for (const binding of head?.appendBindings ?? []) if (head?.outcomes.some((o) => o.operationId === binding.operationId && o.state === 'applied'))
-      proven.add(key(binding));
-  }
-  const inherited = new Set((value.completedAppends ?? []).map(key));
-  if (inherited.size !== proven.size || [...inherited].some((k) => !proven.has(k))) return false;
+/**
+ * Each satisfied append is proved by the manifest itself: its request captured, its archive move the completion, its
+ * source filed by this run (the move it waits for) or a captured place, and the line already in the note as read.
+ */
+async function satisfiedProven(value: Manifest | ManifestV2): Promise<boolean> {
   for (const row of value.satisfiedAppends ?? []) {
     const c = row.consent;
     const place = value.capture.places.find((p) => p.file.fileId === c.targetFileId);
@@ -524,7 +504,7 @@ async function admit<M extends Manifest | ManifestV2>(
   if (parsed.operations.some(({ effect: e }) => e.kind === 'write-runner-json' && !writes.includes(e.path))) return { ok: false, reason: 'shape' };
   const value = parsed;
   if (!driveId(expectedRootId) || expectedRootId !== value.scope.rootId) return { ok: false, reason: 'scope' };
-  if (!await appendProvenance(value)) return { ok: false, reason: 'shape' };
+  if (!await satisfiedProven(value)) return { ok: false, reason: 'shape' };
   for (const item of texts(value)) {
     if (!await describes(item.content, item.text)) return { ok: false, reason: 'content' };
   }
