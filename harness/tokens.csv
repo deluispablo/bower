@@ -466,3 +466,13 @@ tree-name-first,merge (remove-new-note),codex,gpt-5-codex,high,1,515074,509491,,
 tree-name-first,red-owner (repair),codex,gpt-5-codex,medium,1,375095,371466,,325248,3629,,,,2 old tests,2026-10-10
 p4-q1-prep,drafter,codex,gpt-5-codex,high,1,2103848,2085864,,1939712,17984,,,,doc,2026-10-10
 c05-person-notes,red-owner (r5 add6),codex,gpt-5-codex,high,1,1334092,1322322,,1224576,12770,,,,2 reds (1 pin),2026-10-10
+c05-person-notes,implementer (r5 add6),codex,gpt-5-codex,high,1,1623688,1616273,,1527936,7415,,,,blocked: 3 test conflicts,2026-10-10
+c05-person-notes,red-owner (r5 add6 repair),codex,gpt-5-codex,high,1,927466,920347,,858496,7119,,,,3 tests repaired,2026-10-10
+b3a-hot-reduce,red-owner,codex,gpt-5-codex,high,1,635492,622058,,573952,13434,,,,11 reds,2026-10-10
+c05-person-notes,adversarial pass 5,codex,gpt-5-codex,high,1,754167,750930,,655232,3237,,,,PASS,2026-10-10
+b3a-hot-reduce,implementer,codex,gpt-5-codex,medium,1,388016,383911,,337024,4105,,,,green,2026-10-10
+b3a-hot-reduce,adversarial pass,codex,gpt-5-codex,high,1,420836,413129,,369024,7707,,,,BLOCK 2,2026-10-10
+b3a-hot-reduce,red-owner (repair),codex,gpt-5-codex,high,1,538093,529632,,479488,8461,,,,24 reds,2026-10-10
+b3a-hot-reduce,implementer (fix round 1),codex,gpt-5-codex,medium,1,457350,454208,,415616,3142,,,,green,2026-10-10
+b3a-hot-reduce,adversarial pass 2,codex,gpt-5-codex,high,1,238459,234386,,202624,4073,,,,BLOCK 1,2026-10-10
+empty-note-help-flaky,diagnoser,claude,opus,,1,75599,,,,,,32,25,diagnosed,2026-10-10
