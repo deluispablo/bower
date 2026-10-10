@@ -198,3 +198,16 @@ numeric evidence under R7, never an exception for model-authored numbers.
 | c17-b11-monthly-money | agrees | Points 1–8: receipts fit Money, typed date/category/currency guide deterministic sums, missing/invalid totals stay honest and sourced content/history unchanged; no conversion or new taxonomy (F13/R7). |
 | c17-b11-flat-formulas | agrees | Points 1–8: raw typed flat inputs alone yield derived metrics, zero/missing areas remain unavailable and personal prose/metadata are protected; Table uses the approved B5 projection, multiple columns await Q7 (F13/R5). |
 | c17-b11-proposal-authority | agrees | Points 1–8: file clear source beside its linked map while optional trusted consent waits; document imperatives grant nothing and one immutable ignored proposal survives filing without schema changes (F5/F7). |
+
+## B8 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-48)
+
+These are method verdicts, not execution verdicts. C17 is not selected by today's
+C04–C15 method gate. Diagnostic notes and internal log rows do not add source facts,
+write permissions, automatic repairs or another report mechanism.
+
+| Case | Verdict | Reason |
+| --- | --- | --- |
+| c17-b8-settled-recovery | agrees | Points 1–8: fit the notice, preserve its original/history, link the useful source note, and report/log only applied outcomes; rejected hub work grants no success, recovery makes no duplicate fact or note (F3/U3). Fault proof remains pending. |
+| c17-b8-report-only-grammar | agrees | Points 1–8: useful diagnostics reuse Bower health and the actual graph, never fill personal metadata, rewrite notes, repair links, invent related links or teach tags; semantic reads stay bounded and only the health create is reported (R2/U3). |
+| c17-b8-bounded-encoding | agrees | Points 1–8: clear filing fits Gardening with a grounded linked note and unchanged original; reversible fields and bounded lossless sealing preserve primary outcomes without schema growth, fabricated facts or visible internal-file rows (F14). Bounds await the lead. |
+| c17-b8-findings-refresh | agrees | Points 1–8: the supported personal edit remains exact, fresh evidence clears the actual defect, and unchanged diagnostics produce no false update; no redundant note, personal metadata adoption, policy, repair or external-edit Bower log event (F3/F10/U3). No-change policy awaits Q7. |
