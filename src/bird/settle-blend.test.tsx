@@ -13,6 +13,10 @@ import { ACT_REFERENCE, FPS, POSE_REFERENCE, fakeFrames } from './pose-reference
 
 const SEED = 240_726;
 const EPSILON = 0.005;
+// A layer fills its positioned parent. Home is a point anywhere in that frame,
+// not just the one point whose drawing happens to need no translation.
+const LAYER_FRAME = { width: window.innerWidth, height: window.innerHeight };
+const ORIGIN_HOME = { x: 50, y: 92 };
 const POSES = Object.keys(POSE_REFERENCE) as Pose[];
 const KINDS = Object.keys(REACTIONS) as ReactionKind[];
 const STARTS = [...POSES, ...ACT_NAMES.map((name) => `act:${name}` as const), 'turned', 'layer'] as const;
@@ -73,6 +77,9 @@ function reader(container: HTMLElement, layer: boolean) {
   const carry = container.querySelector<HTMLElement>('.bower-carry');
   return (): Drawn => {
     const placed = transformValues(bird.style.transform || getComputedStyle(bird).transform);
+    // Placement may be expressed by CSS positioning after the engine releases.
+    placed.x += Number.parseFloat(getComputedStyle(bird).left) || 0;
+    placed.y += Number.parseFloat(getComputedStyle(bird).top) || 0;
     const output: Drawn = {
       // The fixture uses a 100 px drawing: 100% and 100px have the same size.
       width: Number.parseFloat(bird.style.width || getComputedStyle(bird).width) || 100,
@@ -134,6 +141,10 @@ const timings = fc.record({
   nextPose: fc.constantFrom(...POSES),
   mindAct: fc.constantFrom(...ACT_NAMES),
   settings: fc.boolean(),
+  home: fc.record({
+    x: fc.integer({ min: 0, max: LAYER_FRAME.width }),
+    y: fc.integer({ min: 0, max: LAYER_FRAME.height }),
+  }),
 });
 type Timing = typeof timings extends fc.Arbitrary<infer Value> ? Value : never;
 type Track = 'control' | 'foreign' | 'pose';
@@ -147,7 +158,9 @@ function trace(start: Start, kind: ReactionKind, timing: Timing, track: Track) {
   const controller = createRef<BowerController>();
   const options = { ...frames.options, acts: true };
   const drawing = (p: Pose) => layer ?
-    <BowerLayer ref={controller} size={100} home={() => ({ x: 50, y: 92 })} engineOptions={options} /> :
+    <div style={{ position: 'relative', ...LAYER_FRAME }}>
+      <BowerLayer ref={controller} size={100} home={() => timing.home} engineOptions={options} />
+    </div> :
     <PoseBower pose={p} size={100} engineOptions={options} />;
   const view = render(drawing(pose));
   const read = reader(view.container, layer);
@@ -233,15 +246,28 @@ describe.each(KINDS.flatMap((kind) => STARTS.flatMap((start) =>
       if (timing.nextPose === startPose(start)) timing.nextPose = startPose(start) === 'sleep' ? 'idle' : 'sleep';
       const layer = start.startsWith('layer');
       const expected = stillFrame(startPose(start), timing.settings, layer);
+      if (layer) {
+        expected['perch.x'] = timing.home.x - 50;
+        expected['perch.y'] = timing.home.y - 92;
+      }
       const queued = stillFrame(timing.nextPose, timing.settings, false);
       const control = trace(start, kind, timing, 'control');
       const foreign = trace(start, kind, timing, 'foreign');
       const changed = layer ? null : trace(start, kind, timing, 'pose');
+      const origin = layer ? trace(start, kind, { ...timing, home: ORIGIN_HOME }, 'control') : null;
       const problems: string[] = [];
       const check = (label: string, actual: Drawn, wanted: Drawn) => {
         const wrong = differences(actual, wanted);
         if (wrong.length) problems.push(`${label}: ${wrong.join('; ')}`);
       };
+      if (origin) {
+        // Positive control: the original zero-translation home still settles
+        // and survives release under exactly the same bounds.
+        const originStill = { ...expected, 'perch.x': 0, 'perch.y': 0 };
+        if (!origin.released) problems.push('positive control: origin did not release');
+        else check('positive control: origin at release', origin.released.drawn, originStill);
+        check('positive control: origin after release', origin.after, originStill);
+      }
       for (const [name, result] of [['control', control], ['foreign', foreign], ['pose', changed]] as const) {
         if (!result) continue;
         if (!result.released) {
@@ -289,8 +315,117 @@ describe.each(KINDS.flatMap((kind) => STARTS.flatMap((start) =>
     // turned facing, preen at 0.6 s, chirp before the first settle frame,
     // and an active layer's breathing. A second run uses generated moments.
     const witness: Timing = { phase: 60, reactionFrames: kind === 'done' ? 60 : kind === 'offline' || kind === 'error' ? 90 : 0, poseAt: start === 'sleep' ? 33 : 6,
-      chirpAt: 0, actAt: 18, gazeAt: 12, nextPose: 'idle', mindAct: 'preen', settings: false };
+      chirpAt: 0, actAt: 18, gazeAt: 12, nextPose: 'idle', mindAct: 'preen', settings: false,
+      home: { x: 350, y: 280 } };
     fc.assert(property, { seed: SEED, numRuns: batch === 'random' ? 2 : 1,
       examples: batch === 'witness' ? [[witness]] : [], endOnFailure: true });
   });
+});
+
+const DIRECT_TIMING: Timing = {
+  phase: 60, reactionFrames: 0, poseAt: 12, chirpAt: 0, actAt: 18, gazeAt: 12,
+  nextPose: 'alarm', mindAct: 'preen', settings: false, home: ORIGIN_HOME,
+};
+
+it('a layer keeps its home position across moves-off release at (350, 280)', () => {
+  const origin = trace('layer', 'moves-off', DIRECT_TIMING, 'control');
+  expect(origin.released, 'positive control: the origin home finishes its settle').toBeDefined();
+  if (!origin.released) throw new Error('Missing origin release.');
+  expect(differences(origin.after, origin.released.drawn),
+    'positive control: the origin home has no release jump').toEqual([]);
+
+  const offset = trace('layer', 'moves-off', { ...DIRECT_TIMING, home: { x: 350, y: 280 } }, 'control');
+  expect(offset.released, 'the offset home finishes its settle').toBeDefined();
+  if (!offset.released) throw new Error('Missing offset release.');
+  expect(differences({ 'perch.x': offset.released.drawn['perch.x'] ?? NaN,
+    'perch.y': offset.released.drawn['perch.y'] ?? NaN }, { 'perch.x': 300, 'perch.y': 188 }),
+  'positive control: the drawn feet reach the requested home before release').toEqual([]);
+  expect(differences(offset.after, offset.released.drawn),
+    'release preserves the whole drawn still frame, including the home position').toEqual([]);
+});
+
+function resizedDrawing(settle: boolean, resize: boolean) {
+  usePrefs.setState({ birdMoves: true });
+  window.history.replaceState(null, '', '/');
+  const frames = fakeFrames(11);
+  const options = { ...frames.options, acts: false };
+  const drawing = (size: number) => <PoseBower pose="idle" size={size} engineOptions={options} />;
+  const view = render(drawing(100));
+  const read = reader(view.container, false);
+  const run = (n: number) => act(() => frames.run(n));
+  run(61);
+  if (settle) act(() => usePrefs.setState({ birdMoves: false }));
+  run(18); // Midway through the 36-frame settle.
+  const before = read();
+  if (resize) view.rerender(drawing(200));
+  const immediate = read();
+  run(1);
+  const next = read();
+  const moving = activeHandle() !== null;
+  view.unmount();
+  return { before, immediate, next, moving };
+}
+
+it('a size change midway through moves-off cannot bypass the frozen drawn blend', () => {
+  const live = resizedDrawing(false, true);
+  expect([live.before.width, live.before.height], 'positive control: the mounted size starts at 100').toEqual([100, 100]);
+  expect([live.next.width, live.next.height], 'positive control: a live component draws the new size').toEqual([200, 200]);
+  const unchanged = resizedDrawing(true, false);
+  const resized = resizedDrawing(true, true);
+  expect(resized.moving, 'the size changes before the settle releases its engine').toBe(true);
+  expect(differences(resized.immediate, unchanged.immediate), 'the size prop preserves the drawn snapshot at the call').toEqual([]);
+  expect(differences(resized.next, unchanged.next),
+    'every drawn value, width and height included, follows the original snapshot blend until release').toEqual([]);
+});
+
+function resumedPose(enableAt: number) {
+  usePrefs.setState({ birdMoves: true });
+  window.history.replaceState(null, '', '/');
+  const frames = fakeFrames(11);
+  const options = { ...frames.options, acts: false };
+  const drawing = (pose: Pose) => <PoseBower pose={pose} size={100} engineOptions={options} />;
+  const view = render(drawing('idle'));
+  const read = reader(view.container, false);
+  const run = (n: number) => act(() => frames.run(n));
+  run(61);
+  act(() => usePrefs.setState({ birdMoves: false }));
+  run(12);
+  const beforeQueue = read();
+  view.rerender(drawing('alarm'));
+  const afterQueue = read();
+  run(enableAt - 12);
+  const stillBeforeEnable = view.container.querySelector('[data-pose]')?.classList.contains('still');
+  act(() => usePrefs.setState({ birdMoves: true }));
+  const samples: Drawn[] = [];
+  for (let i = 0; i < 4 * FPS; i++) { run(1); samples.push(read()); }
+  const pose = view.container.querySelector('[data-pose]')?.getAttribute('data-pose');
+  const animated = activeHandle() !== null && !view.container.querySelector('[data-pose]')?.classList.contains('still');
+  view.unmount();
+  return { beforeQueue, afterQueue, stillBeforeEnable, samples, pose, animated };
+}
+
+it('moves returning during settle draw and animate the queued alarm pose after waking and shaking', () => {
+  // Packet item 6 still requires wake + shake if moves return before release.
+  // Addendum 7 queues the pose only while settling: when motion returns that
+  // queued pose must become the drawn, animated pose, just as after a full settle.
+  const completed = resumedPose(42);
+  expect(completed.stillBeforeEnable, 'positive control: the full settle released').toBe(true);
+  expect(completed.samples.at(-1)?.['tuft.angle'], 'positive control: a queued alarm draws after a full settle')
+    .toBeCloseTo(18, 2);
+  const interrupted = resumedPose(18);
+  expect(differences(interrupted.afterQueue, interrupted.beforeQueue), 'queuing alarm does not retarget the blend').toEqual([]);
+  expect(interrupted.stillBeforeEnable, 'moves return before release').toBe(false);
+  expect(interrupted.pose).toBe('alarm');
+  expect(interrupted.animated).toBe(true);
+  for (const result of [completed, interrupted]) {
+    expect(Math.min(...result.samples.map((v) => v['head.angle'] ?? NaN)), 'moves-on wakes with the startle').toBeLessThanOrEqual(-8);
+    expect(Math.min(...result.samples.map((v) => v['rig.angle'] ?? NaN)), 'moves-on shakes to the left').toBeLessThanOrEqual(-2);
+    expect(Math.max(...result.samples.map((v) => v['rig.angle'] ?? NaN)), 'moves-on shakes to the right').toBeGreaterThanOrEqual(2);
+  }
+  const last = interrupted.samples.at(-1);
+  expect(differences({ 'tuft.angle': last?.['tuft.angle'] ?? NaN, 'tuft.y': last?.['tuft.y'] ?? NaN },
+    { 'tuft.angle': 18, 'tuft.y': -2 }), 'the queued alarm, rather than the old idle pose, stays drawn after moves return').toEqual([]);
+  const lateHeads = interrupted.samples.slice(2 * FPS).map((v) => v['head.angle'] ?? NaN);
+  expect(Math.min(...lateHeads), 'the resumed alarm script still lowers its head after the wake ends').toBeLessThanOrEqual(-8);
+  expect(Math.max(...lateHeads), 'the resumed alarm script also returns its head').toBeGreaterThanOrEqual(-2);
 });
