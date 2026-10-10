@@ -3,9 +3,6 @@
   "note": "Known unused code (knip). The list may only shrink: remove a line when the code is used or deleted. See docs/harness/2026-10-09-c3-unused-code-notes.md.",
   "findings": [
     "duplicates src/data/contracts/run-phases.ts RUN_STEPS=ACTIVE_PHASES",
-    "exports api/src/security.ts COOKIE_ROUTES",
-    "exports api/src/security.ts genericRateLimit",
-    "exports api/src/security.ts rateLimit",
     "files runner/src/hot.ts runner/src/hot.ts"
   ],
   "reasons": {

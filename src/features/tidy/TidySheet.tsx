@@ -11,7 +11,7 @@ import { Sheet } from '@/ui/Sheet';
 import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
 import { PoseBower } from '@/bird/Bower';
-import { hasReplay, isRunning, runClock, runDetail, runTitle, stepLabel, stepState } from './run-words';
+import { hasReplay, reportWaiting, isRunning, runClock, runDetail, runTitle, stepLabel, stepState } from './run-words';
 import { useNow } from './useNow';
 import { TidyScene } from './TidyScene';
 import { RunLinks } from './RunLinks';
@@ -19,38 +19,36 @@ import s from './tidy.module.css';
 
 /** The tidy-up: confirm, then the real phases, then the result. One sheet. */
 export function TidySheet() {
-  const { tidyOpen, setTidy } = useUi();
+  const { tidyOpen, tidyReportRunId, setTidy } = useUi();
   const runState = useRun();
   const { data: run } = runState;
   const running = isRunning(run);
-  // The sheet shows a run's end only for a run it showed running (the person watched it, or started it
-  // here); a finished run from before stays on Home's own card, so a press on "Tidy up" asks first.
-  // A run that stopped and was not looked at still opens on why (the stopped card and chip lead here).
+  // The status bar reopens unseen reports; watched runs still show their end even with no rows.
+  // A stopped run stays reachable until acknowledged as well.
   const [watched, setWatched] = useState<string | null>(null);
   // Adjusted while rendering (React: storing information from previous renders), not in an effect.
   if (!tidyOpen && watched !== null) setWatched(null);
   else if (tidyOpen && running && run && watched !== run.id) setWatched(run.id);
-  const showRun = !!run && (running || (run.phase === 'failed' && !run.seen) || watched === run.id);
+  const showRun = !!run && (running || (tidyReportRunId === run.id && reportWaiting(run)) || (run.phase === 'failed' && !run.seen) || watched === run.id);
   const { runs } = useSources();
-  const { data: piles } = usePiles();
+  const pilesState = usePiles();
+  const { data: piles } = pilesState;
   const waiting = waitingIn(piles);
   const ask = waiting ? `Tidy up ${plural(waiting, 'thing')}?` : 'Nothing to tidy';
   const onOpenChange = (open: boolean): void => {
-    // Closing on a finished run with nothing to replay: it has been seen.
     // Closing a finished run with nothing to replay: it has been seen. A stopped one stays on Home
     // (with Try again) until "Got it", however the sheet was closed.
-    if (!open && run && run.phase === 'done' && !run.seen && !hasReplay(run)) void runs.markSeen(run.id);
+    if (!open && showRun && run && run.phase === 'done' && !run.seen && !hasReplay(run)) void runs.markSeen(run.id);
     setTidy(open);
   };
   return (
     <Sheet open={tidyOpen} onOpenChange={onOpenChange} title={runState.error ? 'Latest update unavailable' : showRun && run ? runTitle(run) : ask} hideTitle className={s.sheet}>
-      {runState.error ? <LoadError state={runState} /> : showRun && run ? <RunView run={run} /> : <Confirm />}
+      {runState.error ? <LoadError state={runState} /> : showRun && run ? <RunView run={run} /> : <Confirm pilesState={pilesState} />}
     </Sheet>
   );
 }
 
-function Confirm() {
-  const pilesState = usePiles();
+function Confirm({ pilesState }: { pilesState: ReturnType<typeof usePiles> }) {
   const { data: piles } = pilesState;
   const { runs } = useSources();
   const [busy, setBusy] = useState(false);
