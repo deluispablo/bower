@@ -38,6 +38,7 @@ it.each(Object.keys(REACTIONS) as ReactionKind[])('each reaction kind plays its 
   const b = mount();
   const at = target(b);
   if (kind === 'moves-off') { act(() => { activeHandle()?.act('preen'); }); b.run(0.2); expect(b.read().head).toBeGreaterThan(30); }
+  const startHead = b.read().head;
   act(() => { react(kind, at); });
   const ref = REACTION_REFERENCE[kind];
   expect(Object.keys(REACTION_REFERENCE).sort()).toEqual(Object.keys(REACTIONS).sort());
@@ -46,7 +47,12 @@ it.each(Object.keys(REACTIONS) as ReactionKind[])('each reaction kind plays its 
     const seen = samples.map((r) => r[part]);
     for (const value of values) expect(Math.min(...seen.map((v) => Math.abs(v - value))), `${kind} ${part} reaches ${value}`).toBeLessThanOrEqual(2);
     expect(Math.min(...seen), `${kind} ${part} low`).toBeGreaterThanOrEqual(Math.min(b.read()[part], 0, ...values) - 2);
-    expect(Math.max(...seen), `${kind} ${part} high`).toBeLessThanOrEqual(Math.max(1, ...values) + 2);
+    expect(Math.max(...seen), `${kind} ${part} high`).toBeLessThanOrEqual(Math.max(1, ...values, kind === 'moves-off' && part === 'head' ? startHead : 1) + 2);
+    if (kind === 'moves-off' && part === 'head') {
+      const head = samples[Math.round(0.6 * FPS) - 1]?.head;
+      expect(head, 'moves-off head settled at 0.6 s low').toBeGreaterThanOrEqual(Math.min(...values) - 2);
+      expect(head, 'moves-off head settled at 0.6 s high').toBeLessThanOrEqual(Math.max(...values) + 2);
+    }
   }
   if (['bin', 'error', 'duplicate', 'link-open'].includes(kind)) expect(Math.max(...samples.map((r) => r.iris))).toBeGreaterThan(1.1);
   if (kind === 'rule') expect(samples.some((r) => r.dy < -7)).toBe(true);
@@ -137,7 +143,7 @@ it('a sleep-pose bird ignores reactions except error and offline', () => {
     expect(b.read().head, kind).toBeCloseTo(20, 1); expect(b.read().eye, kind).toBeCloseTo(0.08, 2);
   }
   for (const kind of ['error', 'offline'] as const) {
-    let reaction = react(kind); const samples = b.run(2);
+    const reaction = react(kind); const samples = b.run(2);
     expect(Math.min(...samples.map((r) => r.head))).toBeLessThanOrEqual(-8);
     expect(b.read().head).toBeCloseTo(-10, 1); expect(b.read().eye).toBeGreaterThan(0.9);
     act(() => { reaction.end(); }); b.run(1); expect(b.read().head).toBeCloseTo(20, 1);

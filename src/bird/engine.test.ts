@@ -549,7 +549,7 @@ describe("the engine's named actions", () => {
           try {
             if ('reaction' in entry) {
               const port = engine as unknown as { play?: (kind: 'error' | 'offline') => void };
-              port.play?.(entry.reaction);
+              port.play?.(entry.reaction as 'error' | 'offline');
             } else engine.nudge();
             // Sample the deadlines exactly; other frames retain the selected cadence (including its jitter).
             advance(0.15, sample);
@@ -576,7 +576,7 @@ describe("the engine's named actions", () => {
     { name: '60 fps', ms: [1000 / 60] },
     { name: '120 fps', ms: [1000 / 120] },
     { name: 'jittered', ms: [1000 / 120, 1000 / 30, 1000 / 90, 1000 / 60, 25] },
-  ])('every frame keeps the addendum 5 bounds under random focus, pointer, touch, step and wake events: $name', (schedule) => {
+  ].flatMap((schedule) => Array.from({ length: 8 }, (_, batch) => ({ ...schedule, batch }))))('every frame keeps the addendum 5 bounds under random focus, pointer, touch, step and wake events: $name batch $batch', (schedule) => {
     const event = fc.record({
       gap: fc.integer({ min: 0, max: 200 }),
       kind: fc.constantFrom('pointer', 'touch', 'focus', 'blur', 'nudge', 'sleep', 'snapGaze', 'preenNudge'),
@@ -684,9 +684,9 @@ describe("the engine's named actions", () => {
         expect(problems.slice(0, 5), JSON.stringify({ schedule: schedule.name, pose, events })).toEqual([]);
         engine.stop();
       }),
-      { seed: 2610, numRuns: 40 },
+      { seed: 2610, numRuns: 5, path: String(schedule.batch * 5) },
     );
-  }, 30_000);
+  });
 
   it('every ENGINE_MEMBERS key needs a reference row or an allowlist entry, whatever its tag', () => {
     // TL-P4-22 addendum 21, over every key: a new name with any tag that is not a row of its own fails.
