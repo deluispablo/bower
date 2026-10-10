@@ -119,20 +119,35 @@ export function useFileActions() {
           report(e, 'That did not work. Try again.');
         }
       },
-      async createNamed(folder: string, name: string): Promise<void> {
+      askFolderName(folder: string, inline = false): void {
+        if (inline) useUi.getState().openAll([...ancestors(folder), folder]);
+        useUi.getState().setNaming({ folder, type: 'folder', inline });
+      },
+      async createNamed(folder: string, name: string, response?: {
+        made: (path: string) => void;
+        failed: (sentence: string) => void;
+      }): Promise<void> {
         try {
           const path = await vault.create(folder, 'folder', name);
           open({ path, type: 'folder' });
+          response?.made(path);
         } catch (e) {
-          if (e instanceof BowerError && e.applied?.path) open({ path: e.applied.path, type: 'folder' });
-          report(e, 'The folder was not made. Try again.');
+          const applied = e instanceof BowerError ? e.applied?.path : null;
+          if (applied) {
+            open({ path: applied, type: 'folder' });
+            response?.made(applied);
+          }
+          if (response && !applied) {
+            console.error(e);
+            response.failed('The folder was not made. Try again.');
+          } else report(e, 'The folder was not made. Try again.');
         }
       },
-      async create(folder: string, type: 'note' | 'folder'): Promise<void> {
+      async create(folder: string, type: 'note'): Promise<void> {
         try {
           const path = await vault.create(folder, type);
           useUi.getState().openAll([...ancestors(path)]);
-          // The new thing gets its name in place; the selection stays, so New folder twice makes two siblings.
+          // New note still gets its name in place; folders use askFolderName/createNamed.
           useUi.getState().setJustMade(path);
           useUi.getState().setRenaming(path);
         } catch (e) {
@@ -144,7 +159,7 @@ export function useFileActions() {
           report(e, 'That did not work. Try again.');
         }
       },
-      /** Takes back a thing just made (Escape on its name), with no Bin and no journal line. */
+      /** Takes back a note just made when its inline name is cancelled. */
       async discard(path: string): Promise<void> {
         try {
           await vault.trash(path);
