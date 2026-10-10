@@ -1,0 +1,5 @@
+# Supported edit between runs
+Run 1 establishes the cache and cursor. Alex edits their own unowned Career plans note between runs on the same Drive, including its summary. Run 2 refreshes the index before planning, showing remote rather than local work, without adding generated metadata or changing Alex's text. Garden plans remains byte identical.
+The full edited text is asserted in expected.json; its exact equality and unchanged ownership must also be checked by the driver. No personal-edit handling for a Bower region or external rename repair is requested.
+A fresh full listing can satisfy the strings but cannot prove this case: the read oracle must see changes.list from the stored token, one changed prefix read, no Garden plans download and the new version in step 1's index and step 2's relevant neighbourhood. Cursor persistence must precede successful completion and never precede durable refreshed state.
+The two empty execution replies request no knowledge-note mutation; script-owned maintenance must supply the index refresh. Step-aware replies and feed simulation are harness gaps. Covers:model until those production-entry assertions pass.

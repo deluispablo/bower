@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { BrowserRouter, useLocation } from 'react-router';
 import { useState } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -9,6 +9,7 @@ import { useUi } from '@/app/ui-store';
 import { useTabs } from '@/app/tabs-store';
 import { toast } from '@/ui/toast';
 import { useFileActions } from './file-actions';
+import * as fileActions from './file-actions';
 import { NameSheet } from './NameSheet';
 
 vi.mock('@/ui/toast', () => ({ toast: vi.fn() }));
@@ -62,4 +63,31 @@ it('a named thing made before its journal warning opens once without a retry pro
   expect(create).toHaveBeenCalledOnce();
   expect(toast).toHaveBeenCalledWith(failure.message);
   expect(screen.queryByRole('dialog')).toBeNull();
+});
+
+it("createNamed creates once and reports NameSheet's refused-create sentence", async () => {
+  const base = loadingSources();
+  const path = 'Resources/Garden plans';
+  const create = vi.fn(async () => path);
+  const { result } = renderHook(() => fileActions.useFileActions() as ReturnType<typeof useFileActions> & {
+    createNamed?: (folder: string, name: string) => Promise<void>;
+  }, {
+    wrapper: ({ children }) => <BrowserRouter><DataProvider sources={{ ...base, vault: { ...base.vault, create } }}>{children}</DataProvider></BrowserRouter>,
+  });
+  expect(typeof result.current.createNamed).toBe('function');
+  const createNamed = result.current.createNamed;
+  if (!createNamed) return;
+
+  await act(() => createNamed('Resources', 'Garden plans'));
+  expect(create).toHaveBeenCalledExactlyOnceWith('Resources', 'folder', 'Garden plans');
+  expect(location.pathname).toBe('/files/Resources/Garden%20plans');
+  expect(useUi.getState().selected).toBe(path);
+  expect(toast).not.toHaveBeenCalled();
+
+  const failure = new Error('Create refused');
+  create.mockClear();
+  create.mockRejectedValueOnce(failure);
+  await act(() => createNamed('Resources', 'Garden plans'));
+  expect(create).toHaveBeenCalledExactlyOnceWith('Resources', 'folder', 'Garden plans');
+  expect(toast).toHaveBeenCalledExactlyOnceWith('The folder was not made. Try again.');
 });

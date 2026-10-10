@@ -52,3 +52,5 @@ When a fix is on staging or `main`, tell the designer so it can verify against i
 - **At each new model release:** audit every role and rung, because each one encodes a weakness of a model.
 - **DECISIONS:** a line is a ruling that changes what someone does. Status news belongs in LEAD or HANDOFF.
 
+
+- **UI needs the owner's OK first (TL-P4-40).** The lead never dispatches a change to what the person sees until the owner has approved it through the designer. That covers new UI, UI parts of a capability, and UI defect fixes that change appearance or behaviour. Fixes that restore an already approved spec, such as a broken token or a regression, may proceed, and the owner is told.

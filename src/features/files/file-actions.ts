@@ -40,15 +40,16 @@ export function useFileActions() {
     const now = to + shown.slice(from.length);
     nav(onNote ? routeFor({ path: now, type: 'file' }) : routeFor({ path: now, type: 'folder' }), { replace: true });
   };
+  const open = (node: Pick<TreeNode, 'path' | 'type'>, newTab = false): void => {
+    const route = routeFor(node);
+    if (newTab) useTabs.getState().open(route);
+    useUi.getState().select(node.path);
+    nav(route);
+    if (node.type === 'file') void vault.markSeen(node.path);
+  };
   return useMemo(
     () => ({
-      open(node: Pick<TreeNode, 'path' | 'type'>, newTab = false): void {
-        const route = routeFor(node);
-        if (newTab) useTabs.getState().open(route);
-        useUi.getState().select(node.path);
-        nav(route);
-        if (node.type === 'file') void vault.markSeen(node.path);
-      },
+      open,
       async move(path: string, to: string): Promise<string | null> {
         const from = parentOf(path);
         try {
@@ -116,6 +117,15 @@ export function useFileActions() {
             useUi.getState().relocate(path, null);
           }
           report(e, 'That did not work. Try again.');
+        }
+      },
+      async createNamed(folder: string, name: string): Promise<void> {
+        try {
+          const path = await vault.create(folder, 'folder', name);
+          open({ path, type: 'folder' });
+        } catch (e) {
+          if (e instanceof BowerError && e.applied?.path) open({ path: e.applied.path, type: 'folder' });
+          report(e, 'The folder was not made. Try again.');
         }
       },
       async create(folder: string): Promise<void> {

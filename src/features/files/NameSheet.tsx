@@ -1,13 +1,11 @@
 import { LoadError } from '@/ui/LoadError';
 import { useEffect, useId, useRef, useState } from 'react';
-import { useSources, useTree } from '@/data/provider';
-import { BowerError } from '@/data/types';
+import { useTree } from '@/data/provider';
 import { findNode, thingName, nameOf, parentOf } from '@/data/tree';
 import { crumbs } from '@/app/paths';
 import { useUi } from '@/app/ui-store';
 import { Button } from '@/ui/Button';
 import { afterOverlaysClosed } from '@/ui/back';
-import { report } from '@/ui/report';
 import { toast } from '@/ui/toast';
 import { Sheet } from '@/ui/Sheet';
 import { FieldError, Input } from '@/ui/Field';
@@ -17,7 +15,6 @@ import s from './files.module.css';
 /** Rename and New folder from a page share one name sheet. */
 export function NameSheet() {
   const { naming, setNaming } = useUi();
-  const { vault } = useSources();
   const treeState = useTree();
   const { data: tree } = treeState;
   const act = useFileActions();
@@ -43,13 +40,7 @@ export function NameSheet() {
     if (!making) return;
     if (/[/\\]/.test(n)) toast('Names cannot have slashes; Bower used a dash.');
     const safe = n.replace(/[/\\]/g, '-');
-    try {
-      const path = await vault.create(making.folder, 'folder', safe);
-      act.open({ path, type: 'folder' });
-    } catch (e) {
-      if (e instanceof BowerError && e.applied?.path) act.open({ path: e.applied.path, type: 'folder' });
-      report(e, 'The folder was not made. Try again.');
-    }
+    await act.createNamed(making.folder, safe);
   };
   return (
     <Sheet open={!!naming} onOpenChange={(o) => !o && setNaming(null)} title={what} description={`In ${crumbs(where)}`}>
