@@ -701,3 +701,199 @@ it('B1a contract: round 3 2: unrelated account changes drain once and the next r
     expect(next.after['.bower/index.md']).toBe(index);
   }
 });
+
+/** Bootstrap through main so the stored tree, summaries and versions are production evidence. */
+async function folderFeedBaseline() {
+  vi.setSystemTime(AT);
+  const { c, drive, root } = await setup();
+  c.scope = 'all';
+  c.journal = [];
+  const listing = await drive.listAll(root);
+  const garden = listing.find((f) => f.folder && f.name === 'Gardening');
+  const resources = listing.find((f) => f.folder && f.name === 'Resources');
+  const plot = listing.find((f) => f.name === 'Plot.md');
+  if (!garden || !resources || !plot) throw new Error('Expected the corpus garden and indexed plot');
+  const seasons = await drive.createFolder(garden.id, 'Seasons');
+  const spring = await drive.createFolder(seasons.id, 'Spring');
+  const seeds = await drive.createText(spring.id, 'Seeds.md', '---\nsummary: Alex saves beans for spring.\n---\n');
+  const watering = await drive.createText(seasons.id, 'Watering.md', '---\nsummary: Alex waters seedlings weekly.\n---\n');
+  const reading = await drive.createFolder(resources.id, 'Reading');
+  const book = await drive.createText(reading.id, 'Book.md', '---\nsummary: Alex reads about growing beans.\n---\n');
+  const outside = await drive.createFolder('root', 'Elsewhere');
+  const admission: AdmissionManifest = { v: 1, id: 'folder-bootstrap', rootId: root, scope: 'all', at: AT, piles: [], journal: [] };
+  const boot = await runOnDrive(c, drive, root, { admission, pacing }, 1);
+  expect(boot.code, 'positive bootstrap reaches main and stores all descendants').toBe(0);
+  expect(boot.wire?.statuses.at(-1)?.phase).toBe('done');
+  const state = JSON.parse(boot.after['.bower/retrieval.json'] ?? 'null') as RetrievalFile;
+  const descendants = [plot, watering, seeds];
+  for (const note of [...descendants, book]) {
+    expect(state.files[note.id]).toMatchObject({ path: drive.pathOf(note.id, root), version: note.modifiedTime });
+    expect(boot.after['.bower/index.md']).toContain(`[[${note.name.replace(/\.md$/, '')}]] — ${state.files[note.id]?.summary}`);
+  }
+  expect(state.files[seeds.id]?.path).toBe('Resources/Gardening/Seasons/Spring/Seeds.md');
+  return { c, drive, root, garden, seasons, spring, reading, outside, book, descendants, state,
+    index: boot.after['.bower/index.md'], admission };
+}
+
+type FolderChange = 'live control' | 'trashed' | 'removed' | 'outside' | 'renamed' | 'nested';
+
+/** Change only the folder; descendants never receive their own changes-feed entries. */
+async function runFolderChange(mode: FolderChange) {
+  const baseline = await folderFeedBaseline();
+  const { c, drive, root, garden, reading, outside, descendants, state, admission } = baseline;
+  if (mode === 'trashed' || mode === 'removed') await drive.trash(garden.id);
+  else if (mode === 'outside' || mode === 'nested') {
+    await drive.update(garden.id, { removeParent: garden.parents[0], addParent: mode === 'outside' ? outside.id : reading.id });
+  } else await drive.update(garden.id, { name: mode === 'renamed' ? 'Zinnia' : garden.name });
+  const throughCursor = await drive.getStartPageToken();
+  const drained = await drive.listChanges(state.cursor);
+  // Bootstrap bookkeeping is hidden; the folder is the only visible feed change.
+  expect(drained.changes.filter((change) => change.fileId === garden.id)).toHaveLength(1);
+  expect(drained.changes.filter((change) => descendants.some((note) => note.id === change.fileId))).toEqual([]);
+  expect(drained.newStartPageToken).toBe(throughCursor);
+  for (const note of descendants) expect((await drive.evidence(note.id))?.file.modifiedTime).toBe(state.files[note.id]?.version);
+  const vanished = ['trashed', 'removed', 'outside'].includes(mode);
+  const requests: Array<{ method: string; url: URL }> = [];
+  let discovery: typeof requests = [];
+  let feedReads = 0;
+  const sent: Sent[] = [];
+  const original = maintenance.withMaintenance;
+  const planned = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest) => {
+    const listed = await adapter.planReads().listAll(root);
+    // The change happened before the planner listed: it cannot recover ancestry from the old listing.
+    const ix = VaultIndex.build(root, listed);
+    expect(ix.pathOf(garden.id)).toBe(vanished ? undefined
+      : mode === 'renamed' ? 'Resources/Zinnia' : mode === 'nested' ? 'Resources/Reading/Gardening' : 'Resources/Gardening');
+    for (const note of descendants) expect(listed.some((f) => f.id === note.id)).toBe(!vanished);
+    const from = requests.length;
+    const maintained = await original(adapter, manifest);
+    discovery = requests.slice(from);
+    return maintained;
+  });
+  const observe = trace(drive, root, sent);
+  const around = (fetch: typeof globalThis.fetch): typeof globalThis.fetch => {
+    const traced = observe(fetch);
+    return async (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      if (url.origin === 'https://www.googleapis.com') requests.push({ method: (init?.method ?? 'GET').toUpperCase(), url });
+      const response = await traced(input, init);
+      if (url.pathname !== '/drive/v3/changes') return response;
+      feedReads++;
+      const feed = await response.json() as { newStartPageToken: string; changes: Array<{
+        fileId: string; removed: boolean; file?: { parents: string[]; trashed: boolean };
+      }> };
+      expect(feed.newStartPageToken).toBe(throughCursor);
+      expect(feed.changes.find((change) => change.fileId === garden.id)?.file).toMatchObject({
+        parents: mode === 'outside' ? [outside.id] : mode === 'nested' ? [reading.id] : garden.parents,
+        trashed: mode === 'trashed' || mode === 'removed',
+      });
+      if (mode === 'removed') feed.changes = feed.changes.map((change) => change.fileId === garden.id
+        ? { fileId: garden.id, removed: true } : change);
+      return new Response(JSON.stringify(feed), { status: response.status, headers: response.headers });
+    };
+  };
+  vi.setSystemTime(AT + 1);
+  const run = await runOnDrive(c, drive, root, { admission: { ...admission, id: 'folder-feed', at: AT + 1 }, pacing, around,
+    answerStart: { scope: 'all', requestId: 'folder-feed' } }, 2);
+  expect(planned).toHaveBeenCalledTimes(1);
+  planned.mockRestore();
+  expect(feedReads, `${mode}: main drains the real feed once`).toBe(1);
+  const after = JSON.parse(run.after['.bower/retrieval.json'] ?? 'null') as RetrievalFile;
+  expect(after).not.toBeNull();
+  return { ...baseline, run, after, throughCursor, requests, discovery, sent };
+}
+
+function assertFolderRefresh(result: Awaited<ReturnType<typeof runFolderChange>>, mode: FolderChange) {
+  const { run, after, throughCursor, state, book, descendants, discovery, requests, sent } = result;
+  const check = mode === 'live control' ? expect : expect.soft;
+  check(run.code, `${mode}: folder changes never fail main`).toBe(0);
+  check(run.wire?.statuses.at(-1)?.phase, `${mode}: main reaches done`).toBe('done');
+  check(after.cursor, `${mode}: cursor commits the state reflecting the drained feed`).toBe(throughCursor);
+  expect(after.files[book.id], `${mode}: unrelated indexed note survives by id`).toEqual(state.files[book.id]);
+  // Exactly retrieval media, changes feed and the old index media. No snapshot/media re-reads.
+  check(discovery.length, `${mode}: maintenance discovery makes exactly three Drive calls`).toBe(3);
+  check(requests.filter((r) => r.method === 'GET' && r.url.searchParams.get('alt') === 'media'
+    && descendants.some((note) => r.url.pathname === `/drive/v3/files/${note.id}`)),
+  `${mode}: the whole run makes zero descendant media reads`).toEqual([]);
+  check(sent.filter((s) => s.path === '.bower/retrieval.json'), `${mode}: one state/cursor write`).toHaveLength(1);
+  check(JSON.parse(sent.find((s) => s.path === '.bower/retrieval.json')?.text ?? 'null') as unknown,
+    `${mode}: the cursor and refreshed state are the same stored write`).toEqual(after);
+  check(sent.filter((s) => s.path === '.bower/index.md'), `${mode}: one projection rebuild`).toHaveLength(1);
+  if (mode === 'live control') {
+    for (const note of descendants) expect(after.files[note.id]).toEqual(state.files[note.id]);
+    expect(run.after['.bower/index.md']).toBe(result.index);
+  }
+}
+
+it('B1a contract: round 4 1: a folder binned before planning drops every indexed descendant', async () => {
+  assertFolderRefresh(await runFolderChange('live control'), 'live control');
+  for (const mode of ['trashed', 'removed'] as const) {
+    const result = await runFolderChange(mode);
+    assertFolderRefresh(result, mode);
+    for (const file of [result.garden, result.seasons, result.spring, ...result.descendants]) {
+      expect.soft(result.after.files[file.id], `${mode}: retrieval drops vanished subtree id ${file.id}`).toBeUndefined();
+      expect.soft(JSON.stringify(result.after), `${mode}: no stored ancestry retains vanished id ${file.id}`)
+        .not.toContain(JSON.stringify(file.id));
+    }
+    for (const note of result.descendants) {
+      expect.soft(result.run.after['.bower/index.md'], `${mode}: projection drops ${note.name}`)
+        .not.toContain(`[[${note.name.replace(/\.md$/, '')}]]`);
+    }
+    expect(result.run.after['.bower/index.md']).toContain('[[Book]]');
+  }
+});
+
+it('B1a contract: round 4 2: a folder moved outside drops its indexed subtree and commits the cursor', async () => {
+  assertFolderRefresh(await runFolderChange('live control'), 'live control');
+  const result = await runFolderChange('outside');
+  assertFolderRefresh(result, 'outside');
+  for (const file of [result.garden, result.seasons, result.spring, ...result.descendants]) {
+    expect.soft(result.after.files[file.id], `outside: retrieval drops subtree id ${file.id}`).toBeUndefined();
+    expect.soft(JSON.stringify(result.after), `outside: no stored ancestry retains subtree id ${file.id}`)
+      .not.toContain(JSON.stringify(file.id));
+  }
+  for (const note of result.descendants) {
+    expect.soft(result.run.after['.bower/index.md'], `outside: projection drops ${note.name}`)
+      .not.toContain(`[[${note.name.replace(/\.md$/, '')}]]`);
+    expect(await result.drive.readText(note.id), 'moving out preserves the actual note').toContain('summary:');
+  }
+  expect(result.run.after['.bower/index.md']).toContain('[[Book]]');
+});
+
+it('B1a contract: round 4 3: a renamed folder updates descendant paths and index order without media reads', async () => {
+  assertFolderRefresh(await runFolderChange('live control'), 'live control');
+  const result = await runFolderChange('renamed');
+  assertFolderRefresh(result, 'renamed');
+  for (const note of result.descendants) {
+    const old = result.state.files[note.id];
+    expect.soft(result.after.files[note.id], `rename recomputes descendant ${note.id} from state`).toEqual({
+      ...old, path: old?.path.replace('Resources/Gardening/', 'Resources/Zinnia/'),
+    });
+  }
+  const index = result.run.after['.bower/index.md'] ?? '';
+  expect(result.index?.indexOf('[[Plot]]')).toBeLessThan(result.index?.indexOf('[[Book]]') ?? -1);
+  for (const note of result.descendants) {
+    const link = `[[${note.name.replace(/\.md$/, '')}]]`;
+    expect(index).toContain(link);
+    expect.soft(index.indexOf('[[Book]]'), `rename regroups ${note.name} after Reading`).toBeLessThan(index.indexOf(link));
+  }
+});
+
+it('B1a contract: round 4 4: an inside folder move updates recursive paths and regroups without media reads', async () => {
+  assertFolderRefresh(await runFolderChange('live control'), 'live control');
+  const result = await runFolderChange('nested');
+  assertFolderRefresh(result, 'nested');
+  for (const note of result.descendants) {
+    const old = result.state.files[note.id];
+    expect.soft(result.after.files[note.id], `inside move recomputes descendant ${note.id} from state`).toEqual({
+      ...old, path: old?.path.replace('Resources/Gardening/', 'Resources/Reading/Gardening/'),
+    });
+  }
+  const index = result.run.after['.bower/index.md'] ?? '';
+  expect(result.index?.indexOf('[[Plot]]')).toBeLessThan(result.index?.indexOf('[[Book]]') ?? -1);
+  for (const note of result.descendants) {
+    const link = `[[${note.name.replace(/\.md$/, '')}]]`;
+    expect(index).toContain(link);
+    expect.soft(index.indexOf('[[Book]]'), `destination direct note precedes moved ${note.name}`).toBeLessThan(index.indexOf(link));
+  }
+});
