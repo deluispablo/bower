@@ -326,7 +326,7 @@ export function refreshed(inputs: Maintain['inputs'], outcomes: readonly Outcome
     if (effect.kind === 'create-text' || effect.kind === 'edit-text') {
       const path = ix.pathOf(f.fileId);
       if (path && !isHidden(path) && path.endsWith('.md') && path.split('/')[0] !== 'Inbox') files[f.fileId] = {
-        path, version: f.modifiedTime, summary: retrievalSummary(path, effect.text), coverage: { kind: 'prefix', bytes: 4096 },
+        path, version: f.modifiedTime, summary: retrievalSummary(path, effect.text), mocChecked: true, coverage: { kind: 'prefix', bytes: 4096 },
         ...(mocSnapshot(effect.text) ? { moc: mocSnapshot(effect.text) ?? undefined } : {}),
       };
     }

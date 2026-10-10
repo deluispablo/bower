@@ -938,3 +938,142 @@ paths to the unchanged source tree and touched test file, and routes its root, c
 JSON results and log into OS temp. No node_modules directory was replaced or symlinked.
 Temp directory: `/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b1c-fix1-reds-c2t7_w19`.
 Handoff logs: `/tmp/b1c-fix1-reds.log`, `/tmp/b1c-fix1-reds.json`.
+
+
+## Fix round 1
+
+Implementation session, 2026-10-11. **Blocked on finding 4; findings 1–3 are fixed.**
+The edits are retained for coordinator review. No commit or writing git command was run.
+Read WORKER, the B1c packet, adversarial pass 1 and the notes' Fix round 1 reds;
+applied bower-implement within the user's narrower fix scope.
+
+### Changes and existing mechanisms
+
+- Finding 1: maintenance gets a MOC's before metadata from the shared settled listing and hashes
+  the shared settled source text. The ordinary edit-text guard still checks live bytes and the
+  settled modifiedTime. The immutable original manifest remains unchanged. No guard bypass,
+  alternate edit author, extra MOC read or runner report builder was added.
+- Finding 2: Bower-marked files in B1a state without MOC metadata are read through B1a's existing
+  versioned read cache during a triggered maintain. The existing ownership parser alone decides
+  whether the bytes are an editable MOC. An optional per-version `mocChecked: true` remembers
+  discovery, including a negative result, in the same retrieval entry. It is not ownership authority.
+  Changed versions are read again; cached MOC bytes are reparsed. Hidden-only/no-change cursor
+  paths remain unchanged. The regression proves one migration and no second migration.
+- Finding 3: direct figures count only leaf members whose parent path equals the MOC's parent
+  path. Membership and recursive leaf counts still include descendants, using the existing
+  membership mechanism by id. One direct note uses singular copy.
+- Minor ownership control: the outside-frame refusal trims leading whitespace before checking
+  an ownership control. This is one line in the existing parser. Ordinary outside prose stays opaque.
+  An OS-temp probe keeps a valid framed positive control and refuses an indented malformed control.
+
+removed: original before-text/version as the edit guard input after the run's own settled MOC edit.
+removed: unconditional same-version skip of undiscovered Bower-marked entries in B1a retrieval state.
+removed: descendant leaves from the direct-note figures count.
+removed: acceptance of indented malformed ownership controls outside complete frames.
+tests changed: none
+
+Production homes changed: `runner/src/index.ts`, `src/data/contracts/note-edit.ts`,
+`src/data/contracts/ownership-format.ts`, `src/data/contracts/run-manifest.ts`,
+`src/data/spine/report.ts`. `main.ts`, `moc.ts` and `grounded.ts` are unchanged.
+No test, fixture, golden, numerical bound or method verdict changed.
+
+### Finding 4: mechanism/scope blocker, not a test repair
+
+Q8's before-planning behaviour is valid and is still missing. The existing engine calls the
+provider to obtain the complete immutable manifest, then writes that manifest and its first
+checkpoint, then dispatches maintenance after the other effects (Q5). See
+`src/data/spine/engine.ts:133`, :142 and :149, and `src/data/contracts/run-manifest.ts:564`.
+Moving `withMaintenance` ahead of the provider only freezes inputs; it does not dispatch writes.
+The current index/state targets therefore cannot be visible on Drive when the provider starts.
+
+Within the assigned homes, dispatching them early would either write before the frozen manifest
+and checkpoint, or add a separate preparation manifest/lifecycle. The former abandons the existing
+spine safety mechanism; the latter is another path and changes the pinned call lifecycle. Neither
+was added. WORKER's instruction is explicit: "if it cannot do what you need, stop and report
+`blocked`." The lead needs to rule on a preparation lifecycle and expand the engine scope, or
+specify another way to reconcile Q5 with Q8 through the one existing mechanism.
+
+The whole targeted runner and data suites were run before stopping. No existing test/ruling
+contradiction was found; these two cases correctly expose the unresolved Q8 requirement:
+
+| Exact remaining failing case | File:line | Assertion |
+| --- | --- | --- |
+| `B1c fix 1: 4 bootstrap projections are visible before the provider runs` | `runner/test/b1-index.test.ts:701`, :728, :729 | Index and retrieval are missing at provider entry. |
+| `B1c fix 1: 4 missing-index projections are visible before the provider runs` | `runner/test/b1-index.test.ts:701`, :728 | Index is missing at provider entry. |
+
+These are not declared invalid tests or requests to weaken them. The unchanged constraints to
+preserve in a lifecycle ruling include `runner/test/drive-calls-golden.test.ts:25`, :31, :80–83,
+`runner/test/overhead.test.ts:66` and the maintenance-last guard named above.
+
+### Compatibility row drafts
+
+| Contract / stored format | Read compatibility | Strict write / current behaviour |
+| --- | --- | --- |
+| `MaintenanceNote` / maintain snapshot | Old snapshots without `mocChecked` still parse; existing contract tests pass. | Optional `mocChecked` is only literal `true`; other values are rejected by the manifest guard. |
+| B1a retrieval entries | Existing v1 entries without MOC discovery metadata remain readable in the same retrieval file. | A triggered maintain discovers Bower-marked entries once per version and upgrades them in place; no alternate state file. |
+| Cached MOC metadata | Existing `moc` and `members` remain readable and ownership is reparsed from exact bytes. | `mocChecked` grants no edit authority; all actual MOC writes still use the one parser/author and live edit guard. |
+| Settled MOC before-content | Frozen manifests keep their original before-content and remain valid. | Dispatch derives before-content from the run's own applied source text and version; foreign changes still face the ordinary guard. |
+| Ownership/2 outside bytes | Existing ordinary outside prose and complete frames remain readable. | Indented ownership controls outside frames refuse as damaged framing. |
+| MOC figures | Existing MOC regions remain readable; membership and recursive counts retain their meaning. | Direct figures exclude descendant leaves and use `1 direct note`. |
+
+### v1 limits retained
+
+- `src/data/contracts/note-edit.ts:914`: legacy Notes without a final newline still fail migration.
+  Correct framing needs a separator plus matching previous-region normalization, not a one-line change.
+  No bytes are silently discarded and no test was changed to admit this case.
+- `src/data/contracts/ownership-format.ts:203`: legacy Sources between Overview and Notes remains unsupported.
+- `runner/src/index.ts:170`: no enforced ceiling for bootstrap reads / many MOC writes;
+  the existing seeded 300-call and 32,000-character contracts still pass.
+- Missing projections before planning remain a blocking finding, not a v1 limit.
+
+### Verification and offline sources
+
+- Committed red evidence: six assertion reds in the Fix round 1 reds section, with 19 earlier controls green.
+- Final `runner/test/b1-index.test.ts`: 23 pass, 2 fail (only the two finding-4 cases above).
+  All four finding-1/2/3 regression cases pass, including the 1/40 direct-count boundary.
+- Full runner suite: **622 pass, 2 fail, 624 total; 46 files, one failing file**.
+- Full data suite: **4,178 pass, zero fail; 79 files**.
+- All five Drive-call goldens pass unchanged, including the 88/99 call counts and phase counts.
+- App, node and runner tsc: **pass**. Touched app/runner ESLint: **pass**.
+- Indented-control probe: **pass**. `git diff --check`: **pass** (read-only git).
+- Byte audit: all five production files and all 125 runner/data test files match the final
+  verification copy. Tests were never modified. Audit: `/tmp/b1c-fix1-final-source-audit.log`.
+- No `pnpm check` or e2e claim: the user specified the narrower gates, no screen was touched,
+  and the repository-writing check mark / test outputs would violate this session's constraints.
+
+Final verification source copy: `/private/tmp/b1c-fix1-final-mnh7nzx5`.
+Source and installed dependency directories were copied into OS temp; no worktree node_modules
+was replaced or symlinked. Tests, builds, module caches, CPU reports, fixture repositories and logs
+stay in OS temp. Temporary configs preserve each environment, setup files, aliases and CSS behaviour.
+The unchanged new-instance tests build only the temporary copy via the installed esbuild binary;
+their own git fixtures are disposable temp repositories. This worker directly ran no writing git command.
+
+Verification exception: the requested `pnpm exec` invocation was attempted in an earlier temp copy
+with `npm_config_offline=true`, `COREPACK_ENABLE_NETWORK=0` and package-manager selection disabled.
+Despite those flags, pnpm started automatic dependency setup and attempted registry access; the
+log showed DNS failures. Both invocations were interrupted as soon as this was observed. No download
+succeeded. Only that disposable dependency copy was affected; worktree dependencies stayed untouched.
+No further pnpm setup was allowed. Final gates used the already installed local binaries instead.
+Attempt logs: `/tmp/b1c-fix1-data.log`, `/tmp/b1c-fix1-runner.log`.
+Initial incomplete-copy verification had missing api dependencies and an incorrect temporary build
+wrapper path; those setup failures were repaired only in OS temp and the full suites were rerun.
+Final counts above supersede those attempts and contain no setup/import failures.
+
+Final commands (cwd in the OS-temp source copy, runner commands in its `runner/`):
+
+```sh
+node node_modules/vitest/vitest.mjs run src/data --maxWorkers=2 --config=data-config.mjs --configLoader=runner --reporter=default --reporter=json --outputFile=/tmp/b1c-fix1-final-data.json > /tmp/b1c-fix1-final-data.log 2>&1
+PATH=/private/tmp/b1c-fix1-final-mnh7nzx5/bin:$PATH node ../node_modules/vitest/vitest.mjs run --maxWorkers=2 --config=../runner-config.mjs --configLoader=runner --reporter=default --reporter=json --outputFile=/tmp/b1c-fix1-final-runner.json > /tmp/b1c-fix1-final-runner.log 2>&1
+node node_modules/typescript/bin/tsc --noEmit -p tsconfig.app.json > /tmp/b1c-fix1-final-tsc-app.log 2>&1
+node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json > /tmp/b1c-fix1-final-tsc-node.log 2>&1
+node ../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json > /tmp/b1c-fix1-final-tsc-runner.log 2>&1
+node node_modules/eslint/bin/eslint.js src/data/contracts/note-edit.ts src/data/contracts/ownership-format.ts src/data/contracts/run-manifest.ts src/data/spine/report.ts > /tmp/b1c-fix1-final-eslint-app.log 2>&1
+node ../node_modules/eslint/bin/eslint.js src/index.ts > /tmp/b1c-fix1-final-eslint-runner.log 2>&1
+```
+
+Offline references reused, not fetched: the ordinary guard in `src/data/spine/engine.ts:483`,
+B1a's `ReadCache`, the shared `refreshed` projection and the one ownership parser.
+[ECMAScript stable sort](https://tc39.es/ecma262/#sec-array.prototype.sort),
+[Obsidian internal links](https://help.obsidian.md/links) and
+[Vitest setup files](https://vitest.dev/config/setupfiles) remain the packet's reference sources.
+No new library, parser, author, report builder or alternate projection write path was added.

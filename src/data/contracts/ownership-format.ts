@@ -261,7 +261,7 @@ export function parseOwnership(bytes: Uint8Array): OwnershipResult {
       const owner = owners[next];
       if (owner && line.text === `<!-- bower:ownership/2 begin ${owner} -->`) {
         active = owner; start = line.after;
-      } else if (line.text.startsWith('<!-- bower:ownership')) return damaged();
+      } else if (line.text.trimStart().startsWith('<!-- bower:ownership')) return damaged();
       // Outside bytes are opaque and grant no payload or task authority. Never interpret their Markdown.
     }
   }

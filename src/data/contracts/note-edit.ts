@@ -1113,9 +1113,9 @@ export function mocEdit(id: string, files: Notes, members: ReadonlyMap<string, s
   if (!note?.moc) return null;
   const ids = members.get(id) ?? [];
   const links = noteLinks(files);
-  const direct = ids.filter((member) => !members.has(member)).length;
+  const direct = ids.filter((member) => !members.has(member) && folderOf(files[member]?.path ?? '') === folderOf(note.path)).length;
   const regions = {
-    'moc-figures': `## Figures\n\n${direct} direct notes; ${leafCount(id, members)} notes in all.\n`,
+    'moc-figures': `## Figures\n\n${direct} direct ${direct === 1 ? 'note' : 'notes'}; ${leafCount(id, members)} notes in all.\n`,
     'moc-members': `## Notes\n\n${ids.map((member) => `- [[${links.get(member)}]] — ${files[member]?.summary}\n`).join('')}`,
   };
   const changes: Change[] = (['moc-figures', 'moc-members'] as const).map((region) => ({

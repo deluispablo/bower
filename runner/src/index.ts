@@ -1,6 +1,6 @@
 /** Derived maintenance uses the manifest, its settled outcomes and the ordinary fenced effects. */
 import { sha256Hex } from '../../src/data/contracts/hashes';
-import type { EffectV2, Maintain, MaintenanceNote, SeenFile } from '../../src/data/contracts/run-manifest';
+import type { EffectV2, Maintain, MaintenanceNote, SeenFile, VerifiedContent } from '../../src/data/contracts/run-manifest';
 import type { DriveFile } from '../../src/data/drive/drive-api';
 import { driveEffects, type Effects, type Settled } from '../../src/data/spine/engine';
 import { refreshed, retrievalSummary } from '../../src/data/spine/report';
@@ -171,7 +171,8 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
     const cached = state?.files[f.id];
     let text: string | null;
     try {
-      text = cached?.version === f.modifiedTime ? null : await drive.readListedText(f);
+      const discover = cached?.moc === undefined && cached?.mocChecked !== true && f.appProperties?.by === 'bower';
+      text = cached?.version === f.modifiedTime && !discover ? null : await drive.readListedText(f);
     } catch (error) {
       // Drive also reports a trashed media read as not-found; other failures still stop the run.
       if (!(error instanceof BowerError) || error.code !== 'not-found') throw error;
@@ -181,6 +182,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
     }
     snapshot[f.id] = cached?.version === f.modifiedTime ? { path, version: cached.version, summary: cached.summary, coverage: cached.coverage }
       : { path, version: f.modifiedTime, summary: text === null ? '(no summary)' : retrievalSummary(path, text), coverage: { kind: 'prefix', bytes: 4096 } };
+    if (text !== null || cached?.mocChecked === true) snapshot[f.id] = { ...snapshot[f.id] as MaintenanceNote, mocChecked: true };
     // Optional metadata in an old retrieval file is never ownership authority: derive it again from its bytes.
     const moc = text === null ? typeof cached?.moc?.text === 'string' && mocSnapshot(cached.moc.text) : mocSnapshot(text);
     if (moc) snapshot[f.id] = { ...snapshot[f.id] as MaintenanceNote, moc,
@@ -263,7 +265,9 @@ export function maintenanceEffects(drive: RunnerDrive): Effects {
       // Retrieval is the commit record: every MOC and projection must settle before it is sent.
       const targets = [...(op.effect.inputs.targets ?? [])].sort((a, b) => Number(a.path === SYSTEM.retrieval) - Number(b.path === SYSTEM.retrieval));
       for (const target of targets) {
-        const before = op.effect.inputs.listing?.find((f) => f.fileId === target.fileId);
+        const frozen = op.effect.inputs.listing?.find((f) => f.fileId === target.fileId);
+        const settled = state.listing?.find((f) => f.id === target.fileId);
+        const before = settled ? seen(settled) : frozen;
         const owned = !(RUNNER_WRITES as readonly string[]).includes(target.path);
         const edit = owned ? mocEdit(target.fileId, state.files, members) : null;
         if (owned && !edit) continue;
@@ -279,8 +283,12 @@ export function maintenanceEffects(drive: RunnerDrive): Effects {
         }
         const ev = before || replaying.has(op.operationId) ? await drive.evidence(target.fileId) : null;
         const content = { encoding: 'utf8' as const, size: new TextEncoder().encode(text).length, sha256: await rawHash(text) };
-        const effect: EffectV2 = owned && before && target.beforeContent && edit ? { kind: 'edit-text', before,
-          path: target.path, beforeContent: target.beforeContent, changes: edit.changes, beforeText: state.files[target.fileId]?.moc?.text, text, content }
+        const beforeText = state.files[target.fileId]?.moc?.text;
+        const beforeContent: VerifiedContent | undefined = owned && before && beforeText !== undefined ? { encoding: 'utf8' as const,
+          size: new TextEncoder().encode(beforeText).length, sha256: await rawHash(beforeText),
+          provenance: drive.provenance, observedModifiedTime: before.modifiedTime } : target.beforeContent;
+        const effect: EffectV2 = owned && before && beforeContent && edit ? { kind: 'edit-text', before,
+          path: target.path, beforeContent, changes: edit.changes, beforeText, text, content }
           : before && target.beforeContent ? { kind: 'write-runner-json' as const, before, path: target.path as typeof SYSTEM.index | typeof SYSTEM.retrieval,
           beforeContent: target.beforeContent, text, content }
           : { kind: 'create-text' as const, parent: { fileId: target.parentId }, name: target.path.split('/').at(-1) ?? '', createKey: op.operationId, purpose: 'runner-json' as const, text, content };
