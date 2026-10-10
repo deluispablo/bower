@@ -111,7 +111,7 @@ export class DriveVault implements VaultSource {
   protected readonly rootId: () => Promise<string>;
   protected readonly runningPiles: () => ReadonlySet<string>;
   protected readonly journal: Journal;
-  /** The ids reserved for the creates a person means to make, until each is confirmed (`write-once.ts`). */
+  /** The ids reserved for the creates a person means to make, until each intent is complete (`write-once.ts`). */
   private readonly intended = new Intended<Holder & { loose?: DriveFile }>();
   /** The words each try of a kept pile-note create sent, so a retry writes only over a note that still holds them. */
   private readonly pileNoteSent = new Map<string, string[]>();
@@ -1100,10 +1100,12 @@ export class DriveVault implements VaultSource {
       // Keep the conversion's original read with its create, in the existing holder. A retry uses its first intent.
       const fresh = pendingFolder?.sent ?? sentAs(f.parents[0] ?? (await this.rootId()), freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text })));
       this.intended.keep(folderKey, pendingFolder ?? { loose: f });
-      const folder = await this.intended.make(folderKey, this.drive, fresh, (made, sent) => makeFolder(this.drive, this.drive, { ...sent, props: { [PROP.pile]: id }, id: made }));
-      folderPath = join('Inbox', folder.name);
-      ix.put(folder);
-      ix.put(await this.once(f, `move:${folder.id}`, (op, fence) => this.drive.update(f.id, { addParent: folder.id, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}), appProperties: op }, { fence })));
+      await this.intended.make(folderKey, this.drive, fresh, (made, sent) => makeFolder(this.drive, this.drive, { ...sent, props: { [PROP.pile]: id }, id: made }), async (folder) => {
+        folderPath = join('Inbox', folder.name);
+        ix.put(folder);
+        // The conversion's holder stays until its loose-file move lands, including a retry after a failed move.
+        ix.put(await this.once(f, `move:${folder.id}`, (op, fence) => this.drive.update(f.id, { addParent: folder.id, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}), appProperties: op }, { fence })));
+      });
     } else if (text) {
       const name = freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text }), pile.path);
       if (name !== nameOf(pile.path)) {

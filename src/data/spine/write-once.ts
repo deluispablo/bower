@@ -332,16 +332,20 @@ export class Intended<H extends Holder = Holder> {
     this.held.delete(key);
   }
 
-  /** One intended create kept in this page's memory, by its key (`makeOnce`), with what it was first sent as. */
-  async make(this: Intended<Holder>, key: string, w: Pick<Makes, 'generateIds'>, fresh: Sent, create: (id: string, sent: Sent) => Promise<DriveFile>): Promise<DriveFile> {
+  /**
+   * One intended create kept in this page's memory, by its key (`makeOnce`), with what it was first sent as.
+   * When a following step completes the intent, keep its holder until that step succeeds too.
+   */
+  async make(this: Intended<Holder>, key: string, w: Pick<Makes, 'generateIds'>, fresh: Sent, create: (id: string, sent: Sent) => Promise<DriveFile>, finish?: (made: DriveFile) => Promise<void>): Promise<DriveFile> {
     const h = this.held.get(key) ?? {};
     this.held.set(key, h);
     try {
       const made = await makeOnce(h, w, fresh, create);
+      await finish?.(made);
       this.held.delete(key);
       return made;
     } catch (e) {
-      // Still not known whether it landed, or not taken for now: the id stays for the next try. Refused: let go.
+      // Create or following step still pending: the holder stays for the next try. A refused create lets it go.
       if (h.reserved === undefined) this.held.delete(key);
       throw e;
     }
