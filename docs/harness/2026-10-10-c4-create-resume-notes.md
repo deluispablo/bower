@@ -171,3 +171,72 @@ which cites https://stripe.com/docs/api/idempotent_requests for keeping the firs
 No network, git write, production change, pnpm check or e2e. The coordinator owns commits.
 Compatibility: tests and notes only; no stored format or runtime behavior changed.
 Status: red delivered; addendum 18 implementation remains for the fresh implementation session.
+
+## Re-plan (addendum 18)
+
+The fix is in src/data/spine/write-once.ts and src/data/vault/drive-vault.ts. The coordinator owns
+the fix commit, then this notes commit. No git write command, network, pnpm check or e2e was run.
+
+Intent shape and home:
+
+- src/data/spine/write-once.ts:308: Conversion keeps the original loose DriveFile, first text and folder
+  properties, folder and note holders with reserved ids and first Sent values, and the landed folder,
+  moved file and note. The note name is chosen with the folder name before any conversion send.
+- src/data/spine/write-once.ts:332: the conversion is one entry in Intended's existing held map,
+  keyed by pile-conversion:<pile id>. There is no separate conversion map or reservation mechanism.
+- src/data/spine/write-once.ts:379: Intended.convert owns reservation, recovery and progress for all
+  three steps. reserveFor reserves both ids at :388; the note's first place is that reserved folder id.
+  Fresh names and words are evaluated only once, by the first-start factory.
+- src/data/vault/drive-vault.ts:1066: updatePile finds the pending conversion before folder-edit selection.
+  Its original loose file supplies the move fence, even when refresh lists the half-made folder instead.
+  The conversion's result updates the index only after all three steps are confirmed.
+
+Resume order:
+
+1. Folder (:392-395): madeAt reads by the folder's reserved id and checks its first name/place, including
+   the Bin. A found folder is used without a create send. An already confirmed folder is checked again
+   before further effects; if it disappeared, it is refused rather than created again.
+2. Loose-file move (:396): skip a confirmed move. An interrupted move uses the original read with the
+   existing stamped, fenced DriveVault.once call (drive-vault.ts:1087). That call recognizes an already
+   landed move and sends no second update. Name/place changes elsewhere remain refusals.
+3. Note (:397-398): madeAt reads by the note's reserved id, checking first name/place and first words.
+   A found note is used without a create send; otherwise makeText sends the same reserved id and intent.
+4. Completion (:399): forget the whole intent only after the folder, move and note have landed.
+   Unknown outcomes, lost recovery reads and transient failures retain both ids, first names and progress.
+
+Compatibility: the existing terminal-refusal rule remains in force (:402-403, reusing releases at :276).
+A conversion permanently refused because its folder changed elsewhere ends on that refusal, with nothing
+sent into the changed folder. A later press may start a new intent, as the unchanged existing test
+`a pile folder whose create landed and then moved is refused on retry` requires at drive-vault.test.ts:3913.
+The first full data run exposed this compatibility requirement; preserving the existing rule made it green.
+Ordinary pile-note edits and retries in already-existing folders retain their original behavior and keeper.
+No stored device format changed: this intent lives in the existing page-memory port and survives refresh().
+
+removed: src/data/vault/drive-vault.ts:115: Holder & { loose?: DriveFile } conversion context on a per-create holder.
+removed: src/data/vault/drive-vault.ts (old :1066-1074): pile-folder key and per-folder pending/kept branching.
+removed: src/data/vault/drive-vault.ts (old :1092-1109): per-step folder holder, completion callback and early release.
+removed: src/data/spine/write-once.ts (old :335-344): Intended.make's optional finish callback and its await.
+removed: no tests, goldens, contract numbers or ordinary existing-folder pile-note retry logic.
+
+tests changed: none
+
+Research: reused the existing write-once home and the lead's one-intent saga ruling, with the local
+write-once.ts:2-24 references to [Stripe idempotent requests](https://stripe.com/docs/api/idempotent_requests)
+and RFC 9110 sections 9.2.2 and 13.1.1. Reservation, create landing and move landing remain reserveFor,
+madeAt/makeFolder/makeText and DriveVault.once/updateByStamp; no second landing check was introduced.
+No network research was performed.
+
+Evidence and logs:
+
+- Before the fix, the unchanged six-row table had five assertion failures and one pass:
+  `pnpm exec vitest run src/data/vault/drive-vault.test.ts -t 'a pile conversion interrupted at any step resumes there and keeps its first names' > /tmp/resume-a18-before.log 2>&1`.
+  Folder/move rows sent two folder creates; the midnight note row renamed the folder.
+- After the re-plan, the same targeted table passed, exit 0: /tmp/resume-a18-red-green.log.
+  The final full data run also passes all six unchanged rows, the earlier midnight/move reds and the create property.
+- `pnpm exec tsc -p tsconfig.app.json > /tmp/resume-a18-tsc.log 2>&1`: final exit 0.
+- `pnpm exec vitest run src/data > /tmp/resume-a18-unit.log 2>&1`: final exit 0.
+- `pnpm -C runner exec vitest run > /tmp/resume-a18-runner.log 2>&1`: exit 0.
+  runner/test/drive-calls-golden.test.ts is unchanged and asserts exactly 78 (:21, :23) and 88 (:69).
+- Read-only git diff --check: exit 0. Only failure sections of test logs were read.
+
+Status: implementation and the requested local runs are green; coordinator commits and independent review remain.
