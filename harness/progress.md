@@ -300,3 +300,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-10: c4-e2e-sync passes — c4-e2e-sync passes again: verify names surviving tests after New note was removed (c5-remove-new-note)
 - 2026-10-10: c5-remove-new-note passes — c5-remove-new-note passes: New note removed everywhere; New folder and Add unchanged (P4-82 PASS, designer verified)
 - 2026-10-10: namesheet-names passes — namesheet-names passes again: verify names surviving tests after New note was removed (c5-remove-new-note)
+- 2026-10-10: b1b-ports passes — b1b-ports passes: prefix read, changes feed with parents scope, fake parity (P4-83 PASS)
