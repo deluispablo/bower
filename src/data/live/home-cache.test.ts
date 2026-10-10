@@ -236,7 +236,7 @@ describe('Home reads only the records of the piles in the inbox (TL-P4-16 b)', (
     expect(stamped, 'stamped pile records read').toEqual([]);
     const unstamped = records.filter((k) => !stamped.includes(k));
     expect(unstamped, `${out.calls} Drive calls, ${records.length} pile records read`).toHaveLength(1);
-    expect(unstamped[0]).toMatch(/^readBytes \.bower\/piles\/declaration-/);
+    expect(unstamped[0]).toMatch(/^readBytes Bower\/\.bower\/piles\/declaration-/);
     expect(calls[unstamped[0] ?? ''], 'current unstamped declaration reads').toBe(1);
   }, 60_000);
 

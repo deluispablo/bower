@@ -330,3 +330,50 @@ Verification:
 
 removed: none.
 Left out: test verification (local Vitest missing), production changes, full gates and coordinator commits.
+
+## Fix round 1 reds
+
+Independent red-owning session, TL-P4-29, 2026-10-10. Unchanged production HEAD:
+`1decc02781d1ddc19d83e7b3d2a14d086a77a570`.
+Finding: BLOCK 1 in `2026-10-10-codex-orphan-pile-count-data-adversarial.md`.
+Only the two test files and this requested notes file changed. No network or git-writing command.
+
+tests changed: src/data/live/home-cache.test.ts: repair 2 matches the fake's rooted Bower/.bower/piles/declaration- path; exactly one unstamped byte read and every stamped-read assertion remain intact.
+tests changed: src/data/orphan-pile-count.test.ts: add the fix 1 context-only failed-Add history-flat regression; all existing assertions, property runs, seeds and bounds are unchanged.
+
+Exact new test:
+`orphan-pile-count-data: fix 1: a failed context-only Add costs the same reads with a small or large change history`.
+
+The regression uses real `DriveVault.addPile` with context text and zero members, refusing
+only the declaration-stamped folder create under the Inbox. Positive controls prove the
+declaration committed, parses as a context-only folder declaration, and has no live anchor.
+Both fixtures contain parser-valid unrelated request records under `.bower/changes/archive`,
+with exact archive populations of 2 and 200. Each reload uses a new `DriveVault` and resets
+the fake Drive counter after fixture setup and positive-control reads.
+
+Cold `piles()` followed by `orphanSummary()` preserves the unknown context-only result
+`{ count: 0, complete: false }`, reads the declaration exactly once, shares the full-read cache,
+and leaves the complete Drive snapshot unchanged. The new assertions require equal total
+Drive reads across history sizes and zero archived byte/text reads, matched by record id.
+No fixed total-call bound was introduced or changed.
+
+At the unchanged production HEAD, the new red fails on the equality assertion:
+`Drive reads with 2 and 200 archived changes: 5 and 203: expected 203 to be 5`.
+Both fixtures reach that assertion after all positive controls and cache/unknown/read-only
+checks pass. The subsequent zero-archive-read assertion remains present for implementation.
+This is an assertion red reproducing BLOCK 1, with no load errors or missing capability.
+
+Verification (offline local dependencies; no install needed):
+- `pnpm --config.verifyDepsBeforeRun=false --config.offline=true exec vitest run src/data/orphan-pile-count.test.ts src/data/live/home-cache.test.ts --maxWorkers=2`
+  exited 1: 22 tests, 21 passed, only the new fix 1 red failed. All 10 Home cache tests pass,
+  including the repaired rooted-path assertion; all 11 existing orphan tests pass.
+- Touched-file ESLint passed; app TypeScript (`tsc -p tsconfig.app.json --noEmit`) passed.
+- `git diff --check` passed. Only failures and the test-output tail were read.
+- Output was redirected to `tmp-logs/fix-round-1-vitest.log`, `fix-round-1-eslint.log`,
+  `fix-round-1-tsc.log`, and `vitest-version.log`; `tmp-logs/` deleted before delivery.
+- Full check/e2e not run for this test-only red repair. Production repair and coordinator
+  commits remain pending; no implementation green or integration mark is claimed.
+
+Sources: the existing fake Drive/cold-vault test pattern and the packet's previously cited
+Google Drive resumable upload and IndexedDB transaction references above. No network research.
+removed: none.

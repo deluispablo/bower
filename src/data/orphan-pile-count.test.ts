@@ -5,6 +5,7 @@ import type { Declaration } from './contracts/pile-declaration';
 import { parsePileDeclaration } from './contracts/pile-declaration';
 import type { Disposition } from './contracts/pile-disposition';
 import { parsePileDisposition } from './contracts/pile-disposition';
+import { isJournalRecord, type JournalRecord } from './contracts/journal-record';
 import { canonicalRecordJson, hashRecordJson } from './contracts/record-json';
 import { FakeDrive } from './drive/fake-drive';
 import type { DriveFile } from './drive/drive-api';
@@ -149,6 +150,73 @@ it('orphan-pile-count-data: orphan folder declaration remains countable after an
   expect(await summary(reader)).toEqual({ count: 1, complete: true });
   expect(create).not.toHaveBeenCalled();
   expect(await f.drive.snapshot()).toBe(before);
+});
+
+it('orphan-pile-count-data: fix 1: a failed context-only Add costs the same reads with a small or large change history', async () => {
+  const measurements: Array<{ calls: number; archivedReads: number }> = [];
+  for (const history of [2, 200]) {
+    const f = await fixture();
+    const system = (await f.drive.get(f.records)).parents[0];
+    if (!system) throw new Error('The positive system folder control failed.');
+    const changes = (await f.drive.createFolder(system, 'changes')).id;
+    const archive = (await f.drive.createFolder(changes, 'archive')).id;
+    const archived = new Set<string>();
+    for (let i = 0; i < history; i++) {
+      const record: JournalRecord = {
+        v: 1, id: `old-change-${i}`, device: 'DEVICE_B', at: AT - i - 1,
+        kind: 'request', what: `Asked Bower to tidy shelf ${i}`, text: `Tidy shelf ${i}`,
+      };
+      expect(isJournalRecord(record)).toBe(true);
+      archived.add((await f.drive.createText(archive, `${record.id}.json`, JSON.stringify(record))).id);
+    }
+    expect((await f.drive.listAll(archive)).filter((file) => !file.folder)).toHaveLength(history);
+    const uploader = page(f);
+    const create = f.drive.createFolder.bind(f.drive);
+    const fail = vi.spyOn(f.drive, 'createFolder').mockImplementation(async (...args) => {
+      if (args[0] === f.inbox && args[2]?.[PROP.declaration]) {
+        throw new BowerError('offline', 'You are offline.');
+      }
+      return create(...args);
+    });
+    try {
+      await expect(uploader.addPile({ text: 'Context from Alex', items: [] })).rejects.toMatchObject({ code: 'offline' });
+    } finally {
+      fail.mockRestore();
+      uploader.dispose();
+    }
+    const copies = await declarations(f);
+    expect(copies).toHaveLength(1);
+    const copy = copies[0];
+    if (!copy) throw new Error('The positive committed context declaration control failed.');
+    const declared = await parsed(f, copy);
+    expect(declared.value.anchor.kind).toBe('folder');
+    expect(declared.value.members).toEqual([]);
+    expect(declared.value.context.kind).toBe('text');
+    expect((await f.drive.listAll(f.root)).filter((file) => file.appProperties?.[PROP.declaration] === declared.value.declarationId)).toEqual([]);
+
+    const before = await f.drive.snapshot();
+    const textReads = vi.spyOn(f.drive, 'readText');
+    const byteReads = vi.spyOn(f.drive, 'readBytes');
+    const reader = page(f);
+    f.drive.calls = 0;
+    expect(await reader.piles()).toEqual([]);
+    const fullReadCalls = f.drive.calls;
+    // No surviving anchor or removal evidence: context-only history remains unknown.
+    expect(await summary(reader)).toEqual({ count: 0, complete: false });
+    expect(f.drive.calls, 'summary shares the cold full read').toBe(fullReadCalls);
+    expect(byteReads.mock.calls.filter(([id]) => id === copy.id)).toHaveLength(1);
+    measurements.push({
+      calls: fullReadCalls,
+      archivedReads: [...textReads.mock.calls, ...byteReads.mock.calls].filter(([id]) => archived.has(id)).length,
+    });
+    expect(await f.drive.snapshot()).toBe(before);
+    reader.dispose();
+    textReads.mockRestore();
+    byteReads.mockRestore();
+  }
+  expect(measurements[1]?.calls, `Drive reads with 2 and 200 archived changes: ${measurements.map((m) => m.calls).join(' and ')}`)
+    .toBe(measurements[0]?.calls);
+  expect(measurements.map((m) => m.archivedReads), 'cold recovery never scans unrelated archived changes').toEqual([0, 0]);
 });
 
 it('orphan-pile-count-data: orphan count merges queued loose work and copied declarations once', async () => {
