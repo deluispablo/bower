@@ -6658,7 +6658,7 @@
     "id": "c5-css-tokens",
     "task": "p4-defects",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "Every var() in src CSS names a defined custom property (a guard test); the two var(--muted) uses become var(--text-muted) (DEFECTS css-unknown-token).",
     "steps": [

@@ -291,3 +291,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-10: shell-page-column passes — harness: shell-page-column passes (P4-75b PASS, designer verified)
 - 2026-10-10: c5-test-margin passes — harness: c5-test-margin passes (P4-76b PASS)
 - 2026-10-10: c5-empty-note-help passes — harness: c5-empty-note-help passes (P4-77 PASS, designer verified)
+- 2026-10-10: c5-css-tokens passes — harness: c5-css-tokens passes (P4-78 PASS, designer verified)
