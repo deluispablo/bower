@@ -8,7 +8,11 @@ import { parseRunCheckpoint, verifyCheckpointChain, type Checkpoint } from '../.
 import { RUNNER_WRITES, isHidden } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import { serializeRules } from '../../src/data/contracts/rules-format';
+import { MOC_REGIONS, parseOwnership } from '../../src/data/contracts/ownership-format';
+import { parseNote } from '../../src/data/contracts/note-format';
+import { stampOf } from '../../src/data/spine/write-once';
 import * as reply from '../src/claude';
+import * as maintenance from '../src/index';
 import { loadCase, type LoadedCase } from '../src/corpus';
 import { AT, redispatchCase, replySequence, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
@@ -53,7 +57,7 @@ it('B1a contract: 2: selection is closed candidate ids with five wants and exact
   expect(validate({ ...words, items: [{ ...words.items[0], wants: ['note-1', 'note-2', 'note-3', 'note-6'] }] }, pinned)).toMatchObject({ ok: false });
 });
 
-interface Sent { path: string; text: string }
+interface Sent { path: string; text: string; stamp?: string }
 /** Observe production sends only. Seeding and snapshot reads never contribute to this trace. */
 function trace(drive: FakeDrive, root: string, sent: Sent[], lost?: { path: string; reached: boolean; enabled: boolean }) {
   return (fetch: typeof globalThis.fetch): typeof globalThis.fetch => async (input, init = {}) => {
@@ -63,14 +67,14 @@ function trace(drive: FakeDrive, root: string, sent: Sent[], lost?: { path: stri
     const body = init.body === undefined || init.body === null ? '' : await new Response(init.body).text();
     const boundary = /^--([^\r\n]+)\r\n/.exec(body)?.[1];
     const parts = boundary ? body.split(`--${boundary}`).slice(1, -1).map((part) => part.slice(part.indexOf('\r\n\r\n') + 4).replace(/\r\n$/, '')) : [];
-    const meta = parts[0];
-    const json = meta ? JSON.parse(meta) as { name?: string; parents?: string[] } : undefined;
+    const meta = parts[0] ?? (!url.pathname.startsWith('/upload/') && body ? body : undefined);
+    const json = meta ? JSON.parse(meta) as { name?: string; parents?: string[]; appProperties?: { bowerOp?: string } } : undefined;
     const path = id ? drive.pathOf(decodeURIComponent(id), root) : json?.name && json.parents?.[0]
       ? [drive.pathOf(json.parents[0], root), json.name].filter(Boolean).join('/') : undefined;
     if (lost?.enabled && lost.reached && path === lost.path) throw new TypeError('Made-up maintenance transport remains disconnected');
-    if (url.origin === 'https://www.googleapis.com' && ['POST', 'PATCH'].includes(method) && path && url.pathname.startsWith('/upload/')) {
-      const content = url.searchParams.get('uploadType') === 'media' ? body : parts[1] ?? '';
-      sent.push({ path, text: content });
+    if (url.origin === 'https://www.googleapis.com' && ['POST', 'PATCH', 'DELETE'].includes(method) && path) {
+      const content = url.searchParams.get('uploadType') === 'media' ? body : parts[1] ?? body;
+      sent.push({ path, text: content, stamp: json?.appProperties?.bowerOp });
       // The write really lands on the existing fake; the caller loses only its reply.
       if (lost?.enabled && path === lost.path) {
         const response = await fetch(input, init);
@@ -92,6 +96,136 @@ async function setup(): Promise<{ c: LoadedCase; drive: FakeDrive; root: string 
 const manifests = (run: CaseRun): Array<[string, string]> => Object.entries(run.after).filter(([p]) => p.includes('/runs/') && /\/manifest-[^/]+\.json$/.test(p));
 const checkpoints = (run: CaseRun): Checkpoint[] => Object.entries(run.after).filter(([p]) => p.includes('/runs/') && /\/checkpoint-[^/]+\.json$/.test(p)).map(([, text]) => JSON.parse(text) as Checkpoint).sort((a, b) => a.revision - b.revision);
 const report = (run: CaseRun): { updated: Array<{ path: string }>; created: Array<{ path: string }> } => (run.lastRun as { run: { report: { updated: Array<{ path: string }>; created: Array<{ path: string }> } } }).run.report;
+
+it('B1a contract: addendum 4: a no-change run adds exactly two discovery reads and zero writes', async () => {
+  const { c, drive, root } = await setup();
+  c.scope = 'all';
+  const files = await drive.listAll(root);
+  const sys = files.find((f) => f.name === '.bower' && f.parents[0] === root)?.id ?? '';
+  const plot = files.find((f) => f.name === 'Plot.md');
+  expect(plot).toBeDefined();
+  await drive.createText(sys, 'index.md', '- [[Plot]] — Alex grows beans in a raised bed.\n');
+  await drive.createText(sys, 'log.md', 'Previous operation.\n');
+  // Creating retrieval is the last seed change; its cursor includes that own bookkeeping write.
+  const cursor = String(Number(await drive.getStartPageToken()) + 1);
+  const state = JSON.stringify({ v: 1, folderId: root, account: 'ACCOUNT_ID', cursor, files: {
+    [plot?.id ?? '']: { path: 'Resources/Gardening/Plot.md', version: plot?.modifiedTime,
+      summary: 'Alex grows beans in a raised bed.', coverage: { kind: 'prefix', bytes: 4096 } },
+  } });
+  const retrieval = await drive.createText(sys, 'retrieval.json', state);
+  expect(await drive.getStartPageToken()).toBe(cursor);
+  expect(await drive.listChanges(cursor)).toEqual({ changes: [], newStartPageToken: cursor });
+  const sent: Sent[] = [];
+  const requests: Array<{ method: string; url: URL }> = [];
+  const original = maintenance.withMaintenance;
+  const calls = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest) => {
+    expect(manifest.operations).toEqual([]);
+    const from = requests.length;
+    const maintained = await original(adapter, manifest);
+    // Observe the real production wrapper inside main, after the planner's required reads.
+    expect(requests.slice(from).map((r) => [r.method, r.url.pathname, r.url.searchParams.get('alt')]))
+      .toEqual([
+        ['GET', `/drive/v3/files/${retrieval.id}`, 'media'], // read .bower/retrieval.json
+        ['GET', '/drive/v3/changes', null], // one changes-feed listing
+      ]);
+    expect(requests.at(-1)?.url.searchParams.get('pageToken')).toBe(cursor);
+    expect(maintained).toEqual(manifest);
+    return maintained;
+  });
+  const observed = trace(drive, root, sent);
+  const around = (fetch: typeof globalThis.fetch): typeof globalThis.fetch => {
+    const traced = observed(fetch);
+    return (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      if (url.origin === 'https://www.googleapis.com') requests.push({ method: (init?.method ?? 'GET').toUpperCase(), url });
+      return traced(input, init);
+    };
+  };
+  const admission: AdmissionManifest = { v: 1, id: 'no-change', rootId: root, scope: 'all', at: AT, piles: [], journal: [] };
+  const run = await runOnDrive(c, drive, root, { admission, pacing, around }, 1);
+  expect(run.code).toBe(0);
+  expect(calls).toHaveBeenCalledTimes(1);
+  // Main still persists its normal run records; maintenance adds no writes or derived changes.
+  expect(sent.filter((s) => derived.includes(s.path))).toEqual([]);
+  expect(run.after['.bower/retrieval.json']).toBe(state);
+  expect(run.after['.bower/index.md']).toBe('- [[Plot]] — Alex grows beans in a raised bed.\n');
+  expect(run.after['.bower/log.md']).toBe('Previous operation.\n');
+});
+
+/** Compare byte spans so a changed MOC payload never grants a write to its surrounding content. */
+function mocParts(path: string, text: string): { outside: string; regions: string[] } {
+  const bytes = new TextEncoder().encode(text);
+  const own = parseOwnership(bytes);
+  expect(own.status).toBe('v2');
+  if (own.status !== 'v2') throw new Error('Expected framed MOC regions');
+  expect(parseNote(path, text).byBower).toBe(true);
+  const decode = (start: number, end: number): string => new TextDecoder().decode(bytes.subarray(start, end));
+  expect(decode(own.layout.front?.start ?? 0, own.layout.front?.end ?? 0)).toMatch(/^type: moc$/m);
+  let from = 0;
+  let outside = '';
+  const regions = MOC_REGIONS.map((region) => {
+    const span = own.payloads[region];
+    expect(span, region).toBeDefined();
+    if (!span) throw new Error('Expected a MOC payload');
+    outside += decode(from, span.start);
+    from = span.end;
+    return decode(span.start, span.end);
+  });
+  return { outside: outside + decode(from, bytes.length), regions };
+}
+
+it('B1a contract: addendum 4: maintain writes only retrieval index once and changed MOC regions per run', async () => {
+  for (const existing of [false, true]) {
+    const { c, drive, root } = await setup();
+    const frame = (owner: string, text: string): string => `<!-- bower:ownership/2 begin ${owner} -->\n${text}\n<!-- bower:ownership/2 end ${owner} -->\n`;
+    const map = '---\nbower_format: ownership/2\ntype: moc\nby: bower\n---\n'
+      + frame('current', '## Current state') + frame('personal', 'Alex keeps these words.')
+      + frame('timeline', '## Timeline') + frame('bower-note', "## Bower's note")
+      + MOC_REGIONS.map((region) => frame(region, `Existing ${region}.`)).join('');
+    const resources = (await drive.listAll(root)).find((f) => f.name === 'Resources' && f.folder);
+    expect(resources).toBeDefined();
+    await drive.createText(resources?.id ?? '', 'Garden map.md', map, { by: 'bower' });
+    // Positive control: the fixture has actual independently framed, Bower-owned MOC regions.
+    expect(mocParts('Resources/Garden map.md', map).regions).toHaveLength(3);
+    if (existing) {
+      const sys = (await drive.listAll(root)).find((f) => f.name === '.bower' && f.parents[0] === root)?.id ?? '';
+      await drive.createText(sys, 'index.md', 'Previous index.\n');
+      await drive.createText(sys, 'log.md', 'Previous operation.\n');
+      await drive.createText(sys, 'retrieval.json', JSON.stringify({ v: 1, folderId: root, account: 'ACCOUNT_ID', cursor: '0', files: {} }));
+    }
+    const press = existing ? 'existing projections' : 'bootstrap';
+    const listing = await drive.listAll(root);
+    const before = new Map(await Promise.all(listing.filter((f) => !f.folder).map(async (f) => [drive.pathOf(f.id, root), await drive.readText(f.id)] as const)));
+    const sent: Sent[] = [];
+    const run = await runOnDrive(c, drive, root, { pacing, claude: replySequence([emptyReply]), around: trace(drive, root, sent) }, 1);
+    expect(run.code).toBe(0);
+    const recorded = manifests(run).find(([, text]) => (JSON.parse(text) as { runId: string }).runId === run.dispatch?.runId);
+    expect(recorded, `manifest for run ${run.dispatch?.runId}`).toBeDefined();
+    const manifest = JSON.parse(recorded?.[1] ?? '{}') as {
+      operations: Array<{ operationId: string; effect: { kind: string } }>;
+    };
+    const maintain = manifest.operations.filter((op) => op.effect.kind === 'maintain');
+    expect(maintain).toHaveLength(1);
+    const writes = sent.filter((s) => s.stamp === stampOf(run.dispatch?.runId ?? '', maintain[0]?.operationId ?? ''));
+    // Positive control: stamp matching observes the real maintenance state commit, not an empty trace.
+    expect(writes.filter((s) => s.path === '.bower/retrieval.json')).toHaveLength(1);
+    const counts = new Map<string, number>();
+    for (const write of writes) counts.set(write.path, (counts.get(write.path) ?? 0) + 1);
+    expect.soft([...counts.values()].every((n) => n <= 1), `one content send per file in run ${press}`).toBe(true);
+    for (const write of writes) {
+      if (['.bower/retrieval.json', '.bower/index.md'].includes(write.path)) continue;
+      const prior = before.get(write.path);
+      const permittedMoc = prior !== undefined && prior.includes('\ntype: moc\n') && prior.includes('\nby: bower\n');
+      expect.soft(permittedMoc, `maintain write set in run ${press}: ${write.path}`).toBe(true);
+      if (!permittedMoc || prior === undefined) continue;
+      const old = mocParts(write.path, prior);
+      const next = mocParts(write.path, write.text);
+      expect.soft(next.outside, `only MOC regions change: ${write.path}`).toBe(old.outside);
+      expect.soft(next.regions, `unchanged MOC is not written: ${write.path}`).not.toEqual(old.regions);
+    }
+    expect(run.after['Resources/Gardening/Plot.md']).toBe(before.get('Resources/Gardening/Plot.md'));
+  }
+});
 
 it('B1a contract: 3: retrieval state and cursor commit together before the hidden report barrier', async () => {
   const { c, drive, root } = await setup();
