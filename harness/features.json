@@ -6673,5 +6673,33 @@
     "note": "DEFECTS css-unknown-token (lead ruling, designer). Codex, then a Claude review and the designer contrast check (verified 92feaf2b; re-check after merge). implementer: codex. Designer re-verified the merged box on claude/p3 b56e8ec2 (375, 1440).",
     "review": "P4-78 PASS",
     "design": "verified"
+  },
+  {
+    "id": "create-named",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "ui": false,
+    "what": "Naming a new thing has one home: createNamed(folder, name) in file-actions, which NameSheet uses with no behaviour change (DEFECTS new-folder-first-letters, ruling (b), entry 1).",
+    "steps": [
+      "createNamed calls vault.create(folder, folder, name) once and reports a refusal with NameSheet's sentence.",
+      "NameSheet behaves as before."
+    ],
+    "verify": "",
+    "note": "DEFECTS new-folder-first-letters (b). Codex, then a Claude review. Packet 2026-10-10-create-named-packet.md. implementer: codex."
+  },
+  {
+    "id": "tree-name-first",
+    "task": "p4-consolidation",
+    "category": "fix",
+    "passes": false,
+    "ui": true,
+    "what": "The tree's New folder (row menu and header) opens the name box before any await and creates once with the name, so no typed letter is lost (DEFECTS new-folder-first-letters, ruling (b), entry 2).",
+    "steps": [
+      "Typing at once after New folder keeps every letter (20/20).",
+      "Escape makes nothing; blur with a name makes it once; a failed create keeps the name."
+    ],
+    "verify": "",
+    "note": "After create-named. Codex red, Codex implementation, Claude review, designer check once (rows signed 2026-10-10). Packet 2026-10-10-tree-name-first-packet.md. Closes create-name-speed."
   }
 ]
