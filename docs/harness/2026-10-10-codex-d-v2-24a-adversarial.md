@@ -19,3 +19,11 @@ The three earlier findings are not reported again (fixed).
    Violates packet item 6 and TL-P4-26 point 3’s held still frame and immediate reduced-motion behavior; the resize path bypasses addendum 7’s single output gate.
 
 findings: 1
+
+## Pass round 3 on round 3 (ab1d16b4..36d267df), 2026-10-10
+
+The round-2 finding (resize outside the gate) and the three earlier ones are not reported again (fixed).
+
+1. **Important — `src/bird/engine.ts:726`: Sparkles keep moving outside the settle gate.** `beginSettle()` suspends engine updates, but leaves `.bower-spark.go` running its independent 0.7 s CSS animation; `release()` also leaves it active. Reproduction: call `BowerLayer`’s `showOff()`, disable “Bower moves” immediately after the first sparkle, then complete the 0.6 s settle. The sparkle animation continues for approximately 0.1 s after release. Enabling reduced motion at the sparkle likewise fails to stop it immediately. Violates TL-P4-26 addendum 7(2)’s suspension of every other motion source and packet item 6’s still-frame and reduced-motion requirements.
+
+findings: 1
