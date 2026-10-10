@@ -1,0 +1,39 @@
+{
+  "id": "c05-note-not-written-by-bower",
+  "capability": "C05",
+  "title": "A personal note stays personal after a sourced append",
+  "covers": "scripted",
+  "source": "new (C05 preservation through scripted intent replies and the existing planner)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "",
+      "files": [
+        "Water butt update.txt"
+      ]
+    }
+  ],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Update the garden plot from this committee letter."
+    }
+  ],
+  "questions": [],
+  "bowerOwned": [],
+  "presses": [
+    {
+      "request": {
+        "kind": "replay",
+        "id": "change-1"
+      }
+    },
+    {
+      "request": {
+        "kind": "tidy",
+        "text": "Update these notes."
+      }
+    }
+  ]
+}

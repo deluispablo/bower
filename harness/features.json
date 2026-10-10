@@ -6681,6 +6681,23 @@
     "design": "verified"
   },
   {
+    "id": "c05-person-notes",
+    "task": "p4-semantic",
+    "category": "feature",
+    "passes": false,
+    "ui": true,
+    "what": "Bower appends one sourced Timeline line to a note the person wrote when the request names it, with consent from the runner, the title grammar, an append clash retried, and two or more matches listed in Left as you wrote them without a question (TL-P4-32).",
+    "steps": [
+      "A bound sourced append keeps every other byte; any other edit to a person note is refused not-bower.",
+      "Same-title or unparseable notes are filed beside, listed in leftAsWritten and never counted updated.",
+      "Old reports stay readable; Home and the result show the designer rows with working links."
+    ],
+    "verify": "pnpm exec vitest run src/data/contracts/c05-person-notes.test.ts src/data/contracts/c05-person-reports.test.ts src/features/tidy/c05-person-notes.test.tsx -t \"C05 person notes:\" && pnpm -C runner exec vitest run test/c05-person-notes.test.ts test/c05-incorporation.test.ts -t \"C05 person notes:|the C05 corpus cases score green with scripted proposals\" && bash scripts/e2e-both.sh e2e/c05-person-notes.spec.ts -g \"C05 person notes:\"",
+    "note": "TL-P4-28 addendum 3; TL-P4-32; escalated (TL-P4-31): Codex red 0871c4f0, Codex implementation, Codex adversarial, Claude review, designer. Packet 2026-10-10-c05-person-notes-packet.md. implementer: codex.",
+    "design": "verified",
+    "review": "P4-87 PASS"
+  },
+  {
     "id": "create-named",
     "task": "p4-consolidation",
     "category": "refactor",

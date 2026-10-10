@@ -129,6 +129,7 @@ export function fixedReport(r: RunReport): RunReport {
     questions: r.questions.map(fixedQuestion),
   };
   if (r.yourChanges !== undefined) out.yourChanges = r.yourChanges;
+  if (r.leftAsWritten?.length) out.leftAsWritten = r.leftAsWritten.map((r) => ({ name: r.name, why: r.why, ...(r.fileId ? { fileId: r.fileId } : {}) }));
   if (r.requests !== undefined) out.requests = [...r.requests];
   if (r.rulesWorded !== undefined) out.rulesWorded = r.rulesWorded;
   if (r.nothingReady) out.nothingReady = true;

@@ -240,6 +240,7 @@ export interface RunReport {
   created: Array<{ path: string; what: string }>;
   updated: UpdatedRow[];
   setAside: Array<{ name: string; why: string }>;
+  leftAsWritten?: Array<{ name: string; why: string; fileId?: string }>;
   questions: Question[];
   /**
    * Things whose content was already filed (TL-P4-10 addendum 2): each went to the Bin, with the name of the file
