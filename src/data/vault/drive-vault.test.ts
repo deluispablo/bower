@@ -4001,6 +4001,77 @@ describe('c4-create-landed: an app create found by its reserved id counts only a
     });
   });
 
+  /** c4-create-newer-words: the first folder lands, but both its answer and recovery read are lost. */
+  async function pendingConversionWithNewWords() {
+    vi.setSystemTime(new Date('2026-10-10T00:02:00Z'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    drive = new FakeDrive();
+    root = (await seedFakeDrive(drive, 'default', Date.now() - 20 * 60_000)) ?? '';
+    vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    await vault.tree();
+    const lone = (await vault.piles()).find((p) => p.path === 'Inbox/Dentist reminder.pdf');
+    if (!lone?.path) throw new Error('no lone pile');
+    const thing = await idOf(lone.path);
+    const lost = loseCreate('createFolder', (a) => typeof a[2] === 'object' && a[2] !== null && 'pile' in a[2]);
+    await expect(vault.updatePile(lone.id, 'Dentist papers')).rejects.toMatchObject({ code: 'offline' });
+    expect(lost.lost()).toBe(1);
+    const folder = lost.id() ?? '';
+    expect((await drive.get(folder)).name).toBe('2026-10-09 Dentist papers');
+    expect(await drive.listAll(folder)).toEqual([]);
+    await vault.refresh();
+    const noteCreates = vi.spyOn(drive, 'createText');
+    return { lone, thing, folder, noteCreates };
+  }
+
+  it('a retry with new words while the conversion is pending ends with the new words in Drive', async () => {
+    const { lone, thing, folder, noteCreates } = await pendingConversionWithNewWords();
+    const newWords = 'Dentist papers, signed';
+    // Read Drive at resolution: success must wait for the newer words, not merely the held conversion.
+    const atResolution = await vault.updatePile(lone.id, newWords).then(async (saved) => ({
+      saved,
+      words: await Promise.all((await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md').map((f) => drive.readText(f.id))),
+    }));
+    expect(atResolution.words).toEqual([newWords]);
+    expect(atResolution.saved.text).toBe(newWords);
+    expect(noteCreates.mock.calls.filter(([, name]) => name === 'Pile note.md').map(([, , text]) => text)).toEqual(['Dentist papers']);
+    const folders = (await drive.listAll(root)).filter((f) => f.folder && f.appProperties?.pile === lone.id);
+    expect(folders.map((f) => ({ id: f.id, name: f.name }))).toEqual([{ id: folder, name: '2026-10-09 Dentist papers' }]);
+    expect((await drive.get(thing)).parents).toEqual([folder]);
+    expect(drive.pathOf(thing, root)).toBe('Inbox/2026-10-09 Dentist papers/Dentist reminder.pdf');
+    expect((await drive.listAll(folder)).map((f) => f.name).sort()).toEqual(['Dentist reminder.pdf', 'Pile note.md']);
+  });
+
+  it('a retry with new words refuses an outside change between landing and updating', async () => {
+    const { lone, thing, folder, noteCreates } = await pendingConversionWithNewWords();
+    const newWords = 'Dentist papers, signed';
+    const outsideWords = 'Dentist papers, edited on the laptop';
+    const writeText = drive.writeText.bind(drive);
+    let changed = false;
+    let readTime: string | undefined;
+    let outsideTime: string | undefined;
+    vi.spyOn(drive, 'writeText').mockImplementation(async (...args) => {
+      if (!changed && args[1] === newWords) {
+        changed = true;
+        readTime = args[2];
+        const note = await drive.get(args[0]);
+        expect(await drive.readText(note.id)).toBe('Dentist papers');
+        expect((await drive.get(thing)).parents).toEqual([folder]);
+        // Another device writes after the conversion lands and before the ordinary update reaches Drive.
+        outsideTime = (await writeText(note.id, outsideWords, note.modifiedTime)).modifiedTime;
+      }
+      return writeText(...args);
+    });
+    await expect(vault.updatePile(lone.id, newWords)).rejects.toMatchObject({ code: 'conflict' });
+    expect(changed).toBe(true);
+    expect(readTime).toBeDefined();
+    expect(outsideTime).not.toBe(readTime);
+    expect(noteCreates.mock.calls.filter(([, name]) => name === 'Pile note.md').map(([, , text]) => text)).toEqual(['Dentist papers']);
+    const notes = (await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md');
+    expect(notes).toHaveLength(1);
+    expect(await drive.readText(notes[0]?.id ?? '')).toBe(outsideWords);
+    expect((await drive.get(notes[0]?.id ?? '')).modifiedTime).toBe(outsideTime);
+  });
+
   it('a pile-folder conversion whose file move failed after the folder landed keeps its first name and finishes', async () => {
     vi.setSystemTime(new Date('2026-10-10T00:02:00Z'));
     vi.spyOn(console, 'error').mockImplementation(() => {});

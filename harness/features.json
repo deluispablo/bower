@@ -6481,13 +6481,14 @@
     "id": "c4-create-newer-words",
     "task": "p4-consolidation",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "what": "A pile retried with newer words while its conversion is pending gets the newer words once the conversion lands (TL-P4-24 addendum 19; P4-68 minor 1).",
     "steps": [
       "A person who changes a pile's words while it is still being made sees the newer words in its note."
     ],
     "verify": "pnpm exec vitest run src/data/vault/drive-vault.test.ts -t \"a retry with new words while the conversion is pending ends with the new words in Drive\"",
-    "note": "TL-P4-24 addendum 19 (main): Codex, escalated (red, implementation, adversarial pass), then a Claude review. Queued for the next batch, after c4-create-resume. Packet to write. Packet 2026-10-10-c4-create-newer-words-packet.md."
+    "note": "TL-P4-24 addendum 19 (main): Codex, escalated (red, implementation, adversarial pass), then a Claude review. Queued for the next batch, after c4-create-resume. Packet to write. Packet 2026-10-10-c4-create-newer-words-packet.md.",
+    "review": "P4-70 PASS"
   },
   {
     "id": "c4-undo-confirm-in-place",

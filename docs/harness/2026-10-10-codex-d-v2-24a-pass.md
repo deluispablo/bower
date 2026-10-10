@@ -39,3 +39,13 @@ Read-only, high effort. Tokens: input 1137664 (cached 1037440), output 5868.
 2. **Important — [src/bird/engine.ts:983](/private/tmp/bower-d-v2-24a/src/bird/engine.ts:983): chirp ownership remains unprotected before the first reaction frame.** On idle, call `react('done')`, then `activeHandle().chirp(0.3)` before advancing a frame. `beginReaction()` has installed the action but has not claimed its channels, so `mayWrite()` permits the tuft impulse. At 60 fps, the displayed tuft dips to **−3.12°**, outside the allowed **−2°** lower bound. The escalated regression checks chirp only after one second. **Contract:** TL-P4-26 addendum 3’s ownership rule and packet §11’s eased values with no overshoot past 2°.
 
 findings: 2
+
+## Escalated round 2 pass
+
+Read-only, high effort. Tokens: input 784896 (cached 692480), output 4799.
+
+1. **Important — [src/bird/engine.ts:1747](/private/tmp/bower-d-v2-24a/src/bird/engine.ts:1747): changing away from `land` during moves-off leaves stale opacity at release.** At 60 fps, disable moves 0.05 s into `land`, advance 0.1 s, then change the pose to `idle`. Reproduced: rendered opacity remains **0.54** through release, then jumps to **1** when styles are cleared. Settlement checks `B.opacity`, but `apply()` stops drawing it after the pose changes. **Contract:** TL-P4-26 §3, packet §6, and escalated round 2 require every drawn value to reach the still frame before release.
+
+2. **Important — [src/bird/engine.ts:1749](/private/tmp/bower-d-v2-24a/src/bird/engine.ts:1749): layer breathing continues through moves-off settlement.** Mount an idle layer, advance one second, then disable moves. Reproduced: the release frame draws rig scale **(1.008, 0.988)**, then snaps to **(1, 1)**. The breathing multiplier remains active while settlement checks only `C.squash.v`; the rendered scale is still moving and has not reached its target. **Contract:** TL-P4-26 §3, packet §6, and escalated round 2 require layer birds to reach the still frame at rest before release.
+
+findings: 2

@@ -2,15 +2,15 @@
 
 Coordinator: the Claude Code session named "Orquestador". It integrates in `/Users/deluisp/Projects/bower-app` on branch `claude/p3`; P4 continues on it. Lead: the Planificador session ([DECISIONS.md](DECISIONS.md)). Output rule: [TL-P3-29](2026-10-07-tl-p3-29-output-rule-survives-compaction.md), in AGENTS.md. Minors: [P2_POLISH.md](P2_POLISH.md). Earlier handoffs: git history of this file.
 
-## Resume (2026-10-10 early)
+## Resume (2026-10-10 morning)
 
-Read this first. TL-P4-29 (Codex first): Codex implements everything. Escalated data entries use three Codex sessions: the red, the implementation, and a read-only adversarial pass. A fresh Claude bower-reviewer gives the closing PASS. Codex cannot write git or open ports, so the coordinator commits (red, fix, notes) and runs pnpm check and e2e under `harness/with-lock.sh` (/tmp/bower-heavy.lockf). Prompts sit in the scratchpad (`codex-*-prompt.md`). The lead's sends are paused (10 without an owner message): rulings arrive on main in DECISIONS, and questions go to `docs/harness/LEAD_QUESTIONS.md`.
-- **Closed:** c4-lockf, c4-precheck-runner, c4-create-landed, p4-corpus-driver, c4-parse-once (474/482).
-- **d-v2-07:** merged at 86b4fe3e (P4-58h PASS). It waits for the designer's verification (asked by message), then `harness/done.sh d-v2-07 --known-green`. Lead question: the rate-property 30 s timeout. The worktree `/private/tmp/bower-d-v2-07b` was kept, because a process ran in it; clean it up.
-- **c4-undo-compensate** (`/private/tmp/bower-c4-compensate`): re-plan reds at 8da56079 (addendum 9). The Codex implementation is partial and uncommitted (patch in the scratchpad), blocked on the volatile-outbox question in LEAD_QUESTIONS. After the ruling: a fresh Codex implementation, then gates, the adversarial pass, a Claude review and the designer. If that pass finds another Important, it goes to the owner through the lead.
-- **d-v2-24a** (`/private/tmp/bower-d-v2-24a`): the Codex implementation is running. Then gates with e2e and axe, a Codex pass, a Claude review and the designer.
-- **Queue:** 24b ∥ d-v2-06, d-v2-02, the c4 data entries, then P4-C. C05 has an open question: `2026-10-09-c05-open-question-person-notes.md`.
-- **Parked:** c4-undo-withdraw at 70a2b0da. Delete it after c4-undo-compensate merges.
+Read this first. **Stage 4 is closed** (lead ruling: close with d-v2-24a open). main = backup = 03b5d0d2, verified. The four suites are green apart from the known flake bird-one-changes-flaky. 480/486. The lead deploys staging and runs the smoke (LEAD_QUESTIONS "stage-4-closed").
+TL-P4-29: Codex first. Escalated data entries use three Codex sessions (the red, the implementation, a read-only adversarial pass), then a fresh Claude bower-reviewer gives the PASS. The coordinator commits for Codex and runs pnpm check and e2e under `harness/with-lock.sh` (/tmp/bower-heavy.lockf). Never commit in the main checkout while integrate.sh runs. Never put the word for sending to a remote in a Bash line, except the single backup command (the hook blocks it). The lead answers only in DECISIONS on main; questions go to `docs/harness/LEAD_QUESTIONS.md`.
+- **Next batch, in order:**
+  1. d-v2-24a re-plan (TL-P4-26 addendum 7: one blend of the whole drawn output, snapshotted at react(); other motion suspended at one gate; a pose change queued until release). The order is a Codex red (a property over every kind, start pose and pose-change moment), then Claude escalated, a Codex pass, a Claude review and the designer. Branch `/private/tmp/bower-d-v2-24a` at 2061d25a carries rounds 1–3 plus the escalated rounds and the spec fixes (TL-P4-26 addenda 4 and 5).
+  2. The sync fixes for qa7:63 (wait for the name box before typing) and capabilities:210 (navigate in the app instead of page.goto), on Codex with a Claude review.
+  3. Then the queue: 24b ∥ d-v2-06, d-v2-02, the c4 data entries, then P4-C (C05 open question: notes the person wrote).
+- **Known limits:** DEFECT_LOG compensate-storage-failure-limits.
 - **Sessions:** lead Planificador; Designer; lead planning worktree `/private/tmp/bower-tl-planning`. Never remove role worktrees.
 
 ## Where things stand
