@@ -258,8 +258,8 @@ async function pileBaseline() {
   const baseline = await traced(c, drive, root);
   expect(baseline.result.code).toBe(0);
   expect(reportOf(baseline.result).filed.length).toBeGreaterThan(0);
-  // Same named C04 pile-run baseline as drive-calls-golden.test.ts; its reads golden is 15.
-  expect(baseline.trace.reads).toBe(15);
+  // Measure the same C04 pile fixture; B1a discovery and maintain calls pin its reads to 20.
+  expect(baseline.trace.reads).toBe(20);
   expect(baseline.trace.media.filter((p) => p.startsWith('.bower/runs/'))).toEqual([]);
   return baseline;
 }

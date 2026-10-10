@@ -149,3 +149,61 @@ left out: implementation after B1a, full check/e2e, integration and commits (coo
   creation times belong to the metadata listing, so deriving the horizon needs no manifest media.
 - Existing “index points to evidence” implementation: `VaultIndex` maps physical paths/ids, and `RunRecords.found`
   verifies originating manifests and checkpoint chains. The new reds use these homes, with no extra index/store.
+
+## Implementation
+
+Stopped before production edits under the implementation instruction: “if a red contradicts the packet or a
+ruling, stop and say so.” No network or git writes were performed.
+
+The committed bounded-read reds still pin the pre-B1a C04 reads baseline to 15 at
+`runner/test/c05-bounded-reads.test.ts:262`. On this checkout the real pile control returns 20.
+Both the golden and pending tests stop at that assertion, before their bounded-read scenarios.
+The current C04 golden in `runner/test/drive-calls-golden.test.ts:31` explicitly pins reads to 20.
+TL-P4-41 addenda 3–4 authorize B1a's maintenance calls; the Reds section above already requires those
+authorized calls to be accounted for after B1a integrates. Making this control return 15 would contradict
+that accepted behaviour. Tests cannot be changed by this implementation session, so the red owner must
+reconcile this control before implementation resumes.
+
+Verification: `pnpm -C runner exec vitest run test/c05-bounded-reads.test.ts --maxWorkers=2` failed all
+three tests. The golden and pending fail with expected 15, received 20; the horizon still reproduces
+the listing-age and historical-read defects. Output: `tmp-logs/implementation-reds.log`; only failures
+were inspected. C05/app/data/runner suites, typechecks, eslint, full check and e2e were not run after
+the required stop. No assertion or bound was weakened.
+
+removed: none (implementation stopped before production edits).
+tests changed: none.
+
+Compatibility row drafts for the resumed implementation, not claims of completed validation:
+
+| Fixture/format | Required outcome | Status |
+| --- | --- | --- |
+| B1a C04 pile control | Preserve authorized maintenance calls; reconcile the stale 15-read red. | Blocked on red-owner repair. |
+| New requests directly in changes | Zero run-record reads; staging old-format waiting requests count as new. | Not implemented. |
+| Waiting requests in pending/run id | Existing move effect; bound record/target/source ids; strict one-media-read bound. | Not implemented. |
+| Settled requests | No archive scan; write-once recovery after interrupted settlement move. | Not implemented. |
+| Retention horizon | Run-folder listing creation times; TOO_OLD_WHY without chain reads. | Not implemented. |
+| Existing v2 manifests/checkpoints and personal bytes | Preserve parsers, verified evidence and TL-P4-32 addenda 2–6 outcomes. | Not revalidated. |
+
+The existing conflicting tests and strict one-read interpretation listed above still require reconciliation;
+this session has made no ruling on them and has introduced no store, index or alternative mechanism.
+
+## Red repair
+
+tests changed: `runner/test/c05-bounded-reads.test.ts`: re-pin the measured C04 pile control from 15 to 20
+under TL-P4-41 addendum 4; preserve exact zero historical media and the measured baseline + at most one
+read per waiting request. The bound still consumes `baseline.trace.reads` from the real pile run in the
+same `c04-offer-and-flat` fixture; no constant is added to a request's measured reads.
+
+At HEAD `707f3ca6`, the pre-repair run measured 20 in `pileBaseline`, failing its stale 15-read assertion
+in both golden and pending. Evidence: `tmp-logs/red-repair-before.log`.
+The repaired run passes that 20-read control and the golden still fails for 50 archived request media
+reads and 75 unrelated manifest/checkpoint media reads. Its request-only reads are 143 against the
+measured baseline of 20; its no-waiting pile reads 75 historical records and costs 91 against 20.
+Every historical-media assertion remains exactly `[]`.
+
+Verification: `pnpm -C runner exec vitest run test/c05-bounded-reads.test.ts --maxWorkers=2`;
+exit 1, three assertion reds, no load errors. Evidence: `tmp-logs/red-repair.log`.
+Pending proceeds beyond the repaired baseline and fails on the missing pending move and gone-target
+control; horizon still fails on listing age and historical media. No other test expectations changed.
+No non-test source edits, network, git writes, full check or e2e. Existing notes were preserved;
+commits remain coordinator-owned.
