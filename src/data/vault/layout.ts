@@ -141,7 +141,7 @@ export function isRunnerFile<K extends keyof RunnerFiles>(path: K, v: unknown): 
     case SYSTEM.retrieval: return text(v.folderId) && v.folderId.length > 0 && text(v.account) && v.account.length > 0 && text(v.cursor) && v.cursor.length > 0
       && object(v.files) && Object.values(v.files).every((f) => object(f) && text(f.path) && text(f.version) && text(f.summary)
         && object(f.coverage) && f.coverage.kind === 'prefix' && count(f.coverage.bytes));
-    case SYSTEM.questions: return list(v.questions, question) && optional(v.rounds, (rs) => list(rs, (r) => object(r) && text(r.subject) && text(r.pileId) && text(r.words) && number(r.count) && Number.isInteger(r.count) && r.count >= 1 && r.count <= 2 && optional(r.hash, text) && optional(r.exhausted, (v) => v === true)));
+    case SYSTEM.questions: return list(v.questions, question) && optional(v.rounds, (rs) => list(rs, (r) => object(r) && text(r.subject) && text(r.pileId) && text(r.words) && number(r.count) && Number.isInteger(r.count) && r.count >= 1 && r.count <= 2 && optional(r.hash, text) && optional(r.exhausted, (v) => v === true) && optional(r.wordsOnly, (v) => v === true) && optional(r.reask, question)));
     case SYSTEM.suggestions: return list(v.suggestions, suggestion);
     case SYSTEM.requests: return list(v.done, request);
     case SYSTEM.lastRun: return run(v.run);

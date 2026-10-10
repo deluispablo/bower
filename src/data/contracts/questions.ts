@@ -21,7 +21,13 @@ import { displayName, nameOf, thingName } from './tree';
 /** Additive journal values; legacy text yes/no remains readable. */
 export type QuestionAnswer = boolean | { option: string } | { text: string };
 export interface QuestionOption { id: string; label: string; action: { kind: 'file-to'; folderId: string } }
-export interface QuestionRound { subject: string; hash?: string; pileId: string; words: string; count: number; exhausted?: true }
+export interface QuestionRound {
+  subject: string; hash?: string; pileId: string; words: string; count: number; exhausted?: true;
+  /** Words alone are a member of their own, never the things added later. Absent on legacy pile histories. */
+  wordsOnly?: true;
+  /** The settled asking's wording, retained only until an unavailable-folder answer is asked again. */
+  reask?: Question;
+}
 
 export function isQuestionAnswer(value: unknown): value is QuestionAnswer {
   if (typeof value === 'boolean') return true;
@@ -81,18 +87,31 @@ export function subjectPile(q: Asked, piles: readonly Pile[], hashes: ReadonlyMa
     ?? (s.hash && s.hash !== EMPTY_MD5 ? piles.find((p) => p.items.some((i) => hashes.get(i.id) === s.hash)) : undefined);
 }
 
-/** Existing inbox identity including pile/member switches and reuploads, reset by changed pile words. */
+/** Today's members covered by an asking; words alone use the pile identity. No frozen membership. */
+export function subjectMembers(q: Asked, piles: readonly Pile[], contextName: string, hashes: ReadonlyMap<string, string> = new Map()): string[] {
+  const pile = subjectPile(q, piles, hashes);
+  if (!pile) return [];
+  const subject = subjectKey(q);
+  const members = pile.items.filter((i) => i.name !== contextName).map((i) => i.id);
+  if (subject === pile.id) return members.length ? members : [pile.id];
+  if (subject !== undefined && members.includes(subject)) return [subject];
+  return members.filter((id) => q.hash !== undefined && q.hash !== EMPTY_MD5 && hashes.get(id) === q.hash);
+}
+
+/** Member history including legacy pile askings and reuploads; a pile's count is its members' maximum. */
 export function roundFor(rounds: readonly QuestionRound[], q: Asked, piles: readonly Pile[], hashes: ReadonlyMap<string, string> = new Map()): QuestionRound | undefined {
   const pile = subjectPile(q, piles, hashes);
   if (!pile) return undefined;
   const inbox = { ids: new Set(piles.flatMap((p) => [p.id, ...p.items.map((i) => i.id)])) };
-  return rounds.find((r) => r.words === pile.text && (relatedSubjects(r.subject, subjectKey(q), piles)
+  return rounds.filter((r) => r.words === pile.text && (!r.wordsOnly || r.subject === subjectKey(q)) && (relatedSubjects(r.subject, subjectKey(q), piles)
     || sameSubjectContent({ id: askId(r.subject), subject: r.subject, hash: r.hash }, q, inbox)
-    || sameSubjectContent(q, r, inbox)));
+    || sameSubjectContent(q, r, inbox))).reduce<QuestionRound | undefined>((max, r) =>
+      !max || r.count > max.count || (r.count === max.count && r.exhausted) ? r : max, undefined);
 }
 export function pileQuestion(pile: Pile, open: readonly Question[], rounds: readonly QuestionRound[], hashes: ReadonlyMap<string, string> = new Map()): Pile['question'] {
   const belongs = (q: Asked): boolean => subjectPile(q, [pile], hashes) !== undefined;
   if (open.some(belongs)) return 'waiting';
+  if (rounds.some((r) => r.reask && r.words === pile.text && belongs({ id: askId(r.subject), subject: r.subject, hash: r.hash }))) return 'waiting';
   return rounds.some((r) => r.exhausted && r.words === pile.text && belongs({ id: askId(r.subject), subject: r.subject, ...(r.hash ? { hash: r.hash } : {}) })) ? 'exhausted' : undefined;
 }
 

@@ -1129,3 +1129,123 @@ Offline research reuses the established production-main/in-process route fixture
 under Research, including [Hono testing](https://hono.dev/docs/guides/testing), tagged unions, tolerant
 readers and stable request identity. No online verification or new execution mechanism is claimed.
 Left out: production repairs, full check/e2e, commits and integration; this is the authorized red-only round.
+
+
+## Fix round 3
+
+2026-10-10. Codex implementer; supplied HEAD `c72e4fa2c7ddbbba83e227416658077566db3db3`.
+Implemented the lead-approved final class sweep, TL-P4-44 addendum 5, in the existing question
+identity, round lookup and scripted planner. Read WORKER, the packet, both adversarial reviews,
+and all these notes, including the supplied addendum 5 under Fix round 3 reds.
+The coordinator owns commits and integration. No network or writing git command was issued.
+No test, fixture, golden, fingerprint, dependency, UI, admission, scheduler or journal format was edited.
+
+### Rules and existing homes
+
+- `contracts/questions.ts`: `roundFor` returns the largest matching member count, with durable
+  exhaustion winning equal counts. Different members remain different subjects. `subjectMembers`
+  resolves today's covered members through the existing id/nonempty-reupload policy, excluding
+  the context note; words alone keep their own identity. A pile card covers its current members,
+  without a frozen member list. Pile projection also shows a refused destination as waiting.
+- `spine/scripted.ts`: retained legacy pile histories are projected onto their covered members,
+  with the strongest history retained per member. New pile askings increment each covered waiting
+  member exactly once through the existing fresh-asking write. A mixed pile asking becomes member
+  cards for the eligible members; it cannot cover an exhausted member or extend a count past two.
+  An answered second asking settles each member separately, after valid placement is considered.
+  Exhaustion alone never holds clear existing or later siblings. Changed words, departure,
+  instructions scope, retry, save recovery and reupload keep their established meanings.
+- An unavailable-folder answer holds the continuation and removes its answered card, without a
+  replacement asking or a new round. The same member's existing round retains that asking in
+  optional `reask` until the next run saves a fresh asking. That pending state prevents model
+  placement and merge, and survives archiving of the original answer. A current model asking
+  supplies current options; otherwise the saved model wording is reused without expired actions.
+  Saving the next asking clears `reask` and increments the same count. An unresolved second answer
+  exhausts instead. Older stored askings without history retain their already-written first asking.
+  The provider's omitted-item hold cannot suppress this required re-ask; omitted siblings still wait.
+- Optional `wordsOnly` distinguishes a words-only member from things added later, so its history
+  cannot exhaust new clear siblings. It is identity information in the same round, not another count.
+  The owning questions-file validator in `vault/layout.ts` accepts both optional fields; no new
+  file, store, counter, version, writer or effect path was added. All writes and moves still use
+  their existing modifiedTime, content and stillAsSeen fences.
+
+Offline research reused the established mechanisms and sources read in the packet/prep and these notes:
+[TypeScript discriminated unions](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions),
+[Tolerant Reader](https://martinfowler.com/bliki/TolerantReader.html), and
+[stable request identity](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/).
+These are carried local references, not claims of online verification.
+
+removed: src/data/contracts/questions.ts: 4 lines; first-match lookup and old round declaration replaced.
+removed: src/data/spine/scripted.ts: 32 lines; whole-pile exhaustion and shared increments replaced by member rules.
+removed: src/data/vault/layout.ts: 1 line; existing round validator accepts the optional identity and re-ask fields.
+removed: notes: none (append only).
+tests changed: none
+
+### Compatibility row draft (review pending)
+
+| Boundary | Preserved meaning | Additive evidence / draft disposition |
+| --- | --- | --- |
+| `contracts/questions.ts`, `vault/layout.ts`, questions.json v1 | Old questions and rounds remain readable; missing optional fields retain legacy interpretation. No version or required field changes. Old yes/no, state/pair/folder and report fields are unchanged. | Rounds remain in the same questions file, per member, with a pile lookup returning their maximum. Optional `reask` uses the existing question validator; optional `wordsOnly` preserves words-member identity across new arrivals. All 39 Q1 tests, 4,141 data tests and 595 runner tests pass, including P2 readers, earlier reds, corpus, goldens and fingerprints. Draft only; coordinator/reviewer acceptance pending. |
+
+### Validation and TL-P4-51
+
+All requested test suites completed with `--maxWorkers=2`; all output is under `tmp-logs/`.
+Only failed assertions/diagnostics and aggregate results were read. No tests were weakened or changed.
+The whole targeted sweep found no test/ruling contradiction; the TL-P4-51 contradiction ledger is empty.
+
+| Command | Result / evidence |
+| --- | --- |
+| Q1 baseline, `pnpm -C runner exec vitest run test/q1-continuation.test.ts --maxWorkers=2` | 36 pass / 3 fail of 39; the exact fix 3.1, 3.2 and 3.3 assertion failures in the committed reds reproduced. `tmp-logs/q1a-fix-round-3-before.json`, `.log`. |
+| Q1 final, same command | 39/39 pass; `tmp-logs/q1a-fix-round-3-reds-final.json`, `.log`. |
+| `pnpm exec vitest run src/data --maxWorkers=2` | 4,141/4,141 pass; `tmp-logs/q1a-fix-round-3-data-final.json`, `.log`. |
+| `pnpm -C runner exec vitest run --maxWorkers=2` | 595/595 pass; `tmp-logs/q1a-fix-round-3-runner-final.json`, `.log`. Includes corpus, unchanged Drive call goldens, raw/normalized fingerprints and earlier reds. |
+| `pnpm exec tsc --noEmit -p tsconfig.app.json` | Pass; `tmp-logs/q1a-fix-round-3-tsc-app-final.log`. |
+| `pnpm exec tsc --noEmit -p tsconfig.node.json` | Pass; `tmp-logs/q1a-fix-round-3-tsc-node.log`. |
+| `pnpm -C runner exec tsc --noEmit -p .` | Pass; `tmp-logs/q1a-fix-round-3-tsc-runner.log`. |
+| ESLint on questions.ts, scripted.ts and layout.ts | Pass; `tmp-logs/q1a-fix-round-3-eslint-final.log`. |
+| Read-only preservation/diff checks | No test/golden/fingerprint diff; `git diff --check` passes. HEAD unchanged. |
+
+Intermediate implementation diagnostics were corrected before the final checks: the stored-question
+fallback initially exposed stored options to the planner's differently shaped Ask type. It now projects
+only saved wording, keeping expired action consent out of the new asking. The intermediate runner run
+also failed `runner/test/new-instance.test.ts:137` (second invocation had three commits instead of two)
+while source edits overlapped its runner rebuild. Both completed runs with stable source passed all 595
+runner tests, including that unchanged test. No fixture repair or assertion change was made.
+
+The first extra `pnpm check` waited for the existing global heavy-run lock, then failed in whole-tree
+ESLint before collecting tests: ENOENT reading a transient fixture's `dist/assets/index.js` under
+`tmp-logs/bower-deploy-4D8ReJ/repo`. It overlapped the requested suites' temporary fixture lifecycle.
+Evidence: `tmp-logs/q1a-fix-round-3-check.log`. A serial full-check retry follows the completed suites;
+its result is recorded below. No alternate lock, gate configuration change or success mark is claimed.
+No screen was touched (`ui: false`); no new screen e2e is claimed. Earlier full-gate/listener failures
+remain recorded above. Q1c publication, Q1b UI, which-note, B12, commits and integration remain left out.
+
+
+### Serial whole-check result and owning fix
+
+The serial `pnpm check` acquired the existing lock and passed full lint/typecheck, then completed
+the whole app suite: 5,484 pass / 3 fail of 5,487. Exit 1; later check stages were not reached.
+Logs: `tmp-logs/q1a-fix-round-3-check-final.log`, `tmp-logs/q1a-fix-round-3-check-app.json`.
+Every failed test is listed below. These are gate failures, not test/ruling contradictions.
+
+| Exact test | File:line | Outcome |
+| --- | --- | --- |
+| `the shape of the code > the shared core > contracts import only themselves and allowlisted pure libraries` | `src/architecture.test.ts:154` | The new context-name import from data/piles crossed the pure-contract boundary. Repaired in the owning subject policy: subjectMembers receives the existing PILE_NOTE constant from its planner caller; no constant was copied, moved or added. The contracts now import only contracts. Targeted architecture result follows below. |
+| `the e2e port and server identity > a server from another worktree is never reused` | `src/e2e-port.test.ts:37` | Local listener EPERM on 127.0.0.1, then timeout; the same sandbox limitation previously recorded. |
+| `TL-P4-28(2): compensating Undo preserves FIFO and the Drive-only person-state oracle (random batch 3)` | `src/data/vault/undo-compensate.property.test.ts:623` (FIFO assertion `:128`) | Failed after 28 runs, seed 96466243, path 27: two newer journal lines passed an older line. The complete command counterexample is in the check log. This Undo/journal mechanism and its test are unchanged; no cause is inferred from the random property result. Requested complete data suites passed before this whole-check run and are repeated after the architecture repair. |
+
+An unhandled listener EPERM belongs to the same e2e-port test. No unrelated gate repair or test edit
+was made. The full check is not rerun after its confirmed listener refusal; the owning architecture
+repair, all requested suites, typechecks and touched-file lint are verified on the final source instead.
+No full-check mark, e2e success or integration is claimed.
+
+
+Final verification after the pure-contract repair: Q1 39/39, data 4,141/4,141, runner 595/595,
+and architecture 7/7 pass. App/node/runner tsc and touched-file ESLint all pass with no diagnostics.
+The final data run includes the unchanged Undo property test and passes; its separate full-check
+counterexample remains recorded above. There are no Q1 or earlier-red failures and no ruling
+contradictions. Architecture evidence: `tmp-logs/q1a-fix-round-3-architecture.json`, `.log`.
+All final requested evidence uses the `q1a-fix-round-3-*-final` paths in the validation table.
+Read-only diff checks again show only the three owning production files and this notes appendix;
+no test, golden or fingerprint change, no whitespace error, and HEAD unchanged.
+Implementation and the requested verification are complete. The full-check failures above prevent
+claiming a green whole gate; no acceptance, commit or integration is claimed.
