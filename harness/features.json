@@ -6756,7 +6756,7 @@
       "maintain is idempotent, adds no rows for refused effects and is skipped on a done run."
     ],
     "verify": "pnpm -C runner exec vitest run test/b1a-contract.test.ts -t \"B1a contract:\"",
-    "note": "Escalated (contracts): Codex red, implementation, Codex pass, Claude review. Packet 2026-10-10-b1a-packet.md. After c05-person-notes lands.",
+    "note": "Escalated (contracts): Codex red, implementation, Codex pass, Claude review. Packet 2026-10-10-b1a-packet.md. After c05-person-notes lands. Known green: the reds failed before 254e728f (Codex red evidence, notes), and each later red repair was proven red before its fix round; fix rounds 1, 3, 4 and 5 touched runner/src/index.ts after it.",
     "review": "P4-94b PASS"
   },
   {
