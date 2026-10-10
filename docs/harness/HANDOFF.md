@@ -6,7 +6,7 @@ Coordinator: the Claude Code session named "Orquestador". It integrates in `/Use
 
 Read this first. Cap 1 Claude + 4 Codex (load < ~12). Wait on Codex only with tracked background Bash jobs (run_in_background), never `&`-detached ones: a lost waiter idled the coordinator 2.5 h on 2026-10-10. Codex can't bind ports (no e2e, no api vitest): the coordinator runs those; api fix rounds go to a Claude implementer. Never commit in the main checkout while integrate.sh or done.sh runs.
 - **Late evening update:** c05-timeline-list closed (505/515); B11/B4 preps integrated (TL-P4-48); B1c, B3b, B5a reds committed in their worktrees; smoke-request-slow implementation running after red round 3; then Q1a; B7/B8/B9 preps running. Suites, main and backup still at 645710a4.
-- **main = backup = 2ab7b490** (C05 on staging). Since then on claude/p3: preps c08-c15 integrated; packets for B2a, Q1a, rate limits, smoke-request-slow, smoke-request-report-hidden, pwa-update.
+- **main = backup = 645710a4** (staging; older line: 2ab7b490 had C05). Since then on claude/p3: preps c08-c15 integrated; packets for B2a, Q1a, rate limits, smoke-request-slow, smoke-request-report-hidden, pwa-update.
 - **In flight (worktrees /private/tmp/bower-<branch>):**
   - pwa-update (blocks the owner's retest): fix round 1 committed; e2e:pwa + check running; then Claude review.
   - smoke-request-report-hidden (ui): designer findings fixed (14f1392b); gates running; then Codex pass, Claude review, designer verify.
