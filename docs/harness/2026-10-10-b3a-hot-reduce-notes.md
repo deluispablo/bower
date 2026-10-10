@@ -168,3 +168,74 @@ The offline standard references in Sources above informed the implementation;
 no pages were fetched. Redux's prerequisite reducer concepts describe a pure
 projection over supplied inputs without effects or input mutation. CommonMark
 0.31.2 ATX headings and list items supply the generated Markdown syntax.
+
+## Red repair
+
+The packet's numbered contract controls this repair. Its point 2 reserves the
+cap mark for Open threads; the earlier cap red and implementation notes above
+incorrectly required marks for capped focus and recent rows. Point 4 still requires
+`- (N more)` when the 300-word cut removes rows. That word-cut red is unchanged.
+
+tests changed: runner/test/b23-hot.test.ts: empty inputs now assert exact text, rejecting blank-line padding.
+tests changed: runner/test/b23-hot.test.ts: cap expectations now require marks only for Open threads (packet point 2).
+tests changed: runner/test/b23-hot.test.ts: added leading-block and exact 300-word cap regressions (points 3 and 4).
+
+- `B3a hot: empty inputs leave three bare headings` compares the entire string
+  against the title, supplied date and three adjacent headings, with no trailing
+  newline. Its ordinary-question control and empty provenance assertion remain.
+- `B3a hot: row caps keep 10 threads 5 hubs and 10 changes with only a thread mark`
+  retains the original inputs, bounds and positive control, and requires five
+  focus rows and ten recent rows with no cap marks. Open threads still reports
+  three waiting on Home. A soft focus assertion lets the log expose both failures;
+  it still fails the test.
+- `B3a hot: 6 hubs and 11 changes keep exactly 300 capped words without marks`
+  uses hubs H0 through H5 and changes c00 through c10, all dated 2026-10-09.
+  c00 has 243 words; every other change has one. The expected complete text is
+  explicitly counted as 300 words. The control with only five hubs and ten changes
+  matches it exactly. Adding the over-cap inputs must preserve that text and its
+  displayed provenance, without marks or lost retained changes.
+- Added two parameterized test families:
+  `B3a hot: question $label starts literally in one top-level row` and
+  `B3a hot: hub $label starts literally in one top-level row`.
+  Each has the ordinary-row control and eleven labels: ATX heading, level-one
+  heading, hyphen list, asterisk list, plus list, ordered list, block quote,
+  backtick fence, tilde fence, heading after newline, and list after newline.
+  They cover `## Injected`, `# x`, `- Extra row`, `* x`, `+ x`, `1. x`, `> x`,
+  both fenced-code openers, and syntax preceded by collapsed whitespace/newlines.
+  The line parser requires exactly one top-level row and the exact remaining
+  document lines. Its content must not begin the covered CommonMark blocks;
+  decoding valid ASCII punctuation escapes must recover the collapsed input
+  (plus the hub date). This accepts different valid escape placements rather
+  than pinning one spelling such as `- \## Injected`.
+  The existing multiline question, hub and change assertions are unchanged.
+
+### Red repair evidence
+
+Final pinned run collected 34 tests: 24 expected assertion failures and 10 passes.
+All 22 question/hub syntax cases fail because their row content still begins
+an unescaped CommonMark block marker. The ordinary-row controls pass first.
+
+The corrected cap test fails on the extra focus `- (2 more)` and recent
+`- (3 more)` marks. The boundary test's exactly-300-word control passes, but its
+over-cap result adds focus `- (1 more)` and displays only eight changes:
+change-8 and change-9 disappear in favor of `- (3 more)`. Both section failures
+are visible in the log. These reproduce the adversarial review's two blockers.
+The strengthened empty-input assertion passes against the current implementation;
+it now rejects the padding that the previous helper would have filtered away.
+
+- `pnpm -C runner exec vitest run test/b23-hot.test.ts --maxWorkers=2`: exit 1, expected assertion reds.
+  Log: `tmp-logs/b3a-red-repair-vitest.log`.
+- `pnpm -C runner exec tsc --noEmit -p .`: exit 0.
+  Log: `tmp-logs/b3a-red-repair-tsc.log`.
+- `pnpm -C runner exec eslint test/b23-hot.test.ts`: exit 0.
+  Log: `tmp-logs/b3a-red-repair-eslint.log`.
+
+The pinned run was repeated after enabling both cap assertions to report their
+failures. The final TypeScript and ESLint checks passed after that test change.
+Only failure records were read. No broader tests, pnpm check, e2e, network access,
+git writes or implementation edits ran; the coordinator owns commits.
+
+Offline standard reference supplied by the repair instruction:
+[CommonMark 0.31.2 §2.4: backslash escapes](https://spec.commonmark.org/0.31.2/#backslash-escapes).
+No page was fetched. The assertion decodes only ASCII punctuation escapes and
+checks heading/list/quote/fence syntax at the start of each parsed row's content.
