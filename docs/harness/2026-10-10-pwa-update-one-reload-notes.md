@@ -95,3 +95,7 @@ sources, plus the packet's diagnosis and ruling. Standard references for the imp
 
 Production routing, registration, dependencies and all implementation files are untouched. No git command
 that writes was run. The coordinator must commit the red files and this notes file separately.
+
+## Reds confirmed by the coordinator
+
+`pnpm e2e:pwa` at fb3c534c: the 6 existing tests pass; `pwa-update-one-reload: / executes B before its worker installs` fails on the assertion (B's index-DKtH2vo8.js not executed; A's precached bundles ran). The serial block stops there, so the later reds were not reached.
