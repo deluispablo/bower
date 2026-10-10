@@ -110,12 +110,13 @@ it('upload-sign-out-forget: upload forget cannot be undone by an in-flight devic
       const staged: PendingUpload[] = [];
       const delayed: UploadStore = {
         ...store,
-        add: async (record, body) => {
-          if (commitBeforeForget) await store.add(record, body);
+        add: async (...args) => {
+          const [record] = args;
+          if (commitBeforeForget) await store.add(...args);
           staged.push(record);
           if (staged.length === count) entered.open();
           await release.promise;
-          if (!commitBeforeForget) await store.add(record, body);
+          if (!commitBeforeForget) await store.add(...args);
         },
       };
       const q = queue(drive, delayed);
@@ -329,9 +330,9 @@ async function delayedStaging(store: UploadStore, parent: string) {
   });
   const records: PendingUpload[] = [];
   const add = store.add.bind(store);
-  vi.spyOn(store, 'add').mockImplementation(async (record, bytes) => {
-    records.push(record);
-    await add(record, bytes);
+  vi.spyOn(store, 'add').mockImplementation(async (...args) => {
+    records.push(args[0]);
+    await add(...args);
   });
   return { input, records, entered, release };
 }
@@ -389,10 +390,12 @@ it.each([false, true])('upload-sign-out-forget: fix 1.2: sign-out waits for stag
   const cleared = barrier(), cleaning = barrier(), releaseCleanup = barrier();
   const cause = new Error('Synthetic purge removal refused');
   const clear = f.storeA.clear.bind(f.storeA);
+  const control = f.control[0];
+  if (!control) throw new Error('The pending control must exist.');
   vi.spyOn(f.storeA, 'clear').mockImplementation(async (account, folder) => {
     // Exercise a purge removal on metadata that existed before sign-out.
     let failure: { cause: unknown } | undefined;
-    try { await f.storeA.remove(f.control[0]); }
+    try { await f.storeA.remove(control); }
     catch (cause) { failure = { cause }; }
     // Finish the account clear too; a removal failure must still be reported.
     await clear(account, folder);
@@ -420,7 +423,9 @@ it.each([false, true])('upload-sign-out-forget: fix 1.2: sign-out waits for stag
     await cleaning.promise;
     expect(await fresh.list(f.account, f.root)).toEqual([]);
     expect(await keptBytes(fresh, stage.records)).toEqual([null]);
-    expect(await outcome(vi.mocked(f.storeA.add).mock.results[0].value)).toEqual({
+    const addResult = vi.mocked(f.storeA.add).mock.results[0];
+    if (!addResult) throw new Error('The staged add must have run.');
+    expect(await outcome(addResult.value)).toEqual({
       error: expect.any(UploadForgottenError),
     });
     const endedDuringCleanup = ended;
@@ -701,7 +706,7 @@ it.each(['sign-out', 'auth expiry'] as const)(
     vi.spyOn(body, 'arrayBuffer').mockImplementationOnce(async () => { entered.open(); await release.promise; return read(); });
     const writes: PendingUpload[] = [];
     const add = f.storeB.add.bind(f.storeB);
-    vi.spyOn(f.storeB, 'add').mockImplementation(async (r, bytes) => { writes.push(r); await add(r, bytes); });
+    vi.spyOn(f.storeB, 'add').mockImplementation(async (...args) => { writes.push(args[0]); await add(...args); });
     const adding = outcome(f.vaultB.addPile(syntheticPile(body)));
     try {
       await entered.promise;
@@ -781,12 +786,13 @@ it.each(progressPaths)(
     const entered = barrier(), release = barrier();
     const save = f.storeB.save.bind(f.storeB);
     let held = false;
-    vi.spyOn(f.storeB, 'save').mockImplementation(async (record) => {
+    vi.spyOn(f.storeB, 'save').mockImplementation(async (...args) => {
+      const [record] = args;
       const target = write === 'fileId' ? record.fileId !== null
         : write === 'session' ? record.session !== null
         : write === 'reset' ? record.fileId === null : record.confirmed === 4;
       if (target && !held) { held = true; entered.open(); await release.promise; }
-      await save(record);
+      await save(...args);
     });
     f.drive.beforeChunk = async ({ start }) => {
       if (write === 'reset') throw new BowerError('unknown', 'This file could not be sent.', undefined, marked('permanent'));

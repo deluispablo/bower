@@ -917,7 +917,7 @@ describe('things that arrive late', () => {
     const keeping = new Promise<void>((r) => (kept = r));
     let letKeep: () => void = () => undefined;
     const keepGate = new Promise<void>((r) => (letKeep = r));
-    const store = { ...base, add: async (rec: Parameters<typeof base.add>[0], body: Blob) => { kept(); await keepGate; return base.add(rec, body); } };
+    const store = { ...base, add: async (...args: Parameters<typeof base.add>) => { kept(); await keepGate; return base.add(...args); } };
     const queue = createUploadQueue({ drive, store });
     const v = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set(), uploads: { queue, account: async () => 'ACCOUNT_A' } });
     const realTrash = drive.trash.bind(drive);

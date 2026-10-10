@@ -937,3 +937,188 @@ and timer setup keep Vite cache and CPU reports in OS temp. Tests write nothing 
 No pnpm check or e2e for this authorized test-only red repair. git diff --check passed.
 
 removed: none (0 production lines; only the authorized retained-record/byte expectations replaced).
+
+
+## Fix round 3
+
+This fresh final-round session read WORKER, the packet, all three adversarial reviews and the
+notes, including the committed fix-3 red repair. The repaired fix-1.2 absence assertions agree
+with addendum 8; the previously documented retained-byte contradiction is resolved.
+No production or test file changed, no network, no Git-writing command and no new store.
+The coordinator owns commits. This notes append is the only repository change.
+
+### Remaining frozen-test/API contradiction (TL-P4-51)
+
+The assignment explicitly requires every caller to pass the forget version captured at its own
+start into the store write API, with no write path without one. However, frozen test callers
+still invoke `add(record, body)` and `save(record)` without a version. Barrier wrappers also
+discard any additional argument before forwarding the call to the real store. Making the
+version required in both existing write signatures cannot satisfy these calls and app tsc.
+Accepting a missing argument, recapturing after a wrapper's await, or keeping a legacy
+versionless write path would violate the explicit assignment. Tests may not be changed.
+
+Evidence is a compiler-only in-memory overlay, not a repository or test edit:
+`/private/tmp/upload-forget-fix3-final-nt1wcess/mandatory-api.cjs` changes only the two interface
+signatures in the compiler host's read result, making add's third and save's second argument
+mandatory. Full app diagnostics find exactly 25 missing-version test calls, three expected
+production callers to update, and two existing unrelated test typing errors. Complete output:
+`mandatory-api.log`; location summary: `mandatory-api-summary.log`, in that OS-temp directory.
+
+Every missing-version test call (each location receives TS2554 in the overlay):
+
+- `src/data/upload-store.test.ts:30`: keeps bytes/progress per account/folder, later member add.
+- `src/data/upload-store.test.ts:31`: same test, first member add.
+- `src/data/upload-store.test.ts:32`: same test, other account add.
+- `src/data/upload-store.test.ts:33`: same test, other folder add.
+- `src/data/upload-store.test.ts:36`: same test, session/confirmed/reserved-id save.
+- `src/data/upload-store.test.ts:47`: removed-one-stays-removed test, initial add.
+- `src/data/upload-store.test.ts:49`: same test, late progress save.
+- `src/data/upload-store.test.ts:56`: folder/account-clear test, initial add.
+- `src/data/upload-store.test.ts:57`: same test, other folder add.
+- `src/data/upload-store.test.ts:58`: same test, other account add.
+- `src/data/upload-store.test.ts:75`: no-IndexedDB test, add rejection call.
+- `src/data/upload-store.test.ts:81`: database-replacement test, first add.
+- `src/data/upload-store.test.ts:87`: same test, reopened connection add.
+- `src/data/upload-store.test.ts:94`: malformed-record cleanup test, initial valid add.
+- `src/data/upload-sign-out.test.ts:114`: original forget property, commit-before-forget wrapper.
+- `src/data/upload-sign-out.test.ts:118`: same property, commit-after-forget wrapper.
+- `src/data/upload-sign-out.test.ts:334`: delayedStaging wrapper, used by both fix-1.1 and both fix-1.2 cases.
+- `src/data/upload-sign-out.test.ts:704`: both fix-3 addPile declaration-hashing cases, add wrapper.
+- `src/data/upload-sign-out.test.ts:789`: all five fix-3 progressPaths cases, delayed save wrapper.
+- `src/data/upload-resume.test.ts:157`: committedControl, used by generated staging-barrier test at :714.
+- `src/data/upload-resume.test.ts:243`: reloadCase's stale-progress save; tests at :220 and :705 use it.
+- `src/data/upload-resume.test.ts:725`: generated staging-barrier test's delayed add wrapper.
+- `src/data/upload-queue-real.test.ts:274`: reserved-id/write-once test's observing save wrapper.
+- `src/data/upload-queue.test.ts:667`: refused reserved-id retention test's first-failure save wrapper.
+- `src/data/vault/drive-vault.test.ts:920`: landsAfterTheBin helper's delayed memory-store add wrapper.
+
+The unmodified committed red repair also fails actual app tsc independently:
+
+- `src/data/upload-sign-out.test.ts:395`: TS2345, `f.control[0]` may be undefined when passed to remove.
+- `src/data/upload-sign-out.test.ts:423`: TS2532, the first mocked add result may be undefined.
+
+These two errors are baseline test typing faults, not behavioral contradictions with forgetting.
+The 25 caller diagnostics establish the mandatory write-API/no-test-edit conflict. No test
+assertion is bypassed and no compatibility overload or optional version is introduced.
+
+### Every store write path from the final sweep
+
+- `src/data/upload-queue.ts:318`, keepBytes -> store.add: direct new add and chosenAgain
+  reselection. Their own start capture must precede estimate, Blob reads and digest waits.
+  Existing capture at :847 binds only queue admission, too late for outer vault operations.
+- `src/data/vault/drive-vault.ts:1724`, stageQueued -> queue.add -> keepBytes -> store.add:
+  addPile (:1002, initial staging :1054), restore/Undo (:449, re-enqueue :487-490),
+  retryPile (:1224, send :1249), chooseAgain (:1261, send :1313). Every outer start capture
+  must be forwarded through send (:1612), sendAll (:1629), sendQueued (:1729) and stageQueued
+  (:1720), including fallback hashing at :1724; no recapture after their awaits.
+- `src/data/upload-queue.ts:434`, keepFileId -> store.save: first transfer and retry/offline
+  retry, vault retryPile, explicit resume after halt, and start/hydration after reload.
+- `src/data/upload-queue.ts:452`, shared save -> store.save: onSession, onConfirmed and
+  letFileIdGo (permanently refused reserved-id release/reset), through those same transfer
+  paths. Each start version must survive every callback and connection/transaction retry.
+- `src/data/upload-store.ts:275` and :276: IndexedDB pending metadata and byte puts from add.
+  :298: conditional progress put from save. One required-version write boundary must check
+  the shared marker transactionally for all three puts. The retirement exception at :273
+  must be removed; no old captured version may commit even during awaited local cleanup.
+- `src/data/upload-store.ts:338` and :339: existing memory store add/save mutate the held map.
+  These direct write APIs also require their callers' captured version and the same refusal rule.
+- `src/data/upload-store.ts:203`: the forget marker put is the forget operation itself, not
+  an upload admission. list's malformed-record cleanup, remove/discard/completion, and
+  folder/account clear delete records and bytes; they cannot resurrect them. The vault's
+  index.put calls update its listing, not the upload store.
+
+### Research and verification
+
+No network. Reused inherited official references and inspected the existing mechanism:
+[IndexedDB transaction lifecycle](https://www.w3.org/TR/IndexedDB/#transaction-lifecycle) and
+[Drive resumable uploads](https://developers.google.com/workspace/drive/api/guides/manage-uploads#resumable).
+Required versions belong at the existing store's transactional write boundary, preserved on
+retry; no alternate store, protocol, stored record format or upload mechanism is needed.
+
+Evidence directory: `/private/tmp/upload-forget-fix3-final-nt1wcess/`. Explicit pnpm
+verifyDepsBeforeRun=false/offline=true options prevent dependency auto-install and network.
+The OS-temp config imports the original Vite config, uses the original app setup, and copies
+the timer setup only to redirect CPU-report paths and resolve its imports. Timer enforcement
+is unchanged. Vite cache, logs, CPU reports and tsc build-info paths are OS temp. The complete
+data suite uses repository cwd for its existing relative fixture reads. Tests write no files
+into the repository; no repository configuration or test was edited. Only failure sections
+and aggregate summaries were read.
+
+- Reds: exit 1; 32 tests, 24 pass, eight assertion failures; `reds.log`.
+  Both repaired fix-1.2 cases fail their absence assertion at :421. Undo sign-out/auth expiry
+  fail at :687; addPile declaration hashing sign-out/auth expiry at :715; chooseAgain
+  hashing sign-out/auth expiry at :757. Original 15-byte bodies are restored in each race.
+- Actual app tsc: exit 2; only the two existing committed-test errors at :395 and :423 above; `tsc-app.log`.
+- Node tsc: exit 0; `tsc-node.log`.
+- ESLint on inspected upload-store.ts, upload-queue.ts and vault/drive-vault.ts: exit 0; `eslint.log`.
+
+removed: none (0 production lines; 0 test lines).
+tests changed: none
+
+- Complete requested data suite: exit 1; 79 files, 78 pass; 4,192 tests, 4,184 pass and
+  the same eight assertion failures; `data.log`. No additional behavioral contradiction,
+  load error, unhandled failure or timer-gate failure surfaced. Exact failing names are
+  both fix-1.2 remove-fails variants, Undo before sign-out/auth expiry, addPile declaration
+  hashing before sign-out/auth expiry, and chooseAgain hashing before sign-out/auth expiry.
+- The mandatory-version overlay's 25 test diagnostics are exhaustive over the app compilation.
+  The landsAfterTheBin wrapper at drive-vault.test.ts:920 is used by the late-Bin tests at
+  :981 and :991 (helper calls at :982 and :992); both require forwarding the captured version.
+- Read-only git diff --check: pass. Final diff contains only this notes append. No commit,
+  integration, pnpm check, server, browser gate or production edit after the contradiction stop.
+
+removed: none (0 production lines; 0 test lines).
+tests changed: none
+
+## Fix round 3 red repair 2
+
+Contract (TL-P4-53 addendum 8): `captureForgetVersion(record): Promise<number>` returns
+the version; `add(record, body, version: number)` and `save(record, version: number)`
+require the version the caller captured at its own start. The store refuses an older one.
+The capture is required, not optional; no versionless write or recapture after an await.
+
+All 25 sites identified in the last Fix round 3 contradiction are repaired: 15 direct
+writes pass the captured version and 10 wrapper write sites forward the complete argument
+tuple unchanged. Direct store fixtures capture before their writes, removals, or database
+replacement. reloadCase captures its retained record's version before stopping/releasing
+and awaiting the old page, then passes it to the stale progress save. Without IndexedDB,
+the capture-and-add operation is inside the existing rejection expectation, because capture
+itself rejects without storage; no substitute version or fallback is introduced.
+
+The two independent typing faults have explicit failing checks: the retained control must
+exist before remove, and the staged add mock result must exist before reading its value.
+No test name, assertion predicate, expected value, or contract number changed.
+
+tests changed: src/data/upload-store.test.ts: TL-P4-53 addendum 8 write-API sweep: capture versions at fixture start and pass them through all 14 direct writes.
+tests changed: src/data/upload-sign-out.test.ts: TL-P4-53 addendum 8 write-API sweep: forward all arguments at five wrapper writes; explicitly fail on absent control or mock result.
+tests changed: src/data/upload-resume.test.ts: TL-P4-53 addendum 8 write-API sweep: preserve both staging wrapper tuples and capture the stale-save version before release and waits.
+tests changed: src/data/upload-queue-real.test.ts: TL-P4-53 addendum 8 write-API sweep: observing save forwards every received argument unchanged.
+tests changed: src/data/upload-queue.test.ts: TL-P4-53 addendum 8 write-API sweep: first-failure save forwards every received argument unchanged on the real-store path.
+tests changed: src/data/vault/drive-vault.test.ts: TL-P4-53 addendum 8 write-API sweep: delayed memory-store add forwards every received argument after its barrier unchanged.
+
+Verification: `/private/tmp/upload-forget-red-repair2-6imwm62v/` contains config, copied
+timer setup, cache, CPU reports, `tests.log`, `tsc.log`, and app build info. The temporary
+config imports the original Vite config and preserves timer enforcement; only report and
+cache destinations and copied setup imports are redirected. Direct local Node executables
+avoid package installs and network. No tests write into the repository.
+
+Touched-file run: `node node_modules/vitest/vitest.mjs run --config
+/private/tmp/upload-forget-red-repair2-6imwm62v/vitest.config.mjs --maxWorkers=2` with all six
+changed test files: exit 1, 331 tests, 323 pass, the same eight assertion reds. Five files
+pass; upload-sign-out.test.ts fails only these existing cases:
+
+- fix 1.2 remove-fails false/true: metadata absence at src/data/upload-sign-out.test.ts:424.
+- fix 3 Undo before sign-out/auth expiry: forgotten metadata/15-byte absence at :692.
+- fix 3 addPile declaration hashing before sign-out/auth expiry: absence at :720.
+- fix 3 chooseAgain hashing before sign-out/auth expiry: absence at :762.
+
+Actual app tsc with OS-temp build info: exit 2, expected API diagnostics only in
+upload-store.test.ts and upload-resume.test.ts (capture still optional; writes still
+versionless in production). Both original typing faults at old :395/:423 are gone.
+Production must implement the required Promise<number> capture and write signatures.
+No compatibility overload, cast, suppression, production edit, or weakened assertion.
+Read-only git diff --check: pass. No Git-writing command, commit, pnpm check, or e2e run;
+the coordinator owns commits and this assignment is only the mechanical red repair.
+Research: reused the existing store and inherited official references, without network:
+https://www.w3.org/TR/IndexedDB/#transaction-lifecycle and
+https://vitest.dev/config/#setupfiles. Argument forwarding uses the existing wrapper homes.
+Removed: none. Production repair and integration remain with the assigned sessions.
