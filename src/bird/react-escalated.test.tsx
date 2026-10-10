@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { usePrefs } from '@/app/prefs';
 import { PoseBower, type Pose } from './Bower';
 import { activeHandle } from './presence';
-import { react } from './react';
+import { REACTIONS, react, type ReactionKind } from './react';
 import { FPS, fakeFrames, readRig } from './pose-reference.fixture';
 
 afterEach(() => {
@@ -67,4 +67,50 @@ it("a mind chirp cannot disturb the tuft that done's display owns", () => {
   const values = b.run(12);
   expect(Math.min(...values.map((v) => v.tuft)), 'tuft stays within 16 +- 2 deg').toBeGreaterThanOrEqual(14);
   expect(Math.max(...values.map((v) => v.tuft))).toBeLessThanOrEqual(18);
+});
+
+it('the moves-off settle from the land pose reaches full opacity before release (moves off 0.05 s in)', () => {
+  const frames = fakeFrames(11);
+  const options = { ...frames.options, acts: false };
+  const view = render(<PoseBower pose="land" size={78} engineOptions={options} />);
+  const perch = view.container.querySelector<HTMLElement>('.bird-perch');
+  if (!perch) throw new Error('Missing Bower.');
+  act(() => frames.run(Math.round(0.05 * FPS)));
+  const engine = activeHandle();
+  if (!engine) throw new Error('Missing engine.');
+  const start = Number(perch.style.opacity);
+  expect(start, 'positive control: land is still fading in 0.05 s in').toBeLessThan(0.5);
+  const release = engine.release.bind(engine);
+  let atRelease: number | undefined;
+  vi.spyOn(engine, 'release').mockImplementation(() => { atRelease = Number(perch.style.opacity || 'NaN'); release(); });
+  act(() => usePrefs.setState({ birdMoves: false }));
+  act(() => frames.run(2 * FPS));
+  expect(atRelease, 'release after the settle').toBeDefined();
+  expect(atRelease, 'drawn opacity at release is the still frame (1)').toBeGreaterThanOrEqual(0.99);
+});
+
+it('a chirp right after react(), before its first frame, cannot disturb the tuft the reaction owns', () => {
+  const b = mount('idle');
+  expect(Math.abs(b.read().tuft), 'positive control: idle holds the tuft at 0').toBeLessThanOrEqual(0.5);
+  act(() => { react('done'); b.engine.chirp(0.3); });
+  const values = b.run(FPS);
+  expect(Math.min(...values.map((v) => v.tuft)), "done's tuft eases in from 0 with no dip past -2 deg").toBeGreaterThanOrEqual(-2);
+  expect(Math.abs((values.at(-1)?.tuft ?? 0) - 16), 'positive control: done reaches 16 +- 2 deg').toBeLessThanOrEqual(2);
+});
+
+it('no reaction moves focus: a focused field keeps it through every kind', () => {
+  const b = mount('idle');
+  const field = document.createElement('input');
+  field.setAttribute('aria-label', 'Name');
+  document.body.append(field);
+  field.focus();
+  const before = b.read().head;
+  for (const kind of Object.keys(REACTIONS) as ReactionKind[]) {
+    if (kind === 'moves-off') continue;
+    act(() => { react(kind, field).end(); });
+    b.run(3);
+    expect(document.activeElement, `${kind} leaves focus on the field`).toBe(field);
+  }
+  expect(b.history.some((v) => v.head !== before), 'positive control: the reactions moved the rig').toBe(true);
+  field.remove();
 });
