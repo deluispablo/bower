@@ -455,3 +455,142 @@ and the recovery-contract fixture pattern in run-checkpoint.test.ts. Official li
 provided by the installed Vitest documentation: https://vitest.dev/. No external query was made.
 compatibility: not applicable to these tests; implementation compatibility remains the fix session's responsibility.
 Left out: implementation, commits, fake-worker test changes, full check, e2e and deployment, as assigned.
+
+
+## Fix round 1 implementation
+
+Codex implementation on the assigned `c05-person-notes` worktree. The coordinator owns the product commit and
+separate notes commit. No test, fixture or corpus file changed. No network, git write command, server, real timer,
+`pnpm check` or e2e was used. The separate red session's nine assertions were reproduced before product edits.
+
+### Findings and changes
+
+1. **Overflow blocks every named target.** `scripted.ts` applies the blocked-target policy before planning Timeline
+   lines or model Current state updates, including Bower-owned notes. The existing content author and engine remain
+   the only write path. The source still files and the unlinked row still explains the overflow.
+2. **Pending bindings survive retention.** `personalAppendHistory` recognizes a conflict whose citation is already
+   captured as a place, as well as an applied source move. Each retry manifest therefore remains a verified home for
+   the waiting request/target/source tuple after the first run is retired. The existing next-run retry re-reads the
+   note and passes its newly read modifiedTime through the unchanged engine.
+3. **One title key.** `namedNotes` returns its normalized `titleKey`. Both the planner's ambiguity grouping and the
+   runner's context suppression reuse it. Article-equivalent titles produce refusal rows for every matching file id
+   and folder, and receive no content update. Ambiguous rows share the relevant group's citation ids.
+4. **A replay does not mask another request.** `consentFor` excludes completed request/target pairs while selecting
+   the eligible request. The completed request no longer consumes the selection for a new request to the same note.
+5. **Already-present lines complete durably.** The existing author must return `unchanged` for the bound sourced
+   append before it can become a `satisfiedAppends` entry. That entry stores the read target, exact text, verified
+   content, consent and line, and names the request's existing archive move. That move depends on its source filing.
+   `firstCheckpoint` binds this satisfied request to the archive outcome; `nextCheckpoint` records completion only
+   when that operation is applied. It uses the same bindings, completion set and chain as actual appends, with no
+   content write or updated row. Multiple satisfied targets can share one request archive operation.
+6. **State writes splice one bullet.** The granted personal-state path replaces only the changed bullet's original
+   character span, preserving its original ending and every byte before and after it. The personal-state invariant
+   compares these surrounding spans byte-for-byte, including untouched bullets' trailing spaces and mixed endings.
+   It still writes no ownership mark.
+7. **Plain Markdown uses the existing section layout.** `ownership-format.ts` computes plain-note section spans
+   through its existing legacy layout parser. The content author uses those spans and the existing Timeline grammar;
+   `parseNote` exposes the section for its re-parse invariant. No second section parser or Timeline formatter exists.
+   The existing `timelineBullets` extraction API retains its framed/legacy-only behavior, preserving the runner's
+   corpus extraction assertion for plain prose. The direct bound append and display parser use the same layout.
+8. **Refusal rows depend on their own citation.** Internal refusal rows carry the relevant source file ids. The
+   manifest contributes each row on its source move, rather than requiring every move in the run. Report
+   materialization deduplicates by file id and why when more than one relevant source succeeds. An unrelated move
+   refusal cannot hide the explanation for a successfully filed source.
+9. **Exact completion sets and inherited evidence.** `verifyCheckpointChain` requires the next completion set to be
+   exactly the prior set plus bindings with applied outcomes. A missing completion and an invented completion are
+   both refused. Manifests carry `appendEvidence`, verified prefixes of the originating checkpoint chains; their
+   inherited completion set must exactly match locally applied bindings in those chains. The existing checkpoint
+   parser and chain verifier validate every prefix. History carries these prefixes forward, deduplicated by run and
+   revision, so provenance remains available after retention. The satisfied-entry guard independently reuses the
+   content author to prove that the bound line is already present and validates its capture and archive dependencies.
+
+The six existing fake-worker regressions have two causes, both repaired at the existing ownership filter:
+
+- The three Job hunt regressions now classify `ownership/2` as owned, even without a legacy `by` property. Its
+  Timeline edit, operation-linked updated row and write-time conflict therefore reach the existing author/engine.
+- The three unsupported-format regressions reach the author's typed refusal, hold and fallback paths. Ownership
+  classification consults the cached raw-byte parser and does not call the throwing display parser for an invalid
+  layout. The existing rename hold, merge fallback and failed-move answer retention work again.
+
+removed: the personal-only overflow line filter that allowed owned targets to change.
+removed: separate untrimmed title equivalence in ambiguity grouping and planner context suppression.
+removed: completed requests from the eligible consent selection.
+removed: the assumption that a verified pending citation must have a move in every retry manifest.
+removed: silent settlement of bound appends already present without a checkpoint completion.
+removed: whole-section reconstruction and trim-only invariants for granted personal-state edits.
+removed: the plain-note early return that omitted section spans from the existing ownership layout.
+removed: unconditional display parsing for ownership classification on unsupported formats.
+removed: all-run filing dependencies for individual refusal rows.
+removed: one-sided completion validation that checked additions but permitted missing applied bindings.
+removed: acceptance of inherited completion tuples without checkpoint provenance.
+removed: the unreachable personal-state return and unused runner displayName import.
+
+tests changed: none in fix round 1 implementation.
+compatibility: FIXSHA (coordinator supplies the product commit).
+
+### Verification and logs
+
+The baseline executions reproduced all nine fix-round reds and the six existing fake-worker regressions:
+
+- `tmp-logs/c05-fix1-before-app.log`: 9 failed / 2,752 passed (three new reds and six existing regressions).
+- `tmp-logs/c05-fix1-before-runner.log`: 6 failed / 353 passed (the six new runner reds).
+
+Exact red names are the nine `C05 person notes: fix 1 finding <n>: ...` entries in the preceding Fix round 1 reds
+ table. The six existing names and their original evidence `/tmp/c05-g1-check.log` are in Six existing HEAD
+regressions above. All of them pass in the final unfiltered targeted suites, alongside all other C05 tests and all
+five unchanged `runner/test/keep-one-note.test.ts` tests.
+
+Final commands (all output redirected beneath this worktree; only failures and result totals inspected):
+
+```sh
+pnpm exec vitest run src/data/contracts src/data/fake src/features/tidy src/features/note --maxWorkers=2 > tmp-logs/c05-fix1-green-app.log 2>&1
+pnpm -C runner exec vitest run --maxWorkers=2 > tmp-logs/c05-fix1-green-runner.log 2>&1
+pnpm exec tsc -p tsconfig.app.json --noEmit > tmp-logs/c05-fix1-tsc-app.log 2>&1
+pnpm exec tsc -p tsconfig.node.json --noEmit > tmp-logs/c05-fix1-tsc-node.log 2>&1
+pnpm -C runner exec tsc --noEmit -p . > tmp-logs/c05-fix1-tsc-runner.log 2>&1
+pnpm exec eslint src/data/contracts/note-edit.ts src/data/contracts/note-format.ts src/data/contracts/ownership-format.ts src/data/contracts/run-checkpoint.ts src/data/contracts/run-manifest.ts src/data/spine/records.ts src/data/spine/report.ts src/data/spine/scripted.ts > tmp-logs/c05-fix1-eslint-app.log 2>&1
+pnpm -C runner exec eslint src/claude.ts > tmp-logs/c05-fix1-eslint-runner.log 2>&1
+```
+
+App: **32 files / 2,761 tests pass**. Runner: **41 files / 359 tests pass**. All three TypeScript projects and
+both touched-file ESLint commands exit 0. Read-only `git diff --check` passes. No NODE_OPTIONS was supplied.
+Intermediate suites (`c05-fix1-app.log`, `c05-fix1-runner.log`, `c05-fix1-app-final.log`,
+`c05-fix1-runner-final.log`) exposed the plain-note invariant and the existing extraction/ambiguity-row expectations;
+the final green logs supersede them. No assertion, test bound or fixture was adjusted.
+
+### Updated compatibility-row draft
+
+This supersedes the earlier draft for the fix-round product commit. The coordinator supplies the actual SHA.
+
+| Commit | Entry | What it changes for the accepted app's files |
+| --- | --- | --- |
+| `FIXSHA` | c05-person-notes | Adds the previously drafted optional leftAsWritten, consent, appendBindings and completedAppends fields. This round adds optional manifest appendEvidence (verified originating checkpoint prefixes) and satisfiedAppends (an already-present bound line, its read evidence and archive-operation binding). Checkpoints retain their existing shape; binding uniqueness includes the request and target so an archive operation can complete several satisfied targets. The completion set must equal inherited plus applied bindings, and inherited manifest completions require provenance. Accepted older manifests, checkpoints and reports without these C05 fields retain their meaning and pass the existing fixture tests; unproved completion tuples from the unaccepted implementation draft are refused. Plain Markdown section layout and display now recognize supported Timelines; the old framed/legacy Timeline extraction API retains its behavior. Granted personal-state writes preserve all bytes outside one bullet and add no ownership mark. Personal link rewrites retain TL-P4-32 addendum 1 behavior. App and runner deploy together; old strict readers cannot execute the new C05 records. |
+
+Evidence prefixes use the existing record hashes and chain validation, not a second completion store or dispatcher.
+They grow with distinct completed runs; existing manifest size limits still apply. No new retention or pruning policy
+was introduced in this entry.
+
+### Coordinator commit files and offline reuse
+
+Product commit only:
+
+- `runner/src/claude.ts`
+- `src/data/contracts/note-edit.ts`
+- `src/data/contracts/note-format.ts`
+- `src/data/contracts/ownership-format.ts`
+- `src/data/contracts/run-checkpoint.ts`
+- `src/data/contracts/run-manifest.ts`
+- `src/data/spine/records.ts`
+- `src/data/spine/report.ts`
+- `src/data/spine/scripted.ts`
+
+Separate notes commit: `docs/harness/2026-10-10-c05-person-notes-notes.md` only.
+Logs under `tmp-logs/` are local execution evidence, not product files.
+
+Offline research/reuse: the assigned raw-byte ownership layout cites
+[CommonMark ATX headings](https://spec.commonmark.org/0.31.2/#atx-headings); the existing state/write fencing cites
+[RFC 9110 If-Match](https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.1). The original author provenance,
+Timeline parser/formatter, RunRecords recovery chain, corpus driver and report materializer were reused locally.
+No external lookup was made, under the owner's no-network instruction.
+
+Left out: tests, fixtures, corpus changes, commits, git writes, shared harness state, pnpm check, e2e and deployment.
