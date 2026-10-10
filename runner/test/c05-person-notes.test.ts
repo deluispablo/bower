@@ -776,7 +776,8 @@ describe('C05 person notes through runner main', () => {
       && destination(o.effect.parent) === SYSTEM.archive);
     expect(pending, 'the request first moves to its originating pending folder').toBeDefined();
     expect(archive, 'the archive is selected by its destination').toBeDefined();
-    expect(operations.indexOf(archive!)).toBeGreaterThan(operations.indexOf(pending!));
+    if (!archive || !pending) throw new Error('pending and archive moves are both required');
+    expect(operations.indexOf(archive)).toBeGreaterThan(operations.indexOf(pending));
     return archive;
   }
 
