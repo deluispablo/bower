@@ -1,0 +1,53 @@
+{
+  "section": "how-you-like-things",
+  "lines": [
+    {
+      "text": "Prefers remote roles except when regular mentoring is offered in Saltmere.",
+      "factIds": [
+        "fact-choice-1"
+      ]
+    },
+    {
+      "text": "Prefers short written updates with outcomes, reasons and next steps.",
+      "factIds": [
+        "fact-choice-2"
+      ]
+    },
+    {
+      "text": "Prefers a small role shortlist with clear responsibilities and regular feedback.",
+      "factIds": [
+        "fact-choice-3"
+      ]
+    },
+    {
+      "text": "Prefers a clear path beside the amber garden gate in Saltmere.",
+      "factIds": [
+        "fact-choice-4"
+      ]
+    },
+    {
+      "text": "Prefers recipe ingredients beside steps with the original quantities.",
+      "factIds": [
+        "fact-choice-5"
+      ]
+    },
+    {
+      "text": "Prefers travel notes that preserve places, dates and tentative weather conditions.",
+      "factIds": [
+        "fact-choice-6"
+      ]
+    },
+    {
+      "text": "Prefers comparisons that keep sources separate and say what evidence is missing.",
+      "factIds": [
+        "fact-choice-7"
+      ]
+    },
+    {
+      "text": "Prefers keeping the amber gate clear when planning garden work in Saltmere.",
+      "factIds": [
+        "$new:press-2:0"
+      ]
+    }
+  ]
+}

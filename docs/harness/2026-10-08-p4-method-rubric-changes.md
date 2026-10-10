@@ -172,6 +172,19 @@ Semantic review only: covers:model cases are not executed by the existing C04–
 | b23-summary-words | agrees | A words-only note preserves primary prose while adding a one-line scalar summary; unrelated personal metadata is never adopted (F2, F7, R2). |
 | b23-hot-evidence-only | agrees | An instruction-only run rebuilds hot from primary evidence and settled outcomes, dropping unsupported old claims without inventing focus or report rows (F3, F7, F10). |
 
+## B4 preparation verdicts — 2026-10-10
+
+Every new case was checked against TL-P4-08 points 1–8 and the later brain contracts.
+These verdicts cover the proposed method, not implemented B4 outcomes or accepted numeric budgets.
+No existing rubric, expectation or threshold changes. C17 is still outside the method id filter.
+
+| Case | Verdict | Reason |
+| --- | --- | --- |
+| c17-b4-forget-no-return | agrees | Points 1–8 agree: reuse About me, remove only the identified derived fact through a durable tombstone, preserve immutable sources/history, no irrelevant links/type proposals, bounded reads and actual update rows; TL-P4-39 F4 supersedes append-only treatment of this derived memory region. |
+| c17-b4-origin-not-authority | agrees | Points 1–8 agree: trusted words supply one qualified preference, clear offer fits Job hunt with immutable source and a relevant hub link; no document-created preference, sensitive inference, rule or schema, no redundant memory note, bounded reads and truthful rows (F7). |
+| c17-b4-gate-archive-first | agrees | Points 1–8 agree under TL-P4-39 addendum 2: record observations immediately, consolidate only over budget and at five new observations, preserve primary facts/conditions and archive first; the proposed 200-word section budget awaits the lead and is not a changed method threshold. |
+| c17-b4-own-text-deletion | agrees | Points 1–8 agree: supported personal text stays as edited, exactly its bound removed fact is tombstoned, remaining evidence stays live, no whole-note adoption, redundant notes or inference; matching/initialization awaits the lead, and Bower-subsection hand edits have no new recovery (F2/R1 as narrowed). |
+
 ## B11 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-47)
 
 Review of proposed semantics against TL-P4-08 points 1–8, not executed C17 acceptance.
