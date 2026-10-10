@@ -58,7 +58,7 @@ for (const width of [375, 1440]) {
       await page.goto('/?scenario=default&time=instant');
       const inbox = page.getByRole('region', { name: 'Inbox' });
       await expect(inbox.getByText('Looking…', { exact: true })).toHaveCount(0);
-      await expect(inbox.getByRole('button', { name: 'Add', exact: true })).toBeVisible();
+      await expect(inbox.getByRole('button', { name: 'Add a pile', exact: true })).toBeVisible();
       if (row.sentence) {
         const line = inbox.getByText(row.sentence, { exact: true });
         await expect(line).toBeVisible();

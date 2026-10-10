@@ -183,3 +183,19 @@ Eight failures are the committed UI reds recorded above. The other two are uncha
 These two are not spec contradictions and were not modified; neither owned file can resolve them.
 TypeScript and ESLint both passed (exit 0, empty OS-temp logs). Only this notes file differs in the worktree.
 Required next step: resolve the committed Add/Add-a-pile contract contradiction before implementation resumes.
+
+## Red repair 1
+
+tests changed: src/features/home/Home.test.tsx: the spec reuses today's "Add a pile" button
+tests changed: e2e/c02-orphan-count.spec.ts: the spec reuses today's "Add a pile" button
+
+Changed only the accessible name in the one Home assertion and the shared assertion for all 12 e2e cases.
+No other assertions or app code changed. No git writes, network requests, port binding or node_modules changes.
+
+Verification: `pnpm exec vitest run --config /private/tmp/c02-upload-count-ui-vitest.mjs --configLoader native --maxWorkers=2`
+ran Home.test.tsx and Settings.test.tsx: 26 tests, 18 passed, only the 8 expected behaviour reds failed
+(6 Home summary cases and 2 Settings sign-out sheet cases). Log: `/tmp/c02-red-repair-unit.log`.
+The Add assertion remains behind the expected missing-summary failure in the no-unfinished-pile unit case.
+E2e spec tsc passed (exit 0): `pnpm exec tsc --ignoreConfig --noEmit --target ES2023 --lib ES2023,DOM --module ESNext --moduleResolution bundler --types node --strict --skipLibCheck --allowImportingTsExtensions --verbatimModuleSyntax e2e/c02-orphan-count.spec.ts`.
+Log: `/tmp/c02-red-repair-tsc.log`. `git diff --check` passed.
+pnpm check and e2e execution omitted under the explicit repository-write and port-binding constraints.

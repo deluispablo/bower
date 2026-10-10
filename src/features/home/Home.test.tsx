@@ -391,7 +391,7 @@ describe('c02-upload-count-ui Inbox contract', () => {
     expect(orphanSummary).toHaveBeenCalled();
     const inbox = screen.getByRole('region', { name: 'Inbox' });
     expect(within(inbox).queryByText(/finish arriving|couldn't check that/)).toBeNull();
-    expect(within(inbox).getByRole('button', { name: 'Add' })).toBeVisible();
+    expect(within(inbox).getByRole('button', { name: 'Add a pile' })).toBeVisible();
     expect(within(inbox).getByRole('button', { name: 'Tidy up 1 thing' })).toBeVisible();
   });
 
