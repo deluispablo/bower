@@ -290,19 +290,25 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     const finished: Entry[] = [];
     for (const entry of entries.values()) {
       const { item, halted } = entry;
-      // Kept on the device, gone from it, not sent here: another tab finished it.
+      // Kept on the device, gone from it, not sent here: another tab may have finished it.
       // One held back is being removed here: it is not done.
       if (item.durable && item.state === 'waiting' && !halted && !ids.has(item.id)) {
-        item.state = 'done';
-        item.sent = item.size;
         finished.push(entry);
       }
     }
     // Its file, where this page knew the reserved id (one a block interrupted here and another tab finished).
-    for (const { item, record } of finished) {
-      if (record.fileId === null || item.file) continue;
+    for (const entry of finished) {
+      const { item, record } = entry;
+      if (record.fileId === null) continue;
       try {
-        item.file = await drive.getUploaded(record.fileId);
+        // It stays on its way until this page knows the arrival, including while read-back waits or fails.
+        const file = item.file ?? await drive.getUploaded(record.fileId);
+        if (gen !== generation || entries.get(item.id) !== entry) return;
+        item.file = file;
+        item.sent = item.size;
+        item.state = 'done';
+        // Publish this arrival before another member's read-back can wait.
+        notify();
       } catch (error) {
         console.error(error);
       }

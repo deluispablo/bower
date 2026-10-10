@@ -543,3 +543,78 @@ Research is inherited from the packet and local mechanisms; no source was fetche
 [IndexedDB transaction lifetime](https://w3c.github.io/IndexedDB/#transaction-lifetime).
 Existing queue, store, write-once and Drive implementations are used without replacement.
 Implementation, commits, full check and e2e are left to the assigned sessions/coordinator.
+
+## Fix round 2
+
+Implementer: Codex, 2026-10-10. Baseline HEAD: `20705542`.
+Implements the second adversarial review's completion-window class ruling.
+No network, git-writing command, test edit, dependency change or shared harness edit.
+
+The existing queue's other-tab reconciliation leaves each member `waiting` while its
+reserved-file read-back is outstanding. Only a successful read-back publishes its file,
+full byte count and `done` state together. An absent reservation or failed read-back
+does not claim completion. A changed queue generation or removed entry rejects a late
+read-back. Each confirmed member notifies the existing subscribers before reconciliation
+can wait on the next member, so one slow read-back cannot hide another member's arrival.
+The existing sender already completes only with a confirmed file; its path is unchanged.
+
+`declaredState` takes its file snapshot and in-flight member keys synchronously at the
+same point, after reading the declaration. The existing `accountPile` judges that file
+snapshot; local-member decisions use those same captured queue facts. If accounting
+finds a missing member, it still waits for existing queue hydration, then repeats the
+same accounting from a fresh paired snapshot. Ordinary listings retain their ability
+to finish before a gated account answer. The existing full-read publication guard and
+completion subscribers still refresh children/accounting when arrival changes mid-read.
+No queue, store, state machine, arrival ledger, protocol or second accounting rule was added.
+
+removed: `src/data/upload-queue.ts`: 6 replaced/moved lines; premature `done`/full-progress assignment removed.
+removed: `src/data/vault/drive-vault.ts`: 9 replaced/moved lines; separate file/queue decision snapshots replaced.
+removed: no mechanism deleted; final production diff is 29 added lines and 15 removed lines.
+tests changed: none.
+
+### Red and verification
+
+The committed tests ran unchanged before implementation. Exact failing name:
+`upload-resume-after-reload: fix 2: other-tab completion with pending read-back`.
+It failed at `src/data/upload-resume.test.ts:520`: the first full read returned a
+`chooseAgain` row with `upload: -1` and `notArrived: true`. All nine other tests passed,
+including the resolved other-tab and same-tab completion controls.
+The final production change passes all ten tests, including that exact red and both controls.
+
+All output is under `tmp-logs/`; only failure excerpts and aggregate results were inspected.
+
+```sh
+pnpm exec vitest run src/data/upload-resume.test.ts --maxWorkers=2 > tmp-logs/resume-fix2-reds-before.log 2>&1
+pnpm exec vitest run src/data/upload-resume.test.ts --maxWorkers=2 > tmp-logs/resume-fix2-reds-final2.log 2>&1
+pnpm exec vitest run src/data --maxWorkers=2 > tmp-logs/resume-fix2-data-final2.log 2>&1
+pnpm exec tsc -p tsconfig.app.json --noEmit > tmp-logs/resume-fix2-tsc-app-final2.log 2>&1
+pnpm exec tsc -p tsconfig.node.json --noEmit > tmp-logs/resume-fix2-tsc-node-final2.log 2>&1
+pnpm exec eslint src/data/upload-queue.ts src/data/vault/drive-vault.ts > tmp-logs/resume-fix2-eslint-final2.log 2>&1
+```
+
+- Before: 1 intended assertion failure, 9 passes; exit 1.
+- Final reload reds and controls: 10 passed, 2.68 seconds; exit 0.
+- Final entire data suite: 4,150 passed across 78 files, 73.30 seconds; exit 0.
+- Final app tsc, node tsc and touched-production-file eslint: exit 0, empty logs.
+- Read-only `git diff --check`: exit 0.
+- The complete requested data suite has no failed tests or unhandled errors. No test
+  contradicts this ruling (TL-P4-51); every test, assertion, bound and timeout is unchanged.
+- An intermediate data sweep was interrupted after an exploratory publication guard
+  change was reverted; `resume-fix2-data.log` is not completion evidence. That guard
+  would also have required already-observed, intentionally removed files to reappear.
+  The original guard remains. The next sweep passed 4,150 tests across 78 files,
+  44.01 seconds (`resume-fix2-data-final.log`), before per-member completion notification
+  was added. The final sweep above verifies the completed change.
+
+### Research and remaining delivery gates
+
+No sources were fetched. Research/reuse comes from the packet/prep and existing mechanisms:
+[Drive resumable uploads](https://developers.google.com/workspace/drive/api/guides/manage-uploads#resumable)
+and [IndexedDB transaction lifetime](https://w3c.github.io/IndexedDB/#transaction-lifetime).
+Retained session URI, server offset/status queries, reserved identity, committed device
+staging and write-once reconciliation keep their existing homes.
+
+Full `pnpm check` was not run: its harness fixture tests run git-writing commands,
+which the assignment prohibits. Browser e2e and a full-check mark are not claimed.
+Coordinator owns commits and delivery gates; independent review and designer U3 verification
+remain before entry close. Production changes and these notes remain uncommitted.

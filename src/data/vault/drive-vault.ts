@@ -714,7 +714,7 @@ export class DriveVault implements VaultSource {
     for (const pile of await this.looseMissing(new Set(out.map((p) => p.id)))) out.push(pile);
     // Queue completion updates the listing through fromQueue. Publish only when that listing and the
     // queued rows stayed consistent across the reads; otherwise reuse the listing and read caches.
-    // A done file whose completion event is still on its way also needs that updated listing first.
+    // The queue keeps read-back pending members in flight. A done file still needs its completion event here.
     if (this.arrived.size !== arrivals || this.queued.queue.items().some((i) => i.state === 'done' && i.file && !this.arrived.has(i.id))) return this.piles(context);
     return out.sort((a, b) => b.createdAt - a.createdAt);
   }
@@ -811,8 +811,7 @@ export class DriveVault implements VaultSource {
    */
   private async declaredState(folder: DriveFile, u: Upload | undefined, queued: readonly string[] = []): Promise<DeclaredState> {
     const ix = await this.index();
-    const files = this.known(ix);
-    const found = await this.declarationOf(folder, files);
+    const found = await this.declarationOf(folder, this.known(ix));
     if (found.state !== 'found') return { rows: [], contextKey: null, changed: new Set(), lookup: found.state, blocked: null, missing: [], remaining: [] };
     const contextKey = found.declaration.context.kind === 'text' ? found.declaration.context.memberKey : null;
     const drive = this.drive;
@@ -820,16 +819,25 @@ export class DriveVault implements VaultSource {
     // Only when a member is missing everywhere live: one Bin lookup for all of them.
     const binned = (keys: readonly string[]) => drive.binnedByItem(root, keys);
     // The tidy-up's own accounting: a member a consumed disposition records is filed, the rest looked up.
-    const readiness = await accountPile(found.declaration, found.sha256, folder, files, (id) => this.readBytesOnce(id), (f) => this.digestOf(f), binned, this.dispositionCache);
+    const account = async () => {
+      // Take the file evidence and in-flight members together, before any accounting read can yield.
+      const files = this.known(ix);
+      const local = new Set([...(u?.entries.map((e) => e.key) ?? []), ...queued, ...this.queuedItems(found.declaration.pileId).map((i) => i.memberKey)]);
+      const readiness = await accountPile(found.declaration, found.sha256, folder, files, (id) => this.readBytesOnce(id), (f) => this.digestOf(f), binned, this.dispositionCache);
+      return { readiness, local };
+    };
+    let { readiness, local } = await account();
     this.checkCurrent();
+    if (readiness.members.some((m) => m.state === 'missing')) {
+      await this.startQueue();
+      this.checkCurrent();
+      // Hydration may have brought in a member or its arrival: decide from one fresh snapshot of both.
+      ({ readiness, local } = await account());
+      this.checkCurrent();
+    }
     const state = new Map(readiness.members.map((m) => [m.memberKey, m]));
     // Only a member with no file anywhere has not arrived; a changed or unchecked one is not sent again.
     const missing = found.declaration.members.filter((m) => state.get(m.memberKey)?.state === 'missing');
-    if (missing.length) {
-      await this.startQueue();
-      this.checkCurrent();
-    }
-    const local = new Set([...(u?.entries.map((e) => e.key) ?? []), ...queued, ...this.queuedItems(found.declaration.pileId).map((i) => i.memberKey)]);
     const rows = missing
       .filter((m) => !local.has(m.memberKey))
       .map((m) => ({ id: m.memberKey, name: shownName(m), kind: m.kind, origin: m.origin ?? 'Added in Drive', upload: -1, chooseAgain: true as const }));
