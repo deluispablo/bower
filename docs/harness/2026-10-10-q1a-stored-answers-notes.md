@@ -961,3 +961,72 @@ Final status: implementation complete; full gate verification blocked by the 22 
 and sandbox listener EPERM for both e2e sources. No permission escalation or alternate heavy-run lock was used.
 The existing global heavy-run lock was respected; both e2e attempts and the full check ran to completion.
 No additional run is needed to reproduce the unchanged listener refusal, and no gate success is claimed.
+
+## Fix round 2
+
+2026-10-10. Continued the escalated entry at supplied HEAD
+`e149f63cb81bf2a7f7b249dc6d7ad24f03b1b674`, with committed Red repair 4.
+Status: the addendum 4 acceptance contract and all requested regression checks pass.
+No production repair was necessary: the complete baseline Q1 file already passes 36/36.
+This agrees with Red repair 4's recorded green result; no new failing assertion is claimed.
+Only this appendix was edited. The coordinator owns commits and integration.
+No network, writing git command, test edit, golden edit, fingerprint edit or new store was used.
+
+Read WORKER, the packet, TL-P4-44, DECISIONS addenda 1–2, all notes (including supplied
+addendum 3 and Red repair 4's addendum 4 contract), and the seven-finding adversarial review.
+Addenda 3–4 are still supplied through these notes rather than this checkout's DECISIONS.
+
+### Existing mechanism and acceptance evidence
+
+- `src/data/spine/scripted.ts:711–721` resolves the selected stored action through its folder id,
+  then obtains that folder's current path in the existing index. Renaming Home to Room or moving
+  Home from Areas to Projects keeps the same destination id. Normal move fences preserve item bytes.
+- The same chosen map records an unavailable destination as null and holds its subject without
+  alternative placement, asking or copying in that continuation. The existing answered-asking
+  closure removes that answered card; no new asking means the existing round stays at one.
+- On the next run, the existing candidate builder (`runner/src/claude.ts:440–442`) uses the current
+  listing. The existing asking and round-history path writes one newer asking with current options,
+  excludes the gone folder, and advances the same history to round two. Nothing stores a second counter.
+- Both exact acceptance tests pass through production main, answerQuestion and the real /process fixture:
+  `Q1a fix 1.5: missing or outside-root stored option folders cannot authorize alternative filing`
+  and `Q1a fix 1.5b: a gone option folder leaves the item waiting and the next run asks again as the next round`.
+  The first covers ordinary/valid filing, rename, allowed-root move, gone and outside controls.
+  The second preserves the original item evidence and verifies checksum-matching files contain
+  only its original id after both the gone continuation and the fresh next-round asking.
+
+Offline research reused these existing local mechanisms and the packet's established references:
+[TypeScript discriminated unions](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions),
+[Tolerant Reader](https://martinfowler.com/bliki/TolerantReader.html), and
+[stable request identity](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/).
+No online verification is claimed. Existing stored schemas, journal identity, consent, fences,
+rounds, asking path and subscription timing remain unchanged.
+
+removed: none (zero production or notes lines removed).
+tests changed: none
+
+### Validation
+
+All output is under `tmp-logs/`; only failed assertions and aggregate results were read.
+All requested suites ran to completion with `--maxWorkers=2`. No failures, skips, load errors,
+timeouts or test/ruling contradictions were found; the TL-P4-51 contradiction ledger is empty.
+
+| Command | Result / evidence |
+| --- | --- |
+| Q1 reds: `TMPDIR=/private/tmp/bower-q1a-stored-answers/tmp-logs pnpm -C runner exec vitest run test/q1-continuation.test.ts --maxWorkers=2` | 36/36 pass before changes; `tmp-logs/q1a-fix-round-2-before.json`, `.log`. |
+| `pnpm exec vitest run src/data --maxWorkers=2` | 4,141/4,141 pass; `tmp-logs/q1a-fix-round-2-data.json`, `.log`. |
+| `TMPDIR=/private/tmp/bower-q1a-stored-answers/tmp-logs pnpm -C runner exec vitest run --maxWorkers=2` | 592/592 pass; `tmp-logs/q1a-fix-round-2-runner.json`, `.log`. Includes corpus, Drive call goldens, raw/normalized fingerprints, bounded reads and timing. |
+| `pnpm exec tsc --noEmit -p tsconfig.app.json` | Exit 0; `tmp-logs/q1a-fix-round-2-tsc-app.log`. |
+| `pnpm exec tsc --noEmit -p tsconfig.node.json` | Exit 0; `tmp-logs/q1a-fix-round-2-tsc-node.log`. |
+| `pnpm -C runner exec tsc --noEmit -p .` | Exit 0; `tmp-logs/q1a-fix-round-2-tsc-runner.log`. |
+| `pnpm exec eslint src/data/spine/scripted.ts src/data/contracts/questions.ts src/data/vault/drive-vault.ts` | Exit 0; `tmp-logs/q1a-fix-round-2-eslint-app.log`. |
+| `pnpm -C runner exec eslint src/claude.ts` | Exit 0; `tmp-logs/q1a-fix-round-2-eslint-runner.log`. |
+
+There are no touched TypeScript files in this round; ESLint additionally verifies the four production
+files from fix round 1. Read-only diff checks confirm no production, test, golden or fingerprint change.
+HEAD remains unchanged. Generated evidence stays under the untracked `tmp-logs/` directory.
+The sole tracked change is this notes appendix.
+
+`pnpm check` and e2e are not repeated for unchanged production/screens. Their previously recorded
+whole-check failures and local-listener refusals remain recorded under Fix round 1; no full-gate mark
+or e2e success is claimed here. This round completes the user's requested checks.
+Left out: Q1c live publication, Q1b UI, which-note, B12, full-gate repair, commits and integration.
