@@ -482,3 +482,38 @@ b3a-hot-reduce,implementer (fix round 2),codex,gpt-5-codex,medium,1,338436,33654
 b3a-hot-reduce,reviewer (P4-88),claude,opus,,1,35988,,,,,,6,1,PASS,2026-10-10
 e2e-resize-helper,implementer,codex,gpt-5-codex,medium,1,918338,911223,,860416,7115,,,,done,2026-10-10
 e2e-resize-helper,reviewer (P4-89),claude,opus,,1,31379,,,,,,3,1,PASS,2026-10-10
+b1a-contract,red-owner,codex,gpt-5-codex,high,1,7719923,7676614,,7485184,43309,,,,12 reds,2026-10-10
+b1a-contract,red-owner (repair TL-P4-45),codex,gpt-5-codex,medium,1,291956,289200,,264064,2756,,,,2 tests,2026-10-10
+b2a-summary-format,red-owner,codex,gpt-5-codex,high,1,1218801,1203440,,1123200,15361,,,,152 reds,2026-10-10
+q1a-stored-answers,red-owner,codex,gpt-5-codex,high,1,8977712,8922272,,8701952,55440,,,,28 reds,2026-10-10
+request-run-slow-reads,diagnoser,codex,gpt-5-codex,high,1,1033361,1025889,,908416,7472,,,,3 options,2026-10-10
+request-outcome-not-shown,diagnoser,codex,gpt-5-codex,high,1,923699,916863,,812544,6836,,,,3 options,2026-10-10
+b1a-contract,implementer (draft),codex,gpt-5-codex,high,1,3633803,3614656,,3456128,19147,,,,blocked: 3 tests + goldens,2026-10-10
+b2a-summary-format,implementer,codex,gpt-5-codex,high,1,966881,957755,,894720,9126,,,,green,2026-10-10
+tree-new-note-button,diagnoser,codex,gpt-5-codex,medium,1,388523,385683,,317568,2840,,,,old bundle,2026-10-10
+b2a-summary-format,adversarial pass,codex,gpt-5-codex,high,1,317770,312512,,269696,5258,,,,BLOCK 4,2026-10-10
+b1a-contract,red-owner (repair 2),codex,gpt-5-codex,medium,1,756935,752221,,708608,4714,,,,3 tests,2026-10-10
+p4-rate-limits,implementer (blocked),codex,gpt-5-codex,medium,1,695418,688886,,640128,6532,,,,EPERM loopback,2026-10-10
+pwa-update-stuck,diagnoser,codex,gpt-5-codex,high,1,450027,445060,,371200,4967,,,,3 options,2026-10-10
+b2a-summary-format,red-owner (repair),codex,gpt-5-codex,high,1,511172,502830,,440192,8342,,,,44 reds; 1 collision,2026-10-10
+p4-rate-limits,implementer,claude,opus,,1,99305,,,,,,19,3,green,2026-10-10
+smoke-request-slow,red-owner,codex,gpt-5-codex,high,1,2994367,2970325,,2831360,24042,,,,reds,2026-10-10
+p4-rate-limits,adversarial pass,codex,gpt-5-codex,high,1,307491,303481,,237184,4010,,,,BLOCK 3,2026-10-10
+p4-rate-limits,red-owner (repair),codex,gpt-5-codex,high,1,497634,489075,,441856,8559,,,,reds,2026-10-10
+smoke-request-report-hidden,implementer,codex,gpt-5-codex,medium,1,1227885,1215702,,1147520,12183,,,,green,2026-10-10
+smoke-request-report-hidden,red-owner (designer findings),codex,gpt-5-codex,medium,1,945789,937523,,882432,8266,,,,7 reds,2026-10-10
+b2a-summary-format,red-owner (ruling),codex,gpt-5-codex,medium,1,425530,422454,,371328,3076,,,,42 reds,2026-10-10
+b1a-contract,implementer (round 2),codex,gpt-5-codex,high,1,5546193,5520230,,5341824,25963,,,,blocked: rulings,2026-10-10
+pwa-update,implementer,codex,gpt-5-codex,medium,1,736016,724536,,679680,11480,,,,done,2026-10-10
+pwa-update,implementer (fix round 1),claude,opus,,1,79402,,,,,,20,3,test bug,2026-10-10
+p4-rate-limits,implementer (fix round 1),claude,opus,,1,92451,,,,,,21,6,green,2026-10-10
+pwa-update,red-owner (repair),codex,gpt-5-codex,medium,1,229304,227861,,204544,1443,,,,test bug fixed,2026-10-10
+smoke-request-report-hidden,implementer (fix round 1),codex,gpt-5-codex,medium,1,720178,716330,,671232,3848,,,,green,2026-10-10
+b2a-summary-format,implementer (fix round 1),codex,gpt-5-codex,high,1,681610,674851,,621952,6759,,,,green,2026-10-10
+b1a-contract,red-owner (repair 3),codex,gpt-5-codex,high,1,2147523,2131374,,2031104,16149,,,,goldens pinned,2026-10-10
+p4-rate-limits,adversarial pass 2,codex,gpt-5-codex,high,1,336070,334018,,269568,2052,,,,PASS,2026-10-10
+p4-rate-limits,reviewer (P4-90),claude,opus,,1,54007,,,,,,12,1,BLOCK 1,2026-10-10
+pwa-update,reviewer (P4-92),claude,opus,,1,34209,,,,,,6,1,PASS,2026-10-10
+b2a-summary-format,adversarial pass 2,codex,gpt-5-codex,high,1,472890,467927,,419200,4963,,,,BLOCK 1 (limit),2026-10-10
+b2a-summary-format,reviewer (P4-91),claude,opus,,1,49537,,,,,,9,1,PASS,2026-10-10
+b1a-contract,implementer (round 3),codex,gpt-5-codex,high,1,1206300,1197364,,1128960,8936,,,,green but goldens,2026-10-10

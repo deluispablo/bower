@@ -1,0 +1,22 @@
+{
+  "id": "c12-model-failure-retry",
+  "capability": "C12",
+  "title": "A model failure changes nothing and a later tidy-up succeeds",
+  "covers": "model",
+  "source": "new (C12 preparation; scripted fault and lifecycle proof pending)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "Update the garden plot from this notice.",
+      "files": [
+        "Water butt notice.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Areas/Home/Garden plot.md"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "id": "c08-report-with-sources",
+  "capability": "C08",
+  "title": "A useful readiness report with grounded next steps",
+  "covers": "model",
+  "source": "new (C08 prep; existing thing.note boundary)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "Write a readiness report for the garden day with a table, next steps, limits and sources.",
+      "files": [
+        "Garden day briefing.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Projects/Garden day/Garden day.md"
+  ]
+}

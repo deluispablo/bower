@@ -1,0 +1,22 @@
+{
+  "id": "c15-context-budget-exhausted",
+  "capability": "C15",
+  "title": "A partial packing guide stays honest after the context budget is spent",
+  "covers": "model",
+  "source": "new (C15 preparation; scripted input and context proof pending)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "Packing guidance for Move. File it with Move; do not infer a moving date.",
+      "files": [
+        "Packing guide.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Projects/Move/Move.md"
+  ]
+}

@@ -1,5 +1,6 @@
 # Capability corpus (P4-A)
 
+Made-up cases for the capabilities C04 to C13 and C15 (Alex, Larkspur Lane, Saltmere, Ferrowick; nothing personal). Each folder holds:
 Made-up cases for the capabilities C04 to C11, C13, C15 and proposed C17 / B1–B3 (Alex, Larkspur Lane, Saltmere, Ferrowick; nothing personal). Each folder holds:
 
 - `case.json`: the inputs (piles, requests, rules, answers, seeded questions), the scope and the web switch;
@@ -38,8 +39,17 @@ Made-up cases for the capabilities C04 to C11, C13, C15 and proposed C17 / B1–
 | c07-dated-rent-change | C07 | model | new (C07 prep; scripted intent proof pending) |
 | c08-compare-flats | C08 | scripted | p2-journey:C08 |
 | c08-revise-comparison | C08 | model | new (no revision path is scripted) |
+| c08-report-with-sources | C08 | model | new (C08 prep; report through the existing thing.note boundary) |
+| c08-compare-missing-fact | C08 | model | new (C08 prep; comparison with a missing deposit and trade-off prose) |
+| c08-revise-keeps-personal-text | C08 | model | new (C08 prep; same-document revision, personal text and history) |
 | c09-burst-pipe | C09 | model | bench:5-question-about-filed-pdf, adapted (made-up policy; the original is in bench-5-question-about-filed-pdf) |
 | c09-closest-flat | C09 | scripted | p2-journey:C09 |
+| c10-fresh-result-cited | C10 | model | new (C10 prep; scripted proposals pending lookup harness proof) |
+| c10-stale-result-withheld | C10 | model | new (C10 prep; scripted proposals pending lookup harness proof) |
+| c10-denied-keeps-prior-result | C10 | model | new (C10 prep; scripted proposals pending lookup harness proof) |
+| c09-original-over-summary | C09 | model | new (C09 prep: original over stale summary) |
+| c09-two-source-answer | C09 | model | new (C09 prep: two sources, exact identities) |
+| c09-not-in-sources | C09 | model | new (C09 prep: honest missing evidence) |
 | c10-lookup-fails | C10 | model | new (failed and stale lookups are not scripted) |
 | c10-web-allowed | C10 | scripted | p2-journey:C10 (allowed) |
 | c10-web-denied | C10 | scripted | p2-journey:C10 (denied) |
@@ -50,10 +60,19 @@ Made-up cases for the capabilities C04 to C11, C13, C15 and proposed C17 / B1–
 | c11-source-cannot-override-rule | C11 | model | new (C11 preparation; scripted intent pending) |
 | c11-request-is-one-time | C11 | model | new (C11 preparation; scripted intent pending) |
 | c11-source-cannot-answer | C11 | model | new (C11 preparation; scripted intent pending) |
+| c12-model-failure-retry | C12 | model | new (C12 preparation; scripted fault and lifecycle proof pending) |
+| c12-tool-interruption-recovery | C12 | model | new (C12 preparation; scripted fault and lifecycle proof pending) |
+| c12-text-budget-truthful | C12 | model | new (C12 preparation; scripted fault and lifecycle proof pending) |
 | c13-undo-protects-edit | C13 | model | new |
 | c13-undo-whole-run | C13 | model | new |
+| c13-manifest-move-and-create | C13 | model | new (C13 prep; scripted manifest lifecycle proof pending) |
+| c13-manifest-partial-edited-note | C13 | model | new (C13 prep; scripted manifest lifecycle proof pending) |
+| c13-manifest-state-with-personal-edit | C13 | model | new (C13 prep; scripted manifest lifecycle proof pending) |
 | c15-more-context-bounded | C15 | model | new |
 | c15-scanned-letter | C15 | model | bench:4-scanned-pdf, adapted (made-up; the original is in bench-4-scanned-pdf) |
+| c15-ready-package-reused | C15 | model | new (C15 preparation; scripted input and context proof pending) |
+| c15-stale-package-rebuilt | C15 | model | new (C15 preparation; scripted input and context proof pending) |
+| c15-context-budget-exhausted | C15 | model | new (C15 preparation; scripted input and context proof pending) |
 | b1-index-job-offer | C17 / B1 | model | TL-P4-39; reused made-up B123 indexed job-search fixture; scripted proof pending |
 | b1-changes-person-edit | C17 / B1 | model | TL-P4-39 §1.6, addendum 2; supported own-note edit on the same Drive |
 | b1-moc-over-40 | C17 / B1 | model | TL-P4-38 addenda 1–2; 41-item parent folds to existing child maps |

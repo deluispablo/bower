@@ -1,0 +1,34 @@
+{
+  "files": {
+    "present": [
+      "Projects/Flat hunt/Larkspur Lane flat.md",
+      "Projects/Flat hunt/Larkspur Lane listing.txt"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "unchanged": [
+    "Projects/Flat hunt/Larkspur Lane flat.md",
+    "Projects/Flat hunt/Larkspur Lane listing.txt"
+  ],
+  "notes": [
+    {
+      "path": ".bower/requests.json",
+      "contains": [
+        "[[Projects/Flat hunt/Larkspur Lane listing.txt]]"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 0,
+    "created": [],
+    "updated": [],
+    "setAside": 0,
+    "questions": [],
+    "requests": [
+      "Does the Larkspur Lane flat allow pets?"
+    ]
+  }
+}

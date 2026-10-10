@@ -1,0 +1,48 @@
+{
+  "files": {
+    "present": [
+      "Projects/Flat hunt/Shortlist comparison.md"
+    ],
+    "absent": [
+      "Projects/Flat hunt/Shortlist comparison, revised.md",
+      "Projects/Flat hunt/Shortlist comparison (2).md"
+    ]
+  },
+  "unchanged": [
+    "Projects/Flat hunt/Flat hunt.md",
+    "Projects/Flat hunt/Larkspur Lane flat.md",
+    "Projects/Flat hunt/Cobble Row flat.md"
+  ],
+  "notes": [
+    {
+      "path": "Projects/Flat hunt/Shortlist comparison.md",
+      "contains": [
+        "| Flat | Rent | Commute | Deposit | Status |",
+        "| [[Larkspur Lane flat]] | 1,450 a month | 24 min | 1,450 | viewing done |",
+        "| [[Cobble Row flat]] | 1,580 a month | 18 min | Not stated | viewing booked |",
+        "## My plans\n\nAlex wants to visit Cobble Row in daylight before choosing.\n",
+        "## Sources",
+        "[[Larkspur Lane flat]]",
+        "[[Cobble Row flat]]",
+        "[[Flat hunt]]"
+      ],
+      "timeline": [
+        "2026-10-05 · Written for Alex's comparison request."
+      ],
+      "timelineCount": 2
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 0,
+    "created": [],
+    "updated": [
+      "Projects/Flat hunt/Shortlist comparison.md"
+    ],
+    "setAside": 0,
+    "questionsExactly": 0,
+    "requests": [
+      "Add a Deposit column to Shortlist comparison using the flat notes, keep My plans and the earlier history, and revise the same document."
+    ]
+  }
+}

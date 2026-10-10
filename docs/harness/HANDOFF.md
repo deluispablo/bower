@@ -2,15 +2,20 @@
 
 Coordinator: the Claude Code session named "Orquestador". It integrates in `/Users/deluisp/Projects/bower-app` on branch `claude/p3`; P4 continues on it. Lead: the Planificador session ([DECISIONS.md](DECISIONS.md)). Output rule: [TL-P3-29](2026-10-07-tl-p3-29-output-rule-survives-compaction.md), in AGENTS.md. Minors: [P2_POLISH.md](P2_POLISH.md). Earlier handoffs: git history of this file.
 
-## Resume (2026-10-10 afternoon, TL-P4-31 Codex throughput)
+## Resume (2026-10-10 evening, TL-P4-31 Codex throughput)
 
-Read this first. Cap 1 Claude + 4 Codex while the 1-min load stays under ~12; Codex prompts run targeted tests with --maxWorkers=2. TL-P4-40: no visible change dispatched without the owner's OK via the designer. Never commit in the main checkout while integrate.sh or done.sh runs (check `ps`).
-- **Closed today:** d-v2-24a, landing-csp, c5-remove-new-note, create-named, b1b-ports, tree-name-first, create-name-speed, undo-miss-refresh, q-ui-3, new-note-escape. p4-b23-prep integrated (255f0e07).
-- **C05 (`/private/tmp/bower-c05-person-notes`):** round 5 = addendum 5 (fix 3e958da1) + addendum 6 (two named notes: every target settles in the run; reds 8685f74d; Codex implementation running). Then gates (check; e2e c05-person-notes, capabilities, app, qa5 on demo and fake), scoped Codex pass 5, fresh Claude review, designer, integrate, done. Only Blocking normal-use findings go to the lead.
-- **B3a (`/private/tmp/bower-b3a-hot-reduce`):** packet 2026-10-10-b3a-hot-reduce-packet.md; Codex red running; then Codex implementation, pass, Claude review.
-- **After C05:** B1a red → implementation → pass → review; B2a; Q1a. B1c packet notes in the coordinator scratchpad (hidden paths via isHidden; TL-P4-45 `.bower/` paths).
-- **Open closes:** new-note-opens is blocked by empty-note-help-flaky (diagnoser running); namesheet-names passes.
-- **Suites** for this batch run on a detached worktree `/private/tmp/bower-suites`; then main, backup, SHA to the lead, staging smoke.
+Read this first. Cap 1 Claude + 4 Codex (load < ~12). Wait on Codex only with tracked background Bash jobs (run_in_background), never `&`-detached ones: a lost waiter idled the coordinator 2.5 h on 2026-10-10. Codex can't bind ports (no e2e, no api vitest): the coordinator runs those; api fix rounds go to a Claude implementer. Never commit in the main checkout while integrate.sh or done.sh runs.
+- **main = backup = 2ab7b490** (C05 on staging). Since then on claude/p3: preps c08-c15 integrated; packets for B2a, Q1a, rate limits, smoke-request-slow, smoke-request-report-hidden, pwa-update.
+- **In flight (worktrees /private/tmp/bower-<branch>):**
+  - pwa-update (blocks the owner's retest): fix round 1 committed; e2e:pwa + check running; then Claude review.
+  - smoke-request-report-hidden (ui): designer findings fixed (14f1392b); gates running; then Codex pass, Claude review, designer verify.
+  - p4-rate-limits: fix round 1 committed (check green); Codex pass 2 running; then Claude review.
+  - b2a-summary-format (escalated): fix round 1 committed; Codex pass 2 running; then Claude review.
+  - b1a-contract (escalated): reds + 3 red repairs committed; implementation draft UNCOMMITTED; round 3 removes the .bower/log.md write (addendum 4); then the red owner re-pins goldens to measured (≤91/102), commit fix, check, e2e, Codex pass, Claude review.
+  - q1a-stored-answers: reds committed; implementation after B1a integrates.
+  - smoke-request-slow (escalated): reds committed; implementation after B1a integrates.
+  - p4-b56-prep: Codex refresh running; then to the lead.
+- **Defects logged today:** request-run-slow-reads, request-outcome-not-shown, pwa-update-stuck (all ruled); tree-new-note-button (old cached bundle).
 
 ## Where things stand
 
