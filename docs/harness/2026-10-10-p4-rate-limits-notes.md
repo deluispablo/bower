@@ -2,7 +2,7 @@
 
 implementer: codex
 
-status: red repair complete; runtime evidence awaits the coordinator (sandbox loopback EPERM).
+status: red repair 3 complete; app pin passes; API runtime red evidence awaits the coordinator.
 
 ## Original test-first attempt (historical)
 
@@ -158,3 +158,53 @@ removed: the logout handler's own `authenticate` / signed-out catch (`auth.ts`).
 tests changed: api/test/in-process.ts: harness Env gains accepting rate-limit bindings (the Worker now fails closed without them).
 tests changed: none else; rate-limits.test.ts and no-rate-limit-bindings.ts untouched.
 Logs: /tmp/rl-fr1-vitest.log (26 files, 251 pass), /tmp/rl-fr1-tsc*.log, /tmp/rl-fr1-eslint*.log, /tmp/rl-fr1-check2.log.
+
+
+## Red repair 3
+
+Lead-approved narrow round, TL-P4-29, against `2026-10-10-p4-90-review.md`.
+Preserved contract: a missing or stale session logout answers 204 and clears the session cookie,
+so the client still calls forgetThisPerson. The only new rule is that this logout spends no auth quota.
+This ruling supersedes the 401 expectation recorded in the earlier Red repair and Fix round 1 sections.
+
+tests changed: api/test/rate-limits.test.ts: replace the incorrect 401 signed-out expectation with 204 and Max-Age=0 cookie clearing for 20 missing/invalid/retired/expired logouts; require no binding calls and a subsequent login 302; retain the valid logout count/retirement control and every 20/30/60 boundary.
+tests changed: api/test/auth.test.ts: add missing/retired/expired logout cases requiring 204 and a cleared session cookie; existing tests unchanged.
+tests changed: src/data/live/live.test.ts: add a stale-session sign-out pin through WorkerHttp's actual 204 handling and LiveSources cleanup; assert personal storage and draft bytes disappear while the folder outbox and preferences remain; existing tests unchanged.
+
+Intended API reds (not executed here):
+- `logout without a current session (%s) clears the cookie without counting`: first logout should
+  answer 204 rather than the current handler's 401, clear the cookie, and leave the auth bucket untouched.
+- `logout with a stale session (%s) clears the cookie`: missing/retired/expired logout should answer
+  204 rather than 401 and clear the cookie with Max-Age=0.
+Coordinator must run both API files for observed red evidence before the source repair, then rerun for green.
+
+Observed app pin: `stale-session logout answering 204 forgets this person and keeps the folder outbox`
+passes before source repair; this preserves existing client behavior rather than claiming a new client red.
+Command: `pnpm exec vitest run src/data/live/live.test.ts --maxWorkers=2` (102 tests pass).
+Log: `/tmp/p4-rate-limits-red-repair-3-app.log`.
+API TypeScript and per-project ESLint pass; logs `/tmp/p4-rate-limits-red-repair-3-tsc.log`,
+`/tmp/p4-rate-limits-red-repair-3-api-eslint.log`, `/tmp/p4-rate-limits-red-repair-3-app-eslint.log`.
+An initial combined ESLint invocation failed before linting because it mixed tsconfig roots;
+separate invocations in each project passed. An initial API type check caught an inferred optional
+cookie header; explicitly typing the headers as Record<string, string> corrected it.
+`git diff --check` passes. API tests, pnpm check and e2e not run; coordinator owns API runtime and gates.
+No non-test source, network, git write command, commit, configuration or deployment change.
+Offline references: existing LiveSession.signOut and WorkerHttp.signOut, existing cleanup fixtures,
+and the packet's Cloudflare binding / RFC 9110 Retry-After sources above. No online research performed.
+All four changed files remain uncommitted for the coordinator; notes must stay in a separate commit.
+
+## Fix round 3
+
+Lead-approved narrow repair in `api/src/auth.ts` only; red repair 3 tests remain untouched.
+Restored the signed-out logout path from `git show claude/p3:api/src/auth.ts`:
+missing, invalid, expired or retired sessions answer 204 and clear the session cookie without counting.
+A valid session calls the existing `enforceRateLimit` with `clientIp` after `authenticate` succeeds,
+then retires sessions. Only `HttpError` with code `signed-out` is caught; other failures propagate.
+Offline reference: `claude/p3:api/src/auth.ts`; existing rate-limit mechanism in `api/src/security.ts`.
+removed: logout route's `requireSession` and unconditional `rateLimit` middleware.
+removed: logout handler's `userId` context lookup and undefined-user internal-error guard.
+tests changed: none
+Static checks: API TypeScript and auth.ts ESLint pass; logs `/tmp/p4-rate-limits-fix-3-tsc.log`
+and `/tmp/p4-rate-limits-fix-3-eslint.log`. `git diff --check` passes.
+API tests not run (sandbox restriction); coordinator owns runtime verification and remaining gates.
+No network, git write command, test edit, configuration change or deployment.
