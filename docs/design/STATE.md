@@ -83,4 +83,4 @@ Phase 4/5. The owner approved V2 on 2026-10-09.
   - Inbox row: the second line reads "Waiting for your answer" (accent-line), or "Bower couldn't place this" (muted). The pile page shows a plain line.
   - Sheet CSS: one line so the desktop max-height stays inside the window.
   - Dropped from the draft: run chip pill, Continuing block, pager/Skip, compact scene, new pills and buttons.
-  - Waiting on the owner's OK, then the spec goes to the lead.
+  - The owner OKed it on 2026-10-10. Spec: specs/2026-10-10-questions-ui.md, sent to the lead.
