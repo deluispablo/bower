@@ -1,0 +1,23 @@
+{
+  "id": "c11-request-is-one-time",
+  "capability": "C11",
+  "title": "A one-time filing request does not become a standing preference",
+  "covers": "model",
+  "source": "new (TL-P4-31 ruling 1: C11 preparation; scripted intent pending)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "For this pile only, file the garden newsletter in Resources/Gardening as reference material. This is not a rule for future newsletters.",
+      "files": [
+        "Garden newsletter.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Rules.md",
+    "Resources/Gardening/Gardening.md"
+  ]
+}

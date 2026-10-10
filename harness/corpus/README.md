@@ -47,6 +47,9 @@ Made-up cases for the capabilities C04 to C11, C13 and C15 (Alex, Larkspur Lane,
 | c11-document-is-not-policy | C11 | scripted | p2-journey:C11 (no policy change from a document) |
 | c11-rule-worded | C11 | scripted | p2-journey:C11 (rules) |
 | c11-saltmere-question | C11 | scripted | p2-journey:C11 (question lifecycle) |
+| c11-source-cannot-override-rule | C11 | model | new (C11 preparation; scripted intent pending) |
+| c11-request-is-one-time | C11 | model | new (C11 preparation; scripted intent pending) |
+| c11-source-cannot-answer | C11 | model | new (C11 preparation; scripted intent pending) |
 | c13-undo-protects-edit | C13 | model | new |
 | c13-undo-whole-run | C13 | model | new |
 | c15-more-context-bounded | C15 | model | new |

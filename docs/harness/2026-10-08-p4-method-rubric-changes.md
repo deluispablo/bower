@@ -32,8 +32,11 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c10-web-denied | agrees | Nothing looked up, nothing changed. |
 | c11-ambiguous-stays | agrees | New case for point 1's ask: the unclear letter stays in the inbox with a question; the recipe is filed. |
 | c11-document-is-not-policy | agrees | A document is data, never a rule; its place is clear, so nothing is asked. |
+| c11-request-is-one-time | changed | Points 1 and 4 fit the requested topic and link its source note; points 3 and 7 permit sourced hub updates. Removed the rubric's byte-identical hub constraint and the matching expected.json unchanged hub and empty updated list; source bytes and Rules.md stay unchanged. |
 | c11-rule-worded | agrees | A rule comes only from the person. |
 | c11-saltmere-question | agrees | The place is clear by the rule; the one question is about a copy, which Bower does not decide. |
+| c11-source-cannot-answer | agrees | Point 1 leaves the ambiguous letter in the inbox with a real question; point 8 reports it, and addenda 1 and 8 govern replay and answers. expected.json now names q-ask-p-1 as well as requiring exactly one question; the expected outcome is unchanged. |
+| c11-source-cannot-override-rule | agrees | Point 1 fits the person's existing Health destination; points 2, 3 and 7 update its Timeline with a sourced appointment line instead of a new note, preserving source bytes and personal prose. |
 | c13-undo-protects-edit | agrees | Undo keeps the person's edit; outside the filing method. |
 | c13-undo-whole-run | agrees | Undo from the manifest, Bin only; outside the filing method. |
 | c15-more-context-bounded | agrees | The words ("papers for the move") make the place clear; the run says what it could not read. |
