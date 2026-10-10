@@ -577,3 +577,36 @@ removed: none.
 tests changed: none; one new parity test only.
 left out: production fix, pnpm check, e2e and commits; this assignment is red-only, coordinator commits.
 No network or git command that writes was run. Only parity.test.ts and this notes file changed.
+
+## Fix round 2 implementation
+
+Changed only `src/data/drive/fake-drive.ts` production code: the existing `add` and
+`applyWrite` metadata assignments now use `new TextEncoder().encode(text).byteLength`
+for string content. Both ordinary and fenced creates/writes share these assignments;
+`changed` continues to publish the stored metadata. Unicode `é🙂` now reports 6 bytes
+through the existing fake paths. No extra metadata or feed-size path was added.
+
+Research reused the locally supplied Drive files-resource reference from the adversarial
+review: https://developers.google.com/workspace/drive/api/reference/rest/v3/files
+(defines size in bytes). The fake already uses TextEncoder for stored text checksums.
+No network access was used.
+
+Verification (output redirected; only failure matches and aggregate results read):
+
+- `pnpm exec vitest run src/data/drive src/data/vault src/data/live --maxWorkers=2`:
+  exit 0; 22 files and 808 tests passed, including
+  `b1b fix 2: native fake sizes are UTF-8 bytes for Unicode creates and updates`.
+  Log: `tmp-logs/b1b-fr2-impl.log`.
+- `pnpm exec tsc -p tsconfig.app.json --noEmit`: exit 0.
+  Log: `tmp-logs/b1b-fr2-impl-tsc-app.log`.
+- `pnpm exec tsc -p tsconfig.node.json --noEmit`: exit 0.
+  Log: `tmp-logs/b1b-fr2-impl-tsc-node.log`.
+- `pnpm exec eslint src/data/drive/fake-drive.ts`: exit 0.
+  Log: `tmp-logs/b1b-fr2-impl-eslint.log`.
+- `git diff --check`: passed (read-only).
+
+removed: string character counts from create metadata sizes.
+removed: string character counts from write metadata sizes.
+tests changed: none.
+left out: pnpm check, e2e and commits; this small round runs the explicitly requested gates, coordinator commits.
+No git command that writes was run. This round changed only fake-drive.ts and this notes file.
