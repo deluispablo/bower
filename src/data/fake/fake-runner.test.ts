@@ -43,13 +43,17 @@ const atFirstDispatch = (act: () => Promise<void>): FakeRunServiceOptions['hooks
 const fresh = (): DriveVault => new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
 
 beforeEach(async () => {
+  vi.setSystemTime(new Date('2026-10-10T12:00:00Z'));
   localStorage.clear();
   drive = new FakeDrive();
   root = (await seedFakeDrive(drive, 'default', Date.now())) ?? '';
   vault = fresh();
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 describe('the fake runner', () => {
   it('files every pile it took and empties the journal', async () => {

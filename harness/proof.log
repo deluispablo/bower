@@ -524,3 +524,5 @@ c2-create-by-id	a4944d46f66f289e	2026-10-09	known-green: verify drops 'taking a 
 p4-corpus-driver	b67e90f4068fe9ac	2026-10-09	red (fixed in 0b77422f)
 c4-parse-once	a473bf6c3bd4ae48	2026-10-10	red (fixed in eb909a67)
 d-v2-07	949b96a3d0707255	2026-10-10	known-green: reds proved per round by red-owning sessions (273b58af, 38262feb, 15fd3964, fa474bd0, a7d6ed1a, 66a97045 each failed before its fix); fixes 5784747a, c1aa1941, 69235c10; merged 86b4fe3e; designer verified 2026-10-10
+c4-sheet-settle	6fc16b78602e736f	2026-10-10	known-green: flaky-timing fix, no deterministic red (packet); proof: desktop repeat-each=3 6/6 and fake 24/24 at b7f0b971; check green inside integrate.sh
+c4-create-resume	d77c326d47f1b182	2026-10-10	red (fixed in 56f529fd)

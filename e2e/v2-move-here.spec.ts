@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
+import { animationsEnd, expectAxeClean } from './axe';
 import { expect, test } from './fixtures';
 
 async function openMove(page: Page, isMobile: boolean) {
@@ -31,6 +31,7 @@ test('the move sheet shows where the thing is now and it cannot be chosen', asyn
   const rows = sheet.locator('li > button');
   for (const row of await rows.all()) {
     await row.scrollIntoViewIfNeeded();
+    await animationsEnd(page);
     const box = await row.boundingBox();
     expect(box?.height).toBeGreaterThanOrEqual(52);
   }
@@ -50,12 +51,7 @@ test('the move sheet shows where the thing is now and it cannot be chosen', asyn
   await input.fill('Documents');
   await expect(sheet.getByText('Now here')).toHaveCount(0);
   await input.fill('');
-  const axe = await new AxeBuilder({ page })
-    .include('[role="dialog"]')
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-    .options({ rules: { 'target-size': { enabled: true } } })
-    .analyze();
-  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+  await expectAxeClean(page, { include: '[role="dialog"]', wcag22: true });
 });
 
 test('the move sheet has a cancel that returns focus to its opener', async ({ page, isMobile }) => {
@@ -64,7 +60,9 @@ test('the move sheet has a cancel that returns focus to its opener', async ({ pa
   const cancel = sheet.getByRole('button', { name: 'Cancel', exact: true });
   await expect(cancel).toBeVisible();
   const cancelContainer = cancel.locator('..');
+  await animationsEnd(page);
   const cancelBox = await cancel.boundingBox();
+  await animationsEnd(page);
   const containerBox = await cancelContainer.boundingBox();
   if (!cancelBox || !containerBox) throw new Error('Cancel and its container must have visible bounds.');
   expect(Math.abs(cancelBox.width - containerBox.width)).toBeLessThanOrEqual(1);

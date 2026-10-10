@@ -6403,7 +6403,8 @@
       "Rules apply in line order (wordRules and rules() one sequence by since); pairsOf hides a same-run pair in Since the last tidy-up and the report."
     ],
     "verify": "",
-    "note": "TL-P4-27 (main 802ac116); replaces c4-undo-withdraw (parked at 70a2b0da) and closes TL-P4-24 #3. Escalated, Opus plus a Codex pass; contract sign-off trial; designer copy pending. Packet 2026-10-09-c4-undo-compensate-packet.md. Re-planned by TL-P4-27 addendum 2 (main c7a6556c): design (B) and tooLate withdrawn. Addenda 4-5 (main a370c1da, b938c629) folded in 2a828b2f; dispatched on Opus."
+    "note": "TL-P4-27 (main 802ac116); replaces c4-undo-withdraw (parked at 70a2b0da) and closes TL-P4-24 #3. Escalated, Opus plus a Codex pass; contract sign-off trial; designer copy pending. Packet 2026-10-09-c4-undo-compensate-packet.md. Re-planned by TL-P4-27 addendum 2 (main c7a6556c): design (B) and tooLate withdrawn. Addenda 4-5 (main a370c1da, b938c629) folded in 2a828b2f; dispatched on Opus.",
+    "review": "P4-67 PASS"
   },
   {
     "id": "c4-lockf",
@@ -6452,7 +6453,7 @@
     "id": "c4-sheet-settle",
     "task": "p4-consolidation",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "what": "Sheet geometry tests read boxes only after the shared animationsEnd; their axe scans go through expectAxeClean (defect move-sheet-cancel-width-flaky).",
     "steps": [
       "The move sheet cancel matches its container width on every desktop run.",
@@ -6466,12 +6467,13 @@
     "id": "c4-create-resume",
     "task": "p4-consolidation",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "what": "A pending pile-folder create resumes through its stored intent after a refresh, never renamed by a recomputed name; tests that seed with the wall clock use fixed clocks with a midnight case (defect create-property-time-dependent).",
     "steps": [
       "A pile whose folder was being made when the answers were lost, refreshed across UTC midnight, keeps its first name and holds its file."
     ],
-    "verify": "pnpm exec vitest run src/data/vault/drive-vault.test.ts -t \"a pile-folder create resumed after a refresh across UTC midnight keeps its first name\"",
-    "note": "TL-P4-24 addendum 17 (main): (a) plus fixed clocks; first in the next batch; stage 4 may close with it open. Codex (three sessions), then a Claude review. Packet 2026-10-10-c4-create-resume-packet.md."
+    "verify": "pnpm exec vitest run src/data/vault/drive-vault.test.ts -t \"a pile-folder create resumed after a refresh across UTC midnight keeps its first name|a pile-folder conversion whose file move failed after the folder landed keeps its first name and finishes|a pile conversion interrupted at any step resumes there and keeps its first names\"",
+    "note": "TL-P4-24 addendum 17 (main): (a) plus fixed clocks; first in the next batch; stage 4 may close with it open. Codex (three sessions), then a Claude review. Packet 2026-10-10-c4-create-resume-packet.md.",
+    "review": "P4-68 PASS"
   }
 ]

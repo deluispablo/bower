@@ -2,7 +2,7 @@
  * The write-it situation (TL-P4-19 addendum 13): the scripted provider updates two Current states the person changed
  * by hand, so a tidy-up asks "Write it" with the update shown, and a yes writes it, through the pretend Worker's runs.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tidyUp } from '@/testing/tidy-up';
 import { FakeDrive } from '../drive/fake-drive';
 import { DriveVault } from '../vault/drive-vault';
@@ -30,6 +30,7 @@ const note = async (path: string): Promise<string> => drive.dump(root).get(path)
 const REASK = (name: string): string => `The current state of ${name} changed after Bower showed you its update, so nothing was written. Should Bower write its update there now?`;
 
 beforeEach(async () => {
+  vi.setSystemTime(new Date('2026-10-10T12:00:00Z'));
   localStorage.clear();
   drive = new FakeDrive();
   const keys = new Map<string, string>();
@@ -37,6 +38,8 @@ beforeEach(async () => {
   WRITE_IT_STATES = writeItStates(keys);
   await writeIt(drive, root);
 });
+
+afterEach(() => vi.useRealTimers());
 
 describe('the write-it situation', () => {
   it('asks Write it about each note with the update shown, and a yes writes it', async () => {

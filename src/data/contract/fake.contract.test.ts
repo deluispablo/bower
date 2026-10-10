@@ -1,9 +1,13 @@
+import { afterEach, beforeEach, vi } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
 import { FakeWorker } from '../fake/fake-worker';
 import { FakeRunService } from '../fake/fake-run-service';
 import { seedFakeDrive } from '../fake/seed';
 import { makeLiveSources } from '../live';
 import { describeVaultContract } from './vault-contract';
+
+beforeEach(() => vi.setSystemTime(new Date('2026-10-10T12:00:00Z')));
+afterEach(() => vi.useRealTimers());
 
 describeVaultContract('fake Drive', async () => {
   localStorage.clear();
