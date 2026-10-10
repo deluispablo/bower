@@ -352,3 +352,4 @@ d-v2-24a,implementer,codex,gpt-5-codex,high,4,3750950,3716895,,3578240,34055,,,,
 c4-undo-compensate,implementer,codex,gpt-5-codex,high,6,711326,705077,,611072,6249,,,,last round done,2026-10-10
 c4-create-resume,implementer,codex,gpt-5-codex,high,1,1045199,1034857,,970880,10342,,,,done,2026-10-10
 c4-create-resume,adversarial,codex,gpt-5-codex,medium,1,255621,254022,,209664,1599,,,,1 Important,2026-10-10
+c4-create-resume,property-red,codex,gpt-5-codex,medium,2,319832,317461,,290432,2371,,,,round 2 red,2026-10-10
