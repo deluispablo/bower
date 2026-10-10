@@ -34,6 +34,9 @@ Made-up cases for the capabilities C04 to C11, C13 and C15 (Alex, Larkspur Lane,
 | c08-revise-comparison | C08 | model | new (no revision path is scripted) |
 | c09-burst-pipe | C09 | model | bench:5-question-about-filed-pdf, adapted (made-up policy; the original is in bench-5-question-about-filed-pdf) |
 | c09-closest-flat | C09 | scripted | p2-journey:C09 |
+| c09-original-over-summary | C09 | model | new (C09 prep: original over stale summary) |
+| c09-two-source-answer | C09 | model | new (C09 prep: two sources, exact identities) |
+| c09-not-in-sources | C09 | model | new (C09 prep: honest missing evidence) |
 | c10-lookup-fails | C10 | model | new (failed and stale lookups are not scripted) |
 | c10-web-allowed | C10 | scripted | p2-journey:C10 (allowed) |
 | c10-web-denied | C10 | scripted | p2-journey:C10 (denied) |
