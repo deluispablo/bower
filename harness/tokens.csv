@@ -412,3 +412,4 @@ p4-c10-prep,drafter,codex,gpt-5-codex,medium,1,1011256,999928,,910976,11328,,,,3
 shell-page-column,implementer (fix round 2),codex,gpt-5-codex,medium,3,519941,514085,,463232,5856,,,,ruled nits + drag guard,2026-10-10
 d-v2-24a,red (round 3),codex,gpt-5-codex,high,1,2095904,2079522,,1999104,16382,,,,resize + one apply() site,2026-10-10
 c5-test-margin,implementer,codex,gpt-5-codex,high,1,1056487,1043640,,976384,12847,,,,delivered,2026-10-10
+shell-page-column,reviewer (delta),claude,bower-reviewer,,2,35410,,,,,,3,0.3,PASS (P4-75b),2026-10-10
