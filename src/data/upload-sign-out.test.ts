@@ -285,6 +285,87 @@ it('upload-sign-out-forget: a failed local upload purge reports a BowerError and
   } finally { f.release.open(); f.active.dispose(); await f.q.idle(); }
 });
 
+async function unreadableAccountFixture(knownIdentity: boolean) {
+  const drive = new FakeDrive({ clock: () => NOW.getTime(), chunkMultiple: 4 });
+  const rootA = (await drive.createFolder('root', 'Synthetic A')).id;
+  const rootB = (await drive.createFolder('root', 'Synthetic B')).id;
+  const runs = new FakeRunService({ drive, clock: () => NOW.getTime(), scale: 'instant', sleep: async () => undefined });
+  const worker = new FakeWorker({ drive, runs, rootId: rootA, scenario: 'empty', account: 'you@example.com' });
+  const me = vi.spyOn(worker, 'me').mockResolvedValue({ user: { name: 'Alex', email: 'you@example.com' }, folderId: rootA });
+  const accountA = await requiredExport(liveExports, 'uploadAccount')('you@example.com');
+  const idb = new IDBFactory();
+  const store = indexedDbUploadStore(idb);
+  const q = queue(drive, store);
+  drive.offline = true;
+  const records: PendingUpload[] = [];
+  for (const [account, folder] of [[accountA, rootA], [accountA, rootB], [ACCOUNT_B, rootA]] as const) {
+    await q.start(account, folder);
+    await q.add(await member(folder, 1));
+    await q.idle();
+    records.push(...await store.list(account, folder));
+    q.stop();
+  }
+  expect(records).toHaveLength(3);
+  expect(await keptBytes(store, records)).toEqual(records.map(() => [1, 2, 3, 4, 5, 6, 7, 8, 9, 1]));
+  const accountError = new BowerError('offline', 'Synthetic account could not be read.');
+  if (!knownIdentity) me.mockRejectedValue(accountError);
+  const live = requiredExport(liveExports, 'makeLiveSources')({ drive, worker, uploadQueue: q });
+  sources.add(live);
+  if (knownIdentity) expect(await live.session.current()).toEqual({ name: 'Alex', email: 'you@example.com' });
+  else await expect(live.session.current()).rejects.toBe(accountError);
+  me.mockRejectedValue(accountError);
+  const remoteError = new BowerError('offline', 'Signing out did not finish. Try again.');
+  vi.spyOn(worker, 'signOut').mockRejectedValue(remoteError);
+  return { live, idb, records, accountA, rootA, rootB, accountError, remoteError };
+}
+
+it.each([false, true])(
+  'upload-sign-out-forget: addendum 9: offline sign-out with an unreadable account purges device uploads (known identity: %s)',
+  async (knownIdentity) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const f = await unreadableAccountFixture(knownIdentity);
+    await expect(f.live.session.signOut()).rejects.toMatchObject({
+      name: 'BowerError', message: 'Signing out did not finish. Try again.',
+    });
+    const fresh = indexedDbUploadStore(f.idb);
+    expect({
+      firstFolder: await fresh.list(f.accountA, f.rootA),
+      secondFolder: await fresh.list(f.accountA, f.rootB),
+      bytes: await keptBytes(fresh, f.records.slice(0, 2)),
+    }).toEqual({ firstFolder: [], secondFolder: [], bytes: [null, null] });
+    expect({
+      records: await fresh.list(ACCOUNT_B, f.rootA),
+      bytes: await keptBytes(fresh, f.records.slice(2)),
+    }).toEqual(knownIdentity
+      ? { records: f.records.slice(2), bytes: [[1, 2, 3, 4, 5, 6, 7, 8, 9, 1]] }
+      : { records: [], bytes: [null] });
+  },
+);
+
+it.each([false, true])(
+  'upload-sign-out-forget: addendum 9: a purge failure shows the sign-out sentence and logs both failures (remote fails: %s)',
+  async (remoteFails) => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const f = await liveFixture();
+    const purgeError = new Error('Synthetic device purge refused');
+    const remoteError = new BowerError('offline', 'Signing out did not finish. Try again.');
+    vi.spyOn(f.store, 'clear').mockRejectedValue(purgeError);
+    if (remoteFails) vi.spyOn(f.worker, 'signOut').mockRejectedValueOnce(remoteError);
+    log.mockClear();
+    try {
+      const result = await outcome(f.active.session.signOut());
+      f.release.open();
+      await f.q.idle();
+      expect(result).toMatchObject({
+        error: { name: 'BowerError', message: 'Signing out did not finish. Try again.' },
+      });
+      expect('error' in result && result.error).toBeInstanceOf(BowerError);
+      expect(log.mock.calls.flat()).toContain(purgeError);
+      if (remoteFails) expect(log.mock.calls.flat()).toContain(remoteError);
+    } finally { f.release.open(); f.active.dispose(); await f.q.idle(); }
+  },
+);
+
 /** Separate queue instances and IndexedDB connections model the two tabs, without replacing either queue. */
 async function twoTabFixture(storageB?: StorageLike) {
   const drive = new FakeDrive({ clock: () => NOW.getTime(), chunkMultiple: 4 });

@@ -1266,3 +1266,60 @@ Reused the prior OS-temp config and timer setup with only temp paths changed; ca
 CPU reports, logs and build info remain outside the repository. Offline pnpm settings
 prevent installs/network. Read only failures and aggregate results. No pnpm check or e2e
 was run for this explicitly scoped fixture repair. The coordinator owns commits.
+
+
+## Addendum 9 reds
+
+tests changed: src/data/upload-sign-out.test.ts: added four live sign-out cases for TL-P4-53 addendum 9; no existing assertion changed
+
+Red-owning session for defect sign-out-purge-skipped. Only the test file and this notes
+append were edited. No production change, network, Git-writing command or commit.
+The coordinator owns commits. Research reused the existing live-source, real queue and
+IndexedDB fixtures, and the inherited official Vitest setup-files reference:
+https://vitest.dev/config/#setupfiles. No additional mechanism or dependency was added.
+
+New exact test names (all use the required prefix):
+
+- `upload-sign-out-forget: addendum 9: offline sign-out with an unreadable account purges device uploads (known identity: false)`
+- `upload-sign-out-forget: addendum 9: offline sign-out with an unreadable account purges device uploads (known identity: true)`
+- `upload-sign-out-forget: addendum 9: a purge failure shows the sign-out sentence and logs both failures (remote fails: false)`
+- `upload-sign-out-forget: addendum 9: a purge failure shows the sign-out sentence and logs both failures (remote fails: true)`
+
+The unreadable-account fixture seeds three durable uploads: account A in two folders and
+account B in one folder, with actual ten-byte Blob contents. Drive is offline. Without a
+known identity, Worker me rejects before live sources are constructed, and current() is
+verified to reject with that same error; startup cannot accidentally cache an identity.
+With a known identity, current() first confirms Alex, then Worker me becomes unreadable.
+Remote sign-out fails offline in both cases. The tests require metadata and bytes to be
+forgotten across both A folders; B must also be forgotten without an identity and must
+remain byte-for-byte intact with an identity. Both exercise production session.signOut().
+
+The two purge-failure cases reuse liveFixture and the real queue/store. Store clear throws
+a distinct synthetic error. Successful remote sign-out is the positive control; in the
+second case remote sign-out also throws its own BowerError. Each outcome must be an
+actual BowerError with exactly the existing sentence `Signing out did not finish. Try again.`
+Console assertions require the original purge error and, when present, original remote
+error by identity, so replacing one with the other cannot satisfy the combined case.
+
+Verification: whole touched file, --maxWorkers=2, exit 1; 36 tests, 34 pass, two intended
+assertion failures. All 32 pre-existing tests pass; both new controls pass.
+
+- Unknown identity red: src/data/upload-sign-out.test.ts:335 retains A metadata and
+  original bytes instead of empty lists/null bytes. The subsequent assertion at :339
+  also requires B metadata and bytes to be forgotten; it is not reached on this build.
+- Dual failure red: src/data/upload-sign-out.test.ts:364 console.error lacks the original
+  remote sign-out error. The exact single-sentence BowerError and purge-cause assertions
+  preceding it pass, reproducing the remote error being masked by the purge failure.
+- Contradicting existing assertions: none in the completed touched-file suite.
+
+Command: npm_config_offline=true npm_config_verify_deps_before_run=false pnpm exec vitest
+run src/data/upload-sign-out.test.ts --maxWorkers=2 --config <evidence>/vitest.config.mjs
+--configLoader runner, with stdout/stderr redirected to <evidence>/reds.log.
+Evidence: /private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/upload-addendum-9-tjbwsf_c/
+The temporary config imports the original Vite config and original app test setup. A copy
+of timer-gate setup changes only import resolution and CPU report destination; timer
+checks remain active. Cache, setup copy and CPU reports are all in OS temp, not the repo.
+An initial run could not resolve the macOS /var path alias; using its canonical /private/var
+path fixed setup loading. Final evidence is an assertion red, not an import failure.
+Read-only git diff --check passed. No pnpm check or e2e: assignment is tests-only reds.
+Production fix and integration remain with their assigned sessions.
