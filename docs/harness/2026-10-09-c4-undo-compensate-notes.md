@@ -360,3 +360,7 @@ Results: tsc PASS, `/tmp/compensate-jf-tsc.log`; data/features vitest PASS, 102 
 `/tmp/compensate-jf-unit.log`; `git diff --check` PASS. Playwright unavailable and not run. No Git write used.
 tests changed: none
 Offline reference reused: https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API (asynchronous lock admission).
+
+## Gate fix: withdraw covers the held conversion
+
+- Cause: removePile still visited the old per-create keys; fix: drive-vault.ts:1764 visits the held conversion, and write-once.ts:451 withdraws its note and folder through the existing fenced withdrawal before releasing that one intent, retaining it on refusal; no second holder. Red: unchanged write-once.test.ts:275 failed for r2, /tmp/compensate-withdraw-red.log. Results: tsc PASS, /tmp/compensate-withdraw-tsc.log; data vitest PASS, 74 files / 3,831 tests including every c4-create-resume case, /tmp/compensate-withdraw-unit.log; git diff --check PASS; tests changed: none; no Git write used. Offline standard reused: https://learn.microsoft.com/en-us/azure/architecture/patterns/compensating-transaction (compensate every held step).

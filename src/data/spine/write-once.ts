@@ -451,7 +451,13 @@ export class Intended<H extends Holder = Holder> {
   async withdraw(key: string, drive: Bins, keep?: Keeps): Promise<Withdrawn> {
     const h = this.held.get(key);
     if (!h) return null;
-    const out = await withdraw(h, drive, keep);
+    // A conversion holds both creates until the whole pile lands. Withdraw the note first, then the folder;
+    // either refusal keeps the same intent for another removal, and the caller receives its pile folder.
+    let out: Withdrawn;
+    if (h.conversion) {
+      const note = await withdraw(h.conversion.note, drive, keep);
+      out = (await withdraw(h.conversion.folder, drive, keep)) ?? note;
+    } else out = await withdraw(h, drive, keep);
     this.held.delete(key);
     return out;
   }

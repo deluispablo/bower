@@ -1761,7 +1761,7 @@ export class DriveVault implements VaultSource {
         if (ours) took(w, item.memberKey);
       }
       for (const e of u?.entries ?? []) if (!e.queued) took(await withdraw(e, this.drive, inFolder), e.key);
-      for (const key of [`pile-folder:${pileId}`, `pile-note:${pileId}`]) {
+      for (const key of [`pile-conversion:${pileId}`, `pile-folder:${pileId}`, `pile-note:${pileId}`]) {
         took(await this.intended.withdraw(key, this.drive, inFolder), key);
         this.pileNoteSent.delete(key);
       }
