@@ -556,3 +556,5 @@ c05-timeline-list,reviewer (P4-95),claude,opus,,1,39904,,,,,,8,1,PASS,2026-10-10
 undo-fifo-seed,implementer,codex,unknown,medium,1,1969848,1959292,,1897728,10556,,,,green,2026-10-10
 orphan-pile-count-data,implementer,codex,unknown,high,1,3122384,3108779,,2986496,13605,,,,check-failed,2026-10-10
 upload-sign-out-forget,implementer,codex,unknown,high,1,5616541,5589597,,5462016,26944,,,,check-failed,2026-10-10
+orphan-pile-count-data,implementer,codex,unknown,high,2,1811588,1799054,,1707136,12534,,,,check-failed,2026-10-10
+b1c-index,implementer,codex,unknown,high,1,8857958,8822245,,8636928,35713,,,,check-failed,2026-10-10

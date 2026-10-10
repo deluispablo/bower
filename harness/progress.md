@@ -323,3 +323,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-10: undo-fifo-seed passes — the Undo property model knows an inverse retired without sending; seed -1937975690 path 40 pinned (P4-98 PASS)
 - 2026-10-10: upload-resume-after-reload passes — files are kept on the device before saved and resume after a reload with no picker and no second file (P4-99 PASS, designer verified)
 - 2026-10-10: q1a-stored-answers passes — questions carry stored file-to options and text answers; two rounds per member; the pile marker comes from the cached questions (P4-100 PASS)
+- 2026-10-11: c2-pile-records passes — re-proved after orphan-pile-count-data renamed the empty-inbox golden (TL-P4-53 addendum 5)
