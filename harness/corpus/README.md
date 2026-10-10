@@ -1,6 +1,6 @@
 # Capability corpus (P4-A)
 
-Made-up cases for the capabilities C04 to C11, C13 and C15 (Alex, Larkspur Lane, Saltmere, Ferrowick; nothing personal). Each folder holds:
+Made-up cases for the capabilities C04 to C13 and C15 (Alex, Larkspur Lane, Saltmere, Ferrowick; nothing personal). Each folder holds:
 
 - `case.json`: the inputs (piles, requests, rules, answers, seeded questions), the scope and the web switch;
 - `inbox/`: the files of the piles; `folder/`: the starting folder (notes with their front matter, `Rules.md`);
@@ -50,6 +50,9 @@ Made-up cases for the capabilities C04 to C11, C13 and C15 (Alex, Larkspur Lane,
 | c11-source-cannot-override-rule | C11 | model | new (C11 preparation; scripted intent pending) |
 | c11-request-is-one-time | C11 | model | new (C11 preparation; scripted intent pending) |
 | c11-source-cannot-answer | C11 | model | new (C11 preparation; scripted intent pending) |
+| c12-model-failure-retry | C12 | model | new (C12 preparation; scripted fault and lifecycle proof pending) |
+| c12-tool-interruption-recovery | C12 | model | new (C12 preparation; scripted fault and lifecycle proof pending) |
+| c12-text-budget-truthful | C12 | model | new (C12 preparation; scripted fault and lifecycle proof pending) |
 | c13-undo-protects-edit | C13 | model | new |
 | c13-undo-whole-run | C13 | model | new |
 | c15-more-context-bounded | C15 | model | new |

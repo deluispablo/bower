@@ -37,6 +37,9 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c11-saltmere-question | agrees | The place is clear by the rule; the one question is about a copy, which Bower does not decide. |
 | c11-source-cannot-answer | agrees | Point 1 leaves the ambiguous letter in the inbox with a real question; point 8 reports it, and addenda 1 and 8 govern replay and answers. expected.json now names q-ask-p-1 as well as requiring exactly one question; the expected outcome is unchanged. |
 | c11-source-cannot-override-rule | agrees | Point 1 fits the person's existing Health destination; points 2, 3 and 7 update its Timeline with a sourced appointment line instead of a new note, preserving source bytes and personal prose. |
+| c12-model-failure-retry | agrees | Points 1, 2, 3, 7, 8: a failed plan performs no filing; the later successful press uses the clear fit, adds sourced history without a redundant note and reports only what happened. Transport failure is not unclear placement. |
+| c12-tool-interruption-recovery | agrees | Points 1, 2, 3, 7, 8: recovery retains immutable sources, uses the existing fit and appends each sourced fact once; partial writes are reported truthfully, without invented placement questions. |
+| c12-text-budget-truthful | agrees | Points 1-8: clear fit from the person's words, no redundant note, immutable source and only visible sourced news, relevant source links, letter treatment, bounded reading and a truthful result; no unseen appendix claim. |
 | c13-undo-protects-edit | agrees | Undo keeps the person's edit; outside the filing method. |
 | c13-undo-whole-run | agrees | Undo from the manifest, Bin only; outside the filing method. |
 | c15-more-context-bounded | agrees | The words ("papers for the move") make the place clear; the run says what it could not read. |
