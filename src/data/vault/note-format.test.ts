@@ -466,7 +466,6 @@ describe('protected sections retain prose and tasks outside the personal body', 
     { name: 'missing end marker', source: raw.replace('<!-- bower:ownership/2 end current -->\n', '') },
     { name: 'unsupported version', source: raw.replace('bower_format: ownership/2', 'bower_format: ownership/3') },
     { name: 'duplicate declaration', source: raw.replace('summary:', 'bower_format: ownership/2\nsummary:') },
-    { name: 'unclaimed content', source: raw + 'Outside text\n- [ ] Unclaimed task' },
     { name: 'unclosed fence', source: raw.replace(personal, '```\n' + personal) },
     { name: 'lone CR', source: raw.replace(paragraph, paragraph + '\rX') },
   ];
@@ -474,6 +473,18 @@ describe('protected sections retain prose and tasks outside the personal body', 
     const before = new TextEncoder().encode(source);
     expect(() => parseNote('Synthetic.md', source)).toThrow(BowerError);
     expect(() => toggleTaskInText(source, 0)).toThrow(BowerError);
+    expect(new TextEncoder().encode(source)).toEqual(before);
+  });
+
+  // TL-P4-41 addendum 8: outside prose is readable but its task-shaped bytes have no task authority.
+  it('reads unclaimed content and refuses task edits in its untouchable span', () => {
+    const outside = 'Outside text\n- [ ] Unclaimed task';
+    const source = raw + outside;
+    const before = new TextEncoder().encode(source);
+    expect(parseNote('Synthetic.md', source)).toEqual(parseNote('Synthetic.md', raw));
+    // Index 0 is the framed personal task; index 1 would be the outside task if prose were wrongly indexed.
+    expect(() => toggleTaskInText(source, 1)).toThrow(BowerError);
+    expect(toggleTaskInText(source, 0).text).toBe(raw.replace('- [ ] Personal task', '- [x] Personal task') + outside);
     expect(new TextEncoder().encode(source)).toEqual(before);
   });
 

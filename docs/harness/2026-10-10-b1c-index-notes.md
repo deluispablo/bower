@@ -228,7 +228,7 @@ No network, git writes, production edits, full suites, pnpm check or e2e. Offlin
 | `B1a contract: round 4 4: an inside folder move updates recursive paths and regroups without media reads` | AssertionError: live control: writes only a changed projection: expected [ { path: '.bower/index.md', …(2) } ] to have a length of +0 but got 1 |
 
 
-## Implementation (partial; blocked)
+## Implementation (retained first round; historical blocker)
 
 The index work is left in place for review. This entry is not complete: folding and MOC region maintenance remain red.
 No test, fixture, verdict, threshold or shared harness record was changed. No writing git command was run.
@@ -463,3 +463,307 @@ Vite and module caches to OS temp and disables the result cache. The runner conf
 config scratch writes. Reports, logs, driver fixture files and caches stay outside the repository.
 Local Node binaries bypass pnpm's automatic installation; no pnpm check, full suites, e2e or build is run.
 No bound, assertion, corpus fixture, golden or method verdict was changed. These reds are ready for coordinator commits.
+
+
+## Implementation (2026-10-11 resumed scope)
+
+Current baseline: `920c3dfcbed32994c3075c499964acba828dd434`. The earlier implementation and addendum-7 reds
+are committed. This round changes production and this notes file only; the coordinator owns any later commits.
+No writing git command, test edit, fixture edit, golden increase or repository-local test output is made by this worker.
+The user additionally assigned run-manifest.ts and note-edit.ts. Existing offline sources above were reused;
+none was fetched. The bower-implement skill and WORKER card were read before implementation.
+
+### Implemented in the existing homes
+
+- `run-manifest.ts` widens maintain's declared targets to an owned MOC, requiring its full original text,
+  each exact region payload, listing id/version/name/parent, and verified before-content size/hash/version.
+  Region authority is derived again by note-edit from the bytes, never from a title or MOC type alone.
+  Personal targets are refused even when their listing metadata and operation identities are resealed.
+  Old maintain snapshots without the new optional fields still parse unchanged.
+- `note-edit.ts` supplies the frozen MOC inputs from the existing ownership parser. The actual changes still
+  use applyChanges, recheckEdit, ordinary edit-text, the live modifiedTime/name/place fence and write-once stamps.
+  No alternate ownership author or Drive writer was introduced.
+- `runner/src/moc.ts` resolves the existing membership links once to unique Drive ids and stores member ids
+  with the snapshot. Canonical folder maps collect existing direct members and descendant maps; peer maps reuse
+  the existing split's member ids. Removed ids disappear; duplicate member ids are removed. Recursive counts
+  count unique leaves, excluding the maps. The renderer creates no hierarchy and never modifies Overview.
+- `runner/src/index.ts` uses that membership and the shared shortest unique link suffixes to fold a folder
+  into `→ [[MOC]] (N)`. Whole rows and the honest cut stay within 32,000 characters in the named budget red.
+  Exact final-newline bytes now pass the PARA-order red. Existing unchanged flat/stamped indexes retain bytes.
+- Framed MOCs are maintained through the same manifest operation, before retrieval's final commit and the
+  report barrier. Retrieval stores the written map version, region bytes, member ids and listing metadata.
+  Recovery reads the existing stamps and ordinary edit evidence; it never sends a landed MOC again.
+  Same-version edit checks share B1a's read cache after a fresh metadata read; the write fence remains live.
+- Personal maps retain their exact bytes. A done replay performs no further projection/MOC write. All three
+  lost-reply targets resume the existing maintain operation without replanning or an early final report.
+
+removed: runner/src/index.ts: duplicate link-suffix renderer; one renderer in moc.ts serves both projections.
+removed: runner/src/index.ts: RunnerWrite-only target dispatch restriction; owned maps dispatch as edit-text.
+removed: runner/src/index.ts: extra terminal blank line in a complete canonical index.
+tests changed: none
+
+### Remaining mechanism/ownership blocker
+
+The two newly allocated contract files remove the first-round target/snapshot blocker. Two further existing
+homes are needed; no workaround was added to bypass them. Scope was requested asynchronously while independent
+implementation and all requested verification continued; no reply has arrived at this point.
+
+1. `src/data/contracts/ownership-format.ts:228-250` requires current/personal/timeline/bower-note frames first,
+   then all three MOC frames, with no other prose outside them. The legacy red preserves the appendix AFTER Notes
+   (`runner/test/b1-index.test.ts:433`) byte for byte. Wrapping only Overview/Notes plus inserting Figures therefore
+   needs an extension of this one parser. Moving the appendix, putting it inside the regenerated member payload,
+   or introducing a second parser would violate the byte oracle/one-home ruling. This parser is not in the B1c row
+   or the user's two-file scope extension, so it remains untouched.
+2. `src/data/spine/report.ts:56-64` materializes only frozen contributions, and
+   `src/data/spine/grounded.ts:90-100` binds Updated rows to a single ordinary create/edit path. Maintain can write
+   several maps, and the actual write set depends on settled effects. Candidate rows inserted into a frozen plan
+   could claim unchanged/refused maps were updated. Truthful rows need the existing report/grounding homes,
+   rather than a new report builder in runner/main or a mutation of the immutable manifest. Both remain untouched.
+
+The worker scope rule is explicit: [WORKER.md](WORKER.md), "Touch only the files the packet owns."
+The applied [bower-implement SKILL.md](../../.agents/skills/bower-implement/SKILL.md) uses that worker card.
+This is a scope blocker, not a test/ruling contradiction or an assertion-repair request.
+The supplied DECISIONS file has TL-P4-41 and addenda 1-6; it has no TL-P4-41 addendum-7 entry.
+The entire supplied notes' Addendum 7 reds section was read, including all its migration/byte-preservation controls.
+
+### Complete failure audit (TL-P4-51, resumed run)
+
+The complete targeted B1c/B1a/corpus/method run passes 68/75 tests. All seven remaining failures are required
+behaviour not yet implemented in the unallocated homes; none contradicts a ruling. Every failure is listed:
+
+| Exact test | First failing assertion | Remaining home |
+| --- | --- | --- |
+| B1c index: existing MOC at 40 direct members folds and rebuilds complete regions by id | runner/test/b1-index.test.ts:300 | Actual MOC Updated row; membership/folding/byte assertions already pass. |
+| B1c index: existing MOC at 41 direct members folds and rebuilds complete regions by id | runner/test/b1-index.test.ts:300 | Same report row. |
+| B1c index: corpus b1-moc-over-40 folds 41 leaves with complete reachable child maps | runner/test/b1-index.test.ts:411 | Legacy migration. |
+| B1c index: legacy MOC migrates on its first maintain and keeps every other byte | runner/test/b1-index.test.ts:492 | Legacy migration and appendix byte preservation. |
+| B1c index: legacy MOC second maintain is idempotent with no MOC write | runner/test/b1-index.test.ts:513 | First migration, then second-run equality. |
+| B1c index: legacy MOC without Overview and Notes is untouched | runner/test/b1-index.test.ts:535 | Required positive migration counterpart. |
+| B1c index: legacy MOC belonging to a person with the same headings is untouched | runner/test/b1-index.test.ts:551 | Required Bower-owned positive counterpart. |
+
+The two unchanged new-instance tests at runner/test/new-instance.test.ts:103/:107 and :156/:162 still build
+in the source ROOT and use git only in their disposable OS-temp fixture repositories. Verification therefore
+runs in an OS-temp source copy. The initial full suite failed those two at the automatic package-manager setup;
+its test bodies were not changed. The offline build helper from the first round invokes the exact installed
+esbuild command from runner/package.json, in the temporary copy, for the subsequent full-suite verification.
+
+### Compatibility row drafts (resumed)
+
+| Stored format / behaviour | Result |
+| --- | --- |
+| v1 manifests; old maintain snapshots without MOC fields | Existing contract tests preserved; the optional MOC envelope is additive. |
+| Legacy by:bower MOCs | Still readable; migration pending the one-parser scope extension. No legacy byte is changed. |
+| Legacy personal MOCs and framed personal maps | Exact bytes preserved; headings/type alone never admit a target. |
+| Framed Bower MOCs at 40/41 | Regions rebuild completely by id; Overview/personal prose preserved; no hierarchy creation. Report row pending. |
+| Persisted MOC membership | Ids survive path/version refresh; peer maps retain the existing split rather than guessing a new one. |
+| Plain old retrieval rows; unknown optional row metadata | Canonical writes copy only declared fields; no extra metadata grants ownership. |
+| Hidden-only feed; root index; old flat/stamped derived index | Existing controls remain green; no hidden index/hot sends; root content untouched. |
+| Exact PARA, duplicate paths and bounded cut | Green through runner main; no id/version appears in the index; measured whole run remains <=300 calls. |
+| B1a incremental changes, vanished folders and descendant path updates | All 18 B1a reds remain green. |
+| Done replay and lost replies for index/MOC/retrieval | All four framed-MOC lifecycle tests green; one manifest/maintain before the barrier. |
+| Corpus/method verdicts | All 38 corpus/driver/PDF/method tests green; no verdict/fixture edits. |
+
+### Verification (resumed; OS-temp only)
+
+All tests, copies, config/module caches and reports are under `/private/tmp` or `/tmp`. Tests never run a build
+in this worktree. The copied sources/tests are verified against this worktree before final delivery.
+Local installed Node binaries are used as the offline equivalents of pnpm exec; the first round documented
+why the installed pnpm attempts automatic package-manager/dependency setup. No dependencies were installed here.
+The temporary Vitest configs retain Node/jsdom, setup files, include patterns, aliases and CSS module behaviour,
+while using the runner config loader and OS-temp module/Vite caches. No test source or committed config was edited.
+
+- Baseline B1c/B1a reds: 23 pass, 14 assertion failures, `/tmp/b1c-resume-red.json`.
+- Targeted B1c/B1a/corpus/method: 68 pass, 7 assertion failures, `/tmp/b1c-resume-targeted.{log,json}`.
+- App tsc: four unchanged implicit-any dependency-type errors in Palette.tsx:119 (two), :123 and :127.
+- Node and runner tsc: pass; `/tmp/b1c-resume-tsc-{node,runner}-final.log`.
+- ESLint on both changed contracts and both changed runner source files: pass; `/tmp/b1c-resume-eslint-*.log`.
+- Initial data run had 3,494 passes and no assertion failures, but ten load failures from a missing temp-config
+  `@` alias. The alias was restored before rerunning the complete data suite; this is setup evidence, not a regression.
+- Full runner first pass: 609 pass, 9 fail; seven required MOC features plus the two unchanged build-environment tests.
+- Full data and offline full-runner results are appended below after completion.
+
+No pnpm check mark or e2e pass is claimed. The user's specified gates supersede the packet's broader gates;
+there is no screen/UI change. No golden, test threshold or numerical contract was raised.
+
+
+The first complete reruns finished: data **4,160/4,160 pass**; runner **611 pass, 7 fail** (618 tests).
+All seven runner failures match the complete audit above. Both unchanged new-instance tests pass when built
+with the installed offline esbuild command in the OS-temp copy. No assertion or build command was bypassed.
+Reports: `/tmp/b1c-resume-data-final.{log,json}` and `/tmp/b1c-resume-runner-final.{log,json}`.
+
+Afterward, two production refinements were made: canonicalizing optional old retrieval metadata before a strict
+manifest write, and reporting an unexpected ownership-author refusal as BowerError instead of silently skipping it.
+The map's direct figure counts member-note ids, excluding child maps. Final production bytes were copied and
+SHA-256-compared again, and both complete suites plus all requested type/lint checks were restarted on those bytes.
+Their delivery reports are `/tmp/b1c-delivery-data.{log,json}` and `/tmp/b1c-delivery-runner.{log,json}`.
+All 46 runner test files and all 78 data test files are byte-compared between worktree and temporary copy;
+no test is edited or skipped. The earlier first-run conflict fixtures are superseded by the committed red repair.
+
+
+Final delivery verification of the retained production bytes:
+
+- B1c **12 pass / 7 fail**; B1a **18/18 pass**; corpus/driver/PDF/method **38/38 pass**.
+- Data **4,160/4,160 pass**; runner **611 pass / 7 fail**, 618 total. The seven failures are exactly the audit above.
+- Node and runner tsc pass. App tsc retains the four Palette.tsx dependency-type errors already listed.
+- ESLint on every touched source file passes. Git diff --check passes. All tested production files' SHA-256
+  digests still match the worktree; all 46 runner and 78 data test files match the unchanged temporary copies.
+- Both unchanged new-instance source-root builds are confined to the OS-temp copy and pass with the installed
+  offline build helper. No repository file is written by a test. Test/fixture sources are unchanged.
+- No test/ruling contradiction was found. No golden/cap/time bound was changed. No git write was run by the worker.
+
+Final commands (local offline binaries equivalent to the requested pnpm exec, temporary source copy):
+
+```sh
+# /private/tmp/b1c-resume-verify
+node node_modules/vitest/vitest.mjs run src/data --config=data-config.mjs --configLoader=runner --maxWorkers=2 --reporter=default --reporter=json --outputFile=/tmp/b1c-delivery-data.json > /tmp/b1c-delivery-data.log 2>&1
+node node_modules/typescript/bin/tsc --noEmit -p tsconfig.app.json > /tmp/b1c-delivery-tsc-app.log 2>&1
+node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json > /tmp/b1c-delivery-tsc-node.log 2>&1
+node node_modules/typescript/bin/tsc --noEmit -p runner/tsconfig.json > /tmp/b1c-delivery-tsc-runner.log 2>&1
+node node_modules/eslint/bin/eslint.js src/data/contracts/run-manifest.ts src/data/contracts/note-edit.ts > /tmp/b1c-delivery-eslint-contracts.log 2>&1
+# /private/tmp/b1c-resume-verify/runner
+PATH=/private/tmp/b1c-offline-bin:$PATH node ../node_modules/vitest/vitest.mjs run --config=../runner-config.mjs --configLoader=runner --maxWorkers=2 --reporter=default --reporter=json --outputFile=/tmp/b1c-delivery-runner.json > /tmp/b1c-delivery-runner.log 2>&1
+node ../node_modules/eslint/bin/eslint.js src/index.ts src/moc.ts > /tmp/b1c-delivery-eslint-runner.log 2>&1
+```
+
+Status: **blocked on parser/report scope**, with the verified framed-MOC implementation retained and uncommitted.
+The scope question remains pending. No claim is made that legacy migration or truthful MOC Updated rows are finished.
+
+## Implementation (addendum 8)
+
+The user supplied TL-P4-41 addendum 8 verbatim and assigned ownership-format.ts, report.ts and grounded.ts
+until handoff. The previous scope blocker is resolved. A different, verified test/ruling contradiction now
+requires stopping under the user's explicit TL-P4-51 instruction. No further production change was retained.
+The existing uncommitted index.ts, moc.ts, run-manifest.ts and note-edit.ts diff is preserved exactly.
+Only this notes section was appended in the worktree; the coordinator still owns commits.
+
+### Changes and complete contradiction audit
+
+In `/private/tmp/b1c-add8-audit`, copied production and unchanged tests were run with a minimal parser probe:
+the single existing parser accepts outside prose instead of rejecting every nonempty outside line. It still
+rejects malformed ownership controls and retains the existing framed payload/task authority. No extra parser,
+writer, report builder, stored format, fixture or test was introduced. This is diagnostic scratch code only,
+not a delivered implementation of the complete untouchable-span API or migration.
+
+The whole runner suite and the whole data suite completed before stopping. Exactly three tests contradict
+addendum 8's general permission for opaque unframed bytes. Every contradiction is listed here:
+
+| Exact test | File:line | Contradiction / observed assertion |
+| --- | --- | --- |
+| ownership/2 raw byte authority > classifies invalid-outside-content and trusts only the independently authored raw spans | src/data/vault/ownership-format.test.ts:54 | Expects `invalid` solely for outside prose; the one-parser probe correctly returns `v2`. Parameterized case is declared at :50. |
+| ownership/2 raw byte authority > refuses damaged framing without publishing any writable range: unclaimed trailing text | src/data/vault/ownership-format.test.ts:126 | Expects damaged-boundary for `Unclaimed` after complete frames; addendum 8 requires keeping those bytes without interpreting them. Input at :123; task-refusal assertion at :127 also contradicts valid framed task authority. |
+| protected sections retain prose and tasks outside the personal body > refuses reading and task edits for unclaimed content | src/data/vault/note-format.test.ts:475 | Expects parsing to throw for outside text/task-shaped prose after complete frames; reading now succeeds and outside prose remains outside task authority. Input at :469; parameterized case at :473; task-refusal assertion at :476 has the same contradiction. |
+
+The first case's fixture expectation lives in
+`docs/harness/evidence/2026-10-05-local-prerequisites/ownership-fixtures-final/manifest.json:545`
+(`expected_status: invalid`, fixture id at :542). Neither this independently pinned bundle nor its tests was changed.
+No fourth contradiction appeared in the complete suites. Existing report and grounded tests remain green.
+All seven original B1c reds remain exactly those named in the resumed failure audit; they are required
+implementation work, not contradictions. Parser migration and settled-outcome report changes stop here pending
+the lead's resolution of the three contradictory test contracts. No request to change them is made by this worker.
+
+removed: no retained production mechanism was removed in this round.
+removed: the prospective parser change from delivery; it exists only in the OS-temp contradiction audit copy.
+tests changed: none
+
+### Compatibility row drafts for the contract homes
+
+These rows distinguish verified retained behaviour from addendum-8 work still blocked by test contracts.
+
+| Contract home / stored behaviour | Compatibility draft |
+| --- | --- |
+| ownership-format.ts: existing plain/legacy/framed records | Existing authority, raw spans, encoding refusals, fences and framed tasks preserved by the probe; only the three outside-prose expectations conflict. No delivered parser change. |
+| ownership-format.ts: opaque bytes outside frames | Addendum 8 admits them byte for byte without parsing meaning; the full data probe confirms the three listed contradictory contracts. General untouchable spans and legacy MOC migration remain undelivered. |
+| run-manifest.ts: v1 and old maintain inputs | Retained optional MOC snapshot/target envelope remains additive; existing data contract tests pass with the probe. No schema change in this round. |
+| note-edit.ts: framed maps and personal maps | Retained one-author region edits remain fenced; personal maps retain exact bytes. Legacy MOC migration remains pending; no second parser or author added. |
+| report.ts: fixed contributions and settled maintain writes | Existing report tests pass unchanged. Addendum 8 requires truthful existing Updated rows materialized from settled maintain outcomes; no speculative candidate row or runner-side report builder retained. |
+| grounded.ts: ordinary rows and maintain targets | Existing grounding tests pass unchanged. Acceptance of maintain target paths is authorized but not implemented before the contradiction stop. |
+
+### Verification (OS-temp only)
+
+- Full ruling-probe data: **4,157 pass / 3 fail**, 4,160 total; precisely the three contradictions above.
+- Full runner: **611 pass / 7 fail**, 618 total; precisely the seven resumed-audit B1c reds.
+- Node and runner tsc: pass. App tsc: the same four Palette.tsx implicit-any dependency-type errors
+  at :119 (value/search), :123 (w), :127 (w); no new type failure.
+- ESLint: pass on index.ts, moc.ts, run-manifest.ts, note-edit.ts and all three newly assigned homes.
+- All 78 data and 46 runner test files were byte-compared with the worktree and are unchanged.
+  Every retained production file except the diagnostic scratch parser was likewise byte-compared.
+- Existing report and grounded tests pass; ownership-format's only failures are its two listed contradictions.
+- The actual requested `pnpm exec vitest run src/data --maxWorkers=2` was attempted in the temp copy with
+  temporary config/report options and automatic manager-version selection disabled. The installed pnpm still
+  attempted dependency setup and refused the existing node_modules symlink (`workspace hoist directory is not
+  a real directory`). The installed local Vitest binary ran the identical suite offline afterward.
+- Both unchanged new-instance tests pass using the previous offline esbuild build helper entirely in the
+  temporary source copy. Test fixture git writes stay inside their disposable OS-temp repositories.
+  This worker ran no writing git command. No test/build/log output was written in this worktree.
+- No pnpm check or e2e claim: the user's requested gates supersede them and no screen changed.
+
+Reports: `/tmp/b1c-add8-data.{log,json}`, `/tmp/b1c-add8-runner.{log,json}`,
+`/tmp/b1c-add8-tsc-{app,node,runner}.log`, `/tmp/b1c-add8-eslint-{app,runner}.log`.
+The diagnostic source copy and its temporary Vitest configs are `/private/tmp/b1c-add8-audit`.
+
+Commands used after the pnpm setup refusal, with output redirected to the listed OS-temp files:
+
+```sh
+# /private/tmp/b1c-add8-audit
+node node_modules/vitest/vitest.mjs run src/data --config=data-config.mjs --configLoader=runner --maxWorkers=2 --reporter=default --reporter=json --outputFile=/tmp/b1c-add8-data.json
+node node_modules/typescript/bin/tsc --noEmit -p tsconfig.app.json
+node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json
+node node_modules/typescript/bin/tsc --noEmit -p runner/tsconfig.json
+node node_modules/eslint/bin/eslint.js src/data/contracts/run-manifest.ts src/data/contracts/note-edit.ts src/data/contracts/ownership-format.ts src/data/spine/report.ts src/data/spine/grounded.ts
+# /private/tmp/b1c-add8-audit/runner
+PATH=/private/tmp/b1c-offline-bin:$PATH node ../node_modules/vitest/vitest.mjs run --config=../runner-config.mjs --configLoader=runner --maxWorkers=2 --reporter=default --reporter=json --outputFile=/tmp/b1c-add8-runner.json
+node ../node_modules/eslint/bin/eslint.js src/index.ts src/moc.ts
+```
+
+Status: **blocked by the three explicitly listed test/ruling contradictions (TL-P4-51)**.
+The retained implementation is unchanged; the seven remaining reds are not claimed green.
+
+
+## Addendum 8 red repair
+
+The owner authorized this tests-only TL-P4-51 repair against TL-P4-41 addendum 8.
+The single ownership parser must admit opaque bytes outside complete frames, retain them exactly,
+and grant writes and task authority only inside framed payloads. No production implementation was changed.
+
+tests changed: src/data/vault/ownership-format.test.ts: TL-P4-41 addendum 8: override only invalid-outside-content's local status and personal-task expectations; accept trailing prose, exclude its byte span from payload/task authority, refuse outside task requests and preserve outside bytes through a framed task edit.
+tests changed: src/data/vault/note-format.test.ts: TL-P4-41 addendum 8: outside prose reads successfully; the existing task-edit refusal now targets outside task index 1, while framed task index 0 remains editable and preserves the outside bytes.
+
+The pinned evidence bundle, its hashes and all other fixture expectations are unchanged.
+Only the outside-prose row was removed from each invalid-case table; all damaged-frame,
+malformed-control, unsupported-version and encoding refusal cases and their assertions remain unchanged.
+Outside spans are checked through the existing published payload and task authority and exact output bytes;
+these tests do not prescribe an additional parser or a new result-property name.
+
+### Remaining-test audit
+
+One final `rg -n -i 'outside|unclaimed|unframed' src/data runner/test --glob '*test*'`
+found no further assertion that outside prose is invalid or throws. The other matching refusals concern
+changed source versions, folder/admission boundaries or URLs, rather than opaque bytes outside frames.
+Existing runner/test/b1a-contract.test.ts:223 and runner/test/b1-index.test.ts:493 already require outside
+bytes to survive. The full search output is `/tmp/b1c-add8-red-prose-audit.log`.
+
+### Red verification
+
+Ran both entire files offline with `--maxWorkers=2`: **290 pass / 3 fail**, 293 total.
+Only these newly corrected expectations fail:
+
+- src/data/vault/ownership-format.test.ts:56: invalid-outside-content still returns invalid instead of v2.
+- src/data/vault/ownership-format.test.ts:149: unclaimed trailing text still returns invalid instead of v2.
+- src/data/vault/note-format.test.ts:484: reading outside prose still throws damaged-boundary.
+
+All test execution, Vite caches, timer-gate CPU reports and logs stayed in the OS-temp folder.
+An exact source copy at `/tmp/b1c-add8-red-3qai3rgh` uses the installed local Vitest binary and a temporary
+config retaining jsdom and both existing setup files; no pnpm setup or network request was made.
+
+```sh
+# cwd: /tmp/b1c-add8-red-3qai3rgh
+node node_modules/vitest/vitest.mjs run src/data/vault/ownership-format.test.ts src/data/vault/note-format.test.ts --config=red-config.mjs --configLoader=runner --maxWorkers=2 --reporter=default --reporter=json --outputFile=/tmp/b1c-add8-red-tests.json > /tmp/b1c-add8-red-tests.log 2>&1
+```
+
+Logs: `/tmp/b1c-add8-red-tests.log`, `/tmp/b1c-add8-red-tests.json`.
+SHA-256 comparison confirms retained runner/src/index.ts, runner/src/moc.ts,
+src/data/contracts/note-edit.ts and src/data/contracts/run-manifest.ts are byte-for-byte unchanged.
+`git diff --check` passes. No writing git command, production edit or evidence edit was run.
+No green implementation, pnpm check or e2e claim: this assignment owns only the corrected reds.
+Source: the owner's verbatim TL-P4-41 addendum 8 ruling and the preceding Implementation (addendum 8) audit;
+no external research was needed or permitted for this assertion-only repair.
