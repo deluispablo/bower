@@ -1,0 +1,44 @@
+{
+  "files": {
+    "present": [
+      "Projects/Garden shelter/Cedar timber update.txt"
+    ],
+    "absent": [
+      "Inbox/*",
+      "Projects/Garden shelter/Cedar timber update.md"
+    ]
+  },
+  "unchanged": [
+    "Projects/Garden shelter/Garden shelter.md",
+    "Projects/Walking trip/Walking trip.md",
+    "Projects/Walking trip/Cedar.md"
+  ],
+  "notes": [
+    {
+      "path": "Projects/Garden shelter/Cedar.md",
+      "contains": [
+        "Alex wants untreated timber."
+      ],
+      "excludes": [
+        "[[Projects/Walking trip/Cedar]]",
+        "[[Walking trip]]",
+        "Bramblehaven"
+      ],
+      "timeline": [
+        "2026-10-02 \u00b7 Recorded the timber option.",
+        "The Cedar timber option is available untreated. \u00b7 [[Cedar timber update.txt]]"
+      ],
+      "timelineCount": 2
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "created": [],
+    "updated": [
+      "Projects/Garden shelter/Cedar.md"
+    ],
+    "questionsExactly": 0,
+    "setAside": 0
+  }
+}

@@ -2,7 +2,7 @@
 .desk {
   height: 100dvh;
   display: grid;
-  grid-template-columns: 52px var(--lw) minmax(0, 1fr) var(--rw);
+  grid-template-columns: 52px var(--lw) minmax(560px, 1fr) var(--rw);
   grid-template-rows: minmax(0, 1fr) auto;
   grid-template-areas: 'ribbon left center right' 'status status status status';
   background: var(--bg);
@@ -42,6 +42,9 @@
 .ptab:hover { color: var(--heading); background: var(--hover); }
 .ptab[aria-selected='true'] { background: var(--surface-strong); color: var(--heading); }
 .panelBody { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.panelClose { display: flex; justify-content: flex-end; }
+.panelCloseRight { justify-content: flex-start; }
+.panelClose .overlayClose { width: 44px; height: 44px; }
 .resizer { position: absolute; top: 0; bottom: 0; right: -3px; width: 6px; cursor: col-resize; z-index: 3; touch-action: none; }
 .resizer:focus-visible { outline: none; background: var(--accent-line); }
 .resizer:hover { background: linear-gradient(90deg, transparent 2px, var(--brand) 2px, var(--brand) 4px, transparent 4px); }

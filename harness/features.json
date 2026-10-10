@@ -6554,7 +6554,7 @@
     "id": "shell-page-column",
     "task": "p4-defects",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "The desktop page column never gets narrower than 560 px: docked(shellWidth, prefs) folds the right panel first, then the side panel; a folded panel opens as an overlay through Sheet from its button; prefs are never rewritten; dragging is clamped (DEFECTS shell-page-column-squeeze).",
     "steps": [
@@ -6562,14 +6562,15 @@
       "A folded panel opens as an overlay and Escape returns focus to its button."
     ],
     "verify": "pnpm exec vitest run src/app/DesktopShell.test.tsx -t \"docked keeps the page column at least 560 px\"",
-    "note": "DEFECTS shell-page-column-squeeze (lead ruling, designer spec). Codex, then a Claude review and the designer. Packet 2026-10-10-shell-page-column-packet.md. implementer: codex. Designer verified 44799444; a short re-check follows fix rounds 1-2.",
-    "review": "P4-75 BLOCK; P4-75b PASS"
+    "note": "DEFECTS shell-page-column-squeeze (lead ruling, designer spec). Codex, then a Claude review and the designer. Packet 2026-10-10-shell-page-column-packet.md. implementer: codex. Designer verified 44799444; a short re-check follows fix rounds 1-2. Designer re-verified fc5c4cf1 (overlay motion, first render, resizer).",
+    "review": "P4-75 BLOCK; P4-75b PASS",
+    "design": "verified"
   },
   {
     "id": "p4-corpus-answers",
     "task": "p4-semantic",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "ui": null,
     "what": "The corpus driver answers questions through the real answer path between presses, asserts per run, compares protected byte ranges and Drive properties directly, and tells a replay of the original request from a new tidy-up (TL-P4-32 finding 7).",
     "steps": [
@@ -6598,14 +6599,57 @@
     "id": "c5-test-margin",
     "task": "p4-throughput",
     "category": "test",
-    "passes": false,
+    "passes": true,
     "ui": null,
     "what": "The three tests that time out under CPU contention (engine startle, undo-compensate property batches 1-2, codex-run guarded paths) are split so each part runs in at most 1 s at idle, with every case, run count, assertion, bound and timeout unchanged (TL-P4-31 addendum 1).",
     "steps": [
       "Each split part runs in at most 1 s alone at idle.",
       "The total case count is unchanged."
     ],
-    "verify": "pnpm exec vitest run src/bird/engine.test.ts src/data/vault/undo-compensate.property.test.ts src/codex-run.test.ts",
-    "note": "TL-P4-31 addendum 1. Codex, then a Claude review. Packet 2026-10-10-c5-test-margin-packet.md. implementer: codex. Tests only: closes with --known-green."
+    "verify": "pnpm exec vitest run src/bird/engine.test.ts src/data/vault/undo-compensate.property.test.ts src/codex-run.test.ts -t \"the startle settles within|compensating Undo preserves FIFO|refuses guarded paths, secrets and addresses\"",
+    "note": "TL-P4-31 addendum 1. Codex, then a Claude review. Packet 2026-10-10-c5-test-margin-packet.md. implementer: codex. Tests only: closes with --known-green.",
+    "review": "P4-76 BLOCK; P4-76b PASS"
+  },
+  {
+    "id": "c5-empty-note-help",
+    "task": "p4-polish",
+    "category": "fix",
+    "passes": false,
+    "ui": true,
+    "what": "The empty-note line says how to write in a note (Google Drive for desktop and any notes app) with the existing Open in Drive action beside it; the later-version promise is gone (TL-P4-33 addenda 1 and 2).",
+    "steps": [
+      "An empty note shows the designer copy and Open in Drive.",
+      "On a phone the row wraps and the button keeps a 44 px target."
+    ],
+    "verify": "pnpm exec vitest run src/features/note -t \"an empty note says how to write in it and offers Open in Drive\"",
+    "note": "TL-P4-33 addenda 1 and 2. Codex, then a Claude review and the designer. Packet 2026-10-10-c5-empty-note-help-packet.md. implementer: codex."
+  },
+  {
+    "id": "c5-remove-new-note",
+    "task": "p4-polish",
+    "category": "fix",
+    "passes": false,
+    "ui": true,
+    "what": "New note is removed everywhere it is offered (explorer button and row menu, folder page, its name-sheet path); New folder stays; code only it used goes (TL-P4-35).",
+    "steps": [
+      "No New note control on desktop or phone.",
+      "New folder is still offered."
+    ],
+    "verify": "pnpm exec playwright test e2e/no-new-note.spec.ts -g \"no New note control on desktop or phone\"",
+    "note": "TL-P4-35 (1). Codex after c5-empty-note-help, then a Claude review and the designer. Packet 2026-10-10-c5-remove-new-note-packet.md. implementer: codex."
+  },
+  {
+    "id": "p4-docs-md-roundtrip",
+    "task": "p4-production",
+    "category": "check",
+    "passes": false,
+    "ui": null,
+    "what": "A Bower note edited in Google Docs (native .md editing) keeps what Bower relies on: bytes Bower can parse, appProperties, ownership marks and note-edit behaviour; the result is a DEFECTS entry or a safe line (TL-P4-36).",
+    "steps": [
+      "A made-up note on staging for account B is snapshotted (bytes, appProperties, modifiedTime).",
+      "After the owner edits it in Docs, a Codex session diffs it and runs the parser and note-edit on it."
+    ],
+    "verify": "pnpm exec vitest run src/data/contracts/docs-md-roundtrip.test.ts -t \"a note edited in Google Docs\"",
+    "note": "TL-P4-36 (P4-E). The owner edits by hand; no session signs in to Google. implementer: codex."
   }
 ]

@@ -1,0 +1,22 @@
+{
+  "id": "c07-tentative-closure",
+  "capability": "C07",
+  "title": "A possible closure is not a confirmed cancellation",
+  "covers": "model",
+  "source": "new (C07 preparation; scripted intent proof pending lead review)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "File this with the related note and record what it changes.",
+      "files": [
+        "Garden notice.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Projects/Garden visit/Saltmere garden visit.md"
+  ]
+}

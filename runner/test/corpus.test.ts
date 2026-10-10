@@ -2,11 +2,19 @@ import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CORPUS_CAPABILITIES, loadCorpus, score, timelineOf } from '../src/corpus';
+import { CORPUS_CAPABILITIES, loadCase, loadCorpus, score, timelineOf, type Expected, type LoadedCase } from '../src/corpus';
 import { groundsOf, ungrounded } from '../src/claude';
 import { runScripted } from './corpus-run';
 
 const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
+
+async function assertScriptedCases(scripted: LoadedCase[]): Promise<void> {
+  for (const c of scripted) {
+    const run = await runScripted(c);
+    expect({ id: c.id, code: run.code }).toEqual({ id: c.id, code: 0 });
+    expect({ id: c.id, ...run.score }).toEqual({ id: c.id, pass: true, unmet: [] });
+  }
+}
 
 describe('the capability corpus', () => {
   it('every corpus capability has at least two cases', async () => {
@@ -29,11 +37,17 @@ describe('the capability corpus', () => {
   it('the corpus scorer passes on the scripted provider outputs', async () => {
     const scripted = (await loadCorpus(ROOT)).filter((c) => c.covers === 'scripted');
     expect(scripted.length).toBeGreaterThanOrEqual(10);
-    for (const c of scripted) {
-      const run = await runScripted(c);
-      expect({ id: c.id, code: run.code }).toEqual({ id: c.id, code: 0 });
-      expect({ id: c.id, ...score({ expected: c.expected, before: c.folder, after: run.after, lastRun: run.lastRun, pathsById: run.pathsById }) }).toEqual({ id: c.id, pass: true, unmet: [] });
-    }
+    await assertScriptedCases(scripted);
+  });
+
+  it.each<[string, Expected]>([
+    ['runs', { runs: [{ report: { questionsExactly: 1 } }] }],
+    ['protectedRanges', { protectedRanges: [{ path: 'Missing.md', range: { frontMatter: true } }] }],
+    ['properties', { properties: [{ path: 'Missing.md', absent: ['by'] }] }],
+    ['questionSubjects', { report: { questionSubjects: [{ kind: 'state', note: 'Missing.md' }] } }],
+  ])('the scripted corpus loop rejects an unmet %s expectation', async (_field, expected) => {
+    const seed = await loadCase(join(ROOT, 'c09-closest-flat'));
+    await expect(assertScriptedCases([{ ...seed, expected }])).rejects.toThrow();
   });
 
   it('the corpus scorer fails when an expected file is missing', async () => {

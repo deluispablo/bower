@@ -376,16 +376,18 @@ describe("the engine's named actions", () => {
     expect(heads[heads.length - 1], 'startle lands').toBeLessThanOrEqual(-8);
   });
 
-  it('the startle settles within 2° and at rest before any handover from every pose and holds 0.6 s from landing', () => {
+  describe('the startle settles within 2° and at rest before any handover from every pose and holds 0.6 s from landing', () => {
     // Settling-based transitions: TL-P4-25 addendum 14. Reuse the fixture's domain, not idle's angle limits.
     const preen = ACT_REFERENCE.preen;
-    const ranges = POSES.map((pose) => ({ pose, range: POSE_REFERENCE[pose].parts.head?.range ?? [0, 0] }));
-    ranges.push({ pose: 'idle', range: [Math.min(...preen.values), Math.max(...preen.values)] });
-    for (const { pose, range } of ranges) {
-      for (const angle of range) {
-        expect(Math.abs(angle + 10) / 360, `${pose} at ${angle}°: geometry alone`).toBeLessThanOrEqual(0.2);
+    it('every pose and preen endpoint meets the geometry bound', () => {
+      const ranges = POSES.map((pose) => ({ pose, range: POSE_REFERENCE[pose].parts.head?.range ?? [0, 0] }));
+      ranges.push({ pose: 'idle', range: [Math.min(...preen.values), Math.max(...preen.values)] });
+      for (const { pose, range } of ranges) {
+        for (const angle of range) {
+          expect(Math.abs(angle + 10) / 360, `${pose} at ${angle}°: geometry alone`).toBeLessThanOrEqual(0.2);
+        }
       }
-    }
+    });
     const schedules = [
       { name: '30 fps', dt: [1 / 30] },
       { name: '60 fps', dt: [1 / 60] },
@@ -405,165 +407,176 @@ describe("the engine's named actions", () => {
       startle(): void;
       step(dt: number, headDt: number): void;
     };
-    fc.assert(
-      fc.property(fc.noBias(fc.integer({ min: 0, max: 10_000 })), fc.integer({ min: 0, max: 4 }), (phaseTick, offset) => {
-        const phase = phaseTick / 10_000;
-        const problems: string[] = [];
-        const cases = [
-          ...POSES.map((pose) => ({ pose, act: false, seconds: POSE_REFERENCE[pose].period * (1 + phase) })),
-          { pose: 'idle' as const, act: true, seconds: 0.75 * phase },
-          { pose: 'idle' as const, act: true, seconds: 0.6 }, // The round-7 witness: preen at 42°.
-          { pose: 'idle' as const, act: false, seconds: 0.2, doze: true },
-        ];
-        for (const schedule of schedules) for (const entry of cases) {
-          cleanup();
-          let callback: ((ts: number) => void) | undefined;
-          const { engine, headPart, read } = mount(entry.pose, {
-            sleeps: 'doze' in entry,
-            random: () => 0.5,
-            frame: (cb) => { callback = cb; return 1; },
-            cancelFrame: () => { callback = undefined; },
-          });
-          const internals = engine as unknown as ProfileProbe;
-          const startling = internals.heard() && internals.minded();
-          let time = 1;
-          let frame = offset;
-          callback?.(time * 1000); // Prime the clock: the first animation frame has zero elapsed time.
-          const readHead = () => Number(headPart.getAttribute('transform')?.match(/rotate\((-?\d+(?:\.\d+)?)/)?.[1] ?? 0);
-          const advance = (seconds: number, sample: (dt: number) => void = () => {}) => {
-            const until = time + seconds;
-            while (time < until - 1e-10) {
-              const dt = Math.min(schedule.dt[frame++ % schedule.dt.length] ?? 1 / FPS, until - time);
-              time += dt;
-              callback?.(time * 1000);
-              sample(dt);
-            }
-          };
-          if (entry.act) engine.act('preen');
-          // Inject the quiet clock at DOZE's 60 s boundary; the real idle path enters the minded doze.
-          if ('doze' in entry) internals.S.quietT = Number(internals.S.t) - 60;
-          advance(entry.seconds);
-          if ('doze' in entry) {
-            expect(internals.asleep, 'minded doze starts after 60 s without input').toBe(true);
-            expect(readHead(), 'minded doze starts with its head at 20°').toBeCloseTo(20, 4);
-          }
-          if (!startling) {
-            // Compare the same pose and cadence without input: nudge must preserve its head script.
-            const expected: number[] = [readHead()];
-            const replayTime = time;
-            const replayFrame = frame;
-            advance(1.3, () => { expected.push(readHead()); });
-            engine.stop();
+    const entries = [...POSES, 'preen phase', 'preen at 0.6 s', 'minded doze'];
+    const batches = schedules.flatMap((schedule) => entries.map((name, entryIndex) => ({ schedule, name, entryIndex })));
+    // 20 generated phases × four cadences × all poses and the three extra entries, exactly once.
+    expect(batches.length * 20).toBe(960);
+    it.each(batches)('$schedule.name: $name', ({ schedule, entryIndex }) => {
+      let runs = 0;
+      fc.assert(
+        fc.property(fc.noBias(fc.integer({ min: 0, max: 10_000 })), fc.integer({ min: 0, max: 4 }), (phaseTick, offset) => {
+          runs++;
+          const phase = phaseTick / 10_000;
+          const problems: string[] = [];
+          const cases = [
+            ...POSES.map((pose) => ({ pose, act: false, seconds: POSE_REFERENCE[pose].period * (1 + phase) })),
+            { pose: 'idle' as const, act: true, seconds: 0.75 * phase },
+            { pose: 'idle' as const, act: true, seconds: 0.6 }, // The round-7 witness: preen at 42°.
+            { pose: 'idle' as const, act: false, seconds: 0.2, doze: true },
+          ];
+          const selected = cases[entryIndex];
+          if (!selected) throw new Error('Missing startle case');
+          for (const entry of [selected]) {
             cleanup();
-            const control = mount(entry.pose, {
-              sleeps: false,
+            let callback: ((ts: number) => void) | undefined;
+            const { engine, headPart, read } = mount(entry.pose, {
+              sleeps: 'doze' in entry,
               random: () => 0.5,
               frame: (cb) => { callback = cb; return 1; },
               cancelFrame: () => { callback = undefined; },
             });
-            time = 1;
-            frame = offset;
-            callback?.(time * 1000);
+            const internals = engine as unknown as ProfileProbe;
+            const startling = internals.heard() && internals.minded();
+            let time = 1;
+            let frame = offset;
+            callback?.(time * 1000); // Prime the clock: the first animation frame has zero elapsed time.
+            const readHead = () => Number(headPart.getAttribute('transform')?.match(/rotate\((-?\d+(?:\.\d+)?)/)?.[1] ?? 0);
+            const advance = (seconds: number, sample: (dt: number) => void = () => {}) => {
+              const until = time + seconds;
+              while (time < until - 1e-10) {
+                const dt = Math.min(schedule.dt[frame++ % schedule.dt.length] ?? 1 / FPS, until - time);
+                time += dt;
+                callback?.(time * 1000);
+                sample(dt);
+              }
+            };
+            if (entry.act) engine.act('preen');
+            // Inject the quiet clock at DOZE's 60 s boundary; the real idle path enters the minded doze.
+            if ('doze' in entry) internals.S.quietT = Number(internals.S.t) - 60;
             advance(entry.seconds);
-            expect(time).toBe(replayTime);
-            expect(frame).toBe(replayFrame);
-            const startle = vi.spyOn(control.engine as unknown as ProfileProbe, 'startle');
-            const actual: number[] = [control.read().head];
+            if ('doze' in entry) {
+              expect(internals.asleep, 'minded doze starts after 60 s without input').toBe(true);
+              expect(readHead(), 'minded doze starts with its head at 20°').toBeCloseTo(20, 4);
+            }
+            if (!startling) {
+              // Compare the same pose and cadence without input: nudge must preserve its head script.
+              const expected: number[] = [readHead()];
+              const replayTime = time;
+              const replayFrame = frame;
+              advance(1.3, () => { expected.push(readHead()); });
+              engine.stop();
+              cleanup();
+              const control = mount(entry.pose, {
+                sleeps: false,
+                random: () => 0.5,
+                frame: (cb) => { callback = cb; return 1; },
+                cancelFrame: () => { callback = undefined; },
+              });
+              time = 1;
+              frame = offset;
+              callback?.(time * 1000);
+              advance(entry.seconds);
+              expect(time).toBe(replayTime);
+              expect(frame).toBe(replayFrame);
+              const startle = vi.spyOn(control.engine as unknown as ProfileProbe, 'startle');
+              const actual: number[] = [control.read().head];
+              try {
+                control.engine.nudge();
+                expect(control.read().head, `${entry.pose}: nudge leaves the head unchanged`).toBe(expected[0]);
+                advance(1.3, () => { actual.push(control.read().head); });
+                expect(startle, `${entry.pose}: nudge does not startle`).not.toHaveBeenCalled();
+                expect(actual, `${schedule.name} ${entry.pose}: head follows its pose`).toEqual(expected);
+              } finally {
+                startle.mockRestore();
+                control.engine.stop();
+              }
+              continue;
+            }
+            const label = `${schedule.name} ${'doze' in entry ? 'minded doze' : entry.act ? `preen at ${entry.seconds.toFixed(4)} s` : entry.pose} phase ${phase.toFixed(4)}`;
+            const seen = new Set<string>();
+            const fail = (kind: string, detail: string) => {
+              if (!seen.has(kind)) problems.push(`${label}: ${kind} ${detail}`);
+              seen.add(kind);
+            };
+            let head = readHead();
+            const from = head;
+            const range = 'doze' in entry ? [20, 20] : entry.act ? [0, Math.max(...preen.values)] : POSE_REFERENCE[entry.pose].parts.head?.range ?? [0, 0];
+            if (head < (range[0] ?? 0) - 2 || head > (range[1] ?? 0) + 2) fail('fixture range', `${head.toFixed(4)}°`);
+            const tuftFrom = read().tuft;
+            let headAt = Infinity;
+            let tuftAt = Math.abs(tuftFrom - 18) <= 0.01 ? 0 : Infinity;
+            let landingAt = headAt === 0 && tuftAt === 0 ? 0 : Infinity;
+            let tuftClock = 0;
+            let sampled = false;
+            const nudgedAt = time;
+            const step = internals.step;
+            const spy = vi.spyOn(internals, 'step').mockImplementation(function (dt, headDt) {
+              if (headAt === Infinity) {
+                const probe = Object.assign(Object.create(Object.getPrototypeOf(engine)) as ProfileProbe, engine, {
+                  H: { ...internals.H }, S: { ...internals.S }, B: { ...internals.B },
+                  C: Object.fromEntries(Object.entries(internals.C).map(([key, spring]) => [key, { ...spring }])),
+                }) as unknown as ProfileProbe;
+                const direction = Math.sign(-10 - head) || Math.sign(-10 - from) || 1;
+                const before = probe.H.v;
+                probe.H.vel = -direction * 360;
+                step.call(probe, 0, headDt);
+                const toward = (probe.H.v - before) * direction;
+                // A snap already on target stays there; a return with the injected velocity moves away.
+                if (toward < 0 || (toward === 0 && before !== -10)) {
+                  fail('handover before settling', `${(time - nudgedAt).toFixed(4)} s, head ${head.toFixed(4)}°`);
+                }
+              }
+              step.call(internals, dt, headDt);
+            });
+            const sample = (dt: number) => {
+              const elapsed = time - nudgedAt;
+              const now = readHead();
+              const tuft = read().tuft;
+              tuftClock += Math.min(0.033, dt);
+              if (!sampled && Math.abs(tuftFrom - 18) > 0.01 && Math.abs(tuft - 18) >= Math.abs(tuftFrom - 18)) {
+                fail('tuft waits for head', `tuft ${tuft.toFixed(2)}°, head ${now.toFixed(4)}°`);
+              }
+              sampled = true;
+              // The tuft's own 0.15 s rise uses the engine's capped animation clock, independently of head arrival.
+              if (tuftAt === Infinity && tuftClock >= 0.15 - 1e-10 && Math.abs(tuft - 18) > 0.01) {
+                fail('tuft schedule', `not at 18° on its first frame after 0.15 s: ${tuft.toFixed(2)}°`);
+              }
+              const speed = Math.abs(now - head) / dt;
+              if (speed > 360) fail('speed', `${speed.toFixed(4)}°/s at ${elapsed.toFixed(4)} s`);
+              if ((from >= -10 && now < -12) || (from < -10 && now > -8 && elapsed <= landingAt + 0.6)) {
+                fail('overshoot', `${now.toFixed(4)}° at ${elapsed.toFixed(4)} s`);
+              }
+              if (headAt === Infinity && Math.abs(now + 10) <= 2 && speed < 1e-6) headAt = elapsed;
+              if (tuftAt === Infinity && Math.abs(tuft - 18) <= 0.01) tuftAt = elapsed;
+              if (landingAt === Infinity && headAt < Infinity && tuftAt < Infinity) landingAt = elapsed;
+              if (elapsed < landingAt + 0.6 - 1e-10 && landingAt < Infinity) {
+                if (Math.abs(now + 10) > 2 || Math.abs(tuft - 18) > 2 || internals.H.t !== -10) {
+                  fail('hold from landing', `landed ${landingAt.toFixed(4)} s, released ${elapsed.toFixed(4)} s`);
+                }
+              }
+              head = now;
+            };
             try {
-              control.engine.nudge();
-              expect(control.read().head, `${entry.pose}: nudge leaves the head unchanged`).toBe(expected[0]);
-              advance(1.3, () => { actual.push(control.read().head); });
-              expect(startle, `${entry.pose}: nudge does not startle`).not.toHaveBeenCalled();
-              expect(actual, `${schedule.name} ${entry.pose}: head follows its pose`).toEqual(expected);
+              engine.nudge();
+              // Sample the deadlines exactly; other frames retain the selected cadence (including its jitter).
+              advance(0.15, sample);
+              advance(Math.max(...schedule.dt), sample);
+              if (tuftAt === Infinity) fail('tuft schedule', 'no independent 18° peak by the first frame after 0.15 s');
+              advance(0.2 - (time - nudgedAt), sample);
+              if (headAt > 0.2 + 1e-10) fail('landing deadline', `head ${head.toFixed(4)}° at 0.2 s`);
+              advance(1.1, sample);
+              if (landingAt === Infinity) fail('hold from landing', 'both parts never landed');
             } finally {
-              startle.mockRestore();
-              control.engine.stop();
+              spy.mockRestore();
+              engine.stop();
             }
-            continue;
           }
-          const label = `${schedule.name} ${'doze' in entry ? 'minded doze' : entry.act ? `preen at ${entry.seconds.toFixed(4)} s` : entry.pose} phase ${phase.toFixed(4)}`;
-          const seen = new Set<string>();
-          const fail = (kind: string, detail: string) => {
-            if (!seen.has(kind)) problems.push(`${label}: ${kind} ${detail}`);
-            seen.add(kind);
-          };
-          let head = readHead();
-          const from = head;
-          const range = 'doze' in entry ? [20, 20] : entry.act ? [0, Math.max(...preen.values)] : POSE_REFERENCE[entry.pose].parts.head?.range ?? [0, 0];
-          if (head < (range[0] ?? 0) - 2 || head > (range[1] ?? 0) + 2) fail('fixture range', `${head.toFixed(4)}°`);
-          const tuftFrom = read().tuft;
-          let headAt = Infinity;
-          let tuftAt = Math.abs(tuftFrom - 18) <= 0.01 ? 0 : Infinity;
-          let landingAt = headAt === 0 && tuftAt === 0 ? 0 : Infinity;
-          let tuftClock = 0;
-          let sampled = false;
-          const nudgedAt = time;
-          const step = internals.step;
-          const spy = vi.spyOn(internals, 'step').mockImplementation(function (dt, headDt) {
-            if (headAt === Infinity) {
-              const probe = Object.assign(Object.create(Object.getPrototypeOf(engine)) as ProfileProbe, engine, {
-                H: { ...internals.H }, S: { ...internals.S }, B: { ...internals.B },
-                C: Object.fromEntries(Object.entries(internals.C).map(([key, spring]) => [key, { ...spring }])),
-              }) as unknown as ProfileProbe;
-              const direction = Math.sign(-10 - head) || Math.sign(-10 - from) || 1;
-              const before = probe.H.v;
-              probe.H.vel = -direction * 360;
-              step.call(probe, 0, headDt);
-              const toward = (probe.H.v - before) * direction;
-              // A snap already on target stays there; a return with the injected velocity moves away.
-              if (toward < 0 || (toward === 0 && before !== -10)) {
-                fail('handover before settling', `${(time - nudgedAt).toFixed(4)} s, head ${head.toFixed(4)}°`);
-              }
-            }
-            step.call(internals, dt, headDt);
-          });
-          const sample = (dt: number) => {
-            const elapsed = time - nudgedAt;
-            const now = readHead();
-            const tuft = read().tuft;
-            tuftClock += Math.min(0.033, dt);
-            if (!sampled && Math.abs(tuftFrom - 18) > 0.01 && Math.abs(tuft - 18) >= Math.abs(tuftFrom - 18)) {
-              fail('tuft waits for head', `tuft ${tuft.toFixed(2)}°, head ${now.toFixed(4)}°`);
-            }
-            sampled = true;
-            // The tuft's own 0.15 s rise uses the engine's capped animation clock, independently of head arrival.
-            if (tuftAt === Infinity && tuftClock >= 0.15 - 1e-10 && Math.abs(tuft - 18) > 0.01) {
-              fail('tuft schedule', `not at 18° on its first frame after 0.15 s: ${tuft.toFixed(2)}°`);
-            }
-            const speed = Math.abs(now - head) / dt;
-            if (speed > 360) fail('speed', `${speed.toFixed(4)}°/s at ${elapsed.toFixed(4)} s`);
-            if ((from >= -10 && now < -12) || (from < -10 && now > -8 && elapsed <= landingAt + 0.6)) {
-              fail('overshoot', `${now.toFixed(4)}° at ${elapsed.toFixed(4)} s`);
-            }
-            if (headAt === Infinity && Math.abs(now + 10) <= 2 && speed < 1e-6) headAt = elapsed;
-            if (tuftAt === Infinity && Math.abs(tuft - 18) <= 0.01) tuftAt = elapsed;
-            if (landingAt === Infinity && headAt < Infinity && tuftAt < Infinity) landingAt = elapsed;
-            if (elapsed < landingAt + 0.6 - 1e-10 && landingAt < Infinity) {
-              if (Math.abs(now + 10) > 2 || Math.abs(tuft - 18) > 2 || internals.H.t !== -10) {
-                fail('hold from landing', `landed ${landingAt.toFixed(4)} s, released ${elapsed.toFixed(4)} s`);
-              }
-            }
-            head = now;
-          };
-          try {
-            engine.nudge();
-            // Sample the deadlines exactly; other frames retain the selected cadence (including its jitter).
-            advance(0.15, sample);
-            advance(Math.max(...schedule.dt), sample);
-            if (tuftAt === Infinity) fail('tuft schedule', 'no independent 18° peak by the first frame after 0.15 s');
-            advance(0.2 - (time - nudgedAt), sample);
-            if (headAt > 0.2 + 1e-10) fail('landing deadline', `head ${head.toFixed(4)}° at 0.2 s`);
-            advance(1.1, sample);
-            if (landingAt === Infinity) fail('hold from landing', 'both parts never landed');
-          } finally {
-            spy.mockRestore();
-            engine.stop();
-          }
-        }
-        expect(problems, `phase ${phase}, schedule offset ${offset}`).toEqual([]);
-      }),
-      { seed: 2610, numRuns: 20, endOnFailure: true },
-    );
+          expect(problems, `phase ${phase}, schedule offset ${offset}`).toEqual([]);
+        }),
+        { seed: 2610, numRuns: 20, endOnFailure: true },
+      );
+      expect(runs).toBe(20);
+    });
   });
 
   // TL-P4-25 addendum 8: rates are measured from delivered frames; gaze is always a return.
