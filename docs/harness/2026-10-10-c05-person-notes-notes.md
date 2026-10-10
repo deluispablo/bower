@@ -4,7 +4,7 @@ implementer: codex
 
 Scope: tests, restored corpus, the requested method verdict row and these notes only. No app implementation changed.
 No network, server, e2e execution or git write command. The coordinator owns commits; notes need their own commit.
-compatibility: not applicable to this red-only change; the fix session must record compatibility: FIXSHA.
+compatibility: not applicable to this red-only change; the fix session must record compatibility: 3e958da1.
 
 ## Reds
 
@@ -197,7 +197,7 @@ removed: request replay dependence on identical model wording or the note's most
 removed: unrelated historical-manifest reads from append-history discovery.
 
 tests changed: none in the implementation session.
-compatibility: FIXSHA
+compatibility: 3e958da1
 
 ### Verification and blockers
 
@@ -248,7 +248,7 @@ The coordinator supplies the fix SHA and moves this row to the compatibility led
 
 | Commit | Entry | What it changes for the accepted app's files |
 | --- | --- | --- |
-| `FIXSHA` | c05-person-notes | Adds optional leftAsWritten report rows, Timeline consent, inherited completedAppends in manifests, and appendBindings/completedAppends in checkpoints; old records retain their meaning and parse without the fields. A granted personal-state edit can carry a null ownership mark, preserves every other bullet's bytes and adds no ownership mark. New manifest records with append evidence have the bowerAppends discovery property. The result renders Left as you wrote them without increasing updated counts. The app and runner deploy together; older strict readers cannot execute these new bound edits. Personal-note link rewrites retain the existing links-only behavior without a new grant, per TL-P4-32 addendum 1. |
+| `3e958da1` | c05-person-notes | Adds optional leftAsWritten report rows, Timeline consent, inherited completedAppends in manifests, and appendBindings/completedAppends in checkpoints; old records retain their meaning and parse without the fields. A granted personal-state edit can carry a null ownership mark, preserves every other bullet's bytes and adds no ownership mark. New manifest records with append evidence have the bowerAppends discovery property. The result renders Left as you wrote them without increasing updated counts. The app and runner deploy together; older strict readers cannot execute these new bound edits. Personal-note link rewrites retain the existing links-only behavior without a new grant, per TL-P4-32 addendum 1. |
 
 ### Files per coordinator commit
 
@@ -347,7 +347,7 @@ removed: round-1 not-bower refusal for fetched personal-note link rewrites in th
 removed: the draft compatibility row's resolved personal-link ruling blocker.
 
 tests changed: none in implementation round 2.
-compatibility: FIXSHA (coordinator supplies the commit; existing personal-link behavior is preserved).
+compatibility: 3e958da1 (coordinator supplies the commit; existing personal-link behavior is preserved).
 
 Before the fix, the corrected author test
 `C05 person notes: link rewrite changes only links beside the admitted append` failed with
@@ -526,7 +526,7 @@ removed: acceptance of inherited completion tuples without checkpoint provenance
 removed: the unreachable personal-state return and unused runner displayName import.
 
 tests changed: none in fix round 1 implementation.
-compatibility: FIXSHA (coordinator supplies the product commit).
+compatibility: 3e958da1 (coordinator supplies the product commit).
 
 ### Verification and logs
 
@@ -564,7 +564,7 @@ This supersedes the earlier draft for the fix-round product commit. The coordina
 
 | Commit | Entry | What it changes for the accepted app's files |
 | --- | --- | --- |
-| `FIXSHA` | c05-person-notes | Adds the previously drafted optional leftAsWritten, consent, appendBindings and completedAppends fields. This round adds optional manifest appendEvidence (verified originating checkpoint prefixes) and satisfiedAppends (an already-present bound line, its read evidence and archive-operation binding). Checkpoints retain their existing shape; binding uniqueness includes the request and target so an archive operation can complete several satisfied targets. The completion set must equal inherited plus applied bindings, and inherited manifest completions require provenance. Accepted older manifests, checkpoints and reports without these C05 fields retain their meaning and pass the existing fixture tests; unproved completion tuples from the unaccepted implementation draft are refused. Plain Markdown section layout and display now recognize supported Timelines; the old framed/legacy Timeline extraction API retains its behavior. Granted personal-state writes preserve all bytes outside one bullet and add no ownership mark. Personal link rewrites retain TL-P4-32 addendum 1 behavior. App and runner deploy together; old strict readers cannot execute the new C05 records. |
+| `3e958da1` | c05-person-notes | Adds the previously drafted optional leftAsWritten, consent, appendBindings and completedAppends fields. This round adds optional manifest appendEvidence (verified originating checkpoint prefixes) and satisfiedAppends (an already-present bound line, its read evidence and archive-operation binding). Checkpoints retain their existing shape; binding uniqueness includes the request and target so an archive operation can complete several satisfied targets. The completion set must equal inherited plus applied bindings, and inherited manifest completions require provenance. Accepted older manifests, checkpoints and reports without these C05 fields retain their meaning and pass the existing fixture tests; unproved completion tuples from the unaccepted implementation draft are refused. Plain Markdown section layout and display now recognize supported Timelines; the old framed/legacy Timeline extraction API retains its behavior. Granted personal-state writes preserve all bytes outside one bullet and add no ownership mark. Personal link rewrites retain TL-P4-32 addendum 1 behavior. App and runner deploy together; old strict readers cannot execute the new C05 records. |
 
 Evidence prefixes use the existing record hashes and chain validation, not a second completion store or dispatcher.
 They grow with distinct completed runs; existing manifest size limits still apply. No new retention or pruning policy
@@ -735,7 +735,7 @@ removed: the `continue` that skipped a note's append on a refused personal state
 removed: plain-note personal span split and plain parseNote currentState/timeline (ownership-format, note-format).
 removed: `prior` retry entry reuse in the model-lines loop; `what` set to row 1 on the line (now set on the row).
 tests changed: none.
-compatibility: FIXSHA
+compatibility: 3e958da1
 
 ### Verification
 
@@ -755,7 +755,7 @@ compatibility: FIXSHA
 | Commit | Entry | What it changes for the accepted app's files |
 | --- | --- | --- |
 | `99ade27a` | c05-person-notes | none: tests only (round 3 reds and amendments, TL-P4-32 addendum 2). |
-| `FIXSHA` | c05-person-notes | Manifests no longer accept completedAppends or appendEvidence (only unaccepted C05 drafts wrote them; such a manifest is refused, not read inertly); satisfiedAppends stays, proved by the manifest itself. Checkpoints keep optional appendBindings/completedAppends, now only the run's own applied bindings. Accepted manifests, checkpoints and reports never had these fields and parse unchanged (existing fixture tests). Plain notes are parsed as on main (whole note personal, no state); their layout gains only a Timeline span for a request's one line. App and runner deploy together. |
+| `3e958da1` | c05-person-notes | Manifests no longer accept completedAppends or appendEvidence (only unaccepted C05 drafts wrote them; such a manifest is refused, not read inertly); satisfiedAppends stays, proved by the manifest itself. Checkpoints keep optional appendBindings/completedAppends, now only the run's own applied bindings. Accepted manifests, checkpoints and reports never had these fields and parse unchanged (existing fixture tests). Plain notes are parsed as on main (whole note personal, no state); their layout gains only a Timeline span for a request's one line. App and runner deploy together. |
 
 Sources: the existing RunRecords walk and checkpoint chain (local), timeline-line.ts, CommonMark ATX headings
 (https://spec.commonmark.org/0.31.2/#atx-headings), RFC 9110 If-Match (https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.1).
@@ -899,7 +899,7 @@ corpus-driver replay tests, the c05 corpus case and fix 1 finding 2.
 | Commit | Entry | What it changes for the accepted app's files |
 | --- | --- | --- |
 | `946eae84` | c05-person-notes | none: tests only (round 4 reds, TL-P4-32 addendum 3). |
-| `FIXSHA` | c05-person-notes | none: no stored shape changes. A waiting append retries on its stored target and source ids; a request already archived binds nothing again. |
+| `3e958da1` | c05-person-notes | none: no stored shape changes. A waiting append retries on its stored target and source ids; a request already archived binds nothing again. |
 
 Sources: Drive files resource and ids (https://developers.google.com/drive/api/reference/rest/v3/files),
 RFC 9110 If-Match (https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.1); local RunRecords and grounding.
@@ -1008,3 +1008,72 @@ Reused the existing corpus driver, persisted RunRecords chain, checkpoint valida
 No external lookup under the owner's no-network instruction; no new identity or settlement mechanism.
 
 left out: production fixes, the designer-signed TOO_OLD_WHY export, full suites, pnpm check, e2e and git writes.
+
+## Round 5 implementation (escalated)
+
+Claude (bower-escalated), on the round-5 reds at `74ee65ac`. Only `src/data/spine/scripted.ts` changed. No test,
+fixture or corpus file changed. No commits, network, server, e2e or push. Logs under `/tmp/c05-r5e/`.
+
+### Changes per point (TL-P4-32 addendum 5)
+
+1. **Completed by the record id in the bytes.** `archivedRecords` now reads every archived journal file once per run
+   (lazily, only when your changes hold a request, all reads at once as `journalValues` does) and keeps the set of
+   record ids inside them. A request line is `archived` when its id is in that set, whatever either file is named.
+   Only request lines are checked (the flag is read only by `settleRequest`).
+2. **Never title-resolved once bound or completed.** In `settleRequest`, a request with any completion or any bound
+   line in the kept records (`recorded`) is settled by those ids only: a waiting line retries on its persisted target
+   and source (round 4 path, unchanged), a gone target gets the `ASK_GONE` row, and a request whose recorded lines
+   are all completed is admitted with nothing bound and archived (the completed-but-unarchived crash case). Its words'
+   titles are not read again. An archived request is admitted and settles as a no-op (as before, but it no longer
+   reaches the title path at all).
+3. **Fail closed past retention.** New `retainedSince` reads, through `RunRecords.found`, the earliest `requestedAt`
+   of the kept runs once at least 20 run folders are kept (`RETAINED_RUNS`, the runner's `KEEP_FINISHED`); null while
+   fewer are. It is read only when a request has nothing of it in the kept records. Such a request with `at` older
+   than that, naming notes, is admitted with no binding, no line and no completion, and gets one row per named note
+   (`name` its path, `fileId`), or one `Request` row when it names more than three, with the new exported
+   `TOO_OLD_WHY` (the designer's signed text, packet addendum). Rows with no source ride its archive row
+   (`withArchive`, round 4); `settleRequest` stays the one settlement home and its archive the one archive path.
+
+Also: one `recordsOf` builds the run records for `personalAppendHistory` and `retainedSince` (no copy).
+
+removed: the name filter in `archivedRecords` (`archived.filter((x) => x.name === f.name)`) and its per-line reads.
+removed: `settled` and the archived clause of `done` in `settleRequest` (archived requests short-circuit instead).
+removed: the title path for a request with a completion but no waiting line (`open` = notes not yet completed).
+tests changed: none.
+
+### v1 limits and findings (logged, not fixed; TL-P4-32 addendum 5 (4))
+
+- Possible normal-use regression, unverified, for the lead: a request naming two notes, where a run appends the
+  line to one (completion recorded) but the model offers no line for the other, so the request waits. By (2) the next
+  run binds only the recorded id, so the other note never gets its line, and the request is archived with no row.
+  Before round 5 it was title-resolved again and bound. No test covers it; I did not check whether a waiting
+  request's planned line lands in that run.
+- Every run with a request in your changes reads the whole archive of your changes once; the cost grows with it.
+- Past 20 kept runs, a request with nothing of it in the records makes the run read every kept run's records once.
+- `RETAINED_RUNS` (20) mirrors the runner's `KEEP_FINISHED`; `src/data` cannot import the runner.
+- A request that waited unbound for 20 runs (20 clashes in a row, or the model giving no line 20 times) fails closed
+  with `TOO_OLD_WHY`. A hand-restored copy edited so its bytes still parse with the same id settles as a no-op; one
+  whose id was changed is a new request (hand restore, outside supported use).
+- A binding in a manifest whose append was neither applied nor conflicted (a crash before dispatch) is not a record
+  (unchanged): such a request is title-resolved again on the next run.
+- Carried from round 4: the planner context still shows a recorded request's title-matched notes (no consent).
+
+### Verification
+
+- Before: `/tmp/c05-r5e/base.log`: the 3 round-5 tests fail.
+- `pnpm -C runner exec vitest run test/c05-person-notes.test.ts --maxWorkers=2`: 42 pass (`c05.log`).
+- `pnpm exec vitest run src/data --maxWorkers=2`: 76 files / 3,871 pass (`app.log`).
+- `pnpm -C runner exec vitest run --maxWorkers=2`: 41 files / 376 pass (`runner.log`), corpus-driver replays,
+  keep-one-note and fake-worker included.
+- tsc app, node, runner: pass (`tsc-*.log`). ESLint on scripted.ts: pass (`eslint.log`). `git diff --check`: pass.
+- `pnpm check` once under with-lock: pass (`check.log`).
+
+### Compatibility row draft (coordinator)
+
+| Commit | Entry | What it changes for the accepted app's files |
+| --- | --- | --- |
+| `74ee65ac` | c05-person-notes | none: tests only (round 5 reds, TL-P4-32 addendum 5). |
+| `3e958da1` | c05-person-notes | none: no stored shape changes. A request in the archive under any name settles as a no-op; one past the kept runs with no record gets a "Left as you wrote them" row and no line. |
+
+Sources: Drive files resource and ids (https://developers.google.com/drive/api/reference/rest/v3/files),
+OWASP fail securely (https://owasp.org/www-community/Fail_securely); local RunRecords, retention and grounding.
