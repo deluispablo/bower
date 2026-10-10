@@ -21,7 +21,10 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c08-revise-comparison | agrees | The same note is revised, not a second one made (value gate, point 2); the revision is a Timeline line. |
 | c09-burst-pipe | agrees | An answer from the notes; nothing filed or changed. |
 | c09-closest-flat | agrees | An answer from the notes; nothing filed or changed. |
+| c10-denied-keeps-prior-result | agrees | With web permission off there is no new evidence to change a note; saved sources stay immutable and the report explains the denial (points 3, 7, 8). |
+| c10-fresh-result-cited | agrees | The capture fits the existing project, its source note links the target, and a cited Timeline line records the new fact while preserving the person's state (points 1, 3, 4, 7; addendum 1). |
 | c10-lookup-fails | agrees | Honest about a failed lookup; invents nothing. |
+| c10-stale-result-withheld | agrees | Expired evidence cannot establish a current fact; sources are preserved, no unsupported update is made, and the answer states the limitation (points 3, 7, 8). |
 | c10-web-allowed | agrees | The finding is a Timeline line with its source (point 3). |
 | c10-web-denied | agrees | Nothing looked up, nothing changed. |
 | c11-ambiguous-stays | agrees | New case for point 1's ask: the unclear letter stays in the inbox with a question; the recipe is filed. |
