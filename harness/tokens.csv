@@ -433,3 +433,6 @@ d-v2-24a,implementer (rule),codex,gpt-5-codex,,1,704090,699611,,660224,4479,,,,r
 d-v2-24a,implementer (rule),codex,gpt-5-codex,,2,501122,498233,,468224,2889,,,,rule fix (4209d72f),2026-10-10
 c5-remove-new-note,implementer,codex,gpt-5-codex,,1,1531528,1520169,,1418496,11359,,,,red + fix,2026-10-10
 c5-remove-new-note,implementer (fix 1),codex,gpt-5-codex,,1,540469,536568,,477056,3901,,,,axe scope + New folder test,2026-10-10
+d-v2-24a,merge (c5-test-margin),codex,gpt-5-codex,high,1,750461,746866,,701312,3595,,,,engine.test.ts conflict resolved,2026-10-10
+p4-brain-design,adversarial (design),codex,gpt-5-codex,high,1,2405358,2393635,,2203648,11723,,,,brain design review,2026-10-10
+c05-person-notes,red,codex,gpt-5-codex,,1,5265570,5221598,,5033728,43972,,,,33 reds (0871c4f0),2026-10-10
