@@ -1,0 +1,22 @@
+{
+  "id": "c17-b12-authority-person-boundary",
+  "capability": "C17",
+  "title": "One garden concept can be tagged and one remains person-owned",
+  "covers": "model",
+  "source": "new; TL-P4-39 B12/class F, F6/F7/F8/F11/U4; TL-P4-41 through TL-P4-50; pending scripted proof",
+  "scope": "instructions",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Add gardening to both garden concepts in Gardening. Keep other tags and all note text; do not use the web."
+    }
+  ],
+  "questions": [],
+  "bowerOwned": [
+    "Resources/Gardening/Garden methods.md",
+    "Resources/Gardening/Workshop source.md",
+    "Rules.md"
+  ]
+}

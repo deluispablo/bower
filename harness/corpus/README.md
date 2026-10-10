@@ -264,6 +264,29 @@ C17 registration/verdict selection is shared upstream H1 work; current passing t
 do not execute these model cases. See `docs/harness/2026-10-10-b9-prep.md` for the
 compatible plain-text storage recommendation, six lead questions and exact file ledger.
 
+## B12 preparation cases — 2026-10-10
+
+| Case | Capability | Covers | Source |
+| --- | --- | --- | --- |
+| c17-b12-shared-target | C17 / B12 | model | TL-P4-39 F11/F8/U4; two members contribute to one list edit, combined caps and full accounting |
+| c17-b12-closed-ops | C17 / B12 | model | TL-P4-39 class F; move/rename/property/tag, dependent edit/move and shared mechanical link consequences |
+| c17-b12-large-first-part | C17 / B12 | model | TL-P4-39 addenda 2–3, TL-P4-44 Q4; 201→200 yes, late arrival exclusion and new rest with 30-day skipping |
+| c17-b12-authority-person-boundary | C17 / B12 | model | TL-P4-39 F7/R2; private workers, no person/Source metadata and honest unavailable member |
+
+All four are pending preparation fixtures, not scripted success. `maps` is a proposed
+closed execution arm rejected by today's provider. `$request:`, `$set:`, `$note:`,
+`$folder:` and `$question:` need exact id/asking binding in the shared driver; only
+`$file:NAME` works today. Case 3's `$script:*` result-array recipes need deterministic
+expansion from stored members, not a production string result. Its late-arrival.txt
+is outside folder/inbox/model input and is inserted by a future fault/press oracle
+after the question persists; today's between format cannot add a file. Case 2 needs
+id-based byte comparison across moved paths and explicit primary-edit→move evidence.
+`oracle.json` and `inventory.json` are independent evidence/allocation specifications,
+never production stores, model input or new scored case fields. C17 registration,
+verdict selection, named model stages, shared budget/receipt and whole-request oracles
+remain required. See `docs/harness/2026-10-10-b12-prep.md` for the exact top-two replies,
+nine lead questions, binding rulings and serial file ledger.
+
 ## B10 preparation cases — 2026-10-10
 
 | Case | Capability | Covers | Source |

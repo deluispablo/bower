@@ -1,0 +1,24 @@
+{
+  "id": "c17-b12-closed-ops",
+  "capability": "C17",
+  "title": "Move rename property and tag complete 2 members with 0 unresolved members",
+  "covers": "model",
+  "source": "new; TL-P4-39 B12/class F, F6/F7/F8/F11/U4; TL-P4-41 through TL-P4-50; pending scripted proof",
+  "scope": "instructions",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "For the two active offer notes in Job hunt, move each into its existing country folder, rename it to its company followed by offer, set review_state to reviewed and add shortlist. Keep all other text and tags."
+    }
+  ],
+  "questions": [],
+  "bowerOwned": [
+    "Projects/Job hunt/Offer amber.md",
+    "Projects/Job hunt/Offer birch.md",
+    "Rules.md",
+    "Projects/Job hunt/Saltmere/Saltmere.md",
+    "Projects/Job hunt/Lindenwick/Lindenwick.md"
+  ]
+}

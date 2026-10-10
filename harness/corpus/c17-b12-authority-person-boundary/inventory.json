@@ -1,0 +1,16 @@
+{
+  "files": [
+    "harness/corpus/c17-b12-authority-person-boundary/case.json",
+    "harness/corpus/c17-b12-authority-person-boundary/expected.json",
+    "harness/corpus/c17-b12-authority-person-boundary/folder/.bower/tags.json",
+    "harness/corpus/c17-b12-authority-person-boundary/folder/.bower/type-table.json",
+    "harness/corpus/c17-b12-authority-person-boundary/folder/Resources/Gardening/Alex plot.md",
+    "harness/corpus/c17-b12-authority-person-boundary/folder/Resources/Gardening/Garden methods.md",
+    "harness/corpus/c17-b12-authority-person-boundary/folder/Resources/Gardening/Workshop source.md",
+    "harness/corpus/c17-b12-authority-person-boundary/folder/Rules.md",
+    "harness/corpus/c17-b12-authority-person-boundary/oracle.json",
+    "harness/corpus/c17-b12-authority-person-boundary/replies.json",
+    "harness/corpus/c17-b12-authority-person-boundary/rubric.md",
+    "harness/corpus/c17-b12-authority-person-boundary/inventory.json"
+  ]
+}
