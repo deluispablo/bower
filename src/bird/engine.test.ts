@@ -410,7 +410,7 @@ describe("the engine's named actions", () => {
     const entries = [...POSES, 'preen phase', 'preen at 0.6 s', 'minded doze'];
     const batches = schedules.flatMap((schedule) => entries.map((name, entryIndex) => ({ schedule, name, entryIndex })));
     // 20 generated phases × four cadences × all poses and the three extra entries, exactly once.
-    expect(batches.length * 20).toBe(schedules.length * (POSES.length + 3) * 20);
+    expect(batches.length * 20).toBe(960);
     it.each(batches)('$schedule.name: $name', ({ schedule, entryIndex }) => {
       let runs = 0;
       fc.assert(
