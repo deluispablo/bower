@@ -1,0 +1,50 @@
+{
+  "files": {
+    "present": [
+      "Resources/Gardening/Options | alternatives.txt",
+      "Resources/Gardening/Mulch options.md",
+      ".bower/log.md",
+      ".bower/log/2026.md"
+    ],
+    "absent": [
+      "Inbox/*",
+      "log.md"
+    ]
+  },
+  "unchanged": [
+    "Resources/Gardening/Gardening.md"
+  ],
+  "notes": [
+    {
+      "path": ".bower/log.md",
+      "contains": [
+        " | ingest | ",
+        "Options \\u007c alternatives.txt"
+      ],
+      "excludes": [
+        "made-up-run-0",
+        "Options | alternatives.txt"
+      ]
+    },
+    {
+      "path": ".bower/log/2026.md",
+      "contains": [
+        "made-up-run-0",
+        "made-up-run-1023"
+      ],
+      "excludes": [
+        "Options \\u007c alternatives.txt"
+      ]
+    }
+  ],
+  "report": {
+    "filed": 1,
+    "created": [
+      "Resources/Gardening/Mulch options.md"
+    ],
+    "updated": [
+      "Bower health.md"
+    ],
+    "questionsExactly": 0
+  }
+}

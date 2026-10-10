@@ -1,0 +1,25 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Mulch notice.txt",
+        "to": "Resources/Gardening",
+        "name": "Mulch notice.txt",
+        "note": {
+          "name": "Mulch notice.md",
+          "summary": "Mulch collection opens at the amber gate.",
+          "body": "Alex can collect mulch from the amber gate at the Saltmere garden.\n\nRelated: [[Gardening]]."
+        }
+      }
+    ],
+    "lines": [
+      {
+        "note": "Resources/Gardening/Gardening.md",
+        "text": "Mulch collection opens at the amber gate.",
+        "cites": "$file:Mulch notice.txt"
+      }
+    ]
+  }
+]
