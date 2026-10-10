@@ -405,3 +405,6 @@ d-v2-24a,adversarial (round 2),codex,gpt-5-codex,high,1,1091840,1082619,,984576,
 landing-csp,implementer,codex,gpt-5-codex,high,1,1012001,998901,,923008,13100,,,,delivered (packet error corrected),2026-10-10
 p4-corpus-answers,implementer (fix round 1),codex,gpt-5-codex,high,2,488962,480008,,427264,8954,,,,P4-74 findings fixed,2026-10-10
 p4-c08-prep,drafter,codex,gpt-5-codex,medium,1,950252,937583,,851072,12669,,,,3 cases + doc,2026-10-10
+p4-corpus-answers,reviewer (delta),claude,bower-reviewer,,2,38655,,,,,,6,0.4,PASS (P4-74b),2026-10-10
+shell-page-column,implementer (fix round 1),codex,gpt-5-codex,high,2,879893,867790,,808832,12103,,,,P4-75 findings fixed,2026-10-10
+p4-c09-prep,drafter,codex,gpt-5-codex,medium,1,1061004,1051265,,892160,9739,,,,3 cases + doc,2026-10-10

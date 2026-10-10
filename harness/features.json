@@ -6562,7 +6562,7 @@
       "A folded panel opens as an overlay and Escape returns focus to its button."
     ],
     "verify": "pnpm exec vitest run src/app/DesktopShell.test.tsx -t \"docked keeps the page column at least 560 px\"",
-    "note": "DEFECTS shell-page-column-squeeze (lead ruling, designer spec). Codex, then a Claude review and the designer. Packet 2026-10-10-shell-page-column-packet.md. implementer: codex."
+    "note": "DEFECTS shell-page-column-squeeze (lead ruling, designer spec). Codex, then a Claude review and the designer. Packet 2026-10-10-shell-page-column-packet.md. implementer: codex. Designer verified 44799444; a short re-check follows fix rounds 1-2."
   },
   {
     "id": "p4-corpus-answers",
@@ -6576,7 +6576,8 @@
       "A protected range check fails on one changed byte."
     ],
     "verify": "pnpm -C runner exec vitest run test/corpus-driver.test.ts -t \"answers a pair question through the answer path between presses|a protected range fails on one changed byte\"",
-    "note": "TL-P4-32 finding 7; before the C05 reds. Codex, then a Claude review. Packet 2026-10-10-p4-corpus-answers-packet.md. implementer: codex."
+    "note": "TL-P4-32 finding 7; before the C05 reds. Codex, then a Claude review. Packet 2026-10-10-p4-corpus-answers-packet.md. implementer: codex.",
+    "review": "P4-74 BLOCK; P4-74b PASS"
   },
   {
     "id": "landing-csp",
@@ -6591,5 +6592,19 @@
     ],
     "verify": "pnpm exec vitest run src/landing-csp.test.ts -t \"fix-landing removes the runtime eval from an export|the landing CSP has no unsafe-eval\"",
     "note": "P4-E (TL-P4-31 ruling 2). Codex, then a Claude review and the designer. Packet 2026-10-10-landing-csp-packet.md. implementer: codex."
+  },
+  {
+    "id": "c5-test-margin",
+    "task": "p4-throughput",
+    "category": "test",
+    "passes": false,
+    "ui": null,
+    "what": "The three tests that time out under CPU contention (engine startle, undo-compensate property batches 1-2, codex-run guarded paths) are split so each part runs in at most 1 s at idle, with every case, run count, assertion, bound and timeout unchanged (TL-P4-31 addendum 1).",
+    "steps": [
+      "Each split part runs in at most 1 s alone at idle.",
+      "The total case count is unchanged."
+    ],
+    "verify": "pnpm exec vitest run src/bird/engine.test.ts src/data/vault/undo-compensate.property.test.ts src/codex-run.test.ts",
+    "note": "TL-P4-31 addendum 1. Codex, then a Claude review. Packet 2026-10-10-c5-test-margin-packet.md. implementer: codex. Tests only: closes with --known-green."
   }
 ]
