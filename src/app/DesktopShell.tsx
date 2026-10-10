@@ -193,7 +193,7 @@ export function DesktopShell() {
       {shown.left && (
         <aside ref={leftPanel} className={s.left} aria-label="Side panel">
           {sideContent}
-          <div className={s.resizer} role="separator" tabIndex={0} aria-orientation="vertical" aria-valuenow={leftWidth} aria-valuemin={220} aria-valuemax={leftMax} aria-label="Resize the side panel" onKeyDown={keyResize('left')} data-side="left" onPointerDown={startDrag} onPointerMove={onDrag} onPointerUp={endDrag} />
+          <div className={s.resizer} role="separator" tabIndex={0} aria-orientation="vertical" aria-valuenow={Math.round(leftWidth)} aria-valuemin={220} aria-valuemax={leftMax} aria-label="Resize the side panel" onKeyDown={keyResize('left')} data-side="left" onPointerDown={startDrag} onPointerMove={onDrag} onPointerUp={endDrag} />
         </aside>
       )}
 
@@ -260,7 +260,7 @@ export function DesktopShell() {
 
       {shown.right && (
         <aside ref={rightPanel} className={s.right} aria-label="Right panel">
-          <div className={s.resizer + ' ' + s.resizerLeft} role="separator" tabIndex={0} aria-orientation="vertical" aria-valuenow={rightWidth} aria-valuemin={220} aria-valuemax={rightMax} aria-label="Resize the right panel" onKeyDown={keyResize('right')} data-side="right" onPointerDown={startDrag} onPointerMove={onDrag} onPointerUp={endDrag} />
+          <div className={s.resizer + ' ' + s.resizerLeft} role="separator" tabIndex={0} aria-orientation="vertical" aria-valuenow={Math.round(rightWidth)} aria-valuemin={220} aria-valuemax={rightMax} aria-label="Resize the right panel" onKeyDown={keyResize('right')} data-side="right" onPointerDown={startDrag} onPointerMove={onDrag} onPointerUp={endDrag} />
           <RightPanel />
         </aside>
       )}
