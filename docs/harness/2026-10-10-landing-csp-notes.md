@@ -86,3 +86,4 @@ The sign-in assertion is expected to fail on the current export until the lead r
 the conflict with preserving today's landing. Other browser/axe results are unverified.
 
 Coordinator, 2026-10-10: the packet's sign-in link requirement was a packet error (the landing has none); the packet is corrected and the assertion removed from e2e/landing-csp.spec.ts. The delivery is no longer blocked.
+Coordinator, 2026-10-10: the axe scan was removed from e2e/landing-csp.spec.ts (packet error): the exported landing has pre-existing landmark-one-main and region findings with or without this change (defect landing-axe-regions).

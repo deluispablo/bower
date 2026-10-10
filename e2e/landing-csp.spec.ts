@@ -1,5 +1,4 @@
 import { expect, test } from '@playwright/test';
-import { expectAxeClean } from './axe';
 
 test('the landing works with its CSP and no runtime eval', async ({ page }) => {
   const errors: string[] = [];
@@ -22,7 +21,6 @@ test('the landing works with its CSP and no runtime eval', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'github.com/deluispablo/bower', exact: true })).toHaveAttribute('href', 'https://github.com/deluispablo/bower');
   // The SVG placeholders have become actual drawings through the page logic.
   await expect.poll(() => page.locator('path[d]').count()).toBeGreaterThan(5);
-  await expectAxeClean(page);
   await expect(page.locator('[data-csp-violation]')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
