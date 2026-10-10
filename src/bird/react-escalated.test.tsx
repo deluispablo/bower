@@ -35,7 +35,7 @@ function mount(pose: Pose) {
   return { ...view, box, engine, read, run, history, pose: (p: Pose) => view.rerender(drawing(p)) };
 }
 
-it('a pose change during the moves-off settle reaches the new still frame before release (sleep to idle at 0.55 s)', () => {
+it('a pose change during the moves-off settle waits until release (sleep to idle at 0.55 s)', () => {
   const b = mount('sleep');
   expect(b.read().head, 'positive control: the sleep pose holds its head down').toBeGreaterThan(18);
   const release = b.engine.release.bind(b.engine);
@@ -46,13 +46,19 @@ it('a pose change during the moves-off settle reaches the new still frame before
   b.run(Math.round(0.55 * FPS));
   expect(ending, 'positive control: the settle is still running at 0.55 s').toBeUndefined();
   act(() => b.pose('idle'));
-  b.run(2 * FPS);
+  expect(Math.abs(b.read().head - 20), 'queuing idle does not change the drawn sleep head').toBeLessThanOrEqual(20 * 0.005);
+  b.run(2);
+  expect(ending, 'the queued pose does not release the settle early').toBeUndefined();
+  expect(Math.abs(b.read().head - 20), 'sleep stays drawn until the blend ends').toBeLessThanOrEqual(20 * 0.005);
+  b.run(1);
   expect(ending, 'release after the settle').toBeDefined();
   if (!ending || !previous) throw new Error('Missing release frame.');
-  expect(Math.abs(ending.head), "drawn head at release is idle's still frame (0 deg, within 2 deg)").toBeLessThanOrEqual(2);
+  expect(Math.abs(ending.head - 20), "drawn head at release is the snapshot pose's sleep still frame").toBeLessThanOrEqual(20 * 0.005);
   expect(Math.abs(ending.head - previous.head), 'the head has stopped (speed near 0) at release').toBeLessThanOrEqual(1.5);
+  expect(Math.abs(ending.head - previous.head), 'the blend does not jump the head into its release frame').toBeLessThanOrEqual(0.1);
   const after = b.read();
-  expect(Math.abs(after.head - ending.head), 'release does not jump the head').toBeLessThanOrEqual(0.1);
+  // The queued pose deliberately changes the CSS frame after release; it never retargets the blend.
+  expect(Math.abs(after.head), 'the queued idle pose applies after release').toBeLessThanOrEqual(0.005);
   expect(activeHandle()).toBeNull();
   expect(b.box).toHaveClass('posed', 'idle', 'still');
 });

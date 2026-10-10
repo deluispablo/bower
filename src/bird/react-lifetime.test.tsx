@@ -49,11 +49,16 @@ it('Settings draws the closing settle, then holds its CSS head and eyes until mo
   expect(b.read().eye).toBeGreaterThan(0.08);
   expect(b.read().eye).toBeLessThan(0.5);
   b.run(0.3);
-  expect(ending?.head).toBeCloseTo(8, 1);
-  expect(ending?.eye).toBeCloseTo(0.08, 2);
+  expect(ending, 'release after the closing settle').toBeDefined();
+  if (!ending) throw new Error('Missing release frame.');
+  expect(Math.abs(ending.head - 8)).toBeLessThanOrEqual(8 * 0.005);
+  expect(Math.abs(ending.eye - 0.08)).toBeLessThanOrEqual(0.005);
   expect(activeHandle()).toBeNull();
-  expect(b.box.querySelector<SVGGElement>('.b-head')?.style.transform).toBe('rotate(8deg)');
-  expect(b.box.querySelector<SVGGElement>('.b-eye')?.style.transform).toBe('scaleY(.08)');
+  const head = Number(b.box.querySelector<SVGGElement>('.b-head')?.style.transform.match(/^rotate\((.+)deg\)$/)?.[1]);
+  const eye = Number(b.box.querySelector<SVGGElement>('.b-eye')?.style.transform.match(/^scaleY\((.+)\)$/)?.[1]);
+  // Addendum 7's per-value bound uses a unit floor, as the blend property does.
+  expect(Math.abs(head - 8)).toBeLessThanOrEqual(8 * 0.005);
+  expect(Math.abs(eye - 0.08)).toBeLessThanOrEqual(0.005);
   const before = b.bird.outerHTML;
   b.run(2);
   expect(b.bird.outerHTML).toBe(before);
