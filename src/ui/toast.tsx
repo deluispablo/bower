@@ -111,7 +111,10 @@ export function Toasts() {
   useEffect(() => {
     const now = list.map((t) => t.id);
     for (const id of shown.current) {
-      if (now.includes(id)) continue;
+      const current = list.find((t) => t.id === id);
+      if (current && (current.action || !had.current.has(id))) continue;
+      // A confirmation removes the focused action in place, just as dismissal did.
+      if (current) hold(id, false, 'keyboard');
       const wasIn = had.current.has(id);
       const opener = from.current.get(id) ?? null;
       had.current.delete(id);
@@ -120,7 +123,7 @@ export function Toasts() {
       if (wasIn && (!document.activeElement || document.activeElement === document.body || !document.activeElement.isConnected)) returnFocusTo(opener);
     }
     shown.current = now;
-  }, [list]);
+  }, [list, hold]);
   return (
     <div className={s.toasts} role="status" aria-live="polite">
       {list.map((t) => (
