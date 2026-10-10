@@ -6665,7 +6665,7 @@
       "The guard fails on any undefined var() name.",
       "The empty-note line and the Bower waits line use --text-muted."
     ],
-    "verify": "pnpm exec vitest run src/styles/css-tokens.test.ts -t \"every var() in src CSS names a defined custom property\"",
+    "verify": "pnpm exec vitest run src/styles/css-tokens.test.ts -t \"in src CSS names a defined custom property\"",
     "note": "DEFECTS css-unknown-token (lead ruling, designer). Codex, then a Claude review and the designer contrast check (verified 92feaf2b; re-check after merge). implementer: codex. Designer re-verified the merged box on claude/p3 b56e8ec2 (375, 1440).",
     "review": "P4-78 PASS",
     "design": "verified"
