@@ -553,6 +553,155 @@ it('upload-resume-after-reload: fix 2: same-tab completion', async () => {
   await declarationArrivalCase(true);
 });
 
+/** Reload before/after the later sibling's reservation, then take the same queue into Use here. */
+async function siblingTakeoverCase(hydrateBeforeReservation: boolean): Promise<void> {
+  const env = await environment();
+  const firstChunk = barrier();
+  const releaseFirst = barrier();
+  const laterChunk = barrier();
+  const releaseLater = barrier();
+  let firstSession: string | undefined;
+  env.drive.beforeChunk = async (call) => {
+    firstSession ??= call.session;
+    if (call.start !== 4) return;
+    if (call.session === firstSession) {
+      firstChunk.open();
+      await releaseFirst.wait;
+    } else {
+      laterChunk.open();
+      await releaseLater.wait;
+    }
+  };
+  let onCompletion = (): void => undefined;
+  let ownerFinished = false;
+  let completions = 0;
+  const owner = page(env, storeFor(env), {
+    bus: { post: () => {
+      completions += 1;
+      ownerFinished = completions === 2;
+      onCompletion();
+    }, listen: () => undefined },
+  });
+  let observer: Page | undefined;
+  let canOwn = false;
+  const firstReconciled = barrier();
+  const readBackEntered = barrier();
+  const readBackAnswer = barrier();
+  const readBacks: string[] = [];
+  let unsubscribe = (): void => undefined;
+  try {
+    const submitted = input(2);
+    const pile = await owner.vault.addPile(submitted);
+    await firstChunk.wait;
+    const firstKey = present(pile.items[0]).id;
+    const laterKey = present(pile.items[1]).id;
+    const staged = await storeFor(env).list(ACCOUNT, env.root);
+    expect(staged).toHaveLength(2);
+    expect(present(staged.find((record) => record.memberKey === laterKey)).fileId).toBeNull();
+    if (!hydrateBeforeReservation) {
+      releaseFirst.open();
+      await laterChunk.wait;
+    }
+    observer = page(env, storeFor(env), {
+      locks: { request: async (name, _options, callback) => callback(canOwn ? { name } : null) },
+      bus: { post: () => undefined, listen: (listener) => { onCompletion = listener; } },
+    });
+    await observer.vault.piles();
+    expect(await observer.queue.start(ACCOUNT, env.root)).toBe('other-tab');
+    const hydrated = present(observer.queue.items().find((item) => item.memberKey === laterKey));
+    expect(hydrated).toMatchObject({ state: 'waiting', sent: hydrateBeforeReservation ? 0 : 4 });
+    if (hydrateBeforeReservation) expect(hydrated.fileId).toBeNull();
+    else expect(hydrated.fileId).toEqual(expect.any(String));
+    unsubscribe = observer.queue.subscribe(() => {
+      if (observer?.queue.items().some((item) => item.memberKey === firstKey && item.state === 'done')) {
+        firstReconciled.open();
+      }
+    });
+    if (hydrateBeforeReservation) {
+      releaseFirst.open();
+      await laterChunk.wait;
+      await firstReconciled.wait;
+      // Let the first completion's refresh settle before the owner removes the later record.
+      await storeFor(env).list(ACCOUNT, env.root);
+      expect(observer.queue.items().find((item) => item.memberKey === laterKey)?.fileId).toBeNull();
+    }
+    const reserved = present(present((await storeFor(env).list(ACCOUNT, env.root))
+      .find((record) => record.memberKey === laterKey)).fileId);
+    const getUploaded = env.drive.getUploaded.bind(env.drive);
+    vi.spyOn(env.drive, 'getUploaded').mockImplementation(async (id) => {
+      const observerRead = ownerFinished && id === reserved;
+      if (observerRead) readBacks.push(id);
+      const file = await getUploaded(id);
+      if (observerRead) {
+        readBackEntered.open();
+        await readBackAnswer.wait;
+      }
+      return file;
+    });
+    releaseLater.open();
+    await owner.queue.idle();
+    await owner.vault.settled();
+    await arrived(env, pile, submitted);
+    expect((await members(env, pile)).find((file) => file.appProperties?.[PROP.item] === laterKey)?.id).toBe(reserved);
+    expect(await storeFor(env).list(ACCOUNT, env.root)).toEqual([]);
+    // Use here pauses the old generation and starts this same account/folder with retained queue entries.
+    await close(owner);
+    ownerFinished = true;
+    observer.queue.pause();
+    canOwn = true;
+    const operations = env.drive.resumableCalls.length;
+    expect(await observer.queue.start(ACCOUNT, env.root)).toBe('owner');
+    // A committed IDB transaction checkpoints takeover without waiting on a missing read-back at HEAD.
+    await storeFor(env).list(ACCOUNT, env.root);
+    if (readBacks.includes(reserved)) await readBackEntered.wait;
+    const beforeAnswer = present(observer.queue.items().find((item) => item.memberKey === laterKey));
+    let offeredBeforeReadBack: Pile[] | undefined;
+    const reading = observer.vault.piles().then((rows) => { offeredBeforeReadBack = rows; return rows; });
+    await storeFor(env).list(ACCOUNT, env.root);
+    const earlyRow = offeredBeforeReadBack?.find((item) => item.id === pile.id);
+    readBackAnswer.open();
+    await reading;
+    await observer.queue.idle();
+    const row = present((await observer.vault.piles()).find((item) => item.id === pile.id));
+    const sibling = present(observer.queue.items().find((item) => item.memberKey === laterKey));
+    expect({
+      reconciledByMember: sibling.id === hydrated.id && sibling.file?.appProperties?.[PROP.item] === laterKey,
+      confirmed: sibling.state === 'done' && sibling.file?.id === reserved && sibling.sent === sibling.size,
+      readBackByReservedId: readBacks.includes(reserved),
+      heldBeforeReadBack: !beforeAnswer.gone && beforeAnswer.error === undefined,
+      picker: row.items.filter((item) => item.chooseAgain),
+      notArrived: row.setAside === 'not-arrived',
+      offeredPickerBeforeReadBack: earlyRow?.items.some((item) => item.chooseAgain) ?? false,
+      offeredNotArrivedBeforeReadBack: earlyRow?.setAside === 'not-arrived',
+      secondCreate: env.drive.resumableCalls.slice(operations).filter((call) => call.op === 'open' || call.op === 'generateIds'),
+    }, 'member identity must recover the unseen reservation before takeover offers a picker or another create').toEqual({
+      reconciledByMember: true, confirmed: true, readBackByReservedId: true, heldBeforeReadBack: true,
+      picker: [], notArrived: false,
+      offeredPickerBeforeReadBack: false, offeredNotArrivedBeforeReadBack: false, secondCreate: [],
+    });
+    await arrived(env, pile, submitted);
+    expect(env.drive.resumableCalls.filter((call) => call.op === 'open')).toHaveLength(2);
+    expect(await storeFor(env).list(ACCOUNT, env.root)).toEqual([]);
+  } finally {
+    owner.queue.stop();
+    observer?.queue.stop();
+    releaseFirst.open();
+    releaseLater.open();
+    readBackAnswer.open();
+    unsubscribe();
+    await close(owner);
+    if (observer) await close(observer);
+  }
+}
+
+it('upload-resume-after-reload: fix 3 control: two-tab reload after reservation needs no picker and no second create', async () => {
+  await siblingTakeoverCase(false);
+});
+
+it('upload-resume-after-reload: fix 3: two-tab reload, completion and takeover need no picker and no second create', async () => {
+  await siblingTakeoverCase(true);
+});
+
 it('upload-resume-after-reload: accepted durable members survive generated transfer reloads', async () => {
   await sentControl(3);
   await reloadCase(1, 8, true);

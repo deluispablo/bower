@@ -618,3 +618,72 @@ Full `pnpm check` was not run: its harness fixture tests run git-writing command
 which the assignment prohibits. Browser e2e and a full-check mark are not claimed.
 Coordinator owns commits and delivery gates; independent review and designer U3 verification
 remain before entry close. Production changes and these notes remain uncommitted.
+
+## Fix round 3 red
+
+Red-owning Codex session, 2026-10-10, TL-P4-53 addendum 4. Baseline HEAD:
+`48ce0fd717ff537090f6433f7efc18be07540cfa`. Finding: BLOCK 1 in
+`docs/harness/2026-10-10-codex-upload-resume-after-reload-adversarial-3.md`.
+No network, git-writing commands, production edits or changes to existing assertions or bounds.
+
+Red name: `upload-resume-after-reload: fix 3: two-tab reload, completion and takeover need no picker and no second create`.
+Positive control: `upload-resume-after-reload: fix 3 control: two-tab reload after reservation needs no picker and no second create`.
+
+tests changed: src/data/upload-resume.test.ts: add two-tab sibling hydration/completion/takeover regression and reserved-sibling positive control through public queue/vault calls; preserve every existing assertion and bound.
+removed: none; 149 test lines added, no existing test line edited or deleted.
+
+Both schedules use the real queue, real DriveVault, FakeDrive and fresh stores over the
+same fake IndexedDB. Public addPile accepts a two-member pile with distinct 10-byte Blobs.
+Promise barriers hold each member at chunk offset 4. In the red, tab 2's public piles/start
+hydrates the later sibling while its reserved ID is null and confirmed offset is 0.
+Tab 1 then completes the first member, reserves the later member and reaches its held chunk.
+The first member's confirmed reconciliation and a committed IDB checkpoint establish that
+tab 2 still has the later member with a null reserved ID. Tab 1 completes it and removes
+its retained record. Original bodies, exact member identities, the later reserved file ID
+and removal of both committed records are verified before takeover.
+
+The positive control reloads tab 2 after the later member has its reservation and confirmed
+offset 4. It otherwise follows the same completion and takeover schedule and assertions.
+The first fixture run incorrectly expected offset 0 in this new control as well; corrected
+only the new control's conditional expectation to its actual barrier offset 4. No existing
+assertion or bound changed. A refresh before the final read initially concealed the picker;
+the final regression reads public piles without refreshing away the stale member.
+
+Completion broadcasts invoke the observer's real bus listener. A spy delegates every
+getUploaded to real FakeDrive, holding only the observer's later reserved-ID answer after
+actual read-back. The owner is closed; public queue.pause/start reproduce Use here's
+retained-entry generation change and ownership acquisition for the same account/folder.
+Committed IDB checkpoints capture the queued state and any listing offered before that
+read-back answer is released. A corrected implementation may wait for read-back or show
+an unfinished member; it must offer no picker or not-arrived reason. Final assertions require
+the same queue/member identity, confirmed completion with the original reserved file,
+observer read-back by that ID, no picker, no not-arrived and no further reservation/create.
+The control additionally confirms exactly two original upload sessions and original bytes.
+No polling, real timers, queue substitutes, production exports or new mechanisms were added.
+
+Verification (all output redirected; only failures/tails inspected):
+
+```sh
+pnpm exec vitest run src/data/upload-resume.test.ts --maxWorkers=2 > tmp-logs/upload-resume-fix-3-red.log 2>&1
+pnpm exec tsc -p tsconfig.app.json --noEmit > tmp-logs/upload-resume-fix-3-tsc.log 2>&1
+pnpm exec eslint src/data/upload-resume.test.ts > tmp-logs/upload-resume-fix-3-eslint.log 2>&1
+```
+
+- Full requested file at HEAD: exit 1, **one intended assertion failure and 11 passes**.
+- Exact new red fails at `src/data/upload-resume.test.ts:677`: member reconciliation,
+  confirmed completion and reserved-ID observer read-back are false; piles returns the
+  later sibling with chooseAgain true, upload -1 and setAside not-arrived. Drive receives
+  no second create. The queue logs its expected lost-bytes BowerError during takeover.
+- Positive control and all ten pre-existing tests pass. No timeout, load failure,
+  unhandled rejection or timer-gate failure; no contradicting existing test in this file.
+- App TypeScript and touched-test ESLint exit 0, empty logs. Read-only git diff --check passes.
+- Production remains HEAD; only the new test additions and this requested notes section differ.
+- Implementation, coordinator commits, full check, broader suites and e2e are left out.
+  Full check's git-writing harness fixtures are outside this no-git-writes assignment.
+
+Research/reuse is inherited from the packet and existing local mechanisms, without fetching sources:
+[Drive resumable uploads](https://developers.google.com/workspace/drive/api/guides/manage-uploads#resumable),
+[Drive pre-generated IDs](https://developers.google.com/workspace/drive/api/guides/manage-uploads#pre-generated-ids),
+[IndexedDB transaction lifetime](https://w3c.github.io/IndexedDB/#transaction-lifetime).
+Existing queue, store, resumable transport, write-once reconciliation and takeover calls
+remain their mechanism homes. No second mechanism was introduced. Coordinator owns commits.
