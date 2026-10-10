@@ -528,3 +528,10 @@ smoke-request-report-hidden,reviewer (P4-93),claude,opus,,1,38168,,,,,,5,1,PASS,
 b1a-contract,red-owner (repair 5),codex,gpt-5-codex,high,1,1382900,1370515,,1236864,12385,,,,5 reds,2026-10-10
 b1a-contract,implementer (fix round 1),codex,gpt-5-codex,high,1,4628694,4603964,,4445568,24730,,,,green,2026-10-10
 b1a-contract,adversarial pass 2,codex,gpt-5-codex,high,1,1757724,1748722,,1648384,9002,,,,BLOCK 1,2026-10-10
+b1a-contract,red-owner (repair 6),codex,gpt-5-codex,high,1,2232036,2219706,,2123648,12330,,,,2 reds,2026-10-10
+b1a-contract,implementer (round 3),codex,gpt-5-codex,high,1,866761,859337,,798720,7424,,,,green,2026-10-10
+b1a-contract,adversarial pass 3,codex,gpt-5-codex,high,1,1657541,1647134,,1560320,10407,,,,BLOCK 1,2026-10-10
+b1a-contract,red-owner (repair 7),codex,gpt-5-codex,high,1,1257779,1244698,,1142656,13081,,,,4 reds,2026-10-10
+b1a-contract,implementer (round 4),codex,gpt-5-codex,high,1,1132860,1124488,,1048448,8372,,,,green,2026-10-10
+b1a-contract,adversarial pass 4,codex,gpt-5-codex,high,1,280444,277894,,220672,2550,,,,PASS,2026-10-10
+b1a-contract,reviewer (P4-94),claude,opus,,1,81882,,,,,,20,1,BLOCK 1,2026-10-10
