@@ -534,3 +534,4 @@ folder-header-wrap	d7c0f19cb325e6a4	2026-10-10	known-green: red proven by the co
 c5-codex-run	d12e2384c9f51926	2026-10-10	red (fixed in d7162b35)
 p4-corpus-answers	92df71b52da21291	2026-10-10	known-green: the driver lives in runner/test (excluded from the code set-aside), so done.sh cannot revert it; the reds failed before the driver change (Codex /tmp/pca-red.log: prior runs missing, changed bytes passed), recorded in the entry notes
 shell-page-column	82cf5b43fc42295c	2026-10-10	known-green: red proven by the coordinator before the fix: e2e/shell-page-column.spec.ts 12 failed without 44799444, 12/12 with it (later rounds 16/16 demo and fake); the fix no longer reverts cleanly after rounds 1-2
+c5-test-margin	850e333e84251423	2026-10-10	known-green: tests only: no product code to set aside; every split part under 1 s at idle with cases unchanged (notes)

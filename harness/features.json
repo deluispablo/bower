@@ -6599,7 +6599,7 @@
     "id": "c5-test-margin",
     "task": "p4-throughput",
     "category": "test",
-    "passes": false,
+    "passes": true,
     "ui": null,
     "what": "The three tests that time out under CPU contention (engine startle, undo-compensate property batches 1-2, codex-run guarded paths) are split so each part runs in at most 1 s at idle, with every case, run count, assertion, bound and timeout unchanged (TL-P4-31 addendum 1).",
     "steps": [

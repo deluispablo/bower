@@ -289,3 +289,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-10: c5-codex-run passes — harness: c5-codex-run passes (P4-73 PASS)
 - 2026-10-10: p4-corpus-answers passes — harness: p4-corpus-answers passes (P4-74b PASS)
 - 2026-10-10: shell-page-column passes — harness: shell-page-column passes (P4-75b PASS, designer verified)
+- 2026-10-10: c5-test-margin passes — harness: c5-test-margin passes (P4-76b PASS)
