@@ -11,7 +11,7 @@ import { sha256Hex } from '../../src/data/contracts/hashes';
 import { RUNNER_WRITES, SYSTEM, isHidden, type RetrievalFile } from '../../src/data/vault/layout';
 import { loadCase, type LoadedCase } from '../src/corpus';
 import { AT, redispatchCase, replySequence, runOnDrive, seedCase, type CaseRun } from './corpus-run';
-import { fixedDrive, paging } from './drive-v3';
+import { fixedDrive, paging, RUN_ID } from './drive-v3';
 
 const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
 const METHOD = resolve(import.meta.dirname, '../../docs/harness/2026-10-08-p4-method-rubric-changes.md');
@@ -698,7 +698,7 @@ it.each([1, 40])('B1c fix 1: 3 figures count %i direct notes without a child map
 });
 
 it.each(['bootstrap', 'missing-index'] as const)(
-  'B1c fix 1: 4 %s projections are visible before the provider runs', async (mode) => {
+  'B1c fix 1: 4 %s plans with the in-memory index', async (mode) => {
     const base = await setup({ 'Resources/Visible.md': note('Visible control.') });
     if (mode === 'missing-index') {
       await seedState(base, '# Index\nOld projection.\n');
@@ -709,25 +709,60 @@ it.each(['bootstrap', 'missing-index'] as const)(
     const before = await base.drive.listAll(base.root);
     expect(before.some((f) => base.drive.pathOf(f.id, base.root) === SYSTEM.index)).toBe(false);
     expect(before.some((f) => base.drive.pathOf(f.id, base.root) === SYSTEM.retrieval)).toBe(mode === 'missing-index');
-    const shown: Array<Record<string, string>> = [];
+    const visible = before.find((f) => base.drive.pathOf(f.id, base.root) === 'Resources/Visible.md');
+    expect(visible).toBeDefined();
+    // Make missing-index read fresh bytes too, rather than only reusing a durable summary.
+    if (mode === 'missing-index') base.drive.touch(visible?.id ?? '');
+    // Pre-existing record folders isolate content ordering from the manifest's own namespace creation.
+    const own = before.find((f) => f.folder && base.drive.pathOf(f.id, base.root) === SYSTEM.dir);
+    expect(own).toBeDefined();
+    const runs = await base.drive.createFolder(own?.id ?? '', 'runs');
+    await base.drive.createFolder(runs.id, RUN_ID);
+    const sent: Sent[] = [];
+    const reads: number[] = [];
+    const shown: string[][] = [];
+    let mutations = 0;
+    const writesAtPlan: number[] = [];
+    const readsAtPlan: number[] = [];
     const answer = replySequence([empty]);
     const result = await runOnDrive(base.c, base.drive, base.root, { admission: base.admission, pacing,
+      around: (fetch) => observe(base.drive, base.root, sent)(async (input, init) => {
+        const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+        const method = (init?.method ?? 'GET').toUpperCase();
+        if (url.origin === 'https://www.googleapis.com' && ['POST', 'PATCH', 'DELETE'].includes(method)) mutations++;
+        if (method === 'GET' && url.searchParams.get('alt') === 'media'
+          && url.pathname === `/drive/v3/files/${visible?.id}`) reads.push(sent.length);
+        return fetch(input, init);
+      }),
       claude: async (call) => {
-        const projections: Record<string, string> = {};
-        for (const file of await base.drive.listAll(base.root)) {
-          const path = base.drive.pathOf(file.id, base.root);
-          if (path === SYSTEM.index || path === SYSTEM.retrieval) projections[path] = await base.drive.readText(file.id);
-        }
-        shown.push(projections);
+        const context: unknown = JSON.parse(call.input.split('\n').at(-1) ?? '{}');
+        shown.push(snapshotStrings(context));
+        writesAtPlan.push(mutations);
+        readsAtPlan.push(reads.length);
         return answer(call);
       },
     }, 1);
     expect(result.code).toBe(0);
     expect(shown, 'positive control: real main called the planning provider').toHaveLength(1);
-    expect.soft(result.after[SYSTEM.index], 'the run does rebuild eventually').toContain('[[Visible]]');
-    expect.soft(shown[0]?.[SYSTEM.index] ?? '', 'rebuilt index is visible at planning entry').toContain('[[Visible]]');
-    expect(shown[0]?.[SYSTEM.retrieval], 'rebuilt state is visible at planning entry').toBeDefined();
-    const state = JSON.parse(shown[0]?.[SYSTEM.retrieval] ?? 'null') as RetrievalFile;
-    expect(Object.values(state.files)).toMatchObject([{ path: 'Resources/Visible.md', summary: 'Visible control.' }]);
+    const rows = '## Resources\n\n- [[Visible]] — Visible control.\n';
+    expect.soft(shown[0]?.some((text) => indexRows(text) === rows), 'provider receives the in-memory index projection').toBe(true);
+    expect.soft(writesAtPlan, 'planning performs no Drive writes').toEqual([0]);
+    expect.soft(readsAtPlan, 'projection reads the note before planning').toEqual([1]);
+    expect(mutations, 'the trace accounts for every Drive mutation').toBe(sent.length);
+    expect.soft(sent[0]?.path, 'the immutable manifest is the first Drive write').toMatch(/\/manifest-[^/]+\.json$/);
+    const frozen = manifests(result);
+    expect(frozen).toHaveLength(1);
+    const manifest = JSON.parse(frozen[0]?.[1] ?? 'null') as ManifestV2;
+    expect(manifest.operations.at(-1)?.effect.kind, 'maintain remains the final planned operation').toBe('maintain');
+    const projectionWrites = sent.filter((s) => s.path === SYSTEM.index || s.path === SYSTEM.retrieval);
+    expect(projectionWrites.map((s) => s.path).sort(), 'maintain persists both projections exactly once').toEqual([SYSTEM.index, SYSTEM.retrieval].sort());
+    expect(indexRows(result.after[SYSTEM.index])).toBe(rows);
+    expect(Object.values(stateOf(result).files)).toMatchObject([{ path: 'Resources/Visible.md', summary: 'Visible control.' }]);
+    expect.soft(reads, 'maintain reuses the planning read without downloading the same bytes again').toEqual([0]);
+    for (const write of projectionWrites) {
+      expect(write.text, 'maintain persists the final projection bytes').toBe(result.after[write.path]);
+      expect(sent.indexOf(write), 'projection persistence follows the manifest and initial checkpoint').toBeGreaterThan(1);
+      expect(sent.findIndex((s) => s.path === SYSTEM.lastRun), 'both projections commit before the report barrier').toBeGreaterThan(sent.indexOf(write));
+    }
   },
 );

@@ -1077,3 +1077,70 @@ B1a's `ReadCache`, the shared `refreshed` projection and the one ownership parse
 [Obsidian internal links](https://help.obsidian.md/links) and
 [Vitest setup files](https://vitest.dev/config/setupfiles) remain the packet's reference sources.
 No new library, parser, author, report builder or alternate projection write path was added.
+
+## Addendum 9 red repair
+
+Red-owning session, 2026-10-11, TL-P4-41 addendum 9 / TL-P4-51 sweep.
+This ruling supersedes Fix round 1's Finding 4 Drive-visibility expectations: bootstrap and
+missing-index planning receive an in-memory index; maintain persists the two projections last.
+No production code, lifecycle, golden, numerical bound or dependency directory changed.
+No network access or writing git command was run; the coordinator owns commits.
+
+tests changed: runner/test/b1-index.test.ts: renamed and rewrote both Finding 4 cases for the in-memory planning projection, manifest-first writes, maintenance-last persistence and shared cached reads, per addendum 9.
+
+Exact red names (table declaration at `runner/test/b1-index.test.ts:701`):
+- `B1c fix 1: 4 bootstrap plans with the in-memory index`
+- `B1c fix 1: 4 missing-index plans with the in-memory index`
+
+The real `main` / Claude-provider input is parsed and its string values must include the exact
+Resources index rows, with the Visible link and summary. This avoids prescribing a new context
+field name while requiring the actual projection, rather than merely the note or its path.
+Both fixtures begin without index.md; only missing-index has existing retrieval.json. That
+fixture touches the note's version so it must read fresh source bytes, rather than accepting
+its old durable summary. Record folders are seeded before the run to isolate manifest-first
+Drive writes from the existing manifest namespace creation lifecycle.
+
+The production-fetch observer counts every Drive mutation, verifies there are none at provider
+entry, and checks that all mutations are accounted for by the path/text trace and the first is
+the immutable manifest. Maintain must be the final manifest operation. Exactly one index write
+and one retrieval write follow the manifest and opening checkpoint, match the final stored
+bytes, and precede last-run.json. The note must be read once before planning and only once over
+the entire run, proving maintain reuses that cached read.
+
+### Final TL-P4-51 sweep
+
+Remaining tests expecting projections on Drive before the provider: **none**.
+A repository-wide search of test/spec TS and TSX files checked projection/index/retrieval
+references paired with before/provider/planning; the matching behaviours were inspected.
+The following timing matches are consistent with addendum 9, not contradictions:
+- `runner/test/b1a-contract.test.ts:230`: retrieval/cursor commit before the report barrier.
+- `runner/test/b1a-contract.test.ts:830`: a folder binned before planning drops indexed descendants.
+- `runner/test/b1-index.test.ts:347`, :357: maintain must settle before the report barrier after a lost reply.
+- `runner/test/b1-index.test.ts:701`, :748, :750: repaired in-memory planning/read expectations.
+- `runner/test/b1-index.test.ts:710`, :711: initial fixture state, not provider-entry Drive visibility.
+- `runner/test/b1-index.test.ts:765`: projection persistence before the final report barrier.
+Search evidence: `/tmp/b1c-addendum9-sweep.log`.
+
+### Verification
+
+Ran the entire requested file with `--maxWorkers=2`: **23 pass, 2 assertion reds, 25 total**.
+Both repaired cases fail only these expected unimplemented behaviours:
+- `runner/test/b1-index.test.ts:748`: provider receives no in-memory index projection.
+- `runner/test/b1-index.test.ts:750`: zero note reads at provider entry, expected one.
+The manifest-first, no-planning-write, final-maintain, durable projections and one-total-read
+assertions pass. Earlier controls remain green. Read-only `git diff --check` passes.
+
+Sources/tests were copied into the existing OS-temp verification tree before running. Installed
+dependencies were reused there; repository node_modules was neither replaced nor symlinked.
+Config, module cache, JSON report, logs and corpus event/provider scratch files stay in OS temp.
+No pnpm check/e2e was run: this is the requested red repair only, with no screen changes, and
+pnpm check's repository-writing mark conflicts with the user's test-write restriction.
+
+Command (cwd `/private/tmp/b1c-fix1-final-mnh7nzx5/runner`):
+```sh
+node ../node_modules/vitest/vitest.mjs run test/b1-index.test.ts --maxWorkers=2 --config=../runner-config.mjs --configLoader=runner --reporter=default --reporter=json --outputFile=/tmp/b1c-addendum9-runner.json > /tmp/b1c-addendum9-runner.log 2>&1
+```
+
+Offline reference reused: [Vitest setup files](https://vitest.dev/config/setupfiles), already
+recorded above; the existing real-main corpus helper, mutation observer and snapshot-string
+inspection were reused. No external source was fetched.
