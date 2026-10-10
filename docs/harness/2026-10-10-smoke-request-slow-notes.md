@@ -501,3 +501,371 @@ Round 3 owned diff files (read-only git diff --name-only):
 - harness/corpus/c05-note-not-written-by-bower/case.json
 - docs/harness/2026-10-10-smoke-request-slow-notes.md
 No other tracked file differs; bounded-read reds were not edited.
+
+## Implementation — after red repair round 3
+
+Stopped on the user's explicit instruction: if a red contradicts the packet or ruling, stop; retain
+production changes uncommitted. No tests were edited, no network was used, and no git write command ran.
+The retained production changes are an incomplete implementation, not a green delivery.
+
+### Remaining hand-restore contradictions
+
+Two unchanged tests still require the hand-restore promise superseded by Update 2 and the round 3 ruling:
+
+- `runner/test/c05-person-notes.test.ts:467`, `C05 person notes: fix 1 finding 4: a completed replay cannot
+  consume the new request for the same note`, passes `{ kind: 'replay', id: 'change-1' }` at line 474.
+  After the first successful append/archive, `addRequest` in `runner/test/corpus-run.ts:230–240` copies
+  that archived record back into direct changes. The test then requires only change-2's binding and
+  completion at lines 482–483. Under the ruling, the restored change-1 is new and older, so the existing
+  oldest-request rule admits it before change-2. The failure is expected ['change-2'], received ['change-1'].
+- `runner/test/c05-person-notes.test.ts:488`, `C05 person notes: fix 1 finding 5: an already-present bound
+  append completes the request before replay`, likewise restores the archived change-1 at lines 497–498,
+  supplies new source material and different model wording, and requires unchanged note bytes and no
+  updated row at lines 500–501. A hand-restored copy is new under Update 2, so its fresh consent permits
+  the offered append; this test requires retaining the superseded archive replay identity.
+
+These are not the same-run recovery test repaired in round 3. Both explicitly invoke the corpus driver's
+archive-to-inbox copy path. No archive/history scan or extra provenance ledger was restored to satisfy them.
+Evidence: `tmp-logs/implementation-round3-c05-runner.log`, failure sections for fix 1 findings 4 and 5.
+
+### Retained production changes
+
+- `src/data/spine/scripted.ts`: removes archivedRecords and the archived admission flag; selects append
+  evidence only from admitted waiting requests' runs, filters evidence by embedded request id, and
+  derives the horizon from run-folder creation metadata. Missing waiting-run evidence fails closed.
+  Plans pending relocation with ordinary move effects while keeping archive dependencies on successful edits.
+- `src/data/vault/vault-index.ts`: includes requests physically under pending/run-id in journal discovery;
+  resolves their evidence run by actual parent containment, including duplicate bookkeeping folders.
+- `runner/src/claude.ts`: selects waiting history from admitted requests and shows bound target ids.
+- `src/data/contracts/run-manifest.ts`: recognizes request relocation moves and permits the existing
+  bowerRun property in move properties, retaining the existing manifest shape and chain authority.
+- `src/data/spine/engine.ts`: permits a pending move after its bound append's definite conflict;
+  subsequent moves fence the name/place returned by the earlier applied move, through the same move effect.
+- `src/data/spine/grounded.ts`: distinguishes relocation moves from the request's one reported archive move.
+
+Interrupted settlement recovery passed the bounded red's completionRecovery control. The implementation
+uses an in-place move to publish a temporary bowerRun pointer before the append, then clears it with the
+physical pending move. This permits own-run recovery when that physical move is interrupted. It adds no
+store or index file and still verifies evidence through RunRecords.found. This intermediate metadata
+pointer and the relocation guard/engine changes need independent review; they are not an accepted delivery.
+
+### Verification at the stop
+
+Every Vitest command used --maxWorkers=2 and wrote under tmp-logs/. Test files are unchanged.
+
+| Check | Result | Log |
+| --- | --- | --- |
+| Committed bounded reds before production edits | Three behavioural reds | tmp-logs/implementation-round3-reds.log |
+| Bounded reds after production edits | Golden/horizon pass; pending fails at gone-target control | tmp-logs/implementation-round3-green3.log |
+| C05 runner person-notes/incorporation/between/marked-history | 42 pass, 6 fail | tmp-logs/implementation-round3-c05-runner.log |
+| C05 app person-notes/reports/tidy | 18 pass | tmp-logs/implementation-round3-c05-app.log |
+| TypeScript app | Pass | tmp-logs/implementation-round3-tsc-app.log |
+| TypeScript node | Pass | tmp-logs/implementation-round3-tsc-node.log |
+| TypeScript runner | Fail: five unchanged test references to absent SYSTEM.runs | tmp-logs/implementation-round3-tsc-runner.log |
+| ESLint touched files | Command fails on ambiguous tsconfigRootDir when root/runner files are passed together | tmp-logs/implementation-round3-eslint.log |
+| git diff --check | Pass before notes append | Read-only command |
+
+Other failures are not presented as hand-restore contradictions:
+
+- The bounded pending red gets past physical relocation, unchanged bytes, the five-file originating chain,
+  and interrupted completion recovery. Its gone-target variant restores FakeDrive from a snapshot that
+  keeps B1a's retrieval cursor but drops the changes feed. FakeDrive.listChanges rejects the saved cursor
+  as 'Invalid fake changes page token'; runner/index.ts:73 refuses before the new report. The old report
+  therefore lacks ASK_GONE. FakeDrive.snapshot/restore at lines 98–128 does not serialize the changes feed.
+  No fake-feed or B1a maintenance change was made outside the diagnosed request-read mechanism.
+- Existing round 4 1, round 5 2 and round 5 5 find the first move for the request file and call it the archive.
+  They currently select the temporary in-place pointer move and fail their 'not applied' assertion.
+  These are unresolved implementation/verification issues, not evidence for weakening those tests.
+- The within-twenty-runs test reaches its fresh final run assertion but finds no manifest for run 21.
+  The repaired fixture also refers to SYSTEM.runs, which does not exist in the current layout constant;
+  its five references fail runner tsc. Neither the test nor layout was changed after the required stop.
+
+The full src/data suite, full runner suite, pnpm check and e2e were not run after discovering the
+hand-restore contradiction. Those gates remain required after red-owner reconciliation and completion
+of the retained implementation. The pending retry's own-run read bound is not claimed green: the gone-target
+control prevents execution from reaching that later assertion.
+
+removed: 88 production lines in the retained diff (git diff --numstat); includes archivedRecords and broad history walks.
+removed: archived admission flag and per-run manifest/checkpoint horizon walk; no archive media admission path remains.
+tests changed: none.
+
+Compatibility row drafts for the resumed implementation:
+
+| Fixture/format | Outcome/status |
+| --- | --- |
+| B1a C04 control | Exact 20-read baseline passes in the bounded golden. B1a source unchanged. |
+| New/direct requests, including old staging format | Bounded golden passes: zero archive/run media and no inherited binding. |
+| Waiting requests | Physical pending relocation and unchanged-byte assertions pass; full retry bound not reached. |
+| One-run evidence | Existing RunRecords.found full chain remains authoritative; no chain shortcut/store/index file. |
+| Interrupted settlement move | Bounded completionRecovery passes: no second append/completion after filename/target renames. |
+| Metadata horizon | Bounded horizon passes: listing creation time, zero chain reads, signed TOO_OLD_WHY. |
+| Every named target settles | Pending first-run no-line row passes; final retry verification remains incomplete. |
+| Stored v2 records/personal bytes | Bounded parser/chain and app controls pass; full suites remain unvalidated. |
+| Hand-restored archive copy | Treated as new by ruling; fix 1 findings 4 and 5 still require superseded replay protection. |
+
+Sources: the official Drive files.list, parent-query and partial-response references in Sources above,
+cited without fetching under the no-network instruction. Existing VaultIndex discovery points to
+RunRecords evidence; existing ordinary move effects publish relocation and its recoverable pointer.
+
+left out: red-owner reconciliation, remaining implementation failures, full data/runner/check/e2e gates and commits.
+All six production files listed above and these notes remain in place uncommitted, as requested.
+
+
+## Red repair round 4
+
+Authority: lead-approved repair round 4, DECISIONS after c62e2a15; the three rules in the red-owner assignment.
+No network or git write commands. Only the two test files and this required notes section were edited.
+The implementer's six uncommitted production files were left untouched.
+
+Rule 1 (round 3 ruling, hand-restored copies are new requests under v1): finding 4 now interrupts only
+archive publication after the original has moved into its originating pending folder. corpus-run's replay
+observes `already-active`, never copies an archive to the inbox. The original completion cannot consume
+change-2; all original assertions about new binding/completion, both lines and personal bytes remain.
+Finding 5 now redispatches the exact completed run through runner main with its immutable admission.
+The already-present line is explicitly proved completed before redispatch; its entire stored run remains
+identical after redispatch. All existing note-byte, filing-report and no-updated-row assertions remain.
+The offered different wording and additional source remain in the fixture. Same-run replay returns the
+original filing report; the extra source is outside that immutable admission.
+
+Rule 2 (pending first, archive at settle): the three first-run archive lookups now resolve the move's
+actual destination, following either a captured file id or a planned create-folder operation. They assert
+that the originating pending move exists and precedes the archive move in the manifest. Their original
+archive outcome assertions remain unchanged; the temporary in-place pointer move is not selected.
+All other assertions, including the retry archive outcome, are unchanged.
+
+Rule 3 (DEFECT_LOG fake-drive-snapshot-feed): save a real nonzero cursor before snapshot, create one
+change, positively prove the original feed, restore the snapshot, then require the identical feed and
+terminal token from the saved cursor. No production repair is included.
+
+tests changed: runner/test/c05-person-notes.test.ts:480: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:481: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:482: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:490: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:494: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:495: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:496: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:497: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:498: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:500: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:502: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:503: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:504: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:514: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:515: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:517: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:519: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:523: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:524: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:525: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:526: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:527: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:528: rule 1 (round 3 ruling): preserve replay/completion assertions through pending or same-run recovery; no archived copy.
+tests changed: runner/test/c05-person-notes.test.ts:777: rule 2 (pending before archive): require pending and destination-selected archive in this order.
+tests changed: runner/test/c05-person-notes.test.ts:778: rule 2 (pending before archive): require pending and destination-selected archive in this order.
+tests changed: runner/test/c05-person-notes.test.ts:779: rule 2 (pending before archive): require pending and destination-selected archive in this order.
+tests changed: runner/test/c05-person-notes.test.ts:814: rule 2 (pending before archive): retain the archive presence/outcome assertion against its destination, not the first move.
+tests changed: runner/test/c05-person-notes.test.ts:815: rule 2 (pending before archive): retain the archive presence/outcome assertion against its destination, not the first move.
+tests changed: runner/test/c05-person-notes.test.ts:978: rule 2 (pending before archive): retain the archive presence/outcome assertion against its destination, not the first move.
+tests changed: runner/test/c05-person-notes.test.ts:1074: rule 2 (pending before archive): retain the archive presence/outcome assertion against its destination, not the first move.
+tests changed: runner/test/c05-person-notes.test.ts:1075: rule 2 (pending before archive): retain the archive presence/outcome assertion against its destination, not the first move.
+tests changed: runner/test/c05-person-notes.test.ts:1317: rule 2 (pending before archive): retain the archive presence/outcome assertion against its destination, not the first move.
+tests changed: runner/test/c05-person-notes.test.ts:1318: rule 2 (pending before archive): retain the archive presence/outcome assertion against its destination, not the first move.
+tests changed: src/data/drive/fake-drive.test.ts:43: rule 3 (fake-drive-snapshot-feed): prove the live cursor/feed control or identical restored answer to the saved token.
+tests changed: src/data/drive/fake-drive.test.ts:45: rule 3 (fake-drive-snapshot-feed): prove the live cursor/feed control or identical restored answer to the saved token.
+
+### Verification
+
+Every Vitest invocation used `--maxWorkers=2`; output is under `tmp-logs/`.
+- `red-repair-round4-runner-final.log`: person-notes + bounded-reads, 57 pass / 6 fail.
+  Finding 4, finding 5, round 5 2 and round 5 5 pass; round 4 1 passes its repaired archive assertions.
+- `red-repair-round4-fake.log`: 32 pass / 1 fail. New snapshot/feed red rejects the saved token with
+  `Invalid fake changes page token` instead of returning the identical feed. This is the requested red.
+- `red-repair-round4-finding5-final.log`: 1 pass (59 excluded by name filter), after explicit completion/evidence checks.
+- Initial exploration log `red-repair-round4-runner.log`: finding 5's attempted pending fixture had no
+  physical pending move for an already-present line. Replaced with authorized same-run recovery above.
+
+Remaining failures (preserved, outside this repair's authorized assertion changes):
+1. Bounded pending's gone-target control misses ASK_GONE: restore discards the feed and rejects the saved
+   retrieval cursor before the new report. The dedicated FakeDrive red now reproduces that defect.
+2. Fix 1 finding 2: final run-21 RunRecords.found answers `new`, not `run`; no manifest was published.
+   The five existing SYSTEM.runs references remain unchanged and outside the three rules.
+3. Round 4 1's later hand-restore retention control appends a new line and records a new completion.
+   Its repaired first-run archive lookup passes; the later assertions were explicitly left unchanged.
+4. Timeline list 2 with front matter: hand-restored archive request permits different wording and appends.
+5. Timeline list 2 without front matter: same preserved hand-restore mismatch.
+6. Timeline list 5 preseeded star line: same preserved hand-restore mismatch.
+
+Zero-archive and other-run media assertions, the golden's bounds and all other tests are unchanged.
+Golden and horizon pass. Pending retry's later media bounds are still blocked by its gone-target control.
+No full check/e2e: this is an intentionally failing red repair; no UI or production implementation changed.
+No commits; coordinator owns commits. Production remains uncommitted for the implementer.
+Sources: existing official Drive references in this notes file, reused without a network request;
+local existing corpus-run redispatchCase and RunRecords are reused rather than adding a replay mechanism.
+
+## Implementation — round 4 continuation audit
+
+Stopped under the user's explicit instruction: if a test still contradicts the packet or a ruling,
+stop and retain the changes. Round 4 repairs findings 4/5 and the first-move selections, but four
+remaining failing tests still require the superseded hand-restore protection. No production or test
+file was edited in this continuation; the six retained production changes remain uncommitted.
+No network request or git write command ran. Only this notes section was added.
+
+Contradiction evidence, against DECISIONS smoke-request-slow round 3 at line 499:
+
+- `runner/test/c05-person-notes.test.ts:844–852`, `C05 person notes: round 4 1: settlement survives
+  recovery and retention`, still copies archived change-1 into direct changes after twenty newer
+  runs, explicitly checks `outcome: 'restored'`, and requires unchanged personal bytes and no
+  completion. The run supplies a new source and different wording. The unchanged assertions at
+  lines 850 and 852 fail with the newly offered line and change-1's completion. This is the later
+  retention control; the destination-selected archive assertions repaired in round 4 pass.
+- `runner/test/c05-person-notes.test.ts:1386–1399`, the shared Timeline replay helper, still
+  restores an archived request into direct changes, supplies a new source and different wording,
+  and requires unchanged bytes, no updated row and no completion. Its byte assertion at line 1397
+  fails in both `C05 timeline list: 2: plain list with front matter appends once, updates, archives
+  and completes` and the corresponding `without front matter` test, and in
+  `C05 timeline list: 5: preseeded Bower star line completes once and replay keeps exact bytes`.
+- `runner/test/corpus-run.ts:230–240` proves this is a hand restore: when no active request exists,
+  `addRequest` creates a new direct-changes file from the archived JSON and returns `restored`.
+  These are neither same-run recovery nor a waiting request's physical pending path.
+
+The round 3 ruling explicitly supersedes the old hand-restore promise: a copy restored by hand
+counts as new and is outside supported v1 use. Reintroducing archive admission or historical scans,
+or recognizing these copies through another ledger, would contradict the packet. No test was weakened
+and no such production workaround was made. The round 4 notes already identify these remaining
+contradictions under remaining failures 3–6; this continuation reproduced them.
+
+Verification performed before the stop, with output under tmp-logs/ and --maxWorkers=2:
+
+| Check | Result | Log |
+| --- | --- | --- |
+| Three bounded reds plus C05 runner person-notes/incorporation/between/marked-history | 61 pass, 6 fail | tmp-logs/implementation-round4-initial-runner.log |
+| FakeDrive tests, including snapshot feed red | 32 pass, 1 fail | tmp-logs/implementation-round4-initial-fake.log |
+
+Only failure output was inspected. The bounded golden and horizon pass. The pending red still fails
+at its gone-target control because restored FakeDrive rejects the saved changes token; its later
+retry bound is not reached. The independent fake snapshot/feed red reproduces that same defect at
+`src/data/drive/fake-drive.test.ts:45`. This authorized snapshot repair remains unimplemented because
+the user's stop condition was reached first. It belongs in FakeDrive.snapshot/restore, including
+the existing snapshotWith delegation, with no second snapshot mechanism.
+
+The other non-contradiction failure remains fix 1 finding 2, line 433: final run-21 RunRecords.found
+returns `new` instead of `run`. No claim is made that this implementation issue is a ruling conflict.
+App C05, full data/runner suites, app/node/runner tsc, ESLint, pnpm check and e2e were not run in this
+continuation after the required stop. Earlier round 3 results above are not new validation claims.
+
+removed: 0 additional production lines in this continuation; 88 production lines removed in the retained diff.
+removed: retained archivedRecords/archive admission and broad history/horizon walks; no removal was undone.
+tests changed: none.
+
+Compatibility row drafts for the retained src/data/contracts/run-manifest.ts changes (not accepted validation):
+
+| Stored format / contract | Required compatibility | Current evidence |
+| --- | --- | --- |
+| Existing v2 move properties without bowerRun | Continue parsing with unchanged meaning. | Optional field remains optional; full contract suite pending. |
+| Move properties with bowerRun string/null | Strict writer/parser accepts the existing pointer and its removal. | Bounded golden and horizon parse produced manifests; full contract suite pending. |
+| Existing edit/archive dependency guards | Keep every archive dependent on the writes it settles. | requestMoveKind exempts only the temporary pointer; repaired archive checks pass. |
+| New pending relocation moves | Use ordinary move effects and RunRecords chain verification. | Physical pending controls pass; final pending bound blocked by fake feed failure. |
+| Existing manifests/checkpoints and personal bytes | Preserve lenient historical reads and write-once supported recovery. | Same-run and repaired findings 4/5 pass; complete suites pending. |
+
+Sources: reuse the official Drive files.list, parent-query and fields links in Sources above without fetching;
+VaultIndex points to RunRecords evidence, and relocation uses the existing move effect.
+left out: remaining hand-restore test reconciliation, fake snapshot feed repair, remaining implementation fixes,
+full gates and commits. User-authorized retained production changes and all pre-existing test edits stay in place.
+
+
+## Red repair round 5 (sweep)
+
+Authority: the owner's round-5 assignment (TL-P4-51, DECISIONS after e7b5545e), and the bounded
+rule at DECISIONS:471, round-2 clarification at :498 and round-3 supported-path ruling at :499.
+The local DECISIONS file has no round-4/round-5 or TL-P4-51 lines; those instructions were supplied
+explicitly in this session. No inference reinstates the superseded hand-restore promise.
+No network, git write, production edit, formatting or reverted implementer change. This append is
+the explicitly requested notes exception to the test-only scope. All six starting production-file
+SHA-256 hashes still match (tmp-logs/round5-production-unchanged.log). Commits remain coordinator-owned.
+
+### Every converted test and its point
+
+tests changed: runner/test/corpus-run.ts:228: addRequest replay writes no file and never copies archived JSON into changes.
+tests changed: runner/test/corpus-run.ts:178: later corpus replay presses pass the preceding immutable run to the existing redispatchCase.
+tests changed: runner/test/corpus-run.ts:240: replay validates the original admitted request id and same Drive/root, then redispatches that run.
+tests changed: runner/test/corpus-driver.test.ts:182: original request id/words remain distinct from fresh press-3; replay dispatch equals the original.
+tests changed: runner/test/corpus-driver.test.ts:229: settled replay writes no second request; archive/personal bytes and exact one-record count remain.
+tests changed: runner/test/corpus-driver.test.ts:256: replay and new tidy-up remain separately reported; same dispatch and entire replay snapshot are exact.
+tests changed: runner/test/c05-person-notes.test.ts:486: fix 1 finding 4 uses the physically pending original plus new change-2, never archive restoration.
+tests changed: runner/test/c05-person-notes.test.ts:493: its ordinary fresh generic tidy-up avoids competing named consent; change-2 alone binds/completes.
+tests changed: runner/test/c05-person-notes.test.ts:718: round 3 6 filing collision redispatches the original run; final citation and exact note bytes remain.
+tests changed: runner/test/c05-person-notes.test.ts:783: round 4 1 retains interrupted settlement recovery and twenty-newer-run retention controls.
+tests changed: runner/test/c05-person-notes.test.ts:843: run 22 is an ordinary supported pile, with original archive bytes, one filed item and zero new completions.
+tests changed: runner/test/c05-person-notes.test.ts:1386: shared Timeline replay uses the original immutable dispatch despite extra source/different offered wording.
+tests changed: runner/test/c05-person-notes.test.ts:1431: Timeline list 2 with front matter still appends once, reports, archives and completes once.
+tests changed: runner/test/c05-person-notes.test.ts:1431: Timeline list 2 without front matter keeps the same plain-list and no-second-append point.
+tests changed: runner/test/c05-person-notes.test.ts:1520: Timeline list 5 keeps both '-' and '*' preseed controls, one completion and exact bytes on redispatch.
+tests changed: runner/test/c05-person-notes.test.ts:1396: replay returns its original report/completion; exact stored-run bytes prove no additional update/completion.
+tests changed: runner/test/c05-person-notes.test.ts:408: fix 1 finding 2 uses SYSTEM.dir/RUNS_NAME for run 1 listing times, with all numeric bounds unchanged.
+tests changed: runner/test/c05-person-notes.test.ts:413: same test uses the existing run-folder constant for run 2.
+tests changed: runner/test/c05-person-notes.test.ts:420: same test uses the existing constant for runs 3 through 19.
+tests changed: runner/test/c05-person-notes.test.ts:873: round4Pending consumers round 4 2 and round 5 3 get truthful originating-folder times.
+tests changed: runner/test/c05-person-notes.test.ts:996: round5NewerRuns consumers round 5 1 and round 5 3 use the existing run-folder constant.
+
+Same-run replay returns the original persisted report, including its original updated row, rather than
+a new empty report. Comparing the full original run's manifest/checkpoint bytes and completions establishes
+no new update or completion. Exact note-byte checks, one filed-item counts, plain/star controls and every
+original append/settlement assertion remain. No test asserts that a hand-restored copy inherits identity.
+The pending finding-4 conversion initially used a named extra request that won oldest-request selection;
+that fixture error was corrected to the existing generic tidy-up input before final verification, retaining
+all change-2 binding/completion assertions. It is not a remaining implementation failure.
+
+### Sweep coverage
+
+Searched every runner test/helper for replay, restored, restore/request/archive combinations and archive
+writes/reads, and every harness/corpus/*/case.json and replies.json. The only remaining explicit replay
+inputs are the three driver tests above, now using same-run redispatch. Other replay mentions are existing
+same-run recovery, replayed transports or unrelated Bin/cache restoration. Archived request seeding in
+bounded reads is deliberate historical-load evidence, never hand-restore admission. No corpus case/reply
+currently contains an archived-request replay input; no case/reply needed conversion. Corpus expected
+scores, all numbers/bounds and zero archive/other-run media assertions are unchanged. The bounded-reads
+file is unchanged. Search evidence: tmp-logs/round5-runner-sweep.log, round5-corpus-sweep.log and
+round5-archive-sweep.log. The stale replay explanation in harness/corpus/README.md is outside the permitted
+non-test edit scope and remains unchanged; this section records the driver's actual supported semantics.
+
+### Final verification and EVERY remaining failure
+
+All Vitest commands use --maxWorkers=2 and redirect output to tmp-logs; only failures/summaries were read.
+- Whole C05 runner set plus every corpus*.test.ts: 100 tests, 98 pass, 2 fail (8 files).
+  Command from runner/: pnpm exec vitest run test/c05-*.test.ts test/corpus*.test.ts --maxWorkers=2.
+  Log: tmp-logs/round5-runner-final.log. All 33 corpus tests pass; C05 has 65 pass / 2 fail.
+- FakeDrive: 33 tests, 32 pass, 1 fail.
+  Command: pnpm exec vitest run src/data/drive/fake-drive.test.ts --maxWorkers=2.
+  Log: tmp-logs/round5-fake.log.
+- Runner tsc: pass, pnpm -C runner exec tsc --noEmit -p .; tmp-logs/round5-tsc-final.log.
+- ESLint on all three touched runner files: fail, two inherited diagnostics below;
+  tmp-logs/round5-eslint-final.log. No config or non-test file changed.
+- Read-only git diff --check: pass.
+
+1. Implementation pending (existing fake snapshot/feed defect): C05 bounded pending,
+   runner/test/c05-bounded-reads.test.ts:348, misses ASK_GONE. FakeDrive.restore drops the saved
+   changes feed, producing Invalid fake changes page token before a new report; the old report remains.
+   The later own-run retry/media bounds are blocked by that hard assertion, not claimed executed/green.
+2. Implementation/verification unresolved, preserved from round 4: C05 fix 1 finding 2,
+   runner/test/c05-person-notes.test.ts:433, expects run-21 records but gets 'new'. The runner log
+   shows the fresh named request's offered previously filed source is refused with lineCites (after
+   one retry); no run-21 manifest is published. Fixing SYSTEM.runs removes the tsc error but does not
+   resolve that provider/source-validation failure. No assertion or source fixture was weakened.
+3. Implementation pending (dedicated fake snapshot/feed red): src/data/drive/fake-drive.test.ts:45,
+   snapshot then restore preserves a previously stored changes page token and its feed, rejects
+   with BowerError/Invalid fake changes page token instead of the exact original feed/token.
+4. Anything else (inherited round-4 test lint): runner/test/c05-person-notes.test.ts:779:31,
+   forbidden non-null assertion on archive!, @typescript-eslint/no-non-null-assertion.
+5. Anything else (inherited round-4 test lint): runner/test/c05-person-notes.test.ts:779:77,
+   forbidden non-null assertion on pending!, same rule. Both are outside the three authorized
+   assertion repairs and left unchanged; no new eslint error is introduced by this sweep.
+
+All converted restore-path tests pass. Bounded golden/horizon pass without changing their zeros or bounds.
+No remaining failure invokes hand-restoration. Production completion, inherited lint, full pnpm check,
+app/e2e gates and coordinator commits remain outside this red-only sweep; no full-gate green is claimed.
+Sources: existing official Drive files.list, parent queries and fields URLs in Sources above, cited without
+fetching under the no-network instruction; reused local redispatchCase, RunRecords and RUNS_NAME.
+removed: archive-to-changes copying and obsolete restored/already-active driver outcomes; no production removal.
+
+Round-5 owned changes: runner/test/corpus-run.ts, runner/test/corpus-driver.test.ts,
+runner/test/c05-person-notes.test.ts, and this required notes append. No corpus file changed.
