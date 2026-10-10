@@ -6,12 +6,12 @@
 import { BowerError, type ErrorCode } from '../types';
 import { sha256 } from '../vault/hashes';
 import { md5Hex } from '../contracts/hashes';
-import { driveError, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type FaultHook, type FencedCall, type FencedDrive, type ResumableTarget, type SessionStatus, type StoredEvidence } from './drive-api';
+import { ancestryLookup, changesError, decodePrefix, drainChanges, driveError, PREFIX_BYTES, resolveDriveScope, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveChange, type DriveChangePage, type DriveChanges, type DriveFile, type DrivePatch, type DriveScope, type FaultHook, type FencedCall, type FencedDrive, type ResumableTarget, type SessionStatus, type StoredEvidence } from './drive-api';
 /** The fence's types live with the Drive ports; kept here for the tests that import them from the fake. */
 export type { FaultAction, FaultHook, FencedCall, FencedDrive, StoredEvidence } from './drive-api';
 
 interface Stored {
-  meta: DriveFile;
+  meta: DriveFile & { mimeType?: string };
   trashed: boolean;
   content: string | Blob | null;
   /** A restored big-file placeholder has no original bytes; never certify it as content. */
@@ -28,6 +28,11 @@ export interface FakeDriveOptions {
   offline?: boolean;
   /** Resumable chunks other than the last must be a multiple of this (Drive: 256 KiB). */
   chunkMultiple?: number;
+  /** Recorded prefix response statuses; stored media otherwise answers as 206. */
+  prefixResponses?: Record<string, 206 | 200 | 416>;
+  /** Recorded feed responses; without them, tokens address this instance's in-memory changes. */
+  startPageToken?: string;
+  changePages?: Record<string, DriveChangePage>;
 }
 
 /** One resumable-upload call the pretend Drive answered, for tests. */
@@ -57,6 +62,10 @@ export class FakeDrive implements DriveApi {
   private failing: ErrorCode | null = null;
   private readonly clock: () => number;
   private readonly chunkMultiple: number;
+  private readonly prefixResponses: Record<string, 206 | 200 | 416>;
+  private readonly startPageToken: string | undefined;
+  private readonly changePages: Record<string, DriveChangePage> | undefined;
+  private readonly changes: DriveChange[] = [];
   /** Can change after seeding, so a folder fills at once and then answers slowly or not at all. */
   latency: number;
   offline: boolean;
@@ -72,6 +81,9 @@ export class FakeDrive implements DriveApi {
     this.latency = opts.latency ?? 0;
     this.offline = opts.offline ?? false;
     this.chunkMultiple = opts.chunkMultiple ?? RESUMABLE_UNIT;
+    this.prefixResponses = opts.prefixResponses ?? {};
+    this.startPageToken = opts.startPageToken;
+    this.changePages = opts.changePages;
     const at = this.stamp();
     this.files.set('root', { meta: { id: 'root', name: 'My Drive', folder: true, parents: [], modifiedTime: at, createdTime: at }, trashed: false, content: null });
   }
@@ -123,7 +135,10 @@ export class FakeDrive implements DriveApi {
   /** Another device changed the file. */
   touch(id: string): void {
     const f = this.files.get(id);
-    if (f) f.meta = { ...f.meta, modifiedTime: this.stamp() };
+    if (f) {
+      f.meta = { ...f.meta, modifiedTime: this.stamp() };
+      this.changes.push({ fileId: id, removed: false, file: this.listed(f) });
+    }
   }
 
   /** Sets a file's times, for seeding a folder with some history. */
@@ -189,6 +204,55 @@ export class FakeDrive implements DriveApi {
     }
   }
 
+  async readPrefix(id: string): Promise<string | null> {
+    await this.gate();
+    const f = this.find(id);
+    const mimeType = f.meta.mimeType ?? (f.content instanceof Blob ? f.content.type : undefined);
+    if (f.meta.folder || mimeType?.startsWith('application/vnd.google-apps.')) return null;
+    const status = this.prefixResponses[id] ?? 206;
+    if (status === 416) return '';
+    const bytes = await this.readBytes(id);
+    return decodePrefix(status === 206 ? bytes.subarray(0, PREFIX_BYTES) : bytes);
+  }
+
+  async getStartPageToken(): Promise<string> {
+    await this.gate();
+    return this.startPageToken ?? String(this.changes.length);
+  }
+
+  async listChanges(pageToken: string): Promise<DriveChanges> {
+    return drainChanges(pageToken, async (token) => {
+      await this.gate();
+      let page: DriveChangePage;
+      if (this.changePages) {
+        const recorded = this.changePages[token];
+        if (!recorded) throw changesError('Unknown fake changes page token');
+        page = recorded;
+      } else {
+        const from = Number(token);
+        if (!/^\d+$/.test(token) || !Number.isSafeInteger(from) || from > this.changes.length) {
+          throw changesError('Invalid fake changes page token');
+        }
+        page = { changes: this.changes.slice(from), newStartPageToken: String(this.changes.length) };
+      }
+      return {
+        ...page,
+        changes: page.changes.map((c) => ({ fileId: c.fileId, removed: c.removed, ...(c.file ? { file: this.copy(c.file) } : {}) })),
+      };
+    });
+  }
+
+  async parents(id: string): Promise<string[]> {
+    await this.gate();
+    const f = this.files.get(id);
+    if (!f) throw driveError('not-found');
+    return [...f.meta.parents];
+  }
+
+  async resolveScope(rootId: string, unknownIds: readonly string[]): Promise<DriveScope> {
+    return resolveDriveScope(rootId, unknownIds, (id) => this.parents(id));
+  }
+
   /**
    * A file's size and SHA-256 as stored here (fake-stored evidence): from its
    * bytes, or, for a big file after a reload, from what the snapshot kept.
@@ -206,21 +270,11 @@ export class FakeDrive implements DriveApi {
   async binnedByItem(rootId: string, keys: readonly string[]): Promise<BinnedItem[]> {
     await this.gate();
     const wanted = new Set(keys);
-    const below = (f: Stored): boolean => {
-      const seen = new Set<string>();
-      let cur: Stored | undefined = f;
-      while (cur && !seen.has(cur.meta.id)) {
-        seen.add(cur.meta.id);
-        const parent: string | undefined = cur.meta.parents[0];
-        if (parent === rootId) return true;
-        cur = parent ? this.files.get(parent) : undefined;
-      }
-      return false;
-    };
+    const below = ancestryLookup(new Set([rootId]), async (id) => this.files.get(id)?.meta.parents ?? []);
     const out: BinnedItem[] = [];
     for (const f of this.files.values()) {
       const key = f.meta.appProperties?.bowerItem;
-      if (!f.trashed || f.meta.folder || !key || !wanted.has(key) || !below(f)) continue;
+      if (!f.trashed || f.meta.folder || !key || !wanted.has(key) || !(await below(f.meta.id))) continue;
       const digest = f.bytesUnavailable ? null : await this.digestOfStored(f);
       out.push({ file: this.copy(f.meta), size: digest?.size ?? (f.sha256 ? (f.meta.size ?? null) : null), sha256: digest?.sha256 ?? f.sha256 ?? null });
     }
@@ -422,7 +476,11 @@ export class FakeDrive implements DriveApi {
     throw driveError('offline');
   }
 
-  private changed<T>(out: T): T {
+  private changed<T extends DriveFile | null>(out: T): T {
+    if (out) {
+      const f = this.files.get(out.id);
+      if (f) this.changes.push({ fileId: out.id, removed: false, file: this.listed(f) });
+    }
     this.onChange?.();
     return out;
   }

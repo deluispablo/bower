@@ -21,13 +21,18 @@ export interface Version {
   readonly modifiedTime: string | undefined;
 }
 
-type Kind = 'text' | 'bytes' | 'digest' | 'file';
+type Kind = 'text' | 'bytes' | 'prefix' | 'digest' | 'file';
 
 export class ReadCache {
   private readonly kept = new Map<string, { modifiedTime: string; reads: Map<Kind, Promise<unknown>> }>();
 
   text(v: Version, read: () => Promise<string>): Promise<string> {
     return this.once('text', v, read);
+  }
+
+  /** A prefix is never evidence of the full media, even when it is short. */
+  prefix(v: Version, read: () => Promise<string | null>): Promise<string | null> {
+    return this.once('prefix', v, read);
   }
 
   /** Each caller gets its own copy. */
