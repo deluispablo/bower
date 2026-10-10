@@ -890,3 +890,51 @@ Notes: `docs/harness/2026-10-10-b1c-index-notes.md`, separately committed by the
 
 Status: **done**, retained and uncommitted for coordinator handoff. All seven remaining reds and every other
 runner/data test are green. The only requested gate still failing is the documented baseline app typecheck.
+
+
+## Fix round 1 reds
+
+Red-owning session for adversarial pass 1 (BLOCK), 2026-10-11. Tests and notes only;
+no production change, network access, dependency replacement, writing git command or commit.
+The coordinator owns commits. Applied bower-implement within the user's red-only scope.
+
+Offline research: reused the real corpus driver, versioned FakeDrive and ordinary fenced edits.
+[Vitest assertions](https://vitest.dev/api/expect.html) and
+[Vitest setup files](https://vitest.dev/config/setupfiles) are reference URLs, not fetched.
+The production runner main is the entry point for every added case; no alternate MOC writer or parser.
+
+tests changed: runner/test/b1-index.test.ts: added four numbered regression contracts (six parameterized cases).
+tests changed: docs/harness/2026-10-10-b1c-index-notes.md: appended fix-round red evidence and handoff only.
+No pre-existing assertion was changed, removed, skipped or weakened.
+
+| Exact test name | Assertion evidence |
+| --- | --- |
+| B1c fix 1: 1 settled link rewrite supplies maintenance its new MOC text and version | Exit 1 instead of 0; one MOC write instead of two; stale figures survive; retrieval never commits. |
+| B1c fix 1: 2 B1a unchanged legacy MOC is discovered migrated once and folded | Legacy ownership instead of v2; zero migration writes instead of one; missing folded Garden line. |
+| B1c fix 1: 3 figures count 1 direct notes without a child map | Figures report 2 direct notes instead of 1 direct note, with 2 notes in all. |
+| B1c fix 1: 3 figures count 40 direct notes without a child map | Figures report 41 direct notes instead of 40, with 41 notes in all. |
+| B1c fix 1: 4 bootstrap projections are visible before the provider runs | Index and retrieval state are absent at provider entry, although the index exists after the run. |
+| B1c fix 1: 4 missing-index projections are visible before the provider runs | Index is absent at provider entry, although the index exists after the run. |
+
+Positive controls: (1) the settled rewrite changes Overview to [[Seed]] while retaining stale figures;
+(2) B1a state contains no MOC metadata, the MOC version is unchanged and the other note's version updates;
+(3) direct and descendant members remain reachable by id, the recursive folded count is unchanged,
+and no child map is created; (4) main calls the provider exactly once and eventually rebuilds the index.
+The success-side assertions also require final MOC text/version in retrieval, the report barrier,
+legacy-byte preservation and no second migration on a later forced maintain.
+
+Verification: the entire touched file ran with --maxWorkers=2: **6 assertion reds; 19 existing tests pass**.
+No import, transform, timer, unhandled-runtime or fixture failure. Contradicting existing assertions: **none**.
+The red-only task deliberately leaves production fixes and full check/e2e gates to the implementation session.
+
+Command, run with cwd in the OS-temp directory below:
+
+```sh
+node /private/tmp/bower-b1c-index/node_modules/vitest/vitest.mjs run --config=vitest.config.mjs --configLoader=runner --maxWorkers=2 > run.log 2>&1
+```
+
+The temporary config preserves the runner's Node environment and timer-gate setup, uses absolute
+paths to the unchanged source tree and touched test file, and routes its root, cache, CPU reports,
+JSON results and log into OS temp. No node_modules directory was replaced or symlinked.
+Temp directory: `/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b1c-fix1-reds-c2t7_w19`.
+Handoff logs: `/tmp/b1c-fix1-reds.log`, `/tmp/b1c-fix1-reds.json`.

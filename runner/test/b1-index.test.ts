@@ -622,3 +622,112 @@ it('B1c index: maintain MOC targets pass the fenced-edit guard and personal targ
   }
   expect(await parseRunManifestV2(encode(admitted), base.root, RUNNER_WRITES), 'MOC snapshot and target pass the same existing guard').toMatchObject({ ok: true });
 });
+
+
+it('B1c fix 1: 1 settled link rewrite supplies maintenance its new MOC text and version', async () => {
+  const original = moc('Garden evidence.').replace('Alex recorded these observations.', 'Alex follows [[Sprout]].');
+  const base = await setup({ [legacyPath]: original, 'Resources/Garden/Seed.md': note('Seed control.') });
+  const changes = (await base.drive.listAll(base.root)).find((f) => base.drive.pathOf(f.id, base.root) === SYSTEM.changes);
+  expect(changes?.folder).toBe(true);
+  const change = await base.drive.createText(changes?.id ?? '', 'rename-seed.json', JSON.stringify({
+    v: 1, id: 'rename-seed', device: 'device-1', at: AT, kind: 'rename', what: 'Renamed Sprout to Seed',
+    from: 'Resources/Garden/Sprout.md', path: 'Resources/Garden/Seed.md',
+  }));
+  base.admission.journal = [{ fileId: change.id, name: change.name, parents: change.parents, modifiedTime: change.modifiedTime }];
+  const sent: Sent[] = [];
+  const result = await run(base, sent);
+  const writes = sent.filter((s) => s.path === legacyPath);
+  expect(writes[0]?.text, 'positive control: the run settled its own link rewrite first').toContain('Alex follows [[Seed]].');
+  expect(writes[0]?.text).toContain('Stale figures.');
+  expect.soft(result.code, 'maintenance accepts the run-owned version instead of rejecting the original fence').toBe(0);
+  expect.soft(writes, 'link rewrite and maintenance both commit in this one run').toHaveLength(2);
+  expect.soft(region(result.after[legacyPath], 'moc-overview')).toContain('Alex follows [[Seed]].');
+  expect.soft(region(result.after[legacyPath], 'moc-figures')).not.toContain('Stale figures.');
+  expect(sent.some((s) => s.path === SYSTEM.retrieval), 'retrieval commits after both MOC writes').toBe(true);
+  const stored = stateOf(result).files[idAt(result, legacyPath)] as RetrievalFile['files'][string] & { moc?: { text: string } };
+  expect(stored.moc?.text).toBe(result.after[legacyPath]);
+  expect(stored.version).toBe((await base.drive.get(idAt(result, legacyPath))).modifiedTime);
+  expect(result.after[SYSTEM.lastRun], 'the report barrier commits').toBeDefined();
+  expect(sent.findIndex((s) => s.path === SYSTEM.lastRun)).toBeGreaterThan(sent.findIndex((s) => s.path === SYSTEM.retrieval));
+});
+
+it('B1c fix 1: 2 B1a unchanged legacy MOC is discovered migrated once and folded', async () => {
+  const original = legacyMoc();
+  const base = await setup(legacyFolder(original));
+  const { state } = await seedState(base, '# Index\nOld B1a projection.\n');
+  expect(Object.values(state.files).every((f) => !('moc' in f)), 'positive control: stored B1a has no MOC metadata').toBe(true);
+  const listing = await base.drive.listAll(base.root);
+  const map = listing.find((f) => base.drive.pathOf(f.id, base.root) === legacyPath);
+  const seed = listing.find((f) => base.drive.pathOf(f.id, base.root) === 'Resources/Garden/Seed.md');
+  expect(map).toBeDefined(); expect(seed).toBeDefined();
+  base.drive.touch(seed?.id ?? '');
+  const sent: Sent[] = [];
+  const first = await run(base, sent);
+  expect(first.code).toBe(0);
+  expect(stateOf(first).files[seed?.id ?? '']?.version).not.toBe(state.files[seed?.id ?? '']?.version);
+  expect(state.files[map?.id ?? '']?.version, 'the legacy MOC was unchanged before this run').toBe(map?.modifiedTime);
+  expect.soft(parseOwnership(new TextEncoder().encode(first.after[legacyPath])).status, 'upgrade discovers the unchanged MOC').toBe('v2');
+  expect.soft(sent.filter((s) => s.path === legacyPath), 'first discovery migrates exactly once').toHaveLength(1);
+  folded(first, 'Garden', 2);
+  expectLegacyMigrated(first);
+  expect(restoredLegacyBytes(first.after[legacyPath] ?? '')).toBe(original);
+  base.drive.touch(seed?.id ?? '');
+  sent.length = 0;
+  const second = await run(base, sent, undefined, 2);
+  expect(second.code).toBe(0);
+  expect(stateOf(second).files[seed?.id ?? '']?.version).not.toBe(stateOf(first).files[seed?.id ?? '']?.version);
+  expect(second.after[legacyPath]).toBe(first.after[legacyPath]);
+  expect(sent.filter((s) => s.path === legacyPath), 'later maintain never migrates again').toEqual([]);
+  folded(second, 'Garden', 2);
+});
+
+it.each([1, 40])('B1c fix 1: 3 figures count %i direct notes without a child map', async (count) => {
+  const folder: Record<string, string> = { [legacyPath]: moc('Garden evidence.'),
+    'Resources/Garden/Deep/Leaf.md': note('Descendant evidence.') };
+  if (count === 1) folder['Resources/Garden/Seed.md'] = note('Seed control.');
+  else for (let i = 1; i <= count; i++) folder[`Resources/Garden/Note ${String(i).padStart(2, '0')}.md`] = note(`Member ${i}.`);
+  const base = await setup(folder);
+  const result = await run(base);
+  expect(result.code).toBe(0);
+  expect(membersById(result, legacyPath).sort(), 'positive control: descendants stay reachable without a child map')
+    .toEqual(Object.keys(folder).filter((p) => p !== legacyPath).map((p) => idAt(result, p)).sort());
+  folded(result, 'Garden', count + 1);
+  expect(Object.keys(result.after).filter((p) => !isHidden(p)).sort()).toEqual(Object.keys(folder).sort());
+  expect(region(result.after[legacyPath], 'moc-figures'), 'only notes directly in Garden count as direct')
+    .toBe(`## Figures\n\n${count} direct ${count === 1 ? 'note' : 'notes'}; ${count + 1} notes in all.\n`);
+});
+
+it.each(['bootstrap', 'missing-index'] as const)(
+  'B1c fix 1: 4 %s projections are visible before the provider runs', async (mode) => {
+    const base = await setup({ 'Resources/Visible.md': note('Visible control.') });
+    if (mode === 'missing-index') {
+      await seedState(base, '# Index\nOld projection.\n');
+      const index = (await base.drive.listAll(base.root)).find((f) => base.drive.pathOf(f.id, base.root) === SYSTEM.index);
+      expect(index).toBeDefined();
+      await base.drive.trash(index?.id ?? '');
+    }
+    const before = await base.drive.listAll(base.root);
+    expect(before.some((f) => base.drive.pathOf(f.id, base.root) === SYSTEM.index)).toBe(false);
+    expect(before.some((f) => base.drive.pathOf(f.id, base.root) === SYSTEM.retrieval)).toBe(mode === 'missing-index');
+    const shown: Array<Record<string, string>> = [];
+    const answer = replySequence([empty]);
+    const result = await runOnDrive(base.c, base.drive, base.root, { admission: base.admission, pacing,
+      claude: async (call) => {
+        const projections: Record<string, string> = {};
+        for (const file of await base.drive.listAll(base.root)) {
+          const path = base.drive.pathOf(file.id, base.root);
+          if (path === SYSTEM.index || path === SYSTEM.retrieval) projections[path] = await base.drive.readText(file.id);
+        }
+        shown.push(projections);
+        return answer(call);
+      },
+    }, 1);
+    expect(result.code).toBe(0);
+    expect(shown, 'positive control: real main called the planning provider').toHaveLength(1);
+    expect.soft(result.after[SYSTEM.index], 'the run does rebuild eventually').toContain('[[Visible]]');
+    expect.soft(shown[0]?.[SYSTEM.index] ?? '', 'rebuilt index is visible at planning entry').toContain('[[Visible]]');
+    expect(shown[0]?.[SYSTEM.retrieval], 'rebuilt state is visible at planning entry').toBeDefined();
+    const state = JSON.parse(shown[0]?.[SYSTEM.retrieval] ?? 'null') as RetrievalFile;
+    expect(Object.values(state.files)).toMatchObject([{ path: 'Resources/Visible.md', summary: 'Visible control.' }]);
+  },
+);
