@@ -153,3 +153,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `b8555ada` | c5-empty-note-help | none: tests only (the empty-note copy and Open in Drive red). |
 | `c1f845cc` | c5-empty-note-help | none for stored data: the empty-note line says how to write in a note (Drive for desktop, any notes app) with the existing Open in Drive action; copy only. |
 | `ace15da0` | c5-css-tokens | none for stored data: two CSS colours use the defined --text-muted token instead of the undefined --muted. |
+| `3cc13c38` | c5-remove-new-note | none: tests only (no New note control). |
+| `9040d9bf` | c5-remove-new-note | none for stored data: the New note controls and their name-sheet path are removed; vault.createNote, the journal create kind and its fixtures stay. |
