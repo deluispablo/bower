@@ -936,3 +936,35 @@ Round-5 owned changes: runner/test/corpus-run.ts, runner/test/corpus-driver.test
 runner/test/c05-person-notes.test.ts, and this required notes append. No corpus file changed.
 
 tests changed: src/data/drive/fake-drive.test.ts: new red for DEFECT_LOG fake-drive-snapshot-feed (lead ruling round 4): snapshot, restore, listChanges still answers a stored token.
+
+## Fix round 1 red
+
+- Exact red: `C05 bounded reads: fix 1: a waiting retry whose archive move failed completes once`.
+- Positive control: `C05 bounded reads: fix 1 control: a waiting retry whose archive lands completes once`.
+- HEAD: `e432f3e887119e36dab3b14089447e8cd825ff77`; no production edits or git writes.
+- Both variants run through runner main using `runOnDrive`, injected clock and FakeDrive transport.
+  A changes the personal note after manifest publication, verifies the rejected conflict and physical
+  `pending/A` request with unchanged bytes and no completion. B appends the saved bound line and records
+  its completion; the red throws before the archive PATCH reaches FakeDrive. Its archive outcome is
+  unapplied, the request remains physically pending, and its bytes are unchanged. No request is restored.
+  C proposes the original source id with unchanged wording or different wording during ordinary pile work.
+- Confirmed failure: unchanged wording records a second completion for the same request/target pair.
+  Different wording records that second completion and adds a second personal Timeline line, a new
+  timeline-append effect and an updated report row. Byte equality and empty completion/effect assertions
+  are independent oracles; every produced run is parsed and its checkpoint chain verified.
+- Positive control: B's archive PATCH lands; C records no second completion, append or personal update
+  in either wording variant. A correction removes the now-ungranted model line while filing the new pile.
+- Command: `pnpm -C runner exec vitest run test/c05-bounded-reads.test.ts --maxWorkers=2`.
+  Output: `tmp-logs/smoke-request-slow-fix1-red.log`. Result: 1 expected failing red, 4 passing tests
+  (positive control and all three pre-existing bounded-read tests). Every existing assertion and bound
+  is preserved; no existing test was modified. Only additive test coverage and these requested notes.
+- Research: no network, as instructed. Reused the existing RunRecords, main-entry test harness and
+  before-landing transport interruption pattern. Packet reference: Drive parent queries and fields,
+  https://developers.google.com/workspace/drive/api/guides/search-files and
+  https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list.
+  Physical pending placement points to the verified evidence; no new index or recovery mechanism.
+- Full check/e2e intentionally not run in this test-only red session: production fix belongs to the
+  implementation session; this red must remain failing for the coordinator to commit.
+- Touched-file ESLint and runner typecheck pass after the final test edit; outputs:
+  `tmp-logs/smoke-request-slow-fix1-lint.log`, `tmp-logs/smoke-request-slow-fix1-typecheck.log`.
+  `git diff --check` passes. No commits made; coordinator owns commits.
