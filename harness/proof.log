@@ -572,3 +572,4 @@ c2-pile-records	df60fdadbeb5982f	2026-10-11	known-green: verify renamed per adde
 orphan-pile-count-data	56cba471a01a7463	2026-10-11	known-green: rounds touched the first implementation's lines; reds proved at their commits, see notes
 c2-pile-records	a564e46e757d84fa	2026-10-11	known-green: verify renamed per addendum 5; the golden passes on claude/p3 after E3
 upload-sign-out-forget	87fda9aad7e334f0	2026-10-11	known-green: reds proved at their tests-only commits; later rounds touched the same lines; see notes Close
+delete-account-purge	99c1289d92b9aa0e	2026-10-11	red (fixed in b5ae5ec1)
