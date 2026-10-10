@@ -6736,5 +6736,18 @@
     ],
     "verify": "",
     "note": "Escalated (contracts): Codex red, implementation, Codex pass, Claude review. Packet 2026-10-10-b1a-packet.md. After c05-person-notes lands."
+  },
+  {
+    "id": "q-ui-3",
+    "task": "p4-q1",
+    "category": "fix",
+    "passes": false,
+    "ui": true,
+    "what": "A tall sheet stays inside the window on desktop and scrolls (questions UI spec Q-UI-3, owner OK).",
+    "steps": [
+      "At 1280x720 a sheet taller than the window ends inside it and scrolls."
+    ],
+    "verify": "",
+    "note": "TL-P4-43 item 1. Codex, then a Claude review and the designer. Packet 2026-10-10-q-ui-3-packet.md. implementer: codex."
   }
 ]
