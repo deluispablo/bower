@@ -6518,5 +6518,34 @@
     "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/qa7.spec.ts e2e/capabilities.spec.ts --project=desktop -g \"New note in an empty folder asks for a name, then opens the note|write it shows the state written, re-asks on a clash and settles as an answered row\"",
     "note": "Lead 2026-10-10 (stage-4 close): sync fixes. Codex, then a Claude review and repeat runs. Packet 2026-10-10-c4-e2e-sync-packet.md.",
     "review": "P4-71 PASS"
+  },
+  {
+    "id": "c5-codex-run",
+    "task": "p4-throughput",
+    "category": "harness",
+    "passes": false,
+    "ui": null,
+    "what": "harness/codex-run.sh runs a Codex delivery in a worktree, appends its tokens row, commits per its plan with implementer: codex, refuses guarded paths, secrets and addresses, runs check and the named e2e under the lock, and writes one result file (TL-P4-31 ruling 4).",
+    "steps": [
+      "Refuses the main checkout, a codex/* branch and a dirty tree.",
+      "Commits a two-commit plan in order and gates it."
+    ],
+    "verify": "pnpm exec vitest run src/codex-run.test.ts -t \"refuses the main checkout, a codex branch and a dirty tree|commits a two-commit plan in order with implementer: codex|refuses guarded paths, secrets and addresses\"",
+    "note": "TL-P4-31 ruling 4. Codex, then a Claude review. Packet 2026-10-10-c5-codex-run-packet.md. implementer: codex."
+  },
+  {
+    "id": "folder-header-wrap",
+    "task": "p4-defects",
+    "category": "fix",
+    "passes": false,
+    "ui": true,
+    "what": "The folder table headers stay on one line: .table th gets white-space: nowrap in folder.module.css, so columns keep their natural width and the table scrolls sideways (DEFECTS folder-table-header-wrap).",
+    "steps": [
+      "On Flat hunt at 375 and 1280 every header is one line.",
+      "Bedrooms and Commute are no narrower than their labels; the table scrolls sideways at 375."
+    ],
+    "verify": "pnpm exec playwright test e2e/folder-table.spec.ts -g \"folder table headers stay on one line and the table scrolls sideways\"",
+    "note": "DEFECTS folder-table-header-wrap (lead ruling, owner-reported). Codex, then a Claude review and the designer. Packet 2026-10-10-folder-header-wrap-packet.md. implementer: codex.",
+    "design": "designer verifies"
   }
 ]
