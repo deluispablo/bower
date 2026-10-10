@@ -7000,8 +7000,9 @@
     "steps": [
       "The prep's E3 reds pass through the vault source with fake Drive."
     ],
-    "verify": "",
-    "note": "C02 E3. Escalated; after upload-resume-after-reload. Packet 2026-10-10-orphan-pile-count-data-packet.md. implementer: codex."
+    "verify": "pnpm exec vitest run src/data/orphan-pile-count.test.ts -t \"orphan-pile-count-data\"",
+    "note": "C02 E3. Escalated; after upload-resume-after-reload. Packet 2026-10-10-orphan-pile-count-data-packet.md. implementer: codex.",
+    "review": "P4-101 PASS"
   },
   {
     "id": "c02-upload-count-ui",
