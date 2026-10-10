@@ -12,14 +12,21 @@ import s from './tidy.module.css';
  * list named by its visible label (WAI-ARIA APG link pattern; WAI tutorials,
  * content structure: lists).
  */
-export function RunLinks({ report, onOpen }: { report: Pick<RunReport, 'created' | 'updated' | 'answered'>; onOpen?: () => void }) {
+export function RunLinks({ report, onOpen }: { report: Pick<RunReport, 'created' | 'updated' | 'answered' | 'leftAsWritten'>; onOpen?: () => void }) {
   const { made, updated } = runLinkRows(report);
   const answered = report.answered ?? [];
-  if (!made.length && !updated.length && !answered.length) return null;
+  const left = report.leftAsWritten ?? [];
+  if (!made.length && !updated.length && !answered.length && !left.length) return null;
   return (
     <div className={s.links}>
       <LinkList label="New notes" rows={made} {...(onOpen ? { onOpen } : {})} />
       <LinkList label="Brought up to date" rows={updated} {...(onOpen ? { onOpen } : {})} />
+      {!!left.length && <LabelledList label="Left as you wrote them">
+        {left.map((r, i) => <li key={r.fileId ?? i}>
+          {r.fileId && <Link to={noteRoute(r.name)} onClick={onOpen}>{displayName(nameOf(r.name))}</Link>}
+          <span className="muted">{r.why}</span>
+        </li>)}
+      </LabelledList>}
       <AnsweredRows rows={answered} />
     </div>
   );

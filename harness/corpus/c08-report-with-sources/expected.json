@@ -1,0 +1,43 @@
+{
+  "files": {
+    "present": [
+      "Projects/Garden day/Garden day readiness report.md",
+      "Projects/Garden day/Garden day briefing.txt"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "unchanged": [
+    "Projects/Garden day/Garden day.md"
+  ],
+  "notes": [
+    {
+      "path": "Projects/Garden day/Garden day readiness report.md",
+      "contains": [
+        "| Work |",
+        "4 tables",
+        "2026-10-23",
+        "2026-10-18",
+        "canopy",
+        "## Limits",
+        "## Sources",
+        "[[Garden day briefing.txt]]",
+        "[[Garden day]]"
+      ],
+      "excludes": [
+        "canopy is booked"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "created": [
+      "Projects/Garden day/Garden day readiness report.md"
+    ],
+    "updated": [],
+    "setAside": 0,
+    "questionsExactly": 0
+  }
+}

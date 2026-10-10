@@ -1,0 +1,45 @@
+{
+  "files": {
+    "present": [
+      "Projects/Flat hunt/Larkspur Lane flat.md",
+      "Projects/Flat hunt/Listing.txt",
+      "Projects/Flat hunt/Deposit terms.txt",
+      "Archive/Old flat/Listing.txt"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "unchanged": [
+    "Projects/Flat hunt/Larkspur Lane flat.md",
+    "Projects/Flat hunt/Listing.txt",
+    "Projects/Flat hunt/Deposit terms.txt",
+    "Archive/Old flat/Listing.txt"
+  ],
+  "notes": [
+    {
+      "path": ".bower/requests.json",
+      "contains": [
+        "1,450",
+        "1,600",
+        "[[Projects/Flat hunt/Listing.txt]]",
+        "[[Projects/Flat hunt/Deposit terms.txt]]"
+      ],
+      "excludes": [
+        "900",
+        "[[Archive/Old flat/Listing.txt]]"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 0,
+    "created": [],
+    "updated": [],
+    "setAside": 0,
+    "questions": [],
+    "requests": [
+      "What are the rent and deposit for the Larkspur Lane flat?"
+    ]
+  }
+}

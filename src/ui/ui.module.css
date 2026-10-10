@@ -73,6 +73,7 @@
     right: auto;
     bottom: auto;
     top: 12vh;
+    max-height: calc(100dvh - 12vh - 24px);
     width: min(560px, 92vw);
     transform: translateX(-50%);
     border-radius: 20px;
@@ -82,6 +83,23 @@
   .grab { display: none; }
 }
 .sheetTitle { font-size: 22px; margin-bottom: 4px; }
+.edgeSheet {
+  top: 0;
+  bottom: auto;
+  max-height: none;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0;
+  padding: 0;
+  transform: none;
+  animation-duration: 0.28s;
+  animation-timing-function: var(--ease-out);
+}
+.edgeLeft { left: 52px; right: auto; animation-name: edgeLeft; }
+.edgeRight { left: auto; right: 0; animation-name: edgeRight; }
+@keyframes edgeLeft { from { transform: translateX(-100%); } }
+@keyframes edgeRight { from { transform: translateX(100%); } }
 @keyframes fade { from { opacity: 0; } }
 @keyframes rise { from { transform: translateY(40px); opacity: 0; } }
 @keyframes pop { from { transform: translate(-50%, 8px) scale(0.98); opacity: 0; } }

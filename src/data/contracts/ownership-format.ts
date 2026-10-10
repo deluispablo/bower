@@ -15,7 +15,9 @@ export interface PersonalTask {
  * from its `## ` heading (ATX heading, CommonMark 0.31) to the end of its text: a v2 payload is framed by its markers, a
  * legacy section ends where the next one starts (Current state: after its last `- ` line). `front` is the lines
  * between the `---` fences (YAML front matter), `frontEnd` the first byte after the closing fence. A section the note
- * lacks is null; a note with no frontmatter has none. A repeated heading is the last one.
+ * lacks is null. A note with no frontmatter (plain) is wholly the person's: its one section is its last `## Timeline`,
+ * to the end of the note, so a request's sourced line can find it (TL-P4-32 addendum 2 (5)); it has no Current state.
+ * A repeated heading is the last one.
  */
 export interface Layout {
   readonly front: ByteSpan | null;
@@ -119,7 +121,15 @@ function tasks(bytes: Uint8Array, personal: ByteSpan, v2: boolean): PersonalTask
   return out;
 }
 
-const NO_LAYOUT: Layout = { front: null, frontEnd: 0, current: null, timeline: null, bowerNote: null };
+/** A plain note's layout: only its last `## Timeline` heading, to the end of the note; nothing else is framed. */
+function plainLayout(raw: string): Layout {
+  const text = raw.replace(/\r\n/g, '\n');
+  const after = text.lastIndexOf('\n## Timeline\n');
+  const at = after >= 0 ? after + 1 : text.startsWith('## Timeline\n') ? 0 : -1;
+  if (at < 0) return { front: null, frontEnd: 0, current: null, timeline: null, bowerNote: null };
+  const byteAt = byteTable(raw, text.length);
+  return { front: null, frontEnd: 0, current: null, timeline: { start: byteAt[at] ?? 0, end: byteAt[text.length] ?? 0 }, bowerNote: null };
+}
 
 /**
  * One table for the whole note: entry n is the UTF-8 length of the raw text before the n-th character of the text with
@@ -145,7 +155,7 @@ function legacyNote(bytes: Uint8Array, raw: string): OwnershipResult {
   const close = text.startsWith('---\n') ? text.indexOf('\n---', 3) : -1;
   if (close < 0) {
     const personal = { start: 0, end: bytes.length };
-    return { status: 'plain', personal, layout: NO_LAYOUT, tasks: tasks(bytes, personal, false) };
+    return { status: 'plain', personal, layout: plainLayout(raw), tasks: tasks(bytes, personal, false) };
   }
   const lineEnd = text.indexOf('\n', close + 1);
   const frontEnd = lineEnd < 0 ? text.length : lineEnd + 1;

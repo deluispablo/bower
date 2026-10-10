@@ -1,5 +1,11 @@
-import { describeDriveContract } from './drive-contract';
+import { describeB1PortsContract, describeDriveContract, makeB1Drive } from './drive-contract';
+import { DriveHttp } from './drive-http';
 import { FakeDrive } from './fake-drive';
+
+describeB1PortsContract('fake', (prefix) => makeB1Drive('fake', {
+  restore: (snapshot, options) => FakeDrive.restore(snapshot, options),
+  http: (options) => new DriveHttp(options),
+}, prefix));
 
 describeDriveContract('fake', async () => {
   const drive = new FakeDrive();

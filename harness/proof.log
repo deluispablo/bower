@@ -532,3 +532,26 @@ c4-create-newer-words	10a0c0413e516991	2026-10-10	red (fixed in ec30299d)
 c4-e2e-sync	cd19e8dae2e59ade	2026-10-10	known-green: flaky-timing fixes, no deterministic red (packet); proof: qa7:63 fake desktop 12/12, capabilities:210 8/8 at the branch tip; claude/p3 before: 4/12 and 1/4 failed
 folder-header-wrap	d7c0f19cb325e6a4	2026-10-10	known-green: red proven by the coordinator without the fix (2 failed on the header-height assertion); done.sh misclassifies custom-message Playwright asserts (defect redkind-custom-message)
 c5-codex-run	d12e2384c9f51926	2026-10-10	red (fixed in d7162b35)
+p4-corpus-answers	92df71b52da21291	2026-10-10	known-green: the driver lives in runner/test (excluded from the code set-aside), so done.sh cannot revert it; the reds failed before the driver change (Codex /tmp/pca-red.log: prior runs missing, changed bytes passed), recorded in the entry notes
+shell-page-column	82cf5b43fc42295c	2026-10-10	known-green: red proven by the coordinator before the fix: e2e/shell-page-column.spec.ts 12 failed without 44799444, 12/12 with it (later rounds 16/16 demo and fake); the fix no longer reverts cleanly after rounds 1-2
+c5-test-margin	850e333e84251423	2026-10-10	known-green: tests only: no product code to set aside; every split part under 1 s at idle with cases unchanged (notes)
+c5-empty-note-help	d24fb50b1a0a33ea	2026-10-10	known-green: red proven: without c1f845cc the component test fails on getByText of the new copy (TestingLibraryElementError, /tmp/enh-done.log) and the e2e 4 failed (/tmp/enh-red.log); done.sh misclassifies the query error (defect redkind-custom-message)
+c5-css-tokens	bd9d2a2e8021e208	2026-10-10	known-green: red proven before the fix: the guard failed on exactly the two --muted uses (/tmp/csst-red.log, recorded in the notes); the fix no longer reverts cleanly after the merge with c5-empty-note-help
+d-v2-24a	390b7947b25acc87	2026-10-10	red (fixed in 4209d72f)
+landing-csp	ee2f2a45b4cda374	2026-10-10	red (fixed in 781f7fc1)
+create-named	4cbf86070cdbeda0	2026-10-10	red (fixed in cf04e6ae)
+weak-tests	225fa5e0c65cf549	2026-10-10	known-green: behaviour unchanged; its old tests were removed with New note (TL-P4-35); the verify now names surviving or new tests that pass after c5-remove-new-note
+v2-name-sheet	b5c008c7d937a526	2026-10-10	known-green: behaviour unchanged; its old tests were removed with New note (TL-P4-35); the verify now names surviving or new tests that pass after c5-remove-new-note
+c4-e2e-sync	91f635d31f4a1e8b	2026-10-10	known-green: behaviour unchanged; its old tests were removed with New note (TL-P4-35); the verify now names surviving or new tests that pass after c5-remove-new-note
+c5-remove-new-note	5555460dc7c8a571	2026-10-10	known-green: red 3cc13c38 failed before fix 9040d9bf; the revert no longer applies after the create-named merge
+namesheet-names	754299b18fc0201f	2026-10-10	known-green: behaviour unchanged; old tests removed with New note (TL-P4-35); verify names surviving tests
+b1b-ports	23fb6da3e7a70d06	2026-10-10	known-green: reds proven failing by the red session (54 missing-port assertions) and each fix round's reds; the fix spans four commits, so a single revert does not isolate it
+tree-name-first	fa44ac674a547625	2026-10-10	known-green: red cda855c6 failed before the fix (red session; the immediate-typing guard failed 9-11/20 on the base, 20/20 green after); later merges touched the same lines
+create-name-speed	29ba89050dff1f30	2026-10-10	known-green: red cda855c6 failed before the fix (red session; the immediate-typing guard failed 9-11/20 on the base, 20/20 green after); later merges touched the same lines
+undo-miss-refresh	02825c3ddfe978c8	2026-10-10	red (fixed in 925594be)
+q-ui-3	f97fe2d0a58740b9	2026-10-10	known-green: e2e red proven by the coordinator at the tests-only commit; fix 92c2801c
+new-note-escape	9a8d1dd5add25238	2026-10-10	known-green: re-proved after c5-remove-new-note; note committed
+c05-person-notes	c77af6e52a8db0e4	2026-10-10	red (fixed in 2f41450c)
+b3a-hot-reduce	53bf403af723d5ed	2026-10-10	red (fixed in 5df380e8)
+new-note-opens	96ec8698222521eb	2026-10-10	known-green: re-proved after c5-remove-new-note; note committed; flake fixed by e2e-resize-helper
+e2e-resize-helper	eaad5e5f9fbb2890	2026-10-10	known-green: e2e-only change; 3/20 fake-phone failures before, 40/40 after; guard fixture fails on a raw resize

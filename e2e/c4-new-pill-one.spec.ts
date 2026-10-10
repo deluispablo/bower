@@ -1,3 +1,4 @@
+import { resize } from './viewport';
 import type { Locator } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { expectAxeClean } from './axe';
@@ -19,7 +20,7 @@ async function look(pill: Locator) {
 
 test('the new pill has one look everywhere', async ({ page, isMobile }) => {
   test.setTimeout(60_000);
-  await page.setViewportSize({ width: isMobile ? 375 : 1440, height: 900 });
+  await resize(page, { width: isMobile ? 375 : 1440, height: 900 });
   await page.goto('/?source=fake&scenario=default&time=instant');
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
   // The scripted tidy-up marks both a filed thing and the project note's new Timeline line.

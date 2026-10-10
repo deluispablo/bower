@@ -1,0 +1,23 @@
+{
+  "id": "c06-stored-project-connection",
+  "capability": "C06",
+  "title": "A new source connects two existing projects without a shared pile",
+  "covers": "model",
+  "source": "new (C06 preparation; scripted intent proof pending)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "File this offer with Job hunt and connect its Saltmere office to the Flat hunt shortlist.",
+      "files": [
+        "Saltmere offer.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Projects/Job hunt/Job hunt.md",
+    "Projects/Flat hunt/Flat hunt.md"
+  ]
+}

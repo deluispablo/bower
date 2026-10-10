@@ -1,0 +1,25 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Ferrowick offer.txt",
+        "to": "Projects/Zinnia path",
+        "name": "Ferrowick offer.txt",
+        "note": {
+          "name": "Ferrowick offer.md",
+          "summary": "Ferrowick offers Alex a remote developer role.",
+          "body": "Ferrowick offers Alex a remote developer role, 42,000 a year, starting 2 November 2026. Reply by 14 October 2026.\n\nRelated: [[Zinnia path]] and [[Applications]]."
+        }
+      }
+    ],
+    "lines": [
+      {
+        "note": "Projects/Zinnia path/Zinnia path.md",
+        "text": "Ferrowick offers Alex a remote developer role.",
+        "cites": "$file:Ferrowick offer.txt"
+      }
+    ]
+  }
+]

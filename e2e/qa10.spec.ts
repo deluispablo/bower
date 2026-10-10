@@ -1,3 +1,4 @@
+import { resize } from './viewport';
 /**
  * Round ten: what the evaluator found after round eight. Each test pins one
  * entry of harness/features.json with "task": "qa-10", on demo and on fake.
@@ -30,7 +31,7 @@ const notBody = (page: Page) => expect.poll(() => page.evaluate(() => document.a
 
 test('the phone page menu button is as clear as Back', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'phone page controls');
-  await page.setViewportSize({ width: 390, height: 844 });
+  await resize(page, { width: 390, height: 844 });
   await open(page, '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Larkspur%20Lane.md');
   const more = page.getByRole('button', { name: 'More for Flat 3, 12 Larkspur Lane', exact: true });
   await expect(more).toBeVisible();

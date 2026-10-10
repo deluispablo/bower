@@ -20,6 +20,7 @@ export function Button({ variant = 'primary', size = 'md', block, className = ''
 }
 
 interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  ref?: Ref<HTMLButtonElement>;
   label: string;
   small?: boolean;
   children: ReactNode;

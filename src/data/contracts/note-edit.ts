@@ -13,11 +13,11 @@ import { ruleLike } from './rules';
 import { displayName, nameOf } from './tree';
 import type { ChangeEntry, Rule } from './types';
 import { sha256 } from './hashes';
-import { parseNote } from './note-format';
+import { parseNote, timelineEntries } from './note-format';
 import { fenceAfter, parseOwnership, type ByteSpan, type Fence, type Layout, type OwnershipFailure, type FetchedOwnership } from './ownership-format';
 import { parseTimelineLine, timelineLine } from './timeline-line';
 import { parseRules } from './rules-format';
-import type { Change, EditEntry, EditText, Rename, RuleAdd, RuleRemove } from './run-manifest';
+import type { Change, EditEntry, EditText, Rename, RuleAdd, RuleRemove, TimelineConsent } from './run-manifest';
 
 /** Files larger than 1 MiB are never edited (TL-P2-20 rule 6). */
 export const EDIT_FILE_LIMIT = 1024 * 1024;
@@ -32,7 +32,9 @@ export const EDIT_FILE_LIMIT = 1024 * 1024;
  * `state-changed`: the Current state does not read as the change's `previous`.
  */
 export type EditRefusal = OwnershipFailure | 'too-large' | 'not-bower' | 'unsupported' | 'field' | 'order' | 'invariant' | 'unchanged'
-  | 'person-edited' | 'state-changed';
+  | 'person-edited' | 'state-changed' | 'no-timeline' | 'unreadable-timeline';
+/** Independently derived bindings accompany fetched bytes during planning and effect recheck. */
+export type EditFetched = FetchedOwnership & { consents?: readonly TimelineConsent[] };
 export type EditResult = { ok: true; text: string; bytes: Uint8Array } | { ok: false; reason: EditRefusal };
 /** The low-level splice, replaceable only so a test can inject a faulty one (R4-3 m-g). */
 export type Authors = { splice: (text: string, at: number, insert: string) => string };
@@ -208,13 +210,44 @@ function byBower(text: string, fetched?: FetchedOwnership): boolean {
 // timeline-append
 // ---------------------------------------------------------------------------------------------
 
+/** Why a person's note takes no sourced line (C05 rows 5 and 8): no Timeline, or one `timeline-line.ts` cannot read. */
+function timelineRefusal(text: string, sections: Sections): 'no-timeline' | 'unreadable-timeline' | null {
+  if (!sections.timeline) return 'no-timeline';
+  const lines = linesOf(text, sections.timeline.start, sections.timeline.end);
+  return lines.slice(1).some((line) => line.text.trim() && !parseTimelineLine(line.text)) ? 'unreadable-timeline' : null;
+}
+
+/**
+ * Whether a person's note can take a request's one sourced line, as `applyChanges` decides it: null when it can (or the
+ * note is Bower's, which takes lines as before), else why not. A request settles on this without any line proposed.
+ */
+export function personalTimelineRefusal(bytes: Uint8Array, fetched?: FetchedOwnership): 'no-timeline' | 'unreadable-timeline' | null {
+  let text: string;
+  try { text = decoder.decode(bytes); }
+  catch {
+    // expected: a note that is not UTF-8 has no Timeline Bower can read.
+    return 'unreadable-timeline';
+  }
+  const own = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
+  if (own.status === 'invalid') return 'unreadable-timeline';
+  if (own.status === 'v2' || byBower(text, fetched)) return null;
+  const sections = sectionsOf(text, fetched);
+  return sections ? timelineRefusal(text, sections) : 'unreadable-timeline';
+}
+
 type Step = { text: string; added: EditEntry[]; rules: Pick<Rule, 'text' | 'yourWords' | 'since'>[] | null } | { refused: EditRefusal };
 
-function appendLines(text: string, change: Extract<Change, { kind: 'timeline-append' }>, authors: Authors, fetched?: FetchedOwnership): Step {
+function appendLines(text: string, change: Extract<Change, { kind: 'timeline-append' }>, authors: Authors, fetched?: EditFetched): Step {
   const bytes = encoder.encode(text);
   const own = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
   if (own.status === 'invalid') return { refused: own.reason };
-  if (own.status === 'plain' || (own.status === 'legacy' && !byBower(text, fetched))) return { refused: 'not-bower' };
+  const personal = own.status !== 'v2' && !byBower(text, fetched);
+  if (personal) {
+    const c = change.consent;
+    if (!c || c.targetFileId !== fetched?.fileId || change.recordIds.length !== 1 || change.recordIds[0] !== c.requestId
+      || change.entries.length !== 1 || change.entries[0]?.source === null
+      || (fetched.consents && !fetched.consents.some((x) => x.requestId === c.requestId && x.targetFileId === c.targetFileId && x.sourceFileId === c.sourceFileId))) return { refused: 'not-bower' };
+  }
   const eol = eolOf(text);
   let region = '';
   let at: number;
@@ -227,6 +260,8 @@ function appendLines(text: string, change: Extract<Change, { kind: 'timeline-app
   } else {
     const legacy = sectionsOf(text, fetched);
     if (!legacy) return { refused: 'not-bower' };
+    const unwritable = personal ? timelineRefusal(text, legacy) : null;
+    if (unwritable) return { refused: unwritable };
     if (legacy.timeline) {
       const sectionEnd = legacy.timeline.end;
       const lines = linesOf(text, legacy.timeline.start, sectionEnd);
@@ -302,7 +337,6 @@ function stateSection(text: string, fetched?: FetchedOwnership): StateSection | 
   const bytes = encoder.encode(text);
   const own = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
   if (own.status === 'invalid') return own.reason;
-  if (own.status === 'plain' || (own.status === 'legacy' && !byBower(text, fetched))) return 'not-bower';
   const sections = sectionsOf(text, fetched);
   const close = sections?.front ? linesOf(text, sections.front.end)[0] : undefined;
   if (!sections?.front || !close) return 'not-bower';
@@ -351,17 +385,18 @@ const sameLines = (a: readonly string[], b: readonly string[]): boolean => a.len
  * Null when there is none Bower could write (not Bower's note, a form it does not write, not UTF-8).
  */
 export type StateOwner = 'bower' | 'person' | 'unmarked' | 'missing';
-export function currentStateOf(bytes: Uint8Array, fetched?: FetchedOwnership): { owner: StateOwner; lines: string[] } | null {
+export function currentStateOf(bytes: Uint8Array, fetched?: FetchedOwnership, personal = false): { owner: StateOwner; lines: string[] } | null {
   let text: string;
   try { text = decoder.decode(bytes); }
   catch {
     // expected: a file that is not UTF-8 has no Current state Bower can read; nothing is planned for it.
     return null;
   }
+  if (!personal && !byBower(text, fetched)) return null;
   const section = stateSection(text, fetched);
-  if (typeof section === 'string') return null;
+  if (typeof section === 'string' || (personal && !byBower(text, fetched) && section.missing)) return null;
   const mark = markOf(section);
-  const owner: StateOwner = section.missing ? 'missing' : mark === null ? 'unmarked' : mark === stateMark(section.lines) ? 'bower' : 'person';
+  const owner: StateOwner = !byBower(text, fetched) ? 'person' : section.missing ? 'missing' : mark === null ? 'unmarked' : mark === stateMark(section.lines) ? 'bower' : 'person';
   return { owner, lines: section.lines };
 }
 
@@ -409,19 +444,29 @@ export function stateNewsLine(lines: readonly string[], existing: readonly strin
 }
 
 function rewriteState(text: string, change: Extract<Change, { kind: 'state-rewrite' }>, fetched?: FetchedOwnership): Step | { refused: EditRefusal } {
+  const personal = !byBower(text, fetched);
+  if (personal && (!change.granted || change.granted.mark !== null || change.recordIds.length !== 1 || change.recordIds[0] !== change.granted.answer)) return { refused: 'not-bower' };
   const section = stateSection(text, fetched);
   if (typeof section === 'string') return { refused: section };
+  if (personal && (section.missing || change.lines.length !== section.lines.length
+    || section.lines.filter((line, i) => line.trim() !== change.lines[i]?.trim()).length !== 1)) return { refused: 'not-bower' };
   const mark = markOf(section);
   // A section the person edited is written over only by their yes to it (`granted`), under the mark it had when asked.
   if (change.granted && (section.missing || mark !== change.granted.mark)) return { refused: 'person-edited' };
   if (!section.missing && mark !== null && mark !== stateMark(section.lines) && !change.granted) return { refused: 'person-edited' };
   // No mark is the person's: only a rule's grant (`adopted`) lets Bower rewrite it.
-  if (!section.missing && mark === null && !change.adopted) return { refused: 'person-edited' };
+  if (!personal && !section.missing && mark === null && !change.adopted) return { refused: 'person-edited' };
   // A release only takes back Bower's own write: a section Bower marked.
   if (change.release && (section.missing || mark === null)) return { refused: 'person-edited' };
   if (!sameLines(section.lines, change.previous)) return { refused: 'state-changed' };
   // The same lines again change nothing, not even the mark (rule 5).
   if (sameLines(change.lines, change.previous)) return { text, added: [], rules: null };
+  if (personal) {
+    const index = section.lines.findIndex((line, i) => line.trim() !== change.lines[i]?.trim());
+    const bullet = linesOf(text, section.start, section.end)[index];
+    if (!bullet) return { refused: 'invariant' };
+    return { text: text.slice(0, bullet.start) + `- ${change.lines[index]}` + text.slice(bullet.end), added: [], rules: null };
+  }
   const { eol } = section;
   const written = change.lines.map((line) => `- ${line}`).join(eol);
   let body: string;
@@ -464,6 +509,17 @@ function stateHolds(before: string, after: string, change: Extract<Change, { kin
   const a = parseOwnership(encoder.encode(before));
   const b = parseOwnership(encoder.encode(after));
   if (a.status === 'invalid' || b.status !== a.status) return false;
+  if (change.granted?.mark === null && !byBower(before)) {
+    const old = stateSection(before);
+    const section = stateSection(after);
+    if (typeof old === 'string' || typeof section === 'string' || markOf(section) !== null) return false;
+    const index = old.lines.findIndex((line, i) => line.trim() !== change.lines[i]?.trim());
+    const was = linesOf(before, old.start, old.end)[index];
+    const now = linesOf(after, section.start, section.end)[index];
+    return !!was && !!now && now.text === `- ${change.lines[index]}`
+      && before.slice(0, was.start) === after.slice(0, now.start)
+      && before.slice(was.end) === after.slice(now.end);
+  }
   const old = stateSection(before);
   const added = typeof old !== 'string' && old.missing;
   const was = outsideState(before);
@@ -500,7 +556,7 @@ function stateHolds(before: string, after: string, change: Extract<Change, { kin
  */
 export function undoChanges(changes: readonly Change[]): Change[] {
   return changes.flatMap((change): Change[] => (change.kind === 'state-rewrite'
-    ? [{ kind: 'state-rewrite', recordIds: [], previous: change.lines, lines: change.previous, ...(change.adopted ? { release: true as const } : {}), ...(change.granted ? { mark: change.granted.mark } : {}) }]
+    ? [{ kind: 'state-rewrite', recordIds: [], previous: change.lines, lines: change.previous, ...(change.adopted ? { release: true as const } : {}), ...(change.granted?.mark ? { mark: change.granted.mark } : {}) }]
     : []));
 }
 
@@ -699,7 +755,7 @@ function insertionOnly(before: string, after: string): boolean {
   return i === before.length;
 }
 function timelineOf(text: string): unknown[] | null {
-  try { return parseNote('note.md', text).timeline; }
+  try { return timelineEntries(text); }
   catch (error) {
     // expected: a result that cannot be read back fails the invariant; logged here, its cause says why.
     console.error('An edited note could not be read back:', error);
@@ -743,7 +799,14 @@ function holds(before: string, after: string, change: Change, step: Exclude<Step
     const at = spanOf(bytes, span);
     return text.slice(at.start, at.end);
   };
-  if (same(slice(before, beforeBytes, a.personal)) !== same(slice(after, afterBytes, b.personal))) return false;
+  // A plain note is wholly the person's; a request's one line goes in its Timeline, which ends the note: every byte
+  // before that section stays, and the section only gains (checked below).
+  const plainAppend = a.status === 'plain' && change.kind === 'timeline-append';
+  if (plainAppend) {
+    const was = sectionsOf(before)?.timeline;
+    const now = sectionsOf(after)?.timeline;
+    if (!was || !now || before.slice(0, was.start) !== after.slice(0, now.start)) return false;
+  } else if (same(slice(before, beforeBytes, a.personal)) !== same(slice(after, afterBytes, b.personal))) return false;
   if (tasksOf(a.tasks, same) !== tasksOf(b.tasks, same)) return false;
   if (a.status === 'v2' && b.status === 'v2') {
     const skeleton = (text: string, bytes: Uint8Array, payloads: Readonly<Record<string, ByteSpan>>): string => {
@@ -788,7 +851,7 @@ function holds(before: string, after: string, change: Change, step: Exclude<Step
 const refuse = (reason: EditRefusal): EditResult => ({ ok: false, reason });
 
 /** `applyChanges` with a replaceable splice; only tests pass anything but the real one. */
-export function applyChangesUsing(before: Uint8Array, changes: readonly Change[], authors: Authors, fetched?: FetchedOwnership): EditResult {
+export function applyChangesUsing(before: Uint8Array, changes: readonly Change[], authors: Authors, fetched?: EditFetched): EditResult {
   if (before.byteLength > EDIT_FILE_LIMIT) return refuse('too-large');
   let text: string;
   try { text = decoder.decode(before); }
@@ -807,7 +870,7 @@ export function applyChangesUsing(before: Uint8Array, changes: readonly Change[]
     const step = change.kind === 'state-rewrite' ? rewriteState(current, change, source)
       : change.kind === 'link-rewrite' ? relink(current, change, source)
         : change.kind === 'timeline-append' ? appendLines(current, change, authors, source) : wordRules(current, change, authors, source);
-    source = undefined;
+    source = fetched;
     if ('refused' in step) return refuse(step.refused);
     const kept = change.kind === 'state-rewrite' ? stateHolds(current, step.text, change) : holds(current, step.text, change, step);
     if (step.text !== current && !kept) return refuse('invariant');
@@ -818,7 +881,7 @@ export function applyChangesUsing(before: Uint8Array, changes: readonly Change[]
 }
 
 /** The one author of an edit's after-text: the bytes after every change in order, or why it is refused. */
-export function applyChanges(before: Uint8Array, changes: readonly Change[], fetched?: FetchedOwnership): EditResult {
+export function applyChanges(before: Uint8Array, changes: readonly Change[], fetched?: EditFetched): EditResult {
   return applyChangesUsing(before, changes, { splice: (text, at, insert) => text.slice(0, at) + insert + text.slice(at) }, fetched);
 }
 

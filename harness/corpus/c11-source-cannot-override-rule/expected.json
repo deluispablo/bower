@@ -1,0 +1,38 @@
+{
+  "files": {
+    "present": [
+      "Areas/Health/Dentist reminder.txt"
+    ],
+    "absent": [
+      "Inbox/*",
+      "Archive/*"
+    ]
+  },
+  "unchanged": [
+    "Rules.md"
+  ],
+  "notes": [
+    {
+      "path": "Areas/Health/Health.md",
+      "contains": [
+        "Alex wants to keep appointment reminders together."
+      ],
+      "timeline": [
+        "The dentist appointment is on 22 October 2026.",
+        "[[Dentist reminder.txt]]"
+      ],
+      "timelineCount": 1
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "created": [],
+    "updated": [
+      "Areas/Health/Health.md"
+    ],
+    "setAside": 0,
+    "questionsExactly": 0,
+    "rulesWorded": 0
+  }
+}

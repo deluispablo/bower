@@ -2,16 +2,15 @@
 
 Coordinator: the Claude Code session named "Orquestador". It integrates in `/Users/deluisp/Projects/bower-app` on branch `claude/p3`; P4 continues on it. Lead: the Planificador session ([DECISIONS.md](DECISIONS.md)). Output rule: [TL-P3-29](2026-10-07-tl-p3-29-output-rule-survives-compaction.md), in AGENTS.md. Minors: [P2_POLISH.md](P2_POLISH.md). Earlier handoffs: git history of this file.
 
-## Resume (2026-10-10 morning)
+## Resume (2026-10-10 afternoon, TL-P4-31 Codex throughput)
 
-Read this first. **Stage 4 is closed** (lead ruling: close with d-v2-24a open). main = backup = 03b5d0d2, verified. The four suites are green apart from the known flake bird-one-changes-flaky. 480/486. The lead deploys staging and runs the smoke (LEAD_QUESTIONS "stage-4-closed").
-TL-P4-29: Codex first. Escalated data entries use three Codex sessions (the red, the implementation, a read-only adversarial pass), then a fresh Claude bower-reviewer gives the PASS. The coordinator commits for Codex and runs pnpm check and e2e under `harness/with-lock.sh` (/tmp/bower-heavy.lockf). Never commit in the main checkout while integrate.sh runs. Never put the word for sending to a remote in a Bash line, except the single backup command (the hook blocks it). The lead answers only in DECISIONS on main; questions go to `docs/harness/LEAD_QUESTIONS.md`.
-- **Next batch, in order:**
-  1. d-v2-24a re-plan (TL-P4-26 addendum 7: one blend of the whole drawn output, snapshotted at react(); other motion suspended at one gate; a pose change queued until release). The order is a Codex red (a property over every kind, start pose and pose-change moment), then Claude escalated, a Codex pass, a Claude review and the designer. Branch `/private/tmp/bower-d-v2-24a` at 2061d25a carries rounds 1–3 plus the escalated rounds and the spec fixes (TL-P4-26 addenda 4 and 5).
-  2. The sync fixes for qa7:63 (wait for the name box before typing) and capabilities:210 (navigate in the app instead of page.goto), on Codex with a Claude review.
-  3. Then the queue: 24b ∥ d-v2-06, d-v2-02, the c4 data entries, then P4-C (C05 open question: notes the person wrote).
-- **Known limits:** DEFECT_LOG compensate-storage-failure-limits.
-- **Sessions:** lead Planificador; Designer; lead planning worktree `/private/tmp/bower-tl-planning`. Never remove role worktrees.
+Read this first. Cap 1 Claude + 4 Codex while the 1-min load stays under ~12; Codex prompts run targeted tests with --maxWorkers=2. TL-P4-40: no visible change dispatched without the owner's OK via the designer. Never commit in the main checkout while integrate.sh or done.sh runs (check `ps`).
+- **Closed today:** d-v2-24a, landing-csp, c5-remove-new-note, create-named, b1b-ports, tree-name-first, create-name-speed, undo-miss-refresh, q-ui-3, new-note-escape. p4-b23-prep integrated (255f0e07).
+- **C05 (`/private/tmp/bower-c05-person-notes`):** round 5 = addendum 5 (fix 3e958da1) + addendum 6 (two named notes: every target settles in the run; reds 8685f74d; Codex implementation running). Then gates (check; e2e c05-person-notes, capabilities, app, qa5 on demo and fake), scoped Codex pass 5, fresh Claude review, designer, integrate, done. Only Blocking normal-use findings go to the lead.
+- **B3a (`/private/tmp/bower-b3a-hot-reduce`):** packet 2026-10-10-b3a-hot-reduce-packet.md; Codex red running; then Codex implementation, pass, Claude review.
+- **After C05:** B1a red → implementation → pass → review; B2a; Q1a. B1c packet notes in the coordinator scratchpad (hidden paths via isHidden; TL-P4-45 `.bower/` paths).
+- **Open closes:** new-note-opens is blocked by empty-note-help-flaky (diagnoser running); namesheet-names passes.
+- **Suites** for this batch run on a detached worktree `/private/tmp/bower-suites`; then main, backup, SHA to the lead, staging smoke.
 
 ## Where things stand
 

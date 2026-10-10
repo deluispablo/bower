@@ -1,0 +1,32 @@
+{
+  "files": {
+    "present": [
+      "Areas/Home/Garden plot.md"
+    ]
+  },
+  "unchanged": [
+    "Rules.md"
+  ],
+  "protectedRanges": [
+    {
+      "path": "Areas/Home/Garden plot.md",
+      "range": {
+        "heading": "My plans"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "path": "Areas/Home/Garden plot.md",
+      "contains": [
+        "## Current state\n- The committee will replace the shared water butt."
+      ],
+      "excludes": [
+        "## Current state\n- The shared water butt has arrived."
+      ],
+      "timeline": [
+        "2026-09-12 \u00b7 Planted garlic."
+      ]
+    }
+  ]
+}

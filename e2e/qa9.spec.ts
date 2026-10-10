@@ -1,3 +1,4 @@
+import { resize } from './viewport';
 /**
  * Round nine: what the review after round eight found. Each test pins one
  * entry of harness/features.json with "task": "qa-9", on demo and on fake.
@@ -10,6 +11,45 @@ const open = async (page: Page, path: string, scenario = 'default', time = 'inst
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
 };
 const toast = (page: Page, text: string | RegExp) => page.getByRole('status').getByText(text);
+
+test('the rename name sheet keeps one note extension', async ({ page }) => {
+  await resize(page, { width: 375, height: 900 });
+  await open(page, '/note/Resources/Cooking/Lemon%20tart.md');
+  await page.getByRole('button', { name: 'More for Lemon tart', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Rename', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: 'Rename', exact: true });
+  await sheet.getByRole('textbox', { name: 'Name', exact: true }).fill('Tyres.md');
+  await sheet.getByRole('button', { name: 'Rename', exact: true }).click();
+  await expect(sheet).toBeHidden();
+  await expect(page).toHaveURL(/\/note\/Resources\/Cooking\/Tyres\.md(?:\?|$)/);
+  await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText('Tyres');
+  await page.getByRole('button', { name: 'More for Tyres', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Rename', exact: true }).click();
+  await expect(sheet.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Tyres');
+});
+
+test('the New folder name sheet preserves dots and explains slashes', async ({ page }) => {
+  await resize(page, { width: 375, height: 900 });
+  await open(page, '/files/Resources/Cooking');
+  await page.getByRole('button', { name: 'More for Cooking', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'New folder', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: 'New folder', exact: true });
+  const name = sheet.getByRole('textbox', { name: 'Name', exact: true });
+  const make = sheet.getByRole('button', { name: 'Make the folder', exact: true });
+  await name.fill('Tyres.md');
+  await make.click();
+  await expect(page).toHaveURL(/\/files\/Resources\/Cooking\/Tyres\.md(?:\?|$)/);
+  await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText('Tyres.md');
+  await page.getByRole('button', { name: 'More for Tyres.md', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'New folder', exact: true }).click();
+  await name.fill('a/b');
+  await expect(name).toHaveAttribute('aria-invalid', 'true');
+  await expect(sheet.getByText('Names cannot have slashes; Bower used a dash.', { exact: true })).toBeVisible();
+  await make.click();
+  await expect(page).toHaveURL(/\/files\/Resources\/Cooking\/Tyres\.md\/a-b(?:\?|$)/);
+  await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText('a-b');
+  await expect(page.getByRole('status').getByText('Names cannot have slashes; Bower used a dash.', { exact: true })).toBeVisible();
+});
 
 test('on screen: answering a question is confirmed in the words of the choice', async ({ page }) => {
   await open(page, '/');
@@ -88,22 +128,7 @@ test('Undo twice on the same thing gives its row the keyboard both times', async
   }
 });
 
-test('the name sheet takes a name as typed: no doubled .md, and a slash is explained', async ({ page, isMobile }) => {
-  test.skip(!isMobile, 'the phone page menu');
-  await open(page, '/files/Areas/Car');
-  await page.getByRole('button', { name: 'More for Car' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'New note' }).click();
-  await page.keyboard.type('Tyres.md');
-  await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/\/note\/Areas\/Car\/Tyres\.md$|\/note\/Areas\/Car\/Tyres\.md\?/);
-  await open(page, '/files/Areas/Car');
-  await page.getByRole('button', { name: 'More for Car' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'New note' }).click();
-  await page.keyboard.type('Spring/Summer');
-  await page.keyboard.press('Enter');
-  await expect(page.getByRole('status').getByText('Names cannot have slashes; Bower used a dash.')).toBeVisible();
-  await expect(page).toHaveURL(/\/note\/Areas\/Car\/Spring-Summer\.md/);
-});
+
 
 test('Move to: Enter with no folder that matches says so', async ({ page, isMobile }) => {
   test.skip(isMobile, 'the desktop tree');

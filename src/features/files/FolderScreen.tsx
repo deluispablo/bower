@@ -157,7 +157,6 @@ function Folder({ path }: { path: string }) {
       {children.length === 0 ? (
         <div className={s.empty}>
           <p>Nothing in here yet.</p>
-          <NewNoteButton folder={path} label={`New note in ${node.name}`} />
         </div>
       ) : view === 'list' ? (
         <ul className={s.list}>
@@ -203,16 +202,6 @@ function PhoneBookmarks() {
         );
       })}
     </section>
-  );
-}
-
-/** A new note gets its name first, in the one name sheet, then opens. */
-function NewNoteButton({ folder, label }: { folder: string; label: string }) {
-  const { setNaming } = useUi();
-  return (
-    <button type="button" className={s.linkBtn} onClick={() => setNaming({ folder, type: 'note' })}>
-      {label}
-    </button>
   );
 }
 

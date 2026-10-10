@@ -24,4 +24,13 @@ export default tseslint.config(
   },
   testRulesConfig(['src/**/*.test.{ts,tsx}']),
   ...syntaxConfig('root'),
+  {
+    files: ['e2e/**/*.spec.ts'],
+    rules: {
+      'no-restricted-properties': ['error', {
+        property: 'setViewportSize',
+        message: 'Use resize from e2e/viewport.ts to wait for the shell after crossing its breakpoint.',
+      }],
+    },
+  },
 );

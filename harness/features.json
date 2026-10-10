@@ -205,8 +205,9 @@
       "Explorer New note",
       "Name it"
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"a new note opens and says how to write in it\"",
-    "passes": true
+    "verify": "bash scripts/e2e-both.sh e2e/no-new-note.spec.ts e2e/empty-note-help.spec.ts -g \"no New note control on desktop or phone|empty-note help and Open in Drive\"",
+    "passes": true,
+    "note": "Re-proved after c5-remove-new-note (TL-P4-35): New note was removed, so the verify names surviving behaviour on New folder and the empty note; known green."
   },
   {
     "id": "search-everything",
@@ -1054,8 +1055,9 @@
       "Type \"Soup ideas\", then press Escape",
       "No note opens, and neither \"Untitled\" nor \"Soup ideas\" is left in the tree"
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"Escape on a new note's name takes it back\"",
-    "passes": true
+    "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"Escape on a new folder's name takes it back\"",
+    "passes": true,
+    "note": "Re-proved after c5-remove-new-note (TL-P4-35): New note was removed, so the verify names surviving behaviour on New folder and the empty note; known green."
   },
   {
     "id": "failed-card-dismiss",
@@ -1580,7 +1582,7 @@
       "Read those tests",
       "Green now: each one checks what the screen or the Drive shows, and fails if the fix is undone"
     ],
-    "verify": "pnpm vitest run src/features/files src/data/demo src/data/live src/data/vault/drive-vault.test.ts -t \"ConfirmBin|repeats a rule|toured|late file\" && bash scripts/e2e-both.sh e2e/qa7.spec.ts -g \"New note in an empty folder\"",
+    "verify": "pnpm vitest run src/features/files src/data/demo src/data/live src/data/vault/drive-vault.test.ts -t \"ConfirmBin|repeats a rule|toured|late file\" && bash scripts/e2e-both.sh e2e/qa7.spec.ts -g \"New folder in an empty folder asks for a name, then opens the folder\"",
     "passes": true,
     "note": "Tests only, so done.sh has no code to set aside. Red checked by hand on 2026-10-04 by breaking the code each pins: ConfirmBin without nested words, toured kept at sign-out, a question repeating a rule, the late file's Bin without its retry, New note in an empty folder made without asking. The vacuous demo-question test is gone."
   },
@@ -2000,8 +2002,9 @@
       "Open http://localhost:5190/?scenario=default&time=instant at phone width, a folder page, ⋯ New note, type Tyres.md: the note is Tyres.",
       "Type a/b: a toast says Bower used a dash."
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"the name sheet takes a name as typed\"",
-    "passes": true
+    "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"the New folder name sheet preserves dots and explains slashes|the rename name sheet keeps one note extension\"",
+    "passes": true,
+    "note": "Re-proved after c5-remove-new-note (TL-P4-35): New note was removed, so the verify names surviving behaviour on New folder and the empty note; known green."
   },
   {
     "id": "move-no-match",
@@ -2049,8 +2052,9 @@
       "Right-click Resources, New note, type Soup ideas at once, Enter.",
       "The note is Soup ideas, not a name missing its first letters."
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts e2e/qa7.spec.ts -g \"a new note opens and says how|New note in an empty folder\"",
-    "passes": true
+    "verify": "bash scripts/e2e-both.sh e2e/qa7.spec.ts -g \"New folder from the tree keeps the first letters typed\"",
+    "passes": true,
+    "note": " Reopened by c5-remove-new-note: its New note half is withdrawn (TL-P4-33/35); its New folder half fails (DEFECTS new-folder-first-letters, ruling (b)) and closes with entry 2, whose red is this test."
   },
   {
     "id": "situation-address-clean",
@@ -6179,7 +6183,7 @@
       "At 375 the rename field is at least 300 px with a 16 px font and the name selected.",
       "A folder New note opens NameSheet."
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/v2-name-sheet.spec.ts -g \"the rename field spans the sheet and selects the name|new note from a folder uses the name sheet\"",
+    "verify": "bash scripts/e2e-both.sh e2e/v2-name-sheet.spec.ts -g \"the rename field spans the sheet and selects the name\"",
     "note": "TL-P4-21 order 3; spec d-v2-09 (after v2-field). Starting model bower-implementer. Packet 2026-10-09-v2-name-sheet-packet.md; e2e file may differ. Red 332410b1, fix 51978d36. Designer verified a764e350.",
     "design": "verified"
   },
@@ -6381,15 +6385,17 @@
     "id": "d-v2-24a",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "One react(kind) port in src/bird mapping each BowerMap reaction to engine actions (nod, tilt, lean, startle, settle, shake, wave), within 0.1 s via interrupt now, flights keep the latest, reduced motion and moves off respected.",
     "steps": [
       "Each kind queues its engine action.",
       "A reaction starts within 0.1 s; during a flight only the latest plays on landing."
     ],
-    "verify": "",
-    "note": "TL-P4-21 ruling 4 (24a, Opus, escalated); spec d-v2-24; bower-map.md. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-d-v2-24a-packet.md."
+    "verify": "pnpm exec vitest run src/bird -t \"apply has exactly one call site|settle begin clears every engine-toggled animated CSS class|a real tap on loaded Home goes through|a pose change during the moves-off settle waits until release|during moves-off gaze moves only the iris|turns first, then moves-off reaches x-scale|Settings draws the closing settle|a reaction starts within 0.1 s and cuts the running one|with moves off only the settle runs|a layer keeps its home position across moves-off release|rule carries the paper from the hop start\" && bash scripts/e2e-both.sh e2e/bird-engine.spec.ts -g \"a tap goes through react\"",
+    "note": "TL-P4-21 ruling 4 (24a, Opus, escalated); spec d-v2-24; bower-map.md. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-d-v2-24a-packet.md.",
+    "design": "verified",
+    "review": "P4-79 PASS (round 4); rule fix 4209d72f gated, designer verified"
   },
   {
     "id": "c4-undo-compensate",
@@ -6515,7 +6521,7 @@
       "The new-folder name is typed into the name box, never the tree.",
       "An answered row shows after Write it without a reload race."
     ],
-    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/qa7.spec.ts e2e/capabilities.spec.ts --project=desktop -g \"New note in an empty folder asks for a name, then opens the note|write it shows the state written, re-asks on a clash and settles as an answered row\"",
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/qa7.spec.ts e2e/capabilities.spec.ts --project=desktop -g \"New folder in an empty folder asks for a name, then opens the folder|write it shows the state written, re-asks on a clash and settles as an answered row\"",
     "note": "Lead 2026-10-10 (stage-4 close): sync fixes. Codex, then a Claude review and repeat runs. Packet 2026-10-10-c4-e2e-sync-packet.md.",
     "review": "P4-71 PASS"
   },
@@ -6554,7 +6560,7 @@
     "id": "shell-page-column",
     "task": "p4-defects",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "The desktop page column never gets narrower than 560 px: docked(shellWidth, prefs) folds the right panel first, then the side panel; a folded panel opens as an overlay through Sheet from its button; prefs are never rewritten; dragging is clamped (DEFECTS shell-page-column-squeeze).",
     "steps": [
@@ -6562,13 +6568,15 @@
       "A folded panel opens as an overlay and Escape returns focus to its button."
     ],
     "verify": "pnpm exec vitest run src/app/DesktopShell.test.tsx -t \"docked keeps the page column at least 560 px\"",
-    "note": "DEFECTS shell-page-column-squeeze (lead ruling, designer spec). Codex, then a Claude review and the designer. Packet 2026-10-10-shell-page-column-packet.md. implementer: codex."
+    "note": "DEFECTS shell-page-column-squeeze (lead ruling, designer spec). Codex, then a Claude review and the designer. Packet 2026-10-10-shell-page-column-packet.md. implementer: codex. Designer verified 44799444; a short re-check follows fix rounds 1-2. Designer re-verified fc5c4cf1 (overlay motion, first render, resizer).",
+    "review": "P4-75 BLOCK; P4-75b PASS",
+    "design": "verified"
   },
   {
     "id": "p4-corpus-answers",
     "task": "p4-semantic",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "ui": null,
     "what": "The corpus driver answers questions through the real answer path between presses, asserts per run, compares protected byte ranges and Drive properties directly, and tells a replay of the original request from a new tidy-up (TL-P4-32 finding 7).",
     "steps": [
@@ -6576,13 +6584,14 @@
       "A protected range check fails on one changed byte."
     ],
     "verify": "pnpm -C runner exec vitest run test/corpus-driver.test.ts -t \"answers a pair question through the answer path between presses|a protected range fails on one changed byte\"",
-    "note": "TL-P4-32 finding 7; before the C05 reds. Codex, then a Claude review. Packet 2026-10-10-p4-corpus-answers-packet.md. implementer: codex."
+    "note": "TL-P4-32 finding 7; before the C05 reds. Codex, then a Claude review. Packet 2026-10-10-p4-corpus-answers-packet.md. implementer: codex.",
+    "review": "P4-74 BLOCK; P4-74b PASS"
   },
   {
     "id": "landing-csp",
     "task": "p4-production",
     "category": "security",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "The landing runs without unsafe-eval: fix-landing.mjs precompiles the exported page script, --check catches an export that still needs eval, and the /landing/* CSP drops unsafe-eval (P4-E landing-csp).",
     "steps": [
@@ -6590,6 +6599,246 @@
       "The landing loads under its CSP with no violation."
     ],
     "verify": "pnpm exec vitest run src/landing-csp.test.ts -t \"fix-landing removes the runtime eval from an export|the landing CSP has no unsafe-eval\"",
-    "note": "P4-E (TL-P4-31 ruling 2). Codex, then a Claude review and the designer. Packet 2026-10-10-landing-csp-packet.md. implementer: codex."
+    "note": "P4-E (TL-P4-31 ruling 2). Codex, then a Claude review and the designer. Packet 2026-10-10-landing-csp-packet.md. implementer: codex.",
+    "design": "verified",
+    "review": "P4-80 PASS"
+  },
+  {
+    "id": "c5-test-margin",
+    "task": "p4-throughput",
+    "category": "test",
+    "passes": true,
+    "ui": null,
+    "what": "The three tests that time out under CPU contention (engine startle, undo-compensate property batches 1-2, codex-run guarded paths) are split so each part runs in at most 1 s at idle, with every case, run count, assertion, bound and timeout unchanged (TL-P4-31 addendum 1).",
+    "steps": [
+      "Each split part runs in at most 1 s alone at idle.",
+      "The total case count is unchanged."
+    ],
+    "verify": "pnpm exec vitest run src/bird/engine.test.ts src/data/vault/undo-compensate.property.test.ts src/codex-run.test.ts -t \"the startle settles within|compensating Undo preserves FIFO|refuses guarded paths, secrets and addresses\"",
+    "note": "TL-P4-31 addendum 1. Codex, then a Claude review. Packet 2026-10-10-c5-test-margin-packet.md. implementer: codex. Tests only: closes with --known-green.",
+    "review": "P4-76 BLOCK; P4-76b PASS"
+  },
+  {
+    "id": "c5-empty-note-help",
+    "task": "p4-polish",
+    "category": "fix",
+    "passes": true,
+    "ui": true,
+    "what": "The empty-note line says how to write in a note (Google Drive for desktop and any notes app) with the existing Open in Drive action beside it; the later-version promise is gone (TL-P4-33 addenda 1 and 2).",
+    "steps": [
+      "An empty note shows the designer copy and Open in Drive.",
+      "On a phone the row wraps and the button keeps a 44 px target."
+    ],
+    "verify": "pnpm exec vitest run src/features/note -t \"an empty note says how to write in it and offers Open in Drive\"",
+    "note": "TL-P4-33 addenda 1 and 2. Codex, then a Claude review and the designer. Packet 2026-10-10-c5-empty-note-help-packet.md. implementer: codex. Designer verified 48895273 (copy, ghost button, wrap, 44 px; dark and light).",
+    "review": "P4-77 PASS",
+    "design": "verified"
+  },
+  {
+    "id": "c5-remove-new-note",
+    "task": "p4-polish",
+    "category": "fix",
+    "passes": true,
+    "ui": true,
+    "what": "New note is removed everywhere it is offered (explorer button and row menu, folder page, its name-sheet path); New folder stays; code only it used goes (TL-P4-35).",
+    "steps": [
+      "No New note control on desktop or phone.",
+      "New folder is still offered."
+    ],
+    "verify": "pnpm exec playwright test e2e/no-new-note.spec.ts -g \"no New note control on desktop or phone\"",
+    "note": "TL-P4-35 (1). Codex after c5-empty-note-help, then a Claude review and the designer. Packet 2026-10-10-c5-remove-new-note-packet.md. implementer: codex. Known green: red 3cc13c38 failed before fix 9040d9bf (red session log); the revert no longer applies after the create-named merge.",
+    "review": "P4-82 PASS",
+    "design": "verified"
+  },
+  {
+    "id": "p4-docs-md-roundtrip",
+    "task": "p4-production",
+    "category": "check",
+    "passes": false,
+    "ui": null,
+    "what": "A Bower note edited in Google Docs (native .md editing) keeps what Bower relies on: bytes Bower can parse, appProperties, ownership marks and note-edit behaviour; the result is a DEFECTS entry or a safe line (TL-P4-36).",
+    "steps": [
+      "A made-up note on staging for account B is snapshotted (bytes, appProperties, modifiedTime).",
+      "After the owner edits it in Docs, a Codex session diffs it and runs the parser and note-edit on it."
+    ],
+    "verify": "pnpm exec vitest run src/data/contracts/docs-md-roundtrip.test.ts -t \"a note edited in Google Docs\"",
+    "note": "TL-P4-36 (P4-E). The owner edits by hand; no session signs in to Google. implementer: codex."
+  },
+  {
+    "id": "c5-css-tokens",
+    "task": "p4-defects",
+    "category": "fix",
+    "passes": true,
+    "ui": true,
+    "what": "Every var() in src CSS names a defined custom property (a guard test); the two var(--muted) uses become var(--text-muted) (DEFECTS css-unknown-token).",
+    "steps": [
+      "The guard fails on any undefined var() name.",
+      "The empty-note line and the Bower waits line use --text-muted."
+    ],
+    "verify": "pnpm exec vitest run src/styles/css-tokens.test.ts -t \"in src CSS names a defined custom property\"",
+    "note": "DEFECTS css-unknown-token (lead ruling, designer). Codex, then a Claude review and the designer contrast check (verified 92feaf2b; re-check after merge). implementer: codex. Designer re-verified the merged box on claude/p3 b56e8ec2 (375, 1440).",
+    "review": "P4-78 PASS",
+    "design": "verified"
+  },
+  {
+    "id": "c05-person-notes",
+    "task": "p4-semantic",
+    "category": "feature",
+    "passes": true,
+    "ui": true,
+    "what": "Bower appends one sourced Timeline line to a note the person wrote when the request names it, with consent from the runner, the title grammar, an append clash retried, and two or more matches listed in Left as you wrote them without a question (TL-P4-32).",
+    "steps": [
+      "A bound sourced append keeps every other byte; any other edit to a person note is refused not-bower.",
+      "Same-title or unparseable notes are filed beside, listed in leftAsWritten and never counted updated.",
+      "Old reports stay readable; Home and the result show the designer rows with working links."
+    ],
+    "verify": "pnpm exec vitest run src/data/contracts/c05-person-notes.test.ts src/data/contracts/c05-person-reports.test.ts src/features/tidy/c05-person-notes.test.tsx -t \"C05 person notes:\" && pnpm -C runner exec vitest run test/c05-person-notes.test.ts test/c05-incorporation.test.ts -t \"C05 person notes:|the C05 corpus cases score green with scripted proposals\" && bash scripts/e2e-both.sh e2e/c05-person-notes.spec.ts -g \"C05 person notes:\"",
+    "note": "TL-P4-28 addendum 3; TL-P4-32; escalated (TL-P4-31): Codex red 0871c4f0, Codex implementation, Codex adversarial, Claude review, designer. Packet 2026-10-10-c05-person-notes-packet.md. implementer: codex.",
+    "design": "verified",
+    "review": "P4-87 PASS"
+  },
+  {
+    "id": "create-named",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": true,
+    "ui": false,
+    "what": "Naming a new thing has one home: createNamed(folder, name) in file-actions, which NameSheet uses with no behaviour change (DEFECTS new-folder-first-letters, ruling (b), entry 1).",
+    "steps": [
+      "createNamed calls vault.create(folder, folder, name) once and reports a refusal with NameSheet's sentence.",
+      "NameSheet behaves as before."
+    ],
+    "verify": "pnpm exec vitest run src/features/files/file-actions.test.tsx -t \"createNamed creates once and reports NameSheet\" && bash scripts/e2e-both.sh e2e/v2-name-sheet.spec.ts -g \"the rename field spans the sheet and selects the name\"",
+    "note": "DEFECTS new-folder-first-letters (b). Codex, then a Claude review. Packet 2026-10-10-create-named-packet.md. implementer: codex.",
+    "review": "P4-81 PASS"
+  },
+  {
+    "id": "tree-name-first",
+    "task": "p4-consolidation",
+    "category": "fix",
+    "passes": true,
+    "ui": true,
+    "what": "The tree's New folder (row menu and header) opens the name box before any await and creates once with the name, so no typed letter is lost (DEFECTS new-folder-first-letters, ruling (b), entry 2).",
+    "steps": [
+      "Typing at once after New folder keeps every letter (20/20).",
+      "Escape makes nothing; blur with a name makes it once; a failed create keeps the name."
+    ],
+    "verify": "pnpm exec vitest run src/features/files/tree-name-first.test.tsx -t \"New folder focuses its name before an unresolved create|pending row is the first child with folder icon|Escape drops the pending row without a write|blur with a name makes that folder once|keeps the name and inline FieldError|after create the new row is selected and focused\" && bash scripts/e2e-both.sh e2e/qa7.spec.ts e2e/tree-name-first.spec.ts -g \"New folder from the tree keeps the first letters typed|desktop pending New folder row passes WCAG 2.2\"",
+    "note": "After create-named. Codex red, Codex implementation, Claude review, designer check once (rows signed 2026-10-10). Packet 2026-10-10-tree-name-first-packet.md. Closes create-name-speed.",
+    "review": "P4-85 PASS",
+    "design": "verified"
+  },
+  {
+    "id": "b1b-ports",
+    "task": "p4-brain",
+    "category": "feature",
+    "passes": true,
+    "ui": false,
+    "what": "Drive ports for B1: a 4 KB prefix read (Range, tolerating 200) and the changes feed (start token, drained pages, parents lookup), with fake parity (TL-P4-41 Q3, Q10).",
+    "steps": [
+      "A prefix read returns at most 4,096 bytes on whole characters for 206 and 200 responses.",
+      "The feed drains every page to the new token; unknown ids resolve scope through parents."
+    ],
+    "verify": "pnpm exec vitest run src/data/drive -t \"b1-prefix-read never poisons the full-media cache|b1-feed-bootstrap-new-folder|b1b fix 1 finding 1|b1b fix 1 finding 2|b1b fix 2: native fake sizes|b1-ports-parity full-media cache separation\"",
+    "note": "Escalated (transport): Codex red, implementation, Codex pass, Claude review. Packet 2026-10-10-b1b-packet.md. Before B1a (lead). Codex passes 1-3; restore legacy size is a Minor by ruling (TL-P4-41 addendum 2).",
+    "review": "P4-83 PASS"
+  },
+  {
+    "id": "b1a-contract",
+    "task": "p4-brain",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "The B1 contract: MOC regions, the closed selection reply, retrieval.json with its cursor in one write, and the maintain effect (TL-P4-41 Q1, Q2, Q4, Q5).",
+    "steps": [
+      "A person's MOC is never edited except by the link rewrite.",
+      "maintain is idempotent, adds no rows for refused effects and is skipped on a done run."
+    ],
+    "verify": "",
+    "note": "Escalated (contracts): Codex red, implementation, Codex pass, Claude review. Packet 2026-10-10-b1a-packet.md. After c05-person-notes lands."
+  },
+  {
+    "id": "q-ui-3",
+    "task": "p4-q1",
+    "category": "fix",
+    "passes": true,
+    "ui": true,
+    "what": "A tall sheet stays inside the window on desktop and scrolls (questions UI spec Q-UI-3, owner OK).",
+    "steps": [
+      "At 1280x720 a sheet taller than the window ends inside it and scrolls."
+    ],
+    "verify": "pnpm exec playwright test e2e/q-ui-3.spec.ts --project=desktop -g \"tall desktop sheet stays inside the window and scrolls\"",
+    "note": "TL-P4-43 item 1. Codex, then a Claude review and the designer. Packet 2026-10-10-q-ui-3-packet.md. implementer: codex. Known green: the coordinator proved the e2e red at the tests-only commit (demo and fake, 2 failed on toHaveCount); done.sh cannot read a Playwright red.",
+    "review": "P4-86 PASS",
+    "design": "verified"
+  },
+  {
+    "id": "undo-miss-refresh",
+    "task": "p4-consolidation",
+    "category": "fix",
+    "passes": true,
+    "ui": false,
+    "what": "Undo of a rule another tab confirmed finds it: a cached miss refreshes the listing once before saying not-found (DEFECTS undo-compensate-counterexample, option (1)).",
+    "steps": [
+      "The seed 752195386 path 49 replay passes.",
+      "A hit makes no extra listing call; a miss makes exactly one."
+    ],
+    "verify": "pnpm exec vitest run src/data/vault -t \"replays undo-compensate-counterexample|removeRule lists zero times on a hit and once on each miss\"",
+    "note": "Lead ruling option (1). Codex, then a Claude review. Packet 2026-10-10-undo-miss-refresh-packet.md. implementer: codex.",
+    "review": "P4-84 PASS"
+  },
+  {
+    "id": "b3a-hot-reduce",
+    "task": "p4-b3",
+    "category": "feature",
+    "passes": true,
+    "ui": false,
+    "what": "A pure script renders hot from open questions, hubs with settled changes and recent changes, bounded to 300 words (TL-P4-42 Q3, Q4, Q6).",
+    "steps": [
+      "renderHot gives the three sections in order with their caps, cuts and provenance; sameExceptDate and boundHot hold."
+    ],
+    "verify": "pnpm -C runner exec vitest run test/b23-hot.test.ts -t \"B3a hot:\"",
+    "note": "TL-P4-42. Codex red, Codex implementation, Codex pass, Claude review. Packet 2026-10-10-b3a-hot-reduce-packet.md. implementer: codex.",
+    "review": "P4-88 PASS"
+  },
+  {
+    "id": "e2e-resize-helper",
+    "task": "p4-harness",
+    "category": "fix",
+    "passes": true,
+    "ui": false,
+    "what": "A cross-breakpoint resize in e2e waits for the target shell before reading the page (empty-note-help-flaky, option b).",
+    "steps": [
+      "e2e/empty-note-help.spec.ts passes 20/20 on fake phone; every cross-breakpoint resize uses e2e/viewport.ts resize()."
+    ],
+    "verify": "pnpm exec vitest run src/e2e-viewport.test.ts -t \"e2e viewport changes go through the shell-settling helper\"",
+    "note": "Lead ruling on empty-note-help-flaky (b). Diagnosis docs/harness/defects/2026-10-10-empty-note-help-flaky-diagnosis.md. Codex, non-escalated, then a Claude review. implementer: codex. Known green: the change is e2e-only, so done.sh cannot revert code; the diagnosis measured 3/20 fake-phone failures before, the coordinator 40/40 passes after (/tmp/erh-guard.log), and the guard test fails on a raw cross-breakpoint resize (its fixture).",
+    "review": "P4-89 PASS"
+  },
+  {
+    "id": "b2a-summary-format",
+    "task": "p4-b2",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "A note summary is written as a safe one-line YAML scalar and read back exactly (TL-P4-42 Q1, Q2).",
+    "steps": [
+      "serialize then parse gives back any one-line summary of at most 200 characters; old notes parse as before; validSummary refuses empty, multi-line, control and over-200 text."
+    ],
+    "verify": "",
+    "note": "TL-P4-42. Escalated: Codex red, Codex implementation, Codex pass, Claude review. Packet 2026-10-10-b2a-summary-format-packet.md. implementer: codex."
+  },
+  {
+    "id": "q1a-stored-answers",
+    "task": "p4-q1",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Questions carry stored file-to options and text answers; two rounds per inbox subject; the continuation keeps today's subject scope (TL-P4-44).",
+    "steps": [
+      "The prep's Q1a reds pass through runner main, answerQuestion, the Worker and the vault."
+    ],
+    "verify": "",
+    "note": "TL-P4-44 and addenda 1-2. Escalated; implementation after B1a integrates. Packet 2026-10-10-q1a-stored-answers-packet.md. implementer: codex."
   }
 ]

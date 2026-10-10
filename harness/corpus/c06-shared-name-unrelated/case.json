@@ -1,0 +1,25 @@
+{
+  "id": "c06-shared-name-unrelated",
+  "capability": "C06",
+  "title": "A shared name does not connect unrelated project notes",
+  "covers": "model",
+  "source": "new (C06 preparation; scripted intent proof pending)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "This is about the Cedar timber option for Garden shelter. It has no connection to Walking trip.",
+      "files": [
+        "Cedar timber update.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Projects/Garden shelter/Garden shelter.md",
+    "Projects/Garden shelter/Cedar.md",
+    "Projects/Walking trip/Walking trip.md",
+    "Projects/Walking trip/Cedar.md"
+  ]
+}

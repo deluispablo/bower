@@ -1,5 +1,5 @@
 import fc from 'fast-check';
-import { expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
 import { driveError, driveFailure } from '../drive/drive-api';
 import { seedFakeDrive } from '../fake/seed';
@@ -499,61 +499,142 @@ async function setup(): Promise<Real> {
   return r;
 }
 
-it.each([
+// Keep the original budgets and explicit seed; pin the two split batches for replay.
+const splitBatches = [
+  { label: 'random batch 1', seed: 427286, numRuns: 50 },
+  { label: 'random batch 2', seed: 427287, numRuns: 50 },
+];
+const batches = [
   { label: 'seeded', seed: 427285, numRuns: 30 },
-  ...Array.from({ length: 6 }, (_, index) => ({ label: `random batch ${index + 1}`, numRuns: 50 })),
-])('TL-P4-28(2): compensating Undo preserves FIFO and the Drive-only person-state oracle ($label)', async (batch) => {
-  const command = fc.oneof(
-    fc.record({ op: fc.constant('change' as const), kind: fc.constantFrom<Kind>('bin', 'move', 'add', 'remove'),
-      tab: fc.integer({ min: 0, max: 1 }), api: fc.boolean() }),
-    fc.record({ op: fc.constantFrom('undo' as const, 'race' as const, 'refused-inverse' as const, 'owner-waiting' as const), index: fc.nat(30),
-      tab: fc.integer({ min: 0, max: 1 }), api: fc.boolean() }),
-    fc.record({ op: fc.constant('send' as const), outcome: fc.constantFrom<Outcome>('landed', 'refused', 'unknown',
-      'offline', 'signin', 'permission'), tab: fc.integer({ min: 0, max: 1 }) }),
-  ).map((action) => new Command(action));
-  const property = fc.asyncProperty(fc.commands([command], { maxCommands: 24 }), fc.boolean(), async (commands, undoAll) => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    let r: Real | undefined;
-    try {
-      r = await setup();
-      const real = r;
-      const state = { model: { changes: [] } as Model, real };
-      // A mandatory coverage spine makes every run exercise each kind, outcome and production Undo site.
-      for (const kind of ['bin', 'move', 'add', 'remove'] as const) {
-        await new Command({ op: 'change', kind, tab: 0, api: true }).run(state.model, r);
-        await new Command({ op: 'undo', index: state.model.changes.length - 1, tab: 1, api: true }).run(state.model, r);
-      }
-      for (const outcome of ['offline', 'unknown', 'signin', 'permission', 'refused', 'landed'] as const) {
-        r.outcome = 'offline';
-        await new Command({ op: 'change', kind: 'add', tab: 0, api: false }).run(state.model, r);
-        const head = state.model.changes.length - 1;
-        await new Command({ op: 'send', outcome, tab: 1 }).run(state.model, r);
-        await new Command({ op: 'change', kind: 'add', tab: 1, api: false }).run(state.model, r);
-        r.outcome = 'landed';
-        await new Command({ op: 'undo', index: head, tab: 1, api: false }).run(state.model, r);
-      }
-      await new Command({ op: 'race', index: 0, tab: 0, api: false }).run(state.model, r);
-      // Addendum 4(2),(7): two tabs undo one sent original; both inverses must hide with it.
-      await new Command({ op: 'undo', index: 0, tab: 1, api: false }).run(state.model, r);
-      await fc.asyncModelRun(() => state, commands);
-      r.outcome = 'landed';
-      await transport(() => real.tabs[0].port().flush());
-      await inverseOutcomes(state.model, r);
-      for (let index = 0; index < state.model.changes.length; index++) {
-        const c = state.model.changes[index];
-        if (c && !undone(c) && (undoAll || r.refused.has(c.line.id))) await undo(state.model, r, index, index % 2, false);
-      }
-      await r.tabs[1].port().flush();
-      await observe(r);
-      await inverseOutcomes(state.model, r);
-      await invariants(r);
-      await oracle(state.model, r);
-      expect(localStorage.getItem(outboxKey(r.root))).toBeNull();
-    } finally {
-      r?.tabs.forEach((tab) => tab.dispose());
-      vi.restoreAllMocks();
-      vi.unstubAllGlobals();
+  ...splitBatches,
+  ...Array.from({ length: 4 }, (_, index) => ({ label: `random batch ${index + 3}`, numRuns: 50 })),
+];
+
+async function checkUndo(commands: Iterable<fc.AsyncCommand<Model, Real>>, undoAll: boolean): Promise<void> {
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  let r: Real | undefined;
+  try {
+    r = await setup();
+    const real = r;
+    const state = { model: { changes: [] } as Model, real };
+    // A mandatory coverage spine makes every run exercise each kind, outcome and production Undo site.
+    for (const kind of ['bin', 'move', 'add', 'remove'] as const) {
+      await new Command({ op: 'change', kind, tab: 0, api: true }).run(state.model, r);
+      await new Command({ op: 'undo', index: state.model.changes.length - 1, tab: 1, api: true }).run(state.model, r);
     }
-  });
-  await fc.assert(property, { ...batch, endOnFailure: true });
+    for (const outcome of ['offline', 'unknown', 'signin', 'permission', 'refused', 'landed'] as const) {
+      r.outcome = 'offline';
+      await new Command({ op: 'change', kind: 'add', tab: 0, api: false }).run(state.model, r);
+      const head = state.model.changes.length - 1;
+      await new Command({ op: 'send', outcome, tab: 1 }).run(state.model, r);
+      await new Command({ op: 'change', kind: 'add', tab: 1, api: false }).run(state.model, r);
+      r.outcome = 'landed';
+      await new Command({ op: 'undo', index: head, tab: 1, api: false }).run(state.model, r);
+    }
+    await new Command({ op: 'race', index: 0, tab: 0, api: false }).run(state.model, r);
+    // Addendum 4(2),(7): two tabs undo one sent original; both inverses must hide with it.
+    await new Command({ op: 'undo', index: 0, tab: 1, api: false }).run(state.model, r);
+    await fc.asyncModelRun(() => state, commands);
+    r.outcome = 'landed';
+    await transport(() => real.tabs[0].port().flush());
+    await inverseOutcomes(state.model, r);
+    for (let index = 0; index < state.model.changes.length; index++) {
+      const c = state.model.changes[index];
+      if (c && !undone(c) && (undoAll || r.refused.has(c.line.id))) await undo(state.model, r, index, index % 2, false);
+    }
+    await r.tabs[1].port().flush();
+    await observe(r);
+    await inverseOutcomes(state.model, r);
+    await invariants(r);
+    await oracle(state.model, r);
+    expect(localStorage.getItem(outboxKey(r.root))).toBeNull();
+  } finally {
+    r?.tabs.forEach((tab) => tab.dispose());
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  }
+}
+
+const command = fc.oneof(
+  fc.record({ op: fc.constant('change' as const), kind: fc.constantFrom<Kind>('bin', 'move', 'add', 'remove'),
+    tab: fc.integer({ min: 0, max: 1 }), api: fc.boolean() }),
+  fc.record({ op: fc.constantFrom('undo' as const, 'race' as const, 'refused-inverse' as const, 'owner-waiting' as const), index: fc.nat(30),
+    tab: fc.integer({ min: 0, max: 1 }), api: fc.boolean() }),
+  fc.record({ op: fc.constant('send' as const), outcome: fc.constantFrom<Outcome>('landed', 'refused', 'unknown',
+    'offline', 'signin', 'permission'), tab: fc.integer({ min: 0, max: 1 }) }),
+).map((action) => new Command(action));
+const property = fc.asyncProperty(fc.commands([command], { maxCommands: 24 }), fc.boolean(), checkUndo);
+const name = 'TL-P4-28(2): compensating Undo preserves FIFO and the Drive-only person-state oracle';
+
+it('replays undo-compensate-counterexample', async () => {
+  await fc.assert(property, { seed: 752195386, path: '49', numRuns: 1, endOnFailure: true });
 });
+
+async function assertPart<Ts>(property: fc.IAsyncProperty<Ts>, seed: number, part: { from: number; to: number }): Promise<void> {
+  // A root-only path resumes generation at that run index, including its original bias.
+  // Native reporting keeps the seed, absolute replay path and commands' toString().
+  await fc.assert(property, { seed, path: String(part.from - 1), numRuns: part.to - part.from + 1, endOnFailure: true });
+}
+
+it('a failing property part reports its seed, replay path and command case', async () => {
+  let caseText = '';
+  const standIn = fc.integer({ min: 0, max: 100 }).map((value) => [{
+    check: () => true,
+    run: async () => {},
+    toString: () => `stand-in(${value})`,
+  }]);
+  const failing = fc.asyncProperty(standIn, fc.boolean(), async (commands, undoAll) => {
+    await fc.asyncModelRun(() => ({ model: {}, real: {} }), commands);
+    caseText = fc.stringify([commands, undoAll]);
+    throw new Error('Deliberate part failure');
+  });
+  let failure: unknown;
+  try { await assertPart(failing, 427286, { from: 6, to: 10 }); }
+  catch (error) { failure = error; }
+  expect(failure).toBeInstanceOf(Error);
+  const message = (failure as Error).message;
+  expect(message).toContain('seed: 427286');
+  expect(message).toContain('path: "5"');
+  expect(message).toContain(`Counterexample: ${caseText}`);
+  expect(message).toContain('stand-in(');
+});
+
+it.each(splitBatches)('seeded property parts keep all 50 cases in order ($label, seed $seed)', async (batch) => {
+  const collect = (cases: string[]) => fc.asyncProperty(
+    fc.commands([command], { maxCommands: 24 }), fc.boolean(), async (commands, undoAll) => {
+      cases.push(fc.stringify([Array.from(commands, (command) => command.toString()), undoAll]));
+    },
+  );
+  const unsplit: string[] = [];
+  await fc.assert(collect(unsplit), { seed: batch.seed, numRuns: batch.numRuns, endOnFailure: true });
+  expect(unsplit).toHaveLength(50);
+  for (let repeat = 0; repeat < 2; repeat++) {
+    const sliced: string[] = [];
+    for (let from = 1; from <= batch.numRuns; from += 5) {
+      await assertPart(collect(sliced), batch.seed, { from, to: from + 4 });
+    }
+    expect(sliced).toHaveLength(50);
+    expect(sliced).toEqual(unsplit);
+  }
+});
+
+it.each(batches.filter((batch) => batch.label !== 'random batch 1' && batch.label !== 'random batch 2'))(
+  `${name} ($label)`, async (batch) => {
+    await fc.assert(property, { ...batch, endOnFailure: true });
+  },
+);
+
+for (const batch of splitBatches) {
+  describe(`${name} (${batch.label}, seed ${batch.seed})`, () => {
+    // Only partition run numbers at collection; filtered-out tests generate no cases.
+    const runNumbers = Array.from({ length: batch.numRuns }, (_, index) => index + 1);
+    const parts = Array.from({ length: runNumbers.length / 5 }, (_, index) => ({
+      from: index * 5 + 1, to: index * 5 + 5, runs: runNumbers.slice(index * 5, index * 5 + 5),
+    }));
+    expect(runNumbers).toHaveLength(batch.numRuns);
+    expect(parts.flatMap((part) => part.runs)).toHaveLength(batch.numRuns);
+    it.each(parts)('runs $from–$to', async (part) => {
+      await assertPart(property, batch.seed, part);
+    });
+  });
+}
