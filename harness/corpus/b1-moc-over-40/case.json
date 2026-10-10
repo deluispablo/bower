@@ -1,0 +1,22 @@
+{
+  "id": "b1-moc-over-40",
+  "capability": "C17",
+  "title": "Fold a 41-item MOC to its existing child maps without losing members",
+  "covers": "model",
+  "source": "new (TL-P4-38 addenda 1-2; TL-P4-39 §4 scale, §6.1)",
+  "scope": "instructions",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Refresh the index and the gardening map."
+    }
+  ],
+  "questions": [],
+  "bowerOwned": [
+    "Resources/Gardening/Gardening.md",
+    "Resources/Gardening/Soil.md",
+    "Resources/Gardening/Water.md"
+  ]
+}

@@ -6587,7 +6587,7 @@
     "id": "landing-csp",
     "task": "p4-production",
     "category": "security",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "The landing runs without unsafe-eval: fix-landing.mjs precompiles the exported page script, --check catches an export that still needs eval, and the /landing/* CSP drops unsafe-eval (P4-E landing-csp).",
     "steps": [
@@ -6595,7 +6595,9 @@
       "The landing loads under its CSP with no violation."
     ],
     "verify": "pnpm exec vitest run src/landing-csp.test.ts -t \"fix-landing removes the runtime eval from an export|the landing CSP has no unsafe-eval\"",
-    "note": "P4-E (TL-P4-31 ruling 2). Codex, then a Claude review and the designer. Packet 2026-10-10-landing-csp-packet.md. implementer: codex."
+    "note": "P4-E (TL-P4-31 ruling 2). Codex, then a Claude review and the designer. Packet 2026-10-10-landing-csp-packet.md. implementer: codex.",
+    "design": "verified",
+    "review": "P4-80 PASS"
   },
   {
     "id": "c5-test-margin",
@@ -6686,5 +6688,62 @@
     ],
     "verify": "pnpm exec vitest run src/data/contracts/c05-person-notes.test.ts src/data/contracts/c05-person-reports.test.ts src/features/tidy/c05-person-notes.test.tsx -t \"C05 person notes:\" && pnpm -C runner exec vitest run test/c05-person-notes.test.ts test/c05-incorporation.test.ts -t \"C05 person notes:|the C05 corpus cases score green with scripted proposals\" && bash scripts/e2e-both.sh e2e/c05-person-notes.spec.ts -g \"C05 person notes:\"",
     "note": "TL-P4-28 addendum 3; TL-P4-32; escalated (TL-P4-31): Codex red 0871c4f0, Codex implementation, Codex adversarial, Claude review, designer. Packet 2026-10-10-c05-person-notes-packet.md. implementer: codex."
+  },
+  {
+    "id": "create-named",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": true,
+    "ui": false,
+    "what": "Naming a new thing has one home: createNamed(folder, name) in file-actions, which NameSheet uses with no behaviour change (DEFECTS new-folder-first-letters, ruling (b), entry 1).",
+    "steps": [
+      "createNamed calls vault.create(folder, folder, name) once and reports a refusal with NameSheet's sentence.",
+      "NameSheet behaves as before."
+    ],
+    "verify": "pnpm exec vitest run src/features/files/file-actions.test.tsx -t \"createNamed creates once and reports NameSheet\" && bash scripts/e2e-both.sh e2e/v2-name-sheet.spec.ts -g \"the rename field spans the sheet and selects the name\"",
+    "note": "DEFECTS new-folder-first-letters (b). Codex, then a Claude review. Packet 2026-10-10-create-named-packet.md. implementer: codex.",
+    "review": "P4-81 PASS"
+  },
+  {
+    "id": "tree-name-first",
+    "task": "p4-consolidation",
+    "category": "fix",
+    "passes": false,
+    "ui": true,
+    "what": "The tree's New folder (row menu and header) opens the name box before any await and creates once with the name, so no typed letter is lost (DEFECTS new-folder-first-letters, ruling (b), entry 2).",
+    "steps": [
+      "Typing at once after New folder keeps every letter (20/20).",
+      "Escape makes nothing; blur with a name makes it once; a failed create keeps the name."
+    ],
+    "verify": "",
+    "note": "After create-named. Codex red, Codex implementation, Claude review, designer check once (rows signed 2026-10-10). Packet 2026-10-10-tree-name-first-packet.md. Closes create-name-speed."
+  },
+  {
+    "id": "b1b-ports",
+    "task": "p4-brain",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Drive ports for B1: a 4 KB prefix read (Range, tolerating 200) and the changes feed (start token, drained pages, parents lookup), with fake parity (TL-P4-41 Q3, Q10).",
+    "steps": [
+      "A prefix read returns at most 4,096 bytes on whole characters for 206 and 200 responses.",
+      "The feed drains every page to the new token; unknown ids resolve scope through parents."
+    ],
+    "verify": "",
+    "note": "Escalated (transport): Codex red, implementation, Codex pass, Claude review. Packet 2026-10-10-b1b-packet.md. Before B1a (lead)."
+  },
+  {
+    "id": "b1a-contract",
+    "task": "p4-brain",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "The B1 contract: MOC regions, the closed selection reply, retrieval.json with its cursor in one write, and the maintain effect (TL-P4-41 Q1, Q2, Q4, Q5).",
+    "steps": [
+      "A person's MOC is never edited except by the link rewrite.",
+      "maintain is idempotent, adds no rows for refused effects and is skipped on a done run."
+    ],
+    "verify": "",
+    "note": "Escalated (contracts): Codex red, implementation, Codex pass, Claude review. Packet 2026-10-10-b1a-packet.md. After c05-person-notes lands."
   }
 ]
