@@ -403,3 +403,5 @@ p4-corpus-answers,reviewer,claude,bower-reviewer,,1,49637,,,,,,7,0.6,BLOCK (P4-7
 shell-page-column,reviewer,claude,bower-reviewer,,1,41553,,,,,,5,0.4,BLOCK (P4-75: Sheet still not gated on placement),2026-10-10
 d-v2-24a,adversarial (round 2),codex,gpt-5-codex,high,1,1091840,1082619,,984576,9221,,,,1 Important,2026-10-10
 landing-csp,implementer,codex,gpt-5-codex,high,1,1012001,998901,,923008,13100,,,,delivered (packet error corrected),2026-10-10
+p4-corpus-answers,implementer (fix round 1),codex,gpt-5-codex,high,2,488962,480008,,427264,8954,,,,P4-74 findings fixed,2026-10-10
+p4-c08-prep,drafter,codex,gpt-5-codex,medium,1,950252,937583,,851072,12669,,,,3 cases + doc,2026-10-10

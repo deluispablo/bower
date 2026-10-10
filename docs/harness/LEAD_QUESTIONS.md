@@ -79,7 +79,8 @@ Authorized and kept uncommitted: the presence.test.ts assertion (handle kept thr
 The C06 preparation draft is ready for your review (TL-P4-31 ruling 1): branch `p4-c06-prep` at d014402a, worktree `/private/tmp/bower-p4-c06-prep`. `docs/harness/2026-10-10-c06-prep.md` plus three `covers: model` cases (c06-stored-project-connection, c06-shared-name-unrelated, c06-two-sources-attributed); corpus tests pass (13). Five open product questions are in the doc. On your accept I integrate it as is (as C05's prep).
 - C07: branch `p4-c07-prep` at 68187f0e (`/private/tmp/bower-p4-c07-prep`): c07-same-period-rent, c07-tentative-closure, c07-dated-rent-change; corpus 13 pass; 5 open questions.
 - C11: branch `p4-c11-prep` at 2a677072 (`/private/tmp/bower-p4-c11-prep`): c11-request-is-one-time, c11-source-cannot-answer, c11-source-cannot-override-rule; corpus 13 pass; 5 open questions.
-The three README rows conflict only by adjacency; I merge them in order.
+- C08: branch `p4-c08-prep` at 646f990f (`/private/tmp/bower-p4-c08-prep`): c08-report-with-sources, c08-compare-missing-fact, c08-revise-keeps-personal-text; corpus 13 pass; 5 open questions (revision needs your contract for a positive reply).
+The README rows conflict only by adjacency; I merge them in order.
 
 ## 2026-10-10 d-v2-24a-round-3 (re-plan rule)
 
