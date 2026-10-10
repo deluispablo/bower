@@ -372,4 +372,4 @@ c4-undo-confirm-in-place,implementer,codex,gpt-5-codex,medium,1,497456,492037,,4
 d-v2-24a,property-red,codex,gpt-5-codex,medium,3,257390,255147,,220416,2243,,,,spec nudge (addendum 4),2026-10-10
 c4-undo-confirm-in-place,reviewer,claude,bower-reviewer,,1,34880,,,,,,7,0.3,PASS (P4-69),2026-10-10
 d-v2-24a,reviewer,codex,gpt-5-codex,high,3,944899,936551,,833920,8348,,,,2 Important (to escalated),2026-10-10
-d-v2-24a,implementer,codex,gpt-5-codex,high,7,0,,,,,,,,tap fix (tokens in jsonl),2026-10-10
+d-v2-24a,implementer,codex,gpt-5-codex,high,7,832924,825951,,747392,6973,,,,tap fix (regex accommodation; reverted),2026-10-10
