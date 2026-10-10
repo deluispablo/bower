@@ -27,3 +27,19 @@ The round-2 finding (resize outside the gate) and the three earlier ones are not
 1. **Important — `src/bird/engine.ts:726`: Sparkles keep moving outside the settle gate.** `beginSettle()` suspends engine updates, but leaves `.bower-spark.go` running its independent 0.7 s CSS animation; `release()` also leaves it active. Reproduction: call `BowerLayer`’s `showOff()`, disable “Bower moves” immediately after the first sparkle, then complete the 0.6 s settle. The sparkle animation continues for approximately 0.1 s after release. Enabling reduced motion at the sparkle likewise fails to stop it immediately. Violates TL-P4-26 addendum 7(2)’s suspension of every other motion source and packet item 6’s still-frame and reduced-motion requirements.
 
 findings: 1
+
+## Pass round 4 (last blocking round) on 30f324ce..20925040, 2026-10-10
+
+verdict: BLOCK
+range: 30f324ce..20925040; settle: de1183df..20925040
+worktree: /private/tmp/bower-d-v2-24a
+
+**Blocking — src/bird/engine.ts:535:** Resizing during settlement causes a jump at release.
+Scenario: mount idle PoseBower at 100 px, disable moves, change size to 200 px after 18 frames, then finish settlement.
+Reproduced in memory: release clears the frozen 100 px dimensions; CSS immediately expands the drawing to 200 px.
+Rule: TL-P4-26 addendum 7(1,3), whole-output settlement and no jump at release.
+
+Sparkle is fixed and structurally covered. Other earlier regressions pass; no second mechanism found.
+Fresh Vitest run unavailable: the sandbox refused the `/tmp` log write.
+
+blocking: 1
