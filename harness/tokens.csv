@@ -397,3 +397,5 @@ p4-c06-prep,drafter,codex,gpt-5-codex,medium,1,873175,863581,,786176,9594,,,,3 c
 c5-codex-run,reviewer,claude,bower-reviewer,,1,36835,,,,,,5,0.7,PASS (P4-73),2026-10-10
 p4-c07-prep,drafter,codex,gpt-5-codex,medium,1,964301,952171,,874112,12130,,,,3 cases + doc,2026-10-10
 p4-corpus-answers,implementer,codex,gpt-5-codex,high,1,2738493,2714883,,2602496,23610,,,,delivered,2026-10-10
+p4-c11-prep,drafter,codex,gpt-5-codex,medium,1,1516829,1505021,,1398016,11808,,,,3 cases + doc,2026-10-10
+shell-page-column,implementer,codex,gpt-5-codex,high,1,2130647,2104851,,2013056,25796,,,,delivered,2026-10-10
