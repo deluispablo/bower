@@ -551,3 +551,4 @@ create-name-speed	29ba89050dff1f30	2026-10-10	known-green: red cda855c6 failed b
 undo-miss-refresh	02825c3ddfe978c8	2026-10-10	red (fixed in 925594be)
 q-ui-3	f97fe2d0a58740b9	2026-10-10	known-green: e2e red proven by the coordinator at the tests-only commit; fix 92c2801c
 new-note-escape	9a8d1dd5add25238	2026-10-10	known-green: re-proved after c5-remove-new-note; note committed
+c05-person-notes	c77af6e52a8db0e4	2026-10-10	red (fixed in 2f41450c)

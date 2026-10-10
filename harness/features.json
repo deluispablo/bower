@@ -6684,7 +6684,7 @@
     "id": "c05-person-notes",
     "task": "p4-semantic",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "Bower appends one sourced Timeline line to a note the person wrote when the request names it, with consent from the runner, the title grammar, an append clash retried, and two or more matches listed in Left as you wrote them without a question (TL-P4-32).",
     "steps": [
