@@ -6173,7 +6173,7 @@
     "id": "v2-name-sheet",
     "task": "p4-consolidation",
     "category": "ui",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "NameSheet uses the one field rule: full width, name selected, muted links line on rename, half-width 44 px buttons (d-v2-09); FolderScreen New note opens NameSheet and its own form is deleted.",
     "steps": [
