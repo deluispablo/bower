@@ -1,0 +1,41 @@
+{
+  "files": {
+    "present": [
+      "Projects/Flat hunt/Flat hunt.md",
+      "Projects/Flat hunt/Amber flat.md",
+      "Projects/Flat hunt/Birch flat.md",
+      "Projects/Flat hunt/Cedar flat.md",
+      "Projects/Flat hunt/Alex flat.md"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "unchanged": [
+    "Rules.md",
+    "Projects/Flat hunt/Flat hunt.md",
+    "Projects/Flat hunt/Alex flat.md"
+  ],
+  "notes": [
+    {
+      "path": "Projects/Flat hunt/Amber flat.md",
+      "contains": [
+        "price_per_area:",
+        "days_left:"
+      ],
+      "excludes": [
+        "price_per_area: 123 EUR"
+      ]
+    }
+  ],
+  "report": {
+    "filed": 0,
+    "created": [],
+    "updated": [
+      "Projects/Flat hunt/Amber flat.md",
+      "Projects/Flat hunt/Birch flat.md",
+      "Projects/Flat hunt/Cedar flat.md"
+    ],
+    "questionsExactly": 0
+  }
+}

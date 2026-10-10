@@ -1,0 +1,42 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [],
+    "views": [
+      {
+        "requestId": "$request:change-1",
+        "home": {
+          "kind": "moc",
+          "fileId": "$note:Projects/Job hunt/Job hunt.md"
+        },
+        "mode": "install",
+        "definition": {
+          "v": 1,
+          "id": "active-offer-skills",
+          "kind": "aggregate",
+          "set": {
+            "type": "offer",
+            "folderId": "$folder:Projects/Job hunt",
+            "recursive": true,
+            "where": {
+              "op": "eq",
+              "property": "status",
+              "value": "active"
+            }
+          },
+          "groupBy": [],
+          "measures": [
+            {
+              "id": "skills",
+              "op": "top",
+              "property": "skills",
+              "limit": 3,
+              "count": "notes"
+            }
+          ]
+        }
+      }
+    ]
+  }
+]

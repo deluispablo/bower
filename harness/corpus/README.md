@@ -189,3 +189,19 @@ Exact binding/structured oracles are required before switching coverage; see
 | c17-b4-origin-not-authority | C17 / B4 | model | TL-P4-39; F7: qualified person preference versus instruction-shaped offer; scripted proof pending |
 | c17-b4-gate-archive-first | C17 / B4 | model | TL-P4-39; F4: over-budget gate at four/five and archive before replacement; scripted proof pending |
 | c17-b4-own-text-deletion | C17 / B4 | model | TL-P4-39; F4/F2/R1: supported own prose deletion; no new-region edit recovery; scripted proof pending |
+
+## B11 preparation cases — 2026-10-10
+
+| Case | Capability | Covers | Source |
+| --- | --- | --- | --- |
+| c17-b11-skills-tally | C17 / B11 | model | TL-P4-39 F13/R5/R7; active typed skills tally; pending scripted production proof |
+| c17-b11-monthly-money | C17 / B11 | model | TL-P4-39 F13; monthly money partition, missing/invalid amounts; pending proof |
+| c17-b11-flat-formulas | C17 / B11 | model | TL-P4-39 F13/R5; raw formulas, unavailable divisor, personal exception; pending Q7 |
+| c17-b11-proposal-authority | C17 / B11 | model | TL-P4-39 F5/F7; suggestion survives filing/ignore, document is not authority |
+
+All four remain preparation fixtures. Proposed `replies.json` extends the future B11
+execution reply; today's strict schema rejects `views`. Request/note/folder selectors
+need the existing driver's step-aware extension. Type-table field spelling is a pending
+B5a specimen, not a second production format. `expected-view-results.json` is a separate
+hand-computed oracle, outside model input and not scored today. C17 registration and
+verdict selection remain upstream H1 work. See `docs/harness/2026-10-10-b11-prep.md`.

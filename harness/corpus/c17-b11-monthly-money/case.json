@@ -1,0 +1,26 @@
+{
+  "id": "c17-b11-monthly-money",
+  "capability": "C17",
+  "title": "Monthly money totals keep currencies separate and count unavailable amounts",
+  "covers": "model",
+  "source": "new; TL-P4-39 B11, F13/R5/R7; TL-P4-41/42/44/45/47; pending contract specimen",
+  "scope": "instructions",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Save a monthly spending view in Money, grouped by category, with separate totals for each currency and missing amounts counted."
+    }
+  ],
+  "questions": [],
+  "bowerOwned": [
+    "Rules.md",
+    "Areas/Money/Money.md",
+    "Areas/Money/Mulch.md",
+    "Areas/Money/Seeds.md",
+    "Areas/Money/Tool.md",
+    "Areas/Money/Missing total.md",
+    "Areas/Money/Unknown currency.md"
+  ]
+}

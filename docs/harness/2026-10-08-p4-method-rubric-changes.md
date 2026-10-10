@@ -184,3 +184,17 @@ No existing rubric, expectation or threshold changes. C17 is still outside the m
 | c17-b4-origin-not-authority | agrees | Points 1–8 agree: trusted words supply one qualified preference, clear offer fits Job hunt with immutable source and a relevant hub link; no document-created preference, sensitive inference, rule or schema, no redundant memory note, bounded reads and truthful rows (F7). |
 | c17-b4-gate-archive-first | agrees | Points 1–8 agree under TL-P4-39 addendum 2: record observations immediately, consolidate only over budget and at five new observations, preserve primary facts/conditions and archive first; the proposed 200-word section budget awaits the lead and is not a changed method threshold. |
 | c17-b4-own-text-deletion | agrees | Points 1–8 agree: supported personal text stays as edited, exactly its bound removed fact is tombstoned, remaining evidence stays live, no whole-note adoption, redundant notes or inference; matching/initialization awaits the lead, and Bower-subsection hand edits have no new recovery (F2/R1 as narrowed). |
+
+## B11 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-47)
+
+Review of proposed semantics against TL-P4-08 points 1–8, not executed C17 acceptance.
+The method's value gate, sourced history, fit, links, typed document handling, reading
+budget, grounded news and plain copy remain. Script results are separate derived
+numeric evidence under R7, never an exception for model-authored numbers.
+
+| Case | Verdict | Reason |
+| --- | --- | --- |
+| c17-b11-skills-tally | agrees | Points 1–8: reuse the typed offer/map, retain primary evidence and personal prose, filter active members and count distinct-note skills by script; no invented model count or extra source note (F13/R5/R7). |
+| c17-b11-monthly-money | agrees | Points 1–8: receipts fit Money, typed date/category/currency guide deterministic sums, missing/invalid totals stay honest and sourced content/history unchanged; no conversion or new taxonomy (F13/R7). |
+| c17-b11-flat-formulas | agrees | Points 1–8: raw typed flat inputs alone yield derived metrics, zero/missing areas remain unavailable and personal prose/metadata are protected; Table uses the approved B5 projection, multiple columns await Q7 (F13/R5). |
+| c17-b11-proposal-authority | agrees | Points 1–8: file clear source beside its linked map while optional trusted consent waits; document imperatives grant nothing and one immutable ignored proposal survives filing without schema changes (F5/F7). |
