@@ -6,6 +6,7 @@ How work is done here: `docs/harness/METHOD.md`. Where it stands and what comes 
 - `progress.md`: one dated line per session or feature.
 - `init.sh`: assigned writers install, run every check gate and print the next open entry in their exclusively owned checkout; read-only roles use a prepared target.
 - `briefs/`: assignments for coordinator, implementer, evaluator and reviewer, in either tool.
+- `codex-run.sh`: runs one local Codex delivery, scans and commits its plan, gates it and records its card and usage.
 - `.agents/skills/bower-*`: canonical session/implement/review/evaluate skills; `.claude/skills/bower-*` are committed links to them.
 - `docs/harness/ACTIVE.md`: current integration assignments and resource reservations; `COORDINATION.md` defines worktree and closure flow.
 
