@@ -1,6 +1,6 @@
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
-import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { usePiles, useRun, useTree } from '@/data/provider';
 import { isRunning } from '@/features/tidy/run-words';
@@ -8,12 +8,15 @@ import { displayName, findNode, isRoot, parentOf, thingName, visibleRows, type S
 import type { TreeNode } from '@/data/types';
 import { countThings, folderCount } from '@/data/piles';
 import { ancestors, useUi } from '@/app/ui-store';
-import { crumbs, decodeSplat, paraColor } from '@/app/paths';
+import { decodeSplat, paraColor } from '@/app/paths';
 import { IconButton } from '@/ui/Button';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { menuCls } from '@/ui/menu';
 import { Sheet } from '@/ui/Sheet';
 import { useFileActions } from './file-actions';
+import { NameField } from './NameForm';
+import { nameRules } from './name-rules';
+import { openerNow, returnFocusTo } from '@/ui/focus';
 import { toast } from '@/ui/toast';
 import { useIsDesktop } from '@/ui/media';
 import s from './explorer.module.css';
@@ -81,11 +84,6 @@ export function Explorer({ variant }: Props) {
   const act = useFileActions();
   const binOrAsk = useBinOrAsk();
   const routePath = useRoutePath();
-  /** A new folder says where it was made once named. */
-  const welcomeNew = (path: string): void => {
-    const folder = parentOf(path);
-    toast(`New folder in ${folder ? crumbs(folder) : 'your Bower folder'}`);
-  };
   const [focus, setFocus] = useState<string | null>(null);
   const [kb, setKb] = useState(false);
   const [menuNode, setMenuNode] = useState<TreeNode | null>(null);
@@ -95,6 +93,8 @@ export function Explorer({ variant }: Props) {
   const dragPath = useRef<string | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const treeRef = useRef<HTMLDivElement>(null);
+  const nameOpener = useRef<HTMLElement | null>(null);
+  const pending = desktop && ui.naming && 'folder' in ui.naming && ui.naming.inline ? ui.naming : null;
   const press = useRef<{ t: ReturnType<typeof setTimeout>; fired: boolean } | null>(null);
 
   // Auto-reveal: the open note's folders open and its row is selected.
@@ -314,7 +314,7 @@ export function Explorer({ variant }: Props) {
   const renderRow = (node: TreeNode, level: number): ReactNode => {
     const folder = node.type === 'folder';
     // An empty folder has nothing to show open: it reads closed, with its 0, like every empty folder.
-    const isOpen = folder && ui.open.has(node.path) && !!node.children?.length;
+    const isOpen = folder && ui.open.has(node.path) && (!!node.children?.length || pending?.folder === node.path);
     const root = isRoot(node.path) || (level === 0 && folder);
     const selected = ui.selected === node.path;
     const focused = kb && current === node.path;
@@ -387,31 +387,21 @@ export function Explorer({ variant }: Props) {
           <RenameInput
             node={node}
             draft={draft}
-            onDone={async (name, typed, how) => {
+            onDone={async (name, how) => {
               ui.setRenaming(null);
-              const made = ui.justMade === node.path;
-              if (name === null && made && typed === null) {
-                // Escape on a brand-new folder: it was never wanted.
-                ui.setJustMade(null);
-                await act.discard(node.path);
-              } else if (name === null || (how === 'blur' && name === draft)) {
+              if (name === null || (how === 'blur' && name === draft)) {
                 // Escape, or clicking away from a name already refused: cancel, quietly.
-                ui.setJustMade(null);
                 setDraft(null);
-                if (made && typed !== null) welcomeNew(node.path);
               } else {
-                let partial = false;
-                const to = await act.rename(node.path, name, { quiet: made, onPartial: () => { partial = true; } });
+                const to = await act.rename(node.path, name);
                 if (to) {
                   setFocus(to);
-                  ui.setJustMade(null);
                   setDraft(null);
-                  if (made && !partial) welcomeNew(to);
                 } else if (how === 'enter') {
                   // Refused on Enter: back in the box with what you typed.
                   setDraft(name);
                   ui.setRenaming(node.path);
-                } else ui.setJustMade(null);
+                }
               }
               treeRef.current?.focus();
             }}
@@ -428,7 +418,10 @@ export function Explorer({ variant }: Props) {
 
   const header = (
     <div className={s.nav}>
-      <IconButton small label="New folder" onClick={() => void act.create(targetFolder())}>
+      <IconButton small label="New folder" onClick={() => {
+        nameOpener.current = openerNow();
+        act.askFolderName(targetFolder(), desktop);
+      }}>
         <Icon name="newFolder" size={18} />
       </IconButton>
       <Dropdown.Root>
@@ -503,7 +496,25 @@ export function Explorer({ variant }: Props) {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropOn(null);
       }}
     >
-      {loading && !tree ? <TreeSkeleton /> : rows.map((r) => renderRow(r.node, r.level))}
+      {loading && !tree ? <TreeSkeleton /> : rows.map((r) => <Fragment key={r.node.path}>
+        {renderRow(r.node, r.level)}
+        {pending?.folder === r.node.path && <PendingFolder
+          key={JSON.stringify(pending)}
+          folder={r.node}
+          level={r.level + 1}
+          onCancel={() => {
+            ui.setNaming(null);
+            returnFocusTo(nameOpener.current);
+          }}
+          onMade={(path) => {
+            if (useUi.getState().naming !== pending) return;
+            ui.setNaming(null);
+            setFocus(path);
+            setKb(true);
+            returnFocusTo(treeRef.current);
+          }}
+        />}
+      </Fragment>)}
     </div>
   );
 
@@ -518,13 +529,17 @@ export function Explorer({ variant }: Props) {
             setMenuNode(null);
             // The keyboard goes back to the tree at once, so a key pressed right after Escape reaches it.
             // A name box the menu opened keeps it; a sheet takes it from the tree and gives it back (Sheet remembers its opener).
-            if (!useUi.getState().renaming) treeRef.current?.focus();
+            const naming = useUi.getState().naming;
+            if (!useUi.getState().renaming && !(naming && 'folder' in naming && naming.inline)) treeRef.current?.focus();
           }}
         >
           <ContextMenu.Trigger asChild>{treeEl}</ContextMenu.Trigger>
           <ContextMenu.Portal>
             <ContextMenu.Content className={menuCls.content} hidden={!menuNode} onCloseAutoFocus={(e) => e.preventDefault()}>
-              {menuNode && <NodeMenuItems node={menuNode} Item={ContextMenu.Item} Separator={ContextMenu.Separator} beforeRun={() => treeRef.current?.focus()} />}
+              {menuNode && <NodeMenuItems node={menuNode} Item={ContextMenu.Item} Separator={ContextMenu.Separator} beforeRun={() => {
+                treeRef.current?.focus();
+                nameOpener.current = openerNow();
+              }} />}
             </ContextMenu.Content>
           </ContextMenu.Portal>
         </ContextMenu.Root>
@@ -538,15 +553,86 @@ export function Explorer({ variant }: Props) {
   );
 }
 
-function RenameInput({ node, draft, onDone }: { node: TreeNode; draft: string | null; onDone: (name: string | null, typed: string | null, how: 'enter' | 'blur' | 'escape') => void }) {
+/** A local row until its one named create succeeds; no Drive write is needed to start typing. */
+function PendingFolder({ folder, level, onCancel, onMade }: {
+  folder: TreeNode;
+  level: number;
+  onCancel: () => void;
+  onMade: (path: string) => void;
+}) {
+  const act = useFileActions();
+  const [name, setName] = useState('');
+  const [failure, setFailure] = useState<string | null>(null);
+  const writing = useRef(false);
+  const finished = useRef(false);
+  const finish = (how: 'enter' | 'blur' | 'escape'): void => {
+    if (writing.current || finished.current) return;
+    const safe = nameRules(name).name;
+    if (how === 'escape' || (!safe && how === 'blur')) {
+      finished.current = true;
+      onCancel();
+      return;
+    }
+    if (!safe) return;
+    // A refused name stays until an explicit retry; moving focus must not repeat the write.
+    if (how === 'blur' && failure) return;
+    writing.current = true;
+    setFailure(null);
+    void act.createNamed(folder.path, safe, {
+      made: (path) => {
+        finished.current = true;
+        onMade(path);
+      },
+      failed: (sentence) => {
+        writing.current = false;
+        setFailure(sentence);
+      },
+    });
+  };
+  return <div
+    role="treeitem"
+    aria-level={level + 1}
+    aria-selected={false}
+    className={`${s.row} ${s.folder} ${s.pending}`}
+    style={{ paddingLeft: 6 + level * 16 }}
+  >
+    {Array.from({ length: level }, (_, k) => <span key={k} className={s.guide} style={{ left: 15 + k * 16 }} />)}
+    <span className={s.lead}><Icon name="folder" size={15} /></span>
+    <div className={s.pendingName}>
+      <NameField
+        className={s.rename}
+        inBox
+        aria-label={`New folder in ${shownFolderName(folder.path, folder.name)}`}
+        placeholder="Name"
+        autoFocus
+        value={name}
+        failure={failure}
+        onChange={(e) => {
+          setName(e.target.value);
+          setFailure(null);
+        }}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter' || e.key === 'Escape') {
+            e.preventDefault();
+            finish(e.key === 'Enter' ? 'enter' : 'escape');
+          }
+        }}
+        onBlur={() => finish('blur')}
+      />
+    </div>
+  </div>;
+}
+
+function RenameInput({ node, draft, onDone }: { node: TreeNode; draft: string | null; onDone: (name: string | null, how: 'enter' | 'blur' | 'escape') => void }) {
   const initial = node.type === 'folder' ? node.name : thingName(node.name);
   const [v, setV] = useState(draft ?? initial);
   const done = useRef(false);
-  /** `typed` is null when the person pressed Escape. */
   const finish = (name: string | null, how: 'enter' | 'blur' | 'escape'): void => {
     if (done.current) return;
     done.current = true;
-    onDone(name === initial ? null : name, how === 'escape' ? null : v, how);
+    onDone(name === initial ? null : name, how);
   };
   return (
     <input
@@ -571,7 +657,7 @@ type ItemComp = typeof ContextMenu.Item;
 type SepComp = typeof ContextMenu.Separator;
 
 /** The menu of a row; the same items on right-click and in the phone sheet. */
-export function useNodeMenu(node: TreeNode) {
+export function useNodeMenu(node: TreeNode, inline?: boolean) {
   const wide = useIsDesktop();
   const act = useFileActions();
   const binOrAsk = useBinOrAsk();
@@ -597,7 +683,7 @@ export function useNodeMenu(node: TreeNode) {
   }
   if (folder) {
     items.push({ key: 'view', label: 'Open as a list or table', icon: 'table', run: () => act.open(node) });
-    items.push({ key: 'folder', label: 'New folder', icon: 'newFolder', run: () => void act.create(node.path) });
+    items.push({ key: 'folder', label: 'New folder', icon: 'newFolder', run: () => act.askFolderName(node.path, inline ?? wide) });
     items.push('sep');
   } else {
     items.push({ key: 'tab', label: 'Open in a new tab', icon: 'add', run: () => act.open(node, true) });
@@ -626,7 +712,7 @@ export function useNodeMenu(node: TreeNode) {
 }
 
 function NodeMenuItems({ node, Item, Separator, beforeRun }: { node: TreeNode; Item: ItemComp; Separator: SepComp; beforeRun?: () => void }) {
-  const items = useNodeMenu(node);
+  const items = useNodeMenu(node, true);
   return (
     <>
       {items.map((it, i) =>
