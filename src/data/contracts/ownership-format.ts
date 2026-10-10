@@ -26,6 +26,8 @@ export interface Layout {
   readonly current: ByteSpan | null;
   readonly timeline: ByteSpan | null;
   readonly bowerNote: ByteSpan | null;
+  /** Exact legacy MOC sections; admission remains the ownership author's responsibility. */
+  readonly moc?: Readonly<Partial<Record<MocRegion, ByteSpan>>>;
 }
 export type OwnershipResult =
   | { readonly status: 'invalid'; readonly reason: OwnershipFailure }
@@ -187,7 +189,21 @@ function legacyNote(bytes: Uint8Array, raw: string): OwnershipResult {
   const rawByteAt = (offset: number): number => byteAt[offset] ?? 0;
   const span = (from: number, to: number): ByteSpan => ({ start: rawByteAt(from), end: rawByteAt(to) });
   const personal = span(start, end);
+  const headings: Line[] = [];
+  let fence: Fence | null = null;
+  for (const line of lines(bytes, { start: rawByteAt(frontEnd), end: bytes.length })) {
+    const previous = fence;
+    fence = fenceAfter(line.text, fence);
+    if (!previous && !fence && /^#{1,6}\s/.test(line.text)) headings.push(line);
+  }
+  const overview = headings.filter((line) => line.text === '## Overview');
+  const members = headings.filter((line) => line.text === '## Notes');
+  const section = (line: Line): ByteSpan => ({ start: line.start, end: headings.find((next) => next.start > line.start)?.start ?? bytes.length });
+  const moc = overview.length === 1 && members.length === 1 && overview[0] && members[0]
+    && section(overview[0]).end === members[0].start
+    ? { 'moc-overview': section(overview[0]), 'moc-figures': { start: members[0].start, end: members[0].start }, 'moc-members': section(members[0]) } : undefined;
   const layout: Layout = {
+    ...(moc ? { moc } : {}),
     front: span(4, close + 1),
     frontEnd: rawByteAt(frontEnd),
     current: current && span(current.start, current.end),
@@ -245,7 +261,8 @@ export function parseOwnership(bytes: Uint8Array): OwnershipResult {
       const owner = owners[next];
       if (owner && line.text === `<!-- bower:ownership/2 begin ${owner} -->`) {
         active = owner; start = line.after;
-      } else if (line.text.trim()) return damaged();
+      } else if (line.text.startsWith('<!-- bower:ownership')) return damaged();
+      // Outside bytes are opaque and grant no payload or task authority. Never interpret their Markdown.
     }
   }
   const { current, personal, timeline, 'bower-note': bowerNote } = spans;
@@ -265,8 +282,10 @@ export function togglePersonalTask(bytes: Uint8Array, request: TaskRequest): Tas
   const task = Number.isInteger(request.index) && request.index >= 0 ? parsed.tasks.find((t) => t.index === request.index) : undefined;
   if (!task) return { kind: 'refused', reason: 'task-not-found' };
   if (task.label !== request.label || task.done !== request.previousDone) return { kind: 'refused', reason: 'task-changed' };
-  // A Uint8Array subclass may implement slice as a shared view (for example Buffer).
-  const out = new Uint8Array(bytes);
+  // Ordinary byte arrays keep their realm. Subclasses normalize to an independent byte array,
+  // even when their slice override returns a shared view (for example Buffer).
+  const out: Uint8Array = Object.hasOwn(Object.getPrototypeOf(bytes), 'BYTES_PER_ELEMENT')
+    ? Uint8Array.prototype.slice.call(bytes) : new Uint8Array(bytes);
   out[task.checkboxByte] = request.done ? 120 : 32;
   return { kind: 'changed', bytes: out, label: task.label, done: request.done };
 }

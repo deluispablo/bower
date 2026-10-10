@@ -1,49 +1,28 @@
 /** Derived maintenance uses the manifest, its settled outcomes and the ordinary fenced effects. */
 import { sha256Hex } from '../../src/data/contracts/hashes';
-import type { Checkpoint } from '../../src/data/contracts/run-checkpoint';
-import { parseNote } from '../../src/data/contracts/note-format';
-import { parseOwnership } from '../../src/data/contracts/ownership-format';
-import type { EffectV2, Maintain, OperationV2, RunnerWrite, SeenFile } from '../../src/data/contracts/run-manifest';
+import type { EffectV2, Maintain, MaintenanceNote, SeenFile } from '../../src/data/contracts/run-manifest';
 import type { DriveFile } from '../../src/data/drive/drive-api';
-import { driveEffects, type Effects } from '../../src/data/spine/engine';
+import { driveEffects, type Effects, type Settled } from '../../src/data/spine/engine';
+import { refreshed, retrievalSummary } from '../../src/data/spine/report';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { happened, reserveFor, stampOf, type Holder } from '../../src/data/spine/write-once';
 import { BowerError } from '../../src/data/types';
 import { RUNNER_WRITES, SYSTEM, isHidden, isRunnerFile, type RetrievalFile } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import type { RunnerDrive } from './drive';
+import { leafCount, mocEdit, mocMembership, mocSnapshot, noteLinks, type Notes } from './moc';
 
 const seen = (f: DriveFile): SeenFile => ({ fileId: f.id, name: f.name, parents: f.parents, folder: f.folder, modifiedTime: f.modifiedTime });
 const file = (f: SeenFile): DriveFile => ({ id: f.fileId, name: f.name, parents: f.parents, folder: f.folder, modifiedTime: f.modifiedTime, createdTime: f.modifiedTime });
 const unavailable = (): BowerError => new BowerError('unknown', 'Bower could not update its notes. It will try again.');
-type RetrievalState = RetrievalFile & { listing?: DriveFile[] };
-
-function retrievalSummary(path: string, text: string): string {
-  // Validate full ownership framing, while only indexing front matter covered by Q3's prefix.
-  const note = parseNote(path, text);
-  const ownership = parseOwnership(new TextEncoder().encode(text));
-  return ownership.status !== 'invalid' && ownership.layout.frontEnd <= 4096 ? note.summary || '(no summary)' : '(no summary)';
-}
+type RetrievalState = Omit<RetrievalFile, 'files'> & { files: Notes; listing?: DriveFile[] };
 
 /** Q8: stable folder traversal and shortest unique suffixes, without exposing Drive ids. */
-function projectIndex(files: RetrievalFile['files']): string {
+function projectIndex(files: Notes): string {
   const notes = Object.values(files).filter((f) => !isHidden(f.path));
-  const suffixes = new Map<string, number>();
-  for (const note of notes) {
-    const parts = note.path.replace(/\.md$/, '').split('/');
-    for (let i = 0; i < parts.length; i++) {
-      const suffix = parts.slice(i).join('/');
-      suffixes.set(suffix, (suffixes.get(suffix) ?? 0) + 1);
-    }
-  }
-  const link = (path: string): string => {
-    const parts = path.replace(/\.md$/, '').split('/');
-    for (let n = 1; n < parts.length; n++) {
-      const suffix = parts.slice(-n).join('/');
-      if (suffixes.get(suffix) === 1) return suffix;
-    }
-    return parts.join('/');
-  };
+  const links = noteLinks(files);
+  const ids = new Map(Object.entries(files).map(([id, f]) => [f.path, id]));
+  const members = mocMembership(files);
   const direct = new Map<string, typeof notes>();
   const children = new Map<string, Set<string>>();
   for (const note of notes) {
@@ -65,8 +44,14 @@ function projectIndex(files: RetrievalFile['files']): string {
   const chunks: string[] = [];
   const visit = (folder: string): void => {
     const heading = folder ? `${'#'.repeat(Math.min(6, folder.split('/').length + 1))} ${folder.split('/').at(-1)}\n\n` : '';
+    const map = (direct.get(folder) ?? []).find((f) => f.moc && f.path.replace(/\.md$/, '').split('/').at(-1) === folder.split('/').at(-1));
+    if (map) {
+      const id = ids.get(map.path) ?? '';
+      chunks.push(`${heading}→ [[${links.get(id)}]] (${leafCount(id, members)})\n\n`);
+      return;
+    }
     const rows = (direct.get(folder) ?? []).sort((a, b) => a.path.localeCompare(b.path))
-      .map((f) => `- [[${link(f.path)}]] — ${f.summary}\n`).join('');
+      .map((f) => `- [[${links.get(ids.get(f.path) ?? '')}]] — ${f.summary}\n`).join('');
     if (heading || rows) chunks.push(heading + rows + (rows ? '\n' : ''));
     const subfolders = [...(children.get(folder) ?? [])].sort((a, b) => {
       if (!folder) {
@@ -85,7 +70,7 @@ function projectIndex(files: RetrievalFile['files']): string {
     if (text.length + (chunks[i]?.length ?? 0) + (i + 1 < chunks.length ? cut.length : 0) > 32000) return text + cut;
     text += chunks[i];
   }
-  return text;
+  return text.replace(/\n+$/, '\n');
 }
 
 /** An ignored-feed cursor advance is an ordinary manifest write, never maintenance. */
@@ -181,7 +166,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
   if (state && ix.file(SYSTEM.index) && !changes.length && !manifest.operations.length) {
     return old ? cursorOnly(drive, manifest, old, state, cursor) : manifest;
   }
-  const snapshot: RetrievalFile['files'] = {};
+  const snapshot: Notes = {};
   for (const { path, file: f } of notes) {
     const cached = state?.files[f.id];
     let text: string | null;
@@ -194,8 +179,17 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
       drop(f.id);
       continue;
     }
-    snapshot[f.id] = cached?.version === f.modifiedTime ? { ...cached, path }
+    snapshot[f.id] = cached?.version === f.modifiedTime ? { path, version: cached.version, summary: cached.summary, coverage: cached.coverage }
       : { path, version: f.modifiedTime, summary: text === null ? '(no summary)' : retrievalSummary(path, text), coverage: { kind: 'prefix', bytes: 4096 } };
+    // Optional metadata in an old retrieval file is never ownership authority: derive it again from its bytes.
+    const moc = text === null ? typeof cached?.moc?.text === 'string' && mocSnapshot(cached.moc.text) : mocSnapshot(text);
+    if (moc) snapshot[f.id] = { ...snapshot[f.id] as MaintenanceNote, moc,
+      ...(text === null && Array.isArray(cached?.members) && cached.members.every((id) => typeof id === 'string')
+        ? { members: [...new Set(cached.members)] } : {}) };
+  }
+  for (const [id, members] of mocMembership(snapshot)) {
+    const note = snapshot[id];
+    if (note) note.members = members;
   }
   listing = [...files.values()];
   const own = ix.file(SYSTEM.dir);
@@ -212,6 +206,14 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
     targets.push({ path, fileId: before?.id ?? holders[missing.indexOf(path)]?.reserved ?? '', parentId: own.id,
       ...(before && bytes ? { beforeContent: { encoding: 'utf8', size: bytes.length, sha256: await sha256Hex(bytes), provenance: drive.provenance, observedModifiedTime: before.modifiedTime } } : {}) });
   }
+  // MOC inputs contain the exact original bytes and every owned region; no whole-note permission is inferred.
+  for (const [id, note] of Object.entries(snapshot)) {
+    const before = files.get(id);
+    if (!note.moc || !before || before.parents.length !== 1) continue;
+    const bytes = new TextEncoder().encode(note.moc.text);
+    targets.splice(targets.length - 1, 0, { path: note.path, fileId: id, parentId: before.parents[0] ?? '',
+      beforeContent: { encoding: 'utf8', size: bytes.length, sha256: await sha256Hex(bytes), provenance: drive.provenance, observedModifiedTime: before.modifiedTime } });
+  }
   const inputs: Maintain['inputs'] = { folderId: rootId, account: state?.account ?? rootId, cursor,
     changes: [...new Set(changes)], operationIds: manifest.operations.map((o) => o.operationId), targets,
     snapshot, listing: listing.map(seen) };
@@ -221,41 +223,15 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
   return { ...manifest, v: 2, operations: [...manifest.operations, { ordinal, operationId, dependsOn: [], effect }] };
 }
 
-/** Whole projections from frozen input versions plus successful settled effects; refused effects add nothing. */
-function refreshed(op: OperationV2, head: Checkpoint, manifest: RunManifest): RetrievalState {
-  if (op.effect.kind !== 'maintain') throw unavailable();
-  const inputs = op.effect.inputs;
-  let files: RetrievalFile['files'] = structuredClone(inputs.snapshot ?? {});
-  const listing = (inputs.listing ?? []).map(file);
-  const ix = VaultIndex.build(inputs.folderId, listing);
-  for (const outcome of head.outcomes) {
-    if (outcome.state !== 'applied' || !inputs.operationIds.includes(outcome.operationId)) continue;
-    const effect = manifest.operations.find((o) => o.operationId === outcome.operationId)?.effect;
-    if (!effect) continue;
-    if (effect.kind === 'bin') ix.drop(effect.before.fileId);
-    else ix.put({ ...file(outcome.evidence.file), ...(effect.kind === 'create-text' ? { mimeType: 'text/markdown' } : {}) });
-    const f = outcome.evidence.file;
-    if (effect.kind === 'create-text' || effect.kind === 'edit-text') {
-      const path = ix.pathOf(f.fileId);
-      if (path && !isHidden(path) && path.endsWith('.md') && path.split('/')[0] !== 'Inbox') files[f.fileId] = {
-        path, version: f.modifiedTime, summary: retrievalSummary(path, effect.text), coverage: { kind: 'prefix', bytes: 4096 },
-      };
-    }
-  }
-  files = Object.fromEntries(Object.entries(files).flatMap(([id, note]) => {
-    const path = ix.pathOf(id);
-    return !path || isHidden(path) || path.split('/')[0] === 'Inbox' ? []
-      : [[id, { ...note, path, version: ix.byId(id)?.modifiedTime ?? note.version }]];
-  }));
-  const ancestry = [...ix.entries()].flatMap(([path]) => {
-    const f = ix.file(path);
-    return f && (f.folder || files[f.id]) && path.split('/')[0] !== 'Inbox' ? [f] : [];
-  });
-  return { v: 1, folderId: inputs.folderId, account: inputs.account, cursor: inputs.cursor, files, listing: ancestry };
-}
-
 export function maintenanceEffects(drive: RunnerDrive): Effects {
-  const ordinary = driveEffects(drive);
+  // The ordinary edit guard still reads live metadata; unchanged bytes share B1a's versioned read cache.
+  const ordinary = driveEffects(new Proxy(drive, {
+    get(target, key) {
+      if (key === 'readBytes') return async (id: string) => new TextEncoder().encode(await target.readListedText(await target.get(id)));
+      const value: unknown = Reflect.get(target, key);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }));
   // The engine always calls readBack before replay; fresh reserved creates need no existence probe.
   const replaying = new Set<string>();
   return {
@@ -276,14 +252,23 @@ export function maintenanceEffects(drive: RunnerDrive): Effects {
     },
     async apply(op, head, w, manifest, sending) {
       if (op.effect.kind !== 'maintain') throw unavailable();
-      const state = refreshed(op, head, manifest);
+      const state = refreshed(op.effect.inputs, head.outcomes, manifest);
+      const members = mocMembership(state.files);
+      for (const [id, ids] of members) {
+        const note = state.files[id];
+        if (note) note.members = ids;
+      }
       const index = projectIndex(state.files);
-      const texts: Partial<Record<RunnerWrite, string>> = { [SYSTEM.index]: index, [SYSTEM.retrieval]: JSON.stringify(state) };
-      let last;
-      for (const target of op.effect.inputs.targets ?? []) {
-        const text = texts[target.path];
-        if (text === undefined || !(RUNNER_WRITES as readonly string[]).includes(target.path)) throw unavailable();
+      let last: Settled | undefined;
+      // Retrieval is the commit record: every MOC and projection must settle before it is sent.
+      const targets = [...(op.effect.inputs.targets ?? [])].sort((a, b) => Number(a.path === SYSTEM.retrieval) - Number(b.path === SYSTEM.retrieval));
+      for (const target of targets) {
         const before = op.effect.inputs.listing?.find((f) => f.fileId === target.fileId);
+        const owned = !(RUNNER_WRITES as readonly string[]).includes(target.path);
+        const edit = owned ? mocEdit(target.fileId, state.files, members) : null;
+        if (owned && !edit) continue;
+        const text = owned ? edit?.text : target.path === SYSTEM.index ? index : target.path === SYSTEM.retrieval ? JSON.stringify(state) : undefined;
+        if (text === undefined) throw unavailable();
         // Versions and the feed cursor belong to state, not to the derived projection's date.
         if (target.path === SYSTEM.index && before) {
           const previous = (await drive.readListedText(file(before))).replace(/^> Generated by Bower[^\n]*\n/gm, '').trim();
@@ -294,7 +279,9 @@ export function maintenanceEffects(drive: RunnerDrive): Effects {
         }
         const ev = before || replaying.has(op.operationId) ? await drive.evidence(target.fileId) : null;
         const content = { encoding: 'utf8' as const, size: new TextEncoder().encode(text).length, sha256: await rawHash(text) };
-        const effect: EffectV2 = before && target.beforeContent ? { kind: 'write-runner-json' as const, before, path: target.path,
+        const effect: EffectV2 = owned && before && target.beforeContent && edit ? { kind: 'edit-text', before,
+          path: target.path, beforeContent: target.beforeContent, changes: edit.changes, beforeText: state.files[target.fileId]?.moc?.text, text, content }
+          : before && target.beforeContent ? { kind: 'write-runner-json' as const, before, path: target.path as typeof SYSTEM.index | typeof SYSTEM.retrieval,
           beforeContent: target.beforeContent, text, content }
           : { kind: 'create-text' as const, parent: { fileId: target.parentId }, name: target.path.split('/').at(-1) ?? '', createKey: op.operationId, purpose: 'runner-json' as const, text, content };
         const sub = { ...op, effect };
@@ -303,11 +290,22 @@ export function maintenanceEffects(drive: RunnerDrive): Effects {
           const back = await ordinary.readBack(sub, subHead, manifest);
           if (back.state !== 'landed') throw unavailable();
           last = { state: 'applied' as const, evidence: back.evidence };
+          if (owned && state.files[target.fileId]) {
+            state.files[target.fileId] = { ...state.files[target.fileId] as MaintenanceNote,
+              version: back.evidence.file.modifiedTime, moc: mocSnapshot(text) ?? undefined };
+            state.listing = state.listing?.map((f) => f.id === target.fileId ? file(back.evidence.file) : f);
+          }
           continue;
         }
         await sending();
         last = await ordinary.apply(sub, subHead, w, manifest, async () => target.fileId);
         if (last.state !== 'applied') throw unavailable();
+        if (owned && state.files[target.fileId]) {
+          state.files[target.fileId] = { ...state.files[target.fileId] as MaintenanceNote,
+            version: last.evidence.file.modifiedTime, moc: mocSnapshot(text) ?? undefined };
+          const written = last.evidence.file;
+          state.listing = state.listing?.map((f) => f.id === target.fileId ? file(written) : f);
+        }
       }
       if (!last) throw unavailable();
       // Even a fully reconciled partial effect was already named by the opening checkpoint.

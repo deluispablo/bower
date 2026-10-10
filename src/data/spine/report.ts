@@ -7,9 +7,15 @@
  */
 import type { Disposition } from '../contracts/pile-disposition';
 import type { EffectEvidence, Outcome, ReportRecord } from '../contracts/run-checkpoint';
-import type { OperationV2 } from '../contracts/run-manifest';
+import type { OperationV2, Maintain } from '../contracts/run-manifest';
 import type { RunReport } from '../types';
-import { KEEP_REFUSED } from '../contracts/note-edit';
+import { KEEP_REFUSED, mocEdit, mocMembership, mocSnapshot, type Notes } from '../contracts/note-edit';
+import { parseNote } from '../contracts/note-format';
+import { parseOwnership } from '../contracts/ownership-format';
+import { VaultIndex } from '../vault/vault-index';
+import { isHidden, type RetrievalFile } from '../vault/layout';
+import type { DriveFile } from '../drive/drive-api';
+import type { SeenFile } from '../contracts/run-manifest';
 import { stateNotWritten } from '../contracts/questions';
 import { displayName, nameOf } from '../tree';
 import { savedWordsPile } from './duplicates';
@@ -59,7 +65,8 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
     if (!states.every((s) => s === c.when)) continue;
     report.filed.push(...c.value.filed);
     report.created.push(...c.value.created);
-    report.updated.push(...c.value.updated);
+    // Maintain rows are selected only from the settled shared author result below.
+    if (ops.get(c.requires[0] ?? '')?.effect.kind !== 'maintain') report.updated.push(...c.value.updated);
     if (c.value.leftAsWritten?.length) report.leftAsWritten = [...new Map([...(report.leftAsWritten ?? []), ...c.value.leftAsWritten]
       .map((r) => [JSON.stringify([r.fileId, r.why]), r])).values()];
     // A set-aside row is its contribution's one move's (`grounded`): by op id, never by the name a row carries (two
@@ -88,6 +95,23 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
     const answered = refusal === null ? c.value.answered ?? [] : refusal.code === 'conflict' ? []
       : (c.value.answered ?? []).map((row) => ({ ...row, why: stateNotWritten(row.note === undefined ? null : displayName(nameOf(row.note)), refusal.code === 'auth' || refusal.code === 'not-found') }));
     if (answered.length) report.answered = [...(report.answered ?? []), ...answered];
+  }
+  for (const op of manifest.operations) {
+    if (op.effect.kind !== 'maintain') continue;
+    const outcome = byId.get(op.operationId);
+    if (outcome?.state !== 'applied' && outcome?.state !== 'rejected') return null;
+    if (outcome.state !== 'applied') continue;
+    // Every input operation must settle before deriving the exact same write set as maintenance.
+    if (op.effect.inputs.operationIds.some((id) => state.get(id) !== 'applied' && state.get(id) !== 'rejected')) return null;
+    const snapshot = refreshed(op.effect.inputs, outcomes, manifest);
+    const members = mocMembership(snapshot.files);
+    for (const target of op.effect.inputs.targets ?? []) {
+      const note = snapshot.files[target.fileId];
+      if (!note?.moc || !mocEdit(target.fileId, snapshot.files, members)) continue;
+      if (!report.updated.some((row) => row.op === op.operationId && row.path === target.path)) {
+        report.updated.push({ path: target.path, what: 'Updated map.', op: op.operationId });
+      }
+    }
   }
   // No other change is said by leaving the count out (TL-P2-23): a claimed line may count 0.
   if (report.yourChanges === 0) delete report.yourChanges;
@@ -275,4 +299,46 @@ export function reportContradictions(admission: AdmissionManifest, manifest: Run
     if (!ok) wrong.push(`${item.fileId} is ${item.disposition}, which the report does not say`);
   }
   return wrong;
+}
+
+export type MaintenanceState = Omit<RetrievalFile, 'files'> & { files: Notes; listing?: DriveFile[] };
+const file = (f: SeenFile): DriveFile => ({ id: f.fileId, name: f.name, parents: f.parents, folder: f.folder, modifiedTime: f.modifiedTime, createdTime: f.modifiedTime });
+
+export function retrievalSummary(path: string, text: string): string {
+  // Validate full ownership framing, while only indexing front matter covered by Q3's prefix.
+  const note = parseNote(path, text);
+  const ownership = parseOwnership(new TextEncoder().encode(text));
+  return ownership.status !== 'invalid' && ownership.layout.frontEnd <= 4096 ? note.summary || '(no summary)' : '(no summary)';
+}
+
+/** Whole projections from frozen input versions plus successful settled effects; refused effects add nothing. */
+export function refreshed(inputs: Maintain['inputs'], outcomes: readonly Outcome[], manifest: RunManifest): MaintenanceState {
+  let files: Notes = structuredClone(inputs.snapshot ?? {});
+  const listing = (inputs.listing ?? []).map(file);
+  const ix = VaultIndex.build(inputs.folderId, listing);
+  for (const outcome of outcomes) {
+    if (outcome.state !== 'applied' || !inputs.operationIds.includes(outcome.operationId)) continue;
+    const effect = manifest.operations.find((o) => o.operationId === outcome.operationId)?.effect;
+    if (!effect) continue;
+    if (effect.kind === 'bin') ix.drop(effect.before.fileId);
+    else ix.put({ ...file(outcome.evidence.file), ...(effect.kind === 'create-text' ? { mimeType: 'text/markdown' } : {}) });
+    const f = outcome.evidence.file;
+    if (effect.kind === 'create-text' || effect.kind === 'edit-text') {
+      const path = ix.pathOf(f.fileId);
+      if (path && !isHidden(path) && path.endsWith('.md') && path.split('/')[0] !== 'Inbox') files[f.fileId] = {
+        path, version: f.modifiedTime, summary: retrievalSummary(path, effect.text), coverage: { kind: 'prefix', bytes: 4096 },
+        ...(mocSnapshot(effect.text) ? { moc: mocSnapshot(effect.text) ?? undefined } : {}),
+      };
+    }
+  }
+  files = Object.fromEntries(Object.entries(files).flatMap(([id, note]) => {
+    const path = ix.pathOf(id);
+    return !path || isHidden(path) || path.split('/')[0] === 'Inbox' ? []
+      : [[id, { ...note, path, version: ix.byId(id)?.modifiedTime ?? note.version }]];
+  }));
+  const ancestry = [...ix.entries()].flatMap(([path]) => {
+    const f = ix.file(path);
+    return f && (f.folder || files[f.id]) && path.split('/')[0] !== 'Inbox' ? [f] : [];
+  });
+  return { v: 1, folderId: inputs.folderId, account: inputs.account, cursor: inputs.cursor, files, listing: ancestry };
 }

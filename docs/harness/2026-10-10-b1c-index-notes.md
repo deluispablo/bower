@@ -767,3 +767,126 @@ src/data/contracts/note-edit.ts and src/data/contracts/run-manifest.ts are byte-
 No green implementation, pnpm check or e2e claim: this assignment owns only the corrected reds.
 Source: the owner's verbatim TL-P4-41 addendum 8 ruling and the preceding Implementation (addendum 8) audit;
 no external research was needed or permitted for this assertion-only repair.
+
+## Implementation (addendum 8, after red repair)
+
+The owner assigned ownership-format.ts, report.ts and grounded.ts until handoff and required production-only
+continuation on the retained diff. The committed Addendum 8 red repair was read before this implementation.
+No test, fixture, evidence bundle, golden, contract number or committed configuration was changed. The
+coordinator still owns commits. No network call or writing git command was run by this worker.
+
+### Changes
+
+- The existing ownership parser admits opaque bytes between and after complete frames. They stay outside every
+  published payload and task range; Markdown in these gaps is never interpreted. The existing malformed-control,
+  missing-frame, version, encoding and fenced-payload refusals remain. Its existing legacy branch additionally
+  publishes exact Overview/Notes byte spans, with an empty Figures insertion point, only for one exact ordered
+  heading pair outside code fences. This is a layout observation, not ownership authority.
+- note-edit's existing MOC snapshot checks both `by: bower` and `type: moc` before admitting those legacy spans.
+  Its existing moc-rewrite author inserts the ownership declaration and frames without moving or changing a
+  legacy byte, then rewrites only Figures and Notes. Overview, prefix, suffix, multibyte prose and original
+  sections remain exact; missing/near-match headings and personal maps remain untouched. Each rewrite's
+  invariant compares its framed before-image with the after-image, protecting all bytes outside that payload.
+- The shared member-id projection and MOC edit preparation moved from runner/moc.ts into note-edit.ts; moc.ts
+  reexports them. The existing shortest unique links, peer-map membership, recursive leaf count and ordinary
+  applyChanges author remain the single mechanism. No new parser, author, hierarchy builder or Drive writer.
+- The existing settled-input refresh moved from runner/index.ts into report.ts and is used by both maintenance
+  and materialization. An applied maintain outcome proves every shared computed MOC edit settled before the
+  retrieval commit. Only then does materialize add one existing Updated row per changed target. Unresolved
+  maintain waits; rejected maintain and unchanged MOCs produce no Updated row. Frozen candidate Updated rows
+  for maintain are not copied into the report; the actual shared author result selects them. Replay recomputes
+  the same rows from the immutable manifest and settled outcomes, without extra Drive reads or a runner builder.
+- grounded.ts accepts Updated paths from maintain's declared, verified MOC targets, with that operation id,
+  no Timeline ordinal, and no created/filed/set-aside claim. Ordinary edit/create and journal grounding remain.
+- The task writer copies ordinary typed byte arrays with their realm intact and normalizes subclasses to an
+  independent Uint8Array. Calling the typed-array slice intrinsic avoids a subclass's shared-view override;
+  normalization preserves the existing Buffer-copy contract. This also satisfies the repaired byte-exact
+  outside-prose test under jsdom without changing any assertion or test environment.
+
+removed: ownership-format.ts: rejection solely for opaque bytes outside complete ownership frames.
+removed: note-edit.ts: framed-only MOC snapshot admission; legacy layout still comes from the one parser.
+removed: runner/src/moc.ts: runner-local rendering/edit preparation; it reexports the shared contract helpers.
+removed: runner/src/index.ts: runner-local settled snapshot refresh; report.ts supplies the shared implementation.
+removed: report.ts: frozen-candidate maintain Updated claims; settled shared author results select the rows.
+tests changed: none
+
+### Compatibility row drafts for the contract homes
+
+| Contract home / stored behaviour | Compatibility draft |
+| --- | --- |
+| ownership-format.ts: plain and legacy notes | Existing personal/task/layout semantics remain; optional legacy MOC layout spans are additive and never grant ownership. |
+| ownership-format.ts: framed notes, About me and Rules-added outside bytes | Complete framing permits arbitrary outside prose as untouchable gaps. Only framed payloads grant body/task authority. Reserved malformed controls still refuse. |
+| ownership-format.ts: raw bytes and subclasses | Source arrays remain unchanged; canonical task edits change one framed checkbox. Buffer/subclass inputs are copied, never shared. |
+| note-edit.ts: framed MOCs | Existing exact region payloads and protected-byte invariants remain; no change to ownership or edit ordering. |
+| note-edit.ts: legacy Bower MOCs | One exact Overview/Notes pair migrates on first real maintain; all other bytes survive. Second maintain is byte-identical and sends no MOC write. |
+| note-edit.ts: personal or incomplete legacy MOCs | Type/title/headings alone grant no write. These maps remain byte-identical and unfolded. |
+| run-manifest.ts: old v1/v2 and old maintain snapshots | Existing snapshots without optional MOC fields remain readable; new target envelopes retain exact source bytes, region bytes, listing identity and verified before-content. |
+| run-manifest.ts: MOC targets | The existing strict guard derives authority from source bytes and verifies parent/name/version/hash. Personal targets cannot be resealed into authority. |
+| report.ts: existing fixed report contributions | Ordinary rows preserve existing contribution/outcome semantics. No report/checkpoint format or row kind changes. |
+| report.ts: settled maintain outcomes | Changed MOCs get one existing Updated row after the commit; unchanged/refused/unresolved work cannot become a speculative claim. Lost replies and done replay retain meaning. |
+| grounded.ts: existing edits/creates/journal rows | Existing path, operation and Timeline grounding stays unchanged. |
+| grounded.ts: maintain targets | Updated rows may name only declared, verified MOC paths for their maintain operation; no new row kind or runner-file report claim. |
+
+### Exact seven-red resolution (TL-P4-51)
+
+The complete earlier failure audit remains the acceptance list, with every name preserved:
+
+| Exact test | Earlier first failure | Implemented home |
+| --- | --- | --- |
+| B1c index: existing MOC at 40 direct members folds and rebuilds complete regions by id | runner/test/b1-index.test.ts:300 | report.ts settled Updated row |
+| B1c index: existing MOC at 41 direct members folds and rebuilds complete regions by id | runner/test/b1-index.test.ts:300 | report.ts settled Updated row |
+| B1c index: corpus b1-moc-over-40 folds 41 leaves with complete reachable child maps | runner/test/b1-index.test.ts:411 | ownership-format.ts layout and note-edit.ts migration |
+| B1c index: legacy MOC migrates on its first maintain and keeps every other byte | runner/test/b1-index.test.ts:492 | one parser and exact-byte framed author |
+| B1c index: legacy MOC second maintain is idempotent with no MOC write | runner/test/b1-index.test.ts:513 | first migration and shared unchanged-edit refusal |
+| B1c index: legacy MOC without Overview and Notes is untouched | runner/test/b1-index.test.ts:535 | exact-heading admission plus migrating positive control |
+| B1c index: legacy MOC belonging to a person with the same headings is untouched | runner/test/b1-index.test.ts:551 | by/type authority plus migrating positive control |
+
+Offline research reused the earlier stable-sort and Obsidian-link references in this notes file, without
+fetching them. The typed-array copy uses ECMAScript's standard intrinsic slice/species behaviour
+(<https://tc39.es/ecma262/#sec-%typedarray%.prototype.slice>), referenced offline, not fetched.
+
+### Verification (final production; OS-temp only)
+
+- All seven named remaining reds pass through runner main. B1c is **19/19**, B1a **18/18**.
+- Full runner: **618/618 pass**, 46 files; corpus/driver/PDF/method and all lifecycle controls remain green.
+- Full data: **4,160/4,160 pass**, 78 files, including the existing ownership-format, report and grounded tests.
+- Repaired ownership/note-format files: **293/293 pass**. The full-suite Buffer-copy regression was corrected
+  in production before the final entire data/runner runs; no assertion or environment was changed.
+- Node and runner tsc pass. App tsc has only the four previously documented Palette.tsx dependency-type errors:
+  :119 (`value`, `search`), :123 (`w`), :127 (`w`). No new type failure; that screen is outside this assignment.
+- ESLint passes on all seven touched production files. `git diff --check` passes.
+- SHA-256 confirms every touched production source matches the final verification copy. All 78 data and
+  46 runner test files match the worktree byte for byte. Audit: `/tmp/b1c-add8-final-source-audit.log`.
+- No test/ruling contradiction remains after the committed red repair. No test was changed, skipped or relaxed.
+- No pnpm check mark or e2e pass is claimed: the user specified these narrower gates and no screen was touched.
+
+The requested pnpm data command was attempted with offline mode and automatic package-manager selection
+explicitly disabled. It refused the installed node_modules symlink during setup (`workspace hoist directory
+is not a real directory`), before Vitest. Log: `/tmp/b1c-add8-impl-pnpm-data.log`. The same full data suite then
+ran with the installed local Vitest binary, offline. No dependency installation or network request was needed.
+Temporary configs preserve the existing environments, setup files, includes, alias and CSS-module behaviour;
+Vite/module caches, CPU reports, builds and all logs stay under OS temp. The two unchanged new-instance tests
+build only in the OS-temp copy, using the existing installed esbuild helper; their git fixture writes are
+confined to disposable OS-temp repositories. This worker directly ran no writing git command.
+
+Final commands (source copy `/private/tmp/b1c-add8-implementation`):
+
+```sh
+# source-copy root
+node node_modules/vitest/vitest.mjs run src/data --config=data-config.mjs --configLoader=runner --maxWorkers=2 --reporter=default --reporter=json --outputFile=/tmp/b1c-add8-final-data.json > /tmp/b1c-add8-final-data.log 2>&1
+node node_modules/typescript/bin/tsc --noEmit -p tsconfig.app.json > /tmp/b1c-add8-final-tsc-app.log 2>&1
+node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json > /tmp/b1c-add8-final-tsc-node.log 2>&1
+node node_modules/eslint/bin/eslint.js src/data/contracts/run-manifest.ts src/data/contracts/note-edit.ts src/data/contracts/ownership-format.ts src/data/spine/report.ts src/data/spine/grounded.ts > /tmp/b1c-add8-final-eslint-app.log 2>&1
+# source-copy runner/
+PATH=/private/tmp/b1c-offline-bin:$PATH node ../node_modules/vitest/vitest.mjs run --config=../runner-config.mjs --configLoader=runner --maxWorkers=2 --reporter=default --reporter=json --outputFile=/tmp/b1c-add8-final-runner.json > /tmp/b1c-add8-final-runner.log 2>&1
+node ../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json > /tmp/b1c-add8-final-tsc-runner.log 2>&1
+node ../node_modules/eslint/bin/eslint.js src/index.ts src/moc.ts > /tmp/b1c-add8-final-eslint-runner.log 2>&1
+```
+
+Production files for handoff: `runner/src/index.ts`, `runner/src/moc.ts`,
+`src/data/contracts/run-manifest.ts`, `src/data/contracts/note-edit.ts`,
+`src/data/contracts/ownership-format.ts`, `src/data/spine/report.ts`, `src/data/spine/grounded.ts`.
+Notes: `docs/harness/2026-10-10-b1c-index-notes.md`, separately committed by the coordinator.
+
+Status: **done**, retained and uncommitted for coordinator handoff. All seven remaining reds and every other
+runner/data test are green. The only requested gate still failing is the documented baseline app typecheck.
