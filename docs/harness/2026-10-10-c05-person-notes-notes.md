@@ -375,3 +375,83 @@ All three TypeScript projects and ESLint on the touched product file pass. No NO
 Offline research/reuse sources: the assigned `note-edit.ts` relink function and its links-only invariant,
 plus TL-P4-32 addendum 1 in `docs/harness/DECISIONS.md`. No network was used.
 Left out: test changes, commits, git write commands, shared harness records, pnpm check, e2e and deployment.
+
+
+## Fix round 1 reds
+
+Red session on implementation HEAD; tests and Minor whitespace repair only. No implementation, existing assertions,
+shared harness records, fake-worker tests or git state were changed. The coordinator owns commits.
+No network, server, real timers, .only or .skip was used. These are nine tests, one per adversarial finding.
+Each runs a positive control before its failing contract assertion. The runner cases use runOnDrive/runWithClaude
+from the existing corpus driver, through production main; author cases use applyChanges; finding 9 uses the
+checkpoint parser/chain verifier and manifest parser. All data is made up.
+
+| File | Exact test name | Why it fails now |
+| --- | --- | --- |
+| `runner/test/c05-person-notes.test.ts` | `C05 person notes: fix 1 finding 1: overflow blocks owned and personal note writes` | The three-note control (including the owned Shed roof) appends successfully. With four named notes, row 7 and filing succeed, but Shed roof still gets a line and an updated row; its bytes change. |
+| `runner/test/c05-person-notes.test.ts` | `C05 person notes: fix 1 finding 2: a conflicted append survives twenty newer runs and retries its filed source` | The first conflict files the source; the second manifest carries its bound append. Twenty newer runs retire the original manifest, after 22 injected conflicts. The next main call refuses the now-filed citation (lineCites) and adds no line, rather than retrying on fresh personal bytes. The red is the final exact-text assertion, not a thrown/load error. |
+| `runner/test/c05-person-notes.test.ts` | `C05 person notes: fix 1 finding 3: article-equivalent titles stay ambiguous in context and writes` | The single-note append control succeeds. Garden plot and The Garden plot both enter context and receive a line; neither gets the promised folder-specific refusal row. The article-equivalent ambiguity is not suppressed. |
+| `runner/test/c05-person-notes.test.ts` | `C05 person notes: fix 1 finding 4: a completed replay cannot consume the new request for the same note` | The original personal append lands. Main then admits completed change-1 and new change-2 together and files the new source, but does not append the new requested line. Completed change-1 masks the eligible request. |
+| `runner/test/c05-person-notes.test.ts` | `C05 person notes: fix 1 finding 5: an already-present bound append completes the request before replay` | An ordinary append succeeds in the control. The fresh request with an already-present sourced line leaves the note unchanged and files the source. Replaying that exact request with a different admitted source/wording appends again; the satisfied request was not persisted as completed. |
+| `src/data/contracts/c05-person-notes.test.ts` | `C05 person notes: fix 1 finding 6: a granted state change preserves untouched mixed-ending bullet bytes` | Owned append and uniform-CRLF personal-state controls succeed. A null-mark answered state rewrite with CRLF front matter and LF bullets is accepted, but rebuilds untouched bullet endings as CRLF. Exact output text/bytes differ from the one-bullet splice oracle, including the untouched bullet with trailing spaces. |
+| `src/data/contracts/c05-person-notes.test.ts` | `C05 person notes: fix 1 finding 7: a valid Timeline in plain Markdown admits the bound append` | Owned and front-matter personal append controls succeed. The same valid Timeline without YAML is refused no-timeline, instead of accepting the exact sourced append and preserving all other bytes. |
+| `runner/test/c05-person-notes.test.ts` | `C05 person notes: fix 1 finding 8: an unrelated filing failure preserves the filed source refusal row` | The one-source no-Timeline control files its source and shows its linked refusal row. After the dual-source manifest lands, only unrelated source B is renamed; its real move fence refuses it. Source A is filed, the note is unchanged and updated is empty, but its leftAsWritten row is missing. |
+| `src/data/contracts/c05-person-reports.test.ts` | `C05 person notes: fix 1 finding 9: completion guards require applied bindings and inherited provenance` | The legacy manifest and a correctly rehashed, parsed checkpoint chain with the applied binding completed pass. Removing that completion still makes verifyCheckpointChain return ok:true, instead of transition at revision 2. An unrelated invented inherited tuple also makes parseRunManifestV2 return ok:true. Both negative assertions run in the one test. |
+
+The retention red uses the real twenty-run policy, injected Drive edits and the corpus driver's fixed clock.
+Its 30-second test timeout is only a failure deadline: it does not wait or advance a real timer.
+Finding 9 recomputes every previous hash after adding bindings and parses each checkpoint before chain validation;
+there is no stale-digest or load failure. The valid completion chain is the adjacent positive control.
+
+### Verification
+
+Final targeted files, without a name filter, so all their existing tests also execute:
+
+```sh
+pnpm exec vitest run src/data/contracts/c05-person-notes.test.ts src/data/contracts/c05-person-reports.test.ts --maxWorkers=2 > tmp-logs/c05-fix1-author-reports.log 2>&1
+pnpm -C runner exec vitest run test/c05-person-notes.test.ts --maxWorkers=2 > tmp-logs/c05-fix1-runner.log 2>&1
+pnpm exec tsc -p tsconfig.app.json --noEmit > tmp-logs/c05-fix1-tsc-app.log 2>&1
+pnpm -C runner exec tsc --noEmit -p . > tmp-logs/c05-fix1-tsc-runner.log 2>&1
+pnpm exec eslint src/data/contracts/c05-person-notes.test.ts src/data/contracts/c05-person-reports.test.ts > tmp-logs/c05-fix1-eslint-app.log 2>&1
+pnpm -C runner exec eslint test/c05-person-notes.test.ts > tmp-logs/c05-fix1-eslint-runner.log 2>&1
+```
+
+App contracts: **3 failed / 13 passed**. Runner: **6 failed / 19 passed**.
+All nine new tests fail on assertions for the findings above; all existing tests in these files pass.
+No load errors, unhandled errors or timer-gate failures. Both TypeScript projects and both touched-file ESLint
+invocations pass. Read-only `git diff --check` passes. Output is under this worktree's `tmp-logs/`;
+only failures and result totals were read. An intermediate finding-8 diagnostic log is
+`tmp-logs/c05-fix1-finding8.log`; final evidence is the complete runner log above.
+No pnpm check, broader test suite or e2e was run in this session, as requested.
+
+### Six existing HEAD regressions
+
+Evidence already supplied: `/tmp/c05-g1-check.log` (6 failed / 5,157 passed).
+These tests are already red at HEAD; none was edited or rerun. The following diagnosis is from that log and the
+fixture/implementation code. The new unconditional ownership classification at scripted.ts:1186 and personal
+line filter at :1187 are the common regression site. Finding 1 exercises that filter's overflow policy; these
+failures have different triggers. No fix to these tests or implementation was made.
+
+| Existing fake-worker test (exact leaf name) | Cause and relation to findings 1–9 |
+| --- | --- |
+| `adds the line inside each Timeline byte for byte, marks the note new, reports it, and never adds it again` | The ownership/2 Job hunt fixture has owned section markers but no legacy by property. parseNote.byBower is false, so the new personal filter drops its unbound line. No identical root cause among 1–9; shares the new filter site with finding 1. |
+| `each updated row carries its edit's op id and its line` | The same ownership/2 misclassification drops the Job hunt edit and therefore its updated row. No identical root cause among 1–9; shares the new filter site with finding 1. |
+| `rejects the edit as a conflict when the note changed after planning, keeping the person's words` | The same ownership/2 misclassification drops the otherwise valid Job hunt edit before the conflict scenario can report it. No identical root cause among 1–9; shares the new filter site with finding 1. |
+| `leaves the line unarchived when a linking note cannot be rewritten at plan time` | The ownership/9 fixture now throws from the unconditional parseNote classification, bypassing the existing refusal/hold path. No shared root cause with 1–9: finding 7 is a valid plain layout missing a section span, not unsupported-format exception handling. |
+| `files the thing on its own when the merge line cannot be planned, says so, and settles the answer` | Its unknown-format iteration throws at the same parseNote classification before the existing fallback filing path. No shared root cause with 1–9; distinct unsupported-format exception handling, adjacent to the ownership checks. |
+| `keeps the answer and the question when a thing filed on its own is not moved after all` | The same unsupported-format parseNote throw stops the fallback before its failed-move scenario. No shared root cause with 1–9; distinct unsupported-format exception handling, adjacent to the ownership checks. |
+
+### Minor and existing-test accounting
+
+tests changed: runner/test/c05-person-notes.test.ts: remove the extra blank line at EOF; append six fix-round reds without changing existing tests.
+tests changed: harness/corpus/c05-note-not-written-by-bower/folder/Areas/Home/Garden plot.md: remove only the extra blank line at EOF (Minor).
+tests changed: harness/corpus/c05-note-not-written-by-bower/inbox/Water butt update.txt: remove only the extra blank line at EOF (Minor).
+
+Existing assertions, controls, test names and corpus text content are unchanged. The two other test files only add
+new tests and the verifier import. The earlier TL-P4-32 addendum 1 link-only acceptance red remains intact and passes.
+
+Offline research/reuse: the assigned tests' byte oracles and real entry points, the established corpus driver,
+and the recovery-contract fixture pattern in run-checkpoint.test.ts. Official library source reference already
+provided by the installed Vitest documentation: https://vitest.dev/. No external query was made.
+compatibility: not applicable to these tests; implementation compatibility remains the fix session's responsibility.
+Left out: implementation, commits, fake-worker test changes, full check, e2e and deployment, as assigned.
