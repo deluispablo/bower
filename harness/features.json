@@ -6877,7 +6877,8 @@
     "steps": [
       "e2e:pwa: build A then B, one reload runs B; the old-chunk case recovers with one reload."
     ],
-    "verify": "",
-    "note": "pwa-update-stuck (Important). Codex, then a Claude review; before the owner retest. Packet 2026-10-10-pwa-update-packet.md. implementer: codex."
+    "verify": "pnpm exec vitest run src/preload-error.test.ts -t \"a missing lazy chunk reloads once per page load\"",
+    "note": "pwa-update-stuck (Important). Codex, then a Claude review; before the owner retest. Packet 2026-10-10-pwa-update-packet.md. implementer: codex. Known green for the e2e part: the coordinator proved the e2e:pwa red at the tests-only commit 2cab69f6 (one reload kept build A) and green 6/6 after (/tmp/pwa-green2.log).",
+    "review": "P4-92 PASS"
   }
 ]
