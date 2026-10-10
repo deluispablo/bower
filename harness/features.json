@@ -6835,7 +6835,7 @@
     "id": "q1a-stored-answers",
     "task": "p4-q1",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "Questions carry stored file-to options and text answers; two rounds per inbox subject; the continuation keeps today's subject scope (TL-P4-44).",
     "steps": [
