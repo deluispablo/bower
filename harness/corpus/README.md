@@ -38,6 +38,9 @@ Made-up cases for the capabilities C04 to C11, C13, C15 and proposed C17 / B1–
 | c07-dated-rent-change | C07 | model | new (C07 prep; scripted intent proof pending) |
 | c08-compare-flats | C08 | scripted | p2-journey:C08 |
 | c08-revise-comparison | C08 | model | new (no revision path is scripted) |
+| c08-report-with-sources | C08 | model | new (C08 prep; report through the existing thing.note boundary) |
+| c08-compare-missing-fact | C08 | model | new (C08 prep; comparison with a missing deposit and trade-off prose) |
+| c08-revise-keeps-personal-text | C08 | model | new (C08 prep; same-document revision, personal text and history) |
 | c09-burst-pipe | C09 | model | bench:5-question-about-filed-pdf, adapted (made-up policy; the original is in bench-5-question-about-filed-pdf) |
 | c09-closest-flat | C09 | scripted | p2-journey:C09 |
 | c10-lookup-fails | C10 | model | new (failed and stale lookups are not scripted) |
