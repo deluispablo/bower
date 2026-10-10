@@ -4,9 +4,10 @@ The owner OKed this on 2026-10-10: the "Refined: least change" page of the "Bowe
 
 ## Q-UI-1. The question card gains options and "Something else…" (one home: Home's `Questions`, Home.tsx)
 
-- **Unchanged:** text, the `about` link and "Bower's update". A yes/no question is exactly as today: primary `yes`, ghost `no`.
+- **Unchanged:** text, the `about` link and "Bower's update". A yes/no question keeps today's row: primary `yes`, ghost `no`.
 - **Options** (`Question.options`, at most 4): they replace the yes/no row with a vertical stack of `Button size="sm" variant="ghost"` at full width, left-aligned, label only (for example "Projects / Job hunt"). No option is primary. A gap of 8 px, and 10 px above, as `.question .row2`.
 - **"Something else…":** the last button of the stack, the same ghost sm, with its label in `--brand-line`. It shows only on a question about an inbox thing or pile, and never on state or pair questions.
+- **On a yes/no question** about an inbox thing or pile (owner OK 2026-10-10): a full-width ghost sm "Something else…" (label in `--brand-line`) sits 8 px below the yes/no row. It opens the same text box in place, and Cancel brings back the yes/no row.
 - **Pressing "Something else…":** the buttons are replaced in place by:
   - the label "In your own words" (15 px, `--text-muted`);
   - Field's `Textarea`, focused at once;
@@ -39,6 +40,7 @@ The owner OKed this on 2026-10-10: the "Refined: least change" page of the "Bowe
 | Situation | What shows |
 | --- | --- |
 | A question with options on Home | The stacked ghost buttons and "Something else…" (inbox and pile questions only). |
+| A yes/no question about an inbox thing or pile | Today's yes/no row, with "Something else…" below it at full width. |
 | "Something else…" pressed | "In your own words", the focused Textarea, "Tell Bower" (disabled while empty) and "Cancel". |
 | Cancel | The options come back; focus is on "Something else…". |
 | An answer on Home, no run live | The card goes; today's `answeredNow` toast. |
