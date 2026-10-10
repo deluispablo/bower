@@ -368,3 +368,71 @@ Output was written to tmp-logs; final logs were copied to
 `/private/tmp/upload-sign-out-fix-1-evidence/` and tmp-logs was deleted before delivery.
 Evidence: upload-sign-out-fix-1-red.log, upload-sign-out-fix-1-tsc.log,
 upload-sign-out-fix-1-eslint.log. No temporary test artifacts remain in the worktree.
+
+## Fix round 1
+
+Implementation session stopped under the owner's TL-P4-51 instruction after running the whole
+targeted data suite and finding the following contract contradiction. No production file or test
+was edited; no network request, Git-writing command, dependency install or new store was used.
+
+### Every contradictory test (file:line)
+
+- `src/data/upload-sign-out.test.ts:126`, test declared at line 71:
+  `upload-sign-out-forget: upload forget cannot be undone by an in-flight device add`.
+  Its injected store.add waits on release.promise at line 115. The test awaits forgetAccount at
+  line 126 and opens that release only in the following finally at line 127. Both explicit
+  examples at line 139, `[2,true]` and `[2,false]`, therefore require forgetting to return with
+  its staging/cleanup operation outstanding. If forgetting awaits that operation as required
+  in this round, forget waits for staging, staging waits for release, and release waits for
+  forget: the test deadlocks. In the true case the store write has committed but queue cleanup
+  is still outstanding; in the false case both the write and cleanup are still outstanding.
+  Neither case can be satisfied by awaiting the account's staging and cleanup without changing
+  the test's barrier ordering. The owner forbids every test change in this session.
+
+This is the complete contradiction list found after searching the targeted data tests for
+forgetAccount, signOut, forgetting, purge and logout and inspecting the queue/store and live
+cleanup cases. Ordinary transfer barriers are not staging barriers. The fix 1.2 assertions at
+lines 412–413 require a temporary late record while sign-out is still pending; they constrain
+a transactional-marker implementation but do not independently contradict the required
+post-sign-out fence, since awaited cleanup can remove that record before sign-out settles.
+No additional contradictory test was found in the whole requested suite.
+
+The full data suite still reproduces both adversarial findings. A shared store transaction fence
+and awaited queue cleanup remain unimplemented pending the lead's resolution of the barrier
+contract above. No timeout, skip, changed assertion, test-specific bypass or altered numeric
+bound was introduced. The sign-out/auth-expiry, ordinary-disposal and journal contracts remain
+as committed.
+
+### Verification
+
+All output was redirected under tmp-logs; only failures and aggregate results were read.
+Explicit offline pnpm configuration prevented dependency auto-install.
+
+- `pnpm --config.verifyDepsBeforeRun=false --config.offline=true exec vitest run src/data/upload-sign-out.test.ts --maxWorkers=2`:
+  exit 1; 10 tests, seven pass, three intended finding assertion failures. Exact failing names:
+  `upload-sign-out-forget: fix 1.1: cross-tab staging cannot restore forgotten bytes (sign-out)`;
+  `upload-sign-out-forget: fix 1.1: cross-tab staging cannot restore forgotten bytes (auth expiry)`;
+  `upload-sign-out-forget: fix 1.2: sign-out waits for staging cleanup and reports a late remove failure (remove fails: true)`.
+  Both cross-tab cases fail at line 369; the cleanup-failure case fails at line 426.
+- `pnpm --config.verifyDepsBeforeRun=false --config.offline=true exec vitest run src/data --maxWorkers=2`:
+  exit 1; 79 files, 78 pass; 4,170 tests, 4,167 pass. Only the same three assertions fail.
+  No load error, unhandled failure or additional failure. The contradictory test currently
+  passes because the existing forgetAccount does not await staging; its deadlock follows from
+  the committed barrier ordering, not from a baseline failure or a modified test.
+- `pnpm --config.verifyDepsBeforeRun=false --config.offline=true exec tsc -p tsconfig.app.json --noEmit`: pass.
+- `pnpm --config.verifyDepsBeforeRun=false --config.offline=true exec tsc -p tsconfig.node.json --noEmit`: pass.
+- `pnpm --config.verifyDepsBeforeRun=false --config.offline=true exec eslint src/data/upload-queue.ts src/data/upload-store.ts`: pass.
+  These are the inspected production files; the only touched file is this Markdown notes file.
+- No check/e2e, server, implementation edit or commit after the required contradiction stop.
+
+Research: the inherited official IndexedDB transaction-lifecycle and Drive resumable-upload
+references in the Research section above, checked against the existing store/queue code only.
+Nothing was fetched. Transaction completion and application staging completion are distinct;
+the existing store stages the Blob before starting its write transaction.
+
+removed: none (0 production lines; 0 test lines)
+tests changed: none
+
+Evidence: `/private/tmp/upload-sign-out-fix-round-1-implementation-evidence/`.
+Logs: fix-round-1-red.log, fix-round-1-data.log, fix-round-1-tsc-app.log,
+fix-round-1-tsc-node.log, fix-round-1-eslint.log. tmp-logs deleted before delivery.
