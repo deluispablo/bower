@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as noteEdit from '../../src/data/contracts/note-edit';
+import { createOwnershipContext } from '../../src/data/contracts/ownership-format';
 import type { ClaudeSpawn } from '../src/claude';
 import { loadCase, type LoadedCase } from '../src/corpus';
 import type { RunReport, Question } from '../../src/data/contracts/types';
@@ -217,7 +218,7 @@ describe('C05 person notes through runner main', () => {
 
   it.each([
     ['row 5 missing Timeline', (text: string) => text.replace(/## Timeline[\s\S]*$/, ''), NO_TIMELINE],
-    ['row 8 unparseable Timeline', (text: string) => text.replace('- 2026-09-12 · Planted garlic.', '* September: planted garlic.'), UNREADABLE],
+    ['row 8 unparseable Timeline', (text: string) => text.replace('- 2026-09-12 · Planted garlic.', 'September: planted garlic.'), UNREADABLE],
   ])('C05 person notes: %s is byte-identical, linked in leftAsWritten and never counted updated', async (_label, transform, why) => {
     await positiveControl();
     const c = await fixture(); c.folder[PATH] = transform(c.folder[PATH] ?? '');
@@ -577,7 +578,7 @@ describe('C05 person notes through runner main', () => {
         rows = [expect.objectContaining({ why: OVERFLOW })];
       } else if (reason === 'missing Timeline') c.folder[PATH] = (c.folder[PATH] ?? '').replace(/## Timeline[\s\S]*$/, '');
       else {
-        c.folder[PATH] = (c.folder[PATH] ?? '').replace('- 2026-09-12 · Planted garlic.', '* September: planted garlic.');
+        c.folder[PATH] = (c.folder[PATH] ?? '').replace('- 2026-09-12 · Planted garlic.', 'September: planted garlic.');
         rows = [expect.objectContaining({ fileId: expect.any(String), why: UNREADABLE })];
       }
       const r = await runWithClaude(c, reply((_ctx, source) => ({ kind: 'tidy-intent', v: 1,
@@ -1291,6 +1292,202 @@ describe('C05 person notes through runner main', () => {
     expect(idOf(next, PATH)).toBe(noteId); expect(idOf(next, round5Other)).toBe(otherId);
     expect(idOf(next, `Areas/Home/${SOURCE}`)).toBe(sourceId);
     assertPersonal(first); assertPersonal(next);
+  });
+
+  // CommonMark list items: https://spec.commonmark.org/0.31.2/#list-items
+  // These expected strings are independent byte oracles, not output from timeline-line.ts.
+  describe('C05 timeline list', () => {
+    const path = 'Areas/Home/Allotment diary.md';
+    const front = '---\nsummary: Alex keeps a planting diary.\n---\n\n';
+    const prefix = `${front}My words stay here.\n\n## Timeline\n`;
+    const added = `- 2026-10-07 · ${NEWS} · [[${SOURCE}]]`;
+    const starAdded = `* 2026-10-07 · ${NEWS} · [[${SOURCE}]]`;
+    const enc = (text: string) => new TextEncoder().encode(text);
+
+    async function timelineFixture(text: string): Promise<LoadedCase> {
+      const c = await fixture();
+      Reflect.deleteProperty(c.folder, PATH);
+      c.folder[path] = text;
+      c.journal = [{ kind: 'request', text: 'Update Allotment diary from this committee letter.' }];
+      c.inbox[0] = { line: '', files: [SOURCE] };
+      return c;
+    }
+
+    async function completions(r: CaseRun, runId = 'abc123-run1') {
+      const found = await round4Records(r, runId);
+      return found.chain.at(-1)?.completedAppends ?? [];
+    }
+
+    function staysPersonal(r: CaseRun): void {
+      expect(r.props[path] ?? {}).not.toHaveProperty('by');
+      expect(r.props[path] ?? {}).not.toHaveProperty('bower_state');
+      expect(r.props[path] ?? {}).not.toHaveProperty('bowerMd5');
+      expect(r.after[path]).not.toMatch(/by: bower|bower_state:|<!-- bower:ownership/);
+    }
+
+    async function controls(): Promise<void> {
+      await positiveControl();
+      const before = `${prefix}- 2026-10-01 · Alex dug the first bed.\n`;
+      const c = await timelineFixture(before);
+      const r = await runWithClaude(c, appendReply(path));
+      expect(r.code).toBe(0);
+      expect(r.after[path]).toBe(`${prefix}- 2026-10-01 · Alex dug the first bed.\n${added}\n`);
+      expect(reportOf(r).updated).toEqual([expect.objectContaining({ path, what: APPENDED })]);
+      expect(r.after[`${SYSTEM.archive}/change-1.json`]).toBeDefined();
+      expect(await completions(r)).toEqual([{ requestId: 'change-1', targetFileId: idOf(r, path) }]);
+      staysPersonal(r);
+    }
+
+    async function replay(c: LoadedCase, first: CaseRun): Promise<CaseRun> {
+      const source = await addNextSource(first, false);
+      const r = await runOnDrive(c, first.drive, first.root, {
+        request: { kind: 'replay', id: 'change-1' },
+        claude: reply(() => ({ kind: 'tidy-intent', v: 1,
+          things: [round4File(source, 'Next water butt update.txt')],
+          lines: [{ note: path, text: 'Alex received another update about the bed.', cites: source }] })),
+      }, 2);
+      expect(r.code).toBe(0);
+      expect(r.requestAction).toEqual({ kind: 'replay', id: 'change-1', outcome: 'restored' });
+      expect(reportOf(r).filed).toHaveLength(1);
+      expect(r.after[path]).toBe(first.after[path]);
+      expect(reportOf(r).updated).toEqual([]);
+      expect(await completions(r, 'abc123-run1-2')).toEqual([]);
+      staysPersonal(r);
+      return r;
+    }
+
+    it('C05 timeline list: 1: dated-colon list with no offered line settles as nothing found', async () => {
+      await controls();
+      const control = await timelineFixture(`${prefix}- 2026-10-01 · Alex dug the first bed.\n`);
+      // runScripted auto-loads this corpus's recorded replies; {} selects main's actual scripted provider.
+      const controlDrive = fixedDrive();
+      const good = await runOnDrive(control, controlDrive, await seedCase(controlDrive, control), {}, 1);
+      expect(good.code).toBe(0);
+      expect(NOTHING_FOUND_WHY).toBe("Bower didn't add the line: it found nothing about this note in what you added.");
+      expect(reportOf(good).leftAsWritten).toEqual([expect.objectContaining({ why: NOTHING_FOUND_WHY })]);
+      expect(good.after[path]).toBe(control.folder[path]);
+      expect(await completions(good)).toEqual([]);
+
+      const c = await timelineFixture(`${prefix}- 1 Oct: Alex dug the first bed.\n`);
+      const drive = fixedDrive();
+      const r = await runOnDrive(c, drive, await seedCase(drive, c), {}, 1);
+      expect(r.code).toBe(0);
+      expect.soft(reportOf(r).leftAsWritten).toEqual([
+        expect.objectContaining({ why: NOTHING_FOUND_WHY, fileId: idOf(r, path) }),
+      ]);
+      expect(r.after[path]).toBe(c.folder[path]);
+      expect(reportOf(r).updated).toEqual([]);
+      expect(await completions(r)).toEqual([]);
+      staysPersonal(r);
+    });
+
+    it.each([['with front matter', prefix], ['without front matter', 'My words stay here.\n\n## Timeline\n']])(
+      'C05 timeline list: 2: plain list %s appends once, updates, archives and completes', async (_label, start) => {
+        await controls();
+        const before = `${start}- Alex dug the first bed.\n`;
+        const c = await timelineFixture(before);
+        const r = await runWithClaude(c, appendReply(path));
+        expect(r.code).toBe(0);
+        expect.soft(r.after[path]).toBe(`${start}- Alex dug the first bed.\n${added}\n`);
+        expect.soft(reportOf(r).updated).toEqual([expect.objectContaining({ path, what: APPENDED })]);
+        expect(r.after[`${SYSTEM.archive}/change-1.json`]).toBeDefined();
+        expect(r.after[`${SYSTEM.changes}/change-1.json`]).toBeUndefined();
+        expect.soft(await completions(r)).toEqual([{ requestId: 'change-1', targetFileId: idOf(r, path) }]);
+        staysPersonal(r);
+        await replay(c, r);
+      });
+
+    it('C05 timeline list: 3: prose stays unreadable even with a sourced line offered', async () => {
+      await controls();
+      const c = await timelineFixture(`${prefix}Alex dug the first bed.\n`);
+      const r = await runWithClaude(c, appendReply(path));
+      expect(r.code).toBe(0);
+      expect(reportOf(r).filed).toHaveLength(1);
+      expect(reportOf(r).leftAsWritten).toEqual([expect.objectContaining({ why: UNREADABLE, fileId: idOf(r, path) })]);
+      expect(r.after[path]).toBe(c.folder[path]);
+      expect(reportOf(r).updated).toEqual([]);
+      expect(await completions(r)).toEqual([]);
+      staysPersonal(r);
+    });
+
+    it('C05 timeline list: 4: appendable person and Bower-owned notes remain positive controls', controls);
+
+    const byteCases = [
+      { label: 'CRLF and Unicode byte offsets',
+        before: '---\r\nsummary: Alex grows café beans.\r\n---\r\n\r\nMy words: café.\r\n\r\n## Timeline\r\n- 1 Oct: Alex dug the first bed.\r\n',
+        after: `---\r\nsummary: Alex grows café beans.\r\n---\r\n\r\nMy words: café.\r\n\r\n## Timeline\r\n- 1 Oct: Alex dug the first bed.\r\n${added}\r\n` },
+      { label: 'star marker', before: `${prefix}* September: planted garlic.\n`,
+        after: `${prefix}* September: planted garlic.\n${starAdded}\n` },
+      { label: 'whole nested subtree at top level',
+        before: `${prefix}- Alex dug the first bed.\n  * Alex planted garlic.\n    - Alex watered it.\n      Still damp.\n`,
+        after: `${prefix}- Alex dug the first bed.\n  * Alex planted garlic.\n    - Alex watered it.\n      Still damp.\n${added}\n` },
+      { label: 'last top-level star in mixed markers',
+        before: `${prefix}- Alex dug the first bed.\n\n* Alex planted garlic.\n  - Alex watered it.\n`,
+        after: `${prefix}- Alex dug the first bed.\n\n* Alex planted garlic.\n  - Alex watered it.\n${starAdded}\n` },
+      { label: 'last top-level dash in mixed markers',
+        before: `${prefix}* Alex dug the first bed.\n\n- Alex planted garlic.\n  * Alex watered it.\n`,
+        after: `${prefix}* Alex dug the first bed.\n\n- Alex planted garlic.\n  * Alex watered it.\n${added}\n` },
+      { label: 'trailing blanks with final newline', before: `${prefix}- Alex dug the first bed.\n\n  \n\n`,
+        after: `${prefix}- Alex dug the first bed.\n${added}\n\n  \n\n` },
+      { label: 'no final newline', before: `${prefix}- Alex dug the first bed.`,
+        after: `${prefix}- Alex dug the first bed.\n${added}` },
+      { label: 'trailing blanks without final newline', before: `${prefix}- Alex dug the first bed.\n\n  `,
+        after: `${prefix}- Alex dug the first bed.\n${added}\n\n  ` },
+      { label: 'following heading stays outside the list',
+        before: `${prefix}- Alex dug the first bed.\n\n## Links\nSee [[Planting guide]].\n`,
+        after: `${prefix}- Alex dug the first bed.\n${added}\n\n## Links\nSee [[Planting guide]].\n` },
+      { label: 'plain CRLF star subtree before a following heading',
+        before: 'My words: café.\r\n\r\n## Timeline\r\n* Alex dug the first bed.\r\n  - Alex planted garlic.\r\n\r\n## Links\r\nSee [[Planting guide]].',
+        after: `My words: café.\r\n\r\n## Timeline\r\n* Alex dug the first bed.\r\n  - Alex planted garlic.\r\n${starAdded}\r\n\r\n## Links\r\nSee [[Planting guide]].` },
+    ];
+
+    function authored(before: string) {
+      const consent = { requestId: 'change-1', targetFileId: 'diary-id', sourceFileId: 'letter-id' };
+      const bytes = enc(before);
+      const copy = bytes.slice();
+      const fetched = { fileId: consent.targetFileId, context: createOwnershipContext(), consents: [consent] };
+      const admitted = noteEdit.personalTimelineRefusal(bytes, fetched);
+      const result = noteEdit.applyChanges(bytes, [{ kind: 'timeline-append', recordIds: [consent.requestId],
+        entries: [{ date: '2026-10-07', text: NEWS, source: SOURCE }], consent }], fetched);
+      expect(bytes).toEqual(copy);
+      return { admitted, result };
+    }
+
+    it.each(byteCases.map(({ label, before, after }) => [label, before, after] as const))(
+      'C05 timeline list: 5: exact bytes preserve %s through main and note-edit', async (_label, before, after) => {
+        await controls();
+        const baseline = `${prefix}- 2026-10-01 · Alex dug the first bed.\n`;
+        expect(authored(baseline)).toEqual({ admitted: null,
+          result: { ok: true, text: `${baseline.trimEnd()}\n${added}\n`, bytes: enc(`${baseline.trimEnd()}\n${added}\n`) } });
+        const c = await timelineFixture(before);
+        const r = await runWithClaude(c, appendReply(path));
+        expect(r.code).toBe(0);
+        expect.soft(enc(r.after[path] ?? '')).toEqual(enc(after));
+        expect.soft(reportOf(r).updated).toEqual([expect.objectContaining({ path, what: APPENDED })]);
+        expect.soft(await completions(r)).toEqual([{ requestId: 'change-1', targetFileId: idOf(r, path) }]);
+        staysPersonal(r);
+        const api = authored(before);
+        expect.soft(api.admitted).toBeNull();
+        expect.soft(api.result).toEqual({ ok: true, text: after, bytes: enc(after) });
+      });
+
+    it('C05 timeline list: 5: preseeded Bower star line completes once and replay keeps exact bytes', async () => {
+      await controls();
+      // Control and red differ only in their marker; the old date pins text-plus-source identity.
+      for (const marker of ['-', '*']) {
+        const before = `${prefix}${marker} 2026-09-12 · ${NEWS} · [[${SOURCE}]]\n`;
+        const c = await timelineFixture(before);
+        const first = await runWithClaude(c, appendReply(path));
+        expect(first.code).toBe(0);
+        expect(first.after[path]).toBe(before);
+        expect(reportOf(first).filed).toHaveLength(1);
+        expect(reportOf(first).updated).toEqual([]);
+        expect.soft(await completions(first)).toEqual([{ requestId: 'change-1', targetFileId: idOf(first, path) }]);
+        expect(first.after[`${SYSTEM.archive}/change-1.json`]).toBeDefined();
+        expect.soft(authored(before).result).toEqual({ ok: false, reason: 'unchanged' });
+        await replay(c, first);
+      }
+    });
   });
 
 });

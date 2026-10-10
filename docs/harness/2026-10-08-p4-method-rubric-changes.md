@@ -171,3 +171,48 @@ Semantic review only: covers:model cases are not executed by the existing C04–
 | b23-hot-question-answer | agrees | The actual app answer settles the question identity; hot reflects that state and actual effects before done, never owns pending work (F3, F5, F10). |
 | b23-summary-words | agrees | A words-only note preserves primary prose while adding a one-line scalar summary; unrelated personal metadata is never adopted (F2, F7, R2). |
 | b23-hot-evidence-only | agrees | An instruction-only run rebuilds hot from primary evidence and settled outcomes, dropping unsupported old claims without inventing focus or report rows (F3, F7, F10). |
+
+## B4 preparation verdicts — 2026-10-10
+
+Every new case was checked against TL-P4-08 points 1–8 and the later brain contracts.
+These verdicts cover the proposed method, not implemented B4 outcomes or accepted numeric budgets.
+No existing rubric, expectation or threshold changes. C17 is still outside the method id filter.
+
+| Case | Verdict | Reason |
+| --- | --- | --- |
+| c17-b4-forget-no-return | agrees | Points 1–8 agree: reuse About me, remove only the identified derived fact through a durable tombstone, preserve immutable sources/history, no irrelevant links/type proposals, bounded reads and actual update rows; TL-P4-39 F4 supersedes append-only treatment of this derived memory region. |
+| c17-b4-origin-not-authority | agrees | Points 1–8 agree: trusted words supply one qualified preference, clear offer fits Job hunt with immutable source and a relevant hub link; no document-created preference, sensitive inference, rule or schema, no redundant memory note, bounded reads and truthful rows (F7). |
+| c17-b4-gate-archive-first | agrees | Points 1–8 agree under TL-P4-39 addendum 2: record observations immediately, consolidate only over budget and at five new observations, preserve primary facts/conditions and archive first; the proposed 200-word section budget awaits the lead and is not a changed method threshold. |
+| c17-b4-own-text-deletion | agrees | Points 1–8 agree: supported personal text stays as edited, exactly its bound removed fact is tombstoned, remaining evidence stays live, no whole-note adoption, redundant notes or inference; matching/initialization awaits the lead, and Bower-subsection hand edits have no new recovery (F2/R1 as narrowed). |
+
+## B11 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-47)
+
+Review of proposed semantics against TL-P4-08 points 1–8, not executed C17 acceptance.
+The method's value gate, sourced history, fit, links, typed document handling, reading
+budget, grounded news and plain copy remain. Script results are separate derived
+numeric evidence under R7, never an exception for model-authored numbers.
+
+| Case | Verdict | Reason |
+| --- | --- | --- |
+| c17-b11-skills-tally | agrees | Points 1–8: reuse the typed offer/map, retain primary evidence and personal prose, filter active members and count distinct-note skills by script; no invented model count or extra source note (F13/R5/R7). |
+| c17-b11-monthly-money | agrees | Points 1–8: receipts fit Money, typed date/category/currency guide deterministic sums, missing/invalid totals stay honest and sourced content/history unchanged; no conversion or new taxonomy (F13/R7). |
+| c17-b11-flat-formulas | agrees | Points 1–8: raw typed flat inputs alone yield derived metrics, zero/missing areas remain unavailable and personal prose/metadata are protected; Table uses the approved B5 projection, multiple columns await Q7 (F13/R5). |
+| c17-b11-proposal-authority | agrees | Points 1–8: file clear source beside its linked map while optional trusted consent waits; document imperatives grant nothing and one immutable ignored proposal survives filing without schema changes (F5/F7). |
+
+## B7 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-48)
+
+Semantic review of four proposed cases against TL-P4-08 points 1–8, not executed
+C17 acceptance. No existing rubric, test or numeric bound changed. Tags are topics,
+not a new filing hierarchy; schema consent is B5/Q1's exact-payload mechanism.
+
+| Case | Verdict | Reason |
+| --- | --- | --- |
+| c17-b7-reuse-known | agrees | Points 1–8: reuse the Gardening destination and allowed topics, create only its useful linked source note, retain original evidence/history and personal prose, and report actual filing; three generated tags do not cause a vocabulary write. |
+| c17-b7-proposal-yes | agrees | Points 1–8: clear filing proceeds with an existing topic while optional schema consent waits; the real yes installs only the frozen tag once, and immutable source/personal text is never retroactively rewritten (F5/U2/F7/R2). |
+| c17-b7-proposal-budget | agrees | Points 1–8: file three clear sources with grounded linked notes, deduplicate topic proposals before the shared two-per-run cap and keep the explicit third request remainder pending through B5, without a tag queue or guessed schema (TL-P4-47 Q3). |
+| c17-b7-authority-full-cap | agrees | Points 1–8: sources fit the existing topic, full vocabulary does not evict or grow from document instructions, and the moved person note keeps its legacy four-tag frontmatter/prose byte-identical; only new Bower notes receive generated caps (F7/R2; TL-P4-42 addendum 3). |
+
+Current method-test selection omits C17; these rows are lead-review evidence until
+H1/B7c admits them. expected-tag-results.json stays outside model input and is not
+scored today. Proposed reply extensions/consent selector are pending contracts/driver
+work, so the requested gate cannot prove tag semantics, growth or proposal acceptance.

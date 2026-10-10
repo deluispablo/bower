@@ -1,0 +1,39 @@
+{
+  "viewId": "flat-metrics",
+  "asOf": "2026-10-07",
+  "values": {
+    "Amber flat": {
+      "price_per_area": {
+        "amount": 20,
+        "currency": "EUR"
+      },
+      "days_left": 7
+    },
+    "Birch flat": {
+      "price_per_area": null,
+      "reason": "division-by-zero",
+      "days_left": 7
+    },
+    "Cedar flat": {
+      "price_per_area": null,
+      "reason": "missing",
+      "days_left": 7
+    },
+    "Alex flat": {
+      "price_per_area": {
+        "amount": 20,
+        "currency": "EUR"
+      },
+      "days_left": 7,
+      "readOnly": true
+    }
+  },
+  "table": [
+    "rent",
+    "area",
+    "price_per_area",
+    "days_left"
+  ],
+  "preserveBodies": true,
+  "modelCallsForEvaluation": 0
+}

@@ -6890,13 +6890,52 @@
     "id": "c05-timeline-list",
     "task": "p4-c05",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "A person note whose Timeline is a bullet list is appendable; only non-list sections say they cannot be read (lead ruling after 5019e2f4).",
     "steps": [
       "Through runner main: a dated-colon list gives the nothing-found row, a plain list appends once, a prose section keeps can't read."
     ],
-    "verify": "",
+    "verify": "pnpm -C runner exec vitest run test/c05-person-notes.test.ts -t \"C05 timeline list:\"",
     "note": "c05-person-timeline-format (staging 645710a4). Codex red, Codex implementation after B1a integrates, Claude review. Packet 2026-10-10-c05-timeline-list-packet.md. implementer: codex."
+  },
+  {
+    "id": "b1c-index",
+    "task": "p4-b1",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "The runner keeps .bower/index.md as an exact projection of retrieval.json and folds existing Bower MOCs by id (TL-P4-41 Q1, Q6-Q8).",
+    "steps": [
+      "Through runner main: exact index bytes, hidden paths excluded, no-change runs write nothing, existing MOCs fold with complete membership."
+    ],
+    "verify": "",
+    "note": "TL-P4-41. Escalated; red now, implementation after the scripted.ts/index.ts handoffs. Packet 2026-10-10-b1c-packet.md. implementer: codex."
+  },
+  {
+    "id": "b5a-contracts",
+    "task": "p4-b5",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Contracts for the type table, bounded property values, immutable proposals and profile regions (TL-P4-47 Q1, Q3, Q4).",
+    "steps": [
+      "Strict-write/lenient-read type-table.json with 8 seed rows; bounded values; proposals by id; a 400-word profile region."
+    ],
+    "verify": "",
+    "note": "TL-P4-47. Escalated; red now, implementation after the note-edit/questions handoffs. Packet 2026-10-10-b5a-packet.md. implementer: codex."
+  },
+  {
+    "id": "b3b-hot-maintain",
+    "task": "p4-b3",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Hot is read into the prompt at position 6 and written by maintain at .bower/hot.md only when more than its date changed (TL-P4-42 Q4, Q5, Q8).",
+    "steps": [
+      "Through runner main: hot written after a filing run and read on the next; unchanged hot not rewritten; failure or done redispatch writes nothing."
+    ],
+    "verify": "",
+    "note": "TL-P4-42. Escalated (hot target); red now, implementation after B1c and the scripted.ts handoff. Packet 2026-10-10-b3b-packet.md. implementer: codex."
   }
 ]
