@@ -9,6 +9,7 @@ import { fakeRead } from './read';
 import { scriptedDecisions, scriptedProvider } from '../demo/script';
 import * as planner from './scripted';
 import { runKeys, type Decisions, type PlanOptions, type RunPlan } from './scripted';
+import { parseNote } from '../contracts/note-format';
 
 const AT = Date.UTC(2026, 9, 7, 9);
 const RUN = 'run-scripted';
@@ -21,6 +22,40 @@ async function seeded(): Promise<{ drive: FakeDrive; root: string; admitted: Adm
   if (admission.kind !== 'manifest') throw new Error(`nothing admitted: ${admission.cause}`);
   return { drive, root, admitted: admission.manifest };
 }
+
+it('B6a templates: b6-source-absent-url plans a Source with its original and no invented address', async () => {
+  const { drive, root, admitted } = await seeded();
+  const item = admitted.piles.flatMap((pile) => pile.items).find((candidate) => candidate.name !== 'Pile note.md');
+  expect(item).toBeDefined();
+  if (!item) return;
+  const decisions: Decisions = { ...scriptedDecisions([], []), ownNote: () => null,
+    thing: (seen) => ({ to: 'Resources/Gardening', name: seen.fileName }),
+    pileAsk: () => null, thingAsk: () => null, merge: () => null,
+    note: (fileId) => fileId === item.fileId ? {
+      name: 'Garden source.md', summary: 'Alex records a stated gardening fact.', template: 'source',
+      body: '## Summary\nAlex grows mint.\n\n## Key points\n- Alex grows mint.\n\n## Related\n[[Gardening]]\n\n## Transcript\nAlex grows mint.',
+    } : null,
+  };
+  const plan = await planner.planScripted(fakeScripted(drive), root, { scope: 'all', allowWeb: false, runId: RUN,
+    requestId: admitted.id, requestedAt: admitted.at, taken: admitted, mintKey: await runKeys(RUN), decisions });
+  // Positive control: ordinary filing and the authored body have crossed the real planner.
+  expect(plan.manifest.operations.some((op) => op.effect.kind === 'move' && op.effect.before.fileId === item.fileId)).toBe(true);
+  const source = plan.manifest.operations.map((op) => op.effect)
+    .find((effect) => effect.kind === 'create-text' && effect.name === 'Garden source.md');
+  expect(source).toBeDefined();
+  if (source?.kind !== 'create-text') return;
+  expect(source.text).toContain('## Transcript\nAlex grows mint.');
+  expect(source.text).not.toMatch(/^url:/m);
+  expect(source.text).not.toMatch(/https?:\/\//);
+  const original = plan.manifest.operations.map((op) => op.effect)
+    .find((effect) => effect.kind === 'move' && effect.before.fileId === item.fileId);
+  expect(original?.kind).toBe('move');
+  if (original?.kind !== 'move') return;
+  const note = parseNote('Garden source.md', source.text);
+  expect(note.original, 'A generated Source must identify the filed original without inventing a url').toBe(original.name);
+  expect(note.properties.find((p) => p.key === 'type')?.value).toBe('source');
+  expect(note.timeline).toEqual([]);
+});
 
 describe('the scripted provider', () => {
   it('the scripted provider plans the same run as the fake runner', async () => {
