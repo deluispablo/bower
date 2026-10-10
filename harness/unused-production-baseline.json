@@ -22,6 +22,7 @@
     "exports src/data/spine/read.ts driveRead",
     "exports src/features/piles/add-words.ts leftOut",
     "files runner/src/corpus.ts runner/src/corpus.ts",
+    "files runner/src/hot.ts runner/src/hot.ts",
     "files src/copy-rules.ts src/copy-rules.ts",
     "files src/data/compat-p2-fixtures.ts src/data/compat-p2-fixtures.ts",
     "files src/data/contract/vault-contract.ts src/data/contract/vault-contract.ts",
@@ -30,5 +31,8 @@
     "files src/data/vault/ownership-format.ts src/data/vault/ownership-format.ts",
     "files src/test-setup.ts src/test-setup.ts",
     "types src/data/drive/fake-drive.ts FaultAction"
-  ]
+  ],
+  "reasons": {
+    "files runner/src/hot.ts runner/src/hot.ts": "B3b wires it (TL-P4-42 addendum 1); B3b removes this line"
+  }
 }
