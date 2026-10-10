@@ -6693,7 +6693,9 @@
       "Old reports stay readable; Home and the result show the designer rows with working links."
     ],
     "verify": "pnpm exec vitest run src/data/contracts/c05-person-notes.test.ts src/data/contracts/c05-person-reports.test.ts src/features/tidy/c05-person-notes.test.tsx -t \"C05 person notes:\" && pnpm -C runner exec vitest run test/c05-person-notes.test.ts test/c05-incorporation.test.ts -t \"C05 person notes:|the C05 corpus cases score green with scripted proposals\" && bash scripts/e2e-both.sh e2e/c05-person-notes.spec.ts -g \"C05 person notes:\"",
-    "note": "TL-P4-28 addendum 3; TL-P4-32; escalated (TL-P4-31): Codex red 0871c4f0, Codex implementation, Codex adversarial, Claude review, designer. Packet 2026-10-10-c05-person-notes-packet.md. implementer: codex."
+    "note": "TL-P4-28 addendum 3; TL-P4-32; escalated (TL-P4-31): Codex red 0871c4f0, Codex implementation, Codex adversarial, Claude review, designer. Packet 2026-10-10-c05-person-notes-packet.md. implementer: codex.",
+    "design": "verified",
+    "review": "P4-87 PASS"
   },
   {
     "id": "create-named",
