@@ -11,7 +11,7 @@ import { Sheet } from '@/ui/Sheet';
 import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
 import { PoseBower } from '@/bird/Bower';
-import { hasReplay, isRunning, runClock, runDetail, runTitle, stepLabel, stepState } from './run-words';
+import { hasReplay, reportWaiting, isRunning, runClock, runDetail, runTitle, stepLabel, stepState } from './run-words';
 import { useNow } from './useNow';
 import { TidyScene } from './TidyScene';
 import { RunLinks } from './RunLinks';
@@ -23,14 +23,13 @@ export function TidySheet() {
   const runState = useRun();
   const { data: run } = runState;
   const running = isRunning(run);
-  // The sheet shows a run's end only for a run it showed running (the person watched it, or started it
-  // here); a finished run from before stays on Home's own card, so a press on "Tidy up" asks first.
-  // A run that stopped and was not looked at still opens on why (the stopped card and chip lead here).
+  // Unseen reports stay reachable when reopened; watched runs still show their end even with no rows.
+  // A stopped run stays reachable until acknowledged as well.
   const [watched, setWatched] = useState<string | null>(null);
   // Adjusted while rendering (React: storing information from previous renders), not in an effect.
   if (!tidyOpen && watched !== null) setWatched(null);
   else if (tidyOpen && running && run && watched !== run.id) setWatched(run.id);
-  const showRun = !!run && (running || (run.phase === 'failed' && !run.seen) || watched === run.id);
+  const showRun = !!run && (running || reportWaiting(run) || (run.phase === 'failed' && !run.seen) || watched === run.id);
   const { runs } = useSources();
   const { data: piles } = usePiles();
   const waiting = waitingIn(piles);

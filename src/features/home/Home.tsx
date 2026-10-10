@@ -19,7 +19,7 @@ import { Button } from '@/ui/Button';
 import { fieldBox } from '@/ui/Field';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
-import { filedWords, hasReplay, notesUpdated, replayWaiting, isRunning, landedSummary, PHASE_POSE, runDetail, runTitle, stoppedUnseen } from '@/features/tidy/run-words';
+import { hasReplay, reportWaiting, isRunning, PHASE_POSE, runDetail, runTitle, stoppedUnseen } from '@/features/tidy/run-words';
 import { RunLinks } from '@/features/tidy/RunLinks';
 import { PileStack } from '@/features/piles/PileStack';
 import { SetAsideNote } from '@/features/piles/PileScreen';
@@ -51,7 +51,7 @@ export function Home() {
   // button and its number wait for that read, so neither can drop or move once the person can press it.
   const ready = !pilesState.error && read !== undefined;
   const waiting = ready ? waitingIn(read) : 0;
-  const away = replayWaiting(run);
+  const away = reportWaiting(run);
   const stopped = stoppedUnseen(run);
   const running = isRunning(run);
   // One Bower per screen: it sits on whichever card matters most now.
@@ -99,14 +99,14 @@ function AwayCard({ run, bird }: { run: RunState; bird: boolean }) {
       )}
       <p className="muted">Tidy-up finished {ago(end).toLowerCase()}</p>
       <h2 id="away" className={s.cardTitle}>
-        {filedWords(run.report)}{run.report?.updated.length ? `, ${plural(notesUpdated(run.report), 'note')} brought up to date` : ''}.
+        {runTitle(run)}
       </h2>
-      <p className="muted">{landedSummary(run)}</p>
+      <p className="muted">{runDetail(run)}</p>
       {run.report && <RunLinks report={run.report} />}
       <div className={s.row2}>
-        <Button size="sm" onClick={() => startReplay(run.id)}>
+        {hasReplay(run) && <Button size="sm" onClick={() => startReplay(run.id)}>
           <Icon name="play" size={15} /> Watch what Bower did
-        </Button>
+        </Button>}
         <Button size="sm" variant="ghost" onClick={() => void runs.markSeen(run.id).then(focusMain, (e: unknown) => report(e, 'That did not work. Try again.'))}>
           Got it
         </Button>

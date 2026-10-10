@@ -48,6 +48,14 @@ export function hasReplay(r: RunState | null | undefined): boolean {
   return !!r && r.phase === 'done' && r.scope === 'all' && (r.report?.filed.length ?? 0) > 0;
 }
 
+/** A finished report with any row that the person has not acknowledged, independently of replay. */
+export function reportWaiting(r: RunState | null | undefined): boolean {
+  if (!r || r.phase !== 'done' || r.seen || !r.report) return false;
+  const rep = r.report;
+  return [rep.filed, rep.created, rep.updated, rep.setAside, rep.questions, rep.leftAsWritten,
+    rep.answered, rep.alreadySaved, rep.unconfirmed].some((rows) => !!rows?.length);
+}
+
 /** A finished tidy-up whose replay has not been watched. */
 export function replayWaiting(r: RunState | null | undefined): boolean {
   return hasReplay(r) && !r?.seen;
