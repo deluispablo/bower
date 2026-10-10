@@ -1,0 +1,31 @@
+{
+  "id": "c17-b9-contradiction-two-sources",
+  "capability": "C17",
+  "title": "A marked rent disagreement keeps both sources",
+  "covers": "model",
+  "source": "new (TL-P4-39 B9/U6; preparation only, scripted production proof pending)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "File the later listing beside the flat note and record the disagreement without choosing a rent.",
+      "files": [
+        "Later listing.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Rules.md",
+    "Projects/Flat hunt/Larkspur Lane flat.md"
+  ],
+  "presses": [
+    {
+      "request": {
+        "kind": "tidy",
+        "text": "Record the same disagreement only if it is not already in the flat note."
+      }
+    }
+  ]
+}
