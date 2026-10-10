@@ -6554,7 +6554,7 @@
     "id": "shell-page-column",
     "task": "p4-defects",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "The desktop page column never gets narrower than 560 px: docked(shellWidth, prefs) folds the right panel first, then the side panel; a folded panel opens as an overlay through Sheet from its button; prefs are never rewritten; dragging is clamped (DEFECTS shell-page-column-squeeze).",
     "steps": [
