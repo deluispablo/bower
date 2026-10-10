@@ -7072,7 +7072,7 @@
     "id": "undo-fifo-seed",
     "task": "p4-e",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "The Undo property model knows an inverse the drain retires without sending after its original is refused; seed -1937975690 path 40 is pinned and passes.",
     "steps": [
