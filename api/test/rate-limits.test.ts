@@ -1,4 +1,5 @@
 import { env as testEnv } from 'cloudflare:test';
+import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } from 'jose';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { encrypt, importEncryptionKey } from '../src/crypto.js';
@@ -26,8 +27,8 @@ function setup() {
   const auth = binding(20);
   const drive = binding(30);
   const vault = binding(60);
-  const env = { ...base, AUTH_RATE_LIMIT: auth, DRIVE_RATE_LIMIT: drive, VAULT_RATE_LIMIT: vault,
-    RATE_LIMIT_REQUIRED: 'true' };
+  // Keep the vars read from wrangler.jsonc; no test-only production switch.
+  const env = { ...base, AUTH_RATE_LIMIT: auth, DRIVE_RATE_LIMIT: drive, VAULT_RATE_LIMIT: vault };
   const fetchImpl = vi.fn(async (input: string) => {
     const url = new URL(input);
     if (url.pathname.endsWith('/token')) return Response.json({ access_token: 'access-test', expires_in: 3599 });
@@ -68,6 +69,68 @@ it('a route over its rate limit is refused', async () => {
   expect(Number(refused.headers.get('Retry-After'))).toBeLessThanOrEqual(60);
   expect((await s.app.request(`${ORIGIN}/auth/login`, { headers: { 'CF-Connecting-IP': '192.0.2.2' } }, s.env)).status).toBe(302);
 });
+
+it('missing CF-Connecting-IP shares one bucket despite rotating X-Forwarded-For', async () => {
+  const s = setup();
+  const response = (n: number) => s.app.request(`${ORIGIN}/auth/login`, {
+    headers: { 'X-Forwarded-For': `198.51.100.${n}, 203.0.113.1` },
+  }, s.env);
+  for (let n = 1; n <= 20; n++) expect((await response(n)).status).toBe(302);
+  const refused = await response(21);
+  expect(refused.status).toBe(429);
+  expect(await refused.json()).toMatchObject({ error: { code: 'rate-limited' } });
+  expect(s.auth.counts.size).toBe(1);
+  expect([...s.auth.counts.values()]).toEqual([21]);
+  // Omitting the spoofed header still uses that same missing-address bucket.
+  expect((await s.app.request(`${ORIGIN}/auth/login`, {}, s.env)).status).toBe(429);
+  expect(s.auth.counts.size).toBe(1);
+  // The trusted address gets a separate bucket even with a reused forwarding header.
+  expect((await s.app.request(`${ORIGIN}/auth/login`, {
+    headers: { 'CF-Connecting-IP': '192.0.2.1', 'X-Forwarded-For': '198.51.100.1, 203.0.113.1' },
+  }, s.env)).status).toBe(302);
+  for (let n = 2; n <= 20; n++) {
+    expect((await s.app.request(`${ORIGIN}/auth/login`, {
+      headers: { 'CF-Connecting-IP': '192.0.2.1', 'X-Forwarded-For': `203.0.113.${n}` },
+    }, s.env)).status).toBe(302);
+  }
+  expect((await s.app.request(`${ORIGIN}/auth/login`, {
+    headers: { 'CF-Connecting-IP': '192.0.2.1', 'X-Forwarded-For': '203.0.113.21' },
+  }, s.env)).status).toBe(429);
+  expect(s.auth.counts.size).toBe(2);
+  expect([...s.auth.counts.values()]).toEqual([22, 21]);
+});
+
+it.each(['missing', 'invalid', 'retired'] as const)(
+  'logout without a current session (%s) is refused before counting', async (session) => {
+    const s = setup();
+    const alex = await someone();
+    if (session === 'retired') await alex.person.retireSessions();
+    const { cookie, ...headers } = alex.headers;
+    const refusedHeaders = session === 'missing' ? headers : {
+      ...headers, cookie: session === 'invalid' ? `${SESSION_COOKIE}=not-a-session` : cookie,
+    };
+    for (let n = 0; n < 20; n++) {
+      const refused = await s.app.request(`${ORIGIN}/auth/logout`, {
+        method: 'POST', headers: refusedHeaders,
+      }, s.env);
+      expect(refused.status).toBe(401);
+      expect(await refused.json()).toMatchObject({ error: { code: 'signed-out' } });
+    }
+    expect(s.auth.limit).not.toHaveBeenCalled();
+    expect((await s.app.request(`${ORIGIN}/auth/login`, { headers }, s.env)).status).toBe(302);
+    expect(s.auth.limit).toHaveBeenCalledTimes(1);
+    // A valid logout at the same address retires the session and spends one request.
+    const signedIn = await someone();
+    const generation = (await signedIn.person.account())?.generation;
+    expect(generation).toBeDefined();
+    expect((await s.app.request(`${ORIGIN}/auth/logout`, {
+      method: 'POST', headers: signedIn.headers,
+    }, s.env)).status).toBe(204);
+    expect(s.auth.limit).toHaveBeenCalledTimes(2);
+    expect([...s.auth.counts.values()]).toEqual([2]);
+    expect((await signedIn.person.account())?.generation).toBe((generation ?? -1) + 1);
+  },
+);
 
 it.each([{ path: '/drive/token', max: 30, method: 'GET' }, { path: '/vault', max: 60, method: 'POST' }])(
   '$path uses its per-person limit after the session check', async ({ path, max, method }) => {
@@ -110,7 +173,7 @@ it('OAuth checks precede counting and callback refusal stays a 429', async () =>
   expect((await s.app.request(`${ORIGIN}/auth/logout`, { method: 'POST' }, s.env)).status).toBe(403);
   expect(s.auth.limit).not.toHaveBeenCalled();
   const headers = { 'CF-Connecting-IP': '192.0.2.1' };
-  for (let n = 0; n < 20; n++) await s.app.request(`${ORIGIN}/auth/login`, { headers }, s.env);
+  for (let n = 0; n < 20; n++) expect((await s.app.request(`${ORIGIN}/auth/login`, { headers }, s.env)).status).toBe(302);
   const oauth = await signToken({ state: 'test', nonce: 'test', verifier: 'test' }, base.SESSION_SECRET, 600);
   const refused = await s.app.request(`${ORIGIN}/auth/callback?code=test&state=test`, {
     headers: { ...headers, cookie: `${OAUTH_COOKIE}=${oauth}` },
@@ -118,18 +181,74 @@ it('OAuth checks precede counting and callback refusal stays a 429', async () =>
   expect(refused.status).toBe(429);
   expect(refused.headers.get('Retry-After')).toBe('60');
   expect(s.fetchImpl).not.toHaveBeenCalled();
-  const logout = await s.app.request(`${ORIGIN}/auth/logout`, { method: 'POST', headers: { ...headers, origin: ORIGIN } }, s.env);
+  const alex = await someone();
+  const generation = (await alex.person.account())?.generation;
+  const logout = await s.app.request(`${ORIGIN}/auth/logout`, { method: 'POST', headers: alex.headers }, s.env);
   expect(logout.status).toBe(429);
+  expect((await alex.person.account())?.generation).toBe(generation);
 });
 
-it('missing bindings fail closed only when production configuration requires them', async () => {
-  const s = setup();
-  const env = { ...s.env, AUTH_RATE_LIMIT: undefined };
-  expect((await s.app.request(`${ORIGIN}/auth/login`, {}, env)).status).toBe(500);
-  expect((await s.app.request(`${ORIGIN}/auth/login`, {}, { ...env, RATE_LIMIT_REQUIRED: 'false' })).status).toBe(302);
-  const broken = { ...s.env, AUTH_RATE_LIMIT: { limit: async () => { throw new Error('binding unavailable'); } } };
-  expect((await s.app.request(`${ORIGIN}/auth/login`, {}, broken)).status).toBe(500);
-});
+it.each(['missing', 'throwing'] as const)(
+  'production configuration fails closed with a %s auth binding', async (failure) => {
+    const s = setup();
+    expect((await s.app.request(`${ORIGIN}/auth/login`, {}, s.env)).status).toBe(302);
+    const limit = vi.fn(async () => { throw new Error('binding unavailable'); });
+    const env = { ...s.env, AUTH_RATE_LIMIT: failure === 'missing' ? undefined : { limit } };
+    const refused = await s.app.request(`${ORIGIN}/auth/login`, {}, env);
+    expect(refused.status).toBe(500);
+    expect(await refused.json()).toMatchObject({ error: { code: 'internal' } });
+    expect(refused.headers.get('location')).toBeNull();
+    expect(s.auth.limit).toHaveBeenCalledTimes(1);
+    expect(limit).toHaveBeenCalledTimes(failure === 'missing' ? 0 : 1);
+    expect(s.fetchImpl).not.toHaveBeenCalled();
+  },
+);
+
+it.each(['missing', 'throwing'] as const)(
+  'a valid OAuth callback fails closed with a %s binding', async (failure) => {
+    const s = setup();
+    // Reuse the auth suite's local Google signing fixture for a full successful control.
+    const pair = await generateKeyPair('RS256', { extractable: true });
+    const keys = createLocalJWKSet({ keys: [{
+      ...(await exportJWK(pair.publicKey)), kid: 'test-key', alg: 'RS256', use: 'sig',
+    }] });
+    const sub = `rate-sub-${crypto.randomUUID()}`;
+    const idToken = await new SignJWT({
+      sub, nonce: 'test', email: 'you@example.com', email_verified: true, given_name: 'Alex',
+    }).setProtectedHeader({ alg: 'RS256', kid: 'test-key' })
+      .setIssuer('https://accounts.google.com').setAudience(base.GOOGLE_CLIENT_ID)
+      .setIssuedAt().setExpirationTime('1h').sign(pair.privateKey);
+    await base.BOWER_KV.put(allowKey('you@example.com'), '1');
+    s.fetchImpl.mockResolvedValueOnce(Response.json({
+      access_token: 'access-test', expires_in: 3599, id_token: idToken, refresh_token: 'test-refresh-token',
+    }));
+    const app = createApp({ fetchImpl: s.fetchImpl, keys });
+    const oauth = await signToken({ state: 'test', nonce: 'test', verifier: 'test' }, base.SESSION_SECRET, 600);
+    const headers = { 'CF-Connecting-IP': '192.0.2.1', cookie: `${OAUTH_COOKIE}=${oauth}` };
+    const url = `${ORIGIN}/auth/callback?code=test&state=test`;
+    const allowed = await app.request(url, { headers }, s.env);
+    expect(allowed.status).toBe(302);
+    expect(allowed.headers.get('location')).toBe(ORIGIN);
+    expect(allowed.headers.getSetCookie().some((cookie) => cookie.startsWith(`${SESSION_COOKIE}=`))).toBe(true);
+    expect(s.auth.limit).toHaveBeenCalledTimes(1);
+    expect(s.fetchImpl).toHaveBeenCalledTimes(1);
+    const person = base.PERSON.get(base.PERSON.idFromName(sub));
+    const generation = (await person.account())?.generation;
+    expect(generation).toBeDefined();
+    s.fetchImpl.mockClear();
+    const limit = vi.fn(async () => { throw new Error('binding unavailable'); });
+    const env = { ...s.env, AUTH_RATE_LIMIT: failure === 'missing' ? undefined : { limit } };
+    const refused = await app.request(url, { headers }, env);
+    expect(refused.status).toBe(500);
+    expect(await refused.json()).toMatchObject({ error: { code: 'internal' } });
+    expect(refused.headers.get('location')).toBeNull();
+    expect(s.fetchImpl).not.toHaveBeenCalled();
+    expect(s.auth.limit).toHaveBeenCalledTimes(1);
+    expect(limit).toHaveBeenCalledTimes(failure === 'missing' ? 0 : 1);
+    expect((await person.account())?.generation).toBe(generation);
+    expect(refused.headers.getSetCookie().some((cookie) => cookie.startsWith(`${SESSION_COOKIE}=`))).toBe(false);
+  },
+);
 
 it('/process retains admission daily quota without the new minute limits', async () => {
   const s = setup();
