@@ -420,3 +420,9 @@ c5-empty-note-help,implementer,codex,gpt-5-codex,medium,1,927466,920482,,869248,
 c5-test-margin,implementer (fix round 1),codex,gpt-5-codex,high,2,971588,957282,,896384,14306,,,,P4-76 findings fixed,2026-10-10
 d-v2-24a,implementer (round 3),codex,gpt-5-codex,high,1,2122694,2111442,,1987328,11252,,,,one apply() site,2026-10-10
 d-v2-24a,adversarial (round 3),codex,gpt-5-codex,high,1,1167476,1157320,,1075072,10156,,,,1 Important (sparkle),2026-10-10
+c5-css-tokens,implementer,codex,gpt-5-codex,medium,1,343890,340514,,313728,3376,,,,delivered,2026-10-10
+c5-css-tokens,reviewer,claude,bower-reviewer,,1,28224,,,,,,5,0.3,PASS (P4-78),2026-10-10
+d-v2-24a,red (round 4),codex,gpt-5-codex,high,1,1035548,1026170,,971264,9378,,,,sparkle + animated classes,2026-10-10
+d-v2-24a,implementer (round 4),codex,gpt-5-codex,high,1,888720,885356,,847744,3364,,,,sparkle gated,2026-10-10
+d-v2-24a,adversarial (round 4),codex,gpt-5-codex,high,1,1257817,1250663,,1162240,7154,,,,0 blocking after ruling (size minor),2026-10-10
+d-v2-24a,reviewer,claude,bower-reviewer,,1,39809,,,,,,8,2.2,PASS (P4-79),2026-10-10
