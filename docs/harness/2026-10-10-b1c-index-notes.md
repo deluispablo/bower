@@ -131,3 +131,98 @@ Uncommitted deliverables: `runner/test/b1-index.test.ts` and this notes file.
 Logs stay under `tmp-logs/`; final JSON output is there too. Coordinator commits tests and notes separately.
 Implement only the packet's single maintain/projection path, preserve existing assertions, and take the listed
 contradictions to the lead. No code fix, hierarchy creation, Overview-model rewrite or new corpus admission here.
+
+## Lead-authorized assertion repair (2026-10-10, B1c/B3b red repairs)
+
+This round supersedes only the four preserved-conflict rows above. The earlier session record remains historical.
+No implementation, fixture, golden, threshold, method verdict or unrelated assertion changed.
+The shared folder helper still requires one send for every changed projection; only live control now requires zero.
+Root index bytes remain protected in all no-change expectations; the MOC corpus now also checks unchanged bytes.
+
+Changed assertions (current line numbers; each relocated contains/excludes item is listed):
+
+tests changed: harness/corpus/b1-index-no-change/expected.json:14: TL-P4-45: score the derived index; root index is personal content.
+tests changed: harness/corpus/b1-index-no-change/expected.json:16: TL-P4-45: preserve contains "# Index" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:17: TL-P4-45: preserve contains "## Areas" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:18: TL-P4-45: preserve contains "### Home" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:19: TL-P4-45: preserve contains "## Resources" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:20: TL-P4-45: preserve contains "### Gardening" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:21: TL-P4-45: preserve contains "- [[Late summary]] — (no summary)" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:22: TL-P4-45: preserve contains "- [[Plot diary]] — (no summary)" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:25: TL-P4-45: preserve excludes "Late summary sentinel." at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:26: TL-P4-45: preserve excludes "Hidden exclusion sentinel." at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:27: TL-P4-45: preserve excludes "Inbox exclusion sentinel." at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:28: TL-P4-45: preserve excludes "Root exclusion sentinel." at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:50: TL-P4-45: score the derived index; root index is personal content.
+tests changed: harness/corpus/b1-index-no-change/expected.json:52: TL-P4-45: preserve contains "# Index" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:53: TL-P4-45: preserve contains "## Areas" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:54: TL-P4-45: preserve contains "### Home" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:55: TL-P4-45: preserve contains "## Resources" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:56: TL-P4-45: preserve contains "### Gardening" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:57: TL-P4-45: preserve contains "- [[Late summary]] — (no summary)" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:58: TL-P4-45: preserve contains "- [[Plot diary]] — (no summary)" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:61: TL-P4-45: preserve excludes "Late summary sentinel." at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:62: TL-P4-45: preserve excludes "Hidden exclusion sentinel." at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:63: TL-P4-45: preserve excludes "Inbox exclusion sentinel." at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:64: TL-P4-45: preserve excludes "Root exclusion sentinel." at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:86: TL-P4-45: score the derived index; root index is personal content.
+tests changed: harness/corpus/b1-index-no-change/expected.json:88: TL-P4-45: preserve contains "# Index" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:89: TL-P4-45: preserve contains "## Areas" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:90: TL-P4-45: preserve contains "### Home" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:91: TL-P4-45: preserve contains "## Resources" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:92: TL-P4-45: preserve contains "### Gardening" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:93: TL-P4-45: preserve contains "- [[Late summary]] — (no summary)" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:94: TL-P4-45: preserve contains "- [[Plot diary]] — (no summary)" at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:97: TL-P4-45: preserve excludes "Late summary sentinel." at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:98: TL-P4-45: preserve excludes "Hidden exclusion sentinel." at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:99: TL-P4-45: preserve excludes "Inbox exclusion sentinel." at .bower/index.md.
+tests changed: harness/corpus/b1-index-no-change/expected.json:100: TL-P4-45: preserve excludes "Root exclusion sentinel." at .bower/index.md.
+tests changed: harness/corpus/b1-moc-over-40/expected.json:97: TL-P4-45: score the derived index; root index is personal content.
+tests changed: harness/corpus/b1-moc-over-40/expected.json:99: TL-P4-45: preserve contains "# Index" at .bower/index.md.
+tests changed: harness/corpus/b1-moc-over-40/expected.json:100: TL-P4-41 Q8: folded MOC row uses arrow and recursive count 41.
+tests changed: harness/corpus/b1-moc-over-40/expected.json:103: TL-P4-45: preserve excludes "- [[Garden clipping" at .bower/index.md.
+tests changed: harness/corpus/b1-moc-over-40/expected.json:104: TL-P4-45: preserve excludes "- [[Soil]] —" at .bower/index.md.
+tests changed: harness/corpus/b1-moc-over-40/expected.json:105: TL-P4-45: preserve excludes "- [[Water]] —" at .bower/index.md.
+tests changed: harness/corpus/b1-moc-over-40/expected.json:52: TL-P4-45: require root index.md to remain byte-for-byte unchanged.
+tests changed: runner/test/b1a-contract.test.ts:822: TL-P4-41 Q8: live control changes only metadata/date; require zero index sends, retaining one for all other modes.
+
+Touched files:
+
+- `harness/corpus/b1-index-no-change/expected.json`
+- `harness/corpus/b1-moc-over-40/expected.json`
+- `runner/test/b1a-contract.test.ts`
+- `docs/harness/2026-10-10-b1c-index-notes.md`
+
+Repair verification:
+
+```sh
+pnpm -C runner exec vitest run test/b1-index.test.ts test/b1a-contract.test.ts --testNamePattern='B1c index:|B1a contract: round 4 [1-4]:' --maxWorkers=2 --reporter=default --reporter=json --outputFile=../tmp-logs/b1c-index-repairs.json > tmp-logs/b1c-index-repairs.log 2>&1
+pnpm -C runner exec tsc --noEmit -p tsconfig.json > tmp-logs/b1c-index-repairs-tsc.log 2>&1
+pnpm -C runner exec eslint test/b1a-contract.test.ts test/b1-index.test.ts > tmp-logs/b1c-index-repairs-eslint.log 2>&1
+```
+
+Results: 12 B1c assertion reds remain, 2 hidden-path controls pass. The 4 touched B1a round-4 tests
+now fail on the ruled zero-send live control (actual 1); implementation is pending.
+The other 14 B1a tests were excluded by name filter, without adding any skip directive.
+Runner tsc and touched-test eslint pass. JSON parsing and a baseline comparison confirm only the authorized
+expectation changes; fixture paths have no diff. git diff --check passes.
+No network, git writes, production edits, full suites, pnpm check or e2e. Offline sources remain those cited above.
+
+| Exact failing test | First assertion failure |
+| --- | --- |
+| `B1c index: exact PARA order direct notes shortest duplicate paths and recursive folded count` | AssertionError: expected '- [[Old]] — Old evidence.\n- [[Home]]…' to be '## Projects\n\n- [[Zeta]] — Direct ev…' // Object.is equality |
+| `B1c index: 32000 character cut names every omitted folder and preserves whole rows` | AssertionError: context projection stays inside Q7: expected 32700 to be less than or equal to 32000 |
+| `B1c index: unchanged summaries keep index bytes and stamp through a visible version change` | AssertionError: stamp-only changes cause zero index sends: expected [ { path: '.bower/index.md', …(1) } ] to deeply equal [] |
+| `B1c index: existing MOC at 40 direct members folds and rebuilds complete regions by id` | AssertionError: member link Removed resolves to exactly one stored id: expected [] to have a length of 1 but got +0 |
+| `B1c index: existing MOC at 41 direct members folds and rebuilds complete regions by id` | AssertionError: member link Removed resolves to exactly one stored id: expected [] to have a length of 1 but got +0 |
+| `B1c index: a personal MOC stays byte identical while the Bower MOC refreshes` | AssertionError: positive counterpart: the owned map really refreshes: expected '---\nsummary: Garden evidence.\ntype:…' not to be '---\nsummary: Garden evidence.\ntype:…' // Object.is equality |
+| `B1c index: done replay keeps the folded projection and complete members without another write` | AssertionError: member link Removed resolves to exactly one stored id: expected [] to have a length of 1 but got +0 |
+| `B1c index: lost reply for .bower/index.md resumes the same maintain before the report barrier` | AssertionError: member link Removed resolves to exactly one stored id: expected [] to have a length of 1 but got +0 |
+| `B1c index: lost reply for Resources/Garden/Garden.md resumes the same maintain before the report barrier` | AssertionError: fault must hit the declared production maintenance target: expected false to be true // Object.is equality |
+| `B1c index: lost reply for .bower/retrieval.json resumes the same maintain before the report barrier` | AssertionError: member link Removed resolves to exactly one stored id: expected [] to have a length of 1 but got +0 |
+| `B1c index: corpus b1-index-no-change preserves the derived stamp on the second real instruction press` | AssertionError: missing derived index is rebuilt on the real instruction path: expected undefined to be defined |
+| `B1c index: corpus b1-moc-over-40 folds 41 leaves with complete reachable child maps` | AssertionError: script rebuilt a valid marked MOC: expected 'legacy' to be 'v2' // Object.is equality |
+| `B1a contract: round 4 1: a folder binned before planning drops every indexed descendant` | AssertionError: live control: writes only a changed projection: expected [ { path: '.bower/index.md', …(2) } ] to have a length of +0 but got 1 |
+| `B1a contract: round 4 2: a folder moved outside drops its indexed subtree and commits the cursor` | AssertionError: live control: writes only a changed projection: expected [ { path: '.bower/index.md', …(2) } ] to have a length of +0 but got 1 |
+| `B1a contract: round 4 3: a renamed folder updates descendant paths and index order without media reads` | AssertionError: live control: writes only a changed projection: expected [ { path: '.bower/index.md', …(2) } ] to have a length of +0 but got 1 |
+| `B1a contract: round 4 4: an inside folder move updates recursive paths and regroups without media reads` | AssertionError: live control: writes only a changed projection: expected [ { path: '.bower/index.md', …(2) } ] to have a length of +0 but got 1 |

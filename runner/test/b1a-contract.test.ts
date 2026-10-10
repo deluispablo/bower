@@ -818,7 +818,9 @@ function assertFolderRefresh(result: Awaited<ReturnType<typeof runFolderChange>>
   check(sent.filter((s) => s.path === '.bower/retrieval.json'), `${mode}: one state/cursor write`).toHaveLength(1);
   check(JSON.parse(sent.find((s) => s.path === '.bower/retrieval.json')?.text ?? 'null') as unknown,
     `${mode}: the cursor and refreshed state are the same stored write`).toEqual(after);
-  check(sent.filter((s) => s.path === '.bower/index.md'), `${mode}: one projection rebuild`).toHaveLength(1);
+  // TL-P4-41 Q8: metadata/date alone does not change the projection.
+  check(sent.filter((s) => s.path === '.bower/index.md'), `${mode}: writes only a changed projection`)
+    .toHaveLength(mode === 'live control' ? 0 : 1);
   if (mode === 'live control') {
     for (const note of descendants) expect(after.files[note.id]).toEqual(state.files[note.id]);
     expect(run.after['.bower/index.md']).toBe(result.index);
