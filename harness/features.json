@@ -2053,7 +2053,7 @@
       "The note is Soup ideas, not a name missing its first letters."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa7.spec.ts -g \"New folder from the tree keeps the first letters typed\"",
-    "passes": false,
+    "passes": true,
     "note": " Reopened by c5-remove-new-note: its New note half is withdrawn (TL-P4-33/35); its New folder half fails (DEFECTS new-folder-first-letters, ruling (b)) and closes with entry 2, whose red is this test."
   },
   {
