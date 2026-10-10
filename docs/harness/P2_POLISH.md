@@ -345,3 +345,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
 - 2026-10-10 d-v2-24a-size-mid-settle (Minor, lead ruled; P4-79): a size prop change during the moves-off settle is held in the frozen blend and applies at release, so the drawing jumps to the new size (engine.ts:524, :565). Same semantics as addendum 8's queued pose; rare (a layout change within 0.6 s).
 - 2026-10-10 landing-csp-minors (P4-80 Minor): support.js keeps the unused x-import loader that calls new Function (fix-landing --check covers only the page-script path); src/landing-csp.test.ts finds the CSP section by splitting on "/landing/*
 "; e2e/landing-csp.config.ts needs dist built first.
+- 2026-10-10 create-named-minors (P4-81 Minor): file-actions.test.tsx:70 keeps the red scaffolding (createNamed? cast, if (!createNamed) return); NameSheet.tsx:53 still branches on making.type where it is always note (tidy in tree-name-first).
