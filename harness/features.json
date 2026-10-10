@@ -6841,8 +6841,9 @@
     "steps": [
       "The prep's Q1a reds pass through runner main, answerQuestion, the Worker and the vault."
     ],
-    "verify": "",
-    "note": "TL-P4-44 and addenda 1-2. Escalated; implementation after B1a integrates. Packet 2026-10-10-q1a-stored-answers-packet.md. implementer: codex."
+    "verify": "pnpm -C runner exec vitest run test/q1-continuation.test.ts -t \"Q1a\"",
+    "note": "TL-P4-44 and addenda 1-2. Escalated; implementation after B1a integrates. Packet 2026-10-10-q1a-stored-answers-packet.md. implementer: codex.",
+    "review": "P4-100 PASS"
   },
   {
     "id": "smoke-request-slow",
