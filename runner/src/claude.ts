@@ -47,7 +47,7 @@ import type { Admitted, RunProvider } from '../../src/data/spine/provider';
 import type { ScriptedRead } from '../../src/data/spine/read';
 import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
-import { subjectKey, subjectOf } from '../../src/data/contracts/questions';
+import { answersAsking, checkedAnswer, journalAnswer, type QuestionAnswer, subjectKey, subjectOf } from '../../src/data/contracts/questions';
 import type { Question } from '../../src/data/contracts/types';
 import { modelDecisions, namedNotes, personalAppendHistory, planScripted, requestTargets, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
 import { MAX_NAME } from '../../src/data/contracts/tree';
@@ -187,6 +187,7 @@ interface Shown {
   /** The paths and names of the folder's files, for the check on a note's links; not shown to the model. */
   names?: Set<string>;
   folders: string[];
+  folderCandidates?: Array<{ folderId: string; path: string }>;
 }
 
 /** `text` within `room` characters: whole, cut and marked, or not shown when there is no room left. */
@@ -231,7 +232,7 @@ function calculateSectionHashes(
  * existing folder, or a new direct subfolder of" one, :255-328 its eight kinds of document).
  */
 /** The fixed prompt instructions for the model (TL-P4-08 addendum 3). */
-function promptInstructions(): string {
+function promptInstructions(options = false): string {
   return [
     'You plan one Bower tidy-up. You have no tools: never try to read, write or run anything.',
     'Reply with one JSON object and nothing else, of exactly this shape:',
@@ -260,6 +261,7 @@ function promptInstructions(): string {
     '3. Ask: when where a thing goes is genuinely unclear, never guess. Leave it out of "things" and add one plain yes-or-no',
     `   question about it to "asks" by its "fileId" (at most ${ASK.text} characters, no links, answers at most ${ASK.answer}). For a pile of`,
     '   words only, or a pile unclear as a whole, give its "pileId" instead and leave the whole pile out of "things" and "notes".',
+    ...(options ? ['   When 2 to 4 folderCandidates fit, options may select {folderId,label} from those candidates. Bower supplies option ids and actions.'] : []),
     '   What is asked about stays in the inbox untouched, with the pile\'s words, until the person answers. File everything',
     '   else, the rest of its pile too: the run never waits.',
     '',
@@ -329,8 +331,8 @@ function inStableOrder(piles: Shown['piles']): Shown['piles'] {
 
 function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
   return [
-    promptInstructions(),
-    JSON.stringify({ runId: run.runId, admission: took.taken.id, piles: inStableOrder(shown.piles), notes: shown.notes, folders: shown.folders, ...(shown.rules ? { rules: shown.rules } : {}), ...(shown.answers?.length ? { answers: shown.answers } : {}) }),
+    promptInstructions(!!shown.folderCandidates),
+    JSON.stringify({ runId: run.runId, admission: took.taken.id, piles: inStableOrder(shown.piles), notes: shown.notes, folders: shown.folders, ...(shown.folderCandidates ? { folderCandidates: shown.folderCandidates } : {}), ...(shown.rules ? { rules: shown.rules } : {}), ...(shown.answers?.length ? { answers: shown.answers } : {}) }),
   ].join('\n');
 }
 
@@ -435,7 +437,9 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
         .map((file) => JSON.stringify([note.path, line.text, file.id]));
     });
   }));
-  return { own: ix.file(SYSTEM.dir)?.id, piles, notes, folders, names, suppressed, retrySources, presentLines, personalNotes: new Set(listing.flatMap((f) => {
+  const folderCandidates = listing.flatMap((f) => { const path = f.folder ? ix.pathOf(f.id) : undefined;
+    return inMain(path) && path.includes('/') ? [{ folderId: f.id, path }] : []; });
+  return { own: ix.file(SYSTEM.dir)?.id, piles, notes, folders, ...(folderCandidates.length >= 2 && folderCandidates.length <= 4 ? { folderCandidates } : {}), names, suppressed, retrySources, presentLines, personalNotes: new Set(listing.flatMap((f) => {
     const path = ix.pathOf(f.id);
     return !f.folder && f.appProperties?.by !== 'bower' && path?.endsWith('.md') && MAIN_FOLDERS.includes(path.split('/')[0] ?? '') ? [path] : [];
   })), ...(rules ? { rules } : {}) };
@@ -475,7 +479,8 @@ interface TakenAnswer {
   /** The answer's journal record id. */
   id: string;
   yes: boolean;
-  question: Pick<Question, 'id' | 'text' | 'yes' | 'no' | 'subject'>;
+  value: QuestionAnswer;
+  question: Pick<Question, 'id' | 'text' | 'yes' | 'no' | 'subject' | 'options'>;
   /** For "Write it" (a question about a note's Current state): the note it is about, by that id: its file id and its path now. */
   note?: { fileId: string; path: string };
   /** For keeping one note (a pair question by file ids, c3-pair-ask): the two notes, by those ids, and their paths now. */
@@ -517,12 +522,15 @@ async function answersTaken(read: ScriptedRead, run: ScriptedRun, took: Admitted
   // A change of yours that is not an answer to a question that kept what it showed needs the model.
   let others = 0;
   for (const line of took.taken.journal) {
-    const rec = json(await read.readText(line.fileId)) as { id?: unknown; kind?: unknown; text?: unknown; questionId?: unknown; at?: unknown } | null;
+    const value = json(await read.readText(line.fileId));
+    const rec = isJournalRecord(value) ? value : null;
     const q = questions.find((x) => x.id === rec?.questionId);
     const shown = !!q && subjectOf({ id: typeof q.id === 'string' ? q.id : '' }).kind === 'state' && isRecord(q.shown) && Array.isArray(q.shown.lines);
     if (rec?.kind !== 'answer' || !shown) others++;
-    if (rec?.kind !== 'answer' || (rec.text !== 'yes' && rec.text !== 'no') || typeof rec.id !== 'string') continue;
-    if (!q || typeof q.id !== 'string' || typeof q.text !== 'string') continue;
+    if (rec?.kind !== 'answer' || journalAnswer(rec) === undefined || typeof rec.id !== 'string') continue;
+    if (!q || typeof q.id !== 'string' || typeof q.text !== 'string' || typeof q.askedAt !== 'number' || !answersAsking(rec, { id: q.id, askedAt: q.askedAt })) continue;
+    let answerValue: QuestionAnswer;
+    try { answerValue = checkedAnswer(q as unknown as Question, journalAnswer(rec) as QuestionAnswer); } catch (e) { console.error(e); continue; }
     const at = typeof rec.at === 'number' ? rec.at : 0;
     // One answer per question: of two (another device's), the later one is the person's answer (P4-20 M1).
     const before = out.findIndex((a) => a.answer.question.id === q.id);
@@ -536,7 +544,7 @@ async function answersTaken(read: ScriptedRead, run: ScriptedRun, took: Admitted
     const pairPaths = pairIds?.map((id) => ix.pathOf(id));
     const [pathA, pathB] = pairPaths ?? [];
     const answer: TakenAnswer = {
-      id: rec.id, yes: rec.text === 'yes', question: { id: q.id, text: q.text, yes: text(q.yes), no: text(q.no), ...(typeof q.subject === 'string' ? { subject: q.subject } : {}) },
+      id: rec.id, yes: answerValue === true, value: answerValue, question: { id: q.id, text: q.text, yes: text(q.yes), no: text(q.no), ...(Array.isArray(q.options) ? { options: q.options as Question['options'] } : {}), ...(typeof q.subject === 'string' ? { subject: q.subject } : {}) },
       ...(noteId !== undefined && notePath !== undefined ? { note: { fileId: noteId, path: notePath } } : {}),
       ...(pairIds && pathA !== undefined && pathB !== undefined ? { pair: { fileIds: pairIds, paths: [pathA, pathB] } } : {}),
       ...(shown ? { shown: true as const } : {}),
@@ -579,11 +587,13 @@ function mergesOf(answers: readonly TakenAnswer[], notes: readonly string[]): No
 function answersShown(answers: readonly TakenAnswer[], piles: Shown['piles']): NonNullable<Shown['answers']> {
   const things = new Set(piles.flatMap((p) => p.things.map((t) => t.fileId)));
   const pileIds = new Set(piles.map((p) => p.pileId));
-  return answers.slice(0, AUTHORED.lines).map((a) => {
+  return answers.flatMap((a) => {
     const subject = subjectKey(a.question);
     const about = subject === undefined ? {} : things.has(subject) ? { fileId: subject } : pileIds.has(subject) ? { pileId: subject } : {};
-    return { question: a.question.text.slice(0, ASK.text), answer: (a.yes ? a.question.yes : a.question.no).slice(0, ASK.answer) || (a.yes ? 'Yes' : 'No'), ...about, ...(a.note ? { note: a.note.path } : {}), ...(a.pair ? { notes: [...a.pair.paths] } : {}) };
-  });
+    // Typed person text is admitted only with its own thing or pile; unrelated journal remains pending.
+    if (typeof a.value !== 'boolean' && 'text' in a.value && !('fileId' in about) && !('pileId' in about)) return [];
+    return [{ question: a.question.text.slice(0, ASK.text), answer: typeof a.value === 'boolean' ? (a.yes ? a.question.yes : a.question.no).slice(0, ASK.answer) || (a.yes ? 'Yes' : 'No') : 'text' in a.value ? a.value.text : a.question.options?.find((o) => typeof a.value !== 'boolean' && 'option' in a.value && o.id === a.value.option)?.label ?? '', ...about, ...(a.note ? { note: a.note.path } : {}), ...(a.pair ? { notes: [...a.pair.paths] } : {}) }];
+  }).slice(0, AUTHORED.lines);
 }
 
 /**
@@ -700,6 +710,7 @@ const lineOk = (text: unknown, max: number): text is string =>
 /** What the model was shown that its reply is checked against: the notes it may update, and (for links) the folder's
  * file paths and names and each thing's text. */
 export interface Seen {
+  folderCandidates?: ReadonlySet<string>;
   suppressed?: ReadonlySet<string>;
   personalNotes?: ReadonlySet<string>;
   retrySources?: ReadonlySet<string>;
@@ -878,6 +889,7 @@ const AskShape = z.strictObject({
   text: z.string(named('askText', 'askKeys')), yes: z.string(named('askText', 'askKeys')), no: z.string(named('askText', 'askKeys')),
   pileId: z.string(named('askNotAdmitted')).optional(), fileId: z.string(named('askNotAdmitted')).optional(),
   notes: z.array(z.string(named('askNotes')), named('askNotes')).optional(),
+  options: z.array(z.strictObject({ folderId: z.string(), label: z.string() }), named('askKeys')).min(2, named('askKeys')).max(4, named('askKeys')).optional(),
 }, named('askKeys'));
 const KeepShape = z.strictObject({ kept: z.string(named('keepNote', 'keepKeys')), other: z.string(named('keepNote', 'keepKeys')) }, named('keepKeys'));
 type ThingIn = z.output<typeof ThingShape>;
@@ -1015,9 +1027,10 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       if (!files) return true;
       return !thing && pile.anchor ? 'a question about a pile it also files: to ask about one thing of a pile, give that thing\'s "fileId" and file the rest' : false;
     }),
+    rule('askKeys', (a) => a.options === undefined || (a.notes === undefined && new Set(a.options.map((o) => o.folderId)).size === a.options.length && a.options.every((o) => seen.folderCandidates?.has(o.folderId) && plain(o.label, ASK.answer)))),
     rule('askText', (a) => plain(a.text, ASK.text) && plain(a.yes, ASK.answer) && plain(a.no, ASK.answer)),
   ], (a) => {
-    const said = { text: a.text.trim(), yes: a.yes.trim(), no: a.no.trim() };
+    const said = { text: a.text.trim(), yes: a.yes.trim(), no: a.no.trim(), ...(a.options ? { options: a.options.map((o) => ({ folderId: o.folderId, label: o.label.trim() })) } : {}) };
     const pair = pairIn(a);
     if (pair) return void askedPairs.push({ notes: pair, ...said });
     const { pile, whole } = about(a);
@@ -1284,6 +1297,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       names: shown.names ?? new Set(),
       texts,
       folders: new Set(shown.folders),
+      folderCandidates: new Set(shown.folderCandidates?.map((o) => o.folderId)),
       words: shown.piles.map((p) => p.words).join('\n'),
       shownNotes: shown.notes.map((n) => `${n.path}\n${n.text}`).join('\n'),
       ...(shown.rules ? { rules: shown.rules } : {}),
@@ -1293,7 +1307,11 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     // addendum 4); a second one ends the run. A run that went wrong (a cap, an error result) ends it at once.
     const check = (done: ClaudeExit): { ok: true; intent: Extract<Intent, { ok: true }> } | Refused => {
       const stats = statsOf(done.stdout);
-      if (setup.timing && stats) setup.timing.model = stats;
+      if (setup.timing && stats) {
+        const previous = setup.timing.model;
+        setup.timing.model = previous ? { wallMs: previous.wallMs + stats.wallMs, apiMs: previous.apiMs + stats.apiMs,
+          turns: previous.turns + stats.turns, inputTokens: previous.inputTokens + stats.inputTokens, outputTokens: previous.outputTokens + stats.outputTokens } : stats;
+      }
       const reply = replyOf(done, maxTurns);
       if (!reply.ok) return reply.kind === null ? refuse(reply.why, done.stderr) : reply;
       const got = intentOf(reply.value, shownTook, seen);

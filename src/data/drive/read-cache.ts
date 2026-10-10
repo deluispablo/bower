@@ -24,7 +24,7 @@ export interface Version {
 type Kind = 'text' | 'bytes' | 'prefix' | 'digest' | 'file';
 
 export class ReadCache {
-  private readonly kept = new Map<string, { modifiedTime: string; reads: Map<Kind, Promise<unknown>> }>();
+  private readonly kept = new Map<string, { modifiedTime: string; reads: Map<Kind, Promise<unknown>>; settled: Set<Kind>; published?: true }>();
 
   text(v: Version, read: () => Promise<string>): Promise<string> {
     return this.once('text', v, () => {
@@ -47,9 +47,18 @@ export class ReadCache {
     return this.once('digest', v, read);
   }
 
-  /** The text kept for this version, read or on its way. */
-  keptText(v: Version): Promise<string> | undefined {
+  /** The text kept for this version. A projection can request only a completed read and never wait on media. */
+  keptText(v: Version, settledOnly = false): Promise<string> | undefined {
+    if (settledOnly && !this.kept.get(v.id)?.settled.has('text')) return undefined;
     return this.keptRead<string>('text', v);
+  }
+
+  /** Notify a view once when it has projected this completed text version; no separate publication store. */
+  publishText(v: Version, notify: () => void): void {
+    const entry = this.kept.get(v.id);
+    if (!entry || entry.modifiedTime !== v.modifiedTime || !entry.settled.has('text') || entry.published) return;
+    entry.published = true;
+    notify();
   }
 
   private keptRead<T>(kind: Kind, v: Version): Promise<T> | undefined {
@@ -87,7 +96,7 @@ export class ReadCache {
       entry = undefined;
     }
     if (!entry) {
-      entry = { modifiedTime: at, reads: new Map() };
+      entry = { modifiedTime: at, reads: new Map(), settled: new Set() };
       this.kept.set(v.id, entry);
     }
     const have = entry.reads.get(kind);
@@ -95,8 +104,9 @@ export class ReadCache {
     const p = read();
     const reads = entry.reads;
     reads.set(kind, p);
+    const settled = entry.settled;
     // expected: the caller hears the failure; this only forgets the failed read, so the next ask reads again.
-    p.catch(() => {
+    p.then(() => { settled.add(kind); }, () => {
       if (reads.get(kind) === p) reads.delete(kind);
     });
     return p;
