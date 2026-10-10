@@ -52,3 +52,5 @@ Coordinator commit order (separate file sets):
 3. Notes: `docs/harness/2026-10-10-folder-header-wrap-notes.md`.
 
 Left out: none within the implementation contract; runtime evidence is pending.
+
+compatibility: ce1eb3cd

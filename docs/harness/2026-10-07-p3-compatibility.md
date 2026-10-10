@@ -149,3 +149,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `e22c4408` | c4-undo-compensate | none: tests only (last-round reds: stale page copy, refused original stays dropped, old manifest with no removals). |
 | `d20eeaa3` | c4-undo-compensate | none for stored formats: sends read the outbox under the lock; the failed list is written before outbox removal; old manifests without dated removals keep their order byte for byte. |
 | `20e76dc1` | c4-undo-confirm-in-place | none for stored data: the online Undo confirmation replaces its toast in place (toast.replace), as the offline swap does; copy unchanged. |
+| `ce1eb3cd` | folder-header-wrap | none: the folder table header cells stay on one line (CSS only); no data or file change |
