@@ -1,8 +1,10 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import s from './ui.module.css';
 import { useBackCloses } from './back';
-import { closeFocus, openerNow } from './focus';
+import { closeFocus, focusRouteHeading, openerNow } from './focus';
+import { usePrefs } from '@/app/prefs';
+import { useMedia } from './media';
 
 interface Props {
   open: boolean;
@@ -13,10 +15,19 @@ interface Props {
   description?: string;
   children: ReactNode;
   className?: string;
+  /** Edge panels share the dialog's dismissal and focus behaviour. */
+  placement?: 'left' | 'right';
+  style?: CSSProperties;
+  overlayStyle?: CSSProperties;
+  /** Navigation dismisses an edge panel to the new page's heading. */
+  navigation?: boolean;
 }
 
 /** A bottom sheet on a phone, a centred dialog on a desktop. */
-export function Sheet({ open, onOpenChange, title, hideTitle, description, children, className = '' }: Props) {
+export function Sheet({ open, onOpenChange, title, hideTitle, description, children, className = '', placement, style, overlayStyle, navigation }: Props) {
+  const moves = usePrefs((prefs) => prefs.birdMoves);
+  const reduced = useMedia('(prefers-reduced-motion: reduce)');
+  const still = !moves || reduced;
   useBackCloses(open, () => onOpenChange(false));
   // The control that held the keyboard when the sheet opened; read before the sheet takes it.
   const opener = useRef<HTMLElement | null>(null);
@@ -26,15 +37,22 @@ export function Sheet({ open, onOpenChange, title, hideTitle, description, child
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className={s.scrim} />
+        <Dialog.Overlay className={s.scrim} style={{ ...overlayStyle, ...(still ? { animation: 'none' } : {}) }} />
         {/* With no description, say so (aria-describedby undefined) rather than repeat the title. */}
         <Dialog.Content
-          className={`${s.sheet} ${className}`}
+          className={`${s.sheet} ${placement ? `${s.edgeSheet} ${placement === 'left' ? s.edgeLeft : s.edgeRight}` : ''} ${className}`}
+          style={{ ...style, ...(still ? { animation: 'none' } : {}) }}
           {...(description ? {} : { 'aria-describedby': undefined })}
           // Back to what opened it; when that is gone (a sheet opened by the app), to the page's heading.
-          onCloseAutoFocus={(e) => closeFocus(e, opener.current)}
+          onCloseAutoFocus={(e) => {
+            if (navigation) {
+              e.preventDefault();
+              // The route may still be loading: use the existing rule after the modal has gone.
+              focusRouteHeading();
+            } else closeFocus(e, opener.current);
+          }}
         >
-          <div className={s.grab} aria-hidden="true" />
+          {!placement && <div className={s.grab} aria-hidden="true" />}
           <Dialog.Title className={hideTitle ? 'sr-only' : s.sheetTitle}>{title}</Dialog.Title>
           {description && <Dialog.Description className="muted">{description}</Dialog.Description>}
           {children}
