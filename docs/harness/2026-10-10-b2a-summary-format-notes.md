@@ -222,3 +222,49 @@ These existing behaviors already hold at HEAD and remain required after the fix.
 ## Left out
 
 The fix, callers, authoring, fallback summaries, state edits, live/corpus integration, commits and full gates belong to later sessions. No contract number or existing test was weakened.
+
+## Implementation
+
+Implementation session: codex; all git writes and commits are left to the coordinator. The existing `frontOf` and `serializeNote` mechanisms now encode/decode summary scalars in their contract home. Only `src/data/contracts/note-format.ts` is changed in production. No new dependency, caller, route, storage write, fixture or corpus change is introduced. This pure format change performs no content write; the existing callers' modifiedTime handling is untouched.
+
+The initial implementation-session run reproduced all 152 assertion reds, with 45 passing controls/existing tests. After the fix, all 197 tests in the red file passed, including every exact `B2a summary:` name listed above. The generated round trip retains edge spaces and Unicode; ordinary safe summaries stay plain. The validator preserves the 200 untrimmed JavaScript string-unit bound and refuses empty trimmed text, C0/DEL/C1 controls and line separators. It has no new callers. Serialization preserves text in one physical line using escapes rather than folding; the reader stays lenient for unknown escapes and incomplete quoted values.
+
+The supplied notes contain no `Red repair` section. The existing `Reds` section and fixed tests were read unchanged; no red contradicts the packet or Q1/Q2.
+
+tests changed: none
+removed: summary-only trimming and newline folding through oneLine.
+removed: summary-only quote stripping without YAML escape decoding.
+removed: no dependency, caller, test, fixture, corpus file or other format mechanism.
+
+### Standards researched before implementation
+
+Research was entirely offline, reading the installed YAML 2.9.1 README, `dist/stringify/stringifyString.js`, `dist/compose/resolve-flow-scalar.js`, core-schema boolean/null/integer/float definitions and the timestamp definition, all inside this worktree. The installed package is research evidence only and is not imported by production. A read-only scalar check through that package confirmed the double-quote fixture spelling matches the intended text. The following links identify the standards; none was fetched over the network.
+
+- Plain-scalar eligibility and preservation of whitespace/indicators/comments/colons: [YAML 1.2.2 §7.3.3](https://yaml.org/spec/1.2.2/#733-plain-style). The packet additionally requires conservative quoting of every listed leading indicator and embedded quote/backslash.
+- Double-quoted write and read, including JSON-compatible escapes and YAML named/hexadecimal escapes: [YAML 1.2.2 §7.3.1](https://yaml.org/spec/1.2.2/#731-double-quoted-style) and [§5.7](https://yaml.org/spec/1.2.2/#57-escaped-characters). JSON.stringify supplies the shared escape subset; YAML-sensitive controls, separators, BOM and noncharacters are explicitly escaped too.
+- Single-quoted summary decoding with doubled apostrophes: [YAML 1.2.2 §7.3.2](https://yaml.org/spec/1.2.2/#732-single-quoted-style).
+- Quoting boolean/null/numeric-looking values: [YAML 1.2.2 §10.3.2](https://yaml.org/spec/1.2.2/#1032-tag-resolution), confirmed against the installed core schema. Conservative date/timestamp quoting follows the packet and [YAML timestamp type](https://yaml.org/type/timestamp.html), confirmed against the installed timestamp schema; yes/no/on/off remain strings under the core schema.
+- Control/line-break validation: [YAML 1.2.2 §5.1](https://yaml.org/spec/1.2.2/#51-character-set) and [§5.4](https://yaml.org/spec/1.2.2/#54-line-break-characters) supply the format background; TL-P4-42 Q1 and the fixed validator rows supply the stricter authoring contract. The 200-unit bound uses [ECMAScript String values](https://tc39.es/ecma262/#sec-ecmascript-language-types-string-type), preserving the existing string-length semantics.
+
+### Draft compatibility rows for coordinator commits
+
+One production-contract commit is proposed. The coordinator fills its SHA and commits these notes separately.
+
+| Commit (coordinator fills SHA) | Contract home | New write/export behavior | Compatible reads | Evidence |
+| --- | --- | --- | --- | --- |
+| Pending: B2a format fix | src/data/contracts/note-format.ts | Exact one-line plain/escaped double-quoted summary; validSummary export enforces Q1 without callers | Existing plain summaries, missing metadata, malformed quote/unknown escape values and other frontmatter unchanged; standard quoted summaries decoded | Every fixed B2a red and legacy/Q2 controls; implementation verification below |
+
+### Implementation verification
+
+Logs are under `tmp-logs/`; only failing assertions/diagnostics and machine-readable totals are read. No pnpm check or e2e is run, per the implementation assignment.
+
+- Red: `pnpm exec vitest run src/data/vault/note-format.test.ts --maxWorkers=2 --reporter=json --outputFile=tmp-logs/b2a-implementation-red.json > tmp-logs/b2a-implementation-red.log 2>&1`: exit 1, 197 tests, 152 assertion failures, 45 passes.
+- Green: `pnpm exec vitest run src/data/vault/note-format.test.ts --maxWorkers=2 --reporter=json --outputFile=tmp-logs/b2a-implementation-green.json > tmp-logs/b2a-implementation-green.log 2>&1`: exit 0, 197 tests passed.
+- `pnpm exec tsc -p tsconfig.app.json --noEmit > tmp-logs/b2a-implementation-tsc-app.log 2>&1`: exit 0.
+- `pnpm exec tsc -p tsconfig.node.json --noEmit > tmp-logs/b2a-implementation-tsc-node.log 2>&1`: exit 0.
+- `pnpm exec eslint src/data/contracts/note-format.ts > tmp-logs/b2a-implementation-eslint.log 2>&1`: final exit 0 after removing one unnecessary regular-expression escape.
+- `pnpm exec vitest run src/data --maxWorkers=2 --reporter=json --outputFile=tmp-logs/b2a-implementation-data.json > tmp-logs/b2a-implementation-data.log 2>&1`: exit 0, all 4,085 tests passed. JSON reports 330 total test-suite units.
+- The red-file green command was repeated after the equivalent ESLint escape cleanup: final exit 0, all 197 tests passed. The broad src/data run also passed. No test, fixture or corpus file changed.
+- `git diff --check`: exit 0; read-only git status/diff confirm only the formatter and these notes changed. No git write was run.
+
+Left out: summary callers/authoring/fallbacks and existing-note edits remain with B2b/B2c; commits, SHA completion and integration gates remain with the coordinator. No incompatible red or ruling was found.
