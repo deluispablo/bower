@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import * as maintenance from '../src/index';
+import { PILE_NOTE } from '../../src/data/piles';
 import type { FakeDrive } from '../../src/data/drive/fake-drive';
 import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { parseOwnership, type MocRegion } from '../../src/data/contracts/ownership-format';
@@ -764,5 +766,124 @@ it.each(['bootstrap', 'missing-index'] as const)(
       expect(sent.indexOf(write), 'projection persistence follows the manifest and initial checkpoint').toBeGreaterThan(1);
       expect(sent.findIndex((s) => s.path === SYSTEM.lastRun), 'both projections commit before the report barrier').toBeGreaterThan(sent.indexOf(write));
     }
+  },
+);
+
+it('B1c fix 2: unchanged legacy MOC without Drive ownership is discovered migrated once and folded', async () => {
+  const original = legacyMoc();
+  // Seed the siblings normally, then create the actual legacy bytes without the corpus
+  // helper, which automatically adds Drive ownership from frontmatter.
+  const { [legacyPath]: omitted, ...siblings } = legacyFolder(original);
+  expect(omitted).toBe(original);
+  const base = await setup(siblings);
+  const garden = (await base.drive.listAll(base.root)).find((f) => f.folder
+    && base.drive.pathOf(f.id, base.root) === 'Resources/Garden');
+  expect(garden).toBeDefined();
+  const legacy = await base.drive.createText(garden?.id ?? '', 'Garden.md', original);
+  expect(legacy.appProperties?.by, 'fixture never supplies Drive ownership').toBeUndefined();
+  expect(parseNote(legacyPath, await base.drive.readText(legacy.id)).byBower).toBe(true);
+  const { state } = await seedState(base, '# Index\nOld B1a projection.\n');
+  expect(Object.values(state.files).every((f) => !('moc' in f)), 'positive control: stored B1a has no MOC metadata').toBe(true);
+  const listing = await base.drive.listAll(base.root);
+  const map = listing.find((f) => base.drive.pathOf(f.id, base.root) === legacyPath);
+  const seed = listing.find((f) => base.drive.pathOf(f.id, base.root) === 'Resources/Garden/Seed.md');
+  expect(map).toBeDefined(); expect(seed).toBeDefined();
+  expect(map?.appProperties?.by).toBeUndefined();
+  base.drive.touch(seed?.id ?? '');
+  const sent: Sent[] = [];
+  const first = await run(base, sent);
+  expect(first.code).toBe(0);
+  expect(stateOf(first).files[seed?.id ?? '']?.version).not.toBe(state.files[seed?.id ?? '']?.version);
+  expect(state.files[map?.id ?? '']?.version, 'the legacy MOC was unchanged before this run').toBe(map?.modifiedTime);
+  expect.soft(parseOwnership(new TextEncoder().encode(first.after[legacyPath])).status, 'upgrade discovers the unchanged MOC').toBe('v2');
+  expect.soft(sent.filter((s) => s.path === legacyPath), 'first discovery migrates exactly once').toHaveLength(1);
+  folded(first, 'Garden', 2);
+  expectLegacyMigrated(first);
+  expect(restoredLegacyBytes(first.after[legacyPath] ?? '')).toBe(original);
+  base.drive.touch(seed?.id ?? '');
+  sent.length = 0;
+  const second = await run(base, sent, undefined, 2);
+  expect(second.code).toBe(0);
+  expect(stateOf(second).files[seed?.id ?? '']?.version).not.toBe(stateOf(first).files[seed?.id ?? '']?.version);
+  expect(second.after[legacyPath]).toBe(first.after[legacyPath]);
+  expect(sent.filter((s) => s.path === legacyPath), 'later maintain never migrates again').toEqual([]);
+  folded(second, 'Garden', 2);
+});
+
+it.each(['instructions', 'all'] as const)(
+  'B1c fix 2: warm %s planning preserves calls without Inbox or declaration reads for the index',
+  async (scope) => {
+    const warmFixture = async () => {
+      const base = await setup({ 'Resources/Visible.md': note('Visible control.') });
+      base.c.scope = scope;
+      const listing = await base.drive.listAll(base.root);
+      const inbox = listing.find((f) => f.folder && base.drive.pathOf(f.id, base.root) === 'Inbox');
+      const own = listing.find((f) => f.folder && base.drive.pathOf(f.id, base.root) === SYSTEM.dir);
+      expect(inbox).toBeDefined(); expect(own).toBeDefined();
+      const pile = await base.drive.createFolder(inbox?.id ?? '', 'Waiting evidence',
+        { pile: 'waiting-pile', bowerDeclaration: 'waiting-declaration' });
+      const pileNote = await base.drive.createText(pile.id, PILE_NOTE, 'Alex keeps this for a later press.\n');
+      const records = await base.drive.createFolder(own?.id ?? '', 'piles');
+      // The untouched declaration is not admitted. Its bytes must never be parsed by this run.
+      const declaration = await base.drive.createText(records.id,
+        `declaration-waiting-declaration-${'0'.repeat(64)}.json`, '{}\n');
+      await seedState(base, '# Index\nExisting warm projection.\n');
+      const warm = await base.drive.listAll(base.root);
+      expect(warm.some((f) => base.drive.pathOf(f.id, base.root) === SYSTEM.index)).toBe(true);
+      expect(warm.some((f) => base.drive.pathOf(f.id, base.root) === SYSTEM.retrieval)).toBe(true);
+      return { base, pileNote, declaration };
+    };
+    const { base } = await warmFixture();
+    const requests: Array<[string, string, string | null]> = [];
+    const indexCalls: typeof requests = [];
+    const callsAtPlan: Array<typeof requests> = [];
+    const original = maintenance.planningIndex;
+    const maintain = maintenance.withMaintenance;
+    vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (...args) => {
+      callsAtPlan.push([...requests]);
+      return maintain(...args);
+    });
+    const around = (fetch: typeof globalThis.fetch): typeof globalThis.fetch => async (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      if (url.origin === 'https://www.googleapis.com') requests.push([
+        (init?.method ?? 'GET').toUpperCase(), url.pathname, url.searchParams.get('alt'),
+      ]);
+      return fetch(input, init);
+    };
+    // Positive control: the pre-addendum main path has no planning-index step.
+    // Everything else, including scope aiming and the real provider, still runs.
+    const baseline = await warmFixture();
+    const planning = vi.spyOn(maintenance, 'planningIndex').mockResolvedValue(undefined);
+    const before = await runOnDrive(baseline.base.c, baseline.base.drive, baseline.base.root, {
+      admission: { ...baseline.base.admission, scope }, pacing, around,
+    }, 1);
+    expect(before.code).toBe(0);
+    expect(callsAtPlan).toHaveLength(1);
+    const expected = callsAtPlan[0] ?? [];
+    const inboxReads = expected.filter(([, path, alt]) => alt === 'media'
+      && [baseline.pileNote.id, baseline.declaration.id].some((id) => path === `/drive/v3/files/${id}`));
+    expect(inboxReads).toEqual(scope === 'instructions' ? [] : [
+      ['GET', `/drive/v3/files/${baseline.pileNote.id}`, 'media'],
+      ['GET', `/drive/v3/files/${baseline.declaration.id}`, 'media'],
+    ]);
+    requests.length = 0; callsAtPlan.length = 0; planning.mockClear();
+    planning.mockImplementation(async (...args) => {
+      const from = requests.length;
+      const index = await original(...args);
+      indexCalls.push(...requests.slice(from));
+      expect(index, 'warm planning uses the stored projection').toBeUndefined();
+      return index;
+    });
+    const result = await runOnDrive(base.c, base.drive, base.root, {
+      admission: { ...base.admission, scope }, pacing, around,
+    }, 1);
+    expect(result.code).toBe(0);
+    expect(planning).toHaveBeenCalledOnce();
+    expect.soft(indexCalls, 'index discovery is one shared listing with zero unrelated media reads')
+      .toEqual([['GET', '/drive/v3/files', null]]);
+    expect.soft(callsAtPlan, 'exact pre-addendum warm calls; all reads its Inbox only through the provider')
+      .toEqual([expected]);
+    expect(result.after[`Inbox/Waiting evidence/${PILE_NOTE}`]).toBe('Alex keeps this for a later press.\n');
+    expect(result.after[SYSTEM.index]).toBe('# Index\nExisting warm projection.\n');
   },
 );

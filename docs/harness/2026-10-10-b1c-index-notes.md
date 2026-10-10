@@ -1355,3 +1355,75 @@ Final full runner suite at the pinned source HEAD with only the authorized test/
 `/tmp/b1c-a9-repair2-green.json`, `/tmp/b1c-a9-repair2-green.log`.
 Read-only `git diff --check`: pass. Owned-file and exact-copy/HEAD byte audits: pass.
 No remaining contradiction, import, setup or runtime failure. All warm-run controls pass unchanged.
+
+
+## Fix round 2 reds
+
+Red-owning session, 2026-10-11. Packet: `2026-10-11-codex-b1c-index-adversarial-2.md`, pass 2, BLOCK 2.
+Only the test file and these notes changed. No production edit, network access, writing git command,
+commit, dependency replacement or node_modules symlink. The coordinator owns commits.
+
+tests changed: runner/test/b1-index.test.ts: added one legacy discovery red and a two-scope warm-call red; existing assertions unchanged.
+tests changed: docs/harness/2026-10-10-b1c-index-notes.md: recorded Fix round 2 red contracts, observations and OS-temp evidence.
+
+### Blocking finding 1 — legacy discovery
+
+Exact test: `B1c fix 2: unchanged legacy MOC without Drive ownership is discovered migrated once and folded`.
+The sibling fixture uses the existing corpus seed; the MOC itself is created directly with FakeDrive.createText,
+with no appProperties argument. The fixture therefore never supplies the Drive ownership property.
+It proves valid `by: bower` bytes, absent Drive `appProperties.by`, and an unchanged MOC version in seeded
+B1a retrieval state with no MOC metadata. A sibling version changes before real runner main runs.
+The contract requires one migration, complete folded membership, preservation of unowned bytes, and no
+second migration on a later sibling change. Existing ownership parsing and migration helpers are reused.
+
+Observed assertion reds at `runner/test/b1-index.test.ts:798-800`: ownership remains `legacy`, not `v2`;
+zero MOC writes instead of one; index lacks `→ [[Garden]] (2)`. The later idempotence checks remain in
+this test and will execute after discovery is repaired.
+
+### Blocking finding 2 — warm scoped calls
+
+Exact tests:
+- `B1c fix 2: warm instructions planning preserves calls without Inbox or declaration reads for the index`
+- `B1c fix 2: warm all planning preserves calls without Inbox or declaration reads for the index`
+
+Both fixtures contain persisted index/retrieval projections, an unrelated Inbox pile note, and a declaration
+referenced by that pile. Neither pile nor declaration is admitted. FakeDrive ids and seed order are identical.
+The production scripted provider runs through real runner main; no provider or read helper is replaced.
+An observing withMaintenance spy delegates to the real function and captures every prior Drive request.
+The planningIndex spy delegates to the real function for the subject run and records its request interval.
+
+The positive control bypasses only the added planningIndex step (returns undefined), reproducing the
+pre-addendum main path on an independent identical fixture. It retains scope aiming, real provider reads,
+maintenance, and all later effects. Exact ordered pre-maintenance request triples from this control are
+compared with the real subject, without a tolerance, filtered total, or permitted count delta.
+The control also proves instructions reads neither Inbox file, while all reads both once through its provider.
+
+Observed: planningIndex makes three requests in each scope: one listing plus the unrelated pile-note and
+declaration media reads. Its frozen contract permits exactly the shared listing. Instructions has eight
+pre-maintenance calls versus the control's six; all has eight versus eight (its provider would read both
+anyway), but fails the separate zero-unrelated-index-reads assertion. Thus default all is covered even
+when the total happens to hide the premature eager reads.
+
+### Verification and contradictions
+
+Whole targeted file: **25 existing tests pass, 3 new assertion reds, 28 total**. No setup/import/runtime
+failure and no contradictory existing assertion found; no existing test body or assertion changed.
+
+Reports: `/tmp/b1c-fix2-reds.json`, `/tmp/b1c-fix2-reds.log`.
+Scratch cwd/config/cache/CPU reports:
+`/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b1c-fix2-reds-enshatb2`.
+Vitest reads source from the worktree, with its config, module cache, transform cache and reporter outputs
+in OS temp. The timer-gate CPU report uses the OS-temp cwd. Corpus event files use the existing os.tmpdir
+helper. Tests write nothing into the repository. No pnpm check or e2e ran: this is the requested red-only
+file run, and pnpm check writes a repository mark.
+
+Command, from that scratch cwd:
+
+```sh
+node /private/tmp/bower-b1c-index/node_modules/vitest/vitest.mjs run test/b1-index.test.ts --maxWorkers=2 --config=config.mjs --configLoader=runner --reporter=json --outputFile=/tmp/b1c-fix2-reds.json > /tmp/b1c-fix2-reds.log 2>&1
+```
+
+Read-only `git diff --check`: pass. Only added tests/imports and notes appear in the diff.
+Offline reference reused: [Vitest setup files](https://vitest.dev/config/setupfiles), the existing real-main
+corpus helper, direct FakeDrive seed and B1a's delegating maintenance-spy observation pattern.
+No external research was fetched under the explicit no-network constraint.
