@@ -1,0 +1,30 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Garden notice.txt",
+        "to": "Projects/Garden visit",
+        "name": "Garden notice.txt"
+      }
+    ],
+    "lines": [
+      {
+        "note": "Projects/Garden visit/Saltmere visit.md",
+        "text": "The garden may close if heavy rain is forecast; no decision has been made.",
+        "cites": "$file:Garden notice.txt",
+        "marker": "uncertain"
+      },
+      {
+        "note": "Projects/Garden visit/Saltmere visit.md",
+        "text": "The confirmed visit may be affected; the booking has not been cancelled.",
+        "cites": "$file:Garden notice.txt",
+        "marker": "inferred",
+        "alsoCites": [
+          "Projects/Garden visit/Visit booking.txt"
+        ]
+      }
+    ]
+  }
+]

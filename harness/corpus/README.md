@@ -243,3 +243,23 @@ log is a proposed bounded-format specimen, not an accepted stored grammar. B7 ow
 the allowed-tag codec; case 2 pins only the already ruled three-tag cap. C17/verdict
 admission, real finding sets, field decoding, write traces and recovery still need
 the shared driver/scorer handoff. See `docs/harness/2026-10-10-b8-prep.md`.
+
+## B9 preparation cases — 2026-10-10
+
+| Case | Capability | Covers | Source |
+| --- | --- | --- | --- |
+| c17-b9-contradiction-two-sources | C17 / B9 | model | TL-P4-39 B9/U6; one plain contradiction entry, both original links, old history retained |
+| c17-b9-uncertain-and-inferred | C17 / B9 | model | TL-P4-39 B9/U6; explicit uncertainty and qualified inference, no asserted cancellation |
+| c17-b9-legacy-readable | C17 / B9 | model | TL-P4-39 B9/U6; old and unknown marker text remains literal, no note migration |
+| c17-b9-person-list-kept | C17 / B9 | model | c05-timeline-list + TL-P4-32/-42; one personal byte append, star/CRLF and replay preserved |
+
+All four are pending preparations, not scripted success. Top-two `replies.json` objects
+propose bounded `marker`/`alsoCites` execution fields that today's strict schema rejects;
+existing source selectors still bind by exact admitted name. Case 3's empty reply and
+case 4's ordinary append reply use the existing intent shape, but stronger reader/DOM,
+source-id, exact-byte, dedup and same-run recovery evidence remains required. Case 4
+builds on the separately landing c05-timeline-list ruling; it does not reinstate strict
+parsing of the person's earlier bullets. All outcomes use existing Expected keys.
+C17 registration/verdict selection is shared upstream H1 work; current passing tests
+do not execute these model cases. See `docs/harness/2026-10-10-b9-prep.md` for the
+compatible plain-text storage recommendation, six lead questions and exact file ledger.

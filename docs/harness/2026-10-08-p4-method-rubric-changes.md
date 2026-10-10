@@ -229,3 +229,18 @@ write permissions, automatic repairs or another report mechanism.
 | c17-b8-report-only-grammar | agrees | Points 1–8: useful diagnostics reuse Bower health and the actual graph, never fill personal metadata, rewrite notes, repair links, invent related links or teach tags; semantic reads stay bounded and only the health create is reported (R2/U3). |
 | c17-b8-bounded-encoding | agrees | Points 1–8: clear filing fits Gardening with a grounded linked note and unchanged original; reversible fields and bounded lossless sealing preserve primary outcomes without schema growth, fabricated facts or visible internal-file rows (F14). Bounds await the lead. |
 | c17-b8-findings-refresh | agrees | Points 1–8: the supported personal edit remains exact, fresh evidence clears the actual defect, and unchanged diagnostics produce no false update; no redundant note, personal metadata adoption, policy, repair or external-edit Bower log event (F3/F10/U3). No-change policy awaits Q7. |
+
+## B9 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-48)
+
+Each case was reviewed against TL-P4-08 points 1–8. These are semantic preparation
+verdicts, not executed C17 acceptance: the current method test selects c04–c15 ids only.
+No prior rubric, expected outcome, test or numeric threshold is changed. B9 carries
+qualification and compatible marker text; C07 still determines disagreement. New
+marker schema/source binding and production/display oracles await the lead's packet.
+
+| Case | Verdict | Reason |
+| --- | --- | --- |
+| c17-b9-contradiction-two-sources | agrees | Points 1–8: reuse the flat note, apply the value gate, preserve immutable evidence and personal prose, append both sourced claims without a winner, use clear listing placement and bounded reads, and report only the real update; B9 adds a plain label, not a second C07 mechanism. |
+| c17-b9-uncertain-and-inferred | agrees | Points 1–8: fit the visit, carry conditional source news and a visibly qualified inference with relevant sources, no redundant note, cancellation, invented number, policy or schema; both entries share one bounded edit and a truthful existing update row. |
+| c17-b9-legacy-readable | agrees | Points 1–8: an instruction-only read does not migrate old or unknown marker strings, rewrite source/personal bytes, add metadata, create redundant notes or asks, or claim an update; tolerant reading is distinct from strict new writes. |
+| c17-b9-person-list-kept | agrees | Points 1–8 plus TL-P4-32/-42 and c05-timeline-list: one explicitly named sourced append uses the value gate and preserves prior star bullets, CRLF, quoted summary and prose; replay adds nothing, source syntax grants no authority, and the unnamed non-list note stays personal. |
