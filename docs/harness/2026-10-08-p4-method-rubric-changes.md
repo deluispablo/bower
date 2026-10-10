@@ -21,6 +21,9 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c08-revise-comparison | agrees | The same note is revised, not a second one made (value gate, point 2); the revision is a Timeline line. |
 | c09-burst-pipe | agrees | An answer from the notes; nothing filed or changed. |
 | c09-closest-flat | agrees | An answer from the notes; nothing filed or changed. |
+| c09-not-in-sources | agrees | Points 1, 3 and 6: the answer acknowledges missing evidence and cites the checked source without guessing; no inbox item or compiled-state update is involved. |
+| c09-original-over-summary | agrees | Points 3, 6 and 7: the answer cites the original's explicit deadline replacement and marks the stale summary; the unowned compiled state needs permission to change. |
+| c09-two-source-answer | agrees | Points 3 and 6: each answer claim cites its exact original, excluding the unrelated archived listing; no new document or note update is involved. |
 | c10-lookup-fails | agrees | Honest about a failed lookup; invents nothing. |
 | c10-web-allowed | agrees | The finding is a Timeline line with its source (point 3). |
 | c10-web-denied | agrees | Nothing looked up, nothing changed. |
