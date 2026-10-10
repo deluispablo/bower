@@ -88,6 +88,25 @@ test('dragging and keyboard resizing stop with a 560 px page column', () => {
   expect(usePrefs.getState().rightWidth).toBe(368);
 });
 
+test.each(['side', 'right'] as const)('%s resizer values stay integral after fractional dragging and clamping', (side) => {
+  show();
+  act(() => resize(1280.5));
+  const resizer = screen.getByRole('separator', { name: `Resize the ${side} panel` });
+  resizer.setPointerCapture = vi.fn();
+  const direction = side === 'side' ? 1 : -1;
+  const width = () => side === 'side' ? usePrefs.getState().leftWidth : usePrefs.getState().rightWidth;
+  fireEvent.pointerDown(resizer, { clientX: 500, pointerId: 1 });
+  fireEvent.pointerMove(resizer, { clientX: 500 + direction * 20.5, pointerId: 1 });
+  expect(width()).toBe(side === 'side' ? 320.5 : 340.5);
+  expect(Number.isInteger(Number(resizer.getAttribute('aria-valuenow')))).toBe(true);
+  expect(resizer).toHaveAttribute('aria-valuenow', side === 'side' ? '321' : '341');
+  fireEvent.pointerMove(resizer, { clientX: 500 + direction * 600.5, pointerId: 1 });
+  fireEvent.pointerUp(resizer, { pointerId: 1 });
+  expect(width()).toBe(side === 'side' ? 348.5 : 368.5);
+  expect(Number.isInteger(Number(resizer.getAttribute('aria-valuenow')))).toBe(true);
+  expect(resizer).toHaveAttribute('aria-valuenow', side === 'side' ? '349' : '369');
+});
+
 test('folding focused panels returns focus to their toggles without writing prefs', () => {
   show();
   screen.getByRole('button', { name: 'Linked note' }).focus();

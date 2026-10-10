@@ -6,11 +6,11 @@ const prefs = { leftOpen: true, rightOpen: true, leftWidth: 300, rightWidth: 320
 const folder = '/files/Projects/Flat%20hunt?source=demo&scenario=default&time=instant';
 const saved = (page: Page) => page.evaluate(() => localStorage.getItem('bower:prefs'));
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page }, testInfo) => {
   await page.addInitScript((initial) => {
     // Test each motion control independently: reduced motion has Bower moves on.
-    localStorage.setItem('bower:prefs', JSON.stringify({ ...initial, birdMoves: matchMedia('(prefers-reduced-motion: reduce)').matches }));
-  }, prefs);
+    localStorage.setItem('bower:prefs', JSON.stringify({ ...initial, birdMoves: initial.birdMoves || matchMedia('(prefers-reduced-motion: reduce)').matches }));
+  }, { ...prefs, birdMoves: testInfo.annotations.some(({ type }) => type === 'bower-moves-on') });
 });
 
 test('desktop page widths follow the designer table and List/Table stays on one line', async ({ page }) => {
@@ -138,10 +138,62 @@ test('edge sheets hold still with Bower moves off and with reduced motion', asyn
     const dialog = page.getByRole('dialog', { name: 'Side panel', exact: true });
     await expect(dialog).toBeVisible();
     expect(await saved(page)).toBe(JSON.stringify({ ...prefs, birdMoves: reduced }));
-    expect(await dialog.evaluate((el) => getComputedStyle(el).animationName)).toBe('none');
+    const motion = await dialog.evaluate((el) => {
+      const style = getComputedStyle(el);
+      const durationMs = Math.max(...style.animationDuration.split(',').map((duration) =>
+        parseFloat(duration) * (duration.trim().endsWith('ms') ? 1 : 1000)));
+      return { name: style.animationName, durationMs };
+    });
+    if (reduced) expect(motion.name === 'none' || motion.durationMs <= 0.01).toBe(true);
+    else expect(motion.name).toBe('none');
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
   }
+});
+
+test('edge sheets slide with Bower moves on and no reduced motion', {
+  annotation: { type: 'bower-moves-on', description: 'Positive control for edge motion' },
+}, async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 900 });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto(folder);
+  await expect(page.locator('#boot')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Show the side panel' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Side panel', exact: true });
+  await expect(dialog).toBeVisible();
+  expect(await saved(page)).toBe(JSON.stringify({ ...prefs, birdMoves: true }));
+  const motion = await dialog.evaluate((el) => {
+    const style = getComputedStyle(el);
+    return { name: style.animationName, duration: parseFloat(style.animationDuration) };
+  });
+  expect(motion.name).not.toBe('none');
+  expect(motion.duration).toBeGreaterThan(0);
+});
+
+test('a real mouse drag on the side panel resizer reaches its target width', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(folder);
+  await expect(page.locator('#boot')).toHaveCount(0);
+  // Leave room for the full 80 px drag; the separate limit test covers clamping with both panels open.
+  await page.getByRole('button', { name: 'Hide the right panel' }).click();
+  const resizer = page.getByRole('separator', { name: 'Resize the side panel' });
+  const panel = page.getByRole('complementary', { name: 'Side panel', exact: true });
+  await expect(resizer).toHaveAttribute('aria-valuemax', '480');
+  const start = Number(await resizer.getAttribute('aria-valuenow'));
+  const target = start + 80;
+  expect(target).toBeLessThanOrEqual(Number(await resizer.getAttribute('aria-valuemax')));
+  const box = await resizer.boundingBox();
+  if (!box) throw new Error('Missing side resizer');
+  const x = box.x + box.width / 2;
+  const y = box.y + 100;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (const delta of [20, 40, 60, 80]) {
+    await page.mouse.move(x + delta, y, { steps: 4 });
+  }
+  await page.mouse.up();
+  await expect(resizer).toHaveAttribute('aria-valuenow', String(target));
+  await expect.poll(() => panel.evaluate((el) => el.getBoundingClientRect().width)).toBe(target);
 });
 
 test('resizers publish and stop at the current page limit without folding', async ({ page }) => {
