@@ -631,3 +631,91 @@ prior research. Clearing one transaction cannot prevent a later add transaction;
 that boundary through the existing store, queues, fake adapters and production lifetime entry points.
 
 removed: none.
+
+
+## Fix round 2
+
+This implementation repairs adversarial pass 2 BLOCK 1 in the existing queue/store homes.
+Only src/data/upload-queue.ts, src/data/upload-store.ts and these notes changed. No test,
+network call, Git-writing command, dependency, database schema or additional store was used.
+The coordinator owns commits.
+
+### Research and reuse
+
+No network. Inherited official references, checked against the existing implementation:
+
+- [IndexedDB transaction lifecycle](https://www.w3.org/TR/IndexedDB/#transaction-lifecycle):
+  the admission read captures the existing account marker; the metadata/bytes write transaction
+  checks that captured version against the same marker before either put. The original
+  account-wide purge transaction still increments the marker and deletes every folder's bytes.
+- [Drive resumable uploads](https://developers.google.com/workspace/drive/api/guides/manage-uploads#resumable):
+  session URI, status query, 308 range and expiry behavior remain unchanged in the existing adapter.
+
+### Implementation
+
+Queue add initiates and awaits captureForgetVersion before its first hashing, storage estimation
+or persistence request. Its local forget version is also taken at admission and passed to
+reselection instead of being read again there. The store retains the original marker-read promise
+in a WeakMap keyed by the exact admitted record. The later store.add reuses it through the
+existing test/adapter wrappers; transaction retries keep the same captured version. Direct store
+adds initiate the same capture at their own entry, before reading the Blob. Capture errors are
+logged and remain attached to the admission: a subsequent write cannot recapture a newer marker
+and instead follows the existing storage-failure fallback.
+
+Every reselection admission clones the original record and properties, preserving reserved ID,
+session, confirmed bytes and content identity while preventing overlapping reselections from
+sharing or replacing their captured fence. The WeakMap is transient coordination in the existing
+store, not another retention home; it is released after add settles or with the record's lifetime
+when no durable write is attempted. No stored member field or object store changes.
+
+The transaction still refuses cross-connection writes when the admission version moved. The
+existing connection-local retireStaging permission and awaited late-removal path remain intact
+for the earlier fix 1.2 contract: they do not replace the captured admission version or grant
+another connection permission. Sign-out waits for that cleanup and reports its original failure.
+Ordinary disposal, other-account/folder isolation, journal retention, memory fallback, count,
+resumable transport and reselection validation remain covered by unchanged tests.
+
+### Red evidence
+
+Baseline: all eight committed fix-2 cases fail at src/data/upload-sign-out.test.ts:589; the ten
+earlier tests pass. Each restores MEMBER_21 and its exact original 15-byte body after production
+sign-out/auth expiry completed with zero records and null bytes. Exact failing names:
+
+- upload-sign-out-forget: fix 2: new add storage.estimate() before sign-out
+- upload-sign-out-forget: fix 2: new add storage.estimate() before auth expiry
+- upload-sign-out-forget: fix 2: reselection Blob.arrayBuffer() before sign-out
+- upload-sign-out-forget: fix 2: reselection Blob.arrayBuffer() before auth expiry
+- upload-sign-out-forget: fix 2: reselection crypto.subtle.digest() before sign-out
+- upload-sign-out-forget: fix 2: reselection crypto.subtle.digest() before auth expiry
+- upload-sign-out-forget: fix 2: reselection storage.estimate() before sign-out
+- upload-sign-out-forget: fix 2: reselection storage.estimate() before auth expiry
+
+removed: 15 original production lines replaced (queue 9; store 6); 0 test lines removed.
+removed: no store, stored member field, journal line, Drive file, behavior or assertion removed.
+tests changed: none
+
+### Verification
+
+Evidence: `/private/tmp/upload-sign-out-fix-round-2-d2lffn7o/`. All output, Vite caches, CPU reports and optional
+TypeScript build-info paths are under OS temp. Tests write no artifacts into the repository.
+The temp config imports the real Vite/Vitest config and original app setup, with the timer setup
+copied only to redirect its CPU report paths; timer enforcement is unchanged. No repository
+config or test was edited. Explicit offline pnpm options prevent dependency auto-install.
+
+- Baseline `pnpm exec vitest run src/data/upload-sign-out.test.ts --maxWorkers=2`: exit 1,
+  eight intended fix-2 assertions fail and ten earlier tests pass; `red.log`.
+- Final same reds: exit 0, 18/18 pass; `reds-final.log`. This includes all eight exact names above,
+  both earlier cross-tab Blob-staging cases, the awaited removal-failure case and all older reds.
+- `pnpm exec vitest run src/data --maxWorkers=2`: exit 0, 79/79 files and 4,178/4,178 tests pass;
+  `data.log`. No contradicting test, load error, unhandled failure or timer-gate failure surfaced.
+- `pnpm exec tsc -p tsconfig.app.json --noEmit`: exit 0; `tsc-app.log`.
+- `pnpm exec tsc -p tsconfig.node.json --noEmit`: exit 0; `tsc-node.log`.
+- `pnpm exec eslint src/data/upload-queue.ts src/data/upload-store.ts`: exit 0; `eslint.log`.
+- All command output was redirected; only failure sections and aggregate results were read.
+- `git diff --check`: pass; test-file diff empty; status shows only the two owned production
+  files and these notes. Git was used only for read-only status/diff, never for a writing command.
+- Full check, browser gates and designer closure were not rerun in this scoped fix round;
+  their previously recorded environment/closure limitations remain. No green check mark claimed.
+
+removed: 15 original production lines replaced (queue 9; store 6); 0 test lines removed.
+tests changed: none

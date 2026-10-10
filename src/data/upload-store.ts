@@ -43,6 +43,8 @@ export interface PendingUpload {
 export interface UploadStore {
   /** The account's things for this folder, oldest first. */
   list: (account: string, folder: string) => Promise<PendingUpload[]>;
+  /** Captures the forget fence at add admission, before room checks or reselection hashing. */
+  captureForgetVersion?: (record: PendingUpload) => Promise<void>;
   /** Keeps a new one with its bytes, together. Rejects when it cannot (`QuotaExceededError`). */
   add: (record: PendingUpload, body: Blob) => Promise<void>;
   /** Keeps new progress; a removed one stays removed. */
@@ -133,6 +135,7 @@ function under(key: IDBValidKey, prefix: string[]): boolean {
 export function indexedDbUploadStore(factory: IDBFactory | null = typeof indexedDB === 'undefined' ? null : indexedDB, name = DB_NAME): UploadStore {
   let opening: Promise<IDBDatabase> | null = null;
   const staging = new Set<StagedBytes>();
+  const admitted = new WeakMap<PendingUpload, Promise<number>>();
 
   /** Forgets the connection, so the next call opens a fresh one. */
   function forget(): void {
@@ -214,7 +217,22 @@ export function indexedDbUploadStore(factory: IDBFactory | null = typeof indexed
     });
   }
 
+  /** The record identity carries its admission fence through wrappers around add. */
+  function capture(record: PendingUpload): Promise<number> {
+    const captured = admitted.get(record);
+    if (captured) return captured;
+    const version = run('readonly', async (t) => {
+      const [marker] = await Promise.all([
+        request<unknown>(t.objectStore(BYTES).get(forgetKey(record.account))), finished(t),
+      ]);
+      return forgetVersion(marker);
+    });
+    admitted.set(record, version);
+    return version;
+  }
+
   return {
+    captureForgetVersion: async (record) => { await capture(record); },
     list: (account, folder) =>
       run('readwrite', async (t) => {
         const pending = t.objectStore(PENDING);
@@ -243,12 +261,7 @@ export function indexedDbUploadStore(factory: IDBFactory | null = typeof indexed
       const stage: StagedBytes = { record, retiring: false, retiringVersion: null };
       staging.add(stage);
       try {
-        const version = await run('readonly', async (t) => {
-          const [marker] = await Promise.all([
-            request<unknown>(t.objectStore(BYTES).get(forgetKey(record.account))), finished(t),
-          ]);
-          return forgetVersion(marker);
-        });
+        const version = await capture(record);
         // Read before the write transaction: IndexedDB closes one that waits on other work.
         const stored: StoredBytes = { buffer: await body.arrayBuffer(), type: body.type };
         await run('readwrite', async (t) => {
@@ -267,6 +280,7 @@ export function indexedDbUploadStore(factory: IDBFactory | null = typeof indexed
         });
       } finally {
         staging.delete(stage);
+        admitted.delete(record);
       }
     },
 

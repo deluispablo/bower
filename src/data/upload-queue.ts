@@ -745,10 +745,8 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
    * reserved file id and session: Drive never gets a second file. The bytes
    * are kept on the device again when they can be.
    */
-  async function chosenAgain(entry: Entry, body: Blob, gen: number, stage: StagingUpload): Promise<QueueItem> {
-    const { item, record } = entry;
-    stage.record = record;
-    const version = forgotten.get(record.account) ?? 0;
+  async function chosenAgain(entry: Entry, record: PendingUpload, body: Blob, gen: number, version: number, stage: StagingUpload): Promise<QueueItem> {
+    const { item } = entry;
     if (body.size !== record.size || (await sha256(body)) !== record.sha256) {
       console.error('Bytes chosen again differ from the pending upload');
       throw new BowerError('unknown', NOT_SENT_TEXT);
@@ -823,7 +821,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
         throw new BowerError('unknown', NOT_SENT_TEXT);
       }
       return stageUpload(s.account, async (stage) => {
-        const record: PendingUpload = {
+        const candidate: PendingUpload = {
           account: s.account,
           folder: s.folder,
           declarationId: input.declarationId,
@@ -840,12 +838,19 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
           confirmed: 0,
           addedAt: now().toISOString(),
         };
-        stage.record = record;
-        const id = uploadId(record);
+        const id = uploadId(candidate);
         const known = entries.get(id);
+        if (known && !known.item.gone) return { ...known.item };
+        // Each admission has its own identity, even when two reselections overlap.
+        const record = known ? { ...known.record, appProperties: { ...known.record.appProperties } } : candidate;
+        stage.record = record;
+        try { await store.captureForgetVersion?.(record); }
+        catch (error) {
+          // The store retains the failed capture, so add still uses the existing storage fallback.
+          console.error(error);
+        }
         // Its bytes are gone from this device: the same file, chosen again, takes their place.
-        if (known?.item.gone) return chosenAgain(known, input.body, gen, stage);
-        if (known) return { ...known.item };
+        if (known?.item.gone) return chosenAgain(known, record, input.body, gen, version, stage);
         if (!persistAsked) {
           persistAsked = true;
           void storage?.persist?.().then(
