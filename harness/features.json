@@ -7059,7 +7059,7 @@
     "id": "pwa-update-one-reload",
     "task": "p4-e",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "One reload after a deploy runs the new build even before the new service worker installs; offline still opens (navigations network-first, 3 s timeout).",
     "steps": [
