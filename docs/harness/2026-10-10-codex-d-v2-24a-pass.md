@@ -29,3 +29,13 @@ The round-3 tap change at **engine.ts:1709–1710 only accommodates the regex**.
 The earlier reported scenarios now settle correctly. No second motion path, allowlist growth, or missing reaction-dispatch row was found. Findings above were reproduced with read-only, in-memory engine probes; the sandbox prevented the unit-test log write.
 
 findings: 2
+
+## Escalated round pass
+
+Read-only, high effort. Tokens: input 1137664 (cached 1037440), output 5868.
+
+1. **Important — [src/bird/engine.ts:838](/private/tmp/bower-d-v2-24a/src/bird/engine.ts:838): moves-off releases before opacity reaches the still frame.** Disable moves 0.05 s into the `land` pose. Its opacity remains **0.21** throughout settlement and at release, then jumps to **1** when `release()` clears the style. The settle never updates opacity; completion checks only the head. **Contract:** TL-P4-26 §3 and packet §6 require reaching the pose’s still frame before release.
+
+2. **Important — [src/bird/engine.ts:983](/private/tmp/bower-d-v2-24a/src/bird/engine.ts:983): chirp ownership remains unprotected before the first reaction frame.** On idle, call `react('done')`, then `activeHandle().chirp(0.3)` before advancing a frame. `beginReaction()` has installed the action but has not claimed its channels, so `mayWrite()` permits the tuft impulse. At 60 fps, the displayed tuft dips to **−3.12°**, outside the allowed **−2°** lower bound. The escalated regression checks chirp only after one second. **Contract:** TL-P4-26 addendum 3’s ownership rule and packet §11’s eased values with no overshoot past 2°.
+
+findings: 2
