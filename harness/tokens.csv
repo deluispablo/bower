@@ -340,3 +340,4 @@ d-v2-24a,implementer,codex,gpt-5-codex,medium,2,429662,426637,,369792,3025,,,,bl
 move-sheet-flaky,diagnosis,codex,gpt-5-codex,medium,1,205044,203150,,148096,1894,,,,test timing,2026-10-10
 c4-sheet-settle,implementer,codex,gpt-5-codex,low,1,278711,276485,,238720,2226,,,,done,2026-10-10
 d-v2-24a,property-red,codex,gpt-5-codex,low,1,580019,576829,,539776,3190,,,,red repairs,2026-10-10
+c4-sheet-settle,reviewer,claude,bower-reviewer,,1,30927,,,,,,5,0.2,PASS (P4-66),2026-10-10

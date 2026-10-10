@@ -6459,6 +6459,7 @@
       "The name sheet field and buttons are measured after the sheet settles."
     ],
     "verify": "pnpm exec playwright test e2e/v2-move-here.spec.ts e2e/v2-name-sheet.spec.ts --project=desktop -g \"the move sheet has a cancel that returns focus to its opener\"",
-    "note": "DEFECTS move-sheet-cancel-width-flaky (lead 2026-10-10): proposal (a). Codex, then a Claude review. Packet 2026-10-10-c4-sheet-settle-packet.md."
+    "note": "DEFECTS move-sheet-cancel-width-flaky (lead 2026-10-10): proposal (a). Codex, then a Claude review. Packet 2026-10-10-c4-sheet-settle-packet.md.",
+    "review": "P4-66 PASS"
   }
 ]
