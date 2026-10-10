@@ -496,3 +496,40 @@ online verification is claimed, following the no-network instruction:
 
 left out: pnpm check and e2e for integration; this fix round ran the requested targeted gates and has no UI.
 left out: retrieval state, cursor persistence, indexing, contracts, other fake APIs and commits.
+
+## Red repair 3: the fake import
+
+The dependency gate reproduced the reported red before edits: exit 1,
+`production-imports-no-fake-or-demo: src/data/drive/drive-contract.ts → src/data/drive/fake-drive.ts`.
+Evidence: `tmp-logs/b1b-depcruise-red.log`.
+
+Research stayed local, following the no-network instruction. Read-only
+`git show claude/p3:src/data/drive/drive-contract.ts` confirms the existing
+`describeDriveContract(name, make)` pattern: test files build adapters and inject their factory.
+The B1 suite now uses that same pattern. Each of fake-drive.test.ts, drive-http.test.ts and
+parity.test.ts supplies FakeDrive.restore and DriveHttp construction from the test file.
+The shared recorded fixture still owns its snapshot, transport answers and positive controls;
+its adapter constructors are injected. Its options type describes only the fixture inputs,
+and its backing port extends DriveApi only with the existing setTimes fixture operation.
+There is no fake-drive import, including type imports, in drive-contract.ts.
+
+Every B1 case, name, assertion, bound, fixture value and positive control is preserved.
+A read-only comparison against HEAD verified every assertion, test-name and suite-name line
+in all four touched TypeScript files is identical. No dependency rule was changed.
+
+tests changed: src/data/drive/drive-contract.ts: inject adapter factories and the B1 suite factory; assertions unchanged.
+tests changed: src/data/drive/fake-drive.test.ts: construct adapters in the test file and pass the fixture factory.
+tests changed: src/data/drive/drive-http.test.ts: construct adapters in the test file and pass the fixture factory.
+tests changed: src/data/drive/parity.test.ts: supply adapter factories through its local fixture wrapper; cases unchanged.
+
+Requested checks all exited 0; output was redirected and inspected only for failures:
+
+- `pnpm exec vitest run src/data/drive --maxWorkers=2 > tmp-logs/b1b-redfix3.log 2>&1`: 279 tests passed.
+- `pnpm exec depcruise src --config .dependency-cruiser.cjs > tmp-logs/b1b-depcruise.log 2>&1`: passed.
+- `pnpm exec tsc -p tsconfig.app.json --noEmit > tmp-logs/b1b-redfix3-tsc.log 2>&1`: passed.
+- `pnpm exec eslint src/data/drive/drive-contract.ts src/data/drive/drive-http.test.ts src/data/drive/fake-drive.test.ts src/data/drive/parity.test.ts > tmp-logs/b1b-redfix3-eslint.log 2>&1`: passed.
+- `git diff --check`: passed (read-only).
+
+removed: src/data/drive/drive-contract.ts: fake-drive import and concrete adapter construction.
+left out: full pnpm check and e2e; requested targeted red repair checks only, no screen changes.
+No production adapter was changed. No network or git write command was run. The coordinator commits.

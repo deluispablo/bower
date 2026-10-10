@@ -10,7 +10,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DRIVE_OPS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE } from './drive-api';
 import { DriveHttp, FOLDER, type WireFile } from './drive-http';
 import { FakeDrive } from './fake-drive';
-import { B1_FEED_CASES, B1_PREFIX_CASES, makeB1Drive, runB1CacheCase, runB1FeedCase, runB1PrefixCase } from './drive-contract';
+import { B1_FEED_CASES, B1_PREFIX_CASES, makeB1Drive as makeB1Fixture, runB1CacheCase, runB1FeedCase, runB1PrefixCase } from './drive-contract';
+
+const makeB1Drive = (kind: 'http' | 'fake', prefix?: Parameters<typeof makeB1Fixture>[2]) =>
+  makeB1Fixture(kind, {
+    restore: (snapshot, options) => FakeDrive.restore(snapshot, options),
+    http: (options) => new DriveHttp(options),
+  }, prefix);
 
 /** Recorded Drive metadata includes inherited trash and Workspace MIME types, independently of fake normalization. */
 function makeFixRound1Drive() {

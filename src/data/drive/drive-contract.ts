@@ -4,8 +4,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DriveApi, DriveFile } from './drive-api';
-import { DriveHttp, FOLDER, type WireFile } from './drive-http';
-import { FakeDrive, type FakeDriveOptions } from './fake-drive';
+import { FOLDER, type DriveHttpOptions, type WireFile } from './drive-http';
 import { ReadCache } from './read-cache';
 
 export interface DriveUnderTest {
@@ -174,10 +173,19 @@ export const B1_PREFIX_CASES: readonly B1PrefixCase[] = [
 ];
 
 /** Scripted answers extend the existing fake's injected options, without implementing a port in the red. */
-interface B1FakeOptions extends FakeDriveOptions {
+interface B1FixtureOptions {
+  clock: () => number;
+  latency: number;
   prefixResponses: Record<string, 206 | 200 | 416>;
   startPageToken: string;
   changePages: Record<string, B1ChangePage>;
+}
+
+export interface B1DriveFactories {
+  restore(snapshot: string, options: B1FixtureOptions): DriveApi & {
+    setTimes(id: string, created: number, modified: number): void;
+  };
+  http(options: DriveHttpOptions): DriveApi;
 }
 
 export interface B1UnderTest {
@@ -202,7 +210,7 @@ const b1Wire = (file: DriveFile, mimeType?: string): WireFile => ({
 });
 
 /** One recorded protocol fixture, consumed by DriveHttp and by the existing FakeDrive's fixture options. */
-export function makeB1Drive(kind: 'http' | 'fake', prefix = B1_DEFAULT_PREFIX): B1UnderTest {
+export function makeB1Drive(kind: 'http' | 'fake', factories: B1DriveFactories, prefix = B1_DEFAULT_PREFIX): B1UnderTest {
   const newFolder = b1File(B1_FOLDER, 'Projects', [B1_ROOT], true);
   const newNote = b1File(B1_ARRIVAL, 'Plan.md', [B1_FOLDER], false, 'New arrival.');
   const outsideNote = b1File(B1_OUT_NOTE, 'Elsewhere.md', [B1_OUTSIDE], false, 'Unrelated.');
@@ -229,14 +237,14 @@ export function makeB1Drive(kind: 'http' | 'fake', prefix = B1_DEFAULT_PREFIX): 
     { meta: { ...b1File(B1_NOTE, 'Note.md', [B1_ROOT], false, prefix.fullText), ...(prefix.mimeType ? { mimeType: prefix.mimeType } : {}) }, trashed: false, content: { text: prefix.fullText } },
     ...Array.from({ length: 51 }, (_, i) => ({ meta: b1File(`UNKNOWN_${i}`, `Note ${i}.md`, [B1_ROOT], false, 'Known bytes.'), trashed: false, content: { text: 'Known bytes.' } })),
   ];
-  const options: B1FakeOptions = {
+  const options: B1FixtureOptions = {
     clock: () => Date.parse(B1_TIME), latency: 0,
     prefixResponses: { [B1_NOTE]: prefix.status, [B1_CONTROL]: 206 }, startPageToken: 'START_TOKEN', changePages: pages,
   };
-  const backing = FakeDrive.restore(JSON.stringify({ v: 1, seq: 100, last: Date.parse(B1_TIME), files }), options);
+  const backing = factories.restore(JSON.stringify({ v: 1, seq: 100, last: Date.parse(B1_TIME), files }), options);
   const calls: B1UnderTest['calls'] = [];
   const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
-  const http = new DriveHttp({
+  const http = factories.http({
     token: async () => 'made-up-token', pacing: { baseMs: 0 },
     fetch: async (input, init) => {
       const url = new URL(String(input));
@@ -454,21 +462,21 @@ export async function runB1CacheCase(u: B1UnderTest): Promise<unknown> {
   return { text, bytes: Array.from(bytes) };
 }
 
-export function describeB1PortsContract(kind: 'http' | 'fake'): void {
+export function describeB1PortsContract(kind: 'http' | 'fake', make: (prefix?: B1PrefixCase) => B1UnderTest): void {
   describe(`B1b ports: ${kind}`, () => {
     beforeEach(() => vi.useFakeTimers());
     afterEach(() => vi.useRealTimers());
     it.each(B1_PREFIX_CASES)('b1-prefix-read $name', async (prefix) => {
-      await runB1PrefixCase(makeB1Drive(kind, prefix), prefix);
+      await runB1PrefixCase(make(prefix), prefix);
     });
     it('b1-prefix-read never poisons the full-media cache', async () => {
-      await runB1CacheCase(makeB1Drive(kind));
+      await runB1CacheCase(make());
     });
     it.each(B1_FEED_CASES.filter((name) => name !== 'b1-feed-bootstrap-new-folder'))('b1-changes-feed %s', async (name) => {
-      await runB1FeedCase(makeB1Drive(kind), name);
+      await runB1FeedCase(make(), name);
     });
     it('b1-feed-bootstrap-new-folder', async () => {
-      await runB1FeedCase(makeB1Drive(kind), 'b1-feed-bootstrap-new-folder');
+      await runB1FeedCase(make(), 'b1-feed-bootstrap-new-folder');
     });
   });
 }

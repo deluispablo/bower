@@ -3,9 +3,13 @@ import { DriveHttp } from './drive-http';
 import { failureKind, isNoAnswer, isUnconfirmedWrite } from './transport';
 import { CHANGED_ELSEWHERE, checkStillAsSeen, notAsSeenReason, type NotAsSeenReason } from '../contracts/still-as-seen';
 import { BowerError } from '../types';
-import { describeB1PortsContract } from './drive-contract';
+import { FakeDrive } from './fake-drive';
+import { describeB1PortsContract, makeB1Drive } from './drive-contract';
 
-describeB1PortsContract('http');
+describeB1PortsContract('http', (prefix) => makeB1Drive('http', {
+  restore: (snapshot, options) => FakeDrive.restore(snapshot, options),
+  http: (options) => new DriveHttp(options),
+}, prefix));
 
 interface Call {
   method: string;
