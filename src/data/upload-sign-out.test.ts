@@ -316,7 +316,7 @@ async function unreadableAccountFixture(knownIdentity: boolean) {
   me.mockRejectedValue(accountError);
   const remoteError = new BowerError('offline', 'Signing out did not finish. Try again.');
   vi.spyOn(worker, 'signOut').mockRejectedValue(remoteError);
-  return { live, idb, records, accountA, rootA, rootB, accountError, remoteError };
+  return { live, q, idb, records, accountA, rootA, rootB, accountError, remoteError };
 }
 
 it.each([false, true])(
@@ -342,7 +342,7 @@ it.each([false, true])(
   },
 );
 
-it('upload-sign-out-forget: addendum 9: a retried offline sign-out still purges only the last known account', async () => {
+it('upload-sign-out-forget: addendum 11: a retried offline sign-out still purges only the last known account', async () => {
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
   const f = await unreadableAccountFixture(true);
   const fresh = indexedDbUploadStore(f.idb);
@@ -369,9 +369,10 @@ it('upload-sign-out-forget: addendum 9: a retried offline sign-out still purges 
   });
 });
 
-it('upload-sign-out-forget: addendum 9: a retried offline sign-out purges every account when no identity was ever known', async () => {
+it('upload-sign-out-forget: addendum 11: every never-known sign-out attempt purges the same every-account scope', async () => {
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
   const f = await unreadableAccountFixture(false);
+  const purge = vi.spyOn(f.q, 'forgetAccount');
   const fresh = indexedDbUploadStore(f.idb);
   for (let attempt = 0; attempt < 2; attempt++) {
     await expect(f.live.session.signOut()).rejects.toBe(f.remoteError);
@@ -381,6 +382,8 @@ it('upload-sign-out-forget: addendum 9: a retried offline sign-out purges every 
       otherAccount: await fresh.list(ACCOUNT_B, f.rootA),
       bytes: await keptBytes(fresh, f.records),
     }).toEqual({ firstFolder: [], secondFolder: [], otherAccount: [], bytes: [null, null, null] });
+    // Observe the real purge on each attempt, including its scope, even after the store is empty.
+    expect(purge.mock.calls).toEqual(Array.from({ length: attempt + 1 }, () => [undefined]));
   }
 });
 
@@ -772,6 +775,52 @@ async function endAccount(f: Awaited<ReturnType<typeof livePair>>, ending: 'sign
 const syntheticPile = (body: Blob) => ({
   text: 'Synthetic papers',
   items: [{ name: 'Synthetic.pdf', kind: 'pdf' as const, origin: 'From this computer', body }],
+});
+
+it('upload-sign-out-forget: addendum 11: successful retry forgets an upload added after failed sign-out', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  const f = await twoTabFixture();
+  f.live.dispose();
+  f.b.stop();
+  f.drive.offline = false;
+  f.drive.beforeChunk = async () => { throw new BowerError('offline', 'You are offline.'); };
+  const worker = new FakeWorker({
+    drive: f.drive,
+    runs: new FakeRunService({ drive: f.drive, clock: () => NOW.getTime(), scale: 'instant', sleep: async () => undefined }),
+    rootId: f.root, scenario: 'empty', account: 'you@example.com',
+  });
+  vi.spyOn(worker, 'me').mockResolvedValue({ user: { name: 'Alex', email: 'you@example.com' }, folderId: f.root });
+  const live = requiredExport(liveExports, 'makeLiveSources')({
+    drive: f.drive, worker, uploadQueue: f.a, declarePiles: true,
+    place: { place: 'PLACE_A', clock: { now: () => NOW.getTime(), every: () => () => undefined } },
+  });
+  sources.add(live);
+  expect((await live.session.current())?.email).toBe('you@example.com');
+  expect(await live.session.rootId()).toBe(f.root);
+  expect(await live.place?.start()).toBe('active');
+  const remote = vi.spyOn(worker, 'signOut').mockRejectedValueOnce(new BowerError('offline', 'Signing out did not finish. Try again.'));
+  await expect(live.session.signOut()).rejects.toMatchObject({ code: 'offline' });
+  expect((await live.session.current())?.email).toBe('you@example.com');
+  const fresh = indexedDbUploadStore(f.idb);
+  expect(await fresh.list(f.account, f.root)).toEqual([]);
+  expect(await keptBytes(fresh, f.control)).toEqual([null]);
+
+  const body = new Blob(['Synthetic bytes'], { type: 'application/pdf' });
+  expect(body.size).toBe(15);
+  const pile = await live.vault.addPile(syntheticPile(body));
+  await live.vault.settled();
+  await f.a.idle();
+  const pending = await fresh.list(f.account, f.root);
+  expect(pending).toHaveLength(1);
+  expect(pending[0]?.pileId).toBe(pile.id);
+  expect(await keptBytes(fresh, pending)).toEqual([[...new TextEncoder().encode('Synthetic bytes')]]);
+
+  await expect(live.session.signOut()).resolves.toBeUndefined();
+  expect(remote).toHaveBeenCalledTimes(2);
+  expect(await live.session.current()).toBeNull();
+  await f.a.idle();
+  expect({ records: await fresh.list(f.account, f.root), bytes: await keptBytes(fresh, pending) },
+    'successful retry must forget the one new record and its 15 original bytes').toEqual({ records: [], bytes: [null] });
 });
 
 it.each(['sign-out', 'auth expiry', 'no sign-out'] as const)(

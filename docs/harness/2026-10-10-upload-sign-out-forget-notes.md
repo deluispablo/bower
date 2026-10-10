@@ -1630,3 +1630,67 @@ used the owner's explicitly requested checks. No screen changed; no e2e run.
 Standard solution/reuse: existing live sign-out wrapper and forgetPerson mechanism,
 with a lifetime flag preventing repeated destructive cleanup. Inherited offline source:
 https://www.w3.org/TR/IndexedDB/#transaction-lifecycle (not fetched).
+
+
+## Addendum 11 reds
+
+tests changed: src/data/upload-sign-out.test.ts: added the pass 6 live addPile retry red; retained pass 5 assertions with the required prefix; strengthened the never-known control with a real purge spy; exposed its queue in the existing fixture.
+
+TL-P4-53 addendum 11 supersedes the remote-only retry rule: every sign-out attempt
+purges with this session's last known identity. Every-account scope is used only if
+this session has never known an identity. Only tests and these notes changed.
+
+Named tests and evidence:
+
+- `upload-sign-out-forget: addendum 11: successful retry forgets an upload added after failed sign-out`
+  (`src/data/upload-sign-out.test.ts:780`). Real live sources, active place guard,
+  real queue and fake IndexedDB reproduce pass 6. The first remote call fails and
+  the person remains signed in; first cleanup removes the original upload. The
+  person adds a new file through addPile; exactly one record and all 15 original
+  bytes are present before retry. The second remote call succeeds, session.current
+  returns null, and the final assertion fails at line 823: records remain 1 -> 1
+  and the body remains `Synthetic bytes`, instead of an empty list and null body.
+- `upload-sign-out-forget: addendum 11: a retried offline sign-out still purges only the last known account`
+  (`src/data/upload-sign-out.test.ts:345`). Preserved pass 5 red, changing only its
+  prefix. Both offline remote attempts fail; identity reads are also offline.
+  Account B's one pending record and ten exact bytes remain unchanged. Passing
+  on this baseline; guards against widening the retry to every account.
+- `upload-sign-out-forget: addendum 11: every never-known sign-out attempt purges the same every-account scope`
+  (`src/data/upload-sign-out.test.ts:372`). All three seeded records and bodies
+  disappear on the first attempt. A call-through spy on the real queue proves
+  each purge and its every-account argument, independently of the empty store.
+  The retry assertion fails at line 386: one `[undefined]` call instead of two.
+  No stored-data assertion or contract number was relaxed.
+
+Existing-test sweep (once): searched current app, API, runner, harness and e2e test
+sources for retry/retries with purge, forget, logout, sign-out or identity, and
+inspected the matching sign-out tests and purge-call assertions. No existing test
+asserts that a retry never purges; no contradictory test requires rewriting.
+The existing never-known test at `src/data/upload-sign-out.test.ts:372` merely
+checked an already-empty store, so its assertions remain and the spy strengthens
+it. The existing live draft retry test at `src/data/live/live.test.ts:1691` asserts
+cleanup on both sides of retry without forbidding a second purge; unchanged.
+The retained pass 5 test at `src/data/upload-sign-out.test.ts:345` forbids deleting
+B, not purging A again; unchanged apart from the required addendum 11 prefix.
+
+Verification (whole file, no name filter):
+
+```sh
+pnpm exec vitest run src/data/upload-sign-out.test.ts --maxWorkers=2 --config /private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/upload-a9-red2-e7a9j2_b/vitest.config.mjs --configLoader runner
+```
+
+Exit 1: 51 tests, 49 passed, exactly the two intended assertion failures above.
+Log: `/private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/upload-a11-reds.log`.
+Reused the existing OS-temp config: imports the real Vite config and app setup,
+keeps timer checks active, redirects cache and CPU reports outside the repository.
+The new place guard uses an injected fixed clock; no real timer wait is added.
+Read-only `git diff --check` passed. No network, Git writes, production edits,
+node_modules replacements or symlinks, or repository test outputs.
+Implementation, commits, pnpm check and e2e are left out of this red-only assignment.
+
+Standard solution/reuse: existing live sign-out entry point, addPile, place guard,
+upload queue and IndexedDB store; the spy calls through to the production purge.
+Inherited offline sources (not fetched):
+[IndexedDB transaction lifecycle](https://www.w3.org/TR/IndexedDB/#transaction-lifecycle)
+and [Vitest setupFiles](https://vitest.dev/config/#setupfiles), already cited by the
+existing notes and timer setup. No second cleanup mechanism introduced.
