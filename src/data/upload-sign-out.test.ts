@@ -2,6 +2,7 @@ import { IDBFactory } from 'fake-indexeddb';
 import fc from 'fast-check';
 import { afterEach, expect, it, vi } from 'vitest';
 import { FakeDrive } from './drive/fake-drive';
+import { marked } from './drive/transport';
 import { FakeWorker } from './fake/fake-worker';
 import { FakeRunService } from './fake/fake-run-service';
 import * as liveExports from './live/index';
@@ -12,6 +13,7 @@ import { indexedDbUploadStore, type PendingUpload, type UploadStore } from './up
 import { BowerError } from './types';
 import { sha256 } from './vault/hashes';
 import { outboxKey } from './vault/journal';
+import type { DriveVault } from './vault/drive-vault';
 
 const NOW = new Date('2026-10-10T12:00:00.000Z');
 const ACCOUNT_B = 'ACCOUNT_B';
@@ -596,5 +598,251 @@ it.each(preWriteSteps.flatMap((step) => (['sign-out', 'auth expiry'] as const).m
       release.open();
       await adding;
     }
+  },
+);
+
+
+/** Two live lifetimes share only Drive and IndexedDB; neither queue nor cleanup is replaced. */
+async function livePair() {
+  const f = await twoTabFixture();
+  f.drive.offline = false;
+  f.drive.beforeChunk = async () => { throw new BowerError('offline', 'You are offline.'); };
+  const workerB = new FakeWorker({
+    drive: f.drive,
+    runs: new FakeRunService({ drive: f.drive, clock: () => NOW.getTime(), scale: 'instant', sleep: async () => undefined }),
+    rootId: f.root, scenario: 'empty', account: 'you@example.com',
+  });
+  vi.spyOn(workerB, 'me').mockImplementation(async () => ({ user: { name: 'Alex', email: 'you@example.com' }, folderId: f.root }));
+  const liveB = requiredExport(liveExports, 'makeLiveSources')({ drive: f.drive, worker: workerB, uploadQueue: f.b, declarePiles: true });
+  sources.add(liveB);
+  expect((await liveB.session.current())?.email).toBe('you@example.com');
+  expect(await liveB.session.rootId()).toBe(f.root);
+  await liveB.vault.tree();
+  return { ...f, liveB, vaultB: liveB.vault as DriveVault };
+}
+
+async function endAccount(f: Awaited<ReturnType<typeof livePair>>, ending: 'sign-out' | 'auth expiry') {
+  if (ending === 'sign-out') await f.live.session.signOut();
+  else {
+    f.drive.failNext('auth');
+    await expect(f.live.vault.tree()).rejects.toMatchObject({ code: 'auth' });
+  }
+  const fresh = indexedDbUploadStore(f.idb);
+  expect(await fresh.list(f.account, f.root)).toEqual([]);
+  expect(await keptBytes(fresh, f.control)).toEqual([null]);
+  return fresh;
+}
+
+const syntheticPile = (body: Blob) => ({
+  text: 'Synthetic papers',
+  items: [{ name: 'Synthetic.pdf', kind: 'pdf' as const, origin: 'From this computer', body }],
+});
+
+it.each(['sign-out', 'auth expiry', 'no sign-out'] as const)(
+  'upload-sign-out-forget: fix 3: Undo awaits untrash before %s',
+  async (ending) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const f = await livePair();
+    const body = new Blob(['Synthetic bytes'], { type: 'application/pdf' });
+    expect(body.size).toBe(15);
+    const pile = await f.vaultB.addPile(syntheticPile(body));
+    await f.vaultB.settled();
+    await f.b.idle();
+    const pending = (await f.storeA.list(f.account, f.root)).filter((r) => r.pileId === pile.id);
+    expect(pending).toHaveLength(1);
+    expect(await keptBytes(f.storeA, pending)).toEqual([[...new TextEncoder().encode('Synthetic bytes')]]);
+    await f.vaultB.trash(pile.path ?? '');
+    await f.vaultB.settled();
+    expect(await keptBytes(f.storeA, pending)).toEqual([null]);
+    const entered = barrier(), release = barrier();
+    const untrash = f.drive.untrash.bind(f.drive);
+    vi.spyOn(f.drive, 'untrash').mockImplementation(async (...args) => {
+      const result = await untrash(...args);
+      if (args[0] === pending[0]?.parentId) { entered.open(); await release.promise; }
+      return result;
+    });
+    const undo = outcome(f.vaultB.restore(pile.path ?? ''));
+    try {
+      await entered.promise;
+      const fresh = ending === 'no sign-out' ? indexedDbUploadStore(f.idb) : await endAccount(f, ending);
+      if (ending !== 'no sign-out') expect(await keptBytes(fresh, pending)).toEqual([null]);
+      release.open();
+      await undo;
+      await f.vaultB.settled();
+      await Promise.all([f.a.idle(), f.b.idle()]);
+      if (ending === 'no sign-out') {
+        expect(await fresh.list(f.account, f.root)).toHaveLength(2);
+        expect(await keptBytes(fresh, pending)).toEqual([[...new TextEncoder().encode('Synthetic bytes')]]);
+        expect(f.b.items().find((i) => i.pileId === pile.id)).toMatchObject({ state: 'waiting', durable: true });
+      } else {
+        expect({ records: await fresh.list(f.account, f.root), bytes: await keptBytes(fresh, [...f.control, ...pending]) },
+          'Undo must not re-admit the 15 retained bytes under a newer forget version').toEqual({ records: [], bytes: [null, null] });
+      }
+    } finally { release.open(); await undo; }
+  },
+);
+
+it.each(['sign-out', 'auth expiry'] as const)(
+  'upload-sign-out-forget: fix 3: addPile awaits declaration hashing before %s',
+  async (ending) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const f = await livePair();
+    const entered = barrier(), release = barrier();
+    const body = new Blob(['Synthetic bytes'], { type: 'application/pdf' });
+    const read = body.arrayBuffer.bind(body);
+    vi.spyOn(body, 'arrayBuffer').mockImplementationOnce(async () => { entered.open(); await release.promise; return read(); });
+    const writes: PendingUpload[] = [];
+    const add = f.storeB.add.bind(f.storeB);
+    vi.spyOn(f.storeB, 'add').mockImplementation(async (r, bytes) => { writes.push(r); await add(r, bytes); });
+    const adding = outcome(f.vaultB.addPile(syntheticPile(body)));
+    try {
+      await entered.promise;
+      expect(writes).toEqual([]);
+      const fresh = await endAccount(f, ending);
+      release.open();
+      await adding;
+      await f.vaultB.settled();
+      await f.b.idle();
+      expect({ records: await fresh.list(f.account, f.root), bytes: await keptBytes(fresh, [...f.control, ...writes]) },
+        'the addPile admission begins before its declaration hashes the Blob').toEqual({ records: [], bytes: [null, ...writes.map(() => null)] });
+    } finally { release.open(); await adding; }
+  },
+);
+
+it.each(['sign-out', 'auth expiry'] as const)(
+  'upload-sign-out-forget: fix 3: chooseAgain awaits hashing before %s',
+  async (ending) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const f = await livePair();
+    const body = new Blob(['Synthetic bytes'], { type: 'application/pdf' });
+    const pile = await f.vaultB.addPile(syntheticPile(body));
+    await f.vaultB.settled();
+    await f.b.idle();
+    const pending = (await f.storeA.list(f.account, f.root)).filter((r) => r.pileId === pile.id);
+    expect(pending).toHaveLength(1);
+    expect(await keptBytes(f.storeA, pending)).toEqual([[...new TextEncoder().encode('Synthetic bytes')]]);
+    // Model a reload after this member's device copy was lost; its declaration remains in Drive.
+    f.liveB.dispose();
+    f.b.stop();
+    const retained = pending[0];
+    if (!retained) throw new Error('The pending member must exist.');
+    await f.storeB.remove(retained);
+    const worker = new FakeWorker({ drive: f.drive, runs: new FakeRunService({ drive: f.drive, clock: () => NOW.getTime(), scale: 'instant', sleep: async () => undefined }), rootId: f.root, scenario: 'empty', account: 'you@example.com' });
+    vi.spyOn(worker, 'me').mockImplementation(async () => ({ user: { name: 'Alex', email: 'you@example.com' }, folderId: f.root }));
+    const tab = requiredExport(liveExports, 'makeLiveSources')({ drive: f.drive, worker, uploadQueue: f.b, declarePiles: true });
+    sources.add(tab);
+    await tab.session.current(); await tab.session.rootId();
+    const vault = tab.vault as DriveVault;
+    expect((await vault.piles()).find((p) => p.id === pile.id)?.items).toEqual(expect.arrayContaining([expect.objectContaining({ id: pending[0]?.memberKey, chooseAgain: true })]));
+    const entered = barrier(), release = barrier();
+    const read = body.arrayBuffer.bind(body);
+    vi.spyOn(body, 'arrayBuffer').mockImplementationOnce(async () => { entered.open(); await release.promise; return read(); });
+    const choosing = outcome(vault.chooseAgain(pile.id, retained.memberKey, { body }));
+    try {
+      await entered.promise;
+      const fresh = await endAccount(f, ending);
+      release.open();
+      await choosing;
+      await vault.settled();
+      await f.b.idle();
+      expect({ records: await fresh.list(f.account, f.root), bytes: await keptBytes(fresh, [...f.control, ...pending]) },
+        'reselection starts at chooseAgain, before hashing and looking in Drive').toEqual({ records: [], bytes: [null, null] });
+    } finally { release.open(); await choosing; }
+  },
+);
+
+const progressPaths = [
+  { path: 'retry reserves a file id', launch: 'retry', write: 'fileId' },
+  { path: 'resume after halt keeps a session', launch: 'resume', write: 'session' },
+  { path: 'reload resume keeps confirmed progress', launch: 'reload', write: 'confirmed' },
+  { path: 'retryPile reserves a file id', launch: 'retryPile', write: 'fileId' },
+  { path: 'retry releases a refused file id', launch: 'retry', write: 'reset' },
+] as const;
+
+it.each(progressPaths)(
+  'upload-sign-out-forget: fix 3: $path across sign-out',
+  async ({ launch, write }) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const f = await livePair();
+    await f.b.idle();
+    const item = f.b.items().find((i) => i.memberKey === f.control[0]?.memberKey);
+    expect(item).toMatchObject({ state: 'waiting', durable: true });
+    if (!item) throw new Error('The pending control must be in tab B.');
+    if (launch === 'resume') { await f.b.halt(item.id); f.b.retry(); await f.b.idle(); }
+    if (launch === 'reload') f.b.stop();
+    const entered = barrier(), release = barrier();
+    const save = f.storeB.save.bind(f.storeB);
+    let held = false;
+    vi.spyOn(f.storeB, 'save').mockImplementation(async (record) => {
+      const target = write === 'fileId' ? record.fileId !== null
+        : write === 'session' ? record.session !== null
+        : write === 'reset' ? record.fileId === null : record.confirmed === 4;
+      if (target && !held) { held = true; entered.open(); await release.promise; }
+      await save(record);
+    });
+    f.drive.beforeChunk = async ({ start }) => {
+      if (write === 'reset') throw new BowerError('unknown', 'This file could not be sent.', undefined, marked('permanent'));
+      if (write !== 'confirmed' || start !== 0) throw new BowerError('offline', 'You are offline.');
+    };
+    const launched = outcome((async () => {
+      if (launch === 'reload') await f.b.start(f.account, f.root);
+      else if (launch === 'resume') f.b.resume(item.id);
+      else if (launch === 'retryPile') await f.vaultB.retryPile(item.pileId);
+      else f.b.retry();
+    })());
+    try {
+      await entered.promise;
+      const fresh = await endAccount(f, 'sign-out');
+      release.open();
+      await launched;
+      await f.b.idle();
+      expect({ records: await fresh.list(f.account, f.root), bytes: await keptBytes(fresh, f.control) },
+        'a delayed progress put must not recreate a forgotten pending upload').toEqual({ records: [], bytes: [null] });
+    } finally { release.open(); await launched; await f.b.idle(); }
+  },
+);
+
+it.each(['new add', 'queue reselection'] as const)(
+  'upload-sign-out-forget: fix 3: %s awaits Blob read across sign-out',
+  async (path) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const f = await livePair();
+    const body = new Blob(['Synthetic bytes'], { type: 'application/pdf' });
+    const input = { ...await member(f.inbox, 44), body, sha256: await sha256(body) };
+    const pending: PendingUpload = {
+      account: f.account, folder: f.root, declarationId: input.declarationId,
+      memberKey: input.memberKey, sha256: input.sha256, pileId: input.pileId,
+      parentId: input.parentId, name: input.name, type: body.type, size: body.size,
+      appProperties: { ...input.appProperties }, fileId: null, session: null,
+      confirmed: 0, addedAt: NOW.toISOString(),
+    };
+    if (path === 'queue reselection') {
+      await f.b.add(input); await f.b.idle();
+      expect(await keptBytes(f.storeA, [pending])).toEqual([[...new TextEncoder().encode('Synthetic bytes')]]);
+      f.b.stop();
+      const read = f.storeB.body.bind(f.storeB);
+      const unreadable = vi.spyOn(f.storeB, 'body').mockImplementation(async (record) => {
+        if (record.memberKey === input.memberKey) throw new Error('Synthetic device read refused');
+        return read(record);
+      });
+      await f.b.start(f.account, f.root); await f.b.idle();
+      expect(f.b.items().find((i) => i.memberKey === input.memberKey)).toMatchObject({ gone: true, state: 'failed' });
+      unreadable.mockRestore();
+    }
+    const entered = barrier(), release = barrier();
+    const read = body.arrayBuffer.bind(body);
+    vi.spyOn(body, 'arrayBuffer').mockImplementationOnce(async () => { entered.open(); await release.promise; return read(); });
+    const adding = outcome(f.b.add(input));
+    try {
+      await entered.promise;
+      const fresh = await endAccount(f, 'sign-out');
+      expect(await keptBytes(fresh, [pending])).toEqual([null]);
+      release.open();
+      const added = await adding;
+      await f.b.idle();
+      expect({ records: await fresh.list(f.account, f.root), bytes: await keptBytes(fresh, [...f.control, pending]) })
+        .toEqual({ records: [], bytes: [null, null] });
+      expect(added).toMatchObject({ error: expect.any(BowerError) });
+    } finally { release.open(); await adding; }
   },
 );

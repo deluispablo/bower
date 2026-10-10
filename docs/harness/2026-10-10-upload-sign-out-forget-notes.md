@@ -719,3 +719,99 @@ config or test was edited. Explicit offline pnpm options prevent dependency auto
 
 removed: 15 original production lines replaced (queue 9; store 6); 0 test lines removed.
 tests changed: none
+
+## Fix round 3 reds
+
+Red-owning session for TL-P4-53 addendum 8, sweep per TL-P4-51. Read WORKER, this entry's
+packet, and adversarial pass 3 (BLOCK 1). Production HEAD remains
+`be1e602efd720c5b9c5c880bf4b4192568c96e4d`. The coordinator owns commits.
+No production edit, network call or Git-writing command. Only the test and this requested notes
+record changed. All 18 pre-existing cases, every assertion and every bound remain byte-for-byte intact.
+
+tests changed: src/data/upload-sign-out.test.ts: add start-of-operation forget-fence regressions for Undo, addPile and chooseAgain; sweep store writers with retry, resume, reload and direct admission controls; preserve every existing assertion and bound.
+removed: none
+
+### Exact new names
+
+1. `upload-sign-out-forget: fix 3: Undo awaits untrash before sign-out`
+2. `upload-sign-out-forget: fix 3: Undo awaits untrash before auth expiry`
+3. `upload-sign-out-forget: fix 3: Undo awaits untrash before no sign-out`
+4. `upload-sign-out-forget: fix 3: addPile awaits declaration hashing before sign-out`
+5. `upload-sign-out-forget: fix 3: addPile awaits declaration hashing before auth expiry`
+6. `upload-sign-out-forget: fix 3: chooseAgain awaits hashing before sign-out`
+7. `upload-sign-out-forget: fix 3: chooseAgain awaits hashing before auth expiry`
+8. `upload-sign-out-forget: fix 3: retry reserves a file id across sign-out`
+9. `upload-sign-out-forget: fix 3: resume after halt keeps a session across sign-out`
+10. `upload-sign-out-forget: fix 3: reload resume keeps confirmed progress across sign-out`
+11. `upload-sign-out-forget: fix 3: retryPile reserves a file id across sign-out`
+12. `upload-sign-out-forget: fix 3: retry releases a refused file id across sign-out`
+13. `upload-sign-out-forget: fix 3: new add awaits Blob read across sign-out`
+14. `upload-sign-out-forget: fix 3: queue reselection awaits Blob read across sign-out`
+
+### Sweep and live evidence
+
+Searched add/save/put callers in upload-queue.ts, drive-vault.ts and upload-store.ts.
+There is one byte-staging store.add caller, upload-queue.ts:318 (keepBytes), reached from
+new add and chosenAgain. Existing fix 1.1/fix 2 assertions cover Blob reads, digest and estimate
+waits. New cases 13–14 repeat admission fencing with two live sources, independent real queues
+and independent store connections to shared fake IndexedDB.
+
+DriveVault has one queue.add caller, drive-vault.ts:1724 (stageQueued). Its awaited callers
+are addPile's initial staging and sendQueued/sendAll, reached by Undo, retryPile and chooseAgain.
+Cases 1–7 exercise the real vault doors, with declaration hashing and reselection hashing barriers;
+case 11 exercises the real retryPile door. No alternate store or queue was substituted.
+
+There are two progress store.save callers: upload-queue.ts:434 (reserved file id) and :452
+(shared progress callback). The latter is reached by onSession, onConfirmed and letFileIdGo.
+Cases 8–12 pause those real saves before their IndexedDB transaction, including reservation
+release on a permanently refused create. They cover retry, explicit resume after halt, and
+start after reload. These paths already pass: save's conditional put never recreates a removed
+record. The only pending/byte puts are upload-store.ts:275–276 (add) and :298 (save).
+The version-marker put at :203 belongs to capture/forget, not pending-upload admission;
+DriveVault's index.put calls update its in-memory listing, not the upload store.
+
+Both tabs use real makeLiveSources lifetimes and real queues; fake Drive and IndexedDB are entirely
+in memory. The queued account has a separately committed 10-byte control, verified before forgetting.
+Every selected test Blob has the original 15 bytes `Synthetic bytes`. Transfers refuse offline
+through the injected Drive hook while metadata operations remain available. No timer sleeps,
+waitFor, timeout overrides or repository-writing test fixtures were introduced.
+
+Undo commits removal first, then pauses the successful untrash answer for the actual pile folder.
+Tab A completes production sign-out or the production auth watcher while tab B's Undo is suspended.
+Fresh IndexedDB reads confirm zero records and null control/pending bodies before releasing B.
+After Undo and all vault/queue work settle, both reds observe one record and its 15 original bytes.
+The positive control without sign-out restores the pending upload and its original body, with
+waiting/durable queue state. Its separate control remains, so the exact positive count is two.
+
+The addPile and chooseAgain barriers precede their queue.add admission. Both sign-out and auth
+expiry variants confirm forgetting first, then fail on resurrection of one record and its 15-byte
+body after the delayed operation and queues settle. All six failures are intended storage assertions.
+No contradiction with a preserved assertion remains in this targeted file.
+
+### Final verification at HEAD
+
+- Full file, `--maxWorkers=2`: exit 1; **32 tests, 26 pass, six intended assertion reds**.
+  Exact failing names: 1, 2, 4, 5, 6, 7 above. All 18 existing cases and eight new controls pass.
+  No load error, unhandled rejection, timeout or timer-gate failure in the final run.
+- `tsc -p tsconfig.app.json --noEmit`: pass; `/private/tmp/upload-forget-fix3/types.log`.
+- ESLint for the changed test: pass; `/private/tmp/upload-forget-fix3/lint.log`.
+- `git diff --check`: pass. No check/e2e/server/fix/commit/integration in this red-only assignment.
+
+The installed local Vitest binary was invoked directly to avoid pnpm dependency/network checks:
+
+```sh
+cd /private/tmp/upload-forget-fix3
+node /private/tmp/bower-upload-sign-out-forget/node_modules/vitest/vitest.mjs run --config /private/tmp/upload-forget-fix3/vitest.config.mjs --maxWorkers=2 > /private/tmp/upload-forget-fix3/red.log 2>&1
+```
+
+The OS-temp config selects only src/data/upload-sign-out.test.ts, keeps jsdom and both original
+setup files (including the timer gate), and sets Vite cacheDir to OS temp. The process cwd is OS
+temp so the existing CPU reporter also writes there. Test logs, cache and CPU reports are all
+under `/private/tmp/upload-forget-fix3`; tests never write into the repository. Read only failure
+sections and aggregate results. TypeScript used --noEmit and ESLint did not use --fix or --cache.
+
+Research: inherited official Drive resumable upload and IndexedDB transaction-lifecycle links in
+this notes file's Research section; no references were fetched. Reuse the existing live sources,
+queue, conditional progress put, IndexedDB implementation and fake stack. A transaction clear
+cannot prevent a later admission that captures its fence after an earlier operation's awaits:
+that is the shared late-capture mechanism pinned by these six reds.
