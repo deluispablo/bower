@@ -6545,8 +6545,8 @@
       "Bedrooms and Commute are no narrower than their labels; the table scrolls sideways at 375."
     ],
     "verify": "pnpm exec playwright test e2e/folder-table.spec.ts -g \"folder table headers stay on one line and the table scrolls sideways\"",
-    "note": "DEFECTS folder-table-header-wrap (lead ruling, owner-reported). Codex, then a Claude review and the designer. Packet 2026-10-10-folder-header-wrap-packet.md. implementer: codex.",
-    "design": "verified (designer, ce1eb3cd: 43 px headers at 375-1440; table scrolls)",
+    "note": "DEFECTS folder-table-header-wrap (lead ruling, owner-reported). Codex, then a Claude review and the designer. Packet 2026-10-10-folder-header-wrap-packet.md. implementer: codex. Designer verified ce1eb3cd: 43 px headers at 375-1440, table scrolls sideways.",
+    "design": "verified",
     "review": "P4-72 PASS"
   }
 ]
