@@ -264,7 +264,13 @@ describe('Q1a stored answers through production entry points', () => {
     expect(await run(legacy, 0)).toBe(0);
     expect(legacy.drive.pathOf(legacy.ids.clear, legacy.rootId)).toBe('Areas/Home/Clear.md');
     expect(await questions(legacy)).toHaveLength(1);
-    const w = await world((w) => ({ ...emptyIntent, things: [{ fileId: w.ids.clear, to: 'Areas/Home', name: 'Clear.md' }], asks: [optionAsk(w)] }));
+    let siblingId = '';
+    const w = await world((w) => ({ ...emptyIntent, things: [
+      { fileId: w.ids.clear, to: 'Areas/Home', name: 'Clear.md' },
+      { fileId: siblingId, to: 'Areas/Home', name: 'Sibling.md' },
+    ], asks: [optionAsk(w)] }));
+    const sibling = await w.drive.createText(w.ids.inbox, 'Sibling.md', '# Home\n\nA clear made-up room paper.\n', { pile: 'pile-clear-sibling' });
+    siblingId = sibling.id;
     const before = await w.drive.evidence(w.ids.unclear);
     const words = await w.drive.readText(w.ids.anchor);
     await w.drive.createText(w.ids.changes, 'request-1.json', JSON.stringify({ v: 1, id: 'request-1', device: 'device-1', at: AT,
@@ -275,7 +281,9 @@ describe('Q1a stored answers through production entry points', () => {
     expect(await w.drive.evidence(w.ids.unclear)).toEqual(before);
     expect(await w.drive.readText(w.ids.anchor)).toBe(words);
     expect.soft(w.drive.pathOf(w.ids.clear, w.rootId)).toBe('Areas/Home/Clear.md');
-    expect.soft((await journal(w)).some((l) => l.id === 'request-1'), 'independent request is completed').toBe(false);
+    expect.soft(w.drive.pathOf(sibling.id, w.rootId), 'the clear sibling pile is filed despite the asking').toBe('Areas/Home/Sibling.md');
+    expect.soft((await journal(w)).some((l) => l.id === 'request-1'), 'the free request stays pending without a model decision').toBe(true);
+    expect.soft(await fileAt(w, `${SYSTEM.archive}/request-1.json`), 'the pending request is not archived').toBeUndefined();
     expect.soft((await questions(w))[0]?.options ?? [], 'question stores script-bound options').toHaveLength(2);
   });
 

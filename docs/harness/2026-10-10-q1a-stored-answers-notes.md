@@ -153,7 +153,93 @@ new corpus support, full gates and e2e. The timing retry accounting remains with
 
 ## Implementation
 
-### Round 2 — current delivery
+### Round 3 — current delivery after supplied red repair 2 HEAD
+
+2026-10-10. Final status: **blocked under TL-P4-51; one unchanged fixture contradiction**.
+Resumed all 12 retained production changes at `2589a3418ba0bb376220bc1e0d166849cc97b916`.
+No production repair was needed for the other 27 Q1 reds or any other data/runner test.
+No network, writing git command, test edit, fixture edit, dependency change or numeric loosening was used.
+Only this notes section was edited in this session; all retained production changes remain uncommitted.
+
+#### Supplied repair 2 did not change the fixture
+
+Read-only `git show --stat HEAD` and `git show HEAD -- runner/test/q1-continuation.test.ts` establish that
+HEAD changes only this notes file (139 insertions), despite its commit subject claiming a fixture request decision.
+The second clear-work reply at `runner/test/q1-continuation.test.ts:267` still contains only `emptyIntent`,
+one `things` entry and one `asks` entry. It supplies no decision for the generic request created at :270–271.
+The committed notes' Red repair 2 section itself records that repair as blocked and that no fixture changed.
+The red repair 1 listing assertions and supplied TL-P4-44 addendum 3 remain preserved and green.
+
+#### Every contradicting test — complete targeted sweep
+
+All three requested suites completed before stopping. Exactly one distinct test fails, in both Q1 and runner runs:
+
+| Exact test | File:line | Contradiction |
+| --- | --- | --- |
+| `Q1a q1-clear-work-with-waiting-item: an option asking leaves its item and files clear work` | `runner/test/q1-continuation.test.ts:278` | Requires `request-1` to disappear as completed, but the supplied fixture reply contains no request decision. Actual: the request remains pending. |
+
+The validated model reply fields at `runner/src/claude.ts:1072–1077` and Filing construction at :1084
+have no generic request decision. `modelDecisions` at `src/data/spine/scripted.ts:552–565` installs no
+request handler; the existing admission filter at :827 keeps generic requests without that handler pending.
+The request text names no existing note, so the C05 named-note settlement cannot admit it either.
+The existing decision contract at :517–519 and :542–543 requires this pending behavior; Q1a contract 7
+preserves it. The provider's existing no-unproposed-effects test at `runner/test/claude-provider.test.ts:735`
+passes in the complete runner sweep. An implicit completion would change the existing request contract.
+No other contradiction or regression was observed. The lead/coordinator must supply the actual fixture repair
+or rule the generic model request boundary before this entry can finish with every red green.
+
+#### Final validation
+
+All command output is under `tmp-logs/`; only failures and result summaries were read.
+
+| Command | Result / log |
+| --- | --- |
+| `pnpm -C runner exec vitest run test/q1-continuation.test.ts --maxWorkers=2` | 27 pass, 1 fail / 28; `tmp-logs/q1-r3-reds.log`. |
+| `pnpm exec vitest run src/data --maxWorkers=2` | 4,141 pass / 4,141; 77 green files; `tmp-logs/q1-r3-data.log`. |
+| `pnpm -C runner exec vitest run --maxWorkers=2` | 583 pass, 1 fail / 584; 44 green files, one failed; `tmp-logs/q1-r3-runner.log`. Includes corpus, Drive call goldens, fingerprints and bounded reads. |
+| `pnpm exec tsc -p tsconfig.app.json --noEmit` | Pass; `tmp-logs/q1-r3-tsc-app.log`. |
+| `pnpm exec tsc -p tsconfig.node.json --noEmit` | Pass; `tmp-logs/q1-r3-tsc-node.log`. |
+| `pnpm -C runner exec tsc --noEmit` | Pass; `tmp-logs/q1-r3-tsc-runner.log`. |
+| ESLint on all 11 retained app TS files | Pass; `tmp-logs/q1-r3-eslint-app.log`. |
+| ESLint on `runner/src/claude.ts` | Pass; `tmp-logs/q1-r3-eslint-runner.log`. |
+| Read-only `git diff --check`; test diff | Pass; no uncommitted test changes. |
+| `pnpm check`; app/capabilities e2e demo/fake | Not run after the complete TL-P4-51 contradiction sweep; no check mark or integration claim. |
+
+#### Removed lines and tests — retained production diff against supplied HEAD
+
+removed: runner/src/claude.ts: 13 lines; additive answer input, conditional candidates and accumulated usage replace old forms.
+removed: src/data/answer-loop.ts: 3 lines; boolean-only signature/import widened at the existing answer boundary.
+removed: src/data/contracts/journal-record.ts: 1 line; existing validator accepts asking identity and additive values.
+removed: src/data/contracts/questions.ts: 5 lines; explicit asking and report policies replace id-only closure/rest spread.
+removed: src/data/contracts/types.ts: 0 lines; additive fields only.
+removed: src/data/demo/world.ts: 2 lines; shared answer type replaces boolean map/signature.
+removed: src/data/drive/read-cache.ts: 5 lines; existing entries track completed text and notification.
+removed: src/data/sources.ts: 1 line; existing VaultSource.answer signature widened.
+removed: src/data/spine/scripted.ts: 30 lines; existing planner handles additive values, stored choices and durable rounds.
+removed: src/data/vault/drive-vault.ts: 19 lines; shared cached projection and asking policy replace id-only filtering.
+removed: src/data/vault/journal.ts: 2 lines; existing list/parser accepts completed-cache-only projection.
+removed: src/data/vault/layout.ts: 3 lines; existing stored questions validator widened additively.
+tests changed: none
+
+#### Compatibility row drafts — current, review pending
+
+| Boundary | Preserved old meaning | Additive evidence / draft disposition |
+| --- | --- | --- |
+| contracts/types.ts, questions.ts | Legacy yes/no, subjects and public report fields still read. | Optional file-to options, words and asking identity; all Q1 legacy controls pass. Review pending. |
+| contracts/journal-record.ts | Legacy text yes/no remains boolean; later record still wins. | Strict optional answer/askedAt values with trim, length and control checks; Q1 identity/text reds and data suite pass. Review pending. |
+| vault/layout.ts | `{v:1,questions}` remains readable with no new required field/version. | Optional durable rounds and validated actions; retries, exhaustion, reset, reupload and old reader controls pass. Review pending. |
+| drive/read-cache.ts, vault/journal.ts, vault/drive-vault.ts | Existing single-flight/version/session lifetime, outbox and owning-reader errors remain. | Zero-media first listing and subscription projection after Home's existing questions read; supplied addendum 3 reds and all data tests pass. Review pending. |
+| sources.ts, answer-loop.ts, demo/world.ts | Existing boolean callers and continuation request identity remain. | Typed option/text on the same ports; actual /process/main batching, replay and quota reds pass. Review pending. |
+| Manifest/checkpoint/report | Existing versions and reader meanings unchanged. | Q1 frozen P2 fixtures, guarded writes/moves and runner controls pass. Draft unchanged-reader row. |
+| Features/model inputs | No screen changes; existing prompts outside eligible 2–4 candidates retain bytes. | App tsc and all raw/normalized prompt fingerprints pass. Q1b owns UI. |
+| Generic model requests | Missing request decision remains pending. | Supplied repair 2 HEAD contains no fixture repair; sole contradictory red listed above. Blocked, no implicit completion. |
+
+Sources remain the offline references in Research: discriminated unions, tolerant readers and stable asking
+request identities, plus the existing versioned read-cache mechanism. No online verification was attempted.
+Left out: missing fixture repair/request-boundary ruling; Q1c publication, Q1b UI, which-note, B12,
+full gates/e2e, commits and integration. The coordinator owns commits; all 12 production changes are retained.
+
+### Round 2 — historical delivery (superseded by round 3)
 
 2026-10-10. Continued the retained production changes from the supplied red repair 1 HEAD
 `421764904128cbff0f1405cee47b0201c0d8a95b`. Status: **blocked on one request-decision contract mismatch**.
@@ -500,3 +586,25 @@ Both test files ran to completion. Every failing test is listed below; none was 
 
 No remaining test-contract contradiction was found in the listing-marker sweep; these are production failures.
 Production repair, full gates, e2e and integration remain outside this test-only repair session.
+
+## Red repair 3
+
+2026-10-10. Codex red owner, TL-P4-29; lead ruling (a). Repair complete.
+
+tests changed: runner/test/q1-continuation.test.ts:284: lead ruling (a) 2026-10-10: clear work is a clear sibling pile that is filed despite the asking; request-1 stays pending and is not archived because the validated model path has no general request decision (C11).
+
+The fixture adds a separate, single-file clear sibling pile with its own pile id and an explicit model filing.
+The original clear-file filing, legacy control, successful run, saved option count, unclear item's evidence
+(bytes, id, name and place), and original pile words assertions are preserved verbatim.
+Only the request-completion expectation is replaced, with positive filing and pending/not-archived assertions.
+The request text remains `Tidy the room papers.`. Red repair 2's finding is preserved above;
+this ruling supersedes its unconditional request-completion contract, not the existing planner boundary.
+No production file was edited, reverted or formatted; no network or writing git command was used.
+The coordinator owns commits. Offline research reuses the existing single-file pile fixture at
+runner/test/q1-continuation.test.ts and the Research references already recorded above.
+
+Validation (all commands exit 0):
+- Q1 file: `TMPDIR=/private/tmp/bower-q1a-stored-answers/tmp-logs pnpm -C runner exec vitest run test/q1-continuation.test.ts --maxWorkers=2`; 28/28 pass; `tmp-logs/q1-red-repair-3-vitest.log`.
+- Runner tsc: `pnpm -C runner exec tsc --noEmit -p .`; pass; `tmp-logs/q1-red-repair-3-tsc.log`.
+- Test ESLint: `pnpm -C runner exec eslint test/q1-continuation.test.ts`; pass; `tmp-logs/q1-red-repair-3-eslint.log`.
+Full gates, e2e, implementation and integration remain outside this authorized test-only repair.
