@@ -6562,8 +6562,9 @@
       "A folded panel opens as an overlay and Escape returns focus to its button."
     ],
     "verify": "pnpm exec vitest run src/app/DesktopShell.test.tsx -t \"docked keeps the page column at least 560 px\"",
-    "note": "DEFECTS shell-page-column-squeeze (lead ruling, designer spec). Codex, then a Claude review and the designer. Packet 2026-10-10-shell-page-column-packet.md. implementer: codex. Designer verified 44799444; a short re-check follows fix rounds 1-2.",
-    "review": "P4-75 BLOCK; P4-75b PASS"
+    "note": "DEFECTS shell-page-column-squeeze (lead ruling, designer spec). Codex, then a Claude review and the designer. Packet 2026-10-10-shell-page-column-packet.md. implementer: codex. Designer verified 44799444; a short re-check follows fix rounds 1-2. Designer re-verified fc5c4cf1 (overlay motion, first render, resizer).",
+    "review": "P4-75 BLOCK; P4-75b PASS",
+    "design": "verified"
   },
   {
     "id": "p4-corpus-answers",
