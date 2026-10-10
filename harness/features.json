@@ -6890,7 +6890,7 @@
     "id": "c05-timeline-list",
     "task": "p4-c05",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "A person note whose Timeline is a bullet list is appendable; only non-list sections say they cannot be read (lead ruling after 5019e2f4).",
     "steps": [
