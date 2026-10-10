@@ -1,0 +1,110 @@
+{
+  "files": {
+    "present": [
+      "index.md",
+      "Resources/Careers/Career plans.md"
+    ]
+  },
+  "unchanged": [
+    "Resources/Gardening/Garden plans.md"
+  ],
+  "notes": [
+    {
+      "path": "Resources/Careers/Career plans.md",
+      "contains": [
+        "---\nsummary: Alex is looking for a remote developer role.\nstatus: active\n---\n\n# Career plans\n\nAlex is looking for a remote developer role. Updated on 10 October 2026.\n"
+      ],
+      "excludes": [
+        "by: bower",
+        "bower_state:"
+      ]
+    },
+    {
+      "path": "index.md",
+      "contains": [
+        "- [[Career plans]] — Alex is looking for a remote developer role."
+      ],
+      "excludes": [
+        "local developer role"
+      ]
+    }
+  ],
+  "properties": [
+    {
+      "path": "Resources/Careers/Career plans.md",
+      "absent": [
+        "by",
+        "bower_state"
+      ]
+    }
+  ],
+  "report": {
+    "filed": 0,
+    "questionsExactly": 0
+  },
+  "runs": [
+    {
+      "unchanged": [
+        "Resources/Careers/Career plans.md",
+        "Resources/Gardening/Garden plans.md"
+      ],
+      "notes": [
+        {
+          "path": "index.md",
+          "contains": [
+            "- [[Career plans]] — Alex is looking for a local developer role."
+          ]
+        }
+      ],
+      "report": {
+        "filed": 0,
+        "questionsExactly": 0
+      }
+    },
+    {
+      "files": {
+        "present": [
+          "index.md",
+          "Resources/Careers/Career plans.md"
+        ]
+      },
+      "unchanged": [
+        "Resources/Gardening/Garden plans.md"
+      ],
+      "notes": [
+        {
+          "path": "Resources/Careers/Career plans.md",
+          "contains": [
+            "---\nsummary: Alex is looking for a remote developer role.\nstatus: active\n---\n\n# Career plans\n\nAlex is looking for a remote developer role. Updated on 10 October 2026.\n"
+          ],
+          "excludes": [
+            "by: bower",
+            "bower_state:"
+          ]
+        },
+        {
+          "path": "index.md",
+          "contains": [
+            "- [[Career plans]] — Alex is looking for a remote developer role."
+          ],
+          "excludes": [
+            "local developer role"
+          ]
+        }
+      ],
+      "properties": [
+        {
+          "path": "Resources/Careers/Career plans.md",
+          "absent": [
+            "by",
+            "bower_state"
+          ]
+        }
+      ],
+      "report": {
+        "filed": 0,
+        "questionsExactly": 0
+      }
+    }
+  ]
+}
