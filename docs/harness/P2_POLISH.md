@@ -347,3 +347,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
 "; e2e/landing-csp.config.ts needs dist built first.
 - 2026-10-10 create-named-minors (P4-81 Minor): file-actions.test.tsx:70 keeps the red scaffolding (createNamed? cast, if (!createNamed) return); NameSheet.tsx:53 still branches on making.type where it is always note (tidy in tree-name-first).
 - 2026-10-10 b1b-ports-minors (P4-83 Minor): drive-http readPrefix buffers the whole body on a 200 before cutting; resolveDriveScope counts and walks duplicate unknown ids; fake-drive imports FOLDER and toFile from drive-http; fake trash/delete log no removed stubs outside recorded changePages.
+- 2026-10-10 undo-miss-refresh-minors (P4-84 Minor): drive-vault.ts:1388 kept-suggestion Undo looks up a journal record id among rule ids, so it always misses and refreshes (correct, untested); the hit/miss test covers removeRule only.
