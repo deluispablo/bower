@@ -6840,5 +6840,31 @@
     ],
     "verify": "",
     "note": "TL-P4-44 and addenda 1-2. Escalated; implementation after B1a integrates. Packet 2026-10-10-q1a-stored-answers-packet.md. implementer: codex."
+  },
+  {
+    "id": "smoke-request-slow",
+    "task": "p4-c05",
+    "category": "fix",
+    "passes": false,
+    "ui": false,
+    "what": "A request run reads only its own evidence: no archive scan, waiting requests in .bower/changes/pending/<run id>/, horizon from listing metadata (lead ruling, DECISIONS after bd2671ba).",
+    "steps": [
+      "A main golden with 50 archived requests and 25 kept runs reads the pile-run baseline plus at most 1 per waiting request."
+    ],
+    "verify": "",
+    "note": "Smoke 2ab7b490: 268 s, 757 reads. Escalated; implementation after B1a integrates. Packet 2026-10-10-smoke-request-slow-packet.md. implementer: codex."
+  },
+  {
+    "id": "smoke-request-report-hidden",
+    "task": "p4-c05",
+    "category": "fix",
+    "passes": false,
+    "ui": true,
+    "what": "A finished report with any row is reachable on Home and from the status bar, whatever its scope (restores the C05 spec run result; designer confirmed).",
+    "steps": [
+      "After a request-only run with a Left as you wrote them row, Home shows the report card and the reopened sheet shows the report, never Nothing to tidy."
+    ],
+    "verify": "",
+    "note": "Lead ruling (a), DECISIONS after bd2671ba and d57e04e0; exempt under TL-P4-40. Codex, Codex pass, Claude review, designer check. Packet 2026-10-10-smoke-request-report-hidden-packet.md. implementer: codex."
   }
 ]
