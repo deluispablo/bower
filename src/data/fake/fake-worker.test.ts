@@ -3634,15 +3634,22 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       planRun(w.drive, w.rootId, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
 
     it('a pile waiting for its context note is held, never restored by the runner', async () => {
-      const w = await bWorld({ declared: true });
+      let w = await bWorld({ declared: true });
       const lease = (await w.uploader.piles()).find((p) => p.text === 'Papers about the lease');
       const folder = (await w.drive.listAll(w.rootId)).find((f) => f.folder && w.drive.pathOf(f.id, w.rootId) === lease?.path);
       if (!lease || !folder) throw new Error('no lease pile');
       const note = (await w.drive.listAll(folder.id)).find((f) => f.parents[0] === folder.id && f.name === 'Pile note.md');
       if (!note) throw new Error('no pile note');
       const key = note.appProperties?.bowerItem;
-      // The note goes to the Bin in Drive, not through Bower: nothing in your changes says it was removed.
-      await w.drive.trash(note.id);
+      // Reload a fixture where the context write never landed: no live note and no Bin entry.
+      const kept = JSON.parse(await w.drive.snapshot()) as { files: Array<{ meta: { id: string } }> };
+      const drive = FakeDrive.restore(JSON.stringify({ ...kept, files: kept.files.filter((f) => f.meta.id !== note.id) }));
+      drive.fault = w.drive.fault;
+      drive.onChange = w.drive.onChange;
+      const runs = FakeRunService.restore(w.runs.toJSON(), { drive, clock: w.clock.now, scale: 'instant' });
+      const worker = new FakeWorker({ drive, runs, scenario: 'first', rootId: w.rootId });
+      const uploader = new DriveVault({ drive, rootId: async () => w.rootId, runningPiles: () => new Set(), declarePiles: true, device: 'DEVICE_A' });
+      w = { ...w, drive, runs, worker, uploader };
       const children = async (): Promise<string> => JSON.stringify((await w.drive.listAll(folder.id)).filter((f) => f.parents[0] === folder.id).map((f) => [f.id, f.name, f.modifiedTime]));
       const before = await children();
 
