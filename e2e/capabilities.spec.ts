@@ -251,8 +251,7 @@ test('write it shows the state written, re-asks on a clash and settles as an ans
   await editElsewhere(CAR_NOW, CAR_UPDATE);
   await again.getByRole('button', { name: 'Write it' }).click();
   await expect(again).toHaveCount(0);
-  await page.goto(`/note/${CAR.split('/').map(encodeURIComponent).join('/')}`);
-  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+  await page.getByRole('region', { name: 'Recent' }).getByRole('link', { name: /^Car/ }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Car' })).toBeVisible();
   const main = page.getByRole('main');
   await expect(main.getByText(NOTHING, { exact: true })).toBeVisible({ timeout: 20_000 });
