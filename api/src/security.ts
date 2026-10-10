@@ -150,175 +150,78 @@ export const requireSameOrigin: MiddlewareHandler<AppEnv> = async (c, next) => {
   await next();
 };
 
-/**
- * Requests allowed per minute on each of the two strict routes: per client
- * IP on `GET /auth/callback`, per signed-in user on `POST /process`.
- */
-export const RATE_LIMIT_PER_MINUTE = 30;
+/** The three rate-limit bindings (`ratelimits` in `wrangler.jsonc`), by name. */
+export type RateLimitName = 'AUTH_RATE_LIMIT' | 'DRIVE_RATE_LIMIT' | 'VAULT_RATE_LIMIT';
 
-/** Requests allowed per client IP, per minute, across every cookie route. */
-export const GENERIC_RATE_LIMIT_PER_MINUTE = 120;
+/** Seconds a refused caller is told to wait: the binding's longest period (it reports no remaining time). */
+export const RATE_LIMIT_RETRY_AFTER_SECONDS = 60;
 
 /**
- * The routes the browser calls with the session cookie, and so the ones
- * under the generic limit (mounted by `index.ts`, before each route's own
- * strict limit). Left out: `/health` and `GET /push/public-key` (public,
- * no cookie), `/runner/*`, `/admin/*` (bearer keys) and unknown paths.
- */
-export const COOKIE_ROUTES: readonly string[] = [
-  '/auth/*',
-  '/me',
-  '/drive/token',
-  '/settings',
-  '/vault',
-  '/process',
-  '/status',
-  '/runs',
-  '/push/subscribe',
-];
-
-/**
- * The client IP as Cloudflare reports it (`cf-connecting-ip`), else the
- * first `x-forwarded-for` entry, else `unknown` (every such request then
- * shares one bucket).
+ * The client address as Cloudflare reports it (`cf-connecting-ip`), else
+ * `unknown` (every such request then shares one bucket). A forwarding header
+ * is never a key: the caller chooses it, so rotating it would escape the limit.
  */
 export function clientIp<E extends AppEnv>(c: Context<E>): string {
   const cf = c.req.header('cf-connecting-ip')?.trim();
-  if (cf !== undefined && cf !== '') return cf;
-  const forwarded = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
-  if (forwarded !== undefined && forwarded !== '') return forwarded;
-  return 'unknown';
+  return cf !== undefined && cf !== '' ? cf : 'unknown';
 }
 
-/** Most client IPs the generic limit tracks at once, per isolate. */
-export const GENERIC_RATE_LIMIT_MAX_KEYS = 10_000;
-
-/** A sliding-window request counter per key, kept in memory. */
-export interface SlidingWindow {
-  /**
-   * Counts one request for `key` at `now` (ms) and answers 0 if it is within
-   * the limit, else the seconds (at least 1) until the oldest counted
-   * request leaves the window. A refused request is not counted.
-   */
-  hit(key: string, now: number): number;
-  /** Forgets every key (tests). */
-  clear(): void;
-  /** How many keys are tracked (tests). */
-  size(): number;
-}
+/** The binding is missing or threw: the limit cannot be checked, so the request is refused (a 500). */
+export class RateLimitUnavailable extends Error {}
 
 /**
- * A sliding window of `windowMs` allowing `limit` requests per key, in a
- * `Map` from key to the timestamps of its counted requests. Each call prunes
- * the key's expired timestamps and moves the key to the back of the map, so
- * the front holds the least recently seen keys: idle keys are dropped from
- * the front on each call, and past `maxKeys` the least recently seen key is
- * evicted. Pure memory, nothing to fail.
- */
-export function createSlidingWindow(
-  limit: number,
-  windowMs: number,
-  maxKeys: number,
-): SlidingWindow {
-  const hits = new Map<string, number[]>();
-
-  function pruneIdle(now: number): void {
-    for (const [key, times] of hits) {
-      const newest = times[times.length - 1];
-      if (newest !== undefined && newest > now - windowMs) break;
-      hits.delete(key);
-    }
-  }
-
-  return {
-    hit(key: string, now: number): number {
-      pruneIdle(now);
-      const times = (hits.get(key) ?? []).filter((t) => t > now - windowMs);
-      hits.delete(key);
-      if (times.length >= limit) {
-        hits.set(key, times);
-        const oldest = times[0] ?? now;
-        return Math.max(1, Math.ceil((oldest + windowMs - now) / 1000));
-      }
-      times.push(now);
-      hits.set(key, times);
-      while (hits.size > maxKeys) {
-        const first = hits.keys().next();
-        if (first.done === true) break;
-        hits.delete(first.value);
-      }
-      return 0;
-    },
-    clear(): void {
-      hits.clear();
-    },
-    size(): number {
-      return hits.size;
-    },
-  };
-}
-
-/** The generic limit's window, one per isolate (module scope). */
-export const genericWindow: SlidingWindow = createSlidingWindow(
-  GENERIC_RATE_LIMIT_PER_MINUTE,
-  60_000,
-  GENERIC_RATE_LIMIT_MAX_KEYS,
-);
-
-/**
- * The generic limit on every cookie route (`COOKIE_ROUTES`): at most
- * `GENERIC_RATE_LIMIT_PER_MINUTE` requests per client IP in any 60 seconds,
- * all routes together. Over the limit, the same 429 `rate-limited`, with
- * `Retry-After` set to the seconds until the oldest counted request leaves
- * the window.
+ * Counts one request in `name`'s bucket for `key` and refuses it with a 429
+ * `rate-limited` and `Retry-After` (RFC 9110 section 10.2.3, whole seconds) when the
+ * binding says the limit is passed. This is the one rate-limit mechanism:
+ * Cloudflare's Rate Limiting binding (developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/),
+ * whose limit and period (10 or 60 seconds) are set in `wrangler.jsonc`. Its
+ * count is per Cloudflare location and eventually consistent, so a limit is
+ * approximate, never exact.
  *
- * In memory (`genericWindow`), not KV: it costs no KV write, so normal use
- * never eats the free tier's daily writes. Best-effort per isolate: each
- * Cloudflare isolate counts on its own and forgets on eviction, so a client
- * spread across isolates gets more. The strict limits (`rateLimit`) work the
- * same way.
+ * A binding that is absent or throws fails closed with a 500, never a silent
+ * pass; every environment declares them (`ratelimits` in `wrangler.jsonc`).
  */
-export const genericRateLimit: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const retryAfter = genericWindow.hit(clientIp(c), Date.now());
-  if (retryAfter > 0) {
-    c.header('Retry-After', String(retryAfter));
+export async function enforceRateLimit(
+  c: Context<AppEnv>,
+  name: RateLimitName,
+  key: string,
+): Promise<void> {
+  const env = c.get('env');
+  const binding = env[name];
+  if (binding === undefined) {
+    throw new HttpError(500, 'internal', undefined, { cause: new RateLimitUnavailable(`missing ${name}`) });
+  }
+  let allowed: boolean;
+  try {
+    allowed = (await binding.limit({ key })).success;
+  } catch (err) {
+    throw new HttpError(500, 'internal', undefined, { cause: new RateLimitUnavailable(`${name} failed`, { cause: err }) });
+  }
+  if (!allowed) {
+    c.header('Retry-After', String(RATE_LIMIT_RETRY_AFTER_SECONDS));
     throw new HttpError(429, 'rate-limited');
   }
-  await next();
-};
-
-/** Most keys the strict limits track at once, per isolate, both routes together. */
-export const STRICT_RATE_LIMIT_MAX_KEYS = 10_000;
-
-/** The strict limits' window, one per isolate (module scope), keyed per route. */
-export const strictWindow: SlidingWindow = createSlidingWindow(
-  RATE_LIMIT_PER_MINUTE,
-  60_000,
-  STRICT_RATE_LIMIT_MAX_KEYS,
-);
+}
 
 /**
- * The strict limit for `route`: at most `RATE_LIMIT_PER_MINUTE` requests per
- * key in any 60 seconds, the key being `keyOf(c)` (the client IP by
- * default). Over the limit, a 429 `rate-limited` with `Retry-After` set to
- * the seconds until the oldest counted request leaves the window.
- *
- * In memory (`strictWindow`), like the generic limit: it costs no KV write,
- * so a flood of requests cannot spend the free tier's daily KV writes
- * (finding M1 of the 2026-09-28 security review). Mount it only after the
- * checks that write nothing (the OAuth cookie on the callback, the session on
- * `POST /process`), so only requests that could be legitimate are counted.
+ * Middleware form of `enforceRateLimit`, keyed by the client address by
+ * default (`/auth/*`) or by the signed-in person (`personKey`, mounted after
+ * `requireSession`). Mount it only after the checks that write nothing, so
+ * only requests that could be legitimate are counted.
  */
-export function rateLimit<E extends AppEnv = AppEnv>(
-  route: string,
-  keyOf: (c: Context<E>) => string = clientIp,
-): MiddlewareHandler<E> {
+export function rateLimit(
+  name: RateLimitName,
+  keyOf: (c: Context<AppEnv>) => string = clientIp,
+): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
-    const retryAfter = strictWindow.hit(`${route}:${keyOf(c)}`, Date.now());
-    if (retryAfter > 0) {
-      c.header('Retry-After', String(retryAfter));
-      throw new HttpError(429, 'rate-limited');
-    }
+    await enforceRateLimit(c, name, keyOf(c));
     await next();
   };
+}
+
+/** The key for a per-person limit: the session subject `requireSession` set. */
+export function personKey(c: Context<AppEnv>): string {
+  const sub = c.get('userId');
+  if (sub === undefined) throw new HttpError(500, 'internal');
+  return sub;
 }
