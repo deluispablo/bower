@@ -77,3 +77,10 @@ Phase 4/5. The owner approved V2 on 2026-10-09.
   - Phone P1–P9: bottom sheets, the keyboard view for Something else…, and the same rules.
   - Waiting on the owner's OK.
 - **Questions canvas:** added B5 (desktop) and P10 (phone): Something else… on Home after the tidy-up. "Tell Bower" makes the card go, a small tidy-up start, and the dock say "You told Bower. Bower is doing it now."
+- **Questions UI refined to least change (owner asked, 2026-10-10):** a "Refined: least change" page, R1–R8, with the lead's back-end confirmed (TL-P4-40; Q1 builds it).
+  - One home: Home's Questions card. Options are Button sm ghost stacked, label only. "Something else…" swaps in Field's Textarea with "Tell Bower" / "Cancel"; it shows only on inbox and pile questions.
+  - RunView shows the same card above the steps (first question only, plus "N more questions on Home"). An answer mid-run gives today's waits toast; in the done sheet, today's answeredNow.
+  - Inbox row: the second line reads "Waiting for your answer" (accent-line), or "Bower couldn't place this" (muted). The pile page shows a plain line.
+  - Sheet CSS: one line so the desktop max-height stays inside the window.
+  - Dropped from the draft: run chip pill, Continuing block, pager/Skip, compact scene, new pills and buttons.
+  - Waiting on the owner's OK, then the spec goes to the lead.
