@@ -2049,8 +2049,8 @@
       "Right-click Resources, New note, type Soup ideas at once, Enter.",
       "The note is Soup ideas, not a name missing its first letters."
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts e2e/qa7.spec.ts -g \"a new note opens and says how|New note in an empty folder\"",
-    "passes": true
+    "verify": "bash scripts/e2e-both.sh e2e/qa7.spec.ts -g \"New folder from the tree keeps the first letters typed\"",
+    "passes": false
   },
   {
     "id": "situation-address-clean",
@@ -6172,14 +6172,14 @@
     "id": "v2-name-sheet",
     "task": "p4-consolidation",
     "category": "ui",
-    "passes": true,
+    "passes": false,
     "ui": true,
     "what": "NameSheet uses the one field rule: full width, name selected, muted links line on rename, half-width 44 px buttons (d-v2-09); FolderScreen New note opens NameSheet and its own form is deleted.",
     "steps": [
       "At 375 the rename field is at least 300 px with a 16 px font and the name selected.",
       "A folder New note opens NameSheet."
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/v2-name-sheet.spec.ts -g \"the rename field spans the sheet and selects the name|new note from a folder uses the name sheet\"",
+    "verify": "bash scripts/e2e-both.sh e2e/v2-name-sheet.spec.ts -g \"the rename field spans the sheet and selects the name\"",
     "note": "TL-P4-21 order 3; spec d-v2-09 (after v2-field). Starting model bower-implementer. Packet 2026-10-09-v2-name-sheet-packet.md; e2e file may differ. Red 332410b1, fix 51978d36. Designer verified a764e350.",
     "design": "verified"
   },
@@ -6509,13 +6509,13 @@
     "id": "c4-e2e-sync",
     "task": "p4-consolidation",
     "category": "fix",
-    "passes": true,
+    "passes": false,
     "what": "Two e2e specs wait for the state they act on: qa7:63 types after the name box is focused; capabilities:210 navigates in the app instead of reloading before the answer run is admitted (defects qa7-63-flaky, capabilities-210-flaky).",
     "steps": [
       "The new-folder name is typed into the name box, never the tree.",
       "An answered row shows after Write it without a reload race."
     ],
-    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/qa7.spec.ts e2e/capabilities.spec.ts --project=desktop -g \"New note in an empty folder asks for a name, then opens the note|write it shows the state written, re-asks on a clash and settles as an answered row\"",
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/qa7.spec.ts e2e/capabilities.spec.ts --project=desktop -g \"New folder from the tree keeps the first letters typed|write it shows the state written, re-asks on a clash and settles as an answered row\"",
     "note": "Lead 2026-10-10 (stage-4 close): sync fixes. Codex, then a Claude review and repeat runs. Packet 2026-10-10-c4-e2e-sync-packet.md.",
     "review": "P4-71 PASS"
   },
