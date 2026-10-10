@@ -1,3 +1,4 @@
+import type { QuestionAnswer } from './contracts/questions';
 import type {
   ChangeEntry,
   ChosenAgain,
@@ -87,7 +88,7 @@ export interface VaultSource {
   /** For each file, where you already have it (its path), or null. */
   duplicates(files: Array<{ name: string; body?: Blob }>): Promise<Array<string | null>>;
   questions(): Promise<Question[]>;
-  answer(id: string, yes: boolean): Promise<void>;
+  answer(id: string, yes: QuestionAnswer): Promise<void>;
   rules(): Promise<Rule[]>;
   requests(): Promise<Request[]>;
   /** `intent`: one per intended request (a press whose words are sent again after a wait); sent again, it is that request. */

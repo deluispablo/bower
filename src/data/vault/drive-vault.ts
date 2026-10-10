@@ -38,7 +38,7 @@ import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
 import { ADOPT_STATES_ID, ADOPT_STATES_RULE, ruleSequence } from '../contracts/note-edit';
 import { pairsOf } from '../contracts/journal-record';
-import { RUNNER_WRITES, PROP, SYSTEM, isRunnerFile, recordStamp, type RunnerFiles, type LastRunFile } from './layout';
+import { RUNNER_WRITES, PROP, SYSTEM, isRunnerFile, recordStamp, type RunnerFiles, type QuestionsFile, type LastRunFile } from './layout';
 import { md5Hex, sha256 } from './hashes';
 import { placeOf, plainSnippet, plainText, savedLinkAddress, savedLinkUrl, searchLines } from '../search-text';
 import { noteRefusal, parseNote, toggleTaskInText, type ParsedNote } from './note-format';
@@ -48,7 +48,7 @@ import { VaultIndex } from './vault-index';
 import { NOT_SENT_TEXT, PERSIST_REFUSED_TEXT, UNREADABLE_TEXT, createUploadQueue, stoppedText, type QueueItem, type UploadQueue } from '../upload-queue';
 import { memoryUploadStore } from '../upload-store';
 import { CHANGED_ELSEWHERE, checkStillAsSeen, notAsSeen, notAsSeenError, notAsSeenReason, notRead, type Landing, type SeenExpectation } from '../contracts/still-as-seen';
-import { openQuestions } from '../contracts/questions';
+import { answeredAskings, checkedAnswer, pileQuestion, subjectPile, type QuestionAnswer, type QuestionRound, openQuestions } from '../contracts/questions';
 
 export interface DriveVaultOptions {
   driveLinks?: boolean;
@@ -604,7 +604,8 @@ export class DriveVault implements VaultSource {
       const words = f.name.replace(/^\d{4}-\d{2}-\d{2} /, '');
       out.push({ id, path, text: words === 'Pile' ? '' : words, createdAt, items });
     }
-    return out.sort((a, b) => b.createdAt - a.createdAt);
+    out.sort((a, b) => b.createdAt - a.createdAt);
+    return ix.file(SYSTEM.questions) ? this.projectQuestions(out, ix, true) : out;
   }
 
   async piles(context?: OwnershipContext): Promise<Pile[]> {
@@ -725,7 +726,8 @@ export class DriveVault implements VaultSource {
     // queued rows stayed consistent across the reads; otherwise reuse the listing and read caches.
     // The queue keeps read-back pending members in flight. A done file still needs its completion event here.
     if (this.arrived.size !== arrivals || this.queued.queue.items().some((i) => i.state === 'done' && i.file && !this.arrived.has(i.id))) return this.piles(context);
-    return out.sort((a, b) => b.createdAt - a.createdAt);
+    out.sort((a, b) => b.createdAt - a.createdAt);
+    return ix.file(SYSTEM.questions) ? this.projectQuestions(out, ix) : out;
   }
 
   async orphanSummary(): Promise<{ count: number; complete: boolean }> {
@@ -1513,35 +1515,100 @@ export class DriveVault implements VaultSource {
     return { id: r.id, text, at: r.at };
   }
 
-  async questions(): Promise<Question[]> {
-    const all = (await this.json(SYSTEM.questions))?.questions ?? [];
-    // Your changes and the inbox as the listing shows it are read together: neither needs the other, and the inbox's
-    // full read (each pile's note and records) is not what these questions wait on (TL-P4-16 b).
-    const [lines, inbox] = await Promise.all([this.journal.list(), this.pilesListed()]);
-    const answered = new Set(lines.filter((r) => r.kind === 'answer').map((r) => r.questionId));
-    // A question about a thing that is no longer in the inbox is closed, even when no tidy-up can run (an empty inbox
-    // has nothing to tidy): its subject is the thing's or pile's id (`contracts/questions.ts`, as the planner reads it).
+  /** Shared subject policy over one questions file and the existing versioned reads. */
+  private async questionSnapshot(inbox: Pile[], stored: QuestionsFile | null, lines: JournalRecord[], cachedOnly = false): Promise<{ open: Question[]; rounds: QuestionRound[]; piles: Pile[] }> {
+    const ix = await this.index();
+    inbox = await Promise.all(inbox.map(async (p) => {
+      if (!(stored?.rounds?.length || stored?.questions.some((q) => q.words !== undefined))) return p;
+      const note = p.path ? ix.file(join(p.path, PILE_NOTE)) : undefined;
+      if (!note) return p;
+      if (cachedOnly) {
+        const read = this.reads.keptText(note, true);
+        if (!read) return p;
+        try { return { ...p, text: parseNote(join(p.path ?? '', PILE_NOTE), await read).body.trim() }; }
+        catch (e) { console.error(e); return p; }
+      }
+      try { return { ...p, text: (await this.parsed(note, join(p.path ?? '', PILE_NOTE))).body.trim() }; }
+      catch (e) { console.error(e); return p; }
+    }));
     const here = new Set(inbox.flatMap((p) => [p.id, ...p.items.map((i) => i.id)]));
-    // Things still on their way from here have no file to list yet; their questions stay open.
     for (const [id, u] of this.uploads) for (const e of u.entries) here.add(id).add(e.item.id);
     for (const item of this.queuedItems()) here.add(item.pileId).add(item.memberKey);
-    // A question about a note that is not there now (a pair's other note in the Bin) is not shown either (TL-P4-19
-    // addendum 10): the notes as this page's listing has them, as the planner reads them.
-    return openQuestions(all, answered, { ids: here }, (await this.index()).notesSeen());
+    const inboxHashes = new Map(ix.filesIn('Inbox').flatMap((f) => f.md5Checksum ? [[f.id, f.md5Checksum] as const] : []));
+    const all = (stored?.questions ?? []).filter((q) => {
+      const pile = subjectPile(q, inbox, inboxHashes);
+      if (!pile) return true;
+      if (q.words !== undefined) return q.words === pile.text;
+      // Old askings have no words. A fenced edit of their pile after asking ends them too.
+      const folder = pile.path ? ix.file(pile.path) : undefined;
+      return !folder?.appProperties?.[STAMP] || Date.parse(folder.modifiedTime) <= q.askedAt;
+    });
+    const hashes = new Set(ix.filesIn('Inbox').flatMap((f) => f.md5Checksum ? [f.md5Checksum] : []));
+    return { open: openQuestions(all, answeredAskings(lines), { ids: here, hashes }, ix.notesSeen()), rounds: stored?.rounds ?? [], piles: inbox };
+  }
+
+  private async projectQuestions(piles: Pile[], ix: VaultIndex, cachedOnly = false): Promise<Pile[]> {
+    const file = ix.file(SYSTEM.questions);
+    if (!file) return piles;
+    const cached = this.reads.keptText(file, cachedOnly);
+    // The listing initiates no media or checksum read. Full piles may read a nonempty questions file.
+    if (!cached && (cachedOnly || (file.size !== undefined && file.size <= 40))) return piles;
+    let stored: QuestionsFile;
+    try {
+      const value: unknown = JSON.parse(await (cached ?? this.readTextOnce(file.id)));
+      if (!isRunnerFile(SYSTEM.questions, value)) {
+        if (!cached) console.error(new BowerError('unknown', 'Bower could not read its latest update. Try again.'), `${SYSTEM.questions} has an unsupported shape`);
+        return piles;
+      }
+      stored = value;
+    } catch (e) {
+      // The explicit questions reader owns its error; a marker cannot refuse the inbox or admission.
+      if (e instanceof BowerError && (e.code === 'auth' || !this.current())) throw e;
+      if (!cached) console.error(e);
+      return piles;
+    }
+    if (!stored.questions.length && !stored.rounds?.length) return piles;
+    const snapshot = await this.questionSnapshot(piles, stored, await this.journal.list(true), true);
+    const hashes = new Map(piles.flatMap((p) => p.items.flatMap((i) => {
+      const hash = ix.byId(i.id)?.md5Checksum;
+      return hash ? [[i.id, hash] as const] : [];
+    })));
+    if (!cachedOnly && snapshot.rounds.some((r) => r.hash)) for (const p of piles) for (const i of p.items) {
+      if (hashes.has(i.id)) continue;
+      const meta = await this.drive.get(i.id, { checksums: true });
+      if (meta.md5Checksum) hashes.set(i.id, meta.md5Checksum);
+    }
+    return piles.map((p) => {
+      const question = pileQuestion(snapshot.piles.find((x) => x.id === p.id) ?? p, snapshot.open, snapshot.rounds, hashes);
+      return { ...p, ...(question ? { question } : {}) };
+    });
+  }
+
+  async questions(): Promise<Question[]> {
+    const [stored, lines, inbox] = await Promise.all([this.json(SYSTEM.questions), this.journal.list(), this.pilesListed()]);
+    const snapshot = await this.questionSnapshot(inbox, stored, lines);
+    const file = (await this.index()).file(SYSTEM.questions);
+    // Publish once per questions version through the existing cache and subscription. A subscriber may read
+    // questions again; the cached publication prevents a refresh loop and belongs to this vault's lifetime.
+    if (file) this.reads.publishText(file, () => this.emit());
+    return snapshot.open;
   }
 
   /**
    * One answer per question (TL-P4-08 addendum 8): a question answered already, or being answered now on this page,
    * records nothing more. A yes to Bower keeping the summaries it did not write is also your rule saying so.
    */
-  async answer(id: string, yes: boolean): Promise<void> {
+  async answer(id: string, yes: QuestionAnswer): Promise<void> {
     const going = this.answering.get(id);
     if (going) return await going;
     const work = (async () => {
       const q = (await this.questions()).find((x) => x.id === id);
       if (!q) return;
-      await this.journal.record('answer', `Answered "${yes ? q.yes : q.no}" to a question`, { questionId: id, text: yes ? 'yes' : 'no' });
-      if (yes && id === ADOPT_STATES_ID && !ruleLike(await this.rules(), ADOPT_STATES_RULE)) {
+      const answer = checkedAnswer(q, yes);
+      const label = typeof answer === 'boolean' ? answer ? q.yes : q.no : 'text' in answer ? 'your words' : q.options?.find((o) => o.id === answer.option)?.label;
+      await this.journal.record('answer', `Answered "${label}" to a question`, { questionId: id, askedAt: q.askedAt, answer,
+        ...(typeof answer === 'boolean' ? { text: answer ? 'yes' : 'no' } : {}) });
+      if (yes === true && id === ADOPT_STATES_ID && !ruleLike(await this.rules(), ADOPT_STATES_RULE)) {
         await this.journal.record('rule', `New rule: "${ADOPT_STATES_RULE}"`, { path: 'Rules.md', text: ADOPT_STATES_RULE });
       }
       this.emit();

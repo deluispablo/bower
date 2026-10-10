@@ -6835,14 +6835,15 @@
     "id": "q1a-stored-answers",
     "task": "p4-q1",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "Questions carry stored file-to options and text answers; two rounds per inbox subject; the continuation keeps today's subject scope (TL-P4-44).",
     "steps": [
       "The prep's Q1a reds pass through runner main, answerQuestion, the Worker and the vault."
     ],
-    "verify": "",
-    "note": "TL-P4-44 and addenda 1-2. Escalated; implementation after B1a integrates. Packet 2026-10-10-q1a-stored-answers-packet.md. implementer: codex."
+    "verify": "pnpm -C runner exec vitest run test/q1-continuation.test.ts -t \"Q1a q1-\"",
+    "note": "TL-P4-44 and addenda 1-2. Escalated; implementation after B1a integrates. Packet 2026-10-10-q1a-stored-answers-packet.md. implementer: codex.",
+    "review": "P4-100 PASS"
   },
   {
     "id": "smoke-request-slow",
@@ -6968,14 +6969,16 @@
     "id": "upload-resume-after-reload",
     "task": "p4-c02",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "Files added to a pile are kept on the device before Bower says saved, and resume after a reload with no picker and no second file (TL-P4-53).",
     "steps": [
       "The prep's E1 reds pass through the real queue, fake Drive and fake IndexedDB."
     ],
     "verify": "pnpm exec vitest run src/data/upload-resume.test.ts -t \"upload-resume-after-reload\"",
-    "note": "C02 E1. Escalated. Designer verifies the reload behaviour (U3) before close. Packet 2026-10-10-upload-resume-after-reload-packet.md. implementer: codex."
+    "note": "C02 E1. Escalated. Designer verifies the reload behaviour (U3) before close. Packet 2026-10-10-upload-resume-after-reload-packet.md. implementer: codex.",
+    "design": "verified",
+    "review": "P4-99 PASS"
   },
   {
     "id": "upload-sign-out-forget",

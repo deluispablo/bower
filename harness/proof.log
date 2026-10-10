@@ -566,3 +566,6 @@ c05-timeline-list	57030bcbc7af8879	2026-10-10	red (fixed in 34cb7238)
 smoke-request-slow	f8540e107261cc75	2026-10-10	known-green: fix rounds touched the fix's lines; reds proved at their commits, see notes
 pwa-update-one-reload	3db8100d69a69ad6	2026-10-10	known-green: the reverted build has no sw.ts input; red proved at fb3c534c, see notes
 undo-fifo-seed	9b7f8c1128ea4f25	2026-10-10	known-green: test-only fix; the pinned replay failed before the model change, see notes
+upload-resume-after-reload	27ecd4eef28b687d	2026-10-10	known-green: fix rounds touched the fix's lines; reds proved at their commits, see notes
+q1a-stored-answers	8438a497eb5f3da8	2026-10-10	known-green: fix rounds touched the fix's lines; reds proved at their commits, see notes
+c2-pile-records	df60fdadbeb5982f	2026-10-11	known-green: verify renamed per addendum 5; the golden passes on claude/p3 after E3
