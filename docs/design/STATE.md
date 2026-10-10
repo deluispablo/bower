@@ -47,3 +47,4 @@ Phase 4/5. The owner approved V2 on 2026-10-09.
 - Run Vite from a worktree only inside one script run (`scratchpad/walk/withvite.mjs`).
 - Never sign in. The owner signs in to claude.ai and staging.
 - Owner's standing permission: made-up piles and Tidy up on staging with test accounts A and B.
+- **C05 consult (a person's own note, 2026-10-10):** I recommended (b). It applies only when the person's own words name the note. Bower appends one dated, sourced Timeline line in their format. Home asks once, with the existing pair question, before Bower changes Current state. Bower never touches the summary or the prose, and never adopts the note. Two matches: Bower asks which. No Timeline section: Bower does (a) and says why. Report line: "Added a line to Garden plot." The lead takes it to the owner.
