@@ -3,8 +3,6 @@ import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'rea
 import s from './ui.module.css';
 import { useBackCloses } from './back';
 import { closeFocus, focusRouteHeading, openerNow } from './focus';
-import { usePrefs } from '@/app/prefs';
-import { useMedia } from './media';
 
 interface Props {
   open: boolean;
@@ -17,6 +15,8 @@ interface Props {
   className?: string;
   /** Edge panels share the dialog's dismissal and focus behaviour. */
   placement?: 'left' | 'right';
+  /** Suppress edge-panel motion; other placements keep their existing animation. */
+  still?: boolean;
   style?: CSSProperties;
   overlayStyle?: CSSProperties;
   /** Navigation dismisses an edge panel to the new page's heading. */
@@ -24,10 +24,8 @@ interface Props {
 }
 
 /** A bottom sheet on a phone, a centred dialog on a desktop. */
-export function Sheet({ open, onOpenChange, title, hideTitle, description, children, className = '', placement, style, overlayStyle, navigation }: Props) {
-  const moves = usePrefs((prefs) => prefs.birdMoves);
-  const reduced = useMedia('(prefers-reduced-motion: reduce)');
-  const still = !moves || reduced;
+export function Sheet({ open, onOpenChange, title, hideTitle, description, children, className = '', placement, still = false, style, overlayStyle, navigation }: Props) {
+  const noSlide = placement !== undefined && still;
   useBackCloses(open, () => onOpenChange(false));
   // The control that held the keyboard when the sheet opened; read before the sheet takes it.
   const opener = useRef<HTMLElement | null>(null);
@@ -37,11 +35,11 @@ export function Sheet({ open, onOpenChange, title, hideTitle, description, child
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className={s.scrim} style={{ ...overlayStyle, ...(still ? { animation: 'none' } : {}) }} />
+        <Dialog.Overlay className={s.scrim} style={{ ...overlayStyle, ...(noSlide ? { animation: 'none' } : {}) }} />
         {/* With no description, say so (aria-describedby undefined) rather than repeat the title. */}
         <Dialog.Content
           className={`${s.sheet} ${placement ? `${s.edgeSheet} ${placement === 'left' ? s.edgeLeft : s.edgeRight}` : ''} ${className}`}
-          style={{ ...style, ...(still ? { animation: 'none' } : {}) }}
+          style={{ ...style, ...(noSlide ? { animation: 'none' } : {}) }}
           {...(description ? {} : { 'aria-describedby': undefined })}
           // Back to what opened it; when that is gone (a sheet opened by the app), to the page's heading.
           onCloseAutoFocus={(e) => {

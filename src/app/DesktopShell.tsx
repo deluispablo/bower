@@ -53,7 +53,7 @@ export function tabTitle(route: string): string {
 }
 
 export function DesktopShell() {
-  const { leftWidth, rightWidth, leftOpen, rightOpen, set } = usePrefs();
+  const { leftWidth, rightWidth, leftOpen, rightOpen, birdMoves, set } = usePrefs();
   const { leftTab, setLeftTab } = useUi();
   const loc = useLocation();
   const nav = useNavigate();
@@ -64,32 +64,40 @@ export function DesktopShell() {
   const rightPanel = useRef<HTMLElement>(null);
   const leftToggle = useRef<HTMLButtonElement>(null);
   const rightToggle = useRef<HTMLButtonElement>(null);
-  const [bounds, setBounds] = useState({ width: 0, left: 0, top: 0, height: 0 });
+  const [bounds, setBounds] = useState<{ width: number; left: number; top: number; height: number } | null>(null);
   const [overlay, setOverlay] = useState<{ side: Side; locationKey: string; open: boolean } | null>(null);
   const prefs = { leftWidth, rightWidth, leftOpen, rightOpen };
-  const shown = docked(bounds.width, prefs);
-  const leftFolded = !docked(bounds.width, { ...prefs, leftOpen: true }).left;
-  const rightFolded = !docked(bounds.width, { ...prefs, rightOpen: true }).right;
-  const leftMax = panelLimit(bounds.width, prefs, 'left');
-  const rightMax = panelLimit(bounds.width, prefs, 'right');
+  const shellWidth = bounds?.width ?? 0;
+  const measured = bounds !== null;
+  const shown = docked(shellWidth, prefs);
+  const leftFolded = !docked(shellWidth, { ...prefs, leftOpen: true }).left;
+  const rightFolded = !docked(shellWidth, { ...prefs, rightOpen: true }).right;
+  const leftMax = panelLimit(shellWidth, prefs, 'left');
+  const rightMax = panelLimit(shellWidth, prefs, 'right');
 
   const route = loc.pathname + loc.search;
   // A route change dismisses the panel, leaving Sheet's navigation focus rule to the page heading.
   const overlaySide = overlay?.open && overlay.locationKey === loc.key && !shown[overlay.side] ? overlay.side : null;
   // Retain the dismissal reason for Sheet's close-focus hook, but never reopen on browser Back.
-  if (overlay?.open && overlay.locationKey !== loc.key) setOverlay({ ...overlay, open: false });
+  useEffect(() => () => {
+    setOverlay((current) => current?.open && current.locationKey === loc.key ? { ...current, open: false } : current);
+  }, [loc.key]);
   useLayoutEffect(() => {
     const node = frame.current;
     if (!node) return;
-    const observer = new ResizeObserver(([entry]) => {
-      if (!entry) return;
+    const measure = (observedWidth?: number): void => {
       const rect = node.getBoundingClientRect();
-      const width = entry.contentRect.width;
+      const width = observedWidth ?? rect.width;
       const next = docked(width, usePrefs.getState());
       if (!next.left && leftPanel.current?.contains(document.activeElement)) leftToggle.current?.focus();
       if (!next.right && rightPanel.current?.contains(document.activeElement)) rightToggle.current?.focus();
       setOverlay((open) => open && next[open.side] ? null : open);
       setBounds({ width, left: rect.left, top: rect.top, height: rect.height });
+    };
+    // Establish docking before the page and panels mount, without waiting for the observer.
+    measure();
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) measure(entry.contentRect.width);
     });
     observer.observe(node);
     return () => observer.disconnect();
@@ -103,7 +111,7 @@ export function DesktopShell() {
   // The active tab stays in sight however many are open.
   useEffect(() => {
     document.querySelector(`[data-tab="${active}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }, [active, tabs.length]);
+  }, [active, tabs.length, measured]);
 
   const drag = useRef<{ side: 'left' | 'right'; x: number; w: number } | null>(null);
   const startDrag = (e: RPointerEvent<HTMLDivElement>): void => {
@@ -155,6 +163,8 @@ export function DesktopShell() {
       </div>
     </>
   );
+
+  if (!bounds) return <div ref={frame} className={s.desk} />;
 
   return (
     <div ref={frame} className={s.desk} style={{ ['--lw' as string]: `${shown.left ? leftWidth : 0}px`, ['--rw' as string]: `${shown.right ? rightWidth : 0}px` }}>
@@ -261,6 +271,7 @@ export function DesktopShell() {
         title={overlay?.side === 'left' ? 'Side panel' : 'Right panel'}
         hideTitle
         placement={overlay?.side ?? 'left'}
+        still={!birdMoves}
         navigation={overlay !== null && overlay.locationKey !== loc.key}
         style={{
           width: Math.min(overlay?.side === 'left' ? leftWidth : rightWidth, Math.max(0, bounds.width - RIBBON)),
