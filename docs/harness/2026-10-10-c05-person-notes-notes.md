@@ -594,3 +594,91 @@ Timeline parser/formatter, RunRecords recovery chain, corpus driver and report m
 No external lookup was made, under the owner's no-network instruction.
 
 Left out: tests, fixtures, corpus changes, commits, git writes, shared harness state, pnpm check, e2e and deployment.
+
+
+## Round 3 reds (TL-P4-32 addendum 2)
+
+Red-owning session on HEAD `6ed23a4150ff6cfb17268fc72cb61a7791af6d50`, branch `c05-person-notes`.
+Tests, this notes section and the pass-2 whitespace repair only. No product edits, network, git write commands,
+commits, server, real timers, `.only` or `.skip`. The coordinator owns the commits. The following v1 assertions
+supersede the earlier descriptions of inherited provenance and plain-note state handling in these notes.
+
+### Narrowed existing reds
+
+tests changed: runner/test/c05-person-notes.test.ts: fix 1 finding 2 keeps all 22 conflicts, the twenty-run retention bound and the exact fresh-byte retry; adds a later exact replay verified through RunRecords.found/walk, requiring no manifest appendEvidence or inherited completedAppends under ruling 4.
+tests changed: runner/test/c05-person-notes.test.ts: fix 1 finding 4 keeps the completed replay/new request lifecycle and every earlier assertion; requires only change-2's local binding/completion and no inherited evidence, consistent with one unfinished request per note under rulings 2 and 4.
+tests changed: src/data/contracts/c05-person-reports.test.ts: fix 1 finding 9 is renamed to require applied bindings without inherited evidence; retains the valid local completion chain, the missing-transition refusal and the invented tuple refusal; replaces reliance on inherited provenance with rejection or inert reading of obsolete evidence under ruling 4.
+
+No existing red expected two unfinished requests on one note to complete together: fix 1 finding 4 concerns an
+already-completed replay beside one new unfinished request. That coverage is retained, and the new ruling-2 red
+pins the two-unfinished case separately: oldest admitted, younger active bytes and metadata untouched, then the
+next run can complete the younger request. No existing red expected a plain-note state question or answered state
+write: fix 1 finding 7 only requires the exact bound append. It remains unchanged. The new plain-note ruling-5
+red requires only the append and no state question, while preserving the complete Current state and other bytes.
+The front-matter state question/answer tests, author admission/refusal assertions, link-only ruling, numeric bounds,
+corpus fixtures and all other assertions are unchanged.
+
+| File | Exact amended test name | Why it fails at HEAD now |
+| --- | --- | --- |
+| `runner/test/c05-person-notes.test.ts` | `C05 person notes: fix 1 finding 2: a conflicted append survives twenty newer runs and retries its filed source` | All 22 injected conflicts, original-run retention removal and the exact successful retry pass. Replay press 24 preserves the note, but its manifest still contains appendEvidence and inherited completion authority rather than consulting only RunRecords. The new no-appendEvidence assertion fails. |
+| `runner/test/c05-person-notes.test.ts` | `C05 person notes: fix 1 finding 4: a completed replay cannot consume the new request for the same note` | The original append and the new request's append both pass their unchanged assertions. The second run has only change-2's local binding, but its checkpoint includes inherited change-1 as well as local change-2; the exact local-completion assertion fails. |
+| `src/data/contracts/c05-person-reports.test.ts` | `C05 person notes: fix 1 finding 9: completion guards require applied bindings without inherited evidence` | Legacy parsing, the valid local chain, exact missing-completion transition refusal and the earlier invented-tuple refusal pass. The manifest reader still accepts an obsolete evidence prefix and imports its completion, instead of rejecting the manifest or reading the obsolete fields inertly. |
+
+### New reds and controls
+
+Each case executes its positive control before the failing assertion. Runner cases use the existing corpus driver
+through production main, the real author, manifest admission and engine; persisted-record checks use
+RunRecords.found, which invokes its originating-manifest-checked walk. No helper-only settlement test or alternative
+write path was introduced. The unchanged author suite executes the exact byte/CRLF and plain-Timeline controls
+through note-edit.applyChanges. The parser case uses parseRunManifestV2, parseRunCheckpoint and
+verifyCheckpointChain, with each predecessor hash freshly recomputed.
+
+| File | Exact new test name | Positive control and why it fails at HEAD |
+| --- | --- | --- |
+| `runner/test/c05-person-notes.test.ts` | `C05 person notes: round 3 2: only the oldest unfinished request settles for one note` | Ordinary owned append works; the oldest personal request actually appends and completes. The younger change-2 is nevertheless archived, its parents/stamp/properties change, and it enters the execution manifest. Expected active text and unchanged metadata fail. The later-run second append is retained as the continuation expectation. Pins ruling 2 and pass-2 finding 5. |
+| `runner/test/c05-person-notes.test.ts` | `C05 person notes: round 3 1: ambiguity settles and reports without a model line` | Ordinary append works. A valid reply generates a source note and files the letter with no Timeline line. Both matching targets stay identical, but their promised linked folder-specific rows are absent and the request archive lacks the source move dependency. Pins ruling 1 and pass-2 finding 4. |
+| `runner/test/c05-person-notes.test.ts` | `C05 person notes: round 3 1: overflow settles and reports without a model line` | Ordinary append works; the valid no-line reply files its source. The unlinked overflow row is absent and the archive lacks its source filing dependency. All four target bytes, zero updates and zero questions remain exact assertions. Pins ruling 1 and pass-2 finding 4. |
+| `runner/test/c05-person-notes.test.ts` | `C05 person notes: round 3 1: missing Timeline settles and reports without a model line` | Ordinary append works; the valid no-line reply files its source. The missing-Timeline linked row is absent and no request archive operation exists. This pins request-derived target refusal/settlement beyond the model-line-only path. |
+| `runner/test/c05-person-notes.test.ts` | `C05 person notes: round 3 1: unreadable Timeline settles and reports without a model line` | Ordinary append works; the valid no-line reply files its source. The unreadable-Timeline linked row is absent and no request archive operation exists. Exact unchanged bytes and no append completion remain required. |
+| `runner/test/c05-person-notes.test.ts` | `C05 person notes: round 3 3: overflow refuses its source on an unnamed owned hub` | The hub accepts the same sourced news in an ordinary admitted request. The four-target refusal still writes that source's line on the unnamed owned Home hub, changes its bytes, reports it updated and asks about its unmarked state. The manifest contains a sourced content edit despite the whole-request refusal. Pins ruling 3 and pass-2 finding 1. |
+| `runner/test/c05-person-notes.test.ts` | `C05 person notes: round 3 3: ambiguity refuses its source on an unnamed owned hub` | The ordinary owned-hub control appends. An ambiguous Garden plot request also naming unique Shed roof still updates Shed roof and the unnamed hub from the refused source. All targets must remain identical, with no sourced content edit or state question. Pins ruling 3's whole-source scope. |
+| `runner/test/c05-person-notes.test.ts` | `C05 person notes: round 3 5: invalid bullet count state proposal leaves the valid append independent` | A front-matter personal note accepts its append and produces the valid one-bullet state question in the control. An invalid two-bullet proposal instead skips the entire note loop: the exact valid append, updated row and local completion are missing. The state remains unchanged and no question is asked. Pins ruling 5 and pass-2 finding 3. |
+| `runner/test/c05-person-notes.test.ts` | `C05 person notes: round 3 5: plain note state proposal leaves the valid append independent` | The front-matter append/state-question control works, and the unchanged author red proves the plain Timeline is writable. With only front matter removed, the runner skips the valid append because it cannot read a state span. V1 expects the append only, exact preservation of every other byte, no question, one updated row and local completion. Pins ruling 5 and the plain-note branch of pass-2 finding 3. |
+| `runner/test/c05-person-notes.test.ts` | `C05 person notes: round 3 6: retry cites the bound source id after its rename` | Ordinary append works; the injected after-manifest personal edit causes exactly one real conflict while the source files. Rename that exact source id to Renamed letter.txt, then retry without a model line. Exactly one append lands on the fresh bytes, but it cites Water butt update.txt rather than Renamed letter.txt. Pins ruling 6 and pass-2 finding 6. |
+| `runner/test/c05-person-notes.test.ts` | `C05 person notes: round 3 6: satisfaction follows final citation naming on a filing collision` | With no collision, the already-present sourced line satisfies the request, files the source and leaves the note unchanged with zero updates. Adding an older different destination file of the same name causes manifest shape refusal after the citation mutates. The fresh source is not filed. The red requires the final free filename's sourced append, local completion and an inert later replay. Pins ruling 6 and pass-2 finding 7. |
+| `src/data/contracts/c05-person-reports.test.ts` | `C05 person notes: round 3 4: a forged inherited move checkpoint cannot complete an append` | Legacy manifest parsing and the original stored move chain pass. Its literal move is confirmed, and the originating manifest has no journal request. Invent request/target bindings and applied completion in that chain, recompute all predecessor hashes, and parse/verify each checkpoint successfully. The receiving manifest still accepts and exposes never-admitted/never-targeted as a completion. It must reject this obsolete inherited evidence or ignore its authority. Pins ruling 4 and pass-2 finding 2. |
+
+### Verification
+
+All final executions were targeted, without a name filter, and used --maxWorkers=2. No test is marked only or skip.
+Output stays under this worktree's tmp-logs; only failure sections and result totals were inspected.
+
+```sh
+pnpm -C runner exec vitest run test/c05-person-notes.test.ts --maxWorkers=2 > tmp-logs/c05-round3-runner-final.log 2>&1
+pnpm exec vitest run src/data/contracts/c05-person-notes.test.ts src/data/contracts/c05-person-reports.test.ts --maxWorkers=2 > tmp-logs/c05-round3-contracts-final.log 2>&1
+pnpm exec tsc -p tsconfig.app.json --noEmit > tmp-logs/c05-round3-tsc-app-final.log 2>&1
+pnpm -C runner exec tsc --noEmit -p . > tmp-logs/c05-round3-tsc-runner-final.log 2>&1
+pnpm exec eslint src/data/contracts/c05-person-reports.test.ts > tmp-logs/c05-round3-eslint-app-final.log 2>&1
+pnpm -C runner exec eslint test/c05-person-notes.test.ts > tmp-logs/c05-round3-eslint-runner-final.log 2>&1
+```
+
+Runner: **13 expected assertion failures / 23 passes** (11 new cases and two amended reds).
+Author/report contracts: **2 expected assertion failures / 15 passes** (one new case and one amended red).
+Every one of the twelve new cases and three amended reds fails for its stated contract reason at HEAD.
+All 38 unchanged targeted tests pass. Every adjacent positive control completes before its red assertion.
+Both TypeScript projects and both touched-file ESLint invocations exit 0. Read-only git diff --check passes.
+No assertion API error, test load error, unhandled exception or timer-gate failure is used as the red. The collision's production
+manifest shape refusal is the defect under test, observed through absent filing and the result; it is not a test
+load error. The no-line replies include a generated source note so they pass the existing provider's noNote guard.
+An initial diagnostic run hit that guard; c05-round3-runner-refined.log and the final log supersede it.
+The name-filtered diagnostic was only to refine those new fixtures; the final evidence above executes every test
+in the three selected files. No pnpm check, broader suite or e2e was run, as assigned.
+
+Whitespace: removed only trailing spaces in docs/harness/2026-10-10-codex-c05-person-notes-adversarial.md;
+no review wording changed (pass-2 Minor). All earlier notes remain as history; this section is the round-3 contract.
+
+Offline research/reuse: the installed Vitest README links [Vitest documentation](https://vitest.dev/).
+The assigned corpus driver, fixedDrive, author byte oracles, recovery fixtures and RunRecords originating-manifest
+check were reused locally. No external query was made under the owner's no-network instruction.
+compatibility: not applicable to test-only edits; the implementation session owns compatibility.
+Left out: implementation, commits, harness shared-state edits, full check, e2e, deployment and backup, as assigned.
