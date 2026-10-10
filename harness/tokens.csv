@@ -426,3 +426,5 @@ d-v2-24a,red (round 4),codex,gpt-5-codex,high,1,1035548,1026170,,971264,9378,,,,
 d-v2-24a,implementer (round 4),codex,gpt-5-codex,high,1,888720,885356,,847744,3364,,,,sparkle gated,2026-10-10
 d-v2-24a,adversarial (round 4),codex,gpt-5-codex,high,1,1257817,1250663,,1162240,7154,,,,0 blocking after ruling (size minor),2026-10-10
 d-v2-24a,reviewer,claude,bower-reviewer,,1,39809,,,,,,8,2.2,PASS (P4-79),2026-10-10
+p4-b123-prep,drafter,codex,gpt-5-codex,high,1,2438316,2415785,,2259840,22531,,,,4 cases + doc,2026-10-10
+p4-b56-prep,drafter,codex,gpt-5-codex,high,1,2531691,2510506,,2381952,21185,,,,4 cases + doc,2026-10-10

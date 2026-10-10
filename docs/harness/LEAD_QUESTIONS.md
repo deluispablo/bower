@@ -91,3 +91,14 @@ Fix round 2 (b44b2dea) fixed the three adversarial findings (layer home at relea
 ## 2026-10-10 prep-method-rows (FYI)
 
 The C06, C07 and C11 preps are integrated (7a178b80, 226597a2, d6863c64). They first failed on a real gap: second-brain-method.test.ts needs a TL-P4-08 verdict row per new case in 2026-10-08-p4-method-rubric-changes.md. Codex added the rows; where a rubric contradicted the method it changed the rubric minimally (reasons in each row): c07-dated-rent-change, c07-same-period-rent, c07-tentative-closure (Current state preservation requirements removed, expected unchanged); c11-request-is-one-time (a sourced hub update permitted; an inbox question id added to expected). C08-C10 got their rows before your review: c08-report-with-sources changed (hub updates allowed; its expected.json mismatch is documented in the row), the rest agree. The prep prompt now adds the rows itself (C15, C13 running).
+
+## 2026-10-10 p4-rate-limits (values to rule before dispatch)
+
+TL-P3-14 left per-address limits on `/auth/*` and per-person limits on `/drive/token` and `/vault` to P4, with Cloudflare's rate limiting binding as the standard (developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/). The original app has none to reuse. Proposal for the packet: one helper in `api/src/security.ts` over the binding (period 60 s, the binding's only granularities are 10 s and 60 s): `/auth/*` 20 per minute per client address (`CF-Connecting-IP`); `/drive/token` 30 per minute per person; `/vault` 60 per minute per person; over the limit, 429 `rate-limited` with `Retry-After`, which the client already maps to a sentence. `/process` keeps its daily quota in admission. The binding goes in wrangler.toml for staging only (no deploy by a worker; dry run). Non-escalated, Codex, with a Codex adversarial pass and a Claude review. Please confirm the numbers or give others.
+
+## 2026-10-10 preps-ready-for-review
+
+Ready for your review (each a branch p4-<x>-prep with a doc docs/harness/2026-10-10-<x>-prep.md, corpus cases and method verdict rows; all pass test/corpus and second-brain-method):
+- C17 brain: b123 (B1 index, B2 summary, B3 hot) at 77768bfd, 4 cases, 12 open questions; b56 (B5 type table and profiles, B6 templates, fit-create-ask) at c180ddba, 4 cases including the three owner failure modes, 10 open questions.
+- c08=fb84f96d c09=7ddcac10 c10=72a043a5 c12=bd75bc87 c13=84c8668f c15=1de6b3b6 (C08-C10 also listed above; C12, C13, C15 new).
+On your accept I integrate each as is.
