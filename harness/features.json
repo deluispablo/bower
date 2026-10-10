@@ -6782,5 +6782,18 @@
     ],
     "verify": "",
     "note": "TL-P4-42. Codex red, Codex implementation, Codex pass, Claude review. Packet 2026-10-10-b3a-hot-reduce-packet.md. implementer: codex."
+  },
+  {
+    "id": "e2e-resize-helper",
+    "task": "p4-harness",
+    "category": "fix",
+    "passes": false,
+    "ui": false,
+    "what": "A cross-breakpoint resize in e2e waits for the target shell before reading the page (empty-note-help-flaky, option b).",
+    "steps": [
+      "e2e/empty-note-help.spec.ts passes 20/20 on fake phone; every cross-breakpoint resize uses e2e/viewport.ts resize()."
+    ],
+    "verify": "",
+    "note": "Lead ruling on empty-note-help-flaky (b). Diagnosis docs/harness/defects/2026-10-10-empty-note-help-flaky-diagnosis.md. Codex, non-escalated, then a Claude review. implementer: codex."
   }
 ]
