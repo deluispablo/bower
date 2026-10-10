@@ -72,6 +72,7 @@ function PhoneBar({ folder, path }: { folder: string; path: string }) {
 }
 
 function NoteView({ path }: { path: string }) {
+  const act = useFileActions();
   const { data: note, error, loading } = useNote(path);
   const { data: tree } = useTree();
   const desktop = useIsDesktop();
@@ -148,7 +149,12 @@ function NoteView({ path }: { path: string }) {
         </section>
       )}
       {!note.body.trim() && !note.summary && !note.currentState.length && !note.timeline.length && (
-        <p className={s.empty}>This note is empty. Write in it from Google Drive or any notes app on your computer; writing here comes in a later version.</p>
+        <div className={s.empty}>
+          <p>This note is empty. To write in it, open your Bower folder on your computer with Google Drive for desktop, then use any notes app.</p>
+          <Button variant="ghost" size="sm" className={s.emptyDrive} onClick={() => act.openInDrive(path)}>
+            <Icon name="drive" size={18} /> Open in Drive
+          </Button>
+        </div>
       )}
       <div className={s.body}>
         <Markdown
