@@ -6896,7 +6896,7 @@
     "steps": [
       "Through runner main: a dated-colon list gives the nothing-found row, a plain list appends once, a prose section keeps can't read."
     ],
-    "verify": "",
+    "verify": "pnpm -C runner exec vitest run test/c05-person-notes.test.ts -t \"C05 timeline list:\"",
     "note": "c05-person-timeline-format (staging 645710a4). Codex red, Codex implementation after B1a integrates, Claude review. Packet 2026-10-10-c05-timeline-list-packet.md. implementer: codex."
   },
   {
