@@ -66,3 +66,7 @@ Rules for every row: plain words, no file names in sentences (the `[[…]]` sour
 ## Commits
 
 1. The reds (tests and the corpus case only). 2. The fix. 3. The notes (`docs/harness/2026-10-10-c05-person-notes-notes.md`) with `compatibility:` and `tests changed:` lines in the exact form `tests changed: <path>: <why>`.
+
+## Addendum (TL-P4-32 addendum 5 (3); owner OK through the designer, 2026-10-10; claude/design 2b7455ac)
+
+| A request older than the oldest retained run, with no binding or completion there | No line is added; the request is archived. Under `Left as you wrote them`: the link `<note>` and the muted line `Bower didn't add the line: this request is too old for Bower to know if it already did. Ask again if you still want it.` |
