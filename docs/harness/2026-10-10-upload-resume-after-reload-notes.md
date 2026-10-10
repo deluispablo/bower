@@ -138,119 +138,109 @@ account/folder-isolation assertions remain untouched. This red session does not 
 
 ## Implementation
 
-Implementer: Codex, 2026-10-10. Baseline HEAD: `dd0b8dfbbc4fbc90fd589bb1ce731025275e7ea9`.
-Status: **blocked under TL-P4-51** after completing the entire targeted data suite.
-The production changes remain in this worktree for the lead to review. No network, git-writing
-command, test edit, shared harness edit or commit was performed.
+Implementer: Codex, 2026-10-10. Continuation HEAD: `729fa07e23e3eac90dcd1c15fea454feeaf94cd6`.
+Status: **blocked under TL-P4-51** after the entire targeted data suite completed.
+The previous UNCOMMITTED production change was retained. Red repair 1 is already committed.
+No network, git-writing command, test edit, shared harness edit or implementation commit was performed.
 
 ### Changes retained
 
-- `DriveVault.addPile` now awaits the existing queue's `add` for every accepted Blob before
-  reporting saved. The queue still owns committed IndexedDB staging and the explicit memory
-  fallback; saving does not wait for Drive transfer. No queue API, store or protocol was added.
-- The previous enqueue-and-watch helper is split into staging and completion observation.
-  Completion observation reuses the staged queue identity. Target metadata has one helper;
-  existing `freeName` includes staged siblings that the Drive listing cannot yet contain.
+- `DriveVault.addPile` awaits the existing queue's `add` for every accepted Blob before
+  reporting saved. The queue owns committed IndexedDB staging and the explicit memory fallback;
+  saving does not wait for Drive transfer. No queue API, store or protocol was added.
+- Staging and completion observation reuse the same queue identity. Target metadata has one
+  helper; existing `freeName` includes staged siblings the Drive listing cannot yet contain.
 - Missing-member decisions wait for existing queue startup/hydration. Folder rows collect queued
-  state after that decision; a retained loose member uses its queue row instead of a picker.
-  An ordinary listing without a missing-member decision still finishes before a gated account
-  answer, preserving `drive-vault.test.ts:2535`.
-- Existing write-once reconciliation, resumable transport, destination refusal and live session
-  fencing are unchanged. The retained candidate is incomplete and is not an accepted delivery.
+  state afterward; a retained loose member uses its queue row instead of a picker. An ordinary
+  listing without a missing-member decision still finishes before a gated account answer.
+- Existing write-once reconciliation, resumable transport, destination refusal, halt/withdrawal
+  and live session fencing remain unchanged. The candidate is not an accepted delivery.
+- Temporary production diagnostics were removed after tracing both remaining timeouts.
+  `cmp` confirmed the production file exactly matches the retained change from this turn's start.
 
-removed: `src/data/vault/drive-vault.ts`: 12 old lines, replaced or moved; no mechanism deleted.
-removed: early queued/sending snapshots and pre-hydration local-key snapshot moved after hydration.
+removed: `src/data/vault/drive-vault.ts`: 12 old lines replaced or moved; no mechanism deleted.
+removed: early queued/sending and pre-hydration local-key snapshots moved after hydration.
 removed: fire-and-forget-only save setup replaced by committed Blob staging before the tracked send.
 removed: inline name/property construction extracted to the shared target helper.
 removed: enqueue-and-watch header and local added-ID lookup replaced by staged-ID observation.
+removed: temporary TRACE diagnostics; none remain in the final production diff.
 tests changed: none.
 
 ### Research and reuse
 
-No network was used. The packet/prep and existing code provide the research, with these inherited
-official references (not fetched or verified online in this session):
+No network was used. Research is inherited from the packet/prep and existing code. Official references
+below were not fetched or verified online in this session.
 
 - [Google Drive resumable uploads](https://developers.google.com/workspace/drive/api/guides/manage-uploads#resumable):
-  retain the session URI; query status using `Content-Range: bytes */N`; respect 308/server Range;
-  reconcile completion and reopen expired sessions using the same logical identity. Existing
-  `resumable-upload.ts` and the queue implement this, including bounded restarts; neither was edited.
+  retain the session URI; status query with `Content-Range: bytes */N`; obey 308/server Range;
+  reconcile completion and reopen expired sessions with the same logical identity. Existing
+  `resumable-upload.ts` and the queue remain the protocol's home.
 - [Drive pre-generated IDs](https://developers.google.com/workspace/drive/api/guides/manage-uploads#pre-generated-ids):
-  the existing write-once keeper persists the reserved identity and reads it back after an ambiguous
-  answer. The candidate reuses it through the queue, rather than creating another reservation path.
+  the existing write-once keeper persists the reservation and reads it back after an ambiguous reply.
 - [IndexedDB transaction lifetime](https://w3c.github.io/IndexedDB/#transaction-lifetime):
-  request success does not mean transaction completion. Existing `upload-store.ts:213–219` writes
-  bytes and metadata together and awaits `finished`, whose success is `oncomplete`. Awaiting the
-  existing queue `add` uses that boundary without changing durability limits or fallback wording.
-- Original-app adaptations already live in `upload-queue.ts` and `upload-store.ts`; their provenance
-  is recorded there. No original checkout, dependency download or new library was needed.
+  request success is distinct from transaction completion. Existing `upload-store.ts` writes bytes
+  and metadata together and awaits transaction `oncomplete`; awaiting queue `add` uses that boundary.
+- Original-app adaptations already live in `upload-queue.ts` and `upload-store.ts`, with provenance
+  recorded there. No new library, store, queue, protocol, lock or session fence was introduced.
 
 ### Verification and complete contradiction audit
 
-Every command below redirected all output under `tmp-logs/`; only failures and result counts were read.
+All output is under `tmp-logs/`; only failures and aggregate result counts were inspected.
 
 ```sh
-pnpm exec vitest run src/data/upload-resume.test.ts --maxWorkers=2 > tmp-logs/upload-resume-implementation-reds.log 2>&1
-pnpm exec vitest run src/data/upload-resume.test.ts --maxWorkers=2 > tmp-logs/upload-resume-implementation-green.log 2>&1
-pnpm exec vitest run src/data --maxWorkers=2 > tmp-logs/upload-resume-data.log 2>&1
-pnpm exec tsc -p tsconfig.app.json --noEmit > tmp-logs/upload-resume-implementation-tsc-app.log 2>&1
-pnpm exec tsc -p tsconfig.node.json --noEmit > tmp-logs/upload-resume-implementation-tsc-node.log 2>&1
-pnpm exec eslint src/data/vault/drive-vault.ts > tmp-logs/upload-resume-implementation-eslint.log 2>&1
+pnpm exec vitest run src/data/upload-resume.test.ts src/data/vault/drive-vault.test.ts --maxWorkers=2 > tmp-logs/resume-continue-targeted.log 2>&1
+pnpm exec vitest run src/data/upload-resume.test.ts --maxWorkers=2 > tmp-logs/resume-continue-reds.log 2>&1
+pnpm exec vitest run src/data --maxWorkers=2 > tmp-logs/resume-continue-data.log 2>&1
+pnpm exec tsc -p tsconfig.app.json --noEmit > tmp-logs/resume-continue-tsc-app.log 2>&1
+pnpm exec tsc -p tsconfig.node.json --noEmit > tmp-logs/resume-continue-tsc-node.log 2>&1
+pnpm exec eslint src/data/vault/drive-vault.ts > tmp-logs/resume-continue-eslint.log 2>&1
 ```
 
-- Baseline reds: all five failed on assertions, reproducing the committed red delivery.
-- Candidate reds: three passed, two failed; this is not a green delivery despite the log's filename.
-- Entire data suite: **78 files, 4,145 tests; 76 files and 4,141 tests passed; four tests failed**.
-  No other data-suite failure was reported. Duration: 61.55 seconds. Both sign-out retention and
-  the gated-account notice test remain untouched and passed.
-- App tsc, node tsc and touched-production-file eslint: exit 0, empty logs.
-- `pnpm check` and demo/fake app/capabilities e2e were not run: the mandatory contradiction stop
-  applies after the complete targeted suite. No green mark or UI/designer verification is claimed.
+- The exact five upload-resume reds pass, both standalone and in the combined targeted run.
+- Combined targeted suite: 232 passed, two failed, 234 total across two files.
+- App tsc, node tsc and touched-production-file eslint: exit 0, empty logs. `git diff --check` passes.
+- Entire data suite: **78 files, 4,145 tests; 77 files and 4,143 tests passed; two tests failed**.
+  Duration: 68.28 seconds. The only failures are both fixture contradictions listed below; no
+  unhandled errors or other data-suite failures were reported. All five reload reds passed here too.
+  Sign-out retention and the existing gated-account notice test passed unchanged.
 
-All **five** contradicting tests are listed below, including the positional red that passed in the
-full run but failed in the candidate-only run. Random member identities remain random; production
-identity generation and ordering were not changed merely to satisfy the fixtures.
+The complete remaining E1 contradiction list is:
 
-1. `upload-resume-after-reload: upload save retains every member before reporting saved`
-   — `src/data/upload-resume.test.ts:194`; assertions at `:204–205`.
-   The fixture equates `records[0]` with `pile.items[0]`. All records have the same injected
-   `addedAt`; IndexedDB enumerates the compound key, including random member keys, then the store
-   stably sorts only by `addedAt` (`upload-store.ts:210`). Once Q2 retains both members, a sibling
-   can be first with confirmed 0 and its own original bytes. Candidate-only failure: 0 versus 4.
-   The contract requires identity-based retention of all members, not selecting the first record
-   by position. Both bodies are already checked by member identity later in this same test.
+1. `a file that lands after its pile is gone goes to the Bin`
+   — `src/data/vault/drive-vault.test.ts:951`; shared fixture at `:905–948`, gate at `:931`.
+2. `a file that lands during a halt is not uploaded again on Undo`
+   — `src/data/vault/drive-vault.test.ts:961`; the same fixture and gate.
 
-2. `upload-resume-after-reload: upload reload resumes all saved members without a picker or duplicate`
-   — `src/data/upload-resume.test.ts:219`; helper assumptions at `:234–235` and `:254–255`.
-   `reloadCase` selects the first store record instead of the held member's identity. Full-suite
-   failure: confirmed 0, null session and null reservation versus the held member's offset 4.
-   Its later global-first status/put assertions also assume that member resumes before every newly
-   staged sibling. Q2 requires all bytes retained and the resumed session's own server offset;
-   it does not require tie ordering among equal timestamps or put calls from different members.
+Both time out at the unchanged 5,000 ms limit. Red repair 1 correctly opens the store gate before
+awaiting `addPile` (`:941–943`), so the old committed-byte/save deadlock is resolved. It does not
+establish the late arrival the helper requires. The fixture awaits saving and starts public trash,
+then refuses to Bin the folder until an individual late file is Binned (`:931`, `:937`). It never
+waits for its `holdChunks` arrival callback before trash (`:928`, `:944–946`).
 
-3. `upload-resume-after-reload: accepted durable members survive generated transfer reloads`
-   — `src/data/upload-resume.test.ts:333`; same helper at `:234–235`, invoked at `:338`.
-   The generated test has the identical positional contradiction for 2–5 retained members.
-   Candidate-only counterexample: `[3,4,true]`, seed 531, path `0:1`.
-   Full-suite counterexample: `[2,8,true]`, seed 531, path `0:0`; selected sibling has confirmed 0
-   and no session/reservation, while the barrier held the first submitted member at offset 8.
-   No bound, seed, example, assertion or test was changed.
+Deterministic trace of each failing test: the saved member already has its queue ID; trash finds
+it uploading; the existing `queue.halt` aborts and settles it as waiting with reserved ID `r3`;
+write-once withdrawal reads that reserved ID and returns null (no file arrived). There is no
+`putChunk` completion callback and no queue done event. The folder's fixture gate therefore waits
+forever for the Bin of a file the existing halt correctly prevented from arriving. The completion
+observer was installed before trash in both traces: moving its installation cannot supply an arrival.
+Logs: `tmp-logs/resume-race-diagnosis.log` and `tmp-logs/resume-race-confirm.log`.
 
-4. `a file that lands after its pile is gone goes to the Bin`
-   — `src/data/vault/drive-vault.test.ts:950`; fixture dependency at `:940–944`.
-   The helper awaits `addPile` before releasing the `store.add` commit gate at `:944`. Under Q2,
-   `addPile` must await that transaction. The fixture therefore deadlocks and reaches its unchanged
-   5,000 ms timeout. Retaining the old fixture ordering would require reporting saved before the
-   device transaction, directly contradicting the packet's save boundary.
+This fixture originally relied on a store add still being unresolved when public saving completed:
+Bin could miss that member, and the member could subsequently start. Q2 requires that member to be
+staged and queued before saving completes; the existing halt/withdrawal now sees it and stops it.
+Making this particular schedule produce a late file would require bypassing or delaying that halt,
+or awaiting transfer before reporting saved. Neither follows the packet's staging boundary and
+reuse of the existing queue/withdrawal. The late-arrival and Undo safety assertions are valid; the
+fixture needs a controlled already-arrived/late-answer schedule, ruled by the lead. No assertion,
+timeout, gate, queue or transport was changed to manufacture green.
 
-5. `a file that lands during a halt is not uploaded again on Undo`
-   — `src/data/vault/drive-vault.test.ts:960`; same helper dependency at `:940–944`.
-   The same pre-commit-save ordering causes the same unchanged 5,000 ms timeout. Its late-arrival
-   and Undo safety assertions remain valid; its scheduling must be reconciled with Q2 by the lead.
+Q1 sign-out retention tests belong to `upload-sign-out-forget` and remain untouched. Their earlier
+policy contradictions are outside this E1 audit. The positional selections fixed by red repair 1
+are no longer contradictions. No other contradiction is inferred from passing tests.
 
-The Q1 sign-out retention contradictions previously recorded above are explicitly assigned to
-`upload-sign-out-forget`; no Q1 implementation or assertion was touched. The staging-barrier and
-hydration reds (`:342` and `:270`) passed in both candidate runs. Lead resolution of the five E1
-fixture contradictions is required before another implementation round and remaining gates.
+`pnpm check` and demo/fake app/capabilities e2e are not run after the TL-P4-51 contradiction stop;
+no green mark, UI/designer verification or accepted completion is claimed. The production change
+is kept uncommitted for the lead, with this full audit in its Implementation section.
 
 ## Red repair 1
 
@@ -331,3 +321,51 @@ failures are the two unchanged Bin/Undo timeouts listed above. Duration 21.55 se
 Both tsc projects and eslint on all five touched test files exited 0 with empty logs.
 `git diff --check` passed. Production hash matches. No commits were made.
 removed: none; positional selectors and the store-gate await order were replaced only.
+
+## Red repair 2
+
+Red-owning Codex session, 2026-10-10; TL-P4-29, TL-P4-53 addendum 3.
+Only the shared late-arrival fixture's schedule and this section were changed.
+No network or git-writing command. The implementer's uncommitted production change
+is unchanged: SHA-256 matches `tmp-logs/red-repair-2-production.sha256`.
+
+tests changed: src/data/vault/drive-vault.test.ts:914: TL-P4-53 addendum 3: stage before saved, land the reserved file with an error instead of its final answer, hold the existing checksum read-back until the real halt starts; preserve both Bin/Undo tests and every assertion, timeout and existing gate.
+
+The fixture lets the real final chunk create the file, then returns a conflict error
+instead of its successful final answer. The existing resumable conflict recovery
+reads the reserved file and its checksum. A deterministic barrier holds that read's
+answer after the real read has completed; trash starts only after this boundary.
+The halt spy calls the original halt first, retaining its abort and settlement,
+then releases the already-sent read's answer. It never bypasses or delays halt.
+The queue's real completion observer consequently receives the late file while
+trash is in progress, tries its first Bin, retries the injected failed Bin, and
+releases the unchanged folder-Bin barrier. Undo restores the same file once.
+The staging gate, failed-first-Bin injection and folder-Bin gate are unchanged.
+No real timers were added; no queue, store, transport or production mechanism changed.
+
+Both preserved tests now pass at their new lines:
+- `src/data/vault/drive-vault.test.ts:981`: a file that lands after its pile is gone goes to the Bin.
+- `src/data/vault/drive-vault.test.ts:991`: a file that lands during a halt is not uploaded again on Undo.
+
+Research is inherited from Implementation's official Drive and IndexedDB references,
+without network access. Existing conflict read-back in `drive/resumable-upload.ts`
+and the real queue halt/completion remain the mechanisms exercised by the fixture.
+
+Verification, all output in `tmp-logs/`:
+
+```sh
+pnpm exec vitest run src/data/vault/drive-vault.test.ts --maxWorkers=2 > tmp-logs/red-repair-2-before.log 2>&1
+pnpm exec vitest run src/data/vault/drive-vault.test.ts --maxWorkers=2 > tmp-logs/red-repair-2-tests.log 2>&1
+pnpm exec tsc -p tsconfig.app.json --noEmit > tmp-logs/red-repair-2-tsc-app.log 2>&1
+pnpm exec tsc -p tsconfig.node.json --noEmit > tmp-logs/red-repair-2-tsc-node.log 2>&1
+pnpm exec eslint src/data/vault/drive-vault.test.ts > tmp-logs/red-repair-2-eslint.log 2>&1
+```
+
+Baseline: 227 passed, two failed, 229 total; only the two named tests timed out
+at the unchanged 5,000 ms limit. Final: **229 passed, 229 total**, one file,
+7.67 seconds. Both tsc projects and touched-test eslint exited 0 with empty logs.
+`git diff --check` passes. Production hash matches. No commits were made.
+Full `pnpm check`, data sweep and e2e belong to implementation/integration delivery
+and were not run in this explicitly scoped red repair. No UI change or green mark
+is claimed. There are no remaining contradictions in the whole touched file.
+removed: none; only the shared fixture's schedule was replaced.

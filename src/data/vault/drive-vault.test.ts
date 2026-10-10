@@ -908,8 +908,8 @@ describe('things that arrive late', () => {
   });
 
   /**
-   * The pile goes to the Bin while its only file is still being kept by the queue (not yet sent), so the Bin finds
-   * nothing to hold back; the file then lands and the Bin of the pile itself is still being written.
+   * The staged file lands, but its final answer is an error. Its read-back is already on the wire when trash
+   * halts the queue; that late answer follows the pile to the Bin while the folder's Bin is still being written.
    */
   async function landsAfterTheBin(failFirstBin: boolean, binPileLast: boolean): Promise<{ lateId: string; pile: { id: string; path?: string }; failed: () => boolean; v: DriveVault }> {
     const base = memoryUploadStore();
@@ -925,7 +925,36 @@ describe('things that arrive late', () => {
     let failOnce = failFirstBin;
     let lateBinned: () => void = () => undefined;
     const binned = new Promise<void>((r) => (lateBinned = r));
-    holdChunks(drive, Promise.resolve(), true, (file) => { lateId = file.id; });
+    let reading: () => void = () => undefined;
+    const readStarted = new Promise<void>((r) => (reading = r));
+    let answer: () => void = () => undefined;
+    const answerGate = new Promise<void>((r) => (answer = r));
+    const put = drive.putChunk.bind(drive);
+    drive.putChunk = async (...args) => {
+      const status = await put(...args);
+      if (status.kind === 'done') {
+        lateId = status.file.id;
+        // Drive has the reserved file, but the client receives an error and must read it back.
+        throw driveError('conflict');
+      }
+      return status;
+    };
+    const uploaded = drive.getUploaded.bind(drive);
+    drive.getUploaded = async (id) => {
+      const file = await uploaded(id);
+      if (id === lateId) {
+        reading();
+        await answerGate;
+      }
+      return file;
+    };
+    const halt = queue.halt.bind(queue);
+    vi.spyOn(queue, 'halt').mockImplementation((id) => {
+      const halted = halt(id);
+      // The read was sent before halt; its answer can still arrive after the abort.
+      answer();
+      return halted;
+    });
     let folder = '';
     drive.trash = async (id) => {
       if (id === folder && binPileLast) await binned;
@@ -941,6 +970,7 @@ describe('things that arrive late', () => {
     await keeping;
     letKeep();
     const pile = await saving;
+    await readStarted;
     folder = (await drive.listAll(root)).find((f) => drive.pathOf(f.id, root) === pile.path)?.id ?? '';
     const trashing = v.trash(pile.path ?? '');
     await trashing;
