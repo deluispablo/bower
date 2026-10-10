@@ -746,3 +746,70 @@ Standard reference inherited from Fix round 2:
 Touched-test ESLint passed; log: `/tmp/orphan-pile-red3.Lz0Hkv/lint.log`.
 Final diff check passed; only the three test files and this requested notes
 record differ. All 14 changed tests are listed above.
+
+
+## Escalated completion after red sweep 3
+
+Implementer: codex, 2026-10-10. Base HEAD
+`4f5f03bf1eece3f224808ddc28f0692f8e9e3541` (red sweep 3 committed).
+Final status: **done**. This supersedes the earlier TL-P4-51 blocked statuses:
+all required targets now pass under TL-P4-53 addenda 5–7. No remaining
+contradicting test was found in the whole requested suite.
+
+No production fix was needed. The existing production implementation in
+`src/data/vault/drive-vault.ts`, `src/data/pile-readiness.ts` and
+`src/data/sources.ts` passes the repaired committed contract unchanged.
+Addendum 5 listing-stamp retirement, addendum 6 exact-identity Bin removal,
+and addendum 7 missing-without-binning fixtures remain intact.
+Only this notes file changed in this completion session.
+
+tests changed: none.
+removed: none.
+No network, git-writing command, dependency install, server, or e2e run.
+The coordinator owns the notes commit and integration.
+
+### Final verification
+
+Every pnpm command used `--config.verifyDepsBeforeRun=false --config.offline=true`.
+Logs and all test-generated artifacts are under
+`/private/tmp/orphan-pile-final-0fmdacwz/`.
+
+- `pnpm exec vitest run src/data/orphan-pile-count.test.ts --maxWorkers=2`:
+  exit 0; one file, all 18 exact orphan reds and controls passed unchanged.
+  Log: `reds.log`. Exact test names and original assertions are recorded above.
+- `pnpm exec vitest run src/data src/architecture.test.ts --maxWorkers=2`:
+  exit 0; 80 files, all 4,185 tests passed. Log: `data.log`.
+  The four prior contradictions and all repaired retry fixtures now pass.
+- `pnpm exec tsc -p tsconfig.app.json --noEmit --incremental false`:
+  exit 0. Log: `tsc-app.log` (empty).
+- `pnpm exec tsc -p tsconfig.node.json --noEmit --incremental false`:
+  exit 0. Log: `tsc-node.log` (empty).
+- `pnpm exec eslint src/data/vault/drive-vault.ts src/data/pile-readiness.ts src/data/sources.ts`:
+  exit 0. Log: `eslint.log` (empty).
+- Read-only `git diff --check`: passed before the notes update.
+
+Both Vitest runs use `--configLoader runner`, a temp `vitest.config.ts`,
+and `--fsModuleCachePath` in the same temp directory. The wrapper imports
+the unchanged app config, redirects Vite caches, and explicitly orders
+`cwd.ts` before the original app and timer-gate setup files. Only worker cwd
+moves to OS temp. Temp `src` and `docs` symlinks support existing read-only
+fixture reads. The original timer gate and CPU reporter both run; CPU
+reports are written under OS temp, never into the repository. No test,
+repository config, or setup file was edited. Only failure-pattern searches
+and aggregate counts were read from test output; there were no failures.
+
+`pnpm check` was not run: its standard command writes repository artifacts,
+which this assignment prohibits. The explicitly requested data/architecture,
+app/node TypeScript and scoped ESLint checks all passed. No full check mark
+is claimed. E2e does not apply to this data-only `ui: false` entry.
+
+### Standard approach and sources
+
+No network research was performed, as instructed. Reused the inherited
+standard references and existing production mechanism recorded above:
+[Drive file search](https://developers.google.com/workspace/drive/api/guides/search-files),
+[Drive resumable uploads](https://developers.google.com/workspace/drive/api/guides/manage-uploads#resumable),
+and [IndexedDB transactions](https://www.w3.org/TR/IndexedDB/#transaction-concept).
+No second scanner, durable store, or upload protocol was added.
+
+Left out: full check mark, UI/e2e, commits and integration.
