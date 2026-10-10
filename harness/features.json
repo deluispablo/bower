@@ -6854,7 +6854,7 @@
     "steps": [
       "A main golden with 50 archived requests and 25 kept runs reads the pile-run baseline plus at most 1 per waiting request."
     ],
-    "verify": "",
+    "verify": "pnpm -C runner exec vitest run test/c05-bounded-reads.test.ts -t \"C05 bounded reads\"",
     "note": "Smoke 2ab7b490: 268 s, 757 reads. Escalated; implementation after B1a integrates. Packet 2026-10-10-smoke-request-slow-packet.md. implementer: codex."
   },
   {
