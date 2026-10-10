@@ -6848,7 +6848,7 @@
     "id": "smoke-request-slow",
     "task": "p4-c05",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "A request run reads only its own evidence: no archive scan, waiting requests in .bower/changes/pending/<run id>/, horizon from listing metadata (lead ruling, DECISIONS after bd2671ba).",
     "steps": [

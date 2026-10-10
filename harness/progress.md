@@ -318,3 +318,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-10: drive-calls-cut passes — drive-calls-cut passes: re-proved after the b1a-contract golden re-pin (TL-P4-41 addendum 4)
 - 2026-10-10: b1a-contract passes — b1a-contract passes: MOC regions, the selection reply, retrieval.json with its cursor, the maintain effect (P4-94b PASS)
 - 2026-10-10: c05-timeline-list passes — a person's bulleted Timeline is appendable; can't read only for non-list sections (P4-95 PASS)
+- 2026-10-10: smoke-request-slow passes — no archive scan; waiting requests in changes/pending/<run id>/ read only their run; horizon from listing time (P4-96 PASS)
