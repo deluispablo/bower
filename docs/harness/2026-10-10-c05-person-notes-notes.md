@@ -146,3 +146,132 @@ existing note-edit tests supply the byte oracle pattern, and e2e/axe.ts supplies
 No external query was made.
 
 Left out: implementation, commits, pnpm check and e2e execution, as assigned.
+
+## Implementation
+
+Implementation session: Codex, on the committed reds at `0871c4f0`, branch `c05-person-notes`.
+No test, fixture or corpus file was changed. No network, server, e2e, pnpm check or git write command was run.
+No commits were made: the coordinator owns the fix and notes commits. Delivery is blocked by the conflicts below.
+
+### Changes per mechanism
+
+- Planner context and title resolution: `namedNotes` in `src/data/spine/scripted.ts` is the shared title matcher.
+  It uses NFC, case-insensitive whole-word references, punctuation/articles and longest overlapping titles.
+  `runner/src/claude.ts` reads admitted request records, prioritizes up to three resolved notes before hubs,
+  and suppresses writes for duplicate names and overflow while retaining ordinary source filing.
+  Stale state proposals for known, unshown personal notes are ignored, allowing Keep mine to settle.
+  Explicit personal-note incorporation keeps its admitted citation available even when the source bytes are a copy.
+- Consent and author: the planner derives the request/target/source tuple from admitted journal words, exact file ids
+  and source filing. It carries that tuple in the existing Timeline change and supplies independently derived tuples
+  beside the fetched bytes. The author compares them, admits one sourced line and refuses mismatched tuples,
+  extra lines, adoption, unanswered state writes, rule wording and concrete personal-note link rewrites.
+  `timeline-line.ts` remains unchanged and is the only line parser/formatter. CRLF and protected bytes are preserved.
+  Missing and unsupported Timelines use the designer's exact left-as-written sentences.
+- State answers: `currentStateOf` explicitly permits reading personal states for planning; the default read remains
+  compatible. The existing grant accepts a null ownership mark for a personal note, replaces exactly one changed
+  bullet, preserves untouched bullets including trailing spaces, and writes no ownership mark.
+  The existing question identity, shown update, answer loop, write fence and re-ask are reused. Initial questions
+  depend on the append and its final stamp, so an append rejected at the fence asks nothing prematurely.
+- Recovery and replay: `RunRecords.found` and its verified checkpoint chain supply completed request/target pairs
+  and pending append bindings. A pending append uses fresh note bytes and its original filed citation; it can use
+  the retry's proposed wording because the previous edit was proven refused before its effect.
+  Same-run resume uses the existing immutable manifest and write-once observation rather than replanning.
+  Additive `appendBindings` and `completedAppends` checkpoint fields carry completions forward; chain validation
+  permits a new completion only for an applied bound operation, and never drops a prior completion.
+  The manifest carries inherited completions so replay evidence survives the existing twenty-run retention.
+  `bowerAppends: 1` on those manifest records is only a discovery hint; authority still requires the verified chain.
+  It avoids reading unrelated historic manifests and preserves the existing 88-call retention golden.
+  Completion carry-forward after actual retention has not received an additional test; the frozen tests were unchanged.
+- Reports: `leftAsWritten` is optional in the public report, immutable manifest, pending checkpoint and saved result.
+  Its validator is shared between the manifest and checkpoint; old stored records still parse.
+  Materialization and the report barrier retain the rows. RunLinks uses the existing labelled-list and note-route
+  parts, links rows with file ids, leaves overflow unlinked, and never adds these rows to the updated count.
+
+removed: unconditional personal-note Timeline refusal, replaced by the single bound sourced admission.
+removed: concrete fetched personal-note link rewrites, which are now refused not-bower.
+removed: the blanket personal-state read refusal within the existing state-section reader.
+removed: ownership marking for the newly granted personal-state branch; owned-note state marking remains.
+removed: consent-free recordIds for bound personal-note append changes.
+removed: omission of leftAsWritten from report materialization and the saved-result projection.
+removed: request replay dependence on identical model wording or the note's most recent write stamp.
+removed: unrelated historical-manifest reads from append-history discovery.
+
+tests changed: none in the implementation session.
+compatibility: FIXSHA
+
+### Verification and blockers
+
+Final commands, with every output redirected and only failure details or result totals inspected:
+
+```sh
+pnpm exec vitest run src/data/contracts src/features/tidy src/features/note --maxWorkers=2 > /tmp/c05-impl-unit.log 2>&1
+pnpm -C runner exec vitest run --maxWorkers=2 > /tmp/c05-impl-runner.log 2>&1
+pnpm exec tsc -p tsconfig.app.json --noEmit > /tmp/c05-impl-tsc-app.log 2>&1
+pnpm exec tsc -p tsconfig.node.json --noEmit > /tmp/c05-impl-tsc-node.log 2>&1
+pnpm -C runner exec tsc --noEmit -p . > /tmp/c05-impl-tsc-runner.log 2>&1
+```
+
+App: **27 files / 2,478 tests pass**, including all 14 C05 app reds.
+Runner, exact requested command: **345 pass / 8 fail**. The 16 non-answer C05 runner reds pass.
+All three TypeScript projects pass. ESLint on all ten touched product files passes, with app and runner run separately.
+`git diff --check` passes. No e2e or pnpm check result is claimed.
+
+1. **Runner environment prerequisite.** Node v26.10.0 has no usable localStorage without a storage file.
+   The three C05 state-answer tests reach the unchanged real answer entry point, then fail in
+   `src/data/vault/journal.ts:144` with `Bower cannot read your waiting changes; keep this page open.`
+   Their new test file does not install the storage port that the existing answer-loop tests install.
+   Changing the tests or adding a Node-specific storage path to app product code is outside the assigned contract.
+   A diagnostic run of the same targeted runner suite with
+   `NODE_OPTIONS='--localstorage-file=/tmp/c05-impl-storage'` is in `/tmp/c05-impl-runner-storage.log`:
+   **348 pass / 5 fail**, with **all 19 C05 runner reds passing** (all 33 C05 unit/runner reds combined).
+   This runtime setup was temporary and no configuration, fixture or corpus file was edited.
+2. **Contract conflict requiring the lead's ruling.** C05 says every other personal-note edit is refused not-bower,
+   and its new author red explicitly requires refusal of a personal link rewrite. The existing
+   `runner/test/keep-one-note.test.ts` requires rewriting the person's plain `Viewing plan.md` before merging
+   and binning the other note. The existing planner correctly keeps that answer waiting when its link rewrite
+   is refused. Permitting this fetched personal-note rewrite would violate the binding; bypassing the planner's
+   refusal would leave links pointing to a binned note. No second write path or test weakening was added.
+   These five existing tests fail in both runner executions:
+   - `keep one note carries the facts and bins the other`
+   - `undo of keep one note restores both notes and links`
+   - `the other note changed after the read is not binned`
+   - `keep-one says what happened when the other note moved or was binned`
+   - `a line that only starts like a kept line is carried`
+
+Additional lint logs: `/tmp/c05-impl-eslint-app.log`, `/tmp/c05-impl-eslint-runner.log`.
+The early combined app/runner ESLint invocation in `/tmp/c05-impl-eslint.log` failed on tsconfig-root discovery;
+separate invocations of the respective existing configurations pass. No lint configuration was changed.
+
+### Draft compatibility row
+
+The coordinator supplies the fix SHA and moves this row to the compatibility ledger only after resolving the blockers.
+
+| Commit | Entry | What it changes for the accepted app's files |
+| --- | --- | --- |
+| `FIXSHA` | c05-person-notes | Adds optional leftAsWritten report rows, Timeline consent, inherited completedAppends in manifests, and appendBindings/completedAppends in checkpoints; old records retain their meaning and parse without the fields. A granted personal-state edit can carry a null ownership mark, preserves every other bullet's bytes and adds no ownership mark. New manifest records with append evidence have the bowerAppends discovery property. The result renders Left as you wrote them without increasing updated counts. The app and runner deploy together; older strict readers cannot execute these new bound edits. Personal-note link-rewrite compatibility remains blocked on the lead's ruling. |
+
+### Files per coordinator commit
+
+Fix (product code only):
+
+- `runner/src/claude.ts`
+- `src/data/contracts/note-edit.ts`
+- `src/data/contracts/run-checkpoint.ts`
+- `src/data/contracts/run-manifest.ts`
+- `src/data/contracts/types.ts`
+- `src/data/spine/barrier.ts`
+- `src/data/spine/records.ts`
+- `src/data/spine/report.ts`
+- `src/data/spine/scripted.ts`
+- `src/features/tidy/RunLinks.tsx`
+
+Notes: `docs/harness/2026-10-10-c05-person-notes-notes.md` only.
+
+Offline research/reuse: the existing author documents the original Bower appendHistoryLine provenance;
+its state grant cites [RFC 9110 If-Match](https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.1).
+The existing record and retention mechanisms cite
+[Drive app properties](https://developers.google.com/workspace/drive/api/guides/properties).
+RunLinks already uses the [WAI-ARIA link pattern](https://www.w3.org/WAI/ARIA/apg/patterns/link/).
+These references came from the assigned mechanisms; no network lookup was made.
+
+Left out: commits, shared harness records, test/fixture/corpus changes, e2e, pnpm check and any deployment.
