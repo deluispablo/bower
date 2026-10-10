@@ -549,3 +549,4 @@ b1b-ports	23fb6da3e7a70d06	2026-10-10	known-green: reds proven failing by the re
 tree-name-first	fa44ac674a547625	2026-10-10	known-green: red cda855c6 failed before the fix (red session; the immediate-typing guard failed 9-11/20 on the base, 20/20 green after); later merges touched the same lines
 create-name-speed	29ba89050dff1f30	2026-10-10	known-green: red cda855c6 failed before the fix (red session; the immediate-typing guard failed 9-11/20 on the base, 20/20 green after); later merges touched the same lines
 undo-miss-refresh	02825c3ddfe978c8	2026-10-10	red (fixed in 925594be)
+q-ui-3	f97fe2d0a58740b9	2026-10-10	known-green: e2e red proven by the coordinator at the tests-only commit; fix 92c2801c

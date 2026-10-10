@@ -6744,7 +6744,7 @@
     "id": "q-ui-3",
     "task": "p4-q1",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "A tall sheet stays inside the window on desktop and scrolls (questions UI spec Q-UI-3, owner OK).",
     "steps": [
