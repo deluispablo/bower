@@ -536,3 +536,5 @@ p4-corpus-answers	92df71b52da21291	2026-10-10	known-green: the driver lives in r
 shell-page-column	82cf5b43fc42295c	2026-10-10	known-green: red proven by the coordinator before the fix: e2e/shell-page-column.spec.ts 12 failed without 44799444, 12/12 with it (later rounds 16/16 demo and fake); the fix no longer reverts cleanly after rounds 1-2
 c5-test-margin	850e333e84251423	2026-10-10	known-green: tests only: no product code to set aside; every split part under 1 s at idle with cases unchanged (notes)
 c5-empty-note-help	d24fb50b1a0a33ea	2026-10-10	known-green: red proven: without c1f845cc the component test fails on getByText of the new copy (TestingLibraryElementError, /tmp/enh-done.log) and the e2e 4 failed (/tmp/enh-red.log); done.sh misclassifies the query error (defect redkind-custom-message)
+c5-css-tokens	bd9d2a2e8021e208	2026-10-10	known-green: red proven before the fix: the guard failed on exactly the two --muted uses (/tmp/csst-red.log, recorded in the notes); the fix no longer reverts cleanly after the merge with c5-empty-note-help
+d-v2-24a	390b7947b25acc87	2026-10-10	red (fixed in 4209d72f)
