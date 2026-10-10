@@ -6990,8 +6990,9 @@
     "steps": [
       "The prep's E2 reds pass through the live sources' sign-out and the real queue."
     ],
-    "verify": "",
-    "note": "C02 E2. Escalated; after upload-resume-after-reload. Packet 2026-10-10-upload-sign-out-forget-packet.md. implementer: codex."
+    "verify": "pnpm exec vitest run src/data/upload-sign-out.test.ts -t \"upload-sign-out-forget\"",
+    "note": "C02 E2. Escalated; after upload-resume-after-reload. Packet 2026-10-10-upload-sign-out-forget-packet.md. implementer: codex.",
+    "review": "P4-102 PASS"
   },
   {
     "id": "orphan-pile-count-data",
