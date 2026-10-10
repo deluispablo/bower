@@ -262,6 +262,7 @@ export class Journal {
     // Folder discovery is independent of outbox ownership; separate clients can discover it concurrently.
     // No id is reserved or journal line sent here. The locked relay alone consumes this result.
     const folder: PreparedFolder | undefined = this.current()
+      // expected: send() rethrows this captured error into its catch, which logs it and classifies the line's outcome.
       ? this.place.folder().then((id) => ({ id }), (error: unknown) => ({ error })) : undefined;
     return this.serial(() => this.acrossTabs(key, async () => {
       // Assign time in admission order, after owner resolution and under the outbox lock.
@@ -344,6 +345,7 @@ export class Journal {
     const guarded = () => { if (requireCurrent) this.checkCurrent(); return work(); };
     if (locks) return locks.request(key, guarded);
     const previous = pageLocks.get(key);
+    // expected: the previous caller receives its failure; either outcome releases the lock for this work.
     const next = previous ? previous.then(guarded, guarded) : guarded();
     // expected: `next` reports failure to its caller; the mutex's tail only releases ownership.
     const tail = next.then(() => undefined, () => undefined);
