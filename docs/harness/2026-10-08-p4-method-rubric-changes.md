@@ -47,6 +47,14 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c05-merge-answer-no | agrees | The person's no keeps both notes and their links; settling the answer does not authorize a merge. |
 | c05-conflicting-fact-kept | agrees | Point 3 keeps both claims attributed in history; C05 preservation never silently resolves a disagreement. |
 | c05-marked-state-keeps-history | agrees | Point 3 rewrites a genuinely Bower-owned state from evidence while Timeline only grows and personal prose survives. |
+| c17-b56-personal-sale-project | agrees | Points 1, 2, 4, 7, 8: existing sale project fits before generic Ideas, with sourced hub history and an honest report. |
+| c17-b56-cv-profile | agrees | Points 1, 3, 4, 7, 8: the specific CV row files originals in Career and updates the named profile through C05, preserving personal prose and sources. |
+| c17-b56-offer-job-search | agrees | Points 1, 3, 4, 7, 8: a job offer fits Job hunt; a shared product word never connects an unrelated repair project or invents a fit score. |
+| c17-b56-clear-topic-templates | agrees | Points 1, 2, 4, 8: clear reference creates a topic and templated notes with relevant links and reports applied creation; it never forces an Area or asks needlessly. |
+
+C17 rows above were reviewed manually against points 1–8; no existing rubric changes. The current
+method test selects c04–c15 ids, so it does not yet enforce these C17 rows. Registration is a candidate
+small follow-up in `2026-10-10-b56-prep.md`, not claimed proof from the requested green test command.
 
 ## Changes
 

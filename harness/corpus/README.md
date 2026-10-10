@@ -1,6 +1,6 @@
 # Capability corpus (P4-A)
 
-Made-up cases for the capabilities C04 to C11, C13 and C15 (Alex, Larkspur Lane, Saltmere, Ferrowick; nothing personal). Each folder holds:
+Made-up cases for the capabilities C04 to C11, C13, C15 and C17 (Alex, Larkspur Lane, Saltmere, Ferrowick; nothing personal). Each folder holds:
 
 - `case.json`: the inputs (piles, requests, rules, answers, seeded questions), the scope and the web switch;
 - `inbox/`: the files of the piles; `folder/`: the starting folder (notes with their front matter, `Rules.md`);
@@ -56,6 +56,16 @@ Made-up cases for the capabilities C04 to C11, C13 and C15 (Alex, Larkspur Lane,
 | c15-scanned-letter | C15 | model | bench:4-scanned-pdf, adapted (made-up; the original is in bench-4-scanned-pdf) |
 | c05-conflicting-fact-kept | C05 | scripted | new (preservation through the existing planner) |
 | c05-marked-state-keeps-history | C05 | scripted | new (preservation through the existing planner) |
+| c17-b56-personal-sale-project | C17 B5/B6 | model | new (TL-P4-38 personal-sale project fit; scripted intent pending) |
+| c17-b56-cv-profile | C17 B5 | model | new (TL-P4-38 CV originals and C05 profile update; scripted intent pending) |
+| c17-b56-offer-job-search | C17 B5/B6 | model | new (TL-P4-38 offer before generic project material; scripted intent pending) |
+| c17-b56-clear-topic-templates | C17 B6 | model | new (TL-P4-38 clear topic with Source, Concept and MOC; contract and scripted intent pending) |
+
+The C17 B5/B6 cases are preparation fixtures for lead review, all `covers: model`.
+C17 is not yet registered in the capability union or the method-test id filter; general
+loading and grounding checks still read these cases. Their type tables are synthetic
+mechanism specimens, not an approved stored-row grammar. Exact top-three intent replies
+and outstanding contract/driver decisions live in `docs/harness/2026-10-10-b56-prep.md`.
 
 `replies.json` supplies deterministic intent replies at the existing Claude provider boundary. `$file:NAME` binds an exact admitted name to its id. `between` edits or moves run on the same fake Drive between two production runner calls; an empty array runs twice without a personal edit. Existing cases keep their demo-provider path.
 
