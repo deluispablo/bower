@@ -7041,5 +7041,18 @@
     ],
     "verify": "",
     "note": "After rules-added-region. Designer verifies. Packet 2026-10-10-rules-original-ui-packet.md. implementer: codex."
+  },
+  {
+    "id": "rules-added-region-model",
+    "task": "p4-e",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "The model sees the person's rules prose first, then the rules added in Bower, within today's 4,000 units with a marked cut; an empty region leaves the input byte-identical (TL-P4-53 Q7).",
+    "steps": [
+      "Runner claude.ts reds and corpus cases: original first, region second, one bounded projection, byte-identical input with no region."
+    ],
+    "verify": "",
+    "note": "Follow-up of rules-added-region; touches runner claude.ts, so after B1c and B3b (lead 2026-10-10). Packet to cut when it starts. implementer: codex."
   }
 ]
