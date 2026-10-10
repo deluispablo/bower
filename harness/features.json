@@ -6453,7 +6453,7 @@
     "id": "c4-sheet-settle",
     "task": "p4-consolidation",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "what": "Sheet geometry tests read boxes only after the shared animationsEnd; their axe scans go through expectAxeClean (defect move-sheet-cancel-width-flaky).",
     "steps": [
       "The move sheet cancel matches its container width on every desktop run.",
