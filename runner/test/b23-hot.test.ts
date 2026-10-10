@@ -203,6 +203,25 @@ it('B3a hot: multiline and heading text stays one row', async () => {
   ]);
 });
 
+// CommonMark 0.31.2 §4.6: all seven HTML-block starts, including all four type-1 tags.
+// https://spec.commonmark.org/0.31.2/#html-blocks (offline reference; no page fetched).
+const htmlBlockInputs = [
+  { label: 'HTML type 1 script', text: '<script>injected</script>' },
+  { label: 'HTML type 1 pre', text: '<pre>' },
+  { label: 'HTML type 1 style', text: '<style>' },
+  { label: 'HTML type 1 textarea', text: '<textarea>' },
+  { label: 'HTML type 2 comment', text: '<!-- x' },
+  { label: 'HTML type 3 processing instruction', text: '<?x' },
+  { label: 'HTML type 4 declaration', text: '<!DOCTYPE' },
+  { label: 'HTML type 5 CDATA', text: '<![CDATA[' },
+  { label: 'HTML type 6 block tag', text: '<div>' },
+  { label: 'HTML type 7 custom tag', text: '<custom-tag>' },
+].flatMap(({ label, text }) => [
+  { label, text },
+  { label: `${label} after whitespace`, text: ` \t${text}\t ` },
+  { label: `${label} after newlines`, text: ` \n\t\r\n${text}\r\n ` },
+]);
+
 // CommonMark 0.31.2 §2.4: escape the leading ASCII marker so list content starts literally.
 const blockInputs = [
   { label: 'ATX heading', text: '## Injected' },
@@ -216,17 +235,22 @@ const blockInputs = [
   { label: 'tilde fence', text: '~~~' },
   { label: 'heading after newline', text: ' \n## Injected\r\n' },
   { label: 'list after newline', text: '\n- Extra\t row ' },
+  ...htmlBlockInputs,
 ];
 
-function literalRow(text: string, expected: string): string {
+function literalRow(text: string, expected: string, prefix = ''): string {
   const rows = text.split('\n').filter((line) => line.startsWith('- '));
   expect(rows).toHaveLength(1);
   const row = rows[0] ?? '';
-  const content = row.slice(2);
-  // These fixtures cover headings, lists, quotes and both fence markers at content start.
+  expect(row.startsWith(`- ${prefix}`)).toBe(true);
+  const content = row.slice(2 + prefix.length);
+  // Check input content after the list marker and any generated date prefix.
   expect(content, 'row content must not start a CommonMark block').not.toMatch(
-    /^(?:#{1,6}(?:\s|$)|[-*+](?:\s|$)|\d{1,9}[.)](?:\s|$)|>|`{3,}|~{3,})/u,
+    /^(?:#{1,6}(?:\s|$)|[-*+](?:\s|$)|\d{1,9}[.)](?:\s|$)|>|`{3,}|~{3,}|<)/u,
   );
+  if (expected.startsWith('<')) {
+    expect(content.startsWith('\\<'), 'HTML opener must start with a literal escaped less-than sign').toBe(true);
+  }
   // Accept any valid ASCII punctuation escape while preserving the literal input.
   expect(content.replace(/\\([!-/:-@[-`{-~])/gu, '$1')).toBe(expected);
   return row;
@@ -252,6 +276,17 @@ it.each(blockInputs)('B3a hot: hub $label starts literally in one top-level row'
   expect(parsedLines).toEqual([
     '# Hot', `_Updated: ${TODAY}_`, '## Open threads', '## Current focus',
     row, '## Recent changes',
+  ]);
+});
+
+it.each(blockInputs)('B3a hot: change $label starts literally in one top-level row', async ({ text }) => {
+  const { renderHot } = await hot('change block syntax starts literally in one top-level row');
+  expect(section(renderHot(inputs({ changes: [change(1)] })).text, 'Recent changes')).toEqual(['- 2026-10-01 Change 1']);
+  const rendered = renderHot(inputs({ changes: [{ id: 'c-block', at: '2026-10-09', text }] })).text;
+  const parsedLines = rendered.split('\n');
+  const row = literalRow(rendered, text.replace(/\s+/gu, ' ').trim(), '2026-10-09 ');
+  expect(parsedLines).toEqual([
+    '# Hot', `_Updated: ${TODAY}_`, '## Open threads', '## Current focus', '## Recent changes', row,
   ]);
 });
 
