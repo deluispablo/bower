@@ -692,9 +692,10 @@ remain their mechanism homes. No second mechanism was introduced. Coordinator ow
 
 Implementer: Codex, 2026-10-10. Baseline HEAD:
 `21d34ad4c056bd2e755445a1d3fe3edea76673a1`.
-Status: blocked under TL-P4-51 after the complete requested data suite.
+Status: done after the committed fixture repair and final requested verification.
+Final verification HEAD: `bca0212db7d92ea4bc307e943f5d7eda5ffe529b`.
 No network, git-writing command, test edit, dependency change or shared harness edit.
-The narrow production candidate is retained uncommitted; it is not a verified green fix.
+The retained production change passes the repaired reds without further adjustment; it remains uncommitted.
 
 ### Narrow candidate and reuse
 
@@ -719,9 +720,9 @@ removed: payload-free bus signatures, browser forwarding and completion post rep
 removed: combined scope/paused early return split to retain the reservation while paused.
 tests changed: none.
 
-### Every contradiction (complete requested-suite audit)
+### Previous contradiction (resolved by the committed red repair)
 
-One contradicting test; no other failed test in the entire requested data suite:
+The previous complete data sweep found one contradicting test, recorded below for the fixture repair:
 
 - `src/data/upload-resume.test.ts:701`:
   `upload-resume-after-reload: fix 3: two-tab reload, completion and takeover need no picker and no second create`.
@@ -739,9 +740,11 @@ One contradicting test; no other failed test in the entire requested data suite:
 The reserved-sibling positive control passes because it already knows the ID. All earlier
 fix-round reds and controls remain green. No assertion, fixture, bound or timeout was
 weakened. A red repair that forwards the completion payload belongs to the lead/red owner;
-this assignment explicitly prohibits any test change. Work stops here under TL-P4-51.
+this assignment explicitly prohibits any test change. That session stopped under TL-P4-51.
+The committed fixture repair now forwards the payload; the regression and control pass.
+No test was edited in this final verification session.
 
-### Verification
+### Previous verification (before fixture repair)
 
 All command output is under `tmp-logs/`; only failures and aggregate results were inspected.
 
@@ -767,6 +770,33 @@ pnpm exec eslint src/data/upload-queue.ts > tmp-logs/resume-fix3-eslint.log 2>&1
   which this assignment prohibits. No full-check mark or browser e2e result is claimed.
   Coordinator owns commits, delivery gates, independent review and designer U3 verification.
 
+### Final verification (after committed fixture repair)
+
+Final status: done for fix round 3. The retained `src/data/upload-queue.ts` change
+needed no adjustment. No tests changed; no network or git-writing command was used.
+The previous fixture contradiction is resolved. The full targeted suite has no
+contradicting or failing test to list under TL-P4-51.
+
+All output is under `tmp-logs/`; only failure patterns and aggregate results were read.
+
+```sh
+pnpm exec vitest run src/data/upload-resume.test.ts --maxWorkers=2 > tmp-logs/resume-fix3-final-reds.log 2>&1
+pnpm exec vitest run src/data --maxWorkers=2 > tmp-logs/resume-fix3-final-data.log 2>&1
+pnpm exec tsc -p tsconfig.app.json --noEmit > tmp-logs/resume-fix3-final-tsc-app.log 2>&1
+pnpm exec tsc -p tsconfig.node.json --noEmit > tmp-logs/resume-fix3-final-tsc-node.log 2>&1
+pnpm exec eslint src/data/upload-queue.ts > tmp-logs/resume-fix3-final-eslint.log 2>&1
+```
+
+- Reds: exit 0, all 12 pass, including every earlier fix-round red and control;
+  1.02 seconds. The exact fix 3 regression and reserved-sibling control both pass.
+- Entire data suite: exit 0, all 4,152 tests across 78 files pass; 65.09 seconds.
+- App tsc, node tsc and touched-production-file ESLint: exit 0, empty logs.
+- Read-only `git diff --check`: exit 0. Production diff and tests are unchanged
+  from the start of this final session; only this notes section was updated.
+- Full `pnpm check` remains unrun because its harness fixtures write git.
+  Browser e2e, commits, independent review and designer U3 verification remain
+  coordinator-owned; no full-check mark or browser e2e pass is claimed.
+
 ### Sources
 
 No sources were fetched. Research is inherited from the packet/prep and local mechanisms:
@@ -774,7 +804,7 @@ No sources were fetched. Research is inherited from the packet/prep and local me
 [Drive pre-generated IDs](https://developers.google.com/workspace/drive/api/guides/manage-uploads#pre-generated-ids),
 and [IndexedDB transaction lifetime](https://w3c.github.io/IndexedDB/#transaction-lifetime).
 The existing reserved identity, read-back, confirmed completion and committed device
-staging remain their mechanism homes. This session does not claim the contradictory red is green.
+staging remain their mechanism homes. The final session verifies the repaired regression is green without fetching sources.
 
 ## Fix round 3 red repair
 

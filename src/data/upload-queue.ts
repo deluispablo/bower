@@ -72,9 +72,15 @@ export interface StorageLike {
 }
 
 /** Tells the other tabs of this device that the queue changed. */
+interface QueueCompletion {
+  /** The account/folder/declaration/member/hash identity, never a file name. */
+  id: string;
+  fileId: string;
+}
+
 export interface QueueBus {
-  post: () => void;
-  listen: (onMessage: () => void) => void;
+  post: (completion?: QueueCompletion) => void;
+  listen: (onMessage: (completion?: QueueCompletion) => void) => void;
 }
 
 /** A `BroadcastChannel` bus, or `undefined` where there is none. */
@@ -82,9 +88,16 @@ export function broadcastBus(): QueueBus | undefined {
   if (typeof BroadcastChannel === 'undefined') return undefined;
   const channel = new BroadcastChannel('bower-uploads');
   return {
-    post: () => channel.postMessage('changed'),
+    post: (completion) => channel.postMessage(completion ?? 'changed'),
     listen: (onMessage) => {
-      channel.onmessage = () => onMessage();
+      channel.onmessage = (event: MessageEvent<unknown>) => {
+        const message = event.data;
+        const completion = typeof message === 'object' && message !== null
+          && 'id' in message && typeof message.id === 'string'
+          && 'fileId' in message && typeof message.fileId === 'string'
+          ? { id: message.id, fileId: message.fileId } : undefined;
+        onMessage(completion);
+      };
     },
   };
 }
@@ -413,7 +426,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
       if (entry.kept) {
         // Drive has it: the bytes go, whichever start this was.
         await store.remove(record).catch((error: unknown) => console.error(error));
-        bus?.post();
+        bus?.post({ id: item.id, fileId: file.id });
       }
       item.state = 'done';
       item.file = file;
@@ -560,9 +573,17 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     return run;
   }
 
-  bus?.listen(() => {
+  bus?.listen((completion) => {
     const s = scope;
-    if (s === null || paused) return;
+    if (s === null) return;
+    // Keep the reservation before read-back waits or Use here changes the generation.
+    // A staged sibling may have been hydrated before its owner reserved this id.
+    const entry = completion === undefined ? undefined : entries.get(completion.id);
+    if (completion && entry && !tombstones.has(entry.item.id) && entry.record.fileId === null) {
+      entry.record.fileId = completion.fileId;
+      entry.item.fileId = completion.fileId;
+    }
+    if (paused) return;
     if (role === 'owner') void pump();
     else refresh(s, generation).catch((error: unknown) => console.error(error));
   });
