@@ -143,3 +143,31 @@ No tests, goldens or contract numbers were changed. No git write command, networ
 The coordinator owns the separate fix and notes commits. Fix files: src/data/spine/write-once.ts and
 src/data/vault/drive-vault.ts. Notes file: this file. No stored format changed; existing holders and callers
 without a completion step retain their existing behavior.
+
+## Addendum 18 re-plan red
+
+Added one six-row `it.each` table in src/data/vault/drive-vault.test.ts:
+`a pile conversion interrupted at any step resumes there and keeps its first names`.
+Each step lands before its answer and its recovery read are lost. The same vault refreshes and retries.
+Clocks are fixed with vi.setSystemTime, and the seed is 20 minutes older than each clock.
+The final assertion checks the original folder id and name, the moved loose file, one note with its words
+and first id when already landed, zero renames, one folder-create send, one note-create send and one move.
+
+| Interrupted step | 2026-10-09T23:59:00Z | 2026-10-10T00:02:00Z |
+| --- | --- | --- |
+| Folder create | FAIL: two folder-create sends | FAIL: two folder-create sends |
+| Loose-file move | FAIL: two folder-create sends | FAIL: two folder-create sends |
+| Note create | PASS | FAIL: folder name changes and a rename is sent |
+
+Verification:
+- Requested targeted vitest command: exit 1, five assertion failures, one pass; /tmp/resume-a18-red.log.
+- pnpm exec eslint src/data/vault/drive-vault.test.ts: exit 0; /tmp/resume-a18-eslint.log.
+- pnpm exec tsc -b --noEmit: exit 0; /tmp/resume-a18-tsc.log.
+- git diff --check: exit 0 (read-only).
+
+tests changed: none (one new table only).
+Standard solution: the lead's TL-P4-24 addendum 18 one-intent saga ruling and the existing write-once home,
+which cites https://stripe.com/docs/api/idempotent_requests for keeping the first intent with its key.
+No network, git write, production change, pnpm check or e2e. The coordinator owns commits.
+Compatibility: tests and notes only; no stored format or runtime behavior changed.
+Status: red delivered; addendum 18 implementation remains for the fresh implementation session.
