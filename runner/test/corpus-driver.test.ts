@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadCase, score } from '../src/corpus';
+import { loadCase, score, type Expected } from '../src/corpus';
 import { runWithClaude } from './corpus-run';
 
 it("the scorer counts questions exactly and checks a pair's subject", () => {
@@ -207,6 +207,62 @@ it('checks a typed state question by the resolved note id', async () => {
   expect(await checkCase(c, withQuestion({ id: `q-state-${id}` }))).toEqual({ pass: true, unmet: [] });
   expect((await checkCase(c, withQuestion({ id: 'q-state-other' }))).pass).toBe(false);
   expect((await checkCase(c, withQuestion({ id: `q-ask-${id}`, subject: id }))).pass).toBe(false);
+});
+
+describe.each(['final', 'per-run'] as const)('empty expectations in the %s score', (where) => {
+  it.each<[string, Expected, string]>([
+    ['questionSubjects', { report: { questionSubjects: [] } }, 'report.questionSubjects: expected a non-empty list'],
+    ['absent', { properties: [{ path: PERSONAL, absent: [], equals: { custom: 'Alex' } }] },
+      `${PERSONAL}: properties.absent: expected a non-empty list`],
+    ['equals', { properties: [{ path: PERSONAL, absent: ['by'], equals: {} }] },
+      `${PERSONAL}: properties.equals: expected at least one key`],
+  ])('refuses empty %s', async (_field, expected, reason) => {
+    const { replySequence } = await import('./corpus-run');
+    const c = { ...await smallCase(), expected: where === 'final' ? expected : { runs: [expected] } };
+    const run = await runWithClaude(c, replySequence([emptyIntent]), { [PERSONAL]: { custom: 'Alex' } });
+    expect(run.code).toBe(0);
+    expect(run.score).toEqual({ pass: false, unmet: [where === 'final' ? reason : `run 1: ${reason}`] });
+  });
+});
+
+it('reports an already-active replay without writing another request', async () => {
+  const { replySequence } = await import('./corpus-run');
+  const text = 'Update Alex’s garden notes.';
+  const seed = await smallCase();
+  const c = { ...seed, journal: [...seed.journal, { kind: 'request' as const, text }],
+    presses: [{ request: { kind: 'replay' as const, id: 'change-2' } }] };
+  const run = await runWithClaude(c, replySequence([emptyIntent, emptyIntent]));
+  const first = run.runs?.[0];
+  expect(first?.code).toBe(0);
+  expect(run.code).toBe(0);
+  const path = '.bower/changes/change-2.json';
+  expect(first?.after[path]).toBeDefined();
+  expect(run.after[path]).toBe(first?.after[path]);
+  const requests = Object.entries(run.after).filter(([p, text]) => p.startsWith('.bower/changes/')
+    && (JSON.parse(text) as { id: string }).id === 'change-2');
+  expect(requests).toHaveLength(1);
+  expect(run.requests).toEqual([{ id: 'change-2', text }]);
+  expect(Reflect.get(run, 'requestAction')).toEqual({ kind: 'replay', id: 'change-2', outcome: 'already-active' });
+});
+
+it('reports a restored replay and a newly written tidy-up separately', async () => {
+  const { runScripted } = await import('./corpus-run');
+  const seed = await loadCase(resolve(import.meta.dirname, '../../harness/corpus/c09-closest-flat'));
+  const text = 'Which flat is closest to Ferrowick?';
+  const run = await runScripted({ ...seed, presses: [
+    { request: { kind: 'replay', id: 'change-1' } }, { request: { kind: 'tidy', text } },
+  ] });
+  const first = run.runs?.[0];
+  const second = run.runs?.[1];
+  expect(first?.code).toBe(0);
+  expect(second?.code).toBe(0);
+  expect(run.code).toBe(0);
+  expect(first?.after['.bower/changes/change-1.json']).toBeUndefined();
+  expect(first?.after['.bower/changes/archive/change-1.json']).toBeDefined();
+  expect(second?.requests).toEqual([{ id: 'change-1', text }]);
+  expect(Reflect.get(second ?? {}, 'requestAction')).toEqual({ kind: 'replay', id: 'change-1', outcome: 'restored' });
+  expect(run.requests).toEqual([{ id: 'press-3', text }]);
+  expect(Reflect.get(run, 'requestAction')).toEqual({ kind: 'tidy', id: 'press-3' });
 });
 
 });
