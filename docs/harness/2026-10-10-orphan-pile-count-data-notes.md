@@ -130,10 +130,11 @@ upload staging/sign-out fixes, UI/copy, integration, full gates, and coordinator
 
 ## Implementation
 
-Implementer: codex. Base HEAD `e4b3ff309f54073132148eb0dbe732e9b55c4cf2`.
-Status: **blocked under TL-P4-51**. The production changes remain in place, uncommitted.
-No test was edited; no git-writing command was run. The coordinator's `harness/codex-run.sh`
-owns commits. This is an unfinished implementation, not an integration-ready delivery.
+Implementer: codex. Round 2, 2026-10-10. Base HEAD `490ebebd` (red repair 1),
+following first-attempt implementation `29e871ca` and original base `e4b3ff30`.
+Status: **blocked under TL-P4-51** after completing the whole targeted suite.
+Round-2 production changes remain in place, uncommitted. No test was edited,
+no network request was made, and no git-writing command was run. The coordinator owns commits.
 
 ### Research before implementation
 
@@ -152,96 +153,110 @@ reused and compared with the local mechanisms before implementation:
 
 ### Changes left in place
 
-- `src/data/pile-readiness.ts`: one common record-reader/copy merger now supports loose and
-  folder declarations, rejects conflicting pile/declaration identities, excludes parser-identified
-  foreign roots, and retains completeness for refused current-root evidence. The legacy loose
-  helper preserves its pre-read folder/stamped-disposition filters for existing callers.
-- `orphanState` uses `accountPile`'s validated disposition identity/hash and member digest facts;
-  matching anchors anywhere in the listed root are excluded. Missing context is checked using
-  the existing `contextRemoved` journal fact and keyed Bin evidence; ambiguous context-only
-  history stays unknown. No shared Pile/SetAside or stored/wire contract changes.
-- `src/data/vault/drive-vault.ts`: the full loose-discovery path and `orphanSummary` share a
-  snapshot promise and the existing listing, parsed declaration/disposition caches and ReadCache.
-  Concurrent reads share results; refresh invalidates the snapshot; local index changes invalidate
-  by evidence identity. The summary returns only `{ count, complete }`.
-- `src/data/sources.ts`: app-local summary capability with the frozen value shape. As with the
-  existing declaration-specific `chooseAgain` door, the interface capability is optional for
-  sources that do not implement declarations; DriveVault exposes the concrete method.
+The first attempt introduced the common declaration reader/copy merger, `orphanState`,
+the shared full-read snapshot, and the app-local `orphanSummary` capability in `sources.ts`.
+The round-2 diff touches only `pile-readiness.ts` and `vault/drive-vault.ts`:
 
-removed: src/data/pile-readiness.ts:201-246 (base): legacy-only copy merger replaced by the common reader.
-removed: src/data/vault/drive-vault.ts:774-776 (base): separate loose scan replaced by full-read classification.
+- `findPileDeclarations` excludes declarations retired by a listing disposition stamp before
+  reading them (TL-P4-53 addendum 5). Damaged, foreign and unrelated stamps are the accepted
+  v1 limit. Unstamped unanchored declarations still retain the existing unknown/completeness rules.
+- Matching live anchors are excluded by pile identity, declaration identity and anchor kind from
+  the listing. Their own row read remains the sole declaration-read/log path; the general query
+  no longer retries or logs that same anchored failure. A matching moved anchor is also excluded.
+- `orphanState` returns the missing-loose-row decision alongside its summary classification,
+  derived from the same `accountPile` call and Bin evidence. The existing full-read snapshot
+  retains this decision; `looseMissing` consumes it without another accounting or Bin query.
+  A loose file deliberately Binned from Inbox stays removed. No second scan or store was added.
+- The snapshot uses its index's root identity and returns its existing promise directly;
+  loose row discovery no longer repeats the root lookup or stamp/anchor scan. Both unchanged
+  live account/folder admission schedules now pass their original 30-turn drain assertions.
+- Refresh still invalidates the one snapshot, and refused unanchored evidence still makes
+  completeness false. No shared Pile/SetAside, stored format or upload protocol changed.
+
+removed: src/data/vault/drive-vault.ts:822-830 (round-2 base): duplicate root/stamp/anchor filtering.
+removed: src/data/vault/drive-vault.ts:836-846 (round-2 base): second member accounting and Bin lookup.
+removed: src/data/pile-readiness.ts:201-246 (original base): legacy-only merger replaced in first attempt.
 removed: no files, tests, contract formats, upload mechanisms or numeric bounds.
-tests changed: none.
+tests changed: none (round 2; red repair 1 below was committed before this assignment).
 
-### Every contradicting test (whole targeted suite completed before stopping)
+### Every remaining contradicting test (whole targeted suite completed before stopping)
 
-The packet requires a general current-root classification from the full read, validating retirement
-rather than accepting a disposition stamp. These four existing call budgets explicitly depend on
-not reading earlier stamped declarations at all. Filtering those records solely from stamps would
-restore the budgets but defeat the packet's damaged/unrelated-disposition and unknown-evidence
-rules. No bound was changed and no purported stamp-only optimization was added.
+Exactly one failing test remains; no other contradiction or failure appeared in any of the 79 data files:
 
-1. `src/data/live/home-cache.test.ts:110` — `Home reads each file of the live-shaped folder once in one load (golden)`.
-   Assertion `:120` requires `readBytes: 1`, total `:121` requires 26 calls. Actual `readBytes: 21`;
-   the 20 earlier declarations are now checked once by the general read.
-2. `src/data/live/home-cache.test.ts:169` — `a refresh during a read in flight never reads one file at one modifiedTime twice (C05 findings 4)`.
-   The no-duplicate-per-version assertion passes; its additional `:190` budget requires 28 calls,
-   actual 48 because the same 20 earlier declaration candidates must now be checked.
-3. `src/data/live/home-cache.test.ts:209` — `Home makes the same Drive calls after 10 and after 500 earlier runs`.
-   Assertion `:219` requires equal totals. Actual 37 and 527: the candidate history is read for
-   valid retirement/unknown facts, rather than suppressed by listing stamps.
-4. `src/data/live/home-cache.test.ts:229` — `an empty inbox reads no old pile records`.
-   Assertion `:235` requires no reads of old records. Actual 31 record reads (48 total calls).
-   An empty Inbox cannot exclude valid unresolved folder declarations whose anchors never appeared.
+1. `src/data/live/home-cache.test.ts:229` — `an empty inbox reads no old pile records`.
+   Assertion `:235` requires zero reads from `.bower/piles`; actual is one declaration byte read
+   (18 total Drive calls). All 30 stamped historical declarations are now skipped.
+   The remaining record is the fresh, **unstamped** declaration made by `liveShape`
+   (`src/data/fake/live-shape.ts:29`). This test directly trashes its real anchor and every
+   other Inbox child (`home-cache.test.ts:50-54`) without a disposition stamp or Bower removal
+   record. The cold live listing excludes Binned anchors and their descendants, while the
+   declaration survives in `.bower/piles`. Addendum 5 therefore does not retire this record.
 
-Lead ruling required on these four contracts before resuming. They are not permission to modify tests.
+The opposing unchanged E3 contracts are:
 
-### All other failing tests (six; not declared packet contradictions)
+- `src/data/orphan-pile-count.test.ts:137` —
+  `orphan-pile-count-data: orphan folder declaration remains countable after anchor creation fails`.
+  An unstamped declaration with no anchor must be inspected and counted; an empty Inbox
+  alone cannot suppress general folder classification.
+- `src/data/orphan-pile-count.test.ts:313` —
+  `orphan-pile-count-data: summary shares the full-read cache and refresh invalidation`.
+  The first `piles()` reads the unanchored folder declaration once (`:325`), even with no live
+  Inbox anchor; deferring all folder evidence until a later summary breaks this full-read contract.
+- `src/data/orphan-pile-count.test.ts:337` —
+  `orphan-pile-count-data: ambiguous context-only history is unknown and intentional removal is retired`.
+  A surviving unstamped context-only declaration with a vanished anchor is unknown; empty
+  Inbox alone is not retirement evidence.
 
-These failures are also preserved for the next diagnosis/fix round; no green suite is claimed.
+These three E3 tests pass and are listed to identify both sides of the remaining contradiction,
+not as additional failures. Skipping every folder declaration or skipping all records for an empty
+Inbox would hide real failed-anchor work or violate the shared full-read read assertion. Reading
+Bin member evidence requires the member identities inside this unstamped declaration. No second
+query, fixture-specific branch, retirement assumption, test change or bound change was added.
+A lead ruling is needed on this direct-Bin unstamped-declaration case before continuing.
 
-- `src/data/fake/fake-runner.test.ts:646` — `a declared loose file that has not arrived is looked up in the Bin once per listing`.
-  Assertion `:656`: expected one Bin query, actual two. Summary accounting and legacy row accounting
-  currently repeat the lookup; the result needs to be shared.
-- `src/data/fake/fake-worker.test.ts:2645` — `a retired loose declaration costs the inbox no digest and no lookup of its member`.
-  Assertion `:2657`: expected zero Bin queries, actual one, for a context key rather than the member.
-  The general read also classifies context history; this needs precise diagnosis before changing retirement.
-- `src/data/live/live.test.ts:400` — `reused sources isolate account and folder changes (queued admissions cannot block or dispatch in B, flushJournal)`.
-  Assertion `:418`: expected one process call after drain, actual zero. Added full-read awaits change
-  this schedule; account isolation was not verified past this failed assertion.
-- `src/data/live/live.test.ts:400` — `reused sources isolate account and folder changes (queued admissions cannot block or dispatch in B, process)`.
-  Assertion `:418`: expected two process calls after drain, actual one. Same schedule-sensitive failure.
-- `src/data/vault/drive-vault.test.ts:2072` — `an unreadable declaration affects only its own pile`.
-  Assertion `:2108`: expected one log of the injected refusal, actual four; anchored and general
-  declaration reads currently log the same failed evidence more than once.
-- `src/data/vault/drive-vault.test.ts:2293` — `offline, a declared pile logs one error per listing`.
-  Assertion `:2308`: expected one log, actual two; existing note refusal and general read both log.
+The other three previously contradictory Home goldens now pass unchanged:
+`home-cache.test.ts:110` (one declaration read, 26 calls), `:169` (28 calls),
+and `:209` (equal calls after 10 and 500 earlier runs).
 
-### Verification and environment
+### Six other failures resolved
 
-- Initial plain `pnpm exec` attempts triggered dependency restoration and failed network fetches.
-  They were interrupted; no intentional network request or research call was made. Local dependencies
-  were then linked from the existing app installation into ignored worktree `node_modules`.
-- Actual assertion red: local `vitest run src/data/orphan-pile-count.test.ts --maxWorkers=2`,
-  11/11 failed the absent `orphanSummary` capability assertion before production edits.
-- After implementation the same red file passed 11/11, including both pinned fast-check properties.
-  Exact expanded names are recorded in the original Reds section above; no value assertions changed.
-- Whole targeted suite: local `vitest run src/data --maxWorkers=2`, 79 files,
-  4,161 passed and 10 failed. Only failure sections and aggregate lines were read.
-- Repeated the requested whole suite through pnpm with dependency restoration disabled and offline
-  enforced: `pnpm --config.verifyDepsBeforeRun=false --config.offline=true exec vitest run src/data --maxWorkers=2`.
-  The pnpm run also completed all 79 files: 4,161 passed and 10 failed. Its final failure log
-  is preserved under `/tmp/e3-orphan/`.
-- App and node TypeScript pass; touched production-file ESLint passes. App TypeScript also passed
-  through pnpm with the same offline flags; node TypeScript and ESLint were rerun through that pnpm path.
-- `git diff --check` passes. No server, screen/e2e change or git write.
-- `pnpm check` and e2e were not run after the TL-P4-51 stop condition; this data-only entry has `ui: false`.
-  No gate mark or integration success is claimed.
-- Logs were generated under `tmp-logs/`, copied to `/tmp/e3-orphan/`, and `tmp-logs/` was deleted
-  as requested. No important result exists only in chat.
+All pass unchanged in both the focused run and the whole data run:
 
-Left out: resolution of the four contradictory numeric/read contracts, remaining six failures,
-full gates, UI, test changes, commits and integration. Production changes remain in place for review.
+- `src/data/fake/fake-runner.test.ts:646`: missing loose member has one shared Bin lookup.
+- `src/data/fake/fake-worker.test.ts:2645`: retired declaration has no member digest or Bin lookup.
+- `src/data/live/live.test.ts:400/:418`, `flushJournal`: fresh B admission dispatches after the same drain.
+- `src/data/live/live.test.ts:400/:418`, `process`: fresh B admission dispatches after the same drain.
+- `src/data/vault/drive-vault.test.ts:2072`: anchored declaration refusal is read/logged by its own path only;
+  the existing one-log-per-failure assertion across refresh/retry remains unchanged.
+- `src/data/vault/drive-vault.test.ts:2293`: offline declared pile logs once per listing; no general duplicate.
+
+### Round-2 verification and environment
+
+All pnpm invocations used `--config.verifyDepsBeforeRun=false --config.offline=true`
+to reuse the installed local dependencies without network or dependency restoration.
+Only failure sections and aggregate test counts were read from test output.
+
+- Before edits: vitest over `orphan-pile-count.test.ts`, `live/home-cache.test.ts`,
+  `fake/fake-runner.test.ts`, `fake/fake-worker.test.ts`, `live/live.test.ts`, and
+  `vault/drive-vault.test.ts`, `--maxWorkers=2`: 605 passed, 13 assertion failures.
+  This reproduced the three repaired reds, four Home goldens, and six other failures.
+- After edits, the same six files: 617 passed, one failed (`home-cache.test.ts:229/:235`).
+  All 11 orphan reds pass, including the three stamp-only v1-limit cases and both pinned properties.
+- Whole requested target: `pnpm exec vitest run src/data --maxWorkers=2`
+  with the offline flags above: 79 files, 4,170 passed, one failed, exit 1.
+  Every remaining failing/contradicting test is listed above before the TL-P4-51 stop.
+- `pnpm exec tsc -p tsconfig.app.json --noEmit`: pass, exit 0.
+- `pnpm exec tsc -p tsconfig.node.json --noEmit`: pass, exit 0.
+- `pnpm exec eslint src/data/pile-readiness.ts src/data/vault/drive-vault.ts`: pass, exit 0.
+- `git diff --check`: pass. No test-file diff; no git write.
+- Logs were created under `tmp-logs/`: `round-2-red.log`, `round-2-focused.log`,
+  `round-2-data.log`, `round-2-tsc-app.log`, `round-2-tsc-node.log`, `round-2-eslint.log`.
+  Their failure evidence and results are recorded here; `tmp-logs/` was deleted before delivery.
+- `pnpm check` was not run after the remaining TL-P4-51 contradiction. E2e is not applicable
+  to this data-only `ui: false` entry; no server, integration or check mark is claimed.
+
+Left out: the one direct-Bin unstamped-declaration Home contradiction, full gates, UI,
+test changes, commits and integration. Round-2 production changes remain in place for review.
 
 
 ## Red repair 1

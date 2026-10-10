@@ -32,7 +32,7 @@ import {
 import type { OwnershipContext } from '../contracts/ownership-format';
 import type { Content, Declaration, DeclarationResult } from '../contracts/pile-declaration';
 import type { DispositionResult } from '../contracts/pile-disposition';
-import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, declarationCopies, declarationRecord, declaredName, findDeclaration, findLooseDeclarations, findPileDeclarations, orphanState, pileRecords, journalValues, looseSetAside, checkable, memberAsNote, recordablePile, recordedNote, sameText, setAsideOf, shownName, writable, type Blocked, type DeclarationLookup, type Digest, type LooseDeclaration } from '../pile-readiness';
+import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, declarationCopies, declarationRecord, declaredName, findDeclaration, findLooseDeclarations, findPileDeclarations, orphanState, journalValues, looseSetAside, checkable, memberAsNote, recordablePile, recordedNote, sameText, setAsideOf, shownName, writable, type Blocked, type DeclarationLookup, type Digest, type LooseDeclaration } from '../pile-readiness';
 import { Journal, type JournalRecord } from './journal';
 import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
@@ -124,7 +124,7 @@ export class DriveVault implements VaultSource {
   private fullDeclarations: {
     ix: VaultIndex;
     files: readonly DriveFile[];
-    read: Promise<{ declarations: LooseDeclaration[]; summary: { count: number; complete: boolean } }>;
+    read: Promise<{ declarations: Array<LooseDeclaration & { missingLoose: boolean }>; summary: { count: number; complete: boolean } }>;
   } | null = null;
   /**
    * What files hold, by id and the modifiedTime the listing gives (`read-cache.ts`, shared with the journal). A refresh
@@ -735,7 +735,7 @@ export class DriveVault implements VaultSource {
   }
 
   /** The same cached record query used by a full piles read, including its unknown evidence. */
-  private async declarationsFor(ix: VaultIndex): Promise<{ declarations: LooseDeclaration[]; summary: { count: number; complete: boolean } }> {
+  private declarationsFor(ix: VaultIndex): Promise<{ declarations: Array<LooseDeclaration & { missingLoose: boolean }>; summary: { count: number; complete: boolean } }> {
     const files = this.known(ix);
     const evidence = [...files, ...ix.journalFiles(true)];
     const kept = this.fullDeclarations;
@@ -743,9 +743,11 @@ export class DriveVault implements VaultSource {
     const read = (async () => {
       const inbox = ix.file('Inbox');
       if (!inbox?.folder) return { declarations: [], summary: { count: 0, complete: false } };
-      const root = await this.rootId();
+      const root = ix.idOf('');
+      if (!root) throw new BowerError('unknown', 'Bower could not find your folder.');
       const found = await findPileDeclarations(files, root, inbox.id, (id) => this.readBytesOnce(id), this.declarationCache);
       const summary = { count: 0, complete: found.complete };
+      const declarations: Array<LooseDeclaration & { missingLoose: boolean }> = [];
       let journal: Promise<unknown[]> | null = null;
       const removed = async (path: string): Promise<boolean> => contextRemoved(
         await (journal ??= journalValues(ix.journalFiles(true), (id) => this.readTextOnce(id))), path);
@@ -753,8 +755,9 @@ export class DriveVault implements VaultSource {
         try {
           const state = await orphanState(declaration, inbox, files, (id) => this.readBytesOnce(id),
             (f) => this.digestOf(f), (keys) => this.drive.binnedByItem(root, keys), this.dispositionCache, removed);
-          if (state === 'orphan') summary.count++;
-          if (state === 'unknown') summary.complete = false;
+          declarations.push({ ...declaration, missingLoose: state.missingLoose });
+          if (state.state === 'orphan') summary.count++;
+          if (state.state === 'unknown') summary.complete = false;
         } catch (e) {
           if ((e instanceof BowerError && e.code === 'auth') || !this.current()) throw e;
           console.error(e);
@@ -762,7 +765,7 @@ export class DriveVault implements VaultSource {
         }
       }
       this.checkCurrent();
-      return { declarations: found.declarations, summary };
+      return { declarations, summary };
     })();
     this.fullDeclarations = { ix, files: evidence, read };
     // A session refusal reaches its caller; it must not poison later reads of this snapshot.
@@ -819,31 +822,13 @@ export class DriveVault implements VaultSource {
     const ix = await this.index();
     const inbox = ix.file('Inbox');
     if (!inbox?.folder) return [];
-    const files = this.known(ix);
-    const drive = this.drive;
-    const root = await this.rootId();
-    const marked = new Set(files.flatMap((f) => f.appProperties?.[PROP.declaration] ?? []));
-    // Recovery and loose discovery use this one full-read classification. Keep the discovery contract:
-    // stamped dispositions and live anchors are omitted from its rows, but are validated for the summary.
-    const retired = new Set(pileRecords(files, root, 'disposition').flatMap((f) => f.appProperties?.[PROP.recordPile] ?? []));
-    const found = (await this.declarationsFor(ix)).declarations.filter(({ declaration: d }) =>
-      d.anchor.kind === 'loose' && !marked.has(d.declarationId) && !retired.has(d.pileId));
+    // The full-read snapshot already excluded anchors and retired stamps and accounted for the Bin.
+    const found = (await this.declarationsFor(ix)).declarations.filter((d) => d.missingLoose);
     this.checkCurrent();
     const out: Pile[] = [];
-    for (const { declaration, sha256: hash } of found) {
+    for (const { declaration } of found) {
       const [member] = declaration.members;
       if (!member || listed.has(declaration.pileId)) continue;
-      // The accounting's one Bin lookup, kept: a copy Binned from the inbox is the person removing it.
-      let inBin = false;
-      const binned = async (keys: readonly string[]) => {
-        const hits = await drive.binnedByItem(root, keys);
-        inBin = hits.length > 0;
-        return hits;
-      };
-      // A consumed disposition retires it first: no digest and no lookup of its member.
-      const readiness = await accountPile(declaration, hash, inbox, files, (id) => this.readBytesOnce(id), (f) => this.digestOf(f), binned, this.dispositionCache);
-      this.checkCurrent();
-      if (readiness.members[0]?.state !== 'missing' || inBin) continue;
       // Only a missing-member decision waits for device hydration; an ordinary listing can finish before sign-in.
       await this.startQueue();
       this.checkCurrent();

@@ -206,7 +206,17 @@ export async function findLooseDeclarations(files: readonly DriveFile[], rootId:
 
 /** The full-read record query, shared by loose discovery and the recovery summary. */
 export function findPileDeclarations(files: readonly DriveFile[], rootId: string, inboxId: string, read: ReadBytes, cache?: Map<string, DeclarationResult>): Promise<{ declarations: LooseDeclaration[]; complete: boolean }> {
-  return readDeclarations(pileRecords(files, rootId, 'declaration'), rootId, inboxId, read, cache);
+  // TL-P4-53 addendum 5: a listing disposition stamp retires its declaration, even when damaged or foreign.
+  const retired = new Set(pileRecords(files, rootId, 'disposition').flatMap((f) => f.appProperties?.[PROP.recordPile] ?? []));
+  const anchored = new Set(files.filter((f) => f.appProperties?.[PROP.pile] && f.appProperties?.[PROP.declaration])
+    .map((f) => `${f.appProperties?.[PROP.pile]}:${f.appProperties?.[PROP.declaration]}:${f.folder ? 'folder' : 'loose'}`));
+  const wanted = pileRecords(files, rootId, 'declaration').filter((copy) => {
+    const pile = copy.appProperties?.[PROP.recordPile];
+    const id = copy.name.slice('declaration-'.length, -'-.json'.length - 64);
+    // Live anchors have their own read path; they cannot be unanchored work.
+    return !retired.has(pile ?? '') && !anchored.has(`${pile}:${id}:${copy.appProperties?.[PROP.recordAnchor]}`);
+  });
+  return readDeclarations(wanted, rootId, inboxId, read, cache);
 }
 
 /** One parser and copy merge for every declaration form; failed evidence stays unknown. */
@@ -271,25 +281,37 @@ async function readDeclarations(wanted: readonly DriveFile[], rootId: string, in
   return { declarations: [...byPile.values()].filter((d): d is LooseDeclaration => d !== 'conflict'), complete };
 }
 
-/** Unanchored work is retired only by the existing member accounting and context-removal facts. */
-export async function orphanState(found: LooseDeclaration, inbox: DriveFile, files: readonly DriveFile[], read: ReadBytes, digest: DigestOf, binned: BinnedOf, cache: Map<string, DispositionResult>, removedContext: (path: string) => Promise<boolean>): Promise<'orphan' | 'retired' | 'unknown'> {
+/** One accounting result supplies both the recovery count and the missing loose row. */
+export type OrphanState = { state: 'orphan' | 'retired' | 'unknown'; missingLoose: boolean };
+
+/** Unstamped unanchored work uses the existing member accounting and context-removal facts. */
+export async function orphanState(found: LooseDeclaration, inbox: DriveFile, files: readonly DriveFile[], read: ReadBytes, digest: DigestOf, binned: BinnedOf, cache: Map<string, DispositionResult>, removedContext: (path: string) => Promise<boolean>): Promise<OrphanState> {
   const { declaration, sha256: hash } = found;
   const { anchor, context } = declaration;
   const anchors = files.filter((f) => f.appProperties?.[PROP.pile] === declaration.pileId
     && f.appProperties?.[PROP.declaration] === declaration.declarationId && f.folder === (anchor.kind === 'folder'));
-  if (anchors.length) return 'retired';
+  const result = (state: OrphanState['state'], missingLoose = false): OrphanState => ({ state, missingLoose });
+  if (anchors.length) return result('retired');
   // With no real folder, verified members anywhere in this root are outside its intended anchor.
   const place = anchor.kind === 'loose' ? inbox : { ...inbox, id: anchor.createKey };
-  const accounting = await accountPile(declaration, hash, place, files, read, digest, binned, cache);
-  if (accounting.members.some((m) => m.state === 'unchecked')) return 'unknown';
-  if (accounting.members.some((m) => m.state === 'missing' || m.state === 'changed' || m.state === 'verified')) return 'orphan';
-  if (context.kind === 'absent') return 'retired';
+  let inBin = false;
+  const accounting = await accountPile(declaration, hash, place, files, read, digest, async (keys) => {
+    const hits = await binned(keys);
+    inBin = hits.length > 0;
+    return hits;
+  }, cache);
+  // A loose file Binned from the inbox was deliberately removed, just as the row accounting treats it.
+  const missingLoose = anchor.kind === 'loose' && accounting.members[0]?.state === 'missing' && !inBin;
+  if (anchor.kind === 'loose' && inBin && accounting.members[0]?.state === 'missing') return result('retired');
+  if (accounting.members.some((m) => m.state === 'unchecked')) return result('unknown');
+  if (accounting.members.some((m) => m.state === 'missing' || m.state === 'changed' || m.state === 'verified')) return result('orphan', missingLoose);
+  if (context.kind === 'absent') return result('retired');
   const contexts = keyed(files, context.memberKey);
-  if (contexts.length === 1) return 'retired';
-  if (contexts.length > 1) return 'unknown';
-  if (anchor.kind === 'folder' && await removedContext(`Inbox/${anchor.name}`)) return 'retired';
-  if ((await binned([context.memberKey])).length === 1) return 'retired';
-  return 'unknown';
+  if (contexts.length === 1) return result('retired');
+  if (contexts.length > 1) return result('unknown');
+  if (anchor.kind === 'folder' && await removedContext(`Inbox/${anchor.name}`)) return result('retired');
+  if ((await binned([context.memberKey])).length === 1) return result('retired');
+  return result('unknown');
 }
 
 const keyed = (files: readonly DriveFile[], key: string): DriveFile[] => files.filter((f) => !f.folder && f.appProperties?.[PROP.item] === key);
