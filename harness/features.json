@@ -5778,7 +5778,7 @@
     "id": "p4-rate-limits",
     "task": "p4-consolidation",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "what": "The Worker mounts the rate limits it already has (api/src/security.ts rateLimit, genericRateLimit, COOKIE_ROUTES), owed by the security review V2.4.1; they leave the knip baselines.",
     "steps": [
       "Requests over the limit on a limited route are refused with the documented status."
