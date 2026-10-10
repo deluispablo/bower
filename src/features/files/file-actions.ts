@@ -59,14 +59,10 @@ export function useFileActions() {
           follow(path, moved);
           useUi.getState().relocate(path, moved);
           useUi.getState().openAll(ancestors(moved));
-          toast(`Moved ${label(path)} to ${crumbs(to)}`, {
-            label: 'Undo',
-            run: () =>
-              void vault.move(moved, from, { undo: true }).then((back) => {
-                follow(moved, back);
-                useUi.getState().relocate(moved, back);
-                toast(`${label(back)} is back in ${crumbs(from) || 'your Bower folder'}`);
-              }, (e: unknown) => report(e, 'That did not work. Try again.')),
+          undoToast(`Moved ${label(path)} to ${crumbs(to)}`, () => vault.move(moved, from, { undo: true }), (back) => {
+            follow(moved, back);
+            useUi.getState().relocate(moved, back);
+            return `${label(back)} is back in ${crumbs(from) || 'your Bower folder'}`;
           });
           return moved;
         } catch (e) {
@@ -111,8 +107,8 @@ export function useFileActions() {
           useUi.getState().relocate(path, null);
           undoToast(path.startsWith('Inbox/') ? "The pile is in your Drive's Bin." : `${label(path)} is in your Drive's Bin.`, () => vault.restore(path), () => {
             useUi.getState().setRestored(path);
-            toast(path.startsWith('Inbox/') ? 'The pile is back in the inbox' : `${label(path)} is back`);
             marks.filter((b) => b === path || b.startsWith(`${path}/`)).forEach((b) => !useUi.getState().bookmarks.includes(b) && useUi.getState().toggleBookmark(b));
+            return path.startsWith('Inbox/') ? 'The pile is back in the inbox' : `${label(path)} is back`;
           });
         } catch (e) {
           if (e instanceof BowerError && e.applied?.path === null) {
