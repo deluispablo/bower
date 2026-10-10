@@ -3,7 +3,7 @@
  * drawn with the one field rule. Phone and desktop, on the fake Drive.
  */
 import type { Page } from '@playwright/test';
-import { expectAxeClean } from './axe';
+import { animationsEnd, expectAxeClean } from './axe';
 import { expect, isFake, test } from './fixtures';
 
 const open = async (page: Page, path: string): Promise<void> => {
@@ -45,6 +45,7 @@ test('the rename field spans the sheet and selects the name', async ({ page, isM
     const sheet = page.getByRole('dialog', { name: 'New note', exact: true });
     const field = sheet.getByRole('textbox', { name: 'Name', exact: true });
     await expect(field).toBeFocused();
+    await animationsEnd(page);
     const w = await field.evaluate((n) => ({ box: n.getBoundingClientRect().width, font: parseFloat(getComputedStyle(n).fontSize), form: n.closest('form')?.getBoundingClientRect().width ?? 0 }));
     expect(w.box).toBeGreaterThanOrEqual(300);
     expect(w.font).toBeGreaterThanOrEqual(16);
@@ -63,6 +64,7 @@ test('the rename field spans the sheet and selects the name', async ({ page, isM
     const field = sheet.getByRole('textbox', { name: 'Name', exact: true });
     await expect(field).toHaveValue(start);
     await expect(field).toBeFocused();
+    await animationsEnd(page);
     const m = await field.evaluate((n: HTMLInputElement) => ({
       width: n.getBoundingClientRect().width,
       font: parseFloat(getComputedStyle(n).fontSize),
@@ -75,6 +77,7 @@ test('the rename field spans the sheet and selects the name', async ({ page, isM
     await expect(sheet.getByText(line, { exact: true })).toBeVisible();
     const cancel = sheet.getByRole('button', { name: 'Cancel', exact: true });
     const rename = sheet.getByRole('button', { name: 'Rename', exact: true });
+    await animationsEnd(page);
     const [c, r] = await Promise.all([cancel.boundingBox(), rename.boundingBox()]);
     expect(c?.height).toBeGreaterThanOrEqual(44);
     expect(r?.height).toBeGreaterThanOrEqual(44);
@@ -106,6 +109,7 @@ test('new note from a folder uses the name sheet', async ({ page, isMobile }) =>
   // The name sheet's field and button, not a second form.
   const field = sheet.getByRole('textbox', { name: 'Name', exact: true });
   await expect(field).toBeFocused();
+  await animationsEnd(page);
   expect((await field.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(300);
   await expect(sheet.getByText(/Links to this/)).toHaveCount(0);
   await axeClean(page, '[role="dialog"]');
