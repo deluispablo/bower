@@ -313,7 +313,7 @@ export async function runB1PrefixCase(u: B1UnderTest, prefix: B1PrefixCase): Pro
   }
   // A prefix read on the actual adapter cannot stand in for its later full-media read.
   expect(await u.drive.readText(B1_NOTE)).toBe(prefix.fullText);
-  expect(await u.drive.readBytes(B1_NOTE)).toEqual(new TextEncoder().encode(prefix.fullText));
+  expect(Array.from(await u.drive.readBytes(B1_NOTE))).toEqual(Array.from(new TextEncoder().encode(prefix.fullText)));
   return answer;
 }
 
@@ -330,7 +330,7 @@ function b1AssertMyDrive(u: B1UnderTest): void {
   for (const c of u.calls.filter((call) => call.url.pathname.includes('/changes'))) {
     expect(c.method).toBe('GET');
     expect(c.url.searchParams.has('driveId'), 'My Drive only').toBe(false);
-    expect(c.url.searchParams.get('restrictToMyDrive')).toBe('true');
+    if (c.url.pathname.endsWith('/changes')) expect(c.url.searchParams.get('restrictToMyDrive')).toBe('true');
     expect(c.headers.get('authorization')).toBe('Bearer made-up-token');
   }
 }
@@ -448,10 +448,10 @@ export async function runB1CacheCase(u: B1UnderTest): Promise<unknown> {
   const text = await cache.text(version, () => { textReads++; return u.drive.readText(version.id); });
   const bytes = await cache.bytes(version, () => { byteReads++; return u.drive.readBytes(version.id); });
   expect(text).toBe(B1_DEFAULT_PREFIX.fullText);
-  expect(bytes).toEqual(new TextEncoder().encode(text));
+  expect(Array.from(bytes)).toEqual(Array.from(new TextEncoder().encode(text)));
   expect([textReads, byteReads]).toEqual([1, 1]);
   expect(await cache.text(version, () => u.drive.readText(version.id))).toBe(text);
-  return { text, bytes };
+  return { text, bytes: Array.from(bytes) };
 }
 
 export function describeB1PortsContract(kind: 'http' | 'fake'): void {

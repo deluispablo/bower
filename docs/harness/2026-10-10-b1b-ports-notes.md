@@ -348,3 +348,53 @@ extension requires callers that build explicit adapter objects to forward the ne
 
 left out: retrieval.json, cursor commit, index building, shared drives, UI, pnpm check and e2e as instructed.
 left out: red-owner repairs above; this implementer is explicitly forbidden to change any test.
+
+## Red repair 2
+
+Repaired the three authorized red-owner issues in test code only. No product code, contract
+number, fixture, test name, threshold or golden changed. No network or git write command ran;
+the coordinator owns commits.
+
+1. Extended the explicit test-only `client(backend)` DriveApi wrapper with direct forwarding of
+   readPrefix, getStartPageToken, listChanges, parents and resolveScope, preserving all arguments.
+   Before repair, app tsc reproduced TS2739 at live.test.ts:1303 (log below).
+2. Verified the locally supplied Drive docs section above: changes.getStartPageToken has no
+   restrictToMyDrive parameter, while changes.list does. Restricted only that parameter assertion
+   to paths ending in `/changes`. GET, no driveId and authorization assertions still apply to
+   both start-token and list requests. The existing start-token path assertion remains intact.
+   Sources: https://developers.google.com/workspace/drive/api/reference/rest/v3/changes/getStartPageToken
+   and https://developers.google.com/workspace/drive/api/reference/rest/v3/changes/list.
+   This is verification from the supplied notes, not a fresh online documentation fetch.
+3. Confirmed the byte realm mismatch with temporary runtime instrumentation under the existing
+   jsdom Vitest environment, then removed the instrumentation. For all seven HTTP non-export
+   prefix cases and the HTTP cache case (also exercised via parity), actualLocal was true,
+   expectedLocal was false and prefix samePrototype was false. Actual and expected lengths
+   were identical (0, 4111 or 4114), with every byte equal. Fake bytes and TextEncoder expectations
+   shared a prototype, both distinct from the jsdom Uint8Array.prototype. The instrumented run
+   reproduced all 18 reported assertion failures: sixteen bytes and two bootstrap assertions.
+   Log: `tmp-logs/b1b-redfix2-realm.log`.
+
+The two shared byte assertions now compare Array.from on both sides, retaining exact ordered
+content and length. The first full run reached a previously masked equality failure in the
+cache parity result (804 pass, 1 fail). Normalized the returned test-only cache result's bytes
+with Array.from too, so the unchanged parity assertion still checks full text and every byte.
+Cache read counts, repeated text reuse, prefix separation and existing copy assertions remain
+unchanged; no production byte constructor or cache behavior changed.
+
+tests changed: src/data/live/live.test.ts: forward the five required read ports in the test-only DriveApi wrapper.
+tests changed: src/data/drive/drive-contract.ts: require restrictToMyDrive on changes.list only, per the cited docs.
+tests changed: src/data/drive/drive-contract.ts: normalize proven cross-realm bytes in both assertions and cache parity output; retain exact length and content.
+
+Baseline evidence: `tmp-logs/b1b-redfix2-before-tsc-app.log` (app tsc exit 2, TS2739).
+removed: temporary byte-realm diagnostic instrumentation only; no tests removed.
+left out: product code, pnpm check, e2e and commits; this assignment requests targeted red repair gates only.
+
+Final verification (all exit 0):
+
+- `pnpm exec vitest run src/data/drive src/data/vault src/data/live --maxWorkers=2 > tmp-logs/b1b-redfix2.log 2>&1`:
+  22 files, 805 tests pass, including all B1b reds and existing Drive-call tests.
+- `pnpm exec tsc -p tsconfig.app.json --noEmit > tmp-logs/b1b-redfix2-tsc-app.log 2>&1`.
+- `pnpm exec tsc -p tsconfig.node.json --noEmit > tmp-logs/b1b-redfix2-tsc-node.log 2>&1`.
+- `pnpm exec eslint src/data/drive/drive-contract.ts src/data/live/live.test.ts > tmp-logs/b1b-redfix2-eslint.log 2>&1`.
+- `git diff --check`: pass. Only the two test files and this notes file are modified;
+  untracked tmp-logs contains local verification output.
