@@ -22,7 +22,9 @@ test("Escape on a new folder's name takes it back", async ({ page }) => {
   await resources.click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'New folder', exact: true }).click();
   const name = tree.getByRole('textbox', { name: 'New folder in Resources', exact: true });
-  const draft = tree.getByRole('treeitem').filter({ has: name });
+  const draft = tree.getByRole('treeitem').filter({
+    has: page.getByRole('textbox', { name: 'New folder in Resources', exact: true }),
+  });
   await expect(name).toBeVisible();
   await expect(name).toBeFocused();
   await expect(name).toHaveValue('');

@@ -307,3 +307,38 @@ Reuse the packet's cited VS Code explorer name-first standard (`openExplorerAndC
 https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/files/browser/fileActions.ts
 No network research under the owner's constraint. The repair reuses the existing Playwright
 role locators, the tree's active-descendant focus model and the existing axe helper; no new mechanism.
+
+## Relative pending-row locator repair
+
+Red-owning session, 2026-10-10; base `9dd6f1f7`. Coordinator commits; no git writes,
+network requests, servers, e2e or pnpm check were run.
+
+The supplied `/tmp/tnf-qa6-err2.txt` records qa6's Escape test failing at line 30:
+the pending-row locator finds zero rows. All four error-context snapshots under
+`/tmp/tnf-demo2-res` and `/tmp/tnf-fake2-res` show a level-2 treeitem containing the
+active `New folder in Resources` textbox with placeholder `Name`. Explorer.tsx's
+PendingFolder explicitly renders `role="treeitem"`, child level, indent and folder icon.
+The signed contract does not require this role; its actual presence permits retaining
+the existing role-based row counts without adding a contract requirement.
+
+Changed only the `has` operand to `page.getByRole('textbox', { name:
+'New folder in Resources', exact: true })`. Playwright evaluates this relative to each
+candidate treeitem. The former `name` operand included the outer tree selector, which
+cannot match inside a treeitem. Every other assertion is unchanged, including empty
+value, focus, placeholder, row removal/count, both absent folder paths, no textbox,
+opener focus, URL/heading and the Enter positive control proving one named creation.
+
+tests changed: e2e/qa6.spec.ts: repair the relative has locator; preserve all assertions, Escape-makes-nothing proof and Enter control.
+
+Verification:
+- `pnpm exec tsc -p tsconfig.node.json --noEmit`: exit 0; `/tmp/tnf-relative-tsc.log`.
+  This project includes e2e/qa6.spec.ts.
+- `pnpm exec eslint e2e/qa6.spec.ts`: exit 0; `/tmp/tnf-relative-eslint.log`.
+- Read-only `git diff --check`: exit 0; test diff changes only the has operand.
+- Browser green remains unverified: coordinator must rerun demo/fake, desktop/phone.
+
+Standard: installed Playwright 1.63.0's types.d.ts documents that the inner `has`
+locator must be relative and cannot use elements outside the candidate. Read locally
+at node_modules/.pnpm/playwright-core@1.63.0/node_modules/playwright-core/types/types.d.ts.
+Reference: https://playwright.dev/docs/api/class-locator#locator-filter
+No network used; existing role locators reused, no production changes.
