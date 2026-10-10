@@ -6,13 +6,17 @@ import { mkdtemp, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FakeDrive } from '../../src/data/drive/fake-drive';
+import { isJournalRecord } from '../../src/data/contracts/journal-record';
+import { fenceAfter, parseOwnership } from '../../src/data/contracts/ownership-format';
+import { subjectOf } from '../../src/data/contracts/questions';
+import type { Question, RunState } from '../../src/data/contracts/types';
 import { PILE_NOTE } from '../../src/data/piles';
 import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
 import { SYSTEM } from '../../src/data/vault/layout';
 import { main } from '../src/main';
 import type { ClaudeSpawn } from '../src/claude';
-import type { LoadedCase } from '../src/corpus';
+import { score, type CorpusBetween, type CorpusPress, type Expected, type LoadedCase, type QuestionSubjectExpectation, type Score } from '../src/corpus';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive } from './drive-v3';
 
 export const AT = Date.UTC(2026, 9, 7, 9);
@@ -38,6 +42,10 @@ function asAdded(name: string): Record<string, string> {
 }
 
 export interface CaseRun {
+  /** Request records actually admitted to this press, retaining each journal line's identity. */
+  requests?: Array<{ id: string; text: string }>;
+  /** The final expectations and, when supplied, every press's expectations. */
+  score?: Score;
   /** The folder after the run, path to text; folders and the Bin are left out. */
   after: Record<string, string>;
   pathsById: Record<string, string>;
@@ -68,6 +76,9 @@ export async function runWithClaude(c: LoadedCase, claude: ClaudeSpawn, props?: 
 export type Before = (drive: FakeDrive, root: string) => Promise<void>;
 
 interface CaseOptions {
+  request?: CorpusPress['request'];
+  /** A yes schedules the next press through answerQuestion, with the app's scope and idempotency key. */
+  answerStart?: { scope: 'all' | 'instructions'; subject?: string; requestId: string };
   around?: (fetch: typeof globalThis.fetch) => typeof globalThis.fetch;
   realTokens?: boolean;
   claude?: ClaudeSpawn;
@@ -134,43 +145,109 @@ async function runCase(c: LoadedCase, { around, realTokens = false, claude, prop
     try { scripted = replySequence(JSON.parse(await readFile(join(c.dir, 'replies.json'), 'utf8')) as unknown[]); }
     catch (e) { if (!(e instanceof Error && 'code' in e && e.code === 'ENOENT')) throw e; }
   }
-  const first = await runOnDrive(c, drive, root, { around, realTokens, ...(scripted ? { claude: scripted } : {}), env: more }, 1);
-  if (!c.between) return first;
-  for (const step of c.between) {
-    const seen = await snapshot(drive, root);
-    const id = Object.entries(seen.pathsById).find(([, path]) => path === step.path)?.[0];
-    if (!id) throw new Error(`between: missing ${step.path}`);
-    const file = await drive.get(id);
-    if (step.kind === 'edit') await drive.writeText(id, step.text, file.modifiedTime);
-    else {
-      const parts = step.to.split('/');
-      const name = parts.pop() ?? step.to;
-      const folders = new Map((await drive.listAll(root)).filter((f) => f.folder).map((f) => [seen.pathsById[f.id] ?? '', f.id]));
-      const parent = await ensureFolder(drive, root, folders, parts.join('/'));
-      await drive.update(id, { name, addParent: parent, removeParent: file.parents[0] });
+  const options = { around, realTokens, ...(scripted ? { claude: scripted } : {}), env: more };
+  const first = await runOnDrive(c, drive, root, options, 1);
+  const runs = [first];
+  const presses = c.presses ?? (c.between ? [{ between: c.between }] : []);
+  // Do not silently discard legacy edits when a case also adds further presses.
+  if (c.presses && c.between) throw new Error('Use between or presses, not both.');
+  for (const [i, press] of presses.entries()) {
+    let answerStart: CaseOptions['answerStart'];
+    for (const step of press.between ?? []) {
+      if (step.kind === 'answer') {
+        const scheduled = await submitAnswer(c, runs.at(-1) ?? first, step);
+        if (scheduled) {
+          if (answerStart) throw new Error('A press can start only one answer run.');
+          answerStart = scheduled;
+        }
+      } else await changeBetween(drive, root, step);
     }
+    if (answerStart && press.request) throw new Error('An answer run and an explicit request need separate presses.');
+    runs.push(await runOnDrive(c, drive, root, { ...options, request: press.request, answerStart }, i + 2));
   }
-  const second = await runOnDrive(c, drive, root, { around, realTokens, ...(scripted ? { claude: scripted } : {}), env: more }, 2);
-  return { ...second, runs: [first] };
+  const last = runs.at(-1) ?? first;
+  const result = runs.length === 1 ? last : { ...last, runs: runs.slice(0, -1) };
+  return { ...result, score: scoreCase(c, result) };
+}
+
+async function changeBetween(drive: FakeDrive, root: string, step: Exclude<CorpusBetween, { kind: 'answer' }>): Promise<void> {
+  const seen = await snapshot(drive, root);
+  const id = Object.entries(seen.pathsById).find(([, path]) => path === step.path)?.[0];
+  if (!id) throw new Error(`between: missing ${step.path}`);
+  const file = await drive.get(id);
+  if (step.kind === 'edit') await drive.writeText(id, step.text, file.modifiedTime);
+  else {
+    const parts = step.to.split('/');
+    const name = parts.pop() ?? step.to;
+    const folders = new Map((await drive.listAll(root)).filter((f) => f.folder).map((f) => [seen.pathsById[f.id] ?? '', f.id]));
+    const parent = await ensureFolder(drive, root, folders, parts.join('/'));
+    await drive.update(id, { name, addParent: parent, removeParent: file.parents[0] });
+  }
+}
+
+/** Minimal runtime ports, as ask-answer-loop.test.ts uses: the app modules need browser types, not runner types. */
+interface AnswerVault { questions(): Promise<Question[]>; answer(id: string, yes: boolean): Promise<void> }
+type AnswerVaultClass = new (opts: { drive: FakeDrive; rootId: () => Promise<string>; runningPiles: () => ReadonlySet<string>; device: string }) => AnswerVault;
+type AnswerLoop = (vault: AnswerVault, runs: { start(scope: 'all' | 'instructions', opts: { requestId: string; subject?: string }): Promise<RunState> },
+  id: string, yes: boolean, opts: { allowWeb: boolean }) => Promise<{ outcome: { kind: string; error?: unknown } } | null>;
+
+async function submitAnswer(c: LoadedCase, previous: CaseRun, step: Extract<CorpusBetween, { kind: 'answer' }>): Promise<CaseOptions['answerStart']> {
+  const questions = JSON.parse(previous.after[SYSTEM.questions] ?? '{"questions":[]}') as { questions: Question[] };
+  const matches = questions.questions.filter((q) => 'id' in step.question ? q.id === step.question.id : matchesSubject(q, step.question, previous.pathsById));
+  if (matches.length !== 1) throw new Error(`between: expected one question from the previous press, found ${matches.length}`);
+  const id = matches[0]?.id;
+  if (!id) throw new Error('between: the previous question has no id');
+  const loopPath = new URL('../../src/data/answer-loop.ts', import.meta.url).pathname;
+  const vaultPath = new URL('../../src/data/vault/drive-vault.ts', import.meta.url).pathname;
+  const { answerQuestion } = await import(/* @vite-ignore */ loopPath) as { answerQuestion: AnswerLoop };
+  const { DriveVault } = await import(/* @vite-ignore */ vaultPath) as { DriveVault: AnswerVaultClass };
+  const vault = new DriveVault({ drive: previous.drive, rootId: async () => previous.root, runningPiles: () => new Set(), device: 'device-1' });
+  let scheduled: CaseOptions['answerStart'];
+  const answered = await answerQuestion(vault, { start: async (scope, opts) => {
+    // The fake Worker queues the scheduled run at the next corpus press; it never authors a note or report here.
+    scheduled = { scope, requestId: opts.requestId, ...(opts.subject ? { subject: opts.subject } : {}) };
+    return { id: opts.requestId, scope, phase: 'reading', requestedAt: AT, phaseAt: AT, seen: false };
+  } }, id, step.yes, { allowWeb: c.allowWeb });
+  if (answered?.outcome.kind === 'failed') throw answered.outcome.error;
+  return scheduled;
+}
+
+/** Only an exact archived or active journal record id can be replayed. */
+async function addRequest(drive: FakeDrive, root: string, press: number, request: CorpusPress['request']): Promise<void> {
+  const seen = await snapshot(drive, root);
+  const changes = Object.entries(seen.pathsById).find(([, path]) => path === SYSTEM.changes)?.[0];
+  if (!changes) throw new Error('The changes folder is missing.');
+  if (request?.kind === 'replay') {
+    const records = Object.entries(seen.after).filter(([path]) => path.startsWith(`${SYSTEM.changes}/`) && path.endsWith('.json'))
+      .map(([path, text]) => ({ path, record: JSON.parse(text) as unknown }))
+      .filter((r) => isJournalRecord(r.record) && r.record.kind === 'request' && r.record.id === request.id);
+    const original = records[0]?.record;
+    if (!isJournalRecord(original)) throw new Error(`replay: missing request ${request.id}`);
+    if (records.some((r) => !r.path.startsWith(`${SYSTEM.changes}/archive/`))) return;
+    await drive.createText(changes, `${original.id}.json`, `${JSON.stringify(original)}\n`);
+  } else {
+    await drive.createText(changes, `press-${press}.json`, JSON.stringify({ v: 1, id: `press-${press}`, device: 'device-1', at: AT + press,
+      kind: 'request', what: 'Asked Bower to update the notes', text: request?.text ?? 'Update these notes.' }));
+  }
 }
 
 /** Each press admits the current folder and uses the production runner/planner/write path. */
-export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, { around, realTokens = false, claude, env: more = {} }: CaseOptions, press: number): Promise<CaseRun> {
+export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, { around, realTokens = false, claude, env: more = {}, request, answerStart }: CaseOptions, press: number): Promise<CaseRun> {
   const current = await snapshot(drive, root);
-  if (press > 1) {
-    const changes = Object.entries(current.pathsById).find(([, path]) => path === SYSTEM.changes)?.[0];
-    if (!changes) throw new Error('The changes folder is missing.');
-    await drive.createText(changes, `press-${press}.json`, JSON.stringify({ v: 1, id: `press-${press}`, device: 'device-1', at: AT + press, kind: 'request', what: 'Asked Bower to update the notes', text: 'Update these notes.' }));
-  }
-  const scope = press > 1 && !Object.keys(current.after).some((p) => p.startsWith('Inbox/')) ? 'instructions' : c.scope;
-  const admitted = await planAdmission(fakeRead(drive), root, { scope: scope === 'undo' ? 'instructions' : scope, clock: () => AT + press - 1, newId: () => `admission-${press}` });
-  const runId = press === 1 ? RUN_ID : `${RUN_ID}-${press}`;
+  if (press > 1 && !answerStart) await addRequest(drive, root, press, request);
+  const scope = answerStart?.scope ?? (press > 1 && !Object.keys(current.after).some((p) => p.startsWith('Inbox/')) ? 'instructions' : c.scope);
+  const admitted = await planAdmission(fakeRead(drive), root, { scope: scope === 'undo' ? 'instructions' : scope,
+    clock: () => AT + press - 1, newId: () => `admission-${press}`, ...(answerStart?.subject ? { subject: answerStart.subject } : {}) });
+  const runId = answerStart?.requestId ?? (press === 1 ? RUN_ID : `${RUN_ID}-${press}`);
   const wire = driveV3(drive, 1, runId);
   wire.folderId = root;
   // The token route's expiry on the real clock, as the Worker's is, so the runner keeps a token as it does on Actions.
   if (realTokens) wire.now = Date.now();
   if (admitted.kind !== 'manifest') return { ...(await snapshot(drive, root)), lastRun: null, code: -1, drive, root };
   wire.manifest = admitted.manifest;
+  const requests = (await Promise.all(admitted.manifest.journal.map((f) => drive.readText(f.fileId))))
+    .map((text) => JSON.parse(text) as unknown).filter(isJournalRecord).filter((r) => r.kind === 'request')
+    .map((r) => ({ id: r.id, text: r.text ?? '' }));
   const dir = await mkdtemp(join(tmpdir(), 'bower-corpus-'));
   const file = join(dir, 'event.json');
   await writeFile(file, JSON.stringify({ action: 'bower-tidy', client_payload: { run_id: runId, attempt: 1, ticket: TICKET, scope, allow_web: c.allowWeb } }));
@@ -178,7 +255,7 @@ export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, 
   const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env, ...more }, { fetch: around ? around(wire.fetch) : wire.fetch, ...(claude ? { claude } : {}) });
   const { after, props: kept, pathsById } = await snapshot(drive, root);
   const lastRun: unknown = after[SYSTEM.lastRun] ? JSON.parse(after[SYSTEM.lastRun] ?? 'null') : null;
-  return { after, props: kept, pathsById, lastRun, code, drive, root };
+  return { after, props: kept, pathsById, lastRun, code, drive, root, requests };
 }
 
 async function snapshot(drive: FakeDrive, root: string): Promise<{ after: Record<string, string>; props: Record<string, Record<string, string>>; pathsById: Record<string, string> }> {
@@ -231,4 +308,90 @@ export function caseReplies(id: string): ClaudeSpawn {
     spawn ??= replySequence(JSON.parse(await readFile(join(import.meta.dirname, '../../harness/corpus', id, 'replies.json'), 'utf8')) as unknown[]);
     return spawn(call);
   };
+}
+
+/** Compare typed subjects by id; paths are fixture selectors, never substring matches. */
+function matchesSubject(q: Question, want: QuestionSubjectExpectation, pathsById: Readonly<Record<string, string>>): boolean {
+  const subject = subjectOf(q);
+  if (subject.kind !== want.kind) return false;
+  switch (want.kind) {
+    case 'pair': return subject.kind === 'pair' && subject.by === 'id'
+      && JSON.stringify(subject.notes.map((id) => pathsById[id]).sort()) === JSON.stringify([...want.notes].sort());
+    case 'state': return subject.kind === 'state' && pathsById[subject.id] === want.note;
+    case 'inbox': return subject.kind === 'inbox' && pathsById[subject.id] === want.path;
+    case 'folder': return subject.kind === 'folder';
+  }
+}
+
+/** Read-only byte selection: the ownership parser supplies front matter and the app's named section spans. */
+function protectedBytes(text: string | undefined, range: NonNullable<Expected['protectedRanges']>[number]['range']): Buffer | null {
+  if (text === undefined) return null;
+  const bytes = Buffer.from(text, 'utf8');
+  const ownership = parseOwnership(bytes);
+  if (ownership.status === 'invalid') return null;
+  if ('frontMatter' in range) return ownership.layout.front ? bytes.subarray(0, ownership.layout.frontEnd) : null;
+  const known = range.heading === 'Current state' ? ownership.layout.current
+    : range.heading === 'Timeline' ? ownership.layout.timeline
+    : range.heading === "Bower's note" ? ownership.layout.bowerNote : undefined;
+  if (known !== undefined) return known ? bytes.subarray(known.start, known.end) : null;
+  // Personal ATX headings: keep raw offsets, ignore fenced code, and refuse an ambiguous repeated heading.
+  const headings: Array<{ start: number; level: number; title: string }> = [];
+  let fence: ReturnType<typeof fenceAfter> = null;
+  for (let start = ownership.personal.start; start < ownership.personal.end;) {
+    const newline = bytes.indexOf(10, start);
+    const after = newline < 0 ? ownership.personal.end : Math.min(newline + 1, ownership.personal.end);
+    const line = bytes.subarray(start, after).toString('utf8').replace(/\r?\n$/, '');
+    const heading = !fence ? /^ {0,3}(#{1,6})[ \t]+(.*?)(?:[ \t]+#+[ \t]*)?$/.exec(line) : null;
+    if (heading) headings.push({ start, level: heading[1]?.length ?? 0, title: heading[2] ?? '' });
+    fence = fenceAfter(line, fence);
+    start = after;
+  }
+  const found = headings.filter((h) => h.title === range.heading);
+  const first = found[0];
+  if (found.length !== 1 || !first) return null;
+  const end = headings.find((h) => h.start > first.start && h.level <= first.level)?.start ?? ownership.personal.end;
+  return bytes.subarray(first.start, end);
+}
+
+function scorePress(c: LoadedCase, run: CaseRun, expected: Expected): Score {
+  const unmet = score({ expected, before: c.folder, after: run.after, lastRun: run.lastRun, pathsById: run.pathsById }).unmet;
+  for (const { path, range } of expected.protectedRanges ?? []) {
+    const before = protectedBytes(c.folder[path], range);
+    const after = protectedBytes(run.after[path], range);
+    const name = 'heading' in range ? range.heading : 'front matter';
+    if (!before || !after) unmet.push(`${path}: missing or ambiguous protected range ${name}`);
+    else if (!before.equals(after)) unmet.push(`${path}: protected range changed: ${name}`);
+  }
+  for (const want of expected.properties ?? []) {
+    if (!(want.path in run.after)) { unmet.push(`missing file for properties: ${want.path}`); continue; }
+    const props = run.props[want.path] ?? {};
+    for (const key of want.absent ?? []) if (Object.hasOwn(props, key)) unmet.push(`${want.path}: appProperty ${key} should be absent`);
+    for (const [key, value] of Object.entries(want.equals ?? {})) {
+      if (!Object.hasOwn(props, key) || props[key] !== value) unmet.push(`${want.path}: appProperty ${key} expected ${JSON.stringify(value)}`);
+    }
+  }
+  if (expected.report?.questionSubjects) {
+    const report = (run.lastRun as { run?: { report?: { questions?: unknown } } } | null)?.run?.report;
+    const questions = Array.isArray(report?.questions) ? report.questions as unknown[] : [];
+    for (const want of expected.report.questionSubjects) {
+      if (!questions.some((q) => q && typeof q === 'object' && typeof (q as { id?: unknown }).id === 'string'
+        && matchesSubject(q as Question, want, run.pathsById))) unmet.push(`report.questions: missing ${JSON.stringify(want)} subject`);
+    }
+  }
+  return { pass: unmet.length === 0, unmet };
+}
+
+/** Driver-only expectations build on the unchanged pure scorer; existing single-run cases score identically. */
+export function scoreCase(c: LoadedCase, final: CaseRun): Score {
+  const unmet = scorePress(c, final, c.expected).unmet;
+  if (c.expected.runs) {
+    const runs = [...final.runs ?? [], final];
+    if (runs.length !== c.expected.runs.length) unmet.push(`runs: ${runs.length}, expected ${c.expected.runs.length}`);
+    for (const [i, expected] of c.expected.runs.entries()) {
+      const run = runs[i];
+      if (!run) { unmet.push(`run ${i + 1}: missing press`); continue; }
+      unmet.push(...scorePress(c, run, expected).unmet.map((line) => `run ${i + 1}: ${line}`));
+    }
+  }
+  return { pass: unmet.length === 0, unmet };
 }

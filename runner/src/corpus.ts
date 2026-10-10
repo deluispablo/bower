@@ -37,7 +37,21 @@ export interface CorpusJournalLine {
 
 export type CorpusBetween =
   | { kind: 'edit'; path: string; text: string }
-  | { kind: 'move'; path: string; to: string };
+  | { kind: 'move'; path: string; to: string }
+  | { kind: 'answer'; question: { id: string } | QuestionSubjectExpectation; yes: boolean };
+
+/** A later press; omitted request means a fresh tidy-up, unless a yes already scheduled an answer run. */
+export interface CorpusPress {
+  between?: CorpusBetween[];
+  request?: { kind: 'replay'; id: string } | { kind: 'tidy'; text?: string };
+}
+
+/** Note paths resolve to stable Drive ids before comparing a question's typed subject. */
+export type QuestionSubjectExpectation =
+  | { kind: 'pair'; notes: [string, string] }
+  | { kind: 'state'; note: string }
+  | { kind: 'inbox'; path: string }
+  | { kind: 'folder' };
 
 export interface CorpusCase {
   id: string;
@@ -60,6 +74,8 @@ export interface CorpusCase {
   bowerOwned: string[];
   /** The person changes the same folder after run 1, before run 2. */
   between?: CorpusBetween[];
+  /** Later presses on the same Drive; legacy `between` still supplies one second press. */
+  presses?: CorpusPress[];
 }
 
 export interface ReportExpectation {
@@ -76,6 +92,7 @@ export interface ReportExpectation {
   questionsAtMost?: number;
   questionsExactly?: number;
   pairSubject?: { kind: 'pair'; notes: [string, string] };
+  questionSubjects?: QuestionSubjectExpectation[];
   setAside?: number;
   /** Question ids. */
   questions?: string[];
@@ -102,6 +119,12 @@ export interface NoteExpectation {
 export interface Placement { files: string[]; allowed: Array<{ under: string; linking?: string }> }
 
 export interface Expected {
+  /** One expectation per press, including the first. Top-level expectations still check the final press. */
+  runs?: Expected[];
+  /** Compare the raw UTF-8 range with the seeded note; a missing or ambiguous range fails. */
+  protectedRanges?: Array<{ path: string; range: { heading: string } | { frontMatter: true } }>;
+  /** Drive appProperties, compared directly rather than inferred from Markdown. */
+  properties?: Array<{ path: string; absent?: string[]; equals?: Record<string, string> }>;
   /** Paths here may use `*` for any run of characters (a model picks names; the rules fix only the place). */
   files?: { present?: string[]; absent?: string[] };
   /**
