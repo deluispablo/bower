@@ -23,7 +23,8 @@ for (const source of ['demo', 'fake']) {
     const sheet = page.getByRole('dialog', { name: 'Tidy up 24 things?', exact: true });
     await expect(sheet).toBeVisible();
     await expect(sheet.getByRole('listitem')).toHaveCount(24);
-    for (const name of names) await expect(sheet.getByText(name, { exact: true })).toHaveCount(1);
+    const pileTitles = sheet.getByRole('listitem').locator(':scope > span:first-of-type');
+    for (const name of names) await expect(pileTitles.filter({ hasText: new RegExp(`^${name}$`) })).toHaveCount(1);
     await animationsEnd(page);
 
     const content = await sheet.getByRole('list').boundingBox();
