@@ -2048,6 +2048,87 @@ describe('a set-aside pile shows its reason in the inbox', () => {
   }
 
   // TL-P2-32: a note to write again has not arrived; the tidy-up holds the pile until Try again writes it.
+  it('pile-binned-context-hold: a Drive-binned note leaves ready things filed with no silent hold', async () => {
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await uploader.settled();
+    const note = await fileIn(pile.id, 'Pile note.md');
+    await drive.trash(note.id);
+    const other = declaring();
+    expect(await other.changes()).toEqual([]);
+    const seen = await pileOn(other, pile.id);
+    expect(seen?.items.map((i) => [i.name, i.upload])).toEqual([['a.pdf', undefined], ['b.pdf', undefined]]);
+    expect(seen?.setAside).toBeUndefined();
+    const folder = await folderOf(pile.id);
+    const out = await tidyUp(drive, root, 'all');
+    if (out.phase !== 'done') throw new Error('the tidy-up failed');
+    expect.soft(out.manifest.capture.piles.map((p) => p.pileId)).toContain(pile.id);
+    expect.soft(out.report.filed.map((f) => f.name)).toEqual(expect.arrayContaining(['a.pdf', 'b.pdf']));
+    expect.soft((await drive.listAll(root)).filter((f) => f.parents.includes(folder.id) && ['a.pdf', 'b.pdf'].includes(f.name))).toEqual([]);
+  });
+
+  it('pile-binned-context-hold: journal trash still removes context for the app and the run', async () => {
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await uploader.settled();
+    if (!pile.path) throw new Error('no pile path');
+    // A stored journal line is the control; the app's Inbox trash command removes the whole pile.
+    const note = await fileIn(pile.id, 'Pile note.md');
+    await drive.trash(note.id);
+    const listing = await drive.listAll(root);
+    const bower = listing.find((f) => f.folder && f.parents.includes(root) && f.name === '.bower') ?? await drive.createFolder(root, '.bower');
+    const changes = listing.find((f) => f.folder && f.parents.includes(bower.id) && f.name === 'changes') ?? await drive.createFolder(bower.id, 'changes');
+    await drive.createText(changes.id, 'context-trash.json', JSON.stringify({ v: 1, id: 'context-trash', device: 'DEVICE', at: Date.now(), kind: 'trash', what: 'Put the pile note in the Bin', path: `${pile.path}/Pile note.md`, fileId: note.id }));
+    const other = declaring();
+    expect((await other.changes()).filter((c) => c.kind === 'trash')).toHaveLength(1);
+    expect((await pileOn(other, pile.id))?.setAside).toBeUndefined();
+    const out = await tidyUp(drive, root, 'all');
+    if (out.phase !== 'done') throw new Error('the tidy-up failed');
+    expect(out.manifest.capture.piles.map((p) => p.pileId)).toContain(pile.id);
+    expect(out.report.filed.map((f) => f.name)).toEqual(expect.arrayContaining(['a.pdf', 'b.pdf']));
+  });
+
+  it.each(['ready things', 'one missing thing', 'things filed elsewhere', 'context only'] as const)(
+    'pile-binned-context-hold: a never-landed context stays not-arrived with %s', async (shape) => {
+      if (shape === 'one missing thing') failing('b.pdf');
+      const uploader = declaring();
+      const pile = await uploader.addPile({ text: 'Papers from Alex', items: shape === 'context only' ? [] : [pdf('a.pdf'), pdf('b.pdf')] });
+      await uploader.settled();
+      if (shape === 'things filed elsewhere') {
+        for (const name of ['a.pdf', 'b.pdf']) {
+          const thing = await fileIn(pile.id, name);
+          await drive.update(thing.id, { addParent: await idOf('Areas'), removeParent: thing.parents[0] ?? '' });
+        }
+      }
+      const note = await fileIn(pile.id, 'Pile note.md');
+      const contextKey = note.appProperties?.bowerItem;
+      if (!contextKey) throw new Error('no context key');
+      await contextNeverCreated([note.id]);
+      expect(await drive.binnedByItem(root, [contextKey])).toEqual([]);
+      expect((await pileOn(declaring(), pile.id))?.setAside).toBe('not-arrived');
+      expect(await runnerSays(pile.id)).toBe(SAID['not-arrived']);
+    },
+  );
+
+  it('pile-binned-context-hold: missing context and member share one Bin listing and cached app readiness', async () => {
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await uploader.settled();
+    const note = await fileIn(pile.id, 'Pile note.md');
+    const member = await fileIn(pile.id, 'b.pdf');
+    await drive.update(member.id, { addParent: await idOf('Areas'), removeParent: member.parents[0] ?? '' });
+    await drive.trash(member.id);
+    await drive.trash(note.id);
+    const other = declaring();
+    const lists = vi.spyOn(drive, 'listAll');
+    const bins = vi.spyOn(drive, 'binnedByItem');
+    expect((await pileOn(other, pile.id))?.setAside).toBeUndefined();
+    expect((await pileOn(other, pile.id))?.setAside).toBeUndefined();
+    expect(lists).toHaveBeenCalledTimes(1);
+    expect(bins).toHaveBeenCalledTimes(1);
+    expect(bins.mock.calls[0]?.[1].slice().sort()).toEqual([note.appProperties?.bowerItem, member.appProperties?.bowerItem].sort());
+  });
+
   it('a note to write again is not an empty pile, for the inbox and the tidy-up alike', async () => {
     const pile = await noteToWriteAgain('Papers from Alex');
     const seen = await pileOn(declaring(), pile.id);
