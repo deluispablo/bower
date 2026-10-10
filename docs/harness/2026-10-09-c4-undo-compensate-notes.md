@@ -340,3 +340,23 @@ Offline standard references reused from the packet's previous research:
 
 The coordinator commits only journal.ts and note-edit.ts as the fix, replaces d20eeaa3 above with that commit's
 SHA, then commits this notes section separately. No Git write command was run by this implementation session.
+
+## Gate fix: background refusal shown
+
+Cause: `src/data/choose.ts:111` could arm permanent refusal before the first journal create reached Drive.
+The re-plan's locked admission (`src/data/vault/journal.ts:267`, drain awaited at `:291`) delays that first
+attempt; `/tmp/compensate-jf.log` records the foreground `record()` refusal, not a lost background notification.
+That line is deliberately excluded from the failed list at `journal.ts:405` because its caller observes it,
+then removed from the outbox, leaving the queued online flush nothing to report. On claude/p3, the unlocked
+first send reached the fake's offline outcome sooner. The scenario's timing assumption no longer held.
+
+Fix: `src/data/choose.ts:117` makes the first journal create fail offline even when the hook armed early.
+The queued online flush then refuses the retained line through the same locked drain: failed list first
+(`journal.ts:416`), notification (`:417`), outbox removal (`:421`). `DriveVault` emits at `drive-vault.ts:190`,
+`useFailedChanges` reloads at `provider.tsx:80`, and the existing FailedChanges component supplies the side
+panel and phone's main. No second send path, notification path, journal change, or test change was added.
+
+Results: tsc PASS, `/tmp/compensate-jf-tsc.log`; data/features vitest PASS, 102 files / 3,954 tests,
+`/tmp/compensate-jf-unit.log`; `git diff --check` PASS. Playwright unavailable and not run. No Git write used.
+tests changed: none
+Offline reference reused: https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API (asynchronous lock admission).

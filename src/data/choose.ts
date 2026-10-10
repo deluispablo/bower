@@ -107,10 +107,14 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
   // The notes of changes find no network until the page says Drive now refuses them for good (the test's hook).
   if (scenario === 'journal-refused') {
     let refuses = false;
+    let waited = false;
     (window as unknown as { __refuseJournal: () => void }).__refuseJournal = () => { refuses = true; };
     const create = drive.createText.bind(drive);
     drive.createText = async (...a: Parameters<typeof drive.createText>) => {
       if (!/^\d{4}-\d{2}-\d{2}T[\d-]+\.\d{3}Z-[a-z0-9]{6}\.json$/.test(a[1])) return create(...a);
+      // Admission now awaits the outbox lock: the hook can run before this first attempt.
+      // Keep the scenario's offline-first order; the queued online drain handles the refusal.
+      if (!waited) { waited = true; throw driveError('offline'); }
       throw refuses ? driveFailure('unknown', 'permanent') : driveError('offline');
     };
   }
