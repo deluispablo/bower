@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { FakeDrive } from './drive/fake-drive';
 import type { NewPile, Pile } from './types';
 import * as queueModule from './upload-queue';
-import type { LocksLike, UploadQueue } from './upload-queue';
+import type { LocksLike, UploadQueue, UploadQueueDeps } from './upload-queue';
 import * as storeModule from './upload-store';
 import type { PendingUpload, UploadStore } from './upload-store';
 import * as vaultModule from './vault/drive-vault';
@@ -67,9 +67,9 @@ function storeFor(env: Env): UploadStore {
   return exported<typeof storeModule.indexedDbUploadStore>(storeModule, 'indexedDbUploadStore')(env.idb);
 }
 
-function page(env: Env, store = storeFor(env)): Page {
+function page(env: Env, store = storeFor(env), options: Pick<UploadQueueDeps, 'locks' | 'bus'> = {}): Page {
   const queue = exported<typeof queueModule.createUploadQueue>(queueModule, 'createUploadQueue')({
-    drive: env.drive, store, locks, chunkSize: CHUNK, now: () => new Date(AT),
+    drive: env.drive, store, locks, chunkSize: CHUNK, now: () => new Date(AT), ...options,
   });
   const Vault = exported<typeof vaultModule.DriveVault>(vaultModule, 'DriveVault');
   const vault = new Vault({
@@ -416,6 +416,140 @@ it('upload-resume-after-reload: fix 1 control: a member still pending during the
 });
 
 it('upload-resume-after-reload: fix 1: a member that arrives during the first declaration read needs no picker', async () => {
+  await declarationArrivalCase(true);
+});
+
+/** An actual owner finishes retained bytes; its bus wakes the non-owning real queue. */
+async function otherTabDeclarationArrivalCase(resolveReadBack: boolean): Promise<void> {
+  const env = await environment();
+  const hold = holdFirst(env, 4);
+  const first = page(env);
+  const entered = barrier();
+  const declarationAnswer = barrier();
+  const readBackEntered = barrier();
+  const readBackAnswer = barrier();
+  const reconciled = barrier();
+  let observer: Page | undefined;
+  let owner: Page | undefined;
+  let resumed: ReturnType<typeof holdFirst> | undefined;
+  let unsubscribe = (): void => undefined;
+  let onCompletion = (): void => undefined;
+  let completionBroadcast = false;
+  try {
+    const submitted = input(1);
+    const pile = await first.vault.addPile(submitted);
+    expect(pile.path).toBeDefined();
+    await hold.reached;
+    const record = present((await first.store.list(ACCOUNT, env.root))
+      .find((item) => item.memberKey === pile.items[0]?.id));
+    expect(record).toMatchObject({ confirmed: 4, session: expect.any(String), fileId: expect.any(String) });
+    first.queue.stop();
+    first.vault.dispose();
+    hold.open();
+    await close(first);
+    expect(await storeFor(env).list(ACCOUNT, env.root)).toHaveLength(1);
+    expect(await members(env, pile)).toEqual([]);
+    const declaration = present((await env.drive.listAll(env.root)).find((file) =>
+      file.appProperties?.[PROP.recordPile] === pile.id && file.appProperties?.[PROP.recordAnchor] === 'folder'));
+    const readBytes = env.drive.readBytes.bind(env.drive);
+    let initial = true;
+    vi.spyOn(env.drive, 'readBytes').mockImplementation(async (id) => {
+      const body = await readBytes(id);
+      if (id === declaration.id && initial) {
+        initial = false;
+        entered.open();
+        await declarationAnswer.wait;
+      }
+      return body;
+    });
+    const getUploaded = env.drive.getUploaded.bind(env.drive);
+    vi.spyOn(env.drive, 'getUploaded').mockImplementation(async (id) => {
+      // The owner uses the same real Drive read-back before broadcasting completion.
+      // Only reconciliation in the non-owning queue is held here.
+      if (id === record.fileId && completionBroadcast) {
+        readBackEntered.open();
+        await readBackAnswer.wait;
+      }
+      return getUploaded(id);
+    });
+    observer = page(env, storeFor(env), {
+      locks: { request: async (_name, _options, callback) => callback(null) },
+      bus: { post: () => undefined, listen: (listener) => { onCompletion = listener; } },
+    });
+    unsubscribe = observer.queue.subscribe(() => {
+      if (observer?.queue.items().some((item) => item.memberKey === record.memberKey && item.file)) reconciled.open();
+    });
+    let firstResult: Pile[] | undefined;
+    const reading = observer.vault.piles().then((rows) => { firstResult = rows; return rows; });
+    await entered.wait;
+    expect(await observer.queue.start(ACCOUNT, env.root)).toBe('other-tab');
+    expect(observer.queue.items().find((item) => item.memberKey === record.memberKey))
+      .toMatchObject({ state: 'waiting', fileId: record.fileId });
+    resumed = holdFirst(env, 4);
+    owner = page(env, storeFor(env), {
+      bus: { post: () => { completionBroadcast = true; onCompletion(); }, listen: () => undefined },
+    });
+    expect(await owner.queue.start(ACCOUNT, env.root)).toBe('owner');
+    await resumed.reached;
+    expect(await members(env, pile)).toEqual([]);
+    resumed.open();
+    await owner.queue.idle();
+    await readBackEntered.wait;
+    await arrived(env, pile, submitted);
+    expect((await members(env, pile))[0]?.id).toBe(record.fileId);
+    expect(await storeFor(env).list(ACCOUNT, env.root)).toEqual([]);
+    expect(firstResult).toBeUndefined();
+    expect(observer.queue.items().find((item) => item.memberKey === record.memberKey)?.file).toBeUndefined();
+    if (resolveReadBack) {
+      readBackAnswer.open();
+      await reconciled.wait;
+      expect(observer.queue.items().find((item) => item.memberKey === record.memberKey)?.file?.id).toBe(record.fileId);
+    }
+    declarationAnswer.open();
+    // A committed IDB transaction drains the listing's microtasks while read-back is still held.
+    // A fix may either return a queued row now or wait for read-back and return the arrived row.
+    expect(await storeFor(env).list(ACCOUNT, env.root)).toEqual([]);
+    const beforeReadBack = firstResult;
+    readBackAnswer.open();
+    await reconciled.wait;
+    const rows = beforeReadBack ?? await reading;
+    const row = present(rows.find((item) => item.id === pile.id));
+    expect({
+      picker: row.items.filter((item) => item.id === record.memberKey && item.chooseAgain),
+      notArrived: row.setAside === 'not-arrived',
+    }, 'completion broadcast must leave the member queued or seen as arrived on the first full read').toEqual({
+      picker: [], notArrived: false,
+    });
+    const member = present(row.items.find((item) => item.id === record.memberKey || item.id === record.fileId));
+    if (member.id === record.memberKey) expect(member.upload).toBeGreaterThanOrEqual(0);
+    else expect(member.id).toBe(record.fileId);
+    await reading;
+    await arrived(env, pile, submitted);
+    expect(await storeFor(env).list(ACCOUNT, env.root)).toEqual([]);
+  } finally {
+    first.queue.stop();
+    observer?.queue.stop();
+    owner?.queue.stop();
+    hold.open();
+    resumed?.open();
+    declarationAnswer.open();
+    readBackAnswer.open();
+    unsubscribe();
+    await close(first);
+    if (observer) await close(observer);
+    if (owner) await close(owner);
+  }
+}
+
+it('upload-resume-after-reload: fix 2: other-tab completion with pending read-back', async () => {
+  await otherTabDeclarationArrivalCase(false);
+});
+
+it('upload-resume-after-reload: fix 2: other-tab completion with resolved read-back', async () => {
+  await otherTabDeclarationArrivalCase(true);
+});
+
+it('upload-resume-after-reload: fix 2: same-tab completion', async () => {
   await declarationArrivalCase(true);
 });
 

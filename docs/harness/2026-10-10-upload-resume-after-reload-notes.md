@@ -481,3 +481,65 @@ Full `pnpm check` was not run: its harness fixture tests execute git-writing com
 which the assignment prohibits. Browser e2e was not run in this no-network fix round.
 No full-check mark or browser result is claimed. Coordinator owns commits and delivery gates;
 independent review and designer U3 verification remain before entry close.
+
+
+## Fix round 2 red
+
+Red-owning Codex session, 2026-10-10. Baseline HEAD:
+`5e6bbaf9a1c9f1eadc0e22d8d48132e592b2c35e`. Finding: BLOCK 1 in
+`docs/harness/2026-10-10-codex-upload-resume-after-reload-adversarial-2.md`.
+No production edits, network access, commits or git-writing commands.
+
+Exact added names:
+
+- `upload-resume-after-reload: fix 2: other-tab completion with pending read-back`
+- `upload-resume-after-reload: fix 2: other-tab completion with resolved read-back`
+- `upload-resume-after-reload: fix 2: same-tab completion`
+
+tests changed: src/data/upload-resume.test.ts: added completion-window class sweep; page fixture accepts lock/bus injection.
+All seven pre-existing tests, every existing assertion and every bound are preserved.
+The same-tab case reuses the unchanged existing completion control.
+
+Both other-tab cases save through public `addPile()`, interrupt the real queue at offset 4,
+retain the reserved identity and bytes in fake IndexedDB, and start a non-owning page's first
+public `piles()` read. The first folder-declaration answer is held after reading its bytes.
+A separate owning real queue resumes the actual transfer against fake Drive; its actual
+completion broadcast invokes the non-owner's bus listener. Only the resulting `getUploaded`
+read-back is gated, never the owner's read-back. The gate keys on the completion broadcast,
+not on an implementation requirement that reconciliation mark the member done early.
+
+Before releasing the declaration, both cases verify one arrived file, original bytes,
+reserved identity, removal of committed pending records and no completed first listing.
+The pending case releases the declaration with read-back outstanding. A separate committed
+IDB read supplies an event-loop checkpoint and captures any first listing published then.
+It subsequently releases read-back so an implementation that waits for reconciliation can
+finish too. The assertion checks the captured first result, never a later refresh masking it.
+The resolved case opens read-back and awaits the queue's public completion notification
+before releasing the declaration. Each result must contain the retained queued member or
+reserved arrived file, without a picker or `not-arrived`. No timers, polling or new bounds.
+
+Verification:
+
+```sh
+pnpm exec vitest run src/data/upload-resume.test.ts --maxWorkers=2 > tmp-logs/upload-resume-fix-2-red.log 2>&1
+pnpm exec eslint src/data/upload-resume.test.ts > tmp-logs/upload-resume-fix-2-eslint.log 2>&1
+pnpm exec tsc -p tsconfig.app.json --noEmit > tmp-logs/upload-resume-fix-2-tsc.log 2>&1
+```
+
+- Full file at HEAD: exit 1, **1 intended assertion failure and 9 passes**.
+- Pending other-tab read-back is red: `picker` contains `chooseAgain: true`, `upload: -1`;
+  `notArrived` is true instead of false. This is precisely BLOCK 1, without timeout,
+  load error, unhandled rejection or timer-gate failure.
+- Resolved other-tab read-back and same-tab completion are passing class controls at HEAD.
+  They do not exhibit BLOCK 1; no artificial failure was added to make them red.
+- All seven existing tests pass. No contradicting assertion was found in the full requested file.
+- App TypeScript and touched-test ESLint pass (exit 0).
+- The initial resolved-control assertion matched a declaration member key even though an
+  arrived row uses the reserved Drive file ID. Corrected only that new assertion to accept
+  the queued key or arrived ID; final results above contain only the intended failure.
+
+Research is inherited from the packet and local mechanisms; no source was fetched:
+[Drive resumable uploads](https://developers.google.com/workspace/drive/api/guides/manage-uploads#resumable),
+[IndexedDB transaction lifetime](https://w3c.github.io/IndexedDB/#transaction-lifetime).
+Existing queue, store, write-once and Drive implementations are used without replacement.
+Implementation, commits, full check and e2e are left to the assigned sessions/coordinator.
