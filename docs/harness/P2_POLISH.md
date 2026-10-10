@@ -346,3 +346,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
 - 2026-10-10 landing-csp-minors (P4-80 Minor): support.js keeps the unused x-import loader that calls new Function (fix-landing --check covers only the page-script path); src/landing-csp.test.ts finds the CSP section by splitting on "/landing/*
 "; e2e/landing-csp.config.ts needs dist built first.
 - 2026-10-10 create-named-minors (P4-81 Minor): file-actions.test.tsx:70 keeps the red scaffolding (createNamed? cast, if (!createNamed) return); NameSheet.tsx:53 still branches on making.type where it is always note (tidy in tree-name-first).
+- 2026-10-10 b1b-ports-minors (P4-83 Minor): drive-http readPrefix buffers the whole body on a 200 before cutting; resolveDriveScope counts and walks duplicate unknown ids; fake-drive imports FOLDER and toFile from drive-http; fake trash/delete log no removed stubs outside recorded changePages.
