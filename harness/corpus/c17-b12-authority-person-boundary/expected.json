@@ -1,0 +1,61 @@
+{
+  "unchanged": [
+    "Resources/Gardening/Alex plot.md",
+    "Resources/Gardening/Workshop source.md",
+    "Rules.md",
+    ".bower/type-table.json",
+    ".bower/tags.json"
+  ],
+  "properties": [
+    {
+      "path": "Resources/Gardening/Alex plot.md",
+      "absent": [
+        "by",
+        "bower_state"
+      ]
+    }
+  ],
+  "protectedRanges": [
+    {
+      "path": "Resources/Gardening/Garden methods.md",
+      "range": {
+        "heading": "Notes"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "path": "Resources/Gardening/Garden methods.md",
+      "contains": [
+        "tags: [learning, gardening]"
+      ]
+    },
+    {
+      "path": "Resources/Gardening/Request - Tag garden concepts.md",
+      "contains": [
+        "Done: 1",
+        "Unavailable: 1",
+        "[[Alex plot]]"
+      ]
+    }
+  ],
+  "files": {
+    "present": [
+      "Resources/Gardening/Request - Tag garden concepts.md"
+    ],
+    "absent": [
+      ".bower/proposals/*"
+    ]
+  },
+  "linksResolve": true,
+  "report": {
+    "filed": 0,
+    "created": [
+      "Resources/Gardening/Request - Tag garden concepts.md"
+    ],
+    "updated": [
+      "Resources/Gardening/Garden methods.md"
+    ],
+    "questionsExactly": 0
+  }
+}

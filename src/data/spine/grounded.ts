@@ -4,7 +4,7 @@
  * `report.ts`, and the pure record guards in `contracts/`.
  */
 import type { DriveFile } from '../drive/drive-api';
-import type { EffectV2, OperationV2, ReportContribution, SeenFile, Target } from '../contracts/run-manifest';
+import { requestMoveKind, type EffectV2, type OperationV2, type ReportContribution, type SeenFile, type Target } from '../contracts/run-manifest';
 import { savedLinkKey } from '../contracts/note-edit';
 import { savedWordsPile } from './duplicates';
 import { md5Hex } from '../contracts/hashes';
@@ -51,6 +51,8 @@ export function grounded(manifest: RunManifest): boolean {
   const places = new Set(manifest.capture.places.map((p) => p.file.fileId));
   const pathOf = (t: Target): string | null => placePath(manifest, t);
   const madeAt = (e: EffectV2): string | null => {
+    // Rules is the one generated root note; its creation words the person's rules too.
+    if (e.kind === 'create-text' && e.name === RULES && 'fileId' in e.parent && e.parent.fileId === manifest.scope.rootId) return RULES;
     const parent = e.kind === 'create-text' ? pathOf(e.parent) : null;
     return e.kind === 'create-text' && parent !== null ? join(parent, e.name) : e.kind === 'edit-text' ? e.path : null;
   };
@@ -118,7 +120,12 @@ export function grounded(manifest: RunManifest): boolean {
       // A pile of words already saved: its Bin is told as a copy's is, once for each outcome.
       asides.set(o.operationId, 1);
     } else if (e.kind === 'move' && lines.has(e.before.fileId)) {
-      if (pathOf(e.parent) !== SYSTEM.archive || e.name !== e.before.name || Object.keys(e.properties).length || mine.length !== 1) return false;
+      const relocating = requestMoveKind(manifest, o);
+      if (relocating) {
+        if (mine.length || aside || e.name !== e.before.name) return false;
+      } else if (pathOf(e.parent) !== SYSTEM.archive || e.name !== e.before.name
+        || Object.keys(e.properties).some((key) => key !== 'bowerRun')
+        || (Object.hasOwn(e.properties, 'bowerRun') && e.properties.bowerRun !== null) || mine.length !== 1) return false;
     } else if (e.kind === 'bin' && places.has(e.before.fileId)) {
       asides.set(o.operationId, 1);
     } else if (e.kind === 'edit-text') {
@@ -154,7 +161,7 @@ export function grounded(manifest: RunManifest): boolean {
   // every file is moved once.
   return manifest.operations.every((o) => (rejected.get(o.operationId) ?? 0) === (asides.get(o.operationId) ?? 0))
     && [...members].every((id) => told.applied.has(id) && told.rejected.has(id))
-    && [...lines].every((id) => manifest.operations.filter((o) => 'before' in o.effect && o.effect.before.fileId === id).length === 1);
+    && [...lines].every((id) => manifest.operations.filter((o) => 'before' in o.effect && o.effect.before.fileId === id && !requestMoveKind(manifest, o)).length === 1);
 }
 
 /** Whether a runner file made again holds what its path holds (a list of questions holds questions, TL-P2-37 Q1). */

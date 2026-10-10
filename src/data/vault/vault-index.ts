@@ -6,6 +6,7 @@
  */
 import type { DriveFile } from '../drive/drive-api';
 import type { NotesSeen } from '../contracts/questions';
+import { isHub } from '../contracts/hub';
 import { displayName, extOf, kindOf, nameOf, type Entries, type Entry } from '../tree';
 import { isHidden, PROP } from './layout';
 import { seenNow } from './seen';
@@ -23,6 +24,9 @@ export class VaultIndex {
     ix.reindex();
     return ix;
   }
+
+  /** The shared hub/MOC recognition for the explorer and edit contract. */
+  static readonly isHub = isHub;
 
   idOf(path: string): string | undefined {
     return path === '' ? this.rootId : this.ids.get(path);
@@ -63,8 +67,26 @@ export class VaultIndex {
     const bower = new Set(all.filter((f) => f.folder && f.name === '.bower' && f.parents.includes(this.rootId)).map((f) => f.id));
     const changes = new Set(all.filter((f) => f.folder && f.name === 'changes' && f.parents.some((p) => bower.has(p))).map((f) => f.id));
     const parents = new Set(changes);
+    const pending = new Set(all.filter((f) => f.folder && f.name === 'pending' && f.parents.some((p) => changes.has(p))).map((f) => f.id));
+    for (const f of all) if (f.folder && f.parents.some((p) => pending.has(p))) parents.add(f.id);
     if (archived) for (const f of all) if (f.folder && f.name === 'archive' && f.parents.some((p) => changes.has(p))) parents.add(f.id);
     return all.filter((f) => !f.folder && f.parents.some((p) => parents.has(p)));
+  }
+
+  /** A waiting request's published evidence pointer, falling back to actual pending containment. */
+  waitingRun(fileId: string): string | null {
+    const file = this.files.get(fileId);
+    // The in-place move publishes the next run before its append. Until relocation lands and clears it,
+    // that pointer wins over the old pending folder, including duplicate bookkeeping folders.
+    const publishedRun = file?.appProperties?.[PROP.run];
+    if (publishedRun !== undefined) return publishedRun;
+    const run = file && this.files.get(file.parents[0] ?? '');
+    const pending = run && this.files.get(run.parents[0] ?? '');
+    const changes = pending && this.files.get(pending.parents[0] ?? '');
+    const bower = changes && this.files.get(changes.parents[0] ?? '');
+    if (run?.folder && pending?.folder && pending.name === 'pending' && changes?.folder && changes.name === 'changes'
+      && bower?.folder && bower.name === '.bower' && bower.parents.includes(this.rootId)) return run.name;
+    return null;
   }
 
   /** Everything the explorer shows. */
@@ -80,8 +102,7 @@ export class VaultIndex {
         e.kind = kindOf(f.name);
         if (f.appProperties?.[PROP.by] === 'bower') e.byBower = true;
         if (f.appProperties?.[PROP.isNew] === '1' && !seen(f.id, f.modifiedTime)) e.isNew = true;
-        const parent = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
-        if (parent && f.name === `${parent.slice(parent.lastIndexOf('/') + 1)}.md`) e.hub = true;
+        if (VaultIndex.isHub(path, f.name)) e.hub = true;
       }
       out.set(path, e);
     }

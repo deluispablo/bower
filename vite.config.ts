@@ -14,7 +14,8 @@ export default defineConfig({
     // never Google Drive or the Worker (their answers are the person's own notes).
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'script-defer',
+      // The plugin's default auto injection enables skipWaiting and clientsClaim.
+      // Its external registration script does not reload an existing page.
       manifest: {
         name: 'Bower',
         short_name: 'Bower',

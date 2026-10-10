@@ -6,6 +6,8 @@ import { mkdtemp, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FakeDrive } from '../../src/data/drive/fake-drive';
+import type { Pacing } from '../../src/data/drive/transport';
+import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { isJournalRecord } from '../../src/data/contracts/journal-record';
 import { fenceAfter, parseOwnership } from '../../src/data/contracts/ownership-format';
 import { subjectOf } from '../../src/data/contracts/questions';
@@ -17,7 +19,7 @@ import { SYSTEM } from '../../src/data/vault/layout';
 import { main } from '../src/main';
 import type { ClaudeSpawn } from '../src/claude';
 import { score, type CorpusBetween, type CorpusPress, type Expected, type LoadedCase, type QuestionSubjectExpectation, type Score } from '../src/corpus';
-import { API, RUN_ID, TICKET, driveV3, fixedDrive } from './drive-v3';
+import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 
 export const AT = Date.UTC(2026, 9, 7, 9);
 
@@ -42,10 +44,13 @@ function asAdded(name: string): Record<string, string> {
 }
 
 export interface CaseRun {
+  /** Test observations for same-run redispatch; never used by production or by the scorer. */
+  dispatch?: { runId: string; scope: 'all' | 'instructions'; admission: AdmissionManifest };
+  wire?: DriveV3;
   /** Request records actually admitted to this press, retaining each journal line's identity. */
   requests?: Array<{ id: string; text: string }>;
   /** How a later explicit or default request reached the active journal before admission. */
-  requestAction?: { kind: 'replay'; id: string; outcome: 'already-active' | 'restored' } | { kind: 'tidy'; id: string };
+  requestAction?: { kind: 'replay'; id: string; outcome: 'redispatched' } | { kind: 'tidy'; id: string };
   /** The final expectations and, when supplied, every press's expectations. */
   score?: Score;
   /** The folder after the run, path to text; folders and the Bin are left out. */
@@ -78,7 +83,12 @@ export async function runWithClaude(c: LoadedCase, claude: ClaudeSpawn, props?: 
 export type Before = (drive: FakeDrive, root: string) => Promise<void>;
 
 interface CaseOptions {
+  pacing?: Partial<Pacing>;
+  /** A valid Worker admission for feed-only/no-item runs, fixed by the test before main. */
+  admission?: AdmissionManifest;
   request?: CorpusPress['request'];
+  /** The immutable run to redispatch for an explicit replay; never restore archived bytes. */
+  replayOf?: CaseRun;
   /** A yes schedules the next press through answerQuestion, with the app's scope and idempotency key. */
   answerStart?: { scope: 'all' | 'instructions'; subject?: string; requestId: string };
   around?: (fetch: typeof globalThis.fetch) => typeof globalThis.fetch;
@@ -165,7 +175,7 @@ async function runCase(c: LoadedCase, { around, realTokens = false, claude, prop
       } else await changeBetween(drive, root, step);
     }
     if (answerStart && press.request) throw new Error('An answer run and an explicit request need separate presses.');
-    runs.push(await runOnDrive(c, drive, root, { ...options, request: press.request, answerStart }, i + 2));
+    runs.push(await runOnDrive(c, drive, root, { ...options, request: press.request, answerStart, replayOf: runs.at(-1) }, i + 2));
   }
   const last = runs.at(-1) ?? first;
   const result = runs.length === 1 ? last : { ...last, runs: runs.slice(0, -1) };
@@ -214,35 +224,29 @@ async function submitAnswer(c: LoadedCase, previous: CaseRun, step: Extract<Corp
   return scheduled;
 }
 
-/** Only an exact archived or active journal record id can be replayed. */
+/** Replay never writes a request; tidy-up creates a fresh journal record. */
 async function addRequest(drive: FakeDrive, root: string, press: number, request: CorpusPress['request']): Promise<NonNullable<CaseRun['requestAction']>> {
+  if (request?.kind === 'replay') return { kind: 'replay', id: request.id, outcome: 'redispatched' };
   const seen = await snapshot(drive, root);
   const changes = Object.entries(seen.pathsById).find(([, path]) => path === SYSTEM.changes)?.[0];
   if (!changes) throw new Error('The changes folder is missing.');
-  if (request?.kind === 'replay') {
-    const records = Object.entries(seen.after).filter(([path]) => path.startsWith(`${SYSTEM.changes}/`) && path.endsWith('.json'))
-      .map(([path, text]) => ({ path, record: JSON.parse(text) as unknown }))
-      .filter((r) => isJournalRecord(r.record) && r.record.kind === 'request' && r.record.id === request.id);
-    const original = records[0]?.record;
-    if (!isJournalRecord(original)) throw new Error(`replay: missing request ${request.id}`);
-    if (records.some((r) => !r.path.startsWith(`${SYSTEM.changes}/archive/`))) {
-      return { kind: 'replay', id: original.id, outcome: 'already-active' };
-    }
-    await drive.createText(changes, `${original.id}.json`, `${JSON.stringify(original)}\n`);
-    return { kind: 'replay', id: original.id, outcome: 'restored' };
-  } else {
-    await drive.createText(changes, `press-${press}.json`, JSON.stringify({ v: 1, id: `press-${press}`, device: 'device-1', at: AT + press,
-      kind: 'request', what: 'Asked Bower to update the notes', text: request?.text ?? 'Update these notes.' }));
-    return { kind: 'tidy', id: `press-${press}` };
-  }
+  await drive.createText(changes, `press-${press}.json`, JSON.stringify({ v: 1, id: `press-${press}`, device: 'device-1', at: AT + press,
+    kind: 'request', what: 'Asked Bower to update the notes', text: request?.text ?? 'Update these notes.' }));
+  return { kind: 'tidy', id: `press-${press}` };
 }
 
 /** Each press admits the current folder and uses the production runner/planner/write path. */
-export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, { around, realTokens = false, claude, env: more = {}, request, answerStart }: CaseOptions, press: number): Promise<CaseRun> {
+export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, { around, realTokens = false, claude, env: more = {}, request, replayOf, answerStart, pacing, admission }: CaseOptions, press: number): Promise<CaseRun> {
+  if (request?.kind === 'replay') {
+    if (!replayOf || replayOf.drive !== drive || replayOf.root !== root
+      || !replayOf.requests?.some((r) => r.id === request.id)) throw new Error(`replay: missing run for request ${request.id}`);
+    const requestAction = await addRequest(drive, root, press, request);
+    return { ...await redispatchCase(c, replayOf, press, { around, claude, pacing }), requests: replayOf.requests, requestAction };
+  }
   const current = await snapshot(drive, root);
   const requestAction = press > 1 && !answerStart ? await addRequest(drive, root, press, request) : undefined;
   const scope = answerStart?.scope ?? (press > 1 && !Object.keys(current.after).some((p) => p.startsWith('Inbox/')) ? 'instructions' : c.scope);
-  const admitted = await planAdmission(fakeRead(drive), root, { scope: scope === 'undo' ? 'instructions' : scope,
+  const admitted = admission ? { kind: 'manifest' as const, manifest: admission } : await planAdmission(fakeRead(drive), root, { scope: scope === 'undo' ? 'instructions' : scope,
     clock: () => AT + press - 1, newId: () => `admission-${press}`, ...(answerStart?.subject ? { subject: answerStart.subject } : {}) });
   const runId = answerStart?.requestId ?? (press === 1 ? RUN_ID : `${RUN_ID}-${press}`);
   const wire = driveV3(drive, 1, runId);
@@ -258,10 +262,31 @@ export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, 
   const file = join(dir, 'event.json');
   await writeFile(file, JSON.stringify({ action: 'bower-tidy', client_payload: { run_id: runId, attempt: 1, ticket: TICKET, scope, allow_web: c.allowWeb } }));
   const env = claude ? { BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' } : {};
-  const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env, ...more }, { fetch: around ? around(wire.fetch) : wire.fetch, ...(claude ? { claude } : {}) });
+  const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env, ...more }, { fetch: around ? around(wire.fetch) : wire.fetch, ...(claude ? { claude } : {}), ...(pacing ? { pacing } : {}) });
   const { after, props: kept, pathsById } = await snapshot(drive, root);
   const lastRun: unknown = after[SYSTEM.lastRun] ? JSON.parse(after[SYSTEM.lastRun] ?? 'null') : null;
-  return { after, props: kept, pathsById, lastRun, code, drive, root, requests, requestAction };
+  return { after, props: kept, pathsById, lastRun, code, drive, root, requests, requestAction, wire,
+    dispatch: { runId, scope: scope === 'undo' ? 'instructions' : scope, admission: admitted.manifest } };
+}
+
+/** Redispatch the exact run over its existing Drive and immutable admission; no admission or planning here. */
+export async function redispatchCase(c: LoadedCase, previous: CaseRun, attempt: number, options: Pick<CaseOptions, 'around' | 'claude' | 'pacing'> = {}): Promise<CaseRun> {
+  const dispatch = previous.dispatch;
+  if (!dispatch) throw new Error('A corpus run must have reached main before redispatch.');
+  const wire = driveV3(previous.drive, attempt, dispatch.runId);
+  wire.folderId = previous.root;
+  wire.manifest = dispatch.admission;
+  const dir = await mkdtemp(join(tmpdir(), 'bower-corpus-'));
+  const file = join(dir, 'event.json');
+  await writeFile(file, JSON.stringify({ action: 'bower-tidy', client_payload: { run_id: dispatch.runId, attempt, ticket: TICKET, scope: dispatch.scope, allow_web: c.allowWeb } }));
+  const env = options.claude ? { BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' } : {};
+  const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env }, {
+    fetch: options.around ? options.around(wire.fetch) : wire.fetch,
+    ...(options.claude ? { claude: options.claude } : {}), ...(options.pacing ? { pacing: options.pacing } : {}),
+  });
+  const observed = await snapshot(previous.drive, previous.root);
+  return { ...observed, code, lastRun: JSON.parse(observed.after[SYSTEM.lastRun] ?? 'null') as unknown,
+    drive: previous.drive, root: previous.root, dispatch, wire };
 }
 
 async function snapshot(drive: FakeDrive, root: string): Promise<{ after: Record<string, string>; props: Record<string, Record<string, string>>; pathsById: Record<string, string> }> {

@@ -1,0 +1,48 @@
+{
+  "files": {
+    "present": [
+      "Projects/Flat hunt/Shortlist comparison.md",
+      "Projects/Flat hunt/Shortlist briefing.txt"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "unchanged": [
+    "Projects/Flat hunt/Flat hunt.md",
+    "Projects/Flat hunt/Larkspur Lane flat.md",
+    "Projects/Flat hunt/Cobble Row flat.md"
+  ],
+  "notes": [
+    {
+      "path": "Projects/Flat hunt/Shortlist comparison.md",
+      "contains": [
+        "| Flat | Rent | Commute | Deposit | Status |",
+        "1,450",
+        "1,580",
+        "24 min",
+        "18 min",
+        "Not stated",
+        "## Trade-offs",
+        "## Sources",
+        "[[Larkspur Lane flat]]",
+        "[[Cobble Row flat]]",
+        "[[Shortlist briefing.txt]]",
+        "[[Flat hunt]]"
+      ],
+      "excludes": [
+        "| 0 |"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "created": [
+      "Projects/Flat hunt/Shortlist comparison.md"
+    ],
+    "updated": [],
+    "setAside": 0,
+    "questionsExactly": 0
+  }
+}

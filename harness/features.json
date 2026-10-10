@@ -4098,9 +4098,9 @@
       "After a run finishes, run folders beyond the newest 20 finished go to the Drive Bin, never deleted.",
       "A contract test runs the same operations on the fake drive and on the adapter over a fake fetch and gets the same chain."
     ],
-    "verify": "pnpm exec vitest run src/data -t \"the shared operations give the same chain on the fake and on Drive|the run folder is made with Bower's mark in its create request\" && pnpm -C runner exec vitest run -t \"a restarted runner resumes after its last checkpoint|an applied operation is never applied twice|after 21 finished runs, 20 run folders remain and the oldest is in the Bin|a run whose retention Bin fails still ends done and logs it|a backlog of run folders drains at most 3 per run|with 25 earlier runs a run makes 88 Drive calls|failed runs are kept to 20 like finished ones|a stopped attempt that will be retried is not stamped as ended|an old redispatch never bins one of the 20 newest|a marked run folder two days old beyond 20 is binned|a folder the person made in .bower/runs is never binned|an ended stamp with no mark, or a broken one, is never counted|an unstamped run folder an hour old is kept|a failed run does not list its folders again before it ends|a lost failed report, redispatched, keeps the first stamp and ends failed|the Bin cap counts folders, duplicates of one run included|the accepted app's files read the same in P3: the runner's readers|a run folder holding a file the person moved in is kept|a run folder holding a folder the person moved in is kept|a clean marked run folder beyond 20 is binned|every record Bower writes in a run folder carries its run mark|a marked run folder renamed at rest is kept\"",
+    "verify": "pnpm exec vitest run src/data -t \"the shared operations give the same chain on the fake and on Drive|the run folder is made with Bower's mark in its create request\" && pnpm -C runner exec vitest run -t \"a restarted runner resumes after its last checkpoint|an applied operation is never applied twice|after 21 finished runs, 20 run folders remain and the oldest is in the Bin|a run whose retention Bin fails still ends done and logs it|a backlog of run folders drains at most 3 per run|with 25 earlier runs a run makes 99 Drive calls|failed runs are kept to 20 like finished ones|a stopped attempt that will be retried is not stamped as ended|an old redispatch never bins one of the 20 newest|a marked run folder two days old beyond 20 is binned|a folder the person made in .bower/runs is never binned|an ended stamp with no mark, or a broken one, is never counted|an unstamped run folder an hour old is kept|a failed run does not list its folders again before it ends|a lost failed report, redispatched, keeps the first stamp and ends failed|the Bin cap counts folders, duplicates of one run included|the accepted app's files read the same in P3: the runner's readers|a run folder holding a file the person moved in is kept|a run folder holding a folder the person moved in is kept|a clean marked run folder beyond 20 is binned|every record Bower writes in a run folder carries its run mark|a marked run folder renamed at rest is kept\"",
     "passes": true,
-    "note": "TL-P3-21 points 2 and 3 (extract, not port; checkpoints in .bower/runs/<run_id>/, retention 20 to the Bin). Reopened 2026-10-09 (retention-never-wired, main f9e2515): keepFinished was never called by a run; wire it at run end after the report barrier through the engine and write-once helper; a Bin failure is logged, never fails the run; test through a real run: \"after 21 finished runs, 20 run folders remain and the oldest is in the Bin\" (replaces the direct-call test name in the verify). Reopened (main e1c4a22): stamp at any terminal end (done, failed, final stop); retention keeps the last 20 terminal runs of any kind; test \"failed runs are kept to 20 like finished ones\". Ruling (main 38f0370): an unstamped run folder whose listed createdTime is over 24 h old and that is not the current run counts as terminal (no extra read or write); tests \"an unstamped run folder two days old beyond 20 is binned\" and \"an unstamped run folder an hour old is kept\". If P4-38b confirms the +11 failure-path calls on the real runner, the failure path reuses the run's listing (no relist after a refused report write), same round. Round 5 (lead, after P4-38c): bowerRun stamped at the folder's create; retention touches only marked folders; tests \"a folder the person made in .bower/runs is never binned\" and \"a marked run folder two days old beyond 20 is binned\". Reopened (lead, after P4-38d): bin a marked run folder only if every item inside it, known from the listing the runner already holds, carries Bower's mark; otherwise skip and log, no extra call; test \"a run folder holding a folder the person moved in is kept, and a clean one beyond 20 is binned\"."
+    "note": "TL-P3-21 points 2 and 3 (extract, not port; checkpoints in .bower/runs/<run_id>/, retention 20 to the Bin). Reopened 2026-10-09 (retention-never-wired, main f9e2515): keepFinished was never called by a run; wire it at run end after the report barrier through the engine and write-once helper; a Bin failure is logged, never fails the run; test through a real run: \"after 21 finished runs, 20 run folders remain and the oldest is in the Bin\" (replaces the direct-call test name in the verify). Reopened (main e1c4a22): stamp at any terminal end (done, failed, final stop); retention keeps the last 20 terminal runs of any kind; test \"failed runs are kept to 20 like finished ones\". Ruling (main 38f0370): an unstamped run folder whose listed createdTime is over 24 h old and that is not the current run counts as terminal (no extra read or write); tests \"an unstamped run folder two days old beyond 20 is binned\" and \"an unstamped run folder an hour old is kept\". If P4-38b confirms the +11 failure-path calls on the real runner, the failure path reuses the run's listing (no relist after a refused report write), same round. Round 5 (lead, after P4-38c): bowerRun stamped at the folder's create; retention touches only marked folders; tests \"a folder the person made in .bower/runs is never binned\" and \"a marked run folder two days old beyond 20 is binned\". Reopened (lead, after P4-38d): bin a marked run folder only if every item inside it, known from the listing the runner already holds, carries Bower's mark; otherwise skip and log, no extra call; test \"a run folder holding a folder the person moved in is kept, and a clean one beyond 20 is binned\". Re-proof after b1a-contract (TL-P4-41 addendum 4): its golden tests were re-pinned and renamed (88→99 calls; C04 cut plus 13 maintenance calls; apply half-time plus the measured delta); re-closed known-green by the coordinator."
   },
   {
     "id": "spine-report-barrier-dispositions",
@@ -5059,8 +5059,8 @@
       "Keep bowerOp stamps, per-effect stillAsSeen and the checkpoint barrier unchanged.",
       "Update the Drive-call golden on purpose; modelled apply for offer-and-flat at most half."
     ],
-    "verify": "pnpm -C runner exec vitest run -t \"the C04 run makes the golden number of Drive calls per step|the C04 run makes at least 40 percent fewer Drive calls|offer-and-flat apply takes at most half its modelled time|a person change between the check and the send is refused\"",
-    "note": "TL-P4-08 addendum 6 (main cf592bf). Live apply 26-37 s on offer-and-flat at 327b987. Reopened by the P4-13 review (BLOCK): the fence reused a read up to 3 s old, so a person rename between check and send was overwritten."
+    "verify": "pnpm -C runner exec vitest run -t \"the C04 run makes the golden number of Drive calls per step|the C04 cut keeps its budget plus the 13 authorized maintenance calls|offer-and-flat apply keeps its half-time budget plus the measured maintenance delta|a person change between the check and the send is refused\"",
+    "note": "TL-P4-08 addendum 6 (main cf592bf). Live apply 26-37 s on offer-and-flat at 327b987. Reopened by the P4-13 review (BLOCK): the fence reused a read up to 3 s old, so a person rename between check and send was overwritten. Re-proof after b1a-contract (TL-P4-41 addendum 4): its golden tests were re-pinned and renamed (88→99 calls; C04 cut plus 13 maintenance calls; apply half-time plus the measured delta); re-closed known-green by the coordinator."
   },
   {
     "id": "admission-subrequest-budget",
@@ -5778,13 +5778,14 @@
     "id": "p4-rate-limits",
     "task": "p4-consolidation",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "what": "The Worker mounts the rate limits it already has (api/src/security.ts rateLimit, genericRateLimit, COOKIE_ROUTES), owed by the security review V2.4.1; they leave the knip baselines.",
     "steps": [
       "Requests over the limit on a limited route are refused with the documented status."
     ],
     "verify": "pnpm -C api exec vitest run -t \"a route over its rate limit is refused\"",
-    "note": "TL-P4-17 addendum 6 point 4 (main 7f5fa754): an owed P4 promise, not dead code. After stage 3. Starting model: bower-escalated."
+    "note": "TL-P4-17 addendum 6 point 4 (main 7f5fa754): an owed P4 promise, not dead code. After stage 3. Starting model: bower-escalated. Lead accepted the values 2026-10-10 (20/30/60 per minute; 429 with Retry-After; staging dry run). Codex, Codex adversarial pass, Claude review. Packet 2026-10-10-p4-rate-limits-packet.md. implementer: codex. Known green: the coordinator ran each red before its fix: 4dd6b6e2 (5 fail: 302/200 not 429), 98174541 (7 fail: XFF, logout, prod fail-closed), 07ee5644 (stale logout 401 not 204); the verify pins round 1, later rounds touched the same files.",
+    "review": "P4-90b PASS"
   },
   {
     "id": "c3-integrate-history",
@@ -6747,15 +6748,16 @@
     "id": "b1a-contract",
     "task": "p4-brain",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "The B1 contract: MOC regions, the closed selection reply, retrieval.json with its cursor in one write, and the maintain effect (TL-P4-41 Q1, Q2, Q4, Q5).",
     "steps": [
       "A person's MOC is never edited except by the link rewrite.",
       "maintain is idempotent, adds no rows for refused effects and is skipped on a done run."
     ],
-    "verify": "",
-    "note": "Escalated (contracts): Codex red, implementation, Codex pass, Claude review. Packet 2026-10-10-b1a-packet.md. After c05-person-notes lands."
+    "verify": "pnpm -C runner exec vitest run test/b1a-contract.test.ts -t \"B1a contract:\"",
+    "note": "Escalated (contracts): Codex red, implementation, Codex pass, Claude review. Packet 2026-10-10-b1a-packet.md. After c05-person-notes lands. Known green: the reds failed before 254e728f (Codex red evidence, notes), and each later red repair was proven red before its fix round; fix rounds 1, 3, 4 and 5 touched runner/src/index.ts after it.",
+    "review": "P4-94b PASS"
   },
   {
     "id": "q-ui-3",
@@ -6819,14 +6821,15 @@
     "id": "b2a-summary-format",
     "task": "p4-b2",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "A note summary is written as a safe one-line YAML scalar and read back exactly (TL-P4-42 Q1, Q2).",
     "steps": [
       "serialize then parse gives back any one-line summary of at most 200 characters; old notes parse as before; validSummary refuses empty, multi-line, control and over-200 text."
     ],
-    "verify": "",
-    "note": "TL-P4-42. Escalated: Codex red, Codex implementation, Codex pass, Claude review. Packet 2026-10-10-b2a-summary-format-packet.md. implementer: codex."
+    "verify": "pnpm exec vitest run src/data/vault/note-format.test.ts -t \"B2a summary:\"",
+    "note": "TL-P4-42. Escalated: Codex red, Codex implementation, Codex pass, Claude review. Packet 2026-10-10-b2a-summary-format-packet.md. implementer: codex.",
+    "review": "P4-91 PASS"
   },
   {
     "id": "q1a-stored-answers",
@@ -6840,5 +6843,216 @@
     ],
     "verify": "",
     "note": "TL-P4-44 and addenda 1-2. Escalated; implementation after B1a integrates. Packet 2026-10-10-q1a-stored-answers-packet.md. implementer: codex."
+  },
+  {
+    "id": "smoke-request-slow",
+    "task": "p4-c05",
+    "category": "fix",
+    "passes": true,
+    "ui": false,
+    "what": "A request run reads only its own evidence: no archive scan, waiting requests in .bower/changes/pending/<run id>/, horizon from listing metadata (lead ruling, DECISIONS after bd2671ba).",
+    "steps": [
+      "A main golden with 50 archived requests and 25 kept runs reads the pile-run baseline plus at most 1 per waiting request."
+    ],
+    "verify": "pnpm -C runner exec vitest run test/c05-bounded-reads.test.ts -t \"C05 bounded reads\"",
+    "note": "Smoke 2ab7b490: 268 s, 757 reads. Escalated; implementation after B1a integrates. Packet 2026-10-10-smoke-request-slow-packet.md. implementer: codex."
+  },
+  {
+    "id": "smoke-request-report-hidden",
+    "task": "p4-c05",
+    "category": "fix",
+    "passes": true,
+    "ui": true,
+    "what": "A finished report with any row is reachable on Home and from the status bar, whatever its scope (restores the C05 spec run result; designer confirmed).",
+    "steps": [
+      "After a request-only run with a Left as you wrote them row, Home shows the report card and the reopened sheet shows the report, never Nothing to tidy."
+    ],
+    "verify": "pnpm exec vitest run src/features/tidy/request-report-hidden.test.tsx -t \"request report: status bar reopens unseen instructions leftAsWritten instead of Nothing to tidy\"",
+    "note": "Lead ruling (a), DECISIONS after bd2671ba and d57e04e0; exempt under TL-P4-40. Codex, Codex pass, Claude review, designer check. Packet 2026-10-10-smoke-request-report-hidden-packet.md. implementer: codex. Known green: the coordinator proved the e2e red at fcd23584 (16 failed on demo and fake, green after 0c696a61); the component reds failed before each fix (Codex red evidence); later fixes touched the same lines, so the verify pins round 1.",
+    "review": "P4-93 PASS",
+    "design": "verified"
+  },
+  {
+    "id": "pwa-update",
+    "task": "p4-e",
+    "category": "fix",
+    "passes": true,
+    "ui": false,
+    "what": "After a deploy, the next reload runs the new build; an old page missing a lazy chunk reloads once (lead ruling (c) plus guard).",
+    "steps": [
+      "e2e:pwa: build A then B, one reload runs B; the old-chunk case recovers with one reload."
+    ],
+    "verify": "pnpm exec vitest run src/preload-error.test.ts -t \"a missing lazy chunk reloads once per page load\"",
+    "note": "pwa-update-stuck (Important). Codex, then a Claude review; before the owner retest. Packet 2026-10-10-pwa-update-packet.md. implementer: codex. Known green for the e2e part: the coordinator proved the e2e:pwa red at the tests-only commit 2cab69f6 (one reload kept build A) and green 6/6 after (/tmp/pwa-green2.log).",
+    "review": "P4-92 PASS"
+  },
+  {
+    "id": "c05-timeline-list",
+    "task": "p4-c05",
+    "category": "fix",
+    "passes": true,
+    "ui": false,
+    "what": "A person note whose Timeline is a bullet list is appendable; only non-list sections say they cannot be read (lead ruling after 5019e2f4).",
+    "steps": [
+      "Through runner main: a dated-colon list gives the nothing-found row, a plain list appends once, a prose section keeps can't read."
+    ],
+    "verify": "pnpm -C runner exec vitest run test/c05-person-notes.test.ts -t \"C05 timeline list:\"",
+    "note": "c05-person-timeline-format (staging 645710a4). Codex red, Codex implementation after B1a integrates, Claude review. Packet 2026-10-10-c05-timeline-list-packet.md. implementer: codex."
+  },
+  {
+    "id": "b1c-index",
+    "task": "p4-b1",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "The runner keeps .bower/index.md as an exact projection of retrieval.json and folds existing Bower MOCs by id (TL-P4-41 Q1, Q6-Q8).",
+    "steps": [
+      "Through runner main: exact index bytes, hidden paths excluded, no-change runs write nothing, existing MOCs fold with complete membership."
+    ],
+    "verify": "",
+    "note": "TL-P4-41. Escalated; red now, implementation after the scripted.ts/index.ts handoffs. Packet 2026-10-10-b1c-packet.md. implementer: codex."
+  },
+  {
+    "id": "b5a-contracts",
+    "task": "p4-b5",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Contracts for the type table, bounded property values, immutable proposals and profile regions (TL-P4-47 Q1, Q3, Q4).",
+    "steps": [
+      "Strict-write/lenient-read type-table.json with 8 seed rows; bounded values; proposals by id; a 400-word profile region."
+    ],
+    "verify": "",
+    "note": "TL-P4-47. Escalated; red now, implementation after the note-edit/questions handoffs. Packet 2026-10-10-b5a-packet.md. implementer: codex."
+  },
+  {
+    "id": "b3b-hot-maintain",
+    "task": "p4-b3",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Hot is read into the prompt at position 6 and written by maintain at .bower/hot.md only when more than its date changed (TL-P4-42 Q4, Q5, Q8).",
+    "steps": [
+      "Through runner main: hot written after a filing run and read on the next; unchanged hot not rewritten; failure or done redispatch writes nothing."
+    ],
+    "verify": "",
+    "note": "TL-P4-42. Escalated (hot target); red now, implementation after B1c and the scripted.ts handoff. Packet 2026-10-10-b3b-packet.md. implementer: codex."
+  },
+  {
+    "id": "q1c-live-questions",
+    "task": "p4-q1",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "A question is answerable on Home while its run is still going: published in the run status at the plan-persisted point and merged by vault.questions() (TL-P4-44 Q2).",
+    "steps": [
+      "The prep's Q1c reds pass through the runner status route, the Worker run state and the vault."
+    ],
+    "verify": "",
+    "note": "TL-P4-44 Q2. Escalated; implementation after Q1a integrates. Packet 2026-10-10-q1c-live-questions-packet.md. implementer: codex."
+  },
+  {
+    "id": "b6a-templates",
+    "task": "p4-b6",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Bower notes follow five declared templates (Source, Concept, Project, Area, MOC) from one declaration home; person notes never gain Bower metadata (TL-P4-47 Q5).",
+    "steps": [
+      "The prep's B6a reds pass through note-format, ownership-format, note-edit and scripted planning."
+    ],
+    "verify": "",
+    "note": "TL-P4-47 Q5. Escalated; implementation after B5a integrates. Packet 2026-10-10-b6a-packet.md. implementer: codex."
+  },
+  {
+    "id": "upload-resume-after-reload",
+    "task": "p4-c02",
+    "category": "feature",
+    "passes": false,
+    "ui": true,
+    "what": "Files added to a pile are kept on the device before Bower says saved, and resume after a reload with no picker and no second file (TL-P4-53).",
+    "steps": [
+      "The prep's E1 reds pass through the real queue, fake Drive and fake IndexedDB."
+    ],
+    "verify": "",
+    "note": "C02 E1. Escalated. Designer verifies the reload behaviour (U3) before close. Packet 2026-10-10-upload-resume-after-reload-packet.md. implementer: codex."
+  },
+  {
+    "id": "upload-sign-out-forget",
+    "task": "p4-c02",
+    "category": "feature",
+    "passes": false,
+    "ui": true,
+    "what": "Signing out forgets that account's pending uploads on the device, even if the remote sign-out fails; the queue exposes the still-sending count (TL-P4-53 Q1, addendum 1).",
+    "steps": [
+      "The prep's E2 reds pass through the live sources' sign-out and the real queue."
+    ],
+    "verify": "",
+    "note": "C02 E2. Escalated; after upload-resume-after-reload. Packet 2026-10-10-upload-sign-out-forget-packet.md. implementer: codex."
+  },
+  {
+    "id": "orphan-pile-count-data",
+    "task": "p4-c02",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "The vault gives a known count and completeness of piles that didn't finish arriving; unknown is never zero (TL-P4-53 Q3, Q4, Q7).",
+    "steps": [
+      "The prep's E3 reds pass through the vault source with fake Drive."
+    ],
+    "verify": "",
+    "note": "C02 E3. Escalated; after upload-resume-after-reload. Packet 2026-10-10-orphan-pile-count-data-packet.md. implementer: codex."
+  },
+  {
+    "id": "c02-upload-count-ui",
+    "task": "p4-c02",
+    "category": "feature",
+    "passes": false,
+    "ui": true,
+    "what": "Home's Inbox card says how many piles didn't finish arriving, and Sign out asks first while things are still sending (spec 2026-10-10-c02-upload-count.md).",
+    "steps": [
+      "The spec's test table passes on demo and fake at 375 and 1440."
+    ],
+    "verify": "",
+    "note": "C02 E4. After E1-E3. Designer verifies. Packet 2026-10-10-c02-upload-count-ui-packet.md. implementer: codex."
+  },
+  {
+    "id": "rules-added-region",
+    "task": "p4-e",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "The first rule added in the app appends a marked 'Rules added in Bower' region to the person's Rules.md; their own prose is never converted (TL-P4-53).",
+    "steps": [
+      "The reds pass through the vault API, runner main and note-edit."
+    ],
+    "verify": "",
+    "note": "rules-original-conversion, simplified. Escalated (contracts, note-edit); after b5a/b6a hand off note-edit. Packet 2026-10-10-rules-added-region-packet.md. implementer: codex."
+  },
+  {
+    "id": "rules-original-ui",
+    "task": "p4-e",
+    "category": "feature",
+    "passes": false,
+    "ui": true,
+    "what": "The Bower screen shows the person's own rules prose beside the rules added in Bower (spec 2026-10-10-rules-original.md).",
+    "steps": [
+      "The spec's test table passes on demo and fake at 375 and 1440."
+    ],
+    "verify": "",
+    "note": "After rules-added-region. Designer verifies. Packet 2026-10-10-rules-original-ui-packet.md. implementer: codex."
+  },
+  {
+    "id": "rules-added-region-model",
+    "task": "p4-e",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "The model sees the person's rules prose first, then the rules added in Bower, within today's 4,000 units with a marked cut; an empty region leaves the input byte-identical (TL-P4-53 Q7).",
+    "steps": [
+      "Runner claude.ts reds and corpus cases: original first, region second, one bounded projection, byte-identical input with no region."
+    ],
+    "verify": "",
+    "note": "Follow-up of rules-added-region; touches runner claude.ts, so after B1c and B3b (lead 2026-10-10). Packet to cut when it starts. implementer: codex."
   }
 ]

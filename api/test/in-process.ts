@@ -210,8 +210,13 @@ export async function startApi(opts: ApiOptions): Promise<ApiHost> {
     put: async (key: string, value: string): Promise<void> => void kvStore.set(key, value),
     delete: async (key: string): Promise<void> => void kvStore.delete(key),
   };
+  // The Worker fails closed without its rate-limit bindings; an accepting double stands in for Cloudflare's.
+  const accepting = { limit: async () => ({ success: true }) } satisfies RateLimit;
   const env = {
     BOWER_KV,
+    AUTH_RATE_LIMIT: accepting,
+    DRIVE_RATE_LIMIT: accepting,
+    VAULT_RATE_LIMIT: accepting,
     PERSON,
     GOOGLE_CLIENT_ID: 'test-google-client-id',
     GOOGLE_CLIENT_SECRET: 'test-google-client-secret',

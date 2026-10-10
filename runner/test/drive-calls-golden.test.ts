@@ -18,31 +18,38 @@ describe('the C04 run makes the golden number of Drive calls per step', () => {
     // longer reads the root folder first, which the fence reads right before a create into it anyway (-1).
     // 78 recorded exception: retention wiring (main 5733eb8, lead ruling option a).
     const totalDriveCalls = calls.filter((c) => c.kind === 'read' || c.kind === 'write').length;
-    expect(totalDriveCalls).toBe(78);
+    // TL-P4-41 addendum 4, round 3: +10 calls over the 78-call control.
+    // Bootstrap: start token + root/folder/nested listings (4); each index/retrieval create:
+    // .bower child listing + live parent metadata fence + create (3 each).
+    // Removed: log name-check child listing, .bower parent fence and .bower/log.md create.
+    expect(totalDriveCalls).toBe(88);
     // The counts are timing's own (`timing.ts`), read from the line the runner logs; the golden infers no phase.
-    expect(drivecalls(timing)).toBe(78);
+    expect(drivecalls(timing)).toBe(88);
     // By timing's phases (the Worker's token, model and status calls are not Drive calls; the two read outside any phase
     // are the run's first listings, before the plan reads).
     const calls_ = Object.fromEntries(Object.entries(countsOf(timing).phases).map(([k, v]) => [k, v.calls]));
-    expect(calls_).toEqual({ token: 0, reads: 15, model: 0, apply: 47, checkpoints: 4, report: 10, status: 0, runner: 2 });
+    expect(calls_).toEqual({ token: 0, reads: 20, model: 0, apply: 52, checkpoints: 4, report: 10, status: 0, runner: 2 });
   });
 });
 
 /** The C04 run's Drive calls before the cut (TL-P4-08 addendum 6, at fd99ca3): 106 reads and 28 writes. */
 const DRIVE_CALLS_BEFORE = 134;
+// Preserve Red repair 3's authorized cut and timing bounds; exact goldens pin round 3 above.
+const MAINTENANCE_CALLS = 13;
+const APPLY_MAINTENANCE_MS = 1350;
 /** Its modelled apply before the cut, from the opening checkpoint's answer to the closing checkpoint's send, at 150 ms a call. */
 const APPLY_MS_BEFORE = 13350;
 
 describe('drive-calls-cut', () => {
-  it('the C04 run makes at least 40 percent fewer Drive calls', async () => {
+  it('the C04 cut keeps its budget plus the 13 authorized maintenance calls', async () => {
     const { calls, code } = await modelled();
     expect(code).toBe(0);
     const drive = calls.filter((c) => c.kind === 'read' || c.kind === 'write').length;
     // Plus the 2 reads of a move's folder by its fence (c2-one-engine fix round), for the lead to weigh.
-    expect(drive).toBeLessThanOrEqual(Math.floor(DRIVE_CALLS_BEFORE * 0.6) + 2);
+    expect(drive).toBeLessThanOrEqual(Math.floor(DRIVE_CALLS_BEFORE * 0.6) + 2 + MAINTENANCE_CALLS);
   });
 
-  it('offer-and-flat apply takes at most half its modelled time', async () => {
+  it('offer-and-flat apply keeps its half-time budget plus the measured maintenance delta', async () => {
     const { calls, code } = await modelled();
     expect(code).toBe(0);
     const opening = calls.find((c) => c.kind === 'write' && c.name?.startsWith('checkpoint-1-'));
@@ -50,7 +57,9 @@ describe('drive-calls-cut', () => {
     if (!opening || !closing) throw new Error('the opening or the closing checkpoint is missing');
     const apply = closing.at - (opening.at + DRIVE_MS);
     console.log(`apply: modelled ${apply} ms (was ${APPLY_MS_BEFORE})`);
-    expect(apply).toBeLessThanOrEqual(APPLY_MS_BEFORE / 2);
+    // Red repair 3 bound: measured 4,880 -> 6,230 ms adds 1,350, not a boundary excess.
+    // Round 3 measures 5,780 ms after removing three sequential 150 ms log calls; keep the bound.
+    expect(apply).toBeLessThanOrEqual(APPLY_MS_BEFORE / 2 + APPLY_MAINTENANCE_MS);
   });
 });
 
@@ -58,7 +67,7 @@ describe('drive-calls-cut', () => {
 const driveCalls = (run: { timing: string }): number => drivecalls(run.timing);
 
 describe('the C04 run past 20 earlier runs (retention-never-wired, round 2)', () => {
-  it('with 25 earlier runs a run makes 88 Drive calls', async () => {
+  it('with 25 earlier runs a run makes 99 Drive calls', async () => {
     const c04 = await modelled();
     const past = await modelled(async (drive, root) => {
       await finishedBefore(drive, root, 25);
@@ -66,7 +75,15 @@ describe('the C04 run past 20 earlier runs (retention-never-wired, round 2)', ()
     expect(past.code).toBe(0);
     console.log(`Drive calls: C04 ${driveCalls(c04)}, with 25 earlier runs ${driveCalls(past)}`);
     // +3: the children of the 3 run folders it bins are listed first (retention round 6, option A).
-    expect(driveCalls(past)).toBe(88);
+    // The same 10 maintenance calls plus listing earlier-run folders at the snapshot's extra depth.
+    // Round 3 removes the log name-check listing, .bower parent fence and .bower/log.md create.
+    expect(driveCalls(c04)).toBe(88);
+    expect(driveCalls(past)).toBe(99);
+    expect(Object.fromEntries(Object.entries(countsOf(past.timing).phases).map(([k, v]) => [k, v.calls])))
+      .toEqual({ token: 0, reads: 23, model: 0, apply: 51, checkpoints: 4, report: 10, status: 0, runner: 11 });
+    // Addendum 4 bounds the whole run under 20%, even when individual phases exceed 20%.
+    expect(c04.ms).toBeLessThan(10520 * 1.2);
+    expect(past.ms).toBeLessThan(11940 * 1.2);
   });
 });
 

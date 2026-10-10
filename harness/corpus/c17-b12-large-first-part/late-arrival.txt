@@ -1,0 +1,11 @@
+---
+by: bower
+type: concept
+summary: Alex adds a late reading note.
+status: active
+created: 2026-10-07
+review_state: new
+---
+
+## Notes
+Added after the first question; this is not permission to widen its answer.

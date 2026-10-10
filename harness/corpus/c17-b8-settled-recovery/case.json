@@ -1,0 +1,23 @@
+{
+  "id": "c17-b8-settled-recovery",
+  "capability": "C17",
+  "title": "Recovered log and health reflect only settled writes",
+  "covers": "model",
+  "source": "new (TL-P4-39 B8, F3/F14/U3; TL-P4-41 to TL-P4-48; scripted proof pending)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "File this notice with Gardening and record the news there.",
+      "files": [
+        "Mulch notice.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Resources/Gardening/Gardening.md",
+    "Bower health.md"
+  ]
+}

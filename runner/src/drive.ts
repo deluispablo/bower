@@ -39,6 +39,7 @@ import { ReadCache } from '../../src/data/drive/read-cache';
 import { destinationOf, SeenFiles, targetOf, type FenceTarget, type StoredNow } from '../../src/data/drive/seen-files';
 import { staleAttempt, type RunnerToken } from './token';
 import type { RunTiming } from './timing';
+import { decodePrefix } from '../../src/data/drive/drive-api';
 
 export interface RunnerDriveOptions {
   token: RunnerToken;
@@ -80,6 +81,7 @@ export class RunnerDrive implements RunDrive {
   private readonly ended: Array<{ end: number; change: Change | null }> = [];
   /** What the plan read of each file, by id and the modifiedTime its listing gave (the one read cache, `read-cache.ts`). */
   private readonly reads = new ReadCache();
+  private planning: (SpineRead & { scope: AdmissionScope }) | undefined;
   /** Ids Drive reserved for this attempt's creates and not used yet (`reserve`). */
   private readonly ids: string[] = [];
   /** The record folders this run made (`ownFolder`). */
@@ -204,6 +206,21 @@ export class RunnerDrive implements RunDrive {
     return (await this.http.query(`${quote(parentId)} in parents and trashed = false`)).map((f) => this.seen.note(f));
   }
 
+  getStartPageToken(): Promise<string> { return this.http.getStartPageToken(); }
+  listChanges(token: string) { return this.http.listChanges(token); }
+  listAll(rootId: string): Promise<DriveFile[]> { return this.http.listAll(rootId, { checksums: true }); }
+  readPrefix(file: DriveFile): Promise<string | null> {
+    return this.reads.prefix(file, async () => {
+      const text = this.reads.keptText(file);
+      return text ? decodePrefix(new TextEncoder().encode(await text)) : this.http.readPrefix(file.id);
+    });
+  }
+
+  /** Maintenance shares the planner's versioned content; live fence reads remain fresh. */
+  readListedText(file: DriveFile): Promise<string> {
+    return this.reads.text(file, () => this.http.readText(file.id));
+  }
+
   async readText(id: string): Promise<string> {
     return this.http.readText(id);
   }
@@ -224,6 +241,7 @@ export class RunnerDrive implements RunDrive {
    *   Nothing here stands in for the fence's read before a write (`fenced`).
    */
   planReads(): SpineRead & { scope: AdmissionScope } {
+    if (this.planning) return this.planning;
     let listed: { generation: number; reads: SpineRead; listings: Map<string, Promise<DriveFile[]>> } | null = null;
     /** The modifiedTime each file had in the latest listing: the version its reads are kept under. */
     const versions = new Map<string, string>();
@@ -244,7 +262,13 @@ export class RunnerDrive implements RunDrive {
         }
         return [...(await listing)];
       },
-      readBytes: (id) => this.reads.bytes(at(id), () => current().reads.readBytes(id)),
+      readBytes: async (id) => {
+        const version = at(id);
+        const bytes = await this.reads.bytes(version, () => current().reads.readBytes(id));
+        // A full-media read also supplies its prefix, without becoming prefix-only evidence.
+        void this.reads.prefix(version, () => Promise.resolve(decodePrefix(bytes)));
+        return bytes;
+      },
       readText: (id) => this.reads.text(at(id), () => current().reads.readText(id)),
       // By version: a file changed since (a newer modifiedTime in the listing) is never paired with an older digest.
       digest: (file) => this.reads.digest(file, () => current().reads.digest(file)),
@@ -261,6 +285,7 @@ export class RunnerDrive implements RunDrive {
         }
       },
     };
+    this.planning = out;
     return out;
   }
 

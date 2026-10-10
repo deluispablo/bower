@@ -1,0 +1,53 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Garden notice.txt",
+        "to": "Resources/Gardening",
+        "name": "Garden notice.txt",
+        "note": {
+          "name": "Garden notice.md",
+          "summary": "Alex can collect mulch at the amber gate.",
+          "body": "Alex can collect mulch at the amber gate in Saltmere.\n\nRelated: [[Gardening]]."
+        }
+      }
+    ],
+    "maps": [
+      {
+        "requestId": "$request:change-1",
+        "setId": "$set:change-1",
+        "question": {
+          "text": "There are 201 reading notes. Start with the 200 most recent?",
+          "yes": "Start with these",
+          "no": "Leave them"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [],
+    "maps": [
+      {
+        "requestId": "$request:change-1",
+        "setId": "$set:change-1",
+        "results": "$script:approved-property-results"
+      }
+    ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [],
+    "maps": [
+      {
+        "requestId": "$request:press-3",
+        "setId": "$set:press-3",
+        "results": "$script:remaining-property-results"
+      }
+    ]
+  }
+]

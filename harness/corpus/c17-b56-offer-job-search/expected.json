@@ -1,0 +1,55 @@
+{
+  "files": {
+    "present": [
+      "Projects/Job hunt/Offers/Ferrowick offer.txt",
+      "Projects/Job hunt/Offers/Ferrowick offer.md"
+    ],
+    "absent": [
+      "Inbox/*",
+      "Projects/Greenhouse repair/*offer*",
+      "Projects/*reenhouse software*/*"
+    ]
+  },
+  "unchanged": [
+    "Rules.md",
+    ".bower/type-table.md",
+    "Projects/Greenhouse repair/Greenhouse repair.md",
+    "Areas/Career/Career profile.md"
+  ],
+  "notes": [
+    {
+      "path": "Projects/Job hunt/Job hunt.md",
+      "timeline": [
+        "2026-10-02 \u00b7 Started the job search.",
+        "Ferrowick offers a software developer role at 48000; reply by 2026-10-12, start 2026-11-02."
+      ],
+      "timelineCount": 2
+    },
+    {
+      "path": "Projects/Job hunt/Offers/Ferrowick offer.md",
+      "contains": [
+        "[[Projects/Job hunt/Job hunt]]",
+        "[[Areas/Career/Career profile]]",
+        "TypeScript",
+        "48000",
+        "2026-10-12"
+      ],
+      "excludes": [
+        "[[Projects/Greenhouse repair/Greenhouse repair]]",
+        "7 out of 10"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "created": [
+      "Projects/Job hunt/Offers/Ferrowick offer.md"
+    ],
+    "updated": [
+      "Projects/Job hunt/Job hunt.md"
+    ],
+    "questionsExactly": 0,
+    "setAside": 0
+  }
+}

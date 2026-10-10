@@ -1,0 +1,50 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [],
+    "views": [
+      {
+        "requestId": "$request:change-1",
+        "home": {
+          "kind": "type-row",
+          "rowId": "flat"
+        },
+        "mode": "install",
+        "definition": {
+          "v": 1,
+          "id": "flat-metrics",
+          "kind": "formula",
+          "type": "flat",
+          "outputs": [
+            {
+              "property": "price_per_area",
+              "type": "money",
+              "label": "Rent per square metre",
+              "expr": {
+                "op": "/",
+                "left": {
+                  "property": "rent"
+                },
+                "right": {
+                  "property": "area"
+                }
+              }
+            },
+            {
+              "property": "days_left",
+              "type": "number",
+              "label": "Days left",
+              "expr": {
+                "op": "daysUntil",
+                "value": {
+                  "property": "deadline"
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+]

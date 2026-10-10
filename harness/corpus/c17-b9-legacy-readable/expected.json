@@ -1,0 +1,38 @@
+{
+  "unchanged": [
+    "Rules.md",
+    "Resources/Garden notes/Garden notes.md",
+    "Resources/Garden notes/Alex diary.md",
+    "Resources/Garden notes/Amber notice.txt",
+    "Resources/Garden notes/Blue notice.txt"
+  ],
+  "notes": [
+    {
+      "path": "Resources/Garden notes/Garden notes.md",
+      "timeline": [
+        "[!contradiction] Opening times differ.",
+        "A quiet visit seems possible ^[inferred]",
+        "[!future-marker] Keep this text literally."
+      ],
+      "timelineCount": 3,
+      "contains": [
+        "> [!contradiction] The amber notice and blue notice disagree.",
+        "A quiet visit seems possible ^[inferred]."
+      ]
+    },
+    {
+      "path": "Resources/Garden notes/Alex diary.md",
+      "contains": [
+        "* 1 Oct: Alex drew the gate.",
+        "* A plain entry with [!future-marker].",
+        "^[inferred]"
+      ]
+    }
+  ],
+  "report": {
+    "filed": 0,
+    "created": [],
+    "updated": [],
+    "questionsExactly": 0
+  }
+}

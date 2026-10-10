@@ -1,0 +1,26 @@
+{
+  "id": "c17-b56-offer-job-search",
+  "capability": "C17",
+  "title": "A job offer fits the job search despite an unrelated project sharing its subject word",
+  "covers": "model",
+  "source": "new (TL-P4-38 B5/B6 preparation; scripted intent proof pending)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "A job offer for me; its product is greenhouse software.",
+      "files": [
+        "Ferrowick offer.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Rules.md",
+    ".bower/type-table.md",
+    "Projects/Job hunt/Job hunt.md",
+    "Areas/Career/Career profile.md",
+    "Projects/Greenhouse repair/Greenhouse repair.md"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "role": "review-only acceptance specification; not model input",
+  "trace": [
+    "Supply complete extraction through the accepted C15 preparation boundary, never by manufacturing Seen.",
+    "Show final terms to the isolated synopsis call before authoring the deadline; capture evidence span and source id/hash/version.",
+    "Cache hit: identical complete evidence, same synopsis, zero extraction or synopsis calls beyond current-source validation.",
+    "Change source before admission to reply by 23 October 2026: old 20 October cache is not consumed.",
+    "Test different account/folder, extractor/config/synopsis version and complete-vs-partial coverage as misses; no stale-write override.",
+    "Lose cache save response before manifest completion; same-run replay resumes frozen proposal without new model call.",
+    "Move keeps original bytes; generated note and source citation resolve to exact source identity."
+  ],
+  "summary": "One B2 scalar <=200 characters in existing note create; no person metadata or extra B2 call."
+}

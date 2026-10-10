@@ -1,0 +1,22 @@
+{
+  "id": "c15-stale-package-rebuilt",
+  "capability": "C15",
+  "title": "A stale prepared letter is rebuilt from its source",
+  "covers": "model",
+  "source": "new (C15 preparation; scripted input and context proof pending)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "This update is for Garden visit.",
+      "files": [
+        "Visit update.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Projects/Garden visit/Garden visit.md"
+  ]
+}

@@ -1,5 +1,7 @@
 # Capability corpus (P4-A)
 
+Made-up cases for the capabilities C04 to C11, C13, C15 and C17 (Alex, Larkspur Lane, Saltmere, Ferrowick; nothing personal). Each folder holds:
+Made-up cases for the capabilities C04 to C13 and C15 (Alex, Larkspur Lane, Saltmere, Ferrowick; nothing personal). Each folder holds:
 Made-up cases for the capabilities C04 to C11, C13, C15 and proposed C17 / B1–B3 (Alex, Larkspur Lane, Saltmere, Ferrowick; nothing personal). Each folder holds:
 
 - `case.json`: the inputs (piles, requests, rules, answers, seeded questions), the scope and the web switch;
@@ -38,8 +40,17 @@ Made-up cases for the capabilities C04 to C11, C13, C15 and proposed C17 / B1–
 | c07-dated-rent-change | C07 | model | new (C07 prep; scripted intent proof pending) |
 | c08-compare-flats | C08 | scripted | p2-journey:C08 |
 | c08-revise-comparison | C08 | model | new (no revision path is scripted) |
+| c08-report-with-sources | C08 | model | new (C08 prep; report through the existing thing.note boundary) |
+| c08-compare-missing-fact | C08 | model | new (C08 prep; comparison with a missing deposit and trade-off prose) |
+| c08-revise-keeps-personal-text | C08 | model | new (C08 prep; same-document revision, personal text and history) |
 | c09-burst-pipe | C09 | model | bench:5-question-about-filed-pdf, adapted (made-up policy; the original is in bench-5-question-about-filed-pdf) |
 | c09-closest-flat | C09 | scripted | p2-journey:C09 |
+| c10-fresh-result-cited | C10 | model | new (C10 prep; scripted proposals pending lookup harness proof) |
+| c10-stale-result-withheld | C10 | model | new (C10 prep; scripted proposals pending lookup harness proof) |
+| c10-denied-keeps-prior-result | C10 | model | new (C10 prep; scripted proposals pending lookup harness proof) |
+| c09-original-over-summary | C09 | model | new (C09 prep: original over stale summary) |
+| c09-two-source-answer | C09 | model | new (C09 prep: two sources, exact identities) |
+| c09-not-in-sources | C09 | model | new (C09 prep: honest missing evidence) |
 | c10-lookup-fails | C10 | model | new (failed and stale lookups are not scripted) |
 | c10-web-allowed | C10 | scripted | p2-journey:C10 (allowed) |
 | c10-web-denied | C10 | scripted | p2-journey:C10 (denied) |
@@ -50,16 +61,35 @@ Made-up cases for the capabilities C04 to C11, C13, C15 and proposed C17 / B1–
 | c11-source-cannot-override-rule | C11 | model | new (C11 preparation; scripted intent pending) |
 | c11-request-is-one-time | C11 | model | new (C11 preparation; scripted intent pending) |
 | c11-source-cannot-answer | C11 | model | new (C11 preparation; scripted intent pending) |
+| c12-model-failure-retry | C12 | model | new (C12 preparation; scripted fault and lifecycle proof pending) |
+| c12-tool-interruption-recovery | C12 | model | new (C12 preparation; scripted fault and lifecycle proof pending) |
+| c12-text-budget-truthful | C12 | model | new (C12 preparation; scripted fault and lifecycle proof pending) |
 | c13-undo-protects-edit | C13 | model | new |
 | c13-undo-whole-run | C13 | model | new |
+| c13-manifest-move-and-create | C13 | model | new (C13 prep; scripted manifest lifecycle proof pending) |
+| c13-manifest-partial-edited-note | C13 | model | new (C13 prep; scripted manifest lifecycle proof pending) |
+| c13-manifest-state-with-personal-edit | C13 | model | new (C13 prep; scripted manifest lifecycle proof pending) |
 | c15-more-context-bounded | C15 | model | new |
 | c15-scanned-letter | C15 | model | bench:4-scanned-pdf, adapted (made-up; the original is in bench-4-scanned-pdf) |
+| c15-ready-package-reused | C15 | model | new (C15 preparation; scripted input and context proof pending) |
+| c15-stale-package-rebuilt | C15 | model | new (C15 preparation; scripted input and context proof pending) |
+| c15-context-budget-exhausted | C15 | model | new (C15 preparation; scripted input and context proof pending) |
 | b1-index-job-offer | C17 / B1 | model | TL-P4-39; reused made-up B123 indexed job-search fixture; scripted proof pending |
 | b1-changes-person-edit | C17 / B1 | model | TL-P4-39 §1.6, addendum 2; supported own-note edit on the same Drive |
 | b1-moc-over-40 | C17 / B1 | model | TL-P4-38 addenda 1–2; 41-item parent folds to existing child maps |
 | b1-index-no-change | C17 / B1 | model | TL-P4-39 F9; reused made-up B123 exclusions and unchanged-index fixture |
 | c05-conflicting-fact-kept | C05 | scripted | new (preservation through the existing planner) |
 | c05-marked-state-keeps-history | C05 | scripted | new (preservation through the existing planner) |
+| c17-b56-personal-sale-project | C17 B5/B6 | model | new (TL-P4-38 personal-sale project fit; scripted intent pending) |
+| c17-b56-cv-profile | C17 B5 | model | new (TL-P4-38 CV originals and C05 profile update; scripted intent pending) |
+| c17-b56-offer-job-search | C17 B5/B6 | model | new (TL-P4-38 offer before generic project material; scripted intent pending) |
+| c17-b56-clear-topic-templates | C17 B6 | model | new (TL-P4-38 clear topic with Source, Concept and MOC; contract and scripted intent pending) |
+
+The C17 B5/B6 cases are preparation fixtures for lead review, all `covers: model`.
+C17 is not yet registered in the capability union or the method-test id filter; general
+loading and grounding checks still read these cases. Their type tables are synthetic
+mechanism specimens, not an approved stored-row grammar. Exact top-three intent replies
+and outstanding contract/driver decisions live in `docs/harness/2026-10-10-b56-prep.md`.
 | b23-summary-person-lint | C17 / B2 | model | TL-P4-39 R2; quoted summary and personal-note preservation; B8 lint dependency |
 | b23-hot-question-answer | C17 / B3 | model | TL-P4-39 F3; reused real generated question → app answer → hot settlement |
 | b23-summary-words | C17 / B2 | model | TL-P4-39 B2; multiline words body and quoted scalar summary |
@@ -147,3 +177,131 @@ The current C04–C15 method test does not select `b1-*` ids or admit C17. See `
 The four `b23-*` cases are pending B2/B3 preparation fixtures, with exact execution replies and existing scored keys.
 They need C17 admission, scalar/context/maintenance oracles and B1’s step-aware driver before scripted acceptance.
 See `docs/harness/2026-10-10-b23-prep.md`; hot is hidden maintenance, not authoritative pending state.
+
+The four `c17-b4-*` cases are pending C17/B4 preparations. New memory reply keys,
+JSONL events and About me marks are proposed specimens, not supported production formats.
+Exact binding/structured oracles are required before switching coverage; see
+`docs/harness/2026-10-10-b4-prep.md`. Internal archives stay under `.bower/` (TL-P4-45).
+
+| Case | Capability | Covers | Source |
+| --- | --- | --- | --- |
+| c17-b4-forget-no-return | C17 / B4 | model | TL-P4-39; F4: trusted Forget, source-keyed tombstone and archive non-resurrection; scripted proof pending |
+| c17-b4-origin-not-authority | C17 / B4 | model | TL-P4-39; F7: qualified person preference versus instruction-shaped offer; scripted proof pending |
+| c17-b4-gate-archive-first | C17 / B4 | model | TL-P4-39; F4: over-budget gate at four/five and archive before replacement; scripted proof pending |
+| c17-b4-own-text-deletion | C17 / B4 | model | TL-P4-39; F4/F2/R1: supported own prose deletion; no new-region edit recovery; scripted proof pending |
+
+## B11 preparation cases — 2026-10-10
+
+| Case | Capability | Covers | Source |
+| --- | --- | --- | --- |
+| c17-b11-skills-tally | C17 / B11 | model | TL-P4-39 F13/R5/R7; active typed skills tally; pending scripted production proof |
+| c17-b11-monthly-money | C17 / B11 | model | TL-P4-39 F13; monthly money partition, missing/invalid amounts; pending proof |
+| c17-b11-flat-formulas | C17 / B11 | model | TL-P4-39 F13/R5; raw formulas, unavailable divisor, personal exception; pending Q7 |
+| c17-b11-proposal-authority | C17 / B11 | model | TL-P4-39 F5/F7; suggestion survives filing/ignore, document is not authority |
+
+All four remain preparation fixtures. Proposed `replies.json` extends the future B11
+execution reply; today's strict schema rejects `views`. Request/note/folder selectors
+need the existing driver's step-aware extension. Type-table field spelling is a pending
+B5a specimen, not a second production format. `expected-view-results.json` is a separate
+hand-computed oracle, outside model input and not scored today. C17 registration and
+verdict selection remain upstream H1 work. See `docs/harness/2026-10-10-b11-prep.md`.
+
+## B7 preparation cases — 2026-10-10
+
+| Case | Capability | Covers | Source |
+| --- | --- | --- | --- |
+| c17-b7-reuse-known | C17 / B7 | model | TL-P4-39 B7; three existing topics on a new note, no vocabulary write |
+| c17-b7-proposal-yes | C17 / B7 | model | TL-P4-39 F5/U2; frozen tag consent after filing, no source backfill |
+| c17-b7-proposal-budget | C17 / B7 | model | TL-P4-47 shared proposal cap/order; duplicate dedup and pending third candidate |
+| c17-b7-authority-full-cap | C17 / B7 | model | TL-P4-39 F7/R2; thirty tags, document injection and personal Markdown preservation |
+
+All four are pending preparation fixtures, not scripted success. Proposed note.tags
+and tagProposals reply fields are rejected today. Case 2's $proposal:rainwater selector
+needs exact generated proposal/asking binding in the existing real-answer driver;
+it is neither a live id nor a supported selector yet. expected-tag-results.json is
+an independent future oracle outside folder/inbox and model input, not a second
+registry or scored key. C17 admission/verdict filtering, step-aware calls and parsed
+payload/tag/raw-byte/send oracles remain upstream support plus B7c work. The prep
+records seven contract questions; no runtime or app changes are made.
+See `docs/harness/2026-10-10-b7-prep.md`.
+
+## B8 preparation cases — 2026-10-10
+
+| Case | Capability | Covers | Source |
+| --- | --- | --- | --- |
+| c17-b8-settled-recovery | C17 / B8 | model | TL-P4-39 F3/U3; rejected edit, lost log response and real health row; pending fault proof |
+| c17-b8-report-only-grammar | C17 / B8 | model | TL-P4-39 B8; links outside fences, orphan, missing summary and tag overflow; personal bytes protected |
+| c17-b8-bounded-encoding | C17 / B8 | model | TL-P4-39 F14; delimiter-rich name and lossless same-year seal at 1024 events; pending codec/rotation proof |
+| c17-b8-findings-refresh | C17 / B8 | model | TL-P4-41 feed/cache; supported personal edit clears a finding, third check has no health write |
+
+All four are pending preparation fixtures, not scripted success. `replies.json` uses
+the existing execution intent: the model never returns log lines or lint findings.
+`oracle.json` is a review/test specification outside model input, not a supported
+case key or a scorer extension. Case 1's expected state requires the described fault
+and same-run redispatch; ordinary `presses` do not inject that fault. Case 3's seeded
+log is a proposed bounded-format specimen, not an accepted stored grammar. B7 owns
+the allowed-tag codec; case 2 pins only the already ruled three-tag cap. C17/verdict
+admission, real finding sets, field decoding, write traces and recovery still need
+the shared driver/scorer handoff. See `docs/harness/2026-10-10-b8-prep.md`.
+
+## B9 preparation cases — 2026-10-10
+
+| Case | Capability | Covers | Source |
+| --- | --- | --- | --- |
+| c17-b9-contradiction-two-sources | C17 / B9 | model | TL-P4-39 B9/U6; one plain contradiction entry, both original links, old history retained |
+| c17-b9-uncertain-and-inferred | C17 / B9 | model | TL-P4-39 B9/U6; explicit uncertainty and qualified inference, no asserted cancellation |
+| c17-b9-legacy-readable | C17 / B9 | model | TL-P4-39 B9/U6; old and unknown marker text remains literal, no note migration |
+| c17-b9-person-list-kept | C17 / B9 | model | c05-timeline-list + TL-P4-32/-42; one personal byte append, star/CRLF and replay preserved |
+
+All four are pending preparations, not scripted success. Top-two `replies.json` objects
+propose bounded `marker`/`alsoCites` execution fields that today's strict schema rejects;
+existing source selectors still bind by exact admitted name. Case 3's empty reply and
+case 4's ordinary append reply use the existing intent shape, but stronger reader/DOM,
+source-id, exact-byte, dedup and same-run recovery evidence remains required. Case 4
+builds on the separately landing c05-timeline-list ruling; it does not reinstate strict
+parsing of the person's earlier bullets. All outcomes use existing Expected keys.
+C17 registration/verdict selection is shared upstream H1 work; current passing tests
+do not execute these model cases. See `docs/harness/2026-10-10-b9-prep.md` for the
+compatible plain-text storage recommendation, six lead questions and exact file ledger.
+
+## B12 preparation cases — 2026-10-10
+
+| Case | Capability | Covers | Source |
+| --- | --- | --- | --- |
+| c17-b12-shared-target | C17 / B12 | model | TL-P4-39 F11/F8/U4; two members contribute to one list edit, combined caps and full accounting |
+| c17-b12-closed-ops | C17 / B12 | model | TL-P4-39 class F; move/rename/property/tag, dependent edit/move and shared mechanical link consequences |
+| c17-b12-large-first-part | C17 / B12 | model | TL-P4-39 addenda 2–3, TL-P4-44 Q4; 201→200 yes, late arrival exclusion and new rest with 30-day skipping |
+| c17-b12-authority-person-boundary | C17 / B12 | model | TL-P4-39 F7/R2; private workers, no person/Source metadata and honest unavailable member |
+
+All four are pending preparation fixtures, not scripted success. `maps` is a proposed
+closed execution arm rejected by today's provider. `$request:`, `$set:`, `$note:`,
+`$folder:` and `$question:` need exact id/asking binding in the shared driver; only
+`$file:NAME` works today. Case 3's `$script:*` result-array recipes need deterministic
+expansion from stored members, not a production string result. Its late-arrival.txt
+is outside folder/inbox/model input and is inserted by a future fault/press oracle
+after the question persists; today's between format cannot add a file. Case 2 needs
+id-based byte comparison across moved paths and explicit primary-edit→move evidence.
+`oracle.json` and `inventory.json` are independent evidence/allocation specifications,
+never production stores, model input or new scored case fields. C17 registration,
+verdict selection, named model stages, shared budget/receipt and whole-request oracles
+remain required. See `docs/harness/2026-10-10-b12-prep.md` for the exact top-two replies,
+nine lead questions, binding rulings and serial file ledger.
+
+## B10 preparation cases — 2026-10-10
+
+| Case | Capability | Covers | Source |
+| --- | --- | --- | --- |
+| c17-b10-partial-pdf | C17 / B10 + C15 | model | TL-P4-39 F12; real three-page extraction cut below visible word threshold; pending coverage trace |
+| c17-b10-complete-tail | C17 / B10 + C15 | model | TL-P4-39 F12/F7; complete tail deadline, original provenance and compatible cached synopsis; pending proof |
+| c17-b10-shared-budget | C17 / B10 + C15 | model | TL-P4-39 F8; five long sources, partial introductions and paid retry in one aggregate budget |
+| c17-b10-personal-original | C17 / B10 + C15 | model | TL-P4-32/-42 addendum 3; long personal Markdown moves with exact original bytes, no metadata rewrite |
+
+All four remain pending preparation fixtures. Top-two replies.json arrays use the
+existing terminal tidy-intent boundary; case 2 requires actual complete C15 evidence
+before that reply can be grounded. oracle.json is a separate unscored specification,
+not model input, a cache format or a supported case field. C15 owns preparation,
+coverage/cache validity, context exchanges and limitation-score support; B10 extends
+that one path. B1 owns named model stages and the aggregate run/request budget.
+C17 registration/verdict selection, exact moved bytes/ids, cache/coverage traces and
+model outcomes are not established by the current green corpus gate. See
+`docs/harness/2026-10-10-b10-prep.md` for six questions, exact file handoffs and proposals.

@@ -1,0 +1,26 @@
+{
+  "id": "c17-b56-cv-profile",
+  "capability": "C17",
+  "title": "A CV updates its named profile instead of being filed as an application",
+  "covers": "model",
+  "source": "new (TL-P4-38 B5 preparation; scripted intent proof pending)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "This is my CV for the job search; keep my career record current.",
+      "files": [
+        "Alex CV.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Rules.md",
+    ".bower/type-table.md",
+    "Areas/Career/Career profile.md",
+    "Areas/Career/Career.md",
+    "Projects/Job hunt/Job hunt.md"
+  ]
+}

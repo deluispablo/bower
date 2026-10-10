@@ -1,0 +1,45 @@
+{
+  "files": {
+    "present": [
+      "Resources/Gardening/Field diary.md"
+    ],
+    "absent": [
+      "Inbox/*",
+      "Resources/Gardening/Field diary summary.md"
+    ]
+  },
+  "unchanged": [
+    "Resources/Gardening/Gardening.md",
+    "Rules.md",
+    "About me.md"
+  ],
+  "properties": [
+    {
+      "path": "Resources/Gardening/Field diary.md",
+      "absent": [
+        "by",
+        "bower_state"
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "path": "Resources/Gardening/Field diary.md",
+      "contains": [
+        "summary: 'Alex''s diary: #amber'",
+        "Alex keeps  two spaces and é🙂 exactly.",
+        "* 1 Oct: Alex sorted the trays in Saltmere."
+      ],
+      "excludes": [
+        "by: bower",
+        "bower_format:"
+      ]
+    }
+  ],
+  "report": {
+    "filed": 1,
+    "created": [],
+    "updated": [],
+    "questionsExactly": 0
+  }
+}

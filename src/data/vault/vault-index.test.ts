@@ -35,10 +35,19 @@ describe('VaultIndex', () => {
   });
 
   it('hidden files are kept out of entries but reachable by systemId', () => {
-    const ix = VaultIndex.build('R', [dir('s', '.bower', 'R'), f('q', 'questions.json', 's'), f('i', 'index.md', 'R'), f('r', 'Rules.md', 'R')]);
-    expect([...ix.entries().keys()]).toEqual(['Rules.md']);
+    const ix = VaultIndex.build('R', [
+      dir('s', '.bower', 'R'), f('q', 'questions.json', 's'),
+      f('si', 'index.md', 's'), f('sh', 'hot.md', 's'), f('sl', 'log.md', 's'),
+      f('i', 'index.md', 'R'), f('h', 'hot.md', 'R'), f('l', 'log.md', 'R'), f('r', 'Rules.md', 'R'),
+    ]);
+    expect.soft([...ix.entries().keys()]).toEqual(['index.md', 'hot.md', 'log.md', 'Rules.md']);
     expect(ix.systemId('.bower/questions.json')).toBe('q');
-    expect(ix.systemId('index.md')).toBe('i');
+    expect(ix.systemId('.bower/index.md')).toBe('si');
+    expect(ix.systemId('.bower/hot.md')).toBe('sh');
+    expect(ix.systemId('.bower/log.md')).toBe('sl');
+    expect.soft(ix.systemId('index.md')).toBeUndefined();
+    expect.soft(ix.systemId('hot.md')).toBeUndefined();
+    expect.soft(ix.systemId('log.md')).toBeUndefined();
     expect(ix.systemId('Rules.md')).toBeUndefined();
   });
 
