@@ -6473,6 +6473,7 @@
       "A pile whose folder was being made when the answers were lost, refreshed across UTC midnight, keeps its first name and holds its file."
     ],
     "verify": "pnpm exec vitest run src/data/vault/drive-vault.test.ts -t \"a pile-folder create resumed after a refresh across UTC midnight keeps its first name\"",
-    "note": "TL-P4-24 addendum 17 (main): (a) plus fixed clocks; first in the next batch; stage 4 may close with it open. Codex (three sessions), then a Claude review. Packet 2026-10-10-c4-create-resume-packet.md."
+    "note": "TL-P4-24 addendum 17 (main): (a) plus fixed clocks; first in the next batch; stage 4 may close with it open. Codex (three sessions), then a Claude review. Packet 2026-10-10-c4-create-resume-packet.md.",
+    "review": "P4-68 PASS"
   }
 ]
