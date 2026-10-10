@@ -913,9 +913,17 @@ describe('C05 person notes through runner main', () => {
     expect(reportOf(r).filed.length).toBeGreaterThan(0);
     expect(r.requests?.map((q) => q.id)).toEqual(['change-1', 'change-2']);
     expect(r.after[PATH]).toBe(c.folder[PATH]);
-    expect(r.after[`${SYSTEM.changes}/change-1.json`]).toBe(oldestText);
+    // Addendum 6: the admitted oldest target has no line, so its row settles and archives it.
+    expect(r.after[`${SYSTEM.changes}/change-1.json`]).toBeUndefined();
+    expect(r.after[`${SYSTEM.archive}/change-1.json`]).toBe(oldestText);
+    expect(reportOf(r).leftAsWritten).toEqual([
+      expect.objectContaining({ fileId: idOf(r, PATH), why: NOTHING_FOUND_WHY }),
+    ]);
     const found = await round4Records(r, 'abc123-run1');
     expect(found.chain.at(-1)?.completedAppends ?? []).toEqual([]);
+    const archive = found.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === oldest.id);
+    expect(archive).toBeDefined();
+    expect(found.chain.at(-1)?.outcomes.find((o) => o.operationId === archive?.operationId)?.state).toBe('applied');
     expect.soft(r.after[`${SYSTEM.changes}/change-2.json`]).toBe(before);
     expect.soft(r.after[`${SYSTEM.archive}/change-2.json`]).toBeUndefined();
     expect.soft(await drive.readText(younger.id)).toBe(before);
@@ -1175,26 +1183,36 @@ describe('C05 person notes through runner main', () => {
     expect.soft(archive, 'the admitting manifest contains the request archive').toBeDefined();
     expect.soft(stored.chain.at(-1)?.outcomes.find((o) => o.operationId === archive?.operationId)?.state).toBe('applied');
 
-    // No feed edit and no replay restore: a new tidy-up must not finish an omitted target later.
-    const unchanged = await runOnDrive(c, drive, root, { claude: reply(() => ({ kind: 'tidy-intent', v: 1, things: [] })) }, 2);
-    expect(unchanged.code).toBe(0);
-    const unchangedStored = await round4Records(unchanged, 'abc123-run1-2');
+    // Use the driver's no-new-request path: neither later run may finish an omitted target.
+    const unchanged = await runOnDrive(c, drive, root, {
+      answerStart: { scope: 'all', requestId: 'abc123-run1-2' },
+      claude: reply(() => ({ kind: 'tidy-intent', v: 1, things: [] })),
+    }, 2);
+    // An empty, unchanged feed is not admitted; it writes no report, operation or completion.
+    expect(unchanged.code).toBe(-1);
+    expect(unchanged.requestAction).toBeUndefined();
+    expect(unchanged.requests).toBeUndefined();
+    expect(unchanged.lastRun).toBeNull();
+    expect((await new RunRecords(drive, root).found('abc123-run1-2')).kind).toBe('new');
+    expect(unchanged.after).toEqual(first.after);
     expect(unchanged.after[PATH]).toBe(first.after[PATH]);
     expect(unchanged.after[round5Other]).toBe(first.after[round5Other]);
-    expect(unchangedStored.chain.at(-1)?.completedAppends ?? []).toEqual([]);
-    expect(unchangedStored.manifest.operations.filter((o) => o.effect.kind === 'edit-text')).toEqual([]);
     expect(reportOf(unchanged).updated).toEqual([]);
     expect(reportOf(unchanged).leftAsWritten ?? []).toEqual([]);
     expect.soft(unchanged.after[`${SYSTEM.archive}/change-1.json`]).toBe(requestBytes);
 
     const unrelated = await drive.createText(idOf(unchanged, 'Inbox') ?? '', 'Unrelated letter.txt',
       'Alex received an unrelated made-up letter.', { pile: 'unrelated-letter' });
-    const later = await runOnDrive(c, drive, root, { claude: reply((ctx) => ({ kind: 'tidy-intent', v: 1,
+    const later = await runOnDrive(c, drive, root, {
+      answerStart: { scope: 'all', requestId: 'abc123-run1-3' },
+      claude: reply((ctx) => ({ kind: 'tidy-intent', v: 1,
       things: [round4File(unrelated.id, 'Unrelated letter.txt', 'Alex received an unrelated made-up letter.')],
       lines: ctx.notes.some((n) => n.path === round5Other)
         ? [{ note: round5Other, text: 'Alex received an unrelated made-up letter.', cites: unrelated.id }] : [],
     })) }, 3);
     expect(later.code).toBe(0); expect(reportOf(later).filed).toHaveLength(1);
+    expect(later.requestAction).toBeUndefined();
+    expect(later.requests).toEqual([]);
     expect(later.after['Areas/Home/Unrelated letter.txt']).toBe('Alex received an unrelated made-up letter.');
     const laterStored = await round4Records(later, 'abc123-run1-3');
     expect(later.after[PATH]).toBe(first.after[PATH]);

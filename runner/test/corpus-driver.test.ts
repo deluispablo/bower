@@ -225,7 +225,7 @@ describe.each(['final', 'per-run'] as const)('empty expectations in the %s score
   });
 });
 
-it('reports an already-active replay without writing another request', async () => {
+it('reports a settled replay without writing another request', async () => {
   const { replySequence } = await import('./corpus-run');
   const text = 'Update Alex’s garden notes.';
   const seed = await smallCase();
@@ -236,13 +236,19 @@ it('reports an already-active replay without writing another request', async () 
   expect(first?.code).toBe(0);
   expect(run.code).toBe(0);
   const path = '.bower/changes/change-2.json';
-  expect(first?.after[path]).toBeDefined();
-  expect(run.after[path]).toBe(first?.after[path]);
+  const archived = '.bower/changes/archive/change-2.json';
+  // Addendum 6 settles the named target without a model line in the first run.
+  expect(first?.after[path]).toBeUndefined();
+  expect(first?.after[archived]).toBeDefined();
+  expect(run.after[path]).toBeUndefined();
+  expect(run.after[archived]).toBe(first?.after[archived]);
+  expect(first?.after[PERSONAL]).toBe(PERSON_TEXT);
+  expect(run.after[PERSONAL]).toBe(PERSON_TEXT);
   const requests = Object.entries(run.after).filter(([p, text]) => p.startsWith('.bower/changes/')
     && (JSON.parse(text) as { id: string }).id === 'change-2');
   expect(requests).toHaveLength(1);
   expect(run.requests).toEqual([{ id: 'change-2', text }]);
-  expect(Reflect.get(run, 'requestAction')).toEqual({ kind: 'replay', id: 'change-2', outcome: 'already-active' });
+  expect(Reflect.get(run, 'requestAction')).toEqual({ kind: 'replay', id: 'change-2', outcome: 'restored' });
 });
 
 it('reports a restored replay and a newly written tidy-up separately', async () => {
