@@ -239,7 +239,7 @@ async function failedLoose(f: Fixture): Promise<{ copy: DriveFile; value: Declar
 }
 
 it.each(['damaged', 'unrelated', 'mismatched-hash'] as const)(
-  'orphan-pile-count-data: orphan count cannot retire unresolved work from disposition stamp alone (%s)',
+  'orphan-pile-count-data: v1 limit retires stamped declarations without reading them (%s)',
   async (kind) => {
     const f = await fixture();
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -259,18 +259,20 @@ it.each(['damaged', 'unrelated', 'mismatched-hash'] as const)(
       else if (wrong.declaration) wrong.declaration.sha256 = '4'.repeat(64);
       await writeDisposition(f, wrong, unresolved.value.pileId);
     }
+    const stampedCopies = (await declarations(f)).filter((copy) =>
+      copy.appProperties?.[PROP.recordPile] === unresolved.value.pileId
+      || copy.appProperties?.[PROP.recordPile] === consumed.value.pileId);
+    const reads = vi.spyOn(f.drive, 'readBytes');
     const reader = page(f);
     expect((await reader.piles()).map((pile) => pile.id)).not.toContain(consumed.value.pileId);
-    const found = await summary(reader);
-    expect(found.count).toBeLessThanOrEqual(1);
-    expect(found.count === 1 || !found.complete, 'Unresolved work cannot become a complete zero').toBe(true);
-    // Remove the adverse evidence: a valid consumed disposition is an exact-zero control.
+    // TL-P4-53 addendum 5: damaged or unrelated disposition evidence is a v1 limit.
+    expect(await summary(reader)).toEqual({ count: 0, complete: true });
+    for (const copy of stampedCopies) expect(reads).not.toHaveBeenCalledWith(copy.id);
+    // A valid consumed disposition keeps the exact-zero retirement control after refresh.
     await writeDisposition(f, disposition(f, unresolved));
     await reader.refresh();
-    const retired = await summary(reader);
-    expect(retired.count).toBe(0);
-    // A damaged current-root copy can still make completeness unknown after retirement.
-    if (kind !== 'damaged') expect(retired.complete).toBe(true);
+    expect(await summary(reader)).toEqual({ count: 0, complete: true });
+    for (const copy of stampedCopies) expect(reads).not.toHaveBeenCalledWith(copy.id);
   },
 );
 

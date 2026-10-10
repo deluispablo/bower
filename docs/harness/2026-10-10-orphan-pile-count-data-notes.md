@@ -242,3 +242,54 @@ These failures are also preserved for the next diagnosis/fix round; no green sui
 
 Left out: resolution of the four contradictory numeric/read contracts, remaining six failures,
 full gates, UI, test changes, commits and integration. Production changes remain in place for review.
+
+
+## Red repair 1
+
+Red-owning session, sweep TL-P4-51, TL-P4-53 addendum 5 (lead, 2026-10-10).
+Only the three stamp-dependent red cases and this requested notes section changed.
+No network or git-writing command was used; the coordinator owns commits.
+
+Listing disposition stamps alone now retire their declarations. Damaged, foreign or unrelated
+stamps are a **v1 limit**. Only unstamped declarations require reading and unknown accounting.
+Each expanded changed test is listed separately:
+
+tests changed: src/data/orphan-pile-count.test.ts: TL-P4-53 addendum 5: (damaged) is a v1 limit; require complete zero and no stamped declaration reads before and after refresh.
+tests changed: src/data/orphan-pile-count.test.ts: TL-P4-53 addendum 5: (unrelated) is a v1 limit; require complete zero and no stamped declaration reads before and after refresh.
+tests changed: src/data/orphan-pile-count.test.ts: TL-P4-53 addendum 5: (mismatched-hash) is a v1 limit; require complete zero and no stamped declaration reads before and after refresh.
+
+The shared exact test name is now
+`orphan-pile-count-data: v1 limit retires stamped declarations without reading them (%s)`.
+Preserved: real failed loose upload/folder creation, identical unresolved copies, parser-valid
+consumed disposition, foreign-root declaration exclusion, consumed pile absence, and the
+valid-consumption exact-zero control after refresh. No generator, unstamped count, completeness
+or unknown-never-zero assertion changed. No tests removed.
+
+C02 sweep: searched the E1/E2/E3 test paths from prep section 3
+(`upload-queue.test.ts`, `live/live.test.ts`, `vault/drive-vault.test.ts`,
+`pile-readiness.test.ts`, `pile-records.test.ts`) for stamp/disposition/retirement/foreign/unrelated
+assumptions, plus data test names mentioning C02 and stamp-only damaged/foreign/unrelated retirement.
+No other C02 test requires converting this assumption. Existing query/loose-discovery stamp-skip
+assertions already follow this rule and are unchanged. No foreign-disposition red existed.
+
+### Verification
+
+Both runs used:
+`pnpm --config.verifyDepsBeforeRun=false --config.offline=true exec vitest run src/data/orphan-pile-count.test.ts src/data/live/home-cache.test.ts --maxWorkers=2`.
+
+- Before repair: 17 passed, 4 failed (unchanged Home goldens); original orphan suite 11/11 passed.
+- After repair: 14 passed, 7 failed. All eight unchanged orphan cases pass. Three repaired cases
+  fail at `src/data/orphan-pile-count.test.ts:269`: expected `{ count: 0, complete: true }`,
+  actual `{ count: 1, complete: true }`. Subsequent no-declaration-read assertions are present
+  but not reached by the committed implementation. These are the new intended reds.
+- Four Home goldens remain byte-for-byte unchanged and fail as before:
+  `home-cache.test.ts:110` readBytes 21 versus 1; `:169` calls 48 versus 28;
+  `:209` calls 37 versus 527 instead of equality; `:229` 31 pile record reads versus zero.
+- Touched-test ESLint and `git diff --check` pass.
+- Output went to `tmp-logs/red-repair-1-before.log`, `red-repair-1-after.log`, and
+  `red-repair-1-eslint.log`; only failures/tails were read. `tmp-logs/` deleted before delivery.
+- Full check/e2e not run: this authorized repair is test-only and data-only, with the targeted
+  run requested. No green implementation or integration mark is claimed.
+
+removed: none.
+Left out: production repair, four Home failures, full gates, integration and coordinator commits.
