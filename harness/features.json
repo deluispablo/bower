@@ -7091,7 +7091,7 @@
     "id": "pile-binned-context-hold",
     "task": "p4-c02",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "A pile whose note the person binned, with ready things left, gets the same answer from the app and the runner: filed, or held with its reason shown.",
     "steps": [
