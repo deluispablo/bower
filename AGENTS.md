@@ -32,4 +32,4 @@ The Bower app rebuild. Owner authorization and roles: `docs/harness/GOVERNANCE.m
 - Brand tokens: `src/styles/tokens.json`, then `pnpm tokens`. Teal and amber are fills; text uses `--brand-line` / `--accent-line`.
 - `public/landing/` is exported from the design canvas: do not edit it by hand; mechanical fixes go in `scripts/fix-landing.mjs`, run after each export.
 - Owner rules (2026-10-06): research the standard solution first and cite it; reuse the original app and existing libraries; simplest proven approach for rare cases (limit or reload, if honest and lossless).
-- Gates: `pnpm check` plus the touched screens' e2e per entry; full e2e suites per integration batch and at the freeze. Test output goes to a file; read only failures. At most one Claude and three Codex workers at once (TL-P4-29).
+- Gates: `pnpm check` plus the touched screens' e2e per entry; full e2e suites per integration batch and at the freeze. Test output goes to a file; read only failures. At most one Claude and three Codex workers at once, four Codex after `codex-run.sh` (TL-P4-29, TL-P4-31).
