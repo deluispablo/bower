@@ -205,8 +205,8 @@
       "Explorer New note",
       "Name it"
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"a new note opens and says how to write in it\"",
-    "passes": true
+    "verify": "bash scripts/e2e-both.sh e2e/no-new-note.spec.ts e2e/empty-note-help.spec.ts -g \"no New note control on desktop or phone|empty-note help and Open in Drive\"",
+    "passes": false
   },
   {
     "id": "search-everything",
@@ -1054,8 +1054,8 @@
       "Type \"Soup ideas\", then press Escape",
       "No note opens, and neither \"Untitled\" nor \"Soup ideas\" is left in the tree"
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"Escape on a new note's name takes it back\"",
-    "passes": true
+    "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"Escape on a new folder's name takes it back\"",
+    "passes": false
   },
   {
     "id": "failed-card-dismiss",
@@ -1580,8 +1580,8 @@
       "Read those tests",
       "Green now: each one checks what the screen or the Drive shows, and fails if the fix is undone"
     ],
-    "verify": "pnpm vitest run src/features/files src/data/demo src/data/live src/data/vault/drive-vault.test.ts -t \"ConfirmBin|repeats a rule|toured|late file\" && bash scripts/e2e-both.sh e2e/qa7.spec.ts -g \"New note in an empty folder\"",
-    "passes": true,
+    "verify": "pnpm vitest run src/features/files src/data/demo src/data/live src/data/vault/drive-vault.test.ts -t \"ConfirmBin|repeats a rule|toured|late file\" && bash scripts/e2e-both.sh e2e/qa7.spec.ts -g \"New folder in an empty folder asks for a name, then opens the folder\"",
+    "passes": false,
     "note": "Tests only, so done.sh has no code to set aside. Red checked by hand on 2026-10-04 by breaking the code each pins: ConfirmBin without nested words, toured kept at sign-out, a question repeating a rule, the late file's Bin without its retry, New note in an empty folder made without asking. The vacuous demo-question test is gone."
   },
   {
@@ -2000,8 +2000,8 @@
       "Open http://localhost:5190/?scenario=default&time=instant at phone width, a folder page, ⋯ New note, type Tyres.md: the note is Tyres.",
       "Type a/b: a toast says Bower used a dash."
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"the name sheet takes a name as typed\"",
-    "passes": true
+    "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"the New folder name sheet preserves dots and explains slashes|the rename name sheet keeps one note extension\"",
+    "passes": false
   },
   {
     "id": "move-no-match",
