@@ -469,6 +469,25 @@ describe('sessions', () => {
     }
   });
 
+  it.each(['missing', 'retired', 'expired'] as const)('logout with a stale session (%s) clears the cookie', async (session) => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const sub = newSub();
+      const cookie = await sessionOf(sub);
+      if (session === 'retired') await env.PERSON.get(env.PERSON.idFromName(sub)).retireSessions();
+      const staleCookie = session === 'expired'
+        ? `${SESSION_COOKIE}=${await signSession({ sub }, env.SESSION_SECRET, Date.now() - 31 * 24 * 60 * 60 * 1000)}`
+        : cookie;
+      const headers: Record<string, string> = session === 'missing'
+        ? { origin: env.APP_ORIGIN } : { origin: env.APP_ORIGIN, cookie: staleCookie };
+      const out = await createApp({ keys }).request(`${API}/auth/logout`, { method: 'POST', headers }, env);
+      expect(out.status).toBe(204);
+      expect(out.headers.getSetCookie().some((c) => c.startsWith(`${SESSION_COOKIE}=;`) && c.includes('Max-Age=0'))).toBe(true);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   it('logout from another origin is refused', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {

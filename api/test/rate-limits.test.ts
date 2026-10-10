@@ -100,21 +100,22 @@ it('missing CF-Connecting-IP shares one bucket despite rotating X-Forwarded-For'
   expect([...s.auth.counts.values()]).toEqual([22, 21]);
 });
 
-it.each(['missing', 'invalid', 'retired'] as const)(
-  'logout without a current session (%s) is refused before counting', async (session) => {
+it.each(['missing', 'invalid', 'retired', 'expired'] as const)(
+  'logout without a current session (%s) clears the cookie without counting', async (session) => {
     const s = setup();
     const alex = await someone();
     if (session === 'retired') await alex.person.retireSessions();
     const { cookie, ...headers } = alex.headers;
-    const refusedHeaders = session === 'missing' ? headers : {
-      ...headers, cookie: session === 'invalid' ? `${SESSION_COOKIE}=not-a-session` : cookie,
-    };
+    const staleCookie = session === 'expired'
+      ? `${SESSION_COOKIE}=${await signToken({ sub: alex.sub }, base.SESSION_SECRET, -60)}`
+      : session === 'invalid' ? `${SESSION_COOKIE}=not-a-session` : cookie;
+    const logoutHeaders = session === 'missing' ? headers : { ...headers, cookie: staleCookie };
     for (let n = 0; n < 20; n++) {
-      const refused = await s.app.request(`${ORIGIN}/auth/logout`, {
-        method: 'POST', headers: refusedHeaders,
+      const out = await s.app.request(`${ORIGIN}/auth/logout`, {
+        method: 'POST', headers: logoutHeaders,
       }, s.env);
-      expect(refused.status).toBe(401);
-      expect(await refused.json()).toMatchObject({ error: { code: 'signed-out' } });
+      expect(out.status).toBe(204);
+      expect(out.headers.getSetCookie().some((c) => c.startsWith(`${SESSION_COOKIE}=;`) && c.includes('Max-Age=0'))).toBe(true);
     }
     expect(s.auth.limit).not.toHaveBeenCalled();
     expect((await s.app.request(`${ORIGIN}/auth/login`, { headers }, s.env)).status).toBe(302);
