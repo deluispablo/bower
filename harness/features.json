@@ -6997,7 +6997,7 @@
     "id": "orphan-pile-count-data",
     "task": "p4-c02",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "The vault gives a known count and completeness of piles that didn't finish arriving; unknown is never zero (TL-P4-53 Q3, Q4, Q7).",
     "steps": [

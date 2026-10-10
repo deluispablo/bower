@@ -569,3 +569,4 @@ undo-fifo-seed	9b7f8c1128ea4f25	2026-10-10	known-green: test-only fix; the pinne
 upload-resume-after-reload	27ecd4eef28b687d	2026-10-10	known-green: fix rounds touched the fix's lines; reds proved at their commits, see notes
 q1a-stored-answers	8438a497eb5f3da8	2026-10-10	known-green: fix rounds touched the fix's lines; reds proved at their commits, see notes
 c2-pile-records	df60fdadbeb5982f	2026-10-11	known-green: verify renamed per addendum 5; the golden passes on claude/p3 after E3
+orphan-pile-count-data	56cba471a01a7463	2026-10-11	known-green: rounds touched the first implementation's lines; reds proved at their commits, see notes
