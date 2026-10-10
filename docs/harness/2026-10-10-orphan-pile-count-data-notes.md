@@ -447,3 +447,83 @@ and [IndexedDB transactions](https://www.w3.org/TR/IndexedDB/#transaction-concep
 No upload protocol or durability mechanism changed.
 
 Left out: full check mark (sandbox EPERM), UI/e2e (`ui: false`), test changes, commits, integration.
+
+## Fix round 2 reds
+
+Independent red-owning session, 2026-10-10; base HEAD
+`2d358967e311fa1784df98f758242e091e15952e`. Reproduces BLOCK 1 in
+`2026-10-10-codex-orphan-pile-count-data-adversarial-2.md`.
+Only the assigned test and this requested notes section were edited. No network or
+git-writing command was used; coordinator owns commits. Production stays at HEAD.
+
+tests changed: src/data/orphan-pile-count.test.ts: add the history-flat class regression for both cold entry points and three pile shapes; preserve every existing assertion and bound byte-for-byte.
+removed: none.
+
+Exact expanded names:
+
+- `orphan-pile-count-data: fix 2: anchored missing context through cold piles`
+- `orphan-pile-count-data: fix 2: unanchored failed Add through cold piles`
+- `orphan-pile-count-data: fix 2: normal pile with context through cold piles`
+- `orphan-pile-count-data: fix 2: anchored missing context through cold orphanSummary`
+- `orphan-pile-count-data: fix 2: unanchored failed Add through cold orphanSummary`
+- `orphan-pile-count-data: fix 2: normal pile with context through cold orphanSummary`
+
+Each test compares 2 with 200 parser-valid unrelated archived request records,
+identified by exact id for byte/text read counting. Each history size uses a fresh
+fake Drive and cold DriveVault. The anchored failure comes through real context-only
+`addPile`: its declaration and folder commit; the keyed context write loses connectivity;
+the exact anchor's cleanup Bin attempt also loses connectivity and logs once.
+Positive controls verify the surviving identity-matched empty folder and valid declaration.
+The unanchored control fails anchor creation, as in fix 1; the normal control makes a
+real context note and checks its member identity. Both public entry points are exercised
+as the first cold read, without a substitute recovery scanner or summary stub.
+
+Every case asserts zero archived-change reads and equal total Drive reads across the
+two histories. Soft assertions expose both failures after both populations are measured.
+All cases retain read-only snapshots, one declaration byte read, shared summary/cache
+read counts, and the expected rows and summary: missing anchored context is held as
+`not-arrived` with complete zero; unanchored context-only evidence remains unknown;
+normal context stays readable and contributes complete zero. No fixed call bound is changed.
+
+### HEAD evidence and verification
+
+The entire assigned file ran with `--maxWorkers=2`: 18 tests, 16 passed, two expected
+assertion reds. Both anchored missing-context tests fail at unchanged production HEAD:
+
+- `src/data/orphan-pile-count.test.ts:362`: archived reads `[2, 200]`, expected `[0, 0]`.
+- `src/data/orphan-pile-count.test.ts:365`: total Drive calls 4 versus 202, expected equality.
+
+Both cold entry points reach these same failures after all fixture, row, summary,
+cache and snapshot assertions pass. All four new controls and all 12 pre-existing
+tests pass. No contradicting existing assertion or bound was found. A read-only
+comparison with HEAD confirmed that removing only the new block reproduces the
+original test file byte-for-byte. An initial new normal-control assertion expected
+`setAside: null`; inspection of the actual row corrected this new assertion to
+`undefined`, the existing normal-row shape. No pre-existing assertion was edited.
+
+Vitest was present; no offline installation was necessary. All pnpm commands used
+`--config.verifyDepsBeforeRun=false --config.offline=true`, with no network.
+
+- File run: `pnpm exec vitest run src/data/orphan-pile-count.test.ts --maxWorkers=2`,
+  with an OS-temp config wrapper, `--configLoader runner`, and temp `--fsModuleCachePath`.
+  Exit 1, only the two anchored reds above.
+- Touched-file ESLint: exit 0.
+- App TypeScript, `tsc -p tsconfig.app.json --noEmit --incremental false`: exit 0.
+- Read-only `git diff --check`: passed.
+
+Logs: `/tmp/orphan-pile-count-fix2-p0c3eya0/vitest.log`, `eslint.log`, and `tsc.log`.
+The temp config imports the unchanged app config and places the Vite/module caches
+in the same OS-temp directory. A temp setup changes only the worker process cwd,
+so the existing timer-gate CPU reporter writes under that temp directory too.
+An initial `/tmp` setup path had a module-resolution error before tests loaded;
+using its canonical `/private/tmp` path resolved it. Final run has no load errors,
+fixture errors, timer violations or unhandled rejections. No test writes to the repository.
+No full check/e2e ran: this assignment is red-only, `ui: false`, and prohibits test
+output in the repository; the standard full check writes repository artifacts.
+
+Standard approach: reuse the existing fake-Drive/cold-Vault regression and real Add
+entry point. Protocol and durability sources remain the packet's inherited Google
+Drive resumable upload and IndexedDB transaction references above; no source was
+fetched and no upload or durability mechanism changed.
+
+Left out: production fix, full check/e2e, commits and integration.

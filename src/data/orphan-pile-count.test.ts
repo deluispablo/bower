@@ -219,6 +219,154 @@ it('orphan-pile-count-data: fix 1: a failed context-only Add costs the same read
   expect(measurements.map((m) => m.archivedReads), 'cold recovery never scans unrelated archived changes').toEqual([0, 0]);
 });
 
+// Every cold entry point must stay independent of unrelated archived changes.
+for (const first of ['piles', 'orphanSummary'] as const) {
+  it.each(['anchored missing context', 'unanchored failed Add', 'normal pile with context'] as const)(
+    `orphan-pile-count-data: fix 2: %s through cold ${first}`,
+    async (kind) => {
+      const measurements: Array<{ calls: number; archivedReads: number }> = [];
+      for (const history of [2, 200]) {
+        const f = await fixture();
+        const system = (await f.drive.get(f.records)).parents[0];
+        if (!system) throw new Error('The positive system folder control failed.');
+        const changes = (await f.drive.createFolder(system, 'changes')).id;
+        const archive = (await f.drive.createFolder(changes, 'archive')).id;
+        const archived = new Set<string>();
+        for (let i = 0; i < history; i++) {
+          const record: JournalRecord = {
+            v: 1, id: `old-change-${i}`, device: 'DEVICE_B', at: AT - i - 1,
+            kind: 'request', what: `Asked Bower to tidy shelf ${i}`, text: `Tidy shelf ${i}`,
+          };
+          expect(isJournalRecord(record)).toBe(true);
+          archived.add((await f.drive.createText(archive, `${record.id}.json`, JSON.stringify(record))).id);
+        }
+        expect((await f.drive.listAll(archive)).filter((file) => !file.folder)).toHaveLength(history);
+
+        const uploader = page(f);
+        if (kind === 'normal pile with context') {
+          await uploader.addPile({ text: 'Context from Alex', items: [] });
+          await uploader.settled();
+        } else if (kind === 'unanchored failed Add') {
+          const create = f.drive.createFolder.bind(f.drive);
+          const fail = vi.spyOn(f.drive, 'createFolder').mockImplementation(async (...args) => {
+            if (args[0] === f.inbox && args[2]?.[PROP.declaration]) {
+              throw new BowerError('offline', 'You are offline.');
+            }
+            return create(...args);
+          });
+          try {
+            await expect(uploader.addPile({ text: 'Context from Alex', items: [] }))
+              .rejects.toMatchObject({ code: 'offline' });
+          } finally {
+            fail.mockRestore();
+          }
+        } else {
+          // The real Add commits its declaration and anchor, then both writes lose connectivity.
+          let anchorId: string | undefined;
+          const create = f.drive.createFolder.bind(f.drive);
+          const text = f.drive.createText.bind(f.drive);
+          const trash = f.drive.trash.bind(f.drive);
+          const anchor = vi.spyOn(f.drive, 'createFolder').mockImplementation(async (...args) => {
+            const made = await create(...args);
+            if (args[0] === f.inbox && args[2]?.[PROP.declaration]) anchorId = made.id;
+            return made;
+          });
+          const context = vi.spyOn(f.drive, 'createText').mockImplementation(async (...args) => {
+            if (anchorId && args[0] === anchorId && args[3]?.[PROP.item]) {
+              throw new BowerError('offline', 'You are offline.');
+            }
+            return text(...args);
+          });
+          const cleanup = vi.spyOn(f.drive, 'trash').mockImplementation(async (...args) => {
+            if (anchorId && args[0] === anchorId) throw new BowerError('offline', 'You are offline.');
+            return trash(...args);
+          });
+          const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+          try {
+            await expect(uploader.addPile({ text: 'Context from Alex', items: [] }))
+              .rejects.toMatchObject({ code: 'offline' });
+            expect(anchorId).toBeDefined();
+            expect(context.mock.calls.filter(([parent]) => parent === anchorId)).toHaveLength(1);
+            expect(cleanup.mock.calls.filter(([id]) => id === anchorId)).toHaveLength(1);
+            expect(errors).toHaveBeenCalledTimes(1);
+            expect(errors.mock.calls[0]?.[0]).toMatchObject({ code: 'offline' });
+          } finally {
+            anchor.mockRestore();
+            context.mockRestore();
+            cleanup.mockRestore();
+            errors.mockRestore();
+          }
+        }
+        uploader.dispose();
+        const copies = await declarations(f);
+        expect(copies).toHaveLength(1);
+        const copy = copies[0];
+        if (!copy) throw new Error('The positive context declaration control failed.');
+        const declared = await parsed(f, copy);
+        expect(declared.value.anchor.kind).toBe('folder');
+        expect(declared.value.members).toEqual([]);
+        expect(declared.value.context.kind).toBe('text');
+        const anchors = (await f.drive.listAll(f.root)).filter((file) =>
+          file.appProperties?.[PROP.declaration] === declared.value.declarationId);
+        if (kind === 'unanchored failed Add') {
+          expect(anchors).toEqual([]);
+        } else {
+          expect(anchors).toHaveLength(1);
+          const anchor = anchors[0];
+          if (!anchor) throw new Error('The positive surviving anchor control failed.');
+          expect(anchor.folder).toBe(true);
+          expect(anchor.appProperties?.[PROP.pile]).toBe(declared.value.pileId);
+          const kids = await f.drive.listAll(anchor.id);
+          if (kind === 'anchored missing context') expect(kids).toEqual([]);
+          else {
+            expect(kids).toHaveLength(1);
+            if (declared.value.context.kind === 'text') {
+              expect(kids[0]?.appProperties?.[PROP.item]).toBe(declared.value.context.memberKey);
+            }
+          }
+        }
+
+        const before = await f.drive.snapshot();
+        const textReads = vi.spyOn(f.drive, 'readText');
+        const byteReads = vi.spyOn(f.drive, 'readBytes');
+        const reader = page(f);
+        f.drive.calls = 0;
+        if (first === 'orphanSummary') {
+          expect(await summary(reader)).toEqual({ count: 0, complete: kind !== 'unanchored failed Add' });
+        }
+        const piles = await reader.piles();
+        if (kind === 'unanchored failed Add') expect(piles).toEqual([]);
+        else {
+          expect(piles).toHaveLength(1);
+          expect(piles[0]).toMatchObject({
+            id: declared.value.pileId,
+            text: kind === 'normal pile with context' ? 'Context from Alex' : '',
+          });
+          expect(piles[0]?.setAside).toBe(kind === 'anchored missing context' ? 'not-arrived' : undefined);
+        }
+        const fullReadCalls = f.drive.calls;
+        expect(await summary(reader)).toEqual({ count: 0, complete: kind !== 'unanchored failed Add' });
+        expect(f.drive.calls, 'summary shares the cold full read').toBe(fullReadCalls);
+        expect(byteReads.mock.calls.filter(([id]) => id === copy.id)).toHaveLength(1);
+        measurements.push({
+          calls: fullReadCalls,
+          archivedReads: [...textReads.mock.calls, ...byteReads.mock.calls].filter(([id]) => archived.has(id)).length,
+        });
+        expect(await f.drive.snapshot()).toBe(before);
+        reader.dispose();
+        textReads.mockRestore();
+        byteReads.mockRestore();
+      }
+      // Soft assertions report both contract failures after exercising both history sizes.
+      expect.soft(measurements.map((m) => m.archivedReads), 'cold recovery never scans unrelated archived changes')
+        .toEqual([0, 0]);
+      expect.soft(measurements[1]?.calls,
+        `Drive reads with 2 and 200 archived changes: ${measurements.map((m) => m.calls).join(' and ')}`)
+        .toBe(measurements[0]?.calls);
+    },
+  );
+}
+
 it('orphan-pile-count-data: orphan count merges queued loose work and copied declarations once', async () => {
   const f = await fixture();
   const idb = new IDBFactory();
