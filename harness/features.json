@@ -2003,7 +2003,7 @@
       "Type a/b: a toast says Bower used a dash."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"the New folder name sheet preserves dots and explains slashes|the rename name sheet keeps one note extension\"",
-    "passes": false,
+    "passes": true,
     "note": "Re-proved after c5-remove-new-note (TL-P4-35): New note was removed, so the verify names surviving behaviour on New folder and the empty note; known green."
   },
   {

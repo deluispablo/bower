@@ -544,3 +544,4 @@ weak-tests	225fa5e0c65cf549	2026-10-10	known-green: behaviour unchanged; its old
 v2-name-sheet	b5c008c7d937a526	2026-10-10	known-green: behaviour unchanged; its old tests were removed with New note (TL-P4-35); the verify now names surviving or new tests that pass after c5-remove-new-note
 c4-e2e-sync	91f635d31f4a1e8b	2026-10-10	known-green: behaviour unchanged; its old tests were removed with New note (TL-P4-35); the verify now names surviving or new tests that pass after c5-remove-new-note
 c5-remove-new-note	5555460dc7c8a571	2026-10-10	known-green: red 3cc13c38 failed before fix 9040d9bf; the revert no longer applies after the create-named merge
+namesheet-names	754299b18fc0201f	2026-10-10	known-green: behaviour unchanged; old tests removed with New note (TL-P4-35); verify names surviving tests
