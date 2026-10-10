@@ -14,3 +14,9 @@ Signed by the designer on 2026-10-10 for TL-P4-28 addendum 3. `<note>` is the no
 | 8. A Timeline that `timeline-line.ts` cannot read (TL-P4-32 finding 9) | The note is left byte-identical. Under `Left as you wrote them`: the link `<note>` and the muted line `Bower didn't add the line: it can't read this note's Timeline.` It does not count as brought up to date. |
 
 Rules for every row: plain words, no file names in sentences (the `[[…]]` source link in the note is the note's own format), sentence case, and never "vault". The app's e2e checks rows 1, 2, 5 and 6 on Home and in the result (demo and fake), with axe.
+
+## Addendum (owner OK 2026-10-10, TL-P4-32 addendum 5 (3))
+
+| Situation | What shows |
+| --- | --- |
+| A request to add a line is older than the history Bower keeps (20 tidy-ups), so Bower adds nothing and archives it | Under "Left as you wrote them", the note link and the muted line: "Bower didn't add the line: this request is too old for Bower to know if it already did. Ask again if you still want it." |
