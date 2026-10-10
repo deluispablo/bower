@@ -6577,5 +6577,19 @@
     ],
     "verify": "pnpm -C runner exec vitest run test/corpus-driver.test.ts -t \"answers a pair question through the answer path between presses|a protected range fails on one changed byte\"",
     "note": "TL-P4-32 finding 7; before the C05 reds. Codex, then a Claude review. Packet 2026-10-10-p4-corpus-answers-packet.md. implementer: codex."
+  },
+  {
+    "id": "landing-csp",
+    "task": "p4-production",
+    "category": "security",
+    "passes": false,
+    "ui": true,
+    "what": "The landing runs without unsafe-eval: fix-landing.mjs precompiles the exported page script, --check catches an export that still needs eval, and the /landing/* CSP drops unsafe-eval (P4-E landing-csp).",
+    "steps": [
+      "fix-landing.mjs turns a fixture export into one with no runtime eval.",
+      "The landing loads under its CSP with no violation."
+    ],
+    "verify": "pnpm exec vitest run src/landing-csp.test.ts -t \"fix-landing removes the runtime eval from an export|the landing CSP has no unsafe-eval\"",
+    "note": "P4-E (TL-P4-31 ruling 2). Codex, then a Claude review and the designer. Packet 2026-10-10-landing-csp-packet.md. implementer: codex."
   }
 ]
