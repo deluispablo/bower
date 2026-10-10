@@ -6467,7 +6467,7 @@
     "id": "c4-create-resume",
     "task": "p4-consolidation",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "what": "A pending pile-folder create resumes through its stored intent after a refresh, never renamed by a recomputed name; tests that seed with the wall clock use fixed clocks with a midnight case (defect create-property-time-dependent).",
     "steps": [
       "A pile whose folder was being made when the answers were lost, refreshed across UTC midnight, keeps its first name and holds its file."
