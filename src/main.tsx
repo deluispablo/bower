@@ -27,8 +27,9 @@ window.addEventListener('vite:preloadError', (event) => {
     const now = Date.now();
     if (previous > 0 && now - previous < PRELOAD_RELOAD_WINDOW) return;
     window.sessionStorage.setItem(PRELOAD_RELOAD_KEY, String(now));
-  } catch {
-    // Storage can be blocked. The in-memory guard still allows only one attempt.
+  } catch (error) {
+    // Storage can be blocked: the in-memory guard still allows one attempt per page load.
+    console.error('Bower could not read or save the reload guard', error);
   }
   event.preventDefault();
   location.reload();
