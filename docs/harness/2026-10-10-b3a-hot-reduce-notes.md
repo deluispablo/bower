@@ -286,3 +286,86 @@ Offline references already supplied by the packet and Red repair:
 [CommonMark 0.31.2 §2.4: backslash escapes](https://spec.commonmark.org/0.31.2/#backslash-escapes)
 and [Redux: prerequisite reducer concepts](https://redux.js.org/usage/structuring-reducers/prerequisite-concepts).
 No pages were fetched. The same typed, deterministic projection remains pure.
+
+## Red repair 2
+
+tests changed: runner/test/b23-hot.test.ts: extend point 3 to all seven CommonMark HTML-block starts in question, hub and change text, including collapsed whitespace and newlines; require a literal escaped opener.
+
+The shared block fixtures now include HTML-block types 1 through 7:
+`<script>injected</script>`, `<pre>`, `<style>`, `<textarea>`, `<!-- x`,
+`<?x`, `<!DOCTYPE`, `<![CDATA[`, `<div>` and `<custom-tag>`.
+Each is tested directly, after spaces/tabs, and after spaces/tabs/LF/CRLF,
+with trailing whitespace also collapsed. All four type-1 tags are covered.
+Question and hub families retain their ordinary-row positive controls and exact
+document-line assertions. A new change family runs every existing block fixture
+and every HTML fixture, with an ordinary-change control and exact document lines.
+
+The row helper retains its single-row, block-marker rejection and lossless
+ASCII-escape decoding assertions. It additionally rejects an unescaped leading
+`<` and explicitly requires HTML input content to start with `\<`. For changes,
+the generated date prefix is checked and removed before checking input content;
+the date cannot mask unsafe input. Hub dates remain part of the exact expected
+content. No previous assertion, numeric bound, tolerance or fixture was loosened.
+
+### Red repair 2 evidence
+
+Against the unchanged current `runner/src/hot.ts`, all 90 new HTML cases fail
+on `row content must not start a CommonMark block`: 30 questions, 30 hubs and
+30 changes. Every type and whitespace variant appears in the failure records.
+The received content begins with unescaped `<`, including the reported script
+question and newline-prefixed div hub. No unexpected failing test is present.
+The ordinary controls execute before these failures. The 11 additional change
+cases for existing heading/list/quote/fence fixtures produce no failure records.
+
+- `pnpm -C runner exec vitest run test/b23-hot.test.ts --maxWorkers=2`: exit 1, expected assertion reds.
+  Log: `tmp-logs/b3a-red-repair-2-vitest.log`.
+- `pnpm -C runner exec tsc --noEmit -p .`: exit 0.
+  Log: `tmp-logs/b3a-red-repair-2-tsc.log`.
+- `pnpm -C runner exec eslint test/b23-hot.test.ts`: exit 0.
+  Log: `tmp-logs/b3a-red-repair-2-eslint.log`.
+
+Only failure records were read from test output. No other test command,
+`pnpm check`, e2e, network request, git-writing command or implementation edit
+ran. The coordinator owns commits; tests and notes are ready for separate commits.
+
+Offline references supplied by the instruction, without fetching pages:
+[CommonMark 0.31.2 §4.6: HTML blocks](https://spec.commonmark.org/0.31.2/#html-blocks)
+and [§2.4: backslash escapes](https://spec.commonmark.org/0.31.2/#backslash-escapes).
+
+## Fix round 2
+
+Changed only `runner/src/hot.ts` in the implementation: the existing one-line
+helper now also backslash-escapes a leading `<` after collapsing whitespace.
+Questions, hub paths and change text share this helper, so all seven CommonMark
+HTML-block starts remain literal, including whitespace and newline variants.
+The projection remains pure; no I/O, clock, dependencies or second mechanism
+were added.
+
+tests changed: none
+
+### Fix round 2 verification
+
+All output is under `tmp-logs/`; only failure records were read.
+
+- Before the fix, `pnpm -C runner exec vitest run test/b23-hot.test.ts --maxWorkers=2`
+  exited 1: 90 HTML-case assertion failures among 135 tests. The script question
+  failed on `row content must not start a CommonMark block`, as in Red repair 2.
+  Log: `tmp-logs/b3a-fix-round-2-red.log`.
+- After the fix, the same pinned command exited 0; all 135 tests passed.
+  Log: `tmp-logs/b3a-fix-round-2-verify.log`.
+- `pnpm -C runner exec vitest run --maxWorkers=2`: exit 0.
+  Log: `tmp-logs/b3a-fix-round-2-suite.log`.
+- `pnpm -C runner exec tsc --noEmit -p .`: exit 0.
+  Log: `tmp-logs/b3a-fix-round-2-tsc.log`.
+- `pnpm -C runner exec eslint src/hot.ts`: exit 0.
+  Log: `tmp-logs/b3a-fix-round-2-eslint.log`.
+
+No network, git-writing command, `pnpm check` or e2e ran, as instructed.
+The coordinator owns commits; the implementation and notes are separate files.
+
+### Fix round 2 sources
+
+Offline references supplied by Red repair 2, without fetching pages:
+[CommonMark 0.31.2 §2.4: backslash escapes](https://spec.commonmark.org/0.31.2/#backslash-escapes)
+and [§4.6: HTML blocks](https://spec.commonmark.org/0.31.2/#html-blocks).
+The existing pure projection uses the same helper and no additional mechanism.
