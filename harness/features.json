@@ -7065,7 +7065,7 @@
     "steps": [
       "e2e:pwa: A open, B deployed and not installed, one reload runs B; offline opens; the old 6 stay green."
     ],
-    "verify": "",
+    "verify": "pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts -g \"pwa-update-one-reload\"",
     "note": "DEFECT_LOG pwa-update-one-reload; ruling (a) after 32b43f82. Codex red and implementation, Claude review, live staging check. Packet 2026-10-10-pwa-update-one-reload-packet.md. implementer: codex."
   }
 ]
