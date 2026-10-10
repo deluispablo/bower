@@ -921,6 +921,273 @@ describe('Q1a stored answers through production entry points', () => {
 });
 
 /** Dispatch main again with an injected model transport, never a second planner or engine. */
+/** Fix-round histories are made by main, never seeded in the counter's stored format. */
+async function firstAsking(w: World): Promise<Question> {
+  await w.drive.update(w.ids.clear, { addParent: w.ids.home, removeParent: w.ids.pile });
+  await press(w);
+  expect(await run(w, 0)).toBe(0);
+  const first = (await questions(w))[0];
+  expect(first, 'the production runner writes asking one').toBeDefined();
+  if (!first) throw new Error('Missing fixture asking one');
+  return first;
+}
+async function secondAsking(w: World): Promise<Question> {
+  const first = await firstAsking(w);
+  tick();
+  expect((await answer(w, first, { text: 'I still do not know where this belongs.' }))?.outcome.kind).toBe('now');
+  expect(await run(w, 1)).toBe(0);
+  const second = (await questions(w))[0];
+  expect(second, 'the unresolved first answer permits asking two').toBeDefined();
+  if (!second) throw new Error('Missing fixture asking two');
+  expect(second.askedAt).toBeGreaterThan(first.askedAt);
+  return second;
+}
+async function roundHistory(w: World): Promise<unknown> {
+  return (JSON.parse(await textAt(w, SYSTEM.questions) ?? '{}') as { rounds?: unknown }).rounds;
+}
+
+describe('Q1a fix round 1 through production entry points', () => {
+  it('Q1a fix 1.1: second-answer placement precedes exhaustion after an unresolved second answer', async () => {
+    for (const kind of ['thing', 'pile'] as const) {
+      let resolves = false;
+      const model = (w: World) => resolves
+        ? { ...emptyIntent, things: [{ fileId: w.ids.unclear, to: 'Areas/Home', name: 'Unclear.md' }] }
+        : { ...emptyIntent, asks: [{ ...(kind === 'thing' ? { fileId: w.ids.unclear } : { pileId: 'pile-mixed' }), ...yesNo }] };
+      // Positive control: the same placement succeeds on the first answer.
+      const one = await world(model);
+      const first = await firstAsking(one);
+      resolves = true;
+      expect((await answer(one, first, { text: PERSON }))?.outcome.kind).toBe('now');
+      expect(await run(one, 1)).toBe(0);
+      expect((await one.drive.get(one.ids.unclear)).parents).toEqual([one.ids.home]);
+      expect(await questions(one)).toEqual([]);
+
+      resolves = false;
+      const two = await world(model);
+      const second = await secondAsking(two);
+      expect.soft(await roundHistory(two), 'writing asking two does not exhaust an unanswered asking')
+        .not.toContainEqual(expect.objectContaining({ exhausted: true }));
+      const before = await two.drive.readText(two.ids.unclear);
+      resolves = true;
+      expect((await answer(two, second, { text: PERSON }))?.outcome.kind).toBe('now');
+      expect(await run(two, 2)).toBe(0);
+      expect.soft((await two.drive.get(two.ids.unclear)).parents, 'a valid place from the second answer files the item')
+        .toEqual([two.ids.home]);
+      expect(await two.drive.readText(two.ids.unclear)).toBe(before);
+      expect(await questions(two)).toEqual([]);
+      expect.soft((await (await vaultOf(two)).piles()).find((p) => p.id === 'pile-mixed')?.question)
+        .not.toBe('exhausted');
+    }
+    // Positive control for the other Q3 branch: an unresolved second answer does exhaust.
+    const unresolved = await exhaust();
+    expect((await (await vaultOf(unresolved)).piles()).find((p) => p.id === 'pile-mixed')?.question).toBe('exhausted');
+    expect(unresolved.drive.pathOf(unresolved.ids.unclear, unresolved.rootId)).toBe('Inbox/Room papers/Unclear.md');
+  });
+
+  it('Q1a fix 1.2: instructions scope preserves inbox counters and exhausted subjects without a third asking', async () => {
+    for (const exhausted of [false, true]) {
+      const w = exhausted ? await exhaust() : await world((w) => ({ ...emptyIntent, asks: [{ fileId: w.ids.unclear, ...yesNo }] }));
+      if (!exhausted) await firstAsking(w);
+      const history = await roundHistory(w);
+      expect(history).toEqual([expect.objectContaining({ count: exhausted ? 2 : 1 })]);
+      if (exhausted) expect(history).toEqual([expect.objectContaining({ exhausted: true })]);
+      const inboxBefore = await w.drive.evidence(w.ids.unclear);
+      const openBefore = await questions(w);
+      const note = await fileAt(w, 'Areas/Home/Home.md');
+      expect(note).toBeDefined();
+      const bytes = await w.drive.readText(note?.id ?? '');
+      const state: Question = { id: `q-state-${note?.id}`, ...yesNo, askedAt: Date.now(),
+        shown: { lines: ['A room Alex is arranging.'], md5: createHash('md5').update(bytes).digest('hex') } };
+      await putQuestions(w, [...openBefore, state]);
+      const bodies: Array<Record<string, unknown>> = [];
+      const calls = w.calls.length;
+      const index = w.dispatched.length;
+      // Positive control: the stored Current state answer really runs in instructions scope, without a model.
+      expect((await answer(w, state, true, undefined, runsOf(w, bodies)))?.outcome.kind).toBe('now');
+      expect(bodies).toEqual([expect.objectContaining({ scope: 'instructions' })]);
+      expect(await run(w, index)).toBe(0);
+      expect(w.calls).toHaveLength(calls);
+      expect((await (await vaultOf(w)).questions()).some((q) => q.id === state.id)).toBe(false);
+      expect(await w.drive.evidence(w.ids.unclear)).toEqual(inboxBefore);
+      expect.soft(await roundHistory(w), 'seeing no inbox in instructions scope cannot erase its durable history').toEqual(history);
+      expect.soft(await questions(w), 'the instructions answer closes only its own asking').toEqual(openBefore);
+      tick();
+      await press(w);
+      expect(await run(w, index + 1)).toBe(0);
+      expect.soft(await questions(w), 'unchanged inbox history permits no new or third asking').toEqual(openBefore);
+      if (exhausted) expect.soft((await (await vaultOf(w)).piles()).find((p) => p.id === 'pile-mixed')?.question).toBe('exhausted');
+    }
+  });
+
+  it('Q1a fix 1.3: pile and member share two rounds and only changed words permit another asking', async () => {
+    const unchanged = await exhaust();
+    await press(unchanged);
+    expect(await run(unchanged, 3)).toBe(0);
+    expect(await questions(unchanged), 'positive control: a repeated member subject stays exhausted').toEqual([]);
+    for (const firstKind of ['pile', 'thing'] as const) {
+      const w = await world((w) => {
+        const pile = w.calls.length === 1 ? firstKind === 'pile' : firstKind !== 'pile';
+        return { ...emptyIntent, asks: [{ ...(pile ? { pileId: 'pile-mixed' } : { fileId: w.ids.unclear }), ...yesNo }] };
+      });
+      const second = await secondAsking(w);
+      expect(second.subject).toBe(firstKind === 'pile' ? w.ids.unclear : 'pile-mixed');
+      expect.soft(await roundHistory(w), 'switching between a pile and its member increments one shared counter')
+        .toEqual([expect.objectContaining({ count: 2 })]);
+      const before = await w.drive.evidence(w.ids.unclear);
+      expect((await answer(w, second, { text: 'There is still no place for it.' }))?.outcome.kind).toBe('now');
+      expect(await run(w, 2)).toBe(0);
+      expect.soft(await questions(w), 'a subject switch cannot produce asking three').toEqual([]);
+      await press(w);
+      expect(await run(w, 3)).toBe(0);
+      expect.soft(await questions(w), 'an unchanged rerun also cannot produce asking three').toEqual([]);
+      expect(await w.drive.evidence(w.ids.unclear)).toEqual(before);
+      expect.soft((await (await vaultOf(w)).piles()).find((p) => p.id === 'pile-mixed')?.question).toBe('exhausted');
+      // Positive control: the owner-authorized words reset reopens this same subject.
+      await (await vaultOf(w)).updatePile('pile-mixed', 'These room papers need a different place.');
+      await press(w);
+      expect(await run(w, 4)).toBe(0);
+      expect(await questions(w)).toHaveLength(1);
+      expect(await roundHistory(w)).toEqual([expect.objectContaining({ count: 1 })]);
+    }
+  });
+
+  it('Q1a fix 1.4: a same-bytes reupload retains hash history through the planner and writes no asking', async () => {
+    for (const sameBytes of [false, true]) {
+      const w = await exhaust();
+      const source = await w.drive.readText(w.ids.unclear);
+      const oldHash = (await w.drive.get(w.ids.unclear, { checksums: true })).md5Checksum;
+      expect(oldHash).toBeTypeOf('string');
+      expect(await roundHistory(w)).toEqual([expect.objectContaining({ hash: oldHash, words: WORDS, count: 2, exhausted: true })]);
+      const copy = await w.drive.createText(w.ids.pile, 'Copy.md', sameBytes ? source : `${source}\nNew made-up information.\n`);
+      expect(copy.id).not.toBe(w.ids.unclear);
+      expect(copy.md5Checksum === oldHash).toBe(sameBytes);
+      await w.drive.trash(w.ids.unclear);
+      w.ids.unclear = copy.id; // The model now names today's admitted id, never the gone id.
+      const before = await w.drive.evidence(copy.id);
+      if (sameBytes) expect((await (await vaultOf(w)).piles()).find((p) => p.id === 'pile-mixed')?.question).toBe('exhausted');
+      await press(w);
+      expect(await run(w, 3)).toBe(0);
+      expect(shownOf(w.calls.at(-1) as ClaudeCall).piles.flatMap((p) => p.things.map((t) => t.fileId))).toContain(copy.id);
+      expect(await w.drive.evidence(copy.id)).toEqual(before);
+      if (sameBytes) {
+        expect.soft(await questions(w), 'same bytes under a new id cannot write asking three').toEqual([]);
+        expect.soft(await roundHistory(w), 'planner retention keeps the producer hash-backed exhausted history')
+          .toEqual([expect.objectContaining({ hash: oldHash, words: WORDS, count: 2, exhausted: true })]);
+        expect.soft((await (await vaultOf(w)).piles()).find((p) => p.id === 'pile-mixed')?.question).toBe('exhausted');
+      } else {
+        // Positive control: different non-empty bytes under a new id are a new subject.
+        expect(await questions(w)).toEqual([expect.objectContaining({ subject: copy.id })]);
+        expect(await roundHistory(w)).toEqual([expect.objectContaining({ subject: copy.id, count: 1 })]);
+      }
+    }
+  });
+
+  it('Q1a fix 1.5: missing or outside-root stored option folders cannot authorize alternative filing', async () => {
+    for (const destination of ['ordinary', 'valid', 'gone', 'outside'] as const) {
+      const w = await world((w) => ({ ...emptyIntent, things: [{ fileId: w.ids.unclear, to: 'Projects/Job hunt', name: 'Unclear.md' }] }));
+      // Clear siblings have already left; otherwise the model's omitted sibling holds the entire pile.
+      await w.drive.update(w.ids.clear, { addParent: w.ids.home, removeParent: w.ids.pile });
+      const q = stored(w, w.ids.unclear, destination !== 'ordinary');
+      await putQuestions(w, [q]);
+      const value = destination === 'ordinary' ? true : { option: 'home-choice' };
+      expect((await answer(w, q, value))?.outcome.kind).toBe('now');
+      expect(answerValue((await journal(w))[0])).toEqual(value);
+      if (destination === 'gone') await w.drive.trash(w.ids.home);
+      if (destination === 'outside') {
+        const home = await w.drive.get(w.ids.home);
+        await w.drive.update(home.id, { addParent: w.ids.inbox, removeParent: home.parents[0] });
+        expect(w.drive.pathOf(home.id, w.rootId)).toBe('Inbox/Home');
+      }
+      const before = await w.drive.evidence(w.ids.unclear);
+      const bytes = await w.drive.readText(w.ids.unclear);
+      expect(await run(w, 0)).toBe(0);
+      expect(w.calls.length).toBeLessThanOrEqual(1);
+      if (destination === 'ordinary' || destination === 'valid') {
+        // Positive controls: ordinary model filing works, and a valid stored id overrides it.
+        expect(w.calls).toHaveLength(1);
+        expect((await w.drive.get(w.ids.unclear)).parents).toEqual([destination === 'valid' ? w.ids.home : w.ids.job]);
+        expect(await w.drive.readText(w.ids.unclear)).toBe(bytes);
+      } else {
+        expect.soft((await w.drive.get(w.ids.unclear)).parents, `${destination} stored consent cannot file into the model's other folder`)
+          .toEqual(before?.file.parents);
+        expect.soft(await w.drive.evidence(w.ids.unclear), `${destination} consent names only its stored id; the item stays untouched`).toEqual(before);
+        expect.soft((await manifestOf(w, 0))?.operations.filter((o) => o.effect.kind === 'move' && o.effect.before?.fileId === w.ids.unclear),
+          'no alternative item filing is planned').toEqual([]);
+      }
+    }
+  });
+
+  it('Q1a fix 1.6: words-only pile consent places its generated note in the chosen stored folder', async () => {
+    for (const otherFolder of [false, true]) {
+      const w = await world(() => ({ ...emptyIntent,
+        notes: [{ pileId: 'pile-mixed', to: otherFolder ? 'Projects/Job hunt' : 'Areas/Home', name: 'Room context.md' }] }));
+      await w.drive.trash(w.ids.unclear);
+      await w.drive.trash(w.ids.clear);
+      const q = stored(w, 'pile-mixed', true);
+      await putQuestions(w, [q]);
+      expect((await answer(w, q, { option: 'home-choice' }))?.outcome.kind).toBe('now');
+      expect(answerValue((await journal(w))[0])).toEqual({ option: 'home-choice' });
+      expect(await run(w, 0)).toBe(0);
+      expect(shownOf(w.calls[0] as ClaudeCall).piles).toEqual([expect.objectContaining({ pileId: 'pile-mixed', words: WORDS, things: [] })]);
+      const notes = (await w.drive.listAll(w.rootId)).filter((f) => f.name === 'Room context.md' && !f.folder);
+      expect(notes, 'positive control: a words-only pile generates one note').toHaveLength(1);
+      const made = notes[0];
+      expect(made).toBeDefined();
+      expect.soft(made?.parents, 'the stored folder wins even when the model supplies another valid folder').toEqual([w.ids.home]);
+      expect(await w.drive.readText(made?.id ?? '')).toContain(WORDS);
+      expect.soft(await fileAt(w, 'Projects/Job hunt/Room context.md'), 'no generated note goes to the unchosen folder').toBeUndefined();
+    }
+  });
+
+  it('Q1a fix 1.7: pending text from another pile never reaches this subject planner without provenance', async () => {
+    // Positive control: a pile's own text reaches its own continuation with its pile id.
+    const own = await world();
+    const ownQuestion = stored(own, 'pile-mixed');
+    await putQuestions(own, [ownQuestion]);
+    expect((await answer(own, ownQuestion, { text: PERSON }))?.outcome.kind).toBe('now');
+    expect(await run(own, 0)).toBe(0);
+    expect(shownOf(own.calls[0] as ClaudeCall).answers).toEqual([expect.objectContaining({ answer: PERSON, pileId: 'pile-mixed' })]);
+
+    const w = await world();
+    const other = await w.drive.createText(w.ids.inbox, 'Other.md', '# Applications\n\nA made-up unrelated paper.\n', { pile: 'pile-other' });
+    const a = stored(w, 'pile-mixed');
+    const b = stored(w, 'pile-other');
+    const pending = 'These words concern only the other pile of applications.';
+    await putQuestions(w, [a, b]);
+    // Real /process quota refusal leaves B's typed answer pending. Next day's A run still admits all journal.
+    const starts = runsOf(w);
+    for (let i = 0; i < 100; i++) {
+      tick();
+      await starts.start('all', { requestId: `fix-1-7-quota-${i}`, subject: a.subject });
+      const dispatch = w.dispatched[i];
+      expect(dispatch).toBeDefined();
+      const done = await w.api.fetch(`${ORIGIN}/runner/runs/${dispatch?.run_id}/status`, { method: 'POST',
+        headers: { ...jsonHeaders, authorization: `Bearer ${dispatch?.ticket}` },
+        body: JSON.stringify({ attempt: 1, seq: 1, phase: 'done' }) });
+      expect(done.status).toBe(200);
+    }
+    expect((await answer(w, b, { text: pending }))?.outcome.kind).toBe('failed');
+    expect(w.dispatched).toHaveLength(100);
+    expect(w.calls).toEqual([]);
+    const saved = (await journal(w)).find((l) => l.questionId === b.id);
+    expect(answerValue(saved)).toEqual({ text: pending });
+    vi.setSystemTime(Date.now() + 86_400_000);
+    expect((await answer(w, a, { text: PERSON }))?.outcome.kind).toBe('now');
+    const admitted = await admissionOf(w, 100);
+    expect(admitted?.piles.map((p) => p.pileId)).toEqual(['pile-mixed']);
+    expect(admitted?.journal.map((l) => l.name)).toContain(`${saved?.id}.json`);
+    const before = await w.drive.evidence(other.id);
+    expect(await run(w, 100)).toBe(0);
+    expect(w.calls).toHaveLength(1);
+    const shown = shownOf(w.calls[0] as ClaudeCall);
+    expect(shown.answers).toContainEqual(expect.objectContaining({ answer: PERSON, pileId: a.subject }));
+    expect.soft(shown.answers, 'other-pile text is not an anonymous answer in A\'s run')
+      .not.toContainEqual(expect.objectContaining({ answer: pending }));
+    expect.soft(w.calls[0]?.input, 'another subject\'s person words never enter this planner input').not.toContain(pending);
+    expect(await w.drive.evidence(other.id)).toEqual(before);
+  }, 60_000);
+});
+
 async function runWithSpawn(w: World, index: number, spawn: ClaudeSpawn): Promise<number> {
   const { main } = await import('../src/main');
   const { writeFile, mkdir } = await import('node:fs/promises');

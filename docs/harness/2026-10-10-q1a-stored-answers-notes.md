@@ -695,3 +695,106 @@ Validation (all commands exit 0):
 - Runner tsc: `pnpm -C runner exec tsc --noEmit -p .`; pass; `tmp-logs/q1-red-repair-3-tsc.log`.
 - Test ESLint: `pnpm -C runner exec eslint test/q1-continuation.test.ts`; pass; `tmp-logs/q1-red-repair-3-eslint.log`.
 Full gates, e2e, implementation and integration remain outside this authorized test-only repair.
+
+## Fix round 1 reds
+
+2026-10-10. Codex red owner, TL-P4-29. Production HEAD `a568d4cc6023f7d59b5d569028410609e4de93e6` remains unchanged.
+Seven new reds cover all seven Blocking findings in `docs/harness/2026-10-10-codex-q1a-stored-answers-adversarial.md`.
+Only the existing Q1 test file is extended; this notes appendix is the requested delivery record. The coordinator owns commits.
+No network, writing git command, production edit, new execution driver, corpus fixture, real timer, `.only` or `.skip` was used.
+
+Read WORKER, the Q1a packet, TL-P4-44’s contract and DECISIONS addenda 1–2, and the seven-finding BLOCK review.
+The local DECISIONS search contains no TL-P4-44 addendum 3 entry. The existing test helper records its zero-read first listing and questions-read subscription ruling; every such assertion is preserved.
+The original test file is byte-identical after removing the newly inserted block (read-only comparison with HEAD). Every existing assertion and bound remains unchanged, including the 100-run quota fixture and prior timing/read bounds.
+All round histories come from production main; no round records are seeded. Reupload checks permit retargeting the subject id while retaining the produced hash, words, count and exhaustion.
+
+Offline research reuses the existing realWorld/main, answerQuestion, DriveVault and in-process /process fixtures, and the references already cited in the local mechanisms: [TypeScript discriminated unions](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions), [Tolerant Reader](https://martinfowler.com/bliki/TolerantReader.html), and [stable request identity](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/). No remote reference was fetched.
+
+### Exact names, positive controls and observed HEAD failures
+
+1. `Q1a fix 1.1: second-answer placement precedes exhaustion after an unresolved second answer`
+
+   tests changed: runner/test/q1-continuation.test.ts: adds second-answer placement coverage for thing and pile; exhausts only after an unresolved second answer. Existing tests unchanged.
+
+   Positive controls (all passed): First-answer filing succeeds for both thing and pile. An unresolved second answer still exhausts and leaves the item in the inbox.
+
+   Observed failure: Asking two is already marked exhausted before its answer; a valid second-answer placement is discarded for both thing and pile (parents remain the inbox pile). The unresolved-second-answer control completes.
+
+   Failing assertion lines: `runner/test/q1-continuation.test.ts:969`, `runner/test/q1-continuation.test.ts:975`, `runner/test/q1-continuation.test.ts:979`.
+
+2. `Q1a fix 1.2: instructions scope preserves inbox counters and exhausted subjects without a third asking`
+
+   tests changed: runner/test/q1-continuation.test.ts: adds instructions-scope preservation of one-round and exhausted inbox histories and the no-third-asking rerun. Existing tests unchanged.
+
+   Positive controls (all passed): A stored Current state answer runs in instructions scope, removes its own card, calls no model, and leaves inbox evidence unchanged. Both count-one and exhausted histories are exercised.
+
+   Observed failure: The instructions run deletes the rounds field for both active and exhausted histories. The exhausted subject gets a third asking on the following all-scope run and projects waiting.
+
+   Failing assertion lines: `runner/test/q1-continuation.test.ts:1012`, `runner/test/q1-continuation.test.ts:1017`, `runner/test/q1-continuation.test.ts:1018`.
+
+3. `Q1a fix 1.3: pile and member share two rounds and only changed words permit another asking`
+
+   tests changed: runner/test/q1-continuation.test.ts: adds pile/member and member/pile round identity coverage, the unchanged rerun, and the words-change reset. Existing tests unchanged.
+
+   Positive controls (all passed): An unchanged member subject stays exhausted. After each subject-switch direction, changing the pile words permits a new count-one asking.
+
+   Observed failure: Both subject-switch directions write two count-one records instead of a shared count-two history. An unresolved second answer writes asking three; an unchanged rerun keeps that third asking.
+
+   Failing assertion lines: `runner/test/q1-continuation.test.ts:1035`, `runner/test/q1-continuation.test.ts:1039`, `runner/test/q1-continuation.test.ts:1042`, `runner/test/q1-continuation.test.ts:1044`.
+
+4. `Q1a fix 1.4: a same-bytes reupload retains hash history through the planner and writes no asking`
+
+   tests changed: runner/test/q1-continuation.test.ts: extends same-bytes reupload coverage through main and durable hash history, with a different-bytes control. Existing tests unchanged.
+
+   Positive controls (all passed): Different non-empty bytes under a new id permit a first asking. Same bytes have equal md5, a new id, and exhausted vault projection before main.
+
+   Observed failure: Vault projection recognizes the exhausted reupload before main. Main drops the hash-backed count-two history and writes a new count-one asking for the new id; projection becomes waiting.
+
+   Failing assertion lines: `runner/test/q1-continuation.test.ts:1073`, `runner/test/q1-continuation.test.ts:1075`, `runner/test/q1-continuation.test.ts:1076`.
+
+5. `Q1a fix 1.5: missing or outside-root stored option folders cannot authorize alternative filing`
+
+   tests changed: runner/test/q1-continuation.test.ts: adds unavailable stored folder consent coverage against a valid alternative model placement. Existing tests unchanged.
+
+   Positive controls (all passed): Ordinary model filing into Job hunt succeeds. With valid Home consent, the same model reply files into the stored Home id. Clear siblings leave first so the ordinary pile hold cannot hide the consent defect.
+
+   Observed failure: Both a binned stored folder and Home moved under Inbox allow the model’s Job hunt move. The item’s parent changes from its inbox pile to Job hunt, and the manifest contains that alternative move.
+
+   Failing assertion lines: `runner/test/q1-continuation.test.ts:1112`, `runner/test/q1-continuation.test.ts:1113`, `runner/test/q1-continuation.test.ts:1115`.
+
+6. `Q1a fix 1.6: words-only pile consent places its generated note in the chosen stored folder`
+
+   tests changed: runner/test/q1-continuation.test.ts: adds words-only pile stored folder consent coverage against a conflicting model note destination. Existing tests unchanged.
+
+   Positive controls (all passed): A words-only pile with a matching model destination generates exactly one note in Home, preserving the pile words. The same stored option is then exercised against a conflicting destination.
+
+   Observed failure: The conflicting model destination writes the generated note into Job hunt instead of stored Home. The matching-destination control passes.
+
+   Failing assertion lines: `runner/test/q1-continuation.test.ts:1136`, `runner/test/q1-continuation.test.ts:1138`.
+
+7. `Q1a fix 1.7: pending text from another pile never reaches this subject planner without provenance`
+
+   tests changed: runner/test/q1-continuation.test.ts: adds subject-only typed text coverage after a real quota refusal and next-day subject-scoped continuation. Existing tests unchanged.
+
+   Positive controls (all passed): An own-pile text answer reaches its continuation with pileId. Real /process quota refusal keeps B’s typed answer; next day A admits only A’s pile but the existing journal still contains B’s record.
+
+   Observed failure: B’s pending text reaches A’s planner as an answer without fileId or pileId, and appears verbatim in the full model input. A’s own text retains its pileId; B’s item remains untouched.
+
+   Failing assertion lines: `runner/test/q1-continuation.test.ts:1185`, `runner/test/q1-continuation.test.ts:1186`.
+
+### Validation
+
+Final whole-file run (exit 1, expected red result):
+
+```sh
+TMPDIR=/private/tmp/bower-q1a-stored-answers/tmp-logs pnpm -C runner exec vitest run test/q1-continuation.test.ts --maxWorkers=2 --reporter=json --outputFile=../tmp-logs/q1a-fix-1-reds.json > tmp-logs/q1a-fix-1-reds.log 2>&1
+```
+
+- 35 tests: all 28 existing tests pass; all 7 new reds fail with AssertionError for their stated findings. No skips, load errors, timeouts or other failure classes. Every positive control completes with hard assertions.
+- `pnpm -C runner exec tsc --noEmit -p .`: exit 0, including the touched file; `tmp-logs/q1a-fix-1-tsc.log`.
+- `pnpm -C runner exec eslint test/q1-continuation.test.ts`: exit 0; `tmp-logs/q1a-fix-1-eslint.log`.
+- Read-only `git diff --check`: pass. Existing-file byte preservation: pass. HEAD unchanged: pass.
+- JSON assertion evidence: `tmp-logs/q1a-fix-1-reds.json`; whole-file log: `tmp-logs/q1a-fix-1-reds.log`.
+
+The initial verification found two test-fixture mistakes (checksum reads and an evidence text lookup), both corrected before final delivery. The invalid-folder fixture initially retained an omitted clear sibling, which held the entire pile and masked the review finding; it now reproduces the normal continuation with clear siblings already filed. No existing assertions were edited or weakened.
+No test/ruling contradiction was found. Production fixes, full check/e2e, Q1b/Q1c, commits and integration remain outside this authorized red-only round.
