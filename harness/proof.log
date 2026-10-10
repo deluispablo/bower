@@ -531,3 +531,4 @@ c4-undo-confirm-in-place	7e82f6bccd478a7a	2026-10-10	red (fixed in 20e76dc1)
 c4-create-newer-words	10a0c0413e516991	2026-10-10	red (fixed in ec30299d)
 c4-e2e-sync	cd19e8dae2e59ade	2026-10-10	known-green: flaky-timing fixes, no deterministic red (packet); proof: qa7:63 fake desktop 12/12, capabilities:210 8/8 at the branch tip; claude/p3 before: 4/12 and 1/4 failed
 folder-header-wrap	d7c0f19cb325e6a4	2026-10-10	known-green: red proven by the coordinator without the fix (2 failed on the header-height assertion); done.sh misclassifies custom-message Playwright asserts (defect redkind-custom-message)
+c5-codex-run	d12e2384c9f51926	2026-10-10	red (fixed in d7162b35)

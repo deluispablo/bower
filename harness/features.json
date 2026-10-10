@@ -6523,7 +6523,7 @@
     "id": "c5-codex-run",
     "task": "p4-throughput",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "ui": null,
     "what": "harness/codex-run.sh runs a Codex delivery in a worktree, appends its tokens row, commits per its plan with implementer: codex, refuses guarded paths, secrets and addresses, runs check and the named e2e under the lock, and writes one result file (TL-P4-31 ruling 4).",
     "steps": [
