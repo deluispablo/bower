@@ -68,6 +68,6 @@
 .body :global(.md-task) input { margin-top: 2px; }
 .body :global(.md-done) span { color: var(--text-muted); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--text-muted) 60%, transparent); }
 
-.empty { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 18px 0; padding: 14px 16px; border-radius: 12px; background: var(--surface); color: var(--muted); }
+.empty { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 18px 0; padding: 14px 16px; border-radius: 12px; background: var(--surface); color: var(--text-muted); }
 .empty p { flex: 1 1 280px; margin: 0; }
 .empty .emptyDrive { flex: none; min-width: 44px; min-height: 44px; }

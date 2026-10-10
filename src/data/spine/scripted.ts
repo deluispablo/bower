@@ -10,11 +10,11 @@
  * (`fake-run-service.ts`) or the runner applies it, recoverably, through the one engine (`engine.ts`). Given the admitted set
  * a run took (`taken`), it plans only those piles, those things and those journal lines.
  */
-import type { OwnershipContext } from '../contracts/ownership-format';
+import { createOwnershipContext, type OwnershipContext } from '../contracts/ownership-format';
 import type { DriveFile } from '../drive/drive-api';
-import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate } from '../contracts/note-edit';
+import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate, personalTimelineRefusal } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
-import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
+import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent, type TimelineConsent, type AppendCompletion, type LeftAsWritten, type SatisfiedAppend } from '../contracts/run-manifest';
 import { PILE_NOTE, safeInboxName } from '../piles';
 import { recordablePile, sameText, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
@@ -24,14 +24,14 @@ import { PROP, RUNNER_WRITES, SYSTEM, isRunnerFile, type HashesFile, type Questi
 import { ruleLike } from '../rules';
 import { savedLinkAddress } from '../search-text';
 import { EMPTY_MD5, md5Hex } from '../contracts/hashes';
-import { STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
+import { ASK_GONE, STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
 import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
 import { parseTimelineLine } from '../contracts/timeline-line';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
 import { grounded, groundedKeys, seen } from './grounded';
-import { RUNS_NAME, canonical, isManifestName } from './records';
+import { APPENDS_RECORD_KEY, RunRecords, RUNS_NAME, canonical, isManifestName } from './records';
 import { NOT_FILED } from './report';
 import { SET_ASIDE, capturePiles, listedPiles, pileShape } from './plan';
 import { duplicatesOf, wordsSaved, type Duplicate } from './duplicates';
@@ -94,6 +94,306 @@ export interface PlanOptions {
    */
   decisions: Decisions;
 }
+
+/** A note a request names, by its title (TL-P4-32 finding 5): `titleKey` is the normalized title it matched. */
+type NamedNote = { file: DriveFile; path: string; titleKey: string };
+
+/** Whole title references, longest overlapping match first; only admitted request words enter here. */
+export function namedNotes(listing: readonly DriveFile[], ix: VaultIndex, words: string): NamedNote[] {
+  const normalize = (s: string): string => s.normalize('NFC').toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '').replace(/^(?:the|my)\s+/u, '');
+  const request = words.normalize('NFC').toLowerCase();
+  const word = (s: string | undefined): boolean => !!s && /[\p{L}\p{N}_]/u.test(s);
+  const matches = listing.flatMap((file) => {
+    const path = file.folder ? undefined : ix.pathOf(file.id);
+    if (!path || !path.endsWith('.md') || !MAIN_FOLDERS.includes(path.split('/')[0] ?? '')) return [];
+    const title = normalize(displayName(file.name));
+    if (!title) return [];
+    const found: Array<NamedNote & { start: number; end: number }> = [];
+    for (let at = request.indexOf(title); at >= 0; at = request.indexOf(title, at + 1)) {
+      if (!word([...request.slice(0, at)].at(-1)) && !word([...request.slice(at + title.length)][0])) found.push({ file, path, titleKey: title, start: at, end: at + title.length });
+    }
+    return found;
+  }).sort((a, b) => (b.end - b.start) - (a.end - a.start) || byCodePoint(a.path, b.path));
+  const kept: typeof matches = [];
+  for (const m of matches) if (!kept.some((k) => m.start < k.end && m.end > k.start && (m.start !== k.start || m.end !== k.end))) kept.push(m);
+  return [...new Map(kept.map((m) => [m.file.id, { file: m.file, path: m.path, titleKey: m.titleKey }])).values()];
+}
+
+/** At most this many notes in one request (TL-P4-32 finding 5). */
+const NAMED_MAX = 3;
+/**
+ * The notes a request names and whether it is refused whole (TL-P4-32 findings 4 and 5): more than three named, or a
+ * name more than one note has. The planner's context and the plan both read this one verdict.
+ */
+export function requestTargets(listing: readonly DriveFile[], ix: VaultIndex, words: string): { notes: NamedNote[]; refused: 'overflow' | 'ambiguous' | null } {
+  const notes = namedNotes(listing, ix, words);
+  const keys = notes.map((n) => n.titleKey);
+  return { notes, refused: notes.length > NAMED_MAX ? 'overflow' : new Set(keys).size < keys.length ? 'ambiguous' : null };
+}
+
+/** The run result's "Left as you wrote them" whys (the designer's rows 5 to 8). */
+const LEFT_AS_WRITTEN = {
+  overflow: "Bower didn't update any note: this request names more than three. Ask for three at most at a time.",
+  ambiguous: (folder: string): string => `In ${folder}. Bower didn't update it: more than one note has this name. Ask again with its folder.`,
+  'no-timeline': "Bower didn't add the line: this note has no Timeline.",
+  'unreadable-timeline': "Bower didn't add the line: it can't read this note's Timeline.",
+} as const;
+/**
+ * The why of a request older than the oldest run Bower still keeps, with no binding or completion there (TL-P4-32
+ * addendum 5 (3); the designer's row, owner OK 2026-10-10): it fails closed, with no line, and is archived.
+ */
+export const TOO_OLD_WHY = "Bower didn't add the line: this request is too old for Bower to know if it already did. Ask again if you still want it.";
+/** A named target with no line in this run (TL-P4-32 addendum 6; the designer's owner-signed row). */
+export const NOTHING_FOUND_WHY = "Bower didn't add the line: it found nothing about this note in what you added.";
+/** Row 1's line, under "Brought up to date". */
+const LINE_ADDED = 'One line added to its Timeline, as you asked.';
+
+/** What earlier runs did with requests' bound lines, read only through their own verified records. */
+type AppendHistory = { completed: AppendCompletion[]; lines: Array<{ consent: TimelineConsent; entry: EditEntry; applied: boolean; path: string }> };
+
+/** Bower's run records as this listing has them, each run read through `RunRecords.found`. */
+const recordsOf = (read: ScriptedRead, rootId: string, listing: readonly DriveFile[]): RunRecords => new RunRecords({
+  listAll: async () => [...listing], readBytes: (id) => read.readBytes(id),
+  get: async (id) => {
+    const file = listing.find((f) => f.id === id);
+    if (!file) throw new BowerError('not-found', 'Bower could not read what it did.');
+    return file;
+  } }, rootId);
+
+/**
+ * A verified checkpoint outcome is the durable completion (or pending retry) of its manifest's request binding: each run
+ * is read through `RunRecords.found`, whose walk checks the first checkpoint against its originating manifest. Only the
+ * run's own bindings count; nothing is carried from one manifest to the next (TL-P4-32 addendum 2 (4)).
+ */
+export async function personalAppendHistory(read: ScriptedRead, rootId: string, listing: readonly DriveFile[], ix: VaultIndex): Promise<AppendHistory> {
+  const records = recordsOf(read, rootId, listing);
+  const runs = new Set(listing.filter((f) => !f.folder && isManifestName(f.name) && f.appProperties?.[APPENDS_RECORD_KEY] === '1'
+    && parentOf(parentOf(ix.pathOf(f.id) ?? '')) === RUNS_PATH).map((f) => nameOf(parentOf(ix.pathOf(f.id) ?? ''))));
+  const lines: AppendHistory['lines'] = [];
+  const completed = new Map<string, AppendCompletion>();
+  for (const runId of runs) {
+    const found = await records.found(runId);
+    if (found.kind !== 'run') throw new BowerError('unknown', 'Bower could not read what it did.');
+    const head = found.chain.at(-1);
+    const outcomes = head?.outcomes ?? [];
+    for (const r of head?.completedAppends ?? []) completed.set(JSON.stringify([r.requestId, r.targetFileId]), r);
+    for (const op of found.manifest.operations) {
+      if (op.effect.kind !== 'edit-text') continue;
+      const outcome = outcomes.find((o) => o.operationId === op.operationId);
+      for (const c of op.effect.changes) {
+        if (c.kind !== 'timeline-append' || !c.consent || !c.entries[0]) continue;
+        const filed = found.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === c.consent?.sourceFileId);
+        const sourceLanded = filed ? outcomes.some((o) => o.operationId === filed.operationId && o.state === 'applied')
+          : found.manifest.capture.places.some((p) => p.file.fileId === c.consent?.sourceFileId);
+        if (outcome?.state === 'applied' || (sourceLanded && outcome?.state === 'rejected' && outcome.failure.code === 'conflict'))
+          lines.push({ consent: c.consent, entry: c.entries[0], applied: outcome.state === 'applied', path: op.effect.path });
+      }
+    }
+  }
+  return { completed: [...completed.values()], lines };
+}
+
+/** Runs Bower keeps (the runner's retention, `KEEP_FINISHED` in `runner/src/spine/retention.ts`): older ones go to the Bin. */
+const RETAINED_RUNS = 20;
+
+/**
+ * Since when the run records reach back, once retention may have let one go (TL-P4-32 addendum 5 (3)): the request time
+ * of the oldest run still kept, read through `RunRecords.found`, when at least `RETAINED_RUNS` runs are kept; null
+ * while fewer are, since then none was let go. A request older than this with no binding or completion in the kept
+ * records may have been bound in a run no longer kept: it fails closed.
+ */
+async function retainedSince(read: ScriptedRead, rootId: string, listing: readonly DriveFile[], ix: VaultIndex): Promise<number | null> {
+  const runs = listing.filter((f) => f.folder && !f.trashed && parentOf(ix.pathOf(f.id) ?? '') === RUNS_PATH);
+  if (runs.length < RETAINED_RUNS) return null;
+  const records = recordsOf(read, rootId, listing);
+  let since: number | null = null;
+  for (const run of runs) {
+    const found = await records.found(run.name);
+    if (found.kind === 'run') since = Math.min(since ?? found.manifest.requestedAt, found.manifest.requestedAt);
+    else if (found.kind === 'broken') console.error(`Run ${run.name} could not be read for its requests' age: ${found.why}`);
+  }
+  return since;
+}
+
+/** A request's bound line already in its note as read: satisfied, or appended once its source's final name differs. */
+type PresentLine = { line: WantedLine; consent: TimelineConsent; file: DriveFile; path: string; bytes: Uint8Array; before: VerifiedContent };
+/** A row of "Left as you wrote them", with the sources it waits for (null: every thing the run files). */
+type LeftRow = LeftAsWritten & { requestId: string; sources: string[] | null };
+
+/**
+ * The one home of what a person's request causes (TL-P4-32 addendum 2 (1)): from the admitted request and the notes it
+ * names, never from a model's lines, it decides which request settles now, the binding of each note to it, whether it
+ * is refused whole, its "Left as you wrote them" rows, what its archive waits for, and its completion.
+ * - One request per note per run (2): the oldest unfinished request naming a note settles; a younger one naming it stays
+ *   in the inbox untouched.
+ * - A request's identity is its record id (TL-P4-32 addendum 5): one archived settles as a no-op, and one with a binding
+ *   or a completion in the kept records is bound only by those ids, never by its words' titles again (a replay changes
+ *   nothing). One older than every kept run with neither fails closed: its row, no line, and its archive.
+ * - A refused request (more than three named, a name two notes share) is refused whole, by source (3): no note named
+ *   is touched, and no edit in the run cites a source it files, Bower's own hubs included. A request is not tied to one
+ *   pile, so every thing the run files is its source.
+ * - Every named note binds at first admission, whether the model offers a line or not (addendum 6). A bound note takes
+ *   one line: the model's, citing a thing filed now, or a waiting retry's, cited by its source's id as named now (6).
+ *   A person's note with no Timeline, or one `timeline-line.ts` cannot read, gets its row instead; no line gets the
+ *   nothing-found row. Only a clashed append carries its bound ids to another run.
+ * - A line already there is satisfied only under its source's final name (6); otherwise it is appended.
+ * A request settles only when every note it binds has its line written or there, or a row; otherwise it waits whole.
+ */
+function settleRequest(requests: readonly JournalLine[], listing: readonly DriveFile[], ix: VaultIndex, history: AppendHistory, since: number | null) {
+  const done = (requestId: string, targetFileId: string): boolean => history.completed.some((h) => h.requestId === requestId && h.targetFileId === targetFileId);
+  const bound = new Map<string, { requestId: string; path: string; file: DriveFile }>();
+  const owned = new Set<string>();
+  const admitted = new Set<string>();
+  const blocked = new Set<string>();
+  const rows: LeftRow[] = [];
+  const sources = new Map<string, Set<string> | null>();
+  // A line refused at the fence waits with its binding, still the person's consent; the next run appends it (6).
+  const retries = new Map<string, { consent: TimelineConsent; entry: EditEntry }>();
+  let refusesSources = false;
+  for (const l of requests) {
+    const id = l.rec.id;
+    // A binding or a completion in the kept records fixes the request's notes by id (TL-P4-32 addendum 5 (2)).
+    const recorded = history.completed.some((h) => h.requestId === id) || history.lines.some((h) => h.consent.requestId === id);
+    // A request already archived (`archivedRecords`, by its record id) settled before: it binds nothing again.
+    if (l.archived) {
+      if (recorded || requestTargets(listing, ix, l.rec.text ?? l.rec.what).notes.length) {
+        owned.add(id);
+        admitted.add(id);
+      }
+      continue;
+    }
+    if (recorded) {
+      owned.add(id);
+      // A request waiting on such a line keeps the notes and the source it was bound to, by id, never its words' titles
+      // again (TL-P4-32 addendum 3 (2)): a renamed note still gets its line; one gone or in the Bin gets the "Not done"
+      // why. One with every recorded line completed settles as a no-op, whatever its words name now.
+      const waiting = new Map(history.lines.filter((h) => !h.applied && h.consent.requestId === id && !done(id, h.consent.targetFileId))
+        .map((h) => [h.consent.targetFileId, h]));
+      if ([...waiting.keys()].some((target) => bound.has(target))) continue;
+      admitted.add(id);
+      for (const [target, h] of waiting) {
+        const file = listing.find((f) => f.id === target && !f.folder && !f.trashed);
+        const path = file && ix.pathOf(file.id);
+        if (file && path) {
+          bound.set(target, { requestId: id, path, file });
+          retries.set(target, { consent: h.consent, entry: h.entry });
+        } else rows.push({ requestId: id, sources: [], name: h.path, why: ASK_GONE });
+      }
+      continue;
+    }
+    const { notes, refused } = requestTargets(listing, ix, l.rec.text ?? l.rec.what);
+    if (!notes.length) continue;
+    owned.add(id);
+    // Older than every kept run, with nothing of it there: it may have been bound in a run let go, so it fails closed
+    // with no line, its row and its archive (TL-P4-32 addendum 5 (3)).
+    if (since !== null && l.rec.at < since) {
+      admitted.add(id);
+      if (refused === 'overflow') rows.push({ requestId: id, sources: [], name: 'Request', why: TOO_OLD_WHY });
+      else for (const n of notes) rows.push({ requestId: id, sources: [], name: n.path, fileId: n.file.id, why: TOO_OLD_WHY });
+      continue;
+    }
+    // An older request settles this note first: this one waits untouched (2).
+    if (notes.some((n) => bound.has(n.file.id))) continue;
+    admitted.add(id);
+    for (const n of notes) bound.set(n.file.id, { requestId: id, path: n.path, file: n.file });
+    if (!refused) continue;
+    refusesSources = true;
+    sources.set(id, null);
+    for (const n of notes) blocked.add(n.file.id);
+    if (refused === 'overflow') rows.push({ requestId: id, sources: null, name: 'Request', why: LEFT_AS_WRITTEN.overflow });
+    else for (const n of notes.filter((m) => notes.filter((x) => x.titleKey === m.titleKey).length > 1)) {
+      rows.push({ requestId: id, sources: null, name: n.path, fileId: n.file.id, why: LEFT_AS_WRITTEN.ambiguous(parentOf(n.path).split('/').join(' / ')) });
+    }
+  }
+  const consents: TimelineConsent[] = [];
+  const given = new Set<string>();
+  const rowed = new Set<string>();
+  const present: PresentLine[] = [];
+  const give = (c: TimelineConsent): TimelineConsent => {
+    consents.push(c);
+    given.add(c.targetFileId);
+    const had = sources.get(c.requestId);
+    if (had !== null) sources.set(c.requestId, new Set([...(had ?? []), c.sourceFileId]));
+    return c;
+  };
+  return {
+    /** Requests that settle in this run; any other C05 request waits. */
+    admitted: admitted as ReadonlySet<string>,
+    /** The requests this settlement decides (C05: they name a note, or wait on a line); a generic handler takes no other. */
+    owned: owned as ReadonlySet<string>,
+    /** Notes a refused request names: nothing is written there this run. */
+    blocked: blocked as ReadonlySet<string>,
+    /** A refused request in the run refuses every source it files (3). */
+    refusesSources,
+    /** The notes bound to a request, to be read for their Timeline. */
+    bound: bound as ReadonlyMap<string, { requestId: string; path: string; file: DriveFile }>,
+    /** Every binding this run gives, for the author's independent comparison. */
+    consents,
+    /** The binding for a model's line on a note, citing a thing this run files: one line per note, never a retry's. */
+    consent(targetFileId: string, sourceFileId: string | null, filedNow: boolean): TimelineConsent | undefined {
+      const b = bound.get(targetFileId);
+      if (!b || !sourceFileId || !filedNow || blocked.has(targetFileId) || retries.has(targetFileId) || given.has(targetFileId)) return undefined;
+      return give({ requestId: b.requestId, targetFileId, sourceFileId });
+    },
+    /** The waiting retries, their line cited by the source's id as it is named now (`nameOf` of the listing). */
+    retries(nameOfSource: (fileId: string) => string | null): Array<{ consent: TimelineConsent; entry: EditEntry; file: DriveFile; path: string }> {
+      return [...retries.values()].flatMap((r) => {
+        const b = bound.get(r.consent.targetFileId);
+        const source = nameOfSource(r.consent.sourceFileId);
+        if (!b || source === null || blocked.has(r.consent.targetFileId)) return [];
+        return [{ consent: give(r.consent), entry: { ...r.entry, source }, file: b.file, path: b.path }];
+      });
+    },
+    /** A bound person's note that takes no line (rows 5 and 8): its row, waiting for the line's source or every one. */
+    refuse(targetFileId: string, why: 'no-timeline' | 'unreadable-timeline', source: string | null): void {
+      const b = bound.get(targetFileId);
+      if (!b || rowed.has(targetFileId)) return;
+      rowed.add(targetFileId);
+      if (source === null) sources.set(b.requestId, null);
+      rows.push({ requestId: b.requestId, sources: source === null ? null : [source], name: b.path, fileId: targetFileId, why: LEFT_AS_WRITTEN[why] });
+    },
+    /** A bound line already there as read: decided once its source's name is final (`named`). */
+    present(p: PresentLine): void { present.push(p); },
+    /**
+     * After filing names every thing (6): a line still there under its source's final name is satisfied, its request's
+     * archive the completion; one whose source got another name is appended under it.
+     */
+    named(finalName: (sourceFileId: string) => string | null): { satisfied: PresentLine[]; append: PresentLine[] } {
+      const satisfied: PresentLine[] = [];
+      const append: PresentLine[] = [];
+      for (const p of present) {
+        const name = finalName(p.consent.sourceFileId);
+        if (name === null || name === p.line.entry.source) satisfied.push(p);
+        else {
+          p.line.entry.source = name;
+          append.push(p);
+        }
+      }
+      return { satisfied, append };
+    },
+    /** Settle targets with no offered line; requests with an unwritten bound line still wait for it. */
+    unsettled(lineDone: (requestId: string, targetFileId: string) => boolean): string[] {
+      for (const [target, b] of bound) if (!blocked.has(target) && !rowed.has(target) && !given.has(target) && !retries.has(target)) {
+        rowed.add(target);
+        sources.set(b.requestId, null);
+        rows.push({ requestId: b.requestId, sources: null, name: b.path, fileId: target, why: NOTHING_FOUND_WHY });
+      }
+      return [...admitted].filter((id) => [...bound].some(([target, b]) => b.requestId === id && !blocked.has(target)
+        && !rowed.has(target) && !lineDone(id, target)));
+    },
+    /** The rows of a request that settles. */
+    rowsOf(requestId: string): LeftRow[] { return rows.filter((r) => r.requestId === requestId); },
+    /** The sources a settling request's archive waits for: its lines' sources, or every thing the run files. */
+    sourcesOf(requestId: string, runSources: readonly string[]): string[] {
+      const own = sources.get(requestId);
+      return own === null ? [...runSources] : [...(own ?? [])];
+    },
+  };
+}
+
+/** Whether a proposed Current state changes exactly one bullet of the one read (the only change asked on a person's note). */
+const oneBulletOf = (read: readonly string[] | undefined, proposed: readonly string[]): boolean => !!read && read.length === proposed.length
+  && read.filter((line, i) => line.trim() !== proposed[i]?.trim()).length === 1;
 
 /** A place in the folder (a path under a main folder) and a name, as a model proposes them. */
 export interface Placement {
@@ -370,7 +670,12 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   const readiness = await capturePiles(drive, rootId, piles.map(pileShape), { notes: true, context: opts.context });
   // Things already saved (`duplicates.ts`, TL-P4-10 addendum 2), by their content.
   const dups = duplicatesOf(listing, ix, piles.flatMap((p) => p.items.map((i) => i.id)));
-  return { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups };
+  const appends = await personalAppendHistory(drive, rootId, listing, ix);
+  // How far the kept records reach is read only for a request with nothing of it there (TL-P4-32 addendum 5 (3)).
+  const unrecorded = lines.some((l) => l.rec.kind === 'request' && !l.archived && !appends.completed.some((h) => h.requestId === l.rec.id)
+    && !appends.lines.some((h) => h.consent.requestId === l.rec.id));
+  const since = unrecorded ? await retainedSince(drive, rootId, listing, ix) : null;
+  return { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since };
 }
 type Captured = Awaited<ReturnType<typeof capture>>;
 
@@ -380,7 +685,7 @@ type Captured = Awaited<ReturnType<typeof capture>>;
  * edits, the generated notes, the questions. It ends decided, or with a try again that holds more back.
  */
 export async function decide(drive: ScriptedRead, snapshot: Captured, opts: PlanOptions, attempt: Attempt = { editCap: EDITS_PER_RUN, held: new Set() }) {
-  const { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups } = snapshot;
+  const { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since } = snapshot;
   const { editCap, held } = attempt;
   const newKey = opts.mintKey ?? mintKey;
   /**
@@ -388,7 +693,19 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
    * a run that can act on them, never archived unanswered.
    */
   const d = opts.decisions;
-  const fetched = (fileId: string) => opts.context ? { fileId, context: opts.context } : undefined;
+  // A person's request (C05): the one settlement decides what it binds, refuses, reports and waits for.
+  const settlement = settleRequest(lines.filter((l) => l.rec.kind === 'request'), listing, ix, appends, since);
+  // A thing a request's line on a person's note cites is filed and cited, never taken for a copy of one already saved.
+  for (const [, b] of settlement.bound) {
+    if (b.file.appProperties?.by === 'bower') continue;
+    for (const l of d.lines.filter((l) => l.path === b.path)) if (l.cites) dups.delete(l.cites);
+    for (const l of d.hubLines?.filter((l) => l.path === b.path) ?? [])
+      for (const p of piles) for (const item of p.items) if (item.name === l.cites) dups.delete(item.id);
+  }
+  const context = opts.context ?? createOwnershipContext();
+  const fetched = (fileId: string) => ({ fileId, context, consents: settlement.consents });
+  /** Whether a refused request in the run refuses what cites this thing (TL-P4-32 addendum 2 (3)). */
+  const refusedSource = (fileId: string | null | undefined): boolean => settlement.refusesSources && !!fileId && things.some((t) => t.file.id === fileId);
   // Notes kept as one: each by its yes, among the lines this run took; one held back (`keep:<answer>`) waits with it.
   // A run with no day to date its lines (outside years 0000-9999) keeps nothing: the answer waits, never archived unmerged.
   const keepDay = timelineDate(opts.requestedAt) !== null;
@@ -464,7 +781,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const row = answeredGone(q, seenFirst, notesSeen, notePath, (id) => binnedNames.get(id));
     return row ? [[l.rec.id, row] as const] : [];
   }));
-  let journal = lines.filter((l) => (l.rec.kind === 'request' ? !!d.request : l.rec.kind === 'answer' ? (d.settles?.(l.rec.questionId ?? '') ?? settled.has(l.rec.questionId ?? '')) : true));
+  let journal = lines.filter((l) => (l.rec.kind === 'request' ? (settlement.owned.has(l.rec.id) ? settlement.admitted.has(l.rec.id) : !!d.request) : l.rec.kind === 'answer' ? (d.settles?.(l.rec.questionId ?? '') ?? settled.has(l.rec.questionId ?? '')) : true));
   // Your rules (TL-P2-20 rules-wording): one change for every rule line, worded below in one edit of Rules.md, or
   // Rules.md made when it is missing; a line whose words cannot be worded stays pending.
   const ruleWords = ruleChangesOf(journal, d.wordRule ?? tidiedRule);
@@ -809,8 +1126,10 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (!f || f.folder) continue;
     const cite = citeOf(u);
     if (u.onlyCited && !cite) continue;
+    if (settlement.blocked.has(f.id) || refusedSource(cite?.fileId)) continue;
     const made = want(f, u.path);
-    made.lines.push({ entry: { date: date ?? '', text: u.what, source: cite?.source ?? null }, record: null, what: u.what, after: cite?.fileId ?? null });
+    const consent = settlement.consent(f.id, cite?.fileId ?? null, !!cite);
+    made.lines.push({ entry: { date: date ?? '', text: u.what, source: cite?.source ?? null }, record: consent?.requestId ?? null, what: u.what, after: cite?.fileId ?? null, ...(consent ? { consent } : {}) });
   }
   // A model's Timeline lines (P4-3): each cites the note its thing gets, or the thing as filed, and waits for its move.
   // The cite is the name asked for until the filing below fixes the name each one gets; then it is that name.
@@ -821,12 +1140,14 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   for (const l of all && date ? d.lines : []) {
     const f = ix.file(l.path);
     if (!f || f.folder) continue;
+    if (settlement.blocked.has(f.id) || refusedSource(l.cites)) continue;
     const thing = l.cites === null ? undefined : things.find((t) => t.file.id === l.cites && !t.merge);
     // A line citing a pile of words only is written only with that pile taken, and the pile waits for it.
     const words = l.cites === null || thing ? undefined : citedWords.get(l.cites);
     if (l.cites !== null && !thing && !words && pileIds.has(l.cites)) continue;
     const asked = thing ? (d.note(thing.file.id)?.name ?? d.thing(seenOf(thing))?.name) : undefined;
-    const line: WantedLine = { entry: { date: date ?? '', text: l.text, source: asked === undefined ? null : citeName(asked) }, record: null, what: l.text, after: asked === undefined ? null : (thing?.file.id ?? null) };
+    const consent = settlement.consent(f.id, l.cites, !!thing && asked !== undefined);
+    const line: WantedLine = { entry: { date: date ?? '', text: l.text, source: asked === undefined ? null : citeName(asked) }, record: consent?.requestId ?? null, what: l.text, after: asked === undefined ? null : (thing?.file.id ?? null), ...(consent ? { consent } : {}) };
     want(f, l.path).lines.push(line);
     if (thing && asked !== undefined) modelLines.push({ line, cites: thing.file.id });
     if (words) {
@@ -904,10 +1225,24 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const f = ix.file(st.path);
     if (!f || f.folder) continue;
     if (!all && !grants.has(f.id)) continue;
+    if (settlement.blocked.has(f.id) || refusedSource(st.cites)) continue;
     const thing = st.cites === null ? undefined : things.find((t) => t.file.id === st.cites && !t.merge);
     const asked = thing ? (d.note(thing.file.id)?.name ?? d.thing(seenOf(thing))?.name) : undefined;
     want(f, st.path).state = { lines: st.lines, source: asked === undefined ? null : citeName(asked), thing: asked === undefined ? null : (thing?.file.id ?? null) };
   }
+  // A request's line refused at the fence is appended to the note as read now, citing its source by id (TL-P4-32 6).
+  // Its words are the model's line on that note citing the same source, when it proposes one, else the line it waited with.
+  for (const r of date ? settlement.retries((id) => {
+    const source = listing.find((x) => x.id === id && !x.folder);
+    return source ? citeName(source.name) : null;
+  }) : []) {
+    const source = listing.find((x) => x.id === r.consent.sourceFileId);
+    if (source) places.set(source.id, source);
+    const text = d.lines.find((l) => l.path === r.path && l.cites === r.consent.sourceFileId)?.text ?? r.entry.text;
+    want(r.file, r.path).lines.push({ entry: { ...r.entry, date: date ?? r.entry.date, text }, record: r.consent.requestId, what: text, after: null, consent: r.consent });
+  }
+  // Every note a request binds is read, so one with no Timeline it can take gets its row with no line proposed.
+  for (const [, b] of settlement.bound) if (!settlement.blocked.has(b.file.id)) want(b.file, b.path);
   /** Current states the person edited: what Bower would write goes on the Timeline as a line, and they are asked. */
   const personStates: Array<{ line: WantedLine; file: DriveFile; path: string; seen: string; shown: StateShown }> = [];
   /** Each question about a Current state this run asks, by its note's file id: the build sets the note as left on it. */
@@ -1065,9 +1400,22 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // edited since is never rewritten: what Bower would write becomes a Timeline line, and the person is asked.
     // TL-P4-10: an unmarked one is the person's, unless a rule lets Bower adopt it (no write of Bower's ever does);
     // a Bower note with none gets one, with its mark.
+    const ownership = context.read(f.id, bytes);
+    // Invalid layouts reach the author's existing typed refusal, never the display parser's exception.
+    const personal = ownership.status !== 'invalid' && ownership.status !== 'v2'
+      && !parseNote(w.path, new TextDecoder().decode(bytes), fetched(f.id)).byBower;
+    // A person's note takes only its request's one bound line; Bower's own takes lines as before, under the request's id.
+    if (personal) w.lines = w.lines.filter((l) => l.consent);
+    else for (const l of w.lines) delete l.consent;
+    const unwritable = personal && settlement.bound.has(f.id) ? personalTimelineRefusal(bytes, fetched(f.id)) : null;
+    if (unwritable) {
+      settlement.refuse(f.id, unwritable, w.lines[0]?.consent?.sourceFileId ?? null);
+      w.lines = [];
+      w.state = null;
+    }
     let state: StateRewrite | null = null;
     const grant = grants.get(f.id);
-    const section = grant ? currentStateOf(bytes, fetched(f.id)) : null;
+    const section = grant ? currentStateOf(bytes, fetched(f.id), true) : null;
     const mark = stateMarkOf(bytes, fetched(f.id));
     const name = displayName(nameOf(w.path));
     // The note as read now: its checksum and stamp, what a question asked now records as the note was left.
@@ -1086,7 +1434,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // Nothing to write: the section already reads as the update (the person wrote it themselves), or there is none
     // (an older question's run had no update, or the note has no mark to grant under). Settled, with its answered row.
     const already = !!update && !!section && section.lines.join('\n') === update.join('\n');
-    const change: StateRewrite | null = granted && !already && !changed && held && mark !== null && update ? { kind: 'state-rewrite', recordIds: [granted.answer], previous: section?.lines ?? [], lines: update, granted: { answer: granted.answer, mark } } : null;
+    const change: StateRewrite | null = granted && !already && !changed && held && (mark !== null || personal) && update ? { kind: 'state-rewrite', recordIds: [granted.answer], previous: section?.lines ?? [], lines: update, granted: { answer: granted.answer, mark } } : null;
     const result = change ? applyChanges(bytes, [change], fetched(f.id)) : null;
     // A clash: the write's own check finds the section is not as read (`person-edited`, `state-changed`).
     const clash = !!result && !result.ok && (result.reason === 'person-edited' || result.reason === 'state-changed');
@@ -1106,9 +1454,11 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       answeredRows.set(granted.answer, answeredState(granted.question.id, 'refused', w.path));
     } else if (granted) {
       answeredRows.set(granted.answer, answeredState(granted.question.id, 'nothing-to-write', w.path));
-    } else if (w.state && !(grant && section?.owner === 'person')) {
-      const now = currentStateOf(bytes, fetched(f.id));
-      const adopt = now?.owner === 'unmarked' && (await adopting());
+    } else if (w.state && !(grant && section?.owner === 'person') && (!personal || (w.lines.some((l) => l.consent) && oneBulletOf(currentStateOf(bytes, fetched(f.id), true)?.lines, w.state.lines)))) {
+      // On a person's note only a proposal changing one bullet is asked about, beside the request's line; any other
+      // is refused alone and the line stands (TL-P4-32 addendum 2 (5)). A plain note has no Current state Bower reads.
+      const now = currentStateOf(bytes, fetched(f.id), true);
+      const adopt = !personal && now?.owner === 'unmarked' && (await adopting());
       if (now && (now.owner === 'bower' || now.owner === 'missing' || adopt)) {
         if (now.lines.join('\n') !== w.state.lines.join('\n')) {
           const change: StateRewrite = { kind: 'state-rewrite', recordIds: [], previous: now.lines, lines: w.state.lines, ...(adopt ? { adopted: true as const } : {}) };
@@ -1147,11 +1497,14 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
         lineState.set(l, 'present');
         continue;
       }
-      const result = applyChanges(bytes, [{ kind: 'timeline-append', recordIds: [], entries: [l.entry] }], fetched(f.id));
+      const result = applyChanges(bytes, [{ kind: 'timeline-append', recordIds: l.record === null ? [] : [l.record], entries: [l.entry], ...(l.consent ? { consent: l.consent } : {}) }], fetched(f.id));
       const twin = lines.find((x) => x.entry.text === l.entry.text);
       if (result.ok && twin) twins.set(l, twin);
       else if (result.ok) lines.push(l);
-      else if (!result.ok && result.reason === 'unchanged') lineState.set(l, 'present');
+      else if (!result.ok && result.reason === 'unchanged') {
+        lineState.set(l, 'present');
+        if (l.consent) settlement.present({ line: l, consent: l.consent, file: f, path: w.path, bytes, before });
+      }
       else if (!result.ok && result.reason === 'not-bower') lineState.set(l, 'person');
       else if (!result.ok) console.error(`A note's Timeline line was refused (${result.reason}); none is planned for it`);
     }
@@ -1170,6 +1523,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       } else if (!result.ok && result.reason === 'unchanged') rulesState = 'present';
       else console.error(`${RULES_PATH} was refused for wording (${result.ok ? 'count' : result.reason})`);
     }
+    for (const l of lines) if (l.record !== null) need(l.record).lines.push(l);
     if (rewrite || lines.length || rules || state) candidates.push({ file: f, path: w.path, before, bytes, rewrite, lines, rules, state, stateAfter: state ? (w.state?.thing ?? null) : null });
   }
   // At most editCap edits, in path order; the rest wait for the next run, which plans them again. Their rename lines
@@ -1178,7 +1532,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   for (const l of candidates.slice(editCap).flatMap((c) => c.lines)) lineState.set(l, 'deferred');
   // Each kept note's changes together, in the contract's order; the text never depends on the record ids.
   const appendOf = (lines: WantedLine[]): Change[] => (lines.length
-    ? [{ kind: 'timeline-append', recordIds: [...new Set([...lines, ...[...twins].filter(([, t]) => lines.includes(t)).map(([l]) => l)].flatMap((l) => (l.record === null ? [] : [l.record])))], entries: lines.map((l) => l.entry) }]
+    ? [{ kind: 'timeline-append', recordIds: [...new Set([...lines, ...[...twins].filter(([, t]) => lines.includes(t)).map(([l]) => l)].flatMap((l) => (l.record === null ? [] : [l.record])))], entries: lines.map((l) => l.entry), ...(lines[0]?.consent ? { consent: lines[0].consent } : {}) }]
     : []);
   /** The answers whose keep a note's link rewrite is for: the notes it links to the other note of each. */
   const keptFor = (bytes: Uint8Array): string[] => keeping.filter((x) => mentions(bytes, [x.rename])).map((x) => x.k.answer);
@@ -1198,8 +1552,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (c.rules) rulesState = 'planned';
     // One report row per Timeline line it writes (report-misses-hub-line); a Current state alone says it was updated.
     // Each row names its line by its ordinal among the lines the edit appends, in order (TL-P4-19 addendum 4).
-    const written = c.lines.flatMap((l, i) => (l.what === null ? [] : [{ what: l.what, line: i }]));
-    const rows = written.length ? written : c.state ? [{ what: STATE_UPDATED }] : [];
+    const written = c.lines.flatMap((l, i) => (l.what === null ? [] : [{ what: l.consent ? LINE_ADDED : l.what, line: i }]));
+    const rows = written.length ? written : c.state ? [{ what: c.state.granted?.mark === null ? 'Current state updated, as you chose.' : STATE_UPDATED }] : [];
     const after = [...new Set([...c.lines.flatMap((l) => (l.after === null ? [] : [l.after])), ...(c.stateAfter === null ? [] : [c.stateAfter])])];
     // An edit a keep needs (the kept note's lines, a link to the other note) keeps the note's text as read, for its undo.
     // So does a write the person's yes granted: its undo puts their section back byte for byte (`undoEdit`).
@@ -1212,7 +1566,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   for (const p of personStates) {
     const kept = lineState.get(p.line);
     if (kept !== 'planned' && kept !== 'present') continue;
-    const q: Question = { id: stateQuestionId(p.file.id), text: STATE_ASK(displayName(nameOf(p.path))), yes: 'Write it', no: 'Keep mine', about: p.path, state: p.seen, shown: p.shown, askedAt: opts.requestedAt };
+    const q: Question = { id: stateQuestionId(p.file.id), text: p.line.consent ? `${thingName(p.line.entry.source ?? '')} also changes the current state of ${displayName(nameOf(p.path))}. Should Bower write its update there?` : STATE_ASK(displayName(nameOf(p.path))), yes: 'Write it', no: 'Keep mine', about: p.path, state: p.seen, shown: p.shown, askedAt: opts.requestedAt };
     askedPiles.push(q);
     stateAsks.set(p.file.id, q);
   }
@@ -1277,12 +1631,20 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   for (const l of holdRenames ? moved : []) need(l.rec.id).held = true;
   for (const id of rules.left) need(id).held = true;
   const waits = new Set([...needs].filter(([, n]) => n.held || !n.lines.every((l) => ['planned', 'present'].includes(lineState.get(l) ?? ''))).map(([id]) => id));
+  // A request settles only when each note it binds has its line written or there, or its row (`settleRequest`).
+  const boundLines = [...wanted.values()].flatMap((w) => w.lines.map((l) => ({ l, fileId: w.file.id })));
+  for (const id of settlement.unsettled((requestId, fileId) => boundLines.some(({ l, fileId: at }) => at === fileId
+    && l.record === requestId && ['planned', 'present'].includes(lineState.get(l) ?? '')))) waits.add(id);
   if (waits.size) journal = journal.filter((l) => !waits.has(l.rec.id));
   const unwritten = [...waits].filter((id) => !needs.get(id)?.held).length;
   if (unwritten) console.error(`${unwritten} of your changes wait for the next tidy-up: what they add could not be written now`);
   // An instructions run with no line it can take, once every held line is left out, has nothing to read: the
   // existing refusal, before admission.
   if (!all && !journal.length) throw new BowerError('conflict', NOTHING_TO_READ);
+  for (const id of settlement.admitted) for (const row of settlement.rowsOf(id)) {
+    const f = row.fileId === undefined ? undefined : listing.find((x) => x.id === row.fileId);
+    if (f) places.set(f.id, f);
+  }
   const edited = new Set(edits.map((e) => e.file.id));
   const filing: Array<{ thing: (typeof things)[number]; to: string; name: string; note?: SavedNote; merge?: MergeState }> = [];
   for (const thing of things) {
@@ -1362,6 +1724,26 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const text = serializeNote({ summary: authored.summary, properties: [], tags: [], currentState: [], body: authored.body, timeline: [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
     generated.push({ to, name: noteName, text, what: authored.summary, after: thing.file.id, pileId: null, aside: thing.file.name, context: null });
   }
+  // A request's line already there is satisfied only under the name its source is filed as (TL-P4-32 addendum 2 (6)):
+  // under another, it is appended now, after that move.
+  const naming = settlement.named((id) => {
+    const made = madeAs.get(id);
+    return made === undefined ? null : citeName(made);
+  });
+  const satisfied = naming.satisfied;
+  for (const p of naming.append) {
+    const change: Change = { kind: 'timeline-append', recordIds: [p.consent.requestId], entries: [p.line.entry], consent: p.consent };
+    const result = edits.some((e) => e.file.id === p.file.id) ? null : applyChanges(p.bytes, [change], fetched(p.file.id));
+    if (!result?.ok) {
+      console.error(`A request's line could not cite the name its thing was given (${result?.reason ?? 'edited'}); the request waits`);
+      journal = journal.filter((l) => l.rec.id !== p.consent.requestId);
+      continue;
+    }
+    lineState.set(p.line, 'planned');
+    places.set(p.file.id, p.file);
+    edits.push({ file: p.file, path: p.path, rows: [{ what: LINE_ADDED, line: 0 }], before: p.before, bytes: p.bytes, changes: [change], text: result.text, after: [p.consent.sourceFileId], keeps: [] });
+  }
+  for (const p of satisfied) places.set(p.file.id, p.file);
   for (const { pileId, folder, words, context } of fromWords) {
     const { to, name: title } = wordsPlace(pileId, words);
     destination(to);
@@ -1527,7 +1909,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     hashesNew = { text, before: hashesFile && text !== hashesText ? await ownVerified(hashesFile) : null };
   }
   return {
-    kind: 'decided' as const, context: opts.context, run: { runId: opts.runId, requestId: opts.requestId, scope: opts.scope, allowWeb: opts.allowWeb, requestedAt: opts.requestedAt },
+    kind: 'decided' as const, context, settlement, satisfied, runSources: things.filter((t) => !t.merge).map((t) => t.file.id), run: { runId: opts.runId, requestId: opts.requestId, scope: opts.scope, allowWeb: opts.allowWeb, requestedAt: opts.requestedAt },
     rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas: d.areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
     requestsBroken, requestsDone, sys, questionsList, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
@@ -1541,11 +1923,11 @@ type Decided = Extract<Awaited<ReturnType<typeof decide>>, { kind: 'decided' }>;
  * It reads neither Drive nor the reply; the manifest guard and grounding check what it built.
  */
 export async function build(decided: Decided): Promise<Ended> {
-  const fetched = (fileId: string) => decided.context ? { fileId, context: decided.context } : undefined;
+  const fetched = (fileId: string) => ({ fileId, context: decided.context, consents: decided.settlement.consents });
   const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
     requestsBroken, requestsDone, sys, questionsList, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows } = decided;
+    rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources } = decided;
 
   // The fixed operations, in order: clear last run's marks, make folders, file, the note edits, the merges, Bin the piles,
   // your changes, the hashes.
@@ -1801,6 +2183,10 @@ export async function build(decided: Decided): Promise<Ended> {
     // and for the moves of the piles its new question is about, so it is asked once they are filed.
     const derived = [
       ...journal.flatMap((l) => (l.rec.kind === 'answer' ? need(l.rec.id).derived : [])),
+      ...[...stateAsks.keys()].flatMap((id) => {
+        const edit = editOf.get(id);
+        return edit ? [edit, ...operations.filter((o) => o.effect.kind === 'move' && o.effect.before.fileId === id && o.dependsOn.includes(edit)).map((o) => o.operationId)] : [];
+      }),
       ...(fresh.length ? [...asking.keys()].flatMap((id) => movesOf.get(id) ?? []) : []),
       // A disagreement is asked once the note it links is written (C07).
       ...disagreeing.filter((d) => fresh.some((q) => q.id === d.question.id)).flatMap((d) => notesOf.get(d.pileId) ?? []),
@@ -1833,6 +2219,7 @@ export async function build(decided: Decided): Promise<Ended> {
   }
   /** What each record's archive waits for: the plan's `needs`. */
   const archives = new Map<string, readonly string[]>();
+  const satisfiedAppends: SatisfiedAppend[] = [];
   // An original and its inverse taken together give no row and no count (`pairsOf`, TL-P4-27 addendum 3); both apply.
   const paired = pairsOf(journal.map((l) => l.rec));
   for (const line of journal) {
@@ -1840,10 +2227,25 @@ export async function build(decided: Decided): Promise<Ended> {
     if (!archiveTo) throw new BowerError('unknown', OWN_FILES);
     const write = line.rec.kind === 'request' ? requestsOp : line.rec.kind === 'answer' ? questionsOp : null;
     const n = need(line.rec.id);
-    const derived = [...new Set([...(write ? [write] : []), ...n.edits, ...n.derived])];
+    // A person's request (`settleRequest`) also waits for the sources it settles on: its lines', or every thing filed.
+    const sourceMoves = line.rec.kind === 'request' ? settlement.sourcesOf(line.rec.id, runSources).flatMap((id) => moveOf.get(id) ?? []) : [];
+    const derived = [...new Set([...(write ? [write] : []), ...n.edits, ...n.derived, ...sourceMoves])];
     archives.set(line.rec.id, derived);
     const moves: string[] = [];
     for (const f of line.files) moves.push(await add({ kind: 'move', before: seen(f), parent: archiveTo, name: f.name, properties: {} }, derived));
+    // A line already there completes its request with the request's archive.
+    for (const p of satisfied.filter((x) => x.consent.requestId === line.rec.id)) if (moves[0]) {
+      satisfiedAppends.push({ consent: p.consent, entry: p.line.entry, before: seen(p.file), path: p.path, text: new TextDecoder().decode(p.bytes), content: p.before, operationId: moves[0] });
+    }
+    // Its "Left as you wrote them" rows, once a source it settles on is filed, or in its archive's one row when none is
+    // (an archive move has exactly one row, `grounded`).
+    const withArchive: LeftAsWritten[] = [];
+    for (const { requestId: _, sources: rowSources, ...row } of line.rec.kind === 'request' ? settlement.rowsOf(line.rec.id) : []) {
+      const filed = (rowSources ?? runSources).flatMap((id) => moveOf.get(id) ?? []);
+      if (!filed.length) withArchive.push(row);
+      for (const op of filed) reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), leftAsWritten: [row] } });
+    }
+    const left = withArchive.length ? { leftAsWritten: withArchive } : {};
     if (paired.has(line.rec.id)) {
       reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: 0 } });
     } else if (line.rec.undoes) {
@@ -1856,12 +2258,12 @@ export async function build(decided: Decided): Promise<Ended> {
       // A rule this run words: counted once it and its line's archive applied.
       reportPlan.push({ requires: [rulesOp, ...moves, ...archiveChain], when: 'applied', value: { ...empty(), rulesWorded: 1 } });
     } else if (line.rec.kind === 'request' && requestsOp) {
-      reportPlan.push({ requires: [requestsOp, ...moves, ...archiveChain], when: 'applied', value: { ...empty(), requests: [line.rec.text ?? line.rec.what] } });
+      reportPlan.push({ requires: [requestsOp, ...moves, ...archiveChain], when: 'applied', value: { ...empty(), requests: [line.rec.text ?? line.rec.what], ...left } });
     } else {
       // A rule taken out or already there is a rule record, not one of your other changes (TL-P2-23, TL-P2-33 §3).
       // An answer whose subject was gone says so in its answered row, never as a thing set aside.
       const gone = answeredRows.get(line.rec.id);
-      reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: line.rec.kind === 'rule' ? 0 : 1, ...(gone ? { answered: [gone] } : {}) } });
+      reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: line.rec.kind === 'rule' ? 0 : 1, ...(gone ? { answered: [gone] } : {}), ...left } });
     }
   }
 
@@ -1883,6 +2285,7 @@ export async function build(decided: Decided): Promise<Ended> {
   const head = {
     kind: 'run-manifest' as const, scope, runId: opts.runId, requestId: opts.requestId, runScope: opts.scope,
     allowWeb: opts.allowWeb, requestedAt: opts.requestedAt, captureId, capture: captureValue, reportPlan,
+    ...(satisfiedAppends.length ? { satisfiedAppends } : {}),
   };
   // v1 whenever the plan has no edit (TL-P2-20 Format): its identities and bytes are exactly as before.
   const v1: Operation[] = operations.flatMap((o) => (o.effect.kind === 'edit-text' ? [] : [{ ...o, effect: o.effect }]));
@@ -1927,8 +2330,39 @@ function refused(why: string): never {
   throw e;
 }
 
-/** A journal line as a B run captures it: the record, every file it was written to, and their one digest. */
-type JournalLine = { rec: JournalRecord; files: DriveFile[]; sha256: string };
+/**
+ * A journal line as a B run captures it: the record, every file it was written to, and their one digest; `archived`
+ * when it is a request whose record id is already in the archive (`archivedRecords`).
+ */
+type JournalLine = { rec: JournalRecord; files: DriveFile[]; sha256: string; archived: boolean };
+
+/**
+ * Whether a request of your changes is already archived (TL-P4-32 addenda 3 (1) and 5 (1)): a run archives a line by
+ * moving its file into `changes/archive`, and settles it there. A copy of the same record back in your changes
+ * (restored by hand, under any name) is that settled request again, never a new one, whatever its age:
+ * `settleRequest` binds no note for it. The record id inside each archived file decides, never a file name. The
+ * archive is read once, and only when your changes hold a request.
+ */
+function archivedRecords(drive: ScriptedRead, ix: VaultIndex): (id: string) => Promise<boolean> {
+  let ids: Promise<Set<string>> | null = null;
+  const read = async (): Promise<Set<string>> => {
+    const active = new Set(ix.journalFiles().map((x) => x.id));
+    const archived = ix.journalFiles(true).filter((x) => !active.has(x.id) && !x.folder && x.name.endsWith('.json'));
+    const out = new Set<string>();
+    for (const text of await Promise.all(archived.map((a) => ownText(drive, a)))) {
+      let rec: unknown;
+      try {
+        rec = JSON.parse(text);
+      } catch (e) {
+        if (!(e instanceof SyntaxError)) throw e;
+        continue;
+      }
+      if (isJournalRecord(rec)) out.add(rec.id);
+    }
+    return out;
+  };
+  return async (id) => (await (ids ??= read())).has(id);
+}
 
 /**
  * Your changes since the last tidy-up, each once by its id with all its
@@ -1973,13 +2407,14 @@ async function journalOf(drive: ScriptedRead, ix: VaultIndex): Promise<JournalLi
     copies.set(rec.id, [...(copies.get(rec.id) ?? []), { rec, file: f, sha256: digest.sha256 }]);
   }
   const lines: JournalLine[] = [];
+  const archived = archivedRecords(drive, ix);
   for (const [, all] of copies) {
     const [first] = all;
     if (!first || all.some((c) => c.sha256 !== first.sha256 || c.file.parents.length !== 1)) {
       left += all.length;
       continue;
     }
-    lines.push({ rec: first.rec, files: all.map((c) => c.file), sha256: first.sha256 });
+    lines.push({ rec: first.rec, files: all.map((c) => c.file), sha256: first.sha256, archived: first.rec.kind === 'request' && await archived(first.rec.id) });
   }
   lines.sort((a, b) => a.rec.at - b.rec.at || a.rec.id.localeCompare(b.rec.id));
   if (left) console.error(new BowerError('unknown', JOURNAL_LEFT), `${left} journal files left uncaptured`);
@@ -2180,7 +2615,7 @@ export function generatedName(title: string): string {
  * A Timeline line a run wants: its entry, the journal record it comes from (a merge's answer), its note's updated row
  * wording, and the captured file whose move it waits for (the thing it cites).
  */
-type WantedLine = { entry: EditEntry; record: string | null; what: string | null; after: string | null };
+type WantedLine = { consent?: TimelineConsent; entry: EditEntry; record: string | null; what: string | null; after: string | null };
 /** What one of your changes needs: to wait whole, the Timeline lines it adds, the edits naming it and what derives from it. */
 type Need = { held: boolean; lines: WantedLine[]; edits: string[]; derived: string[] };
 /** What a run wants to change in one note, before applyChanges decides what it may. */

@@ -1,0 +1,31 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [],
+    "asks": [
+      {
+        "fileId": "$file:Letter.txt",
+        "text": "Is this appointment for the flat hunt?",
+        "yes": "Yes, the flat hunt",
+        "no": "No, something else"
+      }
+    ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Letter.txt",
+        "to": "Projects/Flat hunt",
+        "name": "Appointment letter.txt",
+        "note": {
+          "name": "Appointment letter.md",
+          "summary": "An appointment confirmed for Alex in Saltmere.",
+          "body": "Alex has an appointment on 14 October 2026 in Saltmere. Alex confirmed that the letter is for the flat hunt.\n\nRelated: [[Flat hunt]] and [[Home visits]]."
+        }
+      }
+    ]
+  }
+]

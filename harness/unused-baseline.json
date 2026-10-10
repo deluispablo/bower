@@ -5,6 +5,10 @@
     "duplicates src/data/contracts/run-phases.ts RUN_STEPS=ACTIVE_PHASES",
     "exports api/src/security.ts COOKIE_ROUTES",
     "exports api/src/security.ts genericRateLimit",
-    "exports api/src/security.ts rateLimit"
-  ]
+    "exports api/src/security.ts rateLimit",
+    "files runner/src/hot.ts runner/src/hot.ts"
+  ],
+  "reasons": {
+    "files runner/src/hot.ts runner/src/hot.ts": "B3b wires it (TL-P4-42 addendum 1); B3b removes this line"
+  }
 }

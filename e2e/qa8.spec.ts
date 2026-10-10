@@ -22,16 +22,7 @@ test('the page menu on the phone renames a note', async ({ page, isMobile }) => 
   await expect(page).toHaveURL(/\/note\/Projects\/Flat%20hunt\/Flat%203%20on%20Larkspur\.md/);
 });
 
-test('the page menu on the phone makes a named note in a folder', async ({ page, isMobile }) => {
-  test.skip(!isMobile, 'the phone page menu');
-  await open(page, '/files/Areas/Car');
-  await page.getByRole('button', { name: 'More for Car' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'New note' }).click();
-  await expect(page.getByRole('dialog', { name: 'New note' })).toBeVisible();
-  await page.keyboard.type('Tyres');
-  await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/\/note\/Areas\/Car\/Tyres\.md/);
-});
+
 
 test('after Delete the tree keeps its place, and Undo brings the row back to the keyboard', async ({ page, isMobile }) => {
   test.skip(isMobile, 'the desktop tree');

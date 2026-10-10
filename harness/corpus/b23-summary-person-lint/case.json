@@ -1,0 +1,22 @@
+{
+  "id": "b23-summary-person-lint",
+  "capability": "C17",
+  "title": "A generated quoted summary leaves a personal missing summary unchanged",
+  "covers": "model",
+  "source": "TL-P4-39 §6 items 2–3; reused made-up B123 fixture; production proof pending",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "Keep this gardening notice with its topic.",
+      "files": [
+        "Mulch notice.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Resources/Gardening/Gardening.md"
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "id": "b1-index-no-change",
+  "capability": "C17",
+  "title": "Index ignores stamps, excluded paths and summaries beyond the first four KB",
+  "covers": "model",
+  "source": "new (TL-P4-39 B1; reused made-up TL-P4-38 index fixture; scripted proof pending)",
+  "scope": "instructions",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Refresh the index."
+    }
+  ],
+  "questions": [],
+  "bowerOwned": [
+    "Areas/Home/Home.md",
+    "Resources/Gardening/Gardening.md"
+  ],
+  "presses": [
+    {
+      "request": {
+        "kind": "tidy",
+        "text": "Refresh the index."
+      }
+    }
+  ]
+}

@@ -14,6 +14,7 @@ interface Entry {
   minor: boolean;
   /** The bird's engine while it moves: where d-v2-24's `react()` finds the bird to act on. */
   handle: BirdEngine | null;
+  frame: Element | null;
 }
 let entries: Entry[] = [];
 let counter = 0;
@@ -35,24 +36,29 @@ function activeId(): string | null {
 
 /**
  * The engine of the bird holding the turn, or null while that bird is still.
- * @public d-v2-24's `react()` calls it; nothing in the app does yet.
  */
 export function activeHandle(): BirdEngine | null {
   const id = activeId();
   return entries.find((e) => e.id === id)?.handle ?? null;
 }
 
+/** The active engine's gaze frame: the port measures elements in these same pixels. */
+export function activeFrame(): Element | null {
+  return entries.find((e) => e.id === activeId())?.frame ?? null;
+}
+
 export interface BirdTurn {
   turn: boolean;
   /** Hands presence this bird's engine (null when it has none). */
-  setHandle: (handle: BirdEngine | null) => void;
+  setHandle: (handle: BirdEngine | null, frame?: Element | null) => void;
 }
 
 export function useBirdTurn(priority = 0, { minor = false }: { minor?: boolean } = {}): BirdTurn {
   const id = useId();
   const handle = useRef<BirdEngine | null>(null);
+  const frameRef = useRef<Element | null>(null);
   useEffect(() => {
-    entries = [...entries, { id, priority, order: ++counter, minor, handle: handle.current }];
+    entries = [...entries, { id, priority, order: ++counter, minor, handle: handle.current, frame: frameRef.current }];
     emit();
     return () => {
       entries = entries.filter((e) => e.id !== id);
@@ -60,10 +66,11 @@ export function useBirdTurn(priority = 0, { minor = false }: { minor?: boolean }
     };
   }, [id, priority, minor]);
   const setHandle = useCallback(
-    (h: BirdEngine | null) => {
+    (h: BirdEngine | null, frame?: Element | null) => {
       handle.current = h;
+      frameRef.current = h ? frame ?? null : null;
       const entry = entries.find((e) => e.id === id);
-      if (entry) entry.handle = h;
+      if (entry) { entry.handle = h; entry.frame = frameRef.current; }
     },
     [id],
   );

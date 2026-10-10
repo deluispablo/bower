@@ -1,3 +1,4 @@
+import { resize } from './viewport';
 import { animationsEnd, expectAxeClean } from './axe';
 import { expect, test } from './fixtures';
 
@@ -5,17 +6,20 @@ const COPY = 'This note is empty. To write in it, open your Bower folder on your
 
 for (const width of [375, 1440]) {
   test(`empty-note help and Open in Drive at ${width}px`, async ({ page }) => {
-    // Create through the same phone menu at either size, then measure the requested viewport.
-    await page.setViewportSize({ width: 375, height: 900 });
-    await page.goto('/files/Resources/Cooking?source=demo&scenario=default&time=instant');
+    // Seed an empty Markdown file through Add, as the upload specs seed their piles.
+    await resize(page, { width: 375, height: 900 });
+    await page.goto('/add?source=demo&scenario=default&time=instant');
     await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
-    await page.getByRole('button', { name: 'More for Cooking', exact: true }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'New note', exact: true }).click();
-    const sheet = page.getByRole('dialog', { name: 'New note', exact: true });
-    await sheet.getByRole('textbox', { name: 'Name', exact: true }).fill('Soup ideas');
-    await sheet.getByRole('button', { name: 'Make the note', exact: true }).click();
-    await expect(page).toHaveURL(/\/note\/Resources\/Cooking\/Soup%20ideas\.md/);
-    await page.setViewportSize({ width, height: 900 });
+    await page.locator('input[type=file][multiple]').setInputFiles({ name: 'Soup ideas.md', mimeType: 'text/markdown', buffer: Buffer.alloc(0) });
+    await page.getByRole('button', { name: 'Put 1 thing in the inbox', exact: true }).click();
+    await expect(page.getByRole('status').getByText('1 thing in the inbox', { exact: true })).toBeVisible();
+    await page.getByRole('navigation', { name: 'Main', exact: true }).getByRole('link', { name: 'Files', exact: true }).click();
+    const tree = page.getByRole('tree', { name: 'Your Bower folder', exact: true });
+    const inbox = tree.locator('[data-path="Inbox"]');
+    if (await inbox.getAttribute('aria-expanded') !== 'true') await inbox.click();
+    await tree.locator('[data-path="Inbox/Soup ideas.md"]').click();
+    await expect(page).toHaveURL(/\/note\/Inbox\/Soup%20ideas\.md/);
+    await resize(page, { width, height: 900 });
     const help = page.getByText(COPY, { exact: true });
     const action = page.getByRole('main').getByRole('button', { name: 'Open in Drive', exact: true });
     await expect(help).toBeVisible();

@@ -1,0 +1,22 @@
+{
+  "id": "c12-text-budget-truthful",
+  "capability": "C12",
+  "title": "A cut source is filed without inventing its unseen news",
+  "covers": "model",
+  "source": "new (C12 preparation; scripted fault and lifecycle proof pending)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "File the garden notice beside the garden plot and record only news Bower can read.",
+      "files": [
+        "Long garden notice.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Areas/Home/Garden plot.md"
+  ]
+}

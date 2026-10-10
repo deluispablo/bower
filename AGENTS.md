@@ -26,7 +26,7 @@ The Bower app rebuild. Owner authorization and roles: `docs/harness/GOVERNANCE.m
 - Development stays local. Owner-authorized exception: back up only accepted local `main` to private `deluispablo/bower-app`, following `docs/harness/BACKUP.md`. Workers never push; no other branch/tag, force push or deployment. No secrets in the repo.
 - English everywhere. UI copy: sentence case, plain words, never "vault", no file names or jargon in sentences. Bower is a bowerbird, never "the bird" in copy.
 - TypeScript strict, no `any`. Errors are never swallowed: a `BowerError` with one short sentence for the person, details to `console.error`.
-- The app never hard-deletes (Drive Bin only), never writes `index.md`, `hot.md`, `log.md`, nor Bower's sections of a note. Every content write passes the modifiedTime it read; a move or rename checks the name and place it read (`stillAsSeen`), since a text change elsewhere does not clash with it.
+- The app never hard-deletes (Drive Bin only), never writes the runner's files in `.bower/` (including `index.md`, `hot.md` and `log.md` there, TL-P4-45), nor Bower's sections of a note. Every content write passes the modifiedTime it read; a move or rename checks the name and place it read (`stillAsSeen`), since a text change elsewhere does not clash with it.
 - Sign-out forgets what this device kept about the person (`data/device.ts`); the journal outbox stays at sign-out, since its lines are changes already made in that folder (keyed by folder, never sent to another).
 - Bower on screen: one animated bird per screen (`bird/presence.ts`); respect "Bower moves" and reduced motion.
 - Brand tokens: `src/styles/tokens.json`, then `pnpm tokens`. Teal and amber are fills; text uses `--brand-line` / `--accent-line`.

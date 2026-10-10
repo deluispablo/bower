@@ -1,0 +1,44 @@
+{
+  "files": {
+    "present": [
+      "Projects/Garden visit/Visit update.txt",
+      "Projects/Garden visit/Garden visit.md"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "protectedRanges": [
+    {
+      "path": "Projects/Garden visit/Garden visit.md",
+      "range": {
+        "heading": "My plans"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "path": "Projects/Garden visit/Garden visit.md",
+      "contains": [
+        "I want to keep my own checklist here."
+      ],
+      "timeline": [
+        "2026-09-12 \u00b7 Started planning the garden visit.",
+        "The garden visit will meet at Wren Hall in Saltmere."
+      ],
+      "timelineCount": 2,
+      "excludes": [
+        "Lark Hall"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "created": [],
+    "updated": [
+      "Projects/Garden visit/Garden visit.md"
+    ],
+    "questionsExactly": 0
+  }
+}

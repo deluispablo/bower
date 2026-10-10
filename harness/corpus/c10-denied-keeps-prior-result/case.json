@@ -1,0 +1,18 @@
+{
+  "id": "c10-denied-keeps-prior-result",
+  "capability": "C10",
+  "title": "Web permission off with a saved result already present",
+  "covers": "model",
+  "source": "new (C10 preparation; deterministic proposals pending full lookup harness proof)",
+  "scope": "instructions",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Look up the current council tax band for the Larkspur Lane flat."
+    }
+  ],
+  "questions": [],
+  "bowerOwned": []
+}

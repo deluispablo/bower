@@ -1,3 +1,4 @@
+import { resize } from './viewport';
 import { type Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { animationsEnd, expectAxeClean } from './axe';
@@ -18,7 +19,7 @@ test('desktop page widths follow the designer table and List/Table stays on one 
     [900, 848, false, false], [1024, 672, true, false], [1100, 748, true, false],
     [1280, 608, true, true], [1440, 768, true, true],
   ] as const) {
-    await page.setViewportSize({ width, height: 900 });
+    await resize(page, { width, height: 900 });
     await page.goto(folder);
     await expect(page.locator('#boot')).toHaveCount(0);
     await expect.poll(() => page.locator('#main').evaluate((el) => el.getBoundingClientRect().width)).toBe(column);
@@ -50,7 +51,7 @@ test('desktop page widths follow the designer table and List/Table stays on one 
 
 for (const side of ['side', 'right'] as const) {
   test(`folded ${side} panel uses the edge sheet and returns focus on every close`, async ({ page }) => {
-    await page.setViewportSize({ width: 900, height: 900 });
+    await resize(page, { width: 900, height: 900 });
     await page.goto(folder);
     await expect(page.locator('#boot')).toHaveCount(0);
     // Radix hides the invoking shell from assistive technology while the modal is open.
@@ -90,7 +91,7 @@ for (const side of ['side', 'right'] as const) {
     await expect(dialog).toHaveCount(0);
     await expect(toggle).toBeFocused();
     await open();
-    await page.setViewportSize({ width: 1440, height: 900 });
+    await resize(page, { width: 1440, height: 900 });
     await expect(dialog).toHaveCount(0);
     const dockedToggle = page.getByRole('button', { name: `Hide the ${side} panel` });
     await expect(dockedToggle).toBeFocused();
@@ -98,14 +99,14 @@ for (const side of ['side', 'right'] as const) {
     await expect(page.getByRole('complementary', { name: side === 'side' ? 'Side panel' : 'Right panel', exact: true })).toBeVisible();
     expect(await saved(page)).toBe(JSON.stringify(prefs));
     await page.getByRole('complementary', { name: side === 'side' ? 'Side panel' : 'Right panel', exact: true }).getByRole('tab').first().focus();
-    await page.setViewportSize({ width: 900, height: 900 });
+    await resize(page, { width: 900, height: 900 });
     await expect(toggle).toBeFocused();
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   });
 }
 
 test('opening a folder or linked note dismisses its overlay to the new heading', async ({ page }) => {
-  await page.setViewportSize({ width: 900, height: 900 });
+  await resize(page, { width: 900, height: 900 });
   await page.goto(folder);
   await expect(page.locator('#boot')).toHaveCount(0);
   await page.getByRole('button', { name: 'Show the side panel' }).click();
@@ -129,7 +130,7 @@ test('opening a folder or linked note dismisses its overlay to the new heading',
 });
 
 test('edge sheets hold still with Bower moves off and with reduced motion', async ({ page }) => {
-  await page.setViewportSize({ width: 900, height: 900 });
+  await resize(page, { width: 900, height: 900 });
   for (const reduced of [false, true]) {
     await page.emulateMedia({ reducedMotion: reduced ? 'reduce' : 'no-preference' });
     await page.goto(folder);
@@ -154,7 +155,7 @@ test('edge sheets hold still with Bower moves off and with reduced motion', asyn
 test('edge sheets slide with Bower moves on and no reduced motion', {
   annotation: { type: 'bower-moves-on', description: 'Positive control for edge motion' },
 }, async ({ page }) => {
-  await page.setViewportSize({ width: 900, height: 900 });
+  await resize(page, { width: 900, height: 900 });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.goto(folder);
   await expect(page.locator('#boot')).toHaveCount(0);
@@ -171,7 +172,7 @@ test('edge sheets slide with Bower moves on and no reduced motion', {
 });
 
 test('a real mouse drag on the side panel resizer reaches its target width', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 900 });
+  await resize(page, { width: 1280, height: 900 });
   await page.goto(folder);
   await expect(page.locator('#boot')).toHaveCount(0);
   // Leave room for the full 80 px drag; the separate limit test covers clamping with both panels open.
@@ -197,7 +198,7 @@ test('a real mouse drag on the side panel resizer reaches its target width', asy
 });
 
 test('resizers publish and stop at the current page limit without folding', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 900 });
+  await resize(page, { width: 1280, height: 900 });
   await page.goto(folder);
   await expect(page.locator('#boot')).toHaveCount(0);
   const left = page.getByRole('separator', { name: 'Resize the side panel' });

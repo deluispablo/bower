@@ -1,0 +1,17 @@
+{
+  "files": {
+    "present": [
+      "Inbox/Seed_collection_final(2).txt"
+    ],
+    "absent": [
+      "Resources/Gardening/Seed collection.txt",
+      "Resources/Gardening/Seed collection.md"
+    ]
+  },
+  "unchanged": [
+    "Rules.md"
+  ],
+  "report": {
+    "setAside": 0
+  }
+}

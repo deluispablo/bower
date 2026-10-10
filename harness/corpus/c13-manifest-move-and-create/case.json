@@ -1,0 +1,21 @@
+{
+  "id": "c13-manifest-move-and-create",
+  "capability": "C13",
+  "title": "Undo a manifest move and an unchanged generated note",
+  "covers": "model",
+  "source": "new (C13 preparation; snapshot only, scripted manifest lifecycle proof pending)",
+  "scope": "undo",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Undo the last tidy-up"
+    }
+  ],
+  "questions": [],
+  "bowerOwned": [
+    "Rules.md",
+    "Resources/Gardening/Seed collection.md"
+  ]
+}

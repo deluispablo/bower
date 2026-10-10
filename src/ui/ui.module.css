@@ -73,6 +73,7 @@
     right: auto;
     bottom: auto;
     top: 12vh;
+    max-height: calc(100dvh - 12vh - 24px);
     width: min(560px, 92vw);
     transform: translateX(-50%);
     border-radius: 20px;
