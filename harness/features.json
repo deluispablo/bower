@@ -6531,7 +6531,8 @@
       "Commits a two-commit plan in order and gates it."
     ],
     "verify": "pnpm exec vitest run src/codex-run.test.ts -t \"refuses the main checkout, a codex branch and a dirty tree|commits a two-commit plan in order with implementer: codex|refuses guarded paths, secrets and addresses\"",
-    "note": "TL-P4-31 ruling 4. Codex, then a Claude review. Packet 2026-10-10-c5-codex-run-packet.md. implementer: codex."
+    "note": "TL-P4-31 ruling 4. Codex, then a Claude review. Packet 2026-10-10-c5-codex-run-packet.md. implementer: codex.",
+    "review": "P4-73 PASS"
   },
   {
     "id": "folder-header-wrap",

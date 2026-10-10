@@ -394,3 +394,4 @@ c05-person-notes,contract sign-off,codex,gpt-5-codex,medium,1,959713,955024,,857
 c5-codex-run,implementer,codex,gpt-5-codex,high,1,1342888,1314976,,1247104,27912,,,,delivered,2026-10-10
 d-v2-24a,implementer (fix round 2),codex,gpt-5-codex,high,1,828552,821762,,764672,6790,,,,3 findings fixed,2026-10-10
 p4-c06-prep,drafter,codex,gpt-5-codex,medium,1,873175,863581,,786176,9594,,,,3 cases + doc,2026-10-10
+c5-codex-run,reviewer,claude,bower-reviewer,,1,36835,,,,,,5,0.7,PASS (P4-73),2026-10-10
