@@ -7,3 +7,11 @@ Read-only, medium effort, scope `git diff claude/p3...d-v2-24a` at 4e9fae6c. Tok
 2. **Important — src/bird/engine.ts:734:** Offline, and error on the sleep pose, return to neutral before abruptly restoring alarm. Call `react('offline')` on idle and leave the message showing: the startle’s fall brings head and tuft to 0, then the alarm branch pins the tuft from 0° to 18° in one frame. Sleep-pose error repeats this at line 727. **Contract:** TL-P4-26 addendum 1(B)/(E) and the signed table require startle followed by alarm while the message shows, with every value easing in.
 
 findings: 2
+
+## Round 2 pass
+
+Read-only, medium effort. Tokens: input 639658 (cached 563072), output 3162.
+
+1. **Important — `src/bird/engine.ts:784`**: Moves-off releases before the facing scale settles. Reproduce by focusing behind an idle Bower for 1.5 s, letting it turn left, then disabling “Bower moves.” At the 0.6 s completion callback, the drawn x-scale is **0.611**, rather than **1.000**; release visibly snaps it to the CSS still frame. `step()` at line 1533 overwrites the settle’s face target with the existing `B.face = -1`. Round 2 prevents new turns during settlement but leaves this earlier-turn case unfixed. Contract: **TL-P4-26 §3**, packet §6 and “What the person sees”: reach the still frame before release.
+
+findings: 1
