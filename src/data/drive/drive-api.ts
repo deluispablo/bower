@@ -161,6 +161,8 @@ export const DRIVE_MESSAGES: Record<ErrorCode, string> = {
   'not-found': "That isn't in your Bower folder any more.",
   conflict: 'This note changed somewhere else. Open it again to see the new version.',
   unknown: "Google Drive didn't answer. Try again.",
+  // A withdrawal refused (write-once's `withdraw`): the dock and the pile's box put "Not undone yet: " or "Not removed yet: " first.
+  unreached: 'Bower could not reach Drive to check. Try again when you are back online.',
 };
 
 export const driveError = (code: ErrorCode): BowerError => new BowerError(code, DRIVE_MESSAGES[code]);

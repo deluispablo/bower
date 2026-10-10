@@ -4,6 +4,7 @@
  * own sentence; anything else gets one plain sentence.
  */
 import { BowerError, type ErrorCode } from '../types';
+import { DRIVE_MESSAGES } from '../drive/drive-api';
 import { answered } from '../wait';
 import { isRunWire, type Me, type ProcessOptions, type RunReply, type StatusReply, type WorkerApi } from './worker-api';
 import { isLeaseReply, openElsewhere, type LeaseReply, type SessionAction } from '../session';
@@ -14,6 +15,7 @@ const SENTENCE: Record<ErrorCode, string> = {
   'not-found': 'Your Bower folder is not there any more.',
   conflict: 'That cannot be done right now.',
   unknown: "Bower's server didn't answer. Try again.",
+  unreached: DRIVE_MESSAGES.unreached,
 };
 
 const codeFor = (status: number): ErrorCode => (status === 401 ? 'auth' : status === 404 ? 'not-found' : status === 409 ? 'conflict' : 'unknown');

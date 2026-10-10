@@ -88,7 +88,14 @@ export function grounded(manifest: RunManifest): boolean {
     // A created or updated row names the note its first operation makes or edits.
     const first = ops.get(c.requires[0] ?? '')?.effect;
     const at = first ? madeAt(first) : null;
-    if ([...c.value.created, ...c.value.updated].some((r) => r.path !== at)) return false;
+    // A single row of a change already made is grounded by that journal line's archive operation.
+    const journalRow = c.when === 'applied' && c.value.yourChanges === 1 && first?.kind === 'move'
+      && lines.has(first.before.fileId) && pathOf(first.parent) === SYSTEM.archive
+      && c.value.updated.length === 1 && !c.value.created.length && !c.value.filed.length
+      && !c.value.setAside.length && !c.value.questions.length && !c.value.answered?.length
+      && !c.value.alreadySaved?.length && !c.value.requests?.length && c.value.rulesWorded === undefined
+      && c.value.updated[0]?.line === undefined;
+    if (!journalRow && [...c.value.created, ...c.value.updated].some((r) => r.path !== at)) return false;
   }
   const rows = (o: OperationV2): ReportContribution[] => applied.get(o.operationId) ?? [];
   /** How many set-aside rows each operation must have: none but the ones counted below. */

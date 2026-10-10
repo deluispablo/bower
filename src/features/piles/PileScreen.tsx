@@ -312,7 +312,10 @@ function useTryAgain(pile: Pile | undefined, choose: boolean): { onClick: () => 
 export function RemovePile({ pile, disabled, block, describedBy, onRemoved }: { pile: Pile; disabled?: boolean; block?: boolean; describedBy?: string | undefined; onRemoved?: (() => void) | undefined }) {
   const { vault } = useSources();
   const [confirm, setConfirm] = useState(false);
+  // Refused because Drive did not answer whether a thing of the pile landed (`unreached`): said in the box, not a toast.
+  const [unreached, setUnreached] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
+  const removeButton = useRef<HTMLButtonElement>(null);
   const asked = useRef(false);
   useEffect(() => {
     // The question opens on Keep it, its least destructive answer, so a repeated key cannot remove the pile.
@@ -334,9 +337,10 @@ export function RemovePile({ pile, disabled, block, describedBy, onRemoved }: { 
       ) : (
         <>
           {/* A pile with no things and no words has nothing to go to the Bin: only the buttons. */}
-          {!empty && <p>{onlyNote ? 'The note goes to the Bin of your Drive.' : 'Its files go to the Bin of your Drive, where you can get them back.'}</p>}
+          {unreached ? <p className={s.unreached}>{unreached}</p> : !empty && <p>{onlyNote ? 'The note goes to the Bin of your Drive.' : 'Its files go to the Bin of your Drive, where you can get them back.'}</p>}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <Button
+              ref={removeButton}
               variant="danger"
               size={size}
               aria-describedby={describedBy}
@@ -346,13 +350,26 @@ export function RemovePile({ pile, disabled, block, describedBy, onRemoved }: { 
                     toast('Pile removed');
                     onRemoved?.();
                   },
-                  (e: unknown) => report(e, 'That did not work. Try again.'),
+                  (e: unknown) => {
+                    if (!(e instanceof BowerError && e.code === 'unreached')) return report(e, 'That did not work. Try again.');
+                    console.error(e);
+                    // The box's line says it, and Remove the pile stays the retry, with the focus on it.
+                    setUnreached(`Not removed yet: ${e.message}`);
+                    removeButton.current?.focus();
+                  },
                 )
               }
             >
               Remove the pile
             </Button>
-            <Button variant="ghost" size={size} onClick={() => setConfirm(false)}>
+            <Button
+              variant="ghost"
+              size={size}
+              onClick={() => {
+                setUnreached(null);
+                setConfirm(false);
+              }}
+            >
               Keep it
             </Button>
           </div>

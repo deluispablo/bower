@@ -520,6 +520,7 @@ c4-lockf	5a2a41ca7a59a1ce	2026-10-09	known-green: red at 5ae6061c (/private/tmp/
 c2-create-by-id	3bc3c81c51ca9e82	2026-10-09	known-green: verify renamed by c4-create-landed round 1 (TL-P4-24 addendum 15: refused first, then made); green at 2108340a
 c4-precheck-runner	8cc553b4ddfb3fcb	2026-10-09	red (fixed in 835eb3f5)
 c4-create-landed	dab17277f4906797	2026-10-09	red (fixed in 3022e9df)
+c2-create-by-id	a4944d46f66f289e	2026-10-09	known-green: verify drops 'taking a change back whose Bin answer was lost…' (deleted with the journal Bin, TL-P4-27 addendum 2); green at f8ed5e19
 p4-corpus-driver	b67e90f4068fe9ac	2026-10-09	red (fixed in 0b77422f)
 c4-parse-once	a473bf6c3bd4ae48	2026-10-10	red (fixed in eb909a67)
 d-v2-07	949b96a3d0707255	2026-10-10	known-green: reds proved per round by red-owning sessions (273b58af, 38262feb, 15fd3964, fa474bd0, a7d6ed1a, 66a97045 each failed before its fix); fixes 5784747a, c1aa1941, 69235c10; merged 86b4fe3e; designer verified 2026-10-10

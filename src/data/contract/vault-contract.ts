@@ -234,7 +234,8 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
         expect(after.at(-1)?.path).toBe('Areas/Lease draft.pdf');
       });
 
-      it('undo of a move removes its entry', async () => {
+      // TL-P4-27 addenda 2 and 3: an Undo records the inverse line (or drops a line never sent); the pair is not shown.
+      it('undo of a move or a Bin shows no entry for either', async () => {
         const { vault } = await open();
         const n = (await vault.changes()).length;
         const to = await vault.move(LEASE, 'Areas/Home');
@@ -244,23 +245,27 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
         expect(await vault.changes()).toHaveLength(n);
       });
 
-      it('one line for a new thing named straight away', async () => {
+      // TL-P4-27 addendum 4 (3): one line when its making was never sent; once sent, history is kept: the making, then
+      // the rename, never a deleted line.
+      it('one line for a new thing named straight away, or its making and then its rename once sent', async () => {
         const { vault } = await open();
         const n = (await vault.changes()).length;
         const p = await vault.create('Resources', 'note');
         const named = await vault.rename(p, 'Soup ideas');
-        const after = await vault.changes();
-        expect(after).toHaveLength(n + 1);
-        expect(after.at(-1)).toMatchObject({ kind: 'create', path: named });
+        const after = (await vault.changes()).slice(n);
+        if (after.length === 1) expect(after[0]).toMatchObject({ kind: 'create', path: named });
+        else expect(after.map((c) => [c.kind, c.path])).toEqual([['create', p], ['rename', named]]);
         expect(after.at(-1)?.what).toMatch(/Soup ideas/);
       });
 
-      it('made and binned straight away leaves no trace', async () => {
+      // TL-P4-27 addendum 4 (3): no trace when its making was never sent; once sent, its making and then its Bin.
+      it('made and binned straight away: no trace, or its making and then its Bin', async () => {
         const { vault } = await open();
         const n = (await vault.changes()).length;
         const p = await vault.create('Resources', 'note');
         await vault.trash(p);
-        expect(await vault.changes()).toHaveLength(n);
+        const after = (await vault.changes()).slice(n);
+        if (after.length) expect(after.map((c) => [c.kind, c.path])).toEqual([['create', p], ['trash', p]]);
       });
     });
 

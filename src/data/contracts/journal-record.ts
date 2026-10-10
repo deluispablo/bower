@@ -12,6 +12,11 @@ export interface JournalExtra {
   fileId?: string;
   /** A rule taken out: its wording, as Rules.md has it. */
   removes?: string;
+  /**
+   * An inverse line (an Undo, TL-P4-27 addenda 2 and 3): the id of the line it takes back. Additive: a reader that checks
+   * only the keys it lists reads it, and a line without it is an ordinary change.
+   */
+  undoes?: string;
 }
 
 export type JournalRecord = ChangeEntry & JournalExtra & { v: 1; device: string };
@@ -21,5 +26,21 @@ const KINDS: readonly ChangeKind[] = ['rule', 'request', 'move', 'rename', 'crea
 export function isJournalRecord(v: unknown): v is JournalRecord {
   if (!v || typeof v !== 'object') return false;
   const r = v as Record<string, unknown>;
-  return r.v === 1 && typeof r.id === 'string' && !!r.id && typeof r.device === 'string' && !!r.device && typeof r.at === 'number' && Number.isFinite(r.at) && typeof r.what === 'string' && KINDS.includes(r.kind as ChangeKind) && ['path', 'from', 'text', 'questionId', 'fileId', 'removes'].every((key) => r[key] === undefined || typeof r[key] === 'string');
+  return r.v === 1 && typeof r.id === 'string' && !!r.id && typeof r.device === 'string' && !!r.device && typeof r.at === 'number' && Number.isFinite(r.at) && typeof r.what === 'string' && KINDS.includes(r.kind as ChangeKind) && ['path', 'from', 'text', 'questionId', 'fileId', 'removes', 'undoes'].every((key) => r[key] === undefined || typeof r[key] === 'string');
+}
+
+/**
+ * The ids of the lines that fold as pairs among `lines` (TL-P4-27 addenda 3 and 4 (2)): every line whose `undoes` names a
+ * line in the set, and that line. Two inverses of one original fold with it as one pair. The one home for pairing, used
+ * by "Since the last tidy-up" and by the run report; presentation and counting only, never a cancellation: a run still
+ * applies both lines in order. An inverse whose original is not among `lines` (taken by an earlier run) is ordinary.
+ */
+export function pairsOf(lines: readonly JournalRecord[]): Set<string> {
+  const ids = new Set(lines.map((l) => l.id));
+  const out = new Set<string>();
+  for (const l of lines) {
+    if (l.undoes === undefined || !ids.has(l.undoes)) continue;
+    out.add(l.id).add(l.undoes);
+  }
+  return out;
 }

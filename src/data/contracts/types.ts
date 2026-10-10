@@ -291,7 +291,11 @@ export interface User {
 
 export type FolderState = 'ready' | 'missing';
 
-export type ErrorCode = 'offline' | 'not-found' | 'conflict' | 'auth' | 'unknown';
+/**
+ * `unreached`: a withdrawal (an Undo, a pile removal) refused because Drive did not answer the check of a create that
+ * may have landed (write-once's `withdraw`); only the app raises it, never a Drive or Worker answer.
+ */
+export type ErrorCode = 'offline' | 'not-found' | 'conflict' | 'auth' | 'unknown' | 'unreached';
 
 export class BowerError extends Error {
   constructor(

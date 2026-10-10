@@ -6,16 +6,26 @@ import s from './ui.module.css';
 interface Toast {
   id: number;
   text: string;
-  action?: { label: string; run: () => void };
+  /** A run that returns a promise keeps its toast until it settles, so what it ends with can `replace` it. */
+  action?: { label: string; run: () => unknown };
 }
+type Holder = 'pointer' | 'keyboard' | 'action';
 interface Toasts {
   list: Toast[];
-  show: (text: string, action?: Toast['action']) => void;
+  /** Shows a toast; its id, to `replace` it later. */
+  show: (text: string, action?: Toast['action']) => number;
+  /**
+   * The same toast with new words and action (an Undo refused, then Try again): one message, never a second. It keeps
+   * its place and its button, so focus stays on the action, and its time starts again (paused while held).
+   */
+  replace: (id: number, text: string, action?: Toast['action']) => void;
+  /** The action pressed: it runs, and the toast goes once it ends, unless it was replaced meanwhile. */
+  press: (id: number) => void;
   dismiss: (id: number) => void;
   /** Drops toasts whose action no longer makes sense (e.g. "Tidy up now" once a run started). */
   dismissAction: (label: string) => void;
   /** The pointer or the keyboard is on a toast: it waits; when they leave, its time starts again. */
-  hold: (id: number, on: boolean, by: 'pointer' | 'keyboard') => void;
+  hold: (id: number, on: boolean, by: Holder) => void;
 }
 
 /** Long enough to read a sentence and reach its button (WCAG 2.2.1 asks for room to act). */
@@ -38,6 +48,35 @@ export const useToasts = create<Toasts>((set, get) => {
       const id = ++n;
       set({ list: [...get().list.slice(-2), action ? { id, text, action } : { id, text }] });
       later(id, action ? ACTION_MS : PLAIN_MS);
+      return id;
+    },
+    replace: (id, text, action) => {
+      if (!get().list.some((t) => t.id === id)) {
+        // Gone meanwhile (put away by something newer): said once, as a new message.
+        get().show(text, action);
+        return;
+      }
+      set({ list: get().list.map((t) => (t.id !== id ? t : action ? { id, text, action } : { id, text })) });
+      const holders = held.get(id);
+      holders?.delete('action');
+      if (holders?.size) clearTimeout(timers.get(id));
+      else later(id, action ? ACTION_MS : PLAIN_MS);
+    },
+    press: (id) => {
+      const t = get().list.find((x) => x.id === id);
+      if (!t?.action) return;
+      const ran = t.action.run();
+      if (!(ran instanceof Promise)) {
+        get().dismiss(id);
+        return;
+      }
+      // It waits while its action runs; what the action ends with may replace it, and then it stays.
+      get().hold(id, true, 'action');
+      const settled = (): void => {
+        if (get().list.find((x) => x.id === id) === t) get().dismiss(id);
+      };
+      // expected: the action tells its own failure (it replaces the toast or reports it); this only puts the toast away.
+      void ran.then(settled, settled);
     },
     hold: (id, on, by) => {
       const t = get().list.find((x) => x.id === id);
@@ -60,11 +99,10 @@ export const useToasts = create<Toasts>((set, get) => {
   };
 });
 
-export const toast = (text: string, action?: Toast['action']): void =>
-  useToasts.getState().show(text, action);
+export const toast = (text: string, action?: Toast['action']): number => useToasts.getState().show(text, action);
 
 export function Toasts() {
-  const { list, dismiss, hold } = useToasts();
+  const { list, press, hold } = useToasts();
   // Where the keyboard was before a toast took it, so that closing the toast gives it back
   // (WAI-ARIA APG: on close, focus returns to what it came from). A toast that never had it changes nothing.
   const from = useRef(new Map<number, HTMLElement | null>());
@@ -105,10 +143,7 @@ export function Toasts() {
           {t.action && (
             <button
               type="button"
-              onClick={() => {
-                t.action?.run();
-                dismiss(t.id);
-              }}
+              onClick={() => press(t.id)}
             >
               {t.action.label}
             </button>
