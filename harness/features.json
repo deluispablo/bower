@@ -6678,7 +6678,7 @@
     "id": "create-named",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "Naming a new thing has one home: createNamed(folder, name) in file-actions, which NameSheet uses with no behaviour change (DEFECTS new-folder-first-letters, ruling (b), entry 1).",
     "steps": [

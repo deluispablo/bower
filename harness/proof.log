@@ -539,3 +539,4 @@ c5-empty-note-help	d24fb50b1a0a33ea	2026-10-10	known-green: red proven: without 
 c5-css-tokens	bd9d2a2e8021e208	2026-10-10	known-green: red proven before the fix: the guard failed on exactly the two --muted uses (/tmp/csst-red.log, recorded in the notes); the fix no longer reverts cleanly after the merge with c5-empty-note-help
 d-v2-24a	390b7947b25acc87	2026-10-10	red (fixed in 4209d72f)
 landing-csp	ee2f2a45b4cda374	2026-10-10	red (fixed in 781f7fc1)
+create-named	4cbf86070cdbeda0	2026-10-10	red (fixed in cf04e6ae)
