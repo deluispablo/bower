@@ -1,0 +1,25 @@
+{
+  "id": "c10-fresh-result-cited",
+  "capability": "C10",
+  "title": "A current result with its exact source and dates",
+  "covers": "model",
+  "source": "new (C10 preparation; deterministic proposals pending full lookup harness proof)",
+  "scope": "all",
+  "allowWeb": true,
+  "inbox": [
+    {
+      "line": "",
+      "files": [
+        "Council tax web result.txt"
+      ]
+    }
+  ],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Look up the current council tax band for the Larkspur Lane flat."
+    }
+  ],
+  "questions": [],
+  "bowerOwned": []
+}

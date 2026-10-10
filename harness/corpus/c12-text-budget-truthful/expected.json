@@ -1,0 +1,43 @@
+{
+  "files": {
+    "present": [
+      "Areas/Home/Garden plot.md",
+      "Areas/Home/Long garden notice.txt"
+    ],
+    "absent": [
+      "Inbox/*",
+      "Areas/Home/Long garden notice.md"
+    ]
+  },
+  "protectedRanges": [
+    {
+      "path": "Areas/Home/Garden plot.md",
+      "range": {
+        "heading": "My plans"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "path": "Areas/Home/Garden plot.md",
+      "timeline": [
+        "2026-09-12 \u00b7 Planted garlic.",
+        "The replacement water butt has arrived.",
+        "[[Long garden notice.txt]]"
+      ],
+      "timelineCount": 2,
+      "excludes": [
+        "The shared bench delivery has been cancelled."
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "created": [],
+    "updated": [
+      "Areas/Home/Garden plot.md"
+    ],
+    "questionsExactly": 0
+  }
+}

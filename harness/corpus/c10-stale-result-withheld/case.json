@@ -1,0 +1,18 @@
+{
+  "id": "c10-stale-result-withheld",
+  "capability": "C10",
+  "title": "A recently retrieved page whose facts have expired",
+  "covers": "model",
+  "source": "new (C10 preparation; deterministic proposals pending full lookup harness proof)",
+  "scope": "instructions",
+  "allowWeb": true,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Look up the current council tax band for the Larkspur Lane flat."
+    }
+  ],
+  "questions": [],
+  "bowerOwned": []
+}

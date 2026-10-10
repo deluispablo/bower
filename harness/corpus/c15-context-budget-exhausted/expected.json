@@ -1,0 +1,61 @@
+{
+  "files": {
+    "present": [
+      "Projects/Move/Packing guide.txt",
+      "Projects/Move/Move.md",
+      "Projects/Move/Packing introduction.md"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "protectedRanges": [
+    {
+      "path": "Projects/Move/Move.md",
+      "range": {
+        "heading": "My plans"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "path": "Projects/Move/Move.md",
+      "contains": [
+        "I want to keep my own checklist here."
+      ],
+      "timeline": [
+        "2026-09-12 \u00b7 Started collecting packing guidance.",
+        "The packing introduction lists labels and tape; no moving date is shown."
+      ],
+      "timelineCount": 2,
+      "excludes": [
+        "30 October",
+        "move is confirmed"
+      ]
+    },
+    {
+      "path": "Projects/Move/Packing introduction.md",
+      "contains": [
+        "labels and tape",
+        "Only the introduction was shown",
+        "remaining text was not read",
+        "[[Projects/Move/Move]]"
+      ],
+      "excludes": [
+        "30 October",
+        "move is confirmed"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "created": [
+      "Projects/Move/Packing introduction.md"
+    ],
+    "updated": [
+      "Projects/Move/Move.md"
+    ],
+    "questionsExactly": 0
+  }
+}
