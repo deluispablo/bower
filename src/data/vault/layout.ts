@@ -29,6 +29,10 @@ export const SYSTEM = {
   suggestions: '.bower/suggestions.json',
   requests: '.bower/requests.json',
   hashes: '.bower/hashes.json',
+  retrieval: '.bower/retrieval.json',
+  index: '.bower/index.md',
+  hot: '.bower/hot.md',
+  log: '.bower/log.md',
   /** Immutable pile declarations: `declaration-<declarationId>-<sha256>.json`. */
   piles: '.bower/piles',
 } as const;
@@ -38,13 +42,10 @@ export const SYSTEM = {
  * the manifest contract (`parseRunManifestV2`, given it by every caller) and the runner's admitted check both judge by
  * it. `suggestions.json` and `last-run.json` are written by the barrier after the run, never through the manifest.
  */
-export const RUNNER_WRITES = [SYSTEM.questions, SYSTEM.requests, SYSTEM.hashes] as const satisfies readonly RunnerWrite[];
-
-export const HIDDEN_AT_ROOT = ['index.md', 'hot.md', 'log.md'] as const;
+export const RUNNER_WRITES = [SYSTEM.questions, SYSTEM.requests, SYSTEM.hashes, SYSTEM.retrieval, SYSTEM.index, SYSTEM.hot, SYSTEM.log] as const satisfies readonly RunnerWrite[];
 
 /** Bower's bookkeeping and any dot file stay out of the explorer. */
 export function isHidden(path: string): boolean {
-  if ((HIDDEN_AT_ROOT as readonly string[]).includes(path)) return true;
   return path.split('/').some((part) => part.startsWith('.'));
 }
 
@@ -120,7 +121,12 @@ const count = (v: unknown): boolean => number(v) && Number.isInteger(v) && v >= 
 const report = (v: unknown): boolean => object(v) && list(v.filed, filed) && list(v.created, pathChange) && list(v.updated, pathChange) && list(v.setAside, setAside) && list(v.questions, question) && optional(v.yourChanges, count) && optional(v.rulesWorded, count) && optional(v.requests, (x) => list(x, text)) && optional(v.nothingReady, (x) => x === true) && optional(v.alreadySaved, (x) => list(x, alreadySaved)) && optional(v.unconfirmed, (x) => list(x, setAside)) && optional(v.answered, (x) => list(x, isAnsweredRow));
 const run = (v: unknown): boolean => isRunWire(v) && object(v) && optional(v.report, report);
 
+export interface RetrievalFile {
+  v: 1; folderId: string; account: string; cursor: string;
+  files: Record<string, { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number } }>;
+}
 export interface RunnerFiles {
+  '.bower/retrieval.json': RetrievalFile;
   '.bower/questions.json': QuestionsFile;
   '.bower/suggestions.json': SuggestionsFile;
   '.bower/requests.json': RequestsFile;
@@ -131,6 +137,9 @@ export interface RunnerFiles {
 export function isRunnerFile<K extends keyof RunnerFiles>(path: K, v: unknown): v is RunnerFiles[K] {
   if (!object(v) || v.v !== 1) return false;
   switch (path) {
+    case SYSTEM.retrieval: return text(v.folderId) && v.folderId.length > 0 && text(v.account) && v.account.length > 0 && text(v.cursor) && v.cursor.length > 0
+      && object(v.files) && Object.values(v.files).every((f) => object(f) && text(f.path) && text(f.version) && text(f.summary)
+        && object(f.coverage) && f.coverage.kind === 'prefix' && count(f.coverage.bytes));
     case SYSTEM.questions: return list(v.questions, question);
     case SYSTEM.suggestions: return list(v.suggestions, suggestion);
     case SYSTEM.requests: return list(v.done, request);

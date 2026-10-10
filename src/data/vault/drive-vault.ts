@@ -38,7 +38,7 @@ import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
 import { ADOPT_STATES_ID, ADOPT_STATES_RULE, ruleSequence } from '../contracts/note-edit';
 import { pairsOf } from '../contracts/journal-record';
-import { HIDDEN_AT_ROOT, PROP, SYSTEM, isRunnerFile, recordStamp, type RunnerFiles, type LastRunFile } from './layout';
+import { RUNNER_WRITES, PROP, SYSTEM, isRunnerFile, recordStamp, type RunnerFiles, type LastRunFile } from './layout';
 import { md5Hex, sha256 } from './hashes';
 import { placeOf, plainSnippet, plainText, savedLinkAddress, savedLinkUrl, searchLines } from '../search-text';
 import { noteRefusal, parseNote, toggleTaskInText, type ParsedNote } from './note-format';
@@ -320,7 +320,6 @@ export class DriveVault implements VaultSource {
     const f = this.mustFile(ix, path);
     const out = moveEntry(ix.entries(), path, toFolder, Date.now());
     if (out === path) return path;
-    refuseReserved(out);
     const to = ix.idOf(toFolder);
     if (!to) throw new BowerError('not-found', 'That folder is no longer there.');
     const last = opts?.undo ? [...(await this.journal.list())].reverse().find((c) => c.kind === 'move' && c.path === path) : undefined;
@@ -350,7 +349,6 @@ export class DriveVault implements VaultSource {
     const f = this.mustFile(ix, path);
     const out = renameEntry(ix.entries(), path, name, Date.now());
     if (out === path) return path;
-    refuseReserved(out);
     // Read before the mutation: unreadable device storage must not leave an unjournaled rename.
     const made = (await this.journal.list()).find((c) => c.kind === 'create' && c.path === path);
     ix.put(this.keepSeen(f, await this.once(f, `rename:${nameOf(out)}`, (op, fence) => this.drive.update(f.id, { name: nameOf(out), appProperties: op }, { fence }))));
@@ -369,7 +367,6 @@ export class DriveVault implements VaultSource {
     if (!parent) throw new BowerError('not-found', 'That folder is no longer there.');
     const base = name ?? (type === 'folder' ? 'New folder' : 'Untitled.md');
     checkCreationName(base, type);
-    refuseReserved(join(folder, freeName(ix.entries(), folder, base)));
     // One intended note or folder, one id: tried again after a lost answer, it is found by that id, not made twice. A
     // free name is picked for its first send only; a retry resends that one (the folder listed since may show it).
     const fresh = sentAs(parent, freeName(ix.entries(), folder, base), type === 'folder' ? undefined : '');
@@ -503,6 +500,7 @@ export class DriveVault implements VaultSource {
   }
 
   async toggleTask(path: string, index: number): Promise<void> {
+    if ((RUNNER_WRITES as readonly string[]).includes(path)) throw new BowerError('conflict', 'Bower keeps this file up to date.');
     const ix = await this.index();
     const f = this.mustFile(ix, path);
     // The text of the version toggled, so a retry of the same toggle is the same write (`once`).
@@ -1993,11 +1991,6 @@ async function inBatches<T, R>(list: readonly T[], fn: (x: T) => Promise<R>, siz
   const out: R[] = [];
   for (let i = 0; i < list.length; i += size) out.push(...(await Promise.all(list.slice(i, i + size).map(fn))));
   return out;
-}
-
-/** Bower's own files at the top of the folder (index.md, hot.md, log.md) keep their names. */
-function refuseReserved(path: string): void {
-  if (!path.includes('/') && (HIDDEN_AT_ROOT as readonly string[]).includes(path.toLowerCase())) throw new BowerError('conflict', "That name is kept for Bower's own files. Choose another.");
 }
 
 /** A thing the upload queue holds, as the inbox shows it while it is on its way. */

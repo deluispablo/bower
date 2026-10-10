@@ -537,3 +537,5 @@ b1a-contract,adversarial pass 4,codex,gpt-5-codex,high,1,280444,277894,,220672,2
 b1a-contract,reviewer (P4-94),claude,opus,,1,81882,,,,,,20,1,BLOCK 1,2026-10-10
 b1a-contract,implementer (P4-94 fix),codex,gpt-5-codex,medium,1,674886,668542,,622208,6344,,,,green,2026-10-10
 c05-person-timeline-format,diagnoser,codex,gpt-5-codex,high,1,,,,,,,,,diagnosed,2026-10-10
+b1a-contract,reviewer (P4-94b),claude,opus,,1,33920,,,,,,8,1,PASS,2026-10-10
+c05-timeline-list,red-owner,codex,gpt-5-codex,high,1,1451255,1438254,,1362816,13001,,,,14 reds,2026-10-10

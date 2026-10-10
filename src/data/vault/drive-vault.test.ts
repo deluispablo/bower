@@ -398,13 +398,13 @@ describe('sending things again', () => {
 });
 
 describe('what the review found', () => {
-  it("Bower's own root names cannot be made, renamed into or moved to", async () => {
-    await expect(vault.create('', 'note', 'index.md')).rejects.toMatchObject({ code: 'conflict' });
+  it('root index, hot and log names are ordinary notes that can be made, renamed into or moved to', async () => {
+    await expect.soft(vault.create('', 'note', 'index.md')).resolves.toBe('index.md');
     const plan = await vault.create('', 'note', 'Plan.md');
-    await expect(vault.rename(plan, 'Log')).rejects.toMatchObject({ code: 'conflict' });
+    await expect.soft(vault.rename(plan, 'Log')).resolves.toBe('Log.md');
     const inner = await vault.create('Resources', 'note', 'hot.md');
-    await expect(vault.move(inner, '')).rejects.toMatchObject({ code: 'conflict' });
-    expect(drive.dump(root).has('index.md')).toBe(false);
+    await expect.soft(vault.move(inner, '')).resolves.toBe('hot.md');
+    expect.soft(drive.dump(root).has('index.md')).toBe(true);
   });
 
   it('a retry never sends twice a thing that arrived but whose answer was lost', async () => {
