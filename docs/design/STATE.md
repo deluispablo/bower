@@ -84,3 +84,4 @@ Phase 4/5. The owner approved V2 on 2026-10-09.
   - Sheet CSS: one line so the desktop max-height stays inside the window.
   - Dropped from the draft: run chip pill, Continuing block, pager/Skip, compact scene, new pills and buttons.
   - The owner OKed it on 2026-10-10. Spec: specs/2026-10-10-questions-ui.md, sent to the lead.
+  - Lead took it in as TL-P4-43 (main b034256d). Q-UI-3 is its own small Codex entry; I check it when built. Q-UI-1, -2 and -4 are entry Q1b, after the Q1 back end (after C05). The coordinator sends me Q1b's table (my spec's table verbatim) to sign before the red.
