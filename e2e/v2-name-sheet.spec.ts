@@ -1,5 +1,6 @@
+import { resize } from './viewport';
 /**
- * v2-name-sheet (d-v2-09): Rename, New note and New folder ask for a name in one sheet,
+ * v2-name-sheet (d-v2-09): Rename and New folder ask for a name in one sheet,
  * drawn with the one field rule. Phone and desktop, on the fake Drive.
  */
 import type { Page } from '@playwright/test';
@@ -15,34 +16,18 @@ const axeClean = async (page: Page, within: string): Promise<void> => {
   await expectAxeClean(page, { include: within, wcag22: true });
 };
 
-/** An empty folder "Empty one", opened as a list, so its own "New note in" button shows. */
-const emptyFolder = async (page: Page, isMobile: boolean): Promise<void> => {
-  if (isMobile) {
-    await open(page, '/files/Resources/Cooking');
-    await page.getByRole('button', { name: 'More for Cooking', exact: true }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'New folder', exact: true }).click();
-    await page.keyboard.type('Empty one');
-    await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(/\/files\/Resources\/Cooking\/Empty%20one/);
-    return;
-  }
-  await open(page, '/');
-  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
-  await tree.getByRole('treeitem', { name: /^Resources/ }).click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'New folder' }).click();
-  await page.keyboard.type('Empty one');
-  await page.keyboard.press('Enter');
-  await tree.getByRole('treeitem', { name: /^Empty one/ }).click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Open as a list or table' }).click();
-};
-
 test('the rename field spans the sheet and selects the name', async ({ page, isMobile }) => {
   test.skip(!isFake, 'The fake Drive is the source this entry is judged on.');
   if (!isMobile) {
-    // The desktop renames in the tree; its name sheet is the folder page's New note, with the same field.
-    await emptyFolder(page, false);
-    await page.getByRole('button', { name: 'New note in Empty one' }).click();
-    const sheet = page.getByRole('dialog', { name: 'New note', exact: true });
+    // Reach the same name sheet through the phone folder menu, then measure on desktop.
+    const viewport = page.viewportSize();
+    if (!viewport) throw new Error('The name-sheet check needs a viewport.');
+    await resize(page, { width: 375, height: viewport.height });
+    await open(page, '/files/Resources/Cooking');
+    await page.getByRole('button', { name: 'More for Cooking', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'New folder', exact: true }).click();
+    await resize(page, viewport);
+    const sheet = page.getByRole('dialog', { name: 'New folder', exact: true });
     const field = sheet.getByRole('textbox', { name: 'Name', exact: true });
     await expect(field).toBeFocused();
     await animationsEnd(page);
@@ -98,23 +83,4 @@ test('the rename field spans the sheet and selects the name', async ({ page, isM
   await expect(sheet.getByText('Names cannot have slashes; Bower used a dash.')).toBeVisible();
   await expect(field).toHaveAttribute('aria-invalid', 'true');
   await axeClean(page, '[role="dialog"]');
-});
-
-test('new note from a folder uses the name sheet', async ({ page, isMobile }) => {
-  test.skip(!isFake, 'The fake Drive is the source this entry is judged on.');
-  await emptyFolder(page, isMobile);
-  await page.getByRole('button', { name: 'New note in Empty one' }).click();
-  const sheet = page.getByRole('dialog', { name: 'New note', exact: true });
-  await expect(sheet).toBeVisible();
-  // The name sheet's field and button, not a second form.
-  const field = sheet.getByRole('textbox', { name: 'Name', exact: true });
-  await expect(field).toBeFocused();
-  await animationsEnd(page);
-  expect((await field.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(300);
-  await expect(sheet.getByText(/Links to this/)).toHaveCount(0);
-  await axeClean(page, '[role="dialog"]');
-  await field.fill('Soup/ideas');
-  await sheet.getByRole('button', { name: 'Make the note', exact: true }).click();
-  await expect(page.getByRole('status').getByText('Names cannot have slashes; Bower used a dash.')).toBeVisible();
-  await expect(page).toHaveURL(/\/note\/Resources(?:\/Cooking)?\/Empty%20one\/Soup-ideas\.md/);
 });

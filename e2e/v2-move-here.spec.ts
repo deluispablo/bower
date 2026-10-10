@@ -1,9 +1,10 @@
+import { resize } from './viewport';
 import type { Page } from '@playwright/test';
 import { animationsEnd, expectAxeClean } from './axe';
 import { expect, test } from './fixtures';
 
 async function openMove(page: Page, isMobile: boolean) {
-  await page.setViewportSize({ width: isMobile ? 375 : 1440, height: 812 });
+  await resize(page, { width: isMobile ? 375 : 1440, height: 812 });
   await page.goto('/note/Projects/Flat%20hunt/Lease%20draft.pdf?source=fake&scenario=default&time=instant');
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
   const opener = isMobile

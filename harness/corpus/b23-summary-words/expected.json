@@ -1,0 +1,45 @@
+{
+  "files": {
+    "present": [
+      "Resources/Gardening/Garden bed.md"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "unchanged": [
+    "Resources/Gardening/Gardening.md",
+    "Resources/Gardening/Personal plan.md"
+  ],
+  "notes": [
+    {
+      "path": "Resources/Gardening/Garden bed.md",
+      "contains": [
+        "summary: \"Alex plans a garden bed: use the \\\"amber\\\" label. Keep #mulch beside the gate in Saltmere; the path stays clear.\"",
+        "Alex plans a garden bed: use the \"amber\" label.\n\nKeep #mulch beside the gate in Saltmere; the path stays clear."
+      ]
+    },
+    {
+      "path": "index.md",
+      "contains": [
+        "- [[Garden bed]] — Alex plans a garden bed: use the \"amber\" label. Keep #mulch beside the gate in Saltmere; the path stays clear."
+      ]
+    }
+  ],
+  "properties": [
+    {
+      "path": "Resources/Gardening/Personal plan.md",
+      "absent": [
+        "by",
+        "bower_state"
+      ]
+    }
+  ],
+  "report": {
+    "created": [
+      "Resources/Gardening/Garden bed.md"
+    ],
+    "updated": [],
+    "questionsExactly": 0
+  }
+}

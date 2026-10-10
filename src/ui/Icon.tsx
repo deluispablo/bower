@@ -26,7 +26,6 @@ const PATHS = {
   pile: 'M4 8l8-4 8 4-8 4zM4 12l8 4 8-4M4 16l8 4 8-4',
   side: 'M4 4h16v16H4zM10 4v16',
   sideRight: 'M4 4h16v16H4zM14 4v16',
-  newNote: 'M14 3H6v18h12V7zM14 3v4h4M12 11v6M9 14h6',
   newFolder: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM12 10v6M9 13h6',
   sort: 'M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4',
   reveal: 'M12 3v3M12 18v3M3 12h3M18 12h3M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',

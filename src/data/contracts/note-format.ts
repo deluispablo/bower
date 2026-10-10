@@ -132,8 +132,18 @@ function timelineOf(block: string): TimelineEntry[] {
 export function timelineBullets(raw: string, fetched?: FetchedOwnership): string[] {
   const bytes = encoder.encode(raw);
   const own = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
-  if (own.status === 'invalid' || !own.layout.timeline) return [];
+  // This legacy extraction API reports framed/legacy Timelines, not sections in plain prose.
+  if (own.status === 'invalid' || own.status === 'plain' || !own.layout.timeline) return [];
   return payloadDisplay(bytes, own.layout.timeline, TIMELINE).split('\n').filter((l) => l.startsWith('- '));
+}
+
+/**
+ * The entries of a note's Timeline section as the one parser frames it, for every kind of note: a plain note's too,
+ * which its display shows as part of its body instead (`parseNote`). The author's re-parse invariant reads this.
+ */
+export function timelineEntries(raw: string): TimelineEntry[] {
+  const { bytes, ownership } = ownershipOf(raw);
+  return ownership.layout.timeline ? timelineOf(payloadDisplay(bytes, ownership.layout.timeline, TIMELINE)) : [];
 }
 
 function linksIn(text: string): string[] {

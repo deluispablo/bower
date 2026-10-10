@@ -1,3 +1,4 @@
+import { resize } from './viewport';
 import type { Locator, Page } from '@playwright/test';
 import { expectAxeClean } from './axe';
 import { expect, test } from './fixtures';
@@ -23,7 +24,7 @@ const axeTargets = async (page: Page, within: string): Promise<void> => {
 };
 
 test('the folder view toggle is the one segmented control', async ({ page, isMobile }) => {
-  await page.setViewportSize({ width: isMobile ? 375 : 1440, height: 812 });
+  await resize(page, { width: isMobile ? 375 : 1440, height: 812 });
   await open(page, '/settings');
   const appearance = page.getByRole('radiogroup', { name: 'Appearance' });
   const groupClass = await appearance.getAttribute('class');
@@ -63,7 +64,7 @@ test('the files bookmark chips are at least 44 px on the phone', async ({ page }
   await page.addInitScript(() => {
     localStorage.setItem('bower:bookmarks', JSON.stringify(['Projects/Flat hunt', 'Resources/Cooking/Lemon tart.md']));
   });
-  await page.setViewportSize({ width: 375, height: 812 });
+  await resize(page, { width: 375, height: 812 });
   await open(page, '/files');
   const bookmarks = page.getByRole('region', { name: 'Bookmarks', exact: true });
   const chips = bookmarks.getByRole('button');
@@ -76,7 +77,7 @@ test('the files bookmark chips are at least 44 px on the phone', async ({ page }
   await expect(page.getByRole('main').getByRole('heading', { level: 1, name: /^Flat hunt\b/ })).toBeVisible();
   await expect(page.getByRole('main').locator('a[href="/note/Projects/Flat%20hunt/Lease%20draft.pdf"]')).toBeVisible();
 
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await resize(page, { width: 1440, height: 900 });
   await open(page, '/files');
   await expect(bookmarks).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Your Bower folder', exact: true })).toBeVisible();

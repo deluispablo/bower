@@ -24,9 +24,15 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c07-same-period-rent | changed | Points 1, 3, 4, 7: file the listing, link both sources and mark both same-period claims; removed the Current state preservation requirement so owned state can mark uncertainty. expected.json is unchanged and still pins the old state in the scripted draft. |
 | c07-tentative-closure | changed | Points 1, 3, 4, 7: file the notice, link both sources and record conditional risk without inventing cancellation; removed the Current state preservation requirement so owned state can include the risk. expected.json is unchanged and still pins the old state in the scripted draft. |
 | c08-compare-flats | agrees | A requested comparison is a new generated note linking its sources (point 4). |
+| c08-compare-missing-fact | agrees | Points 1, 3, 4 and 7: the requested comparison fits the existing project, links its hub and sources, states the missing deposit honestly, and its briefing changes no existing facts. |
+| c08-report-with-sources | changed | Points 3, 4 and 7: the sourced report links its hub, but the rubric must allow updating Bower-owned hub state where the briefing changes it; expected.json is unchanged and still pins the hub under this rubric-only scope. |
 | c08-revise-comparison | agrees | The same note is revised, not a second one made (value gate, point 2); the revision is a Timeline line. |
+| c08-revise-keeps-personal-text | agrees | Points 2, 3 and 4: revise the same sourced comparison, retain personal text and earlier history, append a truthful revision line, and preserve unchanged source notes. |
 | c09-burst-pipe | agrees | An answer from the notes; nothing filed or changed. |
 | c09-closest-flat | agrees | An answer from the notes; nothing filed or changed. |
+| c09-not-in-sources | agrees | Points 1, 3 and 6: the answer acknowledges missing evidence and cites the checked source without guessing; no inbox item or compiled-state update is involved. |
+| c09-original-over-summary | agrees | Points 3, 6 and 7: the answer cites the original's explicit deadline replacement and marks the stale summary; the unowned compiled state needs permission to change. |
+| c09-two-source-answer | agrees | Points 3 and 6: each answer claim cites its exact original, excluding the unrelated archived listing; no new document or note update is involved. |
 | c10-lookup-fails | agrees | Honest about a failed lookup; invents nothing. |
 | c10-web-allowed | agrees | The finding is a Timeline line with its source (point 3). |
 | c10-web-denied | agrees | Nothing looked up, nothing changed. |
@@ -42,6 +48,9 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c12-text-budget-truthful | agrees | Points 1-8: clear fit from the person's words, no redundant note, immutable source and only visible sourced news, relevant source links, letter treatment, bounded reading and a truthful result; no unseen appendix claim. |
 | c13-undo-protects-edit | agrees | Undo keeps the person's edit; outside the filing method. |
 | c13-undo-whole-run | agrees | Undo from the manifest, Bin only; outside the filing method. |
+| c13-manifest-move-and-create | agrees | Undo reverses manifest effects, Bin only; points 1-8 are filing rules, not a requirement to refile a restored inbox source. Point 8 requires a truthful result. |
+| c13-manifest-partial-edited-note | agrees | Later personal text is protected and independent effects recover; point 8 requires the partial result, and point 1 permits an inbox return by undo without a question. |
+| c13-manifest-state-with-personal-edit | agrees | Point 3 supports owned state and preserved history; undo restores recorded previous state while retaining later personal prose. Timeline reversal policy is left to the lead. |
 | c15-more-context-bounded | agrees | The words ("papers for the move") make the place clear; the run says what it could not read. |
 | c15-scanned-letter | changed | It filed an unread, unnamed scan by guess; point 1 never guesses, so it stays in the inbox with a question. |
 
@@ -50,8 +59,11 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c05-merge-answer-no | agrees | The person's no keeps both notes and their links; settling the answer does not authorize a merge. |
 | c05-conflicting-fact-kept | agrees | Point 3 keeps both claims attributed in history; C05 preservation never silently resolves a disagreement. |
 | c05-marked-state-keeps-history | agrees | Point 3 rewrites a genuinely Bower-owned state from evidence while Timeline only grows and personal prose survives. |
+| c05-note-not-written-by-bower | agrees | TL-P4-32: one requested sourced line; state asks once, protected bytes and ownership stay personal, replay adds nothing (points 1, 3, 7, 8). |
 
 ## Changes
+
+**C08 preparation: c08-report-with-sources, `rubric.md`.** The briefing adds table collection, watering-can and shelter facts, so "leave the hub byte identical" contradicted points 3 and 7. The rubric now requires updating the Bower-owned hub state where those facts change it, with sourced Timeline entries and personal text preserved. Only the rubric changed: `expected.json` still requires the hub unchanged and `report.updated` empty; those expectations need a separate lead ruling before the case can prove this behaviour.
 
 1. **c05-hub-lines, `rubric.md`.** Was: "The person's earlier lines, the Current state and the summary are untouched."
    Now: the earlier lines and the summary are untouched; Bower may rewrite the Current state only where the pile
@@ -104,3 +116,26 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
    test (`every expected number is grounded in its case`, runner/test/corpus.test.ts) found no other ungrounded number in
    note `timeline` or `contains` texts across the corpus. It reuses `groundsOf` and `ungrounded` from runner/src/claude.ts
    (now exported, unchanged) and skips paths, report ids and the app's `<!-- since DATE -->` stamp, which are not facts.
+
+## B1 preparation verdicts — 2026-10-10 (TL-P4-39; TL-P4-40)
+
+These verdicts review proposed semantics, not execution. The existing test at second-brain-method.test.ts:150–175
+selects C04–C15 ids only; B1/C17 gate admission is a proposed small support entry, not changed in this preparation.
+
+| Case | Verdict | Reason |
+| --- | --- | --- |
+| b1-index-job-offer | agrees | Fit uses the indexed job-search project instead of unrelated workshop focus; grounded news and real links preserve personal content (points 1, 3, 4, 7). |
+| b1-changes-person-edit | agrees | Supported edits to a person's own notes refresh derived retrieval before planning without adopting or rewriting their note (TL-P4-39 addendum 2; F9, F10). |
+| b1-moc-over-40 | agrees | A 41-member map folds through existing child maps, preserving all primary evidence and links; no invented count or model-written list (TL-P4-38 addenda 1–2; F2, F9, F10). |
+| b1-index-no-change | agrees | Zero-token index maintenance excludes root, Inbox and bookkeeping inputs and makes no stamp-only write or summary migration (TL-P4-38 appendix; F3, F9). |
+
+## B2/B3 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-41)
+
+Semantic review only: covers:model cases are not executed by the existing C04–C15 method gate.
+
+| Case | Verdict | Reason |
+| --- | --- | --- |
+| b23-summary-person-lint | agrees | Generated summaries are valid scalar metadata; personal missing summaries stay missing, with report-only lint deferred to B8 (R2, F2, F7). |
+| b23-hot-question-answer | agrees | The actual app answer settles the question identity; hot reflects that state and actual effects before done, never owns pending work (F3, F5, F10). |
+| b23-summary-words | agrees | A words-only note preserves primary prose while adding a one-line scalar summary; unrelated personal metadata is never adopted (F2, F7, R2). |
+| b23-hot-evidence-only | agrees | An instruction-only run rebuilds hot from primary evidence and settled outcomes, dropping unsupported old claims without inventing focus or report rows (F3, F7, F10). |

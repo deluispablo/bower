@@ -1,10 +1,11 @@
+import { resize } from './viewport';
 import { animationsEnd, expectAxeClean } from './axe';
 import { expect, test } from './fixtures';
 
 test('folder table headers stay on one line and the table scrolls sideways', async ({ page }) => {
   for (const viewport of [{ width: 375, height: 812 }, { width: 1280, height: 800 }]) {
     await test.step(`${viewport.width}x${viewport.height}`, async () => {
-      await page.setViewportSize(viewport);
+      await resize(page, viewport);
       // Same folder entry and boot check as v2-targets; explicitly use the demo on both projects.
       await page.goto('/files/Projects/Flat%20hunt?source=demo&scenario=default&time=instant');
       await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });

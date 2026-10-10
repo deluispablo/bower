@@ -1,3 +1,4 @@
+import { resize } from './viewport';
 /**
  * v2-dock (d-v2-01, d-v2-03; WCAG 2.4.11): one bottom dock holds the messages and the run chip.
  * On a phone it spans the width above the tab bar; on desktop it is at most 520 wide, centred in
@@ -30,7 +31,7 @@ const axeClean = async (page: Page, within = 'body'): Promise<void> => {
 
 test('a message spans the phone width above the tab bar', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'the phone dock');
-  await page.setViewportSize({ width: 375, height: 812 });
+  await resize(page, { width: 375, height: 812 });
   await open(page, '/');
   const box = await aMessage(page);
   const m = await box.boundingBox();
@@ -75,7 +76,7 @@ test('the last result row ends above the run chip at full scroll', async ({ page
 test('keyboard focus is never hidden behind the tab bar', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'the phone shell');
   for (const size of [{ width: 375, height: 812 }, { width: 768, height: 1024 }]) {
-    await page.setViewportSize(size);
+    await resize(page, size);
     await open(page, '/');
     const tabTop = (await page.getByRole('navigation', { name: 'Main' }).boundingBox())?.y ?? 0;
     const bad: string[] = [];

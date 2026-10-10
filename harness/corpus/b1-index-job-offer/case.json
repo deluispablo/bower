@@ -1,0 +1,34 @@
+{
+  "id": "b1-index-job-offer",
+  "capability": "C17",
+  "title": "Find the job search through the index after twelve unrelated hubs",
+  "covers": "model",
+  "source": "new (TL-P4-39 B1; reused made-up TL-P4-38 index fixture; scripted proof pending)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "Please file this offer and record its news.",
+      "files": [
+        "Ferrowick offer.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Projects/Alder bench/Alder bench.md",
+    "Projects/Amber cupboard/Amber cupboard.md",
+    "Projects/Birch shelves/Birch shelves.md",
+    "Projects/Cedar stool/Cedar stool.md",
+    "Projects/Elm cabinet/Elm cabinet.md",
+    "Projects/Fir planter/Fir planter.md",
+    "Projects/Hazel desk/Hazel desk.md",
+    "Projects/Larch rack/Larch rack.md",
+    "Projects/Maple box/Maple box.md",
+    "Projects/Oak chair/Oak chair.md",
+    "Projects/Pine tray/Pine tray.md",
+    "Projects/Willow frame/Willow frame.md",
+    "Projects/Zinnia path/Zinnia path.md"
+  ]
+}
