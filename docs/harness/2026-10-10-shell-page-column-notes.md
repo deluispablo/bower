@@ -174,3 +174,63 @@ Coordinator verification and assertion conflict:
   direction to use the global reduced-motion mechanism. This is a static finding; e2e was not run.
   No assertion was loosened or changed, and no duplicate CSS/JS reduced-motion mechanism was added.
   The coordinator/lead must resolve that expectation before the e2e gate can be accepted.
+
+## Fix round 2
+
+Fresh Codex implementer session; three owner-supplied lead rulings, non-escalated.
+Coordinator commits. No git writes, network access, server, e2e or port-dependent pnpm check run.
+
+Changes:
+- Restated the reduced-motion assertion as the signed "appears with no slide" contract:
+  animation name is none or every computed animation duration is at most 0.01 ms.
+  Bower moves off still requires animationName=none. A positive control requires a named
+  animation with duration greater than zero when Bower moves is on and reduced motion is off.
+  A test annotation supplies that preference through the existing single init script,
+  avoiding dependence on the order of multiple Playwright init scripts.
+- Both resizers publish Math.round(width) as aria-valuenow. Stored and rendered widths,
+  the drag handler and the page clamp retain their precision and existing mechanism.
+  Added parameterized production-shell tests for both separators: a fractional 20.5 px drag
+  gives widths 320.5 / 340.5 and integer values 321 / 341; clamping at shell width 1280.5
+  gives widths 348.5 / 368.5 and integer values 349 / 369.
+- Added `a real mouse drag on the side panel resizer reaches its target width` on demo at 1280 px.
+  It closes the right panel through its existing toggle so the full start+80 target (380 px)
+  fits within the 480 px clamp. Mouse down, four incremental moves with four steps each,
+  and mouse up exercise real pointer capture and sustained dragging. Assertions require
+  aria-valuenow and the rendered side panel width both to reach the exact target.
+  The existing test for clamping with both panels open is unchanged.
+
+Research and reuse (offline):
+- Reused base.css's existing 0.01 ms reduced-motion rule and the existing edge animation.
+- Reused the existing spec's page.mouse pointer entry point and locator/poll assertions.
+  Playwright's standard Mouse.move steps option sends intermediate mousemove events:
+  https://playwright.dev/docs/api/class-mouse#mouse-move
+- The installed TypeScript lib.es5.d.ts documents Math.round as rounding to the nearest integer:
+  https://tc39.es/ecma262/multipage/numbers-and-dates.html#sec-math.round
+  URLs are citations only; no remote fetch was performed.
+
+tests changed: e2e/shell-page-column.spec.ts: lead-authorized no-visible-slide assertion, normal-motion positive control, and real mouse drag guard; Bower-moves-off and existing clamp assertions retained.
+tests changed: src/app/DesktopShell.test.tsx: added both fractional-drag/clamp regressions; existing assertions unchanged.
+
+Files per coordinator commit:
+1. red: src/app/DesktopShell.test.tsx; e2e/shell-page-column.spec.ts.
+2. fix: src/app/DesktopShell.tsx.
+3. notes: docs/harness/2026-10-10-shell-page-column-notes.md.
+No src/features files changed; compatibility SHA is not applicable.
+
+Red evidence:
+- /tmp/spc-r2-red.log: pnpm exec vitest run src/app/DesktopShell.test.tsx; exit 1 before the fix.
+- `side resizer values stay integral after fractional dragging and clamping` and
+  `right resizer values stay integral after fractional dragging and clamping` failed:
+  Number.isInteger(aria-valuenow) expected true, received false after the fractional drag.
+- No browser red was run: e2e requires ports and belongs to the coordinator in this round.
+
+Green evidence:
+- /tmp/spc-r2-unit.log: pnpm exec vitest run src/app src/ui; exit 0, including both exact reds above.
+- /tmp/spc-r2-tsc.log: pnpm exec tsc -p tsconfig.app.json; exit 0.
+- /tmp/spc-r2-eslint.log: pnpm exec eslint src/app src/ui e2e/shell-page-column.spec.ts; exit 0.
+- Read only failures from the requested command logs. git diff --check passes.
+- Coordinator must run e2e/shell-page-column.spec.ts; its motion assertions and mouse guard
+  remain browser-unverified here. No fixed waits, only or skip markers were added.
+
+removed: the conflicting reduced-motion animationName-only expectation and fractional aria-valuenow output.
+removed: no tests, components, preferences, features or motion mechanisms.
