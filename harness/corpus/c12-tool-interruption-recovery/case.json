@@ -1,0 +1,28 @@
+{
+  "id": "c12-tool-interruption-recovery",
+  "capability": "C12",
+  "title": "An interrupted tool write recovers the same model plan",
+  "covers": "model",
+  "source": "new (C12 preparation; scripted fault and lifecycle proof pending)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "Update the garden plot from these notices.",
+      "files": [
+        "Water butt notice.txt"
+      ]
+    },
+    {
+      "line": "Update the garden plot from this delivery notice.",
+      "files": [
+        "Bench notice.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Areas/Home/Garden plot.md"
+  ]
+}
