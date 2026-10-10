@@ -6974,7 +6974,7 @@
     "steps": [
       "The prep's E1 reds pass through the real queue, fake Drive and fake IndexedDB."
     ],
-    "verify": "",
+    "verify": "pnpm exec vitest run src/data/upload-resume.test.ts -t \"upload-resume-after-reload\"",
     "note": "C02 E1. Escalated. Designer verifies the reload behaviour (U3) before close. Packet 2026-10-10-upload-resume-after-reload-packet.md. implementer: codex."
   },
   {
