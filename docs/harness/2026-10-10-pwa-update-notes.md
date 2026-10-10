@@ -106,3 +106,32 @@ packet/diagnosis and installed library implementation were used:
 - [Vite load error handling](https://vite.dev/guide/build.html#load-error-handling).
   Installed `node_modules/vite/dist/node/chunks/node.js:26818` emits a cancelable
   vite:preloadError with the original error payload and throws unless prevented.
+
+## Fix round 1
+
+- `pnpm e2e:pwa` "a removed old lazy chunk recovers..." fails at e2e/pwa.spec.ts:182: a harness bug, not the product.
+  A temporary probe (deleted) read `executed(page)` right after `await started`, before the reload: mainA was
+  executed (true). After the reload `stopJSCoverage` reports only the current document's scripts, even with
+  `resetOnNavigation: false`, so A's main is gone. The red is committed and not changed; the lead must fix line 182
+  (e.g. record A's execution before the release, or assert A's request for mainA). Logs `/tmp/pwa-fr1-probe2.log`.
+- src/main.tsx catch block now reports with `console.error` (architecture test "errors are never swallowed").
+- removed: none.
+- tests changed: none.
+
+## Red repair
+
+tests changed: e2e/pwa.spec.ts: assert executed build A coverage while the old lazy request is held, before deployment/release; restart coverage for the recovery reload and retain executed build B, real 404, nonempty app, activation-without-navigation, exactly one reload, and no-loop assertions.
+
+The original A assertion relied on coverage retaining scripts from the previous
+document after reload. The repaired test captures positive executed ranges for
+A before that document is replaced, then starts a fresh coverage session for B.
+No app files were edited by this repair. E2e remains a coordinator gate.
+
+Offline reference: installed Playwright `Coverage.startJSCoverage` documentation
+warns that `resetOnNavigation: false` cannot guarantee coverage survives navigation
+because of browser architecture limitations:
+https://playwright.dev/docs/api/class-coverage#coverage-start-js-coverage-option-reset-on-navigation.
+
+Repair validation: `pnpm exec eslint e2e/pwa.spec.ts` passes
+(`/private/tmp/pwa-red-repair-eslint.log`); `git diff --check` passes.
+No e2e, full check, network, or git-writing command was run in this repair.
