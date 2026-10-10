@@ -104,3 +104,42 @@ The full data run below also covers both reds, drive-vault, journal and write-on
   Runner golden assertions remain exactly 78 and 88 in runner/test/drive-calls-golden.test.ts; file unchanged.
 
 Only failure sections of test logs were read. pnpm check and e2e were excluded by the owner's explicit instruction.
+
+## Round 2
+
+The independent red is committed at HEAD, 34bf7baf. The adversarial report was absent from this worktree;
+the named report was read from /Users/deluisp/Projects/bower-app/docs/harness/2026-10-10-codex-c4-create-resume-adversarial.md.
+
+- src/data/spine/write-once.ts:339: Intended.make accepts an optional completion step. It awaits that step
+  at :344 before deleting the existing holder at :345. A failed completion leaves the same reserved id,
+  first Sent and caller context on that holder; makeOnce still releases a refused create as before.
+- src/data/vault/drive-vault.ts:1103: updatePile supplies the original loose-file move as that completion step.
+  Its existing stamped, fenced once call at :1107 confirms the move before the conversion holder is forgotten.
+  A retry after a failed move therefore recovers the same folder through makeFolder and asMade, using its
+  first name and loose-file read, rather than selecting the folder-edit branch. Note creation follows after
+  the conversion is complete. No new reservation store or landing question was added.
+
+tests changed: none
+
+Standard solution reused: the local write-once.ts documentation (:2-24) cites
+[Stripe idempotent requests](https://stripe.com/docs/api/idempotent_requests): retry with the same key
+and first intent. No network research was performed. This round extends the existing holder's lifetime
+through the conversion's completion and uses the existing create and move landing checks unchanged.
+
+Before the fix:
+`pnpm exec vitest run src/data/vault/drive-vault.test.ts -t 'a pile-folder conversion whose file move failed after the folder landed keeps its first name and finishes' > /tmp/resume-r2-red.log 2>&1`
+Exit 1 on the assertion at drive-vault.test.ts:3999: the folder was renamed from 2026-10-09 Dentist papers
+to 2026-10-10 Dentist papers, and the loose file remained outside it. The test was not changed.
+
+After the fix:
+
+- `pnpm exec tsc -p tsconfig.app.json > /tmp/resume-r2-tsc.log 2>&1`: exit 0.
+- `pnpm exec vitest run src/data > /tmp/resume-r2-unit.log 2>&1`: exit 0, including the unchanged round-2 red,
+  midnight red, create property, drive-vault, journal and write-once suites.
+- `pnpm -C runner exec vitest run > /tmp/resume-r2-runner.log 2>&1`: exit 0.
+  The unchanged runner/test/drive-calls-golden.test.ts asserts exactly 78 (:21, :23) and 88 (:69).
+
+No tests, goldens or contract numbers were changed. No git write command, network, pnpm check or e2e was run.
+The coordinator owns the separate fix and notes commits. Fix files: src/data/spine/write-once.ts and
+src/data/vault/drive-vault.ts. Notes file: this file. No stored format changed; existing holders and callers
+without a completion step retain their existing behavior.
