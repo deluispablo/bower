@@ -7054,5 +7054,18 @@
     ],
     "verify": "",
     "note": "Follow-up of rules-added-region; touches runner claude.ts, so after B1c and B3b (lead 2026-10-10). Packet to cut when it starts. implementer: codex."
+  },
+  {
+    "id": "pwa-update-one-reload",
+    "task": "p4-e",
+    "category": "fix",
+    "passes": false,
+    "ui": false,
+    "what": "One reload after a deploy runs the new build even before the new service worker installs; offline still opens (navigations network-first, 3 s timeout).",
+    "steps": [
+      "e2e:pwa: A open, B deployed and not installed, one reload runs B; offline opens; the old 6 stay green."
+    ],
+    "verify": "",
+    "note": "DEFECT_LOG pwa-update-one-reload; ruling (a) after 32b43f82. Codex red and implementation, Claude review, live staging check. Packet 2026-10-10-pwa-update-one-reload-packet.md. implementer: codex."
   }
 ]
