@@ -66,3 +66,7 @@ Its message is `undo-fifo-seed: settled-without-sending state in the property mo
 The notes accompany the model change, following the owner's explicit instruction overriding the packet's separate notes commit.
 `.codex-commits.json` is the handoff control file; the runner consumes it rather than committing it as a payload file.
 No changed payload file is listed in more than one entry. Commits are delegated to harness/codex-run.sh.
+
+## Known-green close (coordinator)
+
+The fix is a test-only commit (680212f6) that adds the pinned replay and the model state together, so done.sh cannot revert it and keep the replay. The red is proved: before the model change the named replay failed on the :128 FIFO invariant (this notes file), as the same seed did alone on claude/p3 (DEFECT_LOG undo-fifo-seed). After it: property 36/36, unit 25/25; codex-run.sh pnpm check pass; P4-98 PASS.
