@@ -206,7 +206,8 @@
       "Name it"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/no-new-note.spec.ts e2e/empty-note-help.spec.ts -g \"no New note control on desktop or phone|empty-note help and Open in Drive\"",
-    "passes": false
+    "passes": false,
+    "note": "Re-proved after c5-remove-new-note (TL-P4-35): New note was removed, so the verify names surviving behaviour on New folder and the empty note; known green."
   },
   {
     "id": "search-everything",
@@ -1055,7 +1056,8 @@
       "No note opens, and neither \"Untitled\" nor \"Soup ideas\" is left in the tree"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"Escape on a new folder's name takes it back\"",
-    "passes": false
+    "passes": false,
+    "note": "Re-proved after c5-remove-new-note (TL-P4-35): New note was removed, so the verify names surviving behaviour on New folder and the empty note; known green."
   },
   {
     "id": "failed-card-dismiss",
@@ -2001,7 +2003,8 @@
       "Type a/b: a toast says Bower used a dash."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"the New folder name sheet preserves dots and explains slashes|the rename name sheet keeps one note extension\"",
-    "passes": false
+    "passes": false,
+    "note": "Re-proved after c5-remove-new-note (TL-P4-35): New note was removed, so the verify names surviving behaviour on New folder and the empty note; known green."
   },
   {
     "id": "move-no-match",
@@ -6643,7 +6646,7 @@
       "New folder is still offered."
     ],
     "verify": "pnpm exec playwright test e2e/no-new-note.spec.ts -g \"no New note control on desktop or phone\"",
-    "note": "TL-P4-35 (1). Codex after c5-empty-note-help, then a Claude review and the designer. Packet 2026-10-10-c5-remove-new-note-packet.md. implementer: codex.",
+    "note": "TL-P4-35 (1). Codex after c5-empty-note-help, then a Claude review and the designer. Packet 2026-10-10-c5-remove-new-note-packet.md. implementer: codex. Known green: red 3cc13c38 failed before fix 9040d9bf (red session log); the revert no longer applies after the create-named merge.",
     "review": "P4-82 PASS",
     "design": "verified"
   },
