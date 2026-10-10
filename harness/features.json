@@ -6402,9 +6402,10 @@
       "Undo under the outbox lock: Journal.retract drops an unreserved or failed line, otherwise the inverse with undoes is recorded; no inverse reaches Drive before its original.",
       "Rules apply in line order (wordRules and rules() one sequence by since); pairsOf hides a same-run pair in Since the last tidy-up and the report."
     ],
-    "verify": "",
+    "verify": "pnpm exec vitest run src/data/vault/undo-compensate.test.ts -t \"the removal undone while another page reserves its id leaves the rule in place after a tidy-up|drops the refused line and records nothing|a move undone in two pages ends where it was, with at most one row shown|a suggestion kept as a rule online, then Undo: Rules.md lacks it|pairsOf hides a pair in Since the last tidy-up|a later inverse gives one ordinary row|a change made while an earlier line waits stays behind it|a line dropped in one tab is never sent by another tab whose keep failed|an inverse whose original was refused while it was recorded is never sent|a later line from another tab never overtakes an earlier waiting line\"",
     "note": "TL-P4-27 (main 802ac116); replaces c4-undo-withdraw (parked at 70a2b0da) and closes TL-P4-24 #3. Escalated, Opus plus a Codex pass; contract sign-off trial; designer copy pending. Packet 2026-10-09-c4-undo-compensate-packet.md. Re-planned by TL-P4-27 addendum 2 (main c7a6556c): design (B) and tooLate withdrawn. Addenda 4-5 (main a370c1da, b938c629) folded in 2a828b2f; dispatched on Opus.",
-    "review": "P4-67 PASS, P4-67b PASS"
+    "review": "P4-67 PASS, P4-67b PASS",
+    "design": "verified"
   },
   {
     "id": "c4-lockf",
@@ -6500,6 +6501,7 @@
     ],
     "verify": "pnpm exec vitest run src -t \"an online Undo confirmation replaces its toast in place\"",
     "note": "DEFECTS undo-confirm-not-in-place (lead 2026-10-10). Codex, then a Claude review and the designer. Packet 2026-10-10-c4-undo-confirm-in-place-packet.md.",
-    "review": "P4-69 PASS"
+    "review": "P4-69 PASS",
+    "design": "verified"
   }
 ]
