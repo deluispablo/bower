@@ -1437,3 +1437,113 @@ Research: reuse the existing live/IndexedDB test fixtures and the inherited offi
 reference for atomic fence/write ordering. No source was fetched and no dependency added.
 Production implementation and integration remain with their assigned sessions.
 removed: no existing assertion, test, bound or example; only redundant per-scope capture calls.
+
+
+## Addenda 9 and 10
+
+implementer: codex
+
+tests changed: none
+
+Implemented TL-P4-53 addenda 9 and 10 in the assigned worktree. Read WORKER,
+the packet, prep ownership/reuse evidence, and the Addendum 9 reds and Addendum 10 reds.
+No network, Git-writing command, dependency, new object store, schema change or new
+user-facing sentence. All committed tests and assertions remain unchanged.
+
+### Implementation
+
+- upload-store.ts now keeps one numeric device forget generation at the constant
+  `forget-generation` key in the existing bytes store. It contains no account identity.
+  Both backends capture the same generation for all accounts. Every add/save still
+  requires its original captured number; IndexedDB checks it inside the write transaction
+  before any put, retaining addendum 8's refusal across connections and retries.
+- Account-wide clear increments that generation atomically with removing that account's
+  pending metadata and bytes. Clear without an account increments it and removes every
+  account-scoped pending upload on the device. Folder-only clear keeps its earlier scope.
+  Account/device forgetting also removes legacy `forgotten:<account>` keys, so old
+  identity-bearing markers are not retained. The memory backend uses the same one-counter
+  semantics, rather than a map keyed by person.
+- upload-queue.ts extends the existing forgetAccount/clear route to an absent identity;
+  it does not add a retention home. Its local staging-cleanup generation is now a scalar,
+  with no retained per-account version map. Forgetting waits for outstanding staging
+  cleanup and reports original cleanup/storage errors with the existing sign-out sentence.
+- live/index.ts uses the session's last accepted identity without requiring another
+  identity read during sign-out. A null reply does not erase that last known identity.
+  No known identity means device-wide upload purge, including expiry. The cached scope
+  is cleared before awaiting purge, including on failure. Both sign-out and expiry use
+  this same forget path. Ordinary disposal and the folder-keyed journal outbox are unchanged.
+- Remote sign-out errors are captured and logged before local forgetting. A purge failure
+  is logged and returns the existing BowerError sentence, including when remote sign-out
+  also fails; the original remote and purge errors are both logged. Successful purge
+  preserves the remote error when that was the only failure.
+
+### Red and green evidence
+
+Evidence directory: `/private/tmp/upload-a9-a10-jbja_usx/`.
+All pnpm commands used `npm_config_offline=true` and
+`npm_config_verify_deps_before_run=false`. stdout/stderr went to OS-temp logs; only
+failures and aggregate result lines were read. The OS-temp Vitest config imports the
+real Vite config and app setup, overrides cacheDir, and uses a temporary timer-gate setup
+copy with only absolute import resolution and CPU-report destination changed. Timer
+checks remain active. No test, cache, CPU report or TypeScript build info was written
+into the repository.
+
+Before implementation, the exact committed addendum 9/10 cases were run with:
+
+```sh
+pnpm exec vitest run src/data/upload-sign-out.test.ts --maxWorkers=2 --config /private/tmp/upload-a9-a10-jbja_usx/vitest.config.mjs --configLoader runner -t 'addendum (9|10)'
+```
+
+reds.log: exit 1; 16 selected tests, 8 passed and 8 assertion failures:
+
+- `upload-sign-out-forget: addendum 9: offline sign-out with an unreadable account purges device uploads (known identity: false)`
+  failed at src/data/upload-sign-out.test.ts:335: retained metadata and bytes instead of absence.
+- `upload-sign-out-forget: addendum 9: a purge failure shows the sign-out sentence and logs both failures (remote fails: true)`
+  failed at src/data/upload-sign-out.test.ts:364: missing original remote error in console.error.
+- `upload-sign-out-forget: addendum 10: no account-derived IndexedDB key or value remains after sign-out`
+  failed at src/data/upload-sign-out.test.ts:1011: retained identity-bearing forgotten key.
+- `upload-sign-out-forget: addendum 10: no account-derived IndexedDB key or value remains after auth expiry`
+  failed at src/data/upload-sign-out.test.ts:1011: retained identity-bearing forgotten key.
+- `upload-sign-out-forget: addendum 10: pre-sign-out add capture is refused (other account: true)`
+- `upload-sign-out-forget: addendum 10: pre-auth expiry add capture is refused (other account: true)`
+- `upload-sign-out-forget: addendum 10: pre-sign-out save capture is refused (other account: true)`
+- `upload-sign-out-forget: addendum 10: pre-auth expiry save capture is refused (other account: true)`
+  All four failed at src/data/upload-sign-out.test.ts:1047: stale other-account write succeeded.
+
+After implementation:
+
+```sh
+pnpm exec vitest run src/data/upload-sign-out.test.ts src/data/upload-store.test.ts src/data/upload-resume.test.ts --maxWorkers=2 --config /private/tmp/upload-a9-a10-jbja_usx/vitest.config.mjs --configLoader runner
+pnpm exec vitest run src/data --maxWorkers=2 --config /private/tmp/upload-a9-a10-jbja_usx/vitest.config.mjs --configLoader runner
+pnpm exec tsc -p tsconfig.app.json --noEmit --tsBuildInfoFile /private/tmp/upload-a9-a10-jbja_usx/app.tsbuildinfo
+pnpm exec tsc -p tsconfig.node.json --noEmit --tsBuildInfoFile /private/tmp/upload-a9-a10-jbja_usx/node.tsbuildinfo
+pnpm exec eslint src/data/upload-store.ts src/data/upload-queue.ts src/data/live/index.ts
+```
+
+- targeted.log: exit 0; 3 files, 67 tests passed, including all 16 exact addendum 9/10 cases.
+- data.log: exit 0; 80 files, 4,226 tests passed. No contradicting test or unhandled rejection.
+- tsc-app.log and tsc-node.log: exit 0; both logs empty.
+- eslint.log: exit 0; empty log, no fix/cache.
+- Read-only git diff --check: pass. Only the three production files and this notes append changed.
+
+pnpm check was not run: its test script writes reports into the repository, contrary
+ to this assignment's explicit test-output constraint. No e2e/server/network or
+Git-writing operation; packet integration, designer verification and commits remain
+with the coordinator. Requested offline data/type/lint verification is complete.
+
+### Standard solution and reuse
+
+No sources fetched. Reused the packet's inherited official
+[Google Drive resumable upload guide](https://developers.google.com/workspace/drive/api/guides/manage-uploads#resumable)
+and [IndexedDB transaction lifecycle](https://www.w3.org/TR/IndexedDB/#transaction-lifecycle)
+references and the existing upload queue/store adaptations. The existing session URI,
+status query (`Content-Range: bytes */N`), 308 handling and expiry protocol remain intact.
+The atomic readwrite transaction is the fence/write ordering home; a capture made before
+forgetting cannot put bytes or progress after the generation changes. No second upload
+store or sign-out purge mechanism was introduced.
+
+removed: per-account durable forgotten:<account> marker writes; legacy identity-bearing marker keys on forgetting.
+removed: per-account memory-store and queue staging-cleanup version maps.
+removed: identity-read prerequisite and unknown-identity purge skip at sign-out.
+removed: finally-path masking of the remote sign-out error when local purge also fails.
+tests changed: none

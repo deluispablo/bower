@@ -143,7 +143,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
   const authed = watchAuth(opts.worker, expire, () => epoch, (key, reply) => {
     if (key !== 'me') return;
     const me = reply as Awaited<ReturnType<WorkerApi['me']>>;
-    knownAccount = me === null ? null : uploadAccount(me.user.email);
+    if (me !== null) knownAccount = uploadAccount(me.user.email);
   });
   const waitingHere: WaitingHere = { count: 0, listeners: new Set() };
   // One active place per person (TL-P2-13): built here, started by the screens once someone is signed in.
@@ -361,17 +361,22 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
   session = new LiveSession(worker, drive, () => undefined, invalidate);
   async function forgetPerson(who: Promise<string> | null): Promise<void> {
     forgetThisPerson();
-    if (who === null) return;
-    await queue.forgetAccount(await who);
     if (knownAccount === who) knownAccount = null;
+    try { await queue.forgetAccount(who === null ? undefined : await who); }
+    catch (e) {
+      console.error(e);
+      throw new BowerError('unknown', 'Signing out did not finish. Try again.');
+    }
   }
   {
     const signOut = session.signOut.bind(session);
     session.signOut = async (): Promise<void> => {
-      if (knownAccount === null) await account().catch((e: unknown) => console.error(e));
       const who = knownAccount;
+      let failure: { cause: unknown } | undefined;
       try { await signOut(); }
-      finally { await forgetPerson(who); }
+      catch (cause) { console.error(cause); failure = { cause }; }
+      await forgetPerson(who);
+      if (failure) throw failure.cause;
     };
     const ended = session.expire.bind(session);
     session.expire = async (): Promise<void> => {

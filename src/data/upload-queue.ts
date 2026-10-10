@@ -190,8 +190,8 @@ export interface UploadQueue {
   halt: (id: string) => Promise<QueueItem | null>;
   /** Lets a held-back one be sent again. */
   resume: (id: string) => void;
-  /** Forgetting this person: every pending upload of `account`, in every folder, goes. */
-  forgetAccount: (account: string) => Promise<void>;
+  /** Every pending upload of `account` goes; without an identity, forget all device uploads. */
+  forgetAccount: (account?: string) => Promise<void>;
   /** Page disposal: stops sending and gives the lock back; what is kept on the device stays. */
   stop: () => void;
   /**
@@ -277,8 +277,8 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
   let persistAsked = false;
   /** Discarded here though the device could not delete their record: never brought back this session. */
   const tombstones = new Set<string>();
-  /** Account forgets fence adds too, including ones from a previous folder/start. */
-  const forgotten = new Map<string, number>();
+  /** Device forgets fence staging cleanup too, including adds from a previous folder/start. */
+  let forgetGeneration = 0;
   const staging = new Set<StagingUpload>();
   let persisted: 'granted' | 'refused' | 'unknown' = 'unknown';
   let told: string | null = null;
@@ -323,7 +323,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
 
   /** Forgetting awaits staging and this cleanup even when the store refuses the stale write. */
   async function keepBytes(record: PendingUpload, body: Blob, localVersion: number, version: number, stage: StagingUpload): Promise<void> {
-    if ((forgotten.get(record.account) ?? 0) !== localVersion) return;
+    if (forgetGeneration !== localVersion) return;
     let failure: { cause: unknown } | undefined;
     try {
       await store.add(record, body, version);
@@ -331,7 +331,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
       // expected: defer rethrow until the late-write cleanup has finished.
       failure = { cause };
     }
-    if ((forgotten.get(record.account) ?? 0) !== localVersion) {
+    if (forgetGeneration !== localVersion) {
       try { await store.remove(record); }
       catch (cause) { stage.failure = { cause }; throw cause; }
     }
@@ -834,7 +834,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     async add(input, suppliedVersion) {
       const s = scope;
       const gen = generation;
-      const localVersion = s === null ? 0 : forgotten.get(s.account) ?? 0;
+      const localVersion = forgetGeneration;
       if (s === null) {
         console.error('An upload was added before the queue started');
         throw new BowerError('unknown', NOT_SENT_TEXT);
@@ -973,9 +973,9 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     },
 
     async forgetAccount(account) {
-      const pending = [...staging].filter((stage) => stage.account === account);
-      forgotten.set(account, (forgotten.get(account) ?? 0) + 1);
-      if (scope?.account === account) stop();
+      const pending = [...staging];
+      forgetGeneration++;
+      if (account === undefined || scope?.account === account) stop();
       const failures: unknown[] = [];
       try {
         await store.clear(account);
