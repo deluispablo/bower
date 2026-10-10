@@ -1263,3 +1263,95 @@ Offline research reused the existing ReadCache's versioned/prefix evidence contr
 were reused, not fetched: [ECMAScript stable sort](https://tc39.es/ecma262/#sec-array.prototype.sort),
 [Obsidian internal links](https://help.obsidian.md/links), and
 [Vitest setup files](https://vitest.dev/config/setupfiles).
+
+## Addendum 9 red repair 2
+
+Red-owning session, 2026-10-11. TL-P4-51 sweep repair for TL-P4-41 addendum 9.
+Source HEAD: `b972996d14a4667613427ff3481a0a730ac5913b`. No production edits or repository-writing git commands.
+The coordinator owns commits. This section supersedes Addendum 9's seven-test reconciliation blocker.
+
+### Authorized changes
+
+The lifecycle and goldens are unchanged except a cold run's real reads and bootstrap index context.
+The five count cases listed in Addendum 9 retain exact equality: only the measured two prefix reads
+before planning are added. No warm count, timing bound, cut budget, lifecycle assertion or other test changes.
+
+- `c05-bounded-reads.test.ts`: the shared bootstrap baseline is 22, previously 20; both named cases pass it.
+- `drive-calls-golden.test.ts`: C04 total and timing total are 90, previously 88; reads phase 22, previously 20.
+  The later 25-earlier-runs assertion was reached in the capture run and measured 101, previously 99.
+  This is also a cold bootstrap: `modelled` seeds a fresh C04 folder and `finishedBefore` seeds only
+  historical run records and stamps, without index/retrieval projections. Its reads phase is 25, previously 23.
+  The historical run count does not make this fixture warm. All other phase counts and timing bounds stay exact.
+- `timing-counts.test.ts`: total 90, previously 88; reads phase 22, previously 20; all other fields unchanged.
+- Both model-input goldens were regenerated from the real C04 provider call in an OS-temp capture copy.
+  `model-input-fingerprint.test.ts` itself is byte-identical to HEAD; both exact equality assertions remain.
+
+Tests changed: recorded below using the required machine-readable prefix.
+
+tests changed: runner/test/c05-bounded-reads.test.ts: TL-P4-41 addendum 9: two real cold planning prefix reads; baseline 20 to 22.
+tests changed: runner/test/drive-calls-golden.test.ts: TL-P4-41 addendum 9: both fresh fixtures are cold; exact totals/read phases gain only two.
+tests changed: runner/test/timing-counts.test.ts: TL-P4-41 addendum 9: cold timing includes two prefix reads before planning; other phases unchanged.
+tests changed: runner/test/fixtures/model-input-c04.golden.txt: TL-P4-41 addendum 9: normalized bootstrap input gains only the canonical index field.
+tests changed: runner/test/fixtures/model-input-c04.raw.golden.txt: TL-P4-41 addendum 9: raw bootstrap input gains only the canonical index field.
+
+### Exact golden diff
+
+Both files have the same single JSON-field insertion on their final line. Expanded field diff:
+
+```diff
++ "index": "# Index\n\n## Areas\n\n### Home\n\n- [[Garden plot]] — Alex's plot at the Larkspur Lane community garden.\n"
+```
+
+Decoded added context:
+
+```markdown
+# Index
+
+## Areas
+
+### Home
+
+- [[Garden plot]] — Alex's plot at the Larkspur Lane community garden.
+```
+
+Byte audit removes exactly `,"index":<JSON-encoded string>` once from each regenerated file and obtains
+its original HEAD bytes. Prompt bytes, every existing JSON field/value, ordering and all remaining bytes
+are identical. Audit: `/tmp/b1c-a9-repair2-audit.log`.
+
+### Method and verification
+
+Reused the existing exact `readFileSync` golden comparison and the real runner's `modelled`/`countsOf`
+measurement, rather than changing normalization or acceptance assertions. Local method references:
+`runner/test/model-input-fingerprint.test.ts:79`, `runner/test/modelled.ts:118`.
+No network or external research was used under the session's explicit no-network constraint.
+
+The full pre-edit runner sweep reproduced **617 pass, 7 assertion reds, 624 total; 46 files**:
+`/tmp/b1c-a9-repair2-red.json`, `/tmp/b1c-a9-repair2-red.log`.
+The seven exact cases are the complete table in Addendum 9's TL-P4-51 section above.
+The intermediate four-file capture verified later assertions: **21 pass, 3 fail** (the later cold count
+101 versus 99, and the two unchanged goldens). Logs: `/tmp/b1c-a9-repair2-capture.json`,
+`/tmp/b1c-a9-repair2-capture.log`. Capture writes occurred only in OS temp, and instrumentation was removed
+before the final full run.
+
+Verification tree: `/private/tmp/b1c-a9-repair2-8__6ogb7`, populated from the worktree's tracked files.
+Installed dependency directories were copied into this fresh tree; no existing node_modules was replaced
+or symlinked. Test scratch repositories, bundles, caches, reports and logs stay in OS temp. The build-only
+pnpm stand-in executes the installed esbuild binary; no package-manager setup or network is invoked.
+Source/test/corpus/script byte audit verifies the tested copy against the worktree and unchanged production
+against HEAD. Disposable git fixtures belong to the existing runner suite; no session git write touches
+this worktree or its git metadata.
+
+Final command, cwd in the temp tree's `runner/`:
+
+```sh
+PATH=/private/tmp/b1c-a9-repair2-8__6ogb7/bin:$PATH node ../node_modules/vitest/vitest.mjs run --maxWorkers=2 --config=../runner-config.mjs --configLoader=runner --reporter=json --outputFile=/tmp/b1c-a9-repair2-green.json > /tmp/b1c-a9-repair2-green.log 2>&1
+```
+
+No pnpm check/e2e claim: this session is limited to the full runner suite, no screen changed, and pnpm check's
+repository mark violates the session's test-write restriction. Nothing else was repaired or left out.
+
+Final full runner suite at the pinned source HEAD with only the authorized test/golden repairs:
+**624 pass, zero fail, 624 total; all 46 files pass**. Reports:
+`/tmp/b1c-a9-repair2-green.json`, `/tmp/b1c-a9-repair2-green.log`.
+Read-only `git diff --check`: pass. Owned-file and exact-copy/HEAD byte audits: pass.
+No remaining contradiction, import, setup or runtime failure. All warm-run controls pass unchanged.

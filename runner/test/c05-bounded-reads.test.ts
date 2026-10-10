@@ -258,8 +258,8 @@ async function pileBaseline() {
   const baseline = await traced(c, drive, root);
   expect(baseline.result.code).toBe(0);
   expect(reportOf(baseline.result).filed.length).toBeGreaterThan(0);
-  // Measure the same C04 pile fixture; B1a discovery and maintain calls pin its reads to 20.
-  expect(baseline.trace.reads).toBe(20);
+  // TL-P4-41 addendum 9: bootstrap planning adds two real prefix reads before maintain reuses them.
+  expect(baseline.trace.reads).toBe(22);
   expect(baseline.trace.media.filter((p) => p.startsWith('.bower/runs/'))).toEqual([]);
   return baseline;
 }
