@@ -6720,8 +6720,9 @@
       "A prefix read returns at most 4,096 bytes on whole characters for 206 and 200 responses.",
       "The feed drains every page to the new token; unknown ids resolve scope through parents."
     ],
-    "verify": "",
-    "note": "Escalated (transport): Codex red, implementation, Codex pass, Claude review. Packet 2026-10-10-b1b-packet.md. Before B1a (lead)."
+    "verify": "pnpm exec vitest run src/data/drive -t \"b1-prefix-read never poisons the full-media cache|b1-feed-bootstrap-new-folder|b1b fix 1 finding 1|b1b fix 1 finding 2|b1b fix 2: native fake sizes|b1-ports-parity full-media cache separation\"",
+    "note": "Escalated (transport): Codex red, implementation, Codex pass, Claude review. Packet 2026-10-10-b1b-packet.md. Before B1a (lead). Codex passes 1-3; restore legacy size is a Minor by ruling (TL-P4-41 addendum 2).",
+    "review": "P4-83 PASS"
   },
   {
     "id": "b1a-contract",
