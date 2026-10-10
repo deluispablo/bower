@@ -10,6 +10,10 @@ import { SYSTEM } from '../../src/data/vault/layout';
 import { caseReplies, runOnDrive, runScripted, runWithClaude, scoreCase, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 import { RunRecords } from '../../src/data/spine/records';
+import * as c05Whys from '../../src/data/spine/scripted';
+
+// Namespace access lets the missing signed copy fail an assertion, rather than module loading or tsc.
+const { TOO_OLD_WHY } = c05Whys as typeof c05Whys & { TOO_OLD_WHY?: string };
 
 const PATH = 'Areas/Home/Garden plot.md';
 const SOURCE = 'Water butt update.txt';
@@ -916,5 +920,186 @@ describe('C05 person notes through runner main', () => {
     expect.soft(found.manifest.capture.journal.map((j) => j.recordId)).not.toContain('change-2');
     expect.soft(found.manifest.operations.some((o) => o.effect.kind === 'move' && o.effect.before.fileId === younger.id)).toBe(false);
   });
+
+  async function round5NewerRuns(c: LoadedCase, first: CaseRun) {
+    let later = first;
+    for (let press = 2; press <= 21; press++) {
+      const name = `Next letter ${press}.txt`;
+      const source = await first.drive.createText(idOf(later, 'Inbox') ?? '', name,
+        `Alex received made-up letter ${press}.`, { pile: `newer-${press}` });
+      later = await runOnDrive(c, first.drive, first.root, { claude: reply(() => ({ kind: 'tidy-intent', v: 1,
+        things: [round4File(source.id, name, `Alex received made-up letter ${press}.`)] })) }, press);
+      expect(later.code).toBe(0);
+      expect(reportOf(later).filed).toHaveLength(1);
+      const stored = await round4Records(later, `abc123-run1-${press}`);
+      expect(stored.chain.at(-1)?.completedAppends ?? []).toEqual([]);
+      expect(stored.manifest.operations.some((o) => o.effect.kind === 'edit-text'
+        && o.effect.changes.some((change) => change.kind === 'timeline-append'
+          && change.consent?.requestId === 'change-1'))).toBe(false);
+      expect(later.after[PATH]).toBe(first.after[PATH]);
+    }
+    expect(Object.keys(later.after).some((path) => path.includes('/abc123-run1/manifest-'))).toBe(false);
+    return later;
+  }
+
+  it('C05 person notes: round 5 1: archived completion uses the record id inside differently named bytes', async () => {
+    await positiveControl();
+    const c = await fixture(); const drive = fixedDrive(); const root = await seedCase(drive, c);
+    const first = await runOnDrive(c, drive, root, { claude: appendReply() }, 1);
+    expect(first.code).toBe(0);
+    expect(first.after[PATH]).toContain(` · ${NEWS} · [[${SOURCE}]]`);
+    const archivedBytes = first.after[`${SYSTEM.archive}/change-1.json`] ?? '';
+    const archivedFileId = idOf(first, `${SYSTEM.archive}/change-1.json`) ?? '';
+    expect(archivedFileId).toBeTruthy();
+    expect(archivedBytes).toBeTruthy();
+    expect(JSON.parse(archivedBytes)).toEqual(expect.objectContaining({ id: 'change-1' }));
+    const completed = await round4Records(first, 'abc123-run1');
+    expect(completed.chain.at(-1)?.completedAppends).toEqual([{ requestId: 'change-1', targetFileId: idOf(first, PATH) }]);
+    const later = await round5NewerRuns(c, first);
+
+    // Positive replay control after retention: the same bytes under the original name already settle as a no-op.
+    const controlSource = await addNextSource(later, false);
+    const control = await runOnDrive(c, drive, root, { request: { kind: 'replay', id: 'change-1' },
+      claude: reply((ctx) => ({ kind: 'tidy-intent', v: 1,
+        things: [round4File(controlSource, 'Next water butt update.txt')],
+        lines: ctx.notes.some((n) => n.path === PATH)
+          ? [{ note: PATH, text: 'The new water butt is here now.', cites: controlSource }] : [] })) }, 22);
+    expect(control.requestAction).toEqual({ kind: 'replay', id: 'change-1', outcome: 'restored' });
+    expect(control.code).toBe(0); expect(reportOf(control).filed).toHaveLength(1);
+    expect(control.after[PATH]).toBe(first.after[PATH]);
+    expect((await round4Records(control, 'abc123-run1-22')).chain.at(-1)?.completedAppends ?? []).toEqual([]);
+
+    // Keep the archived original; restore its exact bytes under a filename unrelated to its journal id.
+    const restored = await drive.createText(idOf(control, SYSTEM.changes) ?? '', 'restored-copy.json', archivedBytes);
+    expect(await drive.readText(restored.id)).toBe(archivedBytes);
+    expect(restored.id).not.toBe(archivedFileId);
+    expect(await drive.readText(archivedFileId)).toBe(archivedBytes);
+    const source = await drive.createText(idOf(control, 'Inbox') ?? '', 'Replay letter.txt', 'Alex received another made-up letter.', { pile: 'replay-copy' });
+    const replay = await runOnDrive(c, drive, root, { request: { kind: 'replay', id: 'change-1' },
+      claude: reply((ctx) => ({ kind: 'tidy-intent', v: 1, things: [round4File(source.id, 'Replay letter.txt')],
+        lines: ctx.notes.some((n) => n.path === PATH)
+          ? [{ note: PATH, text: 'The new water butt is here now.', cites: source.id }] : [] })) }, 23);
+    expect(replay.requestAction).toEqual({ kind: 'replay', id: 'change-1', outcome: 'already-active' });
+    expect(replay.code).toBe(0); expect(reportOf(replay).filed).toHaveLength(1);
+    expect.soft(replay.after[PATH], 'different filename cannot grant a second append').toBe(first.after[PATH]);
+    const stored = await round4Records(replay, 'abc123-run1-23');
+    expect.soft(stored.chain.at(-1)?.completedAppends ?? [], 'different filename cannot record a second completion').toEqual([]);
+    expect.soft(stored.manifest.operations.some((o) => o.effect.kind === 'edit-text' && o.effect.before.fileId === idOf(first, PATH))).toBe(false);
+    assertPersonal(replay);
+  }, 30_000);
+
+  async function round5CompletedButActive() {
+    const c = await fixture(); const drive = fixedDrive(); const root = await seedCase(drive, c);
+    const requestFileId = (await drive.listAll(root)).find((f) => f.name === 'change-1.json')?.id ?? '';
+    expect(requestFileId).toBeTruthy();
+    let interrupted = 0;
+    const first = await runOnDrive(c, drive, root, { claude: appendReply(), around: (fetch) => async (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      if (init?.method === 'PATCH' && url.pathname === `/drive/v3/files/${requestFileId}` && url.searchParams.has('addParents')) {
+        interrupted++;
+        throw new TypeError('Made-up interruption before the request archive landed.');
+      }
+      return fetch(input, init);
+    } }, 1);
+    expect(interrupted).toBe(1);
+    expect(first.after[PATH]).toContain(` · ${NEWS} · [[${SOURCE}]]`);
+    expect(first.after[`${SYSTEM.changes}/change-1.json`]).toBeDefined();
+    expect(first.after[`${SYSTEM.archive}/change-1.json`]).toBeUndefined();
+    const stored = await round4Records(first, 'abc123-run1');
+    const noteId = idOf(first, PATH) ?? '';
+    expect(stored.chain.at(-1)?.completedAppends).toEqual([{ requestId: 'change-1', targetFileId: noteId }]);
+    const archive = stored.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === requestFileId);
+    expect(archive).toBeDefined();
+    expect(stored.chain.at(-1)?.outcomes.find((o) => o.operationId === archive?.operationId)?.state).not.toBe('applied');
+    return { c, drive, root, first, noteId };
+  }
+
+  it('C05 person notes: round 5 2: a retained completion never resolves a renamed target by title again', async () => {
+    await positiveControl();
+    const control = await round5CompletedButActive();
+    const controlSource = await addNextSource(control.first, false);
+    const recovered = await runOnDrive(control.c, control.drive, control.root, { claude: reply(() => ({ kind: 'tidy-intent', v: 1,
+      things: [round4File(controlSource, 'Next water butt update.txt')] })) }, 2);
+    expect(recovered.code).toBe(0); expect(reportOf(recovered).filed).toHaveLength(1);
+    expect(recovered.after[PATH]).toBe(control.first.after[PATH]);
+    expect(recovered.after[`${SYSTEM.archive}/change-1.json`]).toBe(control.first.after[`${SYSTEM.changes}/change-1.json`]);
+    expect((await round4Records(recovered, 'abc123-run1-2')).chain.at(-1)?.completedAppends ?? []).toEqual([]);
+
+    const { c, drive, root, first, noteId } = await round5CompletedButActive();
+    await drive.update(noteId, { name: 'Beds.md' });
+    const replacementText = (c.folder[PATH] ?? '').replace('Alex keeps a handwritten planting diary.', 'Alex keeps a different made-up diary.');
+    const replacement = await drive.createText(idOf(first, 'Areas/Home') ?? '', 'Garden plot.md', replacementText);
+    const source = await addNextSource(first, false);
+    const next = await runOnDrive(c, drive, root, { claude: reply((ctx) => ({ kind: 'tidy-intent', v: 1,
+      things: [round4File(source, 'Next water butt update.txt')],
+      lines: ctx.notes.some((n) => n.path === PATH)
+        ? [{ note: PATH, text: 'Alex received the next committee letter.', cites: source }] : [] })) }, 2);
+    expect(next.code).toBe(0); expect(reportOf(next).filed).toHaveLength(1);
+    expect(idOf(next, 'Areas/Home/Beds.md')).toBe(noteId); expect(idOf(next, PATH)).toBe(replacement.id);
+    expect.soft(next.after['Areas/Home/Beds.md'], 'the completed target gets no second append').toBe(first.after[PATH]);
+    expect.soft(next.after[PATH], 'the replacement title gets no consent').toBe(replacementText);
+    const stored = await round4Records(next, 'abc123-run1-2');
+    expect.soft(stored.chain.at(-1)?.completedAppends ?? [], 'a retained completion is request-wide').toEqual([]);
+    expect.soft(stored.manifest.operations.some((o) => o.effect.kind === 'edit-text'
+      && [noteId, replacement.id].includes(o.effect.before.fileId))).toBe(false);
+    expect(next.after[`${SYSTEM.archive}/change-1.json`]).toBe(first.after[`${SYSTEM.changes}/change-1.json`]);
+    expect(next.after[`${SYSTEM.changes}/change-1.json`]).toBeUndefined();
+    assertPersonal(next);
+  });
+
+  it('C05 person notes: round 5 3: a request past retention is left as written and archived without an append', async () => {
+    await positiveControl();
+    // A retained pending binding is still actionable after a rename, beside a new note with its old title.
+    const control = await round4Pending();
+    await control.drive.update(control.noteId, { name: 'Beds.md' });
+    const replacementText = control.c.folder[PATH] ?? '';
+    const replacement = await control.drive.createText(idOf(control.first, 'Areas/Home') ?? '', 'Garden plot.md', replacementText);
+    const controlSource = await addNextSource(control.first, false);
+    const retry = await runOnDrive(control.c, control.drive, control.root, { claude: reply((ctx) => ({ kind: 'tidy-intent', v: 1,
+      things: [round4File(controlSource, 'Next water butt update.txt')],
+      lines: ctx.notes.some((n) => n.path === PATH)
+        ? [{ note: PATH, text: 'Alex received the next committee letter.', cites: controlSource }] : [] })) }, 2);
+    expect(retry.code).toBe(0); expect(reportOf(retry).filed).toHaveLength(1);
+    expect(retry.after['Areas/Home/Beds.md']).toBe((control.first.after[PATH] ?? '').trimEnd() + `\n- 2026-10-07 · ${NEWS} · [[${SOURCE}]]\n`);
+    expect(idOf(retry, PATH)).toBe(replacement.id); expect(retry.after[PATH]).toBe(replacementText);
+    expect((await round4Records(retry, 'abc123-run1-2')).chain.at(-1)?.completedAppends).toEqual([
+      { requestId: 'change-1', targetFileId: control.noteId },
+    ]);
+
+    const { c, first, drive, root, noteId, sourceId } = await round4Pending();
+    const activeBytes = first.after[`${SYSTEM.changes}/change-1.json`] ?? '';
+    await drive.trash(sourceId);
+    expect((await drive.evidence(sourceId))?.trashed).toBe(true);
+    const later = await round5NewerRuns(c, first);
+    expect(later.after[`${SYSTEM.changes}/change-1.json`]).toBe(activeBytes);
+    const oldest = await round4Records(later, 'abc123-run1-2');
+    expect((JSON.parse(activeBytes) as { at: number }).at).toBeLessThan(oldest.manifest.requestedAt);
+    await drive.update(noteId, { name: 'Beds.md' });
+    const another = await drive.createText(idOf(later, 'Areas/Home') ?? '', 'Garden plot.md', replacementText);
+    const source = await addNextSource(later, false);
+    const next = await runOnDrive(c, drive, root, { claude: reply((ctx) => ({ kind: 'tidy-intent', v: 1,
+      things: [round4File(source, 'Next water butt update.txt')],
+      lines: ctx.notes.some((n) => n.path === PATH)
+        ? [{ note: PATH, text: 'Alex received the next committee letter.', cites: source }] : [] })) }, 22);
+    expect(next.code).toBe(0); expect(reportOf(next).filed).toHaveLength(1);
+    expect(idOf(next, 'Areas/Home/Beds.md')).toBe(noteId); expect(idOf(next, PATH)).toBe(another.id);
+    expect.soft(next.after['Areas/Home/Beds.md'], 'the old target stays unchanged').toBe(first.after[PATH]);
+    expect.soft(next.after[PATH], 'expired consent cannot transfer to the new title match').toBe(replacementText);
+    const stored = await round4Records(next, 'abc123-run1-22');
+    expect.soft(stored.chain.at(-1)?.completedAppends ?? []).toEqual([]);
+    expect.soft(stored.manifest.operations.some((o) => o.effect.kind === 'edit-text'
+      && [noteId, another.id].includes(o.effect.before.fileId))).toBe(false);
+    expect.soft(next.after[`${SYSTEM.changes}/change-1.json`]).toBeUndefined();
+    expect.soft(next.after[`${SYSTEM.archive}/change-1.json`]).toBe(activeBytes);
+    const archive = stored.manifest.operations.find((o) => o.effect.kind === 'move'
+      && o.effect.before.fileId === idOf(first, `${SYSTEM.changes}/change-1.json`));
+    expect.soft(archive, 'the stale request has its archive move').toBeDefined();
+    expect.soft(stored.chain.at(-1)?.outcomes.find((o) => o.operationId === archive?.operationId)?.state).toBe('applied');
+    expect.soft(reportOf(next).updated).toEqual([]);
+    expect.soft(typeof TOO_OLD_WHY, 'the designer-signed C05 why must be exported').toBe('string');
+    expect.soft(TOO_OLD_WHY, 'the signed why is nonempty').toBeTruthy();
+    expect.soft(reportOf(next).leftAsWritten, 'the stale request reports one Left as you wrote them row').toHaveLength(1);
+    expect.soft(reportOf(next).leftAsWritten).toEqual([expect.objectContaining({ why: TOO_OLD_WHY })]);
+  }, 30_000);
 
 });

@@ -927,3 +927,84 @@ Verification at HEAD with the amended reds:
 
 No network or git writes. Commits are left to the coordinator. Full `pnpm check` and screen e2e
 were not run for this narrowly assigned red amendment; no screen changed.
+
+## Round 5 reds (TL-P4-32 addendum 5)
+
+Red-owning session, 2026-10-10, at HEAD `d696abd0700b560cba988d380baf7429d69336fb`,
+branch `c05-person-notes`, worktree `/private/tmp/bower-c05-person-notes`.
+Read addenda 3–5, the pass-4 review and the Round 4 notes. Scope: addendum 5's three points only.
+Added three tests and their local fixture helpers in `runner/test/c05-person-notes.test.ts`;
+appended this section. No existing test or helper changed. The coordinator commits the tests and notes.
+
+### Exact tests, controls and observed failures
+
+1. `C05 person notes: round 5 1: archived completion uses the record id inside differently named bytes`
+   completes `change-1` on Garden plot (`f11`), verifies its originating checkpoint completion and
+   archived request bytes, then runs twenty newer successful tidy-ups. Each files a distinct made-up
+   letter, changes no Garden plot bytes, records no completion or append binding for `change-1`,
+   and passes manifest/checkpoint verification. Retention removes the original manifest.
+   The positive replay control restores the original filename via the corpus driver and offers new wording:
+   it files the new source, writes nothing to Garden plot and records no second completion.
+   The red then restores the exact archived bytes as `restored-copy.json`, proves the archived original
+   still exists unchanged under a different Drive id, and runs the driver again with a new source.
+   At HEAD, Garden plot gets `The new water butt is here now.` citing `Replay letter`, and
+   `(change-1, f11)` completes again. The exact-byte, no-second-completion and no-edit assertions fail.
+
+2. `C05 person notes: round 5 2: a retained completion never resolves a renamed target by title again`
+   interrupts the archive PATCH before it lands, after the sourced append and checkpoint completion.
+   The control proves the request stays active, the archive outcome is not applied, and the verified
+   checkpoint contains `(change-1, f11)`. An independent recovery without a rename files its new source,
+   archives the exact request, leaves the note byte-identical and records no second completion.
+   The red repeats that crash, renames `f11` to Beds, creates a new Garden plot (`f14`) and offers a
+   new line with a new source. At HEAD, Beds stays exact, but the replacement receives
+   `Alex received the next committee letter.` and `(change-1, f14)` completes. The replacement's
+   exact-byte assertion, empty completions and no-edit assertion fail. The request archive checks pass.
+
+3. `C05 person notes: round 5 3: a request past retention is left as written and archived without an append`
+   first proves a retained pending binding retries after a rename, beside a new same-title note:
+   only Beds gets the original line citing the original source, and only its original target id completes.
+   The red conflicts the first append, verifies the pending target/source binding and conflict outcome,
+   Bins the bound source, then runs twenty newer successful tidy-ups. The note and active request bytes
+   stay exact; each verified newer manifest has no append binding or completion for `change-1`.
+   The originating manifest expires, and the request timestamp is older than the oldest retained manifest.
+   Rename the old target to Beds and create a new Garden plot (`f54`) with a new source (`f55`).
+   At HEAD, the replacement gets the new line and `(change-1, f54)` completes. The archive move and its
+   applied outcome already pass, including exact archived bytes and absence from the active changes.
+   The no-append, no-completion, no-edit, empty-updates and required `leftAsWritten` row assertions fail.
+   `TOO_OLD_WHY` is imported through the `scripted.ts` module namespace with an optional typed export:
+   its missing export fails `expect(typeof TOO_OLD_WHY)` and the nonempty-copy assertion, without a
+   module-load or TypeScript error. The row must use that exact constant once the implementer adds the
+   designer's signed line to the C05 why table; no draft sentence was invented here.
+
+All three tests also run the existing owned-note append positive control. Every scenario uses the
+corpus driver's `runOnDrive`/`runWithClaude` through production runner `main`, fake Drive and its
+injected clock. The existing `round4Records` checks the originating manifest through `RunRecords`,
+then independently parses checkpoints and verifies each chain. No settlement helper substitutes for `main`.
+All positive controls and preconditions pass. No real timers, network, server, production changes,
+`.only`, `.skip`, shared harness-state changes or git-writing command.
+
+tests changed: none (existing tests are unchanged; three new round-5 tests added).
+compatibility: none (tests and notes only; no stored shape or production change).
+
+### Verification at HEAD
+
+```sh
+pnpm -C runner exec vitest run test/c05-person-notes.test.ts -t 'C05 person notes: round 5' --maxWorkers=2 > tmp-logs/c05-round5-runner-final.log 2>&1
+pnpm -C runner exec tsc --noEmit -p . > tmp-logs/c05-round5-tsc-final.log 2>&1
+pnpm exec eslint runner/test/c05-person-notes.test.ts > tmp-logs/c05-round5-eslint-final.log 2>&1
+```
+
+Final targeted run: **3 expected failing tests, 14 assertion failures**; all fail for the reasons above.
+The other 39 tests are excluded by the name filter, without changing their source. No load failure,
+unhandled exception or timer-gate failure. The intentional archive transport errors are reconciled and
+their verified recovery controls pass. Only failure blocks/result counts were read from the test logs.
+Runner TypeScript (including the touched file and imports) and touched-file ESLint exit 0.
+Read-only `git diff --check` passes. Logs remain under `tmp-logs/`.
+
+Offline research/reuse: the locally cited standard Drive file-id resource
+(https://developers.google.com/drive/api/reference/rest/v3/files) and conditional writes
+(https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.1), as recorded in the Round 4 notes.
+Reused the existing corpus driver, persisted RunRecords chain, checkpoint validators and fake Drive.
+No external lookup under the owner's no-network instruction; no new identity or settlement mechanism.
+
+left out: production fixes, the designer-signed TOO_OLD_WHY export, full suites, pnpm check, e2e and git writes.
