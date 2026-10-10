@@ -24,7 +24,7 @@ import { PROP, RUNNER_WRITES, SYSTEM, isRunnerFile, type HashesFile, type Questi
 import { ruleLike } from '../rules';
 import { savedLinkAddress } from '../search-text';
 import { EMPTY_MD5, md5Hex } from '../contracts/hashes';
-import { ASK_GONE, STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
+import { answeredAskings, answersAsking, journalAnswer, roundFor, type QuestionRound, ASK_GONE, STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
 import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
 import { parseTimelineLine } from '../contracts/timeline-line';
@@ -463,6 +463,7 @@ export interface KeepOne {
  * untouched, the question goes to the person, and the rest of the run goes on. A run never waits and never guesses.
  */
 export interface Ask {
+  options?: Array<{ folderId: string; label: string }>;
   text: string;
   yes: string;
   no: string;
@@ -659,6 +660,10 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   // An inbox emptied after the Worker looked at it: the Worker's own refusal, before any effect. A run the Worker
   // admitted is past refusing: what it took and finds gone waits, and it ends with nothing filed (TL-P3-25 point 2).
   if (all && !inbox.length && !opts.taken) throw new BowerError('conflict', NOTHING_WAITING);
+  const questionsFile = ix.file(SYSTEM.questions);
+  const questionValue = questionsFile && (questionsFile.size === undefined || questionsFile.size > 40 || lines.some((l) => l.rec.kind === 'answer'))
+    ? parsed(await ownText(drive, questionsFile)) : null;
+  const questionState: QuestionsFile = isRunnerFile(SYSTEM.questions, questionValue) ? questionValue : { v: 1, questions: [] };
   const piles = opts.taken ? tookPiles(inbox, opts.taken) : inbox;
   // The capture the Worker's admission shares (TL-P3-21), with the one pile note each pile records read and checked.
   const readiness = await capturePiles(drive, rootId, piles.map(pileShape), { notes: true, context: opts.context });
@@ -669,7 +674,7 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   const unrecorded = lines.some((l) => l.rec.kind === 'request' && !appends.completed.some((h) => h.requestId === l.rec.id)
     && !appends.lines.some((h) => h.consent.requestId === l.rec.id));
   const since = unrecorded ? retainedSince(listing, ix) : null;
-  return { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since };
+  return { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState };
 }
 type Captured = Awaited<ReturnType<typeof capture>>;
 
@@ -679,14 +684,58 @@ type Captured = Awaited<ReturnType<typeof capture>>;
  * edits, the generated notes, the questions. It ends decided, or with a try again that holds more back.
  */
 export async function decide(drive: ScriptedRead, snapshot: Captured, opts: PlanOptions, attempt: Attempt = { editCap: EDITS_PER_RUN, held: new Set() }) {
-  const { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since } = snapshot;
+  const { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState } = snapshot;
   const { editCap, held } = attempt;
   const newKey = opts.mintKey ?? mintKey;
   /**
    * What the reply decided. A part it leaves out is not done (P4-2 review I1): your requests and answers then wait for
    * a run that can act on them, never archived unanswered.
    */
-  const d = opts.decisions;
+  const rounds: QuestionRound[] = (questionState.rounds ?? []).map((r) => ({ ...r })).filter((r) => roundFor([r], { id: askId(r.subject), subject: r.subject, ...(r.hash ? { hash: r.hash } : {}) }, inbox));
+  const chosen = new Map<string, { place: Placement; record: string }>();
+  const latest = new Map<string, JournalLine>();
+  for (const l of lines) {
+    const q = questionState.questions.find((q) => answersAsking(l.rec, q));
+    if (l.rec.kind !== 'answer' || !q) continue;
+    const had = latest.get(q.id);
+    if (!had || had.rec.at <= l.rec.at) latest.set(q.id, l);
+  }
+  for (const q of questionState.questions) {
+    const l = latest.get(q.id);
+    const answer = l && journalAnswer(l.rec);
+    if (!l || typeof answer !== 'object' || !('option' in answer)) continue;
+    const action = q.options?.find((o) => o.id === answer.option)?.action;
+    const folder = action && ix.byId(action.folderId);
+    const path = folder && ix.pathOf(folder.id);
+    const subject = subjectKey(q);
+    if (!subject || !folder?.folder || !path || !MAIN_FOLDERS.includes(path.split('/')[0] ?? '')) continue;
+    for (const pile of piles) for (const item of pile.items) if ((subject === pile.id || subject === item.id) && item.name !== PILE_NOTE)
+      chosen.set(item.id, { place: { to: path, name: item.name }, record: l.rec.id });
+  }
+  const d: Decisions = { ...opts.decisions,
+    thing: (t) => chosen.get(t.fileId)?.place ?? opts.decisions.thing(t),
+    thingAsk: (id) => chosen.has(id) ? null : opts.decisions.thingAsk(id),
+    pileAsk: (p) => p.items.some((i) => chosen.has(i.id)) ? null : opts.decisions.pileAsk(p),
+  };
+  const exhausted = (id: string): boolean => {
+    const hash = ix.byId(id)?.md5Checksum;
+    const r = roundFor(rounds, { id: askId(id), subject: id, ...(hash ? { hash } : {}) }, inbox);
+    if (!r) return false;
+    if (r.exhausted) return true;
+    const q = questionState.questions.find((q) => subjectKey(q) === r.subject || (!!r.hash && q.hash === r.hash));
+    return r.count >= 2 && !!q && latest.has(q.id) && !chosen.has(id);
+  };
+  const optionsOf = (ask: Ask): Pick<Question, 'options'> => {
+    if (!ask.options) return {};
+    if (ask.options.length < 2 || ask.options.length > 4 || new Set(ask.options.map((o) => o.folderId)).size !== ask.options.length)
+      throw new BowerError('conflict', 'Bower could not ask that question.');
+    return { options: ask.options.map((o, i) => {
+      const folder = ix.byId(o.folderId);
+      const path = folder && ix.pathOf(folder.id);
+      if (!folder?.folder || !path || !MAIN_FOLDERS.includes(path.split('/')[0] ?? '')) throw new BowerError('conflict', 'Bower could not ask that question.');
+      return { id: `place-${i + 1}`, label: o.label, action: { kind: 'file-to' as const, folderId: folder.id } };
+    }) };
+  };
   // A person's request (C05): the one settlement decides what it binds, refuses, reports and waits for.
   const settlement = settleRequest(lines.filter((l) => l.rec.kind === 'request'), listing, ix, appends, since);
   // A thing a request's line on a person's note cites is filed and cited, never taken for a copy of one already saved.
@@ -705,7 +754,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const keepDay = timelineDate(opts.requestedAt) !== null;
   if (!keepDay && d.keep.length) console.error('A run with no date cannot keep one note; the answer waits for the next tidy-up');
   // A keep whose notes are not there, or cannot be named in links, waits with its answer: decided here, from the listing.
-  const keeps = (keepDay ? d.keep : []).filter((k) => !held.has(`keep:${k.answer}`) && lines.some((l) => l.rec.id === k.answer && l.rec.kind === 'answer' && l.rec.text === 'yes')).flatMap((k) => {
+  const keeps = (keepDay ? d.keep : []).filter((k) => !held.has(`keep:${k.answer}`) && lines.some((l) => l.rec.id === k.answer && l.rec.kind === 'answer' && journalAnswer(l.rec) === true)).flatMap((k) => {
     const kept = ix.file(k.kept);
     const other = ix.file(k.other);
     const rename = { from: displayName(nameOf(k.other)), to: displayName(nameOf(k.kept)) };
@@ -728,7 +777,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // A Current state you edited: a no closes its question; a yes too, once its run wrote the update (the answer goes
     // with that edit) or asked again about a section changed since (`state-yes-writes`). A pair by its notes' ids
     // whose note is gone settles: nothing can be kept as one.
-    return keepAnswers.has(l.rec.id) || l.rec.text === 'no' || q === ADOPT_STATES_ID || subjectOf({ id: q }).kind === 'state' || subjectLeft({ id: q }, null, notesSeen);
+    return keepAnswers.has(l.rec.id) || journalAnswer(l.rec) === false || q === ADOPT_STATES_ID || subjectOf({ id: q }).kind === 'state' || subjectLeft({ id: q }, null, notesSeen);
   };
   const inboxIds = new Set(inbox.flatMap((p) => [p.id, ...p.items.map((i) => i.id)]));
   const seenFirst: InboxSeen | null = all ? { ids: inboxIds, hashes: new Set(listing.flatMap((f) => (inboxIds.has(f.id) && f.md5Checksum ? [f.md5Checksum] : []))) } : null;
@@ -736,13 +785,13 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // so does an older pair question, by the names in its words. The list is read for it only when a model's run has
   // such an answer waiting, or when an answer's subject may be gone (its row names what it was about).
   const bySubject = !d.settles ? lines.filter((l) => l.rec.kind === 'answer' && !settlesAlone(l)) : [];
-  const maybeGone = lines.some((l) => l.rec.kind === 'answer' && l.rec.text !== 'no' && subjectLeft({ id: l.rec.questionId ?? '' }, seenFirst, notesSeen));
+  const maybeGone = lines.some((l) => l.rec.kind === 'answer' && journalAnswer(l.rec) !== false && subjectLeft({ id: l.rec.questionId ?? '' }, seenFirst, notesSeen));
   const listedFile = bySubject.length || maybeGone ? ix.file(SYSTEM.questions) : undefined;
   const listedValue = listedFile && !listedFile.folder ? parsed(await ownText(drive, listedFile)) : null;
   const listed = isRunnerFile(SYSTEM.questions, listedValue) ? listedValue.questions : [];
   const settles = (l: JournalLine): boolean => {
     if (settlesAlone(l)) return true;
-    const q = listed.find((x) => x.id === l.rec.questionId);
+    const q = listed.find((x) => answersAsking(l.rec, x));
     const key = q && subjectKey(q);
     return q !== undefined && ((key !== undefined && tookSubjects.has(key)) || subjectLeft(q, seenFirst, notesSeen));
   };
@@ -759,7 +808,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const had = lastAnswer.get(l.rec.questionId ?? '');
     if (!had || had.rec.at <= l.rec.at) lastAnswer.set(l.rec.questionId ?? '', l);
   }
-  const yesAnswers = [...lastAnswer.values()].filter((l) => l.rec.text !== 'no').map((l) => ({ l, q: listed.find((x) => x.id === l.rec.questionId) ?? { id: l.rec.questionId ?? '' } }));
+  const yesAnswers = [...lastAnswer.values()].filter((l) => journalAnswer(l.rec) !== false).map((l) => ({ l, q: listed.find((x) => answersAsking(l.rec, x)) ?? { id: l.rec.questionId ?? '' } }));
   // A pair asked by ids whose other note is gone is named by the name its file keeps in the Bin: one read of that file,
   // only for a row made here (TL-P4-19 addendum 14). A file that cannot be read (a 404 or any refusal) leaves the row
   // its fallback words.
@@ -780,7 +829,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // Rules.md made when it is missing; a line whose words cannot be worded stays pending.
   const ruleWords = ruleChangesOf(journal, d.wordRule ?? tidiedRule);
   // A "yes" to keeping one note joins the thing it is about to that note (MERGES), by the answer's line.
-  const yes = new Map(journal.filter((l) => l.rec.kind === 'answer' && l.rec.text === 'yes').map((l) => [l.rec.questionId ?? '', l.rec.id]));
+  const yes = new Map(journal.filter((l) => l.rec.kind === 'answer' && journalAnswer(l.rec) === true).map((l) => [l.rec.questionId ?? '', l.rec.id]));
   // Its note is followed through the renames and moves since the last tidy-up, as the resolver follows a link.
   const follow = (path: string): string => {
     let now = path;
@@ -831,7 +880,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const pileOfThing = new Map(piles.flatMap((p) => p.items.map((i) => [i.id, p] as const)));
   const filedHere = (id: string): boolean => {
     const p = pileOfThing.get(id);
-    if (!p || readiness.get(p.id)?.blocked !== null || held.has(p.id)) return false;
+    if (!p || readiness.get(p.id)?.blocked !== null || (held.has(p.id) && !chosen.has(id))) return false;
     if (d.pileAsk(p)) return false;
     return !d.thingAsk(id);
   };
@@ -882,7 +931,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // A pile the reply asks about: asked, never captured (TL-P4-08 point 1).
     const ask = d.pileAsk(pile);
     // A pile whose merge line waits past the edit cap waits whole, with its answer (planned again without it).
-    if (held.has(pile.id) && !ask) {
+    if (held.has(pile.id) && !ask && !pile.items.some((i) => chosen.has(i.id))) {
       for (const item of pile.items) {
         const m = mergeOf(item);
         if (m) need(m.answer).held = true;
@@ -894,8 +943,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       hold('its id cannot be recorded');
       continue;
     }
-    if (ask) {
-      askedPiles.push({ id: askId(pile.id), text: ask.text, yes: ask.yes, no: ask.no, subject: pile.id, askedAt: opts.requestedAt });
+    if (ask || exhausted(pile.id)) {
+      if (ask && !exhausted(pile.id)) askedPiles.push({ id: askId(pile.id), text: ask.text, yes: ask.yes, no: ask.no, subject: pile.id, words: pile.text, ...optionsOf(ask), askedAt: opts.requestedAt });
       continue;
     }
     // Things the model asks about: each stays where it is, named by its question; the rest of the pile goes on.
@@ -903,10 +952,10 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     for (const item of pile.items) {
       const q = thingAsk(item.id);
       const hash = listing.find((f) => f.id === item.id)?.md5Checksum;
-      if (q) askedPiles.push({ id: askId(item.id), text: q.text, yes: q.yes, no: q.no, about: join(pile.path ?? '', item.name), subject: item.id, ...(hash ? { hash } : {}), askedAt: opts.requestedAt });
+      if (q && !exhausted(item.id)) askedPiles.push({ id: askId(item.id), text: q.text, yes: q.yes, no: q.no, about: join(pile.path ?? '', item.name), subject: item.id, words: pile.text, ...optionsOf(q), ...(hash ? { hash } : {}), askedAt: opts.requestedAt });
     }
     // What stays where it is: what is asked about, and a copy of a thing this run does not file.
-    const stays = (fileId: string): boolean => !!thingAsk(fileId) || staying.has(fileId);
+    const stays = (fileId: string): boolean => (chosen.size > 0 && !chosen.has(fileId) && fileId !== ix.file(join(pile.path ?? '', PILE_NOTE))?.id && !d.thing({ fileId, name: ix.byId(fileId)?.name ?? '', fileName: ix.byId(fileId)?.name ?? '', kind: kindOf(ix.byId(fileId)?.name ?? ''), words: pile.text, linkText: null })) || !!thingAsk(fileId) || (exhausted(fileId) && !chosen.has(fileId)) || staying.has(fileId);
     // A pile whose only things are already saved keeps its folder and its words where they are (review P4-17 I3): the
     // copies go to the Bin, and the next tidy-up reads the words on their own, as any pile of words.
     const onlySaved = !loose && !!pile.text.trim() && pile.items.some((i) => dups.has(i.id) && !staying.has(i.id))
@@ -1173,7 +1222,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       const f = path === undefined ? undefined : ix.file(path);
       // A yes whose note is not in the folder now (the Bin) writes nothing: its answer settles, and its answered row
       // comes from `answeredRows` above (`answeredGone`, kind state), the one writer of that row (TL-P4-19 addendum 10).
-      if (l.rec.text !== 'yes' || !q || !f || f.folder || path === undefined) continue;
+      if (journalAnswer(l.rec) !== true || !q || !f || f.folder || path === undefined) continue;
       grants.set(f.id, { answer: l.rec.id, seen: q.state ?? null, question: q });
       want(f, path);
     }
@@ -1290,7 +1339,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const open = isRunnerFile(SYSTEM.questions, openValue) ? openValue.questions : [];
   for (const l of disagreed) {
     const q = open.find((x) => x.id === l.rec.questionId);
-    const said = q ? (d.said?.line(q, l.rec.text === 'yes') ?? null) : null;
+    const said = q ? (d.said?.line(q, journalAnswer(l.rec) === true) ?? null) : null;
     const path = said ? follow(said.note) : '';
     const f = said ? ix.file(path) : undefined;
     if (!said || !f || f.folder || !path.endsWith('.md')) continue;
@@ -1796,11 +1845,11 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   }
   // Answers drop their questions from questions.json; an answer held back keeps its own. The question the run asks
   // goes into that same write (TL-P2-37 Q1 (a)), asked at `requestedAt`, unless it is open already or answered now.
-  const answered = new Set(journal.filter((l) => l.rec.kind === 'answer').map((l) => l.rec.questionId ?? ''));
+  const answered = answeredAskings(journal.map((l) => l.rec));
   // A question asked again (a granted section changed since) replaces the one its answer drops, under the same id.
   const again = new Set(reasked.map((q) => q.id));
   const toAsk = [...asking.values(), ...disagreeing.map((d) => d.question), ...reasked, ...askedPiles]
-    .filter((q, i, all) => (again.has(q.id) || !answered.has(q.id)) && all.findIndex((x) => x.id === q.id) === i);
+    .filter((q, i, all) => (subjectOf(q).kind === 'inbox' || again.has(q.id) || !answered.has(q.id)) && all.findIndex((x) => x.id === q.id) === i);
   const questionsFile = ix.file(SYSTEM.questions);
   let questionsText: string | null = null;
   /** The questions that write holds: written by the build, once it has set on each one asked now the note as left. */
@@ -1814,28 +1863,50 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // An unreadable list is Bower's own file: replaced with a fresh one (TL-P2-17); the report never claims its old entries.
     if (!readable) console.error(new BowerError('unknown', QUESTIONS_REPLACED), `${SYSTEM.questions} is not a valid questions file`);
     const all = readable ? value.questions : [];
-    fresh = toAsk.filter((q) => again.has(q.id) || !all.some((x) => sameThing(x, q)));
+    const open = openQuestions(all, answered, seenNow, notesSeen).filter((q) => {
+      const id = subjectKey(q);
+      const pile = inbox.find((p) => p.id === id || p.items.some((i) => i.id === id));
+      return q.words === undefined || !pile || q.words === pile.text;
+    });
+    fresh = toAsk.filter((q) => again.has(q.id) || !open.some((x) => sameThing(x, q)));
     // The same content uploaded again keeps its one question, now about the new file (so the reader still shows it).
     const retarget = (x: Question): Question => {
       const again = toAsk.find((q) => q.subject !== undefined && related(subjectKey(x), q.subject) === false && sameContent(x, q));
       return again ? { ...x, subject: again.subject, ...(again.about !== undefined ? { about: again.about } : {}) } : x;
     };
-    const open = openQuestions(all, answered, seenNow, notesSeen);
     // A question closed because its thing goes to the Bin now (a saved copy) closes only once that Bin is done (P4-17).
-    closing.push(...all.filter((q) => !answered.has(q.id) && !open.includes(q)));
+    closing.push(...all.filter((q) => !answered.has(q.id) && !answered.has(`${q.id}\n${q.askedAt}`) && !open.includes(q)));
     const left = [...open.map(retarget), ...fresh];
     if (!readable || left.length !== all.length || fresh.length || left.some((q, i) => q.subject !== all[i]?.subject)) {
       questionsList = left;
-      questionsText = questionsJson(left);
+      questionsText = questionsJson(left, rounds);
     }
   } else if (toAsk.length && sys?.folder) {
     // A missing list is made again in `.bower` with the question (TL-P2-33 §2a).
     fresh = toAsk;
     questionsList = fresh;
-    questionsText = questionsJson(fresh);
+    questionsText = questionsJson(fresh, rounds);
   } else if (toAsk.length) {
     // No `.bower` yet: the run's own records make it; there is no list to ask in, so the question is not asked.
     console.error(new BowerError('unknown', NOT_ASKED), `${SYSTEM.dir} is missing; the question is not asked`);
+  }
+  for (const q of fresh) {
+    const subject = subjectKey(q);
+    const pile = inbox.find((p) => p.id === subject || p.items.some((i) => i.id === subject));
+    if (!subject || !pile) continue;
+    const previous = roundFor(rounds, q, inbox);
+    if (previous) previous.count = Math.min(2, previous.count + 1);
+    else rounds.push({ subject, pileId: pile.id, words: pile.text, count: 1, ...(q.hash ? { hash: q.hash } : {}) });
+  }
+  for (const r of rounds) {
+    const q = questionState.questions.find((q) => subjectKey(q) === r.subject || (!!r.hash && q.hash === r.hash));
+    if (r.count >= 2 && q && latest.has(q.id) && !things.some((t) => t.file.id === r.subject) && !chosen.has(r.subject)) r.exhausted = true;
+  }
+  const retained = rounds.filter((r) => !subjectLeft({ id: askId(r.subject), subject: r.subject, ...(r.hash ? { hash: r.hash } : {}) }, seenNow));
+  rounds.splice(0, rounds.length, ...retained);
+  if (JSON.stringify(rounds) !== JSON.stringify(questionState.rounds ?? [])) {
+    questionsList ??= openQuestions(questionState.questions, answered, seenNow, notesSeen);
+    questionsText = questionsJson(questionsList, rounds);
   }
   // A run that only asks, about piles asked about already, has nothing new to do: nothing was ready yet.
   // A Timeline line the model added on a note is something to do, so a run with one is not "nothing ready".
@@ -1911,7 +1982,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     kind: 'decided' as const, context, settlement, satisfied, runSources: things.filter((t) => !t.merge).map((t) => t.file.id), run: { runId: opts.runId, requestId: opts.requestId, scope: opts.scope, allowWeb: opts.allowWeb, requestedAt: opts.requestedAt },
     rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas: d.areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
-    requestsBroken, requestsDone, sys, questionsList, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
+    requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
     rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows,
   };
 }
@@ -1925,7 +1996,7 @@ export async function build(decided: Decided): Promise<Ended> {
   const fetched = (fileId: string) => ({ fileId, context: decided.context, consents: decided.settlement.consents, path: decided.ix.pathOf(fileId), name: decided.ix.byId(fileId)?.name });
   const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
-    requestsBroken, requestsDone, sys, questionsList, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
+    requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
     rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources } = decided;
 
   // The fixed operations, in order: clear last run's marks, make folders, file, the note edits, the merges, Bin the piles,
@@ -1983,6 +2054,8 @@ export async function build(decided: Decided): Promise<Ended> {
     }, created ? [created] : merge?.line === 'planned' ? [editOf.get(ix.idOf(merge.into) ?? '') ?? ''] : []);
     movesOf.set(thing.pile.id, [...(movesOf.get(thing.pile.id) ?? []), move]);
     moveOf.set(thing.file.id, move);
+    const choice = chosen.get(thing.file.id);
+    if (choice) derive(choice.record, move);
     const fallback = fallbackOf(thing);
     if (fallback) {
       // R4-1: what derives from the answer is now this ordinary filing; TL-P2-35: and the report says why, once it applied.
@@ -2188,7 +2261,7 @@ export async function build(decided: Decided): Promise<Ended> {
     }
   }
   let questionsOp: string | null = null;
-  const questionsText = questionsList === null ? null : questionsJson(questionsList);
+  const questionsText = questionsList === null ? null : questionsJson(questionsList, rounds);
   if (questionsText !== null) {
     // It waits for every operation derived from the answers it drops (R4-1), so a question stays until its work is done,
     // and for the moves of the piles its new question is about, so it is asked once they are filed.
@@ -2544,8 +2617,8 @@ const QUESTIONS_REPLACED = 'Bower replaced its list of questions, which it could
 const NOT_ASKED = 'Bower could not ask its question this time.';
 
 /** questions.json's text, as the runner writes it. */
-function questionsJson(questions: Question[]): string {
-  return `${JSON.stringify({ v: 1, questions } satisfies QuestionsFile, null, 2)}\n`;
+function questionsJson(questions: Question[], rounds: QuestionRound[] = []): string {
+  return `${JSON.stringify({ v: 1, questions, ...(rounds.length ? { rounds } : {}) } satisfies QuestionsFile, null, 2)}\n`;
 }
 const REQUESTS_REPLACED = 'Bower replaced its list of done requests, which it could not read.';
 const HASHES_REPLACED = 'Bower replaced its list of your files, which it could not read.';

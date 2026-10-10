@@ -9,11 +9,73 @@
  * it has, and every reader narrows on it. It is derived from the question as `.bower/questions.json` holds it, so the
  * wire stays as the accepted app wrote it (P2's `q1` with no subject still reads, as the folder's own question).
  */
-import type { Question } from './types';
+import type { Pile, Question } from './types';
+import type { JournalRecord } from './journal-record';
+import { BowerError } from './types';
+import { EMPTY_MD5 } from './hashes';
 import { keepAlreadyBinned } from './note-edit';
 import { displayName, nameOf, thingName } from './tree';
 
 /** The id prefixes Bower's questions carry, spelled here alone. */
+
+/** Additive journal values; legacy text yes/no remains readable. */
+export type QuestionAnswer = boolean | { option: string } | { text: string };
+export interface QuestionOption { id: string; label: string; action: { kind: 'file-to'; folderId: string } }
+export interface QuestionRound { subject: string; hash?: string; pileId: string; words: string; count: number; exhausted?: true }
+
+export function isQuestionAnswer(value: unknown): value is QuestionAnswer {
+  if (typeof value === 'boolean') return true;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (Object.keys(v).length !== 1) return false;
+  if (typeof v.option === 'string') return /^[A-Za-z0-9_-]{1,128}$/.test(v.option);
+  return typeof v.text === 'string' && v.text.trim() === v.text && v.text.length > 0 && v.text.length <= 1000
+    && ![...v.text].some((char) => { const code = char.charCodeAt(0);
+      return (code <= 0x1f && code !== 0x0a && code !== 0x0d) || (code >= 0x7f && code <= 0x9f); });
+}
+
+/** Validate at the shared answer boundary, before any journal line or run. */
+export function checkedAnswer(q: Question, value: QuestionAnswer): QuestionAnswer {
+  const answer = value && typeof value === 'object' && 'text' in value && typeof value.text === 'string'
+    ? { ...value, text: value.text.trim() } : value;
+  if (!isQuestionAnswer(answer) || (typeof answer !== 'boolean' && (subjectOf(q).kind !== 'inbox'
+    || ('option' in answer && !q.options?.some((o) => o.id === answer.option)))))
+    throw new BowerError('conflict', 'Choose an answer or write your words.');
+  return answer;
+}
+
+export function journalAnswer(r: Pick<JournalRecord, 'answer' | 'text'>): QuestionAnswer | undefined {
+  return r.answer ?? (r.text === 'yes' ? true : r.text === 'no' ? false : undefined);
+}
+export const askingKey = (q: Pick<Question, 'id' | 'askedAt'>): string => `${q.id}\n${q.askedAt}`;
+export const answersAsking = (r: Pick<JournalRecord, 'questionId' | 'askedAt'>, q: Pick<Question, 'id' | 'askedAt'>): boolean =>
+  r.questionId === q.id && (r.askedAt === undefined || r.askedAt === q.askedAt);
+export function answeredAskings(lines: readonly JournalRecord[]): Set<string> {
+  return new Set(lines.filter((r) => r.kind === 'answer' && journalAnswer(r) !== undefined)
+    .map((r) => r.askedAt === undefined ? r.questionId ?? '' : askingKey({ id: r.questionId ?? '', askedAt: r.askedAt })));
+}
+export function isQuestionOption(value: unknown): value is QuestionOption {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const o = value as Record<string, unknown>;
+  const a = o.action as Record<string, unknown> | undefined;
+  return Object.keys(o).every((k) => ['id', 'label', 'action'].includes(k)) && typeof o.id === 'string'
+    && /^[A-Za-z0-9_-]{1,128}$/.test(o.id) && typeof o.label === 'string' && o.label.trim().length > 0 && o.label.length <= 40
+    && !!a && Object.keys(a).length === 2 && a.kind === 'file-to' && typeof a.folderId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(a.folderId);
+}
+/** Existing inbox identity including reuploads, reset by changed pile words. */
+export function roundFor(rounds: readonly QuestionRound[], q: Asked, piles: readonly Pile[]): QuestionRound | undefined {
+  const s = subjectOf(q);
+  if (s.kind !== 'inbox') return undefined;
+  return rounds.find((r) => (r.subject === s.id || (!!s.hash && s.hash !== EMPTY_MD5 && r.hash === s.hash))
+    && piles.some((p) => (p.id === s.id || p.items.some((i) => i.id === s.id)) && p.text === r.words));
+}
+export function pileQuestion(pile: Pile, open: readonly Question[], rounds: readonly QuestionRound[], hashes: ReadonlyMap<string, string> = new Map()): Pile['question'] {
+  const belongs = (q: Asked): boolean => { const s = subjectOf(q); return s.kind === 'inbox'
+    && (s.id === pile.id || pile.items.some((i) => i.id === s.id || (!!s.hash && hashes.get(i.id) === s.hash))); };
+  if (open.some(belongs)) return 'waiting';
+  return rounds.some((r) => r.exhausted && r.words === pile.text && belongs({ id: askId(r.subject), subject: r.subject, ...(r.hash ? { hash: r.hash } : {}) })) ? 'exhausted' : undefined;
+}
+
 const ASK = 'q-ask-';
 const STATE = 'q-state-';
 const PAIR = 'q-pair-';
@@ -40,7 +102,7 @@ export type Subject =
   | { kind: 'folder' };
 
 /** A question as far as its subject goes: its id, and what the wire may carry about it. */
-export type Asked = Pick<Question, 'id'> & Partial<Pick<Question, 'subject' | 'hash' | 'state' | 'text'>>;
+export type Asked = Pick<Question, 'id'> & Partial<Pick<Question, 'subject' | 'hash' | 'state' | 'text' | 'askedAt'>>;
 
 /** The id of the question asked about a pile, or about one thing by its file id: one each. */
 export const askId = (pileOrFileId: string): string => `${ASK}${pileOrFileId}`;
@@ -134,7 +196,7 @@ export function subjectLeft(q: Asked, inbox: InboxSeen | null, notes: NotesSeen 
 
 /** The questions still open: not answered, and not about a subject that is gone. */
 export function openQuestions<Q extends Asked>(all: readonly Q[], answered: ReadonlySet<string | undefined>, inbox: InboxSeen | null, notes: NotesSeen | null = null): Q[] {
-  return all.filter((q) => !answered.has(q.id) && !subjectLeft(q, inbox, notes));
+  return all.filter((q) => !answered.has(q.id) && !(q.askedAt !== undefined && answered.has(askingKey({ id: q.id, askedAt: q.askedAt }))) && !subjectLeft(q, inbox, notes));
 }
 
 /**
@@ -240,6 +302,6 @@ export type ReportQuestion = Pick<Question, 'id' | 'text' | 'yes' | 'no' | 'aske
 
 /** Its fields in the order the question has them, so a report reads as before. */
 export function reportRowOf(q: Question): ReportQuestion {
-  const { subject: _subject, hash: _hash, state: _state, shown: _shown, ...row } = q;
-  return row;
+  const { id, text, yes, no, askedAt, about } = q;
+  return { id, text, yes, no, askedAt, ...(about === undefined ? {} : { about }) };
 }
