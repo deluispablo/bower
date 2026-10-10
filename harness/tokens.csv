@@ -490,3 +490,7 @@ request-run-slow-reads,diagnoser,codex,gpt-5-codex,high,1,1033361,1025889,,90841
 request-outcome-not-shown,diagnoser,codex,gpt-5-codex,high,1,923699,916863,,812544,6836,,,,3 options,2026-10-10
 b1a-contract,implementer (draft),codex,gpt-5-codex,high,1,3633803,3614656,,3456128,19147,,,,blocked: 3 tests + goldens,2026-10-10
 b2a-summary-format,implementer,codex,gpt-5-codex,high,1,966881,957755,,894720,9126,,,,green,2026-10-10
+tree-new-note-button,diagnoser,codex,gpt-5-codex,medium,1,388523,385683,,317568,2840,,,,old bundle,2026-10-10
+b2a-summary-format,adversarial pass,codex,gpt-5-codex,high,1,317770,312512,,269696,5258,,,,BLOCK 4,2026-10-10
+b1a-contract,red-owner (repair 2),codex,gpt-5-codex,medium,1,756935,752221,,708608,4714,,,,3 tests,2026-10-10
+p4-rate-limits,implementer (blocked),codex,gpt-5-codex,medium,1,695418,688886,,640128,6532,,,,EPERM loopback,2026-10-10
