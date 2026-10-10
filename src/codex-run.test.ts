@@ -133,19 +133,20 @@ describe('codex delivery entry point', () => {
     });
   });
 
-  it('refuses guarded paths, secrets and addresses', () => {
-    for (const [path, text] of [
-      ['.claude/settings.json', '{}'], ['scripts/guard-x.mjs', 'x'], ['src/.env.local', 'x'],
-      ['a.txt', 'ghp_' + 'A'.repeat(36)], ['a.txt', 'person@' + 'invalid.test'],
-    ]) {
-      const f = fixture();
-      const r = f.run({ files: { [path ?? '']: text ?? '' } });
-      expect(r.status, r.out).toBe(3);
-      expect(r.result).toContain('status: refused');
-      expect(f.git(['rev-parse', 'HEAD'])).toBe(f.base);
-      expect(existsSync(f.gates)).toBe(false);
-      expect(f.git(['diff', '--cached', '--name-only'])).toBe('');
-    }
+  it.each([
+    { kind: 'guarded settings', path: '.claude/settings.json', text: '{}' },
+    { kind: 'guarded script', path: 'scripts/guard-x.mjs', text: 'x' },
+    { kind: 'guarded environment', path: 'src/.env.local', text: 'x' },
+    { kind: 'secret', path: 'a.txt', text: 'ghp_' + 'A'.repeat(36) },
+    { kind: 'address', path: 'a.txt', text: 'person@' + 'invalid.test' },
+  ])('refuses guarded paths, secrets and addresses: $kind', ({ path, text }) => {
+    const f = fixture();
+    const r = f.run({ files: { [path ?? '']: text ?? '' } });
+    expect(r.status, r.out).toBe(3);
+    expect(r.result).toContain('status: refused');
+    expect(f.git(['rev-parse', 'HEAD'])).toBe(f.base);
+    expect(existsSync(f.gates)).toBe(false);
+    expect(f.git(['diff', '--cached', '--name-only'])).toBe('');
   });
 
   it.each<{ plan: unknown; files: Record<string, string | null> }>([

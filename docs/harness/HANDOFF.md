@@ -2,16 +2,19 @@
 
 Coordinator: the Claude Code session named "Orquestador". It integrates in `/Users/deluisp/Projects/bower-app` on branch `claude/p3`; P4 continues on it. Lead: the Planificador session ([DECISIONS.md](DECISIONS.md)). Output rule: [TL-P3-29](2026-10-07-tl-p3-29-output-rule-survives-compaction.md), in AGENTS.md. Minors: [P2_POLISH.md](P2_POLISH.md). Earlier handoffs: git history of this file.
 
-## Resume (2026-10-10 morning)
+## Resume (2026-10-10 midday, TL-P4-31 Codex throughput)
 
-Read this first. **Stage 4 is closed** (lead ruling: close with d-v2-24a open). main = backup = 03b5d0d2, verified. The four suites are green apart from the known flake bird-one-changes-flaky. 480/486. The lead deploys staging and runs the smoke (LEAD_QUESTIONS "stage-4-closed").
-TL-P4-29: Codex first. Escalated data entries use three Codex sessions (the red, the implementation, a read-only adversarial pass), then a fresh Claude bower-reviewer gives the PASS. The coordinator commits for Codex and runs pnpm check and e2e under `harness/with-lock.sh` (/tmp/bower-heavy.lockf). Never commit in the main checkout while integrate.sh runs. Never put the word for sending to a remote in a Bash line, except the single backup command (the hook blocks it). The lead answers only in DECISIONS on main; questions go to `docs/harness/LEAD_QUESTIONS.md`.
-- **Next batch, in order:**
-  1. d-v2-24a re-plan (TL-P4-26 addendum 7: one blend of the whole drawn output, snapshotted at react(); other motion suspended at one gate; a pose change queued until release). The order is a Codex red (a property over every kind, start pose and pose-change moment), then Claude escalated, a Codex pass, a Claude review and the designer. Branch `/private/tmp/bower-d-v2-24a` at 2061d25a carries rounds 1–3 plus the escalated rounds and the spec fixes (TL-P4-26 addenda 4 and 5).
-  2. The sync fixes for qa7:63 (wait for the name box before typing) and capabilities:210 (navigate in the app instead of page.goto), on Codex with a Claude review.
-  3. Then the queue: 24b ∥ d-v2-06, d-v2-02, the c4 data entries, then P4-C (C05 open question: notes the person wrote).
-- **Known limits:** DEFECT_LOG compensate-storage-failure-limits.
-- **Sessions:** lead Planificador; Designer; lead planning worktree `/private/tmp/bower-tl-planning`. Never remove role worktrees.
+Read this first. Stage 4 closed (main = backup = 03b5d0d2). TL-P4-31: Codex first; cap 1 Claude + 3 Codex until c5-test-margin lands, then 4 while the 1-min load stays under ~12 during gates (addendum 1). Codex prompts run only targeted tests with --maxWorkers=2. harness/codex-run.sh exists (c5-codex-run closed). The lead answers in DECISIONS on main; questions in LEAD_QUESTIONS.
+- **In flight (worktrees /private/tmp/bower-<branch>):**
+  - c5-test-margin (Codex): split the load-timeout tests; then retry the three prep integrations (p4-c06/c07/c11-prep, accepted, failed only on load timeouts) and landing-csp's check.
+  - d-v2-24a round 3 (TL-P4-26 addendum 9: apply() only through the gate): Codex red running; then Codex fix, gates, Codex pass, Claude review, designer.
+  - shell-page-column: fix round 1 committed (P4-75 BLOCK on Sheet motion); round 2 prompt ready (scratchpad codex-spc-r2-prompt.md: reduced-motion e2e as "no visible slide", aria-valuenow rounding, the drag guard test); then gates, delta review, designer re-check (verified at 44799444).
+  - p4-corpus-answers: P4-74b PASS; integrate, done.sh --fixed-in 41d6dc4d.
+  - landing-csp: delivered; e2e 2/2 with the served headers; check failed only on load timeouts; then a Claude review and the designer.
+  - Prep drafts for the lead: C08 (646f990f), C09 (e70d110d), C10 running; then C15, C13, C12.
+- **C05:** packet amended per TL-P4-32 and the designer (00826d3e); its reds wait for p4-corpus-answers to land (and route c05-incorporation.test.ts:72 through scoreCase, P4-74b Minor). C06 packet: fold TL-P4-34 and addendum 1.
+- **P4-E next on Codex:** p4-rate-limits, p4-structured-output, upload-resume and orphan-count (C02), rules-original-conversion.
+- **Suites:** the four suites run after this batch (folder-header-wrap, c5-codex-run, p4-corpus-answers, shell-page-column).
 
 ## Where things stand
 

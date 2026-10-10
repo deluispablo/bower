@@ -1,0 +1,29 @@
+{
+  "id": "c06-two-sources-attributed",
+  "capability": "C06",
+  "title": "Two separate piles retain the right source for each project claim",
+  "covers": "model",
+  "source": "new (C06 preparation; scripted intent proof pending)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "Confirm the Workshop delivery date from this letter.",
+      "files": [
+        "Workshop delivery.txt"
+      ]
+    },
+    {
+      "line": "Confirm the Moving day collection date from this letter.",
+      "files": [
+        "Moving collection.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Projects/Workshop/Workshop.md",
+    "Projects/Moving day/Moving day.md"
+  ]
+}

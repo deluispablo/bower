@@ -74,6 +74,33 @@ Authorized and kept uncommitted: the presence.test.ts assertion (handle kept thr
 - 2026-10-10 stage-4-smoke | Details in p4-speed-baseline.md, section "Stage 4 smoke". garden pass, 0:56. offer-and-flat pass, 1:18. c05-hub-lines: run 1 partial, 1:14 (no hub line; the made-up offer PDF has no text layer and was filed with no note); run 2 pass, 1:12 (both hubs got a line, hand edit kept). Write-it new q-state: not reached; the model proposed no state change on the unmarked hubs, so the no-model path is still unexercised live. A scripted or fake path covers it; a live route needs a pile that changes a state. Home: 20 calls, 5.0 s. Region: 4 of 5 runs report a region; one shows `region=unknown` (2 s metadata timeout). Every case is faster than stage 3. You can turn Claude off.
 - 2026-10-10 d-v2-24a-a7-blocked | The addendum-7 implementation (Claude escalated) passes the blend property (684/684); fix c8ab9ce8, notes 7f086955. pnpm check fails only on two older tests that contradict addendum 7: `react-escalated.test.tsx:38` (expects a pose change during the settle to apply at once; addendum 7 queues it until release) and `react-lifetime.test.tsx:56` (a 0.08 bound the blend no longer meets). Proposal: a red-owning session updates both to addendum 7 (queued pose; the blend's still-frame bound), with tests-changed lines; then gates, a Codex pass, a Claude review, the designer. OK?
 
-## 2026-10-10 c06-prep-ready (for review; no reply needed by message)
+## 2026-10-10 c06-c07-c11-prep-ready (for review; no reply needed by message)
 
-The C06 preparation draft is ready for your review (TL-P4-31 ruling 1): branch `p4-c06-prep` at d014402a, worktree `/private/tmp/bower-p4-c06-prep`. `docs/harness/2026-10-10-c06-prep.md` plus three `covers: model` cases (c06-stored-project-connection, c06-shared-name-unrelated, c06-two-sources-attributed); corpus tests pass (13). Five open product questions are in the doc. On your accept I integrate it as is (as C05's prep). C07's draft is running.
+The C06 preparation draft is ready for your review (TL-P4-31 ruling 1): branch `p4-c06-prep` at d014402a, worktree `/private/tmp/bower-p4-c06-prep`. `docs/harness/2026-10-10-c06-prep.md` plus three `covers: model` cases (c06-stored-project-connection, c06-shared-name-unrelated, c06-two-sources-attributed); corpus tests pass (13). Five open product questions are in the doc. On your accept I integrate it as is (as C05's prep).
+- C07: branch `p4-c07-prep` at 68187f0e (`/private/tmp/bower-p4-c07-prep`): c07-same-period-rent, c07-tentative-closure, c07-dated-rent-change; corpus 13 pass; 5 open questions.
+- C11: branch `p4-c11-prep` at 2a677072 (`/private/tmp/bower-p4-c11-prep`): c11-request-is-one-time, c11-source-cannot-answer, c11-source-cannot-override-rule; corpus 13 pass; 5 open questions.
+- C08: branch `p4-c08-prep` at 646f990f (`/private/tmp/bower-p4-c08-prep`): c08-report-with-sources, c08-compare-missing-fact, c08-revise-keeps-personal-text; corpus 13 pass; 5 open questions (revision needs your contract for a positive reply).
+- C09: branch `p4-c09-prep` at e70d110d: c09-not-in-sources, c09-original-over-summary, c09-two-source-answer; corpus 13 pass; 6 open questions.
+- C10: branch `p4-c10-prep` at d1ccab32: c10-denied-keeps-prior-result, c10-fresh-result-cited, c10-stale-result-withheld; corpus 13 pass; 6 open questions.
+The README rows conflict only by adjacency; I merge them in order.
+
+## 2026-10-10 d-v2-24a-round-3 (re-plan rule)
+
+Fix round 2 (b44b2dea) fixed the three adversarial findings (layer home at release, size in the blend, queued pose when moves return); check green, the 6-spec e2e 122/122 on demo and fake. The Codex adversarial round 2 found one more Important (branch 2026-10-10-codex-d-v2-24a-adversarial.md): the layer's resize handler calls `snapHome()`, which reaches `apply()` outside addendum 7's single output gate, so a resize after release (moves off, or reduced motion turned on mid-settle) redraws live or blended values over the held still frame. A third round needs your ruling (re-plan rule). Proposal: the same mechanism, one more writer: every path that reaches `apply()` (resize included) goes through the one gate; a Codex red (resize after release with moves off, and with reduced motion turned on mid-settle, through BowerLayer) then a Codex fix, the gates, a Codex pass, the Claude review and the designer.
+
+## 2026-10-10 prep-method-rows (FYI)
+
+The C06, C07 and C11 preps are integrated (7a178b80, 226597a2, d6863c64). They first failed on a real gap: second-brain-method.test.ts needs a TL-P4-08 verdict row per new case in 2026-10-08-p4-method-rubric-changes.md. Codex added the rows; where a rubric contradicted the method it changed the rubric minimally (reasons in each row): c07-dated-rent-change, c07-same-period-rent, c07-tentative-closure (Current state preservation requirements removed, expected unchanged); c11-request-is-one-time (a sourced hub update permitted; an inbox question id added to expected). C08-C10 got their rows before your review: c08-report-with-sources changed (hub updates allowed; its expected.json mismatch is documented in the row), the rest agree. The prep prompt now adds the rows itself (C15, C13 running).
+
+## 2026-10-10 p4-rate-limits (values to rule before dispatch)
+
+TL-P3-14 left per-address limits on `/auth/*` and per-person limits on `/drive/token` and `/vault` to P4, with Cloudflare's rate limiting binding as the standard (developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/). The original app has none to reuse. Proposal for the packet: one helper in `api/src/security.ts` over the binding (period 60 s, the binding's only granularities are 10 s and 60 s): `/auth/*` 20 per minute per client address (`CF-Connecting-IP`); `/drive/token` 30 per minute per person; `/vault` 60 per minute per person; over the limit, 429 `rate-limited` with `Retry-After`, which the client already maps to a sentence. `/process` keeps its daily quota in admission. The binding goes in wrangler.toml for staging only (no deploy by a worker; dry run). Non-escalated, Codex, with a Codex adversarial pass and a Claude review. Please confirm the numbers or give others.
+
+## 2026-10-10 preps-ready-for-review
+
+Ready for your review (each a branch p4-<x>-prep with a doc docs/harness/2026-10-10-<x>-prep.md, corpus cases and method verdict rows; all pass test/corpus and second-brain-method):
+- C17 brain: b123 (B1 index, B2 summary, B3 hot) at 77768bfd, 4 cases, 12 open questions; b56 (B5 type table and profiles, B6 templates, fit-create-ask) at c180ddba, 4 cases including the three owner failure modes, 10 open questions.
+- c08=fb84f96d c09=7ddcac10 c10=72a043a5 c12=bd75bc87 c13=84c8668f c15=1de6b3b6 (C08-C10 also listed above; C12, C13, C15 new).
+On your accept I integrate each as is.
+
+Hold (lead, 2026-10-10): the C17 brain drafts b123 and b56 stay as drafts only, not for review yet; the owner is refining the design (hierarchical folder summaries, a collapsed index, a neighbourhood graph, About me as reflection). A new DECISIONS line lifts the hold.

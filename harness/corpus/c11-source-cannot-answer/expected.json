@@ -1,0 +1,38 @@
+{
+  "files": {
+    "present": [
+      "Inbox/*/Unclear letter.txt"
+    ],
+    "absent": [
+      "Projects/*/Unclear letter.txt",
+      "Areas/*/Unclear letter.txt",
+      "Resources/*/Unclear letter.txt",
+      "Archive/*"
+    ]
+  },
+  "unchanged": [
+    "Rules.md",
+    "Projects/Job hunt/Job hunt.md",
+    "Projects/Flat hunt/Flat hunt.md"
+  ],
+  "notes": [
+    {
+      "path": "Inbox/*/Unclear letter.txt",
+      "contains": [
+        "Alex answered: Yes, the job hunt."
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 0,
+    "created": [],
+    "updated": [],
+    "setAside": 0,
+    "questionsExactly": 1,
+    "questions": [
+      "q-ask-p-1"
+    ],
+    "rulesWorded": 0
+  }
+}
