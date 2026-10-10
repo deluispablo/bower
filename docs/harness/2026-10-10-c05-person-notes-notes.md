@@ -248,7 +248,7 @@ The coordinator supplies the fix SHA and moves this row to the compatibility led
 
 | Commit | Entry | What it changes for the accepted app's files |
 | --- | --- | --- |
-| `FIXSHA` | c05-person-notes | Adds optional leftAsWritten report rows, Timeline consent, inherited completedAppends in manifests, and appendBindings/completedAppends in checkpoints; old records retain their meaning and parse without the fields. A granted personal-state edit can carry a null ownership mark, preserves every other bullet's bytes and adds no ownership mark. New manifest records with append evidence have the bowerAppends discovery property. The result renders Left as you wrote them without increasing updated counts. The app and runner deploy together; older strict readers cannot execute these new bound edits. Personal-note link-rewrite compatibility remains blocked on the lead's ruling. |
+| `FIXSHA` | c05-person-notes | Adds optional leftAsWritten report rows, Timeline consent, inherited completedAppends in manifests, and appendBindings/completedAppends in checkpoints; old records retain their meaning and parse without the fields. A granted personal-state edit can carry a null ownership mark, preserves every other bullet's bytes and adds no ownership mark. New manifest records with append evidence have the bowerAppends discovery property. The result renders Left as you wrote them without increasing updated counts. The app and runner deploy together; older strict readers cannot execute these new bound edits. Personal-note link rewrites retain the existing links-only behavior without a new grant, per TL-P4-32 addendum 1. |
 
 ### Files per coordinator commit
 
@@ -332,3 +332,46 @@ Verification against HEAD's implementation (output redirected; only failures and
 Offline reuse/source: the assigned `note-edit.ts` link-only invariant and TL-P4-32 addendum 1;
 the existing C05 byte oracle and positive control. No network or git write command was used.
 Left out: product repair, commits, pnpm check and e2e, as assigned. The expected implementation reds remain.
+
+## Implementation round 2
+
+Codex implementation under TL-P4-32 addendum 1, branch `c05-person-notes`.
+Removed exactly the round-1 fetched personal-note ownership refusal from `relink` in
+`src/data/contracts/note-edit.ts`. The existing link-rewrite path and its links-only invariant are
+reused unchanged; personal renames, moves and keep-one answers need no new grant. Timeline,
+rule-wording and Current state admission remain governed by their existing checks.
+No second edit path was added. The round-1 removal and blocker 2 above are superseded by this ruling.
+The draft compatibility row now records the preserved personal-note link-rewrite behavior.
+
+removed: round-1 not-bower refusal for fetched personal-note link rewrites in the existing relink function.
+removed: the draft compatibility row's resolved personal-link ruling blocker.
+
+tests changed: none in implementation round 2.
+compatibility: FIXSHA (coordinator supplies the commit; existing personal-link behavior is preserved).
+
+Before the fix, the corrected author test
+`C05 person notes: link rewrite changes only links beside the admitted append` failed with
+`{ ok: false, reason: 'not-bower' }` instead of the exact accepted link-only bytes.
+All five unchanged `runner/test/keep-one-note.test.ts` tests failed on their recorded assertions.
+Baseline logs: `/tmp/c05-impl2-red-unit.log`, `/tmp/c05-impl2-red-keep.log`.
+
+Verification, with output redirected to files and only failures inspected (totals extracted separately):
+
+```sh
+pnpm exec vitest run src/data/contracts src/features/tidy src/features/note --maxWorkers=2 > /tmp/c05-impl2-unit.log 2>&1
+pnpm -C runner exec vitest run --maxWorkers=2 > /tmp/c05-impl2-runner.log 2>&1
+pnpm exec tsc -p tsconfig.app.json --noEmit > /tmp/c05-impl2-tsc-app.log 2>&1
+pnpm exec tsc -p tsconfig.node.json --noEmit > /tmp/c05-impl2-tsc-node.log 2>&1
+pnpm -C runner exec tsc --noEmit -p . > /tmp/c05-impl2-tsc-runner.log 2>&1
+pnpm exec eslint src/data/contracts/note-edit.ts > /tmp/c05-impl2-eslint.log 2>&1
+```
+
+App: 27 files / 2,478 tests pass, including all C05 author/report/result tests.
+Runner: 41 files / 353 tests pass, including all 19 C05 runner tests and all 5 keep-one tests.
+The corrected author link test passes; every other C05 red remains green.
+All three TypeScript projects and ESLint on the touched product file pass. No NODE_OPTIONS was supplied.
+`git diff --check` passes. The coordinator owns the product and separate notes commits.
+
+Offline research/reuse sources: the assigned `note-edit.ts` relink function and its links-only invariant,
+plus TL-P4-32 addendum 1 in `docs/harness/DECISIONS.md`. No network was used.
+Left out: test changes, commits, git write commands, shared harness records, pnpm check, e2e and deployment.
