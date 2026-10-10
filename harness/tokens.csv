@@ -380,3 +380,4 @@ c4-create-newer-words,implementer,codex,gpt-5-codex,high,1,846273,838916,,785536
 c4-create-newer-words,adversarial,codex,gpt-5-codex,medium,1,176346,174897,,134912,1449,,,,0 findings,2026-10-10
 c4-create-newer-words,reviewer,claude,bower-reviewer,,1,35145,,,,,,6,0.5,PASS (P4-70),2026-10-10
 d-v2-24a,implementer,claude,bower-escalated,,9,143162,,,,,,44,20.6,escalated round 2 done,2026-10-10
+d-v2-24a,reviewer,codex,gpt-5-codex,high,5,789695,784896,,692480,4799,,,,2 Important (escalated round 2),2026-10-10
