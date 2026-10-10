@@ -36,6 +36,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { normalizeModelInput } from './model-input';
+import { isJournalRecord } from '../../src/data/contracts/journal-record';
 import { MANIFEST_V2_LIMIT, parseRunManifestV2, recordableName } from '../../src/data/contracts/run-manifest';
 import { z } from 'zod';
 import { AUTHORED_LINE_MAX, STATE_WRITE, newsLineCited } from '../../src/data/contracts/note-edit';
@@ -46,8 +47,8 @@ import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { subjectKey, subjectOf } from '../../src/data/contracts/questions';
 import type { Question } from '../../src/data/contracts/types';
-import { modelDecisions, planScripted, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
-import { MAX_NAME } from '../../src/data/contracts/tree';
+import { modelDecisions, namedNotes, personalAppendHistory, planScripted, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
+import { displayName, MAX_NAME } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
 import { RUNNER_WRITES, SYSTEM } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
@@ -173,6 +174,9 @@ interface Shown {
   own?: string;
   piles: Array<{ pileId: string; words: string; things: ShownThing[] }>;
   notes: Array<{ path: string; text: string; cut: number }>;
+  suppressed?: ReadonlySet<string>;
+  personalNotes?: ReadonlySet<string>;
+  retrySources?: ReadonlySet<string>;
   /** The person's `Rules.md`, bounded, when the folder has one. */
   rules?: string;
   /** Your answers this run took, each with its question and what it is about (TL-P4-08 addendum 8). */
@@ -393,7 +397,24 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
   const rules = rulesFile
     ? bounded(await read.readText(rulesFile.id), CONTEXT_BOUNDS.perNote).text?.replace(/\[cut here: (\d+) more characters not shown\]$/, '[cut here: $1 more characters of the rules not shown; the list may go on]') ?? null
     : null;
-  return { own: ix.file(SYSTEM.dir)?.id, piles, notes: await notesShown(read, listing, ix, first), folders, names, ...(rules ? { rules } : {}) };
+  const named = new Set<string>();
+  const suppressed = new Set<string>();
+  for (const line of took.taken.journal) {
+    const rec: unknown = JSON.parse(await read.readText(line.fileId));
+    if (!isJournalRecord(rec) || rec.kind !== 'request') continue;
+    const matches = namedNotes(listing, ix, rec.text ?? rec.what);
+    for (const n of matches) {
+      if (matches.length > 3 || matches.filter((m) => displayName(m.file.name).normalize('NFC').toLowerCase() === displayName(n.file.name).normalize('NFC').toLowerCase()).length > 1) suppressed.add(n.path);
+      else named.add(n.file.id);
+    }
+  }
+  const personalNamed = listing.some((f) => named.has(f.id) && f.appProperties?.by !== 'bower');
+  const history = personalNamed ? (await personalAppendHistory(read, run.rootId, listing, ix)).lines : [];
+  const retrySources = new Set(history.map((h) => h.consent.sourceFileId));
+  return { own: ix.file(SYSTEM.dir)?.id, piles, notes: await notesShown(read, listing, ix, first, named), folders, names, suppressed, retrySources, personalNotes: new Set(listing.flatMap((f) => {
+    const path = ix.pathOf(f.id);
+    return !f.folder && f.appProperties?.by !== 'bower' && path?.endsWith('.md') && MAIN_FOLDERS.includes(path.split('/')[0] ?? '') ? [path] : [];
+  })), ...(rules ? { rules } : {}) };
 }
 
 /**
@@ -402,7 +423,7 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
  * answer of yours is about (`first`, by file id: "Write it") before all of them, so the model always sees it.
  * `applyChanges` still refuses a line on a note that is not Bower's.
  */
-async function notesShown(read: ScriptedRead, listing: readonly DriveFile[], ix: VaultIndex, first: ReadonlySet<string>): Promise<Shown['notes']> {
+async function notesShown(read: ScriptedRead, listing: readonly DriveFile[], ix: VaultIndex, first: ReadonlySet<string>, named: ReadonlySet<string>): Promise<Shown['notes']> {
   const hubOf = (path: string): boolean => {
     const parts = path.split('/');
     return parts.length > 1 && parts.at(-1) === `${parts.at(-2) ?? ''}.md`;
@@ -410,8 +431,8 @@ async function notesShown(read: ScriptedRead, listing: readonly DriveFile[], ix:
   const candidates = listing.flatMap((f) => {
     const path = f.folder ? undefined : ix.pathOf(f.id);
     if (path === undefined || !/\.md$/i.test(path) || !MAIN_FOLDERS.includes(path.split('/')[0] ?? '')) return [];
-    return f.appProperties?.by === 'bower' || hubOf(path) ? [{ f, path, hub: hubOf(path) }] : [];
-  }).sort((a, b) => Number(first.has(b.f.id)) - Number(first.has(a.f.id)) || Number(b.hub) - Number(a.hub) || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)).slice(0, CONTEXT_BOUNDS.notes);
+    return named.has(f.id) || f.appProperties?.by === 'bower' || hubOf(path) ? [{ f, path, hub: hubOf(path) }] : [];
+  }).sort((a, b) => Number(named.has(b.f.id)) - Number(named.has(a.f.id)) || Number(first.has(b.f.id)) - Number(first.has(a.f.id)) || Number(b.hub) - Number(a.hub) || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)).slice(0, CONTEXT_BOUNDS.notes);
   let room: number = CONTEXT_BOUNDS.notesPerRun;
   const notes: Shown['notes'] = [];
   for (const { f, path } of candidates) {
@@ -547,6 +568,11 @@ function answersShown(answers: readonly TakenAnswer[], piles: Shown['piles']): N
  */
 async function forModel(read: ScriptedRead, run: ScriptedRun, took: Admitted): Promise<Admitted> {
   const listing = await read.listAll(run.rootId);
+  const ix = VaultIndex.build(run.rootId, listing);
+  for (const line of took.taken.journal) {
+    const rec: unknown = JSON.parse(await read.readText(line.fileId));
+    if (isJournalRecord(rec) && rec.kind === 'request' && namedNotes(listing, ix, rec.text ?? rec.what).some((n) => n.file.appProperties?.by !== 'bower')) return took;
+  }
   const saved = duplicatesOf(listing, VaultIndex.build(run.rootId, listing), took.taken.piles.flatMap((p) => p.items.map((i) => i.fileId)));
   if (!saved.size) return took;
   const piles = took.taken.piles.flatMap((p) => {
@@ -650,6 +676,9 @@ const lineOk = (text: unknown, max: number): text is string =>
 /** What the model was shown that its reply is checked against: the notes it may update, and (for links) the folder's
  * file paths and names and each thing's text. */
 export interface Seen {
+  suppressed?: ReadonlySet<string>;
+  personalNotes?: ReadonlySet<string>;
+  retrySources?: ReadonlySet<string>;
   notes: ReadonlySet<string>;
   names?: ReadonlySet<string>;
   texts?: ReadonlyMap<string, string>;
@@ -910,9 +939,9 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     rule('newFolder', (n) => newPlace(n.to, n.basis, n.responsibility, seen, areas) ?? true),
   ], (n) => words.set(n.pileId, { to: n.to, name: n.name })));
   const Line = LineShape.superRefine(inOrder<z.output<typeof LineShape>>([
-    rule('lineNote', (l) => notes.has(l.note)),
+    rule('lineNote', (l) => notes.has(l.note) || !!seen.suppressed?.has(l.note)),
     rule('lineText', (l) => lineOk(l.text, AUTHORED.line) && unlinked(l.text)),
-    rule('lineCites', (l) => l.cites === undefined || placed.has(l.cites) || wordsPile(l.cites)),
+    rule('lineCites', (l) => l.cites === undefined || placed.has(l.cites) || wordsPile(l.cites) || !!seen.retrySources?.has(l.cites)),
     rule('lineUncited', (l) => newsLineCited({ text: l.text.trim(), source: l.cites ?? null })),
     rule('numbers', (l) => grounded(l.cites, [l.text], 'the Timeline line on')),
   ], (l) => {
@@ -922,12 +951,12 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   // A note's Current state as it should read now (C05): only on a note it was shown, one per note, within note-edit's
   // limits; Bower decides whether it may rewrite it (only while the person has not edited it), never the model.
   const State = StateShape.superRefine(inOrder<z.output<typeof StateShape>>([
-    rule('stateNote', (st) => notes.has(st.note)),
+    rule('stateNote', (st) => notes.has(st.note) || !!seen.suppressed?.has(st.note) || !!seen.personalNotes?.has(st.note)),
     rule('stateTwice', (st) => !current.some((x) => x.path === st.note)),
     rule('stateText', (st) => st.lines.every((x) => lineOk(x, STATE_WRITE.line) && unlinked(x))),
     rule('stateCites', (st) => st.cites === undefined || placed.has(st.cites) || cited.has(st.cites)),
     rule('numbers', (st) => grounded(st.cites, st.lines, 'the Current state of')),
-  ], (st) => current.push({ path: st.note, lines: st.lines.map((x) => x.trim()), cites: st.cites ?? null })));
+  ], (st) => { if (notes.has(st.note) && !seen.suppressed?.has(st.note)) current.push({ path: st.note, lines: st.lines.map((x) => x.trim()), cites: st.cites ?? null }); }));
   // A question about one thing, or a whole pile, it does not file: what is asked about stays in the inbox untouched,
   // with the pile's words, and the rest of the pile is filed (TL-P4-08 point 1, addendum 4). A loose thing is its pile.
   type AskIn = z.output<typeof AskShape>;
@@ -1222,6 +1251,9 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const texts = new Map(shown.piles.flatMap((p) => p.things.flatMap((t) => (t.text === null ? [] : [[t.fileId, t.text] as const]))));
     const seen: Seen = {
       notes: new Set(shown.notes.map((n) => n.path)),
+      ...(shown.personalNotes ? { personalNotes: shown.personalNotes } : {}),
+      ...(shown.suppressed ? { suppressed: shown.suppressed } : {}),
+      ...(shown.retrySources ? { retrySources: shown.retrySources } : {}),
       names: shown.names ?? new Set(),
       texts,
       folders: new Set(shown.folders),

@@ -10,11 +10,11 @@
  * (`fake-run-service.ts`) or the runner applies it, recoverably, through the one engine (`engine.ts`). Given the admitted set
  * a run took (`taken`), it plans only those piles, those things and those journal lines.
  */
-import type { OwnershipContext } from '../contracts/ownership-format';
+import { createOwnershipContext, type OwnershipContext } from '../contracts/ownership-format';
 import type { DriveFile } from '../drive/drive-api';
 import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
-import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
+import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent, type TimelineConsent, type AppendCompletion, type LeftAsWritten } from '../contracts/run-manifest';
 import { PILE_NOTE, safeInboxName } from '../piles';
 import { recordablePile, sameText, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
@@ -31,7 +31,7 @@ import { parseTimelineLine } from '../contracts/timeline-line';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
 import { grounded, groundedKeys, seen } from './grounded';
-import { RUNS_NAME, canonical, isManifestName } from './records';
+import { APPENDS_RECORD_KEY, RunRecords, RUNS_NAME, canonical, isManifestName } from './records';
 import { NOT_FILED } from './report';
 import { SET_ASIDE, capturePiles, listedPiles, pileShape } from './plan';
 import { duplicatesOf, wordsSaved, type Duplicate } from './duplicates';
@@ -93,6 +93,64 @@ export interface PlanOptions {
    * Everything else, and every id, hash and digest, the plan makes as it always does. The planner reads only this.
    */
   decisions: Decisions;
+}
+
+/** Whole title references, longest overlapping match first; only admitted request words enter here. */
+export function namedNotes(listing: readonly DriveFile[], ix: VaultIndex, words: string): Array<{ file: DriveFile; path: string }> {
+  const normalize = (s: string): string => s.normalize('NFC').toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '').replace(/^(?:the|my)\s+/u, '');
+  const request = words.normalize('NFC').toLowerCase();
+  const word = (s: string | undefined): boolean => !!s && /[\p{L}\p{N}_]/u.test(s);
+  const matches = listing.flatMap((file) => {
+    const path = file.folder ? undefined : ix.pathOf(file.id);
+    if (!path || !path.endsWith('.md') || !MAIN_FOLDERS.includes(path.split('/')[0] ?? '')) return [];
+    const title = normalize(displayName(file.name));
+    if (!title) return [];
+    const found: Array<{ file: DriveFile; path: string; start: number; end: number }> = [];
+    for (let at = request.indexOf(title); at >= 0; at = request.indexOf(title, at + 1)) {
+      if (!word([...request.slice(0, at)].at(-1)) && !word([...request.slice(at + title.length)][0])) found.push({ file, path, start: at, end: at + title.length });
+    }
+    return found;
+  }).sort((a, b) => (b.end - b.start) - (a.end - a.start) || byCodePoint(a.path, b.path));
+  const kept: typeof matches = [];
+  for (const m of matches) if (!kept.some((k) => m.start < k.end && m.end > k.start && (m.start !== k.start || m.end !== k.end))) kept.push(m);
+  return [...new Map(kept.map((m) => [m.file.id, { file: m.file, path: m.path }])).values()];
+}
+
+/** A verified checkpoint outcome is the durable completion (or pending retry) of its manifest's request binding. */
+export async function personalAppendHistory(read: ScriptedRead, rootId: string, listing: readonly DriveFile[], ix: VaultIndex): Promise<{ completed: AppendCompletion[]; lines: Array<{ consent: TimelineConsent; entry: EditEntry; applied: boolean; runId: string }> }> {
+  const records = new RunRecords({ listAll: async () => [...listing], readBytes: (id) => read.readBytes(id),
+    get: async (id) => {
+      const file = listing.find((f) => f.id === id);
+      if (!file) throw new BowerError('not-found', 'Bower could not read what it did.');
+      return file;
+    } }, rootId);
+  const runs = new Set(listing.filter((f) => !f.folder && isManifestName(f.name) && f.appProperties?.[APPENDS_RECORD_KEY] === '1'
+    && parentOf(parentOf(ix.pathOf(f.id) ?? '')) === RUNS_PATH).map((f) => nameOf(parentOf(ix.pathOf(f.id) ?? ''))));
+  const result: Array<{ consent: TimelineConsent; entry: EditEntry; applied: boolean; runId: string }> = [];
+  const completed = new Map<string, AppendCompletion>();
+  const complete = (r: AppendCompletion): void => { completed.set(JSON.stringify([r.requestId, r.targetFileId]), r); };
+  for (const runId of runs) {
+    const file = listing.find((f) => !f.folder && isManifestName(f.name) && nameOf(parentOf(ix.pathOf(f.id) ?? '')) === runId);
+    const manifest = file ? await parseRunManifestV2(await read.readBytes(file.id), rootId, RUNNER_WRITES) : null;
+    if (!manifest?.ok || (!manifest.value.completedAppends?.length && !manifest.value.operations.some((o) => o.effect.kind === 'edit-text' && o.effect.changes.some((c) => c.kind === 'timeline-append' && c.consent)))) continue;
+    const found = await records.found(runId);
+    if (found.kind !== 'run') throw new BowerError('unknown', 'Bower could not read what it did.');
+    const outcomes = found.chain.at(-1)?.outcomes ?? [];
+    for (const r of found.chain.at(-1)?.completedAppends ?? []) complete(r);
+    for (const op of found.manifest.operations) {
+      if (op.effect.kind !== 'edit-text') continue;
+      const outcome = outcomes.find((o) => o.operationId === op.operationId);
+      for (const c of op.effect.changes) {
+        if (c.kind !== 'timeline-append' || !c.consent || !c.entries[0]) continue;
+        const filed = found.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === c.consent?.sourceFileId);
+        const sourceLanded = filed && outcomes.some((o) => o.operationId === filed.operationId && o.state === 'applied');
+        if (outcome?.state === 'applied' || (sourceLanded && outcome?.state === 'rejected' && outcome.failure.code === 'conflict'))
+          result.push({ consent: c.consent, entry: c.entries[0], applied: outcome.state === 'applied', runId });
+        if (outcome?.state === 'applied') complete({ requestId: c.consent.requestId, targetFileId: c.consent.targetFileId });
+      }
+    }
+  }
+  return { completed: [...completed.values()], lines: result };
 }
 
 /** A place in the folder (a path under a main folder) and a name, as a model proposes them. */
@@ -370,7 +428,8 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   const readiness = await capturePiles(drive, rootId, piles.map(pileShape), { notes: true, context: opts.context });
   // Things already saved (`duplicates.ts`, TL-P4-10 addendum 2), by their content.
   const dups = duplicatesOf(listing, ix, piles.flatMap((p) => p.items.map((i) => i.id)));
-  return { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups };
+  const appends = await personalAppendHistory(drive, rootId, listing, ix);
+  return { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends };
 }
 type Captured = Awaited<ReturnType<typeof capture>>;
 
@@ -380,7 +439,7 @@ type Captured = Awaited<ReturnType<typeof capture>>;
  * edits, the generated notes, the questions. It ends decided, or with a try again that holds more back.
  */
 export async function decide(drive: ScriptedRead, snapshot: Captured, opts: PlanOptions, attempt: Attempt = { editCap: EDITS_PER_RUN, held: new Set() }) {
-  const { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups } = snapshot;
+  const { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends } = snapshot;
   const { editCap, held } = attempt;
   const newKey = opts.mintKey ?? mintKey;
   /**
@@ -388,7 +447,49 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
    * a run that can act on them, never archived unanswered.
    */
   const d = opts.decisions;
-  const fetched = (fileId: string) => opts.context ? { fileId, context: opts.context } : undefined;
+  const requestsNamed = lines.filter((l) => l.rec.kind === 'request').map((l) => ({ id: l.rec.id, notes: namedNotes(listing, ix, l.rec.text ?? l.rec.what) }));
+  const history = appends.lines;
+  const completed = (requestId: string, targetFileId: string): boolean => appends.completed.some((h) => h.requestId === requestId && h.targetFileId === targetFileId);
+  const consents: TimelineConsent[] = [];
+  const leftAsWritten: LeftAsWritten[] = [];
+  const blocked = new Set<string>();
+  for (const r of requestsNamed) {
+    if (r.notes.length > 3) {
+      leftAsWritten.push({ name: 'Request', why: "Bower didn't update any note: this request names more than three. Ask for three at most at a time." });
+      for (const n of r.notes) blocked.add(n.file.id);
+    } else {
+      const titles = new Map<string, typeof r.notes>();
+      for (const n of r.notes) {
+        const title = displayName(n.file.name).normalize('NFC').toLowerCase();
+        titles.set(title, [...(titles.get(title) ?? []), n]);
+      }
+      for (const group of titles.values()) if (group.length > 1) for (const n of group) {
+        blocked.add(n.file.id);
+        leftAsWritten.push({ name: n.path, fileId: n.file.id,
+          why: `In ${parentOf(n.path).split('/').join(' / ')}. Bower didn't update it: more than one note has this name. Ask again with its folder.` });
+      }
+    }
+  }
+  for (const r of requestsNamed) for (const n of r.notes) {
+    if (n.file.appProperties?.by === 'bower') continue;
+    for (const l of d.lines.filter((l) => l.path === n.path)) if (l.cites) dups.delete(l.cites);
+    for (const l of d.hubLines?.filter((l) => l.path === n.path) ?? [])
+      for (const p of piles) for (const item of p.items) if (item.name === l.cites) dups.delete(item.id);
+  }
+  const context = opts.context ?? createOwnershipContext();
+  const fetched = (fileId: string) => ({ fileId, context, consents });
+  const consentFor = (targetFileId: string, sourceFileId: string | null): TimelineConsent | undefined => {
+    if (!sourceFileId || blocked.has(targetFileId)) return undefined;
+    const retryRequest = history.find((h) => !h.applied && h.consent.targetFileId === targetFileId && h.consent.sourceFileId === sourceFileId);
+    const r = requestsNamed.find((r) => r.notes.some((n) => n.file.id === targetFileId) || r.id === retryRequest?.consent.requestId);
+    if (!r || completed(r.id, targetFileId)) return undefined;
+    const c = { requestId: r.id, targetFileId, sourceFileId };
+    const admitted = things.some((t) => t.file.id === sourceFileId && d.thing({ fileId: t.file.id, name: t.item.name, fileName: t.file.name, kind: t.item.kind, words: t.words, linkText: null }));
+    const retry = history.some((h) => !h.applied && h.consent.requestId === r.id && h.consent.targetFileId === targetFileId && h.consent.sourceFileId === sourceFileId);
+    if (!admitted && !retry) return undefined;
+    consents.push(c);
+    return c;
+  };
   // Notes kept as one: each by its yes, among the lines this run took; one held back (`keep:<answer>`) waits with it.
   // A run with no day to date its lines (outside years 0000-9999) keeps nothing: the answer waits, never archived unmerged.
   const keepDay = timelineDate(opts.requestedAt) !== null;
@@ -464,7 +565,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const row = answeredGone(q, seenFirst, notesSeen, notePath, (id) => binnedNames.get(id));
     return row ? [[l.rec.id, row] as const] : [];
   }));
-  let journal = lines.filter((l) => (l.rec.kind === 'request' ? !!d.request : l.rec.kind === 'answer' ? (d.settles?.(l.rec.questionId ?? '') ?? settled.has(l.rec.questionId ?? '')) : true));
+  let journal = lines.filter((l) => (l.rec.kind === 'request' ? !!d.request || history.some((h) => h.consent.requestId === l.rec.id) || requestsNamed.some((r) => r.id === l.rec.id && r.notes.length && (blocked.size || r.notes.some((n) => d.lines.some((x) => x.path === n.path) || d.hubLines?.some((x) => x.path === n.path)) || history.some((h) => h.consent.requestId === r.id))) : l.rec.kind === 'answer' ? (d.settles?.(l.rec.questionId ?? '') ?? settled.has(l.rec.questionId ?? '')) : true));
   // Your rules (TL-P2-20 rules-wording): one change for every rule line, worded below in one edit of Rules.md, or
   // Rules.md made when it is missing; a line whose words cannot be worded stays pending.
   const ruleWords = ruleChangesOf(journal, d.wordRule ?? tidiedRule);
@@ -763,7 +864,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // its report saying nothing was ready yet, and every item it took waiting (TL-P3-25 point 2). It is no failure.
   // A thing that left the inbox closes its question, which is something to do.
   if (all && !capturedPiles.length && !journal.length && !askedPiles.length && !(await closable())) {
-    if (opts.taken) return { kind: 'plan' as const, plan: await nothingReadyPlan(rootId, opts) };
+    if (opts.taken) return { kind: 'plan' as const, plan: await nothingReadyPlan(rootId, opts, appends.completed) };
     throw new BowerError('conflict', NOTHING_READY);
   }
 
@@ -810,7 +911,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const cite = citeOf(u);
     if (u.onlyCited && !cite) continue;
     const made = want(f, u.path);
-    made.lines.push({ entry: { date: date ?? '', text: u.what, source: cite?.source ?? null }, record: null, what: u.what, after: cite?.fileId ?? null });
+    const consent = consentFor(f.id, cite?.fileId ?? null);
+    made.lines.push({ entry: { date: date ?? '', text: u.what, source: cite?.source ?? null }, record: consent?.requestId ?? null, what: consent ? 'One line added to its Timeline, as you asked.' : u.what, after: cite?.fileId ?? null, ...(consent ? { consent } : {}) });
   }
   // A model's Timeline lines (P4-3): each cites the note its thing gets, or the thing as filed, and waits for its move.
   // The cite is the name asked for until the filing below fixes the name each one gets; then it is that name.
@@ -818,7 +920,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   /** A captured thing as a decision about it reads it (its link text is read only where it is filed). */
   const seenOf = (t: (typeof things)[number], linkText: string | null = null): ThingSeen => ({ fileId: t.file.id, name: t.item.name, fileName: t.file.name, kind: t.item.kind, words: t.words, linkText });
   const pileIds = new Set(piles.map((p) => p.id));
-  for (const l of all && date ? d.lines : []) {
+  for (const l of date ? d.lines : []) {
+    if (!all && !history.some((h) => !h.applied && ix.pathOf(h.consent.targetFileId) === l.path)) continue;
     const f = ix.file(l.path);
     if (!f || f.folder) continue;
     const thing = l.cites === null ? undefined : things.find((t) => t.file.id === l.cites && !t.merge);
@@ -826,7 +929,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const words = l.cites === null || thing ? undefined : citedWords.get(l.cites);
     if (l.cites !== null && !thing && !words && pileIds.has(l.cites)) continue;
     const asked = thing ? (d.note(thing.file.id)?.name ?? d.thing(seenOf(thing))?.name) : undefined;
-    const line: WantedLine = { entry: { date: date ?? '', text: l.text, source: asked === undefined ? null : citeName(asked) }, record: null, what: l.text, after: asked === undefined ? null : (thing?.file.id ?? null) };
+    const consent = consentFor(f.id, l.cites);
+    const prior = consent && history.find((h) => !h.applied && h.consent.requestId === consent.requestId && h.consent.targetFileId === f.id && h.consent.sourceFileId === l.cites);
+    const line: WantedLine = { entry: prior ? { ...prior.entry, date: date ?? '', text: l.text } : { date: date ?? '', text: l.text, source: asked === undefined ? null : citeName(asked) }, record: consent?.requestId ?? null, what: consent ? 'One line added to its Timeline, as you asked.' : l.text, after: asked === undefined ? null : (thing?.file.id ?? null), ...(consent ? { consent } : {}) };
     want(f, l.path).lines.push(line);
     if (thing && asked !== undefined) modelLines.push({ line, cites: thing.file.id });
     if (words) {
@@ -907,6 +1012,19 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const thing = st.cites === null ? undefined : things.find((t) => t.file.id === st.cites && !t.merge);
     const asked = thing ? (d.note(thing.file.id)?.name ?? d.thing(seenOf(thing))?.name) : undefined;
     want(f, st.path).state = { lines: st.lines, source: asked === undefined ? null : citeName(asked), thing: asked === undefined ? null : (thing?.file.id ?? null) };
+  }
+  for (const h of history.filter((h) => !h.applied)) {
+    if (!lines.some((l) => l.rec.kind === 'request' && l.rec.id === h.consent.requestId) || completed(h.consent.requestId, h.consent.targetFileId)) continue;
+    const f = listing.find((f) => f.id === h.consent.targetFileId);
+    const path = f && ix.pathOf(f.id);
+    if (!f || !path || blocked.has(f.id)) continue;
+    consents.push(h.consent);
+    const source = listing.find((f) => f.id === h.consent.sourceFileId);
+    if (source) places.set(source.id, source);
+    const w = want(f, path);
+    if (w.lines.some((l) => l.consent?.requestId === h.consent.requestId)) continue;
+    w.lines.push({ entry: { ...h.entry, date: date ?? h.entry.date }, record: h.consent.requestId,
+      what: 'One line added to its Timeline, as you asked.', after: null, consent: h.consent });
   }
   /** Current states the person edited: what Bower would write goes on the Timeline as a line, and they are asked. */
   const personStates: Array<{ line: WantedLine; file: DriveFile; path: string; seen: string; shown: StateShown }> = [];
@@ -1065,9 +1183,11 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // edited since is never rewritten: what Bower would write becomes a Timeline line, and the person is asked.
     // TL-P4-10: an unmarked one is the person's, unless a rule lets Bower adopt it (no write of Bower's ever does);
     // a Bower note with none gets one, with its mark.
+    const personal = !parseNote(w.path, new TextDecoder().decode(bytes), fetched(f.id)).byBower;
+    if (personal) w.lines = w.lines.filter((l) => l.consent && !blocked.has(f.id));
     let state: StateRewrite | null = null;
     const grant = grants.get(f.id);
-    const section = grant ? currentStateOf(bytes, fetched(f.id)) : null;
+    const section = grant ? currentStateOf(bytes, fetched(f.id), true) : null;
     const mark = stateMarkOf(bytes, fetched(f.id));
     const name = displayName(nameOf(w.path));
     // The note as read now: its checksum and stamp, what a question asked now records as the note was left.
@@ -1086,7 +1206,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // Nothing to write: the section already reads as the update (the person wrote it themselves), or there is none
     // (an older question's run had no update, or the note has no mark to grant under). Settled, with its answered row.
     const already = !!update && !!section && section.lines.join('\n') === update.join('\n');
-    const change: StateRewrite | null = granted && !already && !changed && held && mark !== null && update ? { kind: 'state-rewrite', recordIds: [granted.answer], previous: section?.lines ?? [], lines: update, granted: { answer: granted.answer, mark } } : null;
+    const change: StateRewrite | null = granted && !already && !changed && held && (mark !== null || personal) && update ? { kind: 'state-rewrite', recordIds: [granted.answer], previous: section?.lines ?? [], lines: update, granted: { answer: granted.answer, mark } } : null;
     const result = change ? applyChanges(bytes, [change], fetched(f.id)) : null;
     // A clash: the write's own check finds the section is not as read (`person-edited`, `state-changed`).
     const clash = !!result && !result.ok && (result.reason === 'person-edited' || result.reason === 'state-changed');
@@ -1106,9 +1226,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       answeredRows.set(granted.answer, answeredState(granted.question.id, 'refused', w.path));
     } else if (granted) {
       answeredRows.set(granted.answer, answeredState(granted.question.id, 'nothing-to-write', w.path));
-    } else if (w.state && !(grant && section?.owner === 'person')) {
-      const now = currentStateOf(bytes, fetched(f.id));
-      const adopt = now?.owner === 'unmarked' && (await adopting());
+    } else if (w.state && !(grant && section?.owner === 'person') && (!personal || w.lines.some((l) => l.consent))) {
+      const now = currentStateOf(bytes, fetched(f.id), true);
+      const adopt = !personal && now?.owner === 'unmarked' && (await adopting());
       if (now && (now.owner === 'bower' || now.owner === 'missing' || adopt)) {
         if (now.lines.join('\n') !== w.state.lines.join('\n')) {
           const change: StateRewrite = { kind: 'state-rewrite', recordIds: [], previous: now.lines, lines: w.state.lines, ...(adopt ? { adopted: true as const } : {}) };
@@ -1120,6 +1240,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
         // Never silently dropped: what Bower would write becomes one Timeline line (a person's note takes none).
         // Only what the section lacks; nothing new, no line.
         // Same news twice in one run: a line this run adds to the note citing the same thing already says it.
+        if (personal && (!now || w.state.lines.length !== now.lines.length || now.lines.filter((line, i) => line.trim() !== w.state?.lines[i]?.trim()).length !== 1)) continue;
         const cited = w.state.thing === null ? undefined : w.lines.find((l) => l.after === w.state?.thing && l.entry.source !== null);
         // The person is still asked, once that line is there.
         if (cited && now?.owner === 'person') personStates.push({ line: cited, file: f, path: w.path, seen: stateMark(now.lines), shown: asRead(w.state.lines) });
@@ -1147,12 +1268,15 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
         lineState.set(l, 'present');
         continue;
       }
-      const result = applyChanges(bytes, [{ kind: 'timeline-append', recordIds: [], entries: [l.entry] }], fetched(f.id));
+      const result = applyChanges(bytes, [{ kind: 'timeline-append', recordIds: l.record === null ? [] : [l.record], entries: [l.entry], ...(l.consent ? { consent: l.consent } : {}) }], fetched(f.id));
       const twin = lines.find((x) => x.entry.text === l.entry.text);
       if (result.ok && twin) twins.set(l, twin);
       else if (result.ok) lines.push(l);
       else if (!result.ok && result.reason === 'unchanged') lineState.set(l, 'present');
       else if (!result.ok && result.reason === 'not-bower') lineState.set(l, 'person');
+      else if (!result.ok && personal && (result.reason === 'no-timeline' || result.reason === 'unreadable-timeline')) {
+        leftAsWritten.push({ name: w.path, fileId: f.id, why: result.reason === 'no-timeline' ? "Bower didn't add the line: this note has no Timeline." : "Bower didn't add the line: it can't read this note's Timeline." });
+      }
       else if (!result.ok) console.error(`A note's Timeline line was refused (${result.reason}); none is planned for it`);
     }
     // The rules, as applyChanges words them in this edit, after its link rewrite: a rule the rewrite makes a repeat
@@ -1170,6 +1294,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       } else if (!result.ok && result.reason === 'unchanged') rulesState = 'present';
       else console.error(`${RULES_PATH} was refused for wording (${result.ok ? 'count' : result.reason})`);
     }
+    for (const l of lines) if (l.record !== null) need(l.record).lines.push(l);
     if (rewrite || lines.length || rules || state) candidates.push({ file: f, path: w.path, before, bytes, rewrite, lines, rules, state, stateAfter: state ? (w.state?.thing ?? null) : null });
   }
   // At most editCap edits, in path order; the rest wait for the next run, which plans them again. Their rename lines
@@ -1178,7 +1303,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   for (const l of candidates.slice(editCap).flatMap((c) => c.lines)) lineState.set(l, 'deferred');
   // Each kept note's changes together, in the contract's order; the text never depends on the record ids.
   const appendOf = (lines: WantedLine[]): Change[] => (lines.length
-    ? [{ kind: 'timeline-append', recordIds: [...new Set([...lines, ...[...twins].filter(([, t]) => lines.includes(t)).map(([l]) => l)].flatMap((l) => (l.record === null ? [] : [l.record])))], entries: lines.map((l) => l.entry) }]
+    ? [{ kind: 'timeline-append', recordIds: [...new Set([...lines, ...[...twins].filter(([, t]) => lines.includes(t)).map(([l]) => l)].flatMap((l) => (l.record === null ? [] : [l.record])))], entries: lines.map((l) => l.entry), ...(lines[0]?.consent ? { consent: lines[0].consent } : {}) }]
     : []);
   /** The answers whose keep a note's link rewrite is for: the notes it links to the other note of each. */
   const keptFor = (bytes: Uint8Array): string[] => keeping.filter((x) => mentions(bytes, [x.rename])).map((x) => x.k.answer);
@@ -1199,7 +1324,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // One report row per Timeline line it writes (report-misses-hub-line); a Current state alone says it was updated.
     // Each row names its line by its ordinal among the lines the edit appends, in order (TL-P4-19 addendum 4).
     const written = c.lines.flatMap((l, i) => (l.what === null ? [] : [{ what: l.what, line: i }]));
-    const rows = written.length ? written : c.state ? [{ what: STATE_UPDATED }] : [];
+    const rows = written.length ? written : c.state ? [{ what: c.state.granted?.mark === null ? 'Current state updated, as you chose.' : STATE_UPDATED }] : [];
     const after = [...new Set([...c.lines.flatMap((l) => (l.after === null ? [] : [l.after])), ...(c.stateAfter === null ? [] : [c.stateAfter])])];
     // An edit a keep needs (the kept note's lines, a link to the other note) keeps the note's text as read, for its undo.
     // So does a write the person's yes granted: its undo puts their section back byte for byte (`undoEdit`).
@@ -1212,7 +1337,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   for (const p of personStates) {
     const kept = lineState.get(p.line);
     if (kept !== 'planned' && kept !== 'present') continue;
-    const q: Question = { id: stateQuestionId(p.file.id), text: STATE_ASK(displayName(nameOf(p.path))), yes: 'Write it', no: 'Keep mine', about: p.path, state: p.seen, shown: p.shown, askedAt: opts.requestedAt };
+    const q: Question = { id: stateQuestionId(p.file.id), text: p.line.consent ? `${thingName(p.line.entry.source ?? '')} also changes the current state of ${displayName(nameOf(p.path))}. Should Bower write its update there?` : STATE_ASK(displayName(nameOf(p.path))), yes: 'Write it', no: 'Keep mine', about: p.path, state: p.seen, shown: p.shown, askedAt: opts.requestedAt };
     askedPiles.push(q);
     stateAsks.set(p.file.id, q);
   }
@@ -1283,6 +1408,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // An instructions run with no line it can take, once every held line is left out, has nothing to read: the
   // existing refusal, before admission.
   if (!all && !journal.length) throw new BowerError('conflict', NOTHING_TO_READ);
+  for (const row of leftAsWritten) if (row.fileId) { const f = listing.find((f) => f.id === row.fileId); if (f) places.set(f.id, f); }
   const edited = new Set(edits.map((e) => e.file.id));
   const filing: Array<{ thing: (typeof things)[number]; to: string; name: string; note?: SavedNote; merge?: MergeState }> = [];
   for (const thing of things) {
@@ -1464,7 +1590,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // A run that only asks, about piles asked about already, has nothing new to do: nothing was ready yet.
   // A Timeline line the model added on a note is something to do, so a run with one is not "nothing ready".
   if (all && !capturedPiles.length && !journal.length && questionsText === null && ![...wanted.values()].some((w) => w.lines.length || w.state)) {
-    if (opts.taken) return { kind: 'plan' as const, plan: await nothingReadyPlan(rootId, opts) };
+    if (opts.taken) return { kind: 'plan' as const, plan: await nothingReadyPlan(rootId, opts, appends.completed) };
     throw new BowerError('conflict', NOTHING_READY);
   }
   // Your changes go to the archive the legacy runner used, made in `.bower/changes` only when a line needs it
@@ -1527,7 +1653,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     hashesNew = { text, before: hashesFile && text !== hashesText ? await ownVerified(hashesFile) : null };
   }
   return {
-    kind: 'decided' as const, context: opts.context, run: { runId: opts.runId, requestId: opts.requestId, scope: opts.scope, allowWeb: opts.allowWeb, requestedAt: opts.requestedAt },
+    kind: 'decided' as const, context, consents, leftAsWritten, completedAppends: appends.completed, run: { runId: opts.runId, requestId: opts.requestId, scope: opts.scope, allowWeb: opts.allowWeb, requestedAt: opts.requestedAt },
     rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas: d.areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
     requestsBroken, requestsDone, sys, questionsList, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
@@ -1541,11 +1667,11 @@ type Decided = Extract<Awaited<ReturnType<typeof decide>>, { kind: 'decided' }>;
  * It reads neither Drive nor the reply; the manifest guard and grounding check what it built.
  */
 export async function build(decided: Decided): Promise<Ended> {
-  const fetched = (fileId: string) => decided.context ? { fileId, context: decided.context } : undefined;
+  const fetched = (fileId: string) => ({ fileId, context: decided.context, consents: decided.consents });
   const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
     requestsBroken, requestsDone, sys, questionsList, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows } = decided;
+    rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, leftAsWritten, completedAppends } = decided;
 
   // The fixed operations, in order: clear last run's marks, make folders, file, the note edits, the merges, Bin the piles,
   // your changes, the hashes.
@@ -1571,6 +1697,7 @@ export async function build(decided: Decided): Promise<Ended> {
   }
   const chainOf = (path: string): string[] => (made.has(path) ? [made.get(path) ?? '', ...chainOf(parentOf(path))] : []);
   const reportPlan: ReportContribution[] = [];
+  const leftRows = [...new Map(leftAsWritten.map((r) => [r.fileId ?? r.why, r])).values()];
   // A new Area the model gave a responsibility for: the first thing filed there says why it was made (TL-P4-07 addendum 3).
   const said = new Set<string>();
   const areaOf = (to: string): { area: string } | Record<string, never> => {
@@ -1667,6 +1794,10 @@ export async function build(decided: Decided): Promise<Ended> {
     }
     if (!result.ok) throw new BowerError('unknown', B_FAILURE);
     edit.text = result.text;
+  }
+  if (leftRows.length) {
+    const filed = [...moveOf.values()];
+    if (filed.length) reportPlan.push({ requires: filed, when: 'applied', value: { ...empty(), leftAsWritten: leftRows } });
   }
   // After the filing moves, each note edit (TL-P2-20), then the merges whose moves depend on their line. A Timeline
   // line's note is marked new in place after its edit, and gets its updated row once it applied.
@@ -1801,6 +1932,10 @@ export async function build(decided: Decided): Promise<Ended> {
     // and for the moves of the piles its new question is about, so it is asked once they are filed.
     const derived = [
       ...journal.flatMap((l) => (l.rec.kind === 'answer' ? need(l.rec.id).derived : [])),
+      ...[...stateAsks.keys()].flatMap((id) => {
+        const edit = editOf.get(id);
+        return edit ? [edit, ...operations.filter((o) => o.effect.kind === 'move' && o.effect.before.fileId === id && o.dependsOn.includes(edit)).map((o) => o.operationId)] : [];
+      }),
       ...(fresh.length ? [...asking.keys()].flatMap((id) => movesOf.get(id) ?? []) : []),
       // A disagreement is asked once the note it links is written (C07).
       ...disagreeing.filter((d) => fresh.some((q) => q.id === d.question.id)).flatMap((d) => notesOf.get(d.pileId) ?? []),
@@ -1883,6 +2018,7 @@ export async function build(decided: Decided): Promise<Ended> {
   const head = {
     kind: 'run-manifest' as const, scope, runId: opts.runId, requestId: opts.requestId, runScope: opts.scope,
     allowWeb: opts.allowWeb, requestedAt: opts.requestedAt, captureId, capture: captureValue, reportPlan,
+    ...(completedAppends.length ? { completedAppends } : {}),
   };
   // v1 whenever the plan has no edit (TL-P2-20 Format): its identities and bytes are exactly as before.
   const v1: Operation[] = operations.flatMap((o) => (o.effect.kind === 'edit-text' ? [] : [{ ...o, effect: o.effect }]));
@@ -1904,13 +2040,14 @@ const tryAgain = (attempt: Attempt): Ended => ({ kind: 'again', attempt });
  * The plan of an admitted full run that finds every pile it took held, and none of your changes: nothing captured,
  * no operation, no report row. Its report says nothing was ready yet (`materialize`).
  */
-async function nothingReadyPlan(rootId: string, opts: PlanOptions): Promise<RunPlan> {
+async function nothingReadyPlan(rootId: string, opts: PlanOptions, completedAppends: AppendCompletion[]): Promise<RunPlan> {
   const scope = { rootId };
   const capture: ManifestCapture = { piles: [], members: [], journal: [], places: [] };
   const captureId = (await canonical({ scope, runScope: opts.scope, capture })).hash;
   const manifest: Manifest = {
     v: 1, kind: 'run-manifest', scope, runId: opts.runId, requestId: opts.requestId, runScope: opts.scope,
     allowWeb: opts.allowWeb, requestedAt: opts.requestedAt, captureId, capture, reportPlan: [], operations: [],
+    ...(completedAppends.length ? { completedAppends } : {}),
   };
   const checked = await parseRunManifestV2((await canonical(manifest)).bytes, rootId, RUNNER_WRITES);
   if (!checked.ok) return refused(`the manifest guard refused the plan (${checked.reason})`);
@@ -2180,7 +2317,7 @@ export function generatedName(title: string): string {
  * A Timeline line a run wants: its entry, the journal record it comes from (a merge's answer), its note's updated row
  * wording, and the captured file whose move it waits for (the thing it cites).
  */
-type WantedLine = { entry: EditEntry; record: string | null; what: string | null; after: string | null };
+type WantedLine = { consent?: TimelineConsent; entry: EditEntry; record: string | null; what: string | null; after: string | null };
 /** What one of your changes needs: to wait whole, the Timeline lines it adds, the edits naming it and what derives from it. */
 type Need = { held: boolean; lines: WantedLine[]; edits: string[]; derived: string[] };
 /** What a run wants to change in one note, before applyChanges decides what it may. */

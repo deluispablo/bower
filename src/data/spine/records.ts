@@ -10,7 +10,7 @@
  */
 import type { DriveFile, FencedDrive } from '../drive/drive-api';
 import { makeFolder, makeText, type Gets } from './write-once';
-import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
+import { canonicalRecordJson, hashRecordJson, parseRecordJson, type RecordJsonValue } from '../contracts/record-json';
 import { parsePileDisposition, type Disposition } from '../contracts/pile-disposition';
 import { parseRunCheckpoint, verifyCheckpointChain, type Checkpoint, type Outcome } from '../contracts/run-checkpoint';
 import { parseRunManifestV2, type Manifest, type OperationV2 } from '../contracts/run-manifest';
@@ -20,6 +20,8 @@ import { PROP, RUNNER_WRITES, SYSTEM, recordStamp } from '../vault/layout';
 
 /** `.bower/runs`, as Drive names it. */
 export const RUNS_NAME = 'runs';
+/** Discovery hint only; replay authority remains the verified manifest and checkpoint chain. */
+export const APPENDS_RECORD_KEY = 'bowerAppends';
 const PILES_NAME = SYSTEM.piles.slice(SYSTEM.dir.length + 1);
 
 export const manifestName = (hash: string): string => `manifest-${hash}.json`;
@@ -82,17 +84,26 @@ export async function canonical(value: unknown): Promise<{ text: string; bytes: 
 
 /** A run's first checkpoint: queued, every operation not dispatched, written before any operation. */
 export function firstCheckpoint(manifest: RunManifest, manifestHash: string, mark: AttemptMark, at: number): Checkpoint {
+  const appendBindings = manifest.operations.flatMap((o) => o.effect.kind === 'edit-text' ? o.effect.changes.flatMap((c) =>
+    c.kind === 'timeline-append' && c.consent ? [{ operationId: o.operationId, requestId: c.consent.requestId, targetFileId: c.consent.targetFileId }] : []) : []);
   return {
     v: 1, kind: 'run-checkpoint', scope: { rootId: manifest.scope.rootId }, runId: manifest.runId, manifestHash,
     revision: 0, previous: null, attemptId: mark.attemptId, epoch: mark.epoch, phase: 'queued', phaseAt: at,
     outcomes: manifest.operations.map((o): Outcome => ({ operationId: o.operationId, state: 'not-dispatched' })),
     report: { state: 'not-ready' }, retainedPileIds: [],
+    ...(appendBindings.length ? { appendBindings } : {}),
+    ...(manifest.completedAppends?.length ? { completedAppends: manifest.completedAppends } : {}),
   };
 }
 
 /** The checkpoint after `head` (whose digest is `previous`), written by `mark`. */
 export function nextCheckpoint(head: Checkpoint, previous: string, mark: AttemptMark, patch: CheckpointPatch): Checkpoint {
-  return { ...head, ...patch, revision: head.revision + 1, previous, attemptId: mark.attemptId, epoch: mark.epoch };
+  const outcomes = patch.outcomes ?? head.outcomes;
+  const completed = new Map((head.completedAppends ?? []).map((r) => [JSON.stringify([r.requestId, r.targetFileId]), r]));
+  for (const b of head.appendBindings ?? []) if (outcomes.some((o) => o.operationId === b.operationId && o.state === 'applied'))
+    completed.set(JSON.stringify([b.requestId, b.targetFileId]), { requestId: b.requestId, targetFileId: b.targetFileId });
+  return { ...head, ...patch, revision: head.revision + 1, previous, attemptId: mark.attemptId, epoch: mark.epoch,
+    ...(completed.size ? { completedAppends: [...completed.values()] } : {}) };
 }
 
 /** The folders a record can be in, and the listing they were found in. */
@@ -163,7 +174,7 @@ export class RunRecords {
     if (stored) return;
     const parent = await this.ensure(w, where, found);
     this.placed.set(this.placeOf(where), parent);
-    const props = markOf(where, stamp);
+    const props = markOf(where, stamp, text);
     await makeText(w, this.reads, { parent, name, ...(props ? { props } : {}) }, text);
   }
 
@@ -176,7 +187,7 @@ export class RunRecords {
     const parent = this.placed.get(this.placeOf(where));
     if (!parent) return this.put(w, where, name, text);
     try {
-      const props = markOf(where);
+      const props = markOf(where, undefined, text);
       await makeText(w, this.reads, { parent, name, ...(props ? { props } : {}) }, text);
     } catch (e) {
       // The next write looks for its folder again.
@@ -257,6 +268,10 @@ export class RunRecords {
       // More links than records means a loop: the chain check below refuses it.
       if (out.length > files.length) break;
     }
+    const first = out[0];
+    const expectedFirst = first ? firstCheckpoint(manifest, manifestHash, { attemptId: first.attemptId, epoch: first.epoch }, first.phaseAt) : null;
+    if (first && expectedFirst && (JSON.stringify(first.appendBindings ?? []) !== JSON.stringify(expectedFirst.appendBindings ?? [])
+      || JSON.stringify(first.completedAppends ?? []) !== JSON.stringify(expectedFirst.completedAppends ?? []))) return { ok: false, why: 'The checkpoint has unrelated append bindings' };
     const verified = await verifyCheckpointChain(out);
     if (!verified.ok || verified.head !== head) {
       return { ok: false, why: `The checkpoints of run ${runId} do not chain (${verified.ok ? 'head' : `${verified.reason} at ${verified.at}`})` };
@@ -297,8 +312,15 @@ export class RunRecords {
  * What a record's create carries: in a run's folder, that run's mark (`bowerRun`, its run id), riding on the create, so
  * retention bins a run folder only when everything inside is Bower's own record of that run (retention round 6).
  */
-function markOf(where: Where, stamp?: Record<string, string>): Record<string, string> | undefined {
-  return where === 'piles' ? stamp : { ...stamp, [PROP.run]: where.runId };
+function markOf(where: Where, stamp: Record<string, string> | undefined, text: string): Record<string, string> | undefined {
+  if (where === 'piles') return stamp;
+  const parsed = parseRecordJson(new TextEncoder().encode(text));
+  const object = (v: RecordJsonValue | undefined): v is { [key: string]: RecordJsonValue } => v !== null && typeof v === 'object' && !Array.isArray(v);
+  const m = parsed.ok && object(parsed.value) ? parsed.value : null;
+  const appends = m?.kind === 'run-manifest' && ((Array.isArray(m.completedAppends) && m.completedAppends.length > 0)
+    || (Array.isArray(m.operations) && m.operations.some((o) => object(o) && object(o.effect) && o.effect.kind === 'edit-text'
+      && Array.isArray(o.effect.changes) && o.effect.changes.some((c) => object(c) && c.kind === 'timeline-append' && object(c.consent)))));
+  return { ...stamp, [PROP.run]: where.runId, ...(appends ? { [APPENDS_RECORD_KEY]: '1' } : {}) };
 }
 
 function broken(why: string): Found {

@@ -2,7 +2,7 @@
 import type { RunReport } from './types';
 import { PHASE_RANK, isRunPhase, type RunPhase } from './run-phases';
 import { canonicalRecordJson, hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
-import { isSavedRow, isUpdatedRow } from './run-manifest';
+import { isAppendCompletion, type AppendCompletion, isLeftAsWrittenRow, isSavedRow, isUpdatedRow } from './run-manifest';
 import { isAnsweredRow } from './questions';
 
 export type Scope = { rootId: string };
@@ -36,6 +36,8 @@ export type Checkpoint = {
   revision: number; previous: string | null; attemptId: string; epoch: number;
   phase: RunPhase; phaseAt: number;
   outcomes: Outcome[]; report: ReportState; retainedPileIds: string[];
+  completedAppends?: AppendCompletion[];
+  appendBindings?: Array<AppendCompletion & { operationId: string }>;
 };
 /** Independently supplied by a caller that already holds the verified manifest. */
 export type RunExpectation = {
@@ -157,9 +159,10 @@ function question(value: unknown): boolean {
 }
 /** The existing RunReport shape, closed; optional counts and requests are omitted, never null. */
 function runReport(value: unknown): value is RunReport {
-  if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded', 'nothingReady', 'alreadySaved', 'unconfirmed', 'answered'])
+  if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded', 'nothingReady', 'alreadySaved', 'unconfirmed', 'answered', 'leftAsWritten'])
     || !every(value.filed, filed) || !every(value.created, pathChange) || !every(value.updated, isUpdatedRow)
     || !every(value.setAside, setAside) || !every(value.questions, question)) return false;
+  if (Object.hasOwn(value, 'leftAsWritten') && !list(value.leftAsWritten, isLeftAsWrittenRow)) return false;
   if (Object.hasOwn(value, 'yourChanges') && !integer(value.yourChanges)) return false;
   if (Object.hasOwn(value, 'rulesWorded') && !integer(value.rulesWorded)) return false;
   if (Object.hasOwn(value, 'requests') && !list(value.requests, text)) return false;
@@ -186,12 +189,17 @@ function reportState(value: unknown): value is ReportState {
 }
 function checkpoint(value: unknown): value is Checkpoint {
   return closed(value, ['v', 'kind', 'scope', 'runId', 'manifestHash', 'revision', 'previous', 'attemptId',
-    'epoch', 'phase', 'phaseAt', 'outcomes', 'report', 'retainedPileIds'])
+    'epoch', 'phase', 'phaseAt', 'outcomes', 'report', 'retainedPileIds'], ['completedAppends', 'appendBindings'])
     && value.v === 1 && value.kind === 'run-checkpoint' && scope(value.scope) && id(value.runId)
     && hash(value.manifestHash) && integer(value.revision) && (value.previous === null || hash(value.previous))
     && id(value.attemptId) && integer(value.epoch)
     && isRunPhase(value.phase) && integer(value.phaseAt)
     && list(value.outcomes, outcome) && reportState(value.report)
+    && (value.completedAppends === undefined || (list(value.completedAppends, isAppendCompletion)
+      && unique((value.completedAppends as AppendCompletion[]).map((r) => JSON.stringify([r.requestId, r.targetFileId])))))
+    && (value.appendBindings === undefined || (list(value.appendBindings, (r): r is NonNullable<Checkpoint['appendBindings']>[number] => closed(r, ['requestId', 'targetFileId', 'operationId'])
+      && isAppendCompletion({ requestId: r.requestId, targetFileId: r.targetFileId }) && hash(r.operationId))
+      && unique((value.appendBindings as NonNullable<Checkpoint['appendBindings']>).map((r) => r.operationId))))
     && list(value.retainedPileIds, id) && unique(value.retainedPileIds);
 }
 
@@ -227,6 +235,7 @@ export async function parseRunCheckpoint(bytes: Uint8Array, expected: RunExpecta
   if (value.runId !== expected.runId || value.manifestHash !== expected.manifestHash) return { ok: false, reason: 'binding' };
   if (value.outcomes.length !== expected.operationIds.length
     || value.outcomes.some((item, index) => item.operationId !== expected.operationIds[index])) return { ok: false, reason: 'outcomes' };
+  if (value.appendBindings?.some((b) => !expected.operationIds.includes(b.operationId))) return { ok: false, reason: 'binding' };
   if ((value.revision === 0) !== (value.previous === null)) return { ok: false, reason: 'revision' };
 
   if (!honestPhase(value)) return { ok: false, reason: 'phase' };
@@ -321,6 +330,12 @@ export async function verifyCheckpointChain(chain: readonly Checkpoint[]): Promi
       const prior = before.outcomes[index];
       return !prior || !allowed(prior, item);
     })) return { ok: false, reason: 'transition', at };
+    if (canonical(before.appendBindings ?? []) !== canonical(next.appendBindings ?? [])) return { ok: false, reason: 'binding', at };
+    const key = (r: AppendCompletion): string => JSON.stringify([r.requestId, r.targetFileId]);
+    const prior = new Set((before.completedAppends ?? []).map(key));
+    const completed = new Set((next.completedAppends ?? []).map(key));
+    if ([...prior].some((k) => !completed.has(k)) || (next.completedAppends ?? []).some((r) => !prior.has(key(r))
+      && !next.appendBindings?.some((b) => key(b) === key(r) && next.outcomes.some((o) => o.operationId === b.operationId && o.state === 'applied')))) return { ok: false, reason: 'transition', at };
     if (!forwardPhase(before.phase, next.phase)) return { ok: false, reason: 'phase', at };
     if (!forwardReport(before.report, next.report)) return { ok: false, reason: 'report', at };
     head = await digest(next);

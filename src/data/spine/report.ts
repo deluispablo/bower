@@ -60,6 +60,7 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
     report.filed.push(...c.value.filed);
     report.created.push(...c.value.created);
     report.updated.push(...c.value.updated);
+    if (c.value.leftAsWritten?.length) report.leftAsWritten = [...(report.leftAsWritten ?? []), ...c.value.leftAsWritten];
     // A set-aside row is its contribution's one move's (`grounded`): by op id, never by the name a row carries (two
     // things may share one) nor by position.
     const own = c.when === 'rejected' && c.requires.length === 1 ? byId.get(c.requires[0] ?? '') : undefined;

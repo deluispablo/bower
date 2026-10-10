@@ -62,11 +62,15 @@ export type RuleRemove = { recordId: string; text: string; since?: number };
  * person's lines back under the mark they had, so the section is theirs again.
  */
 /** A person's yes that grants one write over a Current state they edited: the answer, and the mark the section had. */
-export type StateGrant = { answer: string; mark: string };
+export type StateGrant = { answer: string; mark: string | null };
+/** Consent derived from an admitted request, never a semantic reply. */
+export type AppendCompletion = { requestId: string; targetFileId: string };
+export type TimelineConsent = { requestId: string; targetFileId: string; sourceFileId: string };
+export type LeftAsWritten = { name: string; why: string; fileId?: string };
 export type Change =
   | { kind: 'state-rewrite'; recordIds: string[]; previous: string[]; lines: string[]; adopted?: true; release?: true; granted?: StateGrant; mark?: string }
   | { kind: 'link-rewrite'; recordIds: string[]; renames: Rename[] }
-  | { kind: 'timeline-append'; recordIds: string[]; entries: EditEntry[] }
+  | { kind: 'timeline-append'; recordIds: string[]; entries: EditEntry[]; consent?: TimelineConsent }
   | { kind: 'rules-wording'; add: RuleAdd[]; remove: RuleRemove[] };
 /**
  * Manifest v2's one new effect: `text` is the whole file after every change, authored by `applyChanges`. `beforeText`
@@ -89,12 +93,14 @@ export type ManifestRunReport = {
   alreadySaved?: { name: string; as: string; notes?: number }[];
   /** Answers that settled with no effect, their subject gone (TL-P4-19 addendum 10): never set aside. */
   answered?: AnsweredRow[];
+  leftAsWritten?: LeftAsWritten[];
 };
 export type ReportContribution = { requires: string[]; when: 'applied' | 'rejected'; value: ManifestRunReport };
 export type Manifest = {
   v: 1; kind: 'run-manifest'; scope: Scope; runId: string; requestId: string;
   runScope: 'all' | 'instructions'; allowWeb: boolean; requestedAt: number;
   captureId: string; capture: Capture; operations: Operation[]; reportPlan: ReportContribution[];
+  completedAppends?: AppendCompletion[];
 };
 /** v1 plus `edit-text`; a v2 manifest always holds at least one. */
 export type ManifestV2 = Omit<Manifest, 'v' | 'operations'> & { v: 2; operations: OperationV2[] };
@@ -319,7 +325,7 @@ function ruleRemove(value: unknown): value is RuleRemove {
 const stateMarkText = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{16}$/.test(value);
 /** A grant names the answer that gives it, which the change carries in its record ids too, and the mark it saw. */
 function stateGrant(value: unknown, ids: readonly string[]): value is StateGrant {
-  return closed(value, ['answer', 'mark']) && recordId(value.answer) && ids.includes(value.answer as string) && stateMarkText(value.mark);
+  return closed(value, ['answer', 'mark']) && recordId(value.answer) && ids.includes(value.answer as string) && (value.mark === null || stateMarkText(value.mark));
 }
 function change(value: unknown): value is Change {
   if (!record(value)) return false;
@@ -331,8 +337,12 @@ function change(value: unknown): value is Change {
       && list(value.previous, text) && list(value.lines, text) && stateLinesOk(value.previous as string[], value.lines as string[]);
     case 'link-rewrite': return closed(value, ['kind', 'recordIds', 'renames']) && recordIds(value.recordIds)
       && list(value.renames, rename) && value.renames.length > 0 && unique((value.renames as Rename[]).map((item) => item.from.toLowerCase()));
-    case 'timeline-append': return closed(value, ['kind', 'recordIds', 'entries']) && recordIds(value.recordIds)
-      && list(value.entries, editEntry) && value.entries.length > 0;
+    case 'timeline-append': return closed(value, ['kind', 'recordIds', 'entries'], ['consent']) && recordIds(value.recordIds)
+      && list(value.entries, editEntry) && value.entries.length > 0
+      && (value.consent === undefined || (closed(value.consent, ['requestId', 'targetFileId', 'sourceFileId'])
+        && recordId(value.consent.requestId) && driveId(value.consent.targetFileId) && driveId(value.consent.sourceFileId)
+        && value.recordIds.length === 1 && value.recordIds[0] === value.consent.requestId
+        && value.entries.length === 1 && (value.entries[0] as EditEntry).source !== null));
     case 'rules-wording': return closed(value, ['kind', 'add', 'remove']) && list(value.add, ruleAdd) && list(value.remove, ruleRemove)
       && value.add.length + value.remove.length > 0;
     default: return false;
@@ -374,14 +384,17 @@ export const isUpdatedRow = (row: unknown): row is UpdatedRow => closed(row, ['p
  */
 export const isSavedRow = (row: unknown): row is { name: string; as: string; notes?: number } => closed(row, ['name', 'as'], ['notes'])
   && text(row.name) && text(row.as) && (!has(row, 'notes') || (integer(row.notes) && (row.notes as number) >= 1));
+export const isLeftAsWrittenRow = (row: unknown): row is LeftAsWritten => closed(row, ['name', 'why'], ['fileId'])
+  && text(row.name) && text(row.why) && (!has(row, 'fileId') || driveId(row.fileId));
 function runReport(value: unknown): value is ManifestRunReport {
-  if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded', 'alreadySaved', 'answered'])) return false;
+  if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded', 'alreadySaved', 'answered', 'leftAsWritten'])) return false;
   return list(value.filed, (row) => closed(row, ['name', 'title', 'kind', 'to'], ['note', 'area']) && text(row.name) && text(row.title)
       && oneOf(row.kind, fileKinds) && text(row.to) && (!Object.hasOwn(row, 'note') || text(row.note)) && (!Object.hasOwn(row, 'area') || text(row.area)))
     && rows(value.created, ['path', 'what']) && list(value.updated, isUpdatedRow) && rows(value.setAside, ['name', 'why'])
     && list(value.questions, (row) => closed(row, ['id', 'text', 'yes', 'no', 'askedAt'], ['about'])
       && text(row.id) && text(row.text) && text(row.yes) && text(row.no) && integer(row.askedAt)
       && (!Object.hasOwn(row, 'about') || text(row.about)))
+    && (!Object.hasOwn(value, 'leftAsWritten') || list(value.leftAsWritten, isLeftAsWrittenRow))
     && (!Object.hasOwn(value, 'yourChanges') || integer(value.yourChanges))
     && (!Object.hasOwn(value, 'requests') || list(value.requests, text))
     && (!Object.hasOwn(value, 'rulesWorded') || integer(value.rulesWorded))
@@ -393,11 +406,15 @@ function contribution(value: unknown): value is ReportContribution {
     && unique(value.requires) && oneOf(value.when, ['applied', 'rejected']) && runReport(value.value);
 }
 
+export const isAppendCompletion = (row: unknown): row is AppendCompletion => closed(row, ['requestId', 'targetFileId'])
+  && recordId(row.requestId) && driveId(row.targetFileId);
 function manifestOf(value: unknown, v: 1 | 2, item: (value: unknown) => boolean): boolean {
-  return closed(value, ['v', 'kind', 'scope', 'runId', 'requestId', 'runScope', 'allowWeb', 'requestedAt', 'captureId', 'capture', 'operations', 'reportPlan'])
+  return closed(value, ['v', 'kind', 'scope', 'runId', 'requestId', 'runScope', 'allowWeb', 'requestedAt', 'captureId', 'capture', 'operations', 'reportPlan'], ['completedAppends'])
     && value.v === v && value.kind === 'run-manifest' && closed(value.scope, ['rootId']) && driveId(value.scope.rootId)
     && id(value.runId) && id(value.requestId) && oneOf(value.runScope, ['all', 'instructions'])
     && typeof value.allowWeb === 'boolean' && integer(value.requestedAt) && hash(value.captureId)
+    && (value.completedAppends === undefined || (list(value.completedAppends, isAppendCompletion)
+      && unique((value.completedAppends as AppendCompletion[]).map((r) => JSON.stringify([r.requestId, r.targetFileId])))))
     && capture(value.capture) && list(value.operations, item) && list(value.reportPlan, contribution);
 }
 function manifest(value: unknown): value is Manifest {
@@ -521,6 +538,12 @@ function edits(value: ManifestV2): EditGuardRule | null {
       if (entry.kind === 'rules-wording' && e.path !== 'Rules.md') return 'rules-path';
       if (entry.kind === 'state-rewrite' && e.path === 'Rules.md') return 'rules-path';
       if (entry.kind === 'timeline-append' && !entry.entries.every((line) => line.date === date)) return 'date';
+      if (entry.kind === 'timeline-append' && entry.consent) {
+        const c = entry.consent;
+        if (c.targetFileId !== e.before.fileId || !journal.has(c.requestId)) return 'record';
+        const source = operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === c.sourceFileId && captured.has(c.sourceFileId));
+        if (source ? !item.dependsOn.includes(source.operationId) : !places.has(c.sourceFileId)) return 'record';
+      }
       if (!recordsOf(entry).every((id) => journal.has(id))) return 'record';
     }
     edited.set(e.before.fileId, { operationId: item.operationId, effect: e });
