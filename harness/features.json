@@ -7084,5 +7084,18 @@
     ],
     "verify": "pnpm exec vitest run src/data/vault/undo-compensate.property.test.ts -t \"undo-fifo-seed\"",
     "note": "DEFECT_LOG undo-fifo-seed; ruling (b) after f885992c. Tests only. Packet 2026-10-10-undo-fifo-seed-packet.md. implementer: codex."
+  },
+  {
+    "id": "pile-binned-context-hold",
+    "task": "p4-c02",
+    "category": "fix",
+    "passes": false,
+    "ui": false,
+    "what": "A pile whose note the person binned, with ready things left, gets the same answer from the app and the runner: filed, or held with its reason shown.",
+    "steps": [
+      "One binned-counts-as-removed predicate in pile-readiness serves plan.ts and drive-vault; missing-only contexts stay not-arrived."
+    ],
+    "verify": "pnpm exec vitest run src/data/pile-readiness.test.ts src/data/spine/plan.test.ts src/data/vault/drive-vault.test.ts -t \"pile-binned-context-hold\"",
+    "note": "DEFECT_LOG pile-binned-context-hold; TL-P4-53 addendum 7. Packet 2026-10-11-pile-binned-context-hold-packet.md. Starts after upload-sign-out-forget (drive-vault.ts). implementer: codex."
   }
 ]
