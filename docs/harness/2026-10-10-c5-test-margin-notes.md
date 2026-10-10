@@ -3,7 +3,7 @@
 implementer: codex
 
 Entry: c5-test-margin, TL-P4-31 addendum 1. Tests only; no assertion red is required by the packet.
-Uncommitted delivery: the coordinator commits the test changes and notes separately.
+The initial split is committed; the coordinator commits fix-round changes and notes separately.
 
 ## Research
 
@@ -14,7 +14,7 @@ Uncommitted delivery: the coordinator commits the test changes and notes separat
   Passing the original property preserves its generation and run-index bias.
 - No network was used.
 
-## Changes and retained coverage
+## Initial split: changes and retained coverage
 
 tests changed: src/bird/engine.test.ts: split the cadence/entry Cartesian product into 48 tests plus geometry; keep seed 2610, numRuns 20 and the original body.
 tests changed: src/data/vault/undo-compensate.property.test.ts: sample each of random batches 1 and 2 with unchanged numRuns 50, then execute the original model-run body in ten five-run tests per batch.
@@ -32,14 +32,15 @@ Case counts before = after:
   all-file total remains 330 model runs. Those other batches were not run for this entry.
 - Runner refusal: 5 cases before = 5 cases after; five original assertions per case are retained.
 - Every original bound, assertion, property budget, explicit seed and default 5 s timeout remains.
-  Random batches retain unspecified seeds. No load-dependent logic, skips, stubs or product edits.
+  At initial delivery, random batches retained unspecified seeds; fix round 1 below pins batches 1 and 2.
+  No load-dependent logic, skips, stubs or product edits.
   Undo already used endOnFailure: true, so sampling does not remove an existing shrinking pass.
 
 removed: src/bird/engine.test.ts: the original single it registration becomes a describe; no cases or assertions removed.
 removed: src/data/vault/undo-compensate.property.test.ts: only the two original single it registrations become describes; no cases or assertions removed.
 removed: src/codex-run.test.ts: the original five-case loop becomes five it.each registrations; no cases or assertions removed.
 
-## Measurements
+## Measurements (initial split)
 
 Each target ran alone, sequentially, with --maxWorkers=2 as explicitly requested (overriding packet --maxWorkers=1).
 Before/after durations below are Vitest JSON per-test wall times, in milliseconds.
@@ -163,3 +164,165 @@ No verify names startle or compensating Undo. Their old names now name describes
 - Undo random batch 1/2 children: `runs 1–5`, `runs 6–10`, …, `runs 46–50`.
 
 left out: none. Git writes in this worktree: none; runner-test Git writes are confined to temporary fixtures.
+
+
+## Fix round 1
+
+P4-76 Important finding: sampled parts lost fast-check's seed, counterexample and replay report.
+The two split random batches now use fixed seeds 427286 and 427287, printed in their describe names.
+Each five-run part calls fast-check's own `fc.assert` with that seed, its zero-based starting `path`,
+`numRuns: 5` and the unchanged `endOnFailure: true`. Root-only paths resume the original generated
+sequence, preserving run-index bias and all 50 cases. Native failures report the seed, absolute path,
+commands' `toString()` and boolean case, with the original error as their cause.
+The pre-existing endOnFailure setting still prevents shrinking; no shrinking setting changed.
+There is no sampling at collection: only run numbers and part boundaries are registered.
+Filtering out these tests with -t therefore performs no property generation for them.
+
+Offline standard solution: fast-check runner parameters, https://fast-check.dev/docs/configuration/.
+Installed primary-source evidence: `node_modules/fast-check/lib/fast-check.js`, `check`, `pathWalk`,
+`toss`, `lazyToss`, `preFormatFailure` and `assert`. A root-only path drops generator positions,
+retains their original indices, limits execution to numRuns, and merges that offset into failures.
+No network was used.
+
+tests changed: src/data/vault/undo-compensate.property.test.ts: replace sampled execution with seeded fc.assert parts; retain all 50 model runs per batch and the original body, bounds and timeout; add tiny failure-report and deterministic-sequence regressions.
+tests changed: src/bird/engine.test.ts: compare the startle simulation count with the independent expected 960, instead of the Cartesian-product tautology; retain every case, assertion, seed, bound and timeout.
+
+Test-first red: `a failing property part reports its seed, replay path and command case` failed on
+`expected 'Deliberate part failure' to contain 'seed: 427286'`. The temporary extracted sample/direct-run
+helper reproduced the old reporting loss; replacing it with native fc.assert made the same test green.
+The stand-in property executes one tiny command, then deliberately fails. The test checks the seed,
+absolute path 5 and the full counterexample, including the command's toString() and its boolean.
+It does not execute the real Undo model.
+
+`seeded property parts keep all 50 cases in order` runs once for each fixed batch seed. It uses the
+real command arbitrary and maxCommands: 24 with a tiny collecting predicate, not the Undo model.
+It compares two repeated ten-part sequences with an unsplit seeded 50-run sequence, including every
+command's toString() and the undoAll flag. Each comparison independently asserts exactly 50 cases.
+The existing generation/partition count checks now check run-number and partition lengths; the new
+regressions verify the actual generated sequences. Both split batches still execute exactly 50 real
+model runs, once per case, across ten parts. The all-file real-model total stays 330; original seeded
+runs and random batches 3–6 are unchanged. The added stand-in tests do not add real-model runs.
+
+removed: src/data/vault/undo-compensate.property.test.ts: collection-time fc.sample and direct case execution only; no original cases, property assertions, bounds or timeouts removed.
+removed: src/bird/engine.test.ts: the derived expected-count expression only; the count assertion now checks 960.
+
+Fix-round verification ran each target sequentially with --maxWorkers=2 and JSON reporting.
+All 77 selected tests pass (49 startle, 20 Undo parts, 3 stand-in regressions, 5 runner refusals).
+Each part is below the unchanged 1,000 ms acceptance bound. No parallel gate ran during measurements.
+The runner test file is unchanged in this round and was re-verified for its existing five cases.
+
+| Target | Passing tests | Max ms |
+| --- | ---: | ---: |
+| undo | 23 | 366.961 |
+| startle | 49 | 277.547 |
+| codex | 5 | 841.674 |
+
+Every measured part (Vitest JSON durations, milliseconds):
+
+| Target | Test | ms |
+| --- | --- | ---: |
+| undo | a failing property part reports its seed, replay path and command case | 6.299 |
+| undo | seeded property parts keep all 50 cases in order (random batch 1, seed 427286) | 10.865 |
+| undo | seeded property parts keep all 50 cases in order (random batch 2, seed 427287) | 2.027 |
+| undo | (random batch 1, seed 427286) runs 1–5 | 366.961 |
+| undo | (random batch 1, seed 427286) runs 6–10 | 263.157 |
+| undo | (random batch 1, seed 427286) runs 11–15 | 319.966 |
+| undo | (random batch 1, seed 427286) runs 16–20 | 252.991 |
+| undo | (random batch 1, seed 427286) runs 21–25 | 153.806 |
+| undo | (random batch 1, seed 427286) runs 26–30 | 89.378 |
+| undo | (random batch 1, seed 427286) runs 31–35 | 76.697 |
+| undo | (random batch 1, seed 427286) runs 36–40 | 83.680 |
+| undo | (random batch 1, seed 427286) runs 41–45 | 73.277 |
+| undo | (random batch 1, seed 427286) runs 46–50 | 75.407 |
+| undo | (random batch 2, seed 427287) runs 1–5 | 76.383 |
+| undo | (random batch 2, seed 427287) runs 6–10 | 79.360 |
+| undo | (random batch 2, seed 427287) runs 11–15 | 84.468 |
+| undo | (random batch 2, seed 427287) runs 16–20 | 79.863 |
+| undo | (random batch 2, seed 427287) runs 21–25 | 83.882 |
+| undo | (random batch 2, seed 427287) runs 26–30 | 79.810 |
+| undo | (random batch 2, seed 427287) runs 31–35 | 80.433 |
+| undo | (random batch 2, seed 427287) runs 36–40 | 87.595 |
+| undo | (random batch 2, seed 427287) runs 41–45 | 75.030 |
+| undo | (random batch 2, seed 427287) runs 46–50 | 76.385 |
+| startle | every pose and preen endpoint meets the geometry bound | 0.833 |
+| startle | 30 fps: idle | 41.118 |
+| startle | 30 fps: wait | 18.838 |
+| startle | 30 fps: read | 31.718 |
+| startle | 30 fps: write | 28.956 |
+| startle | 30 fps: carry | 40.705 |
+| startle | 30 fps: proud | 32.733 |
+| startle | 30 fps: sleep | 38.459 |
+| startle | 30 fps: alarm | 30.015 |
+| startle | 30 fps: land | 88.686 |
+| startle | 30 fps: preen phase | 10.454 |
+| startle | 30 fps: preen at 0.6 s | 10.761 |
+| startle | 30 fps: minded doze | 11.798 |
+| startle | 60 fps: idle | 24.157 |
+| startle | 60 fps: wait | 21.682 |
+| startle | 60 fps: read | 36.067 |
+| startle | 60 fps: write | 37.279 |
+| startle | 60 fps: carry | 49.812 |
+| startle | 60 fps: proud | 49.817 |
+| startle | 60 fps: sleep | 38.807 |
+| startle | 60 fps: alarm | 39.484 |
+| startle | 60 fps: land | 134.001 |
+| startle | 60 fps: preen phase | 14.309 |
+| startle | 60 fps: preen at 0.6 s | 15.003 |
+| startle | 60 fps: minded doze | 15.127 |
+| startle | 120 fps: idle | 42.543 |
+| startle | 120 fps: wait | 38.120 |
+| startle | 120 fps: read | 62.399 |
+| startle | 120 fps: write | 62.698 |
+| startle | 120 fps: carry | 83.736 |
+| startle | 120 fps: proud | 80.718 |
+| startle | 120 fps: sleep | 62.580 |
+| startle | 120 fps: alarm | 75.623 |
+| startle | 120 fps: land | 277.547 |
+| startle | 120 fps: preen phase | 24.771 |
+| startle | 120 fps: preen at 0.6 s | 26.220 |
+| startle | 120 fps: minded doze | 26.029 |
+| startle | jittered: idle | 26.743 |
+| startle | jittered: wait | 22.622 |
+| startle | jittered: read | 40.015 |
+| startle | jittered: write | 36.634 |
+| startle | jittered: carry | 53.524 |
+| startle | jittered: proud | 60.287 |
+| startle | jittered: sleep | 40.785 |
+| startle | jittered: alarm | 36.988 |
+| startle | jittered: land | 129.899 |
+| startle | jittered: preen phase | 13.806 |
+| startle | jittered: preen at 0.6 s | 13.804 |
+| startle | jittered: minded doze | 13.499 |
+| codex | refuses guarded paths, secrets and addresses: guarded settings | 841.674 |
+| codex | refuses guarded paths, secrets and addresses: guarded script | 802.477 |
+| codex | refuses guarded paths, secrets and addresses: guarded environment | 811.524 |
+| codex | refuses guarded paths, secrets and addresses: secret | 787.778 |
+| codex | refuses guarded paths, secrets and addresses: address | 781.569 |
+
+Commands:
+
+```sh
+pnpm exec vitest run src/data/vault/undo-compensate.property.test.ts -t 'a failing property part reports' --maxWorkers=2 --reporter=json --outputFile.json=/tmp/c5tm-fix1-red.json > /tmp/c5tm-fix1-red.log 2>&1
+pnpm exec vitest run src/data/vault/undo-compensate.property.test.ts -t 'random batch [12]|a failing property part reports|seeded property parts keep' --maxWorkers=2 --reporter=json --outputFile.json=/tmp/c5tm-fix1-undo.json > /tmp/c5tm-fix1-undo.log 2>&1
+pnpm exec vitest run src/bird/engine.test.ts -t 'the startle settles' --maxWorkers=2 --reporter=json --outputFile.json=/tmp/c5tm-fix1-startle.json > /tmp/c5tm-fix1-startle.log 2>&1
+pnpm exec vitest run src/codex-run.test.ts -t 'refuses guarded paths, secrets and addresses' --maxWorkers=2 --reporter=json --outputFile.json=/tmp/c5tm-fix1-codex.json > /tmp/c5tm-fix1-codex.log 2>&1
+pnpm exec tsc -p /tmp/c5tm-fix1-tsconfig.json > /tmp/c5tm-fix1-tsc.log 2>&1
+pnpm exec eslint src/bird/engine.test.ts src/data/vault/undo-compensate.property.test.ts > /tmp/c5tm-fix1-eslint.log 2>&1
+```
+
+TypeScript and ESLint pass. The temporary tsc config extends this worktree's tsconfig.app.json and
+includes only the two touched test files, plus their imported dependencies. Its typeRoots point to
+this worktree's node_modules/@types and node_modules. The first scoped tsc attempt could not locate
+the inherited type libraries from /tmp; setting those typeRoots resolved the config-only failure.
+Only failure output, statuses, counts and timing fields were read. Reports and logs:
+`/tmp/c5tm-fix1-{red,undo,startle,codex}.{json,log}`, `/tmp/c5tm-fix1-{tsc,eslint}.log`;
+all part timings also saved to `/tmp/c5tm-fix1-timings.json`.
+
+New Undo describe names retain the old batch label and add `, seed 427286` / `, seed 427287`.
+Their child names still cover `runs 1–5` through `runs 46–50`.
+The existing c5-codex-run verify still matches all five refusal test names and is unaffected this round.
+No product code, harness records, timeouts or contract bounds changed.
+No pnpm check, full suite, e2e, network or worktree-writing git command ran. Runner-test git writes
+remain confined to their temporary fixtures. The coordinator commits test changes and notes separately.
+
+left out: none within the fix-round scope.
