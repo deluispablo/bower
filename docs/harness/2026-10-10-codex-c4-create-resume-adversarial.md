@@ -25,3 +25,9 @@ Concrete scenario: use the midnight fixture; lose the folder-create answer and r
 Contract: packet item 1 and TL-P4-24 addenda 16–17 require resumption from the original intent before folder-edit behavior, preserving the first name. The round-2 red interrupts only the move, leaving this later failure uncovered.
 
 findings: 1
+
+## Re-plan pass (addendum 18)
+
+Read-only, high effort. Tokens: input 291867 (cached 239616), output 2677.
+
+findings: 0
