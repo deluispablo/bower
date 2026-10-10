@@ -586,7 +586,6 @@ function relink(text: string, change: Extract<Change, { kind: 'link-rewrite' }>,
   const bytes = encoder.encode(text);
   const own = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
   if (own.status === 'invalid') return { refused: own.reason };
-  if (fetched && own.status !== 'v2' && !byBower(text, fetched)) return { refused: 'not-bower' };
   const renames = new Map(change.renames.map((item) => [item.from.toLowerCase(), item.to]));
   const out: Replacement[] = [];
   if (own.status === 'v2') {
