@@ -210,3 +210,86 @@ Final verification (all exit 0):
 Only the four code files above and this appended notes section changed in this round.
 No network, git write command, commit, server, e2e or full pnpm check was run.
 The coordinator retains the packet's full check, e2e and designer verification gates.
+
+## Red repair (designer check 2)
+
+Red-owning session, 2026-10-10, HEAD `4845a5ab`, branch `smoke-request-report-hidden`.
+The designer's new finding supersedes the earlier Home-only omission ruling:
+"Everything has its place." must be absent with leftAsWritten rows everywhere runDetail
+is shown, including the reopened sheet and the right panel's Now section.
+The first-press confirmation, filing card words, and Home instructions card assertions
+(no fallback line and Got it alone) remain unchanged and pass at this HEAD.
+
+tests changed: src/features/tidy/request-report-hidden.test.tsx: add reopened-sheet and right-panel Now reds and controls.
+Both all and instructions scopes assert fallback absence with leftAsWritten and fallback
+presence without leftAsWritten, using a created row so the report remains reachable.
+The right-panel cases render the real RightPanel entry point and scope queries to Now.
+The existing reopened-report test keeps every assertion, including visible runDetail;
+its fixture now has yourChanges: 1 to exercise non-fallback detail with leftAsWritten.
+Its linked row, dismissal, markSeen and subsequent Nothing to tidy assertions still pass.
+The new fallback-only tests reproduce the original fixture independently.
+
+tests changed: e2e/request-report-hidden.spec.ts: extend reopened-sheet fallback omission on demo and fake.
+Both 1440 and 375 widths check absence in the first-press/reopen regression and in
+instructions/all-left reports. The conflicting fallback-presence assertion is replaced
+only for reports with leftAsWritten and fallback detail. All other existing assertions,
+including created/filed-no-replay fallback visibility, left-detail visibility, Home words,
+status replay, linked rows, acknowledgment and WCAG 2.2/target-size checks, are retained.
+No numeric bound or accessibility threshold was changed; no skip or only was added.
+
+Offline standard approach: reuse the existing served-source fixtures and Testing Library
+screen/within pattern, with the actual StatusBar and RightPanel component entry points.
+Reference: https://testing-library.com/docs/queries/about/ (unverified offline).
+No new app mechanism, source fixture scenario or UI string was introduced.
+
+Component command:
+`pnpm exec vitest run src/features/tidy/request-report-hidden.test.tsx src/features/home/Home.test.tsx src/features/tidy/StatusBar.test.tsx --maxWorkers=2`
+Log: `tmp-logs/request-report-designer-check-2-red.log`, exit 1: 4 failed, 37 passed.
+Only the four new omission assertions fail, on rendered fallback text instead of null:
+- `request report: reopened all sheet omits fallback detail with leftAsWritten`
+- `request report: reopened instructions sheet omits fallback detail with leftAsWritten`
+- `request report: right panel Now for all omits fallback detail with leftAsWritten`
+- `request report: right panel Now for instructions omits fallback detail with leftAsWritten`
+All four new no-left positive controls pass; there are no setup or runtime failures.
+
+App tsc and touched-test ESLint pass; logs:
+`tmp-logs/request-report-designer-check-2-tsc.log` and
+`tmp-logs/request-report-designer-check-2-eslint.log`.
+`git diff --check` passes. Only the two test files and this notes file changed.
+No network, git write command, non-test app edit, server, e2e execution or full check was run.
+E2e execution and the implementation remain for the coordinator's next dispatch.
+
+## Fix round 2
+
+Moved fallback omission into the existing runDetail mechanism in run-words.ts.
+A finished report with leftAsWritten rows and no composed detail now returns an empty string.
+Home, the reopened sheet and right-panel Now therefore share the same rule.
+Composed detail, nothingReady detail, no-left fallback, and replay filing copy remain unchanged.
+No new strings, renderer, source behavior or report policy were added.
+Offline references and the existing runDetail mechanism above were reused; no network was used.
+
+removed: Home-only showDetail predicate and its comparison against fallback copy.
+removed: unconditional fallback when runDetail has leftAsWritten rows and no composed detail.
+tests changed: none.
+
+Before the fix, the requested component command reproduced the four sheet/Now omission reds.
+Log: tmp-logs/fix-round-2-red.log.
+After the fix, those four assertions pass, with one existing test-query failure in both suites:
+`request report: all with filings retains Home replay and status bar replay`.
+At request-report-hidden.test.tsx:120, queryByText(runDetail(run)) now queries an empty string,
+which matches multiple empty DOM elements and throws TestingLibraryElementError.
+The fixture contains leftAsWritten and no composed detail, so the empty runDetail is required
+by this round's ruling. No production workaround or test edit was made to evade that failure.
+The test owner must repair that query before the component/features gates can be green.
+
+Requested checks:
+- Component tests: exit 1; tmp-logs/fix-round-2-components.log (only the query failure above).
+- `pnpm exec vitest run src/features --maxWorkers=2`: exit 1;
+  tmp-logs/fix-round-2-features.log (only the same query failure).
+- `pnpm exec tsc -p tsconfig.app.json --noEmit`: pass; tmp-logs/fix-round-2-tsc-app.log.
+- ESLint on Home.tsx and run-words.ts: pass; tmp-logs/fix-round-2-eslint.log.
+- `git diff --check`: pass, including the appended notes; no test file has a working-tree diff.
+
+Only Home.tsx, run-words.ts and this appended section were edited in this round.
+No tests, network, git writes, commits, server, full check or e2e execution.
+The coordinator retains the packet's remaining gates and designer verification.
