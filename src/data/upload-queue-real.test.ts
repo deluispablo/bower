@@ -15,7 +15,7 @@ import { DriveHttp } from './drive/drive-http';
 import { makeOnce } from './spine/write-once';
 import type * as WriteOnce from './spine/write-once';
 import { createUploadQueue, type AddUpload, type UploadQueue } from './upload-queue';
-import { indexedDbUploadStore, type PendingUpload, type UploadStore } from './upload-store';
+import { indexedDbUploadStore, type UploadStore } from './upload-store';
 import { sha256 } from './vault/hashes';
 
 // The write-once home as it is, watched: an upload's id must be reserved through it (TL-P4-17 addendum 1).
@@ -269,9 +269,10 @@ describe('the upload queue on the real Drive client', () => {
     let keptAt: { fileId: string; ops: string[] } | null = null;
     const watched: UploadStore = {
       ...real,
-      save: async (r: PendingUpload) => {
+      save: async (...args) => {
+        const [r] = args;
         if (keptAt === null && r.fileId !== null) keptAt = { fileId: r.fileId, ops: env.drive.opsFrom(0) };
-        return real.save(r);
+        return real.save(...args);
       },
     };
     const lost = env.drive.loseReplyAt(UNIT);

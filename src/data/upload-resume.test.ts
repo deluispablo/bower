@@ -6,7 +6,7 @@ import type { NewPile, Pile } from './types';
 import * as queueModule from './upload-queue';
 import type { LocksLike, UploadQueue, UploadQueueDeps } from './upload-queue';
 import * as storeModule from './upload-store';
-import type { PendingUpload, UploadStore } from './upload-store';
+import type { UploadStore } from './upload-store';
 import * as vaultModule from './vault/drive-vault';
 import type { DriveVault } from './vault/drive-vault';
 import { sha256 } from './vault/hashes';
@@ -151,10 +151,10 @@ async function committedControl(): Promise<void> {
   const entered = barrier();
   const commit = barrier();
   const hold = holdFirst(env, 4);
-  const p = page(env, { ...real, add: async (record, body) => {
+  const p = page(env, { ...real, add: async (...args) => {
     entered.open();
     await commit.wait;
-    await real.add(record, body);
+    await real.add(...args);
   } });
   let accepted = false;
   try {
@@ -234,13 +234,14 @@ async function reloadCase(count: number, offset: number, staleOffset: boolean): 
     await hold.reached;
     const record = (await first.store.list(ACCOUNT, env.root)).find((record) => record.memberKey === pile.items[0]?.id);
     expect(record).toMatchObject({ confirmed: offset, session: expect.any(String), fileId: expect.any(String) });
+    const generation = await first.store.captureForgetVersion(present(record));
     const reserved = present(present(record).fileId);
     first.queue.stop();
     first.vault.dispose();
     hold.open();
     await first.queue.idle();
     await first.vault.settled();
-    if (staleOffset) await first.store.save({ ...present(record), confirmed: 0 });
+    if (staleOffset) await first.store.save({ ...present(record), confirmed: 0 }, generation);
     const from = env.drive.resumableCalls.length;
     second = page(env);
     await second.vault.piles();
@@ -719,10 +720,10 @@ it('upload-resume-after-reload: save waits for committed bytes across generated 
     const entered = barrier();
     const commit = barrier();
     const hold = holdFirst(env, 4);
-    const p = page(env, { ...real, add: async (record: PendingUpload, body: Blob) => {
+    const p = page(env, { ...real, add: async (...args) => {
       entered.open();
       await commit.wait;
-      await real.add(record, body);
+      await real.add(...args);
     } });
     let accepted = false;
     try {

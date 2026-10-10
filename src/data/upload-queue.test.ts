@@ -105,6 +105,7 @@ function brokenStore(env: Env, failing: Partial<Record<keyof UploadStore, boolea
   const real = indexedDbUploadStore(env.idb);
   const broken = (name: string) => () => Promise.reject(new Error(`IndexedDB ${name} failed`));
   return {
+    captureForgetVersion: real.captureForgetVersion,
     list: failing.list ? broken('list') : real.list,
     add: failing.add ? broken('add') : real.add,
     save: failing.save ? broken('save') : real.save,
@@ -664,7 +665,7 @@ describe('uploads survive a reload without a second file', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const store = indexedDbUploadStore(env.idb);
     let saves = 0;
-    const firstSaveFails: UploadStore = { ...store, save: (r) => (++saves === 1 ? Promise.reject(new Error('IndexedDB save failed')) : store.save(r)) };
+    const firstSaveFails: UploadStore = { ...store, save: (...args) => (++saves === 1 ? Promise.reject(new Error('IndexedDB save failed')) : store.save(...args)) };
     env.drive.beforeChunk = (call) => {
       if (call.start === 8) env.drive.loseNextReply();
     };
