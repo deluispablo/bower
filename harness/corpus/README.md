@@ -28,6 +28,9 @@ Made-up cases for the capabilities C04 to C11, C13 and C15 (Alex, Larkspur Lane,
 | c05-merge-answer-no | C05 | scripted | new (scripted intent replies through the planner) |
 | c06-clipping-compared | C06 | model | bench:1-job-offer-clipping, adapted (made-up company; the original is in bench-1-job-offer-clipping) |
 | c06-offer-and-listing-linked | C06 | scripted | p2-journey:C06 |
+| c06-stored-project-connection | C06 | model | new (C06 preparation; scripted intent proof pending) |
+| c06-shared-name-unrelated | C06 | model | new (C06 preparation; scripted intent proof pending) |
+| c06-two-sources-attributed | C06 | model | new (C06 preparation; scripted intent proof pending) |
 | c07-answer-yes | C07 | scripted | p2-journey:C07 (the answer run) |
 | c07-rent-disagrees | C07 | scripted | p2-journey:C07 (a words-only pile) |
 | c08-compare-flats | C08 | scripted | p2-journey:C08 |
