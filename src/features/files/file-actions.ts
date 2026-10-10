@@ -76,7 +76,7 @@ export function useFileActions() {
           return e instanceof BowerError ? (e.applied?.path ?? null) : null;
         }
       },
-      /** `quiet`: a thing just made gets its own word ("New note in …"), not a rename one. */
+      /** `quiet`: a thing just made gets its own word ("New folder in …"), not a rename one. */
       async rename(path: string, name: string, opts: { quiet?: boolean; onPartial?: () => void } = {}): Promise<string | null> {
         try {
           const folder = findNode(await vault.tree(), path)?.type === 'folder';
@@ -128,9 +128,9 @@ export function useFileActions() {
           report(e, 'The folder was not made. Try again.');
         }
       },
-      async create(folder: string, type: 'note' | 'folder'): Promise<void> {
+      async create(folder: string): Promise<void> {
         try {
-          const path = await vault.create(folder, type);
+          const path = await vault.create(folder, 'folder');
           useUi.getState().openAll([...ancestors(path)]);
           // The new thing gets its name in place; the selection stays, so New folder twice makes two siblings.
           useUi.getState().setJustMade(path);

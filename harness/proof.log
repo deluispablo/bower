@@ -540,3 +540,7 @@ c5-css-tokens	bd9d2a2e8021e208	2026-10-10	known-green: red proven before the fix
 d-v2-24a	390b7947b25acc87	2026-10-10	red (fixed in 4209d72f)
 landing-csp	ee2f2a45b4cda374	2026-10-10	red (fixed in 781f7fc1)
 create-named	4cbf86070cdbeda0	2026-10-10	red (fixed in cf04e6ae)
+weak-tests	225fa5e0c65cf549	2026-10-10	known-green: behaviour unchanged; its old tests were removed with New note (TL-P4-35); the verify now names surviving or new tests that pass after c5-remove-new-note
+v2-name-sheet	b5c008c7d937a526	2026-10-10	known-green: behaviour unchanged; its old tests were removed with New note (TL-P4-35); the verify now names surviving or new tests that pass after c5-remove-new-note
+c4-e2e-sync	91f635d31f4a1e8b	2026-10-10	known-green: behaviour unchanged; its old tests were removed with New note (TL-P4-35); the verify now names surviving or new tests that pass after c5-remove-new-note
+c5-remove-new-note	5555460dc7c8a571	2026-10-10	known-green: red 3cc13c38 failed before fix 9040d9bf; the revert no longer applies after the create-named merge

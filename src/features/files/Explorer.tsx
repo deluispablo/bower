@@ -8,7 +8,7 @@ import { displayName, findNode, isRoot, parentOf, thingName, visibleRows, type S
 import type { TreeNode } from '@/data/types';
 import { countThings, folderCount } from '@/data/piles';
 import { ancestors, useUi } from '@/app/ui-store';
-import { crumbs, decodeSplat, paraColor, routeFor } from '@/app/paths';
+import { crumbs, decodeSplat, paraColor } from '@/app/paths';
 import { IconButton } from '@/ui/Button';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { menuCls } from '@/ui/menu';
@@ -81,12 +81,10 @@ export function Explorer({ variant }: Props) {
   const act = useFileActions();
   const binOrAsk = useBinOrAsk();
   const routePath = useRoutePath();
-  const goTo = useNavigate();
-  /** A brand-new note, once named, opens; both say where they were made. */
-  const welcomeNew = (path: string, type: TreeNode['type']): void => {
+  /** A new folder says where it was made once named. */
+  const welcomeNew = (path: string): void => {
     const folder = parentOf(path);
-    toast(`${type === 'folder' ? 'New folder' : 'New note'} in ${folder ? crumbs(folder) : 'your Bower folder'}`);
-    if (type === 'file') goTo(routeFor({ path, type }));
+    toast(`New folder in ${folder ? crumbs(folder) : 'your Bower folder'}`);
   };
   const [focus, setFocus] = useState<string | null>(null);
   const [kb, setKb] = useState(false);
@@ -142,7 +140,7 @@ export function Explorer({ variant }: Props) {
 
   const nodeAt = (path: string | null): TreeNode | null => (path ? findNode(roots, path) : null);
 
-  /** Where New note and New folder put things: the selected folder, else the open note's, else Resources. */
+  /** Where New folder puts things: the selected folder, else the open note's, else Resources. */
   const targetFolder = (): string => {
     const n = nodeAt(ui.selected) ?? nodeAt(routePath);
     const f = !n ? '' : n.type === 'folder' ? n.path : parentOf(n.path);
@@ -393,14 +391,14 @@ export function Explorer({ variant }: Props) {
               ui.setRenaming(null);
               const made = ui.justMade === node.path;
               if (name === null && made && typed === null) {
-                // Escape on a brand-new note or folder: it was never wanted.
+                // Escape on a brand-new folder: it was never wanted.
                 ui.setJustMade(null);
                 await act.discard(node.path);
               } else if (name === null || (how === 'blur' && name === draft)) {
                 // Escape, or clicking away from a name already refused: cancel, quietly.
                 ui.setJustMade(null);
                 setDraft(null);
-                if (made && typed !== null) welcomeNew(node.path, node.type);
+                if (made && typed !== null) welcomeNew(node.path);
               } else {
                 let partial = false;
                 const to = await act.rename(node.path, name, { quiet: made, onPartial: () => { partial = true; } });
@@ -408,8 +406,7 @@ export function Explorer({ variant }: Props) {
                   setFocus(to);
                   ui.setJustMade(null);
                   setDraft(null);
-                  if (made && !partial) welcomeNew(to, node.type);
-                  else if (made && node.type === 'file') goTo(routeFor({ path: to, type: node.type }));
+                  if (made && !partial) welcomeNew(to);
                 } else if (how === 'enter') {
                   // Refused on Enter: back in the box with what you typed.
                   setDraft(name);
@@ -431,10 +428,7 @@ export function Explorer({ variant }: Props) {
 
   const header = (
     <div className={s.nav}>
-      <IconButton small label="New note" onClick={() => void act.create(targetFolder(), 'note')}>
-        <Icon name="newNote" size={18} />
-      </IconButton>
-      <IconButton small label="New folder" onClick={() => void act.create(targetFolder(), 'folder')}>
+      <IconButton small label="New folder" onClick={() => void act.create(targetFolder())}>
         <Icon name="newFolder" size={18} />
       </IconButton>
       <Dropdown.Root>
@@ -603,8 +597,7 @@ export function useNodeMenu(node: TreeNode) {
   }
   if (folder) {
     items.push({ key: 'view', label: 'Open as a list or table', icon: 'table', run: () => act.open(node) });
-    items.push({ key: 'note', label: 'New note', icon: 'newNote', run: () => void act.create(node.path, 'note') });
-    items.push({ key: 'folder', label: 'New folder', icon: 'newFolder', run: () => void act.create(node.path, 'folder') });
+    items.push({ key: 'folder', label: 'New folder', icon: 'newFolder', run: () => void act.create(node.path) });
     items.push('sep');
   } else {
     items.push({ key: 'tab', label: 'Open in a new tab', icon: 'add', run: () => act.open(node, true) });
@@ -670,10 +663,9 @@ export function NodeMenuButton({ node }: { node: TreeNode }) {
   );
 }
 
-/** A page has no tree row to type a name in: Rename, New note and New folder ask in a sheet. */
+/** A page has no tree row to type a name in: Rename and New folder ask in a sheet. */
 const ASKS: Record<string, (node: TreeNode) => void> = {
   rename: (node) => useUi.getState().setNaming({ rename: node.path }),
-  note: (node) => useUi.getState().setNaming({ folder: node.path, type: 'note' }),
   folder: (node) => useUi.getState().setNaming({ folder: node.path, type: 'folder' }),
 };
 
