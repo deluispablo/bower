@@ -6699,7 +6699,7 @@
     "id": "tree-name-first",
     "task": "p4-consolidation",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "The tree's New folder (row menu and header) opens the name box before any await and creates once with the name, so no typed letter is lost (DEFECTS new-folder-first-letters, ruling (b), entry 2).",
     "steps": [

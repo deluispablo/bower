@@ -546,3 +546,4 @@ c4-e2e-sync	91f635d31f4a1e8b	2026-10-10	known-green: behaviour unchanged; its ol
 c5-remove-new-note	5555460dc7c8a571	2026-10-10	known-green: red 3cc13c38 failed before fix 9040d9bf; the revert no longer applies after the create-named merge
 namesheet-names	754299b18fc0201f	2026-10-10	known-green: behaviour unchanged; old tests removed with New note (TL-P4-35); verify names surviving tests
 b1b-ports	23fb6da3e7a70d06	2026-10-10	known-green: reds proven failing by the red session (54 missing-port assertions) and each fix round's reds; the fix spans four commits, so a single revert does not isolate it
+tree-name-first	fa44ac674a547625	2026-10-10	known-green: red cda855c6 failed before the fix (red session; the immediate-typing guard failed 9-11/20 on the base, 20/20 green after); later merges touched the same lines
