@@ -157,17 +157,17 @@ export type RateLimitName = 'AUTH_RATE_LIMIT' | 'DRIVE_RATE_LIMIT' | 'VAULT_RATE
 export const RATE_LIMIT_RETRY_AFTER_SECONDS = 60;
 
 /**
- * The client address as Cloudflare reports it (`cf-connecting-ip`), else the
- * first `x-forwarded-for` entry, else `unknown` (every such request then
- * shares one bucket).
+ * The client address as Cloudflare reports it (`cf-connecting-ip`), else
+ * `unknown` (every such request then shares one bucket). A forwarding header
+ * is never a key: the caller chooses it, so rotating it would escape the limit.
  */
 export function clientIp<E extends AppEnv>(c: Context<E>): string {
   const cf = c.req.header('cf-connecting-ip')?.trim();
-  if (cf !== undefined && cf !== '') return cf;
-  const forwarded = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
-  if (forwarded !== undefined && forwarded !== '') return forwarded;
-  return 'unknown';
+  return cf !== undefined && cf !== '' ? cf : 'unknown';
 }
+
+/** The binding is missing or threw: the limit cannot be checked, so the request is refused (a 500). */
+export class RateLimitUnavailable extends Error {}
 
 /**
  * Counts one request in `name`'s bucket for `key` and refuses it with a 429
@@ -178,9 +178,8 @@ export function clientIp<E extends AppEnv>(c: Context<E>): string {
  * count is per Cloudflare location and eventually consistent, so a limit is
  * approximate, never exact.
  *
- * A binding that is absent is skipped unless `RATE_LIMIT_REQUIRED` is
- * `"true"` (production), when the request fails closed with a 500. A binding
- * that throws is a 500 too, never a silent pass.
+ * A binding that is absent or throws fails closed with a 500, never a silent
+ * pass; every environment declares them (`ratelimits` in `wrangler.jsonc`).
  */
 export async function enforceRateLimit(
   c: Context<AppEnv>,
@@ -190,16 +189,13 @@ export async function enforceRateLimit(
   const env = c.get('env');
   const binding = env[name];
   if (binding === undefined) {
-    if (env.RATE_LIMIT_REQUIRED === 'true') {
-      throw new HttpError(500, 'internal', undefined, { cause: new Error(`missing ${name}`) });
-    }
-    return;
+    throw new HttpError(500, 'internal', undefined, { cause: new RateLimitUnavailable(`missing ${name}`) });
   }
   let allowed: boolean;
   try {
     allowed = (await binding.limit({ key })).success;
   } catch (err) {
-    throw new HttpError(500, 'internal', undefined, { cause: err });
+    throw new HttpError(500, 'internal', undefined, { cause: new RateLimitUnavailable(`${name} failed`, { cause: err }) });
   }
   if (!allowed) {
     c.header('Retry-After', String(RATE_LIMIT_RETRY_AFTER_SECONDS));

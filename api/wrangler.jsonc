@@ -11,7 +11,7 @@
   },
   "kv_namespaces": [{ "binding": "BOWER_KV", "id": "6969d46bffdb4b1e90d068f84235fbec" }],
   // Per-minute limits (TL-P3-14): Cloudflare's Rate Limiting binding, per location and eventually consistent.
-  // Namespace ids are made up for this repo; each binding needs its own. Production sets RATE_LIMIT_REQUIRED to "true".
+  // Namespace ids are made up for this repo; each binding needs its own. A missing binding fails closed.
   "ratelimits": [
     { "name": "AUTH_RATE_LIMIT", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } },
     { "name": "DRIVE_RATE_LIMIT", "namespace_id": "1002", "simple": { "limit": 30, "period": 60 } },

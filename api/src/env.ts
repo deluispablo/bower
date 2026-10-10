@@ -17,8 +17,6 @@ export interface Env {
   AUTH_RATE_LIMIT?: RateLimit;
   DRIVE_RATE_LIMIT?: RateLimit;
   VAULT_RATE_LIMIT?: RateLimit;
-  /** `"true"` in production config: a missing rate-limit binding then fails closed. */
-  RATE_LIMIT_REQUIRED?: string;
 
   // Secrets (wrangler secret put / .dev.vars) — no defaults, ever.
   /** A secret on the staging Worker (the lead's setup), though it travels in every sign-in address. */
@@ -246,7 +244,6 @@ export function assertEnv(env: unknown): Env {
     AUTH_RATE_LIMIT: rateLimiter(source.AUTH_RATE_LIMIT),
     DRIVE_RATE_LIMIT: rateLimiter(source.DRIVE_RATE_LIMIT),
     VAULT_RATE_LIMIT: rateLimiter(source.VAULT_RATE_LIMIT),
-    RATE_LIMIT_REQUIRED: typeof source.RATE_LIMIT_REQUIRED === 'string' ? source.RATE_LIMIT_REQUIRED : undefined,
 
     DAILY_RUN_LIMIT: dailyRunLimit,
     DEFAULT_MAX_TURNS: defaultMaxTurns,
