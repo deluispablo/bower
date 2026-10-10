@@ -440,3 +440,10 @@ c5-remove-new-note,implementer (fix 2),codex,gpt-5-codex,high,1,1428666,1416689,
 c05-person-notes,implementer,codex,gpt-5-codex,high,1,8634816,8591448,,8348416,43368,,,,33 reds green; blocked on keep-one ruling,2026-10-10
 c05-person-notes,red-owner (storage),codex,gpt-5-codex,medium,1,297246,295528,,267776,1718,,,,storage stub,2026-10-10
 c05-person-notes,red-owner (link rewrite),codex,gpt-5-codex,medium,1,182791,180873,,151168,1918,,,,TL-P4-32 addendum 1,2026-10-10
+c05-person-notes,implementer (round 2),codex,gpt-5-codex,high,1,480855,477621,,436992,3234,,,,link rewrite re-admitted,2026-10-10
+c05-person-notes,adversarial (pass 1),codex,gpt-5-codex,high,1,1474447,1464381,,1331200,10066,,,,BLOCK: 1 Blocking 8 Important,2026-10-10
+c05-person-notes,red (fix round 1),codex,gpt-5-codex,high,1,2651718,2636455,,2510336,15263,,,,9 reds,2026-10-10
+create-named,implementer,codex,gpt-5-codex,medium,1,313360,308857,,272768,4503,,,,red + fix,2026-10-10
+create-named,reviewer,claude,bower-reviewer,,1,31102,,,,,,5,0.3,PASS (P4-81),2026-10-10
+landing-csp,reviewer,claude,bower-reviewer,,1,35648,,,,,,9,0.4,PASS (P4-80),2026-10-10
+new-folder-first-letters,diagnoser,claude,bower-diagnoser,,1,90596,,,,,,43,5.8,diagnosed,2026-10-10
