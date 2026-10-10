@@ -1,0 +1,52 @@
+{
+  "files": {
+    "present": [
+      "Projects/Job hunt/Ferrowick offer.txt",
+      "Projects/Job hunt/Ferrowick offer.md",
+      ".bower/proposals/*.json"
+    ],
+    "absent": [
+      "Inbox/*",
+      ".bower/views.json"
+    ]
+  },
+  "unchanged": [
+    "Rules.md",
+    ".bower/type-table.json",
+    "Resources/Alex plans.md"
+  ],
+  "notes": [
+    {
+      "path": "Projects/Job hunt/Job hunt.md",
+      "contains": [
+        "No view has been installed."
+      ],
+      "excludes": [
+        "window.fetch",
+        "sensitive_preference"
+      ]
+    }
+  ],
+  "report": {
+    "filed": 1,
+    "created": [
+      "Projects/Job hunt/Ferrowick offer.md"
+    ],
+    "questionsExactly": 0
+  },
+  "runs": [
+    {
+      "report": {
+        "filed": 1,
+        "questionsExactly": 1
+      }
+    },
+    {
+      "report": {
+        "filed": 0,
+        "created": [],
+        "questionsExactly": 0
+      }
+    }
+  ]
+}

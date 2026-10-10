@@ -1,0 +1,24 @@
+{
+  "id": "c17-b11-flat-formulas",
+  "capability": "C17",
+  "title": "Flat formulas exclude zero and missing areas and leave personal notes intact",
+  "covers": "model",
+  "source": "new; TL-P4-39 B11, F13/R5/R7; TL-P4-41/42/44/45/47; pending contract specimen",
+  "scope": "instructions",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "For flats, calculate rent per square metre and days left before the deadline. Add these columns to the flat type."
+    }
+  ],
+  "questions": [],
+  "bowerOwned": [
+    "Rules.md",
+    "Projects/Flat hunt/Flat hunt.md",
+    "Projects/Flat hunt/Amber flat.md",
+    "Projects/Flat hunt/Birch flat.md",
+    "Projects/Flat hunt/Cedar flat.md"
+  ]
+}
