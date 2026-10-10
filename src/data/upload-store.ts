@@ -49,9 +49,14 @@ export interface UploadStore {
   save: (record: PendingUpload) => Promise<void>;
   body: (record: PendingUpload) => Promise<Blob | null>;
   remove: (record: PendingUpload) => Promise<void>;
+  /** Retires this connection's staging through the queue's awaited cleanup, rather than rejecting it. */
+  retireStaging?: (records: readonly PendingUpload[]) => void;
   /** Removes the account's things in one folder, or in every folder. */
   clear: (account: string, folder?: string) => Promise<void>;
 }
+
+/** A different tab forgot the account while its bytes were being staged. */
+export class UploadForgottenError extends Error {}
 
 export function uploadKey(r: Pick<PendingUpload, 'account' | 'folder' | 'declarationId' | 'memberKey' | 'sha256'>): UploadKey {
   return [r.account, r.folder, r.declarationId, r.memberKey, r.sha256];
@@ -67,10 +72,19 @@ const DB_VERSION = 1;
 const PENDING = 'pending';
 const BYTES = 'bytes';
 const KEY_PATH = ['account', 'folder', 'declarationId', 'memberKey', 'sha256'];
+// A string key cannot collide with a member's array key; no new object store or schema is needed.
+const forgetKey = (account: string): string => `forgotten:${account}`;
+const forgetVersion = (value: unknown): number => typeof value === 'number' ? value : 0;
 
 interface StoredBytes {
   buffer: ArrayBuffer;
   type: string;
+}
+
+interface StagedBytes {
+  record: PendingUpload;
+  retiring: boolean;
+  retiringVersion: number | null;
 }
 
 function request<T>(r: IDBRequest<T>): Promise<T> {
@@ -118,6 +132,7 @@ function under(key: IDBValidKey, prefix: string[]): boolean {
  */
 export function indexedDbUploadStore(factory: IDBFactory | null = typeof indexedDB === 'undefined' ? null : indexedDB, name = DB_NAME): UploadStore {
   let opening: Promise<IDBDatabase> | null = null;
+  const staging = new Set<StagedBytes>();
 
   /** Forgets the connection, so the next call opens a fresh one. */
   function forget(): void {
@@ -166,7 +181,7 @@ export function indexedDbUploadStore(factory: IDBFactory | null = typeof indexed
     try {
       return await op((await db()).transaction([PENDING, BYTES], mode));
     } catch (e) {
-      if (factory === null || isQuota(e)) throw e;
+      if (factory === null || isQuota(e) || e instanceof UploadForgottenError) throw e;
       console.error(e);
       forget();
       return op((await db()).transaction([PENDING, BYTES], mode));
@@ -175,6 +190,19 @@ export function indexedDbUploadStore(factory: IDBFactory | null = typeof indexed
 
   function clearWhere(prefix: string[]): Promise<void> {
     return run('readwrite', async (t) => {
+      const account = prefix[0];
+      if (prefix.length === 1 && account !== undefined) {
+        const bytes = t.objectStore(BYTES);
+        const key = forgetKey(account);
+        const marker = bytes.get(key);
+        marker.onsuccess = () => {
+          const version = forgetVersion(marker.result) + 1;
+          bytes.put(version, key);
+          for (const stage of staging) {
+            if (stage.record.account === account && stage.retiring) stage.retiringVersion = version;
+          }
+        };
+      }
       for (const storeName of [PENDING, BYTES]) {
         const store = t.objectStore(storeName);
         const keys = store.getAllKeys();
@@ -212,13 +240,40 @@ export function indexedDbUploadStore(factory: IDBFactory | null = typeof indexed
       }),
 
     async add(record, body) {
-      // Read before the transaction: IndexedDB closes one that waits on other work.
-      const stored: StoredBytes = { buffer: await body.arrayBuffer(), type: body.type };
-      await run('readwrite', async (t) => {
-        t.objectStore(PENDING).put({ ...record, appProperties: { ...record.appProperties } });
-        t.objectStore(BYTES).put(stored, uploadKey(record));
-        await finished(t);
-      });
+      const stage: StagedBytes = { record, retiring: false, retiringVersion: null };
+      staging.add(stage);
+      try {
+        const version = await run('readonly', async (t) => {
+          const [marker] = await Promise.all([
+            request<unknown>(t.objectStore(BYTES).get(forgetKey(record.account))), finished(t),
+          ]);
+          return forgetVersion(marker);
+        });
+        // Read before the write transaction: IndexedDB closes one that waits on other work.
+        const stored: StoredBytes = { buffer: await body.arrayBuffer(), type: body.type };
+        await run('readwrite', async (t) => {
+          let forgotten = false;
+          const bytes = t.objectStore(BYTES);
+          const marker = bytes.get(forgetKey(record.account));
+          marker.onsuccess = () => {
+            const current = forgetVersion(marker.result);
+            forgotten = current !== version && current !== stage.retiringVersion;
+            if (forgotten) return;
+            t.objectStore(PENDING).put({ ...record, appProperties: { ...record.appProperties } });
+            bytes.put(stored, uploadKey(record));
+          };
+          await finished(t);
+          if (forgotten) throw new UploadForgottenError('The account was forgotten while staging.');
+        });
+      } finally {
+        staging.delete(stage);
+      }
+    },
+
+    retireStaging(records) {
+      // Only the queue that awaits these writes and their removal can take this cleanup path.
+      // Other connections still fail the shared transactional fence before writing either part.
+      for (const stage of staging) if (records.includes(stage.record)) stage.retiring = true;
     },
 
     save: (record) =>

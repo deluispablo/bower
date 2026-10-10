@@ -24,7 +24,7 @@ import { arrivedFile, RESUMABLE_CHUNK_BYTES, sendResumable, type ResumableClient
 import { isOpenElsewhere, OPEN_ELSEWHERE_TEXT } from './session';
 import { heldAs, makeOnce } from './spine/write-once';
 import { BowerError } from './types';
-import { uploadId, type PendingUpload, type UploadStore } from './upload-store';
+import { UploadForgottenError, uploadId, type PendingUpload, type UploadStore } from './upload-store';
 import { sha256 } from './vault/hashes';
 
 /** The largest file the queue copies onto the device. */
@@ -249,6 +249,13 @@ function itemOf(record: PendingUpload, durable: boolean): QueueItem {
   };
 }
 
+interface StagingUpload {
+  account: string;
+  done: Promise<void>;
+  record?: PendingUpload;
+  failure?: { cause: unknown };
+}
+
 export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
   const { drive, store, locks, storage, bus } = deps;
   const chunkSize = deps.chunkSize ?? RESUMABLE_CHUNK_BYTES;
@@ -269,6 +276,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
   const tombstones = new Set<string>();
   /** Account forgets fence adds too, including ones from a previous folder/start. */
   const forgotten = new Map<string, number>();
+  const staging = new Set<StagingUpload>();
   let persisted: 'granted' | 'refused' | 'unknown' = 'unknown';
   let told: string | null = null;
   /** Bumped by every `pump` call, so a run that is ending sees a call it would miss. */
@@ -291,14 +299,32 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     return [...entries.values()].filter((e) => e.item.state === 'waiting' || e.item.state === 'uploading').length;
   }
 
-  /** A delayed device transaction may commit after clear; remove that old intent before returning. */
-  async function keepBytes(record: PendingUpload, body: Blob, version: number): Promise<void> {
+  /** Track the entire add, including reselection and room checks before the store starts staging. */
+  async function stageUpload<T>(account: string, work: (stage: StagingUpload) => Promise<T>): Promise<T> {
+    let finish = (): void => undefined;
+    const stage: StagingUpload = {
+      account, done: new Promise<void>((resolve) => { finish = resolve; }),
+    };
+    staging.add(stage);
+    try { return await work(stage); }
+    finally { staging.delete(stage); finish(); }
+  }
+
+  /** A locally retired transaction may commit after clear; forgetting awaits this removal too. */
+  async function keepBytes(record: PendingUpload, body: Blob, version: number, stage: StagingUpload): Promise<void> {
     if ((forgotten.get(record.account) ?? 0) !== version) return;
+    let failure: { cause: unknown } | undefined;
     try {
       await store.add(record, body);
-    } finally {
-      if ((forgotten.get(record.account) ?? 0) !== version) await store.remove(record);
+    } catch (cause) {
+      // expected: defer rethrow until the late-write cleanup has finished.
+      failure = { cause };
     }
+    if ((forgotten.get(record.account) ?? 0) !== version) {
+      try { await store.remove(record); }
+      catch (cause) { stage.failure = { cause }; throw cause; }
+    }
+    if (failure) throw failure.cause;
   }
 
   /** Picks up what another tab, or an earlier visit, left on the device. */
@@ -719,8 +745,9 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
    * reserved file id and session: Drive never gets a second file. The bytes
    * are kept on the device again when they can be.
    */
-  async function chosenAgain(entry: Entry, body: Blob, gen: number): Promise<QueueItem> {
+  async function chosenAgain(entry: Entry, body: Blob, gen: number, stage: StagingUpload): Promise<QueueItem> {
     const { item, record } = entry;
+    stage.record = record;
     const version = forgotten.get(record.account) ?? 0;
     if (body.size !== record.size || (await sha256(body)) !== record.sha256) {
       console.error('Bytes chosen again differ from the pending upload');
@@ -729,8 +756,12 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     let durable = await fits(record.size);
     if (durable) {
       try {
-        await keepBytes(record, body, version);
+        await keepBytes(record, body, version, stage);
       } catch (error) {
+        if (error instanceof UploadForgottenError) {
+          console.error(error);
+          throw new BowerError('unknown', stoppedText(record.appProperties[KIND_PROP]));
+        }
         if (!isQuotaError(error)) console.error(error);
         durable = false;
       }
@@ -791,62 +822,69 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
         console.error('An upload was added before the queue started');
         throw new BowerError('unknown', NOT_SENT_TEXT);
       }
-      const record: PendingUpload = {
-        account: s.account,
-        folder: s.folder,
-        declarationId: input.declarationId,
-        memberKey: input.memberKey,
-        sha256: input.sha256,
-        pileId: input.pileId,
-        parentId: input.parentId,
-        name: input.name,
-        type: input.type ?? input.body.type,
-        size: input.body.size,
-        appProperties: { ...input.appProperties },
-        fileId: null,
-        session: null,
-        confirmed: 0,
-        addedAt: now().toISOString(),
-      };
-      const id = uploadId(record);
-      const known = entries.get(id);
-      // Its bytes are gone from this device: the same file, chosen again, takes their place.
-      if (known?.item.gone) return chosenAgain(known, input.body, gen);
-      if (known) return { ...known.item };
-      if (!persistAsked) {
-        persistAsked = true;
-        void storage?.persist?.().then(
-          (granted) => {
-            // Refused: the browser may clear what is kept under storage pressure.
-            persisted = granted ? 'granted' : 'refused';
-            notify();
-          },
-          (error: unknown) => console.error(error),
-        );
-      }
-      let durable = await fits(record.size);
-      if (durable) {
-        try {
-          await keepBytes(record, input.body, version);
-        } catch (error) {
-          if (!isQuotaError(error)) console.error(error);
-          durable = false;
+      return stageUpload(s.account, async (stage) => {
+        const record: PendingUpload = {
+          account: s.account,
+          folder: s.folder,
+          declarationId: input.declarationId,
+          memberKey: input.memberKey,
+          sha256: input.sha256,
+          pileId: input.pileId,
+          parentId: input.parentId,
+          name: input.name,
+          type: input.type ?? input.body.type,
+          size: input.body.size,
+          appProperties: { ...input.appProperties },
+          fileId: null,
+          session: null,
+          confirmed: 0,
+          addedAt: now().toISOString(),
+        };
+        stage.record = record;
+        const id = uploadId(record);
+        const known = entries.get(id);
+        // Its bytes are gone from this device: the same file, chosen again, takes their place.
+        if (known?.item.gone) return chosenAgain(known, input.body, gen, stage);
+        if (known) return { ...known.item };
+        if (!persistAsked) {
+          persistAsked = true;
+          void storage?.persist?.().then(
+            (granted) => {
+              // Refused: the browser may clear what is kept under storage pressure.
+              persisted = granted ? 'granted' : 'refused';
+              notify();
+            },
+            (error: unknown) => console.error(error),
+          );
         }
-      }
-      if (gen !== generation) {
-        console.error('The upload queue stopped while a file was added');
-        throw new BowerError('unknown', stoppedText(input.appProperties?.[KIND_PROP]));
-      }
-      const again = entries.get(id);
-      if (again) return { ...again.item };
-      // Added again on purpose: no longer a discarded one.
-      tombstones.delete(id);
-      const entry: Entry = { item: itemOf(record, durable), record, body: input.body, kept: durable };
-      entries.set(id, entry);
-      notify();
-      if (durable && role !== 'owner') bus?.post();
-      void pump();
-      return { ...entry.item };
+        let durable = await fits(record.size);
+        if (durable) {
+          try {
+            await keepBytes(record, input.body, version, stage);
+          } catch (error) {
+            if (error instanceof UploadForgottenError) {
+              console.error(error);
+              throw new BowerError('unknown', stoppedText(input.appProperties?.[KIND_PROP]));
+            }
+            if (!isQuotaError(error)) console.error(error);
+            durable = false;
+          }
+        }
+        if (gen !== generation) {
+          console.error('The upload queue stopped while a file was added');
+          throw new BowerError('unknown', stoppedText(input.appProperties?.[KIND_PROP]));
+        }
+        const again = entries.get(id);
+        if (again) return { ...again.item };
+        // Added again on purpose: no longer a discarded one.
+        tombstones.delete(id);
+        const entry: Entry = { item: itemOf(record, durable), record, body: input.body, kept: durable };
+        entries.set(id, entry);
+        notify();
+        if (durable && role !== 'owner') bus?.post();
+        void pump();
+        return { ...entry.item };
+      });
     },
 
     items: () => [...entries.values()].map((e) => ({ ...e.item })),
@@ -910,12 +948,21 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     },
 
     async forgetAccount(account) {
+      const pending = [...staging].filter((stage) => stage.account === account);
       forgotten.set(account, (forgotten.get(account) ?? 0) + 1);
       if (scope?.account === account) stop();
+      const failures: unknown[] = [];
       try {
+        store.retireStaging?.(pending.flatMap((stage) => stage.record ? [stage.record] : []));
         await store.clear(account);
       } catch (error) {
-        console.error(error);
+        // expected: report and reject below, after every outstanding staging cleanup settles.
+        failures.push(error);
+      }
+      await Promise.all(pending.map((stage) => stage.done));
+      for (const stage of pending) if (stage.failure) failures.push(stage.failure.cause);
+      if (failures.length > 0) {
+        for (const error of failures) console.error(error);
         throw new BowerError('unknown', 'Signing out did not finish. Try again.');
       }
     },

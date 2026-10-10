@@ -450,3 +450,110 @@ No production edits, network, Git writes, check or e2e. Research inherited from 
 IndexedDB transaction-lifecycle reference above; no new mechanism introduced.
 Evidence: `/private/tmp/upload-sign-out-red-repair-evidence/red-repair.log`.
 Output was redirected to tmp-logs and that directory was deleted before delivery.
+
+
+## Fix round 1
+
+This fresh implementation follows the committed barrier repair and implements both pass-1
+adversarial findings. Owned production homes: src/data/upload-queue.ts and
+src/data/upload-store.ts. No tests, live/session code, shared harness records, dependency files,
+or stored member format changed. No network, new store, new dependency or Git-writing command.
+The coordinator owns commits.
+
+### Research and design
+
+Inherited official references, checked against local code without fetching them:
+
+- [IndexedDB transaction lifecycle](https://www.w3.org/TR/IndexedDB/#transaction-lifecycle):
+  capture the account's forget generation before reading the Blob; check it inside the same
+  read/write transaction that commits metadata and bytes. An account-wide clear increments the
+  marker in its purge transaction. A transaction ordered before clear gets purged; one ordered
+  after clear cannot commit an old generation from another connection.
+- [Drive resumable uploads](https://developers.google.com/workspace/drive/api/guides/manage-uploads#resumable):
+  existing session URI, status query, 308 range and expiry behavior remain in the original adapter.
+  This round changes neither transport nor reserved identity.
+
+The account marker is a string-keyed number in the existing bytes object store. Member keys
+remain arrays, so marker keys cannot collide or appear in pending listings, member body reads,
+or account/folder deletion prefixes. No database upgrade or second persistence mechanism.
+Absent markers read as generation zero, preserving existing version-1 records and connections.
+
+Queue staging is tracked from add admission through reselection, room checks, the store write
+and late removal. forgetAccount fences/stops immediately, snapshots this account's outstanding
+adds, clears all its folders, then awaits those operations and their cleanup even if clear fails.
+Cleanup failures retain their original cause for the forget caller, which logs details and throws
+the existing BowerError sentence, `Signing out did not finish. Try again.`. Expected stopped-add
+errors are not confused with purge failures. Store fence rejection becomes a logged BowerError
+for the add; it cannot become an in-memory fallback that continues sending forgotten bytes.
+
+The store's optional retireStaging hook matches the exact in-memory record objects whose queue
+operations forgetting will await. It grants no permission to another queue sharing a connection.
+That staging may finish under that connection's specific clear generation
+solely for the queue's awaited removal; it cannot outlive successful forgetting. This preserves
+the committed cleanup red's real late-write/removal path, including its injected refusal. Other
+connections have no retirement permission and fail the shared marker check before writing.
+A subsequent clear in another connection changes the generation again and rejects even a local
+retired write. Direct clear callers never grant retirement. Normal storage fallback, disposal,
+folder scoping, other-account bytes, journal outbox and pendingCount behavior are unchanged.
+
+### Red evidence
+
+Before the fix, upload-sign-out.test.ts has exactly the three reviewed assertion failures:
+
+- fix 1.1 cross-tab staging (sign-out), at src/data/upload-sign-out.test.ts:371;
+- fix 1.1 cross-tab staging (auth expiry), at src/data/upload-sign-out.test.ts:371;
+- fix 1.2 staging cleanup (remove fails: true), at src/data/upload-sign-out.test.ts:428.
+
+Both cross-tab cases restore one record and all 15 bytes after the real clear. The refused late
+remove makes sign-out return success. The other seven tests pass, including the repaired property,
+successful cleanup control and direct pendingCount coverage. No contradiction in these committed
+reds; the previous barrier contradiction was resolved in the preceding red-only repair.
+
+### Verification
+
+All output is under tmp-logs; only failures and aggregate results are read. Explicit offline
+pnpm configuration prevents dependency auto-install. Full packet gates use the shared lock and
+an offline wrapper for nested pnpm calls. Final command results and evidence follow below.
+
+- Baseline reds: 10 tests, seven pass, three intended assertions fail (fix-round-1-red.log).
+- Final exact reds: all 10 pass (fix-round-1-reds-final.log).
+- Final requested `pnpm exec vitest run src/data --maxWorkers=2`: 79 files, 4,170/4,170 pass
+  (fix-round-1-data-final.log). Every committed bound and assertion remains intact.
+- Final `pnpm exec tsc -p tsconfig.app.json --noEmit`: pass (fix-round-1-tsc-app-final.log).
+- `pnpm exec tsc -p tsconfig.node.json --noEmit`: pass (fix-round-1-tsc-node.log).
+- Final eslint on src/data/upload-queue.ts and src/data/upload-store.ts: pass
+  (fix-round-1-eslint-final.log).
+- The full check's first run finds two syntax-scanner catch failures at upload-queue.ts:319,957.
+  Both catches defer their original cause until awaited cleanup completes, then log/reject or
+  rethrow. Added `expected:` comments explaining that deferred handling; no logic or test changed.
+  The architecture test and all 10 exact reds pass together afterward (fix-round-1-architecture-reds.log).
+- Demo and fake packet e2e: both exit 1 before any test runs. Vite cannot listen on ::1:6042
+  (`listen EPERM`), as in the prior implementation environment. No permission bypass attempted.
+- Full-check final result follows below. No contradicting test in the whole requested data suite;
+  the socket-dependent server test is an environment restriction, not a policy contradiction.
+
+removed: 71 original production lines replaced/reindented (queue 63; store 8); no behavior or test removed.
+removed: no store, stored member field, journal line, Drive file or test assertion removed.
+tests changed: none
+
+- Final `pnpm check`: exit 1; 166 app test files, 165 pass; 5,515/5,516 app tests pass.
+  The only failed test is src/e2e-port.test.ts:37, `a server from another worktree is never reused`:
+  the sandbox refuses its local listener on 127.0.0.1 (`listen EPERM`), causing its unchanged
+  five-second timeout and the same unhandled listener error. Architecture and every data test
+  pass. App lint/typecheck pass; subsequent check stages do not run after this app-unit failure.
+  No green check mark is claimed. The full check and demo/fake e2e need a socket-permitted
+  environment for entry closure; the requested fix-round tests, types and touched-file lint pass.
+- Final git diff --check: pass. Test-file diff: empty. Only both owned production homes and this
+  notes file are touched. Git was used only for read-only status/diff; no commit, branch switch,
+  index mutation, integration or push command was issued.
+
+Evidence: `/private/tmp/upload-sign-out-fix1-final-evidence/`.
+Final logs: fix-round-1-red.log, fix-round-1-reds-final.log, fix-round-1-data-final.log,
+fix-round-1-tsc-app-final.log, fix-round-1-tsc-node.log, fix-round-1-eslint-final.log,
+fix-round-1-architecture-reds.log, fix-round-1-check-final.log, fix-round-1-e2e-demo.log,
+fix-round-1-e2e-fake.log. Earlier diagnostic runs are retained there as well.
+All commands settled before evidence was copied; tmp-logs and its offline wrapper were deleted.
+Implementation is ready for independent review; full socket-dependent gates remain blocked.
+
+tests changed: none
+removed: 71 original production lines replaced/reindented; 0 test lines removed.
