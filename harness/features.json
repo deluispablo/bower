@@ -5300,7 +5300,7 @@
     "id": "c2-pile-records",
     "task": "p4-b",
     "category": "fix",
-    "passes": true,
+    "passes": false,
     "what": "One pile-records query: declarations and dispositions stamped with their pile id; Home reads only the records of piles in the inbox; questions() no longer waits for piles(); the latency fake gains leftover declarations. Home's calls do not grow with earlier runs.",
     "steps": [
       "Stamp declarations and dispositions with their pile id; unstamped older records keep working.",
@@ -5308,8 +5308,8 @@
       "questions() independent of piles().",
       "live-shape.ts gains leftover declarations."
     ],
-    "verify": "pnpm vitest run -t \"Home makes the same Drive calls after 10 and after 500 earlier runs|an empty inbox reads no old pile records|a file binned inside a binned folder counts as removed|an unstamped pile record is not read\"",
-    "note": "TL-P4-16 (b), defect home-empty-48s; replaces home-reads-bounded (TL-P4-13 addendum 2). Stage 2, after c2-read-cache. Lead ruling (main 7c9c8e8, after c2-fake-parity): named test \"a file binned inside a binned folder counts as removed\" (Drive marks a trashed folder's children trashed; the lookup must not depend on finding the parent). Lead ruling (main 787f0cd): no backfill and no legacy read branch (unstamped records exist only in staging test folders); fix round drops the unstamped branch; questions() change accepted. Live smokes use a fresh synthetic folder."
+    "verify": "pnpm vitest run -t \"Home makes the same Drive calls after 10 and after 500 earlier runs|an empty inbox reads no stamped pile record, only the current unstamped one|a file binned inside a binned folder counts as removed|an unstamped pile record is not read\"",
+    "note": "TL-P4-16 (b), defect home-empty-48s; replaces home-reads-bounded (TL-P4-13 addendum 2). Stage 2, after c2-read-cache. Lead ruling (main 7c9c8e8, after c2-fake-parity): named test \"a file binned inside a binned folder counts as removed\" (Drive marks a trashed folder's children trashed; the lookup must not depend on finding the parent). Lead ruling (main 787f0cd): no backfill and no legacy read branch (unstamped records exist only in staging test folders); fix round drops the unstamped branch; questions() change accepted. Live smokes use a fresh synthetic folder. Reopened 2026-10-10: orphan-pile-count-data renamed the empty-inbox golden per TL-P4-53 addendum 5 (no stamped record is read; the current unstamped declaration is); re-close known-green after it integrates."
   },
   {
     "id": "c1-digest",
@@ -7003,8 +7003,9 @@
     "steps": [
       "The prep's E3 reds pass through the vault source with fake Drive."
     ],
-    "verify": "",
-    "note": "C02 E3. Escalated; after upload-resume-after-reload. Packet 2026-10-10-orphan-pile-count-data-packet.md. implementer: codex."
+    "verify": "pnpm exec vitest run src/data/orphan-pile-count.test.ts -t \"orphan-pile-count-data\"",
+    "note": "C02 E3. Escalated; after upload-resume-after-reload. Packet 2026-10-10-orphan-pile-count-data-packet.md. implementer: codex.",
+    "review": "P4-101 PASS"
   },
   {
     "id": "c02-upload-count-ui",
