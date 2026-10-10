@@ -321,3 +321,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-10: smoke-request-slow passes — no archive scan; waiting requests in changes/pending/<run id>/ read only their run; horizon from listing time (P4-96 PASS)
 - 2026-10-10: pwa-update-one-reload passes — one reload runs the deployed build before its worker installs; offline still opens (P4-97 PASS)
 - 2026-10-10: undo-fifo-seed passes — the Undo property model knows an inverse retired without sending; seed -1937975690 path 40 pinned (P4-98 PASS)
+- 2026-10-10: upload-resume-after-reload passes — files are kept on the device before saved and resume after a reload with no picker and no second file (P4-99 PASS, designer verified)

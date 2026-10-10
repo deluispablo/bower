@@ -6968,7 +6968,7 @@
     "id": "upload-resume-after-reload",
     "task": "p4-c02",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "Files added to a pile are kept on the device before Bower says saved, and resume after a reload with no picker and no second file (TL-P4-53).",
     "steps": [
