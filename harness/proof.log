@@ -529,3 +529,11 @@ c4-create-resume	d77c326d47f1b182	2026-10-10	red (fixed in 56f529fd)
 c4-undo-compensate	a22105fcc6f50036	2026-10-10	known-green: reds by Opus and red-owning Codex sessions each failed before their fix (8d714c20, 0e6fde89, 8da56079, the addendum-11 reds); fixes across Opus, round 2, re-plan and last round (c9811c7e, 4953b1ae, d20eeaa3, gate fixes 59965218, 313d8dac, 958971be); merged 23d76507; designer verified 2026-10-10
 c4-undo-confirm-in-place	7e82f6bccd478a7a	2026-10-10	red (fixed in 20e76dc1)
 c4-create-newer-words	10a0c0413e516991	2026-10-10	red (fixed in ec30299d)
+c4-e2e-sync	cd19e8dae2e59ade	2026-10-10	known-green: flaky-timing fixes, no deterministic red (packet); proof: qa7:63 fake desktop 12/12, capabilities:210 8/8 at the branch tip; claude/p3 before: 4/12 and 1/4 failed
+folder-header-wrap	d7c0f19cb325e6a4	2026-10-10	known-green: red proven by the coordinator without the fix (2 failed on the header-height assertion); done.sh misclassifies custom-message Playwright asserts (defect redkind-custom-message)
+c5-codex-run	d12e2384c9f51926	2026-10-10	red (fixed in d7162b35)
+p4-corpus-answers	92df71b52da21291	2026-10-10	known-green: the driver lives in runner/test (excluded from the code set-aside), so done.sh cannot revert it; the reds failed before the driver change (Codex /tmp/pca-red.log: prior runs missing, changed bytes passed), recorded in the entry notes
+shell-page-column	82cf5b43fc42295c	2026-10-10	known-green: red proven by the coordinator before the fix: e2e/shell-page-column.spec.ts 12 failed without 44799444, 12/12 with it (later rounds 16/16 demo and fake); the fix no longer reverts cleanly after rounds 1-2
+c5-test-margin	850e333e84251423	2026-10-10	known-green: tests only: no product code to set aside; every split part under 1 s at idle with cases unchanged (notes)
+c5-empty-note-help	d24fb50b1a0a33ea	2026-10-10	known-green: red proven: without c1f845cc the component test fails on getByText of the new copy (TestingLibraryElementError, /tmp/enh-done.log) and the e2e 4 failed (/tmp/enh-red.log); done.sh misclassifies the query error (defect redkind-custom-message)
+c5-css-tokens	bd9d2a2e8021e208	2026-10-10	known-green: red proven before the fix: the guard failed on exactly the two --muted uses (/tmp/csst-red.log, recorded in the notes); the fix no longer reverts cleanly after the merge with c5-empty-note-help

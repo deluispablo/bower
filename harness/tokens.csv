@@ -381,3 +381,55 @@ c4-create-newer-words,adversarial,codex,gpt-5-codex,medium,1,176346,174897,,1349
 c4-create-newer-words,reviewer,claude,bower-reviewer,,1,35145,,,,,,6,0.5,PASS (P4-70),2026-10-10
 d-v2-24a,implementer,claude,bower-escalated,,9,143162,,,,,,44,20.6,escalated round 2 done,2026-10-10
 d-v2-24a,reviewer,codex,gpt-5-codex,high,5,789695,784896,,692480,4799,,,,2 Important (escalated round 2),2026-10-10
+c4-e2e-sync,implementer,codex,gpt-5-codex,low,1,212776,211365,,192640,1411,,,,done,2026-10-10
+c4-e2e-sync,reviewer,claude,bower-reviewer,,1,28894,,,,,,5,0.3,PASS (P4-71),2026-10-10
+d-v2-24a,property-red,codex,gpt-5-codex,high,4,2448574,2425450,,2285952,23124,,,,re-plan red (addendum 7),2026-10-10
+d-v2-24a,implementer,claude,bower-escalated,,10,173173,,,,,,34,9.1,re-plan blend; blocked on 2 old tests,2026-10-10
+d-v2-24a,red-owner (a8 tests),codex,gpt-5-codex,high,1,517335,512336,,466432,4999,,,,two old tests to addendum 7 (12ec932b),2026-10-10
+d-v2-24a,adversarial (a7),codex,gpt-5-codex,high,1,944754,937648,,853632,7106,,,,3 Important,2026-10-10
+folder-header-wrap,implementer,codex,gpt-5-codex,medium,1,336939,333037,,303616,3902,,,,delivered (red+fix+notes),2026-10-10
+folder-header-wrap,reviewer,claude,bower-reviewer,,1,26796,,,,,,2,0.2,PASS (P4-72),2026-10-10
+d-v2-24a,red (fix round 2),codex,gpt-5-codex,high,1,1092811,1082937,,1022464,9874,,,,3 reds (settle-blend),2026-10-10
+c05-person-notes,contract sign-off,codex,gpt-5-codex,medium,1,959713,955024,,857600,4689,,,,9 Important,2026-10-10
+c5-codex-run,implementer,codex,gpt-5-codex,high,1,1342888,1314976,,1247104,27912,,,,delivered,2026-10-10
+d-v2-24a,implementer (fix round 2),codex,gpt-5-codex,high,1,828552,821762,,764672,6790,,,,3 findings fixed,2026-10-10
+p4-c06-prep,drafter,codex,gpt-5-codex,medium,1,873175,863581,,786176,9594,,,,3 cases + doc,2026-10-10
+c5-codex-run,reviewer,claude,bower-reviewer,,1,36835,,,,,,5,0.7,PASS (P4-73),2026-10-10
+p4-c07-prep,drafter,codex,gpt-5-codex,medium,1,964301,952171,,874112,12130,,,,3 cases + doc,2026-10-10
+p4-corpus-answers,implementer,codex,gpt-5-codex,high,1,2738493,2714883,,2602496,23610,,,,delivered,2026-10-10
+p4-c11-prep,drafter,codex,gpt-5-codex,medium,1,1516829,1505021,,1398016,11808,,,,3 cases + doc,2026-10-10
+shell-page-column,implementer,codex,gpt-5-codex,high,1,2130647,2104851,,2013056,25796,,,,delivered,2026-10-10
+p4-corpus-answers,reviewer,claude,bower-reviewer,,1,49637,,,,,,7,0.6,BLOCK (P4-74: corpus loop scores with pure score),2026-10-10
+shell-page-column,reviewer,claude,bower-reviewer,,1,41553,,,,,,5,0.4,BLOCK (P4-75: Sheet still not gated on placement),2026-10-10
+d-v2-24a,adversarial (round 2),codex,gpt-5-codex,high,1,1091840,1082619,,984576,9221,,,,1 Important,2026-10-10
+landing-csp,implementer,codex,gpt-5-codex,high,1,1012001,998901,,923008,13100,,,,delivered (packet error corrected),2026-10-10
+p4-corpus-answers,implementer (fix round 1),codex,gpt-5-codex,high,2,488962,480008,,427264,8954,,,,P4-74 findings fixed,2026-10-10
+p4-c08-prep,drafter,codex,gpt-5-codex,medium,1,950252,937583,,851072,12669,,,,3 cases + doc,2026-10-10
+p4-corpus-answers,reviewer (delta),claude,bower-reviewer,,2,38655,,,,,,6,0.4,PASS (P4-74b),2026-10-10
+shell-page-column,implementer (fix round 1),codex,gpt-5-codex,high,2,879893,867790,,808832,12103,,,,P4-75 findings fixed,2026-10-10
+p4-c09-prep,drafter,codex,gpt-5-codex,medium,1,1061004,1051265,,892160,9739,,,,3 cases + doc,2026-10-10
+p4-c10-prep,drafter,codex,gpt-5-codex,medium,1,1011256,999928,,910976,11328,,,,3 cases + doc,2026-10-10
+shell-page-column,implementer (fix round 2),codex,gpt-5-codex,medium,3,519941,514085,,463232,5856,,,,ruled nits + drag guard,2026-10-10
+d-v2-24a,red (round 3),codex,gpt-5-codex,high,1,2095904,2079522,,1999104,16382,,,,resize + one apply() site,2026-10-10
+c5-test-margin,implementer,codex,gpt-5-codex,high,1,1056487,1043640,,976384,12847,,,,delivered,2026-10-10
+shell-page-column,reviewer (delta),claude,bower-reviewer,,2,35410,,,,,,3,0.3,PASS (P4-75b),2026-10-10
+c5-test-margin,reviewer,claude,bower-reviewer,,1,45211,,,,,,6,0.5,BLOCK (P4-76: undo parts lose fc failure report),2026-10-10
+c5-test-margin,reviewer (delta),claude,bower-reviewer,,2,34273,,,,,,4,0.3,PASS (P4-76b),2026-10-10
+c5-empty-note-help,reviewer,claude,bower-reviewer,,1,32195,,,,,,3,0.2,PASS (P4-77),2026-10-10
+c5-empty-note-help,implementer,codex,gpt-5-codex,medium,1,927466,920482,,869248,6984,,,,delivered,2026-10-10
+c5-test-margin,implementer (fix round 1),codex,gpt-5-codex,high,2,971588,957282,,896384,14306,,,,P4-76 findings fixed,2026-10-10
+d-v2-24a,implementer (round 3),codex,gpt-5-codex,high,1,2122694,2111442,,1987328,11252,,,,one apply() site,2026-10-10
+d-v2-24a,adversarial (round 3),codex,gpt-5-codex,high,1,1167476,1157320,,1075072,10156,,,,1 Important (sparkle),2026-10-10
+c5-css-tokens,implementer,codex,gpt-5-codex,medium,1,343890,340514,,313728,3376,,,,delivered,2026-10-10
+c5-css-tokens,reviewer,claude,bower-reviewer,,1,28224,,,,,,5,0.3,PASS (P4-78),2026-10-10
+d-v2-24a,red (round 4),codex,gpt-5-codex,high,1,1035548,1026170,,971264,9378,,,,sparkle + animated classes,2026-10-10
+d-v2-24a,implementer (round 4),codex,gpt-5-codex,high,1,888720,885356,,847744,3364,,,,sparkle gated,2026-10-10
+d-v2-24a,adversarial (round 4),codex,gpt-5-codex,high,1,1257817,1250663,,1162240,7154,,,,0 blocking after ruling (size minor),2026-10-10
+d-v2-24a,reviewer,claude,bower-reviewer,,1,39809,,,,,,8,2.2,PASS (P4-79),2026-10-10
+p4-b123-prep,drafter,codex,gpt-5-codex,high,1,2438316,2415785,,2259840,22531,,,,4 cases + doc,2026-10-10
+p4-b56-prep,drafter,codex,gpt-5-codex,high,1,2531691,2510506,,2381952,21185,,,,4 cases + doc,2026-10-10
+d-v2-24a,red (rule),codex,gpt-5-codex,,1,765446,759580,,710400,5866,,,,rule timing red (fa9ea5ef),2026-10-10
+d-v2-24a,implementer (rule),codex,gpt-5-codex,,1,704090,699611,,660224,4479,,,,reverted: coordinator prompt error,2026-10-10
+d-v2-24a,implementer (rule),codex,gpt-5-codex,,2,501122,498233,,468224,2889,,,,rule fix (4209d72f),2026-10-10
+c5-remove-new-note,implementer,codex,gpt-5-codex,,1,1531528,1520169,,1418496,11359,,,,red + fix,2026-10-10
+c5-remove-new-note,implementer (fix 1),codex,gpt-5-codex,,1,540469,536568,,477056,3901,,,,axe scope + New folder test,2026-10-10

@@ -1,0 +1,22 @@
+{
+  "id": "c07-same-period-rent",
+  "capability": "C07",
+  "title": "Two sources give different rents for the same period",
+  "covers": "model",
+  "source": "new (C07 preparation; scripted intent proof pending lead review)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "File this with the related note and record what it changes.",
+      "files": [
+        "Later listing.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Projects/Flat hunt/Larkspur Lane flat.md"
+  ]
+}

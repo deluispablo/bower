@@ -6504,5 +6504,170 @@
     "note": "DEFECTS undo-confirm-not-in-place (lead 2026-10-10). Codex, then a Claude review and the designer. Packet 2026-10-10-c4-undo-confirm-in-place-packet.md.",
     "review": "P4-69 PASS",
     "design": "verified"
+  },
+  {
+    "id": "c4-e2e-sync",
+    "task": "p4-consolidation",
+    "category": "fix",
+    "passes": true,
+    "what": "Two e2e specs wait for the state they act on: qa7:63 types after the name box is focused; capabilities:210 navigates in the app instead of reloading before the answer run is admitted (defects qa7-63-flaky, capabilities-210-flaky).",
+    "steps": [
+      "The new-folder name is typed into the name box, never the tree.",
+      "An answered row shows after Write it without a reload race."
+    ],
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/qa7.spec.ts e2e/capabilities.spec.ts --project=desktop -g \"New note in an empty folder asks for a name, then opens the note|write it shows the state written, re-asks on a clash and settles as an answered row\"",
+    "note": "Lead 2026-10-10 (stage-4 close): sync fixes. Codex, then a Claude review and repeat runs. Packet 2026-10-10-c4-e2e-sync-packet.md.",
+    "review": "P4-71 PASS"
+  },
+  {
+    "id": "c5-codex-run",
+    "task": "p4-throughput",
+    "category": "harness",
+    "passes": true,
+    "ui": null,
+    "what": "harness/codex-run.sh runs a Codex delivery in a worktree, appends its tokens row, commits per its plan with implementer: codex, refuses guarded paths, secrets and addresses, runs check and the named e2e under the lock, and writes one result file (TL-P4-31 ruling 4).",
+    "steps": [
+      "Refuses the main checkout, a codex/* branch and a dirty tree.",
+      "Commits a two-commit plan in order and gates it."
+    ],
+    "verify": "pnpm exec vitest run src/codex-run.test.ts -t \"refuses the main checkout, a codex branch and a dirty tree|commits a two-commit plan in order with implementer: codex|refuses guarded paths, secrets and addresses\"",
+    "note": "TL-P4-31 ruling 4. Codex, then a Claude review. Packet 2026-10-10-c5-codex-run-packet.md. implementer: codex.",
+    "review": "P4-73 PASS"
+  },
+  {
+    "id": "folder-header-wrap",
+    "task": "p4-defects",
+    "category": "fix",
+    "passes": true,
+    "ui": true,
+    "what": "The folder table headers stay on one line: .table th gets white-space: nowrap in folder.module.css, so columns keep their natural width and the table scrolls sideways (DEFECTS folder-table-header-wrap).",
+    "steps": [
+      "On Flat hunt at 375 and 1280 every header is one line.",
+      "Bedrooms and Commute are no narrower than their labels; the table scrolls sideways at 375."
+    ],
+    "verify": "pnpm exec playwright test e2e/folder-table.spec.ts -g \"folder table headers stay on one line and the table scrolls sideways\"",
+    "note": "DEFECTS folder-table-header-wrap (lead ruling, owner-reported). Codex, then a Claude review and the designer. Packet 2026-10-10-folder-header-wrap-packet.md. implementer: codex. Designer verified ce1eb3cd: 43 px headers at 375-1440, table scrolls sideways.",
+    "design": "verified",
+    "review": "P4-72 PASS"
+  },
+  {
+    "id": "shell-page-column",
+    "task": "p4-defects",
+    "category": "fix",
+    "passes": true,
+    "ui": true,
+    "what": "The desktop page column never gets narrower than 560 px: docked(shellWidth, prefs) folds the right panel first, then the side panel; a folded panel opens as an overlay through Sheet from its button; prefs are never rewritten; dragging is clamped (DEFECTS shell-page-column-squeeze).",
+    "steps": [
+      "At 900 to 1440 px with both panels open the page column is at least 560 px.",
+      "A folded panel opens as an overlay and Escape returns focus to its button."
+    ],
+    "verify": "pnpm exec vitest run src/app/DesktopShell.test.tsx -t \"docked keeps the page column at least 560 px\"",
+    "note": "DEFECTS shell-page-column-squeeze (lead ruling, designer spec). Codex, then a Claude review and the designer. Packet 2026-10-10-shell-page-column-packet.md. implementer: codex. Designer verified 44799444; a short re-check follows fix rounds 1-2. Designer re-verified fc5c4cf1 (overlay motion, first render, resizer).",
+    "review": "P4-75 BLOCK; P4-75b PASS",
+    "design": "verified"
+  },
+  {
+    "id": "p4-corpus-answers",
+    "task": "p4-semantic",
+    "category": "harness",
+    "passes": true,
+    "ui": null,
+    "what": "The corpus driver answers questions through the real answer path between presses, asserts per run, compares protected byte ranges and Drive properties directly, and tells a replay of the original request from a new tidy-up (TL-P4-32 finding 7).",
+    "steps": [
+      "A Write it answer between presses is consumed once by the next run.",
+      "A protected range check fails on one changed byte."
+    ],
+    "verify": "pnpm -C runner exec vitest run test/corpus-driver.test.ts -t \"answers a pair question through the answer path between presses|a protected range fails on one changed byte\"",
+    "note": "TL-P4-32 finding 7; before the C05 reds. Codex, then a Claude review. Packet 2026-10-10-p4-corpus-answers-packet.md. implementer: codex.",
+    "review": "P4-74 BLOCK; P4-74b PASS"
+  },
+  {
+    "id": "landing-csp",
+    "task": "p4-production",
+    "category": "security",
+    "passes": false,
+    "ui": true,
+    "what": "The landing runs without unsafe-eval: fix-landing.mjs precompiles the exported page script, --check catches an export that still needs eval, and the /landing/* CSP drops unsafe-eval (P4-E landing-csp).",
+    "steps": [
+      "fix-landing.mjs turns a fixture export into one with no runtime eval.",
+      "The landing loads under its CSP with no violation."
+    ],
+    "verify": "pnpm exec vitest run src/landing-csp.test.ts -t \"fix-landing removes the runtime eval from an export|the landing CSP has no unsafe-eval\"",
+    "note": "P4-E (TL-P4-31 ruling 2). Codex, then a Claude review and the designer. Packet 2026-10-10-landing-csp-packet.md. implementer: codex."
+  },
+  {
+    "id": "c5-test-margin",
+    "task": "p4-throughput",
+    "category": "test",
+    "passes": true,
+    "ui": null,
+    "what": "The three tests that time out under CPU contention (engine startle, undo-compensate property batches 1-2, codex-run guarded paths) are split so each part runs in at most 1 s at idle, with every case, run count, assertion, bound and timeout unchanged (TL-P4-31 addendum 1).",
+    "steps": [
+      "Each split part runs in at most 1 s alone at idle.",
+      "The total case count is unchanged."
+    ],
+    "verify": "pnpm exec vitest run src/bird/engine.test.ts src/data/vault/undo-compensate.property.test.ts src/codex-run.test.ts -t \"the startle settles within|compensating Undo preserves FIFO|refuses guarded paths, secrets and addresses\"",
+    "note": "TL-P4-31 addendum 1. Codex, then a Claude review. Packet 2026-10-10-c5-test-margin-packet.md. implementer: codex. Tests only: closes with --known-green.",
+    "review": "P4-76 BLOCK; P4-76b PASS"
+  },
+  {
+    "id": "c5-empty-note-help",
+    "task": "p4-polish",
+    "category": "fix",
+    "passes": true,
+    "ui": true,
+    "what": "The empty-note line says how to write in a note (Google Drive for desktop and any notes app) with the existing Open in Drive action beside it; the later-version promise is gone (TL-P4-33 addenda 1 and 2).",
+    "steps": [
+      "An empty note shows the designer copy and Open in Drive.",
+      "On a phone the row wraps and the button keeps a 44 px target."
+    ],
+    "verify": "pnpm exec vitest run src/features/note -t \"an empty note says how to write in it and offers Open in Drive\"",
+    "note": "TL-P4-33 addenda 1 and 2. Codex, then a Claude review and the designer. Packet 2026-10-10-c5-empty-note-help-packet.md. implementer: codex. Designer verified 48895273 (copy, ghost button, wrap, 44 px; dark and light).",
+    "review": "P4-77 PASS",
+    "design": "verified"
+  },
+  {
+    "id": "c5-remove-new-note",
+    "task": "p4-polish",
+    "category": "fix",
+    "passes": false,
+    "ui": true,
+    "what": "New note is removed everywhere it is offered (explorer button and row menu, folder page, its name-sheet path); New folder stays; code only it used goes (TL-P4-35).",
+    "steps": [
+      "No New note control on desktop or phone.",
+      "New folder is still offered."
+    ],
+    "verify": "pnpm exec playwright test e2e/no-new-note.spec.ts -g \"no New note control on desktop or phone\"",
+    "note": "TL-P4-35 (1). Codex after c5-empty-note-help, then a Claude review and the designer. Packet 2026-10-10-c5-remove-new-note-packet.md. implementer: codex."
+  },
+  {
+    "id": "p4-docs-md-roundtrip",
+    "task": "p4-production",
+    "category": "check",
+    "passes": false,
+    "ui": null,
+    "what": "A Bower note edited in Google Docs (native .md editing) keeps what Bower relies on: bytes Bower can parse, appProperties, ownership marks and note-edit behaviour; the result is a DEFECTS entry or a safe line (TL-P4-36).",
+    "steps": [
+      "A made-up note on staging for account B is snapshotted (bytes, appProperties, modifiedTime).",
+      "After the owner edits it in Docs, a Codex session diffs it and runs the parser and note-edit on it."
+    ],
+    "verify": "pnpm exec vitest run src/data/contracts/docs-md-roundtrip.test.ts -t \"a note edited in Google Docs\"",
+    "note": "TL-P4-36 (P4-E). The owner edits by hand; no session signs in to Google. implementer: codex."
+  },
+  {
+    "id": "c5-css-tokens",
+    "task": "p4-defects",
+    "category": "fix",
+    "passes": true,
+    "ui": true,
+    "what": "Every var() in src CSS names a defined custom property (a guard test); the two var(--muted) uses become var(--text-muted) (DEFECTS css-unknown-token).",
+    "steps": [
+      "The guard fails on any undefined var() name.",
+      "The empty-note line and the Bower waits line use --text-muted."
+    ],
+    "verify": "pnpm exec vitest run src/styles/css-tokens.test.ts -t \"in src CSS names a defined custom property\"",
+    "note": "DEFECTS css-unknown-token (lead ruling, designer). Codex, then a Claude review and the designer contrast check (verified 92feaf2b; re-check after merge). implementer: codex. Designer re-verified the merged box on claude/p3 b56e8ec2 (375, 1440).",
+    "review": "P4-78 PASS",
+    "design": "verified"
   }
 ]

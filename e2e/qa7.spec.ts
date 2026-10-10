@@ -66,6 +66,7 @@ test('New note in an empty folder asks for a name, then opens the note', async (
   const tree = page.getByRole('tree', { name: 'Your Bower folder' });
   await tree.getByRole('treeitem', { name: /^Resources/ }).click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'New folder' }).click();
+  await expect(tree.getByRole('textbox', { name: /^New name for / })).toBeFocused();
   await page.keyboard.type('Empty one');
   await page.keyboard.press('Enter');
   // In the app, not a fresh address: that would start the situation again.
