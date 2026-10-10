@@ -225,13 +225,12 @@ describe('the tidy-up sheet and Home focus', () => {
     const press = await screen.findByRole('button', { name: 'Tidy up 1 thing' });
     await screen.findByText(/Tidy-up finished/);
     expect(screen.queryByRole('dialog')).toBeNull();
-    // Ruling (a): an explicit reopen shows the unseen report; loading Home still never opens it automatically.
+    // The first press does what its label says: it asks, it does not show the old result.
     fireEvent.click(press);
     const sheet = await screen.findByRole('dialog');
-    expect(sheet).toHaveAccessibleName('Done. 1 thing filed');
-    expect(within(sheet).getByRole('button', { name: 'Done' })).toBeVisible();
-    expect(within(sheet).getByRole('button', { name: 'Watch what Bower did' })).toBeVisible();
-    expect(within(sheet).queryByRole('button', { name: 'Tidy up 1 thing' })).toBeNull();
+    expect(within(sheet).queryByRole('button', { name: 'Done' })).toBeNull();
+    expect(within(sheet).queryByRole('button', { name: 'Watch what Bower did' })).toBeNull();
+    expect(within(sheet).getByRole('button', { name: 'Tidy up 1 thing' })).toBeVisible();
   });
 
   it("the write it card shows every line of Bower's update", async () => {

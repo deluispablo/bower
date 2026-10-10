@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { useUi } from '@/app/ui-store';
 import { DataProvider } from '@/data/provider';
 import type { Sources } from '@/data/sources';
-import type { RunReport, RunState } from '@/data/types';
+import type { Pile, RunReport, RunState } from '@/data/types';
 import { Home } from '@/features/home/Home';
 import { loadingSources } from '@/testing/loading-sources';
 import { StatusBar } from './StatusBar';
@@ -18,13 +18,13 @@ const left = (): RunReport => ({ ...empty(), leftAsWritten: [{ name: PATH, fileI
 
 afterEach(() => { cleanup(); useUi.setState({ tidyOpen: false, replayRunId: null }); });
 
-async function open(scope: RunState['scope'], report: RunReport) {
+async function open(scope: RunState['scope'], report: RunReport, piles: Pile[] = []) {
   const base = loadingSources();
   let run: RunState = { id: 'request-run', scope, phase: 'done', requestedAt: 1000, phaseAt: 2000, finishedAt: 2000, seen: false, report };
   const initial = run;
   const listeners = new Set<() => void>();
   const markSeen = vi.fn(async () => { run = { ...run, seen: true }; listeners.forEach((cb) => cb()); });
-  const doors: Record<string, unknown> = { piles: async () => [], pilesListed: async () => null, tree: async () => [],
+  const doors: Record<string, unknown> = { piles: async () => piles, pilesListed: async () => null, tree: async () => [],
       changes: async () => [], questions: async () => [], suggestions: async () => [], uploadNotice: async () => null };
   const vault = new Proxy(base.vault, { get: (target, key) => typeof key === 'string' && key in doors ? doors[key] : Reflect.get(target, key) }) as Sources['vault'];
   const sources = { ...base, vault,
@@ -49,7 +49,7 @@ it('request report: Home shows instructions leftAsWritten with today’s words a
   const card = heading.closest('section');
   expect(card).not.toBeNull();
   if (!card) throw new Error('Missing report card');
-  expect(within(card).getByText(runDetail(run), { exact: true })).toBeVisible();
+  expect(within(card).queryByText('Everything has its place.', { exact: true })).toBeNull();
   assertLeft(card);
   expect(within(card).queryByRole('button', { name: 'Watch what Bower did' })).toBeNull();
   expect(within(card).getAllByRole('button')).toHaveLength(1);
@@ -74,11 +74,13 @@ it('request report: status bar reopens unseen instructions leftAsWritten instead
 
 it('request report: all with filings retains Home replay and status bar replay', async () => {
   const { run } = await open('all', { ...left(), filed: [{ name: 'Garden update.txt', title: 'Garden update', kind: 'other', to: 'Areas/Home' }] });
-  const heading = screen.getByRole('heading', { name: runTitle(run), level: 2 });
+  const heading = screen.getByRole('heading', { name: '1 thing filed.', level: 2 });
   const card = heading.closest('section');
   if (!card) throw new Error('Missing report card');
   assertLeft(card);
-  expect(within(card).getByText(runDetail(run), { exact: true })).toBeVisible();
+  expect(within(card).getByText('Home got 1.', { exact: true })).toBeVisible();
+  expect(within(card).queryByText(runTitle(run), { exact: true })).toBeNull();
+  expect(within(card).queryByText(runDetail(run), { exact: true })).toBeNull();
   expect(within(card).getByRole('button', { name: 'Watch what Bower did' })).toBeVisible();
   expect(within(card).getByRole('button', { name: 'Got it' })).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: /1 thing filed\. Watch what Bower did/ }));
@@ -105,4 +107,61 @@ it.each([
   expect(screen.getByRole('heading', { name: runTitle(run), level: 2 })).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: /^Last tidy-up/ }));
   expect(screen.getByRole('dialog', { name: runTitle(run) })).toBeVisible();
+});
+
+it('request report: filing with replay keeps Home got 1 detail', async () => {
+  await open('all', { ...empty(), filed: [{ name: 'Garden update.txt', title: 'Garden update', kind: 'other', to: 'Areas/Home' }] });
+  const card = screen.getByRole('button', { name: 'Got it' }).closest('section');
+  if (!card) throw new Error('Missing report card');
+  expect(within(card).getByText('Home got 1.', { exact: true })).toBeVisible();
+  expect(within(card).queryByText('Everything has its place.', { exact: true })).toBeNull();
+});
+
+it('request report: filing without replay uses runTitle and runDetail on Home', async () => {
+  const { run } = await open('instructions', { ...empty(), filed: [{ name: 'Garden update.txt', title: 'Garden update', kind: 'other', to: 'Areas/Home' }] });
+  const heading = screen.getByRole('heading', { name: 'Done. Bower read your changes', level: 2 });
+  const card = heading.closest('section');
+  if (!card) throw new Error('Missing report card');
+  expect(within(card).getByText(runDetail(run), { exact: true })).toBeVisible();
+  expect(within(card).queryByText('Home got 1.', { exact: true })).toBeNull();
+  expect(within(card).queryByRole('button', { name: 'Watch what Bower did' })).toBeNull();
+});
+
+it.each(['all', 'instructions'] as const)('request report: %s without replay omits fallback detail with leftAsWritten', async (scope) => {
+  const { run } = await open(scope, left());
+  const card = screen.getByRole('heading', { name: runTitle(run), level: 2 }).closest('section');
+  if (!card) throw new Error('Missing report card');
+  assertLeft(card);
+  expect(within(card).queryByText('Everything has its place.', { exact: true })).toBeNull();
+});
+
+it.each(['all', 'instructions'] as const)('request report: %s without leftAsWritten keeps fallback detail', async (scope) => {
+  const { run } = await open(scope, { ...empty(), created: [{ path: PATH, what: 'Made from 1 thing' }] });
+  const card = screen.getByRole('heading', { name: runTitle(run), level: 2 }).closest('section');
+  if (!card) throw new Error('Missing report card');
+  expect(within(card).getByText('Everything has its place.', { exact: true })).toBeVisible();
+});
+
+it('request report: leftAsWritten keeps a non-fallback detail on Home', async () => {
+  const { run } = await open('instructions', { ...left(), yourChanges: 1 });
+  const card = screen.getByRole('heading', { name: runTitle(run), level: 2 }).closest('section');
+  if (!card) throw new Error('Missing report card');
+  assertLeft(card);
+  expect(within(card).getByText('1 change of yours read.', { exact: true })).toBeVisible();
+});
+
+it('request report: first press asks about a new pile; Last tidy-up alone reopens the old report', async () => {
+  const pile: Pile = { id: 'ready', path: 'Inbox/Ready', text: 'Ready to file', createdAt: 3000,
+    items: [{ id: 'f', name: 'f.pdf', kind: 'pdf', origin: 'From this computer' }] };
+  const { run, markSeen } = await open('instructions', left(), [pile]);
+  fireEvent.click(screen.getByRole('button', { name: 'Tidy up 1 thing' }));
+  const ask = screen.getByRole('dialog');
+  expect(ask).toHaveAccessibleName('Tidy up 1 thing?');
+  expect(within(ask).queryByRole('list', { name: 'Left as you wrote them' })).toBeNull();
+  expect(within(ask).getByRole('button', { name: 'Tidy up 1 thing' })).toBeVisible();
+  fireEvent.click(within(ask).getByRole('button', { name: 'Not now' }));
+  expect(markSeen).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: /^Last tidy-up/ }));
+  const sheet = screen.getByRole('dialog', { name: runTitle(run) });
+  assertLeft(sheet);
 });
