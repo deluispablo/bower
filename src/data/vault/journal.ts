@@ -6,13 +6,12 @@
  * change once written, so normal reads are kept (the one read cache, by
  * id and modifiedTime); acknowledging a waiting copy always checks Drive afresh.
  */
-import type { DriveApi, DriveFile, Fence } from '../drive/drive-api';
+import type { DriveApi, DriveFile } from '../drive/drive-api';
 import { ReadCache } from '../drive/read-cache';
 import type { ChangeKind } from '../types';
 import { BowerError } from '../types';
-import { byId, Intended, isSent, landing, makeOnce, makeText, reserveFor, sentAs, updateByStamp, type Holder } from '../spine/write-once';
-import { afterNotFound, isNoAnswer, type FailureKind } from '../drive/transport';
-import { CHANGED_ELSEWHERE, checkStillAsSeen } from '../contracts/still-as-seen';
+import { Intended, isSent, makeOnce, makeText, sentAs, type Holder } from '../spine/write-once';
+import { afterNotFound, type FailureKind } from '../drive/transport';
 import type { FailedChange } from '../sources';
 
 export type { JournalExtra, JournalRecord } from '../contracts/journal-record';
@@ -30,7 +29,6 @@ export interface JournalPlace {
   reads?: ReadCache;
   /** Told about each file the journal writes or bins, so a listing cache stays true. */
   wrote?: (f: DriveFile) => void;
-  removed?: (id: string) => void;
   /** A change is kept only on this page; refresh the screen before reporting it. */
   waiting?: () => void;
   /** Drive no longer knows the changes folder it named (a 404): list the folder again before the next send. */
@@ -138,9 +136,15 @@ const isWaiting = (v: unknown): v is Waiting =>
   typeof v === 'object' && v !== null && isJournalRecord((v as Waiting).line) && (typeof (v as Waiting).reserved === 'string' || (v as Waiting).reserved === undefined) &&
   ((v as Waiting).notFound === true || (v as Waiting).notFound === undefined);
 
-function readOutbox(key: string): Waiting[] {
+function readOutbox(key: string, page?: Waiting[]): Waiting[] {
+  let raw: string | null;
+  try { raw = localStorage.getItem(key); } catch (e) {
+    console.error(e);
+    if (page !== undefined) return page;
+    throw new BowerError('unknown', 'Bower cannot read your waiting changes; keep this page open.');
+  }
   try {
-    const v: unknown = JSON.parse(localStorage.getItem(key) ?? '[]');
+    const v: unknown = JSON.parse(raw ?? '[]');
     if (!Array.isArray(v)) throw new Error('Unreadable change outbox');
     return v.map((x: unknown): Waiting => {
       // Lenient on read: an intent that does not read as one is dropped, and the line is sent as before intents were kept.
@@ -167,12 +171,13 @@ function writeOutbox(key: string, recs: Waiting[]): boolean {
 
 /** Isolated by Drive as well as folder: simulated Drives may reuse ids after a reset. */
 const volatile = new WeakMap<DriveApi, Map<string, Waiting[]>>();
+/** The same outbox mutex within this page when Web Locks are unavailable. It holds no journal state. */
+const pageLocks = new Map<string, Promise<void>>();
+type PreparedFolder = Promise<{ id: string } | { error: unknown }>;
 
 export class Journal {
   private readonly volatile: Map<string, Waiting[]>;
   private readonly reads: ReadCache;
-  /** Drive files per record id (a line written twice has two), as last read or written, for remove. */
-  private filesOf = new Map<string, DriveFile[]>();
   /** The line each intended create made while it waits, by the caller's intent (`write-once.ts`): sent again, it is that line. */
   private readonly intended = new Intended<Waiting>();
   /** Two changes in one millisecond still keep their order. */
@@ -205,25 +210,37 @@ export class Journal {
   }
 
   dispose(): void {
-    this.filesOf.clear();
     // Folder-keyed waiting records survive every session, including storage failures.
   }
 
   private waiting(key: string): Waiting[] {
-    const byId = new Map(readOutbox(key).map((r) => [r.line.id, r]));
-    for (const r of this.volatile.get(key) ?? []) byId.set(r.line.id, { ...byId.get(r.line.id), ...r });
+    const stored = readOutbox(key, this.volatile.get(key));
+    const byId = new Map(stored.map((r) => [r.line.id, r]));
+    for (const r of this.volatile.get(key) ?? []) if (!byId.has(r.line.id)) byId.set(r.line.id, r);
     return [...byId.values()];
+  }
+
+  /** A wholly unavailable store has no shared lines: the page's outbox is its one truth (addendum 10). */
+  private pageOnly(key: string): boolean {
+    if (!this.volatile.has(key)) return false;
+    try { localStorage.getItem(key); } catch (e) { console.error(e); return true; }
+    // A malformed store is still shared storage, never permission to overwrite it or send around it.
+    try { return readOutbox(key).length === 0; } catch (e) { console.error(e); return false; }
   }
 
   private keep(key: string, records: Waiting[]): boolean {
     // Memory is kept first: quota or blocked storage must never discard the current line.
     const previous = this.volatile.get(key) ?? [];
     this.volatile.set(key, records);
+    // An unreadable store must keep its bytes. Only this page's lines can be drained meanwhile.
+    try { readOutbox(key); } catch (e) { console.error(e); return false; }
     if (!writeOutbox(key, records)) {
-      // A failed removal did not take the change back; keep its memory copy too.
+      // Storage owns every line it holds; only page-only lines remain in memory after a failed keep.
       const retained = new Map(previous.map((r) => [r.line.id, r]));
       for (const r of records) retained.set(r.line.id, r);
-      this.volatile.set(key, [...retained.values()]);
+      let stored = new Set<string>();
+      try { stored = new Set(readOutbox(key).map((r) => r.line.id)); } catch (e) { console.error(e); }
+      this.volatile.set(key, [...retained.values()].filter((r) => !stored.has(r.line.id)));
       return false;
     }
     this.volatile.delete(key);
@@ -239,65 +256,51 @@ export class Journal {
    * or resetting the page can lose such a line; it is never called saved.
    */
   async record(kind: ChangeKind, what: string, extra: JournalExtra = {}, intent?: string): Promise<JournalRecord> {
-    // The same intended create sent again (a person's retry): the line kept for it, never a second one.
-    const kept = intent === undefined ? undefined : this.intended.holder(intent);
-    const rec: JournalRecord = kept?.line ?? this.newLine(kind, what, extra);
-    const line: Waiting = kept ?? { line: rec };
     // Capture the original owner before queue admission, including post-effect bookkeeping.
     const owner = await this.place.owner();
     const key = outboxKey(owner);
-    return this.serial(async () => {
+    // Folder discovery is independent of outbox ownership; separate clients can discover it concurrently.
+    // No id is reserved or journal line sent here. The locked relay alone consumes this result.
+    const folder: PreparedFolder | undefined = this.current()
+      // expected: send() rethrows this captured error into its catch, which logs it and classifies the line's outcome.
+      ? this.place.folder().then((id) => ({ id }), (error: unknown) => ({ error })) : undefined;
+    return this.serial(() => this.acrossTabs(key, async () => {
+      // Assign time in admission order, after owner resolution and under the outbox lock.
+      const kept = intent === undefined ? undefined : this.intended.holder(intent);
+      const rec = kept?.line ?? this.newLine(kind, what, extra);
+      const line: Waiting = kept ?? { line: rec };
+      let readable = true;
+      let previous = this.volatile.get(key) ?? [];
+      try { previous = this.waiting(key); } catch (e) { console.error(e); readable = false; }
       if (!this.current()) {
-        if (extra.fileId && kind !== 'rule' && kind !== 'request' && kind !== 'answer') {
-          let previous = this.volatile.get(key) ?? [];
-          let readable = true;
-          try { previous = this.waiting(key); } catch (e) { console.error(e); readable = false; }
+        if (extra.fileId && madeInDrive(kind)) {
           if (readable) this.keep(key, [...previous, line]);
           else this.volatile.set(key, [...previous, line]);
         }
         this.checkCurrent();
       }
-      // Nothing waiting (the usual case): no lock to take, so the change answers at once.
-      let readable = true;
-      try {
-        if (this.waiting(key).length) await this.acrossTabs(key, () => this.sendWaiting(key));
-      } catch (e) {
-        console.error(e);
-        readable = false;
+      // A retry already settled by a relay must not recreate its line.
+      if (kept && readable && !previous.some((r) => r.line.id === rec.id)) {
+        if (intent !== undefined) this.intended.forget(intent);
+        if (failedOf(owner).some((f) => f.id === rec.id)) throw new BowerError('unknown', refusedSentence(rec));
+        return rec;
       }
-      let w = line;
-      if (kept && intent !== undefined) {
-        const pending = this.pendingLine(key, rec.id);
-        if (pending === null) {
-          // Sent with the others meanwhile, or ended among what failed: done either way, and said so once.
-          this.intended.forget(intent);
-          if (failedOf(owner).some((f) => f.id === rec.id)) throw new BowerError('unknown', refusedSentence(rec));
-          return rec;
-        }
-        // Under the id reserved for it (`spine/write-once.ts`): found by it if an earlier try landed.
-        w = pending ?? line;
-      }
-      const sentNow = await this.send(w, key);
+      const records = previous.some((r) => r.line.id === rec.id) ? previous : [...previous, line];
+      const saved = readable && this.keep(key, records);
+      if (!readable) this.volatile.set(key, records);
+      const outcomes = saved || this.pageOnly(key) ? await this.sendWaiting(key, false, rec.id, folder) : new Map<string, Sent>();
+      const sentNow = outcomes.get(rec.id) ?? 'later';
       if (intent !== undefined) {
         if (sentNow === 'sent' || sentNow === 'refused') this.intended.forget(intent);
-        else this.intended.keep(intent, w);
+        else this.intended.keep(intent, this.pendingLine(key, rec.id) ?? line);
       }
-      if (kept && (sentNow === 'sent' || sentNow === 'refused')) this.drop(key, rec.id);
       // What the screen follows: where the thing is now, made in Drive whatever became of its line.
       const where = { path: kind === 'trash' ? null : (extra.path ?? null) };
       if (sentNow === 'refused') {
         this.checkCurrent();
-        // Told now, to the person who made it; the line no longer exists, so there is nothing to take back.
         throw new BowerError('unknown', refusedSentence(rec), madeInDrive(kind) && extra.fileId ? where : undefined);
       }
       if (sentNow !== 'sent') {
-        let previous = this.volatile.get(key) ?? [];
-        if (readable) {
-          try { previous = this.waiting(key); } catch (e) { console.error(e); readable = false; }
-        }
-        const records = previous.some((r) => r.line.id === rec.id) ? previous.map((r) => (r.line.id === rec.id ? w : r)) : [...previous, w];
-        const saved = readable ? this.keep(key, records) : false;
-        if (!readable) this.volatile.set(key, records);
         const applied = !!extra.fileId && madeInDrive(kind);
         if (!saved) {
           this.place.waiting?.();
@@ -310,7 +313,7 @@ export class Journal {
       }
       this.checkCurrent();
       return rec;
-    });
+    }, false));
   }
 
   private newLine(kind: ChangeKind, what: string, extra: JournalExtra): JournalRecord {
@@ -329,96 +332,122 @@ export class Journal {
     }
   }
 
-  /** A line that went (or ended) leaves the outbox; one that cannot be taken out is found sent by its id next time. */
-  private drop(key: string, id: string): void {
-    try {
-      this.keep(key, this.waiting(key).filter((r) => r.line.id !== id));
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
   /** Sends what waits in the outbox (before a tidy-up, back online, at start); what still cannot go stays. */
   async flush(): Promise<void> {
     const key = outboxKey(await this.place.owner());
-    return this.serial(() => this.acrossTabs(key, () => this.sendWaiting(key, true)));
+    await this.serial(() => this.acrossTabs(key, () => this.sendWaiting(key, true)));
   }
 
   /** Two tabs of this browser share one outbox: one sends it at a time (Web Locks, where the browser has them). */
-  private async acrossTabs<T>(key: string, work: () => Promise<T>): Promise<T> {
-    this.checkCurrent();
+  private acrossTabs<T>(key: string, work: () => Promise<T>, requireCurrent = true): Promise<T> {
+    if (requireCurrent) this.checkCurrent();
     const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
-    if (!locks) return work();
-    return locks.request(key, () => { this.checkCurrent(); return work(); });
+    const guarded = () => { if (requireCurrent) this.checkCurrent(); return work(); };
+    if (locks) return locks.request(key, guarded);
+    const previous = pageLocks.get(key);
+    // expected: the previous caller receives its failure; either outcome releases the lock for this work.
+    const next = previous ? previous.then(guarded, guarded) : guarded();
+    // expected: `next` reports failure to its caller; the mutex's tail only releases ownership.
+    const tail = next.then(() => undefined, () => undefined);
+    pageLocks.set(key, tail);
+    void tail.then(() => { if (pageLocks.get(key) === tail) pageLocks.delete(key); });
+    return next;
   }
 
-  private async sendWaiting(key: string, required = false): Promise<void> {
+  /**
+   * Sends the outbox in order (TL-P4-27 addendum 4 (5)): it stops at the first line neither sent nor refused, so no line
+   * goes before an earlier one, and a line refused for good leaves to the failed list and lets the rest go. Always
+   * under the lock (`acrossTabs`): ids are reserved and kept before any send, so an Undo deciding under the same lock
+   * never drops a line that may be on its way. What became of each line it tried, by id.
+   */
+  private async sendWaiting(key: string, required = false, observed?: string, folder?: PreparedFolder): Promise<Map<string, Sent>> {
     this.checkCurrent();
+    const outcomes = new Map<string, Sent>();
     const waiting = this.waiting(key);
-    if (!waiting.length) return;
-    // A line whose answer was lost may be in Drive already, archived by a run or not: never write it twice. It is sent
-    // again with the id reserved for it, and Drive refuses a second file with that id, so it is found by it. Lines with
-    // none yet get theirs from the home in one request, kept in the outbox before any is sent.
-    const bare = waiting.filter((r) => r.reserved === undefined);
-    if (bare.length) {
-      try {
-        await reserveFor(this.drive, bare);
-      } catch (e) {
-        console.error(e);
-        if (required) throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');
-        return;
+    if (!waiting.length) return outcomes;
+    const unsaved = (): Map<string, Sent> => {
+      for (const r of waiting) outcomes.set(r.line.id, 'later');
+      if (required) {
+        readOutbox(key);
+        throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');
       }
-      this.checkCurrent();
-      // Each line read again is kept as the holder the home gave its id to.
-      const held = new Map(bare.map((r) => [r.line.id, r]));
-      this.keep(key, this.waiting(key).map((r) => {
-        const h = held.get(r.line.id);
-        return r.reserved === undefined && h ? { ...r, ...h } : r;
-      }));
-    }
+      return outcomes;
+    };
+    // A stored outbox's failed keep stops this pass; wholly unavailable storage uses the page's outbox.
+    if (this.volatile.has(key) && !this.keep(key, waiting) && !this.pageOnly(key)) return unsaved();
     const sent = new Set<string>();
     const refused: FailedChange[] = [];
-    for (const r of waiting) {
+    const failed = new Set(failedOf(await this.place.owner()).map((f) => f.id));
+    for (const line of waiting) {
       this.checkCurrent();
-      const out = await this.send(r, key);
+      // Storage under this lock is authoritative, including the reserved id and first intent.
+      const r = this.waiting(key).find((r) => r.line.id === line.line.id);
+      if (!r) continue;
+      // A failed-list entry is final even if removing its outbox copy failed on an earlier pass.
+      if (failed.has(r.line.id)) {
+        sent.add(r.line.id);
+        outcomes.set(r.line.id, 'refused');
+        continue;
+      }
+      // A refused original never took effect, so its inverse is done without a send.
+      if (r.line.undoes && failed.has(r.line.undoes)) {
+        sent.add(r.line.id);
+        outcomes.set(r.line.id, 'sent');
+        continue;
+      }
+      const out = await this.send(r, key, folder);
+      folder = undefined;
+      if (r.notFound) line.notFound = true;
+      outcomes.set(r.line.id, out);
       if (out === 'sent' || out === 'refused') sent.add(r.line.id);
-      if (out === 'refused') refused.push({ id: r.line.id, what: r.line.what, sentence: refusedSentence(r.line) });
+      if (out === 'refused') {
+        failed.add(r.line.id);
+        if (r.line.id !== observed) refused.push({ id: r.line.id, what: r.line.what, sentence: refusedSentence(r.line) });
+      }
+      // Still waiting (later, or on the person): every line after it waits behind it.
+      if (out !== 'sent' && out !== 'refused') break;
     }
-    // Only what was sent, or ended as failed, leaves; anything added meanwhile stays, and a 404 met is kept with its line.
     this.checkCurrent();
-    const metNotFound = new Set(waiting.filter((r) => r.notFound).map((r) => r.line.id));
-    this.keep(key, this.waiting(key).filter((r) => !sent.has(r.line.id)).map((r) => (metNotFound.has(r.line.id) ? { ...r, notFound: true as const } : r)));
-    // Nobody waits on a line that waited: it is kept among what failed, shown once until put away, never sent again.
+    // Keep permanent refusals before removing their outbox copies: a failed removal must never cause a resend.
+    // Nobody waits on a line that waited: it is shown once until put away.
     if (refused.length) {
       const folder = await this.place.owner();
       const known = failedOf(folder);
       keepFailed(folder, [...known, ...refused.filter((f) => !known.some((k) => k.id === f.id))]);
       this.place.failed?.();
     }
-    if (required && sent.size !== waiting.length) throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');
+    // Only what was sent, or ended as failed, leaves; anything added meanwhile stays, and a 404 met is kept with its line.
+    const metNotFound = new Set(waiting.filter((r) => r.notFound).map((r) => r.line.id));
+    this.keep(key, this.waiting(key).filter((r) => !sent.has(r.line.id)).map((r) => (metNotFound.has(r.line.id) ? { ...r, notFound: true as const } : r)));
+    if (required && sent.size !== waiting.length) {
+      readOutbox(key);
+      throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');
+    }
+    return outcomes;
   }
 
   /**
    * Sends one line with the id the home keeps on it (`spine/write-once.ts`), reserved now when it has none: a lost answer
    * is found again by that id, now or on a later try, after a reload too; a refusal lets it go.
    */
-  private async send(w: Waiting, key: string): Promise<Sent> {
+  private async send(w: Waiting, key: string, folder?: PreparedFolder): Promise<Sent> {
     const rec = w.line;
     // The kind of a failed create, once it was sent (`kindOf`, told once); a failure before it is not the line's.
     const tried: { kind?: FailureKind } = {};
     try {
       this.checkCurrent();
-      const folder = await this.place.folder();
+      const prepared = await folder;
+      if (prepared && 'error' in prepared) throw prepared.error;
+      const destination = prepared?.id ?? await this.place.folder();
       this.checkCurrent();
       const text = `${JSON.stringify(rec)}\n`;
-      const f = await makeOnce(w, this.drive, sentAs(folder, `${rec.id}.json`, text), (id, sent) => {
+      const f = await makeOnce(w, this.drive, sentAs(destination, `${rec.id}.json`, text), (id, sent) => {
         // Its id and intent are on the device before anything is sent with them (a line already in the outbox).
-        this.keepHeld(key, w);
+        if (!this.keepHeld(key, w)) throw new BowerError('unknown', 'This is not safely saved; keep this page open.');
         return makeText(this.drive, this.drive, { ...sent, id }, text);
       }, (e) => (tried.kind = this.kindOf(w, e)));
       if (this.current()) {
         this.reads.wrote(f, text);
-        this.filesOf.set(rec.id, [...(this.filesOf.get(rec.id) ?? []), f]);
         this.place.wrote?.(f);
       }
       return 'sent';
@@ -440,13 +469,15 @@ export class Journal {
     }
   }
 
-  /** Keeps `w`'s id and intent on its outbox line, when the line is there; memory still holds them when storage fails. */
-  private keepHeld(key: string, w: Waiting): void {
+  /** Keeps `w`'s id and intent on its outbox line before sending; false means storage did not keep them. */
+  private keepHeld(key: string, w: Waiting): boolean {
     try {
       const all = this.waiting(key);
-      if (all.some((r) => r.line.id === w.line.id)) this.keep(key, all.map((r) => (r.line.id === w.line.id ? heldLine(r, w) : r)));
+      if (!all.some((r) => r.line.id === w.line.id)) return false;
+      return this.keep(key, all.map((r) => (r.line.id === w.line.id ? heldLine(r, w) : r))) || this.pageOnly(key);
     } catch (e) {
       console.error(e);
+      return false;
     }
   }
 
@@ -486,7 +517,6 @@ export class Journal {
     const key = outboxKey(await this.place.owner());
     const files = (await this.place.files()).filter((f) => !f.folder && f.name.endsWith('.json'));
     const byId = new Map<string, JournalRecord>();
-    const seenFiles = new Map<string, DriveFile[]>();
     // The lines are asked for together (a dozen at 300 ms each are one wait, not a dozen); each version is read once.
     const records = await Promise.all(files.map(async (f) => {
       try {
@@ -500,44 +530,31 @@ export class Journal {
       }
     }));
     this.checkCurrent();
-    files.forEach((f, i) => {
-      const rec = records[i];
-      if (!rec) return;
-      byId.set(rec.id, rec);
-      seenFiles.set(rec.id, [...(seenFiles.get(rec.id) ?? []), f]);
-    });
+    for (const rec of records) if (rec) byId.set(rec.id, rec);
     this.checkCurrent();
-    for (const [rid, ids] of seenFiles) this.filesOf.set(rid, ids);
     for (const { line } of this.waiting(key)) if (!byId.has(line.id)) byId.set(line.id, line);
     return [...byId.values()].sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
   }
 
-  /** Takes a change back (an Undo): its file goes to the Bin, or it leaves the outbox. */
-  async remove(id: string): Promise<void> {
-    const key = outboxKey(await this.place.owner());
-    return this.serial(() => this.removeNow(id, key));
-  }
-
-  private async removeNow(id: string, key: string): Promise<void> {
-    this.checkCurrent();
-    const waiting = this.waiting(key);
-    if (waiting.some((r) => r.line.id === id) && !this.keep(key, waiting.filter((r) => r.line.id !== id))) {
-      this.volatile.set(key, waiting);
-      throw new BowerError('unknown', 'Bower could not take that change back; keep this page open.');
-    }
-    if (!this.filesOf.has(id)) await this.list();
-    for (const file of this.filesOf.get(id) ?? []) {
+  /**
+   * Takes a change's line back, decided under the outbox lock (TL-P4-27 addenda 2 and 4 (3)): a line still in the outbox
+   * with no id reserved was never sent, and one on the failed list never arrived, so it is dropped ('dropped') and can
+   * never be sent; anything else may be in Drive, gone or on its way ('sent'), and the caller records the inverse
+   * forward change. The client never deletes a sent line. Storage that refuses the drop: "keep this page open".
+   */
+  async retract(id: string): Promise<'dropped' | 'sent'> {
+    const owner = await this.place.owner();
+    const key = outboxKey(owner);
+    return this.serial(() => this.acrossTabs(key, async (): Promise<'dropped' | 'sent'> => {
       this.checkCurrent();
-      // Still as listed (the one fence, `checkStillAsSeen`): moved, renamed or binned elsewhere, nothing is sent; already
-      // in the Bin by this very Undo (its answer lost), it landed. Then sent once with its stamp: a lost answer is found
-      // again by reading the file by its id. The same check is the write's `fence` (`WriteOptions`), which the transport
-      // runs again right before a resend after a rate limit or a refreshed token (TL-P4-24 finding 1).
-      const check = (): Promise<DriveFile | null> => checkStillAsSeen({ id: file.id, name: file.name, parents: file.parents }, () => byId(this.drive, file.id), CHANGED_ELSEWHERE, { unanswered: isNoAnswer, landed: landing(file, 'bin') });
-      const fence: Fence = async () => void (await check());
-      const landed = await check();
-      if (!landed) await updateByStamp(this.drive, file, 'bin', (op) => this.drive.trash(file.id, op, { fence }));
-      this.place.removed?.(file.id);
-    }
-    this.filesOf.delete(id);
+      if (failedOf(owner).some((f) => f.id === id)) return 'dropped';
+      const waiting = this.waiting(key);
+      const w = waiting.find((r) => r.line.id === id);
+      if (!w || w.reserved !== undefined) return 'sent';
+      if (!this.keep(key, waiting.filter((r) => r.line.id !== id))) {
+        throw new BowerError('unknown', 'Bower could not take that change back; keep this page open.');
+      }
+      return 'dropped';
+    }));
   }
 }

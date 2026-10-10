@@ -24,8 +24,8 @@
  */
 import { BowerError } from '../types';
 import { md5Hex, sha256Sync } from '../contracts/hashes';
-import { CHANGED_ELSEWHERE, notAsSeen, notAsSeenError, notAsSeenReason, type Landing, type SeenExpectation } from '../contracts/still-as-seen';
-import { driveError, type DriveApi, type DriveFile, type FencedDrive } from '../drive/drive-api';
+import { CHANGED_ELSEWHERE, checkStillAsSeen, notAsSeen, notAsSeenError, notAsSeenReason, notRead, type Landing, type SeenExpectation } from '../contracts/still-as-seen';
+import { DRIVE_MESSAGES, driveError, type DriveApi, type DriveFile, type Fence, type FencedDrive } from '../drive/drive-api';
 import { failureKind, isNoAnswer, isUnconfirmedWrite, marked, type FailureKind } from '../drive/transport';
 
 export const STAMP = 'bowerOp';
@@ -282,26 +282,122 @@ const releases = (e: unknown, kind: FailureKind): boolean => notAsSeenReason(e) 
  * every try sends that, never a name picked anew (TL-P4-24 addendum 16). `kindOf` tells a failure's kind when the
  * caller's own table refines it (a 404 listed anew); `signal` stops the reservation with the send it is for.
  */
-export async function makeOnce(h: Holder, w: Pick<Makes, 'generateIds'>, fresh: Sent, create: (id: string, sent: Sent) => Promise<DriveFile>, kindOf: (e: unknown) => FailureKind = failureKind, signal?: AbortSignal): Promise<DriveFile> {
-  await reserveFor(w, [h], signal);
-  const id = h.reserved;
-  if (id === undefined) throw driveError('unknown');
-  // An entry kept before intents were stored has none: it sends this try's, as it did, and keeps it from now on.
-  h.sent ??= fresh;
-  try {
-    return await create(id, h.sent);
-  } catch (e) {
-    if (releases(e, kindOf(e))) {
-      delete h.reserved;
-      delete h.sent;
-      await h.letGo?.();
-    } else if (e instanceof BowerError && e.code === 'not-found') {
-      // A 404: the folder it was sent to is gone, so nothing was made there. The id stays; the next try is sent where
-      // its place is found anew, and a file an earlier try made with this id is still met by it (a 409, then `asMade`).
-      delete h.sent;
+export function makeOnce(h: Holder, w: Pick<Makes, 'generateIds'>, fresh: Sent, create: (id: string, sent: Sent) => Promise<DriveFile>, kindOf: (e: unknown) => FailureKind = failureKind, signal?: AbortSignal): Promise<DriveFile> {
+  return alone(h, async () => {
+    await reserveFor(w, [h], signal);
+    const id = h.reserved;
+    if (id === undefined) throw driveError('unknown');
+    // An entry kept before intents were stored has none: it sends this try's, as it did, and keeps it from now on.
+    h.sent ??= fresh;
+    try {
+      return await create(id, h.sent);
+    } catch (e) {
+      if (releases(e, kindOf(e))) {
+        delete h.reserved;
+        delete h.sent;
+        await h.letGo?.();
+      } else if (e instanceof BowerError && e.code === 'not-found') {
+        // A 404: the folder it was sent to is gone, so nothing was made there. The id stays; the next try is sent where
+        // its place is found anew, and a file an earlier try made with this id is still met by it (a 409, then `asMade`).
+        delete h.sent;
+      }
+      throw e;
     }
-    throw e;
-  }
+  });
+}
+
+/** What each holder is doing now, its create or its withdrawal: the tail of its one line of operations. */
+const busy = new WeakMap<Holder, Promise<unknown>>();
+
+/**
+ * One operation at a time per holder (the per-resource mutex, as Web Locks give per name:
+ * https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API): a create and a withdrawal of the same holder never
+ * run side by side (TL-P4-24 addendum 11). The next waits for the one before to settle, which its own transport
+ * timeout bounds; it is taken in the same turn as the call, so a withdrawal that starts after a send sees it.
+ */
+function alone<T>(h: Holder, work: () => Promise<T>): Promise<T> {
+  const run = (busy.get(h) ?? Promise.resolve()).then(work);
+  // expected: the caller hears this failure through `run`; the line of operations only keeps the order.
+  const tail = run.catch(() => undefined);
+  busy.set(h, tail);
+  void tail.then(() => {
+    if (busy.get(h) === tail) busy.delete(h);
+  });
+  return run;
+}
+
+/**
+ * What a withdrawal found under the reserved id: the file, `binned` by it now or kept where it was; null when none.
+ * `held`: the file stays and so does the holder's id (its keeper's `keep` said `hold`).
+ */
+export type Withdrawn = { file: DriveFile; binned: boolean; held?: true } | null;
+
+/**
+ * Whether a live file found under the id stays: false bins it, true lets the id go with the file where it is, `hold`
+ * keeps both, and a throw refuses the withdrawal with the holder kept.
+ */
+export type Keeps = (f: DriveFile) => boolean | 'hold' | Promise<boolean | 'hold'>;
+
+/** What a withdrawal reads and bins with. */
+export type Bins = Gets & Pick<DriveApi, 'trash'>;
+
+/** The withdrawal's own refusal (`unreached`): Drive did not answer, so whether the create landed is not known. */
+export function unreached(e: unknown): BowerError {
+  console.error(e);
+  return new BowerError('unreached', DRIVE_MESSAGES.unreached, undefined, { cause: e });
+}
+
+/** A failure that leaves whether Drive has the file unknown: no answer, a 5xx, or a fence that could not read. */
+const unanswered = (e: unknown): boolean => isNoAnswer(e) || isUnconfirmedWrite(e) || notRead(e);
+
+/**
+ * The one exit of an intended create the person withdrew (an Undo, a pile removed; TL-P4-24 finding 3, addendum 1). An
+ * id is let go only on Drive's word about it, never on a listing:
+ * - a holder with no id reserved was never sent: it lets go without a read;
+ * - otherwise the file is read by its id (`byId`, the Bin included): none (a 404) or one in the Bin lets go;
+ * - one found live goes to the Bin through the fence (`checkStillAsSeen`, on the name and place just read) and its
+ *   stamp (`updateByStamp`), never a hard delete; unless `keep` says it stays (filed elsewhere, other bytes, or inside a
+ *   folder that goes to the Bin with it), and then it is let go where it is;
+ * - anything else (no answer, a 5xx, a refusal of the read, a 403 or a sign-in asked for) is unknown: the holder keeps
+ *   its id, and the withdrawal is refused with its own code, `unreached`, so a caller tells it from every other failure.
+ * It decides only on the holder as it is once its own create, if one is on its way, settled (`alone`).
+ */
+export function withdraw(h: Holder, drive: Bins, keep?: Keeps): Promise<Withdrawn> {
+  // Never beside a create of the same holder: one on its way is waited for, and the holder is read once it settled.
+  return alone(h, async () => {
+    const id = h.reserved;
+    let out: Withdrawn = null;
+    if (id !== undefined) {
+      let found: DriveFile | null;
+      try {
+        found = await byId(drive, id);
+      } catch (e) {
+        // Neither a 404 nor a file: whatever Drive said (no answer, a 5xx, a 403, signed out), it is not known.
+        throw unreached(e);
+      }
+      try {
+        const stays = found && !found.trashed ? await keep?.(found) : undefined;
+        // Held: neither binned nor let go, so the holder keeps its id.
+        if (found && stays === 'hold') return { file: found, binned: false, held: true };
+        if (found && !found.trashed && !stays) {
+          const f = found;
+          // The same check is the trash's fence (`WriteOptions`), run again before a resend after a rate limit or a
+          // refreshed token (c4-retry-fence, contract point 4).
+          const check = (): Promise<DriveFile | null> => checkStillAsSeen({ id: f.id, name: f.name, parents: f.parents }, () => byId(drive, f.id), CHANGED_ELSEWHERE, { unanswered: isNoAnswer, landed: landing(f, 'bin') });
+          const fence: Fence = async () => void (await check());
+          const landed = await check();
+          out = { file: landed ?? (await updateByStamp(drive, f, 'bin', (op) => drive.trash(f.id, op, { fence }))), binned: true };
+        } else if (found) out = { file: found, binned: false };
+      } catch (e) {
+        if (unanswered(e) || !(e instanceof BowerError)) throw unreached(e);
+        throw e;
+      }
+    }
+    delete h.reserved;
+    delete h.sent;
+    await h.letGo?.();
+    return out;
+  });
 }
 
 /** One pile conversion's first intent and its three landed steps (TL-P4-24 addendum 18). */
@@ -349,6 +445,21 @@ export class Intended<H extends Holder = Holder> {
   /** What `key` meant is settled (made, refused, or found another way): its holder and id are let go. */
   forget(key: string): void {
     this.held.delete(key);
+  }
+
+  /** What `key` meant is withdrawn by the person (`withdraw`): refused while Drive does not answer, it stays kept. */
+  async withdraw(key: string, drive: Bins, keep?: Keeps): Promise<Withdrawn> {
+    const h = this.held.get(key);
+    if (!h) return null;
+    // A conversion holds both creates until the whole pile lands. Withdraw the note first, then the folder;
+    // either refusal keeps the same intent for another removal, and the caller receives its pile folder.
+    let out: Withdrawn;
+    if (h.conversion) {
+      const note = await withdraw(h.conversion.note, drive, keep);
+      out = (await withdraw(h.conversion.folder, drive, keep)) ?? note;
+    } else out = await withdraw(h, drive, keep);
+    this.held.delete(key);
+    return out;
   }
 
   /** One intended create kept in this page's memory, by its key (`makeOnce`), with what it was first sent as. */

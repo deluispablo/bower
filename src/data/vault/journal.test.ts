@@ -2,8 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
 import { FAILED_KEY, Journal } from './journal';
 import { forgetThisPerson } from '../device';
-import { driveError, type WriteOptions } from '../drive/drive-api';
-import { notAsSeenReason } from '../contracts/still-as-seen';
+import { driveError } from '../drive/drive-api';
 import { DriveHttp } from '../drive/drive-http';
 import type { BowerError } from '../types';
 import { tidyUp } from '@/testing/tidy-up';
@@ -42,11 +41,21 @@ describe('the change journal', () => {
     expect(all[1]).toMatchObject({ kind: 'answer', questionId: 'q1', text: 'yes' });
   });
 
-  it('remove puts only that file in the Bin', async () => {
+  it('retract never deletes a sent line: it says sent, and the line stays (TL-P4-27 addendum 4 (3))', async () => {
     const a = await journal.record('move', 'one');
     await journal.record('move', 'two');
-    await journal.remove(a.id);
-    expect((await journal.list()).map((r) => r.what)).toEqual(['two']);
+    await expect(journal.retract(a.id)).resolves.toBe('sent');
+    expect((await journal.list()).map((r) => r.what)).toEqual(['one', 'two']);
+  });
+
+  it('retract drops a line never sent, and it is never sent after', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(drive, 'generateIds').mockRejectedValueOnce(driveError('offline'));
+    const a = await journal.record('move', 'one');
+    await expect(journal.retract(a.id)).resolves.toBe('dropped');
+    await journal.flush();
+    expect((await journal.list()).map((r) => r.what)).toEqual([]);
+    expect((await drive.listAll(changes)).filter((f) => !f.folder)).toEqual([]);
   });
 
   it('a file that is not a journal record is skipped', async () => {
@@ -244,23 +253,6 @@ describe('when Drive does not answer', () => {
   });
 });
 
-describe('c2-create-by-id: a change taken back', () => {
-  it('taking a change back whose Bin answer was lost is resolved by its stamp', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    const a = await journal.record('move', 'one');
-    const trash = drive.trash.bind(drive);
-    let lost = 0;
-    drive.trash = async (...x: Parameters<FakeDrive['trash']>) => {
-      const out = await trash(...x);
-      if (lost++ === 0) throw driveError('offline');
-      return out;
-    };
-    await expect(journal.remove(a.id)).resolves.toBeUndefined();
-    expect(lost).toBe(1);
-    expect((await journal.list()).map((r) => r.what)).toEqual([]);
-  });
-});
-
 describe('c2-create-by-id fix round: a waiting line', () => {
   it('a journal line keeps its reserved id until confirmed and needs no key lookup', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -420,6 +412,46 @@ const outbox = (): Array<{ line: { id: string }; reserved?: string }> =>
   JSON.parse(localStorage.getItem(`bower:outbox:${root}`) ?? '[]') as Array<{ line: { id: string }; reserved?: string }>;
 
 describe('c2-create-by-id reopened: a line refused for good', () => {
+  it('a refused original stays dropped when removing it from the outbox fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const create = drive.createText.bind(drive);
+    let mode: 'offline' | 'refuse' | 'fine' = 'offline';
+    const attempted: string[] = [];
+    drive.createText = async (...args: Parameters<FakeDrive['createText']>) => {
+      attempted.push((JSON.parse(args[2]) as { id: string }).id);
+      if (mode === 'offline') throw driveError('offline');
+      if (mode === 'refuse') return REFUSED().createText(...args);
+      return create(...args);
+    };
+    const original = await journal.record('rule', 'New rule', { path: 'Rules.md', text: 'Keep recipes together.' });
+    const key = `bower:outbox:${root}`;
+    const failedAtDrop: string[][] = [];
+    const remove = Storage.prototype.removeItem;
+    const blocked = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(function (this: Storage, k: string) {
+      if (k === key) {
+        const failed = JSON.parse(localStorage.getItem(FAILED_KEY) ?? '{}') as Record<string, Array<{ id: string }>>;
+        failedAtDrop.push((failed[root] ?? []).map((f) => f.id));
+        throw new DOMException('Full', 'QuotaExceededError');
+      }
+      remove.call(this, k);
+    });
+    mode = 'refuse';
+    await journal.flush();
+    expect.soft(failedAtDrop).toEqual([[original.id]]);
+    expect((await journal.failed()).map((f) => f.id)).toEqual([original.id]);
+    expect(outbox().map((r) => r.line.id)).toEqual([original.id]);
+    await expect(journal.retract(original.id)).resolves.toBe('dropped');
+    blocked.mockRestore();
+    // After storage and Drive recover, even a new page must respect the permanent failed-list tombstone.
+    const reloaded = new Journal(drive, { owner: async () => root, folder: async () => changes,
+      files: async () => (await drive.listAll(changes)).filter((f) => !f.folder) }, 'device-b');
+    attempted.length = 0;
+    mode = 'fine';
+    await reloaded.flush();
+    expect(attempted).toEqual([]);
+    expect((await drive.listAll(changes)).filter((f) => !f.folder)).toEqual([]);
+  });
+
   it('a journal line refused for good releases its id and says so once', async () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     const create = drive.createText.bind(drive);
@@ -540,8 +572,9 @@ describe('c2-create-by-id round 5: what a refusal leaves', () => {
     await expect(journal.flush()).rejects.toMatchObject({ code: 'offline' });
     expect(outbox().map((w) => w.reserved)).toEqual([sentWith[0]]);
     expect(await journal.failed()).toEqual([]);
-    // A rule is the line itself: kept, and said so.
-    expect((await toldBy(journal.record('rule', 'New rule: "receipts go in money"', { path: 'Rules.md', text: 'receipts go in money' }))).message).toBe('Your Google Drive is full. Bower kept this and will send it later.');
+    // A rule after it waits behind it, unsent and kept (FIFO, TL-P4-27 addendum 4 (5)): record answers it as later.
+    await expect(journal.record('rule', 'New rule: "receipts go in money"', { path: 'Rules.md', text: 'receipts go in money' })).resolves.toMatchObject({ kind: 'rule' });
+    expect(outbox()).toHaveLength(2);
     // Space is freed (P4-37d repro D): both are sent, the move under the id it kept.
     full = false;
     await expect(journal.flush()).resolves.toBeUndefined();
@@ -669,51 +702,5 @@ describe('c2-create-by-id round 6: a gone target, a resent request', () => {
     // Another press is another request.
     await journal.record('request', 'Asked Bower: "Compare the flats"', { text: 'Compare the flats' }, 'press-2');
     expect((await journal.list()).map((r) => r.what)).toEqual(['Asked Bower: "Put my id papers together"', 'Asked Bower: "Compare the flats"']);
-  });
-});
-
-describe('c4-retry-fence fix round: an Undo resent after a rate limit', () => {
-  const pacing = { baseMs: 0, sleep: async (): Promise<void> => undefined };
-  /** `drive.trash` goes over the real transport to a pretend Drive v3 that keeps `drive`; its first PATCH gets 429. */
-  function binRateLimitedOnce(elsewhere: (id: string) => Promise<void>): { patches: () => number } {
-    const store = drive.trash.bind(drive);
-    let patches = 0;
-    const http = new DriveHttp({
-      token: async () => 'token',
-      pacing,
-      fetch: async (url, init) => {
-        const id = decodeURIComponent(new URL(url).pathname.split('/').pop() ?? '');
-        if (++patches === 1) {
-          await elsewhere(id);
-          return new Response(JSON.stringify({ error: { code: 429, message: 'Slow down.', errors: [] } }), { status: 429 });
-        }
-        const body = JSON.parse(String(init?.body)) as { appProperties?: Record<string, string> };
-        const f = await store(id, body.appProperties);
-        return new Response(JSON.stringify({ ...f, mimeType: 'application/json' }), { status: 200 });
-      },
-    });
-    // The journal's port takes the write's options; the pretend Drive's own `trash` has none to take.
-    Object.assign(drive, { trash: (id: string, appProperties?: Record<string, string>, opts?: WriteOptions) => http.trash(id, appProperties, opts) });
-    return { patches: () => patches };
-  }
-
-  it('journal Undo after a 429 and an outside move sends no resend', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    const a = await journal.record('move', 'one');
-    const sent = binRateLimitedOnce(async (id) => void (await drive.update(id, { addParent: root, removeParent: changes })));
-    const e = await journal.remove(a.id).catch((x: unknown) => x);
-    expect(notAsSeenReason(e)).toBe('parents');
-    expect(sent.patches()).toBe(1);
-    expect((await drive.listAll(root)).filter((f) => !f.folder && f.parents.includes(root))).toHaveLength(1);
-  });
-
-  it('journal Undo after a 429 with the file unchanged lands on the resend', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    const a = await journal.record('move', 'one');
-    await journal.record('move', 'two');
-    const sent = binRateLimitedOnce(async () => undefined);
-    await expect(journal.remove(a.id)).resolves.toBeUndefined();
-    expect(sent.patches()).toBe(2);
-    expect((await journal.list()).map((r) => r.what)).toEqual(['two']);
   });
 });

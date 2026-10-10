@@ -365,3 +365,6 @@ c4-create-resume,implementer,codex,gpt-5-codex,high,3,1050351,1038338,,966272,12
 c4-create-resume,adversarial,codex,gpt-5-codex,high,3,294544,291867,,239616,2677,,,,0 findings,2026-10-10
 c4-create-resume,reviewer,claude,bower-reviewer,,1,44974,,,,,,12,0.9,PASS (P4-68),2026-10-10
 c4-undo-compensate,implementer,codex,gpt-5-codex,high,7,1241987,1234001,,1159680,7986,,,,regression fix,2026-10-10
+c4-undo-compensate,implementer,codex,gpt-5-codex,high,8,463517,460582,,416128,2935,,,,withdraw gate fix,2026-10-10
+c4-undo-compensate,reviewer,claude,bower-reviewer,,2,35304,,,,,,8,0.5,PASS (P4-67b),2026-10-10
+d-v2-24a,implementer,codex,gpt-5-codex,high,6,3861161,3828836,,3675904,32325,,,,round 3 blocked on head-poll,2026-10-10

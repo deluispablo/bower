@@ -1435,7 +1435,9 @@ describe('foreground discovery', () => {
     expect((await a.vault.piles()).find((p) => p.id === pile.id)?.items).toMatchObject([{ name: 'New image.png', upload: 0 }]);
     await a.vault.restore('External.md');
     expect((await a.vault.note('External.md')).body).toBe('- [ ] Old text café.');
-    expect(localStorage.getItem(key)).toBe(waiting);
+    // The Undo records its inverse line (TL-P4-27 addendum 2), which sends the waiting line first, in order: nothing is lost.
+    expect(localStorage.getItem(key)).toBeNull();
+    expect((await a.vault.changes()).filter((c) => c.id === rule.id)).toHaveLength(1);
     release.resolve(undefined);
     await vi.advanceTimersByTimeAsync(0);
     expect(diagnostic).toHaveBeenCalledOnce(); // The deliberate failed journal send only.

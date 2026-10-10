@@ -41,5 +41,29 @@ describe('toasts', () => {
     vi.advanceTimersByTime(8100);
     expect(useToasts.getState().list).toHaveLength(0);
   });
-});
 
+  it('toast replace keeps the item and restarts its timer', async () => {
+    vi.useFakeTimers();
+    let undo: (() => void) | undefined;
+    const id = useToasts.getState().show('Rule removed.', { label: 'Undo', run: () => new Promise<void>((done) => (undo = done)) });
+    vi.advanceTimersByTime(6000);
+    const retry = { label: 'Try again', run: () => undefined };
+    useToasts.getState().replace(id, 'Not undone yet: Bower could not reach Drive to check. Try again when you are back online.', retry);
+    // The same item, with its new words and action: no second message.
+    expect(useToasts.getState().list).toEqual([{ id, text: 'Not undone yet: Bower could not reach Drive to check. Try again when you are back online.', action: retry }]);
+    // Its 8 seconds start again from the replace.
+    vi.advanceTimersByTime(7900);
+    expect(useToasts.getState().list).toHaveLength(1);
+    vi.advanceTimersByTime(200);
+    expect(useToasts.getState().list).toHaveLength(0);
+    // A press whose action is still running keeps its toast until it ends, so a refusal can replace it.
+    const again = useToasts.getState().show('Rule removed.', { label: 'Undo', run: () => new Promise<void>((done) => (undo = done)) });
+    await useToasts.getState().press(again);
+    expect(useToasts.getState().list.map((t) => t.id)).toEqual([again]);
+    vi.advanceTimersByTime(30_000);
+    expect(useToasts.getState().list.map((t) => t.id)).toEqual([again]);
+    undo?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(useToasts.getState().list).toHaveLength(0);
+  });
+});

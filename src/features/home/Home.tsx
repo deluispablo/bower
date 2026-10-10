@@ -1,6 +1,6 @@
 import { LoadError } from '@/ui/LoadError';
 import { useEffect, useId, useMemo, useRef } from 'react';
-import { report } from '@/ui/report';
+import { report, undoToast } from '@/ui/report';
 import { focusHeading, focusMain } from '@/ui/focus';
 import { answered, answerToast } from './answer-words';
 import { answerQuestion } from '@/data/answer-loop';
@@ -386,7 +386,7 @@ function Suggestions() {
             <Button size="sm" variant="ghost" onClick={() =>
                 void vault.dismissSuggestion(sg.id, false).then(
                   (undo) => {
-                    toast("Bower won't suggest it again.", { label: 'Undo', run: () => void undo().catch((e: unknown) => report(e, 'That did not work. Try again.')) });
+                    undoToast("Bower won't suggest it again.", undo);
                     focusMain();
                   },
                   (e: unknown) => report(e, 'That did not work. Try again.'),
