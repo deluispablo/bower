@@ -105,6 +105,7 @@ function brokenStore(env: Env, failing: Partial<Record<keyof UploadStore, boolea
   const real = indexedDbUploadStore(env.idb);
   const broken = (name: string) => () => Promise.reject(new Error(`IndexedDB ${name} failed`));
   return {
+    captureForgetVersion: real.captureForgetVersion,
     list: failing.list ? broken('list') : real.list,
     add: failing.add ? broken('add') : real.add,
     save: failing.save ? broken('save') : real.save,
