@@ -116,3 +116,70 @@ Documentation references for those standard APIs (not fetched):
 - https://playwright.dev/docs/accessibility-testing
 
 Left out: implementation, commits, pnpm check, e2e execution and resolution of the demo pending-upload fixture gap.
+
+
+## Implementation
+
+Status: blocked before app edits, as instructed when a committed test contradicts the spec.
+The complete targeted Home/Settings suite ran: 26 tests, 18 passed, 8 expected assertion failures.
+The spec says the no-unfinished-pile Inbox is exactly as today and reuses today's Add button.
+Today's actual button says "Add a pile" (`src/features/home/Home.tsx:216`), with no accessible-name override.
+The committed reds instead require the exact accessible name "Add". Renaming it or masking its accessible
+name would change the existing Inbox outside the specified line and sheet. No test was changed.
+
+### Every contradictory case (file:line)
+
+- `src/features/home/Home.test.tsx:394`: `c02-upload-count-ui: No pile left unfinished` requires "Add".
+- `e2e/c02-orphan-count.spec.ts:61`: `c02-upload-count-ui: No pile left unfinished at 375` requires "Add".
+- `e2e/c02-orphan-count.spec.ts:61`: `c02-upload-count-ui: No pile left unfinished at 1440` requires "Add".
+- `e2e/c02-orphan-count.spec.ts:61`: `c02-upload-count-ui: 1 / 3 unfinished, full read (1) at 375` requires "Add".
+- `e2e/c02-orphan-count.spec.ts:61`: `c02-upload-count-ui: 1 / 3 unfinished, full read (1) at 1440` requires "Add".
+- `e2e/c02-orphan-count.spec.ts:61`: `c02-upload-count-ui: 1 / 3 unfinished, full read (3) at 375` requires "Add".
+- `e2e/c02-orphan-count.spec.ts:61`: `c02-upload-count-ui: 1 / 3 unfinished, full read (3) at 1440` requires "Add".
+- `e2e/c02-orphan-count.spec.ts:61`: `c02-upload-count-ui: A read that failed in part (1) at 375` requires "Add".
+- `e2e/c02-orphan-count.spec.ts:61`: `c02-upload-count-ui: A read that failed in part (1) at 1440` requires "Add".
+- `e2e/c02-orphan-count.spec.ts:61`: `c02-upload-count-ui: A read that failed in part (3) at 375` requires "Add".
+- `e2e/c02-orphan-count.spec.ts:61`: `c02-upload-count-ui: A read that failed in part (3) at 1440` requires "Add".
+- `e2e/c02-orphan-count.spec.ts:61`: `c02-upload-count-ui: Nothing could be checked at 375` requires "Add".
+- `e2e/c02-orphan-count.spec.ts:61`: `c02-upload-count-ui: Nothing could be checked at 1440` requires "Add".
+
+The unit contradiction is masked by its earlier expected summary assertion failure; the contradictory
+assertion was identified by reading the entire targeted test suite. E2e was inspected, not executed.
+The previously recorded demo persistence fixture gap remains unverified and is not claimed as a new contradiction.
+
+### Scope and verification
+
+removed: none.
+removed: no app behavior, data mechanism, or store.
+tests changed: none
+sources/provider pass-through: none; stopped before implementation.
+No git write, network request, node_modules replacement, or repository-writing test command ran.
+No dev/e2e server was launched. The requested full-src suite includes a port-binding unit test; its listen
+was refused by the environment (EPERM), as recorded below.
+Reused the existing offline Sheet, Button and Inbox implementations when assessing the contract.
+Standard dialog reference (not fetched): https://www.radix-ui.com/primitives/docs/components/dialog
+
+Commands use the existing OS-temp Vitest config, with its cache outside the repository and CPU-report-writing
+setup omitted, as recorded by the red author. The full-src config changes only the include glob in that temp config.
+- Targeted reds: `/tmp/c02-upload-count-ui-implementation-red.log` (8 failed, 18 passed).
+- Full src: `pnpm exec vitest run src --maxWorkers=2 --config /private/tmp/c02-upload-count-ui-all-vitest.mjs --configLoader native`.
+  Log: `/tmp/c02-upload-count-ui-implementation-src.log`.
+- TypeScript: `pnpm exec tsc -p tsconfig.app.json --incremental false` passed.
+  Log: `/tmp/c02-upload-count-ui-implementation-tsc.log`.
+- ESLint: `pnpm exec eslint src/features/home/Home.tsx src/features/settings/Settings.tsx`.
+  Log: `/tmp/c02-upload-count-ui-implementation-eslint.log`.
+- pnpm check omitted: its test/build/report commands write into the repository, contrary to this task's constraint.
+- E2e/axe omitted: coordinator owns the server and these runs; port binding is forbidden here.
+- Commits omitted: every git write is forbidden here.
+
+
+### Final verification results
+
+Full src completed: 167 files, 5,585 tests; 163 files passed, 5,575 tests passed, 10 failed, 1 unhandled error.
+Eight failures are the committed UI reds recorded above. The other two are unchanged baseline/environment issues:
+- `src/docs.test.ts:134`: `every change since the P2 freeze is listed`; commit `59d4dfbb` missing from the list.
+- `src/e2e-port.test.ts:37`: `a server from another worktree is never reused`; timed out after listen was denied.
+  Unhandled error: `listen EPERM: operation not permitted 127.0.0.1`. No port was successfully bound.
+These two are not spec contradictions and were not modified; neither owned file can resolve them.
+TypeScript and ESLint both passed (exit 0, empty OS-temp logs). Only this notes file differs in the worktree.
+Required next step: resolve the committed Add/Add-a-pile contract contradiction before implementation resumes.
