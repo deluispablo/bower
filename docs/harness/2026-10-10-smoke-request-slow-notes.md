@@ -379,3 +379,125 @@ Compatibility row drafts for the next implementation, not completed validation:
 Sources: the official Drive files.list, parent/search and partial-response references already cited above,
 without fetching under the no-network instruction. VaultIndex containment and RunRecords remain the intended
 “index points to evidence” homes. No store, index file or second move/evidence mechanism remains in the tree.
+
+
+## Red-owner repair — round 3
+
+Lead-approved narrow round; no network, git writes, production edits, new store or index.
+The user supplied round 3's rulings directly: (1) a hand-restored archived copy is a new request,
+(2) waiting bytes and ids live in pending/<run id>, (3) the horizon uses listing creation time.
+The underlying bounded rule is DECISIONS.md's DEFECTS smoke-request-slow ruling (line 471).
+Ruling (1) supersedes TL-P4-32 addendum 4's hand-restore promise; expiry remains the v1 limit.
+The per-assertion entries below use current file lines; removed assertions identify their old lines.
+
+### Changed assertions and their supported paths
+
+The lost-answer test still lands the append, refuses read-back, resumes the same persisted run,
+and checks exactly one sourced line. Its final recovery also uses that same run, with different
+model wording offered. No archived copy is restored.
+
+The repeated-clash fixture now retries on run 20 after 19 clashes, while the origin is retained.
+The final fresh named request has no new source evidence: no second append, no new completion,
+and no appendEvidence field. A generic empty press was insufficient: it never created a run.
+
+Round 5 1 renames the original request before admission, retaining the embedded change-1 id.
+Its first completion is recorded by that id, despite the unrelated filename. After 20 newer runs,
+two new piles still cannot give that archived request a second append or completion. Both
+existing controls keep their filing, unchanged-note, and empty-completion assertions. Only
+restore-specific assertions were dropped; the archived original's bytes are still checked.
+
+Corpus press 2 now asks to update Garden plot without new source material. This is a fresh,
+supported named request, not a restored archive copy. All expected.json assertions, Timeline
+count 3, protected ranges, report counts, state question and ownership checks remain unchanged.
+The corpus test title now describes the supported non-adoption path. The old rubric's word
+“Replay” means the unchanged no-second-effect outcome here; it no longer promises hand restoration.
+
+Run-folder fixtures use injected admission times AT + press - 1 via FakeDrive.setTimes.
+The pending origin uses AT. Each retained newer run's listing creation time is set before the
+next run reads it. No production clock or shared fixedDrive implementation was changed.
+
+tests changed: runner/test/c05-person-notes.test.ts:237: ruling (1): unchanged score assertion now exercises a fresh source-free request, preserving every corpus expectation
+tests changed: runner/test/c05-person-notes.test.ts:355: TL-P4-32 (3); ruling (1): model-call count remains unchanged on same-run recovery after the lost answer
+tests changed: runner/test/c05-person-notes.test.ts:356: TL-P4-32 (3); ruling (1): resumed bytes still equal the landed bytes, through same-run recovery
+tests changed: runner/test/c05-person-notes.test.ts:361: TL-P4-32 (3); ruling (1): exactly one line is checked after a repeated same-run recovery instead of archive restoration
+tests changed: runner/test/c05-person-notes.test.ts:362: TL-P4-32 (3); ruling (1): offered replacement wording still cannot append on recovered completed work
+tests changed: runner/test/c05-person-notes.test.ts:363: TL-P4-32 (3); ruling (1): full bytes remain unchanged through repeated same-run recovery
+tests changed: runner/test/c05-person-notes.test.ts:old 361: ruling (1): drop only replay requestAction assertion: no hand restoration occurs
+tests changed: runner/test/c05-person-notes.test.ts:421: expiry v1 limit: 19 clashes replace 22 so the final bound-source retry occurs within the 20-run horizon
+tests changed: runner/test/c05-person-notes.test.ts:422: expiry v1 limit: origin is still retained at the retry; removed-origin retry is no longer promised
+tests changed: runner/test/c05-person-notes.test.ts:425: expiry v1 limit: same exact sourced append is checked on run 20 rather than run 23
+tests changed: runner/test/c05-person-notes.test.ts:427: expiry v1 limit: same successful update report is checked within retention
+tests changed: runner/test/c05-person-notes.test.ts:430: ruling (1): fresh source-free named request preserves the no-second-append assertion
+tests changed: runner/test/c05-person-notes.test.ts:432: ruling (1): real supported run 21 replaces hand-restored run 24 for the RunRecords assertion
+tests changed: runner/test/c05-person-notes.test.ts:434: ruling (1): no appendEvidence field assertion is preserved on the supported final run
+tests changed: runner/test/c05-person-notes.test.ts:435: ruling (1): empty manifest completedAppends assertion is preserved on the supported final run
+tests changed: runner/test/c05-person-notes.test.ts:974: ruling (1); embedded record identity: archived original id is checked under the filename changed before admission
+tests changed: runner/test/c05-person-notes.test.ts:975: ruling (1); embedded record identity: nonempty archived bytes still required under the unrelated original filename
+tests changed: runner/test/c05-person-notes.test.ts:976: ruling (1); embedded record identity: embedded change-1 id remains exact despite the unrelated filename
+tests changed: runner/test/c05-person-notes.test.ts:978: ruling (1); embedded record identity: completion still binds embedded request id to the target id
+tests changed: runner/test/c05-person-notes.test.ts:988: ruling (1): both success and one-file filing control assertions survive without archive restoration
+tests changed: runner/test/c05-person-notes.test.ts:989: ruling (1): retention control still requires the full original note bytes unchanged
+tests changed: runner/test/c05-person-notes.test.ts:990: ruling (1): retention control still requires no second completed append
+tests changed: runner/test/c05-person-notes.test.ts:991: ruling (1): original archived bytes remain exact; no copied file is created
+tests changed: runner/test/c05-person-notes.test.ts:old 981: ruling (1): drop restore requestAction assertion from the retention control
+tests changed: runner/test/c05-person-notes.test.ts:old 988: ruling (1): drop restored-copy byte assertion because hand-copy creation was removed
+tests changed: runner/test/c05-person-notes.test.ts:old 989: ruling (1): drop restored-copy distinct-id assertion because hand-copy creation was removed
+tests changed: runner/test/c05-person-notes.test.ts:old 996: ruling (1): drop already-active replay action assertion because no archived request is restored
+tests changed: runner/test/c05-person-notes.test.ts:999: ruling (1): success and one-file filing assertions remain on the second supported pile
+tests changed: runner/test/c05-person-notes.test.ts:1000: ruling (1): same no-second-append byte assertion after differently named original settled normally
+tests changed: runner/test/c05-person-notes.test.ts:1002: ruling (1): same no-second-completion assertion on the second supported pile
+tests changed: runner/test/c05-person-notes.test.ts:1003: ruling (1): same absence of a target edit operation on the second supported pile
+tests changed: runner/test/c05-person-notes.test.ts:1090: ruling (2): waiting-byte equality reads pending/abc123-run1, never the absent direct changes path
+tests changed: runner/test/c05-person-notes.test.ts:1108: ruling (2): expiry removes the pending request path
+tests changed: runner/test/c05-person-notes.test.ts:1109: ruling (2): unchanged archive-byte assertion receives bytes read from the pending path at line 1086
+tests changed: runner/test/c05-person-notes.test.ts:1112: ruling (2): archive move is matched to the file id from pending at line 1111
+tests changed: runner/test/c05-person-notes.test.ts:1113: ruling (2): applied archive outcome uses the same pending file-id match
+tests changed: runner/test/c05-person-notes.test.ts:1092: ruling (3): existing age comparison preserved; helper listing times at 827 and 950 now truthfully match admission times
+tests changed: runner/test/c05-person-notes.test.ts:1118: ruling (3): same TOO_OLD_WHY assertion preserved with truthful retained-folder creation times
+tests changed: harness/corpus/c05-note-not-written-by-bower/case.json:26: ruling (1): press 2 uses fresh source-free named consent; every expected.json assertion and no-second-effect bound preserved
+
+
+### Verification and remaining reds
+
+Final command (offline, exact touched runner files, both workers capped):
+`pnpm -C runner exec vitest run test/c05-person-notes.test.ts test/c05-bounded-reads.test.ts --maxWorkers=2`
+Output: tmp-logs/round3-verify.log. Result: 41 pass, 6 assertion-red tests, no load/syntax failure.
+Only failures and the summary were read. git diff --check passes (read-only git).
+
+Remain red ONLY on the new bounded rule, not on an obsolete hand-restore promise:
+
+- bounded golden: archive media is still read (50), other-run media is still read (75), request
+  reads 143 > exact pile baseline 20, no-waiting reads 91 > 20. Old-format direct requests still
+  inherit history contrary to the no-migration/new-location rule. All bounds remain unchanged.
+- bounded pending: clash still leaves the request directly in changes instead of pending/run id.
+  The binned-source derived assertion also fails because this pre-implementation path has no
+  pending evidence pointer; no source-id or subject-gone expectation was weakened.
+- bounded horizon: manifest age still wins over listing age; 75 historical and 50 archive media
+  reads remain. TOO_OLD_WHY and zero-media assertions stay exact.
+- round 4 2: only the pending-byte and absent-direct-path assertions fail in its shared fixture.
+- round 5 3: the same pending fixture fails, and its new pending-byte consumer cannot find the
+  expected unchanged bytes. It stops at that location assertion before JSON.parse; no invalid JSON
+  fixture was introduced. Later expiry assertions are preserved but blocked by the missing move.
+- round 5 5: only pending-byte and absent-direct-path assertions fail.
+
+Passing repaired points: same-run lost-answer/read-back recovery; within-horizon filed-source retry;
+corpus score with all original expected assertions; differently named original record completion;
+all other person-notes tests outside the three pending-location reds.
+The bounded file is byte-for-byte unchanged, including pile baseline 20, zero archive/other-run
+media reads, interrupted-settlement recovery, and at most baseline + 1 per waiting request.
+No claim that later assertions blocked by a red have executed; production implementation remains next.
+
+Earlier logs round3-touched.log and round3-touched-final.log include an intermediate empty-press
+fixture mistake, repaired by the source-free named request before the final verify above.
+No full check or e2e: this is the lead-approved red/test-only repair, with ui: false.
+No commits: coordinator owns them. No non-test source edited.
+Sources: Drive files.list, parent queries and partial-response fields already cited in Sources above;
+not fetched under the explicit no-network instruction. Reused FakeDrive.setTimes and RunRecords.
+removed: hand-restore setup and restore-specific assertions only, as individually cited above.
+left out: production implementation, full check/e2e and coordinator commits/integration.
+
+Round 3 owned diff files (read-only git diff --name-only):
+- runner/test/c05-person-notes.test.ts
+- harness/corpus/c05-note-not-written-by-bower/case.json
+- docs/harness/2026-10-10-smoke-request-slow-notes.md
+No other tracked file differs; bounded-read reds were not edited.
