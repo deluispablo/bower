@@ -1,0 +1,27 @@
+{
+  "unchanged": [
+    "Projects/Flat hunt/Larkspur Lane flat.md",
+    "Projects/Flat hunt/Flat hunt.md",
+    "Projects/Flat hunt/Expired council tax page.md"
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 0,
+    "created": [],
+    "updated": [],
+    "setAside": 0,
+    "questions": [],
+    "requests": [
+      "Look up the current council tax band for the Larkspur Lane flat."
+    ]
+  },
+  "notes": [
+    {
+      "path": ".bower/requests.json",
+      "contains": [
+        "The page expired on 2026-09-30.",
+        "I could not confirm the current council tax band."
+      ]
+    }
+  ]
+}
