@@ -27,7 +27,10 @@ export class ReadCache {
   private readonly kept = new Map<string, { modifiedTime: string; reads: Map<Kind, Promise<unknown>> }>();
 
   text(v: Version, read: () => Promise<string>): Promise<string> {
-    return this.once('text', v, read);
+    return this.once('text', v, () => {
+      const bytes = this.keptRead<Uint8Array>('bytes', v);
+      return bytes ? bytes.then((value) => new TextDecoder().decode(value)) : read();
+    });
   }
 
   /** A prefix is never evidence of the full media, even when it is short. */
@@ -46,8 +49,12 @@ export class ReadCache {
 
   /** The text kept for this version, read or on its way. */
   keptText(v: Version): Promise<string> | undefined {
+    return this.keptRead<string>('text', v);
+  }
+
+  private keptRead<T>(kind: Kind, v: Version): Promise<T> | undefined {
     const entry = this.kept.get(v.id);
-    return entry && entry.modifiedTime === v.modifiedTime ? (entry.reads.get('text') as Promise<string> | undefined) : undefined;
+    return entry && entry.modifiedTime === v.modifiedTime ? (entry.reads.get(kind) as Promise<T> | undefined) : undefined;
   }
 
   /** A file's metadata, under the version it shows (a record folder the runner made). */

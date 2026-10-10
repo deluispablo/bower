@@ -59,6 +59,7 @@ import { runnerReads } from './spine/records';
 import { keepFinishedAtEnd } from './spine/retention';
 import { repairRules } from './rules-repair';
 import { RunTiming } from './timing';
+import { withMaintenance, maintenanceEffects } from './index';
 
 export { RunnerDrive, type RunnerDriveOptions } from './drive';
 export { RunnerToken, isStaleAttempt, type RunnerTokenOptions, type TokenGrant } from './token';
@@ -380,9 +381,12 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
       attempt,
       ...(opts.fetch ? { fetch: opts.fetch } : {}),
       ...(opts.pacing ? { pacing: opts.pacing } : {}),
-      provider: (drive, rootId, context) => providerFor(name, drive, { rootId, runId, allowWeb, context }, { env, timing, ...(opts.claude ? { spawn: opts.claude } : {}) }),
+      provider: (drive, rootId, context) => {
+        const provider = providerFor(name, drive, { rootId, runId, allowWeb, context }, { env, timing, ...(opts.claude ? { spawn: opts.claude } : {}) });
+        return async (admitted) => withMaintenance(drive, await provider(admitted));
+      },
       timing,
-      effects: driveEffects,
+      effects: (drive, context) => driveEffects(drive, context, maintenanceEffects(drive)),
     });
     console.log(`Tidy-up ${runId} ended ${end.phase}.`);
     if (end.phase !== 'done') console.error(end.why);
