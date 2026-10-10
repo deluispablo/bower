@@ -1,3 +1,4 @@
+import { resize } from './viewport';
 /**
  * v2-targets (d-v2-05, d-v2-10; WCAG 2.5.8 target size minimum, 2.5.5 target size): the desktop tab close
  * button is 24 square, and on the phone every listed control is at least 44 px. Fake Drive, phone and desktop.
@@ -53,7 +54,7 @@ test('the desktop tab close button is at least 24 square', async ({ page, isMobi
 
 test('every listed phone control is at least 44 px', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'the phone shell');
-  await page.setViewportSize({ width: 375, height: 812 });
+  await resize(page, { width: 375, height: 812 });
 
   await open(page, '/');
   await atLeast('home answers', page.locator('section[aria-labelledby="qs"] button'), 44);

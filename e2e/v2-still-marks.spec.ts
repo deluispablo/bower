@@ -1,8 +1,9 @@
+import { resize } from './viewport';
 import { expectAxeClean } from './axe';
 import { expect, test } from './fixtures';
 
 test('nothing pulses in the running tidy-up', async ({ page, isMobile }) => {
-  await page.setViewportSize({ width: isMobile ? 375 : 1440, height: 812 });
+  await resize(page, { width: isMobile ? 375 : 1440, height: 812 });
   // Reuse qa5/qa10's running scenario. Real phase timing keeps it running through the axe scan.
   await page.goto('/?source=fake&scenario=running&time=real');
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });

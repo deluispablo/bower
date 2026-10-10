@@ -1,3 +1,4 @@
+import { resize } from './viewport';
 /**
  * Round nine: what the review after round eight found. Each test pins one
  * entry of harness/features.json with "task": "qa-9", on demo and on fake.
@@ -12,7 +13,7 @@ const open = async (page: Page, path: string, scenario = 'default', time = 'inst
 const toast = (page: Page, text: string | RegExp) => page.getByRole('status').getByText(text);
 
 test('the rename name sheet keeps one note extension', async ({ page }) => {
-  await page.setViewportSize({ width: 375, height: 900 });
+  await resize(page, { width: 375, height: 900 });
   await open(page, '/note/Resources/Cooking/Lemon%20tart.md');
   await page.getByRole('button', { name: 'More for Lemon tart', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Rename', exact: true }).click();
@@ -28,7 +29,7 @@ test('the rename name sheet keeps one note extension', async ({ page }) => {
 });
 
 test('the New folder name sheet preserves dots and explains slashes', async ({ page }) => {
-  await page.setViewportSize({ width: 375, height: 900 });
+  await resize(page, { width: 375, height: 900 });
   await open(page, '/files/Resources/Cooking');
   await page.getByRole('button', { name: 'More for Cooking', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'New folder', exact: true }).click();

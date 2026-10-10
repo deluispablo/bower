@@ -1,3 +1,4 @@
+import { resize } from './viewport';
 /**
  * Round seven: what the review of round six found. Each test pins one entry of
  * harness/features.json with "task": "qa-7", on demo and on fake.
@@ -61,7 +62,7 @@ test('Move to: Enter in an empty box says what to do', async ({ page, isMobile }
 });
 
 test('New folder in an empty folder asks for a name, then opens the folder', async ({ page }) => {
-  await page.setViewportSize({ width: 375, height: 900 });
+  await resize(page, { width: 375, height: 900 });
   await open(page, '/files/Resources/Cooking');
   await page.getByRole('button', { name: 'More for Cooking', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'New folder', exact: true }).click();

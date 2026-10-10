@@ -1,3 +1,4 @@
+import { resize } from './viewport';
 import type { Page } from '@playwright/test';
 import { expectAxeClean } from './axe';
 import { expect, test } from './fixtures';
@@ -10,7 +11,7 @@ async function noNewNote(page: Page): Promise<void> {
 test('no New note control on desktop or phone', async ({ page }) => {
   for (const width of [1280, 375]) {
     const folderName = `Empty at ${width}`;
-    await page.setViewportSize({ width, height: 900 });
+    await resize(page, { width, height: 900 });
     await page.goto('/files?scenario=default&time=instant');
     await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
     await noNewNote(page);
