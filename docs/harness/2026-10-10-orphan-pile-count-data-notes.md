@@ -377,3 +377,73 @@ Verification (offline local dependencies; no install needed):
 Sources: the existing fake Drive/cold-vault test pattern and the packet's previously cited
 Google Drive resumable upload and IndexedDB transaction references above. No network research.
 removed: none.
+
+## Fix round 1
+
+Implementer: codex, 2026-10-10. Base HEAD `add7f811`.
+Implemented both assigned findings from the adversarial review in `drive-vault.ts` only.
+No network, git-writing command, test edit, server, or e2e run was used.
+Coordinator owns commits and integration.
+
+### Changes and mechanism reuse
+
+- `declarationsFor` reads only current journal files for the existing `contextRemoved`
+  predicate, evaluated against the declaration's intended folder path. Archived changes are
+  excluded from both this read and its snapshot evidence. No recreation or writes were added.
+- The existing lazy journal promise and versioned `ReadCache` still supply all candidates.
+  Its rejection logs error details once and records only that rejection's identity in the
+  snapshot closure; candidates sharing it retain unknown completeness without duplicate logs.
+  This adds no persistent store, scanner, or cache. Refresh retains its existing retry behavior.
+- A rejected full-read promise now logs its details before evicting the failed snapshot.
+  Authentication/session refusals still propagate and log at that rejection handler.
+- `orphanState`, member accounting, declaration/disposition caches, stamped retirement, unknown
+  context-only classification, the summary API, and Home's assertions are unchanged.
+
+removed: src/data/vault/drive-vault.ts:740 (base): archived lines from snapshot journal evidence.
+removed: src/data/vault/drive-vault.ts:752-753 (base): recovery's active-and-archived journal reader.
+removed: src/data/vault/drive-vault.ts:772 (base): silent rejected-snapshot eviction handler.
+removed: no files, tests, contracts, bounds, or upload mechanisms.
+tests changed: none.
+
+### Red and green evidence
+
+Exact committed regression:
+`orphan-pile-count-data: fix 1: a failed context-only Add costs the same reads with a small or large change history`.
+The unchanged baseline failed its equality assertion: 5 versus 203 Drive calls for 2 versus
+200 archived changes. `src/architecture.test.ts`, `errors are never swallowed`, also failed
+on the `.catch` at base `drive-vault.ts:772`. Both are green after the fix.
+
+Commands used `pnpm --config.verifyDepsBeforeRun=false --config.offline=true` to prevent network
+and dependency restoration. Vitest was installed; no installation was needed.
+Outputs went under `tmp-logs/`; only failures and aggregate results were read.
+
+- Before edits: Vitest over `src/data/orphan-pile-count.test.ts`,
+  `src/data/live/home-cache.test.ts`, and `src/architecture.test.ts`, `--maxWorkers=2`:
+  27 passed, the two assigned assertion reds failed.
+- After edits: the same focused suite: 3 files, 29 tests passed.
+  All 10 Home cache tests and all 12 orphan tests pass, including the committed fix-round red.
+- Requested full target: `pnpm exec vitest run src/data src/architecture.test.ts --maxWorkers=2`:
+  80 files, 4,179 tests passed, exit 0. Contradicting tests: none.
+- App/node TypeScript, `tsc -p tsconfig.app.json --noEmit` and
+  `tsc -p tsconfig.node.json --noEmit`: both passed, exit 0.
+  An intermediate narrowing error in the rejection marker was corrected; final app check passed.
+- ESLint on `src/data/vault/drive-vault.ts`: passed, exit 0. `git diff --check`: passed.
+- A temporary Node verification probe using the real `FakeDrive` and `DriveVault` made
+  two real failed context-only Adds and refused one current journal line. It verified
+  one read and one detailed error log per snapshot, cached unknown completeness, and
+  one further read/log after refresh. Passed, exit 0. No test file changed.
+- `pnpm check` ran through its built-in `harness/with-lock.sh` heavy-run lock. Lint passed;
+  build-mode TypeScript stopped with TS5033/EPERM while writing app/node/sw build info
+  under `node_modules/.tmp/`. This environment failure prevents a full check mark;
+  it is not a test/ruling contradiction. Separate required app/node checks above pass.
+- Logs: `fix-1-red.log`, `fix-1-focused.log`, `fix-1-data.log`, `fix-1-tsc-app.log`,
+  `fix-1-tsc-node.log`, `fix-1-eslint.log`, `fix-1-shared-failure.log`, `fix-1-check.log`.
+  Evidence is recorded here; `tmp-logs/`, including temporary probe scripts, was deleted.
+
+Standard solution: reused the local current-journal query, `contextRemoved`, and existing
+single-flight versioned `ReadCache`; inherited protocol/durability sources were not fetched:
+[Google Drive resumable uploads](https://developers.google.com/workspace/drive/api/guides/manage-uploads#resumable)
+and [IndexedDB transactions](https://www.w3.org/TR/IndexedDB/#transaction-concept).
+No upload protocol or durability mechanism changed.
+
+Left out: full check mark (sandbox EPERM), UI/e2e (`ui: false`), test changes, commits, integration.

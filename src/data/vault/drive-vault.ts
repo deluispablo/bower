@@ -737,7 +737,7 @@ export class DriveVault implements VaultSource {
   /** The same cached record query used by a full piles read, including its unknown evidence. */
   private declarationsFor(ix: VaultIndex): Promise<{ declarations: Array<LooseDeclaration & { missingLoose: boolean }>; summary: { count: number; complete: boolean } }> {
     const files = this.known(ix);
-    const evidence = [...files, ...ix.journalFiles(true)];
+    const evidence = [...files, ...ix.journalFiles()];
     const kept = this.fullDeclarations;
     if (kept?.ix === ix && evidence.length === kept.files.length && evidence.every((f, i) => f === kept.files[i])) return kept.read;
     const read = (async () => {
@@ -749,8 +749,16 @@ export class DriveVault implements VaultSource {
       const summary = { count: 0, complete: found.complete };
       const declarations: Array<LooseDeclaration & { missingLoose: boolean }> = [];
       let journal: Promise<unknown[]> | null = null;
+      const journalFailure: { error?: unknown } = {};
+      // Only current context-removal lines apply; archived changes are not recovery evidence.
       const removed = async (path: string): Promise<boolean> => contextRemoved(
-        await (journal ??= journalValues(ix.journalFiles(true), (id) => this.readTextOnce(id))), path);
+        await (journal ??= journalValues(ix.journalFiles(), (id) => this.readTextOnce(id)).catch((e: unknown) => {
+          if ((e instanceof BowerError && e.code === 'auth') || !this.current()) throw e;
+          // Every candidate shares this rejection and its one log for the snapshot.
+          console.error(e);
+          journalFailure.error = e;
+          throw e;
+        })), path);
       for (const declaration of found.declarations) {
         try {
           const state = await orphanState(declaration, inbox, files, (id) => this.readBytesOnce(id),
@@ -760,7 +768,7 @@ export class DriveVault implements VaultSource {
           if (state.state === 'unknown') summary.complete = false;
         } catch (e) {
           if ((e instanceof BowerError && e.code === 'auth') || !this.current()) throw e;
-          console.error(e);
+          if (!('error' in journalFailure) || journalFailure.error !== e) console.error(e);
           summary.complete = false;
         }
       }
@@ -769,7 +777,10 @@ export class DriveVault implements VaultSource {
     })();
     this.fullDeclarations = { ix, files: evidence, read };
     // A session refusal reaches its caller; it must not poison later reads of this snapshot.
-    read.catch(() => { if (this.fullDeclarations?.read === read) this.fullDeclarations = null; });
+    read.catch((e: unknown) => {
+      console.error(e);
+      if (this.fullDeclarations?.read === read) this.fullDeclarations = null;
+    });
     return read;
   }
 
