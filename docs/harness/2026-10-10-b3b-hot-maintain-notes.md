@@ -101,3 +101,24 @@ implementation/coordinator work. Logs are local artifacts, not committed by this
 - docs/harness/2026-10-10-b3b-hot-maintain-notes.md
 
 Coordinator handoff: commit the red tests/fixture/verdict separately from these notes; no commits were created here.
+
+## Lead-authorized assertion repairs (2026-10-10, B1c/B3b red repairs)
+
+tests changed: runner/test/b1a-contract.test.ts:217: TL-P4-42 Q5: permit .bower/hot.md in the existing bounded maintain write set; the existing at-most-one count and all MOC guards remain unchanged.
+tests changed: harness/corpus/b23-hot-question-answer/expected.json:6: TL-P4-45: locate this hot assertion at .bower/hot.md; preserve every content and report expectation.
+tests changed: harness/corpus/b23-hot-question-answer/expected.json:18: TL-P4-45: locate this hot assertion at .bower/hot.md; preserve every content and report expectation.
+tests changed: harness/corpus/b23-hot-question-answer/expected.json:52: TL-P4-45: locate this hot assertion at .bower/hot.md; preserve every content and report expectation.
+tests changed: harness/corpus/b23-hot-question-answer/expected.json:64: TL-P4-45: locate this hot assertion at .bower/hot.md; preserve every content and report expectation.
+tests changed: harness/corpus/b23-hot-question-answer/expected.json:94: TL-P4-45: locate this hot assertion at .bower/hot.md; preserve every content and report expectation.
+tests changed: harness/corpus/b23-hot-question-answer/expected.json:106: TL-P4-45: locate this hot assertion at .bower/hot.md; preserve every content and report expectation.
+tests changed: harness/corpus/b23-hot-evidence-only/expected.json:4: TL-P4-45: locate this hot assertion at .bower/hot.md; preserve every content and report expectation.
+tests changed: harness/corpus/b23-hot-evidence-only/expected.json:13: TL-P4-45: locate this hot assertion at .bower/hot.md; preserve every content and report expectation.
+
+Preserved: harness/corpus/b23-hot-question-answer/expected.json:79 q-ask-p-1 contradicts no supplied ruling; unchanged and reported. Its known file-subject identity conflict remains for the lead. All numbers, goldens, thresholds, fixture bytes and other assertions remain unchanged. Prior preserved-conflict rows describe the original red delivery; the root-hot and bounded-set conflicts alone are repaired by this round. No production edits or git writes.
+
+### Repair-round verification
+
+- `pnpm -C runner exec vitest run test/b1a-contract.test.ts test/b23-hot-context.test.ts test/b23-hot-recovery.test.ts test/second-brain-method.test.ts --maxWorkers=2 --outputFile=../tmp-logs/b3b-repairs-verdicts.json`: 23 pass, 9 assertion reds; all 18 B1a tests pass, including the repaired bounded-write test. All nine B3b reds listed above remain red (hot implementation/baseline work pending). Log: tmp-logs/b3b-repairs-tests.log; exact verdicts: tmp-logs/b3b-repairs-verdicts.json and tmp-logs/b3b-repairs-summary.txt.
+- Only the two changed fixtures were additionally exercised with a temporary Vitest probe/config in tmp-logs, through the existing runScripted driver, fake time and `--maxWorkers=2`. Both remain assertion-red; exact scorer failures: tmp-logs/b3b-repairs-fixtures.json, readable summary: tmp-logs/b3b-repairs-summary.txt. The question-answer fixture still reports its preserved q-ask-p-1 identity conflict; evidence-only still retains unsupported evidence and lacks a report. No unrelated corpus cases ran. Initial temporary probe setup had a config import failure, then a missing localStorage stub; both were corrected. The final probe uses the existing B3b storage stub pattern and has only assertion failures.
+- App, node and runner `tsc --noEmit` pass (exit 0): tmp-logs/b3b-repairs-tsc-app.log, tmp-logs/b3b-repairs-tsc-node.log, tmp-logs/b3b-repairs-tsc-runner.log. ESLint for test/b1a-contract.test.ts passes (exit 0): tmp-logs/b3b-repairs-eslint.log.
+- Read-only HEAD comparisons confirm both expected.json files differ solely in the eight hot paths, and the TypeScript file solely in the ruled bounded-set allowance and its citation. No fixture content bytes, other assertions, numbers, goldens or thresholds changed. No full gates, e2e, network or writing git command ran. Coordinator owns commits.
