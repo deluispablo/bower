@@ -53,6 +53,8 @@ test('only one bird changes transforms per screen', async ({ page }) => {
     );
   const first = await sample();
   expect(first.length).toBeGreaterThan(0);
+  // A real tap goes through react('tap') before the poll (TL-P4-26 addenda 4 (b) and 5).
+  await page.locator('[data-bird]:not(.posed)').click();
   let changed: number[] = [];
   await expect
     .poll(
@@ -95,7 +97,7 @@ test("a tap goes through react('tap') on Home", async ({ page }) => {
     for (let i = 0; i < 6; i++) {
       (window as unknown as { bowerFrames(n: number): void }).bowerFrames(1);
       const perch = document.querySelector<HTMLElement>('[data-bird]:not(.posed) .bird-perch');
-      const y = Number(perch?.style.transform.match(/translate\([^,]+,(-?[\d.]+)px/)?.[1] ?? 0);
+      const y = perch ? new DOMMatrix(getComputedStyle(perch).transform).m42 : 0;
       lowest = Math.min(lowest, y);
     }
     return lowest;
