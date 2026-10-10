@@ -1030,3 +1030,102 @@ The sole tracked change is this notes appendix.
 whole-check failures and local-listener refusals remain recorded under Fix round 1; no full-gate mark
 or e2e success is claimed here. This round completes the user's requested checks.
 Left out: Q1c live publication, Q1b UI, which-note, B12, full-gate repair, commits and integration.
+
+## Fix round 3 reds
+
+2026-10-10. Codex red owner; lead-approved class sweep, TL-P4-44 addendum 5 and TL-P4-51.
+Production HEAD: `5befca27ad87ab9f06c62b4a6620aef4b8c2e983`, unchanged throughout this session.
+Read WORKER, the packet, these notes and the pass-2 adversarial review (BLOCK 3).
+Applied the supplied addendum 5: rounds/exhaustion belong to members; a pile asking counts for each
+waiting member it covers; the pile count is their maximum; exhausted members alone are held.
+Clear existing and later siblings file with unchanged words. Unavailable-folder consent keeps its
+subject waiting for the next run's new asking, before any model placement.
+Addendum 5 is supplied by the owner and is not claimed present in this checkout's DECISIONS.
+The coordinator owns commits. Only the assigned test additions and this requested appendix were edited.
+No network, writing git command, production change, corpus addition, counter seed or real timer was used.
+
+tests changed: runner/test/q1-continuation.test.ts: add one production-path red and positive control per BLOCK-3 finding under TL-P4-44 addendum 5; preserve every existing assertion and bound.
+removed: none. Removing only the newly inserted describe block reconstructs HEAD's test file byte for byte.
+
+### Exact names and observed HEAD failures
+
+1. `Q1a fix 3.1: unavailable chosen folders force a new asking before next-tidy model placement`
+
+   Main creates asking one; answerQuestion and the real /process accept its generated Home option.
+   Covers both Home binned and Home moved under Inbox. The answer continuation holds the original
+   item, writes no asking and keeps count one. The next ordinary tidy receives a valid Job hunt
+   placement, with no asking supplied by the model. It must write a newer asking/count two and leave
+   the item evidence unchanged, with no item move in its manifest and no expired folder option.
+   Positive control: available Home consent overrides that same valid Job hunt proposal and preserves bytes.
+   Observed failure at `runner/test/q1-continuation.test.ts:1297`: both unavailable cases write no asking,
+   instead moving the item into Job hunt. New-identity, count-two, unchanged-evidence and no-move assertions
+   also fail for the same defect. Both continuation holds and the available-folder control pass.
+
+2. `Q1a fix 3.2: mixed member histories cap pile askings and count only the waiting member`
+
+   Main generates both member histories in one unchanged pile: A is Unclear, B is Clear.
+   A's unanswered asking remains open while B receives and answers two askings without a place.
+   The fixture repeats A's open asking in those replies so the provider's omitted-item safety cannot
+   mask the round-cap defect. Hard assertions establish A=count one and B=count two/exhausted before
+   answering A. A pile-level model asking must now be restricted to A; it cannot ask B a third time.
+   A reaches count two, B retains its exhausted count two, and an unchanged rerun keeps only A waiting.
+   Positive control: switching a sole waiting member's first asking to a pile asking writes round two.
+   Observed failure at `runner/test/q1-continuation.test.ts:1356`: main writes `q-ask-pile-mixed`, covering
+   exhausted B a third time. The unchanged rerun retains that pile card. The mixed-history setup,
+   A's increment, B's retained exhausted history, original words and B's evidence all pass.
+
+3. `Q1a fix 3.3: exhausted members stay untouched while existing and later clear siblings file`
+
+   Main exhausts the unclear member through two actual asking/answer runs. Its existing clear sibling
+   returns to the unchanged pile, and a later clear sibling is added after the next tidy.
+   Both runs propose valid placements, including the exhausted member, so an omitted model decision
+   cannot hold the fixture before the exhaustion policy is reached. Replies include only currently
+   admitted ids, allowing the second run after the existing sibling has correctly left.
+   Each clear sibling must file with unchanged bytes; the exhausted member's full evidence, history,
+   absent third asking and original pile words must remain unchanged across both runs.
+   Positive control: the same ordinary placements file both members when neither is exhausted.
+   Observed failures at `runner/test/q1-continuation.test.ts:1398` and `:1411`: both clear siblings stay
+   under the inbox pile instead of Home. The ordinary control and every exhausted-member hold pass.
+
+### TL-P4-51 class sweep
+
+Searched test/spec files for exhaustion, round histories, pile askings, whole-pile holding, siblings
+and untouched piles. Search evidence: `tmp-logs/q1a-fix-3-class-sweep.txt`,
+`tmp-logs/q1a-fix-3-holding-sweep.txt`, `tmp-logs/q1a-fix-3-member-sweep.txt`;
+the test-file inventory is `tmp-logs/q1a-fix-3-test-inventory.txt`.
+No existing test assertion contradicting addendum 5 was found; none was edited.
+
+- `runner/test/q1-continuation.test.ts:534`, `:950`, `:1022`: pile/member round-switch cases leave
+  only one content member in the pile. Their single count-two history remains compatible with member rounds.
+  Fix 1.3's title/comment says "shared counter", but its sole-member assertion does not require a
+  counter shared between different members. It remains unchanged for the coordinator's review.
+- `runner/test/q1-continuation.test.ts:787`: exhausted pile projection with a newly waiting sibling
+  explicitly expects waiting to win. It does not require that clear siblings be held.
+- `runner/test/claude-provider.test.ts:520`, whole-pile holding assertion at `:557`: its omitted-item
+  fixture has no exhaustion history. It tests missing model proposals, not member exhaustion.
+- `runner/test/per-thing-ask.test.ts:59`: explicitly files the rest of a pile beside a waiting member.
+  Remaining holding matches concern readiness, unreadable notes, missing uploads, races or pending edits,
+  rather than exhaustion after answers. Those established bounds and assertions remain untouched.
+
+### Validation
+
+Final whole-file command (exit 1 is the requested red result):
+
+```sh
+TMPDIR=/private/tmp/bower-q1a-stored-answers/tmp-logs pnpm -C runner exec vitest run test/q1-continuation.test.ts --maxWorkers=2 --reporter=json --outputFile=../tmp-logs/q1a-fix-3-reds.json > tmp-logs/q1a-fix-3-reds.log 2>&1
+```
+
+- Whole Q1 file: 39 tests; all 36 existing tests pass; all three new reds fail for their stated findings.
+  All positive controls and fixture prerequisites pass. Failures are AssertionError only, with no skips,
+  load errors, timeouts or uncaught errors. Logs: `tmp-logs/q1a-fix-3-reds.json` and `.log`.
+- Runner tsc: pass; `tmp-logs/q1a-fix-3-tsc.log`.
+- Touched-test ESLint: pass; `tmp-logs/q1a-fix-3-eslint.log`.
+- Read-only preservation comparison and `git diff --check`: pass; no production diff; HEAD unchanged.
+
+Initial fixture verification corrected an evidence text lookup and member ordering, then repeated
+the still-open A asking to avoid unrelated omitted-item holding. The final reds reach all three defects;
+no existing assertion or bound changed during those corrections.
+Offline research reuses the established production-main/in-process route fixtures and existing references
+under Research, including [Hono testing](https://hono.dev/docs/guides/testing), tagged unions, tolerant
+readers and stable request identity. No online verification or new execution mechanism is claimed.
+Left out: production repairs, full check/e2e, commits and integration; this is the authorized red-only round.

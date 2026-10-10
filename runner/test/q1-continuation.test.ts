@@ -1258,6 +1258,166 @@ describe('Q1a fix round 1 through production entry points', () => {
   }, 60_000);
 });
 
+describe('Q1a fix round 3 through production entry points', () => {
+  it('Q1a fix 3.1: unavailable chosen folders force a new asking before next-tidy model placement', async () => {
+    for (const destination of ['valid', 'gone', 'inbox'] as const) {
+      let placement = false;
+      const w = await world((w) => placement
+        ? { ...emptyIntent, things: [{ fileId: w.ids.unclear, to: 'Projects/Job hunt', name: 'Unclear.md' }] }
+        : { ...emptyIntent, asks: [optionAsk(w)] });
+      const first = await firstAsking(w);
+      const choice = first.options?.find((o) => o.action.folderId === w.ids.home);
+      expect(choice).toBeDefined();
+      tick();
+      expect((await answer(w, first, { option: choice?.id ?? '' }))?.outcome.kind).toBe('now');
+      if (destination === 'gone') await w.drive.trash(w.ids.home);
+      if (destination === 'inbox') {
+        const home = await w.drive.get(w.ids.home);
+        await w.drive.update(home.id, { addParent: w.ids.inbox, removeParent: home.parents[0] });
+        expect(w.drive.pathOf(home.id, w.rootId)).toBe('Inbox/Home');
+      }
+      const before = await w.drive.evidence(w.ids.unclear);
+      const bytes = await w.drive.readText(w.ids.unclear);
+      placement = true;
+      expect(await run(w, 1)).toBe(0);
+      if (destination === 'valid') {
+        // Positive control: this model placement is valid, and available stored consent still wins.
+        expect((await w.drive.get(w.ids.unclear)).parents).toEqual([w.ids.home]);
+        expect(await w.drive.readText(w.ids.unclear)).toBe(bytes);
+        expect(await questions(w)).toEqual([]);
+        continue;
+      }
+      expect(await w.drive.evidence(w.ids.unclear), 'unavailable consent holds the answer continuation').toEqual(before);
+      expect(await questions(w), 'the answer continuation writes no replacement asking').toEqual([]);
+      expect(await roundHistory(w)).toEqual([expect.objectContaining({ count: 1 })]);
+      tick();
+      await press(w);
+      expect(await run(w, 2)).toBe(0);
+      const next = await questions(w);
+      expect.soft(next, `${destination}: next tidy must re-ask despite a valid alternative model placement`)
+        .toEqual([expect.objectContaining({ subject: w.ids.unclear })]);
+      expect.soft(next[0]?.askedAt ?? first.askedAt, 'the replacement is a newly written asking').toBeGreaterThan(first.askedAt);
+      expect.soft(await roundHistory(w), 'only the next run writes round two')
+        .toEqual([expect.objectContaining({ count: 2 })]);
+      expect.soft(await w.drive.evidence(w.ids.unclear), 'no model placement before the new asking').toEqual(before);
+      expect.soft((await manifestOf(w, 2))?.operations.filter((o) =>
+        o.effect.kind === 'move' && o.effect.before?.fileId === w.ids.unclear), 'no alternative move is planned').toEqual([]);
+      expect(next.flatMap((q) => q.options ?? []).some((o) => o.action.folderId === w.ids.home)).toBe(false);
+    }
+  });
+
+  it('Q1a fix 3.2: mixed member histories cap pile askings and count only the waiting member', async () => {
+    // Positive control: a pile-level asking supplies round two to its sole waiting member.
+    const single = await world((w) => ({ ...emptyIntent, asks: [{
+      ...(w.calls.length === 1 ? { fileId: w.ids.unclear } : { pileId: 'pile-mixed' }), ...yesNo,
+    }] }));
+    const second = await secondAsking(single);
+    expect(second.subject).toBe('pile-mixed');
+    expect(await roundHistory(single)).toEqual([expect.objectContaining({ count: 2 })]);
+
+    let phase: 'both' | 'b' | 'unresolved' | 'pile' = 'both';
+    const w = await world((w) => ({ ...emptyIntent, asks: phase === 'pile'
+      ? [{ pileId: 'pile-mixed', ...yesNo }]
+      : [w.ids.unclear, w.ids.clear].map((fileId) => ({ fileId, ...yesNo })) }));
+    await press(w);
+    expect(await run(w, 0)).toBe(0);
+    const first = await questions(w);
+    const a = first.find((q) => q.subject === w.ids.unclear);
+    const b = first.find((q) => q.subject === w.ids.clear);
+    expect(a).toBeDefined();
+    expect(b).toBeDefined();
+    if (!a || !b) throw new Error('Missing fixture member askings');
+    expect(await roundHistory(w)).toEqual([
+      expect.objectContaining({ subject: w.ids.unclear, count: 1 }),
+      expect.objectContaining({ subject: w.ids.clear, count: 1 }),
+    ]);
+    phase = 'b';
+    tick();
+    expect((await answer(w, b, { text: 'There is still no place for this paper.' }))?.outcome.kind).toBe('now');
+    expect(await run(w, 1)).toBe(0);
+    const b2 = (await questions(w)).find((q) => q.subject === w.ids.clear);
+    expect(b2).toBeDefined();
+    if (!b2) throw new Error('Missing fixture second member asking');
+    phase = 'unresolved';
+    tick();
+    expect((await answer(w, b2, { text: 'I still do not know.' }))?.outcome.kind).toBe('now');
+    expect(await run(w, 2)).toBe(0);
+    const before = await w.drive.evidence(w.ids.clear);
+    expect(await questions(w)).toEqual([a]);
+    expect(await roundHistory(w)).toEqual([
+      expect.objectContaining({ subject: w.ids.unclear, count: 1 }),
+      expect.objectContaining({ subject: w.ids.clear, count: 2, exhausted: true }),
+    ]);
+    expect(await w.drive.readText(w.ids.anchor)).toBe(WORDS);
+    phase = 'pile';
+    tick();
+    expect((await answer(w, a, { text: 'I cannot choose a place yet.' }))?.outcome.kind).toBe('now');
+    expect(await run(w, 3)).toBe(0);
+    expect.soft(await questions(w), 'a pile asking cannot cover exhausted B a third time; re-ask only A')
+      .toEqual([expect.objectContaining({ subject: w.ids.unclear })]);
+    expect.soft(await roundHistory(w), 'A reaches two while B keeps its own exhausted count of two').toEqual([
+      expect.objectContaining({ subject: w.ids.unclear, count: 2 }),
+      expect.objectContaining({ subject: w.ids.clear, count: 2, exhausted: true }),
+    ]);
+    expect(await w.drive.evidence(w.ids.clear)).toEqual(before);
+    expect(await w.drive.readText(w.ids.anchor)).toBe(WORDS);
+    tick();
+    await press(w);
+    expect(await run(w, 4)).toBe(0);
+    expect.soft(await questions(w), 'an unchanged rerun keeps only A waiting, never a pile card covering B')
+      .toEqual([expect.objectContaining({ subject: w.ids.unclear })]);
+  });
+
+  it('Q1a fix 3.3: exhausted members stay untouched while existing and later clear siblings file', async () => {
+    const placements = (w: World, later?: string) => ({ ...emptyIntent, things: [
+      { fileId: w.ids.unclear, to: 'Areas/Home', name: 'Unclear.md' },
+      { fileId: w.ids.clear, to: 'Areas/Home', name: 'Clear.md' },
+      ...(later ? [{ fileId: later, to: 'Areas/Home', name: 'Later.md' }] : []),
+    ] });
+    // Positive control: these placements file both members without exhausted history.
+    const ordinary = await world((w) => placements(w));
+    await press(ordinary);
+    expect(await run(ordinary, 0)).toBe(0);
+    expect((await ordinary.drive.get(ordinary.ids.unclear)).parents).toEqual([ordinary.ids.home]);
+    expect((await ordinary.drive.get(ordinary.ids.clear)).parents).toEqual([ordinary.ids.home]);
+
+    const w = await exhaust();
+    const history = await roundHistory(w);
+    const before = await w.drive.evidence(w.ids.unclear);
+    // The existing sibling returns; its member identity has never used an asking.
+    await w.drive.update(w.ids.clear, { addParent: w.ids.pile, removeParent: w.ids.home });
+    const clearBytes = await w.drive.readText(w.ids.clear);
+    const spawn = (later?: string): ClaudeSpawn => async (call) => {
+      w.calls.push(call);
+      const intent = placements(w, later);
+      const admitted = new Set(shownOf(call).piles.flatMap((p) => p.things.map((t) => t.fileId)));
+      return reply({ ...intent, things: intent.things.filter((t) => admitted.has(t.fileId)) });
+    };
+    await press(w);
+    expect(await runWithSpawn(w, 3, spawn())).toBe(0);
+    expect.soft((await w.drive.get(w.ids.clear)).parents, 'exhausted B must not hold its clear existing sibling')
+      .toEqual([w.ids.home]);
+    expect(await w.drive.readText(w.ids.clear)).toBe(clearBytes);
+    expect(await w.drive.evidence(w.ids.unclear), 'only the exhausted member stays untouched').toEqual(before);
+    expect(await roundHistory(w)).toEqual(history);
+    expect(await questions(w)).toEqual([]);
+    expect(await w.drive.readText(w.ids.anchor)).toBe(WORDS);
+
+    const later = await w.drive.createText(w.ids.pile, 'Later.md', '# Home\n\nAnother made-up room paper.\n');
+    const laterBytes = await w.drive.readText(later.id);
+    tick();
+    await press(w);
+    expect(await runWithSpawn(w, 4, spawn(later.id))).toBe(0);
+    expect.soft((await w.drive.get(later.id)).parents, 'a later sibling starts clear even when pile words are unchanged')
+      .toEqual([w.ids.home]);
+    expect(await w.drive.readText(later.id)).toBe(laterBytes);
+    expect(await w.drive.evidence(w.ids.unclear)).toEqual(before);
+    expect(await roundHistory(w)).toEqual(history);
+    expect(await questions(w)).toEqual([]);
+    expect(await w.drive.readText(w.ids.anchor)).toBe(WORDS);
+  });
+});
+
 async function runWithSpawn(w: World, index: number, spawn: ClaudeSpawn): Promise<number> {
   const { main } = await import('../src/main');
   const { writeFile, mkdir } = await import('node:fs/promises');
