@@ -346,3 +346,4 @@ d-v2-24a,property-red,codex,gpt-5-codex,medium,2,364688,362879,,328320,1809,,,,r
 create-time,diagnosis,codex,gpt-5-codex,medium,1,669534,664763,,610688,4771,,,,product defect,2026-10-10
 c4-undo-compensate,implementer,codex,gpt-5-codex,high,5,2702178,2681783,,2545536,20395,,,,re-plan done,2026-10-10
 c4-undo-compensate,adversarial,codex,gpt-5-codex,high,3,1298113,1289914,,1191808,8199,,,,3 Important (re-plan),2026-10-10
+c4-create-resume,property-red,codex,gpt-5-codex,medium,1,299277,296696,,266752,2581,,,,red written,2026-10-10
