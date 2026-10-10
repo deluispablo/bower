@@ -9,6 +9,15 @@
  * even when the layout moves under it.
  */
 
+import type { Reaction, ReactionKind } from './react';
+
+interface ReactionRequest {
+  kind: ReactionKind;
+  at?: Point;
+  ended: boolean;
+  started: number;
+}
+
 export interface Point {
   x: number;
   y: number;
@@ -127,6 +136,7 @@ const follow = (
 };
 
 interface Action {
+  ownsHead?: boolean;
   el?: number;
   start?(): void;
   /** Returns true when done. */
@@ -167,6 +177,12 @@ export interface EngineOptions {
   sleeps?: boolean;
   /** `false` pauses the mind's act scheduling (a test seam). */
   acts?: boolean;
+  /** The mount owns lifetime; the engine reports settlement after drawing its last frame. */
+  onStill?: () => void;
+  /** Settings alone holds a closed-eye still frame. */
+  settings?: boolean;
+  /** Motion-setting transitions also apply to a mounted sleep pose; ordinary reactions still hear nothing. */
+  motionChange?: () => boolean;
 }
 
 /** The mind's idle acts (TL-P4-25); `look` is wait's own. */
@@ -190,7 +206,6 @@ const DOZE = 60;
  * by its profile (TL-P4-22 addendum 20, TL-P4-26 addendum 1, TL-P4-25 addendum 7).
  */
 const STARTLE = { tuft: 18, head: -10, rise: 0.15, seconds: 0.6, fall: 0.4 } as const;
-const STARTLE_TOTAL = STARTLE.rise + STARTLE.seconds + STARTLE.fall;
 /** The iris at rest, where no act or input moves it (wait looks straight ahead instead). */
 const IRIS_REST = { x: 0.4, y: 0 } as const;
 /** The draw's weights (TL-P4-25 act table); wait adds `look`. */
@@ -322,6 +337,7 @@ export class BirdEngine {
     ws: 1,
     home: true,
     carrying: false,
+    ruleCarry: false,
     headY: 0,
     tuftY: 0,
     opacity: 1,
@@ -342,13 +358,11 @@ export class BirdEngine {
     quietT: 0,
     /** The act under way on the act channel (idle, wait, a layer's bird between flights). */
     doing: null as Action | null,
-    /** The startle's seconds left, head settlement, and the tuft's starting angle. */
-    startleT: 0,
-    startleLanded: false,
-    startleFrom: 0,
+    /** The shared startle step owns the snap until its stationary landing frame. */
+    startleRising: false,
     sleepT0: 0,
-    /** The latest tap on a layer bird in flight or carrying, played when it lands. */
-    tap: false,
+    /** One latest input, played on landing (tap and reactions share it). */
+    pending: null as ReactionRequest | null,
     lastSnap: 0,
     nextIdle: 1.2,
     nextBlink: 2,
@@ -356,8 +370,16 @@ export class BirdEngine {
     blink: 0,
     blinkDouble: false,
     chirpT: 0,
+    chirpLength: 0,
     behindT: 0,
   };
+  private reaction: ReactionRequest | null = null;
+  private motion: 'live' | 'settling' | 'still' = 'live';
+  private eyeOpen: number | null = null;
+  private notifyStill = false;
+  private onStill?: () => void;
+  private settings: boolean;
+  private settingChanges: () => boolean;
   private raf = 0;
   private drawnSize: number | null = null;
   private drawnPlace: string | null = null;
@@ -393,6 +415,9 @@ export class BirdEngine {
     this.random = options.random ?? Math.random;
     this.sleeps = options.sleeps ?? false;
     this.acts = options.acts ?? true;
+    this.onStill = options.onStill;
+    this.settings = options.settings ?? false;
+    this.settingChanges = options.motionChange ?? (() => false);
     const h = home();
     this.B.x = h.x;
     this.B.y = h.y;
@@ -432,12 +457,14 @@ export class BirdEngine {
    * idles at random; `null` gives the bird back to its layer's idle mind.
    */
   setPose(pose: PoseName | null): void {
+    // A screen may change its pose during the settle; the same act follows the new still target.
+    if (this.motion === 'settling') { this.pose = pose; return; }
     this.interrupt();
     this.endAct();
     this.pose = pose;
     this.asleep = pose === 'sleep';
     this.S.quietT = this.S.t;
-    this.S.startleT = 0;
+    this.S.startleRising = false;
     this.poseT0 = this.S.t;
     this.poseCycle = -1;
     this.B.headY = 0;
@@ -480,7 +507,6 @@ export class BirdEngine {
   /**
    * An input with no place: wakes the bird with a startle (tuft up 18 degrees, head -10,
    * for 0.6 s), or startles it where the mind owns its acts.
-   * @public d-v2-24's `react()` calls it; nothing in the app does yet.
    */
   nudge(): void {
     if (!this.heard()) return;
@@ -492,7 +518,7 @@ export class BirdEngine {
    * sleep pose, which hears nothing.
    */
   private heard(): boolean {
-    if (this.pose === 'sleep') return false;
+    if (this.pose === 'sleep' || this.motion !== 'live') return false;
     this.S.inputT = this.S.t;
     this.S.quietT = this.S.t;
     if (this.asleep) this.wake();
@@ -505,10 +531,34 @@ export class BirdEngine {
    * 0, and the gaze moves only the iris. The head's profile carries it there.
    */
   private startle(): void {
-    this.S.startleT = STARTLE_TOTAL;
-    this.S.startleLanded = false;
-    this.S.startleFrom = this.C.tuft.v;
+    this.endAct();
+    this.S.doing = this.makeStartle();
+    this.S.doing.el = 0;
     this.H.gaze = 0;
+  }
+  /** One arrival-based step, shared by wake, nudge and reaction timelines. */
+  private makeStartle(): Action {
+    const from = this.C.tuft.v;
+    let hold = -1;
+    let fall = 0;
+    this.S.startleRising = true;
+    return {
+      ownsHead: true,
+      update: (el, dt) => {
+        const restTuft = this.C.tuft.t;
+        if (hold < 0 && el >= STARTLE.rise && !this.S.startleRising) hold = 0;
+        else if (hold >= 0) hold += dt;
+        if (hold < STARTLE.seconds) {
+          this.H.t = STARTLE.head;
+          pin(this.C.tuft, from + (STARTLE.tuft - from) * smooth(el / STARTLE.rise));
+          return false;
+        }
+        fall += dt;
+        pin(this.C.tuft, STARTLE.tuft + (restTuft - STARTLE.tuft) * smooth(fall / STARTLE.fall));
+        return fall >= STARTLE.fall;
+      },
+      end: () => { this.S.startleRising = false; },
+    };
   }
   /** Whether the mind owns the act channel: idle, wait, or a layer's bird. */
   private minded(): boolean {
@@ -524,7 +574,7 @@ export class BirdEngine {
   }
   /**
    * Fires one named idle act on the act channel, cutting the one under way.
-   * The mind draws them; d-v2-24's `react()` fires them too. Only a bird whose
+   * The mind draws them. Only a bird whose
    * act channel the mind owns (idle, wait, a layer's) and that is awake acts.
    */
   act(name: ActName): void {
@@ -539,11 +589,227 @@ export class BirdEngine {
     const a = this.S.doing;
     this.S.doing = null;
     this.doing = null;
+    this.reaction = null;
     a?.end?.();
   }
-  /** The act table (TL-P4-25): each act writes its part; `rest()` puts the parts back each frame. */
-  private makeAct(name: ActName): Action {
+  /** The only reaction dispatcher; a return handle ends this particular input. */
+  play(kind: ReactionKind, at?: Point): Reaction {
+    const request: ReactionRequest = { kind, at, ended: false, started: this.S.t };
+    if (this.pose === 'sleep' && kind !== 'error' && kind !== 'offline' &&
+      !((kind === 'moves-off' || kind === 'moves-on') && this.settingChanges())) return { end() {} };
+    if (this.motion !== 'live' && kind !== 'moves-on') return { end() {} };
+    this.S.inputT = this.S.t;
+    this.S.quietT = this.S.t;
+    if (kind !== 'moves-off' && kind !== 'moves-on' && !this.pose && !this.reaction && (this.busy || this.B.carrying)) this.S.pending = request;
+    else this.beginReaction(request);
+    return { end: () => { request.ended = true; } };
+  }
+  private beginReaction(request: ReactionRequest): void {
+    if (request.ended) return;
+    const waking = this.asleep || request.kind === 'moves-on';
+    this.interrupt({ now: true });
+    const settling = request.kind === 'moves-off';
+    if (settling) { this.B.flying = false; this.B.flare = false; this.S.pending = null; }
+    if (!settling) {
+      this.B.headY = 0;
+      this.B.tuftY = 0;
+      this.B.girth = -0.7;
+      this.B.hopY = 0;
+    }
+    this.B.hopKick = 0;
+    this.S.chirpT = 0;
+    this.H.gaze = 0;
+    this.eyeOpen = null;
+    this.motion = request.kind === 'moves-off' ? 'settling' : 'live';
+    this.reaction = request;
+    this.S.doing = this.makeAct(request.kind, request, waking);
+    this.asleep = false;
+    this.S.doing.el = 0;
+  }
+  private updateReaction(dt: number): void {
+    const a = this.S.doing;
+    if (!a) return;
+    this.rest(this.pose === 'wait' ? 'wait' : 'idle');
+    this.C.pitch.t = 0;
+    this.C.squash.t = 1;
+    this.C.legs.t = 1;
+    this.H.gaze = 0;
+    this.gaze(dt, null);
+    a.el = (a.el ?? 0) + dt;
+    if (a.update(a.el, dt)) {
+      this.endAct();
+      this.poseT0 = this.S.t;
+      this.poseCycle = -1;
+      if (this.pose === 'sleep') this.asleep = true;
+    }
+  }
+  /** One composite act and keyed timeline per kind; substeps never enter the layer queue. */
+  private makeReaction(request: ReactionRequest, waking: boolean): Action {
+    const { kind, at } = request;
     const C = this.C;
+    const B = this.B;
+    const needsStartle = kind !== 'moves-off' && (waking || kind === 'bin' || kind === 'error' || kind === 'offline');
+    const startle = needsStartle ? this.makeStartle() : null;
+    let startleDone = !startle;
+    let startleClock = 0;
+    let clock = 0;
+    let ending = -1;
+    let chirped = false;
+    const partStarts: Partial<Record<SpringName, number>> = {};
+    const partEnds: Partial<Record<SpringName, number>> = {};
+    const heldCarry = B.carrying;
+    const fromX = B.x;
+    const fromY = B.y + B.hopY;
+    const fromHead = this.H.v;
+    const fromEye = this.asleep ? 0.08 : 1 - 0.92 * this.S.blink;
+    const fromParts = Object.fromEntries(Object.entries(C).map(([name, c]) => [name, c.v])) as Record<SpringName, number>;
+    const fromHeadY = B.headY;
+    const fromTuftY = B.tuftY;
+    const proud = kind === 'done' ? this.makeShowOff({ tail: -22, wing: 0, tuft: 16, head: 0,
+      pitch: -4, swell: 1.03, wide: 1.05, seconds: 1.5, rise: 0.6, fall: 1.4,
+      turn: false, chirp: false, sparkle: false, kick: 0 }) : null;
+    proud?.start?.();
+    const angle = (keys: ReadonlyArray<readonly [number, number]>): number => keyed(clock, keys, true);
+    const starting = (name: SpringName): number => partStarts[name] ??= C[name].v;
+    const part = (name: SpringName, keys: ReadonlyArray<readonly [number, number]>): void => {
+      pin(C[name], angle([[0, starting(name)], ...keys.slice(1)]));
+    };
+    return {
+      update: (_el, dt) => {
+        if (!startleDone && startle) {
+          startleClock += dt;
+          startleDone = startle.update(startleClock, dt);
+          if (startleDone) startle.end?.();
+          return false;
+        }
+        clock += dt;
+        switch (kind) {
+          case 'yes':
+          case 'send':
+            this.H.t = angle([[0, 0], [0.08, 18], [0.16, 18], [0.24, 0], [0.32, 18], [0.40, 18], [0.48, 0]]);
+            if (kind === 'send' && clock >= 0.48 && !chirped) {
+              chirped = true;
+              this.chirp(0.3);
+            }
+            return clock >= (kind === 'send' ? 0.8 : 0.48);
+          case 'no':
+            this.H.t = angle([[0, 0], [0.07, -14], [0.14, -14], [0.24, 10], [0.31, 10], [0.42, 0]]);
+            return clock >= 0.42;
+          case 'duplicate':
+            this.H.t = angle([[0, 0], [0.2, -14], [0.8, -14], [1, 0]]);
+            this.actionLook(at);
+            return clock >= 1;
+          case 'point-tidy':
+          case 'drag-over': {
+            if ((request.ended || this.S.t - request.started >= 10) && ending < 0) {
+              ending = clock;
+              for (const name of ['pitch', 'tuft', 'jaw'] as const) partEnds[name] = C[name].v;
+            }
+            const q = ending < 0 ? smooth(clock / 0.2) : 1 - smooth((clock - ending) / 0.25);
+            const targets = { pitch: kind === 'point-tidy' ? 10 : 6,
+              tuft: kind === 'point-tidy' ? 16 : 8, jaw: kind === 'point-tidy' ? 0 : 14 };
+            for (const name of ['pitch', 'tuft', 'jaw'] as const) {
+              pin(C[name], ending < 0 ? starting(name) + (targets[name] - starting(name)) * q :
+                (partEnds[name] ?? 0) * q);
+            }
+            return ending >= 0 && clock - ending >= 0.25;
+          }
+          case 'task-done':
+            if (!chirped) { chirped = true; this.chirp(0.3); }
+            return clock >= 0.4;
+          case 'link-open':
+            this.actionLook(at);
+            return request.ended || clock >= 1.5;
+          case 'bin':
+          case 'error':
+            if (this.pose === 'sleep') {
+              this.H.t = -10;
+              pin(C.tuft, 18);
+              this.actionLook(at);
+              return request.ended;
+            }
+            this.actionLook(at);
+            return request.ended || clock >= 1.5;
+          case 'offline':
+            this.H.t = -10;
+            pin(C.tuft, 18);
+            return request.ended;
+          case 'moves-on':
+            part('pitch', [[0, 0], [0.05, 4], [0.1, -4], [0.15, 4], [0.2, -4],
+              [0.25, 4], [0.3, -4], [0.35, 4], [0.4, 0]]);
+            part('tuft', [[0, 0], [0.05, 8], [0.15, 6], [0.25, 4], [0.35, 2], [0.4, 0]]);
+            return clock >= 0.4;
+          case 'hide':
+            part('wing', [[0, 0], [0.2, -38], [0.3, -38], [0.5, 0]]);
+            return clock >= 0.5;
+          case 'done':
+            return proud?.update(clock, dt) ?? true;
+          case 'tap':
+          case 'drop-folder':
+          case 'online':
+          case 'rule':
+            if (clock <= dt + 1e-9) {
+              B.hopKick = 0.16;
+              if (kind === 'tap') {
+                this.chirp(0.3);
+                C.squash.vel += 2;
+                C.tail.vel += 260;
+              }
+            }
+            if (kind === 'rule') {
+              // A rule uses the Rig glyph, even when a layer has its own carry chip.
+              B.ruleCarry = clock < 0.16;
+              if (at) B.x = fromX + clamp(at.x - fromX, -9, 9) * smooth(clock / 0.16);
+            }
+            return clock >= (kind === 'tap' ? 0.6 : 0.3);
+          case 'moves-off': {
+            const q = 1 - Math.pow(1 - clamp(clock / 0.6, 0, 1), 3);
+            const still = this.pose;
+            const head = this.settings ? 8 : still === 'sleep' ? 20 : 0;
+            const tuft = still === 'sleep' ? -26 : still === 'alarm' ? 18 : still === 'wait' ? 8 : 0;
+            for (const name of Object.keys(C) as SpringName[]) {
+              const target = name === 'squash' || name === 'legs' || name === 'face' ? 1 :
+                name === 'tuft' ? tuft : name === 'ix' ? IRIS_REST.x : 0;
+              pin(C[name], fromParts[name] + (target - fromParts[name]) * q);
+            }
+            this.H.t = fromHead + (head - fromHead) * q;
+            this.eyeOpen = fromEye + ((this.settings ? 0.08 : 1) - fromEye) * q;
+            B.headY = fromHeadY + ((still === 'sleep' ? 3 : 0) - fromHeadY) * q;
+            B.tuftY = fromTuftY + ((still === 'alarm' ? -2 : 0) - fromTuftY) * q;
+            B.ws += (1 - B.ws) * q;
+            B.x = fromX + (this.home().x - fromX) * q;
+            B.y = fromY + (this.home().y - fromY) * q;
+            B.hopY = 0;
+            if (clock >= 0.6 - 1e-9) {
+              this.motion = 'still';
+              this.notifyStill = true;
+              return true;
+            }
+            return false;
+          }
+        }
+      },
+      end: () => {
+        startle?.end?.();
+        proud?.end?.();
+        if (kind === 'rule') {
+          B.carrying = heldCarry;
+          B.ruleCarry = false;
+          B.x = this.home().x;
+        }
+      },
+    };
+  }
+  /** An action's target uses the gaze's own eye geometry, and never moves the head. */
+  private actionLook(at?: Point): void {
+    if (!at) return;
+    this.pointEyes(at);
+  }
+
+  /** The act table (TL-P4-25): each act writes its part; `rest()` puts the parts back each frame. */
+  private makeAct(name: ActName | ReactionKind, request?: ReactionRequest, waking = false): Action {
+    const C = this.C;
+    if (request) return this.makeReaction(request, waking);
     switch (name) {
       case 'snap': {
         const to = this.random() < 0.5 ? -12 : 7;
@@ -594,6 +860,8 @@ export class BirdEngine {
         };
       case 'pause':
         return { update: () => true };
+      default:
+        return { update: () => true };
     }
   }
   /** Queues an action; it runs after the ones before it. */
@@ -613,7 +881,7 @@ export class BirdEngine {
     const S = this.S;
     if (!now) {
       S.queue = [];
-      S.tap = false;
+      S.pending = null;
       this.B.carrying = false;
       return;
     }
@@ -645,6 +913,7 @@ export class BirdEngine {
   }
   chirp(d = 0.4): void {
     this.S.chirpT = d;
+    this.S.chirpLength = d;
     this.C.tuft.vel -= 120;
   }
   private turn(): void {
@@ -882,6 +1151,9 @@ export class BirdEngine {
 
   /** The satin bowerbird's display: tail fanned, wings out, chirps. */
   showOff(o: ShowOffOptions = {}): this {
+    return this.enqueue(this.makeShowOff(o));
+  }
+  private makeShowOff(o: ShowOffOptions): Action {
     const B = this.B;
     const C = this.C;
     const { tail = 32, wing = 42, tuft = -26, head = -18, pitch, swell, wide, seconds = 2.8, rise = 0, fall = 0, turn = true, chirp = true, sparkle = true, kick = 2 } = o;
@@ -892,7 +1164,7 @@ export class BirdEngine {
     let c1 = false,
       c2 = false,
       c3 = false;
-    return this.enqueue({
+    return {
       start: () => {
         if (turn) B.face = 1;
         if (swell !== undefined && wide !== undefined && swell !== 1) B.girth = (wide - 1) / (swell - 1);
@@ -931,7 +1203,7 @@ export class BirdEngine {
         C.squash.t = 1;
         C.squash.vel += kick;
       },
-    });
+    };
   }
 
   /**
@@ -940,22 +1212,8 @@ export class BirdEngine {
    * it lands. A bird in the sleep pose stays asleep.
    */
   poke(): void {
-    if (!this.heard()) return;
-    if (!this.pose && (this.busy || this.B.carrying)) {
-      this.S.tap = true;
-      return;
-    }
-    this.interrupt({ now: true });
-    this.hello();
+    this.play('tap');
   }
-  private hello(): void {
-    this.chirp(0.5);
-    this.C.tuft.vel -= 200;
-    this.B.hopKick = 0.16;
-    this.C.squash.vel += 2;
-    this.C.tail.vel += 260;
-  }
-
   private sparkle(): void {
     const el = this.parts.spark;
     if (!el) return;
@@ -976,12 +1234,21 @@ export class BirdEngine {
     this.think(dt);
     this.step(dt, elapsed);
     this.apply();
-    this.raf = this.frame(this.loop);
+    if (this.notifyStill) {
+      this.notifyStill = false;
+      this.onStill?.();
+    }
+    if (this.running) this.raf = this.frame(this.loop);
   };
 
   private think(dt: number): void {
     const S = this.S;
     const B = this.B;
+    if (this.motion === 'still') return;
+    if (this.reaction) {
+      this.updateReaction(dt);
+      return;
+    }
     if (!S.action && S.queue.length) {
       S.action = S.queue.shift() ?? null;
       // A layer's script step owns its bird: the idle act under way stops.
@@ -996,10 +1263,11 @@ export class BirdEngine {
       if (S.action.update(S.action.el, dt)) {
         S.action.end?.();
         S.action = null;
-        // A layer's tap plays when the action under way ends, before the next one.
-        if (S.tap && !this.pose) {
-          S.tap = false;
-          this.hello();
+        // A pending reaction owns the next frame before the script continues.
+        if (S.pending && !this.pose && !B.flying) {
+          const pending = S.pending;
+          S.pending = null;
+          this.beginReaction(pending);
         }
         this.settle();
       }
@@ -1018,10 +1286,12 @@ export class BirdEngine {
     const h = this.home();
     B.x = h.x;
     B.y = h.y;
-    if (S.tap) {
-      S.tap = false;
-      this.interrupt({ now: true });
-      this.hello();
+    if (S.pending) {
+      const pending = S.pending;
+      S.pending = null;
+      this.beginReaction(pending);
+      this.updateReaction(dt);
+      return;
     }
     if (B.carrying) return;
     this.idle(dt, 'layer');
@@ -1174,7 +1444,7 @@ export class BirdEngine {
     if (this.sleeps && who !== 'layer' && !this.asleep && S.t - S.quietT >= DOZE) {
       this.asleep = true;
       S.sleepT0 = S.t;
-      S.startleT = 0;
+      S.startleRising = false;
       this.endAct();
       this.H.gaze = 0;
     }
@@ -1184,7 +1454,7 @@ export class BirdEngine {
       return;
     }
     this.rest(who);
-    if (this.acts) {
+    if (this.acts && !S.doing?.ownsHead) {
       S.nextIdle -= dt;
       if (S.nextIdle <= 0) {
         S.nextIdle = this.rand(0.8, 2);
@@ -1196,38 +1466,8 @@ export class BirdEngine {
       a.el = (a.el ?? 0) + dt;
       if (a.update(a.el, dt)) this.endAct();
     }
-    if (S.startleT > 0) {
-      // The tuft keyed and eased as the acts are, back to the rest `rest()` just set: no spring overshoot. The head's
-      // profile rises to the step's angle and holds it, then returns to rest when the hold ends.
-      const { rise, seconds } = STARTLE;
-      // The tuft rises independently. The hold clock waits at its peak for
-      // head settlement, then counts the full hold before the existing fall.
-      const holdStart = seconds + STARTLE.fall;
-      S.startleT =
-        S.startleT > holdStart
-          ? Math.max(holdStart, S.startleT - dt)
-          : S.startleLanded
-            ? Math.max(0, S.startleT - dt)
-            : holdStart;
-      const c = this.C.tuft;
-      pin(
-        c,
-        keyed(
-          STARTLE_TOTAL - S.startleT,
-          [
-            [0, S.startleFrom],
-            [rise, STARTLE.tuft],
-            [rise + seconds, STARTLE.tuft],
-            [STARTLE_TOTAL, c.t],
-          ],
-          true,
-        ),
-      );
-      if (STARTLE_TOTAL - S.startleT < rise + seconds) this.H.t = STARTLE.head;
-    }
-    this.gaze(dt, who === 'layer' ? LAYER_HEAD : PERCHED_HEAD);
-    // The step owns the head: the gaze's offset waits at 0 (TL-P4-25 addendum 4), and the profile returns it after.
-    if (S.startleT > 0) this.H.gaze = 0;
+    this.gaze(dt, S.doing?.ownsHead ? null : who === 'layer' ? LAYER_HEAD : PERCHED_HEAD);
+
   }
 
   /**
@@ -1271,9 +1511,17 @@ export class BirdEngine {
         S.lastSnap = S.t;
       }
     } else this.H.gaze = 0;
+    this.pointEyes(p);
+  }
+  private pointEyes(p: Point): void {
+    const B = this.B;
+    const C = this.C;
+    const eye = { x: B.x + C.face.v * 20 * this.size / 100, y: B.y - 58 * this.size / 100 };
+    const dx = (p.x - eye.x) * B.face;
+    const dy = p.y - eye.y;
     const m = Math.hypot(dx, dy) || 1;
-    C.ix.t = 0.3 + (1.3 * dx) / m;
-    C.iy.t = (1.4 * dy) / m;
+    C.ix.t = 0.3 + 1.3 * dx / m;
+    C.iy.t = 1.4 * dy / m;
   }
 
   private step(dt: number, headDt: number): void {
@@ -1288,7 +1536,8 @@ export class BirdEngine {
     }
     if (S.chirpT > 0) {
       S.chirpT -= dt;
-      C.jaw.t = 18 * Math.abs(Math.sin(S.chirpT * Math.PI * 6));
+      const p = 1 - S.chirpT / S.chirpLength;
+      pin(C.jaw, keyed(p, [[0, 0], [0.2, 14], [0.53, 14], [1, 0]], true));
       if (S.chirpT <= 0) C.jaw.t = 0;
     }
     for (const name in C) {
@@ -1299,7 +1548,7 @@ export class BirdEngine {
       c.v += c.vel * dt;
     }
     const h = this.H;
-    const rising = S.startleT > 0 && !S.startleLanded;
+    const rising = S.startleRising;
     if (rising) h.snapTarget = STARTLE.head;
     if (h.snapTarget === null) {
       // Gaze changes start returns; an act snap freezes its combined target
@@ -1321,7 +1570,7 @@ export class BirdEngine {
       Math.abs(h.v - h.snapTarget) <= 2
     ) {
       h.snapTarget = null;
-      if (rising) S.startleLanded = true;
+      if (rising) S.startleRising = false;
     }
     if (B.flying) {
       B.ph += dt * Math.PI * 2 * (B.flare ? 6 : 10);
@@ -1423,7 +1672,7 @@ export class BirdEngine {
       `rotate(${C.tuft.v.toFixed(2)} 61 23)${B.tuftY ? ` translate(0 ${B.tuftY})` : ''}`,
     );
     // Asleep, the eyes stay shut through the blink.
-    const open = this.asleep ? 0.08 : 1 - 0.92 * this.S.blink;
+    const open = this.eyeOpen ?? (this.asleep ? 0.08 : 1 - 0.92 * this.S.blink);
     transform(P.eye, `translate(70 34) scale(1 ${open.toFixed(3)}) translate(-70 -34)`);
     transform(P.iris, `translate(${C.ix.v.toFixed(2)} ${C.iy.v.toFixed(2)})`);
     if (P.carry) {
@@ -1436,7 +1685,7 @@ export class BirdEngine {
         P.carry.style.transform = `translate(${(p.x - w * 0.35 + C.face.v * w * 0.25).toFixed(1)}px,${(p.y - h * 0.3).toFixed(1)}px) rotate(${(C.pitch.v * C.face.v * 0.5).toFixed(1)}deg)`;
       } else P.carry.style.opacity = '0';
     }
-    const glyph = B.carrying && !P.carry;
+    const glyph = B.ruleCarry || (B.carrying && !P.carry);
     if (this.drawnGlyph !== glyph) {
       P.glyph?.setAttribute('display', glyph ? 'inline' : 'none');
       this.drawnGlyph = glyph;

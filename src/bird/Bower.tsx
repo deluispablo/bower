@@ -13,7 +13,8 @@ import {
 import { usePrefs } from '@/app/prefs';
 import { useMedia } from '@/ui/media';
 import { BirdEngine, type EngineOptions, type PoseName, type Point, type TargetFn } from './engine';
-import { useBirdTurn, useOutranked } from './presence';
+import { activeHandle, useBirdTurn, useOutranked } from './presence';
+import { react } from './react';
 import { Rig, type RigPart } from './Rig';
 import './poses.css';
 import './bower.css';
@@ -37,7 +38,8 @@ interface EngineEls {
 }
 
 interface EngineUse {
-  setHandle: (engine: BirdEngine | null) => void;
+  turn: boolean;
+  setHandle: (engine: BirdEngine | null, frame?: Element | null) => void;
   /** A perched bird plays this pose in place; its engine exists only while it moves. */
   pose?: Pose;
   speed?: number;
@@ -61,78 +63,101 @@ function useBirdEngine(els: EngineEls, home: TargetFn, size: number, moves: bool
   useLayoutEffect(() => {
     homeRef.current = home;
   });
-  const { pose, speed = 1, options, setHandle } = use;
+  const { turn, pose, speed = 1, options, setHandle } = use;
   const perched = pose !== undefined;
-  // A layer keeps its engine (it snaps home while still); a perched bird has one only while it moves.
-  const live = !perched || moves;
+  const birdMoves = usePrefs((p) => p.birdMoves);
+  const reduced = useMedia('(prefers-reduced-motion: reduce)');
+  // Remember completion, not elapsed wall time. Adjust input state during render (React's derived-state pattern).
+  const allowed = turn && !reduced;
+  const [motionState, setMotionState] = useState({ moves, allowed, settled: !moves });
+  if (motionState.moves !== moves || motionState.allowed !== allowed) {
+    setMotionState({ moves, allowed, settled: !allowed || (!motionState.allowed && !moves) ? true :
+      moves ? false : motionState.settled });
+  }
+  const animated = moves || (allowed && !birdMoves && !motionState.settled);
+  const wakeOnEnable = useRef(!birdMoves);
+  const settling = useRef(!birdMoves && !reduced);
+  useLayoutEffect(() => { settling.current = !birdMoves && !reduced; }, [birdMoves, reduced]);
+  const settings = window.location.pathname === '/settings';
+  const settingStill = !birdMoves && !reduced && !animated;
+  const closedStill = settings && settingStill;
+
+  // A static Settings frame is CSS, like the other still poses. The engine owns all animated attributes.
+  useLayoutEffect(() => {
+    const head = parts.current.head;
+    const eye = parts.current.eye;
+    if (head) { head.style.transform = closedStill ? 'rotate(8deg)' : ''; head.style.transformOrigin = closedStill ? '60px 50px' : ''; }
+    if (eye) { eye.style.transform = settingStill ? `scaleY(${settings ? '.08' : '1'})` : ''; eye.style.transformOrigin = settingStill ? '70px 34px' : ''; }
+  }, [closedStill, settingStill, settings]);
 
   useEffect(() => {
-    const p = parts.current;
-    const bird = els.bird.current;
-    if (!live || !bird || !p.rig || !p.head || !p.tail || !p.wing || !p.legs || !p.jaw || !p.tuft || !p.eye || !p.iris) return;
-    const e = new BirdEngine(
-      {
-        bird,
-        rig: p.rig,
-        head: p.head,
-        tail: p.tail,
-        wing: p.wing,
-        legs: p.legs,
-        jaw: p.jaw,
-        tuft: p.tuft,
-        eye: p.eye,
-        iris: p.iris,
-        glyph: p.carry ?? null,
-        carry: els.carry?.current ?? null,
-        spark: els.spark?.current ?? null,
-      },
-      () => homeRef.current(),
-      size,
-      // A perched bird dozes after a minute with no input; a layer's never does.
-      { sleeps: perched, ...options },
-    );
-    engine.current = e;
-    return () => {
-      if (perched) e.release();
-      else e.stop();
-      engine.current = null;
-    };
-    // The engine is made once per mount; size, speed, pose and motion are updated below.
+    if (!birdMoves) wakeOnEnable.current = true;
+    if (!engine.current && (moves || !perched)) {
+      const p = parts.current;
+      const bird = els.bird.current;
+      if (!bird || !p.rig || !p.head || !p.tail || !p.wing || !p.legs || !p.jaw || !p.tuft || !p.eye || !p.iris) return;
+      const e = new BirdEngine({ bird, rig: p.rig, head: p.head, tail: p.tail, wing: p.wing, legs: p.legs,
+        jaw: p.jaw, tuft: p.tuft, eye: p.eye, iris: p.iris, glyph: p.carry ?? null,
+        carry: els.carry?.current ?? null, spark: els.spark?.current ?? null },
+        () => homeRef.current(), size, { sleeps: perched, ...options, settings, motionChange: () => settling.current || wakeOnEnable.current,
+          onStill: () => {
+            e.release();
+            if (perched) engine.current = null;
+            setHandle(null);
+            setMotionState({ moves: false, allowed: true, settled: true });
+          },
+        });
+      engine.current = e;
+      if (pose) e.setPose(pose);
+    }
+    const e = engine.current;
+    if (!e) return;
+    e.setSize(size);
+    e.speed = speed;
+    if (moves) {
+      setHandle(e, els.frame.current);
+      if (wakeOnEnable.current) react('moves-on');
+      wakeOnEnable.current = false;
+      e.start();
+    } else if (!birdMoves && allowed && animated) {
+      // The handle and engine stay live until the engine draws the final settle frame.
+      if (activeHandle() === e) react('moves-off');
+    } else {
+      e.release();
+      if (perched) engine.current = null;
+      setHandle(null);
+    }
+    // The rig refs and options belong to this mount; size and speed are updated separately.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live]);
+  }, [moves, turn, birdMoves, reduced, setHandle]);
 
   useEffect(() => {
     if (pose) engine.current?.setPose(pose);
-  }, [pose, live]);
-
+  }, [pose]);
   useEffect(() => {
     engine.current?.setSize(size);
     if (engine.current) engine.current.speed = speed;
-  }, [size, speed, live]);
+  }, [size, speed]);
+  useEffect(() => () => {
+    engine.current?.release();
+    engine.current = null;
+    setHandle(null);
+  }, [setHandle]);
 
   useEffect(() => {
-    const e = engine.current;
-    if (!e) return;
-    if (moves) {
-      e.start();
-      const stopOnHide = (): void => (document.hidden ? e.stop() : e.start());
-      document.addEventListener('visibilitychange', stopOnHide);
-      return () => {
-        document.removeEventListener('visibilitychange', stopOnHide);
-        e.stop();
-      };
-    }
-    e.stop();
-    e.snapHome();
-    const keep = (): void => e.snapHome();
+    const stopOnHide = (): void => {
+      const e = engine.current;
+      if (!e || !animated) return;
+      if (document.hidden) e.stop(); else e.start();
+    };
+    document.addEventListener('visibilitychange', stopOnHide);
+    const keep = (): void => { if (!animated) engine.current?.snapHome(); };
     window.addEventListener('resize', keep);
-    return () => window.removeEventListener('resize', keep);
-  }, [moves, live]);
-
-  useEffect(() => {
-    setHandle(moves ? engine.current : null);
-    return () => setHandle(null);
-  }, [moves, live, setHandle]);
+    return () => {
+      document.removeEventListener('visibilitychange', stopOnHide);
+      window.removeEventListener('resize', keep);
+    };
+  }, [animated]);
 
   // The look source: Bower watches the pointer and touches over the layer's parent (anywhere, for a
   // perched bird) and the focused control. Listeners only read; they never stop or change the event.
@@ -177,7 +202,7 @@ function useBirdEngine(els: EngineEls, home: TargetFn, size: number, moves: bool
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moves, look]);
 
-  return { onPart, engine, home: homeRef };
+  return { onPart, engine, home: homeRef, animated };
 }
 
 interface PoseProps {
@@ -215,21 +240,22 @@ export function PoseBower({ pose, size, priority = 0, minor = false, className =
   }, [size]);
   // The feet on y 92 of the drawing, in the middle of the box.
   const home = useCallback(() => ({ x: drawn / 2, y: 0.92 * drawn }), [drawn]);
-  const { onPart, engine } = useBirdEngine({ bird: perch, frame: box }, home, drawn, moves, 'document', {
+  const { onPart, animated } = useBirdEngine({ bird: perch, frame: box }, home, drawn, moves, 'document', {
     pose,
+    turn,
     setHandle,
     options: engineOptions,
   });
   return (
     <div
       ref={box}
-      className={`bird ${moves ? '' : `posed ${pose} still`} ${className}`}
+      className={`bird ${animated ? '' : `posed ${pose} still`} ${className}`}
       style={{ width: size, height: size, ...style, ...(outranked ? { visibility: 'hidden' } : {}) }}
       data-pose={pose}
       data-bird
       aria-hidden="true"
       // A tap pokes Bower (pointer or touch only: it is never focusable, and no key pokes it).
-      onPointerDown={() => engine.current?.poke()}
+      onPointerDown={() => react('tap')}
     >
       <div ref={perch} className="bird-perch">
         <Rig onPart={onPart} />
@@ -288,7 +314,8 @@ export const BowerLayer = forwardRef<BowerController, LayerProps>(function Bower
   const { turn, setHandle } = useBirdTurn(priority);
   const moves = useMoves(turn);
   const outranked = useOutranked(priority);
-  const { onPart, engine, home: homeRef } = useBirdEngine({ bird, frame: layer, carry, spark }, home, size, moves, 'parent', {
+  const { onPart, engine, home: homeRef, animated } = useBirdEngine({ bird, frame: layer, carry, spark }, home, size, moves, 'parent', {
+    turn,
     setHandle,
     speed,
     options: engineOptions,
@@ -332,7 +359,7 @@ export const BowerLayer = forwardRef<BowerController, LayerProps>(function Bower
       },
     };
     return ctl;
-  }, [moves]);
+  }, [moves, engine, homeRef]);
 
   return (
     <div ref={layer} className="bower-layer" aria-hidden="true" data-bird style={outranked ? { visibility: 'hidden' } : undefined}>
@@ -348,8 +375,8 @@ export const BowerLayer = forwardRef<BowerController, LayerProps>(function Bower
         type="button"
         tabIndex={-1}
         aria-label="Bower"
-        className="bird bower-flyer"
-        onClick={() => engine.current?.poke()}
+        className={`bird bower-flyer ${animated ? '' : 'posed idle still'}`}
+        onClick={() => react('tap')}
       >
         <Rig onPart={onPart} />
       </button>

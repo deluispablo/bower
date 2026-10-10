@@ -1,3 +1,5 @@
+import { activeFrame, activeHandle } from './presence';
+
 /** The one screen-to-Bower reaction port. */
 export const REACTIONS = {
   'point-tidy': 'Tuft up and a lean toward the pointer.',
@@ -11,6 +13,10 @@ export const REACTIONS = {
 } as const;
 export type ReactionKind = keyof typeof REACTIONS;
 export interface Reaction { end(): void }
-export function react(_kind: ReactionKind, _at?: Element): Reaction {
-  return { end() {} };
+export function react(kind: ReactionKind, at?: Element): Reaction {
+  const frame = activeFrame()?.getBoundingClientRect();
+  const rect = at?.getBoundingClientRect();
+  const point = frame && rect ? { x: rect.left + rect.width / 2 - frame.left,
+    y: rect.top + rect.height / 2 - frame.top } : undefined;
+  return activeHandle()?.play(kind, point) ?? { end() {} };
 }
