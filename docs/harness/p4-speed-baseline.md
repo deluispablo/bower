@@ -177,3 +177,19 @@ Staging 55ea8194 (version d3d26e5f), bower-home 1af1684, Claude Sonnet 5.5, acco
 Planner-split smoke on a0a0c1a7, for comparison: garden 0:51, offer-and-flat 1:01, c05 0:55. This smoke is 15–35 s slower on every case. The extra time is in reads (offer-and-flat 29.4 vs 11.2), apply (+8–10 s) and garden's checkpoints (13.6 s).
 
 **Reading (stage-3-live-slower, TL-P4-22 addendum 2):** the 55ea8194 slowdown came from the runner's region and per-call latency (a0a0c1a7 ran in eastus; 55ea8194 ran in the US west and in Mexico). The Drive-call goldens are the same at both SHAs, and c05 was not like-for-like. Compare like-for-like cases only. From c4-run-counts on, the timing line also carries calls, bytes and region.
+
+## Stage 4 smoke on `03b5d0d2` (2026-10-10)
+
+Staging 03b5d0d2 (version b5de87dc), bundle `index-DmEj6T_E.js`, Claude Sonnet 5.5, account A. Each run was reset first: outputs binned, hubs restored with Bower's mark (`__c05m_*`), and the Inbox emptied. For c05, the Job hunt hand edit was added. The Write-it attempt used the unmarked hubs (`__of_*`). Times run from the press to `finishedAt` (Worker /status). The breakdown comes from the runner's `timing:` line.
+
+| Case | Run | Press → done | reads | model (in/out) | apply | checkpoints | report (s) | region | Result |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| garden | 38019173680 | 0:56 | 10.6 | 6.0 (7492 / 772) | 9.9 | 5.4 | 6.4 | eastus | Pass. Renamed "Larkspur Lane Community Garden newsletter, autumn" into Resources/Community garden, with a note giving the dates and the 2027 fee. No question. |
+| offer-and-flat | 38019382423 | 1:18 | 15.3 | 12.0 (7630 / 1549) | 20.6 | 6.2 | 7.1 | centralus | Pass. Offer renamed into Job hunt with a note (remote, 42,000, start 2 November). The link went to Flat hunt with a note. The payslip went to a new Area, Money. The photo was asked about. Each hub got one line. |
+| c05-hub-lines (1) | 38019565934 | 1:14 | 14.7 | 6.6 (7451 / 718) | 15.2 | 6.8 | 9.0 | **unknown** | **Partial.** The hand edit was kept, and nothing was asked again. **No hub got a line.** The offer PDF (`__c05_offer`, a made-up PDF with no text layer) was filed with no note. |
+| c05-hub-lines (2) | 38019716281 | 1:12 | 14.6 | 9.2 (7437 / 989) | 14.3 | 6.3 | 6.8 | centralus | Pass. The hand edit was kept, and both hubs got a line. Job hunt's line says "its text could not be read" (the same PDF). Run 1 versus run 2 is model variance on an unreadable PDF. |
+| Write it, new q-state | 38019867511 | 1:09 | 12.4 | 4.5 (7312 / 560) | 16.6 | 6.4 | 8.6 | westcentralus | **Not reached.** With unmarked hubs and the real offer PDF, Bower only added a Timeline line to Job hunt. It proposed no state change, so no q-state question with `shown` was asked. The no-model Write-it path is still unexercised live. |
+
+**Home after the runs** (empty Inbox, 1 open question): 20 Drive calls (5 media); the last ends at 5.0 s (stage 3: 21 calls, 6.2 s).
+
+**Runner region check:** the timing line carries `region=` on every run. Four of five show a region (eastus, centralus, centralus, westcentralus). One shows `region=unknown` (38019565934): the metadata call failed or timed out within its 2 s (`curl -m 2`). Compared like-for-like with stage 3 (55ea8194, US west and Mexico): garden 1:06 → 0:56, offer-and-flat 1:36 → 1:18, c05 1:19 → 1:12–1:14.
