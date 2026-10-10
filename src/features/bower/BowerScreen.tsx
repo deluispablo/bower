@@ -71,7 +71,7 @@ export function BowerScreen() {
     try {
       const undo = await vault.removeRule(id);
       focusMain();
-      undoToast('Rule removed. Bower stops following it from the next tidy-up.', undo, () => toast('The rule is back.'));
+      undoToast('Rule removed. Bower stops following it from the next tidy-up.', undo, () => 'The rule is back.');
     } catch (e) {
       report(e, 'That did not work. Try again.');
     }

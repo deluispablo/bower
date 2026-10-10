@@ -14,12 +14,15 @@ export const NOT_UNDONE_OFFLINE = 'Not undone yet: Bower could not reach Drive. 
 /**
  * The dock's Undo (TL-P4-24 addendum 1, TL-P4-27 addenda 4 (4) and 5). Refused because Drive did not answer, offline
  * or a check of a create that may have landed (`unreached`, write-once's `withdraw`), the same message says so in
- * place, with Try again running the same Undo; any other failure is reported as ever. `done` runs once it is undone.
+ * place, with Try again running the same Undo; any other failure is reported as ever. `done` runs once it is undone and may return the confirmation words for the same box.
  */
-export function undoToast(text: string, undo: () => Promise<unknown>, done?: () => void): void {
+export function undoToast<T>(text: string, undo: () => Promise<T>, done?: ((result: T) => string) | ((result: T) => void)): void {
   const attempt = (): Promise<void> =>
     undo().then(
-      () => done?.(),
+      (result) => {
+        const confirmation = done?.(result);
+        if (typeof confirmation === 'string') useToasts.getState().replace(id, confirmation);
+      },
       (e: unknown) => {
         if (!(e instanceof BowerError && (e.code === 'unreached' || e.code === 'offline'))) return report(e, 'That did not work. Try again.');
         console.error(e);

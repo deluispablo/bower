@@ -36,8 +36,24 @@ test('the dock Undo of a Bin brings the note back, and Since the last tidy-up sh
   test.skip(!isFake, 'the pretend Drive keeps the change journal');
   await binTheNote(page, isMobile);
   const dock = page.getByRole('status');
-  await dock.getByRole('button', { name: 'Undo' }).click();
+  const undo = dock.getByRole('button', { name: 'Undo' });
+  const box = await undo.locator('..').elementHandle();
+  if (!box) throw new Error('Undo toast missing');
+  // Let the original entrance finish before measuring the confirmation's own box.
+  await box.evaluate(async (el) => { await Promise.all(el.getAnimations().map((a) => a.finished)); });
+  const before = await box.boundingBox();
+  if (!before) throw new Error('Undo toast has no box');
+  await undo.click();
   await expect(dock.getByText(`${NOTE} is back`)).toBeVisible();
+  expect(await box.evaluate((el) => el.isConnected && el.textContent === 'Flat 3, 12 Larkspur Lane is back')).toBe(true);
+  const after = await box.boundingBox();
+  if (!after) throw new Error('Confirmation toast has no box');
+  expect(after.x).toBe(before.x);
+  expect(after.width).toBe(before.width);
+  expect(after.y + after.height).toBe(before.y + before.height);
+  expect(await box.evaluate((el) => el.getAnimations().length)).toBe(0);
+  await expect(dock.getByRole('button', { name: 'Undo' })).toHaveCount(0);
+  await expectAxeClean(page);
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Home', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Inbox' }).first()).toBeVisible();
   await expect(page.getByText(`Put ${NOTE} in the Bin`)).toHaveCount(0);

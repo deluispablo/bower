@@ -15,3 +15,17 @@ Read-only, medium effort. Tokens: input 639658 (cached 563072), output 3162.
 1. **Important — `src/bird/engine.ts:784`**: Moves-off releases before the facing scale settles. Reproduce by focusing behind an idle Bower for 1.5 s, letting it turn left, then disabling “Bower moves.” At the 0.6 s completion callback, the drawn x-scale is **0.611**, rather than **1.000**; release visibly snaps it to the CSS still frame. `step()` at line 1533 overwrites the settle’s face target with the existing `B.face = -1`. Round 2 prevents new turns during settlement but leaves this earlier-turn case unfixed. Contract: **TL-P4-26 §3**, packet §6 and “What the person sees”: reach the still frame before release.
 
 findings: 1
+
+## Round 3 pass (re-plan, TL-P4-26 addenda 3 and 4)
+
+Read-only, high effort. Tokens: input 936551 (cached 833920), output 8348. Per addendum 3, it goes to Claude bower-escalated.
+
+1. **Important — [src/bird/engine.ts:824](/private/tmp/bower-d-v2-24a/src/bird/engine.ts:824): releases before a changed pose settles.** Disable moves on a mounted sleep pose, then change it to idle 0.55 s into settlement. At the 0.6 s completion callback, the head remains **11.12°**, moving at **−266.4°/s**. Release snaps it to idle’s 0° still frame. `setPose()` changes the destination without restarting settlement, while completion checks only elapsed time. **Contract:** TL-P4-26 §3; packet §6 and the signed moves-off row require reaching the still frame before release.
+
+2. **Important — [src/bird/engine.ts:969](/private/tmp/bower-d-v2-24a/src/bird/engine.ts:969): `chirp()` bypasses ownership for the tuft.** Play `done`, advance 1 s into its display, then call the existing `chirp(0.3)` method. The unguarded velocity write pulls the reaction-owned tuft from **16.01° to 12.36°**, disturbing the display despite the jaw correctly remaining protected. **Contract:** TL-P4-26 addendum 3 requires every mind write to respect the one ownership check; the signed display specifies tuft 16° ±2°.
+
+The round-3 tap change at **engine.ts:1709–1710 only accommodates the regex**. It substitutes the identical numeric transform through a [CSS variable fallback](https://drafts.csswg.org/css-variables/#using-variables); it changes neither tap wiring nor visible hop behavior. It is not a product fix.
+
+The earlier reported scenarios now settle correctly. No second motion path, allowlist growth, or missing reaction-dispatch row was found. Findings above were reproduced with read-only, in-memory engine probes; the sandbox prevented the unit-test log write.
+
+findings: 2
