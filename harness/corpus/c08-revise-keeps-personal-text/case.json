@@ -1,0 +1,23 @@
+{
+  "id": "c08-revise-keeps-personal-text",
+  "capability": "C08",
+  "title": "Revise a generated table without losing personal text or history",
+  "covers": "model",
+  "source": "new (C08 prep; revision contract gap)",
+  "scope": "instructions",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Add a Deposit column to Shortlist comparison using the flat notes, keep My plans and the earlier history, and revise the same document."
+    }
+  ],
+  "questions": [],
+  "bowerOwned": [
+    "Projects/Flat hunt/Flat hunt.md",
+    "Projects/Flat hunt/Larkspur Lane flat.md",
+    "Projects/Flat hunt/Cobble Row flat.md",
+    "Projects/Flat hunt/Shortlist comparison.md"
+  ]
+}
