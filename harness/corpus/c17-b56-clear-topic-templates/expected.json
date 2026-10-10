@@ -1,0 +1,65 @@
+{
+  "files": {
+    "present": [
+      "Resources/Rainwater/Sources/Rainwater article.txt",
+      "Resources/Rainwater/Rainwater.md",
+      "Resources/Rainwater/*concept*.md",
+      "Resources/Rainwater/Sources/*source*.md"
+    ],
+    "absent": [
+      "Inbox/*",
+      "Areas/Rainwater/*",
+      "Projects/Rainwater/*"
+    ]
+  },
+  "unchanged": [
+    "Rules.md",
+    ".bower/type-table.md",
+    "Resources/Paper craft/Paper craft.md"
+  ],
+  "notes": [
+    {
+      "path": "Resources/Rainwater/Rainwater.md",
+      "contains": [
+        "type: moc",
+        "status: evergreen",
+        "## Overview",
+        "## Notes",
+        "## Sources"
+      ]
+    },
+    {
+      "path": "Resources/Rainwater/*concept*.md",
+      "contains": [
+        "type: concept",
+        "summary:",
+        "## Current state",
+        "## Notes",
+        "## Related",
+        "## Timeline",
+        "[[Resources/Rainwater/Rainwater]]"
+      ]
+    },
+    {
+      "path": "Resources/Rainwater/Sources/*source*.md",
+      "contains": [
+        "type: source",
+        "summary:",
+        "original:",
+        "## Summary",
+        "## Key points",
+        "## Related",
+        "## Transcript",
+        "[[Resources/Rainwater/Rainwater]]",
+        "covered rainwater container"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "createdAtLeast": 3,
+    "questionsExactly": 0,
+    "setAside": 0
+  }
+}

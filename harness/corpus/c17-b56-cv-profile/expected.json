@@ -1,0 +1,64 @@
+{
+  "files": {
+    "present": [
+      "Areas/Career/Originals/Alex CV.txt",
+      "Areas/Career/Originals/Alex CV.md"
+    ],
+    "absent": [
+      "Inbox/*",
+      "Projects/Job hunt/*CV*",
+      "Projects/*pplication*/*CV*",
+      "Areas/Career/*profile (2).md"
+    ]
+  },
+  "unchanged": [
+    "Rules.md",
+    ".bower/type-table.md",
+    "Projects/Job hunt/Job hunt.md"
+  ],
+  "protectedRanges": [
+    {
+      "path": "Areas/Career/Career profile.md",
+      "range": {
+        "heading": "My notes"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "path": "Areas/Career/Career profile.md",
+      "contains": [
+        "## Current state",
+        "TypeScript and SQL",
+        "built map tools at Ferrowick in 2026",
+        "shipped an offline map editor"
+      ],
+      "timeline": [
+        "2026-10-02 \u00b7 Started the career profile.",
+        "Alex uses TypeScript and SQL, built map tools at Ferrowick in 2026, and shipped an offline map editor."
+      ],
+      "timelineCount": 2
+    },
+    {
+      "path": "Areas/Career/Originals/Alex CV.md",
+      "contains": [
+        "[[Areas/Career/Career profile]]",
+        "[[Areas/Career/Career]]",
+        "TypeScript and SQL",
+        "shipped an offline map editor"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "created": [
+      "Areas/Career/Originals/Alex CV.md"
+    ],
+    "updated": [
+      "Areas/Career/Career profile.md"
+    ],
+    "questionsExactly": 0,
+    "setAside": 0
+  }
+}

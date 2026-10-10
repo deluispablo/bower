@@ -5784,7 +5784,8 @@
       "Requests over the limit on a limited route are refused with the documented status."
     ],
     "verify": "pnpm -C api exec vitest run -t \"a route over its rate limit is refused\"",
-    "note": "TL-P4-17 addendum 6 point 4 (main 7f5fa754): an owed P4 promise, not dead code. After stage 3. Starting model: bower-escalated. Lead accepted the values 2026-10-10 (20/30/60 per minute; 429 with Retry-After; staging dry run). Codex, Codex adversarial pass, Claude review. Packet 2026-10-10-p4-rate-limits-packet.md. implementer: codex."
+    "note": "TL-P4-17 addendum 6 point 4 (main 7f5fa754): an owed P4 promise, not dead code. After stage 3. Starting model: bower-escalated. Lead accepted the values 2026-10-10 (20/30/60 per minute; 429 with Retry-After; staging dry run). Codex, Codex adversarial pass, Claude review. Packet 2026-10-10-p4-rate-limits-packet.md. implementer: codex.",
+    "review": "P4-90 BLOCK then P4-90b PASS"
   },
   {
     "id": "c3-integrate-history",
@@ -6819,14 +6820,15 @@
     "id": "b2a-summary-format",
     "task": "p4-b2",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "A note summary is written as a safe one-line YAML scalar and read back exactly (TL-P4-42 Q1, Q2).",
     "steps": [
       "serialize then parse gives back any one-line summary of at most 200 characters; old notes parse as before; validSummary refuses empty, multi-line, control and over-200 text."
     ],
-    "verify": "",
-    "note": "TL-P4-42. Escalated: Codex red, Codex implementation, Codex pass, Claude review. Packet 2026-10-10-b2a-summary-format-packet.md. implementer: codex."
+    "verify": "pnpm exec vitest run src/data/vault/note-format.test.ts -t \"B2a summary:\"",
+    "note": "TL-P4-42. Escalated: Codex red, Codex implementation, Codex pass, Claude review. Packet 2026-10-10-b2a-summary-format-packet.md. implementer: codex.",
+    "review": "P4-91 PASS"
   },
   {
     "id": "q1a-stored-answers",
@@ -6871,7 +6873,7 @@
     "id": "pwa-update",
     "task": "p4-e",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "After a deploy, the next reload runs the new build; an old page missing a lazy chunk reloads once (lead ruling (c) plus guard).",
     "steps": [
