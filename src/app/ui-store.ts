@@ -19,11 +19,12 @@ interface UiState {
   paletteOpen: boolean;
   drawerOpen: boolean;
   tidyOpen: boolean;
+  tidyReportRunId: string | null;
   replayRunId: string | null;
   moveFor: string | null;
   setPalette: (o: boolean) => void;
   setDrawer: (o: boolean) => void;
-  setTidy: (o: boolean) => void;
+  setTidy: (o: boolean, reportRunId?: string) => void;
   startReplay: (runId: string | null) => void;
   setMoveFor: (path: string | null) => void;
   // desktop side panels
@@ -106,11 +107,12 @@ export const useUi = create<UiState>((set, get) => ({
   paletteOpen: false,
   drawerOpen: false,
   tidyOpen: false,
+  tidyReportRunId: null,
   replayRunId: null,
   moveFor: null,
   setPalette: (paletteOpen) => set({ paletteOpen }),
   setDrawer: (drawerOpen) => set({ drawerOpen }),
-  setTidy: (tidyOpen) => set({ tidyOpen }),
+  setTidy: (tidyOpen, reportRunId) => set({ tidyOpen, tidyReportRunId: tidyOpen ? reportRunId ?? null : null }),
   startReplay: (replayRunId) => set({ replayRunId }),
   setMoveFor: (moveFor) => set({ moveFor }),
   leftTab: 'files',
