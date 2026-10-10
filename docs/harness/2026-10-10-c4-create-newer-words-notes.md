@@ -33,3 +33,5 @@ removed: the unconditional success return after a resumed conversion with differ
 - `git diff --check`: pass. Only the implementation and this notes file are changed.
 
 Per the assignment, no `pnpm check`, e2e, network calls or writing git commands were run. The accepted memory-only pending conversion remains as it was (addendum 19 (2)).
+
+tests changed: src/data/vault/drive-vault.test.ts: adds the two reds by the red-owning session (a retry with new words while the conversion is pending ends with the new words in Drive; its outside-change variant); no existing test changed.
