@@ -174,7 +174,7 @@ async function committedControl(): Promise<void> {
     await hold.reached;
     const records = await storeFor(env).list(ACCOUNT, env.root);
     expect(records).toHaveLength(1);
-    expect(await present(await real.body(present(records[0]))).text()).toBe('0123456789');
+    expect(await present(await real.body(present(records.find((record) => record.memberKey === 'MEMBER_ID')))).text()).toBe('0123456789');
   } finally {
     p.queue.stop();
     commit.open();
@@ -201,8 +201,9 @@ it('upload-resume-after-reload: upload save retains every member before reportin
     const pile = await p.vault.addPile(submitted);
     await hold.reached;
     const records = await storeFor(env).list(ACCOUNT, env.root);
-    expect(records[0]?.confirmed).toBe(4);
-    expect(await bytes(await p.store.body(present(records[0])))).toEqual(await bytes(present(submitted.items[0]).body));
+    const record = records.find((record) => record.memberKey === pile.items[0]?.id);
+    expect(record?.confirmed).toBe(4);
+    expect(await bytes(await p.store.body(present(record)))).toEqual(await bytes(present(submitted.items[0]).body));
     expect(records.map((record) => record.memberKey).sort(), 'saved means every declared Blob is staged')
       .toEqual(pile.items.map((item) => item.id).sort());
     for (const record of records) {
@@ -231,7 +232,7 @@ async function reloadCase(count: number, offset: number, staleOffset: boolean): 
     const submitted = input(count);
     const pile = await first.vault.addPile(submitted);
     await hold.reached;
-    const [record] = await first.store.list(ACCOUNT, env.root);
+    const record = (await first.store.list(ACCOUNT, env.root)).find((record) => record.memberKey === pile.items[0]?.id);
     expect(record).toMatchObject({ confirmed: offset, session: expect.any(String), fileId: expect.any(String) });
     const reserved = present(present(record).fileId);
     first.queue.stop();
@@ -250,7 +251,8 @@ async function reloadCase(count: number, offset: number, staleOffset: boolean): 
     const firstFile = files.find((file) => file.appProperties?.[PROP.item] === pile.items[0]?.id);
     expect(firstFile?.id, 'the retained first member keeps its reserved identity').toBe(reserved);
     expect([...(await env.drive.readBytes(reserved))]).toEqual(await bytes(present(submitted.items[0]).body));
-    const calls = env.drive.resumableCalls.slice(from);
+    const calls = env.drive.resumableCalls.slice(from)
+      .filter((call) => call.session === present(record).session || call.id === reserved);
     expect(calls[0]?.op).toBe('status');
     expect(calls.find((call) => call.op === 'put')?.start, 'Drive, not the saved offset, decides the next chunk').toBe(offset);
     expect(calls.filter((call) => call.op === 'open' && call.id === reserved)).toEqual([]);

@@ -937,11 +937,12 @@ describe('things that arrive late', () => {
       if (id === lateId) lateBinned();
       return r;
     };
-    const pile = await v.addPile({ text: 'Late papers', items: [{ name: 'late.pdf', kind: 'pdf', origin: 'x', body: new Blob(['x']) }] });
+    const saving = v.addPile({ text: 'Late papers', items: [{ name: 'late.pdf', kind: 'pdf', origin: 'x', body: new Blob(['x']) }] });
     await keeping;
+    letKeep();
+    const pile = await saving;
     folder = (await drive.listAll(root)).find((f) => drive.pathOf(f.id, root) === pile.path)?.id ?? '';
     const trashing = v.trash(pile.path ?? '');
-    letKeep();
     await trashing;
     await v.settled();
     return { lateId, pile, failed: () => failOnce, v };
