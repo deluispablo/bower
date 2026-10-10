@@ -1,11 +1,11 @@
-# smoke-request-slow — red delivery
+# smoke-request-slow — implementation continuation
 
 implementer: codex
 
-HEAD: `8298725934e68919d2e71901a98b84ef17de5fe6`.
+HEAD at this continuation: `88a668bcde506714ccf602bdd9e1593985d958fa` (red round 5).
 Worktree: `/private/tmp/bower-smoke-request-slow`, branch `smoke-request-slow`.
-Tests only; no implementation, existing-test edits, git writes, network, live Drive or real waits.
-The coordinator owns both commits (tests first, then these notes separately).
+Current production and notes edits stay uncommitted; no test edits, git writes or external network.
+The coordinator owns commits and integration. See Implementation for the current result; later sections retain prior audits.
 
 ## Reds
 
@@ -152,40 +152,105 @@ left out: implementation after B1a, full check/e2e, integration and commits (coo
 
 ## Implementation
 
-Stopped before production edits under the implementation instruction: “if a red contradicts the packet or a
-ruling, stop and say so.” No network or git writes were performed.
+Current continuation after the round-5 sweep (2026-10-10). The eight production changes are retained
+uncommitted. No test was changed, no git write command ran, and no external network was used.
+The historical implementation/repair audits below describe earlier attempts, not the current result.
 
-The committed bounded-read reds still pin the pre-B1a C04 reads baseline to 15 at
-`runner/test/c05-bounded-reads.test.ts:262`. On this checkout the real pile control returns 20.
-Both the golden and pending tests stop at that assertion, before their bounded-read scenarios.
-The current C04 golden in `runner/test/drive-calls-golden.test.ts:31` explicitly pins reads to 20.
-TL-P4-41 addenda 3–4 authorize B1a's maintenance calls; the Reds section above already requires those
-authorized calls to be accounted for after B1a integrates. Making this control return 15 would contradict
-that accepted behaviour. Tests cannot be changed by this implementation session, so the red owner must
-reconcile this control before implementation resumes.
+Research cited without fetching under the no-network instruction: official
+[Drive files.list](https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list),
+[parent queries](https://developers.google.com/workspace/drive/api/guides/search-files), and
+[partial-response fields](https://developers.google.com/workspace/drive/api/guides/fields-parameter).
+The standard index-points-to-evidence pattern reuses VaultIndex's containment discovery,
+RunRecords.found's originating manifest and full checkpoint-chain verification, and the existing move effect.
+No additional snapshot, ledger, store or index file was introduced.
 
-Verification: `pnpm -C runner exec vitest run test/c05-bounded-reads.test.ts --maxWorkers=2` failed all
-three tests. The golden and pending fail with expected 15, received 20; the horizon still reproduces
-the listing-age and historical-read defects. Output: `tmp-logs/implementation-reds.log`; only failures
-were inspected. C05/app/data/runner suites, typechecks, eslint, full check and e2e were not run after
-the required stop. No assertion or bound was weakened.
+Production files:
+- src/data/spine/scripted.ts: removes archive admission and broad append-history/horizon walks;
+  reads only the waiting requests' own runs, filters by embedded record id, and uses listing creation times.
+  Settlement publishes an in-place bowerRun recovery pointer before the append, then moves unchanged request
+  bytes into pending/run id. Archive remains dependent on the writes it settles. Waiting requests without
+  retained evidence fail closed with TOO_OLD_WHY without resolving their titles again.
+- src/data/vault/vault-index.ts: discovers physical pending requests through actual parent containment;
+  the temporary pointer covers interruption before their physical move.
+- src/data/contracts/run-manifest.ts: accepts the optional existing bowerRun move property and classifies
+  pointer/pending relocation once, shared by the archive guard, engine and grounding checks.
+- src/data/spine/engine.ts: a definite bound-append clash permits pending relocation; subsequent moves fence
+  the name/place from their preceding applied move. Archive still requires successful derived edits.
+- src/data/spine/grounded.ts: checks relocations separately from the single reported archive move.
+- runner/src/claude.ts: waiting requests use only bound target/source ids, never their former titles.
+  This removes reads of replacement-title notes and makes the unchanged 25-read retry bound pass.
+  A fresh request's exact repetition of a cited Timeline line already shown is valid provider input;
+  it grants no binding or source evidence. The existing planner/applyChanges still decides the no-op.
+  This uses timelineBullets/parseTimelineLine, the attempt's ownership context, complete uncut note bytes,
+  and the cited file id's listed name. It neither reads historical records nor authorizes fresh wording
+  from a previously filed source. The previously failing run-21 control now publishes its verified run
+  with unchanged personal bytes and zero new append completions.
+- src/data/spine/records.ts: makes the now-unused APPENDS_RECORD_KEY export private; the existing
+  bowerAppends metadata writer stays compatible. This clears both unused-code gates without changing record bytes.
+- src/data/drive/fake-drive.ts: fixes DEFECT_LOG fake-drive-snapshot-feed in snapshot/restore itself.
+  The changes array is serialized alongside files, restored before another feed read, and copied into
+  snapshotWith's existing consistent twin. An older snapshot without that optional field still restores.
+  A saved nonzero page token now returns the exact same feed and next token after restore.
 
-removed: none (implementation stopped before production edits).
+Red evidence: tmp-logs/finish-initial-c05.log and finish-initial-fake.log reproduce the two C05 failures
+and the dedicated fake snapshot failure. After restoring the feed, finish-c05-green.log reached the
+remaining retry bound: 26 reads against an unchanged limit of 25. Selecting only the waiting target ids
+made that red green. The whole targeted suite was run first; no remaining test contradicts the packet
+or the round-2/3/5 supported-path rulings. Local DECISIONS still lacks the round-4/5/TL-P4-51 entries;
+the owner's explicit assignment and the red-owner round-5 notes supply that authority.
+
+removed: 94 production lines in the complete retained diff (git diff --numstat).
+removed: archivedRecords and archived admission state; unrelated append-run discovery and retention chain walks.
+removed: obsolete public APPENDS_RECORD_KEY export; its stored metadata spelling remains unchanged.
+removed: provider title resolution for waiting requests, including needless reads of title replacements.
 tests changed: none.
 
-Compatibility row drafts for the resumed implementation, not claims of completed validation:
+Compatibility row drafts for src/data/contracts/run-manifest.ts (review/integration remain pending):
 
-| Fixture/format | Required outcome | Status |
+| Stored format / contract | Compatibility | Evidence |
 | --- | --- | --- |
-| B1a C04 pile control | Preserve authorized maintenance calls; reconcile the stale 15-read red. | Blocked on red-owner repair. |
-| New requests directly in changes | Zero run-record reads; staging old-format waiting requests count as new. | Not implemented. |
-| Waiting requests in pending/run id | Existing move effect; bound record/target/source ids; strict one-media-read bound. | Not implemented. |
-| Settled requests | No archive scan; write-once recovery after interrupted settlement move. | Not implemented. |
-| Retention horizon | Run-folder listing creation times; TOO_OLD_WHY without chain reads. | Not implemented. |
-| Existing v2 manifests/checkpoints and personal bytes | Preserve parsers, verified evidence and TL-P4-32 addenda 2–6 outcomes. | Not revalidated. |
+| Existing v2 moves without bowerRun | Optional field stays optional; old shape and meaning remain. | Full src/data and runner suites pass. |
+| bowerRun string/null on ordinary moves | Strict property parser accepts the pointer and its removal; no new manifest version. | Produced C05 manifests and complete chains parse/verify. |
+| Existing archive dependency guards | Every archive still waits for all derived edits; only the in-place pointer is exempt. | C05 interrupted settlement and all existing C05 controls pass. |
+| Pending relocation | Same move effect; a definite bound-append conflict can move to pending; bound ids remain fixed. | Bounded pending red passes all zeros and the five-file/25-read bounds. |
+| Old manifests/checkpoints and personal bytes | Existing lenient reads and supported write-once recovery remain. | Full data 4141 and runner 551 tests pass; C05 app 18 pass. |
+| Fake snapshot v1 without changes | Missing optional feed defaults to empty; files/resumable data still restore. | Existing fake reload/resumable/big-file controls pass. |
+| Fake snapshot with changes | Files and feed share the existing snapshot home; stored cursor remains valid. | Dedicated fake red and restored gone-target control pass. |
 
-The existing conflicting tests and strict one-read interpretation listed above still require reconciliation;
-this session has made no ruling on them and has introduced no store, index or alternative mechanism.
+Current verification (explicit Vitest commands use --maxWorkers=2; pnpm check uses its standard flags;
+output under tmp-logs/):
+
+| Check | Result | Log |
+| --- | --- | --- |
+| Whole C05 runner and corpus target | 100 pass, 8 files | finish-c05-green2.log |
+| Bounded/person-notes reds after the behavioral edits | 63 pass, 2 files | finish-final-reds.log |
+| C05 app contracts/reports/tidy screen | 18 pass, 3 files | finish-c05-app.log |
+| src/data (final tree) | 4141 pass, 77 files | finish-data-final.log |
+| Full runner suite (final tree) | 551 pass, 44 files | finish-runner-final.log |
+| Dedicated FakeDrive tests | 33 pass | finish-fake-green.log |
+| tsc app/node/runner | All pass | finish-tsc-app.log, finish-tsc-node.log, finish-tsc-runner.log |
+| ESLint all eight touched production files | Pass (root/runner commands run separately) | finish-eslint-app.log, finish-eslint-runner.log |
+| pnpm check through shared heavy lock | Fails on sandbox local-server permission; 5486 pass / 1 fail | finish-check.log |
+| E2E c05-person-notes, capabilities, app on demo and fake | Both fail before tests: dev-server listen EPERM | finish-e2e-demo.log, finish-e2e-fake.log |
+| App and runner builds | Pass | finish-build.log, finish-runner-build.log |
+| Duplication gate | Pass, 19 clones unchanged | finish-duplication.log |
+| Unused-code and unused-production-code gates | Pass after private marker cleanup | finish-unused-final.log |
+| Dependency gate | Pass | finish-dependencies.log |
+| Read-only git diff --check | Pass | Command output empty |
+
+Every remaining failure/blocker, outside the implementation's targeted suites:
+- src/e2e-port.test.ts:37: the local server cannot listen: EPERM on 127.0.0.1, then the test times out.
+  pnpm check reports one uncaught listen EPERM and stops before API/runner/build/static gates.
+  The requested runner checks and app/runner builds plus duplication/unused/dependency gates were run separately.
+  A minimal server probe independently reproduces the restriction: finish-local-server-probe.log.
+- runner/test/c05-person-notes.test.ts:779:31 and :779:77: inherited forbidden non-null assertions.
+  The explicit no-test-change instruction keeps them intact. Separately reproduced with ESLint in
+  finish-inherited-test-lint.log; touched production-file ESLint passes.
+- Both demo and fake e2e commands acquired the shared heavy lock, then their local dev server failed
+  before any screen test: listen EPERM on ::1:5301. See finish-e2e-demo.log and finish-e2e-fake.log.
+  Permission escalation is unavailable in this environment; no gate or test was weakened to bypass it.
+
+left out: commits (explicitly forbidden), independent reviews/integration, and blocked full-check/e2e completion.
 
 ## Red repair
 
