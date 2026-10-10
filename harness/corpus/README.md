@@ -54,6 +54,9 @@ Made-up cases for the capabilities C04 to C11, C13 and C15 (Alex, Larkspur Lane,
 | c13-undo-whole-run | C13 | model | new |
 | c15-more-context-bounded | C15 | model | new |
 | c15-scanned-letter | C15 | model | bench:4-scanned-pdf, adapted (made-up; the original is in bench-4-scanned-pdf) |
+| c15-ready-package-reused | C15 | model | new (C15 preparation; scripted input and context proof pending) |
+| c15-stale-package-rebuilt | C15 | model | new (C15 preparation; scripted input and context proof pending) |
+| c15-context-budget-exhausted | C15 | model | new (C15 preparation; scripted input and context proof pending) |
 | c05-conflicting-fact-kept | C05 | scripted | new (preservation through the existing planner) |
 | c05-marked-state-keeps-history | C05 | scripted | new (preservation through the existing planner) |
 

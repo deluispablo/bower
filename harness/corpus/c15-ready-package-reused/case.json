@@ -1,0 +1,22 @@
+{
+  "id": "c15-ready-package-reused",
+  "capability": "C15",
+  "title": "A valid prepared letter is reused",
+  "covers": "model",
+  "source": "new (C15 preparation; scripted input and context proof pending)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "The committee confirms that the plot fees are unchanged. File this beside Garden plot.",
+      "files": [
+        "Plot fees confirmed.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Areas/Home/Garden plot.md"
+  ]
+}
