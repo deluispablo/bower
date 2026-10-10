@@ -61,31 +61,33 @@ describe('c02-upload-count-ui sign-out contract', () => {
   }
 
   it('c02-upload-count-ui: Sign out while 2 things send', async () => {
+    // jsdom history traversal queues a nested immediate on the next fake-clock tick.
+    const settleOverlay = () => act(async () => { await vi.advanceTimersByTimeAsync(10); });
     const f = await setup(2);
     try {
       f.opener.focus();
       fireEvent.click(f.opener);
-      await settle();
+      await settleOverlay();
       const sheet = screen.getByRole('dialog', { name: 'Sign out now?' });
       expect(within(sheet).getByText("2 things you added are still sending from this device. If you sign out now, they stop and you'll need to add them again.", { exact: true })).toHaveClass('muted');
       const keep = within(sheet).getByRole('button', { name: 'Keep sending' });
       expect(keep).toHaveFocus();
       expect(f.signOut).not.toHaveBeenCalled();
       fireEvent.click(keep);
-      await settle();
+      await settleOverlay();
       expect(screen.queryByRole('dialog')).toBeNull();
       expect(f.opener).toHaveFocus();
       expect(f.queue.pendingCount?.()).toBe(2);
       fireEvent.click(f.opener);
       fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape', code: 'Escape' });
-      await settle();
+      await settleOverlay();
       expect(screen.queryByRole('dialog')).toBeNull();
       expect(f.opener).toHaveFocus();
       expect(f.signOut).not.toHaveBeenCalled();
       expect(f.queue.pendingCount?.()).toBe(2);
       fireEvent.click(f.opener);
       fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign out' }));
-      await settle();
+      await settleOverlay();
       expect(f.signOut).toHaveBeenCalledOnce();
       expect(f.queue.pendingCount?.()).toBe(0);
       expect(await f.sources.session.current()).toBeNull();
