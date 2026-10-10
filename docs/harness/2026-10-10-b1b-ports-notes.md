@@ -218,3 +218,26 @@ prep. References were read from those supplied local documents; no online verifi
 removed: none
 tests changed: none in this implementation session.
 left out: all product implementation pending the authorized Drive method-table red update.
+
+## Red repair: the DriveApi table
+
+Extended only `EXPECTED` in `src/data/drive/drive-ops.test.ts` with `readPrefix`,
+`getStartPageToken`, `listChanges`, `parents` and `resolveScope`, each classed `'read'`.
+These names match `B1Ports` in `src/data/drive/drive-contract.ts` exactly.
+The `satisfies Record<Method, 'read' | 'write'>` completeness check and exact equality
+assertion against `DRIVE_OPS` are unchanged; no product code was changed.
+
+tests changed: src/data/drive/drive-ops.test.ts: extend the complete expected method table with the five B1b read ports.
+
+Verification: `pnpm exec vitest run src/data/drive/drive-ops.test.ts --maxWorkers=2 > tmp-logs/b1b-ops.log 2>&1`
+exited 1 with **2 assertion failures and 1 passing test**, not a load error.
+`the table classes each method as expected` reports all five missing `DRIVE_OPS` entries.
+`the lease guard lets every read through and guards every write` reports those same five
+reads as guarded because their table entries are absent. The lost-lease upload test passes.
+Log: `tmp-logs/b1b-ops.log`.
+
+No network or git write command was run. No commits were made; the coordinator commits.
+Research basis: existing method-table and lease-policy tests, with protocol references
+already recorded in the Drive docs section; no online verification was performed.
+removed: none
+left out: product implementation, pnpm check and e2e; this assignment repairs the red only.
