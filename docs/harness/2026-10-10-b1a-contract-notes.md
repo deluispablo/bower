@@ -795,3 +795,174 @@ No reference was fetched. These fixes reuse the existing cache, VaultIndex,
 versioned stored contracts, full-note parser, layout rule and fenced maintenance.
 
 Final read-only diff checks: git diff --check passes. The test/fixture diff is empty.
+
+## Red repair 6 (addendum 5)
+
+Red-owning session, round 3. Owner's narrow authorization: TL-P4-41 addendum 5.
+Validation HEAD: `91cd6168b8a4f1940d2f0d9f616d0cdc55aec01c`, branch `b1a-contract`.
+No non-test source, network, git write command, commit or real timer was used.
+Changes remain uncommitted for the coordinator. Every existing assertion is preserved,
+including all five pass-1 tests and the exact 88/99 Drive-call goldens.
+
+tests changed: runner/test/b1a-contract.test.ts: append exactly two round-3 tests through runOnDrive and production main; existing test bodies and assertions remain byte-for-byte unchanged.
+tests changed: runner/test/drive-v3.ts: preserve the existing FakeDrive changes entry's trashed flag on the Drive wire instead of replacing it with false; no assertions or fake production source changed.
+removed: none (tests or assertions).
+
+### Exact reds and controls
+
+1. `B1a contract: round 3 1: vanished indexed notes drop without failing and ordinary edits refresh`
+   - The same indexed Plot note starts in retrieval and index. A wrapper verifies the
+     planner's cached listing holds its old version, then edits the note immediately
+     before the first real changes request. Ordinary edit control refreshes its exact
+     id, version, summary and projection, and reaches done.
+   - Trashed-feed variant moves the edited note to the Bin before that request.
+     The real FakeDrive feed reports the edited version and `trashed: true`.
+     HEAD's main ends failed after a not-found maintenance read, retains the note in
+     retrieval and index, and retains cursor 17 instead of the drained token 19.
+     Assertions require done, exact-id removal from retrieval, removal of [[Plot]]
+     from .bower/index.md and a state commit at the feed's newStartPageToken.
+   - Removed-feed control uses the same actual Bin state and substitutes Drive's
+     metadata-free removed representation for that id on the wire. All assertions
+     already pass at HEAD: done, removal from both artifacts and advanced cursor.
+   - Not-found-read variant drains an ordinary edited feed, then moves the note to
+     the Bin before maintenance's content read. The real transport answers 404;
+     that fault is asserted as reached. HEAD ends failed, retains both artifacts
+     and cursor 17 instead of 18. The same drop-and-done assertions fail.
+   - Soft assertions run every variant; positive controls are hard assertions.
+
+2. `B1a contract: round 3 2: unrelated account changes drain once and the next run has two discovery reads`
+   - An account folder outside Bower contains another Plot.md, deliberately sharing
+     the indexed note's name. Actual FakeDrive feed entries are asserted by id;
+     VaultIndex confirms the unrelated note has no path under the selected root.
+     A second variant also includes a hidden .obsidian/workspace.json change.
+   - Both first runs reach done and preserve all retrieval fields except the cursor,
+     the indexed Plot entry and projection bytes. HEAD keeps cursor 17 instead of
+     newStartPageToken 19 (outside only) or 20 (outside plus hidden).
+   - A fresh no-change dispatch uses the existing dispatch-id override and empty
+     admission, with a later admission timestamp and fake clock. No journal request
+     is introduced. Observe withMaintenance inside production main, after planning:
+     exactly two discovery requests pass at HEAD (retrieval media, changes listing).
+     Its pageToken wrongly stays 17 and its actual response repeats f18/f19, plus
+     f20 in the hidden variant. Cursor and never-repeat assertions therefore fail.
+   - After either run, querying the committed cursor also proves the ignored entries
+     wrongly remain pending. State and index preserve the unrelated same-name control.
+
+The test helper's one-line wire change exposes the existing fake feed's actual Bin
+metadata. It introduces no separate feed, planner, parser, maintenance or recovery
+mechanism. All ids, paths and content are made up. Fake clocks and injected immediate
+pacing are reused; there are no timer waits.
+
+### Validation
+
+| Command | Result | Log under tmp-logs/ |
+| --- | --- | --- |
+| pnpm -C runner exec vitest run test/b1a-contract.test.ts test/drive-calls-golden.test.ts --maxWorkers=2 | exit 1; exactly the 2 new assertion reds, 17 tests pass; all 12 existing B1a tests and all 5 golden tests pass | b1a-round3-runner-final.log |
+| pnpm exec vitest run src/data/contracts/b1a-contract.test.ts --maxWorkers=2 | 7 tests pass, including both app pass-1 tests | b1a-round3-app.log |
+| pnpm exec tsc -p runner/tsconfig.json --noEmit | pass | b1a-round3-tsc.log |
+| pnpm -C runner exec eslint test/b1a-contract.test.ts test/drive-v3.ts | pass | b1a-round3-eslint.log |
+
+Only failure sections, aggregate results and empty successful check logs were read.
+Both new tests fail on their requested behavior at unchanged production HEAD, with
+16 assertion failures total; there are no import, type or timer failures. The ordinary
+edit and metadata-free removed controls pass. All 88/99 goldens and bounds are unchanged.
+Initial validation exposed a test setup report fence: a fresh run cannot replace an
+older view with an identical admission timestamp. Giving the second admission AT + 1,
+with vi.setSystemTime(AT + 1), fixes that setup using the existing timestamp mechanism.
+The final log has no report-fence failure; the only new failures are the intended reds.
+
+Read-only git comparison verifies the entire previous runner B1a test file is the
+unchanged prefix of this file. git diff --check passes. Full pnpm check was omitted
+because it invokes prohibited writing git commands in src/harness-git.test.ts.
+No screen changed (ui: false); no e2e was run. The requested touched-test gates ran.
+
+Offline standard reused from the packet and existing source: Drive's drained changes
+feed and newStartPageToken, https://developers.google.com/workspace/drive/api/guides/manage-changes;
+state/cursor atomicity, https://www.sqlite.org/atomiccommit.html.
+No URL was fetched. The tests reuse the real main, VaultIndex, versioned retrieval,
+FakeDrive changes feed, corpus driver and existing wire observation mechanism.
+
+The shared test wire was also checked against the full runner suite:
+`pnpm -C runner exec vitest run --maxWorkers=2` exits 1 with exactly the two new
+round-3 reds and all 526 existing tests passing (43 files). The only failing names
+are the two listed above, with the same 16 intended assertion failures.
+Log: `tmp-logs/b1a-round3-runner-all.log`. No existing runner behavior regressed.
+
+## Fix round 3
+
+Implementer: Codex. Authority: the owner's round-3 repair request for TL-P4-41
+addendum 5. Base HEAD: `fc399bb90ed30e7f1ec71c55a1c0df132450f309`.
+Changes are uncommitted; no network or writing git command was used. The inherited
+notes edits above are preserved. Only runner/src/index.ts and this appended section
+were changed in this session.
+
+tests changed: none.
+removed: runner/src/index.ts: cursor rollback for newly discovered or unresolved feed entries.
+removed: runner/src/index.ts: visible-discovery deferral based on the planner's cached membership.
+removed: runner/src/index.ts: hidden-outside-runner-only restriction on the existing cursor write.
+removed: runner/src/index.ts: removed-only feed handling and unconditional propagation of missing-note reads.
+removed: 26 source lines, including replacements; no test, assertion or stored fixture removed.
+
+### Implementation
+
+The existing maintenance snapshot has one local drop rule, backed by VaultIndex.drop.
+Both removed/trashed feed entries and content reads answering BowerError not-found
+use it. Drive's existing read refusal represents trashed reads as not-found. The rule
+forgets the exact id and its descendants from the index and frozen listing; the
+snapshot omits the vanished note, so both retrieval and its Markdown projection drop
+it. A missing content read logs its details and continues; other read failures still
+propagate. Ordinary concurrent edits retain the existing version-keyed full read.
+
+The drained newStartPageToken is immutable for the run. Resolved full paths still go
+through layout.ts isHidden; unrelated ids without a selected-folder path and hidden
+paths do not schedule maintenance. With only ignored changes, the existing
+cursorOnly manifest write commits the cursor and leaves every other retrieval field
+and index/hot/log byte unchanged. Newly visible notes use the ordinary snapshot read
+and the same missing-file rule rather than retaining an old cursor. No ancestry
+lookup, extra discovery request, recovery engine or separate hiding rule was added.
+
+Compatibility row drafts: none. No src/data/contracts file or stored schema changed.
+Existing manifests, checkpoints, ownership fixtures and maintenance recovery remain
+covered by the unchanged B1a tests and full suites.
+
+### Red and green evidence
+
+Before the fix, these exact tests failed on 16 assertions in
+`tmp-logs/b1a-fix3-red.log`:
+
+- `B1a contract: round 3 1: vanished indexed notes drop without failing and ordinary edits refresh`
+  failed done, exact-id removal, projection removal and drained-cursor assertions
+  for trashed-feed and not-found-read variants. Ordinary-edit and removed-feed
+  controls passed.
+- `B1a contract: round 3 2: unrelated account changes drain once and the next run has two discovery reads`
+  failed cursor, no-pending-ignored-ids, next-discovery token and no-repeat assertions,
+  with and without a hidden descendant. Existing two-discovery-read controls passed.
+
+All requested final checks passed. Output is under tmp-logs; only failure sections,
+aggregate results and the sizes of empty successful check logs were inspected.
+
+| Command | Result | Log under tmp-logs/ |
+| --- | --- | --- |
+| pnpm -C runner exec vitest run test/b1a-contract.test.ts test/drive-calls-golden.test.ts --maxWorkers=2 | 19 tests pass, including all 14 runner B1a tests and both round-3 reds | b1a-fix3-focus.log |
+| pnpm exec vitest run src/data/contracts/b1a-contract.test.ts --maxWorkers=2 | All 7 app B1a tests pass | b1a-fix3-app-reds.log |
+| pnpm exec vitest run src/data --maxWorkers=2 | 77 files, 4139 tests pass | b1a-fix3-data.log |
+| pnpm -C runner exec vitest run --maxWorkers=2 | 43 files, 528 tests pass | b1a-fix3-runner.log |
+| pnpm exec tsc -p tsconfig.app.json --noEmit | Pass | b1a-fix3-tsc-app.log |
+| pnpm exec tsc -p tsconfig.node.json --noEmit | Pass | b1a-fix3-tsc-node.log |
+| pnpm exec tsc -p runner/tsconfig.json --noEmit | Pass | b1a-fix3-tsc-runner.log |
+| pnpm -C runner exec eslint src/index.ts | Pass | b1a-fix3-eslint.log |
+
+Drive-call goldens remain exactly 88 and 99, with no changed bound or fixture.
+Named call deltas: C04 +0; 25-earlier-runs +0. Both ignored-feed variants retain
+exactly two discovery reads on the next run. No additional Drive read was needed.
+
+pnpm check was not run: its root harness-git tests invoke writing git commands,
+which the owner prohibited. No UI screen changed (packet ui: false), so no e2e
+was run. The requested data/runner suites, TypeScript projects and touched-file
+ESLint checks are green. Read-only git diff --check passes; test/fixture diff is empty.
+
+Offline standard reused from the packet and existing source: Drive's drained changes
+feed and newStartPageToken,
+https://developers.google.com/workspace/drive/api/guides/manage-changes;
+atomic state/cursor commits, https://www.sqlite.org/atomiccommit.html.
+No URL was fetched. Maintenance retains the existing manifest, fenced writes,
+versioned cache, VaultIndex and layout rule as their single homes.
