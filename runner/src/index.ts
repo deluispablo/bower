@@ -15,6 +15,7 @@ import type { RunnerDrive } from './drive';
 const seen = (f: DriveFile): SeenFile => ({ fileId: f.id, name: f.name, parents: f.parents, folder: f.folder, modifiedTime: f.modifiedTime });
 const file = (f: SeenFile): DriveFile => ({ id: f.fileId, name: f.name, parents: f.parents, folder: f.folder, modifiedTime: f.modifiedTime, createdTime: f.modifiedTime });
 const unavailable = (): BowerError => new BowerError('unknown', 'Bower could not update its notes. It will try again.');
+type RetrievalState = RetrievalFile & { listing?: DriveFile[] };
 
 /** An ignored-feed cursor advance is an ordinary manifest write, never maintenance. */
 async function cursorOnly(drive: RunnerDrive, manifest: RunManifest, old: DriveFile, state: RetrievalFile, cursor: string): Promise<RunManifest> {
@@ -38,10 +39,22 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
   let listing = await drive.planReads().listAll(rootId);
   let ix = VaultIndex.build(rootId, listing);
   const old = ix.file(SYSTEM.retrieval);
-  let state: RetrievalFile | undefined;
+  let state: RetrievalState | undefined;
   if (old) {
     const value: unknown = JSON.parse(await drive.readListedText(old));
-    if (isRunnerFile(SYSTEM.retrieval, value) && value.folderId === rootId) state = value;
+    if (isRunnerFile(SYSTEM.retrieval, value) && value.folderId === rootId) {
+      const stored = value as RetrievalState;
+      // Older state has no ancestry. Ignore malformed optional metadata rather than changing its notes.
+      const ancestry: unknown = stored.listing;
+      state = { ...value };
+      delete state.listing;
+      if (Array.isArray(ancestry) && ancestry.every((f: unknown) =>
+        typeof f === 'object' && f !== null && 'id' in f && typeof f.id === 'string'
+        && 'name' in f && typeof f.name === 'string' && 'folder' in f && typeof f.folder === 'boolean'
+        && 'parents' in f && Array.isArray(f.parents) && f.parents.every((p: unknown) => typeof p === 'string')
+        && 'modifiedTime' in f && typeof f.modifiedTime === 'string'
+        && 'createdTime' in f && typeof f.createdTime === 'string')) state.listing = ancestry as DriveFile[];
+    }
   }
   const notesIn = (index: VaultIndex) => [...index.entries()].flatMap(([path]) => {
     const f = index.file(path);
@@ -56,9 +69,10 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
     listing = await drive.listAll(rootId);
     ix = VaultIndex.build(rootId, listing);
   }
-  const previous = ix;
-  ix = VaultIndex.build(rootId, listing);
-  const files = new Map(listing.map((f) => [f.id, f]));
+  // Stored parent ids retain vanished subtrees even when the planner already omitted them.
+  const files = new Map([...(state?.listing ?? []), ...listing].map((f) => [f.id, f]));
+  const previous = VaultIndex.build(rootId, state?.listing ?? listing);
+  ix = VaultIndex.build(rootId, [...files.values()]);
   // Feed removals and missing content reads forget the same indexed file and descendants.
   const drop = (id: string): void => {
     ix.drop(id);
@@ -73,13 +87,14 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
         if (!listed || listed.modifiedTime <= change.file.modifiedTime) {
           files.set(change.fileId, change.file);
           ix.put(change.file);
+          if (previous.pathOf(change.fileId) !== undefined && ix.pathOf(change.fileId) === undefined) drop(change.fileId);
         }
       }
     }
   }
   const notes = notesIn(ix);
   const pathOfChange = (change: { fileId: string; removed?: boolean; file?: DriveFile }): string | undefined => ix.pathOf(change.fileId)
-    ?? (change.removed || change.file?.trashed ? previous.pathOf(change.fileId) ?? state?.files[change.fileId]?.path : undefined);
+    ?? previous.pathOf(change.fileId) ?? state?.files[change.fileId]?.path;
   // The existing dot-path rule judges the resolved full path, including newly discovered descendants.
   const changes = (feed?.changes ?? notes.map(({ file }) => ({ fileId: file.id, file }))).filter((c) => {
     const path = pathOfChange(c);
@@ -93,7 +108,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
     const cached = state?.files[f.id];
     let text: string | null;
     try {
-      text = cached?.version === f.modifiedTime && cached.path === path ? null : await drive.readListedText(f);
+      text = cached?.version === f.modifiedTime ? null : await drive.readListedText(f);
     } catch (error) {
       // Drive also reports a trashed media read as not-found; other failures still stop the run.
       if (!(error instanceof BowerError) || error.code !== 'not-found') throw error;
@@ -101,7 +116,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
       drop(f.id);
       continue;
     }
-    snapshot[f.id] = cached?.version === f.modifiedTime && cached.path === path ? cached
+    snapshot[f.id] = cached?.version === f.modifiedTime ? { ...cached, path }
       : { path, version: f.modifiedTime, summary: text === null ? '(no summary)' : parseNote(path, text).summary || '(no summary)', coverage: { kind: 'prefix', bytes: 4096 } };
   }
   listing = [...files.values()];
@@ -129,7 +144,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
 }
 
 /** Whole projections from frozen input versions plus successful settled effects; refused effects add nothing. */
-function refreshed(op: OperationV2, head: Checkpoint, manifest: RunManifest): RetrievalFile {
+function refreshed(op: OperationV2, head: Checkpoint, manifest: RunManifest): RetrievalState {
   if (op.effect.kind !== 'maintain') throw unavailable();
   const inputs = op.effect.inputs;
   let files: RetrievalFile['files'] = structuredClone(inputs.snapshot ?? {});
@@ -154,7 +169,11 @@ function refreshed(op: OperationV2, head: Checkpoint, manifest: RunManifest): Re
     return !path || isHidden(path) || path.split('/')[0] === 'Inbox' ? []
       : [[id, { ...note, path, version: ix.byId(id)?.modifiedTime ?? note.version }]];
   }));
-  return { v: 1, folderId: inputs.folderId, account: inputs.account, cursor: inputs.cursor, files };
+  const ancestry = [...ix.entries()].flatMap(([path]) => {
+    const f = ix.file(path);
+    return f && (f.folder || files[f.id]) && path.split('/')[0] !== 'Inbox' ? [f] : [];
+  });
+  return { v: 1, folderId: inputs.folderId, account: inputs.account, cursor: inputs.cursor, files, listing: ancestry };
 }
 
 export function maintenanceEffects(drive: RunnerDrive): Effects {
