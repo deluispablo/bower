@@ -966,3 +966,183 @@ https://developers.google.com/workspace/drive/api/guides/manage-changes;
 atomic state/cursor commits, https://www.sqlite.org/atomiccommit.html.
 No URL was fetched. Maintenance retains the existing manifest, fenced writes,
 versioned cache, VaultIndex and layout rule as their single homes.
+
+## Red repair 7 (addendum 6)
+
+Red-owning session, round 4 (the last round). Authority: the owner's narrow request
+for TL-P4-41 addendum 6. Validation HEAD:
+`87946c58fa02b8d5236db2dc26580e7b7bdbff23`, branch `b1a-contract`.
+Only the runner contract tests and this notes section changed. No network, writing
+git command, commit, non-test source edit or real timer wait was used. The coordinator
+owns the uncommitted changes. All existing assertions and the 88/99 goldens remain.
+
+tests changed: runner/test/b1a-contract.test.ts: append four round-4 main-entry-point reds with live-folder positive controls; existing test bodies and assertions remain byte-for-byte unchanged.
+removed: none (tests, assertions or fixtures).
+
+### Fixture and observations
+
+Each variant bootstraps through production runner main on the existing FakeDrive
+and corpus driver, then loads the actual committed retrieval state. Gardening holds
+Plot.md, Seasons/Watering.md and Seasons/Spring/Seeds.md: three indexed descendants
+at three depths. Resources/Reading/Book.md is an unaffected indexed control. All
+content, ids and places are made up. Fake clocks and immediate injected pacing
+are reused. No new corpus case or method verdict row is needed.
+
+Every mutation changes only the folder. The actual feed is asserted to contain
+exactly one entry for its id and none for its descendants. The mutation precedes
+the planner's listing; the cached listing's presence/absence and current paths are
+asserted inside withMaintenance as called by main. A removed variant substitutes
+Drive's metadata-free removed representation on the existing wire; it uses the
+same real Bin state and feed. No production fake or shared helper was changed.
+
+Each test first runs a positive live-folder control, updating the folder with its
+same name and parent. That feed entry advances the cursor, retains every indexed
+note's exact state, preserves index bytes and completes the run. Controls prove
+that the observation is active: one retrieval write and one index write, exactly
+three maintenance-discovery Drive calls (retrieval media, changes feed, index
+media), and zero descendant media reads over the whole main invocation.
+
+All variants assert main's success/done, the drained newStartPageToken, the
+unaffected note by id, Drive-call count and no descendant media reads. They also
+require one state/cursor commit whose actual sent JSON equals the resulting state,
+and one projection rebuild. Vanished subtree ids must disappear from files and
+all serialized ancestry, including the folder and its subfolders. Rename/move
+must preserve each note's version, summary and coverage while changing its full
+path, and place Reading's direct Book line before every moved descendant line.
+These observable rules use the retrieval state's parent ids as the one ancestry
+home; no test introduces an alternate tree, refresh or recovery implementation.
+
+### Exact reds at HEAD
+
+1. `B1a contract: round 4 1: a folder binned before planning drops every indexed descendant`
+   - Both trashed and metadata-free removed folder variants reach done and commit
+     the drained cursor, but retain all three descendant ids and their index lines.
+   - Each makes two discovery calls instead of the required three and never writes
+     the index. The folder and descendants were absent from the planner's listing.
+   - Removal, serialized-ancestry and projection assertions fail; the control passes.
+2. `B1a contract: round 4 2: a folder moved outside drops its indexed subtree and commits the cursor`
+   - Moving Gardening to Elsewhere outside Bower similarly keeps all three stale
+     entries and lines. It reaches done and advances the cursor despite stale state.
+   - Two discovery calls instead of three; no projection rebuild. Actual notes
+     remain readable outside Bower. Removal assertions fail; the control passes.
+3. `B1a contract: round 4 3: a renamed folder updates descendant paths and index order without media reads`
+   - Gardening becomes Zinnia. All recursive paths, metadata preservation, cursor
+     and index regroup assertions pass. The control's zero-read assertion passes.
+   - HEAD unnecessarily reads all three unchanged descendant media bodies, making
+     six maintenance-discovery Drive calls instead of three. These two assertions fail.
+4. `B1a contract: round 4 4: an inside folder move updates recursive paths and regroups without media reads`
+   - Gardening moves under Reading. All recursive paths, metadata preservation,
+     cursor and direct-note-before-subtree assertions pass; the control passes.
+   - HEAD again reads all three unchanged descendant media bodies: six discovery
+     calls instead of three. The no-read and call-count assertions fail.
+
+### Validation
+
+| Command | Result | Log under tmp-logs/ |
+| --- | --- | --- |
+| pnpm -C runner exec vitest run test/b1a-contract.test.ts test/drive-calls-golden.test.ts --maxWorkers=2 | exit 1; exactly four new reds; 19 existing tests pass (14 B1a, 5 goldens) | b1a-round4-runner-final.log |
+| pnpm exec vitest run src/data/contracts/b1a-contract.test.ts --maxWorkers=2 | all 7 app contract tests pass | b1a-round4-app.log |
+| pnpm exec tsc -p runner/tsconfig.json --noEmit | pass | b1a-round4-tsc.log |
+| pnpm -C runner exec eslint test/b1a-contract.test.ts | pass | b1a-round4-eslint.log |
+
+The final runner log has 37 intended assertion failures across exactly the four
+new tests; no import, type, timer, control or existing-test failure. Each new test
+fails at unchanged production HEAD for the specific reason above. Initial and final
+focus runs agree; b1a-round4-runner-first.log holds the initial red evidence. Only
+failure sections, aggregate summaries and empty check-log sizes were inspected.
+
+Read-only git checks verify the previous runner contract file is an unchanged
+prefix and the goldens have no diff. git diff --check passes. Full pnpm check was
+not run because its harness-git tests invoke prohibited writing git commands;
+intentional contract reds would also keep it red. No screen changed (ui: false),
+so no e2e was run. The requested touched-test, TypeScript and ESLint checks ran.
+
+Offline standards reused from the packet and existing implementation: Drive's
+parents and drained changes feed,
+https://developers.google.com/workspace/drive/api/guides/manage-changes;
+state/cursor atomicity, https://www.sqlite.org/atomiccommit.html;
+version-keyed response reuse, https://www.rfc-editor.org/rfc/rfc9110.html#section-8.8.3.
+No URL was fetched. Main, the existing wire, FakeDrive, VaultIndex and versioned
+retrieval remain the test's production entry points and evidence sources.
+
+## Fix round 4
+
+Implementer: Codex. Authority: the owner's last-round fix request for TL-P4-41
+addendum 6. Base HEAD: `33b96d7d`. No network or writing git command was used;
+the coordinator owns any later commit. The inherited Red repair 7 notes above
+remain intact. Only runner/src/index.ts and this appended section changed.
+
+tests changed: none.
+removed: runner/src/index.ts: planner-only ancestry when constructing the maintenance index.
+removed: runner/src/index.ts: removed/trashed-only fallback for resolving a changed id's previous path.
+removed: runner/src/index.ts: path equality as a condition for reusing a version-matched note summary.
+removed: 10 source lines, including replacements; no test, assertion or fixture removed.
+
+### Implementation and compatibility
+
+Retrieval v1 gains optional listing metadata with file ids and parent ids. The
+existing maintenance materializer stores only visible folders and indexed notes,
+after settled outcomes. Old state without that metadata still reads; optional
+metadata is checked before use. No src/data/contracts file or manifest shape changed.
+
+Maintenance overlays the planner's current listing on the stored ancestry, then
+applies the actual feed through VaultIndex.put and the round-3 local drop rule.
+The previous ancestry resolves a vanished or moved-out folder by id even when
+the planner already omitted its entire subtree. The same VaultIndex.drop removes
+that folder and all descendants from the frozen listing; the snapshot and whole
+projection omit them. No path-prefix matching, second deletion mechanism,
+ancestry lookup request or recovery engine was introduced.
+
+For an inside rename or move, VaultIndex recomputes recursive paths from the
+parent ids. A matching content version reuses the exact summary and coverage
+with the new path, without media reads. The existing index sort regroups those
+paths. The state, ancestry and drained cursor are stored in the same fenced
+retrieval write, using the existing manifest/checkpoint/write-once path.
+
+### Red and green evidence
+
+The pre-fix run in tmp-logs/b1a-fix4-red.log exited 1 with exactly four round-4
+reds, 37 assertion failures and 19 passing existing tests, including all five
+Drive-call golden tests. The exact new names are:
+
+- `B1a contract: round 4 1: a folder binned before planning drops every indexed descendant`
+- `B1a contract: round 4 2: a folder moved outside drops its indexed subtree and commits the cursor`
+- `B1a contract: round 4 3: a renamed folder updates descendant paths and index order without media reads`
+- `B1a contract: round 4 4: an inside folder move updates recursive paths and regroups without media reads`
+
+The first two failed subtree removal, serialized ancestry, projection rebuilding
+and three-call discovery assertions. The last two failed zero descendant reads
+and three-call discovery assertions. All live-folder controls passed before the fix.
+
+All requested final checks exited 0. Output is under tmp-logs; only failure
+sections, aggregate results and empty successful check-log sizes were inspected.
+
+| Command | Result | Log under tmp-logs/ |
+| --- | --- | --- |
+| pnpm -C runner exec vitest run test/b1a-contract.test.ts test/drive-calls-golden.test.ts --maxWorkers=2 | 23 tests pass, including all 18 runner B1a tests and 5 goldens | b1a-fix4-focus.log |
+| pnpm exec vitest run src/data/contracts/b1a-contract.test.ts --maxWorkers=2 | All 7 app B1a tests pass | b1a-fix4-app-reds.log |
+| pnpm exec vitest run src/data --maxWorkers=2 | 77 files, 4139 tests pass | b1a-fix4-data.log |
+| pnpm -C runner exec vitest run --maxWorkers=2 | 43 files, 532 tests pass | b1a-fix4-runner.log |
+| pnpm exec tsc -p tsconfig.app.json --noEmit | Pass | b1a-fix4-tsc-app.log |
+| pnpm exec tsc -p tsconfig.node.json --noEmit | Pass | b1a-fix4-tsc-node.log |
+| pnpm exec tsc -p runner/tsconfig.json --noEmit | Pass | b1a-fix4-tsc-runner.log |
+| pnpm -C runner exec eslint src/index.ts | Pass | b1a-fix4-eslint.log |
+
+Goldens remain exactly 88/99, including their phase counts and timing bounds.
+Named additional-call deltas: C04 +0; 25-earlier-runs +0. All round-4 variants
+make exactly three maintenance discovery calls and zero descendant media reads.
+No bound, golden, fixture or test changed. Read-only git diff --check passes;
+the test/fixture diff is empty.
+
+pnpm check was omitted because its root harness-git tests invoke writing git
+commands, prohibited by the owner. No UI screen changed (packet ui: false), so
+no e2e was run. Startup init.sh was also omitted: it installs over the network
+and runs that prohibited full check. The requested individual gates are green.
+
+Offline standards reused from the packet and existing implementation: Drive's
+parent ids and drained changes feed,
+https://developers.google.com/workspace/drive/api/guides/manage-changes;
+atomic state/cursor commits, https://www.sqlite.org/atomiccommit.html;
+version-keyed response reuse, https://www.rfc-editor.org/rfc/rfc9110.html#section-8.8.3.
+No URL was fetched. VaultIndex, the local drop rule, versioned cache and fenced
+maintenance remain the single homes for their mechanisms.
