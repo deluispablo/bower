@@ -1,6 +1,6 @@
 # Capability corpus (P4-A)
 
-Made-up cases for the capabilities C04 to C11, C13 and C15 (Alex, Larkspur Lane, Saltmere, Ferrowick; nothing personal). Each folder holds:
+Made-up cases for the capabilities C04 to C11, C13, C15 and proposed C17 / B1 (Alex, Larkspur Lane, Saltmere, Ferrowick; nothing personal). Each folder holds:
 
 - `case.json`: the inputs (piles, requests, rules, answers, seeded questions), the scope and the web switch;
 - `inbox/`: the files of the piles; `folder/`: the starting folder (notes with their front matter, `Rules.md`);
@@ -54,6 +54,10 @@ Made-up cases for the capabilities C04 to C11, C13 and C15 (Alex, Larkspur Lane,
 | c13-undo-whole-run | C13 | model | new |
 | c15-more-context-bounded | C15 | model | new |
 | c15-scanned-letter | C15 | model | bench:4-scanned-pdf, adapted (made-up; the original is in bench-4-scanned-pdf) |
+| b1-index-job-offer | C17 / B1 | model | TL-P4-39; reused made-up B123 indexed job-search fixture; scripted proof pending |
+| b1-changes-person-edit | C17 / B1 | model | TL-P4-39 §1.6, addendum 2; supported own-note edit on the same Drive |
+| b1-moc-over-40 | C17 / B1 | model | TL-P4-38 addenda 1–2; 41-item parent folds to existing child maps |
+| b1-index-no-change | C17 / B1 | model | TL-P4-39 F9; reused made-up B123 exclusions and unchanged-index fixture |
 | c05-conflicting-fact-kept | C05 | scripted | new (preservation through the existing planner) |
 | c05-marked-state-keeps-history | C05 | scripted | new (preservation through the existing planner) |
 
@@ -131,3 +135,7 @@ ATX section through the next heading of equal or lesser depth, excluding heading
 repeated personal headings are ambiguous and fail. Properties are read directly from Drive appProperties, including empty
 values: an absent property must have no key. A missing note fails even when all requested properties should be absent.
 These expectations may also appear inside a `runs` item, where they compare that press with the original seeded note.
+
+The four `b1-*` cases are preparation fixtures, not scripted success. Their execution replies use the existing intent
+shape; B1 needs a step-aware driver, changes-feed simulation and context/read/write oracles before coverage can change.
+The current C04–C15 method test does not select `b1-*` ids or admit C17. See `docs/harness/2026-10-10-b1-prep.md`.

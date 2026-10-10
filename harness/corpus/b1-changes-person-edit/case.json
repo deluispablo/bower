@@ -1,0 +1,33 @@
+{
+  "id": "b1-changes-person-edit",
+  "capability": "C17",
+  "title": "Refresh a person's edited note through the changes feed before the next plan",
+  "covers": "model",
+  "source": "new (TL-P4-39 §1.6 and addendum 2; supported own-note edit)",
+  "scope": "instructions",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Refresh the index."
+    }
+  ],
+  "questions": [],
+  "bowerOwned": [],
+  "presses": [
+    {
+      "between": [
+        {
+          "kind": "edit",
+          "path": "Resources/Careers/Career plans.md",
+          "text": "---\nsummary: Alex is looking for a remote developer role.\nstatus: active\n---\n\n# Career plans\n\nAlex is looking for a remote developer role. Updated on 10 October 2026.\n"
+        }
+      ],
+      "request": {
+        "kind": "tidy",
+        "text": "Refresh the index."
+      }
+    }
+  ]
+}

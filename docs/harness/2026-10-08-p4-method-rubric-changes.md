@@ -101,3 +101,15 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
    test (`every expected number is grounded in its case`, runner/test/corpus.test.ts) found no other ungrounded number in
    note `timeline` or `contains` texts across the corpus. It reuses `groundsOf` and `ungrounded` from runner/src/claude.ts
    (now exported, unchanged) and skips paths, report ids and the app's `<!-- since DATE -->` stamp, which are not facts.
+
+## B1 preparation verdicts — 2026-10-10 (TL-P4-39; TL-P4-40)
+
+These verdicts review proposed semantics, not execution. The existing test at second-brain-method.test.ts:150–175
+selects C04–C15 ids only; B1/C17 gate admission is a proposed small support entry, not changed in this preparation.
+
+| Case | Verdict | Reason |
+| --- | --- | --- |
+| b1-index-job-offer | agrees | Fit uses the indexed job-search project instead of unrelated workshop focus; grounded news and real links preserve personal content (points 1, 3, 4, 7). |
+| b1-changes-person-edit | agrees | Supported edits to a person's own notes refresh derived retrieval before planning without adopting or rewriting their note (TL-P4-39 addendum 2; F9, F10). |
+| b1-moc-over-40 | agrees | A 41-member map folds through existing child maps, preserving all primary evidence and links; no invented count or model-written list (TL-P4-38 addenda 1–2; F2, F9, F10). |
+| b1-index-no-change | agrees | Zero-token index maintenance excludes root, Inbox and bookkeeping inputs and makes no stamp-only write or summary migration (TL-P4-38 appendix; F3, F9). |

@@ -1,0 +1,110 @@
+{
+  "unchanged": [
+    "index.md",
+    "Areas/Home/Home.md",
+    "Resources/Gardening/Gardening.md",
+    "Resources/Gardening/Plot diary.md",
+    "Resources/Gardening/Late summary.md",
+    "Root scratch.md",
+    ".bower/cache/Hidden memo.md",
+    "Inbox/Waiting note.md"
+  ],
+  "notes": [
+    {
+      "path": "index.md",
+      "contains": [
+        "# Index",
+        "## Areas",
+        "### Home",
+        "## Resources",
+        "### Gardening",
+        "- [[Late summary]] — (no summary)",
+        "- [[Plot diary]] — (no summary)"
+      ],
+      "excludes": [
+        "Late summary sentinel.",
+        "Hidden exclusion sentinel.",
+        "Inbox exclusion sentinel.",
+        "Root exclusion sentinel."
+      ]
+    }
+  ],
+  "report": {
+    "filed": 0,
+    "questionsExactly": 0
+  },
+  "runs": [
+    {
+      "unchanged": [
+        "index.md",
+        "Areas/Home/Home.md",
+        "Resources/Gardening/Gardening.md",
+        "Resources/Gardening/Plot diary.md",
+        "Resources/Gardening/Late summary.md",
+        "Root scratch.md",
+        ".bower/cache/Hidden memo.md",
+        "Inbox/Waiting note.md"
+      ],
+      "notes": [
+        {
+          "path": "index.md",
+          "contains": [
+            "# Index",
+            "## Areas",
+            "### Home",
+            "## Resources",
+            "### Gardening",
+            "- [[Late summary]] — (no summary)",
+            "- [[Plot diary]] — (no summary)"
+          ],
+          "excludes": [
+            "Late summary sentinel.",
+            "Hidden exclusion sentinel.",
+            "Inbox exclusion sentinel.",
+            "Root exclusion sentinel."
+          ]
+        }
+      ],
+      "report": {
+        "filed": 0,
+        "questionsExactly": 0
+      }
+    },
+    {
+      "unchanged": [
+        "index.md",
+        "Areas/Home/Home.md",
+        "Resources/Gardening/Gardening.md",
+        "Resources/Gardening/Plot diary.md",
+        "Resources/Gardening/Late summary.md",
+        "Root scratch.md",
+        ".bower/cache/Hidden memo.md",
+        "Inbox/Waiting note.md"
+      ],
+      "notes": [
+        {
+          "path": "index.md",
+          "contains": [
+            "# Index",
+            "## Areas",
+            "### Home",
+            "## Resources",
+            "### Gardening",
+            "- [[Late summary]] — (no summary)",
+            "- [[Plot diary]] — (no summary)"
+          ],
+          "excludes": [
+            "Late summary sentinel.",
+            "Hidden exclusion sentinel.",
+            "Inbox exclusion sentinel.",
+            "Root exclusion sentinel."
+          ]
+        }
+      ],
+      "report": {
+        "filed": 0,
+        "questionsExactly": 0
+      }
+    }
+  ]
+}
