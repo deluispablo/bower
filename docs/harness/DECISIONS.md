@@ -392,3 +392,15 @@ One line per ruling, newest last. Read only the decision a task needs. Later rul
   - (4) Profile notes: a type-table row can name a profile note to keep in sync (a CV updates the career profile through C05's update path).
   The C17 preparation must cover all four, with made-up data. The owner's staging test is repeated with Claude on once C05 and C17 have landed
 - TL-P4-37 addendum 2 (one home for L0, after the designer's proposal): the designer's About me section ("## What Bower has learned", with "### About you", "### What you're working on" and "### How you like things") is the whole L0. "What you're working on" holds the current focus that addendum 1 (1) put in hot.md, so hot.md is not used and L0 has one home that the person can see and correct. The runner rewrites "What you're working on" after each run, and appends to the other two subsections. The rest of the designer's surface (Forget through the journal, the right panel's About you block, the keeper line) waits for the owner's OK, which the designer is getting directly
+- TL-P4-38 (owner, 2026-10-10: port the brain of the local vault, with no UI and no designer work) ([doc](2026-10-10-tl-p4-38-brain-port.md)). It replaces TL-P4-37's C17 scope and addenda 1-2, and the designer's About me surface is parked. A read-only study of the vault's mechanism files (method only, never content) gave the gap table. C17 becomes runner entries B1-B10:
+  - B1 an index at zero tokens, always shown, with at most 5 notes opened per source;
+  - B2 a summary on every note;
+  - B3 a hot.md that the runner reads first and rewrites each run;
+  - B4 an About me that grows;
+  - B5 a type table with proposals and profile sync (type-proposals folded in);
+  - B6 templates, with fit → create → ask;
+  - B7 a tag list that grows;
+  - B8 log.md and a lint that reports;
+  - B9 contradiction and inferred markers;
+  - B10 long-text summaries.
+  The planner prompt follows the vault's inbox skill, with its context order About me, hot, index, type table, Rules, then notes. Made-up corpus cases cover the owner's failure modes. Order: C05, then B1-B3, B5-B6, B4, B7-B9, B10 with C15, then C06. Codex preparation of B1-B6 starts now

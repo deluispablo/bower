@@ -42,7 +42,7 @@ P4 adds the real second brain. Claude understands, connects and writes. The P3 s
 | C14 | P3 behaviour, with runner writes from a real model while the app is open. |
 | C15 | The runner consumes the app's ready-input package, with deterministic fallbacks for unprepared inputs and bounded more-context requests. |
 | C16 | Every journey above on phone and desktop, by keyboard, against staging and then production. |
-| C17 | About me grows from what Bower learns (ingested files, rules, requests and answers), with sources, under the person's control, and is the context Bower uses to file, link, update and research ([TL-P4-37](harness/2026-10-10-tl-p4-37-about-me.md)). |
+| C17 | The brain of the owner's local vault in Bower's runner: index (L1), hot (L0), About me, summaries, type table and profiles, templates with fit → create → ask, tags, log and lint, markers, long-text summaries ([TL-P4-38](harness/2026-10-10-tl-p4-38-brain-port.md)). |
 
 ## Owner setup
 
@@ -57,7 +57,7 @@ No session enters credentials.
 | --- | --- |
 | P4-A Adoption and evidence base | `p4-acceptance` (this document); `p4-corpus` (a synthetic capability corpus with expected outcomes for C04–C15, reusing `agent/bench/cases` and the P2 scripted journeys); `original-baseline` (the original app's quality, latency and tokens on the same corpus) |
 | P4-B Provider | `claude-provider` (the semantic-provider interface over headless Claude Code on Actions, under the original's permission policy, returning structured operations only); `provider-contract` (the same fixtures as the scripted provider); `run-budgets` (turns and time per task, with an honest partial or continuation state) |
-| P4-C Semantic slices, each proven with scripted proposals before the model | C04 incorporation; C05 updates and the merge question; C17 About me (TL-P4-37); C06 connections; C07 disagreement; C11 rules, requests and questions; C08 creation and revision; C09 queries; C10 web research; C15 preparation and more-context requests; C13 real undo; C12 model and tool failures |
+| P4-C Semantic slices, each proven with scripted proposals before the model | C04 incorporation; C05 updates and the merge question; C17 the brain (TL-P4-38, entries B1-B10); C06 connections; C07 disagreement; C11 rules, requests and questions; C08 creation and revision; C09 queries; C10 web research; C15 preparation and more-context requests; C13 real undo; C12 model and tool failures |
 | P4-D Quality and speed | `corpus-evaluation` (scored against expected outcomes); `semantic-quality-review` (an independent reviewer judges the corpus outputs); `original-comparison` (quality, latency and tokens against the original) |
 | P4-E Production readiness and cutover | `rate-limits` (TL-P3-14); `oauth-publishing` (owner setup 2); `rules-original-conversion` (how the original's plain `Rules.md` becomes Bower-managed, never by an automatic rewrite); `landing-csp` (drop `unsafe-eval` through `fix-landing.mjs`); `upload-resume-after-reload` and `orphan-pile-count` (C02); `revocation-live` (C01); `production-precheck` (a read-only check that the new app reads the owner's real Bower folder correctly); `production-cutover` (deploy the new Worker and app in place of the original, with a tested rollback); `runbook-p4` |
 | P4-F Close | Freeze; the four suites; a cross-provider review; the C16 walk on staging and then on production; the dossier; owner acceptance |
