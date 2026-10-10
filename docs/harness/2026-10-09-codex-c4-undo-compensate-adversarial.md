@@ -37,3 +37,15 @@ Read-only, high effort. Tokens: input 1289914 (cached 1191808), output 8199.
 3. **Important — [note-edit.ts:633](/private/tmp/bower-c4-compensate/src/data/contracts/note-edit.ts:633): legacy manifests with no removals still change meaning.** `remove.every(...)` is true for an empty array, so equal-time additions receive the new record-ID ordering. Reproduced against pre-entry `c5e8093a`: an old change has `remove: []` and equal-time additions ordered Z then A. Z says “Keep scans together.” / “scans”; A says “keep scans together” / “scans in one place”. Baseline keeps Z’s wording and attribution; HEAD keeps A’s. Breaks TL-P4-27 addendum 9(4) and packet §1: old manifests must behave exactly as before, with byte-equal output.
 
 findings: 3
+
+## Last-round pass (addendum 11; fix d20eeaa3). Known limits per TL-P4-27 addendum 11
+
+Read-only, high effort. Tokens: input 1262448 (cached 1155328), output 6902.
+
+1. **Important — [journal.ts:236](/private/tmp/bower-c4-compensate/src/data/vault/journal.ts:236): the earlier stale-copy finding remains.** Reproduced with separate page memories and shared storage: B queues unreserved X; A reserves it, but storage reads fail between `keepHeld()` reading the outbox and `keep()` validating it. The early return retains A’s reserved copy. Drive stays offline. Storage recovers; B retracts X and answers `dropped`; A’s next online flush sends X. Breaks TL-P4-27 addenda 8(1), 10 and 11(1): failed keeping of a stored outbox must leave no stale page copy eligible to send.
+
+2. **Important — [journal.ts:414](/private/tmp/bower-c4-compensate/src/data/vault/journal.ts:414): failed-list persistence failure does not stop the drain.** Reproduced: queue X offline, then permanently refuse it during flush while failed-list writes and outbox removal fail. `keepFailed()` retains the refusal only in A’s memory, and the drain completes. A’s `retract(X)` answers `dropped`. After storage recovers, another page—with no A-local failed state—flushes the surviving outbox copy and sends X. Breaks addendum 11(2), explicitly requiring the drain to stop with `later` when saving the refusal fails, and the packet’s dropped-line guarantee.
+
+3. **Important — [journal.ts:403](/private/tmp/bower-c4-compensate/src/data/vault/journal.ts:403): an immediate caller’s permanent refusal lacks the failed-list protection.** Reproduced: permanently refuse X during `record()` and fail only removal of its outbox key. The caller receives “Bower couldn't keep that rule.”, but `observed` excludes X from the failed list while its outbox copy survives. Restore storage and let Drive accept creates; another page’s flush sends X successfully. Breaks addendum 11(2): every permanently refused line must enter the failed list before cleanup, so failed cleanup cannot cause a resend.
+
+findings: 3

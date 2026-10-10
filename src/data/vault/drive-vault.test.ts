@@ -29,11 +29,14 @@ let root: string;
 let vault: DriveVault;
 
 beforeEach(async () => {
+  vi.setSystemTime(new Date('2026-10-10T12:00:00Z'));
   localStorage.clear();
   drive = new FakeDrive();
   root = (await seedFakeDrive(drive, 'default', Date.now())) ?? '';
   vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
 });
+
+afterEach(() => vi.useRealTimers());
 
 const idOf = async (path: string): Promise<string> => {
   const all = await drive.listAll(root);
@@ -3835,6 +3838,8 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
  * again on that press, and it stays where the person put it.
  */
 describe('c4-create-landed: an app create found by its reserved id counts only as it was made', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
   type Made = 'createText' | 'createFolder';
   /** The first create `when` picks lands; its answer is lost and so is the read that would find it (or, with `meanwhile`, that runs first). */
   function loseCreate(k: Made, when: (args: unknown[]) => boolean, meanwhile?: (id: string) => Promise<void>): { lost: () => number; id: () => string | undefined } {
@@ -3926,6 +3931,157 @@ describe('c4-create-landed: an app create found by its reserved id counts only a
     expect({ names: await untitled(), path: drive.pathOf(lost.id() ?? '', root) }).toEqual({ names: ['Untitled.md'], path: 'Resources/Cooking/Untitled.md' });
   });
 
+  it('a pile-folder create resumed after a refresh across UTC midnight keeps its first name', async () => {
+    vi.setSystemTime(new Date('2026-10-10T00:02:00Z'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    drive = new FakeDrive();
+    root = (await seedFakeDrive(drive, 'default', Date.now())) ?? '';
+    vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    await vault.tree();
+    const lone = (await vault.piles()).find((p) => p.path === 'Inbox/Dentist reminder.pdf');
+    if (!lone?.path) throw new Error('no lone pile');
+    const thing = await idOf(lone.path);
+    const lost = loseCreate('createFolder', (a) => typeof a[2] === 'object' && a[2] !== null && 'pile' in a[2]);
+    await expect(vault.updatePile(lone.id, 'Dentist papers')).rejects.toMatchObject({ code: 'offline' });
+    expect(lost.lost()).toBe(1);
+    const made = lost.id() ?? '';
+    const firstName = (await drive.get(made)).name;
+    expect(firstName).toBe('2026-10-09 Dentist papers');
+    await vault.refresh();
+    await expect(vault.updatePile(lone.id, 'Dentist papers')).resolves.toMatchObject({ text: 'Dentist papers' });
+    const folders = (await drive.listAll(root)).filter((f) => f.folder && f.appProperties?.pile === lone.id);
+    expect(folders.map((f) => ({ id: f.id, name: f.name }))).toEqual([{ id: made, name: firstName }]);
+    expect((await drive.get(thing)).parents).toEqual([made]);
+    expect(drive.pathOf(thing, root)).toBe(`Inbox/${firstName}/Dentist reminder.pdf`);
+  });
+
+  it.each(
+    (['folder create', 'loose-file move', 'note create'] as const).flatMap((step) =>
+      ['2026-10-09T23:59:00Z', '2026-10-10T00:02:00Z'].map((clock) => ({ step, clock })),
+    ),
+  )('a pile conversion interrupted at any step resumes there and keeps its first names ($step, $clock)', async ({ step, clock }) => {
+    vi.setSystemTime(new Date(clock));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    drive = new FakeDrive();
+    root = (await seedFakeDrive(drive, 'default', Date.now() - 20 * 60_000)) ?? '';
+    vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    await vault.tree();
+    const lone = (await vault.piles()).find((p) => p.path === 'Inbox/Dentist reminder.pdf');
+    if (!lone?.path) throw new Error('no lone pile');
+    const thing = await idOf(lone.path);
+    const createFolder = drive.createFolder.bind(drive);
+    const createText = drive.createText.bind(drive);
+    const update = drive.update.bind(drive);
+    let interrupted = 0;
+    let recoveryReadsLost = 0;
+    const loseAnswer = (id: string): never => {
+      interrupted++;
+      const get = drive.get.bind(drive);
+      drive.get = async (key, options) => {
+        if (key !== id) return get(key, options);
+        drive.get = get;
+        recoveryReadsLost++;
+        throw driveError('offline');
+      };
+      throw driveError('offline');
+    };
+    const folderCreates = vi.spyOn(drive, 'createFolder').mockImplementation(async (...args) => {
+      const made = await createFolder(...args);
+      if (step === 'folder create' && !interrupted && args[2]?.pile === lone.id) loseAnswer(made.id);
+      return made;
+    });
+    const noteCreates = vi.spyOn(drive, 'createText').mockImplementation(async (...args) => {
+      const made = await createText(...args);
+      if (step === 'note create' && !interrupted && args[1] === 'Pile note.md') loseAnswer(made.id);
+      return made;
+    });
+    const writes = vi.spyOn(drive, 'update').mockImplementation(async (id, patch) => {
+      const made = await update(id, patch);
+      if (step === 'loose-file move' && !interrupted && id === thing && patch.addParent) loseAnswer(id);
+      return made;
+    });
+    await expect(vault.updatePile(lone.id, 'Dentist papers')).rejects.toMatchObject({ code: 'offline' });
+    expect({ interrupted, recoveryReadsLost }).toEqual({ interrupted: 1, recoveryReadsLost: 1 });
+    const firstFolder = (await drive.listAll(root)).find((f) => f.folder && f.appProperties?.pile === lone.id);
+    if (!firstFolder) throw new Error('no conversion folder');
+    expect(firstFolder.name).toBe('2026-10-09 Dentist papers');
+    const firstNote = (await drive.listAll(firstFolder.id)).find((f) => f.name === 'Pile note.md');
+    await vault.refresh();
+    await expect(vault.updatePile(lone.id, 'Dentist papers')).resolves.toMatchObject({ text: 'Dentist papers' });
+    const folders = (await drive.listAll(root)).filter((f) => f.folder && f.appProperties?.pile === lone.id);
+    const notes = (await drive.listAll(firstFolder.id)).filter((f) => f.name === 'Pile note.md');
+    expect({
+      folders: folders.map((f) => ({ id: f.id, name: f.name })),
+      parents: (await drive.get(thing)).parents,
+      path: drive.pathOf(thing, root),
+      notes: notes.map((f) => ({ id: firstNote ? f.id : undefined, name: f.name })),
+      text: await Promise.all(notes.map((f) => drive.readText(f.id))),
+      renames: writes.mock.calls.filter(([, patch]) => patch.name !== undefined),
+      folderCreates: folderCreates.mock.calls.filter(([, , props]) => props?.pile === lone.id).length,
+      noteCreates: noteCreates.mock.calls.filter(([, name]) => name === 'Pile note.md').length,
+      moves: writes.mock.calls.filter(([id, patch]) => id === thing && patch.addParent !== undefined).length,
+    }).toEqual({
+      folders: [{ id: firstFolder.id, name: firstFolder.name }],
+      parents: [firstFolder.id],
+      path: `Inbox/${firstFolder.name}/Dentist reminder.pdf`,
+      notes: [{ id: firstNote?.id, name: 'Pile note.md' }],
+      text: ['Dentist papers'],
+      renames: [],
+      folderCreates: 1,
+      noteCreates: 1,
+      moves: 1,
+    });
+  });
+
+  it('a pile-folder conversion whose file move failed after the folder landed keeps its first name and finishes', async () => {
+    vi.setSystemTime(new Date('2026-10-10T00:02:00Z'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    drive = new FakeDrive();
+    root = (await seedFakeDrive(drive, 'default', Date.now())) ?? '';
+    vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    await vault.tree();
+    const lone = (await vault.piles()).find((p) => p.path === 'Inbox/Dentist reminder.pdf');
+    if (!lone?.path) throw new Error('no lone pile');
+    const thing = await idOf(lone.path);
+    const lost = loseCreate('createFolder', (a) => typeof a[2] === 'object' && a[2] !== null && 'pile' in a[2]);
+    await expect(vault.updatePile(lone.id, 'Dentist papers')).rejects.toMatchObject({ code: 'offline' });
+    expect(lost.lost()).toBe(1);
+    const made = lost.id() ?? '';
+    const firstName = (await drive.get(made)).name;
+    expect(firstName).toBe('2026-10-09 Dentist papers');
+
+    await vault.refresh();
+    const update = drive.update.bind(drive);
+    let failedMove = false;
+    const writes = vi.spyOn(drive, 'update').mockImplementation(async (id, patch) => {
+      if (!failedMove && id === thing && patch.addParent === made) {
+        failedMove = true;
+        throw driveError('offline');
+      }
+      return update(id, patch);
+    });
+    // The folder is recovered, but the conversion's loose-file move never reaches Drive.
+    await expect(vault.updatePile(lone.id, 'Dentist papers')).rejects.toMatchObject({ code: 'offline' });
+    expect(failedMove).toBe(true);
+    expect(drive.pathOf(thing, root)).toBe('Inbox/Dentist reminder.pdf');
+    expect((await drive.get(made)).name).toBe(firstName);
+
+    await vault.refresh();
+    await expect(vault.updatePile(lone.id, 'Dentist papers')).resolves.toMatchObject({ text: 'Dentist papers' });
+    const folders = (await drive.listAll(root)).filter((f) => f.folder && f.appProperties?.pile === lone.id);
+    expect({
+      folders: folders.map((f) => ({ id: f.id, name: f.name })),
+      parents: (await drive.get(thing)).parents,
+      path: drive.pathOf(thing, root),
+      renames: writes.mock.calls.filter(([, patch]) => patch.name !== undefined),
+    }).toEqual({
+      folders: [{ id: made, name: firstName }],
+      parents: [made],
+      path: `Inbox/${firstName}/Dentist reminder.pdf`,
+      renames: [],
+    });
+  });
+
   it('a change line whose create landed and then moved is refused, never made again, and stays where it was put', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await vault.tree();
@@ -3953,6 +4109,7 @@ describe('c4-create-landed: an app create found by its reserved id counts only a
    * it is; a file changed elsewhere is never written to, nor anything moved into it; a refused press makes nothing.
    */
   it('every app create, its answer lost, against a move, rename or Bin elsewhere: success only as it was made', async () => {
+    vi.setSystemTime(new Date('2026-10-10T00:02:00Z'));
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     const kinds = ['note', 'folder', 'pile folder', 'pile note', 'pile note, new words', 'link'] as const;
     type Kind = (typeof kinds)[number];

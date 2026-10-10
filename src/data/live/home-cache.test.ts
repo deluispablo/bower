@@ -18,6 +18,7 @@ let versions = new Map<string, string>();
 let ticking = false;
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+  vi.setSystemTime(new Date('2026-10-10T12:00:00Z'));
   ticking = true;
   void (async () => {
     while (ticking) {

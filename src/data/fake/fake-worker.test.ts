@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
 import { BOWER_FOLDER, PROP, SYSTEM } from '../vault/layout';
 import { FakeWorker } from './fake-worker';
@@ -37,6 +37,7 @@ import * as runRecords from '../spine/grounded';
 import { beforeUpload } from '@/testing/upload-hook';
 import { newLineIndexes } from '@/features/note/new-lines';
 
+beforeEach(() => vi.setSystemTime(new Date('2026-10-10T12:00:00Z')));
 afterEach(() => vi.useRealTimers());
 
 async function world(scenario: Scenario) {
@@ -2185,7 +2186,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await m.drive.trash((await fileAt(m, RULES)).id);
       await vaultOf(m).addRule(LEASE_RULE);
       // Typed a moment later, so it is the newer rule.
-      await new Promise((r) => setTimeout(r, 2));
+      vi.setSystemTime(Date.now() + 2);
       await vaultOf(m).addRule(RECEIPTS_RULE);
       const lines = await linesOf(m);
       expect(lines).toHaveLength(2);
@@ -2249,7 +2250,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const changes = await fileAt(w, SYSTEM.changes);
       const again: JournalRecord = { v: 1, id: 'LINE_AGAIN', at: Date.now(), kind: 'rule', what: `New rule: "${LEASE_RULE}"`, device: 'DEVICE_X', path: RULES, text: LEASE_RULE };
       await w.drive.createText(changes.id, 'LINE_AGAIN.json', `${JSON.stringify(again)}\n`);
-      await new Promise((r) => setTimeout(r, 2));
+      vi.setSystemTime(Date.now() + 2);
       await vaultOf(w).addRule(RECEIPTS_RULE);
       const added = (await linesOf(w)).find((l) => l.rec.id !== again.id);
       const second = (await w.worker.process('instructions')).run;
