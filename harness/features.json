@@ -6587,7 +6587,7 @@
     "id": "landing-csp",
     "task": "p4-production",
     "category": "security",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "The landing runs without unsafe-eval: fix-landing.mjs precompiles the exported page script, --check catches an export that still needs eval, and the /landing/* CSP drops unsafe-eval (P4-E landing-csp).",
     "steps": [
