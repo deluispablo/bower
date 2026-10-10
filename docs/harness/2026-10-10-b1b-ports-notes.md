@@ -444,3 +444,55 @@ removed: none.
 tests changed: none; two new parity tests and their recorded fixture only.
 left out: production fixes, pnpm check, e2e and commits; this assignment is red-only, coordinator commits.
 No git command that writes was run. Only parity.test.ts and this notes file changed.
+
+## Fix round 1 implementation
+
+Implemented adversarial findings 1 and 2 in `src/data/drive/fake-drive.ts` only.
+No test was changed. No network request or git write command was run; the coordinator commits.
+
+The existing `listed` metadata mechanism now derives inherited Bin status from stored parents,
+visiting each id once to stop cycles and checking every parent path. Only the public metadata
+is derived: the explicit stored Bin flags stay intact for untrash and snapshot restoration.
+Both existing feed producers (`touch` and `changed`) already use `listed`, so child changes
+now carry inherited `trashed: true`. Prefix reads check that same metadata before reading media
+and reject with the existing not-found BowerError. The unrelated live control remains readable.
+
+Every fake feed file, including a scripted page's file, now passes through the existing HTTP
+`toFile` normalizer. Fake folder, numeric size and SHA-256 fields are supplied in wire form;
+parents and appProperties are copied before normalization. The normalizer defines the public
+field set, so private MIME metadata remains stored for Workspace prefix exclusion and snapshots,
+but is absent from change files. No second public-file normalizer, feed producer or transport
+was introduced. `drive-api.ts` and `drive-http.ts` are unchanged.
+
+removed: src/data/drive/fake-drive.ts: explicit-only Bin status in listed metadata; derive inherited status there.
+removed: src/data/drive/fake-drive.ts: unnormalized feed-file copy; reuse HTTP toFile for every returned change file.
+tests changed: none.
+
+Reproduced the unchanged reds before product edits:
+`pnpm exec vitest run src/data/drive/parity.test.ts -t 'b1b fix 1 finding' --maxWorkers=2`
+exited 1 with exactly two failing tests and three assertion failures, in
+`tmp-logs/b1b-fr1-impl-red.log`:
+
+- `b1b fix 1 finding 1: inherited Bin status in prefix and feed`: missing child trashed flag
+  and prefix resolved instead of rejecting.
+- `b1b fix 1 finding 2: Workspace change has the public HTTP shape`: extra private mimeType.
+
+Final verification, after all product edits (all exit 0; output redirected, only failures and
+aggregate test counts inspected):
+
+- `pnpm exec vitest run src/data/drive src/data/vault src/data/live --maxWorkers=2 > tmp-logs/b1b-fr1-impl.log 2>&1`:
+  22 files and 807 tests passed, including both exact fix-round reds and existing Drive-call tests.
+- `pnpm exec tsc -p tsconfig.app.json --noEmit > tmp-logs/b1b-fr1-impl-tsc-app.log 2>&1`.
+- `pnpm exec tsc -p tsconfig.node.json --noEmit > tmp-logs/b1b-fr1-impl-tsc-node.log 2>&1`.
+- `pnpm exec eslint src/data/drive/fake-drive.ts > tmp-logs/b1b-fr1-impl-eslint.log 2>&1`.
+- `git diff --check`: passed, read-only; no test diff.
+
+Research reused the locally supplied files-resource and changes.list references from the reds
+and adversarial review, and inspected the existing HTTP `toFile` implementation. No fresh
+online verification is claimed, following the no-network instruction:
+
+- https://developers.google.com/workspace/drive/api/reference/rest/v3/files
+- https://developers.google.com/workspace/drive/api/reference/rest/v3/changes/list
+
+left out: pnpm check and e2e for integration; this fix round ran the requested targeted gates and has no UI.
+left out: retrieval state, cursor persistence, indexing, contracts, other fake APIs and commits.
