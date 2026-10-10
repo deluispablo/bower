@@ -6403,7 +6403,8 @@
       "Rules apply in line order (wordRules and rules() one sequence by since); pairsOf hides a same-run pair in Since the last tidy-up and the report."
     ],
     "verify": "",
-    "note": "TL-P4-27 (main 802ac116); replaces c4-undo-withdraw (parked at 70a2b0da) and closes TL-P4-24 #3. Escalated, Opus plus a Codex pass; contract sign-off trial; designer copy pending. Packet 2026-10-09-c4-undo-compensate-packet.md. Re-planned by TL-P4-27 addendum 2 (main c7a6556c): design (B) and tooLate withdrawn. Addenda 4-5 (main a370c1da, b938c629) folded in 2a828b2f; dispatched on Opus."
+    "note": "TL-P4-27 (main 802ac116); replaces c4-undo-withdraw (parked at 70a2b0da) and closes TL-P4-24 #3. Escalated, Opus plus a Codex pass; contract sign-off trial; designer copy pending. Packet 2026-10-09-c4-undo-compensate-packet.md. Re-planned by TL-P4-27 addendum 2 (main c7a6556c): design (B) and tooLate withdrawn. Addenda 4-5 (main a370c1da, b938c629) folded in 2a828b2f; dispatched on Opus.",
+    "review": "P4-67 PASS"
   },
   {
     "id": "c4-lockf",
