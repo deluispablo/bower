@@ -263,3 +263,22 @@ parsing of the person's earlier bullets. All outcomes use existing Expected keys
 C17 registration/verdict selection is shared upstream H1 work; current passing tests
 do not execute these model cases. See `docs/harness/2026-10-10-b9-prep.md` for the
 compatible plain-text storage recommendation, six lead questions and exact file ledger.
+
+## B10 preparation cases — 2026-10-10
+
+| Case | Capability | Covers | Source |
+| --- | --- | --- | --- |
+| c17-b10-partial-pdf | C17 / B10 + C15 | model | TL-P4-39 F12; real three-page extraction cut below visible word threshold; pending coverage trace |
+| c17-b10-complete-tail | C17 / B10 + C15 | model | TL-P4-39 F12/F7; complete tail deadline, original provenance and compatible cached synopsis; pending proof |
+| c17-b10-shared-budget | C17 / B10 + C15 | model | TL-P4-39 F8; five long sources, partial introductions and paid retry in one aggregate budget |
+| c17-b10-personal-original | C17 / B10 + C15 | model | TL-P4-32/-42 addendum 3; long personal Markdown moves with exact original bytes, no metadata rewrite |
+
+All four remain pending preparation fixtures. Top-two replies.json arrays use the
+existing terminal tidy-intent boundary; case 2 requires actual complete C15 evidence
+before that reply can be grounded. oracle.json is a separate unscored specification,
+not model input, a cache format or a supported case field. C15 owns preparation,
+coverage/cache validity, context exchanges and limitation-score support; B10 extends
+that one path. B1 owns named model stages and the aggregate run/request budget.
+C17 registration/verdict selection, exact moved bytes/ids, cache/coverage traces and
+model outcomes are not established by the current green corpus gate. See
+`docs/harness/2026-10-10-b10-prep.md` for six questions, exact file handoffs and proposals.
