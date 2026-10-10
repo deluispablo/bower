@@ -43,7 +43,6 @@ describe('C05 person notes author admission', () => {
     ['no source', (): Change => ({ ...append(), entries: [{ ...entry, source: null }] })],
     ['unanswered state', (): Change => ({ kind: 'state-rewrite', recordIds: ['change-1'], previous: ['Keep the shared water butt.'], lines: ['Return it.'] })],
     ['adoption', (): Change => ({ kind: 'state-rewrite', recordIds: ['change-1'], previous: ['Keep the shared water butt.'], lines: ['Return it.'], adopted: true })],
-    ['link rewrite', (): Change => ({ kind: 'link-rewrite', recordIds: ['change-1'], renames: [{ from: 'Old', to: 'New' }] })],
     ['rule wording', (): Change => ({ kind: 'rules-wording', add: [{ recordId: 'change-1', text: 'Keep papers.', yourWords: 'Keep papers.', since: 1 }], remove: [] })],
   ] as const)('C05 person notes: %s is refused not-bower beside the admitted append', (_label, change) => {
     positiveControl();
@@ -52,6 +51,17 @@ describe('C05 person notes author admission', () => {
     const text = NOTE.replace('Alex keeps a diary.', 'Alex keeps a diary. [[Old]]');
     const source = enc(text);
     expect(applyChanges(source, [change()], fetched())).toEqual({ ok: false, reason: 'not-bower' });
+    expect(source).toEqual(enc(text));
+  });
+
+  it('C05 person notes: link rewrite changes only links beside the admitted append', () => {
+    positiveControl();
+    expect.soft(applyChanges(enc(NOTE), [append()], fetched()).ok).toBe(true);
+    const text = NOTE.replace('Alex keeps a diary.', 'Alex keeps a diary. Old stays in prose. [[Old]]');
+    const source = enc(text);
+    const after = text.replace('[[Old]]', '[[New]]');
+    const change: Change = { kind: 'link-rewrite', recordIds: ['change-1'], renames: [{ from: 'Old', to: 'New' }] };
+    expect(applyChanges(source, [change], fetched())).toEqual({ ok: true, text: after, bytes: enc(after) });
     expect(source).toEqual(enc(text));
   });
 });

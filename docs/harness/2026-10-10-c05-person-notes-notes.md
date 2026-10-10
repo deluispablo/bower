@@ -299,3 +299,36 @@ Verification (output redirected; only failure details and test totals inspected)
 
 No NODE_OPTIONS was supplied. No assertions, names, fixtures, corpus or product code changed.
 No network or git write command was used. No commits, pnpm check or e2e were requested or run.
+
+### Red correction (TL-P4-32 addendum 1)
+
+Corrected blocker 2's personal-link contract under the lead's ruling. The existing link-rewrite mechanism
+remains admitted on personal notes without a new grant. The red now requires the exact output bytes with
+only `[[Old]]` changed to `[[New]]`; plain `Old` in prose, protected sections and CRLF stay identical.
+The owned-note positive control and adjacent bound Timeline append remain. All other refusal cases remain
+unchanged. A search of the other C05 author, runner, screen and e2e reds found no other personal-link refusal.
+No product code, fixture, keep-one test or other red was changed.
+
+tests changed: src/data/contracts/c05-person-notes.test.ts: replace personal-link refusal with exact link-only acceptance per TL-P4-32 addendum 1.
+
+New exact test name: `C05 person notes: link rewrite changes only links beside the admitted append`.
+
+Verification against HEAD's implementation (output redirected; only failures and their result totals read):
+
+- `pnpm exec vitest run src/data/contracts/c05-person-notes.test.ts --maxWorkers=2 > /tmp/c05-redfix2-unit.log 2>&1`:
+  1 failed, 9 passed. Only the corrected test above fails: expected accepted link-only bytes, received
+  `{ ok: false, reason: 'not-bower' }`. Its positive control and adjacent admitted append pass.
+- `pnpm -C runner exec vitest run test/keep-one-note.test.ts --maxWorkers=2 > /tmp/c05-redfix2-keep.log 2>&1`:
+  all 5 tests fail, unchanged from blocker 2:
+  - `keep one note carries the facts and bins the other`: the other note remains.
+  - `undo of keep one note restores both notes and links`: no Bin operation is present.
+  - `the other note changed after the read is not binned`: the injected changed line is absent.
+  - `keep-one says what happened when the other note moved or was binned`: the moved note is absent.
+  - `a line that only starts like a kept line is carried`: the other note remains.
+- `pnpm exec tsc -p tsconfig.app.json --noEmit > /tmp/c05-redfix2-tsc-app.log 2>&1`: pass.
+- `pnpm exec eslint src/data/contracts/c05-person-notes.test.ts > /tmp/c05-redfix2-eslint.log 2>&1`: pass.
+- `git diff --check`: pass.
+
+Offline reuse/source: the assigned `note-edit.ts` link-only invariant and TL-P4-32 addendum 1;
+the existing C05 byte oracle and positive control. No network or git write command was used.
+Left out: product repair, commits, pnpm check and e2e, as assigned. The expected implementation reds remain.
