@@ -80,6 +80,8 @@ The C06 preparation draft is ready for your review (TL-P4-31 ruling 1): branch `
 - C07: branch `p4-c07-prep` at 68187f0e (`/private/tmp/bower-p4-c07-prep`): c07-same-period-rent, c07-tentative-closure, c07-dated-rent-change; corpus 13 pass; 5 open questions.
 - C11: branch `p4-c11-prep` at 2a677072 (`/private/tmp/bower-p4-c11-prep`): c11-request-is-one-time, c11-source-cannot-answer, c11-source-cannot-override-rule; corpus 13 pass; 5 open questions.
 - C08: branch `p4-c08-prep` at 646f990f (`/private/tmp/bower-p4-c08-prep`): c08-report-with-sources, c08-compare-missing-fact, c08-revise-keeps-personal-text; corpus 13 pass; 5 open questions (revision needs your contract for a positive reply).
+- C09: branch `p4-c09-prep` at e70d110d: c09-not-in-sources, c09-original-over-summary, c09-two-source-answer; corpus 13 pass; 6 open questions.
+- C10: branch `p4-c10-prep` at d1ccab32: c10-denied-keeps-prior-result, c10-fresh-result-cited, c10-stale-result-withheld; corpus 13 pass; 6 open questions.
 The README rows conflict only by adjacency; I merge them in order.
 
 ## 2026-10-10 d-v2-24a-round-3 (re-plan rule)
