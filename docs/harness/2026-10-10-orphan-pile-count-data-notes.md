@@ -813,3 +813,7 @@ and [IndexedDB transactions](https://www.w3.org/TR/IndexedDB/#transaction-concep
 No second scanner, durable store, or upload protocol was added.
 
 Left out: full check mark, UI/e2e, commits and integration.
+
+## Known-green close (coordinator)
+
+The first implementation (29e871ca) was followed by rounds 2-3 and the addenda 5-7 work on the same lines of drive-vault.ts and pile-readiness.ts, so done.sh cannot revert it cleanly. The reds are proved: at f53be704 all 11 failed on the absent orphanSummary (Reds section); each fix round committed reds that failed at their HEAD (fix 1, fix 2 history-flat; this notes file). After: orphan 18/18, data+architecture 4185; pnpm check green; e2e app/capabilities demo 35 and fake 49; P4-101 PASS.
