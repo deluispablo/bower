@@ -599,6 +599,7 @@ export class DriveVault implements VaultSource {
   }
 
   async piles(context?: OwnershipContext): Promise<Pile[]> {
+    const arrivals = this.arrived.size;
     // What a reload left on its way goes on, from where Drive stopped.
     this.startQueue().catch((e: unknown) => {
       // Signed out: nothing to resume, and nothing to say.
@@ -711,6 +712,10 @@ export class DriveVault implements VaultSource {
       } else out.push({ id: item.pileId, text: '', createdAt: Date.parse(item.addedAt), items: [queuedRow(item)] });
     }
     for (const pile of await this.looseMissing(new Set(out.map((p) => p.id)))) out.push(pile);
+    // Queue completion updates the listing through fromQueue. Publish only when that listing and the
+    // queued rows stayed consistent across the reads; otherwise reuse the listing and read caches.
+    // A done file whose completion event is still on its way also needs that updated listing first.
+    if (this.arrived.size !== arrivals || this.queued.queue.items().some((i) => i.state === 'done' && i.file && !this.arrived.has(i.id))) return this.piles(context);
     return out.sort((a, b) => b.createdAt - a.createdAt);
   }
 

@@ -417,3 +417,67 @@ and [IndexedDB transaction lifetime](https://w3c.github.io/IndexedDB/#transactio
 The real queue, resumable transport, write-once reconciliation and committed device
 store remain the exercised mechanism homes. No existing contract contradiction was found
 in the whole requested file. Coordinator owns commits.
+
+## Fix round 1
+
+Implementer: Codex, 2026-10-10. Baseline HEAD: `c9ee7774`.
+Implements the Blocking first-folder-declaration completion race from the adversarial review.
+No network, git-writing command, test edit, dependency change or shared harness edit.
+
+The full `piles()` read records the existing `arrived` set's size before reading. Its single
+publication decision checks whether a queue completion changed that evidence while the read
+was outstanding, including a completed file whose queue event has not been processed yet.
+If so, it repeats the full read using the existing updated listing, declaration/read caches
+and accounting. This also refreshes the folder's children, which were captured before the
+declaration read; merely suppressing the picker would still omit the arrived member.
+No intermediate result is published. A member still pending keeps its existing queue row;
+a completed member is accounted and shown from the listing updated by `fromQueue`.
+Ordinary reads still do not wait for a gated account answer unless they need hydration.
+No queue, store, completion ledger, protocol, lock, session fence or accounting rule was added.
+
+removed: none; 0 production lines removed, 5 lines added in `src/data/vault/drive-vault.ts`.
+tests changed: none.
+
+### Red and green evidence
+
+The committed red was run unchanged before editing:
+`upload-resume-after-reload: fix 1: a member that arrives during the first declaration read needs no picker`.
+It failed at `src/data/upload-resume.test.ts:391`: the first full read returned a picker
+and `notArrived: true` instead of no picker and `notArrived: false`.
+The pending-member control and the other five upload-resume tests passed before the fix.
+After the fix, all seven tests pass, including the exact red and its pending-member control.
+
+All command output is under `tmp-logs/`; only failures and aggregate results were inspected.
+
+```sh
+pnpm exec vitest run src/data/upload-resume.test.ts --maxWorkers=2 > tmp-logs/resume-fix1-reds-before.log 2>&1
+pnpm exec vitest run src/data/upload-resume.test.ts --maxWorkers=2 > tmp-logs/resume-fix1-reds-green.log 2>&1
+pnpm exec vitest run src/data --maxWorkers=2 > tmp-logs/resume-fix1-data.log 2>&1
+pnpm exec tsc -p tsconfig.app.json --noEmit > tmp-logs/resume-fix1-tsc-app.log 2>&1
+pnpm exec tsc -p tsconfig.node.json --noEmit > tmp-logs/resume-fix1-tsc-node.log 2>&1
+pnpm exec eslint src/data/vault/drive-vault.ts > tmp-logs/resume-fix1-eslint.log 2>&1
+pnpm exec vitest run src/data/vault/drive-vault.test.ts --maxWorkers=2 > tmp-logs/resume-fix1-vault.log 2>&1
+```
+
+- Before: 6 passed, 1 intended assertion failure; exit 1.
+- After: upload-resume 7 passed; exit 0.
+- Entire data suite: 4,147 passed across 78 files, 57.48 seconds; exit 0.
+- Additional vault verification: 229 passed, 9.31 seconds; exit 0.
+- App tsc, node tsc and touched-file eslint: exit 0, empty logs.
+- Read-only `git diff --check`: exit 0.
+- The complete data suite finished without failed tests or unhandled errors. No test contradicts
+  this fix-round ruling; no assertion, fixture, bound or timeout was changed (TL-P4-51).
+
+### Sources and remaining gates
+
+No sources were fetched. Research is inherited from the packet/prep and existing code:
+[Drive resumable uploads](https://developers.google.com/workspace/drive/api/guides/manage-uploads#resumable)
+and [IndexedDB transaction lifetime](https://w3c.github.io/IndexedDB/#transaction-lifetime).
+The existing queue's completion events update the existing listing; the existing read cache
+keeps repeated unchanged declarations and file reads. The resumable transport, committed
+device staging, reserved identity and write-once reconciliation remain unchanged.
+
+Full `pnpm check` was not run: its harness fixture tests execute git-writing commands,
+which the assignment prohibits. Browser e2e was not run in this no-network fix round.
+No full-check mark or browser result is claimed. Coordinator owns commits and delivery gates;
+independent review and designer U3 verification remain before entry close.
