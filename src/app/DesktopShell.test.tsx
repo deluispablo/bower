@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { Link, MemoryRouter, Route, Routes } from 'react-router';
+import { Profiler } from 'react';
+import { createMemoryRouter, Link, MemoryRouter, Route, RouterProvider, Routes } from 'react-router';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import * as shell from './DesktopShell';
 import { usePrefs } from './prefs';
@@ -143,5 +144,81 @@ test('docking an open edge sheet returns focus and never writes preferences', ()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: `Hide the ${side} panel` })).toHaveFocus();
     expect(localStorage.getItem('bower:prefs')).toBeNull();
+  }
+});
+
+test.each([
+  [900, false, false], [1024, true, false], [1100, true, false],
+  [1280, true, true], [1440, true, true],
+] as const)('the first shell page render docks at %i px without a fold-then-dock flip', (width, left, right) => {
+  // A browser does not deliver its first ResizeObserver notification synchronously.
+  vi.stubGlobal('ResizeObserver', class {
+    constructor(callback: ResizeObserverCallback) {
+      resize = (nextWidth) => callback([{ contentRect: { width: nextWidth } } as ResizeObserverEntry], this as unknown as ResizeObserver);
+    }
+    observe() {}
+    disconnect() {}
+  });
+  const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    width, height: 900, left: 0, top: 0, right: width, bottom: 900, x: 0, y: 0, toJSON: () => ({}),
+  });
+  const frames: { left: boolean; right: boolean }[] = [];
+  try {
+    render(<Profiler id="shell" onRender={() => {
+      // An unmeasured frame may be empty, but the page must first mount with correct docking.
+      if (!document.querySelector('#main')) return;
+      frames.push({
+        left: screen.queryByRole('complementary', { name: 'Side panel' }) !== null,
+        right: screen.queryByRole('complementary', { name: 'Right panel' }) !== null,
+      });
+    }}>{layout()}</Profiler>);
+    expect(frames.length).toBeGreaterThan(0);
+    expect(frames).toEqual(frames.map(() => ({ left, right })));
+    const explorer = screen.queryByRole('button', { name: 'Open a folder' });
+    act(() => resize(width));
+    expect(screen.queryByRole('button', { name: 'Open a folder' })).toBe(explorer);
+    expect(frames).toEqual(frames.map(() => ({ left, right })));
+    expect(usePrefs.getState()).toMatchObject(defaults);
+    expect(localStorage.getItem('bower:prefs')).toBeNull();
+  } finally {
+    rect.mockRestore();
+  }
+});
+
+test('navigation dismisses the overlay permanently when Back returns to its opening route', async () => {
+  const router = createMemoryRouter([{
+    element: <shell.DesktopShell />,
+    children: [{ path: '/', element: <h1>Home</h1> }, { path: '/files/folder', element: <h1>Folder</h1> }],
+  }]);
+  render(<RouterProvider router={router} />);
+  act(() => resize(900));
+  const toggle = screen.getByRole('button', { name: 'Show the side panel' });
+  toggle.focus();
+  fireEvent.click(toggle);
+  expect(screen.getByRole('dialog', { name: 'Side panel' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('link', { name: 'Folder' }));
+  act(() => vi.advanceTimersByTime(600));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Folder' })).toHaveFocus();
+  await act(async () => { await router.navigate(-1); });
+  act(() => vi.runOnlyPendingTimers());
+  expect(screen.getByRole('heading', { name: 'Home' })).toBeInTheDocument();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Show the side panel' })).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('the shell supplies Bower moves to the folded panel Sheet', () => {
+  const moves = usePrefs.getState().birdMoves;
+  try {
+    usePrefs.setState({ birdMoves: false });
+    show();
+    act(() => resize(900));
+    fireEvent.click(screen.getByRole('button', { name: 'Show the side panel' }));
+    const dialog = screen.getByRole('dialog', { name: 'Side panel' });
+    expect(dialog.style.animation).toBe('none');
+    act(() => usePrefs.setState({ birdMoves: true }));
+    expect(dialog.style.animation).toBe('');
+  } finally {
+    act(() => usePrefs.setState({ birdMoves: moves }));
   }
 });
