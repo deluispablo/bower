@@ -193,3 +193,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `59d4dfbb` | c02-upload-count-ui | none: tests only (Home and Settings reds). |
 | `0b299ffd` | c02-upload-count-ui | none: tests only (red repair to today's Add a pile button). |
 | `ab3f9b32` | c02-upload-count-ui | Home: the Inbox card adds one informational line for unfinished piles (from orphanSummary; "At least" when partial; muted can't-check line, never 0); Settings: Sign out shows the "Sign out now?" sheet only while uploads are sending (Keep sending first); with nothing sending it signs out as before. No stored format change. |
+| `edf47d4b` | c02-upload-count-ui | none: tests only (Settings sign-out case timing). |
+| `5c84961f` | c02-upload-count-ui | Settings: the sheet's Sign out closes the sheet and waits for its history back before signing out, as Delete my account does; the person always reaches the signed-out screen. No stored format change. |
