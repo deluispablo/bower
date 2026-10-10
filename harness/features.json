@@ -6705,7 +6705,8 @@
     ],
     "verify": "pnpm exec vitest run src/features/files/tree-name-first.test.tsx -t \"New folder focuses its name before an unresolved create|pending row is the first child with folder icon|Escape drops the pending row without a write|blur with a name makes that folder once|keeps the name and inline FieldError|after create the new row is selected and focused\" && bash scripts/e2e-both.sh e2e/qa7.spec.ts e2e/tree-name-first.spec.ts -g \"New folder from the tree keeps the first letters typed|desktop pending New folder row passes WCAG 2.2\"",
     "note": "After create-named. Codex red, Codex implementation, Claude review, designer check once (rows signed 2026-10-10). Packet 2026-10-10-tree-name-first-packet.md. Closes create-name-speed.",
-    "review": "P4-85 PASS"
+    "review": "P4-85 PASS",
+    "design": "verified"
   },
   {
     "id": "b1b-ports",
