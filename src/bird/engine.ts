@@ -163,6 +163,8 @@ const pin = (c: Spring, v: number): void => {
  * target pose), so what it draws is exactly what the reader measures.
  */
 interface Drawing {
+  /** The square wrapper's width and height, frozen with the rest of the drawing. */
+  size: number;
   /** The bird's place and facing (the wrapper's translate and scaleX), and its opacity. */
   x: number;
   y: number;
@@ -188,7 +190,7 @@ interface Drawing {
   /** The Rig's thing in the beak: shown or not (a categorical value, never eased). */
   glyph: boolean;
 }
-const DRAWN_NUMBERS = ['x', 'y', 'face', 'opacity', 'pitch', 'sx', 'sy', 'head', 'headY', 'tail', 'wing', 'ws',
+const DRAWN_NUMBERS = ['size', 'x', 'y', 'face', 'opacity', 'pitch', 'sx', 'sy', 'head', 'headY', 'tail', 'wing', 'ws',
   'legs', 'jaw', 'tuft', 'tuftY', 'eye', 'ix', 'iy'] as const;
 /** A value as `toFixed(digits)` writes it. */
 const fixed = (v: number, digits: number): number => Number(v.toFixed(digits));
@@ -515,16 +517,20 @@ export class BirdEngine {
   /**
    * Stops and gives the drawing back: every attribute the engine wrote is
    * cleared, so the still frame's CSS shows again (the bird lost its turn).
+   * A layer keeps its wrapper's home placement and size; CSS owns its parts.
    */
   release(): void {
     this.stop();
     const P = this.parts;
+    if (P.carry) this.apply(this.motion === 'still' && this.drawn ? this.drawn :
+      this.stillDrawing(this.drawn ?? this.drawing()));
     for (const g of [P.rig, P.head, P.tail, P.wing, P.legs, P.jaw, P.tuft, P.eye, P.iris]) {
       g.removeAttribute('transform');
       drawnTransforms.delete(g);
     }
     P.glyph?.setAttribute('display', 'none');
-    for (const k of ['transform', 'width', 'height', 'opacity'] as const) P.bird.style[k] = '';
+    P.bird.style.opacity = '';
+    if (!P.carry) for (const k of ['transform', 'width', 'height'] as const) P.bird.style[k] = '';
     this.drawnSize = null;
     this.drawnPlace = null;
     this.drawnGlyph = null;
@@ -695,6 +701,9 @@ export class BirdEngine {
   }
   private beginReaction(request: ReactionRequest): void {
     if (request.ended) return;
+    this.motion = 'live';
+    this.blend = null;
+    this.applyQueuedPose();
     const waking = this.asleep || request.kind === 'moves-on';
     this.interrupt({ now: true });
     this.B.headY = 0;
@@ -704,8 +713,6 @@ export class BirdEngine {
     this.B.hopKick = 0;
     this.S.chirpT = 0;
     this.H.gaze = 0;
-    this.motion = 'live';
-    this.blend = null;
     this.reaction = request;
     this.doNow(this.makeAct(request.kind, request, waking));
     this.asleep = false;
@@ -726,9 +733,10 @@ export class BirdEngine {
   private stillDrawing(from: Drawing): Drawing {
     const pose = this.pose ?? 'idle';
     const h = this.home();
-    const Z = this.size;
+    const Z = from.size;
     const sleep = pose === 'sleep' && !this.settings;
     return {
+      size: Z,
       x: fixed(h.x - Z / 2, 1), y: fixed(h.y - 0.92 * Z, 1), face: 1, opacity: 1,
       pitch: 0, sx: 1, sy: 1,
       head: this.settings ? 8 : sleep ? 20 : 0, headY: sleep ? 3 : 0,
@@ -772,6 +780,10 @@ export class BirdEngine {
       opacity: 1, girth: -0.7, flying: false, flare: false, ruleCarry: false });
     Object.assign(this.S, { chirpT: 0, blink: 0, blinkT: -1, startleRising: false });
     this.drawn = to;
+    this.applyQueuedPose();
+  }
+  /** The same deferred pose handover after completion or a moves-on interruption. */
+  private applyQueuedPose(): void {
     const queued = this.queuedPose;
     this.queuedPose = null;
     if (queued) this.setPose(queued.pose);
@@ -1806,6 +1818,7 @@ export class BirdEngine {
       } else chip = { opacity: 0, x: last.x, y: last.y, r: last.r };
     }
     return {
+      size: Z,
       x: fixed(B.x - Z / 2, 1),
       y: fixed(B.y + B.hopY + B.bob - 0.92 * Z, 1),
       face: fixed(f, 3),
@@ -1832,11 +1845,10 @@ export class BirdEngine {
   }
 
   /** Draws one frame: the state's pose, or the settle's blend while it settles. */
-  private apply(): void {
-    const d = this.blend ? this.blendDrawing(this.blend) : this.drawing();
+  private apply(d = this.blend ? this.blendDrawing(this.blend) : this.drawing()): void {
     this.drawn = d;
     const P = this.parts;
-    const Z = this.size;
+    const Z = d.size;
     if (this.drawnSize !== Z) {
       P.bird.style.width = `${Z}px`;
       P.bird.style.height = `${Z}px`;
