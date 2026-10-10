@@ -11,7 +11,7 @@
  * a run took (`taken`), it plans only those piles, those things and those journal lines.
  */
 import { createOwnershipContext, type OwnershipContext } from '../contracts/ownership-format';
-import type { DriveFile } from '../drive/drive-api';
+import { UNCONFIRMED_WRITE_MESSAGE, type DriveFile } from '../drive/drive-api';
 import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate, personalTimelineRefusal } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent, type TimelineConsent, type AppendCompletion, type LeftAsWritten, type SatisfiedAppend } from '../contracts/run-manifest';
@@ -189,7 +189,11 @@ export async function personalAppendHistory(read: ScriptedRead, rootId: string, 
         const filed = found.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === c.consent?.sourceFileId);
         const sourceLanded = filed ? outcomes.some((o) => o.operationId === filed.operationId && o.state === 'applied')
           : found.manifest.capture.places.some((p) => p.file.fileId === c.consent?.sourceFileId);
-        if (outcome?.state === 'applied' || (sourceLanded && outcome?.state === 'rejected' && outcome.failure.code === 'conflict'))
+        // The engine records this unknown rejection only after read-back says not-landed. Keep its binding
+        // when the published pointer selects this run; changed/gone or unreadable effects are not retried.
+        const retryable = outcome?.state === 'rejected' && (outcome.failure.code === 'conflict'
+          || (outcome.failure.code === 'unknown' && outcome.failure.message === UNCONFIRMED_WRITE_MESSAGE));
+        if (outcome?.state === 'applied' || (sourceLanded && retryable))
           lines.push({ consent: c.consent, entry: c.entries[0], applied: outcome.state === 'applied', path: op.effect.path });
       }
     }

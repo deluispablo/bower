@@ -1076,3 +1076,101 @@ tests changed: runner/test/corpus-run.ts: red round 5 (TL-P4-51): addRequest({ki
 - Notes are the explicitly requested exception to the test-only edit scope. Commits are coordinator-owned.
 
 tests changed: runner/test/c05-bounded-reads.test.ts: additive fix-round-2 pending-relocation red, landing control and pre-append interruption check through main; every existing assertion and bound is unchanged.
+
+## Fix round 2
+
+Authority: the owner's fix-round-2 assignment and the Blocking finding in
+`docs/harness/2026-10-10-codex-smoke-request-slow-adversarial-2.md`.
+No network request, git write command or test edit was made. Commits remain coordinator-owned.
+
+The committed red ran before production edits: `C05 bounded reads: fix 2: a waiting retry whose
+pending relocation failed completes once`. One test failed and seven passed. It recorded another
+completion for unchanged wording, plus another append, append effect and update for changed wording.
+Evidence: `tmp-logs/fix2-red.log`.
+
+`VaultIndex.waitingRun` is the single rule for waiting-request run selection: the published `bowerRun`
+property wins; only its absence permits the actual pending folder's name as fallback. The existing
+in-place move publishes B before its append, and the existing physical move clears the property.
+Failed relocation therefore leaves the request pointing at B, even while it physically remains in A.
+History still verifies only the selected run through RunRecords; no archive scan or new mechanism.
+
+The first precedence-only edit passed the relocation red but exposed the committed pre-append control:
+B's append did not land, and the existing history reader omitted B's binding because its rejection
+was `unknown`, rather than `conflict`. The final fix preserves that retry through B's own records.
+`personalAppendHistory` accepts the engine's existing `unknown`/`UNCONFIRMED_WRITE_MESSAGE` outcome,
+which `engine.ts:666` writes only after read-back reports `not-landed`, alongside its existing clash
+case. It still requires a filed/captured source. Changed/gone read-back refusals and unreadable or
+unresolved effects are not admitted by this addition. No fallback read of A is introduced.
+
+### Waiting-run sweep
+
+Searches covered `waitingRun`, `bowerRun`, `PROP.run`, `pending/`, and the broader `pending` spelling.
+Evidence: `tmp-logs/fix2-run-sweep.log`, `fix2-run-sweep-all.log`, `fix2-run-sweep-repo.log`.
+Every production decision about a waiting request's run is listed below:
+
+- `src/data/vault/vault-index.ts:77`: the sole selector, published pointer before actual containment.
+- `src/data/spine/scripted.ts:172`: personalAppendHistory selects verified evidence via waitingRun.
+- `src/data/spine/scripted.ts:2413`: capture compares duplicate requests' selected runs via waitingRun.
+- `src/data/spine/scripted.ts:2417`: capture stores the request's waitingRun from that same selector.
+- `src/data/spine/scripted.ts:272`: settlement consumes that captured value for missing-evidence expiry.
+- `src/data/spine/scripted.ts:2266`: archive consumes it to clear the temporary property, without reselection.
+- `runner/src/claude.ts:410`: provider identifies waiting requests via waitingRun, then uses
+  personalAppendHistory for bound target/source ids. It does not resolve their former titles.
+
+Other matches were checked and do not select a waiting request's evidence run:
+
+- `vault-index.ts:68-71`: journal discovery includes physical pending folders; selection is waitingRun.
+- `scripted.ts:1857,2236-2242`: captures/creates the current run's pending destination.
+- `scripted.ts:2060,2264`: publishes the current pointer and clears it on physical relocation.
+- `run-manifest.ts:31,294,299,574-587`: parses properties and classifies planned pointer/pending moves;
+  it compares the current manifest run, not the stored request's historical run.
+- `grounded.ts:122-128` and `engine.ts:278-288`: use requestMoveKind for relocation validation/dependencies.
+- `layout.ts:94-95`: property spellings only.
+- `records.ts:307,323`: marks run folders and their records at creation, not waiting requests.
+- `runner/src/spine/retention.ts:43,46,50,61,103`: stamps/checks record-folder retention and its contents,
+  not request admission or history. No folder-first waiting-run selector remains.
+
+removed: 6 production lines replaced (2 in scripted.ts, 4 in vault-index.ts); no mechanism removed.
+tests changed: none.
+
+### Verification
+
+Every explicit Vitest command used `--maxWorkers=2`; output is under `tmp-logs/`.
+
+| Check | Result | Log |
+| --- | --- | --- |
+| Committed red before edits | 1 expected failure, 7 pass | fix2-red.log |
+| All bounded reads, fix 1/fix 2 reds, landing and pre-append controls | 8 pass | fix2-bounded-green.log |
+| C05 person-notes, incorporation, between, marked-history runner tests | 64 pass | fix2-c05-runner.log |
+| Full src/data suite | 4141 pass, 77 files | fix2-data.log |
+| Full runner suite | 556 pass, 44 files | fix2-runner.log |
+| tsc app | Pass | fix2-tsc-app.log |
+| tsc node | Pass | fix2-tsc-node.log |
+| tsc runner | Pass | fix2-tsc-runner.log |
+| ESLint both touched production files | Pass | fix2-eslint.log |
+| pnpm check, shared heavy lock | 5486 pass / 1 fail; listen EPERM | fix2-check.log |
+| c05-person-notes, capabilities, app e2e, demo/fake, shared heavy lock | Both blocked before tests; listen EPERM | fix2-e2e-demo.log, fix2-e2e-fake.log |
+
+No test in these requested suites contradicts a ruling (TL-P4-51). Tests, stored formats,
+personal bytes, target/source identity, five-file own-run bound, exact pile baseline and all
+zero archive/unrelated-run media assertions remain unchanged. Both wording variants pass in
+the relocation-failure and pre-append-interruption tests. No second mechanism was added.
+
+Research: no fetching under the no-network instruction. Reused the packet's index-points-to-evidence
+pattern, existing VaultIndex, RunRecords, moves and engine read-back outcomes. Official references
+cited without fetching: [Drive files.list](https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list),
+[parent queries](https://developers.google.com/workspace/drive/api/guides/search-files), and
+[partial-response fields](https://developers.google.com/workspace/drive/api/guides/fields-parameter).
+
+Every remaining gate failure:
+- `src/e2e-port.test.ts:37`: the scratch server cannot listen on 127.0.0.1 (uncaught EPERM),
+  so the identity test times out. Check stops before API/runner/build/static gates. Root lint,
+  typecheck and all other 5486 root tests pass; the requested runner/typecheck/lint suites pass separately.
+- Demo and fake e2e cannot start the dev server on `::1:5301` (EPERM); no screen tests ran.
+  All three heavy commands acquired the shared lock after waiting for the other worktree's run.
+These environment failures do not contradict a ruling; no test, gate or contract was weakened.
+
+Final read-only `git diff --check` passes. The tracked diff contains only vault-index.ts, scripted.ts
+and this notes append; every test is unchanged. No git write command or external network was used.
+left out: full-check/e2e completion (sandbox listen EPERM), commits/integration (coordinator-owned),
+and the review's unrelated minor plan.ts archive path.
