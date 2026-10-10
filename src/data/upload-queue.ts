@@ -3,11 +3,12 @@
  * member on its way to Drive is kept on the device (`upload-store.ts`) with
  * its reserved file id and resumable session, so a reload only pauses it:
  * on the next start the queue asks Drive how much arrived and sends the rest.
- * The bytes are deleted only once Drive confirms the file.
+ * The bytes are deleted once Drive confirms the file, or the person forgets them.
  *
  * - Pending uploads belong to an account and a Bower folder: they resume only
- *   for that same account and folder, and stay through a sign-out (`stop`).
- *   `forgetAccount` (leaving Bower) removes them; `discard` removes one.
+ *   for that same account and folder. Page disposal (`stop`) keeps them;
+ *   sign-out, auth expiry and leaving Bower (`forgetAccount`) remove them.
+ *   `discard` removes one.
  * - Web Locks give one tab the queue of an account and folder. A tab without
  *   the lock sends nothing from it and waits its turn; a tab that loses the
  *   lock stops at once and leaves the files to the other tab.
@@ -174,6 +175,8 @@ export interface UploadQueue {
   subscribe: (listener: () => void) => () => void;
   /** Anything not yet in Drive (for `beforeunload`). */
   hasUnfinished: () => boolean;
+  /** Things still on their way from this page; optional on older injected queue ports. */
+  pendingCount?: () => number;
   /** Tries again the ones that waited for a connection or failed. */
   /** With `'offline'`, only those that waited for a connection (coming back online). */
   retry: (only?: 'offline') => void;
@@ -185,9 +188,9 @@ export interface UploadQueue {
   halt: (id: string) => Promise<QueueItem | null>;
   /** Lets a held-back one be sent again. */
   resume: (id: string) => void;
-  /** Leaving Bower: every pending upload of `account`, in every folder, goes. */
+  /** Forgetting this person: every pending upload of `account`, in every folder, goes. */
   forgetAccount: (account: string) => Promise<void>;
-  /** Stops sending and gives the lock back; what is kept on the device stays (sign-out, page gone). */
+  /** Page disposal: stops sending and gives the lock back; what is kept on the device stays. */
   stop: () => void;
   /**
    * This place is blocked (another place is active): stops sending and gives the lock back, like `stop`,
@@ -264,6 +267,8 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
   let persistAsked = false;
   /** Discarded here though the device could not delete their record: never brought back this session. */
   const tombstones = new Set<string>();
+  /** Account forgets fence adds too, including ones from a previous folder/start. */
+  const forgotten = new Map<string, number>();
   let persisted: 'granted' | 'refused' | 'unknown' = 'unknown';
   let told: string | null = null;
   /** Bumped by every `pump` call, so a run that is ending sees a call it would miss. */
@@ -280,6 +285,20 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
 
   function notify(): void {
     for (const listener of listeners) listener();
+  }
+
+  function pendingCount(): number {
+    return [...entries.values()].filter((e) => e.item.state === 'waiting' || e.item.state === 'uploading').length;
+  }
+
+  /** A delayed device transaction may commit after clear; remove that old intent before returning. */
+  async function keepBytes(record: PendingUpload, body: Blob, version: number): Promise<void> {
+    if ((forgotten.get(record.account) ?? 0) !== version) return;
+    try {
+      await store.add(record, body);
+    } finally {
+      if ((forgotten.get(record.account) ?? 0) !== version) await store.remove(record);
+    }
   }
 
   /** Picks up what another tab, or an earlier visit, left on the device. */
@@ -702,6 +721,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
    */
   async function chosenAgain(entry: Entry, body: Blob, gen: number): Promise<QueueItem> {
     const { item, record } = entry;
+    const version = forgotten.get(record.account) ?? 0;
     if (body.size !== record.size || (await sha256(body)) !== record.sha256) {
       console.error('Bytes chosen again differ from the pending upload');
       throw new BowerError('unknown', NOT_SENT_TEXT);
@@ -709,7 +729,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     let durable = await fits(record.size);
     if (durable) {
       try {
-        await store.add(record, body);
+        await keepBytes(record, body, version);
       } catch (error) {
         if (!isQuotaError(error)) console.error(error);
         durable = false;
@@ -766,6 +786,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     async add(input) {
       const s = scope;
       const gen = generation;
+      const version = s === null ? 0 : forgotten.get(s.account) ?? 0;
       if (s === null) {
         console.error('An upload was added before the queue started');
         throw new BowerError('unknown', NOT_SENT_TEXT);
@@ -806,7 +827,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
       let durable = await fits(record.size);
       if (durable) {
         try {
-          await store.add(record, input.body);
+          await keepBytes(record, input.body, version);
         } catch (error) {
           if (!isQuotaError(error)) console.error(error);
           durable = false;
@@ -836,7 +857,8 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
         listeners.delete(listener);
       };
     },
-    hasUnfinished: () => [...entries.values()].some((e) => e.item.state === 'waiting' || e.item.state === 'uploading'),
+    hasUnfinished: () => pendingCount() > 0,
+    pendingCount,
 
     retry(only) {
       for (const { item } of entries.values()) {
@@ -888,8 +910,14 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     },
 
     async forgetAccount(account) {
+      forgotten.set(account, (forgotten.get(account) ?? 0) + 1);
       if (scope?.account === account) stop();
-      await store.clear(account);
+      try {
+        await store.clear(account);
+      } catch (error) {
+        console.error(error);
+        throw new BowerError('unknown', 'Signing out did not finish. Try again.');
+      }
     },
 
     stop,

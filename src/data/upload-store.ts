@@ -1,6 +1,7 @@
 /**
  * Where the upload queue keeps things on their way to Drive: IndexedDB, so
- * a reload, a closed tab or a sign-out does not lose them. Each one is kept
+ * a reload or a closed tab does not lose them. Sign-out and auth expiry
+ * remove that account's pending bytes and progress. Each one is kept
  * under its account, folder, declaration, member key and content hash, and
  * in two parts: its progress (`pending`, rewritten as Drive confirms bytes)
  * and its bytes (`bytes`, written once, deleted once Drive has the file).

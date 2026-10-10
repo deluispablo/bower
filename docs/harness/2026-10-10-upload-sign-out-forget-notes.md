@@ -181,3 +181,116 @@ pnpm exec vitest run src/data/live/live.test.ts src/data/vault/drive-vault.test.
   no network or new dependency, and the existing live/queue/store/fake stack is reused.
 
 removed: obsolete vault-test comment promising device retention through sign-out; no tests removed.
+
+
+## Implementation
+
+This session implements the committed reds and red repair 1 under TL-P4-53 Q1 and addendum 1.
+Only the three owned production files and this notes file are changed. No test changes or
+Git-writing commands were made by this session; harness/codex-run.sh owns the commits.
+
+### Research and reuse
+
+No external reference was fetched. The inherited official references were checked against the
+existing local adapters before the fix:
+
+- [Google Drive resumable uploads](https://developers.google.com/workspace/drive/api/guides/manage-uploads#resumable):
+  keep the session URI, ask status with `Content-Range: bytes */N`, interpret 308 with the server's
+  confirmed range, and reopen an expired session with the same reserved file identity.
+  Local evidence: `src/data/drive/drive-http.ts` openResumable/sessionStatus/sessionAnswer and
+  `src/data/drive/resumable-upload.ts` open/status/restart loop. This entry changes none of that protocol.
+- [IndexedDB transaction lifecycle](https://www.w3.org/TR/IndexedDB/#transaction-lifecycle):
+  a transaction's completion commits its changes; clearing earlier cannot cancel an application
+  operation that starts its add transaction later. Existing upload-store.add commits metadata and
+  bytes together, upload-store.save cannot recreate a removed record, and clear removes both stores
+  under the account prefix. The existing queue lifetime fence now covers byte staging too.
+- [Noble hashes](https://github.com/paulmillr/noble-hashes): the existing digest home exposes
+  sha256Sync for small fingerprints. uploadAccount retains its Promise API and identical normalized
+  UTF-8 SHA-256 value while using that helper. No second digest implementation or dependency is added.
+
+The first requested pnpm command unexpectedly auto-installed because this worktree's dependencies
+were incomplete. Its registry requests failed DNS resolution; the process was stopped. An attempted
+environment-only offline setting was ignored by pnpm 12 and was also stopped. Subsequent commands
+use a local pnpm shim with explicit `--config.verifyDepsBeforeRun=false --config.offline=true`.
+Dependencies were copied from the already installed local app checkout; no dependency manifest or
+lockfile was changed. No successful external network request occurred. The local shim is evidence
+only and is removed from the worktree with tmp-logs at delivery.
+
+### Change
+
+- The existing live auth watcher remembers the accepted account hash in memory and awaits expiry
+  cleanup. Session sign-out runs the existing device.ts forgetThisPerson path and queue.forgetAccount
+  in finally, including when the Worker rejects logout. The remote error still reaches the caller;
+  failed remote logout still leaves the remote session available for its existing retry.
+- Expiry uses the same forget helper. Invalidation immediately stops/fences the queue. Ordinary
+  dispose and stop keep device records. No journal outbox key or Drive record is removed.
+- Queue forgetAccount increments an account-scoped fence before stopping and clearing every folder.
+  New staging and reselection share keepBytes: a delayed add from a forgotten lifetime removes its
+  committed metadata and bytes before returning. Ordinary page disposal does not increment that fence.
+  Existing progress saves update only present records, so a held transfer cannot recreate a cleared one.
+- A refused clear logs its original cause and rejects with the pinned BowerError sentence,
+  `Signing out did not finish. Try again.`. An expiry purge error survives the stable door's stale-call
+  check rather than being replaced by a session-conflict error.
+- The real queue always exposes pendingCount(): waiting plus uploading entries in this page's
+  current queue. hasUnfinished uses that same count. No count table, persisted copy, Settings logic,
+  or extra store query is added. The interface makes the method optional only for existing injected
+  queue ports, whose frozen test fixtures predate the new API; the real factory always supplies it.
+
+removed: src/data/upload-queue.ts: old sign-out retention promises and duplicate hasUnfinished predicate.
+removed: src/data/upload-store.ts: old header promise that pending bytes survive sign-out.
+removed: src/data/live/index.ts: old invalidation comment promising retained uploads for a signed-out person.
+removed: no production mechanism, test, stored-format field, journal line or Drive file was removed.
+tests changed: none
+
+### Verification
+
+All command output was written under tmp-logs and only failures and aggregate results were read.
+The explicit offline pnpm settings apply to the commands below; check and e2e use the shared heavy lock.
+
+- Baseline reds, before the fix: `pnpm exec vitest run src/data/upload-sign-out.test.ts --maxWorkers=2`:
+  5 intended assertion failures. The late-add property fails at seed 53029, path 1, `[2,false]`;
+  the three lifecycle reds retain account A uploads; the purge-failure red returns silent success.
+- Final reds and full live file: `pnpm exec vitest run src/data/live/live.test.ts src/data/upload-sign-out.test.ts --maxWorkers=2`:
+  pass, 107/107. All five exact red names remain those listed in the Reds section above.
+- Final requested whole suite: `pnpm exec vitest run src/data --maxWorkers=2`: pass, 79 files, 4,165/4,165 tests.
+- Final `pnpm exec tsc -p tsconfig.app.json --noEmit`: pass.
+- Final `pnpm exec tsc -p tsconfig.node.json --noEmit`: pass.
+- Final `pnpm exec eslint src/data/live/index.ts src/data/upload-queue.ts src/data/upload-store.ts`: pass.
+- `git diff --check`: pass; Git was used only for status, diff and reading HEAD versions for baseline reds.
+
+During implementation the first data run failed the older-ask run-status assertion at
+src/data/live/live.test.ts:1146. Waiting for account hashing inside the identity read changed the
+request order; the fix preserves that read's timing. The next live run found auth diagnostic timing
+at src/data/live/live.test.ts:1464; using the existing synchronous digest helper resolved it.
+Both unchanged tests pass in the final full data suite. No remaining test contradicts the packet
+or Q1. No test was weakened, deleted, skipped or singled out with .only.
+
+### Full gates and delivery boundary
+
+- Final `pnpm check`: exit 1. App lint/typecheck finish; 165 app test files pass,
+  5,510/5,511 tests pass. The sole failure is
+  `src/e2e-port.test.ts:37`, `a server from another worktree is never reused`:
+  its local listener is refused with `listen EPERM` on 127.0.0.1, then the unchanged test times out.
+  One unhandled listener error has that same cause. Later check stages do not run after the failed
+  app-unit stage. The earlier check also captured the subsequently corrected auth-timing regression;
+  that unchanged test passes in the final check. No green check mark is claimed.
+- Demo: `bash harness/with-lock.sh pnpm exec playwright test e2e/app.spec.ts`: exit 1,
+  before any phone/desktop test executes. Vite cannot listen on ::1:6042 (`EPERM`).
+- Fake: `E2E_SOURCE=fake bash harness/with-lock.sh pnpm exec playwright test e2e/app.spec.ts`:
+  exit 1 before any test executes, with the same local-listener refusal.
+- These are environment restrictions, not packet/ruling contradictions. The entire requested data
+  suite was run and is green. Contradicting tests in that suite: none. No permission bypass,
+  alternate lock, weakened server test or unrelated code fix was attempted.
+- Delivery remains blocked on the full check and demo/fake browser gates in a socket-permitted
+  environment. The implementation remains in this worktree for the harness to commit/review.
+  The later Sign out now? sheet and the designer's close verification are outside this assignment.
+
+removed: 20 original production lines replaced (live/index.ts 10; upload-queue.ts 9; upload-store.ts 1).
+tests changed: none
+
+Evidence: `/private/tmp/upload-forget-evidence/`. Log files were retained there after all commands
+finished; tmp-logs, its offline shim, and its temporary baseline copies were deleted from the worktree.
+Final logs: upload-sign-out-red.log, upload-sign-out-live-green-3.log,
+upload-sign-out-data-final.log, upload-sign-out-tsc-app-final.log,
+upload-sign-out-tsc-node-final.log, upload-sign-out-eslint-final.log,
+upload-sign-out-check-final.log, upload-sign-out-e2e-demo.log, upload-sign-out-e2e-fake.log.
