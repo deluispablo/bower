@@ -362,3 +362,58 @@ tests changed: src/data/upload-queue-real.test.ts: red repair 1 (TL-P4-53 Q2): s
 tests changed: src/data/upload-queue.test.ts: red repair 1 (TL-P4-53 Q2): select records by member identity, not store position.
 tests changed: src/data/upload-store.test.ts: red repair 1 (TL-P4-53 Q2): select records by member identity, not store position.
 tests changed: src/data/vault/drive-vault.test.ts: red repairs 1-2 (TL-P4-53 Q2, addendum 3): release the store gate before awaiting addPile; the late arrival comes from a lost final answer.
+
+## Fix round 1 red
+
+Red-owning Codex session, 2026-10-10, TL-P4-29. Baseline HEAD:
+`b715e3071d6846d65a7ddf7ec1899ccac96d0d72`. Finding: BLOCK 1 in
+`docs/harness/2026-10-10-codex-upload-resume-after-reload-adversarial.md`.
+No network, git writes, production edits or changes to existing assertions or bounds.
+
+tests changed: src/data/upload-resume.test.ts: add a first-folder-declaration arrival race and pending-member positive control through public addPile()/piles(); preserve every existing assertion and bound.
+removed: none.
+
+Red name: `upload-resume-after-reload: fix 1: a member that arrives during the first declaration read needs no picker`.
+Positive control: `upload-resume-after-reload: fix 1 control: a member still pending during the first declaration read needs no picker`.
+
+Both schedules save one 10-byte Blob in a declared folder pile through real `addPile`,
+hold the real transfer at offset 4, stop/dispose the first page, and construct a fresh
+real queue/store/vault over the same fake IndexedDB and fake Drive. The saved record
+retains its session and reserved file identity. The folder declaration is selected
+by its exact pile stamp and folder anchor, and only its first bytes-read answer is held.
+The first public `piles()` starts resumption. Promise barriers establish that both
+the declaration answer and resumed chunk are outstanding before proceeding.
+
+The positive control returns that first declaration answer while sending remains held:
+the first full read has a queued member with nonnegative progress, no picker, and no
+`not-arrived` reason. Releasing sending then verifies the original body arrives once
+and its pending device record disappears.
+
+The red releases sending while the declaration answer remains outstanding, awaits
+real queue idle, and verifies the original body, one logical file, reserved identity,
+completed queue state and cleared device record before returning the declaration answer.
+The first full read then incorrectly returns both `chooseAgain: true` for that same
+member and `setAside: 'not-arrived'`. One combined assertion reports both violations.
+No refresh or second full read is used to hide the first answer. No real timers,
+polling, queue substitutes or new production mechanisms were added.
+
+Verification (all output redirected to `tmp-logs/`):
+
+```sh
+pnpm exec vitest run src/data/upload-resume.test.ts --maxWorkers=2 > tmp-logs/fix-1-red.log 2>&1
+pnpm exec tsc -p tsconfig.app.json --noEmit > tmp-logs/fix-1-tsc-app.log 2>&1
+pnpm exec eslint src/data/upload-resume.test.ts > tmp-logs/fix-1-eslint.log 2>&1
+```
+
+Whole requested file: **6 passed, 1 failed, 7 total**; exit 1. The only failure is
+the new exact-name red on its intended assertion. The positive control and all five
+existing tests pass. No timeouts, load failures or unhandled errors. App tsc and
+touched-file eslint pass with empty logs; read-only `git diff --check` passes.
+Full check/e2e and implementation belong to the next session and were not run here.
+
+Research/reuse: inherited local packet and existing mechanism; no sources fetched.
+Official references: [Drive resumable uploads](https://developers.google.com/workspace/drive/api/guides/manage-uploads#resumable)
+and [IndexedDB transaction lifetime](https://w3c.github.io/IndexedDB/#transaction-lifetime).
+The real queue, resumable transport, write-once reconciliation and committed device
+store remain the exercised mechanism homes. No existing contract contradiction was found
+in the whole requested file. Coordinator owns commits.

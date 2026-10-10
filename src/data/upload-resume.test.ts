@@ -332,6 +332,93 @@ it('upload-resume-after-reload: upload first full read waits for retained queue 
   }
 });
 
+/** Keep the first folder-declaration answer outstanding across the real resumed transfer. */
+async function declarationArrivalCase(completeDuringRead: boolean): Promise<void> {
+  const env = await environment();
+  const hold = holdFirst(env, 4);
+  const first = page(env);
+  const entered = barrier();
+  const declarationAnswer = barrier();
+  let resumed: ReturnType<typeof holdFirst> | undefined;
+  let second: Page | undefined;
+  let readSpy: ReturnType<typeof vi.spyOn> | undefined;
+  try {
+    const submitted = input(1);
+    const pile = await first.vault.addPile(submitted);
+    expect(pile.path).toBeDefined();
+    await hold.reached;
+    const record = present((await first.store.list(ACCOUNT, env.root))
+      .find((item) => item.memberKey === pile.items[0]?.id));
+    expect(record).toMatchObject({ confirmed: 4, session: expect.any(String), fileId: expect.any(String) });
+    first.queue.stop();
+    first.vault.dispose();
+    hold.open();
+    await close(first);
+    expect(await storeFor(env).list(ACCOUNT, env.root)).toHaveLength(1);
+    expect(await members(env, pile)).toEqual([]);
+    const declaration = present((await env.drive.listAll(env.root)).find((file) =>
+      file.appProperties?.[PROP.recordPile] === pile.id && file.appProperties?.[PROP.recordAnchor] === 'folder'));
+    const readBytes = env.drive.readBytes.bind(env.drive);
+    let initial = true;
+    readSpy = vi.spyOn(env.drive, 'readBytes').mockImplementation(async (id) => {
+      const body = await readBytes(id);
+      if (id === declaration.id && initial) {
+        initial = false;
+        entered.open();
+        await declarationAnswer.wait;
+      }
+      return body;
+    });
+    resumed = holdFirst(env, 4);
+    second = page(env);
+    const reading = second.vault.piles();
+    await Promise.all([entered.wait, resumed.reached]);
+    expect(await members(env, pile)).toEqual([]);
+    expect(second.queue.items().find((item) => item.memberKey === record.memberKey)?.state).toBe('uploading');
+    if (completeDuringRead) {
+      resumed.open();
+      await second.queue.idle();
+      await arrived(env, pile, submitted);
+      expect((await members(env, pile))[0]?.id).toBe(record.fileId);
+      expect(await storeFor(env).list(ACCOUNT, env.root)).toEqual([]);
+      expect(second.queue.items().find((item) => item.memberKey === record.memberKey)?.state).toBe('done');
+    }
+    declarationAnswer.open();
+    const row = present((await reading).find((item) => item.id === pile.id));
+    expect({
+      picker: row.items.filter((item) => item.id === record.memberKey && item.chooseAgain),
+      notArrived: row.setAside === 'not-arrived',
+    }, 'the first full read must account for the retained or just-arrived member').toEqual({
+      picker: [], notArrived: false,
+    });
+    if (!completeDuringRead) {
+      const pending = present(row.items.find((item) => item.id === record.memberKey));
+      expect(pending.upload).toBeGreaterThanOrEqual(0);
+      resumed.open();
+      await second.queue.idle();
+      await arrived(env, pile, submitted);
+      expect(await storeFor(env).list(ACCOUNT, env.root)).toEqual([]);
+    }
+  } finally {
+    first.queue.stop();
+    second?.queue.stop();
+    hold.open();
+    resumed?.open();
+    declarationAnswer.open();
+    await close(first);
+    if (second) await close(second);
+    readSpy?.mockRestore();
+  }
+}
+
+it('upload-resume-after-reload: fix 1 control: a member still pending during the first declaration read needs no picker', async () => {
+  await declarationArrivalCase(false);
+});
+
+it('upload-resume-after-reload: fix 1: a member that arrives during the first declaration read needs no picker', async () => {
+  await declarationArrivalCase(true);
+});
+
 it('upload-resume-after-reload: accepted durable members survive generated transfer reloads', async () => {
   await sentControl(3);
   await reloadCase(1, 8, true);
