@@ -291,6 +291,36 @@ describe('the outbox sends in order per folder', () => {
 });
 
 // Round 2: the four reproductions in the adversarial pass, TL-P4-27 addendum 8.
+it('a page whose keep failed never sends its in-memory copy after another tab dropped the line', async () => {
+  const changes = (await drive.listAll(root)).find((f) => f.folder && f.name === 'changes');
+  if (!changes) throw new Error('no changes folder in the seed');
+  const place = { owner: async () => root, folder: async () => changes.id,
+    files: async () => (await drive.listAll(changes.id)).filter((f) => !f.folder) };
+  const a = new Journal(drive, place, 'device-a', () => true, {} as FakeDrive);
+  const b = new Journal(drive, place, 'device-b', () => true, {} as FakeDrive);
+  const net = journalOffline();
+  const line = await b.record('rule', 'New rule', { path: 'Rules.md', text: 'Keep recipes together.' });
+  const key = `bower:outbox:${root}`;
+  const stored = localStorage.getItem(key);
+  // A failed retract keeps A's copy in memory; storage still holds the bare, never-sent line.
+  const remove = Storage.prototype.removeItem;
+  const blocked = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(function (this: Storage, k: string) {
+    if (k === key) throw new DOMException('Full', 'QuotaExceededError');
+    remove.call(this, k);
+  });
+  await expect(a.retract(line.id)).rejects.toMatchObject({ code: 'unknown' });
+  expect(localStorage.getItem(key)).toBe(stored);
+  blocked.mockRestore();
+  await expect(b.retract(line.id)).resolves.toBe('dropped');
+  expect(localStorage.getItem(key)).toBeNull();
+  net.off = false;
+  const create = vi.spyOn(drive, 'createText');
+  await a.flush();
+  await b.flush();
+  expect(create).not.toHaveBeenCalled();
+  expect(linesInDrive().filter((r) => r.id === line.id)).toEqual([]);
+});
+
 describe('round 2 compensating lines', () => {
   it('a line dropped in one tab is never sent by another tab whose keep failed', async () => {
     const changes = (await drive.listAll(root)).find((f) => f.folder && f.name === 'changes');

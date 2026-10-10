@@ -806,6 +806,23 @@ describe('note edits change only what the contract allows', () => {
   });
 });
 
+it('an old manifest with no removals keeps its equal-time add order', () => {
+  // Literal bytes from c5e8093a's applyChanges, executed in /tmp/compensate-a11-baseline.
+  // Equal times preserve the manifest array order, even when record ids sort in the opposite order.
+  const before = '---\nsummary: 0 rules Bower follows in every tidy-up.\nby: bower\nkind: Rules\n---\n\n## Rules\n\n## Notes from you\nLeave [[Old]] alone.\n';
+  const expected = '---\nsummary: 2 rules Bower follows in every tidy-up.\nby: bower\nkind: Rules\n---\n\n## Rules\n\n- Name scans by date. <!-- since 2026-10-06 -->\n  *You wrote: "scans by date"*\n- Keep PDFs whole. <!-- since 2026-10-06 -->\n  *You wrote: "dont split pdfs"*\n## Notes from you\nLeave [[Old]] alone.\n';
+  const add: RuleAdd[] = [
+    { recordId: 'Z_ADD', text: 'Keep PDFs whole.', yourWords: 'dont split pdfs', since: 1791244800000 },
+    { recordId: 'A_ADD', text: 'Name scans by date.', yourWords: 'scans by date', since: 1791244800000 },
+  ];
+  for (const eol of ['\n', '\r\n']) {
+    const out = applyChanges(enc(before.replace(/\n/g, eol)), [word(add, [])]);
+    expect(out.ok).toBe(true);
+    if (!out.ok) throw new Error(out.reason);
+    expect(out.bytes).toEqual(enc(expected.replace(/\n/g, eol)));
+  }
+});
+
 // TL-P4-27 addendum 9(4): literal bytes from pre-entry c5e8093a (1d70a38f^).
 // git show into /tmp/compensate-a9-baseline; execute its applyChanges/wordRules, never HEAD.
 it.each([

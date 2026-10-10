@@ -412,6 +412,46 @@ const outbox = (): Array<{ line: { id: string }; reserved?: string }> =>
   JSON.parse(localStorage.getItem(`bower:outbox:${root}`) ?? '[]') as Array<{ line: { id: string }; reserved?: string }>;
 
 describe('c2-create-by-id reopened: a line refused for good', () => {
+  it('a refused original stays dropped when removing it from the outbox fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const create = drive.createText.bind(drive);
+    let mode: 'offline' | 'refuse' | 'fine' = 'offline';
+    const attempted: string[] = [];
+    drive.createText = async (...args: Parameters<FakeDrive['createText']>) => {
+      attempted.push((JSON.parse(args[2]) as { id: string }).id);
+      if (mode === 'offline') throw driveError('offline');
+      if (mode === 'refuse') return REFUSED().createText(...args);
+      return create(...args);
+    };
+    const original = await journal.record('rule', 'New rule', { path: 'Rules.md', text: 'Keep recipes together.' });
+    const key = `bower:outbox:${root}`;
+    const failedAtDrop: string[][] = [];
+    const remove = Storage.prototype.removeItem;
+    const blocked = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(function (this: Storage, k: string) {
+      if (k === key) {
+        const failed = JSON.parse(localStorage.getItem(FAILED_KEY) ?? '{}') as Record<string, Array<{ id: string }>>;
+        failedAtDrop.push((failed[root] ?? []).map((f) => f.id));
+        throw new DOMException('Full', 'QuotaExceededError');
+      }
+      remove.call(this, k);
+    });
+    mode = 'refuse';
+    await journal.flush();
+    expect.soft(failedAtDrop).toEqual([[original.id]]);
+    expect((await journal.failed()).map((f) => f.id)).toEqual([original.id]);
+    expect(outbox().map((r) => r.line.id)).toEqual([original.id]);
+    await expect(journal.retract(original.id)).resolves.toBe('dropped');
+    blocked.mockRestore();
+    // After storage and Drive recover, even a new page must respect the permanent failed-list tombstone.
+    const reloaded = new Journal(drive, { owner: async () => root, folder: async () => changes,
+      files: async () => (await drive.listAll(changes)).filter((f) => !f.folder) }, 'device-b');
+    attempted.length = 0;
+    mode = 'fine';
+    await reloaded.flush();
+    expect(attempted).toEqual([]);
+    expect((await drive.listAll(changes)).filter((f) => !f.folder)).toEqual([]);
+  });
+
   it('a journal line refused for good releases its id and says so once', async () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     const create = drive.createText.bind(drive);
