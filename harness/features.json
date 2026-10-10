@@ -6805,7 +6805,7 @@
     "id": "e2e-resize-helper",
     "task": "p4-harness",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "A cross-breakpoint resize in e2e waits for the target shell before reading the page (empty-note-help-flaky, option b).",
     "steps": [

@@ -309,3 +309,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-10: c05-person-notes passes — c05-person-notes passes: a person's note gets the asked line, once, by id; every named note settles (P4-87 PASS, designer verified)
 - 2026-10-10: b3a-hot-reduce passes — b3a-hot-reduce passes: a pure script renders hot's three sections within 300 words (P4-88 PASS)
 - 2026-10-10: new-note-opens passes — new-note-opens passes: re-proved after c5-remove-new-note (TL-P4-35)
+- 2026-10-10: e2e-resize-helper passes — e2e-resize-helper passes: cross-breakpoint resizes wait for the target shell (P4-89 PASS)

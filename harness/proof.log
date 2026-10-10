@@ -554,3 +554,4 @@ new-note-escape	9a8d1dd5add25238	2026-10-10	known-green: re-proved after c5-remo
 c05-person-notes	c77af6e52a8db0e4	2026-10-10	red (fixed in 2f41450c)
 b3a-hot-reduce	53bf403af723d5ed	2026-10-10	red (fixed in 5df380e8)
 new-note-opens	96ec8698222521eb	2026-10-10	known-green: re-proved after c5-remove-new-note; note committed; flake fixed by e2e-resize-helper
+e2e-resize-helper	eaad5e5f9fbb2890	2026-10-10	known-green: e2e-only change; 3/20 fake-phone failures before, 40/40 after; guard fixture fails on a raw resize
