@@ -6751,7 +6751,7 @@
       "At 1280x720 a sheet taller than the window ends inside it and scrolls."
     ],
     "verify": "pnpm exec playwright test e2e/q-ui-3.spec.ts --project=desktop -g \"tall desktop sheet stays inside the window and scrolls\"",
-    "note": "TL-P4-43 item 1. Codex, then a Claude review and the designer. Packet 2026-10-10-q-ui-3-packet.md. implementer: codex.",
+    "note": "TL-P4-43 item 1. Codex, then a Claude review and the designer. Packet 2026-10-10-q-ui-3-packet.md. implementer: codex. Known green: the coordinator proved the e2e red at the tests-only commit (demo and fake, 2 failed on toHaveCount); done.sh cannot read a Playwright red.",
     "review": "P4-86 PASS",
     "design": "verified"
   },
