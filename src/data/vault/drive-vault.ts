@@ -621,8 +621,6 @@ export class DriveVault implements VaultSource {
       const path = ix.pathOf(f.id);
       if (!path) return null;
       const id = f.appProperties?.[PROP.pile] ?? f.id;
-      const queued = this.queuedItems(id).filter((i) => !listed(i.fileId));
-      const sending = [...(this.uploads.get(id)?.entries ?? []).filter((e) => !listed(this.reservedFor(e))).map((e) => e.item), ...queued.map(queuedRow)];
       if (!f.folder) {
         // A declared loose file waits for the run's reason, by the rule the run shares (TL-P2-21, TL-P2-29).
         const loose = f.appProperties?.[PROP.declaration] ? await this.looseState(f) : null;
@@ -656,7 +654,9 @@ export class DriveVault implements VaultSource {
       const text = parsed?.body.trim() ?? '';
       // A pile whose note could not be read already waits, logged: nothing more of it is read (or logged) now.
       const marked = !!f.appProperties?.[PROP.declaration];
-      const declared = marked && !locked ? await this.declaredState(f, this.uploads.get(id), queued.map((i) => i.memberKey)) : null;
+      const declared = marked && !locked ? await this.declaredState(f, this.uploads.get(id)) : null;
+      const queued = this.queuedItems(id).filter((i) => !listed(i.fileId));
+      const sending = [...(this.uploads.get(id)?.entries ?? []).filter((e) => !listed(this.reservedFor(e))).map((e) => e.item), ...queued.map(queuedRow)];
       const contextKey = declared?.contextKey ?? null;
       // Every note with the pile's context key is its context, never a thing to file; unread, any keyed pile note.
       const bound = (k: DriveFile): boolean => (contextKey ? k.appProperties?.[PROP.item] === contextKey : marked && locked && k.name === PILE_NOTE && !!k.appProperties?.[PROP.item]);
@@ -785,6 +785,14 @@ export class DriveVault implements VaultSource {
       const readiness = await accountPile(declaration, hash, inbox, files, (id) => this.readBytesOnce(id), (f) => this.digestOf(f), binned, this.dispositionCache);
       this.checkCurrent();
       if (readiness.members[0]?.state !== 'missing' || inBin) continue;
+      // Only a missing-member decision waits for device hydration; an ordinary listing can finish before sign-in.
+      await this.startQueue();
+      this.checkCurrent();
+      const retained = this.queued.queue.items().find((i) => i.pileId === declaration.pileId && i.memberKey === member.memberKey);
+      if (retained && !retained.gone) {
+        out.push({ id: declaration.pileId, text: '', createdAt: declaration.createdAt, items: [retained.file ? itemOf(retained.file) : queuedRow(retained)] });
+        continue;
+      }
       out.push({ id: declaration.pileId, text: '', createdAt: declaration.createdAt, items: [{ id: member.memberKey, name: shownName(member), kind: member.kind, origin: member.origin ?? 'Added in Drive', upload: -1, chooseAgain: true }] });
     }
     return out;
@@ -802,7 +810,6 @@ export class DriveVault implements VaultSource {
     const found = await this.declarationOf(folder, files);
     if (found.state !== 'found') return { rows: [], contextKey: null, changed: new Set(), lookup: found.state, blocked: null, missing: [], remaining: [] };
     const contextKey = found.declaration.context.kind === 'text' ? found.declaration.context.memberKey : null;
-    const local = new Set([...(u?.entries.map((e) => e.key) ?? []), ...queued]);
     const drive = this.drive;
     const root = await this.rootId();
     // Only when a member is missing everywhere live: one Bin lookup for all of them.
@@ -813,6 +820,11 @@ export class DriveVault implements VaultSource {
     const state = new Map(readiness.members.map((m) => [m.memberKey, m]));
     // Only a member with no file anywhere has not arrived; a changed or unchecked one is not sent again.
     const missing = found.declaration.members.filter((m) => state.get(m.memberKey)?.state === 'missing');
+    if (missing.length) {
+      await this.startQueue();
+      this.checkCurrent();
+    }
+    const local = new Set([...(u?.entries.map((e) => e.key) ?? []), ...queued, ...this.queuedItems(found.declaration.pileId).map((i) => i.memberKey)]);
     const rows = missing
       .filter((m) => !local.has(m.memberKey))
       .map((m) => ({ id: m.memberKey, name: shownName(m), kind: m.kind, origin: m.origin ?? 'Added in Drive', upload: -1, chooseAgain: true as const }));
@@ -1018,7 +1030,17 @@ export class DriveVault implements VaultSource {
       ...(it.body && declared?.hashes[i] ? { sha256: declared.hashes[i] } : {}),
     }));
     if (entries.length) {
-      this.uploads.set(id, { lone, createdAt, parent, entries, ...(declared ? { declaration: declared.declarationId } : {}) });
+      const u: Upload = { lone, createdAt, parent, entries, ...(declared ? { declaration: declared.declarationId } : {}) };
+      this.uploads.set(id, u);
+      // Queue.add resolves after the device transaction (or its explicit memory fallback), never after transfer.
+      // Stage every accepted Blob before reporting saved, even while the first transfer is held.
+      for (const e of entries) if (e.body) {
+        await this.startQueue();
+        this.checkCurrent();
+        const { name, props } = this.sendTarget(ix, id, u, e);
+        await this.stageQueued(id, u, e, e.body, name, props);
+        this.checkCurrent();
+      }
       this.track(this.send(id));
     }
     this.emit();
@@ -1602,10 +1624,7 @@ export class DriveVault implements VaultSource {
         const ix = await this.index();
         // Removed while the folder was listed: nothing is sent for it (its removal withdrew the holder already).
         if (!this.current() || this.uploads.get(pileId) !== u) return;
-        const parentPath = ix.pathOf(u.parent) ?? 'Inbox';
-        const name = freeName(ix.entries(), parentPath, safeInboxName(e.item));
-        // The session fence (live/index.ts) recognises a pile's thing by PROP.asAdded: it waits for Use here.
-        const props: Record<string, string> = { [PROP.asAdded]: e.item.name, [PROP.origin]: e.item.origin, [PROP.kind]: e.item.kind, [PROP.item]: e.key, ...(u.lone ? { [PROP.pile]: pileId } : {}), ...(u.declaration ? { [PROP.declaration]: u.declaration } : {}) };
+        const { name, props } = this.sendTarget(ix, pileId, u, e);
         e.item.upload = 0;
         // A link or an empty thing keeps the id reserved for it (`write-once.ts`): a try after a lost answer is that same file.
         const text = e.url ? shortcut(e.url) : '';
@@ -1669,16 +1688,38 @@ export class DriveVault implements VaultSource {
     return queue.items().filter((i) => (pileId === undefined || i.pileId === pileId) && (i.state === 'waiting' || i.state === 'uploading' || i.state === 'failed') && !i.gone && !mine.has(i.id));
   }
 
-  /** Sends one thing through the upload queue and waits for Drive to have it. */
-  private async sendQueued(pileId: string, u: Upload, e: Sending, body: Blob, name: string, props: Record<string, string>): Promise<DriveFile> {
+  /** Names include staged siblings not yet in the listing; the queue keeps the original target for every retry. */
+  private sendTarget(ix: VaultIndex, pileId: string, u: Upload, e: Sending): { name: string; props: Record<string, string> } {
+    const parentPath = ix.pathOf(u.parent) ?? 'Inbox';
+    const entries = ix.entries();
+    const items = this.queued.queue.items();
+    for (const item of items) if (item.parentId === u.parent && item.id !== e.queued && item.state !== 'done') {
+      const path = join(parentPath, item.name);
+      entries.set(path, { path, type: 'file', modified: u.createdAt, created: u.createdAt });
+    }
+    const name = items.find((i) => i.id === e.queued)?.name ?? freeName(entries, parentPath, safeInboxName(e.item));
+    // The existing session fence recognises a pile's thing by PROP.asAdded.
+    const props = { [PROP.asAdded]: e.item.name, [PROP.origin]: e.item.origin, [PROP.kind]: e.item.kind, [PROP.item]: e.key, ...(u.lone ? { [PROP.pile]: pileId } : {}), ...(u.declaration ? { [PROP.declaration]: u.declaration } : {}) };
+    return { name, props };
+  }
+
+  /** Retains one Blob through the queue's existing committed-device or memory-fallback boundary. */
+  private async stageQueued(pileId: string, u: Upload, e: Sending, body: Blob, name: string, props: Record<string, string>): Promise<void> {
+    if (e.queued) return;
     const queue = this.queued.queue;
     await this.startQueue();
     const added = await queue.add({ declarationId: u.declaration ?? pileId, memberKey: e.key, sha256: e.sha256 ?? (await sha256(body)), pileId, parentId: u.parent, name, body, type: body.type, appProperties: props });
     e.queued = added.id;
+  }
+
+  /** Waits for the already staged member; transfer remains the queue's one mechanism. */
+  private async sendQueued(pileId: string, u: Upload, e: Sending, body: Blob, name: string, props: Record<string, string>): Promise<DriveFile> {
+    await this.stageQueued(pileId, u, e, body, name, props);
+    const queue = this.queued.queue;
     return new Promise<DriveFile>((resolve, reject) => {
       let off = (): void => undefined;
       const look = (): void => {
-        const it = queue.items().find((i) => i.id === added.id);
+        const it = queue.items().find((i) => i.id === e.queued);
         if (!this.current() || !it) {
           off();
           reject(new BowerError('unknown', stoppedText(e.item.kind)));
