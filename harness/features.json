@@ -6937,5 +6937,18 @@
     ],
     "verify": "",
     "note": "TL-P4-42. Escalated (hot target); red now, implementation after B1c and the scripted.ts handoff. Packet 2026-10-10-b3b-packet.md. implementer: codex."
+  },
+  {
+    "id": "q1c-live-questions",
+    "task": "p4-q1",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "A question is answerable on Home while its run is still going: published in the run status at the plan-persisted point and merged by vault.questions() (TL-P4-44 Q2).",
+    "steps": [
+      "The prep's Q1c reds pass through the runner status route, the Worker run state and the vault."
+    ],
+    "verify": "",
+    "note": "TL-P4-44 Q2. Escalated; implementation after Q1a integrates. Packet 2026-10-10-q1c-live-questions-packet.md. implementer: codex."
   }
 ]
