@@ -8,7 +8,7 @@ import { displayName, findNode, isRoot, parentOf, thingName, visibleRows, type S
 import type { TreeNode } from '@/data/types';
 import { countThings, folderCount } from '@/data/piles';
 import { ancestors, useUi } from '@/app/ui-store';
-import { crumbs, decodeSplat, paraColor, routeFor } from '@/app/paths';
+import { decodeSplat, paraColor } from '@/app/paths';
 import { IconButton } from '@/ui/Button';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { menuCls } from '@/ui/menu';
@@ -84,13 +84,6 @@ export function Explorer({ variant }: Props) {
   const act = useFileActions();
   const binOrAsk = useBinOrAsk();
   const routePath = useRoutePath();
-  const goTo = useNavigate();
-  /** New note still opens once its create-then-rename flow finishes. */
-  const welcomeNew = (path: string): void => {
-    const folder = parentOf(path);
-    toast(`New note in ${folder ? crumbs(folder) : 'your Bower folder'}`);
-    goTo(routeFor({ path, type: 'file' }));
-  };
   const [focus, setFocus] = useState<string | null>(null);
   const [kb, setKb] = useState(false);
   const [menuNode, setMenuNode] = useState<TreeNode | null>(null);
@@ -147,7 +140,7 @@ export function Explorer({ variant }: Props) {
 
   const nodeAt = (path: string | null): TreeNode | null => (path ? findNode(roots, path) : null);
 
-  /** Where New note and New folder put things: the selected folder, else the open note's, else Resources. */
+  /** Where New folder puts things: the selected folder, else the open note's, else Resources. */
   const targetFolder = (): string => {
     const n = nodeAt(ui.selected) ?? nodeAt(routePath);
     const f = !n ? '' : n.type === 'folder' ? n.path : parentOf(n.path);
@@ -394,32 +387,21 @@ export function Explorer({ variant }: Props) {
           <RenameInput
             node={node}
             draft={draft}
-            onDone={async (name, typed, how) => {
+            onDone={async (name, how) => {
               ui.setRenaming(null);
-              const made = ui.justMade === node.path;
-              if (name === null && made && typed === null) {
-                // Escape on a brand-new note: it was never wanted.
-                ui.setJustMade(null);
-                await act.discard(node.path);
-              } else if (name === null || (how === 'blur' && name === draft)) {
+              if (name === null || (how === 'blur' && name === draft)) {
                 // Escape, or clicking away from a name already refused: cancel, quietly.
-                ui.setJustMade(null);
                 setDraft(null);
-                if (made && typed !== null) welcomeNew(node.path);
               } else {
-                let partial = false;
-                const to = await act.rename(node.path, name, { quiet: made, onPartial: () => { partial = true; } });
+                const to = await act.rename(node.path, name);
                 if (to) {
                   setFocus(to);
-                  ui.setJustMade(null);
                   setDraft(null);
-                  if (made && !partial) welcomeNew(to);
-                  else if (made && node.type === 'file') goTo(routeFor({ path: to, type: node.type }));
                 } else if (how === 'enter') {
                   // Refused on Enter: back in the box with what you typed.
                   setDraft(name);
                   ui.setRenaming(node.path);
-                } else ui.setJustMade(null);
+                }
               }
               treeRef.current?.focus();
             }}
@@ -436,9 +418,6 @@ export function Explorer({ variant }: Props) {
 
   const header = (
     <div className={s.nav}>
-      <IconButton small label="New note" onClick={() => void act.create(targetFolder(), 'note')}>
-        <Icon name="newNote" size={18} />
-      </IconButton>
       <IconButton small label="New folder" onClick={() => {
         nameOpener.current = openerNow();
         act.askFolderName(targetFolder(), desktop);
@@ -646,15 +625,14 @@ function PendingFolder({ folder, level, onCancel, onMade }: {
   </div>;
 }
 
-function RenameInput({ node, draft, onDone }: { node: TreeNode; draft: string | null; onDone: (name: string | null, typed: string | null, how: 'enter' | 'blur' | 'escape') => void }) {
+function RenameInput({ node, draft, onDone }: { node: TreeNode; draft: string | null; onDone: (name: string | null, how: 'enter' | 'blur' | 'escape') => void }) {
   const initial = node.type === 'folder' ? node.name : thingName(node.name);
   const [v, setV] = useState(draft ?? initial);
   const done = useRef(false);
-  /** `typed` is null when the person pressed Escape. */
   const finish = (name: string | null, how: 'enter' | 'blur' | 'escape'): void => {
     if (done.current) return;
     done.current = true;
-    onDone(name === initial ? null : name, how === 'escape' ? null : v, how);
+    onDone(name === initial ? null : name, how);
   };
   return (
     <input
@@ -705,7 +683,6 @@ export function useNodeMenu(node: TreeNode, inline?: boolean) {
   }
   if (folder) {
     items.push({ key: 'view', label: 'Open as a list or table', icon: 'table', run: () => act.open(node) });
-    items.push({ key: 'note', label: 'New note', icon: 'newNote', run: () => void act.create(node.path, 'note') });
     items.push({ key: 'folder', label: 'New folder', icon: 'newFolder', run: () => act.askFolderName(node.path, inline ?? wide) });
     items.push('sep');
   } else {
@@ -772,10 +749,9 @@ export function NodeMenuButton({ node }: { node: TreeNode }) {
   );
 }
 
-/** A page has no tree row to type a name in: Rename, New note and New folder ask in a sheet. */
+/** A page has no tree row to type a name in: Rename and New folder ask in a sheet. */
 const ASKS: Record<string, (node: TreeNode) => void> = {
   rename: (node) => useUi.getState().setNaming({ rename: node.path }),
-  note: (node) => useUi.getState().setNaming({ folder: node.path, type: 'note' }),
   folder: (node) => useUi.getState().setNaming({ folder: node.path, type: 'folder' }),
 };
 

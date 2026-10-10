@@ -209,3 +209,47 @@ The supplied diagnosis's standard is VS Code's in-memory pending explorer item a
 https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/files/browser/fileActions.ts
 No network research was attempted under the owner's no-network constraint. This implementation
 reuses existing naming state, NameForm rules, Input/FieldError, createNamed, act.open, Icon and focus return.
+
+## Merge with claude/p3 (remove-new-note)
+
+Resolved the four conflicted production files for the in-progress merge, preserving both accepted
+entries. No git command wrote state, no network request was made, and no test was edited.
+The coordinator must stage the resolved files and commit the merge; the unmerged index is untouched.
+
+- Explorer retains the synchronous `askFolderName` call for its header and row menu, the pending
+  row, immediate focus, shared name rules, one `createNamed` write, cancellation and retry behavior.
+- NameSheet retains the extracted NameForm and name-rules home and excludes inline naming state.
+  Its creation path now handles folders only through `act.createNamed`; existing rename behavior stays.
+- Naming state accepts only `type: 'folder'`, retaining `inline` for the tree.
+- Ordinary rename still follows applied paths and reports its existing messages. Only the options
+  and callbacks used by the removed create-then-rename flow went away.
+
+removed: Explorer's New note header button and row-menu item.
+removed: NameSheet's note-create branch, extension handling, direct source write and note-only imports.
+removed: naming state's note type, justMade/setJustMade and its sign-out reset.
+removed: the now-unused act.create helper; all New folder callers use askFolderName/createNamed.
+removed: act.discard and its create-cancellation Bin write.
+removed: rename's quiet/onPartial options and Explorer's new-item welcome/navigation branches.
+removed: RenameInput's typed callback argument, used only by the removed new-item flow.
+
+The earlier Implementation section's retained-note caveats describe the pre-merge checkout.
+This merge supplies remove-new-note, so those retained callers and branches are now gone.
+The unnamed `create(folder)` from claude/p3 also has no caller after preserving name-first creation;
+keeping it would retain the rejected create-then-rename mechanism. No creation-type argument remains.
+There is no other behavior change. Tests from both accepted branches remain untouched.
+
+### Merge verification
+
+- `pnpm exec vitest run src/features/files src/app --maxWorkers=2 > tmp-logs/tnf-merge.log 2>&1`:
+  exit 0, including the tree-name-first and no-new-note guards.
+- `pnpm exec tsc -p tsconfig.app.json --noEmit`: exit 0; `tmp-logs/tnf-merge-tsc-app.log`.
+- `pnpm exec tsc -p tsconfig.node.json --noEmit`: exit 0; `tmp-logs/tnf-merge-tsc-node.log`.
+- ESLint on the four conflicted files: exit 0; `tmp-logs/tnf-merge-eslint.log`.
+- Read-only `git diff --check`: exit 0; `tmp-logs/tnf-merge-diff-check.log`.
+- Conflict-marker scan: no markers remain. Unstaged test/e2e diff: empty.
+- No pnpm check, e2e, staging, commit or integration in this merge-resolution session,
+  as instructed. The coordinator owns the remaining integration gates and merge commit.
+
+tests changed: none in this merge-resolution session.
+sources: https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/files/browser/fileActions.ts
+Research reused the packet's cited standard under the explicit no-network constraint.

@@ -295,3 +295,5 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-10: d-v2-24a passes — d-v2-24a passes: one settle blend through the gate, rule carries the paper to a jaw-open drop (P4-79 PASS, designer verified)
 - 2026-10-10: landing-csp passes — landing-csp passes: fix-landing precompiles the landing script; /landing/* CSP without unsafe-eval (P4-80 PASS, designer verified)
 - 2026-10-10: create-named passes — create-named passes: one createNamed in file-actions; NameSheet's folder create uses it (P4-81 PASS)
+- 2026-10-10: weak-tests passes — weak-tests passes again: verify names surviving tests after New note was removed (c5-remove-new-note)
+- 2026-10-10: v2-name-sheet passes — v2-name-sheet passes again: verify names surviving tests after New note was removed (c5-remove-new-note)

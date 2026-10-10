@@ -76,8 +76,7 @@ export function useFileActions() {
           return e instanceof BowerError ? (e.applied?.path ?? null) : null;
         }
       },
-      /** `quiet`: a thing just made gets its own word ("New note in …"), not a rename one. */
-      async rename(path: string, name: string, opts: { quiet?: boolean; onPartial?: () => void } = {}): Promise<string | null> {
+      async rename(path: string, name: string): Promise<string | null> {
         try {
           const folder = findNode(await vault.tree(), path)?.type === 'folder';
           const label = (p: string): string => folder ? nameOf(p) : thingName(nameOf(p));
@@ -85,14 +84,13 @@ export function useFileActions() {
           useUi.getState().relocate(path, to);
           follow(path, to);
           const slash = /[/\\]/.test(name) ? ' Names cannot have slashes; Bower used a dash.' : '';
-          if (!opts.quiet && to !== path) toast(`Renamed to ${label(to)}.${slash}`);
+          if (to !== path) toast(`Renamed to ${label(to)}.${slash}`);
           else if (slash) toast(slash.trim());
           return to;
         } catch (e) {
           if (e instanceof BowerError && e.applied?.path) {
             useUi.getState().relocate(path, e.applied.path);
             follow(path, e.applied.path);
-            opts.onPartial?.();
           }
           report(e, 'That did not work. Try again.');
           return e instanceof BowerError ? (e.applied?.path ?? null) : null;
@@ -141,31 +139,6 @@ export function useFileActions() {
             console.error(e);
             response.failed('The folder was not made. Try again.');
           } else report(e, 'The folder was not made. Try again.');
-        }
-      },
-      async create(folder: string, type: 'note'): Promise<void> {
-        try {
-          const path = await vault.create(folder, type);
-          useUi.getState().openAll([...ancestors(path)]);
-          // New note still gets its name in place; folders use askFolderName/createNamed.
-          useUi.getState().setJustMade(path);
-          useUi.getState().setRenaming(path);
-        } catch (e) {
-          if (e instanceof BowerError && e.applied?.path) {
-            useUi.getState().openAll([...ancestors(e.applied.path)]);
-            useUi.getState().setJustMade(e.applied.path);
-            useUi.getState().setRenaming(e.applied.path);
-          }
-          report(e, 'That did not work. Try again.');
-        }
-      },
-      /** Takes back a note just made when its inline name is cancelled. */
-      async discard(path: string): Promise<void> {
-        try {
-          await vault.trash(path);
-          useUi.getState().relocate(path, null);
-        } catch (e) {
-          report(e, 'That did not work. Try again.');
         }
       },
       copyLink(node: Pick<TreeNode, 'path' | 'type'>): void {

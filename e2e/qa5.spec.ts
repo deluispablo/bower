@@ -76,17 +76,7 @@ test.describe('the explorer from the keyboard', () => {
     await expect(page.getByRole('dialog').getByRole('button').filter({ hasText: /\S/ }).first()).toBeFocused();
   });
 
-  test('a new note opens and says how to write in it', async ({ page }) => {
-    await open(page, '/');
-    const tree = page.getByRole('tree', { name: 'Your Bower folder' });
-    await tree.getByRole('treeitem', { name: /^Resources/ }).click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'New note' }).click();
-    await page.keyboard.type('Soup ideas');
-    await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(/\/note\/Resources\/Soup%20ideas\.md/);
-    await expect(page.getByText(/This note is empty/)).toBeVisible();
-    await expect(page.getByRole('status').getByText(/New note in Resources/)).toBeVisible();
-  });
+
 });
 
 const CSS_ESCAPE = (path: string): string => `row-${encodeURIComponent(path)}`.slice(4).replace(/[^a-zA-Z0-9_-]/g, (c) => `\\${c}`);
