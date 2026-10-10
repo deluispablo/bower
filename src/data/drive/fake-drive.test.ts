@@ -1,5 +1,7 @@
-import { describeDriveContract } from './drive-contract';
+import { describeB1PortsContract, describeDriveContract } from './drive-contract';
 import { FakeDrive } from './fake-drive';
+
+describeB1PortsContract('fake');
 
 describeDriveContract('fake', async () => {
   const drive = new FakeDrive();

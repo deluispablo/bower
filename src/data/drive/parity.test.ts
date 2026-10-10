@@ -6,10 +6,40 @@
  * - `pageSize`: https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list (at most 1000 a page,
  *   then `nextPageToken`); `DriveHttp.fullText` reads two pages for each batch of 40 folders.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DRIVE_OPS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE } from './drive-api';
 import { DriveHttp } from './drive-http';
 import { FakeDrive } from './fake-drive';
+import { B1_FEED_CASES, B1_PREFIX_CASES, makeB1Drive, runB1CacheCase, runB1FeedCase, runB1PrefixCase } from './drive-contract';
+
+describe('B1b HTTP and fake port parity', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it.each(B1_PREFIX_CASES)('b1-ports-parity prefix $name', async (prefix) => {
+    const [fake, http] = await Promise.all([
+      runB1PrefixCase(makeB1Drive('fake', prefix), prefix),
+      runB1PrefixCase(makeB1Drive('http', prefix), prefix),
+    ]);
+    expect(http).toEqual(fake);
+  });
+
+  it('b1-ports-parity full-media cache separation', async () => {
+    const [fake, http] = await Promise.all([
+      runB1CacheCase(makeB1Drive('fake')),
+      runB1CacheCase(makeB1Drive('http')),
+    ]);
+    expect(http).toEqual(fake);
+  });
+
+  it.each(B1_FEED_CASES)('b1-ports-parity changes feed %s', async (name) => {
+    const [fake, http] = await Promise.all([
+      runB1FeedCase(makeB1Drive('fake'), name),
+      runB1FeedCase(makeB1Drive('http'), name),
+    ]);
+    expect(http).toEqual(fake);
+  });
+});
 
 const PAGE_SIZE = SEARCH_PAGE_SIZE;
 const PAGES = SEARCH_MAX_PAGES;

@@ -3,6 +3,9 @@ import { DriveHttp } from './drive-http';
 import { failureKind, isNoAnswer, isUnconfirmedWrite } from './transport';
 import { CHANGED_ELSEWHERE, checkStillAsSeen, notAsSeenReason, type NotAsSeenReason } from '../contracts/still-as-seen';
 import { BowerError } from '../types';
+import { describeB1PortsContract } from './drive-contract';
+
+describeB1PortsContract('http');
 
 interface Call {
   method: string;
