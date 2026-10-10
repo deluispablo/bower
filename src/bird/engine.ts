@@ -925,10 +925,11 @@ export class BirdEngine {
             }
             if (kind === 'rule') {
               // A rule uses the Rig glyph, even when a layer has its own carry chip.
-              B.ruleCarry = clock < 0.16;
+              B.ruleCarry = clock < 1;
+              part('jaw', [[0, 0], [0.9, 0], [0.98, 14], [1.04, 14], [1.18, 0]]);
               if (at) B.x = fromX + clamp(at.x - fromX, -9, 9) * smooth(clock / 0.16);
             }
-            return clock >= (kind === 'tap' ? 0.6 : 0.3);
+            return clock >= (kind === 'rule' ? 1.18 : kind === 'tap' ? 0.6 : 0.3);
           case 'moves-off':
             // Never an act: the settle is the one blend (beginSettle).
             return true;
