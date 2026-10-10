@@ -6499,6 +6499,7 @@
       "After Undo online, the toast changes its words in place and the button goes, with no rise or blank frame."
     ],
     "verify": "pnpm exec vitest run src -t \"an online Undo confirmation replaces its toast in place\"",
-    "note": "DEFECTS undo-confirm-not-in-place (lead 2026-10-10). Codex, then a Claude review and the designer. Packet 2026-10-10-c4-undo-confirm-in-place-packet.md."
+    "note": "DEFECTS undo-confirm-not-in-place (lead 2026-10-10). Codex, then a Claude review and the designer. Packet 2026-10-10-c4-undo-confirm-in-place-packet.md.",
+    "review": "P4-69 PASS"
   }
 ]
