@@ -102,3 +102,5 @@ Ready for your review (each a branch p4-<x>-prep with a doc docs/harness/2026-10
 - C17 brain: b123 (B1 index, B2 summary, B3 hot) at 77768bfd, 4 cases, 12 open questions; b56 (B5 type table and profiles, B6 templates, fit-create-ask) at c180ddba, 4 cases including the three owner failure modes, 10 open questions.
 - c08=fb84f96d c09=7ddcac10 c10=72a043a5 c12=bd75bc87 c13=84c8668f c15=1de6b3b6 (C08-C10 also listed above; C12, C13, C15 new).
 On your accept I integrate each as is.
+
+Hold (lead, 2026-10-10): the C17 brain drafts b123 and b56 stay as drafts only, not for review yet; the owner is refining the design (hierarchical folder summaries, a collapsed index, a neighbourhood graph, About me as reflection). A new DECISIONS line lifts the hold.
