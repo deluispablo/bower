@@ -71,3 +71,8 @@ Phase 4/5. The owner approved V2 on 2026-10-09.
 - **Questions canvas, full flow (owner asked, 2026-10-10):** a "Full flow" page with 11 desktop boards: Home, confirm, running, question in the sheet, Something else…, A1 continuing and A2 done (if you answer), B1 hidden with the question on Home, B2 done "14 filed, 1 waits" with the question in the sheet, B3 Home afterwards, B4 answered later ("You chose… Bower is doing it now."). Waiting on the owner's OK.
 - **c5-remove-new-note:** verified at bb1b281c (walk/nonote.cjs, nonote2.cjs, dot.cjs).
 - **Owner asked (2026-10-10):** design the overflow cases (the sheet too tall, several questions) and the phone view of the whole questions flow. In progress on the questions canvas.
+- **Questions canvas, overflow and phone (2026-10-10):**
+  - "When it doesn't fit": once a question shows, the sheet folds the scene to a small one and the steps to "Step 3 of 4" with a progress bar. The sheet's maximum height is the window less 24 px top and bottom; the body scrolls under a fade, with Hide pinned at the bottom.
+  - Several questions: one at a time, "1 of 3", "Skip for now", with skipped ones waiting on Home. The done sheet shortens its lists to "See all".
+  - Phone P1–P9: bottom sheets, the keyboard view for Something else…, and the same rules.
+  - Waiting on the owner's OK.
