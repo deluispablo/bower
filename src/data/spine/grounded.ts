@@ -51,6 +51,8 @@ export function grounded(manifest: RunManifest): boolean {
   const places = new Set(manifest.capture.places.map((p) => p.file.fileId));
   const pathOf = (t: Target): string | null => placePath(manifest, t);
   const madeAt = (e: EffectV2): string | null => {
+    // Rules is the one generated root note; its creation words the person's rules too.
+    if (e.kind === 'create-text' && e.name === RULES && 'fileId' in e.parent && e.parent.fileId === manifest.scope.rootId) return RULES;
     const parent = e.kind === 'create-text' ? pathOf(e.parent) : null;
     return e.kind === 'create-text' && parent !== null ? join(parent, e.name) : e.kind === 'edit-text' ? e.path : null;
   };

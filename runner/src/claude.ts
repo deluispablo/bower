@@ -1294,3 +1294,35 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     return plannedWith(intent.filing, intent.held, shown.own, `with ${model}`);
   };
 }
+
+/** Closed step-one authority; execution is wired separately in B1d. */
+const SelectionShape = z.strictObject({
+  items: z.array(z.strictObject({
+    itemId: z.string(), kind: z.string(),
+    destination: z.union([z.string(), z.strictObject({ parentId: z.string(), name: z.string().refine(recordableName).refine((n) => !n.startsWith('.') && n.trim() === n) })]),
+    wants: z.array(z.string()).max(5),
+  })),
+  asks: z.array(AskShape),
+});
+export interface SelectionContext {
+  itemIds: readonly string[]; kinds: readonly string[]; candidates: readonly string[];
+  folders: readonly { id: string; hubId: string | null }[]; pinned: Readonly<Record<string, readonly string[]>>;
+}
+export function selectionOf(value: unknown, context: SelectionContext):
+  { ok: true; value: z.output<typeof SelectionShape>; allowedTargets: Record<string, string[]> } | { ok: false } {
+  const parsed = SelectionShape.safeParse(value);
+  if (!parsed.success) return { ok: false };
+  const allowedTargets: Record<string, string[]> = {};
+  const seen = new Set<string>();
+  for (const item of parsed.data.items) {
+    const folderId = typeof item.destination === 'string' ? item.destination : item.destination.parentId;
+    const folder = context.folders.find((f) => f.id === folderId);
+    const wants = [...new Set([...item.wants, ...(context.pinned[item.itemId] ?? [])])];
+    if (seen.has(item.itemId) || !context.itemIds.includes(item.itemId) || (item.kind !== 'unknown' && !context.kinds.includes(item.kind))
+      || !folder || wants.length > 5 || wants.some((id) => !context.candidates.includes(id))
+      || new Set(item.wants).size !== item.wants.length) return { ok: false };
+    seen.add(item.itemId);
+    allowedTargets[item.itemId] = [...new Set([...wants, folder.id, ...(folder.hubId ? [folder.hubId] : [])])];
+  }
+  return { ok: true, value: parsed.data, allowedTargets };
+}

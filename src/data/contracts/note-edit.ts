@@ -41,7 +41,7 @@ export type Authors = { splice: (text: string, at: number, insert: string) => st
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
-const ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'timeline-append', 'rules-wording'];
+const ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'timeline-append', 'rules-wording', 'moc-rewrite'];
 const RULE_LINE = /^- (.*?)(?:\s*<!-- since (\d{4}-\d{2}-\d{2}) -->)?\s*$/;
 const WORDS_LINE = /^\s+\*You wrote: "(.*)"\*\s*$/;
 const SUMMARY_LINE = /^summary: \d+ rules? Bower follows in every tidy-up\.$/;
@@ -137,6 +137,7 @@ export function stateLinesOk(previous: readonly string[], lines: readonly string
 }
 function fieldsOk(change: Change): boolean {
   switch (change.kind) {
+    case 'moc-rewrite': return ['moc-overview', 'moc-figures', 'moc-members'].includes(change.region) && typeof change.previous === 'string' && typeof change.text === 'string';
     case 'state-rewrite': return stateLinesOk(change.previous, change.lines);
     case 'link-rewrite': return change.renames.length > 0 && change.renames.every(renameOk)
       && new Set(change.renames.map((item) => item.from.toLowerCase())).size === change.renames.length;
@@ -144,8 +145,9 @@ function fieldsOk(change: Change): boolean {
     case 'rules-wording': return change.add.length + change.remove.length > 0 && change.add.every(ruleAddOk) && change.remove.every(ruleRemoveOk);
   }
 }
+const changeOrder = (c: Change): number => c.kind === 'moc-rewrite' ? ORDER.length + ['moc-overview', 'moc-figures', 'moc-members'].indexOf(c.region) : ORDER.indexOf(c.kind);
 const ordered = (changes: readonly Change[]): boolean => changes.length > 0
-  && changes.every((item, i) => i === 0 || ORDER.indexOf(changes[i - 1]?.kind ?? item.kind) < ORDER.indexOf(item.kind));
+  && changes.every((item, i) => i === 0 || changeOrder(changes[i - 1] ?? item) < changeOrder(item));
 
 /** The renames a run's moves and renames imply, as the resolver's `formerNames` follows them (chains, `taken`). */
 export function renamesFor(changes: readonly ChangeEntry[], taken: ReadonlySet<string> = new Set()): Rename[] {
@@ -626,8 +628,8 @@ function relink(text: string, change: Extract<Change, { kind: 'link-rewrite' }>,
   const out: Replacement[] = [];
   if (own.status === 'v2') {
     values(text, renames, out, fetched);
-    for (const owner of ['current', 'personal', 'timeline', 'bower-note'] as const) {
-      const span = spanOf(bytes, own.payloads[owner]);
+    for (const payload of Object.values(own.payloads)) {
+      const span = spanOf(bytes, payload);
       fenced(text, span.start, span.end, renames, out);
     }
   } else if (own.status === 'plain') fenced(text, 0, text.length, renames, out);
@@ -812,8 +814,7 @@ function holds(before: string, after: string, change: Change, step: Exclude<Step
     const skeleton = (text: string, bytes: Uint8Array, payloads: Readonly<Record<string, ByteSpan>>): string => {
       let out = '';
       let at = 0;
-      for (const owner of ['current', 'personal', 'timeline', 'bower-note']) {
-        const span = payloads[owner];
+      for (const span of Object.values(payloads).sort((a, b) => a.start - b.start)) {
         if (!span) return '';
         const chars = spanOf(bytes, span);
         out += `${text.slice(at, chars.start)}\u0000`;
@@ -822,9 +823,11 @@ function holds(before: string, after: string, change: Change, step: Exclude<Step
       return out + text.slice(at);
     };
     if (same(skeleton(before, beforeBytes, a.payloads)) !== same(skeleton(after, afterBytes, b.payloads))) return false;
-    for (const owner of ['current', 'personal', 'timeline', 'bower-note'] as const) {
+    for (const [owner, payload] of Object.entries(a.payloads)) {
+      const afterPayload = (b.payloads as Readonly<Record<string, ByteSpan>>)[owner];
+      if (!afterPayload) return false;
       if (change.kind === 'timeline-append' && owner === 'timeline') continue;
-      if (same(slice(before, beforeBytes, a.payloads[owner])) !== same(slice(after, afterBytes, b.payloads[owner]))) return false;
+      if (same(slice(before, beforeBytes, payload)) !== same(slice(after, afterBytes, afterPayload))) return false;
     }
   } else if (a.status === 'legacy') {
     const was = sectionsOf(before);
@@ -848,6 +851,27 @@ function holds(before: string, after: string, change: Change, step: Exclude<Step
 // The author
 // ---------------------------------------------------------------------------------------------
 
+function rewriteMoc(text: string, change: Extract<Change, { kind: 'moc-rewrite' }>, fetched?: FetchedOwnership): Step {
+  const bytes = encoder.encode(text);
+  const own = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
+  const note = parseNote('note.md', text, fetched);
+  const span = own.status === 'v2' ? own.payloads[change.region] : undefined;
+  if (!note.byBower || !note.properties.some((p) => p.key === 'type' && p.value === 'moc') || !span) return { refused: 'not-bower' };
+  const at = spanOf(bytes, span);
+  if (text.slice(at.start, at.end) !== change.previous) return { refused: 'person-edited' };
+  return { text: text.slice(0, at.start) + change.text + text.slice(at.end), added: [], rules: null };
+}
+function mocHolds(before: string, after: string, change: Extract<Change, { kind: 'moc-rewrite' }>): boolean {
+  const aBytes = encoder.encode(before), bBytes = encoder.encode(after);
+  const a = parseOwnership(aBytes), b = parseOwnership(bBytes);
+  const aSpan = a.status === 'v2' ? a.payloads[change.region] : undefined;
+  const bSpan = b.status === 'v2' ? b.payloads[change.region] : undefined;
+  if (!aSpan || !bSpan) return false;
+  const x = spanOf(aBytes, aSpan), y = spanOf(bBytes, bSpan);
+  return before.slice(0, x.start) === after.slice(0, y.start) && before.slice(x.end) === after.slice(y.end)
+    && after.slice(y.start, y.end) === change.text;
+}
+
 const refuse = (reason: EditRefusal): EditResult => ({ ok: false, reason });
 
 /** `applyChanges` with a replaceable splice; only tests pass anything but the real one. */
@@ -863,16 +887,19 @@ export function applyChangesUsing(before: Uint8Array, changes: readonly Change[]
   if (own.status === 'invalid') return refuse(own.reason);
   if (!ordered(changes)) return refuse('order');
   if (!changes.every(fieldsOk)) return refuse('field');
+  const note = parseNote('note.md', text, fetched);
+  const map = note.properties.some((p) => p.key === 'type' && ['moc', 'hub'].includes(p.value));
+  if (map && !note.byBower && changes.some((c) => c.kind !== 'link-rewrite')) return refuse('not-bower');
   let current = text;
   let source = fetched;
   for (const change of changes) {
     // Intermediate text is generated, even when it carries the source file id.
     const step = change.kind === 'state-rewrite' ? rewriteState(current, change, source)
       : change.kind === 'link-rewrite' ? relink(current, change, source)
-        : change.kind === 'timeline-append' ? appendLines(current, change, authors, source) : wordRules(current, change, authors, source);
+        : change.kind === 'timeline-append' ? appendLines(current, change, authors, source) : change.kind === 'moc-rewrite' ? rewriteMoc(current, change, source) : wordRules(current, change, authors, source);
     source = fetched;
     if ('refused' in step) return refuse(step.refused);
-    const kept = change.kind === 'state-rewrite' ? stateHolds(current, step.text, change) : holds(current, step.text, change, step);
+    const kept = change.kind === 'moc-rewrite' ? mocHolds(current, step.text, change) : change.kind === 'state-rewrite' ? stateHolds(current, step.text, change) : holds(current, step.text, change, step);
     if (step.text !== current && !kept) return refuse('invariant');
     current = step.text;
   }

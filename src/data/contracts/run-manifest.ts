@@ -1,5 +1,5 @@
 /** Immutable run manifest validation only; no claim, dispatch, readiness or permission authority. */
-import { createOwnershipContext } from './ownership-format';
+import { MOC_REGIONS, createOwnershipContext, type MocRegion } from './ownership-format';
 import { sha256 } from './hashes';
 import { isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
 import type { UpdatedRow } from './types';
@@ -43,7 +43,7 @@ export type Effect =
  * The type of a runner-writable file (TL-P4-14 addendum 20): `RUNNER_WRITES` in `vault/layout.ts` is the one list and
  * is typed by it; the contracts cannot import the layout (architecture.test.ts), so the path's type lives here.
  */
-export type RunnerWrite = '.bower/questions.json' | '.bower/requests.json' | '.bower/hashes.json';
+export type RunnerWrite = '.bower/questions.json' | '.bower/requests.json' | '.bower/hashes.json' | '.bower/retrieval.json' | '.bower/index.md' | '.bower/hot.md' | '.bower/log.md';
 export type Operation = { operationId: string; ordinal: number; dependsOn: string[]; effect: Effect };
 /** One Timeline line: `- <date> · <text>` plus ` · [[<source>]]` when there is a source (TL-P2-20). */
 export type EditEntry = { date: string; text: string; source: string | null };
@@ -69,6 +69,7 @@ export type AppendCompletion = { requestId: string; targetFileId: string };
 export type TimelineConsent = { requestId: string; targetFileId: string; sourceFileId: string };
 export type LeftAsWritten = { name: string; why: string; fileId?: string };
 export type Change =
+  | { kind: 'moc-rewrite'; region: MocRegion; recordIds: string[]; previous: string; text: string }
   | { kind: 'state-rewrite'; recordIds: string[]; previous: string[]; lines: string[]; adopted?: true; release?: true; granted?: StateGrant; mark?: string }
   | { kind: 'link-rewrite'; recordIds: string[]; renames: Rename[] }
   | { kind: 'timeline-append'; recordIds: string[]; entries: EditEntry[]; consent?: TimelineConsent }
@@ -82,7 +83,8 @@ export type EditText = {
   kind: 'edit-text'; before: SeenFile; path: string; beforeContent: VerifiedContent;
   changes: Change[]; text: string; content: Content; beforeText?: string;
 };
-export type EffectV2 = Effect | EditText;
+export type Maintain = { kind: 'maintain'; inputs: { folderId: string; account: string; cursor: string; changes: string[]; operationIds: string[]; targets?: { path: RunnerWrite; fileId: string; parentId: string; beforeContent?: VerifiedContent }[]; snapshot?: Record<string, { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number } }>; listing?: SeenFile[]; log?: string } };
+export type EffectV2 = Effect | EditText | Maintain;
 export type OperationV2 = { operationId: string; ordinal: number; dependsOn: string[]; effect: EffectV2 };
 export type ReportFiled = { name: string; title: string; kind: FileKind; to: string; note?: string; area?: string };
 /** The existing RunReport shape in the stricter closed form used inside new records. */
@@ -318,7 +320,7 @@ function operation(value: unknown): value is Operation {
 }
 
 // Manifest v2 (TL-P2-20): v1 plus edit-text. Field rules shared with the author live in note-edit.ts.
-const CHANGE_ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'timeline-append', 'rules-wording'];
+const CHANGE_ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'timeline-append', 'rules-wording', 'moc-rewrite'];
 const recordIds = (value: unknown): value is string[] => list(value, recordId) && unique(value);
 function editEntry(value: unknown): value is EditEntry {
   return closed(value, ['date', 'text', 'source']) && text(value.date) && text(value.text)
@@ -343,6 +345,8 @@ function stateGrant(value: unknown, ids: readonly string[]): value is StateGrant
 function change(value: unknown): value is Change {
   if (!record(value)) return false;
   switch (value.kind) {
+    case 'moc-rewrite': return closed(value, ['kind', 'region', 'recordIds', 'previous', 'text']) && oneOf(value.region, MOC_REGIONS)
+      && recordIds(value.recordIds) && text(value.previous) && text(value.text);
     case 'state-rewrite': return closed(value, ['kind', 'recordIds', 'previous', 'lines'], ['adopted', 'release', 'granted', 'mark']) && recordIds(value.recordIds)
       && (value.adopted === undefined || value.adopted === true) && (value.release === undefined || (value.release === true && value.adopted === undefined))
       && [value.adopted, value.release, value.granted, value.mark].filter((x) => x !== undefined).length <= 1
@@ -362,15 +366,28 @@ function change(value: unknown): value is Change {
   }
 }
 /** 1+ changes, at most one of each kind, in the order state-rewrite, link-rewrite, timeline-append, rules-wording (R3-7 m4). */
+const changeOrder = (c: Change): number => c.kind === 'moc-rewrite' ? CHANGE_ORDER.length + ['moc-overview', 'moc-figures', 'moc-members'].indexOf(c.region) : CHANGE_ORDER.indexOf(c.kind);
 const canonical = (changes: Change[]): boolean => changes.length > 0
-  && changes.every((item, i) => i === 0 || CHANGE_ORDER.indexOf(changes[i - 1]?.kind ?? item.kind) < CHANGE_ORDER.indexOf(item.kind));
+  && changes.every((item, i) => i === 0 || changeOrder(changes[i - 1] ?? item) < changeOrder(item));
 function editText(value: unknown): value is EditText {
   return closed(value, ['kind', 'before', 'path', 'beforeContent', 'changes', 'text', 'content'], ['beforeText']) && value.kind === 'edit-text'
     && seenFile(value.before) && path(value.path) && verifiedContent(value.beforeContent)
     && list(value.changes, change) && canonical(value.changes as Change[]) && text(value.text) && content(value.content)
     && (!Object.hasOwn(value, 'beforeText') || text(value.beforeText));
 }
-const effectV2 = (value: unknown): value is EffectV2 => effect(value) || editText(value);
+function maintain(value: unknown): value is Maintain {
+  return closed(value, ['kind', 'inputs']) && value.kind === 'maintain'
+    && closed(value.inputs, ['folderId', 'account', 'cursor', 'changes', 'operationIds'], ['targets', 'snapshot', 'listing', 'log'])
+    && driveId(value.inputs.folderId) && driveId(value.inputs.account) && driveId(value.inputs.cursor)
+    && list(value.inputs.changes, driveId) && unique(value.inputs.changes)
+    && list(value.inputs.operationIds, hash) && unique(value.inputs.operationIds)
+    && (value.inputs.snapshot === undefined || (record(value.inputs.snapshot) && Object.entries(value.inputs.snapshot).every(([key, f]) => driveId(key) && closed(f, ['path', 'version', 'summary', 'coverage']) && path(f.path) && rfc3339(f.version) && text(f.summary) && closed(f.coverage, ['kind', 'bytes']) && f.coverage.kind === 'prefix' && integer(f.coverage.bytes))))
+    && (value.inputs.listing === undefined || list(value.inputs.listing, seenFile))
+    && (value.inputs.log === undefined || text(value.inputs.log))
+    && (value.inputs.targets === undefined || list(value.inputs.targets, (t) => closed(t, ['path', 'fileId', 'parentId'], ['beforeContent'])
+      && path(t.path) && driveId(t.fileId) && driveId(t.parentId) && (t.beforeContent === undefined || verifiedContent(t.beforeContent))));
+}
+const effectV2 = (value: unknown): value is EffectV2 => effect(value) || editText(value) || maintain(value);
 function operationV2(value: unknown): value is OperationV2 {
   return closed(value, ['operationId', 'ordinal', 'dependsOn', 'effect']) && hash(value.operationId) && integer(value.ordinal)
     && list(value.dependsOn, hash) && unique(value.dependsOn) && effectV2(value.effect);
@@ -438,7 +455,7 @@ function manifest(value: unknown): value is Manifest {
 }
 /** A v2 manifest without edit-text is refused: the runner writes v1 then. */
 function manifestV2(value: unknown): value is ManifestV2 {
-  return manifestOf(value, 2, operationV2) && (value as ManifestV2).operations.some((item) => item.effect.kind === 'edit-text');
+  return manifestOf(value, 2, operationV2) && (value as ManifestV2).operations.some((item) => item.effect.kind === 'edit-text' || item.effect.kind === 'maintain');
 }
 
 /** Raw text content: utf8 with the size and SHA-256 of the exact UTF-8 bytes, not of C(text). */
@@ -525,6 +542,14 @@ async function admit<M extends Manifest | ManifestV2>(
       || (createdBy !== null && !earlier.has(createdBy))) return { ok: false, reason: 'order' };
     if (createdBy !== null && earlier.get(createdBy) !== 'create-folder') return { ok: false, reason: 'shape' };
     earlier.set(item.operationId, item.effect.kind);
+  }
+  const maintenance = value.operations.filter((o) => o.effect.kind === 'maintain');
+  if (maintenance.length > 1) return { ok: false, reason: 'order' };
+  for (const op of maintenance) {
+    const e = op.effect as Maintain;
+    if (e.inputs.folderId !== expectedRootId) return { ok: false, reason: 'scope' };
+    if (op.ordinal !== value.operations.length - 1 || e.inputs.operationIds.join() !== value.operations.slice(0, op.ordinal).map((o) => o.operationId).join()) return { ok: false, reason: 'order' };
+    if (e.inputs.targets?.some((t) => !writes.includes(t.path)) || new Set(e.inputs.targets?.map((t) => t.path)).size !== (e.inputs.targets?.length ?? 0)) return { ok: false, reason: 'shape' };
   }
   const questions = new Set<string>();
   for (const item of value.reportPlan) {

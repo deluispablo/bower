@@ -2207,6 +2207,9 @@ export async function build(decided: Decided): Promise<Ended> {
   const rulesMade = rules.made !== null
     ? await add({ kind: 'create-text', parent: { fileId: rootId }, name: RULES_PATH, createKey: newKey('rules'), text: rules.made, content: await utf8(rules.made), purpose: 'generated' })
     : null;
+  if (rulesMade) reportPlan.push({ requires: [rulesMade], when: 'applied', value: {
+    ...empty(), updated: [{ path: RULES_PATH, what: 'Rules updated.', op: rulesMade }],
+  } });
   // Every rule line Rules.md is made to word waits for it, in the one map (`needs`).
   if (rulesMade) for (const r of ruleWords.change?.add ?? []) derive(r.recordId, rulesMade);
   const rulesOp = rulesMade ?? (rulesState === 'planned' && rulesFile ? editOf.get(rulesFile.id) ?? null : null);
@@ -2288,7 +2291,7 @@ export async function build(decided: Decided): Promise<Ended> {
     ...(satisfiedAppends.length ? { satisfiedAppends } : {}),
   };
   // v1 whenever the plan has no edit (TL-P2-20 Format): its identities and bytes are exactly as before.
-  const v1: Operation[] = operations.flatMap((o) => (o.effect.kind === 'edit-text' ? [] : [{ ...o, effect: o.effect }]));
+  const v1: Operation[] = operations.flatMap((o) => (o.effect.kind === 'edit-text' || o.effect.kind === 'maintain' ? [] : [{ ...o, effect: o.effect }]));
   const manifest: Manifest | ManifestV2 = v1.length === operations.length ? { v: 1, ...head, operations: v1 } : { v: 2, ...head, operations };
   const checked = await parseRunManifestV2((await canonical(manifest)).bytes, rootId, RUNNER_WRITES);
   if (!checked.ok) {
