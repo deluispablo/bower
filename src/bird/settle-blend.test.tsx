@@ -147,7 +147,7 @@ const timings = fc.record({
   }),
 });
 type Timing = typeof timings extends fc.Arbitrary<infer Value> ? Value : never;
-type Track = 'control' | 'foreign' | 'pose';
+type Track = 'control' | 'foreign' | 'pose' | 'resize';
 
 function trace(start: Start, kind: ReactionKind, timing: Timing, track: Track) {
   usePrefs.setState({ birdMoves: true });
@@ -192,6 +192,7 @@ function trace(start: Start, kind: ReactionKind, timing: Timing, track: Track) {
   const before = read();
   const samples: Drawn[] = [];
   const immediate: Drawn[] = [];
+  let releaseResize: { before: Drawn; after: Drawn } | undefined;
   const gaze = { x: -220, y: -120 };
   act(() => engine.look(() => gaze, 'focus'));
   act(() => usePrefs.setState({ birdMoves: false }));
@@ -210,16 +211,23 @@ function trace(start: Start, kind: ReactionKind, timing: Timing, track: Track) {
         }
       }
       if (track === 'pose' && i === timing.poseAt) view.rerender(drawing(timing.nextPose));
+      // Reuse a generated instant so existing schedules keep their random stream.
+      if (track === 'resize' && i === timing.gazeAt) window.dispatchEvent(new Event('resize'));
     });
     immediate.push(read());
     currentFrame = i + 1;
     run(1);
+    if (track === 'resize' && released && !releaseResize) {
+      const before = read();
+      act(() => window.dispatchEvent(new Event('resize')));
+      releaseResize = { before, after: read() };
+    }
     samples.push(read());
   }
   const after = read();
   spy.mockRestore();
   view.unmount();
-  return { before, samples, immediate, released, after };
+  return { before, samples, immediate, released, after, releaseResize };
 }
 
 /** 0.5% per scalar, with a unit floor for zero-valued angles/offsets.
@@ -255,6 +263,7 @@ describe.each(KINDS.flatMap((kind) => STARTS.flatMap((start) =>
       const foreign = trace(start, kind, timing, 'foreign');
       const changed = layer ? null : trace(start, kind, timing, 'pose');
       const origin = layer ? trace(start, kind, { ...timing, home: ORIGIN_HOME }, 'control') : null;
+      const resized = layer ? trace(start, kind, timing, 'resize') : null;
       const problems: string[] = [];
       const check = (label: string, actual: Drawn, wanted: Drawn) => {
         const wrong = differences(actual, wanted);
@@ -309,6 +318,23 @@ describe.each(KINDS.flatMap((kind) => STARTS.flatMap((start) =>
         check(`(c) whole drawn blend frame ${i + 1}`, control.samples[i] ?? {}, blend);
       }
       if (changed) check('(d) queued pose after release', changed.after, queued);
+      if (resized) {
+        // Resize is a production event, including the first instant after the
+        // public release. Its settle samples keep the same frozen blend oracle.
+        for (let i = 0; i < 36; i++) {
+          if (i < 35) check(`(e) resize blend frame ${i + 1}`, resized.samples[i] ?? {}, control.samples[i] ?? {});
+          check(`(e) synchronous resize ${i}`, resized.immediate[i + 1] ?? {},
+            i ? control.samples[i - 1] ?? {} : control.before);
+        }
+        if (resized.released) check('(e) resized drawing at release', resized.released.drawn, expected);
+        if (!resized.releaseResize) problems.push('(e) resize missing release');
+        else {
+          const { before, after } = resized.releaseResize;
+          const jumps = Object.keys(before).filter((key) => after[key] !== before[key])
+            .map((key) => `${key}: ${after[key]} != ${before[key]}`);
+          if (jumps.length) problems.push(`(e) resize right after release: ${jumps.join('; ')}`);
+        }
+      }
       expect(problems, `${kind} / ${start} ${JSON.stringify(timing)}`).toEqual([]);
     });
     // First run reaches the pass witnesses: early land, late sleep -> idle,
@@ -326,6 +352,93 @@ const DIRECT_TIMING: Timing = {
   phase: 60, reactionFrames: 0, poseAt: 12, chirpAt: 0, actAt: 18, gazeAt: 12,
   nextPose: 'alarm', mindAct: 'preen', settings: false, home: ORIGIN_HOME,
 };
+
+function layerResize(settle: boolean, resize: boolean, hide: boolean, reduce: boolean, resizeAt: number) {
+  usePrefs.setState({ birdMoves: true });
+  window.history.replaceState(null, '', '/');
+  let reduced = false;
+  const media = new EventTarget();
+  const realMatchMedia = window.matchMedia.bind(window);
+  const mock = vi.spyOn(window, 'matchMedia').mockImplementation((query) => ({
+    ...realMatchMedia(query),
+    get matches() { return query.includes('reduce') && reduced; },
+    addEventListener: media.addEventListener.bind(media),
+    removeEventListener: media.removeEventListener.bind(media),
+  }));
+  const frames = fakeFrames(11);
+  const view = render(<div style={{ position: 'relative', ...LAYER_FRAME }}>
+    <BowerLayer size={100} home={() => ORIGIN_HOME} engineOptions={{ ...frames.options, acts: false }} />
+  </div>);
+  const read = reader(view.container, true);
+  const run = (n: number) => act(() => frames.run(n));
+  run(61); // Prime, then exactly 1 s of idle breathing, as in the finding.
+  if (hide) { act(() => { react('hide'); }); run(9); } // 0.15 s into the recorded wave.
+  const live = read();
+  if (settle) act(() => usePrefs.setState({ birdMoves: false }));
+  const samples: Drawn[] = [];
+  let during: { before: Drawn; after: Drawn } | undefined;
+  for (let i = 0; i < (reduce ? 18 : 36); i++) {
+    if (i === resizeAt && resize) {
+      const before = read();
+      act(() => window.dispatchEvent(new Event('resize')));
+      during = { before, after: read() };
+    }
+    run(1);
+    samples.push(read());
+  }
+  const settling = activeHandle() !== null;
+  if (reduce) act(() => { reduced = true; media.dispatchEvent(new Event('change')); });
+  const released = activeHandle() === null;
+  const still = read();
+  if (resize) act(() => window.dispatchEvent(new Event('resize')));
+  const immediate = read();
+  run(2);
+  const after = read();
+  view.unmount();
+  mock.mockRestore();
+  return { live, samples, during, settling, released, still, immediate, after };
+}
+
+it('resize preserves the released layer still frame after idle and moves-off', () => {
+  const property = fc.property(fc.integer({ min: 0, max: 35 }), (resizeAt) => {
+    const live = layerResize(false, true, false, false, resizeAt);
+    expect(live.released, 'positive control: resize leaves a moving engine present').toBe(false);
+    expect(live.live['rig.sy'], 'positive control: the idle layer breathes at 1 s').not.toBe(1);
+    expect(live.after, 'positive control: injected frames advance the live drawing').not.toEqual(live.still);
+    const control = layerResize(true, false, false, false, resizeAt);
+    const resized = layerResize(true, true, false, false, resizeAt);
+    expect(control.released, 'positive control: the unresized settle releases at 0.6 s').toBe(true);
+    expect(control.after, 'positive control: release holds without a resize').toEqual(control.still);
+    expect(resized.during, 'resize was dispatched during settlement').toBeDefined();
+    expect(resized.during?.after, 'the synchronous resize preserves the settle drawing').toEqual(resized.during?.before);
+    expect(resized.samples, 'resize during settlement follows the unchanged whole blend').toEqual(control.samples);
+    expect(resized.released, 'the resized settle also releases at 0.6 s').toBe(true);
+    expect(resized.still).toEqual(control.still);
+    expect(resized.immediate, 'resize right after release must retain the exact CSS still frame').toEqual(resized.still);
+    expect(resized.after, 'later injected frames must retain that same still frame').toEqual(resized.still);
+  });
+  fc.assert(property, { seed: SEED, numRuns: 2, examples: [[18]], endOnFailure: true });
+});
+
+it('resize after reduced motion interrupts a hide settle cannot jump the layer wing', () => {
+  const property = fc.property(fc.integer({ min: 0, max: 17 }), (resizeAt) => {
+    const control = layerResize(true, false, true, true, resizeAt);
+    const resized = layerResize(true, true, true, true, resizeAt);
+    expect(control.live['wing.angle'], 'positive control: hide visibly waves the live wing').toBeLessThan(-2);
+    expect(control.settling, 'positive control: reduced motion changes midway through the settle').toBe(true);
+    expect(control.released, 'positive control: reduced motion releases immediately').toBe(true);
+    expect(control.still['wing.angle'], 'positive control: the released CSS wing is at rest').toBe(0);
+    expect(control.after, 'positive control: without resize every value stays still').toEqual(control.still);
+    expect(resized.during).toBeDefined();
+    expect(resized.during?.after, 'resize during hide settlement preserves the drawn blend').toEqual(resized.during?.before);
+    expect(resized.samples).toEqual(control.samples);
+    expect(resized.released).toBe(true);
+    expect(resized.still).toEqual(control.still);
+    expect(resized.immediate, 'resize after immediate release must not redraw the unfinished wing blend').toEqual(resized.still);
+    expect(resized.after, 'reduced motion continues to hold the exact released frame').toEqual(resized.still);
+  });
+  fc.assert(property, { seed: SEED, numRuns: 2, examples: [[9]], endOnFailure: true });
+});
 
 it('a layer keeps its home position across moves-off release at (350, 280)', () => {
   const origin = trace('layer', 'moves-off', DIRECT_TIMING, 'control');
