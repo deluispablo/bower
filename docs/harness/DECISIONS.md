@@ -437,3 +437,15 @@ One line per ruling, newest last. Read only the decision a task needs. Later rul
   - an item gets at most 2 question rounds, after which it stays in the inbox untouched with the line "Bower couldn't place this. Tell it more in the pile's words, or move it yourself.";
   - options also resolve the deferred C05 which-note case (c05-which-note).
   (3) UI needs the owner's OK first. Every change to what the person sees (new UI, the UI parts of a capability, UI defect fixes that change appearance or behaviour) goes from the designer to the owner, and only after their OK to the lead for building. Fixes that restore an already approved spec (a broken token, a regression) may proceed, and the owner is told. Here, the designer drafts the question piece (options and "Something else…"), the tidy-sheet question block and the inbox "Waiting for your answer" mark, shows them to the owner, and sends the lead the approved spec. The back end of (2) is planned with the brain as entry Q1
+- TL-P4-41 (the B1 contract; rulings on the B1 prep's 11 questions, p4-b1-prep ff1d684c) ([doc](2026-10-10-tl-p4-41-b1-contract.md)): the prep is accepted with its split B1a-B1e:
+  - three new Bower MOC regions, with the person's MOCs never edited;
+  - a closed step-1 selection reply over a script-built candidate list;
+  - 4,096-byte Range reads that tolerate a whole-file 200;
+  - one retrieval.json (state plus cursor), with index.md as its projection;
+  - one idempotent 'maintain' effect before the barrier;
+  - Overview gated at 5 member changes, rebuilt from member summaries and archived first;
+  - starting budgets;
+  - PARA index order with honest cut marks;
+  - feed scope resolved through parents;
+  - hidden maintenance, and MOCs shown only through existing report rows.
+  The content of notes Bower writes follows the owner's own vault templates and is not app UI, so it needs no owner OK. B1e is gated until B5 and B6
