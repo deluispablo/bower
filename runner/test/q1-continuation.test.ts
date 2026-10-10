@@ -4,8 +4,10 @@
  * Tagged answers: https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions
  * Request identity: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
  */
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FakeDrive } from '../../src/data/drive/fake-drive';
 import type { AdmissionManifest } from '../../src/data/spine/admission';
@@ -1500,7 +1502,8 @@ async function runWithSpawn(w: World, index: number, spawn: ClaudeSpawn): Promis
   const { main } = await import('../src/main');
   const { writeFile, mkdir } = await import('node:fs/promises');
   const { resolve } = await import('node:path');
-  const dir = resolve(import.meta.dirname, '../../tmp-logs');
+  const { tmpdir } = await import('node:os');
+  const dir = resolve(tmpdir(), 'bower-q1a-tests');
   await mkdir(dir, { recursive: true });
   const file = resolve(dir, `q1a-event-${crypto.randomUUID()}.json`);
   await writeFile(file, JSON.stringify({ action: 'bower-tidy', client_payload: w.dispatched[index] }));
@@ -1533,7 +1536,9 @@ async function run(w: World, index: number, hop?: Hop): Promise<number> {
   const code = await w.runJob(index, hop);
   if (vi.mocked(console.error).mock.calls.length > 0) {
     const errors = vi.mocked(console.error).mock.calls.map((a) => a.map((x: unknown) => x instanceof Error ? x.stack : String(x)).join(' ')).join('\n');
-    await writeFile(new URL(`../../tmp-logs/q1a-main-failure-${w.dispatched[index]?.run_id}.log`, import.meta.url), errors);
+    const dir = join(tmpdir(), 'bower-q1a-tests');
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, `q1a-main-failure-${w.dispatched[index]?.run_id}.log`), errors);
   }
   return code;
 }

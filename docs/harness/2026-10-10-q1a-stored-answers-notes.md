@@ -1359,3 +1359,5 @@ Left out: full-gate repair, Q1b/Q1c, which-note, B12, commits and integration.
 ## Known-green close (coordinator)
 
 The fix (ddfba738) was followed by fix rounds 1-3 and fix 4 on the same lines of scripted.ts, questions.ts and drive-vault.ts, so done.sh cannot revert it cleanly. The reds are proved at their commits: the Q1a reds failed at da758af6 as assertions (Reds section), and each fix round committed reds that failed at their HEAD (fix 1.1-1.7, fix 3.1-3.3, fix 4.1-4.2; this notes file). After: Q1 43/43, data 4141, runner 599; pnpm check green; e2e app/capabilities demo 35 and fake 59; Codex passes 1-3 (last BLOCK fixed by fix 4); P4-100 PASS.
+
+tests changed: runner/test/q1-continuation.test.ts: test hygiene (coordinator, after integration): the event file and failure logs go to the OS temp folder, not the repo's tmp-logs/, which dirtied the main checkout and blocked done.sh; no assertion changed.
