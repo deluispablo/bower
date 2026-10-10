@@ -297,3 +297,74 @@ upload-sign-out-check-final.log, upload-sign-out-e2e-demo.log, upload-sign-out-e
 
 tests changed: src/data/live/live.test.ts: red repair 1 (TL-P4-53 Q1): a failed remote sign-out forgets pending uploads locally; nothing retains them until a retry.
 tests changed: src/data/vault/drive-vault.test.ts: red repair 1 (TL-P4-53 Q1): pending uploads do not survive sign-out.
+
+## Fix round 1 reds
+
+Red-owning session for TL-P4-29; adversarial review BLOCK 2. Production remains at
+HEAD `2952d5021d9e5a16f68495d61625574accd73b06`. No network or Git-writing command.
+The coordinator owns commits. Only the test file and this requested notes record changed.
+
+tests changed: src/data/upload-sign-out.test.ts: append two finding regressions, their positive controls and direct pendingCount coverage; every existing assertion and bound stays byte-identical.
+removed: none
+
+Exact added test names:
+
+- `upload-sign-out-forget: fix 1.1: cross-tab staging cannot restore forgotten bytes (sign-out)`
+- `upload-sign-out-forget: fix 1.1: cross-tab staging cannot restore forgotten bytes (auth expiry)`
+- `upload-sign-out-forget: fix 1.2: sign-out waits for staging cleanup and reports a late remove failure (remove fails: false)`
+- `upload-sign-out-forget: fix 1.2: sign-out waits for staging cleanup and reports a late remove failure (remove fails: true)`
+- `upload-sign-out-forget: fix 1.3: pendingCount counts waiting and uploading things on this device`
+
+Each finding uses two real upload queues with separate real store connections sharing one
+fake IndexedDB factory. Sign-out goes through LiveSources.session.signOut(); auth expiry
+uses the production watcher after an auth refusal from LiveSources.vault.tree().
+The staging barrier delays the actual Blob.arrayBuffer inside the real IndexedDB store.add,
+rather than replacing staging with a queue mock. Its original body is exactly 15 bytes.
+The clear barrier signals only after the real account-clear transaction commits. Both queues'
+idle promises and the add/ending outcomes settle before the final cross-tab storage read.
+Every held barrier is released in finally; no real timers, polling or sleeps.
+
+Finding 1's positive control commits tab B's original 10-byte body first, observes it through
+tab A's connection, and verifies that tab A's real sign-out/expiry deletes its metadata and
+bytes before releasing B's staged 15-byte Blob read. At HEAD both lifecycle cases then fail
+the intended storage assertion: one record and all 15 original bytes return, instead of an
+empty list and null body. The expected successful sign-out/auth error already passed.
+
+Finding 2 stages on tab A to isolate its existing fence and late cleanup from finding 1's
+missing cross-tab fence; tab B supplies independently committed bytes for the purge control.
+The delayed remove barrier holds actual cleanup after the staged write commits. Its successful
+positive-control case runs the same sequence with the real remove and passes: no record or
+bytes remain. Its failure case throws a synthetic cause from remove after the successful clear.
+The test pins a BowerError with the exact existing short sentence and the cause in console.error,
+plus non-completion during both staging and cleanup. At HEAD the intended error assertion
+fails: sign-out returns `{ value: undefined }` despite the observed retained record and 15 bytes.
+The test never requires success to be reported before releasing a barrier, so a correct waiting
+implementation can complete this sequence.
+
+The count test directly calls the real pendingCount method and pins 0 before starting, 1 while
+uploading, 2 with another waiting item, 1 after discarding that waiting item, and 0 once done.
+It additionally pins an offline waiting item at 1, a failed retry at 0, and stop at 0. The done
+item remains visible while excluded from the count. All these count assertions pass at HEAD.
+
+Final verification (explicit offline pnpm configuration prevents dependency auto-install):
+
+- `pnpm --config.verifyDepsBeforeRun=false --config.offline=true exec vitest run src/data/upload-sign-out.test.ts --maxWorkers=2`:
+  exit 1; 10 tests, 7 pass, exactly the three intended finding assertions fail. All five existing
+  tests pass unchanged, along with the successful-cleanup control and count test. No load error,
+  unhandled failure or timer-gate failure. Final failure lines: test file 369 (both lifecycle cases)
+  and 426 (late remove failure).
+- `pnpm --config.verifyDepsBeforeRun=false --config.offline=true exec tsc -p tsconfig.app.json --noEmit`: pass.
+- `pnpm --config.verifyDepsBeforeRun=false --config.offline=true exec eslint src/data/upload-sign-out.test.ts`: pass.
+- Compared the HEAD test-file bytes to the final file: the entire old file remains an unchanged prefix.
+- No full check/e2e, server, production edit, fix or commit: this assignment is test-only red delivery.
+
+An initial count-test draft mistakenly expected offline to be a terminal error; local inspection
+showed the existing queue keeps it waiting. The final new test pins that behavior and separately
+uses an unknown error for the failed state. No committed assertion or bound changed.
+Research uses the inherited official IndexedDB transaction-lifecycle and Drive resumable-upload
+references above; nothing was fetched. Existing queue/store/live/fake mechanisms were reused.
+
+Output was written to tmp-logs; final logs were copied to
+`/private/tmp/upload-sign-out-fix-1-evidence/` and tmp-logs was deleted before delivery.
+Evidence: upload-sign-out-fix-1-red.log, upload-sign-out-fix-1-tsc.log,
+upload-sign-out-fix-1-eslint.log. No temporary test artifacts remain in the worktree.
