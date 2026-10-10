@@ -338,3 +338,13 @@ c4-undo-compensate,implementer,codex,gpt-5-codex,medium,4,1343064,1334790,,12448
 d-v2-24a,implementer,codex,gpt-5-codex,medium,1,2264142,2243267,,2142080,20875,,,,reds; blocked on presence test,2026-10-10
 d-v2-24a,implementer,codex,gpt-5-codex,medium,2,429662,426637,,369792,3025,,,,blocked: red repairs need ruling,2026-10-10
 move-sheet-flaky,diagnosis,codex,gpt-5-codex,medium,1,205044,203150,,148096,1894,,,,test timing,2026-10-10
+c4-sheet-settle,implementer,codex,gpt-5-codex,low,1,278711,276485,,238720,2226,,,,done,2026-10-10
+d-v2-24a,property-red,codex,gpt-5-codex,low,1,580019,576829,,539776,3190,,,,red repairs,2026-10-10
+c4-sheet-settle,reviewer,claude,bower-reviewer,,1,30927,,,,,,5,0.2,PASS (P4-66),2026-10-10
+d-v2-24a,implementer,codex,gpt-5-codex,high,3,741898,736924,,661120,4974,,,,blocked: registry,2026-10-10
+d-v2-24a,property-red,codex,gpt-5-codex,medium,2,364688,362879,,328320,1809,,,,registry play,2026-10-10
+create-time,diagnosis,codex,gpt-5-codex,medium,1,669534,664763,,610688,4771,,,,product defect,2026-10-10
+c4-undo-compensate,implementer,codex,gpt-5-codex,high,5,2702178,2681783,,2545536,20395,,,,re-plan done,2026-10-10
+c4-undo-compensate,adversarial,codex,gpt-5-codex,high,3,1298113,1289914,,1191808,8199,,,,3 Important (re-plan),2026-10-10
+c4-create-resume,property-red,codex,gpt-5-codex,medium,1,299277,296696,,266752,2581,,,,red written,2026-10-10
+c4-undo-compensate,property-red,codex,gpt-5-codex,medium,7,901804,894539,,829184,7265,,,,last-round reds (addendum 11),2026-10-10
