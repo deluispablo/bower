@@ -343,3 +343,4 @@ d-v2-24a,property-red,codex,gpt-5-codex,low,1,580019,576829,,539776,3190,,,,red 
 c4-sheet-settle,reviewer,claude,bower-reviewer,,1,30927,,,,,,5,0.2,PASS (P4-66),2026-10-10
 d-v2-24a,implementer,codex,gpt-5-codex,high,3,741898,736924,,661120,4974,,,,blocked: registry,2026-10-10
 d-v2-24a,property-red,codex,gpt-5-codex,medium,2,364688,362879,,328320,1809,,,,registry play,2026-10-10
+create-time,diagnosis,codex,gpt-5-codex,medium,1,669534,664763,,610688,4771,,,,product defect,2026-10-10
