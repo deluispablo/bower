@@ -155,3 +155,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `ace15da0` | c5-css-tokens | none for stored data: two CSS colours use the defined --text-muted token instead of the undefined --muted. |
 | `b6fb31c0` | create-named | none: tests only (the createNamed red). |
 | `cf04e6ae` | create-named | none: refactor; NameSheet makes a folder through createNamed with the same call, strings and navigation. |
+| `cda855c6` | tree-name-first | none: tests only (the name-first reds and the restored immediate-typing guard). |
+| `0295e5f2` | tree-name-first | none for stored data: the tree's New folder asks for the name before making the folder, then makes it once; Escape makes nothing. |

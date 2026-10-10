@@ -107,3 +107,105 @@ sources: https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/
 left out: e2e and 20/20 run (no ports); pnpm check; implementation; commits
 tokens: unknown
 ```
+
+
+## Implementation
+
+Implemented in this worktree without git writes, network requests, servers or test edits.
+The observed HEAD was `0bbe0daa02e61cc68a51c87bf707dc3092f7a8d0` (rather than the supplied
+red SHA `cda855c6`); all three supplied red files are present and unchanged in this delivery.
+The coordinator owns the fix commit, the separate notes commit and compatibility-record insertion.
+
+### What changed
+
+Product files: `src/app/ui-store.ts`, `src/features/files/Explorer.tsx`,
+`src/features/files/NameSheet.tsx`, `src/features/files/NameForm.tsx`,
+`src/features/files/name-rules.ts`, `src/features/files/explorer.module.css`,
+`src/features/files/file-actions.ts`.
+
+- `file-actions.askFolderName` sets the existing naming state synchronously and opens the target
+  and its ancestors for inline naming. It does not call the source or await anything.
+- The desktop tree header and row menu request that inline flow. The menu explicitly identifies
+  itself as desktop, rather than relying on the media query to choose the naming surface.
+- Explorer inserts the pending folder immediately after its parent, before its existing children,
+  at the child indent with the existing folder icon. Even an empty parent reads open while naming.
+  The empty, autofocused field has placeholder `Name` and accessible name `New folder in <folder>`.
+- Enter and non-empty blur pass the trimmed, slash-normalized name to `createNamed`. A synchronous
+  in-flight guard blocks Enter/blur/Enter duplicates; a failed write releases it for retry.
+  Escape and empty blur remove the pending row without create, rename or trash.
+- Escape/empty cancellation use `returnFocusTo` from `src/ui/focus.ts` with the saved header or tree
+  opener. The tree-menu close rule leaves the pending field focused. Success uses the same focus
+  home to return to the tree, with the new row selected and its path as the active descendant.
+- `createNamed` still owns the one named folder source write and `act.open` navigation. Its optional
+  response callbacks deliver a refused create's sentence to the field instead of a toast; details
+  go to `console.error`. The typed name and box stay, with `The folder was not made. Try again.`.
+  With no callbacks, NameSheet retains its existing close, navigation and reporting behavior.
+  An already-applied create opens its reported path once and preserves its journal warning through
+  the existing report home, rather than offering a second create for something already made.
+- NameForm was extracted into `NameForm.tsx`; both surfaces share its `NameField` and its extracted
+  `name-rules.ts` rules. The slash sentence and replacement live once; dot/taken-name refusals stay
+  in the source. Phone naming uses NameSheet. There is no keystroke buffer or second source-create path.
+- Pending-row styling keeps the field 24px high and puts a wrapping inline FieldError beneath it.
+  Browser layout and axe remain for the coordinator because this session cannot open ports.
+
+### Removed flow and retained callers
+
+removed: Explorer header and row-menu `act.create(folder, 'folder')` calls.
+removed: folder support in `act.create`; its type now accepts only `note`.
+removed: new-folder rename hand-off, `justMade`, `discard`, quiet rename and partial-rename participation.
+removed: Explorer's create-then-rename folder welcome/navigation branch; the retained helper welcomes notes only.
+removed: duplicated NameSheet slash notice/replacement rules; NameForm's extracted rules are shared.
+
+The conditional removal clause matters on this checkout: New note still exists in the tree header
+and row menu and calls `act.create(..., 'note')`. It still uses `justMade`, `act.discard`, quiet rename
+and the partial-rename callback, so those helpers cannot be deleted without changing another entry.
+The comment claiming discard creates no Bin/journal line was corrected to describe its actual use.
+
+P4-81's `making.type` removal is not applicable here: NameSheet still supports New note, including the
+unchanged existing test `a named thing made before its journal warning opens once without a retry prompt`.
+Its folder/note branch remains live. Remove that branch and the note-only helpers when the entry that
+removes New note is present; this change does not silently remove existing note behavior.
+The red scaffolding in `file-actions.test.tsx` was left unchanged under the no-test-edits instruction.
+
+tests changed: none (including the create-named scaffold and all three supplied red files).
+
+### Verification and logs
+
+- Before product changes, the requested targeted run failed on the 15 supplied matcher reds;
+  the other 57 tests passed. Log: `tmp-logs/tnf-implementation-red.log`.
+- Final `pnpm exec vitest run src/features/files src/app --maxWorkers=2`: exit 0;
+  13 files, 72 tests pass, including all 15 exact tree-name-first rows listed in the Reds table above.
+  Log: `tmp-logs/tnf-implementation-green.log`.
+- `pnpm exec tsc -p tsconfig.app.json --noEmit`: exit 0;
+  `tmp-logs/tnf-implementation-tsc-app.log`.
+- `pnpm exec tsc -p tsconfig.node.json --noEmit`: exit 0;
+  `tmp-logs/tnf-implementation-tsc-node.log`.
+- ESLint on every touched TypeScript/TSX production file: exit 0, no errors;
+  `tmp-logs/tnf-implementation-eslint.log`. The existing Explorer `useNodeMenu` export still emits
+  the fast-refresh warning; the extracted NameForm has no new warning.
+- `git diff --check`: exit 0; `tmp-logs/tnf-implementation-diff-check.log`.
+- No `pnpm check`, e2e, repeat run, commit or integration: the owner restricted this session to
+  targeted tests, tsc and touched-file ESLint, and ports are unavailable. The coordinator must run
+  packet qa6/qa7/qa9/v2-name-sheet/new-spec verification on demo and fake, the qa7 typing guard with
+  `--repeat-each=20`, full check, and the designer's built-UI verification before closing the entry.
+
+### Compatibility-row draft for src/features commits
+
+Replace the SHA placeholders after the coordinator commits; these are drafts, not edits to a shared record.
+
+| Commit | Entry | Accepted behavior / intentional change | Evidence |
+| --- | --- | --- | --- |
+| `<red commit SHA>` (supplied as `cda855c6`) | `tree-name-first` | Tests only; production behavior unchanged. Permanent immediate-typing guard restored unchanged. | Red table above; 15 matcher failures in `tmp-logs/tnf-implementation-red.log`; browser reds await coordinator. |
+| `<fix commit SHA>` | `tree-name-first` | Intentional desktop New folder change: name first, one named create, no cancellation write, signed placement/errors/focus. NameSheet and note-only create/rename callers remain compatible. | All 15 tree-name-first reds and 57 other files/app tests pass; app/node tsc and touched-file ESLint pass. Browser/axe/repeat verification pending. |
+
+Notes-only commit needs no src/features row. No stored format, source API, conflict policy, content write
+precondition, journal format, hard-delete behavior or deployment changed. `createNamed`'s existing
+2-argument `Promise<void>` call remains compatible; the inline response is optional.
+
+### Research and reuse
+
+The supplied diagnosis's standard is VS Code's in-memory pending explorer item and synchronous
+`setEditable`, followed by create only on completion:
+https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/files/browser/fileActions.ts
+No network research was attempted under the owner's no-network constraint. This implementation
+reuses existing naming state, NameForm rules, Input/FieldError, createNamed, act.open, Icon and focus return.
