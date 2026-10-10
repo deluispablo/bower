@@ -6871,7 +6871,7 @@
     "id": "pwa-update",
     "task": "p4-e",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "After a deploy, the next reload runs the new build; an old page missing a lazy chunk reloads once (lead ruling (c) plus guard).",
     "steps": [
