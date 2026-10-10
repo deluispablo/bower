@@ -2,19 +2,15 @@
 
 Coordinator: the Claude Code session named "Orquestador". It integrates in `/Users/deluisp/Projects/bower-app` on branch `claude/p3`; P4 continues on it. Lead: the Planificador session ([DECISIONS.md](DECISIONS.md)). Output rule: [TL-P3-29](2026-10-07-tl-p3-29-output-rule-survives-compaction.md), in AGENTS.md. Minors: [P2_POLISH.md](P2_POLISH.md). Earlier handoffs: git history of this file.
 
-## Resume (2026-10-10 midday, TL-P4-31 Codex throughput)
+## Resume (2026-10-10 afternoon, TL-P4-31 Codex throughput)
 
-Read this first. Stage 4 closed (main = backup = 03b5d0d2). TL-P4-31: Codex first; cap 1 Claude + 3 Codex until c5-test-margin lands, then 4 while the 1-min load stays under ~12 during gates (addendum 1). Codex prompts run only targeted tests with --maxWorkers=2. harness/codex-run.sh exists (c5-codex-run closed). The lead answers in DECISIONS on main; questions in LEAD_QUESTIONS.
-- **In flight (worktrees /private/tmp/bower-<branch>):**
-  - c5-test-margin (Codex): split the load-timeout tests; then retry the three prep integrations (p4-c06/c07/c11-prep, accepted, failed only on load timeouts) and landing-csp's check.
-  - d-v2-24a round 3 (TL-P4-26 addendum 9: apply() only through the gate): Codex red running; then Codex fix, gates, Codex pass, Claude review, designer.
-  - shell-page-column: fix round 1 committed (P4-75 BLOCK on Sheet motion); round 2 prompt ready (scratchpad codex-spc-r2-prompt.md: reduced-motion e2e as "no visible slide", aria-valuenow rounding, the drag guard test); then gates, delta review, designer re-check (verified at 44799444).
-  - p4-corpus-answers: P4-74b PASS; integrate, done.sh --fixed-in 41d6dc4d.
-  - landing-csp: delivered; e2e 2/2 with the served headers; check failed only on load timeouts; then a Claude review and the designer.
-  - Prep drafts for the lead: C08 (646f990f), C09 (e70d110d), C10 running; then C15, C13, C12.
-- **C05:** packet amended per TL-P4-32 and the designer (00826d3e); its reds wait for p4-corpus-answers to land (and route c05-incorporation.test.ts:72 through scoreCase, P4-74b Minor). C06 packet: fold TL-P4-34 and addendum 1.
-- **P4-E next on Codex:** p4-rate-limits, p4-structured-output, upload-resume and orphan-count (C02), rules-original-conversion.
-- **Suites:** the four suites run after this batch (folder-header-wrap, c5-codex-run, p4-corpus-answers, shell-page-column).
+Read this first. Cap 1 Claude + 4 Codex while the 1-min load stays under ~12; Codex prompts run targeted tests with --maxWorkers=2. TL-P4-40: no visible change dispatched without the owner's OK via the designer. Never commit in the main checkout while integrate.sh or done.sh runs (check `ps`).
+- **Closed today:** d-v2-24a, landing-csp, c5-remove-new-note, create-named, b1b-ports, tree-name-first, create-name-speed, undo-miss-refresh, q-ui-3, new-note-escape. p4-b23-prep integrated (255f0e07).
+- **C05 (`/private/tmp/bower-c05-person-notes`):** round 5 = addendum 5 (fix 3e958da1) + addendum 6 (two named notes: every target settles in the run; reds 8685f74d; Codex implementation running). Then gates (check; e2e c05-person-notes, capabilities, app, qa5 on demo and fake), scoped Codex pass 5, fresh Claude review, designer, integrate, done. Only Blocking normal-use findings go to the lead.
+- **B3a (`/private/tmp/bower-b3a-hot-reduce`):** packet 2026-10-10-b3a-hot-reduce-packet.md; Codex red running; then Codex implementation, pass, Claude review.
+- **After C05:** B1a red → implementation → pass → review; B2a; Q1a. B1c packet notes in the coordinator scratchpad (hidden paths via isHidden; TL-P4-45 `.bower/` paths).
+- **Open closes:** new-note-opens is blocked by empty-note-help-flaky (diagnoser running); namesheet-names passes.
+- **Suites** for this batch run on a detached worktree `/private/tmp/bower-suites`; then main, backup, SHA to the lead, staging smoke.
 
 ## Where things stand
 
