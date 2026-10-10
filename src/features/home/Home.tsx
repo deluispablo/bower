@@ -19,7 +19,7 @@ import { Button } from '@/ui/Button';
 import { fieldBox } from '@/ui/Field';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
-import { hasReplay, reportWaiting, isRunning, PHASE_POSE, runDetail, runTitle, stoppedUnseen } from '@/features/tidy/run-words';
+import { filedWords, hasReplay, landedSummary, notesUpdated, reportWaiting, isRunning, PHASE_POSE, runDetail, runTitle, stoppedUnseen } from '@/features/tidy/run-words';
 import { RunLinks } from '@/features/tidy/RunLinks';
 import { PileStack } from '@/features/piles/PileStack';
 import { SetAsideNote } from '@/features/piles/PileScreen';
@@ -90,6 +90,9 @@ function AwayCard({ run, bird }: { run: RunState; bird: boolean }) {
   const { startReplay } = useUi();
   const { runs } = useSources();
   const end = run.finishedAt ?? run.phaseAt;
+  const replay = hasReplay(run);
+  const detail = replay ? landedSummary(run) : runDetail(run);
+  const showDetail = detail && !(run.report?.leftAsWritten?.length && detail === 'Everything has its place.');
   return (
     <section className={`${s.card} ${s.away}`} aria-labelledby="away">
       {bird && (
@@ -99,12 +102,12 @@ function AwayCard({ run, bird }: { run: RunState; bird: boolean }) {
       )}
       <p className="muted">Tidy-up finished {ago(end).toLowerCase()}</p>
       <h2 id="away" className={s.cardTitle}>
-        {runTitle(run)}
+        {replay ? <>{filedWords(run.report)}{run.report?.updated.length ? `, ${plural(notesUpdated(run.report), 'note')} brought up to date` : ''}.</> : runTitle(run)}
       </h2>
-      <p className="muted">{runDetail(run)}</p>
+      {showDetail && <p className="muted">{detail}</p>}
       {run.report && <RunLinks report={run.report} />}
       <div className={s.row2}>
-        {hasReplay(run) && <Button size="sm" onClick={() => startReplay(run.id)}>
+        {replay && <Button size="sm" onClick={() => startReplay(run.id)}>
           <Icon name="play" size={15} /> Watch what Bower did
         </Button>}
         <Button size="sm" variant="ghost" onClick={() => void runs.markSeen(run.id).then(focusMain, (e: unknown) => report(e, 'That did not work. Try again.'))}>
