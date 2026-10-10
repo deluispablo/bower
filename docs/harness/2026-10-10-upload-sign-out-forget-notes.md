@@ -294,3 +294,6 @@ Final logs: upload-sign-out-red.log, upload-sign-out-live-green-3.log,
 upload-sign-out-data-final.log, upload-sign-out-tsc-app-final.log,
 upload-sign-out-tsc-node-final.log, upload-sign-out-eslint-final.log,
 upload-sign-out-check-final.log, upload-sign-out-e2e-demo.log, upload-sign-out-e2e-fake.log.
+
+tests changed: src/data/live/live.test.ts: red repair 1 (TL-P4-53 Q1): a failed remote sign-out forgets pending uploads locally; nothing retains them until a retry.
+tests changed: src/data/vault/drive-vault.test.ts: red repair 1 (TL-P4-53 Q1): pending uploads do not survive sign-out.
