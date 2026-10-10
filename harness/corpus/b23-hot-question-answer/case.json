@@ -1,0 +1,36 @@
+{
+  "id": "b23-hot-question-answer",
+  "capability": "C17",
+  "title": "Hot carries an actual pending question and removes it after an answer",
+  "covers": "model",
+  "source": "TL-P4-39 §6 items 2–3; reused made-up B123 fixture; production proof pending",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "Please file this letter.",
+      "files": [
+        "Letter.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Projects/Flat hunt/Flat hunt.md"
+  ],
+  "presses": [
+    {
+      "between": [
+        {
+          "kind": "answer",
+          "question": {
+            "kind": "inbox",
+            "path": "Inbox/Please file this letter./Letter.txt"
+          },
+          "yes": true
+        }
+      ]
+    }
+  ]
+}

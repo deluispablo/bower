@@ -1,0 +1,61 @@
+{
+  "files": {
+    "present": [
+      "Resources/Gardening/Mulch notice.txt",
+      "Resources/Gardening/Mulch notice.md"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "unchanged": [
+    "Resources/Gardening/Plot diary.md",
+    "Resources/Gardening/Gardening.md"
+  ],
+  "protectedRanges": [
+    {
+      "path": "Resources/Gardening/Plot diary.md",
+      "range": {
+        "frontMatter": true
+      }
+    },
+    {
+      "path": "Resources/Gardening/Plot diary.md",
+      "range": {
+        "heading": "My thoughts"
+      }
+    }
+  ],
+  "properties": [
+    {
+      "path": "Resources/Gardening/Plot diary.md",
+      "absent": [
+        "by",
+        "bower_state"
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "path": "Resources/Gardening/Mulch notice.md",
+      "contains": [
+        "summary: \"Mulch: collection at #amber.\"",
+        "[[Gardening]]",
+        "[[Plot diary]]"
+      ]
+    },
+    {
+      "path": "index.md",
+      "contains": [
+        "- [[Mulch notice]] — Mulch: collection at #amber.",
+        "- [[Plot diary]] — (no summary)"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "createdAtLeast": 1,
+    "questionsExactly": 0
+  }
+}
