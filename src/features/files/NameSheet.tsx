@@ -43,13 +43,17 @@ export function NameSheet() {
     if (!making) return;
     if (/[/\\]/.test(n)) toast('Names cannot have slashes; Bower used a dash.');
     const safe = n.replace(/[/\\]/g, '-');
+    if (making.type === 'folder') {
+      await act.createNamed(making.folder, safe);
+      return;
+    }
     try {
       // A note's name is typed without .md; typed with it, it is not doubled.
-      const path = await vault.create(making.folder, making.type, making.type === 'note' ? `${safe.replace(/\.md$/i, '')}.md` : safe);
-      act.open({ path, type: making.type === 'note' ? 'file' : 'folder' });
+      const path = await vault.create(making.folder, making.type, `${safe.replace(/\.md$/i, '')}.md`);
+      act.open({ path, type: 'file' });
     } catch (e) {
-      if (e instanceof BowerError && e.applied?.path) act.open({ path: e.applied.path, type: making.type === 'note' ? 'file' : 'folder' });
-      report(e, making.type === 'note' ? 'The note was not made. Try again.' : 'The folder was not made. Try again.');
+      if (e instanceof BowerError && e.applied?.path) act.open({ path: e.applied.path, type: 'file' });
+      report(e, 'The note was not made. Try again.');
     }
   };
   return (

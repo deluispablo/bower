@@ -153,3 +153,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `b8555ada` | c5-empty-note-help | none: tests only (the empty-note copy and Open in Drive red). |
 | `c1f845cc` | c5-empty-note-help | none for stored data: the empty-note line says how to write in a note (Drive for desktop, any notes app) with the existing Open in Drive action; copy only. |
 | `ace15da0` | c5-css-tokens | none for stored data: two CSS colours use the defined --text-muted token instead of the undefined --muted. |
+| `b6fb31c0` | create-named | none: tests only (the createNamed red). |
+| `cf04e6ae` | create-named | none: refactor; NameSheet makes a folder through createNamed with the same call, strings and navigation. |

@@ -6685,8 +6685,9 @@
       "createNamed calls vault.create(folder, folder, name) once and reports a refusal with NameSheet's sentence.",
       "NameSheet behaves as before."
     ],
-    "verify": "",
-    "note": "DEFECTS new-folder-first-letters (b). Codex, then a Claude review. Packet 2026-10-10-create-named-packet.md. implementer: codex."
+    "verify": "pnpm exec vitest run src/features/files/file-actions.test.tsx -t \"createNamed creates once and reports NameSheet\" && bash scripts/e2e-both.sh e2e/v2-name-sheet.spec.ts -g \"the rename field spans the sheet and selects the name\"",
+    "note": "DEFECTS new-folder-first-letters (b). Codex, then a Claude review. Packet 2026-10-10-create-named-packet.md. implementer: codex.",
+    "review": "P4-81 PASS"
   },
   {
     "id": "tree-name-first",
