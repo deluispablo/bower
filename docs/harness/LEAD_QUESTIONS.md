@@ -55,3 +55,4 @@ Authorized and kept uncommitted: the presence.test.ts assertion (handle kept thr
 ## 2026-10-10 c4-undo-compensate: the designer check found 1 row not as specified
 
 - 2026-10-10 undo-confirm-not-in-place | DEFECT_LOG line. The online Undo confirmation shows as a new toast (it rises and fades in after a blank frame) instead of replacing the Undo toast in place, as the offline path does. Proposal: the online confirmation uses the same `toast.replace` (the one home the offline swap uses), with the focus return and the 4 s life unchanged. Codex fix entry `c4-undo-confirm-in-place` (non-escalated, UI); the designer re-checks. c4-undo-compensate stays open (design not verified) until then. OK?
+- 2026-10-10 bird-one-changes-flaky | DEFECT_LOG line. Apply TL-P4-26 addendum 4 (b) (a react() nudge before the poll) to bird-engine.spec.ts:41 too, in d-v2-24a? OK?
