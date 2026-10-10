@@ -191,3 +191,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `c72e4fa2` | q1a-stored-answers | none: tests only (fix round 3 reds). |
 | `1ead8678` | q1a-stored-answers | questions/layout: round history is kept per member subject (a pile-level asking records each waiting member it covers); the stored {v:1} shape is unchanged and old round records read as before. |
 | `59d4dfbb` | c02-upload-count-ui | none: tests only (Home and Settings reds). |
+| `0b299ffd` | c02-upload-count-ui | none: tests only (red repair to today's Add a pile button). |
+| `ab3f9b32` | c02-upload-count-ui | Home: the Inbox card adds one informational line for unfinished piles (from orphanSummary; "At least" when partial; muted can't-check line, never 0); Settings: Sign out shows the "Sign out now?" sheet only while uploads are sending (Keep sending first); with nothing sending it signs out as before. No stored format change. |
