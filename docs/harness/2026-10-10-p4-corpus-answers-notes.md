@@ -61,5 +61,5 @@ The full green runner JSON report was preserved while reproducing the final base
 removed: none
 left out: none
 
-tests changed: runner/test/corpus-driver.test.ts: additive only; the vitest import line gains describe/beforeEach for the new answer, per-run, protected-range and replay tests; no existing test body changed.
+tests changed: runner/test/corpus-driver.test.ts: additive only; the vitest import line gains afterEach, beforeEach, describe and vi for the new answer, per-run, protected-range and replay tests; no existing test body changed.
 tests changed: runner/test/corpus-run.ts: the corpus driver this entry owns (TL-P4-32 finding 7) gains answer steps, per-run expectations, protected ranges and replay; existing cases run as before.
