@@ -8,7 +8,7 @@ import type { RunReport, Question } from '../../src/data/contracts/types';
 import { ASK_GONE, subjectOf } from '../../src/data/contracts/questions';
 import { parseRunCheckpoint, verifyCheckpointChain } from '../../src/data/contracts/run-checkpoint';
 import { SYSTEM } from '../../src/data/vault/layout';
-import { AT, caseReplies, runOnDrive, runScripted, runWithClaude, scoreCase, seedCase, type CaseRun } from './corpus-run';
+import { AT, caseReplies, redispatchCase, runOnDrive, runScripted, runWithClaude, scoreCase, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 import { RunRecords } from '../../src/data/spine/records';
 import * as c05Whys from '../../src/data/spine/scripted';
@@ -465,15 +465,34 @@ describe('C05 person notes through runner main', () => {
   const nextReply = (source: string, text: string) => reply(() => ({ kind: 'tidy-intent', v: 1,
     things: [{ fileId: source, to: 'Areas/Home', name: 'Next water butt update.txt' }], lines: [{ note: PATH, text, cites: source }] }));
 
+  // Keep the original request pending after completion; never copy an archive back to the inbox.
+  async function completedAwaitingArchive(c: LoadedCase, drive: CaseRun['drive'], root: string): Promise<CaseRun> {
+    let interrupted = 0;
+    const first = await runOnDrive(c, drive, root, { claude: appendReply(), around: (fetch) => async (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      const parent = url.searchParams.get('addParents');
+      if (init?.method === 'PATCH' && parent && (await drive.get(parent)).name === 'archive') {
+        interrupted++;
+        throw new TypeError('Made-up interruption before the request archive landed.');
+      }
+      return fetch(input, init);
+    } }, 1);
+    expect(interrupted).toBe(1);
+    expect(first.after[`${SYSTEM.changes}/pending/abc123-run1/change-1.json`]).toBeDefined();
+    expect(first.after[`${SYSTEM.archive}/change-1.json`]).toBeUndefined();
+    return first;
+  }
+
   it('C05 person notes: fix 1 finding 4: a completed replay cannot consume the new request for the same note', async () => {
     await positiveControl();
     const c = await fixture(); const drive = fixedDrive(); const root = await seedCase(drive, c);
-    const first = await runOnDrive(c, drive, root, { claude: appendReply() }, 1);
+    const first = await completedAwaitingArchive(c, drive, root);
     expect(first.after[PATH]).toContain(` · ${NEWS} · [[${SOURCE}]]`);
     const source = await addNextSource(first, true);
     const text = 'Alex has received the new instructions.';
     const r = await runOnDrive(c, drive, root, { request: { kind: 'replay', id: 'change-1' }, claude: nextReply(source, text) }, 2);
     expect(r.requests?.map((q) => q.id)).toContain('change-2');
+    expect(r.requestAction).toEqual({ kind: 'replay', id: 'change-1', outcome: 'already-active' });
     expect(reportOf(r).filed).toHaveLength(1);
     expect(r.after[PATH]).toContain(` · ${text} · [[Next water butt update.txt]]`);
     expect(r.after[PATH]?.split(` · ${NEWS}`).length).toBe(2);
@@ -494,9 +513,16 @@ describe('C05 person notes through runner main', () => {
     const first = await runOnDrive(c, drive, root, { claude: appendReply() }, 1);
     expect(first.after[PATH]).toBe(c.folder[PATH]);
     expect(reportOf(first).filed).toHaveLength(1); expect(reportOf(first).updated).toEqual([]);
+    const completed = await new RunRecords(drive, root).found('abc123-run1');
+    expect(completed.kind).toBe('run');
+    if (completed.kind !== 'run') return;
+    expect(completed.chain.at(-1)?.completedAppends).toEqual([{ requestId: 'change-1', targetFileId: idOf(first, PATH) }]);
     const source = await addNextSource(first, false);
-    const r = await runOnDrive(c, drive, root, { request: { kind: 'replay', id: 'change-1' },
-      claude: nextReply(source, 'The same requested update has different wording now.') }, 2);
+    const r = await redispatchCase(c, first, 2, {
+      claude: nextReply(source, 'The same requested update has different wording now.') });
+    expect(r.code).toBe(0);
+    expect(r.dispatch?.runId).toBe(first.dispatch?.runId);
+    expect(await new RunRecords(drive, root).found('abc123-run1')).toEqual(completed);
     expect(reportOf(r).filed).toHaveLength(1);
     expect(r.after[PATH]).toBe(first.after[PATH]);
     expect(reportOf(r).updated).toEqual([]); assertPersonal(r);
@@ -735,6 +761,25 @@ describe('C05 person notes through runner main', () => {
     fileId, to: 'Areas/Home', name, note: { name: name.replace(/\.txt$/, '.md'), summary: body, body },
   });
 
+  function requestArchive(r: CaseRun, stored: Awaited<ReturnType<typeof round4Records>>, requestId: string) {
+    const operations = stored.manifest.operations;
+    const destination = (target: { fileId: string } | { createdBy: string }): string | undefined => {
+      if ('fileId' in target) return r.pathsById[target.fileId];
+      const made = operations.find((o) => o.operationId === target.createdBy);
+      if (made?.effect.kind !== 'create-folder') return undefined;
+      const parent = destination(made.effect.parent);
+      return parent ? `${parent}/${made.effect.name}` : undefined;
+    };
+    const pending = operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === requestId
+      && destination(o.effect.parent) === `${SYSTEM.changes}/pending/abc123-run1`);
+    const archive = operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === requestId
+      && destination(o.effect.parent) === SYSTEM.archive);
+    expect(pending, 'the request first moves to its originating pending folder').toBeDefined();
+    expect(archive, 'the archive is selected by its destination').toBeDefined();
+    expect(operations.indexOf(archive!)).toBeGreaterThan(operations.indexOf(pending!));
+    return archive;
+  }
+
   it('C05 person notes: round 4 1: settlement survives recovery and retention', async () => {
     await positiveControl();
     const c = await fixture(); const drive = fixedDrive(); const root = await seedCase(drive, c);
@@ -765,7 +810,7 @@ describe('C05 person notes through runner main', () => {
     expect(lost.after[`${SYSTEM.archive}/change-1.json`]).toBeUndefined();
     const checkpoint = await round4Records(lost, 'abc123-run1');
     expect(checkpoint.chain.at(-1)?.completedAppends).toEqual([{ requestId: 'change-1', targetFileId: idOf(lost, PATH) }]);
-    const archive = checkpoint.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === requestId);
+    const archive = requestArchive(lost, checkpoint, requestId);
     expect(archive).toBeDefined();
     expect(checkpoint.chain.at(-1)?.outcomes.find((o) => o.operationId === archive?.operationId)?.state).not.toBe('applied');
     const recoverySource = await addNextSource(lost, false);
@@ -1025,7 +1070,7 @@ describe('C05 person notes through runner main', () => {
     const stored = await round4Records(first, 'abc123-run1');
     const noteId = idOf(first, PATH) ?? '';
     expect(stored.chain.at(-1)?.completedAppends).toEqual([{ requestId: 'change-1', targetFileId: noteId }]);
-    const archive = stored.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === requestFileId);
+    const archive = requestArchive(first, stored, requestFileId);
     expect(archive).toBeDefined();
     expect(stored.chain.at(-1)?.outcomes.find((o) => o.operationId === archive?.operationId)?.state).not.toBe('applied');
     return { c, drive, root, first, noteId };
@@ -1268,7 +1313,7 @@ describe('C05 person notes through runner main', () => {
     expect.soft(first.after[`${SYSTEM.changes}/pending/abc123-run1/change-1.json`], 'one clashed target keeps the request active').toBe(requestBytes);
     expect.soft(first.after[`${SYSTEM.changes}/change-1.json`]).toBeUndefined();
     expect.soft(first.after[`${SYSTEM.archive}/change-1.json`], 'the other completion cannot archive the request early').toBeUndefined();
-    const archive = stored.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === requestId);
+    const archive = requestArchive(first, stored, requestId);
     expect(archive).toBeDefined();
     expect.soft(stored.chain.at(-1)?.outcomes.find((o) => o.operationId === archive?.operationId)?.state).not.toBe('applied');
 
