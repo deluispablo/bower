@@ -557,3 +557,77 @@ Implementation is ready for independent review; full socket-dependent gates rema
 
 tests changed: none
 removed: 71 original production lines replaced/reindented; 0 test lines removed.
+
+
+## Fix round 2 reds
+
+Red-owning session for adversarial pass 2 BLOCK 1, TL-P4-29 / TL-P4-51.
+Base HEAD: `95ccde3c5cb835c7f05bd5f91fe7e066ee741e3b`.
+The coordinator owns commits. Only the test file and this requested notes record changed;
+no production edits, network, or Git-writing commands.
+
+tests changed: src/data/upload-sign-out.test.ts: add cross-tab pre-store.add forgetting races; inject optional storage into existing fixtures without changing any current assertion or bound.
+
+### Exact names
+
+- `upload-sign-out-forget: fix 2: new add storage.estimate() before sign-out`
+- `upload-sign-out-forget: fix 2: new add storage.estimate() before auth expiry`
+- `upload-sign-out-forget: fix 2: reselection Blob.arrayBuffer() before sign-out`
+- `upload-sign-out-forget: fix 2: reselection Blob.arrayBuffer() before auth expiry`
+- `upload-sign-out-forget: fix 2: reselection crypto.subtle.digest() before sign-out`
+- `upload-sign-out-forget: fix 2: reselection crypto.subtle.digest() before auth expiry`
+- `upload-sign-out-forget: fix 2: reselection storage.estimate() before sign-out`
+- `upload-sign-out-forget: fix 2: reselection storage.estimate() before auth expiry`
+
+### Class coverage and evidence
+
+- Two real queues use independent IndexedDB-backed store connections sharing one `IDBFactory`.
+  Tab A forgets through `LiveSources.session.signOut()` or an auth refusal through `vault.tree()`;
+  tab B pauses before any `store.add` invocation. No queue or forgetting entry point is mocked.
+- Audited `add`, `chosenAgain`, `fits`, `keepBytes` and the existing digest home. Fresh adds await
+  `fits` / `storage.estimate()`. Reselection additionally awaits hashing, whose two real async steps
+  are `Blob.arrayBuffer()` and `crypto.subtle.digest()`, then awaits the same storage estimate.
+  Each of these four branch/step cases is crossed with both production endings. `storage.persist()`
+  is fire-and-forget, not a pre-write await; `stageUpload` awaits the work containing these steps,
+  and `keepBytes` reaches `store.add` without another pre-write await. Store-internal staging remains
+  covered by the existing fix 1.1 Blob-read cases, all preserved.
+- Reselection starts with the same committed 15-byte body read back exactly, then a test-owned
+  unreadable-body fault drives the real queue to `gone: true`. Restore that read before reselection.
+  Hash barriers keep the real Blob read/digest result. Storage reports an exact 1024-byte quota and
+  zero usage. Barriers are promises, always released in `finally`; no real waits or timer overrides.
+- Positive control: tab A sees tab B's committed 10-byte upload before forgetting. Once the real
+  ending finishes, account listings are empty and both the control and candidate bodies are null,
+  while tab B remains paused. A spy verifies that B has not yet called `store.add`.
+- Only then release B, await its add and both queue drains, read metadata and both bodies, restart
+  both real queues and drain/read again. Both post-forget snapshots must stay empty/null; restart
+  must produce no upload traffic. Candidate identity is retained independently of a store-add spy,
+  so a fix that refuses before `store.add` can still satisfy the zero-byte assertions.
+- Final HEAD run: all eight new cases fail at `src/data/upload-sign-out.test.ts:589` on the intended
+  assertion, with one `MEMBER_21` metadata record and its original 15-byte body in both post-forget
+  snapshots. All eight passed the earlier zero-record / null-body assertion after forgetting finished.
+  All ten existing tests pass. No current assertion, test name, example, trial count, seed, bound,
+  tolerance or failure-injection behaviour was removed or weakened. No contradictory existing test
+  surfaced in the complete requested file; no import, unhandled, or timer-gate failure in the final run.
+
+### Verification
+
+- `pnpm --config.verifyDepsBeforeRun=false --config.offline=true exec vitest run src/data/upload-sign-out.test.ts --maxWorkers=2 --config /private/tmp/upload-sign-out-fix-2-yyg0vonu/vitest.config.mjs --configLoader runner`:
+  exit 1; 18 tests, eight intended assertion failures and ten passes. Log: `/private/tmp/upload-sign-out-fix-2-yyg0vonu/vitest.log`.
+- `pnpm --config.verifyDepsBeforeRun=false --config.offline=true exec tsc -p tsconfig.app.json --noEmit --tsBuildInfoFile /private/tmp/upload-sign-out-fix-2-yyg0vonu/app.tsbuildinfo`:
+  pass; log `/private/tmp/upload-sign-out-fix-2-yyg0vonu/tsc.log`.
+- `pnpm --config.verifyDepsBeforeRun=false --config.offline=true exec eslint src/data/upload-sign-out.test.ts`:
+  pass; log `/private/tmp/upload-sign-out-fix-2-yyg0vonu/eslint.log`.
+- The temporary config reuses the actual Vite/Vitest config and both setup files. Only the CPU report
+  output paths in an OS-temp copy of the timer setup are redirected; timer enforcement is unchanged.
+  Vite cache and config are also in OS temp. No test output is written into the repository.
+  Initial config load rejected the symlinked `/tmp` setup path before collecting tests; canonical
+  `/private/tmp` paths and explicit Vite filesystem access resolved that setup-only issue.
+- No `pnpm check`, e2e, production fix, server, commit or integration: this assignment is red-only.
+
+Research: no network; reuse the inherited official IndexedDB transaction lifecycle reference
+<https://www.w3.org/TR/IndexedDB/#transaction-lifecycle> and Drive resumable protocol reference
+<https://developers.google.com/workspace/drive/api/guides/manage-uploads#resumable> from this packet's
+prior research. Clearing one transaction cannot prevent a later add transaction; the reds exercise
+that boundary through the existing store, queues, fake adapters and production lifetime entry points.
+
+removed: none.

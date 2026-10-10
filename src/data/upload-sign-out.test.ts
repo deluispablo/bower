@@ -7,7 +7,7 @@ import { FakeRunService } from './fake/fake-run-service';
 import * as liveExports from './live/index';
 import type { LiveSources } from './live/index';
 import * as queueExports from './upload-queue';
-import type { AddUpload, UploadQueue } from './upload-queue';
+import type { AddUpload, StorageLike, UploadQueue } from './upload-queue';
 import { indexedDbUploadStore, type PendingUpload, type UploadStore } from './upload-store';
 import { BowerError } from './types';
 import { sha256 } from './vault/hashes';
@@ -36,8 +36,8 @@ const outcome = <T>(promise: Promise<T>) => promise.then(
   (error: unknown) => ({ error }),
 );
 
-function queue(drive: FakeDrive, store: UploadStore): UploadQueue {
-  const result = requiredExport(queueExports, 'createUploadQueue')({ drive, store, chunkSize: 4, now: () => NOW });
+function queue(drive: FakeDrive, store: UploadStore, storage?: StorageLike): UploadQueue {
+  const result = requiredExport(queueExports, 'createUploadQueue')({ drive, store, storage, chunkSize: 4, now: () => NOW });
   queues.add(result);
   return result;
 }
@@ -283,7 +283,7 @@ it('upload-sign-out-forget: a failed local upload purge reports a BowerError and
 });
 
 /** Separate queue instances and IndexedDB connections model the two tabs, without replacing either queue. */
-async function twoTabFixture() {
+async function twoTabFixture(storageB?: StorageLike) {
   const drive = new FakeDrive({ clock: () => NOW.getTime(), chunkMultiple: 4 });
   const root = (await drive.createFolder('root', 'Synthetic folder')).id;
   for (const name of ['Inbox', 'Projects', 'Areas', 'Resources', 'Archive']) await drive.createFolder(root, name);
@@ -297,7 +297,7 @@ async function twoTabFixture() {
   const account = await requiredExport(liveExports, 'uploadAccount')('you@example.com');
   const idb = new IDBFactory();
   const storeA = indexedDbUploadStore(idb), storeB = indexedDbUploadStore(idb);
-  const a = queue(drive, storeA), b = queue(drive, storeB);
+  const a = queue(drive, storeA), b = queue(drive, storeB, storageB);
   const live = requiredExport(liveExports, 'makeLiveSources')({ drive, worker, uploadQueue: a });
   sources.add(live);
   expect((await live.session.current())?.email).toBe('you@example.com');
@@ -483,3 +483,118 @@ it('upload-sign-out-forget: fix 1.3: pendingCount counts waiting and uploading t
     expect(count()).toBe(0);
   } finally { release.open(); await q.idle(); }
 });
+
+
+const preWriteSteps = [
+  'new add storage.estimate()',
+  'reselection Blob.arrayBuffer()',
+  'reselection crypto.subtle.digest()',
+  'reselection storage.estimate()',
+] as const;
+
+it.each(preWriteSteps.flatMap((step) => (['sign-out', 'auth expiry'] as const).map((ending) => ({ step, ending }))))(
+  'upload-sign-out-forget: fix 2: $step before $ending',
+  async ({ step, ending }) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const entered = barrier(), release = barrier();
+    let armed = false;
+    const estimate = vi.fn(async () => {
+      if (armed && step.includes('storage.estimate()')) {
+        entered.open();
+        await release.promise;
+      }
+      return { quota: 1024, usage: 0 };
+    });
+    const f = await twoTabFixture({ estimate });
+    const body = new Blob(['Synthetic bytes'], { type: 'application/pdf' });
+    const input = { ...await member(f.inbox, 21), body, sha256: await sha256(body) };
+    // Keep the exact identity even if the corrected queue refuses before calling store.add.
+    const record: PendingUpload = {
+      account: f.account, folder: f.root, declarationId: input.declarationId,
+      memberKey: input.memberKey, sha256: input.sha256, pileId: input.pileId,
+      parentId: input.parentId, name: input.name, type: body.type, size: body.size,
+      appProperties: { ...input.appProperties }, fileId: null, session: null,
+      confirmed: 0, addedAt: NOW.toISOString(),
+    };
+    expect(body.size).toBe(15);
+    if (step.startsWith('reselection')) {
+      await f.b.add(input);
+      await f.b.idle();
+      expect(await keptBytes(f.storeA, [record])).toEqual([[...new TextEncoder().encode('Synthetic bytes')]]);
+      f.b.stop();
+      // An unreadable device copy takes the real queue's chosenAgain path without deleting the record.
+      const read = f.storeB.body.bind(f.storeB);
+      const unreadable = vi.spyOn(f.storeB, 'body').mockImplementation(async (pending) => {
+        if (pending.memberKey === input.memberKey) throw new Error('Synthetic device read refused');
+        return read(pending);
+      });
+      await f.b.start(f.account, f.root);
+      await f.b.idle();
+      expect(f.b.items().find((item) => item.memberKey === input.memberKey)).toMatchObject({ gone: true, state: 'failed' });
+      unreadable.mockRestore();
+    }
+    if (step === 'reselection Blob.arrayBuffer()') {
+      const read = body.arrayBuffer.bind(body);
+      vi.spyOn(body, 'arrayBuffer').mockImplementationOnce(async () => {
+        entered.open();
+        await release.promise;
+        return read();
+      });
+    } else if (step === 'reselection crypto.subtle.digest()') {
+      const digest = crypto.subtle.digest.bind(crypto.subtle);
+      vi.spyOn(crypto.subtle, 'digest').mockImplementationOnce(async (algorithm, bytes) => {
+        entered.open();
+        await release.promise;
+        return digest(algorithm, bytes);
+      });
+    }
+    const writes = vi.spyOn(f.storeB, 'add');
+    armed = true;
+    const adding = outcome(f.b.add(input));
+    try {
+      await entered.promise;
+      expect(writes).not.toHaveBeenCalled();
+      if (step.includes('storage.estimate()')) expect(estimate).toHaveBeenCalled();
+      // Finish production forgetting while tab B is still paused before its first store.add call.
+      if (ending === 'auth expiry') { f.drive.offline = false; f.drive.failNext('auth'); }
+      const ended = ending === 'sign-out'
+        ? await outcome(f.live.session.signOut())
+        : await outcome(f.live.vault.tree());
+      if (ending === 'sign-out') expect(ended).toEqual({ value: undefined });
+      else expect(ended).toMatchObject({ error: { code: 'auth' } });
+      const fresh = indexedDbUploadStore(f.idb);
+      const afterForget = {
+        records: await fresh.list(f.account, f.root),
+        bytes: await keptBytes(fresh, [...f.control, record]),
+      };
+      expect(afterForget).toEqual({ records: [], bytes: [null, null] });
+      f.drive.offline = true;
+      release.open();
+      const added = await adding;
+      await Promise.all([f.a.idle(), f.b.idle()]);
+      const afterResume = {
+        records: await fresh.list(f.account, f.root),
+        bytes: await keptBytes(fresh, [...f.control, record]),
+      };
+      // Restart both real queues and drain their work too: no later resurrection or upload is allowed.
+      f.a.stop(); f.b.stop();
+      const traffic = f.drive.resumableCalls.length;
+      await f.a.start(f.account, f.root);
+      await f.b.start(f.account, f.root);
+      await Promise.all([f.a.idle(), f.b.idle()]);
+      const afterRestart = {
+        records: await fresh.list(f.account, f.root),
+        bytes: await keptBytes(fresh, [...f.control, record]),
+      };
+      expect({ afterResume, afterRestart }, 'no account metadata or original bytes may appear after forgetting finishes').toEqual({
+        afterResume: { records: [], bytes: [null, null] },
+        afterRestart: { records: [], bytes: [null, null] },
+      });
+      expect(f.drive.resumableCalls).toHaveLength(traffic);
+      expect(added).toMatchObject({ error: expect.any(BowerError) });
+    } finally {
+      release.open();
+      await adding;
+    }
+  },
+);
