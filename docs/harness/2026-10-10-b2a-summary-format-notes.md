@@ -7,6 +7,81 @@ worktree: /private/tmp/bower-b2a-summary-format
 branch: b2a-summary-format
 HEAD: 18b347a10126f9b4448f48c86a4ce7cdf6808ebf
 
+## Red repair
+
+2026-10-10, red-owning Codex session, after the four Blocking findings in
+`2026-10-10-codex-b2a-summary-format-adversarial.md`. This section is the current red evidence;
+the earlier red/green runs below are historical. Only the test and these notes changed.
+
+tests changed: src/data/vault/note-format.test.ts: replace the unsafe yes/no/on/off plain control with quoted-write rows; add plain legacy meaning/person-note byte preservation, all-case YAML 1.1/1.2 string rows, lone-surrogate refusals and generator, and literal quoted separator reads. Lead-ruled amendment removes only quoted legacy-meaning expectations; plain meanings and untouched person-note bytes stay pinned. No other assertion or bound is loosened.
+
+1. Legacy compatibility (lead ruling after 1a432aa2): plain values parse exactly as
+   before; quoted values decode per YAML. Plain literal Unicode escapes and doubled
+   apostrophes remain exact parse controls. The contradictory quoted legacy-meaning
+   assertions are removed by the ruling, while the existing YAML decoding rows stay.
+   Two untouched parse→serialize reds preserve a person's note bytes for stored
+   `"a\u0041b"` and `'Alex''s note.'`, while asserting their decoded summaries are `aAb`
+   and `Alex's note.`. These fixtures have no `by: bower` and assert `byBower: false`.
+   The packet names only the serializer boundary and excludes existing-note edits,
+   so byte preservation is pinned as a serializer property. Its existing layout avoids
+   unrelated blank-line normalization; plain and quoted-colon byte controls pass first.
+2. YAML compatibility: 28 exhaustive casing variants of yes/no/on/off/y/n, including mixed
+   case, plus `0b11`, `1_000`, `12:30`, `0o17`, require exact double-quoted scalar spelling.
+   Every row keeps the safe plain-summary control and exact parse-back comparison.
+   The old line-54 control incorrectly required yes/no/on/off plain because YAML 1.2 core
+   preserves them; YAML 1.1 readers resolve those spellings as booleans. Those four values
+   move to quoting rows. Safe text, including `time 12:30`, remains required plain.
+3. UTF-16: explicit U+D800/U+DBFF/U+DC00/U+DFFF refusal rows and 500 generated lone-surrogate
+   examples (seed 422004, entire surrogate range) pin rejection independently of UTF-8
+   replacement. Each generated example has a well-formed emoji substitute as an acceptance
+   and exact round-trip control. The original 500-string round-trip generator is unchanged.
+4. One line: retain existing NEL/U+2028/U+2029 refusal rows. Add six literal stored-value
+   read cases (each separator in double and single quotes), expecting exact inner text
+   without quotes and rejection for new authoring. Ordinary quoted text and valid one-line
+   text are controls. NEL reads already pass; both quote styles for U+2028/U+2029 fail.
+
+### Collision ruled
+
+The lead ruled the recorded collision after 1a432aa2: quoted values decode per YAML;
+the legacy promise is narrowed to "plain values parse exactly as before". A person's
+note bytes must never be rewritten. The amended reds separate decoded display meaning
+from untouched serializer byte preservation, without inventing a provenance mechanism.
+The other three repairs and their bounds are unchanged.
+
+### Offline standards check
+
+Research used the installed YAML 2.9.1 README, YAML 1.1 boolean/integer/float schema sources
+and quoted-scalar resolver. No network or dependency change. The reference remains
+[YAML 1.2.2 flow scalars](https://yaml.org/spec/1.2.2/#73-flow-scalar-styles), with
+[YAML 1.1 boolean](https://yaml.org/type/bool.html) and
+[integer](https://yaml.org/type/int.html) resolution for the compatibility cases.
+Case-exhaustive quoting is conservative: some mixed-case forms already parse as strings.
+`0o17` is quoted for YAML 1.2 even though YAML 1.1 preserves it plain.
+An offline oracle verifies all 32 expected quoted scalars as exact strings in both schemas
+(64 checks), two safe plain controls per schema, and all six literal quoted separators under
+YAML 1.2. Evidence: `tmp-logs/b2a-red-repair-yaml-oracle.json`; oracle exit 0.
+Tests pin exact quoted bytes without importing an undeclared transitive YAML dependency.
+
+### Repair verification
+
+- `pnpm exec vitest run src/data/vault/note-format.test.ts --maxWorkers=2 --reporter=json --outputFile=tmp-logs/b2a-red-ruling.json > tmp-logs/b2a-red-ruling.log 2>&1`: exit 1; 244 tests, 42 assertion reds, 202 passes.
+- Failure groups: 31 unsafe scalar writes, two untouched person-note byte cases, five
+  surrogate refusals (including the generator), four literal U+2028/U+2029 quoted reads.
+  No unexpected failure. The two amended plain-meaning controls pass, as do quoted YAML
+  decoding and all byte-row controls before their final byte assertion.
+- The serializer changes stored `"a\u0041b"` to plain `aAb`, and stored `'Alex''s note.'`
+  to `"Alex's note."`. Both reads decode correctly; both untouched byte assertions fail
+  at test line 145. The other failures retain their stated reasons: unsafe values remain
+  plain, lone surrogates are accepted, literal U+2028/U+2029 values retain their quotes.
+- Exact names, assertion locations and failure groups: `tmp-logs/b2a-red-ruling-audit.json`;
+  full result: `tmp-logs/b2a-red-ruling.json`.
+- Only the requested test file ran, once, with `--maxWorkers=2`. The initial redirected
+  command could not start because tmp-logs/ was absent; the directory was created before
+  the successful test invocation. Only failures and totals were read. No network,
+  pnpm check, e2e, git write, commit or edit to `src/data/contracts/note-format.ts`.
+- Prior repair evidence (244 tests, 44 reds, 200 passes; type/lint passes) is historical
+  and superseded for the amended legacy contract by this run.
+
 ## Scope and rulings
 
 Read WORKER.md, the B2a packet, TL-P4-42 Q1/Q2, and prep S1/S3/B2a. Swept DECISIONS.md for B2a and TL-P4-42 addenda: the base ruling at line 452 is present; no TL-P4-42 addendum is present. The packet narrows the prep's proposed allocation to the scalar contract and its existing test file. No runner test, caller, route, model reply, existing-note edit, or corpus fixture is changed.
@@ -268,3 +343,73 @@ Logs are under `tmp-logs/`; only failing assertions/diagnostics and machine-read
 - `git diff --check`: exit 0; read-only git status/diff confirm only the formatter and these notes changed. No git write was run.
 
 Left out: summary callers/authoring/fallbacks and existing-note edits remain with B2b/B2c; commits, SHA completion and integration gates remain with the coordinator. No incompatible red or ruling was found.
+
+
+## Fix round 1
+
+2026-10-10, fresh Codex implementation session at committed red repair `2c01218e`.
+Read the packet, adversarial review and current Red repair ruling. The existing dirty
+notes were preserved; this section is appended. Only `src/data/contracts/note-format.ts`
+changed in production. No network, git write, test edit, dependency change or new caller.
+The assignment overrides the packet's general gates: only the red file, src/data suite,
+app/node TypeScript and formatter ESLint ran. Commits and integration gates remain with
+the coordinator. The initial red redirect could not start before tmp-logs/ existed;
+the directory was created and the red then ran successfully.
+
+tests changed: none
+removed: core-schema-only summary type patterns that left YAML 1.1 booleans and numbers plain.
+removed: quoted-summary boundary matching that excluded literal U+2028 and U+2029.
+removed: acceptance of lone UTF-16 surrogates by validSummary.
+removed: normalized serialization of an untouched parsed personal note in place of its source bytes.
+removed: no test, fixture, caller, dependency or other format mechanism.
+
+The existing scalar writer conservatively quotes every casing of yes/no/on/off/y/n,
+binary integers, underscore numbers and sexagesimal numbers, alongside its YAML 1.2
+cases. The plain reader is unchanged. The quoted-summary boundary uses dotAll so literal
+NEL, line and paragraph separators read as inner text; quoted YAML escapes and doubled
+apostrophes retain their standard decoding. validSummary rejects Unicode surrogate code
+points with the Unicode Cs category (paired emoji remain accepted) and retains its Cc,
+U+2028/U+2029 and 200 untrimmed UTF-16-unit checks. Direct serialization also quotes lone
+surrogates, letting JSON escaping avoid UTF-8 replacement without accepting them for
+authoring.
+
+For an untouched personal note, parseNote retains the original raw string and the
+existing serializer's baseline in a WeakMap keyed by the returned note. serializeNote
+returns that source string when its generated representation still equals the baseline.
+This preserves all original bytes while the display summary decodes per YAML, without
+adding fields to the note model. The baseline uses the existing serializer, not a second
+format writer. Changed fields use the existing serialization path; source retention is
+for the same parsed object and is not propagated by cloning/spreading. Existing-note
+editing remains outside this packet; this source retention performs no storage write.
+
+### Offline standards used
+
+Before editing, read the installed YAML 2.9.1 YAML 1.1 boolean, integer and float schema
+sources, timestamp intTime/floatTime patterns, and quoted flow-scalar resolver. Their
+implicit resolution patterns support the quote eligibility changes. No package is added
+or imported. Standards links identify the references and were not fetched:
+[YAML 1.2.2 flow scalars](https://yaml.org/spec/1.2.2/#73-flow-scalar-styles),
+[YAML 1.1 boolean](https://yaml.org/type/bool.html),
+[integer](https://yaml.org/type/int.html) and [float](https://yaml.org/type/float.html).
+
+### Compatibility row draft
+
+| Commit (coordinator fills SHA) | Contract home | Write/export behavior | Existing reads and bytes | Evidence |
+| --- | --- | --- | --- | --- |
+| Pending: B2a fix round 1 | src/data/contracts/note-format.ts | Quote YAML 1.1/1.2 unsafe strings; refuse lone surrogates and Cc/U+2028/U+2029 for authoring | Plain summary meanings unchanged; quoted summaries decode per YAML including literal separators; untouched parsed personal notes retain their source bytes | All 244 red-file tests and 4,132 data tests pass |
+
+### Verification
+
+Output is under tmp-logs/. Only failed assertions/diagnostics and machine-readable counts
+were read. Exact B2a test names remain in the unchanged red file and JSON results.
+
+- Red: `pnpm exec vitest run src/data/vault/note-format.test.ts --maxWorkers=2 --reporter=json --outputFile=tmp-logs/b2a-fix1-red.json > tmp-logs/b2a-fix1-red.log 2>&1`: exit 1; 244 tests, 42 assertion failures, 202 passes. Failures: 31 unsafe writes, two personal-byte rows, four quoted separator reads, five surrogate refusals including the generator. No unexpected failure.
+- Green: `pnpm exec vitest run src/data/vault/note-format.test.ts --maxWorkers=2 --reporter=json --outputFile=tmp-logs/b2a-fix1-green.json > tmp-logs/b2a-fix1-green.log 2>&1`: exit 0; 244 passed, including every `B2a summary:` red and all controls.
+- Data: `pnpm exec vitest run src/data --maxWorkers=2 --reporter=json --outputFile=tmp-logs/b2a-fix1-data.json > tmp-logs/b2a-fix1-data.log 2>&1`: exit 0; all 4,132 tests passed.
+- App: `pnpm exec tsc -p tsconfig.app.json --noEmit > tmp-logs/b2a-fix1-tsc-app.log 2>&1`: exit 0.
+- Node: `pnpm exec tsc -p tsconfig.node.json --noEmit > tmp-logs/b2a-fix1-tsc-node.log 2>&1`: exit 0.
+- Lint: `pnpm exec eslint src/data/contracts/note-format.ts > tmp-logs/b2a-fix1-eslint.log 2>&1`: exit 0.
+- Read-only `git diff --check`: exit 0 before this notes append. Source diff: 22 added and 11 removed lines; the red test has no diff. No git write or commit ran.
+
+Left out: B2b/B2c callers, authoring, fallback and editing; commits, SHA completion,
+pnpm check, e2e and integration remain with the coordinator under this assignment.
