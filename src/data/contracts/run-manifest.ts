@@ -3,7 +3,7 @@ import { MOC_REGIONS, createOwnershipContext, type MocRegion } from './ownership
 import { sha256 } from './hashes';
 import { isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
 import type { UpdatedRow } from './types';
-import { applyChanges, EDIT_FILE_LIMIT, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
+import { satisfiedAppendUnchanged, EDIT_FILE_LIMIT, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 
 export type Scope = { rootId: string };
@@ -116,6 +116,8 @@ export type Manifest = {
 export type SatisfiedAppend = {
   consent: TimelineConsent; entry: EditEntry; before: SeenFile; path: string;
   text: string; content: VerifiedContent; operationId: string;
+  /** Absent in historical rows (author v1); new rows prove satisfaction under B1a's author v2. */
+  editContract?: 2;
 };
 /** v1 plus `edit-text`; a v2 manifest always holds at least one. */
 export type ManifestV2 = Omit<Manifest, 'v' | 'operations'> & { v: 2; operations: OperationV2[] };
@@ -444,7 +446,8 @@ function manifestOf(value: unknown, v: 1 | 2, item: (value: unknown) => boolean)
     && id(value.runId) && id(value.requestId) && oneOf(value.runScope, ['all', 'instructions'])
     && typeof value.allowWeb === 'boolean' && integer(value.requestedAt) && hash(value.captureId)
     && (value.satisfiedAppends === undefined || list(value.satisfiedAppends, (r): r is SatisfiedAppend =>
-      closed(r, ['consent', 'entry', 'before', 'path', 'text', 'content', 'operationId'])
+      closed(r, ['consent', 'entry', 'before', 'path', 'text', 'content', 'operationId'], ['editContract'])
+      && (r.editContract === undefined || r.editContract === 2)
       && closed(r.consent, ['requestId', 'targetFileId', 'sourceFileId']) && recordId(r.consent.requestId)
       && driveId(r.consent.targetFileId) && driveId(r.consent.sourceFileId) && editEntry(r.entry)
       && seenFile(r.before) && path(r.path) && text(r.text) && verifiedContent(r.content) && hash(r.operationId)))
@@ -496,9 +499,9 @@ async function satisfiedProven(value: Manifest | ManifestV2): Promise<boolean> {
       || op?.effect.kind !== 'move' || !journal.fileIds.includes(op.effect.before.fileId)
       || (source ? !op.dependsOn.includes(source.operationId) : !value.capture.places.some((p) => p.file.fileId === c.sourceFileId))
       || row.content.observedModifiedTime !== row.before.modifiedTime || !await describes(row.content, row.text)) return false;
-    const result = applyChanges(new TextEncoder().encode(row.text), [{ kind: 'timeline-append', recordIds: [c.requestId],
-      consent: c, entries: [row.entry] }], { fileId: c.targetFileId, context: createOwnershipContext(), consents: [c] });
-    if (result.ok || result.reason !== 'unchanged') return false;
+    if (!satisfiedAppendUnchanged(new TextEncoder().encode(row.text), { kind: 'timeline-append', recordIds: [c.requestId],
+      consent: c, entries: [row.entry] }, { fileId: c.targetFileId, context: createOwnershipContext(), consents: [c], path: row.path, name: row.before.name },
+    row.editContract ?? 1)) return false;
   }
   return true;
 }

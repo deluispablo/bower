@@ -14,10 +14,11 @@ import { displayName, nameOf } from './tree';
 import type { ChangeEntry, Rule } from './types';
 import { sha256 } from './hashes';
 import { parseNote, timelineEntries } from './note-format';
-import { fenceAfter, parseOwnership, type ByteSpan, type Fence, type Layout, type OwnershipFailure, type FetchedOwnership } from './ownership-format';
+import { createOwnershipContext, fenceAfter, parseOwnership, type ByteSpan, type Fence, type Layout, type OwnershipFailure, type FetchedOwnership } from './ownership-format';
 import { parseTimelineLine, timelineLine } from './timeline-line';
 import { parseRules } from './rules-format';
 import type { Change, EditEntry, EditText, Rename, RuleAdd, RuleRemove, TimelineConsent } from './run-manifest';
+import { VaultIndex } from '../vault/vault-index';
 
 /** Files larger than 1 MiB are never edited (TL-P2-20 rule 6). */
 export const EDIT_FILE_LIMIT = 1024 * 1024;
@@ -34,7 +35,7 @@ export const EDIT_FILE_LIMIT = 1024 * 1024;
 export type EditRefusal = OwnershipFailure | 'too-large' | 'not-bower' | 'unsupported' | 'field' | 'order' | 'invariant' | 'unchanged'
   | 'person-edited' | 'state-changed' | 'no-timeline' | 'unreadable-timeline';
 /** Independently derived bindings accompany fetched bytes during planning and effect recheck. */
-export type EditFetched = FetchedOwnership & { consents?: readonly TimelineConsent[] };
+export type EditFetched = FetchedOwnership & { consents?: readonly TimelineConsent[]; path?: string; name?: string };
 export type EditResult = { ok: true; text: string; bytes: Uint8Array } | { ok: false; reason: EditRefusal };
 /** The low-level splice, replaceable only so a test can inject a faulty one (R4-3 m-g). */
 export type Authors = { splice: (text: string, at: number, insert: string) => string };
@@ -876,6 +877,11 @@ const refuse = (reason: EditRefusal): EditResult => ({ ok: false, reason });
 
 /** `applyChanges` with a replaceable splice; only tests pass anything but the real one. */
 export function applyChangesUsing(before: Uint8Array, changes: readonly Change[], authors: Authors, fetched?: EditFetched): EditResult {
+  return applyAtVersion(before, changes, authors, fetched, 2);
+}
+
+/** Version 1 is used only to prove a stored satisfaction; all current edits use version 2. */
+function applyAtVersion(before: Uint8Array, changes: readonly Change[], authors: Authors, fetched: EditFetched | undefined, version: 1 | 2): EditResult {
   if (before.byteLength > EDIT_FILE_LIMIT) return refuse('too-large');
   let text: string;
   try { text = decoder.decode(before); }
@@ -887,9 +893,9 @@ export function applyChangesUsing(before: Uint8Array, changes: readonly Change[]
   if (own.status === 'invalid') return refuse(own.reason);
   if (!ordered(changes)) return refuse('order');
   if (!changes.every(fieldsOk)) return refuse('field');
-  const note = parseNote('note.md', text, fetched);
-  const map = note.properties.some((p) => p.key === 'type' && ['moc', 'hub'].includes(p.value));
-  if (map && !note.byBower && changes.some((c) => c.kind !== 'link-rewrite')) return refuse('not-bower');
+  const note = parseNote(fetched?.path ?? 'note.md', text, fetched);
+  const map = VaultIndex.isHub(note.path, fetched?.name, note.properties.find((p) => p.key === 'type')?.value);
+  if (version === 2 && map && own.status !== 'v2' && !note.byBower && changes.some((c) => c.kind !== 'link-rewrite')) return refuse('not-bower');
   let current = text;
   let source = fetched;
   for (const change of changes) {
@@ -912,6 +918,12 @@ export function applyChanges(before: Uint8Array, changes: readonly Change[], fet
   return applyChangesUsing(before, changes, { splice: (text, at, insert) => text.slice(0, at) + insert + text.slice(at) }, fetched);
 }
 
+/** Historical satisfaction still proves the full author result is unchanged; it can never grant an edit. */
+export function satisfiedAppendUnchanged(before: Uint8Array, change: Extract<Change, { kind: 'timeline-append' }>, fetched: EditFetched, version: 1 | 2): boolean {
+  const result = applyAtVersion(before, [change], { splice: (text, at, insert) => text.slice(0, at) + insert + text.slice(at) }, fetched, version);
+  return !result.ok && result.reason === 'unchanged';
+}
+
 // ---------------------------------------------------------------------------------------------
 // Adapter decisions (rules 1 and 5) and the saved-link key (R4-3 m-f), all pure
 // ---------------------------------------------------------------------------------------------
@@ -919,9 +931,10 @@ export function applyChanges(before: Uint8Array, changes: readonly Change[], fet
 const digest = (bytes: Uint8Array): Promise<string> => sha256(new Blob([bytes.slice().buffer]));
 
 /** Rule 1: the file as re-read still hashes to `beforeContent`, recomputes to `text`, and `content` describes it. */
-export async function recheckEdit(effect: EditText, bytes: Uint8Array, fetched?: FetchedOwnership): Promise<'ok' | 'conflict'> {
+export async function recheckEdit(effect: EditText, bytes: Uint8Array, fetched?: EditFetched): Promise<'ok' | 'conflict'> {
   if (bytes.byteLength !== effect.beforeContent.size || await digest(bytes) !== effect.beforeContent.sha256) return 'conflict';
-  const result = applyChanges(bytes, effect.changes, fetched);
+  const result = applyChanges(bytes, effect.changes, { ...fetched, fileId: effect.before.fileId,
+    context: fetched?.context ?? createOwnershipContext(), path: effect.path, name: effect.before.name });
   if (!result.ok || result.text !== effect.text) return 'conflict';
   const { content } = effect;
   if (content.encoding !== 'utf8' || content.size !== result.bytes.byteLength || content.sha256 !== await digest(result.bytes)) return 'conflict';
@@ -944,4 +957,3 @@ export async function undoEdit(effect: EditText, now: Uint8Array): Promise<EditR
 export function savedLinkKey(fileId: string): Promise<string> {
   return digest(encoder.encode(`${fileId}:saved-link-note`));
 }
-

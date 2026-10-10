@@ -24,6 +24,13 @@ export class VaultIndex {
     return ix;
   }
 
+  /** The shared hub/MOC recognition for the explorer and edit contract. */
+  static isHub(path: string, name = nameOf(path), type?: string): boolean {
+    if (type === 'moc' || type === 'hub') return true;
+    const parent = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+    return !!parent && name === `${parent.slice(parent.lastIndexOf('/') + 1)}.md`;
+  }
+
   idOf(path: string): string | undefined {
     return path === '' ? this.rootId : this.ids.get(path);
   }
@@ -80,8 +87,7 @@ export class VaultIndex {
         e.kind = kindOf(f.name);
         if (f.appProperties?.[PROP.by] === 'bower') e.byBower = true;
         if (f.appProperties?.[PROP.isNew] === '1' && !seen(f.id, f.modifiedTime)) e.isNew = true;
-        const parent = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
-        if (parent && f.name === `${parent.slice(parent.lastIndexOf('/') + 1)}.md`) e.hub = true;
+        if (VaultIndex.isHub(path, f.name)) e.hub = true;
       }
       out.set(path, e);
     }

@@ -703,7 +703,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       for (const p of piles) for (const item of p.items) if (item.name === l.cites) dups.delete(item.id);
   }
   const context = opts.context ?? createOwnershipContext();
-  const fetched = (fileId: string) => ({ fileId, context, consents: settlement.consents });
+  const fetched = (fileId: string) => ({ fileId, context, consents: settlement.consents, path: ix.pathOf(fileId), name: ix.byId(fileId)?.name });
   /** Whether a refused request in the run refuses what cites this thing (TL-P4-32 addendum 2 (3)). */
   const refusedSource = (fileId: string | null | undefined): boolean => settlement.refusesSources && !!fileId && things.some((t) => t.file.id === fileId);
   // Notes kept as one: each by its yes, among the lines this run took; one held back (`keep:<answer>`) waits with it.
@@ -1923,7 +1923,7 @@ type Decided = Extract<Awaited<ReturnType<typeof decide>>, { kind: 'decided' }>;
  * It reads neither Drive nor the reply; the manifest guard and grounding check what it built.
  */
 export async function build(decided: Decided): Promise<Ended> {
-  const fetched = (fileId: string) => ({ fileId, context: decided.context, consents: decided.settlement.consents });
+  const fetched = (fileId: string) => ({ fileId, context: decided.context, consents: decided.settlement.consents, path: decided.ix.pathOf(fileId), name: decided.ix.byId(fileId)?.name });
   const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
     requestsBroken, requestsDone, sys, questionsList, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
@@ -2238,7 +2238,7 @@ export async function build(decided: Decided): Promise<Ended> {
     for (const f of line.files) moves.push(await add({ kind: 'move', before: seen(f), parent: archiveTo, name: f.name, properties: {} }, derived));
     // A line already there completes its request with the request's archive.
     for (const p of satisfied.filter((x) => x.consent.requestId === line.rec.id)) if (moves[0]) {
-      satisfiedAppends.push({ consent: p.consent, entry: p.line.entry, before: seen(p.file), path: p.path, text: new TextDecoder().decode(p.bytes), content: p.before, operationId: moves[0] });
+      satisfiedAppends.push({ consent: p.consent, entry: p.line.entry, before: seen(p.file), path: p.path, text: new TextDecoder().decode(p.bytes), content: p.before, operationId: moves[0], editContract: 2 });
     }
     // Its "Left as you wrote them" rows, once a source it settles on is filed, or in its archive's one row when none is
     // (an archive move has exactly one row, `grounded`).

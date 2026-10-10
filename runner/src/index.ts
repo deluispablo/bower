@@ -50,24 +50,47 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
   // An empty first run has neither indexed changes nor effects to settle.
   if (!state && !notesIn(ix).length && !manifest.operations.length) return manifest;
   const feed = state ? await drive.listChanges(state.cursor) : undefined;
-  const cursor = feed?.newStartPageToken ?? await drive.getStartPageToken();
+  let cursor = feed?.newStartPageToken ?? await drive.getStartPageToken();
   if (!state) {
     // A bootstrap token must precede its snapshot, so changes racing the listing stay on the next feed.
     listing = await drive.listAll(rootId);
     ix = VaultIndex.build(rootId, listing);
   }
-  const notes = notesIn(ix);
-  // The existing dot-path rule is checked before any scope/ancestry reads.
+  const previous = ix;
+  if (feed) {
+    // Feed metadata supersedes the planner's listing; the read cache keys content by this version.
+    const files = new Map(listing.map((f) => [f.id, f]));
+    for (const change of feed.changes) {
+      if (change.removed) files.delete(change.fileId);
+      else if (change.file) {
+        const listed = files.get(change.fileId);
+        if (!listed || listed.modifiedTime <= change.file.modifiedTime) files.set(change.fileId, change.file);
+      }
+    }
+    listing = [...files.values()];
+    ix = VaultIndex.build(rootId, listing);
+  }
+  const notes = notesIn(ix).filter(({ file }) => {
+    // Newly discovered visible notes wait for a fresh snapshot; old feed metadata may describe a note now in the Bin.
+    if (feed && !previous.byId(file.id)) {
+      cursor = state?.cursor ?? cursor;
+      return false;
+    }
+    return true;
+  });
+  const pathOfChange = (change: { fileId: string; removed?: boolean }): string | undefined => ix.pathOf(change.fileId)
+    ?? (change.removed ? previous.pathOf(change.fileId) ?? state?.files[change.fileId]?.path : undefined);
+  // Without a resolved full path, leave the feed entry after the committed cursor for a later snapshot.
+  if (state && feed?.changes.some((c) => pathOfChange(c) === undefined || (!c.removed && !c.file))) cursor = state.cursor;
+  // The existing dot-path rule judges the resolved full path, including newly discovered descendants.
   const changes = (feed?.changes ?? notes.map(({ file }) => ({ fileId: file.id, file }))).filter((c) => {
-    const path = ix.pathOf(c.fileId);
-    if (path !== undefined) return !isHidden(path);
-    if (c.file?.name.startsWith('.')) return false;
-    return !!state?.files[c.fileId] || !!c.file;
+    const path = pathOfChange(c);
+    return path !== undefined && !isHidden(path);
   }).map((c) => c.fileId);
   if (state && !changes.length && !manifest.operations.length) {
     // Bower's own bookkeeping must not start a cursor-write feedback loop on otherwise idle runs.
     const hiddenOutsideRunner = feed?.changes.some((c) => {
-      const path = ix.pathOf(c.fileId);
+      const path = pathOfChange(c);
       return path !== undefined && isHidden(path) && path.split('/')[0] !== SYSTEM.dir;
     });
     return old && hiddenOutsideRunner ? cursorOnly(drive, manifest, old, state, cursor) : manifest;
@@ -75,9 +98,9 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
   const snapshot: RetrievalFile['files'] = {};
   for (const { path, file: f } of notes) {
     const cached = state?.files[f.id];
-    const prefix = cached?.version === f.modifiedTime && cached.path === path ? null : await drive.readPrefix(f);
+    const text = cached?.version === f.modifiedTime && cached.path === path ? null : await drive.readListedText(f);
     snapshot[f.id] = cached?.version === f.modifiedTime && cached.path === path ? cached
-      : { path, version: f.modifiedTime, summary: prefix === null ? '(no summary)' : parseNote(path, prefix).summary || '(no summary)', coverage: { kind: 'prefix', bytes: 4096 } };
+      : { path, version: f.modifiedTime, summary: text === null ? '(no summary)' : parseNote(path, text).summary || '(no summary)', coverage: { kind: 'prefix', bytes: 4096 } };
   }
   const own = ix.file(SYSTEM.dir);
   if (!own?.folder) throw unavailable();
