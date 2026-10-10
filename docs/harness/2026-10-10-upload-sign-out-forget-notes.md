@@ -815,3 +815,98 @@ this notes file's Research section; no references were fetched. Reuse the existi
 queue, conditional progress put, IndexedDB implementation and fake stack. A transaction clear
 cannot prevent a later admission that captures its fence after an earlier operation's awaits:
 that is the shared late-capture mechanism pinned by these six reds.
+
+
+## Fix round 3
+
+Stopped under the owner's explicit TL-P4-51 instruction after the complete requested targeted
+suite. Addendum 8 says the store refuses an older captured forget version on every upload write;
+keeping both earlier fix-1.2 cases green requires accepting precisely such a write. No production
+or test edit was made. No new store, network request or Git-writing command was used.
+The coordinator owns commits. Only this notes append changes the repository.
+
+### Every contradictory test (file:line)
+
+Both cases are declared at `src/data/upload-sign-out.test.ts:382`:
+
+1. `upload-sign-out-forget: fix 1.2: sign-out waits for staging cleanup and reports a late remove failure (remove fails: false)`:
+   `src/data/upload-sign-out.test.ts:416` requires one retained record and `:417` requires all
+   15 original bytes after the account purge transaction has committed (`:408`). The add started
+   before that purge; its Blob read resumes only at `:413`. An older captured version must now
+   be refused by the store, so those two required retained values cannot exist.
+2. `upload-sign-out-forget: fix 1.2: sign-out waits for staging cleanup and reports a late remove failure (remove fails: true)`:
+   the same contradictory assertions at `src/data/upload-sign-out.test.ts:416` and `:417`, plus
+   `:438` and `:439` require the resurrected record and 15 original bytes after the injected
+   removal refusal and sign-out settlement. Refusing the old-version write prevents those values.
+
+The clear spy opens its barrier only after real `store.clear` completes (`:391`–`:393`);
+this is not a pre-purge observation. Even while sign-out is awaiting cleanup, the account's
+transactional forget marker has already advanced. The existing exception at
+`src/data/upload-store.ts:273` admits that stale write through `stage.retiringVersion`.
+Removing the exception implements the new rule but necessarily breaks both committed cases.
+Retaining it would violate addendum 8. Changing an assertion, exempting local retirement, or
+restoring bytes through another path would not satisfy this assignment.
+
+These are the complete behavioral contradictions found in the upload store/queue tests and
+production sign-out/expiry tests. The six fix-3 assertion reds agree with addendum 8 and remain
+unimplemented pending resolution of the two frozen cases above. Ordinary disposal, journal
+retention, isolation, retry/resume controls and the other earlier reds are not contradictions.
+
+### Every store write path from the sweep
+
+- `src/data/upload-queue.ts:318`, `keepBytes` -> store.add: new queue add and queue reselection
+  (`chosenAgain`), including their estimate, Blob-read and digest waits. Current capture at `:847`
+  starts at queue.add; it is too late for the enclosing vault operations below.
+- `src/data/vault/drive-vault.ts:1724`, `stageQueued` -> queue.add -> keepBytes -> store.add:
+  initial addPile (`:1002`, staging at `:1054`), Undo restore (`:449`, re-enqueue at `:487`–`:490`),
+  chooseAgain (`:1261`, launch at `:1313`), retryPile (`:1224`, launch at `:1249`), and tracked
+  send/sendAll (`:1612`/`:1629`) -> sendQueued (`:1729`). Each outer operation needs its own
+  start capture propagated through its awaits and re-enqueue, not a new capture at stageQueued.
+- `src/data/upload-queue.ts:434`, keepFileId -> store.save: reserved ID on first transfer,
+  retry/offline retry, retryPile, explicit resume after halt, and hydration/start after reload.
+- `src/data/upload-queue.ts:452`, shared save -> store.save: onSession, onConfirmed and
+  letFileIdGo (permanently refused ID release/reset), reached by the same send/retry/resume paths.
+  The send's start version must reach every progress callback and survive transaction retries.
+- `src/data/upload-store.ts:275`–`:276`: IndexedDB pending metadata and byte puts from add.
+  `:298`: conditional pending progress put from save. These are all pending upload puts.
+  A single mandatory-version store write boundary would have to cover both add and save.
+- `src/data/upload-store.ts:338`–`:339`: memory store add/save write the same transient held map;
+  these also need the rule, including the direct-store entry points. No second store is needed.
+- `src/data/upload-store.ts:203`: account-version marker put belongs to forgetting itself.
+  list malformed cleanup, remove/discard/completion cleanup, and folder/account clear only delete
+  pending records/bytes; they cannot resurrect them. Vault index.put updates a listing, not uploads.
+
+No implementation was attempted after identifying the irreconcilable retained-byte assertions.
+In particular, no optional version or late recapture was introduced to bypass the ruling or tests.
+
+### Research and verification
+
+No network. Inherited references: [IndexedDB transaction lifecycle](https://www.w3.org/TR/IndexedDB/#transaction-lifecycle)
+and [Drive resumable uploads](https://developers.google.com/workspace/drive/api/guides/manage-uploads#resumable).
+The existing clear transaction advances the shared marker before the paused add resumes; the
+local retirement exception is the only reason these two tests currently see retained bytes.
+
+Evidence: `/private/tmp/upload-forget-round3-h6wxwpmt/`. Commands use explicit pnpm offline and
+verifyDepsBeforeRun=false settings. The OS-temp config reuses the real Vite/Vitest configuration,
+jsdom and app setup. Reds ran with OS-temp cwd and the original timer setup. The complete data
+suite needs repository cwd for its relative fixture reads: its final temp timer setup copy changes
+only report paths and imports, preserving timer enforcement. Vite caches, CPU reports, logs and
+TypeScript build-info paths remain under OS temp; tests write no artifacts into the repository.
+
+- Reds: `pnpm exec vitest run src/data/upload-sign-out.test.ts --maxWorkers=2`: exit 1,
+  32 tests, 26 pass, six intended fix-3 failures; `reds.log`. Exact failing names are Undo awaits
+  untrash, addPile awaits declaration hashing, and chooseAgain awaits hashing, each before
+  sign-out and auth expiry. Failures at `:679`, `:707`, and `:749` restore the original 15 bytes.
+  All 18 earlier cases and eight new controls pass on unchanged production code.
+- First whole-data run used OS-temp cwd and failed unrelated relative fixture reads; `data.log`.
+  Corrected only the temporary execution setup and reran the complete suite from repository cwd.
+- Final whole-data result: exit 1; 79 files, 78 pass; 4,192 tests, 4,186 pass and six fix-3 failures (`data-final.log`).
+- `tsc -p tsconfig.app.json --noEmit`: exit 0; `tsc-app.log`.
+- `tsc -p tsconfig.node.json --noEmit`: exit 0; `tsc-node.log`.
+- ESLint on the three inspected production files: exit 0; `eslint.log`.
+- All command output was redirected; only failures and aggregate results were read.
+- `git diff --check`: pass; only this notes append is changed; production/test diffs are empty.
+- No pnpm check, e2e, server, integration or commit after the required contradiction stop.
+
+removed: none (0 production lines; 0 test lines).
+tests changed: none
