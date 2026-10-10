@@ -6,6 +6,7 @@ import { DataProvider } from '@/data/provider';
 import type { Sources } from '@/data/sources';
 import type { Pile, RunReport, RunState } from '@/data/types';
 import { Home } from '@/features/home/Home';
+import { RightPanel } from '@/features/note/RightPanel';
 import { loadingSources } from '@/testing/loading-sources';
 import { StatusBar } from './StatusBar';
 import { TidySheet } from './TidySheet';
@@ -18,7 +19,7 @@ const left = (): RunReport => ({ ...empty(), leftAsWritten: [{ name: PATH, fileI
 
 afterEach(() => { cleanup(); useUi.setState({ tidyOpen: false, replayRunId: null }); });
 
-async function open(scope: RunState['scope'], report: RunReport, piles: Pile[] = []) {
+async function open(scope: RunState['scope'], report: RunReport, piles: Pile[] = [], rightPanel = false) {
   const base = loadingSources();
   let run: RunState = { id: 'request-run', scope, phase: 'done', requestedAt: 1000, phaseAt: 2000, finishedAt: 2000, seen: false, report };
   const initial = run;
@@ -32,7 +33,7 @@ async function open(scope: RunState['scope'], report: RunReport, piles: Pile[] =
       subscribe: (cb: () => void) => { listeners.add(cb); return () => listeners.delete(cb); } },
   };
   useUi.setState({ tidyOpen: false, replayRunId: null });
-  await act(async () => { render(<MemoryRouter><DataProvider sources={sources}><main id="main" tabIndex={-1}><Home /></main><StatusBar /><TidySheet /></DataProvider></MemoryRouter>); });
+  await act(async () => { render(<MemoryRouter><DataProvider sources={sources}><main id="main" tabIndex={-1}><Home /></main><StatusBar /><TidySheet />{rightPanel && <RightPanel />}</DataProvider></MemoryRouter>); });
   return { run: initial, markSeen };
 }
 
@@ -59,7 +60,7 @@ it('request report: Home shows instructions leftAsWritten with today’s words a
 });
 
 it('request report: status bar reopens unseen instructions leftAsWritten instead of Nothing to tidy', async () => {
-  const { run, markSeen } = await open('instructions', left());
+  const { run, markSeen } = await open('instructions', { ...left(), yourChanges: 1 });
   fireEvent.click(screen.getByRole('button', { name: /^Last tidy-up/ }));
   const sheet = screen.getByRole('dialog', { name: runTitle(run) });
   assertLeft(sheet);
@@ -70,6 +71,42 @@ it('request report: status bar reopens unseen instructions leftAsWritten instead
   await waitFor(() => expect(markSeen).toHaveBeenCalledWith(run.id));
   fireEvent.click(screen.getByRole('button', { name: /^Last tidy-up/ }));
   expect(screen.getByRole('dialog', { name: 'Nothing to tidy' })).toBeVisible();
+});
+
+it.each(['all', 'instructions'] as const)('request report: reopened %s sheet omits fallback detail with leftAsWritten', async (scope) => {
+  const { run } = await open(scope, left());
+  fireEvent.click(screen.getByRole('button', { name: /^Last tidy-up/ }));
+  const sheet = screen.getByRole('dialog', { name: runTitle(run) });
+  assertLeft(sheet);
+  expect(within(sheet).queryByText('Nothing to tidy', { exact: true })).toBeNull();
+  expect(within(sheet).getByRole('button', { name: 'Done' })).toBeVisible();
+  expect(within(sheet).queryByText('Everything has its place.', { exact: true })).toBeNull();
+});
+
+it.each(['all', 'instructions'] as const)('request report: reopened %s sheet without leftAsWritten keeps fallback detail', async (scope) => {
+  const { run } = await open(scope, { ...empty(), created: [{ path: PATH, what: 'Made from 1 thing' }] });
+  fireEvent.click(screen.getByRole('button', { name: /^Last tidy-up/ }));
+  const sheet = screen.getByRole('dialog', { name: runTitle(run) });
+  expect(within(sheet).queryByRole('list', { name: 'Left as you wrote them' })).toBeNull();
+  expect(within(sheet).getByText('Everything has its place.', { exact: true })).toBeVisible();
+});
+
+it.each(['all', 'instructions'] as const)('request report: right panel Now for %s omits fallback detail with leftAsWritten', async (scope) => {
+  const { run } = await open(scope, left(), [], true);
+  const panel = screen.getByRole('tabpanel', { name: 'Bower' });
+  const now = within(panel).getByRole('heading', { name: 'Now' }).closest('section');
+  if (!now) throw new Error('Missing Now section');
+  expect(within(now).getByText(runTitle(run), { exact: true })).toBeVisible();
+  expect(within(now).queryByText('Everything has its place.', { exact: true })).toBeNull();
+});
+
+it.each(['all', 'instructions'] as const)('request report: right panel Now for %s without leftAsWritten keeps fallback detail', async (scope) => {
+  const { run } = await open(scope, { ...empty(), created: [{ path: PATH, what: 'Made from 1 thing' }] }, [], true);
+  const panel = screen.getByRole('tabpanel', { name: 'Bower' });
+  const now = within(panel).getByRole('heading', { name: 'Now' }).closest('section');
+  if (!now) throw new Error('Missing Now section');
+  expect(within(now).getByText(runTitle(run), { exact: true })).toBeVisible();
+  expect(within(now).getByText('Everything has its place.', { exact: true })).toBeVisible();
 });
 
 it('request report: all with filings retains Home replay and status bar replay', async () => {

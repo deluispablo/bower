@@ -73,6 +73,7 @@ for (const source of ['demo', 'fake'] as const) {
       const report = page.getByRole('dialog', { name: 'Done. Bower read your changes', exact: true });
       await expect(report).toBeVisible();
       await expect(report.getByRole('list', { name: 'Left as you wrote them' }).getByText(WHY, { exact: true })).toBeVisible();
+      await expect(report.getByText('Everything has its place.', { exact: true })).toHaveCount(0);
       await expectAxeClean(page, { include: '[role="dialog"]', wcag22: true });
     });
     for (const shape of ['instructions', 'all', 'empty', 'filed-no-replay', 'created', 'all-left', 'left-detail'] as const) {
@@ -129,7 +130,11 @@ for (const source of ['demo', 'fake'] as const) {
           await expect(sheet.getByRole('list', { name: 'Left as you wrote them' })).toHaveCount(0);
         } else {
           await expect(sheet).toHaveAccessibleName(title);
-          await expect(sheet.getByText(detail, { exact: true })).toBeVisible();
+          if (hasLeft && detail === 'Everything has its place.') {
+            await expect(sheet.getByText(detail, { exact: true })).toHaveCount(0);
+          } else {
+            await expect(sheet.getByText(detail, { exact: true })).toBeVisible();
+          }
           await expect(sheet.getByText('Nothing to tidy', { exact: true })).toHaveCount(0);
           const rows = sheet.getByRole('list', { name: 'Left as you wrote them' });
           if (hasLeft) {
