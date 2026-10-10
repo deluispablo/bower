@@ -150,3 +150,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `d20eeaa3` | c4-undo-compensate | none for stored formats: sends read the outbox under the lock; the failed list is written before outbox removal; old manifests without dated removals keep their order byte for byte. |
 | `20e76dc1` | c4-undo-confirm-in-place | none for stored data: the online Undo confirmation replaces its toast in place (toast.replace), as the offline swap does; copy unchanged. |
 | `ce1eb3cd` | folder-header-wrap | none: the folder table header cells stay on one line (CSS only); no data or file change |
+| `b8555ada` | c5-empty-note-help | none: tests only (the empty-note copy and Open in Drive red). |
+| `c1f845cc` | c5-empty-note-help | none for stored data: the empty-note line says how to write in a note (Drive for desktop, any notes app) with the existing Open in Drive action; copy only. |
