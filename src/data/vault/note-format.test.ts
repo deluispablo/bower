@@ -26,6 +26,14 @@ const summaryValidator = (): ((value: string) => unknown) => {
   return typeof candidate === 'function' ? candidate as (value: string) => unknown : () => false;
 };
 
+// Quote every casing, including mixed case, for consumers using either YAML schema.
+const yaml11SummaryValues = [
+  ...['yes', 'no', 'on', 'off', 'y', 'n'].flatMap((value) =>
+    Array.from({ length: 2 ** value.length }, (_, mask) => [...value]
+      .map((letter, index) => mask & (1 << index) ? letter.toUpperCase() : letter).join(''))),
+  '0b11', '1_000', '12:30', '0o17',
+];
+
 const summaryQuotingRows: { point: string; value: string; scalar: string }[] = [
   { point: 'colon-space', value: 'Mulch: collection tomorrow.', scalar: '"Mulch: collection tomorrow."' },
   { point: 'space-hash', value: 'Collection at #amber.', scalar: '"Collection at #amber."' },
@@ -41,6 +49,9 @@ const summaryQuotingRows: { point: string; value: string; scalar: string }[] = [
     '0x1f', '0o17', '.inf', '-.inf', '.NaN', '2026-10-10'].map((value) => ({
     point: `typed-looking ${value}`, value, scalar: `"${value}"`,
   })),
+  ...yaml11SummaryValues.map((value) => ({
+    point: `YAML 1.1/1.2 string ${value}`, value, scalar: `"${value}"`,
+  })),
 ];
 
 it.each(summaryQuotingRows)('B2a summary: 1 $point: writes one escaped double-quoted scalar', ({ value, scalar }) => {
@@ -53,7 +64,7 @@ it.each(summaryQuotingRows)('B2a summary: 1 $point: writes one escaped double-qu
 
 it('B2a summary: 1 plain controls: keeps safe YAML text plain and unchanged', () => {
   for (const summary of ['Alex keeps a note.', 'café 日本語 🙂 e\u0301', 'time 12:30', 'amber#label',
-    'inside [brackets], {braces}', 'https://example.com/path', 'yes', 'no', 'on', 'off']) {
+    'inside [brackets], {braces}', 'https://example.com/path']) {
     const raw = serializeNote(summaryNote(summary));
     expect(raw.split('\n')[1]).toBe(`summary: ${summary}`);
     expect(parseNote('Synthetic.md', raw).summary).toBe(summary);
@@ -101,6 +112,57 @@ it('B2a summary: 2 legacy fixtures: keeps old parsed summary bytes and personal 
   }
 });
 
+const legacyPlainSummaryRows = [
+  { point: 'literal Unicode escape', scalar: 'a\\u0041b' },
+  { point: 'literal doubled apostrophe', scalar: "Alex''s note." },
+];
+it.each(legacyPlainSummaryRows)('B2a summary: 2 legacy $point: plain values parse exactly as before', ({ scalar }) => {
+  summaryControl();
+  expect(parseNote('Synthetic.md', summaryRaw(scalar)).summary).toBe(scalar);
+});
+
+const storedQuotedSummaryRows = [
+  { point: 'recognized Unicode escape', scalar: '"a\\u0041b"', text: 'aAb' },
+  { point: 'doubled apostrophe', scalar: "'Alex''s note.'", text: "Alex's note." },
+];
+const untouchedSummaryRaw = (scalar: string): string =>
+  ['---', `summary: ${scalar}`, '---', '', 'Alex keeps these words.', ''].join('\n');
+
+it.each(storedQuotedSummaryRows)('B2a summary: 2 person note $point: untouched round trip keeps note bytes', ({ scalar, text }) => {
+  summaryControl();
+  for (const control of ['Alex keeps a note.', '"A note: with a colon"']) {
+    const raw = untouchedSummaryRaw(control);
+    const parsed = parseNote('Personal.md', raw);
+    expect(parsed.byBower).toBe(false);
+    expect(summaryBytes(serializeNote(parsed))).toEqual(summaryBytes(raw));
+  }
+  const raw = untouchedSummaryRaw(scalar);
+  const parsed = parseNote('Personal.md', raw);
+  expect(parsed.byBower).toBe(false);
+  // Quoted reads decode per YAML; an untouched person's note retains its stored bytes.
+  // The packet owns the serializer boundary, with existing-note edits outside this entry.
+  expect(parsed.summary).toBe(text);
+  expect(summaryBytes(serializeNote(parsed))).toEqual(summaryBytes(raw));
+});
+
+const quotedSummaryLineBreakRows = [
+  ['NEL', '\u0085'], ['line separator', '\u2028'], ['paragraph separator', '\u2029'],
+].flatMap(([point, lineBreak]) => ['"', "'"].map((quote) => ({
+  point: `${point} ${quote === '"' ? 'double' : 'single'} quotes`,
+  scalar: `${quote}a${lineBreak}b${quote}`, text: `a${lineBreak}b`,
+})));
+
+it.each(quotedSummaryLineBreakRows)('B2a summary: 2 existing $point: reads text without surrounding quotes', ({ scalar, text }) => {
+  summaryControl();
+  expect(parseNote('Synthetic.md', summaryRaw('"aAb"')).summary).toBe('aAb');
+  expect(parseNote('Synthetic.md', summaryRaw("'aAb'")).summary).toBe('aAb');
+  // Stored text remains readable even though one-line validation refuses it for new writes.
+  expect(parseNote('Synthetic.md', summaryRaw(scalar)).summary).toBe(text);
+  const validSummary = summaryValidator();
+  expect(validSummary('aAb')).toBe(true);
+  expect(validSummary(text)).toBe(false);
+});
+
 it('B2a summary: 3 generated one-line strings: round-trips exact text within 200 characters', () => {
   summaryControl();
   const glyph = fc.oneof(
@@ -114,6 +176,22 @@ it('B2a summary: 3 generated one-line strings: round-trips exact text within 200
     expect(summary.length).toBeLessThanOrEqual(200);
     const raw = serializeNote(summaryNote(summary));
     expect(parseNote('Synthetic.md', raw).summary, JSON.stringify(summary)).toBe(summary);
+  }
+});
+
+it('B2a summary: 3 generated lone surrogates: validSummary refuses ill-formed UTF-16', () => {
+  summaryControl();
+  const validSummary = summaryValidator();
+  const surrounding = fc.array(fc.constantFrom('a', 'é', '日', '🙂', '\u0301'), { maxLength: 40 });
+  const generated = fc.sample(fc.tuple(surrounding, fc.integer({ min: 0xd800, max: 0xdfff }), surrounding),
+    { seed: 422004, numRuns: 500 });
+  for (const [before, code, after] of generated) {
+    const control = `${before.join('')}🙂${after.join('')}`;
+    expect(validSummary(control)).toBe(true);
+    expect(parseNote('Synthetic.md', serializeNote(summaryNote(control))).summary).toBe(control);
+    const summary = `${before.join('')}${String.fromCharCode(code)}${after.join('')}`;
+    expect(summary.length).toBeLessThanOrEqual(200);
+    expect(validSummary(summary), JSON.stringify(summary)).toBe(false);
   }
 });
 
@@ -139,6 +217,9 @@ const summaryRefuseRows = [
   { point: '201-character bound', value: 'x'.repeat(201) },
   { point: 'over bound before trimming', value: ` ${'x'.repeat(199)} ` },
   { point: 'Unicode over existing string bound', value: '🙂'.repeat(101) },
+  ...[0xd800, 0xdbff, 0xdc00, 0xdfff].map((code) => ({
+    point: `lone surrogate U+${code.toString(16).toUpperCase()}`, value: `a${String.fromCharCode(code)}b`,
+  })),
   ...[['LF', '\n'], ['CR', '\r'], ['CRLF', '\r\n'], ['NEL', '\u0085'], ['line separator', '\u2028'], ['paragraph separator', '\u2029']]
     .map(([point, lineBreak]) => ({ point: `${point} never folded`, value: `Alex${lineBreak}keeps a note.` })),
   ...Array.from({ length: 32 }, (_, code) => ({ point: `control U+${code.toString(16).padStart(4, '0')}`, value: `Alex${String.fromCharCode(code)}keeps a note.` })),
