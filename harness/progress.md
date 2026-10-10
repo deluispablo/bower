@@ -282,3 +282,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-10: c4-sheet-settle passes — test(c4-sheet-settle): passes (P4-66 PASS)
 - 2026-10-10: c4-create-resume passes — fix(c4-create-resume): passes (P4-68 PASS)
 - 2026-10-10: c4-undo-compensate passes — fix(c4-undo-compensate): passes (P4-67, P4-67b PASS; designer verified)
+- 2026-10-10: c4-undo-confirm-in-place passes — fix(c4-undo-confirm-in-place): passes (P4-69 PASS; designer verified)

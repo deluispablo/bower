@@ -6493,7 +6493,7 @@
     "id": "c4-undo-confirm-in-place",
     "task": "p4-consolidation",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "The online Undo confirmation replaces its toast in place through toast.replace, as the offline swap does (defect undo-confirm-not-in-place).",
     "steps": [
