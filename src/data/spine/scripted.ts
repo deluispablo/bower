@@ -11,7 +11,7 @@
  * a run took (`taken`), it plans only those piles, those things and those journal lines.
  */
 import { createOwnershipContext, type OwnershipContext } from '../contracts/ownership-format';
-import type { DriveFile } from '../drive/drive-api';
+import { UNCONFIRMED_WRITE_MESSAGE, type DriveFile } from '../drive/drive-api';
 import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate, personalTimelineRefusal } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent, type TimelineConsent, type AppendCompletion, type LeftAsWritten, type SatisfiedAppend } from '../contracts/run-manifest';
@@ -31,7 +31,7 @@ import { parseTimelineLine } from '../contracts/timeline-line';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
 import { grounded, groundedKeys, seen } from './grounded';
-import { APPENDS_RECORD_KEY, RunRecords, RUNS_NAME, canonical, isManifestName } from './records';
+import { RunRecords, RUNS_NAME, canonical, isManifestName } from './records';
 import { NOT_FILED } from './report';
 import { SET_ASIDE, capturePiles, listedPiles, pileShape } from './plan';
 import { duplicatesOf, wordsSaved, type Duplicate } from './duplicates';
@@ -165,27 +165,35 @@ const recordsOf = (read: ScriptedRead, rootId: string, listing: readonly DriveFi
  * is read through `RunRecords.found`, whose walk checks the first checkpoint against its originating manifest. Only the
  * run's own bindings count; nothing is carried from one manifest to the next (TL-P4-32 addendum 2 (4)).
  */
-export async function personalAppendHistory(read: ScriptedRead, rootId: string, listing: readonly DriveFile[], ix: VaultIndex): Promise<AppendHistory> {
+export async function personalAppendHistory(read: ScriptedRead, rootId: string, listing: readonly DriveFile[], ix: VaultIndex, requests: readonly { rec: JournalRecord; files: readonly DriveFile[] }[] = []): Promise<AppendHistory> {
   const records = recordsOf(read, rootId, listing);
-  const runs = new Set(listing.filter((f) => !f.folder && isManifestName(f.name) && f.appProperties?.[APPENDS_RECORD_KEY] === '1'
-    && parentOf(parentOf(ix.pathOf(f.id) ?? '')) === RUNS_PATH).map((f) => nameOf(parentOf(ix.pathOf(f.id) ?? ''))));
+  const runs = new Map<string, Set<string>>();
+  for (const request of requests) if (request.rec.kind === 'request') for (const file of request.files) {
+    const runId = ix.waitingRun(file.id);
+    if (runId) runs.set(runId, new Set([...(runs.get(runId) ?? []), request.rec.id]));
+  }
   const lines: AppendHistory['lines'] = [];
   const completed = new Map<string, AppendCompletion>();
-  for (const runId of runs) {
+  for (const [runId, requestIds] of runs) {
+    if (!listing.some((f) => f.folder && f.name === runId && parentOf(ix.pathOf(f.id) ?? '') === RUNS_PATH)) continue;
     const found = await records.found(runId);
     if (found.kind !== 'run') throw new BowerError('unknown', 'Bower could not read what it did.');
     const head = found.chain.at(-1);
     const outcomes = head?.outcomes ?? [];
-    for (const r of head?.completedAppends ?? []) completed.set(JSON.stringify([r.requestId, r.targetFileId]), r);
+    for (const r of head?.completedAppends ?? []) if (requestIds.has(r.requestId)) completed.set(JSON.stringify([r.requestId, r.targetFileId]), r);
     for (const op of found.manifest.operations) {
       if (op.effect.kind !== 'edit-text') continue;
       const outcome = outcomes.find((o) => o.operationId === op.operationId);
       for (const c of op.effect.changes) {
-        if (c.kind !== 'timeline-append' || !c.consent || !c.entries[0]) continue;
+        if (c.kind !== 'timeline-append' || !c.consent || !c.entries[0] || !requestIds.has(c.consent.requestId)) continue;
         const filed = found.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === c.consent?.sourceFileId);
         const sourceLanded = filed ? outcomes.some((o) => o.operationId === filed.operationId && o.state === 'applied')
           : found.manifest.capture.places.some((p) => p.file.fileId === c.consent?.sourceFileId);
-        if (outcome?.state === 'applied' || (sourceLanded && outcome?.state === 'rejected' && outcome.failure.code === 'conflict'))
+        // The engine records this unknown rejection only after read-back says not-landed. Keep its binding
+        // when the published pointer selects this run; changed/gone or unreadable effects are not retried.
+        const retryable = outcome?.state === 'rejected' && (outcome.failure.code === 'conflict'
+          || (outcome.failure.code === 'unknown' && outcome.failure.message === UNCONFIRMED_WRITE_MESSAGE));
+        if (outcome?.state === 'applied' || (sourceLanded && retryable))
           lines.push({ consent: c.consent, entry: c.entries[0], applied: outcome.state === 'applied', path: op.effect.path });
       }
     }
@@ -196,23 +204,13 @@ export async function personalAppendHistory(read: ScriptedRead, rootId: string, 
 /** Runs Bower keeps (the runner's retention, `KEEP_FINISHED` in `runner/src/spine/retention.ts`): older ones go to the Bin. */
 const RETAINED_RUNS = 20;
 
-/**
- * Since when the run records reach back, once retention may have let one go (TL-P4-32 addendum 5 (3)): the request time
- * of the oldest run still kept, read through `RunRecords.found`, when at least `RETAINED_RUNS` runs are kept; null
- * while fewer are, since then none was let go. A request older than this with no binding or completion in the kept
- * records may have been bound in a run no longer kept: it fails closed.
- */
-async function retainedSince(read: ScriptedRead, rootId: string, listing: readonly DriveFile[], ix: VaultIndex): Promise<number | null> {
+/** The retention horizon comes only from the kept run folders' listing, never from record content. */
+function retainedSince(listing: readonly DriveFile[], ix: VaultIndex): number | null {
   const runs = listing.filter((f) => f.folder && !f.trashed && parentOf(ix.pathOf(f.id) ?? '') === RUNS_PATH);
   if (runs.length < RETAINED_RUNS) return null;
-  const records = recordsOf(read, rootId, listing);
-  let since: number | null = null;
-  for (const run of runs) {
-    const found = await records.found(run.name);
-    if (found.kind === 'run') since = Math.min(since ?? found.manifest.requestedAt, found.manifest.requestedAt);
-    else if (found.kind === 'broken') console.error(`Run ${run.name} could not be read for its requests' age: ${found.why}`);
-  }
-  return since;
+  const ages = runs.map((f) => Date.parse(f.createdTime));
+  if (ages.some((at) => !Number.isFinite(at))) throw new BowerError('unknown', 'Bower could not read what it did.');
+  return Math.min(...ages);
 }
 
 /** A request's bound line already in its note as read: satisfied, or appended once its source's final name differs. */
@@ -226,9 +224,7 @@ type LeftRow = LeftAsWritten & { requestId: string; sources: string[] | null };
  * is refused whole, its "Left as you wrote them" rows, what its archive waits for, and its completion.
  * - One request per note per run (2): the oldest unfinished request naming a note settles; a younger one naming it stays
  *   in the inbox untouched.
- * - A request's identity is its record id (TL-P4-32 addendum 5): one archived settles as a no-op, and one with a binding
- *   or a completion in the kept records is bound only by those ids, never by its words' titles again (a replay changes
- *   nothing). One older than every kept run with neither fails closed: its row, no line, and its archive.
+ * - A waiting request's identity is its record id in its own RunRecords, never its filename or a title match. One older than every kept run with neither fails closed: its row, no line, and its archive.
  * - A refused request (more than three named, a name two notes share) is refused whole, by source (3): no note named
  *   is touched, and no edit in the run cites a source it files, Bower's own hubs included. A request is not tied to one
  *   pile, so every thing the run files is its source.
@@ -254,14 +250,6 @@ function settleRequest(requests: readonly JournalLine[], listing: readonly Drive
     const id = l.rec.id;
     // A binding or a completion in the kept records fixes the request's notes by id (TL-P4-32 addendum 5 (2)).
     const recorded = history.completed.some((h) => h.requestId === id) || history.lines.some((h) => h.consent.requestId === id);
-    // A request already archived (`archivedRecords`, by its record id) settled before: it binds nothing again.
-    if (l.archived) {
-      if (recorded || requestTargets(listing, ix, l.rec.text ?? l.rec.what).notes.length) {
-        owned.add(id);
-        admitted.add(id);
-      }
-      continue;
-    }
     if (recorded) {
       owned.add(id);
       // A request waiting on such a line keeps the notes and the source it was bound to, by id, never its words' titles
@@ -279,6 +267,12 @@ function settleRequest(requests: readonly JournalLine[], listing: readonly Drive
           retries.set(target, { consent: h.consent, entry: h.entry });
         } else rows.push({ requestId: id, sources: [], name: h.path, why: ASK_GONE });
       }
+      continue;
+    }
+    if (l.waitingRun) {
+      owned.add(id);
+      admitted.add(id);
+      rows.push({ requestId: id, sources: [], name: 'Request', why: TOO_OLD_WHY });
       continue;
     }
     const { notes, refused } = requestTargets(listing, ix, l.rec.text ?? l.rec.what);
@@ -670,11 +664,11 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   const readiness = await capturePiles(drive, rootId, piles.map(pileShape), { notes: true, context: opts.context });
   // Things already saved (`duplicates.ts`, TL-P4-10 addendum 2), by their content.
   const dups = duplicatesOf(listing, ix, piles.flatMap((p) => p.items.map((i) => i.id)));
-  const appends = await personalAppendHistory(drive, rootId, listing, ix);
+  const appends = await personalAppendHistory(drive, rootId, listing, ix, lines);
   // How far the kept records reach is read only for a request with nothing of it there (TL-P4-32 addendum 5 (3)).
-  const unrecorded = lines.some((l) => l.rec.kind === 'request' && !l.archived && !appends.completed.some((h) => h.requestId === l.rec.id)
+  const unrecorded = lines.some((l) => l.rec.kind === 'request' && !appends.completed.some((h) => h.requestId === l.rec.id)
     && !appends.lines.some((h) => h.consent.requestId === l.rec.id));
-  const since = unrecorded ? await retainedSince(drive, rootId, listing, ix) : null;
+  const since = unrecorded ? retainedSince(listing, ix) : null;
   return { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since };
 }
 type Captured = Awaited<ReturnType<typeof capture>>;
@@ -1859,6 +1853,11 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const place = archiveFolder ?? changesFolder;
     if (!place) throw new BowerError('unknown', OWN_FILES);
     places.set(place.id, place);
+    if (changesFolder) places.set(changesFolder.id, changesFolder);
+    for (const path of [`${SYSTEM.changes}/pending`, `${SYSTEM.changes}/pending/${opts.runId}`]) {
+      const folder = ix.file(path);
+      if (folder) places.set(folder.id, folder);
+    }
   }
   // A runner file made again goes into `.bower`, a captured place.
   if ((!requests || !hashesFile || (!questionsFile && questionsText !== null)) && sys?.folder) places.set(sys.id, sys);
@@ -2050,11 +2049,23 @@ export async function build(decided: Decided): Promise<Ended> {
     if (!result.ok) throw new BowerError('unknown', B_FAILURE);
     edit.text = result.text;
   }
+  // Publish the recovery pointer with an in-place move before any personal append. A crash before the physical
+  // pending/archive move can still select exactly this run. The physical move clears the temporary property.
+  const pointers = new Map<string, string[]>();
+  for (const line of journal) if (line.rec.kind === 'request'
+    && edits.some((e) => e.changes.some((c) => c.kind === 'timeline-append' && c.consent?.requestId === line.rec.id))) {
+    const sources = settlement.sourcesOf(line.rec.id, runSources).flatMap((id) => moveOf.get(id) ?? []);
+    const own: string[] = [];
+    for (const f of line.files) own.push(await add({ kind: 'move', before: seen(f), parent: { fileId: f.parents[0] ?? '' },
+      name: f.name, properties: { [PROP.run]: opts.runId } }, sources));
+    pointers.set(line.rec.id, own);
+  }
   // After the filing moves, each note edit (TL-P2-20), then the merges whose moves depend on their line. A Timeline
   // line's note is marked new in place after its edit, and gets its updated row once it applied.
   for (const edit of edits) {
     // A line citing a thing filed by this run waits for that thing's move (C06).
-    const cited = edit.after.flatMap((id) => moveOf.get(id) ?? []);
+    const cited = [...edit.after.flatMap((id) => moveOf.get(id) ?? []), ...edit.changes.flatMap((c) =>
+      c.kind === 'timeline-append' && c.consent ? pointers.get(c.consent.requestId) ?? [] : [])];
     const beforeText = edit.keeps.length ? { beforeText: new TextDecoder().decode(edit.bytes) } : {};
     const op = await add({ kind: 'edit-text', before: seen(edit.file), path: edit.path, beforeContent: edit.before, changes: edit.changes, text: edit.text, content: await utf8(edit.text), ...beforeText }, cited);
     editOf.set(edit.file.id, op);
@@ -2220,6 +2231,16 @@ export async function build(decided: Decided): Promise<Ended> {
     archiveChain.push(made);
     archiveTo = { createdBy: made };
   }
+  let pendingTo: Target | null = null;
+  if (pointers.size && changesFolder) {
+    const path = `${SYSTEM.changes}/pending`;
+    const folder = ix.file(path);
+    const parent: Target = folder ? { fileId: folder.id } : { createdBy: await add({ kind: 'create-folder',
+      parent: { fileId: changesFolder.id }, name: 'pending', createKey: newKey('folder') }) };
+    const run = ix.file(`${path}/${opts.runId}`);
+    pendingTo = run ? { fileId: run.id } : { createdBy: await add({ kind: 'create-folder', parent,
+      name: opts.runId, createKey: newKey('folder') }) };
+  }
   /** What each record's archive waits for: the plan's `needs`. */
   const archives = new Map<string, readonly string[]>();
   const satisfiedAppends: SatisfiedAppend[] = [];
@@ -2235,7 +2256,15 @@ export async function build(decided: Decided): Promise<Ended> {
     const derived = [...new Set([...(write ? [write] : []), ...n.edits, ...n.derived, ...sourceMoves])];
     archives.set(line.rec.id, derived);
     const moves: string[] = [];
-    for (const f of line.files) moves.push(await add({ kind: 'move', before: seen(f), parent: archiveTo, name: f.name, properties: {} }, derived));
+    for (const f of line.files) {
+      const pointer = pointers.get(line.rec.id) ?? [];
+      // Pending moves run once append outcomes are known, including a definite clash. The archive still waits
+      // for successful edits. Thus only a clash leaves the unchanged request in its originating run's folder.
+      const pending = pendingTo && pointer.length ? await add({ kind: 'move', before: seen(f), parent: pendingTo,
+        name: f.name, properties: { [PROP.run]: null } }, [...pointer, ...n.edits, ...sourceMoves]) : null;
+      moves.push(await add({ kind: 'move', before: seen(f), parent: archiveTo, name: f.name,
+        properties: line.waitingRun ? { [PROP.run]: null } : {} }, [...derived, ...(pending ? [pending] : [])]));
+    }
     // A line already there completes its request with the request's archive.
     for (const p of satisfied.filter((x) => x.consent.requestId === line.rec.id)) if (moves[0]) {
       satisfiedAppends.push({ consent: p.consent, entry: p.line.entry, before: seen(p.file), path: p.path, text: new TextDecoder().decode(p.bytes), content: p.before, operationId: moves[0], editContract: 2 });
@@ -2333,39 +2362,8 @@ function refused(why: string): never {
   throw e;
 }
 
-/**
- * A journal line as a B run captures it: the record, every file it was written to, and their one digest; `archived`
- * when it is a request whose record id is already in the archive (`archivedRecords`).
- */
-type JournalLine = { rec: JournalRecord; files: DriveFile[]; sha256: string; archived: boolean };
-
-/**
- * Whether a request of your changes is already archived (TL-P4-32 addenda 3 (1) and 5 (1)): a run archives a line by
- * moving its file into `changes/archive`, and settles it there. A copy of the same record back in your changes
- * (restored by hand, under any name) is that settled request again, never a new one, whatever its age:
- * `settleRequest` binds no note for it. The record id inside each archived file decides, never a file name. The
- * archive is read once, and only when your changes hold a request.
- */
-function archivedRecords(drive: ScriptedRead, ix: VaultIndex): (id: string) => Promise<boolean> {
-  let ids: Promise<Set<string>> | null = null;
-  const read = async (): Promise<Set<string>> => {
-    const active = new Set(ix.journalFiles().map((x) => x.id));
-    const archived = ix.journalFiles(true).filter((x) => !active.has(x.id) && !x.folder && x.name.endsWith('.json'));
-    const out = new Set<string>();
-    for (const text of await Promise.all(archived.map((a) => ownText(drive, a)))) {
-      let rec: unknown;
-      try {
-        rec = JSON.parse(text);
-      } catch (e) {
-        if (!(e instanceof SyntaxError)) throw e;
-        continue;
-      }
-      if (isJournalRecord(rec)) out.add(rec.id);
-    }
-    return out;
-  };
-  return async (id) => (await (ids ??= read())).has(id);
-}
+/** A journal record and its physical copies; only a waiting request points to earlier run evidence. */
+type JournalLine = { rec: JournalRecord; files: DriveFile[]; sha256: string; waitingRun: string | null };
 
 /**
  * Your changes since the last tidy-up, each once by its id with all its
@@ -2410,14 +2408,13 @@ async function journalOf(drive: ScriptedRead, ix: VaultIndex): Promise<JournalLi
     copies.set(rec.id, [...(copies.get(rec.id) ?? []), { rec, file: f, sha256: digest.sha256 }]);
   }
   const lines: JournalLine[] = [];
-  const archived = archivedRecords(drive, ix);
   for (const [, all] of copies) {
     const [first] = all;
-    if (!first || all.some((c) => c.sha256 !== first.sha256 || c.file.parents.length !== 1)) {
+    if (!first || all.some((c) => c.sha256 !== first.sha256 || c.file.parents.length !== 1 || ix.waitingRun(c.file.id) !== ix.waitingRun(first.file.id))) {
       left += all.length;
       continue;
     }
-    lines.push({ rec: first.rec, files: all.map((c) => c.file), sha256: first.sha256, archived: first.rec.kind === 'request' && await archived(first.rec.id) });
+    lines.push({ rec: first.rec, files: all.map((c) => c.file), sha256: first.sha256, waitingRun: first.rec.kind === 'request' ? ix.waitingRun(first.file.id) : null });
   }
   lines.sort((a, b) => a.rec.at - b.rec.at || a.rec.id.localeCompare(b.rec.id));
   if (left) console.error(new BowerError('unknown', JOURNAL_LEFT), `${left} journal files left uncaptured`);

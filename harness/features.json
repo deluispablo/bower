@@ -6848,13 +6848,13 @@
     "id": "smoke-request-slow",
     "task": "p4-c05",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "A request run reads only its own evidence: no archive scan, waiting requests in .bower/changes/pending/<run id>/, horizon from listing metadata (lead ruling, DECISIONS after bd2671ba).",
     "steps": [
       "A main golden with 50 archived requests and 25 kept runs reads the pile-run baseline plus at most 1 per waiting request."
     ],
-    "verify": "",
+    "verify": "pnpm -C runner exec vitest run test/c05-bounded-reads.test.ts -t \"C05 bounded reads\"",
     "note": "Smoke 2ab7b490: 268 s, 757 reads. Escalated; implementation after B1a integrates. Packet 2026-10-10-smoke-request-slow-packet.md. implementer: codex."
   },
   {
@@ -6974,7 +6974,7 @@
     "steps": [
       "The prep's E1 reds pass through the real queue, fake Drive and fake IndexedDB."
     ],
-    "verify": "",
+    "verify": "pnpm exec vitest run src/data/upload-resume.test.ts -t \"upload-resume-after-reload\"",
     "note": "C02 E1. Escalated. Designer verifies the reload behaviour (U3) before close. Packet 2026-10-10-upload-resume-after-reload-packet.md. implementer: codex."
   },
   {
@@ -7041,5 +7041,44 @@
     ],
     "verify": "",
     "note": "After rules-added-region. Designer verifies. Packet 2026-10-10-rules-original-ui-packet.md. implementer: codex."
+  },
+  {
+    "id": "rules-added-region-model",
+    "task": "p4-e",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "The model sees the person's rules prose first, then the rules added in Bower, within today's 4,000 units with a marked cut; an empty region leaves the input byte-identical (TL-P4-53 Q7).",
+    "steps": [
+      "Runner claude.ts reds and corpus cases: original first, region second, one bounded projection, byte-identical input with no region."
+    ],
+    "verify": "",
+    "note": "Follow-up of rules-added-region; touches runner claude.ts, so after B1c and B3b (lead 2026-10-10). Packet to cut when it starts. implementer: codex."
+  },
+  {
+    "id": "pwa-update-one-reload",
+    "task": "p4-e",
+    "category": "fix",
+    "passes": true,
+    "ui": false,
+    "what": "One reload after a deploy runs the new build even before the new service worker installs; offline still opens (navigations network-first, 3 s timeout).",
+    "steps": [
+      "e2e:pwa: A open, B deployed and not installed, one reload runs B; offline opens; the old 6 stay green."
+    ],
+    "verify": "pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts -g \"pwa-update-one-reload\"",
+    "note": "DEFECT_LOG pwa-update-one-reload; ruling (a) after 32b43f82. Codex red and implementation, Claude review, live staging check. Packet 2026-10-10-pwa-update-one-reload-packet.md. implementer: codex."
+  },
+  {
+    "id": "undo-fifo-seed",
+    "task": "p4-e",
+    "category": "fix",
+    "passes": true,
+    "ui": false,
+    "what": "The Undo property model knows an inverse the drain retires without sending after its original is refused; seed -1937975690 path 40 is pinned and passes.",
+    "steps": [
+      "The named replay and the class table pass; unresolved heads still block."
+    ],
+    "verify": "pnpm exec vitest run src/data/vault/undo-compensate.property.test.ts -t \"undo-fifo-seed\"",
+    "note": "DEFECT_LOG undo-fifo-seed; ruling (b) after f885992c. Tests only. Packet 2026-10-10-undo-fifo-seed-packet.md. implementer: codex."
   }
 ]

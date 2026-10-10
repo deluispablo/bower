@@ -21,7 +21,7 @@ import { PROP, RUNNER_WRITES, SYSTEM, recordStamp } from '../vault/layout';
 /** `.bower/runs`, as Drive names it. */
 export const RUNS_NAME = 'runs';
 /** Discovery hint only; replay authority remains the verified manifest and checkpoint chain. */
-export const APPENDS_RECORD_KEY = 'bowerAppends';
+const APPENDS_RECORD_KEY = 'bowerAppends';
 const PILES_NAME = SYSTEM.piles.slice(SYSTEM.dir.length + 1);
 
 export const manifestName = (hash: string): string => `manifest-${hash}.json`;

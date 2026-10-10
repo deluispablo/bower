@@ -72,9 +72,15 @@ export interface StorageLike {
 }
 
 /** Tells the other tabs of this device that the queue changed. */
+interface QueueCompletion {
+  /** The account/folder/declaration/member/hash identity, never a file name. */
+  id: string;
+  fileId: string;
+}
+
 export interface QueueBus {
-  post: () => void;
-  listen: (onMessage: () => void) => void;
+  post: (completion?: QueueCompletion) => void;
+  listen: (onMessage: (completion?: QueueCompletion) => void) => void;
 }
 
 /** A `BroadcastChannel` bus, or `undefined` where there is none. */
@@ -82,9 +88,16 @@ export function broadcastBus(): QueueBus | undefined {
   if (typeof BroadcastChannel === 'undefined') return undefined;
   const channel = new BroadcastChannel('bower-uploads');
   return {
-    post: () => channel.postMessage('changed'),
+    post: (completion) => channel.postMessage(completion ?? 'changed'),
     listen: (onMessage) => {
-      channel.onmessage = () => onMessage();
+      channel.onmessage = (event: MessageEvent<unknown>) => {
+        const message = event.data;
+        const completion = typeof message === 'object' && message !== null
+          && 'id' in message && typeof message.id === 'string'
+          && 'fileId' in message && typeof message.fileId === 'string'
+          ? { id: message.id, fileId: message.fileId } : undefined;
+        onMessage(completion);
+      };
     },
   };
 }
@@ -290,19 +303,25 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     const finished: Entry[] = [];
     for (const entry of entries.values()) {
       const { item, halted } = entry;
-      // Kept on the device, gone from it, not sent here: another tab finished it.
+      // Kept on the device, gone from it, not sent here: another tab may have finished it.
       // One held back is being removed here: it is not done.
       if (item.durable && item.state === 'waiting' && !halted && !ids.has(item.id)) {
-        item.state = 'done';
-        item.sent = item.size;
         finished.push(entry);
       }
     }
     // Its file, where this page knew the reserved id (one a block interrupted here and another tab finished).
-    for (const { item, record } of finished) {
-      if (record.fileId === null || item.file) continue;
+    for (const entry of finished) {
+      const { item, record } = entry;
+      if (record.fileId === null) continue;
       try {
-        item.file = await drive.getUploaded(record.fileId);
+        // It stays on its way until this page knows the arrival, including while read-back waits or fails.
+        const file = item.file ?? await drive.getUploaded(record.fileId);
+        if (gen !== generation || entries.get(item.id) !== entry) return;
+        item.file = file;
+        item.sent = item.size;
+        item.state = 'done';
+        // Publish this arrival before another member's read-back can wait.
+        notify();
       } catch (error) {
         console.error(error);
       }
@@ -407,7 +426,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
       if (entry.kept) {
         // Drive has it: the bytes go, whichever start this was.
         await store.remove(record).catch((error: unknown) => console.error(error));
-        bus?.post();
+        bus?.post({ id: item.id, fileId: file.id });
       }
       item.state = 'done';
       item.file = file;
@@ -554,9 +573,17 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     return run;
   }
 
-  bus?.listen(() => {
+  bus?.listen((completion) => {
     const s = scope;
-    if (s === null || paused) return;
+    if (s === null) return;
+    // Keep the reservation before read-back waits or Use here changes the generation.
+    // A staged sibling may have been hydrated before its owner reserved this id.
+    const entry = completion === undefined ? undefined : entries.get(completion.id);
+    if (completion && entry && !tombstones.has(entry.item.id) && entry.record.fileId === null) {
+      entry.record.fileId = completion.fileId;
+      entry.item.fileId = completion.fileId;
+    }
+    if (paused) return;
     if (role === 'owner') void pump();
     else refresh(s, generation).catch((error: unknown) => console.error(error));
   });

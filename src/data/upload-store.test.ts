@@ -35,7 +35,7 @@ describe('the upload store', () => {
 
     await store.save({ ...later, session: 'SESSION', confirmed: 2, fileId: 'RESERVED_ID' });
     const again = await store.list('account-a', 'FOLDER_ID');
-    expect(again[1]).toMatchObject({ session: 'SESSION', confirmed: 2, fileId: 'RESERVED_ID' });
+    expect(again.find((record) => record.memberKey === later.memberKey)).toMatchObject({ session: 'SESSION', confirmed: 2, fileId: 'RESERVED_ID' });
     const bytes = await store.body(later);
     expect(bytes?.type).toBe('application/pdf');
     expect(bytes && [...new Uint8Array(await bytes.arrayBuffer())]).toEqual([7, 8, 9]);

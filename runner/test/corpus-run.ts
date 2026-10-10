@@ -50,7 +50,7 @@ export interface CaseRun {
   /** Request records actually admitted to this press, retaining each journal line's identity. */
   requests?: Array<{ id: string; text: string }>;
   /** How a later explicit or default request reached the active journal before admission. */
-  requestAction?: { kind: 'replay'; id: string; outcome: 'already-active' | 'restored' } | { kind: 'tidy'; id: string };
+  requestAction?: { kind: 'replay'; id: string; outcome: 'redispatched' } | { kind: 'tidy'; id: string };
   /** The final expectations and, when supplied, every press's expectations. */
   score?: Score;
   /** The folder after the run, path to text; folders and the Bin are left out. */
@@ -87,6 +87,8 @@ interface CaseOptions {
   /** A valid Worker admission for feed-only/no-item runs, fixed by the test before main. */
   admission?: AdmissionManifest;
   request?: CorpusPress['request'];
+  /** The immutable run to redispatch for an explicit replay; never restore archived bytes. */
+  replayOf?: CaseRun;
   /** A yes schedules the next press through answerQuestion, with the app's scope and idempotency key. */
   answerStart?: { scope: 'all' | 'instructions'; subject?: string; requestId: string };
   around?: (fetch: typeof globalThis.fetch) => typeof globalThis.fetch;
@@ -173,7 +175,7 @@ async function runCase(c: LoadedCase, { around, realTokens = false, claude, prop
       } else await changeBetween(drive, root, step);
     }
     if (answerStart && press.request) throw new Error('An answer run and an explicit request need separate presses.');
-    runs.push(await runOnDrive(c, drive, root, { ...options, request: press.request, answerStart }, i + 2));
+    runs.push(await runOnDrive(c, drive, root, { ...options, request: press.request, answerStart, replayOf: runs.at(-1) }, i + 2));
   }
   const last = runs.at(-1) ?? first;
   const result = runs.length === 1 ? last : { ...last, runs: runs.slice(0, -1) };
@@ -222,31 +224,25 @@ async function submitAnswer(c: LoadedCase, previous: CaseRun, step: Extract<Corp
   return scheduled;
 }
 
-/** Only an exact archived or active journal record id can be replayed. */
+/** Replay never writes a request; tidy-up creates a fresh journal record. */
 async function addRequest(drive: FakeDrive, root: string, press: number, request: CorpusPress['request']): Promise<NonNullable<CaseRun['requestAction']>> {
+  if (request?.kind === 'replay') return { kind: 'replay', id: request.id, outcome: 'redispatched' };
   const seen = await snapshot(drive, root);
   const changes = Object.entries(seen.pathsById).find(([, path]) => path === SYSTEM.changes)?.[0];
   if (!changes) throw new Error('The changes folder is missing.');
-  if (request?.kind === 'replay') {
-    const records = Object.entries(seen.after).filter(([path]) => path.startsWith(`${SYSTEM.changes}/`) && path.endsWith('.json'))
-      .map(([path, text]) => ({ path, record: JSON.parse(text) as unknown }))
-      .filter((r) => isJournalRecord(r.record) && r.record.kind === 'request' && r.record.id === request.id);
-    const original = records[0]?.record;
-    if (!isJournalRecord(original)) throw new Error(`replay: missing request ${request.id}`);
-    if (records.some((r) => !r.path.startsWith(`${SYSTEM.changes}/archive/`))) {
-      return { kind: 'replay', id: original.id, outcome: 'already-active' };
-    }
-    await drive.createText(changes, `${original.id}.json`, `${JSON.stringify(original)}\n`);
-    return { kind: 'replay', id: original.id, outcome: 'restored' };
-  } else {
-    await drive.createText(changes, `press-${press}.json`, JSON.stringify({ v: 1, id: `press-${press}`, device: 'device-1', at: AT + press,
-      kind: 'request', what: 'Asked Bower to update the notes', text: request?.text ?? 'Update these notes.' }));
-    return { kind: 'tidy', id: `press-${press}` };
-  }
+  await drive.createText(changes, `press-${press}.json`, JSON.stringify({ v: 1, id: `press-${press}`, device: 'device-1', at: AT + press,
+    kind: 'request', what: 'Asked Bower to update the notes', text: request?.text ?? 'Update these notes.' }));
+  return { kind: 'tidy', id: `press-${press}` };
 }
 
 /** Each press admits the current folder and uses the production runner/planner/write path. */
-export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, { around, realTokens = false, claude, env: more = {}, request, answerStart, pacing, admission }: CaseOptions, press: number): Promise<CaseRun> {
+export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, { around, realTokens = false, claude, env: more = {}, request, replayOf, answerStart, pacing, admission }: CaseOptions, press: number): Promise<CaseRun> {
+  if (request?.kind === 'replay') {
+    if (!replayOf || replayOf.drive !== drive || replayOf.root !== root
+      || !replayOf.requests?.some((r) => r.id === request.id)) throw new Error(`replay: missing run for request ${request.id}`);
+    const requestAction = await addRequest(drive, root, press, request);
+    return { ...await redispatchCase(c, replayOf, press, { around, claude, pacing }), requests: replayOf.requests, requestAction };
+  }
   const current = await snapshot(drive, root);
   const requestAction = press > 1 && !answerStart ? await addRequest(drive, root, press, request) : undefined;
   const scope = answerStart?.scope ?? (press > 1 && !Object.keys(current.after).some((p) => p.startsWith('Inbox/')) ? 'instructions' : c.scope);

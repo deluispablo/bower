@@ -194,6 +194,7 @@ it('replays the original request id separately from a new tidy-up', async () => 
   expect(run.code).toBe(0);
   expect(Reflect.get(run.runs?.[0] ?? {}, 'requests')).toEqual([{ id: 'change-1', text }]);
   expect(Reflect.get(run.runs?.[1] ?? {}, 'requests')).toEqual([{ id: 'change-1', text }]);
+  expect(run.runs?.[1]?.dispatch).toEqual(run.runs?.[0]?.dispatch);
   expect(Reflect.get(run, 'requests')).toEqual([{ id: 'press-3', text }]);
 });
 
@@ -248,10 +249,11 @@ it('reports a settled replay without writing another request', async () => {
     && (JSON.parse(text) as { id: string }).id === 'change-2');
   expect(requests).toHaveLength(1);
   expect(run.requests).toEqual([{ id: 'change-2', text }]);
-  expect(Reflect.get(run, 'requestAction')).toEqual({ kind: 'replay', id: 'change-2', outcome: 'restored' });
+  expect(run.dispatch).toEqual(first?.dispatch);
+  expect(Reflect.get(run, 'requestAction')).toEqual({ kind: 'replay', id: 'change-2', outcome: 'redispatched' });
 });
 
-it('reports a restored replay and a newly written tidy-up separately', async () => {
+it('reports a same-run replay and a newly written tidy-up separately', async () => {
   const { runScripted } = await import('./corpus-run');
   const seed = await loadCase(resolve(import.meta.dirname, '../../harness/corpus/c09-closest-flat'));
   const text = 'Which flat is closest to Ferrowick?';
@@ -266,7 +268,9 @@ it('reports a restored replay and a newly written tidy-up separately', async () 
   expect(first?.after['.bower/changes/change-1.json']).toBeUndefined();
   expect(first?.after['.bower/changes/archive/change-1.json']).toBeDefined();
   expect(second?.requests).toEqual([{ id: 'change-1', text }]);
-  expect(Reflect.get(second ?? {}, 'requestAction')).toEqual({ kind: 'replay', id: 'change-1', outcome: 'restored' });
+  expect(second?.dispatch).toEqual(first?.dispatch);
+  expect(second?.after).toEqual(first?.after);
+  expect(Reflect.get(second ?? {}, 'requestAction')).toEqual({ kind: 'replay', id: 'change-1', outcome: 'redispatched' });
   expect(run.requests).toEqual([{ id: 'press-3', text }]);
   expect(Reflect.get(run, 'requestAction')).toEqual({ kind: 'tidy', id: 'press-3' });
 });

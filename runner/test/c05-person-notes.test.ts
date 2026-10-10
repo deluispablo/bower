@@ -8,9 +8,9 @@ import type { RunReport, Question } from '../../src/data/contracts/types';
 import { ASK_GONE, subjectOf } from '../../src/data/contracts/questions';
 import { parseRunCheckpoint, verifyCheckpointChain } from '../../src/data/contracts/run-checkpoint';
 import { SYSTEM } from '../../src/data/vault/layout';
-import { caseReplies, runOnDrive, runScripted, runWithClaude, scoreCase, seedCase, type CaseRun } from './corpus-run';
+import { AT, caseReplies, redispatchCase, runOnDrive, runScripted, runWithClaude, scoreCase, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
-import { RunRecords } from '../../src/data/spine/records';
+import { RunRecords, RUNS_NAME } from '../../src/data/spine/records';
 import * as c05Whys from '../../src/data/spine/scripted';
 
 // Namespace access lets the missing signed copy fail an assertion, rather than module loading or tsc.
@@ -230,7 +230,7 @@ describe('C05 person notes through runner main', () => {
     assertPersonal(r);
   });
 
-  it('C05 person notes: corpus first append, protected ranges, state question, replay and later non-adoption score per run', async () => {
+  it('C05 person notes: corpus first append, protected ranges, state question and later non-adoption score per run', async () => {
     await positiveControl();
     const c = await loadCase(resolve(import.meta.dirname, '../../harness/corpus/c05-note-not-written-by-bower'));
     const r = await runScripted(c);
@@ -324,7 +324,7 @@ describe('C05 person notes through runner main', () => {
     assertPersonal(next);
   });
 
-  it('C05 person notes: landed append with lost answer and failed read-back resumes then replays exactly once', async () => {
+  it('C05 person notes: landed append with lost answer and failed read-back resumes exactly once', async () => {
     await positiveControl();
     const c = await fixture();
     const drive = fixedDrive();
@@ -355,11 +355,10 @@ describe('C05 person notes through runner main', () => {
     const resumed = await runOnDrive(c, drive, root, { claude }, 1);
     expect.soft(modelCalls).toBe(callsAtLoss);
     expect.soft(resumed.after[PATH]).toBe(first.after[PATH]);
-    // Later run restores the exact request id; a model offering new wording must not append it.
-    const replay = await runOnDrive(c, drive, root, { request: { kind: 'replay', id: 'change-1' },
+    // Repeat same-run recovery with new model wording: the persisted append is never planned again.
+    const replay = await runOnDrive(c, drive, root, {
       claude: reply(() => ({ kind: 'tidy-intent', v: 1, things: [], lines: [{ note: PATH,
-        text: 'The new water butt is here now.', cites: idOf(resumed, `Areas/Home/${SOURCE}`) }] })) }, 2);
-    expect(replay.requestAction).toEqual(expect.objectContaining({ kind: 'replay', id: 'change-1' }));
+        text: 'The new water butt is here now.', cites: idOf(resumed, `Areas/Home/${SOURCE}`) }] })) }, 1);
     expect.soft(replay.after[PATH]?.split(` · ${NEWS}`).length).toBe(2);
     expect(replay.after[PATH]).not.toContain('The new water butt is here now.');
     expect(replay.after[PATH]).toBe(resumed.after[PATH]);
@@ -388,7 +387,7 @@ describe('C05 person notes through runner main', () => {
     for (const path of paths) expect.soft(r.after[path]).toBe(c.folder[path]);
   });
 
-  it('C05 person notes: fix 1 finding 2: a conflicted append survives twenty newer runs and retries its filed source', async () => {
+  it('C05 person notes: fix 1 finding 2: a conflicted append retries its filed source within twenty retained runs', async () => {
     await positiveControl();
     const c = await fixture();
     const drive = fixedDrive(); const root = await seedCase(drive, c);
@@ -406,27 +405,31 @@ describe('C05 person notes through runner main', () => {
       return response;
     };
     let r = await runOnDrive(c, drive, root, { claude: appendReply(), around }, 1);
+    drive.setTimes(idOf(r, `${SYSTEM.dir}/${RUNS_NAME}/abc123-run1`) ?? '', AT, AT);
     const source = idOf(r, `Areas/Home/${SOURCE}`);
     expect(source).toBeTruthy(); expect(clashes).toBe(1);
     const retry = reply(() => ({ kind: 'tidy-intent', v: 1, things: [], lines: [{ note: PATH, text: NEWS, cites: source }] }));
     r = await runOnDrive(c, drive, root, { claude: retry, around }, 2);
+    drive.setTimes(idOf(r, `${SYSTEM.dir}/${RUNS_NAME}/abc123-run1-2`) ?? '', AT + 1, AT + 1);
     // Positive retry control: the next manifest really carries the same binding and captured place.
     const retryManifest = Object.entries(r.after).find(([path]) => path.includes('/abc123-run1-2/manifest-'));
     expect(retryManifest?.[1]).toContain('"sourceFileId":"' + source + '"');
     expect(clashes).toBe(2);
-    for (let press = 3; press <= 22; press++) r = await runOnDrive(c, drive, root, { claude: retry, around }, press);
-    expect(clashes).toBe(22);
-    expect(Object.keys(r.after).some((path) => path.includes('/abc123-run1/manifest-'))).toBe(false);
+    for (let press = 3; press <= 19; press++) {
+      r = await runOnDrive(c, drive, root, { claude: retry, around }, press);
+      drive.setTimes(idOf(r, `${SYSTEM.dir}/${RUNS_NAME}/abc123-run1-${press}`) ?? '', AT + press - 1, AT + press - 1);
+    }
+    expect(clashes).toBe(19);
+    expect(Object.keys(r.after).some((path) => path.includes('/abc123-run1/manifest-'))).toBe(true);
     const fresh = r.after[PATH] ?? '';
-    const final = await runOnDrive(c, drive, root, { claude: retry }, 23);
+    const final = await runOnDrive(c, drive, root, { claude: retry }, 20);
     expect(final.after[PATH]).toBe(fresh.replace('- 2026-10-07 · The committee will replace the shared water butt.',
       `- 2026-10-07 · The committee will replace the shared water butt.\n- 2026-10-07 · ${NEWS} · [[${SOURCE}]]`));
     expect(reportOf(final).updated).toEqual(expect.arrayContaining([expect.objectContaining({ path: PATH, what: APPENDED })]));
     assertPersonal(final);
-    const replay = await runOnDrive(c, drive, root, { request: { kind: 'replay', id: 'change-1' },
-      claude: retry }, 24);
+    const replay = await runOnDrive(c, drive, root, { request: { kind: 'tidy', text: 'Update Garden plot.' }, claude: retry }, 21);
     expect(replay.after[PATH]).toBe(final.after[PATH]);
-    const found = await new RunRecords(drive, root).found('abc123-run1-24');
+    const found = await new RunRecords(drive, root).found('abc123-run1-21');
     expect(found.kind).toBe('run');
     if (found.kind !== 'run') return;
     expect(found.manifest).not.toHaveProperty('appendEvidence');
@@ -462,15 +465,34 @@ describe('C05 person notes through runner main', () => {
   const nextReply = (source: string, text: string) => reply(() => ({ kind: 'tidy-intent', v: 1,
     things: [{ fileId: source, to: 'Areas/Home', name: 'Next water butt update.txt' }], lines: [{ note: PATH, text, cites: source }] }));
 
+  // Keep the original request pending after completion; never copy an archive back to the inbox.
+  async function completedAwaitingArchive(c: LoadedCase, drive: CaseRun['drive'], root: string): Promise<CaseRun> {
+    let interrupted = 0;
+    const first = await runOnDrive(c, drive, root, { claude: appendReply(), around: (fetch) => async (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      const parent = url.searchParams.get('addParents');
+      if (init?.method === 'PATCH' && parent && (await drive.get(parent)).name === 'archive') {
+        interrupted++;
+        throw new TypeError('Made-up interruption before the request archive landed.');
+      }
+      return fetch(input, init);
+    } }, 1);
+    expect(interrupted).toBe(1);
+    expect(first.after[`${SYSTEM.changes}/pending/abc123-run1/change-1.json`]).toBeDefined();
+    expect(first.after[`${SYSTEM.archive}/change-1.json`]).toBeUndefined();
+    return first;
+  }
+
   it('C05 person notes: fix 1 finding 4: a completed replay cannot consume the new request for the same note', async () => {
     await positiveControl();
     const c = await fixture(); const drive = fixedDrive(); const root = await seedCase(drive, c);
-    const first = await runOnDrive(c, drive, root, { claude: appendReply() }, 1);
+    const first = await completedAwaitingArchive(c, drive, root);
     expect(first.after[PATH]).toContain(` · ${NEWS} · [[${SOURCE}]]`);
     const source = await addNextSource(first, true);
     const text = 'Alex has received the new instructions.';
-    const r = await runOnDrive(c, drive, root, { request: { kind: 'replay', id: 'change-1' }, claude: nextReply(source, text) }, 2);
+    const r = await runOnDrive(c, drive, root, { request: { kind: 'tidy', text: 'Update these notes.' }, claude: nextReply(source, text) }, 2);
     expect(r.requests?.map((q) => q.id)).toContain('change-2');
+    expect(r.requestAction).toEqual({ kind: 'tidy', id: 'press-2' });
     expect(reportOf(r).filed).toHaveLength(1);
     expect(r.after[PATH]).toContain(` · ${text} · [[Next water butt update.txt]]`);
     expect(r.after[PATH]?.split(` · ${NEWS}`).length).toBe(2);
@@ -491,9 +513,16 @@ describe('C05 person notes through runner main', () => {
     const first = await runOnDrive(c, drive, root, { claude: appendReply() }, 1);
     expect(first.after[PATH]).toBe(c.folder[PATH]);
     expect(reportOf(first).filed).toHaveLength(1); expect(reportOf(first).updated).toEqual([]);
+    const completed = await new RunRecords(drive, root).found('abc123-run1');
+    expect(completed.kind).toBe('run');
+    if (completed.kind !== 'run') return;
+    expect(completed.chain.at(-1)?.completedAppends).toEqual([{ requestId: 'change-1', targetFileId: idOf(first, PATH) }]);
     const source = await addNextSource(first, false);
-    const r = await runOnDrive(c, drive, root, { request: { kind: 'replay', id: 'change-1' },
-      claude: nextReply(source, 'The same requested update has different wording now.') }, 2);
+    const r = await redispatchCase(c, first, 2, {
+      claude: nextReply(source, 'The same requested update has different wording now.') });
+    expect(r.code).toBe(0);
+    expect(r.dispatch?.runId).toBe(first.dispatch?.runId);
+    expect(await new RunRecords(drive, root).found('abc123-run1')).toEqual(completed);
     expect(reportOf(r).filed).toHaveLength(1);
     expect(r.after[PATH]).toBe(first.after[PATH]);
     expect(reportOf(r).updated).toEqual([]); assertPersonal(r);
@@ -707,8 +736,8 @@ describe('C05 person notes through runner main', () => {
     const found = await new RunRecords(r.drive, r.root).found('abc123-run1');
     expect(found.kind).toBe('run');
     if (found.kind === 'run') expect(found.chain.at(-1)?.completedAppends).toEqual([{ requestId: 'change-1', targetFileId: idOf(r, PATH) }]);
-    const replay = await runOnDrive(c, r.drive, r.root, { request: { kind: 'replay', id: 'change-1' },
-      claude: reply(() => ({ kind: 'tidy-intent', v: 1, things: [], lines: [{ note: PATH, text: 'Different replay wording.', cites: idOf(r, newSource[0]) }] })) }, 2);
+    const replay = await redispatchCase(c, r, 2, {
+      claude: reply(() => ({ kind: 'tidy-intent', v: 1, things: [], lines: [{ note: PATH, text: 'Different replay wording.', cites: idOf(r, newSource[0]) }] })) });
     expect(replay.after[PATH]).toBe(r.after[PATH]); assertPersonal(replay);
   });
 
@@ -731,6 +760,26 @@ describe('C05 person notes through runner main', () => {
   const round4File = (fileId: string, name: string, body = 'Alex received the next committee letter.') => ({
     fileId, to: 'Areas/Home', name, note: { name: name.replace(/\.txt$/, '.md'), summary: body, body },
   });
+
+  function requestArchive(r: CaseRun, stored: Awaited<ReturnType<typeof round4Records>>, requestId: string) {
+    const operations = stored.manifest.operations;
+    const destination = (target: { fileId: string } | { createdBy: string }): string | undefined => {
+      if ('fileId' in target) return r.pathsById[target.fileId];
+      const made = operations.find((o) => o.operationId === target.createdBy);
+      if (made?.effect.kind !== 'create-folder') return undefined;
+      const parent = destination(made.effect.parent);
+      return parent ? `${parent}/${made.effect.name}` : undefined;
+    };
+    const pending = operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === requestId
+      && destination(o.effect.parent) === `${SYSTEM.changes}/pending/abc123-run1`);
+    const archive = operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === requestId
+      && destination(o.effect.parent) === SYSTEM.archive);
+    expect(pending, 'the request first moves to its originating pending folder').toBeDefined();
+    expect(archive, 'the archive is selected by its destination').toBeDefined();
+    if (!archive || !pending) throw new Error('pending and archive moves are both required');
+    expect(operations.indexOf(archive)).toBeGreaterThan(operations.indexOf(pending));
+    return archive;
+  }
 
   it('C05 person notes: round 4 1: settlement survives recovery and retention', async () => {
     await positiveControl();
@@ -762,7 +811,7 @@ describe('C05 person notes through runner main', () => {
     expect(lost.after[`${SYSTEM.archive}/change-1.json`]).toBeUndefined();
     const checkpoint = await round4Records(lost, 'abc123-run1');
     expect(checkpoint.chain.at(-1)?.completedAppends).toEqual([{ requestId: 'change-1', targetFileId: idOf(lost, PATH) }]);
-    const archive = checkpoint.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === requestId);
+    const archive = requestArchive(lost, checkpoint, requestId);
     expect(archive).toBeDefined();
     expect(checkpoint.chain.at(-1)?.outcomes.find((o) => o.operationId === archive?.operationId)?.state).not.toBe('applied');
     const recoverySource = await addNextSource(lost, false);
@@ -790,13 +839,13 @@ describe('C05 person notes through runner main', () => {
       expect(later.after[PATH]).toBe(first.after[PATH]);
     }
     expect(Object.keys(later.after).some((path) => path.includes('/abc123-run1/manifest-'))).toBe(false);
-    // Explicitly requested pass-3 reproduction: restore the exact id after twenty newer successful runs.
-    // The archived original remains, so admission must not treat its restored copy as an unfinished request.
+    // After twenty newer successful runs, a supported pile cannot revive the settled request.
     const freshSource = await addNextSource(later, false);
-    const replay = await runOnDrive(c, drive, root, { request: { kind: 'replay', id: 'change-1' },
+    const replay = await runOnDrive(c, drive, root, {
       claude: reply((ctx) => ({ kind: 'tidy-intent', v: 1, things: [round4File(freshSource, 'Next water butt update.txt')],
         lines: ctx.notes.some((n) => n.path === PATH) ? [{ note: PATH, text: 'The new water butt is here now.', cites: freshSource }] : [] })) }, 22);
-    expect(replay.requestAction).toEqual({ kind: 'replay', id: 'change-1', outcome: 'restored' });
+    expect(replay.requestAction).toEqual({ kind: 'tidy', id: 'press-22' });
+    expect(replay.after[`${SYSTEM.archive}/change-1.json`]).toBe(first.after[`${SYSTEM.archive}/change-1.json`]);
     expect(replay.code).toBe(0);
     expect(reportOf(replay).filed).toHaveLength(1);
     expect.soft(replay.after[PATH]).toBe(first.after[PATH]);
@@ -807,6 +856,8 @@ describe('C05 person notes through runner main', () => {
 
   async function round4Pending() {
     const c = await fixture(); const drive = fixedDrive(); const root = await seedCase(drive, c);
+    const requestId = (await drive.listAll(root)).find((f) => f.name === 'change-1.json')?.id ?? '';
+    const requestBytes = await drive.readText(requestId);
     const noteId = (await drive.listAll(root)).find((f) => f.name === 'Garden plot.md')?.id ?? '';
     let clashes = 0;
     const first = await runOnDrive(c, drive, root, { claude: appendReply(), around: (fetch) => async (input, init) => {
@@ -820,9 +871,11 @@ describe('C05 person notes through runner main', () => {
       }
       return response;
     } }, 1);
+    drive.setTimes(idOf(first, `${SYSTEM.dir}/${RUNS_NAME}/abc123-run1`) ?? '', AT, AT);
     expect(first.code).toBe(0); expect(clashes).toBe(1);
     expect(first.after[PATH]).not.toContain(` · ${NEWS} · [[${SOURCE}]]`);
-    expect(first.after[`${SYSTEM.changes}/change-1.json`]).toBeDefined();
+    expect.soft(first.after[`${SYSTEM.changes}/pending/abc123-run1/change-1.json`]).toBe(requestBytes);
+    expect.soft(first.after[`${SYSTEM.changes}/change-1.json`]).toBeUndefined();
     const sourceId = idOf(first, `Areas/Home/${SOURCE}`) ?? '';
     expect(sourceId).toBeTruthy();
     const stored = await round4Records(first, 'abc123-run1');
@@ -941,6 +994,7 @@ describe('C05 person notes through runner main', () => {
         `Alex received made-up letter ${press}.`, { pile: `newer-${press}` });
       later = await runOnDrive(c, first.drive, first.root, { claude: reply(() => ({ kind: 'tidy-intent', v: 1,
         things: [round4File(source.id, name, `Alex received made-up letter ${press}.`)] })) }, press);
+      first.drive.setTimes(idOf(later, `${SYSTEM.dir}/${RUNS_NAME}/abc123-run1-${press}`) ?? '', AT + press - 1, AT + press - 1);
       expect(later.code).toBe(0);
       expect(reportOf(later).filed).toHaveLength(1);
       const stored = await round4Records(later, `abc123-run1-${press}`);
@@ -957,11 +1011,13 @@ describe('C05 person notes through runner main', () => {
   it('C05 person notes: round 5 1: archived completion uses the record id inside differently named bytes', async () => {
     await positiveControl();
     const c = await fixture(); const drive = fixedDrive(); const root = await seedCase(drive, c);
+    const requestFileId = (await drive.listAll(root)).find((f) => f.name === 'change-1.json')?.id ?? '';
+    await drive.update(requestFileId, { name: 'different-name.json' });
     const first = await runOnDrive(c, drive, root, { claude: appendReply() }, 1);
     expect(first.code).toBe(0);
     expect(first.after[PATH]).toContain(` · ${NEWS} · [[${SOURCE}]]`);
-    const archivedBytes = first.after[`${SYSTEM.archive}/change-1.json`] ?? '';
-    const archivedFileId = idOf(first, `${SYSTEM.archive}/change-1.json`) ?? '';
+    const archivedBytes = first.after[`${SYSTEM.archive}/different-name.json`] ?? '';
+    const archivedFileId = idOf(first, `${SYSTEM.archive}/different-name.json`) ?? '';
     expect(archivedFileId).toBeTruthy();
     expect(archivedBytes).toBeTruthy();
     expect(JSON.parse(archivedBytes)).toEqual(expect.objectContaining({ id: 'change-1' }));
@@ -969,29 +1025,24 @@ describe('C05 person notes through runner main', () => {
     expect(completed.chain.at(-1)?.completedAppends).toEqual([{ requestId: 'change-1', targetFileId: idOf(first, PATH) }]);
     const later = await round5NewerRuns(c, first);
 
-    // Positive replay control after retention: the same bytes under the original name already settle as a no-op.
+    // Supported control after retention: the archived request is never restored.
     const controlSource = await addNextSource(later, false);
-    const control = await runOnDrive(c, drive, root, { request: { kind: 'replay', id: 'change-1' },
+    const control = await runOnDrive(c, drive, root, {
       claude: reply((ctx) => ({ kind: 'tidy-intent', v: 1,
         things: [round4File(controlSource, 'Next water butt update.txt')],
         lines: ctx.notes.some((n) => n.path === PATH)
           ? [{ note: PATH, text: 'The new water butt is here now.', cites: controlSource }] : [] })) }, 22);
-    expect(control.requestAction).toEqual({ kind: 'replay', id: 'change-1', outcome: 'restored' });
     expect(control.code).toBe(0); expect(reportOf(control).filed).toHaveLength(1);
     expect(control.after[PATH]).toBe(first.after[PATH]);
     expect((await round4Records(control, 'abc123-run1-22')).chain.at(-1)?.completedAppends ?? []).toEqual([]);
-
-    // Keep the archived original; restore its exact bytes under a filename unrelated to its journal id.
-    const restored = await drive.createText(idOf(control, SYSTEM.changes) ?? '', 'restored-copy.json', archivedBytes);
-    expect(await drive.readText(restored.id)).toBe(archivedBytes);
-    expect(restored.id).not.toBe(archivedFileId);
     expect(await drive.readText(archivedFileId)).toBe(archivedBytes);
+
+    // A settled request stays archived. A later pile cannot grant a second append from those bytes.
     const source = await drive.createText(idOf(control, 'Inbox') ?? '', 'Replay letter.txt', 'Alex received another made-up letter.', { pile: 'replay-copy' });
-    const replay = await runOnDrive(c, drive, root, { request: { kind: 'replay', id: 'change-1' },
+    const replay = await runOnDrive(c, drive, root, {
       claude: reply((ctx) => ({ kind: 'tidy-intent', v: 1, things: [round4File(source.id, 'Replay letter.txt')],
         lines: ctx.notes.some((n) => n.path === PATH)
           ? [{ note: PATH, text: 'The new water butt is here now.', cites: source.id }] : [] })) }, 23);
-    expect(replay.requestAction).toEqual({ kind: 'replay', id: 'change-1', outcome: 'already-active' });
     expect(replay.code).toBe(0); expect(reportOf(replay).filed).toHaveLength(1);
     expect.soft(replay.after[PATH], 'different filename cannot grant a second append').toBe(first.after[PATH]);
     const stored = await round4Records(replay, 'abc123-run1-23');
@@ -1020,7 +1071,7 @@ describe('C05 person notes through runner main', () => {
     const stored = await round4Records(first, 'abc123-run1');
     const noteId = idOf(first, PATH) ?? '';
     expect(stored.chain.at(-1)?.completedAppends).toEqual([{ requestId: 'change-1', targetFileId: noteId }]);
-    const archive = stored.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === requestFileId);
+    const archive = requestArchive(first, stored, requestFileId);
     expect(archive).toBeDefined();
     expect(stored.chain.at(-1)?.outcomes.find((o) => o.operationId === archive?.operationId)?.state).not.toBe('applied');
     return { c, drive, root, first, noteId };
@@ -1079,11 +1130,11 @@ describe('C05 person notes through runner main', () => {
     ]);
 
     const { c, first, drive, root, noteId, sourceId } = await round4Pending();
-    const activeBytes = first.after[`${SYSTEM.changes}/change-1.json`] ?? '';
+    const activeBytes = first.after[`${SYSTEM.changes}/pending/abc123-run1/change-1.json`] ?? '';
     await drive.trash(sourceId);
     expect((await drive.evidence(sourceId))?.trashed).toBe(true);
     const later = await round5NewerRuns(c, first);
-    expect(later.after[`${SYSTEM.changes}/change-1.json`]).toBe(activeBytes);
+    expect(later.after[`${SYSTEM.changes}/pending/abc123-run1/change-1.json`]).toBe(activeBytes);
     const oldest = await round4Records(later, 'abc123-run1-2');
     expect((JSON.parse(activeBytes) as { at: number }).at).toBeLessThan(oldest.manifest.requestedAt);
     await drive.update(noteId, { name: 'Beds.md' });
@@ -1101,10 +1152,10 @@ describe('C05 person notes through runner main', () => {
     expect.soft(stored.chain.at(-1)?.completedAppends ?? []).toEqual([]);
     expect.soft(stored.manifest.operations.some((o) => o.effect.kind === 'edit-text'
       && [noteId, another.id].includes(o.effect.before.fileId))).toBe(false);
-    expect.soft(next.after[`${SYSTEM.changes}/change-1.json`]).toBeUndefined();
+    expect.soft(next.after[`${SYSTEM.changes}/pending/abc123-run1/change-1.json`]).toBeUndefined();
     expect.soft(next.after[`${SYSTEM.archive}/change-1.json`]).toBe(activeBytes);
     const archive = stored.manifest.operations.find((o) => o.effect.kind === 'move'
-      && o.effect.before.fileId === idOf(first, `${SYSTEM.changes}/change-1.json`));
+      && o.effect.before.fileId === idOf(first, `${SYSTEM.changes}/pending/abc123-run1/change-1.json`));
     expect.soft(archive, 'the stale request has its archive move').toBeDefined();
     expect.soft(stored.chain.at(-1)?.outcomes.find((o) => o.operationId === archive?.operationId)?.state).toBe('applied');
     expect.soft(reportOf(next).updated).toEqual([]);
@@ -1260,9 +1311,10 @@ describe('C05 person notes through runner main', () => {
     expect(stored.chain.at(-1)?.outcomes.find((o) => o.operationId === clashed?.operationId)).toEqual(expect.objectContaining({
       state: 'rejected', failure: expect.objectContaining({ code: 'conflict' }),
     }));
-    expect.soft(first.after[`${SYSTEM.changes}/change-1.json`], 'one clashed target keeps the request active').toBe(requestBytes);
+    expect.soft(first.after[`${SYSTEM.changes}/pending/abc123-run1/change-1.json`], 'one clashed target keeps the request active').toBe(requestBytes);
+    expect.soft(first.after[`${SYSTEM.changes}/change-1.json`]).toBeUndefined();
     expect.soft(first.after[`${SYSTEM.archive}/change-1.json`], 'the other completion cannot archive the request early').toBeUndefined();
-    const archive = stored.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === requestId);
+    const archive = requestArchive(first, stored, requestId);
     expect(archive).toBeDefined();
     expect.soft(stored.chain.at(-1)?.outcomes.find((o) => o.operationId === archive?.operationId)?.state).not.toBe('applied');
 
@@ -1334,18 +1386,19 @@ describe('C05 person notes through runner main', () => {
 
     async function replay(c: LoadedCase, first: CaseRun): Promise<CaseRun> {
       const source = await addNextSource(first, false);
-      const r = await runOnDrive(c, first.drive, first.root, {
-        request: { kind: 'replay', id: 'change-1' },
+      const r = await redispatchCase(c, first, 2, {
         claude: reply(() => ({ kind: 'tidy-intent', v: 1,
           things: [round4File(source, 'Next water butt update.txt')],
           lines: [{ note: path, text: 'Alex received another update about the bed.', cites: source }] })),
-      }, 2);
+      });
       expect(r.code).toBe(0);
-      expect(r.requestAction).toEqual({ kind: 'replay', id: 'change-1', outcome: 'restored' });
+      expect(r.dispatch).toEqual(first.dispatch);
       expect(reportOf(r).filed).toHaveLength(1);
       expect(r.after[path]).toBe(first.after[path]);
-      expect(reportOf(r).updated).toEqual([]);
-      expect(await completions(r, 'abc123-run1-2')).toEqual([]);
+      expect(reportOf(r).updated).toEqual(reportOf(first).updated);
+      expect(await completions(r)).toEqual(await completions(first));
+      const storedRun = (run: CaseRun) => Object.entries(run.after).filter(([p]) => p.startsWith(`${SYSTEM.dir}/${RUNS_NAME}/abc123-run1/`));
+      expect(storedRun(r)).toEqual(storedRun(first));
       staysPersonal(r);
       return r;
     }
