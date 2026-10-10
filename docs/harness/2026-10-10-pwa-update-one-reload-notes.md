@@ -204,3 +204,7 @@ importer for the declared dependencies within its authorized scope before frozen
 
 tests changed: src/vite-config.test.ts: the bare-import scanner skips src/sw.ts, which injectManifest builds and Vite never pre-bundles; worker deps do not join OPTIMIZED_DEPS.
 Lockfile: offline `pnpm install` added only the root importer entries for workbox-core, workbox-precaching, workbox-routing and workbox-strategies at 7.4.1 (already in the store through vite-plugin-pwa); no other entry changed, no network, supply-chain policy check passed (817 entries).
+
+## Known-green close (coordinator)
+
+done.sh could not prove the red by reverting 73b3c196: without src/sw.ts, tsconfig.sw.json has no inputs and the build stops before any test runs. The red is proved at its commit: at fb3c534c the coordinator ran `pnpm e2e:pwa` and `pwa-update-one-reload: / executes B before its worker installs` failed on its assertion (A's precached bundles ran, not B's index-DKtH2vo8.js). After the fix e2e:pwa passes 12/12; pnpm check green; e2e app demo 31 and fake 33; P4-97 PASS.
