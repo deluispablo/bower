@@ -357,3 +357,8 @@ Full `pnpm check`, data sweep and e2e belong to implementation/integration deliv
 and were not run in this explicitly scoped red repair. No UI change or green mark
 is claimed. There are no remaining contradictions in the whole touched file.
 removed: none; only the shared fixture's schedule was replaced.
+
+tests changed: src/data/upload-queue-real.test.ts: red repair 1 (TL-P4-53 Q2): select records by member identity, not store position.
+tests changed: src/data/upload-queue.test.ts: red repair 1 (TL-P4-53 Q2): select records by member identity, not store position.
+tests changed: src/data/upload-store.test.ts: red repair 1 (TL-P4-53 Q2): select records by member identity, not store position.
+tests changed: src/data/vault/drive-vault.test.ts: red repairs 1-2 (TL-P4-53 Q2, addendum 3): release the store gate before awaiting addPile; the late arrival comes from a lost final answer.
