@@ -436,3 +436,4 @@ c5-remove-new-note,implementer (fix 1),codex,gpt-5-codex,,1,540469,536568,,47705
 d-v2-24a,merge (c5-test-margin),codex,gpt-5-codex,high,1,750461,746866,,701312,3595,,,,engine.test.ts conflict resolved,2026-10-10
 p4-brain-design,adversarial (design),codex,gpt-5-codex,high,1,2405358,2393635,,2203648,11723,,,,brain design review,2026-10-10
 c05-person-notes,red,codex,gpt-5-codex,,1,5265570,5221598,,5033728,43972,,,,33 reds (0871c4f0),2026-10-10
+c5-remove-new-note,implementer (fix 2),codex,gpt-5-codex,high,1,1428666,1416689,,1324288,11977,,,,surviving New folder tests; typing race found,2026-10-10
