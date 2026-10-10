@@ -512,7 +512,7 @@ export class Journal {
   }
 
   /** Every change since the last tidy-up, oldest first, each once (Drive and this device's outbox). */
-  async list(): Promise<JournalRecord[]> {
+  async list(cachedOnly = false): Promise<JournalRecord[]> {
     this.checkCurrent();
     const key = outboxKey(await this.place.owner());
     const files = (await this.place.files()).filter((f) => !f.folder && f.name.endsWith('.json'));
@@ -520,10 +520,14 @@ export class Journal {
     // The lines are asked for together (a dozen at 300 ms each are one wait, not a dozen); each version is read once.
     const records = await Promise.all(files.map(async (f) => {
       try {
-        const v: unknown = JSON.parse(await this.reads.text(f, () => this.drive.readText(f.id)));
+        const read = cachedOnly ? this.reads.keptText(f, true) : this.reads.text(f, () => this.drive.readText(f.id));
+        if (!read) return null;
+        const v: unknown = JSON.parse(await read);
         if (!isJournalRecord(v)) throw new BowerError('unknown', 'Bower could not read your changes.');
         return v;
       } catch (e) {
+        // Cached projection owns no read: its reader already reports a failed or malformed line.
+        if (cachedOnly) return null;
         console.error(e);
         if (e instanceof SyntaxError) throw new BowerError('unknown', 'Bower could not read your changes.');
         throw e;

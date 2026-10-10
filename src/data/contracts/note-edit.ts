@@ -15,7 +15,7 @@ import type { ChangeEntry, Rule } from './types';
 import { sha256 } from './hashes';
 import { parseNote, timelineEntries } from './note-format';
 import { createOwnershipContext, fenceAfter, parseOwnership, type ByteSpan, type Fence, type Layout, type OwnershipFailure, type FetchedOwnership } from './ownership-format';
-import { parseTimelineLine, timelineLine } from './timeline-line';
+import { parseTimelineLine, timelineLine, type TimelineMarker } from './timeline-line';
 import { parseRules } from './rules-format';
 import type { Change, EditEntry, EditText, Rename, RuleAdd, RuleRemove, TimelineConsent } from './run-manifest';
 import { isHub } from './hub';
@@ -213,11 +213,29 @@ function byBower(text: string, fetched?: FetchedOwnership): boolean {
 // timeline-append
 // ---------------------------------------------------------------------------------------------
 
-/** Why a person's note takes no sourced line (C05 rows 5 and 8): no Timeline, or one `timeline-line.ts` cannot read. */
-function timelineRefusal(text: string, sections: Sections): 'no-timeline' | 'unreadable-timeline' | null {
+/**
+ * A person's Timeline is a list, not a date grammar (CommonMark 0.31.2, list items).
+ * Keep original offsets: blanks belong to the list, indented lines to the preceding item's subtree,
+ * and the next heading to another section. An empty Timeline retains its existing dash append.
+ */
+function timelineAppendability(text: string, sections: Sections): 'no-timeline' | 'unreadable-timeline'
+  | { at: number; end: number; marker: TimelineMarker } {
   if (!sections.timeline) return 'no-timeline';
   const lines = linesOf(text, sections.timeline.start, sections.timeline.end);
-  return lines.slice(1).some((line) => line.text.trim() && !parseTimelineLine(line.text)) ? 'unreadable-timeline' : null;
+  let at = lines[0]?.end ?? sections.timeline.start;
+  let end = sections.timeline.end;
+  let marker: TimelineMarker = '- ';
+  let item = false;
+  for (const line of lines.slice(1)) {
+    if (HEADING.test(line.text)) { end = line.start; break; }
+    if (!line.text.trim()) continue;
+    if (line.text.startsWith('- ') || line.text.startsWith('* ')) {
+      marker = line.text.startsWith('* ') ? '* ' : '- ';
+      item = true;
+    } else if (!item || !/^[ \t]+\S/.test(line.text)) return 'unreadable-timeline';
+    at = line.end;
+  }
+  return { at, end, marker };
 }
 
 /**
@@ -235,7 +253,9 @@ export function personalTimelineRefusal(bytes: Uint8Array, fetched?: FetchedOwne
   if (own.status === 'invalid') return 'unreadable-timeline';
   if (own.status === 'v2' || byBower(text, fetched)) return null;
   const sections = sectionsOf(text, fetched);
-  return sections ? timelineRefusal(text, sections) : 'unreadable-timeline';
+  if (!sections) return 'unreadable-timeline';
+  const appendable = timelineAppendability(text, sections);
+  return typeof appendable === 'string' ? appendable : null;
 }
 
 type Step = { text: string; added: EditEntry[]; rules: Pick<Rule, 'text' | 'yourWords' | 'since'>[] | null } | { refused: EditRefusal };
@@ -252,6 +272,7 @@ function appendLines(text: string, change: Extract<Change, { kind: 'timeline-app
       || (fetched.consents && !fetched.consents.some((x) => x.requestId === c.requestId && x.targetFileId === c.targetFileId && x.sourceFileId === c.sourceFileId))) return { refused: 'not-bower' };
   }
   const eol = eolOf(text);
+  let marker: TimelineMarker = '- ';
   let region = '';
   let at: number;
   let insert: (lines: string[]) => string;
@@ -263,9 +284,14 @@ function appendLines(text: string, change: Extract<Change, { kind: 'timeline-app
   } else {
     const legacy = sectionsOf(text, fetched);
     if (!legacy) return { refused: 'not-bower' };
-    const unwritable = personal ? timelineRefusal(text, legacy) : null;
-    if (unwritable) return { refused: unwritable };
-    if (legacy.timeline) {
+    if (personal) {
+      const appendable = timelineAppendability(text, legacy);
+      if (typeof appendable === 'string') return { refused: appendable };
+      at = appendable.at;
+      marker = appendable.marker;
+      region = text.slice(legacy.timeline?.start, appendable.end);
+      insert = (lines) => lines.map((line) => eol + line).join('');
+    } else if (legacy.timeline) {
       const sectionEnd = legacy.timeline.end;
       const lines = linesOf(text, legacy.timeline.start, sectionEnd);
       region = text.slice(lines[0]?.start ?? sectionEnd, sectionEnd);
@@ -294,7 +320,7 @@ function appendLines(text: string, change: Extract<Change, { kind: 'timeline-app
     return true;
   });
   if (!added.length) return { text, added, rules: null };
-  return { text: authors.splice(text, at, insert(added.map(timelineLine))), added, rules: null };
+  return { text: authors.splice(text, at, insert(added.map((entry) => timelineLine({ ...entry, marker })))), added, rules: null };
 }
 
 // ---------------------------------------------------------------------------------------------

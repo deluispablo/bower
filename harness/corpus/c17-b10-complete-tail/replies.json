@@ -1,0 +1,25 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Seed order guide.txt",
+        "to": "Resources/Gardening",
+        "name": "Seed order guide.txt",
+        "note": {
+          "name": "Seed order guide.md",
+          "summary": "The seed order guide requires a reply by 20 October 2026.",
+          "body": "The guide compares paper labels and reusable trays. Reply by 20 October 2026. Collection is at Wren Hall in Saltmere.\n\n[[Resources/Gardening/Gardening]]"
+        }
+      }
+    ],
+    "lines": [
+      {
+        "note": "Resources/Gardening/Gardening.md",
+        "text": "The seed order guide requires a reply by 20 October 2026.",
+        "cites": "$file:Seed order guide.txt"
+      }
+    ]
+  }
+]

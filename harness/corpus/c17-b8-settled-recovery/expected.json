@@ -1,0 +1,55 @@
+{
+  "files": {
+    "present": [
+      "Resources/Gardening/Mulch notice.txt",
+      "Resources/Gardening/Mulch notice.md",
+      ".bower/log.md",
+      "Bower health.md"
+    ],
+    "absent": [
+      "Inbox/*",
+      "log.md",
+      ".bower/log/2026.md"
+    ]
+  },
+  "unchanged": [
+    "Resources/Gardening/Gardening.md"
+  ],
+  "notes": [
+    {
+      "path": ".bower/log.md",
+      "contains": [
+        "# Log",
+        " | create | ",
+        " | ingest | ",
+        "Mulch notice"
+      ],
+      "excludes": [
+        " | update | ",
+        " | fix | ",
+        "Bower health.md",
+        "Gardening.md"
+      ]
+    },
+    {
+      "path": "Bower health.md",
+      "contains": [
+        "## Bower's note"
+      ],
+      "excludes": [
+        "No checks yet."
+      ]
+    }
+  ],
+  "report": {
+    "filed": 1,
+    "created": [
+      "Resources/Gardening/Mulch notice.md"
+    ],
+    "updated": [
+      "Bower health.md"
+    ],
+    "questionsExactly": 0
+  },
+  "linksResolve": true
+}

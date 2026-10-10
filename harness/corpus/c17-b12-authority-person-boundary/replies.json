@@ -1,0 +1,26 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [],
+    "maps": [
+      {
+        "requestId": "$request:change-1",
+        "setId": "$set:change-1",
+        "results": [
+          {
+            "memberId": "$note:Resources/Gardening/Garden methods.md",
+            "ops": [
+              {
+                "kind": "tag",
+                "targetId": "$note:Resources/Gardening/Garden methods.md",
+                "mode": "add",
+                "value": "gardening"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -1,0 +1,56 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Ferrowick offer.txt",
+        "to": "Projects/Job hunt",
+        "name": "Ferrowick offer.txt",
+        "note": {
+          "name": "Ferrowick offer.md",
+          "summary": "Ferrowick offers Alex remote work.",
+          "body": "Ferrowick offers Alex remote work. Reply by 14 October 2026.\n\nRelated: [[Job hunt]] and [[Old offer]]."
+        }
+      }
+    ],
+    "views": [
+      {
+        "requestId": "$request:change-1",
+        "home": {
+          "kind": "moc",
+          "fileId": "$note:Projects/Job hunt/Job hunt.md"
+        },
+        "mode": "propose",
+        "definition": {
+          "v": 1,
+          "id": "offer-deadlines",
+          "kind": "aggregate",
+          "set": {
+            "type": "offer",
+            "folderId": "$folder:Projects/Job hunt",
+            "recursive": true,
+            "where": {
+              "op": "eq",
+              "property": "status",
+              "value": "active"
+            }
+          },
+          "groupBy": [],
+          "measures": [
+            {
+              "id": "earliest-deadline",
+              "op": "earliest",
+              "property": "deadline"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": []
+  }
+]

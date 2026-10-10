@@ -1,0 +1,27 @@
+{
+  "v": 1,
+  "rows": [
+    {
+      "id": "receipt",
+      "properties": {
+        "amount": {
+          "type": "money"
+        },
+        "spent_on": {
+          "type": "date"
+        },
+        "category": {
+          "type": "enum",
+          "values": [
+            "garden"
+          ]
+        }
+      },
+      "table": [
+        "amount",
+        "spent_on",
+        "category"
+      ]
+    }
+  ]
+}

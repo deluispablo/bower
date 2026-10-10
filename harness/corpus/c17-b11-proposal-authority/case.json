@@ -1,0 +1,37 @@
+{
+  "id": "c17-b11-proposal-authority",
+  "capability": "C17",
+  "title": "Only trusted words propose a view and an ignored proposal survives filing",
+  "covers": "model",
+  "source": "new; TL-P4-39 B11, F13/R5/R7; TL-P4-41/42/44/45/47; pending contract specimen",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "This is an offer for Job hunt.",
+      "files": [
+        "Ferrowick offer.txt"
+      ]
+    }
+  ],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Suggest an earliest-deadline view for active offers in Job hunt, but ask me before saving it. File the clear offer normally."
+    }
+  ],
+  "questions": [],
+  "bowerOwned": [
+    "Rules.md",
+    "Projects/Job hunt/Job hunt.md",
+    "Projects/Job hunt/Old offer.md"
+  ],
+  "presses": [
+    {
+      "request": {
+        "kind": "tidy",
+        "text": "Refresh the folder without accepting the pending suggestion."
+      }
+    }
+  ]
+}

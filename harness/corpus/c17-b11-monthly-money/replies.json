@@ -1,0 +1,43 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [],
+    "views": [
+      {
+        "requestId": "$request:change-1",
+        "home": {
+          "kind": "moc",
+          "fileId": "$note:Areas/Money/Money.md"
+        },
+        "mode": "install",
+        "definition": {
+          "v": 1,
+          "id": "monthly-garden-spend",
+          "kind": "aggregate",
+          "set": {
+            "type": "receipt",
+            "folderId": "$folder:Areas/Money",
+            "recursive": true
+          },
+          "groupBy": [
+            {
+              "property": "spent_on",
+              "bucket": "month"
+            },
+            {
+              "property": "category"
+            }
+          ],
+          "measures": [
+            {
+              "id": "total",
+              "op": "sum",
+              "property": "amount"
+            }
+          ]
+        }
+      }
+    ]
+  }
+]

@@ -1,0 +1,97 @@
+{
+  "files": {
+    "present": [
+      "Resources/Gardening/Garden guide A.txt",
+      "Resources/Gardening/Garden guide B.txt",
+      "Resources/Gardening/Garden guide C.txt",
+      "Resources/Gardening/Garden guide D.txt",
+      "Resources/Gardening/Garden guide E.txt",
+      "Resources/Gardening/Garden guide A introduction.md",
+      "Resources/Gardening/Garden guide B introduction.md",
+      "Resources/Gardening/Garden guide C introduction.md",
+      "Resources/Gardening/Garden guide D introduction.md",
+      "Resources/Gardening/Garden guide E introduction.md"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "unchanged": [
+    "Resources/Gardening/Gardening.md"
+  ],
+  "notes": [
+    {
+      "path": "Resources/Gardening/Garden guide A introduction.md",
+      "contains": [
+        "paper labels and tape",
+        "Only part of this guide was read",
+        "[[Resources/Gardening/Gardening]]"
+      ],
+      "excludes": [
+        "27 November",
+        "Lark Hall"
+      ]
+    },
+    {
+      "path": "Resources/Gardening/Garden guide B introduction.md",
+      "contains": [
+        "paper labels and tape",
+        "Only part of this guide was read",
+        "[[Resources/Gardening/Gardening]]"
+      ],
+      "excludes": [
+        "27 November",
+        "Lark Hall"
+      ]
+    },
+    {
+      "path": "Resources/Gardening/Garden guide C introduction.md",
+      "contains": [
+        "paper labels and tape",
+        "Only part of this guide was read",
+        "[[Resources/Gardening/Gardening]]"
+      ],
+      "excludes": [
+        "27 November",
+        "Lark Hall"
+      ]
+    },
+    {
+      "path": "Resources/Gardening/Garden guide D introduction.md",
+      "contains": [
+        "paper labels and tape",
+        "Only part of this guide was read",
+        "[[Resources/Gardening/Gardening]]"
+      ],
+      "excludes": [
+        "27 November",
+        "Lark Hall"
+      ]
+    },
+    {
+      "path": "Resources/Gardening/Garden guide E introduction.md",
+      "contains": [
+        "paper labels and tape",
+        "Only part of this guide was read",
+        "[[Resources/Gardening/Gardening]]"
+      ],
+      "excludes": [
+        "27 November",
+        "Lark Hall"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 5,
+    "created": [
+      "Resources/Gardening/Garden guide A introduction.md",
+      "Resources/Gardening/Garden guide B introduction.md",
+      "Resources/Gardening/Garden guide C introduction.md",
+      "Resources/Gardening/Garden guide D introduction.md",
+      "Resources/Gardening/Garden guide E introduction.md"
+    ],
+    "updated": [],
+    "questionsExactly": 0
+  }
+}

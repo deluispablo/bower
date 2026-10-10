@@ -1,0 +1,50 @@
+{
+  "v": 1,
+  "proposalPayload": {
+    "kind": "tag",
+    "tag": "rainwater"
+  },
+  "runs": [
+    {
+      "vocabulary": [
+        "gardening"
+      ],
+      "newProposals": [
+        "rainwater"
+      ],
+      "openProposals": [
+        "rainwater"
+      ]
+    },
+    {
+      "vocabulary": [
+        "gardening",
+        "rainwater"
+      ],
+      "newProposals": [],
+      "openProposals": [],
+      "installedPayloads": [
+        {
+          "kind": "tag",
+          "tag": "rainwater"
+        }
+      ]
+    },
+    {
+      "vocabulary": [
+        "gardening",
+        "rainwater"
+      ],
+      "newProposals": [],
+      "openProposals": [],
+      "vocabularyMutationSends": 0
+    }
+  ],
+  "noteTags": {
+    "Resources/Gardening/Rain barrel guide.md": [
+      "gardening"
+    ]
+  },
+  "sameProposalBytesAcrossRuns": true,
+  "sameGeneratedSourceBytesAfterFirstRun": true
+}

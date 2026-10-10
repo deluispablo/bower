@@ -14,8 +14,11 @@ export default defineConfig({
     // never Google Drive or the Worker (their answers are the person's own notes).
     VitePWA({
       registerType: 'autoUpdate',
-      // The plugin's default auto injection enables skipWaiting and clientsClaim.
-      // Its external registration script does not reload an existing page.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      // The external registration script does not reload an existing page.
+      // Lifecycle and navigation routing live in src/sw.ts.
       manifest: {
         name: 'Bower',
         short_name: 'Bower',
@@ -30,12 +33,9 @@ export default defineConfig({
           { src: '/app-icon.svg', sizes: 'any', type: 'image/svg+xml' },
         ],
       },
-      workbox: {
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         globIgnores: ['landing/**'],
-        navigateFallback: '/index.html',
-        // The landing, and the Worker's paths when it shares the app's site (docs/specs/2026-10-04-worker-contract.md).
-        navigateFallbackDenylist: [/^\/landing/, /^\/(auth|me|drive|vault|process|status|session|health|runs|push)(\/|$)/],
       },
     }),
   ],

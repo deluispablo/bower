@@ -1,0 +1,70 @@
+{
+  "files": {
+    "present": [
+      "Bower health.md"
+    ],
+    "absent": [
+      "log.md",
+      ".bower/log.md"
+    ]
+  },
+  "unchanged": [
+    "Resources/Gardening/Gardening.md",
+    "Resources/Gardening/Plot diary.md",
+    "Resources/Gardening/Linked reference.md",
+    "Resources/Gardening/Loose thought.md"
+  ],
+  "protectedRanges": [
+    {
+      "path": "Resources/Gardening/Plot diary.md",
+      "range": {
+        "frontMatter": true
+      }
+    },
+    {
+      "path": "Resources/Gardening/Plot diary.md",
+      "range": {
+        "heading": "My thoughts"
+      }
+    }
+  ],
+  "properties": [
+    {
+      "path": "Resources/Gardening/Plot diary.md",
+      "absent": [
+        "by",
+        "bower_state"
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "path": "Bower health.md",
+      "contains": [
+        "Missing summary",
+        "Plot diary",
+        "Broken link",
+        "Missing plan",
+        "Orphan",
+        "Loose thought",
+        "Too many tags"
+      ],
+      "excludes": [
+        "Fence ghost",
+        "Tilde ghost",
+        "[[Missing plan",
+        "[[Fence ghost",
+        "[[Tilde ghost"
+      ]
+    }
+  ],
+  "report": {
+    "filed": 0,
+    "created": [
+      "Bower health.md"
+    ],
+    "updated": [],
+    "questionsExactly": 0
+  },
+  "linksResolve": true
+}
