@@ -1,3 +1,4 @@
+import { resize } from './viewport';
 /**
  * v2-name-sheet (d-v2-09): Rename and New folder ask for a name in one sheet,
  * drawn with the one field rule. Phone and desktop, on the fake Drive.
@@ -21,11 +22,11 @@ test('the rename field spans the sheet and selects the name', async ({ page, isM
     // Reach the same name sheet through the phone folder menu, then measure on desktop.
     const viewport = page.viewportSize();
     if (!viewport) throw new Error('The name-sheet check needs a viewport.');
-    await page.setViewportSize({ width: 375, height: viewport.height });
+    await resize(page, { width: 375, height: viewport.height });
     await open(page, '/files/Resources/Cooking');
     await page.getByRole('button', { name: 'More for Cooking', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'New folder', exact: true }).click();
-    await page.setViewportSize(viewport);
+    await resize(page, viewport);
     const sheet = page.getByRole('dialog', { name: 'New folder', exact: true });
     const field = sheet.getByRole('textbox', { name: 'Name', exact: true });
     await expect(field).toBeFocused();

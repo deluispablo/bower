@@ -1,3 +1,4 @@
+import { resize } from './viewport';
 /**
  * Round six: what the review of round five found. Each test pins one entry of
  * harness/features.json with "task": "qa-6", on demo and on fake.
@@ -12,7 +13,7 @@ const open = async (page: Page, path: string, scenario = 'default', time = 'inst
 void isFake;
 
 test("Escape on a new folder's name takes it back", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 900 });
+  await resize(page, { width: 1280, height: 900 });
   await open(page, '/files');
   const tree = page.getByRole('tree', { name: 'Your Bower folder' });
   const resources = tree.locator('[data-path="Resources"]');
