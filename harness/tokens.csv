@@ -386,3 +386,5 @@ c4-e2e-sync,reviewer,claude,bower-reviewer,,1,28894,,,,,,5,0.3,PASS (P4-71),2026
 d-v2-24a,property-red,codex,gpt-5-codex,high,4,2448574,2425450,,2285952,23124,,,,re-plan red (addendum 7),2026-10-10
 d-v2-24a,implementer,claude,bower-escalated,,10,173173,,,,,,34,9.1,re-plan blend; blocked on 2 old tests,2026-10-10
 d-v2-24a,red-owner (a8 tests),codex,gpt-5-codex,high,1,517335,512336,,466432,4999,,,,two old tests to addendum 7 (12ec932b),2026-10-10
+d-v2-24a,adversarial (a7),codex,gpt-5-codex,high,1,944754,937648,,853632,7106,,,,3 Important,2026-10-10
+folder-header-wrap,implementer,codex,gpt-5-codex,medium,1,336939,333037,,303616,3902,,,,delivered (red+fix+notes),2026-10-10
