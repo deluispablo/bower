@@ -5052,7 +5052,7 @@
     "id": "drive-calls-cut",
     "task": "p4-b",
     "category": "perf",
-    "passes": false,
+    "passes": true,
     "what": "At least 40% fewer Drive calls on the C04 golden (134 now), and offer-and-flat apply at no more than half its median (about 28 s to 14 s or less), by running independent effects with bounded concurrency; bowerOp stamps, per-effect stillAsSeen and the checkpoint barrier unchanged.",
     "steps": [
       "Cut redundant Drive calls (reads before writes, repeated lookups) and run independent effects with bounded concurrency.",

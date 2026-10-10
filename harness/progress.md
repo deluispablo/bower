@@ -315,3 +315,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-10: p4-rate-limits passes — p4-rate-limits passes: /auth 20, /drive/token 30, /vault 60 per minute; stale logout keeps 204 (P4-90b PASS)
 - 2026-10-10: smoke-request-report-hidden passes — smoke-request-report-hidden passes: a finished report with any row is reachable, whatever its scope (P4-93 PASS, designer verified)
 - 2026-10-10: spine-operations-checkpoints passes — spine-operations-checkpoints passes: re-proved after the b1a-contract golden re-pin (TL-P4-41 addendum 4)
+- 2026-10-10: drive-calls-cut passes — drive-calls-cut passes: re-proved after the b1a-contract golden re-pin (TL-P4-41 addendum 4)
