@@ -1227,3 +1227,4 @@ this assignment and were not changed.
 pnpm check was omitted because its root harness-git tests invoke writing git
 commands, prohibited by the owner. No UI screen changed (packet ui: false), so no
 e2e was run. No test, golden, threshold or fixture changed; no commit was made.
+tests changed: runner/test/corpus-run.ts: additive driver support for the B1a reds (redispatchCase over the same Drive and admission, optional pacing and a fixed admission for feed-only runs); no existing assertion or scorer changed.
