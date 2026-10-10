@@ -75,3 +75,137 @@ it('apply has exactly one call site inside the private motion gate', () => {
   expect(checks.some((check) => check.getStart(file) < call.getStart(file)),
     'the private draw path checks this.motion before apply').toBe(true);
 });
+
+function animatedCssClasses(css: string): Set<string> {
+  const sheet = document.createElement('style');
+  sheet.textContent = css;
+  document.head.append(sheet);
+  const classes = new Set<string>();
+  const visit = (rules: CSSRuleList): void => {
+    for (const rule of Array.from(rules)) {
+      if ('cssRules' in rule) visit(rule.cssRules as CSSRuleList);
+      if (!('selectorText' in rule) || !('style' in rule)) continue;
+      const style = rule.style as CSSStyleDeclaration;
+      const animated = Array.from({ length: style.length }, (_, i) => style.item(i))
+        .some((name) => /^(?:animation|transition)(?:-|$)/.test(name));
+      if (!animated) continue;
+      // CSSOM parses declarations, excluding comments and quoted declaration
+      // lookalikes. Strip quoted selector values too: [title=".fake"] is no class.
+      const selector = (rule.selectorText as string)
+        .replace(/\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, '');
+      for (const match of selector.matchAll(/\.([a-zA-Z_][\w-]*)/g)) {
+        if (match[1]) classes.add(match[1]);
+      }
+    }
+  };
+  try {
+    if (!sheet.sheet) throw new Error('Missing CSS sheet.');
+    visit(sheet.sheet.cssRules);
+    return classes;
+  } finally { sheet.remove(); }
+}
+
+function engineCssGate(source: string) {
+  const file = ts.createSourceFile('engine.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const methods = new Map<string, ts.MethodDeclaration>();
+  const toggled = new Set<string>();
+  const unresolved: string[] = [];
+  const property = (node: ts.Expression): string | undefined => {
+    if (ts.isPropertyAccessExpression(node)) return node.name.text;
+    if (ts.isElementAccessExpression(node) && ts.isStringLiteral(node.argumentExpression)) {
+      return node.argumentExpression.text;
+    }
+    return undefined;
+  };
+  const receiver = (node: ts.Expression): ts.Expression | undefined =>
+    ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node) ? node.expression : undefined;
+  const classCall = (node: ts.Node): ts.CallExpression | undefined => {
+    if (!ts.isCallExpression(node)) return undefined;
+    const target = receiver(node.expression);
+    return target && property(target) === 'classList' &&
+      ['add', 'remove', 'toggle', 'replace'].includes(property(node.expression) ?? '') ? node : undefined;
+  };
+  const visit = (node: ts.Node): void => {
+    if (ts.isMethodDeclaration(node) && ts.isIdentifier(node.name)) methods.set(node.name.text, node);
+    const call = classCall(node);
+    if (call) {
+      const args = property(call.expression) === 'toggle' ? call.arguments.slice(0, 1) : call.arguments;
+      for (const arg of args) {
+        if (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg)) toggled.add(arg.text);
+        else unresolved.push(arg.getText(file));
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+
+  const cleared = new Set<string>();
+  const visited = new Set<string>();
+  const settle = (name: string): void => {
+    if (visited.has(name)) return;
+    visited.add(name);
+    const method = methods.get(name);
+    if (!method?.body) return;
+    const walk = (node: ts.Node): void => {
+      const call = classCall(node);
+      if (call) {
+        const operation = property(call.expression);
+        const removes = operation === 'remove' || operation === 'replace' ||
+          (operation === 'toggle' && call.arguments[1]?.kind === ts.SyntaxKind.FalseKeyword);
+        if (removes) {
+          const args = operation === 'remove' ? call.arguments : call.arguments.slice(0, 1);
+          for (const arg of args) {
+            if (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg)) cleared.add(arg.text);
+          }
+        }
+      }
+      if (ts.isCallExpression(node) && receiver(node.expression)?.kind === ts.SyntaxKind.ThisKeyword) {
+        const called = property(node.expression);
+        if (called) settle(called);
+      }
+      ts.forEachChild(node, walk);
+    };
+    walk(method.body);
+  };
+  settle('beginSettle');
+  return { toggled, cleared, unresolved, hasSettle: methods.has('beginSettle') };
+}
+
+it('settle begin clears every engine-toggled animated CSS class', () => {
+  // Derive the list by intersecting CSSOM animation/transition selectors with
+  // classList operations in the TypeScript AST. AST trivia and opaque strings
+  // are excluded; only actual classList literal arguments supply class names.
+  // Follow this.method() from beginSettle, so a shared clearing helper counts.
+  // A new animated selector + engine toggle without settle handling must fail;
+  // dynamic class expressions fail explicitly rather than silently escaping.
+  const css = animatedCssClasses(`
+    /* .comment { animation: fake 1s; } */
+    .spark.go { animation: spark 0.7s; }
+    @media screen { .chip.slide { transition: opacity 0.2s; } }
+    .plain { content: "animation: fake 1s"; }
+    [title=".quoted"].real { animation-name: pulse; }
+  `);
+  expect([...css].sort()).toEqual(['chip', 'go', 'real', 'slide', 'spark']);
+  const fixture = engineCssGate(`class Engine {
+    private beginSettle() { this.clearCss(); }
+    private clearCss() { this.spark.classList.remove('go'); this.chip.classList.toggle('slide', false); }
+    private sparkle() {
+      // this.spark.classList.add('comment');
+      const text = "this.spark.classList.add('quoted')";
+      const template = \`this.spark.classList.add('template')\`;
+      this.spark.classList.add('go'); this.chip.classList.add('slide');
+    }
+  }`);
+  expect([...fixture.toggled].sort()).toEqual(['go', 'slide']);
+  expect([...fixture.cleared].sort()).toEqual(['go', 'slide']);
+  expect(engineCssGate('class Engine { sparkle() { this.el.classList.add(name); } }').unresolved)
+    .toEqual(['name']);
+  const engine = engineCssGate(readFileSync('src/bird/engine.ts', 'utf8'));
+  const animated = animatedCssClasses(readFileSync('src/bird/bower.css', 'utf8'));
+  expect(engine.unresolved, 'all engine class toggles must be structurally enumerable').toEqual([]);
+  expect(engine.hasSettle, 'the production settle-begin path exists').toBe(true);
+  const owned = [...animated].filter((name) => engine.toggled.has(name));
+  expect(owned.length, 'positive control: CSS motion is owned by the engine').toBeGreaterThan(0);
+  expect(owned.filter((name) => !engine.cleared.has(name)),
+    'animated classes missing removal in the settle-begin path').toEqual([]);
+});
