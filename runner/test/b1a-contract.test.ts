@@ -5,7 +5,7 @@ import type { FakeDrive } from '../../src/data/drive/fake-drive';
 import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { parseRunManifestV2 } from '../../src/data/contracts/run-manifest';
 import { parseRunCheckpoint, verifyCheckpointChain, type Checkpoint } from '../../src/data/contracts/run-checkpoint';
-import { RUNNER_WRITES, isHidden } from '../../src/data/vault/layout';
+import { RUNNER_WRITES, isHidden, type RetrievalFile } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import { serializeRules } from '../../src/data/contracts/rules-format';
 import { MOC_REGIONS, parseOwnership } from '../../src/data/contracts/ownership-format';
@@ -422,4 +422,153 @@ it('B1a contract: TL-P4-45 addendum: root index is an ordinary indexed note and 
   expect.soft(state?.files?.[ownIndex.id]).toMatchObject({ path: 'index.md' });
   const row = readFileSync(resolve(import.meta.dirname, '../../docs/harness/2026-10-08-p4-method-rubric-changes.md'), 'utf8').split('\n').find((l) => l.startsWith('| b1-maintenance-crash-resume |'));
   expect(row).toMatch(/^\| b1-maintenance-crash-resume \| agrees \| .{10,}/);
+});
+
+/** A settled baseline; retrieval's cursor includes its own final seed write. */
+async function feedBaseline() {
+  const { c, drive, root } = await setup();
+  c.scope = 'all';
+  c.journal = [];
+  const listing = await drive.listAll(root);
+  const sys = listing.find((f) => f.name === '.bower' && f.parents[0] === root);
+  const plot = listing.find((f) => f.name === 'Plot.md');
+  if (!sys || !plot) throw new Error('Expected the corpus system folder and plot');
+  const index = '- [[Plot]] — Alex grows beans in a raised bed.\n';
+  await drive.createText(sys.id, 'index.md', index);
+  await drive.createText(sys.id, 'hot.md', 'Nothing active.\n');
+  await drive.createText(sys.id, 'log.md', 'Previous operation.\n');
+  const hidden = await drive.createFolder(root, '.obsidian');
+  const cursor = String(Number(await drive.getStartPageToken()) + 1);
+  const state: RetrievalFile = { v: 1, folderId: root, account: 'ACCOUNT_ID', cursor, files: {
+    [plot.id]: { path: 'Resources/Gardening/Plot.md', version: plot.modifiedTime,
+      summary: 'Alex grows beans in a raised bed.', coverage: { kind: 'prefix', bytes: 4096 } },
+  } };
+  await drive.createText(sys.id, 'retrieval.json', JSON.stringify(state));
+  expect(await drive.listChanges(cursor)).toEqual({ changes: [], newStartPageToken: cursor });
+  const admission: AdmissionManifest = { v: 1, id: 'feed-contract', rootId: root, scope: 'all', at: AT, piles: [], journal: [] };
+  return { c, drive, root, plot, hidden, state, index, admission };
+}
+
+it('B1a contract: pass 1 1: the committed cursor never passes an unreflected concurrent edit', async () => {
+  for (const racing of [false, true]) {
+    const { c, drive, root, plot, state, admission } = await feedBaseline();
+    const summary = 'Alex now grows peas in a raised bed.';
+    const text = `---\nsummary: ${summary}\n---\nAlex changed the planting plan.\n`;
+    let version = plot.modifiedTime;
+    const edit = async () => { version = (await drive.writeText(plot.id, text, plot.modifiedTime)).modifiedTime; };
+    if (!racing) await edit(); // Positive control: the new version is in the planner's listing.
+    let feedReads = 0;
+    const original = maintenance.withMaintenance;
+    const planned = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest) => {
+      const listed = (await adapter.planReads().listAll(root)).find((f) => f.id === plot.id);
+      expect(listed?.modifiedTime).toBe(racing ? state.files[plot.id]?.version : version);
+      return original(adapter, manifest);
+    });
+    const around = (fetch: typeof globalThis.fetch): typeof globalThis.fetch => async (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      if (url.pathname === '/drive/v3/changes' && feedReads++ === 0 && racing) await edit();
+      return fetch(input, init);
+    };
+    const run = await runOnDrive(c, drive, root, { admission, pacing, around }, 1);
+    expect(run.wire?.statuses.at(-1)?.phase).toBe('done');
+    expect(planned).toHaveBeenCalledTimes(1);
+    planned.mockRestore();
+    expect(feedReads).toBeGreaterThan(0);
+    expect(version).not.toBe(state.files[plot.id]?.version);
+    expect(await drive.readText(plot.id)).toBe(text);
+    const after = JSON.parse(run.after['.bower/retrieval.json'] ?? 'null') as RetrievalFile;
+    expect(after).not.toBeNull();
+    const remaining = (await drive.listChanges(after.cursor)).changes;
+    if (!racing) expect(after.files[plot.id]).toMatchObject({ version, summary });
+    expect(remaining.some((change) => change.fileId === plot.id)
+      || (after.files[plot.id]?.version === version && after.files[plot.id]?.summary === summary),
+    'the edit is reflected in retrieval or remains after its committed cursor').toBe(true);
+  }
+});
+
+it('B1a contract: pass 1 4: maintain bootstraps and refreshes full valid ownership notes beyond 4096 bytes', async () => {
+  const frame = (owner: string, text: string): string => `<!-- bower:ownership/2 begin ${owner} -->\n${text}\n<!-- bower:ownership/2 end ${owner} -->\n`;
+  const summary = 'Alex grows beans in a raised bed.';
+  const note = (personal: string): string => `---\nbower_format: ownership/2\nby: bower\nsummary: ${summary}\n---\n`
+    + frame('current', '## Current state\n- Growing') + frame('personal', personal)
+    + frame('timeline', '## Timeline') + frame('bower-note', "## Bower's note");
+  const short = note('Alex keeps these words.');
+  const long = note('x'.repeat(9198 - new TextEncoder().encode(note('')).length));
+  expect(new TextEncoder().encode(long)).toHaveLength(9198);
+  expect(parseOwnership(new TextEncoder().encode(short)).status).toBe('v2');
+  expect(parseOwnership(new TextEncoder().encode(long)).status).toBe('v2');
+  expect(parseNote('Resources/Gardening/Plot.md', long).summary).toBe(summary);
+  for (const mode of ['short bootstrap', 'long bootstrap', 'long refresh']) {
+    const { c, drive, root } = await setup();
+    c.scope = 'all';
+    const listing = await drive.listAll(root);
+    const plot = listing.find((f) => f.name === 'Plot.md');
+    const sys = listing.find((f) => f.name === '.bower' && f.parents[0] === root);
+    if (!plot || !sys) throw new Error('Expected the corpus system folder and plot');
+    if (mode === 'long refresh') {
+      await drive.createText(sys.id, 'index.md', 'Previous projection.\n');
+      await drive.createText(sys.id, 'retrieval.json', JSON.stringify({ v: 1, folderId: root, account: 'ACCOUNT_ID',
+        cursor: await drive.getStartPageToken(), files: { [plot.id]: { path: 'Resources/Gardening/Plot.md',
+          version: plot.modifiedTime, summary: 'Previous summary.', coverage: { kind: 'prefix', bytes: 4096 } } } }));
+    }
+    const text = mode === 'short bootstrap' ? short : long;
+    const updated = await drive.writeText(plot.id, text, plot.modifiedTime);
+    const admission: AdmissionManifest = { v: 1, id: 'long-note-contract', rootId: root, scope: 'all', at: AT, piles: [], journal: [] };
+    const run = await runOnDrive(c, drive, root, { admission, pacing }, 1);
+    expect(await drive.readText(plot.id)).toBe(text);
+    const after = JSON.parse(run.after['.bower/retrieval.json'] ?? 'null') as RetrievalFile | null;
+    expect.soft(run.wire?.statuses.at(-1)?.phase, `${mode}: valid full framing never fails maintenance`).toBe('done');
+    expect.soft(after?.files[plot.id], `${mode}: valid ownership note gets its refreshed version and summary`)
+      .toMatchObject({ path: 'Resources/Gardening/Plot.md', version: updated.modifiedTime, summary });
+  }
+});
+
+it('B1a contract: pass 1 5: newly discovered hidden descendants advance only the cursor', async () => {
+  expect(isHidden('.obsidian/workspace.json')).toBe(true);
+  expect(isHidden('workspace.json')).toBe(false);
+  for (const racing of [false, true]) {
+    const { c, drive, root, hidden, state, index, admission } = await feedBaseline();
+    let childId = '';
+    let throughCursor = state.cursor;
+    const create = async () => {
+      childId = (await drive.createText(hidden.id, 'workspace.json', '{"madeUp":true}')).id;
+      throughCursor = await drive.getStartPageToken();
+    };
+    if (!racing) await create(); // Positive control: the hidden path is present in the cached listing.
+    const original = maintenance.withMaintenance;
+    const planned = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest) => {
+      const ix = VaultIndex.build(root, await adapter.planReads().listAll(root));
+      expect(ix.pathOf(hidden.id)).toBe('.obsidian');
+      expect([...ix.entries().keys()].some((path) => isHidden(path))).toBe(false);
+      expect(childId ? ix.pathOf(childId) : undefined).toBe(racing ? undefined : '.obsidian/workspace.json');
+      return original(adapter, manifest);
+    });
+    const sent: Sent[] = [];
+    const observed = trace(drive, root, sent);
+    let feedReads = 0;
+    const around = (fetch: typeof globalThis.fetch): typeof globalThis.fetch => {
+      const traced = observed(fetch);
+      return async (input, init) => {
+        const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+        if (url.pathname === '/drive/v3/changes' && feedReads++ === 0 && racing) await create();
+        return traced(input, init);
+      };
+    };
+    const run = await runOnDrive(c, drive, root, { admission, pacing, around }, 1);
+    expect(run.wire?.statuses.at(-1)?.phase).toBe('done');
+    expect(planned).toHaveBeenCalledTimes(1);
+    planned.mockRestore();
+    expect(feedReads).toBeGreaterThan(0);
+    expect(await drive.readText(childId)).toBe('{"madeUp":true}');
+    const after = JSON.parse(run.after['.bower/retrieval.json'] ?? 'null') as RetrievalFile;
+    expect(after.cursor).toBe(throughCursor);
+    expect({ ...after, cursor: state.cursor }).toEqual(state);
+    expect.soft(run.after['.bower/index.md'], 'hidden-only feed preserves the projection bytes').toBe(index);
+    expect(run.after['.bower/hot.md']).toBe('Nothing active.\n');
+    expect(run.after['.bower/log.md']).toBe('Previous operation.\n');
+    expect.soft(sent.filter((s) => ['.bower/index.md', '.bower/hot.md', '.bower/log.md'].includes(s.path)),
+      'the full hidden path permits only a retrieval cursor write').toEqual([]);
+    expect.soft(manifests(run).flatMap(([, text]) => (JSON.parse(text) as { operations: Array<{ effect: { kind: string } }> })
+      .operations).filter((op) => op.effect.kind === 'maintain'), 'a hidden-only feed never schedules maintain').toEqual([]);
+  }
 });

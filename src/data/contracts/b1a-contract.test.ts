@@ -5,10 +5,12 @@ import { FakeDrive } from '../drive/fake-drive';
 import { DriveVault } from '../vault/drive-vault';
 import { RUNNER_WRITES, isRunnerFile } from '../vault/layout';
 import { findNode } from '../tree';
+import { VaultIndex } from '../vault/vault-index';
 import { applyChanges, recheckEdit, stateMark } from './note-edit';
 import { createOwnershipContext, parseOwnership } from './ownership-format';
 import { parseRunCheckpoint, verifyCheckpointChain, type Checkpoint } from './run-checkpoint';
-import { parseRunManifestV2, type Change, type EditText, type Manifest, type ManifestV2 } from './run-manifest';
+import { parseRunManifest, parseRunManifestV2, type Change, type EditText, type Manifest, type ManifestV2 } from './run-manifest';
+import { timelineLine } from './timeline-line';
 
 const enc = (text: string): Uint8Array => new TextEncoder().encode(text);
 const bytes = (value: unknown): Uint8Array => enc(JSON.stringify(value));
@@ -216,4 +218,61 @@ it('B1a contract: 6: old notes manifests and checkpoint chains retain meaning be
   // No large-request splitting, hierarchy creation, or report kind is introduced by B1a (Q9/Q11).
   const maintained = seal([{ kind: 'maintain', inputs: { folderId: 'FOLDER_ID', account: 'ACCOUNT_ID', cursor: 'cursor-1', changes: [], operationIds: [] } }]);
   expect(await parseRunManifestV2(bytes(maintained), 'FOLDER_ID', RUNNER_WRITES)).toMatchObject({ ok: true, value: maintained });
+});
+
+it('B1a contract: pass 1 2: a personal path-recognized hub permits only link rewrites', async () => {
+  const drive = new FakeDrive({ clock: () => 0 });
+  const root = (await drive.createFolder('root', 'Bower')).id;
+  const resources = (await drive.createFolder(root, 'Resources')).id;
+  const folder = (await drive.createFolder(resources, 'Gardening')).id;
+  const from = 'Alex links [[Old]].\n\n## Timeline\n';
+  const hub = await drive.createText(folder, 'Gardening.md', from);
+  const ordinary = await drive.createText(folder, 'Plot.md', from);
+  const index = VaultIndex.build(root, await drive.listAll(root));
+  expect(index.entries().get('Resources/Gardening/Gardening.md')?.hub).toBe(true);
+  expect(index.entries().get('Resources/Gardening/Plot.md')?.hub).not.toBe(true);
+  const consent = { requestId: 'request-1', targetFileId: hub.id, sourceFileId: 'source-1' };
+  const append: Change = { kind: 'timeline-append', recordIds: ['request-1'],
+    entries: [{ date: '2026-10-10', text: 'Beans bloom', source: 'Clipping' }], consent };
+  const fetched = { fileId: hub.id, context: createOwnershipContext(), consents: [consent] };
+  const rewrite: Change = { kind: 'link-rewrite', recordIds: [], renames: [{ from: 'Old', to: 'New' }] };
+  expect(applyChanges(enc(from), [rewrite], fetched)).toMatchObject({ ok: true, text: from.replace('[[Old]]', '[[New]]') });
+  const to = `${from}${timelineLine(append.entries[0] ?? { date: '', text: '', source: null })}\n`;
+  const effect: EditText = { kind: 'edit-text', path: 'Resources/Gardening/Gardening.md',
+    before: { fileId: hub.id, name: hub.name, parents: hub.parents, folder: false, modifiedTime: hub.modifiedTime },
+    beforeContent: { ...raw(from), provenance: 'fake-stored', observedModifiedTime: hub.modifiedTime },
+    changes: [append], text: to, content: raw(to) };
+  const ordinaryConsent = { ...consent, targetFileId: ordinary.id };
+  const ordinaryEdit: EditText = { ...effect, path: 'Resources/Gardening/Plot.md',
+    before: { ...effect.before, fileId: ordinary.id, name: ordinary.name, modifiedTime: ordinary.modifiedTime },
+    beforeContent: { ...effect.beforeContent, observedModifiedTime: ordinary.modifiedTime },
+    changes: [{ ...append, consent: ordinaryConsent }] };
+  const ordinaryFetched = {
+    fileId: ordinary.id, context: createOwnershipContext(), consents: [ordinaryConsent],
+  };
+  expect(await recheckEdit(ordinaryEdit, enc(from), ordinaryFetched)).toBe('ok');
+  expect(await recheckEdit({ ...effect, changes: [rewrite], text: from.replace('[[Old]]', '[[New]]'),
+    content: raw(from.replace('[[Old]]', '[[New]]')) }, enc(from), fetched)).toBe('ok');
+  // The production recheck receives the real path, including the hub's folder and stem.
+  expect(await recheckEdit(effect, enc(from), fetched), 'an unmarked hub refuses even a consented append').toBe('conflict');
+});
+
+it('B1a contract: pass 1 3: stored personal MOC satisfied appends retain their read meaning', async () => {
+  const stored = JSON.parse(readFileSync('src/data/contracts/fixtures/p2/b1a-personal-moc-satisfied.json', 'utf8')) as Manifest;
+  const control = structuredClone(stored);
+  const row = control.satisfiedAppends?.[0];
+  expect(row).toBeDefined();
+  if (!row) throw new Error('Expected the historical satisfied append fixture');
+  row.text = row.text.replace('---\ntype: moc\n---\n', '');
+  row.content = { ...row.content, ...raw(row.text) };
+  // Satisfaction uses stored text, not a fresh write; the ordinary-note control already contains its line.
+  expect(applyChanges(enc(row.text), [{ kind: 'timeline-append', recordIds: [row.consent.requestId],
+    entries: [row.entry], consent: row.consent }], {
+    fileId: row.consent.targetFileId, context: createOwnershipContext(), consents: [row.consent],
+  })).toEqual({ ok: false, reason: 'unchanged' });
+  for (const parser of [parseRunManifest, parseRunManifestV2]) {
+    expect(await parser(bytes(control), 'FOLDER_ID', RUNNER_WRITES)).toMatchObject({ ok: true, value: control });
+    expect.soft(await parser(bytes(stored), 'FOLDER_ID', RUNNER_WRITES), 'historic satisfaction is readable through both manifest readers')
+      .toMatchObject({ ok: true, value: stored });
+  }
 });

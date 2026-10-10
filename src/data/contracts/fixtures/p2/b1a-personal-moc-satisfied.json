@@ -1,0 +1,122 @@
+{
+  "v": 1,
+  "kind": "run-manifest",
+  "scope": {
+    "rootId": "FOLDER_ID"
+  },
+  "runId": "historic-run",
+  "requestId": "historic-request",
+  "runScope": "instructions",
+  "allowWeb": false,
+  "requestedAt": 1791622800000,
+  "captureId": "737003d1a5f95232f561337702506bc34ef8ca3058bf4bf31d04a4f5bed31a45",
+  "capture": {
+    "piles": [],
+    "members": [],
+    "journal": [
+      {
+        "recordId": "request-1",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "fileIds": [
+          "request-file"
+        ]
+      }
+    ],
+    "places": [
+      {
+        "file": {
+          "fileId": "map-1",
+          "name": "Garden map.md",
+          "parents": [
+            "resources"
+          ],
+          "folder": false,
+          "modifiedTime": "2026-10-10T09:00:00.000Z"
+        },
+        "path": "Resources/Garden map.md"
+      },
+      {
+        "file": {
+          "fileId": "source-1",
+          "name": "Clipping.txt",
+          "parents": [
+            "resources"
+          ],
+          "folder": false,
+          "modifiedTime": "2026-10-10T09:00:00.000Z"
+        },
+        "path": "Resources/Clipping.txt"
+      },
+      {
+        "file": {
+          "fileId": "archive",
+          "name": "archive",
+          "parents": [
+            "changes"
+          ],
+          "folder": true,
+          "modifiedTime": "2026-10-10T09:00:00.000Z"
+        },
+        "path": ".bower/changes/archive"
+      }
+    ]
+  },
+  "operations": [
+    {
+      "operationId": "ac4b9a8f10abd8aca3466f0e71b21a77439ad16bdd530b9179efd9f61e472df6",
+      "ordinal": 0,
+      "dependsOn": [],
+      "effect": {
+        "kind": "move",
+        "before": {
+          "fileId": "request-file",
+          "name": "request-1.json",
+          "parents": [
+            "changes"
+          ],
+          "folder": false,
+          "modifiedTime": "2026-10-10T09:00:00.000Z"
+        },
+        "parent": {
+          "fileId": "archive"
+        },
+        "name": "request-1.json",
+        "properties": {}
+      }
+    }
+  ],
+  "reportPlan": [],
+  "satisfiedAppends": [
+    {
+      "consent": {
+        "requestId": "request-1",
+        "targetFileId": "map-1",
+        "sourceFileId": "source-1"
+      },
+      "entry": {
+        "date": "2026-10-10",
+        "text": "Beans bloom",
+        "source": "Clipping"
+      },
+      "before": {
+        "fileId": "map-1",
+        "name": "Garden map.md",
+        "parents": [
+          "resources"
+        ],
+        "folder": false,
+        "modifiedTime": "2026-10-10T09:00:00.000Z"
+      },
+      "path": "Resources/Garden map.md",
+      "text": "---\ntype: moc\n---\nAlex links [[Clipping]].\n\n## Timeline\n- 2026-10-10 \u00b7 Beans bloom \u00b7 [[Clipping]]\n",
+      "content": {
+        "encoding": "utf8",
+        "size": 100,
+        "sha256": "bdb6bfdaa40834a821e9663238271a161f8d58701ffcb898b511e7e325828733",
+        "provenance": "fake-stored",
+        "observedModifiedTime": "2026-10-10T09:00:00.000Z"
+      },
+      "operationId": "ac4b9a8f10abd8aca3466f0e71b21a77439ad16bdd530b9179efd9f61e472df6"
+    }
+  ]
+}
