@@ -144,3 +144,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `d146960e` | c4-parse-once | none for stored data or formats: an attempt-scoped ownership context memoises parseOwnership by (fileId, sha256 of the bytes); written bytes and sections unchanged. |
 | `0ee90829` | c4-parse-once | none: tests only (round 2 red: each Drive-read text parsed at most once across an attempt with piles). |
 | `eb909a67` | c4-parse-once | none for stored data or formats: pile reads (listedPiles, capturePiles, the fake pile read) take the attempt's ownership context; bytes and sections unchanged. |
+| `8da56079` | c4-undo-compensate | none: tests only (re-plan reds: later-inverse rows, old-manifest golden, refused original, cross-tab FIFO, property interleavings). |
+| `4953b1ae` | c4-undo-compensate | none for stored formats: one locked send path for the outbox (the unlocked fast path removed); old manifests without since word rules byte for byte as before; a later inverse of any kind reports its own row. |

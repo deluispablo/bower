@@ -202,3 +202,85 @@ Verification (output redirected; failure blocks and summary counts only inspecte
 
 The coordinator commits the four production files as the fix, substitutes its SHA for c9811c7e, then commits
 this notes file separately. No out-of-scope mechanism or second implementation path was added.
+
+## Re-plan (addendum 9)
+
+Implementation of TL-P4-27 addenda 9 and 10; the separate red owner supplied `8da56079`.
+The checkout's current baseline is `d4d4dc06` (merge of claude/p3), not just the red commit.
+No network, Git write command, test edit, pnpm check or e2e was used. The coordinator owns the fix commit
+and the separate notes commit. Status: blocked on the existing app-create property below; do not close this entry.
+
+1. `src/data/vault/journal.ts:258`: record captures its original owner, then creates and appends its line under
+   the outbox lock and awaits sendWaiting for that line's outcome. `:269` assigns at only after owner resolution
+   and lock admission; the owner-waiting property's arrival order now passes. The intended retry retains its
+   original line and holder. `:274` retains late post-effect bookkeeping for the original folder before rejecting
+   a disposed page. `:341` is the existing lock home: Web Locks when available, a shared per-page Promise mutex
+   otherwise. Its tail contains no records or send outcomes. Folder discovery starts independently (`:264`),
+   with its result consumed only by the locked drain; it reserves no journal id and sends no journal file.
+   This preserves concurrent first-folder discovery and the lost-answer recovery test at drive-vault.test.ts:716.
+2. `src/data/vault/journal.ts:361`: sendWaiting is the sole relay. It rereads each holder from the authoritative
+   outbox under the lock; makeOnce/keepHeld remain the sole reservation and intent homes. `:385` drops inverses
+   of originals on the failed list or refused earlier in this drain, answering their record as sent/done without
+   sending them. An immediate refusal still gives its own caller the existing sentence once, rather than adding
+   a second failed-list notification (`:397`). FIFO still stops at its first unresolved/waits head.
+3. `src/data/spine/scripted.ts:1849`: every unpaired inverse (move, restore, Bin, rename and both rule forms)
+   gets one ordinary updated row, its existing what sentence and its own path, dependent on effects and archive.
+   Same-run pairs remain hidden and count zero. No report or manifest field was added.
+   `src/data/spine/grounded.ts:91`: addendum 10's supporting change grounds only one updated archive row,
+   one counted change, no other row kinds, no Timeline ordinal, and a captured journal file moved to the archive.
+   The existing operation-id check still applies; this guard generates no rows and adds no report mechanism.
+4. `src/data/contracts/note-edit.ts:644`: legacy removals without since retain exact text matching, in the
+   existing removals-first sequence. Modern ordered changes retain ruleLike matching and journal-id tie ordering.
+   All three literal pre-entry goldens pass byte for byte, each for LF and CRLF. ruleSequence/wordRules stay
+   the one rule mechanism; the app's rules view still uses that same sequence.
+5. `src/data/vault/undo-compensate.property.test.ts:505`: all seven unchanged property batches pass, including
+   refused-inverse and owner-waiting, every prior invariant, the independent Drive replay oracle, and unchanged
+   seeds/counts. No implementation workaround or test amendment was made in the property.
+6. `src/data/vault/journal.ts:139`, `:224`, `:231`, `:375`, `:464`: addendum 10 distinguishes stored lines from
+   page-only lines. Failed keeping of a stored outbox prevents its send; only the volatile outbox is authoritative
+   when storage is unavailable and holds no shared lines. Malformed stored bytes remain untouched and block
+   sending. A volatile offline change still gets the existing keep-this-page-open warning; a volatile change
+   that reaches Drive succeeds. live.test.ts:265-275, both variants, and the late-owner bookkeeping cases pass.
+
+removed: src/data/vault/journal.ts: record's unlocked fast path; only sendWaiting calls send.
+removed: src/data/vault/journal.ts: flying and the separate original-send wait.
+removed: src/data/vault/journal.ts: behind and its separate send decision.
+removed: src/data/vault/journal.ts: unused drop helper and bulk reservation path; makeOnce reserves within the relay.
+tests changed: none
+compatibility: 4953b1ae
+
+### Required verification
+
+- `pnpm exec tsc -p tsconfig.app.json > /tmp/compensate-a9-tsc.log 2>&1`: PASS, exit 0.
+- `pnpm exec vitest run src/data > /tmp/compensate-a9-unit.log 2>&1`: FAIL, exit 1;
+  73 files passed / 1 failed, 3,819 tests passed / 1 failed. All entry reds and all seven Undo property batches pass.
+- `pnpm -C runner exec vitest run > /tmp/compensate-a9-runner.log 2>&1`: PASS, exit 0;
+  40 files / 314 tests. runner/test/drive-calls-golden.test.ts:21,69 asserts exactly 78 and 88, unchanged and passing.
+- `git diff --check`: PASS. The diff contains four production files and this notes file; no test file changed.
+- Additional diagnostics: `/tmp/compensate-a9-regression.log`, `/tmp/compensate-a9-regression-2.log`,
+  `/tmp/compensate-a9-property-isolated.log`, `/tmp/compensate-a9-create-isolated.log`,
+  `/tmp/compensate-a9-create-baseline.log`, `/tmp/compensate-a9-create-head.log`.
+  The earlier full run's property timeouts under concurrent tsc/runner load did not recur in the final serial data run.
+
+### Existing failure for the lead
+
+`src/data/vault/drive-vault.test.ts:3997` (c4-create-landed), "every app create, its answer lost, against a move,
+rename or Bin elsewhere: success only as it was made", fails after 60 trials, seed 20261009, path "59":
+`["pile folder", "none", "after a refresh, before the retry"]`. Its retry reports done but asMade returns false
+at `:4059` / `:4074`. This is the pile-folder recovery path in updatePile, not a compensating journal line.
+
+Diagnosis boundary: the failure reproduces with the changed journal restored to HEAD, and again with ALL FOUR
+changed production files restored to unchanged `d4d4dc06`; see `/tmp/compensate-a9-create-head.log` (exit 1,
+identical seed/path/assertion). The implementation files were restored to this delivery afterward, without any
+Git write command. The final full data run has this same single failure. This is not an entry regression, but it
+prevents the required all-green delivery. Under the defect ruling process, the lead must rule on this separate
+app-create recovery defect before implementation; no test, assertion, number or unrelated app-create code was changed.
+
+Offline standard references reused from the packet's previous research and the red owner's notes:
+- https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API
+- https://learn.microsoft.com/en-us/azure/architecture/patterns/compensating-transaction
+- https://fast-check.dev/docs/advanced/model-based-testing/
+
+One home per mechanism remains: journal outbox/relay and lock in journal.ts; rule order/wording in note-edit.ts;
+ordinary report construction in scripted.ts, with only structural validation in grounded.ts. The coordinator must
+substitute the eventual fix SHA for 4953b1ae and commit these notes separately after resolving the failed gate.
