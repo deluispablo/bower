@@ -500,12 +500,14 @@ export class BirdEngine {
     const h = home();
     this.B.x = h.x;
     this.B.y = h.y;
-    this.apply();
+    this.drawFrame();
   }
 
   /** Starts the frame loop. Call `stop()` when the bird leaves the page. */
   start(): void {
     if (this.running) return;
+    // A retained layer can regain its turn after releasing its drawing.
+    if (this.motion === 'still') this.motion = 'live';
     this.running = true;
     this.last = 0;
     this.raf = this.frame(this.loop);
@@ -522,8 +524,7 @@ export class BirdEngine {
   release(): void {
     this.stop();
     const P = this.parts;
-    if (P.carry) this.apply(this.motion === 'still' && this.drawn ? this.drawn :
-      this.stillDrawing(this.drawn ?? this.drawing()));
+    this.drawFrame(true);
     for (const g of [P.rig, P.head, P.tail, P.wing, P.legs, P.jaw, P.tuft, P.eye, P.iris]) {
       g.removeAttribute('transform');
       drawnTransforms.delete(g);
@@ -572,7 +573,7 @@ export class BirdEngine {
     this.B.x = h.x;
     this.B.y = h.y;
     this.B.home = true;
-    this.apply();
+    this.drawFrame();
   }
   /**
    * Where an input is, in layer pixels: Bower looks at it, for 2.5 s after a
@@ -1390,12 +1391,12 @@ export class BirdEngine {
     if (this.S.doing) this.claim(this.S.doing);
     if (this.S.action) this.claim(this.S.action);
     this.S.t += dt;
-    // The gate: while it settles, no motion source runs; apply() draws the blend alone.
+    // While it settles, no motion source runs; the draw gate chooses the blend alone.
     if (this.motion === 'live') {
       this.think(dt);
       this.step(dt, elapsed);
     }
-    this.apply();
+    this.drawFrame();
     if (this.blend && this.S.t - this.blend.t0 >= SETTLE - 1e-9) this.endSettle();
     if (this.notifyStill) {
       this.notifyStill = false;
@@ -1844,8 +1845,25 @@ export class BirdEngine {
     };
   }
 
-  /** Draws one frame: the state's pose, or the settle's blend while it settles. */
-  private apply(d = this.blend ? this.blendDrawing(this.blend) : this.drawing()): void {
+  /**
+   * The only draw path, including mount, resize and release. Still engines
+   * leave the CSS drawing alone. An immediate release draws the still target
+   * once for the layer's placement, discards any unfinished blend and closes
+   * the gate before giving the parts back to CSS.
+   */
+  private drawFrame(releasing = false): void {
+    if (this.motion === 'still') return;
+    const d = releasing ? this.stillDrawing(this.drawn ?? this.drawing()) :
+      this.motion === 'settling' && this.blend ? this.blendDrawing(this.blend) : this.drawing();
+    this.apply(d);
+    if (releasing) {
+      this.blend = null;
+      this.motion = 'still';
+    }
+  }
+
+  /** Writes the drawing selected by the private motion gate. */
+  private apply(d: Drawing): void {
     this.drawn = d;
     const P = this.parts;
     const Z = d.size;
