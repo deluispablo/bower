@@ -285,3 +285,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-10: c4-undo-confirm-in-place passes — fix(c4-undo-confirm-in-place): passes (P4-69 PASS; designer verified)
 - 2026-10-10: c4-create-newer-words passes — fix(c4-create-newer-words): passes (P4-70 PASS)
 - 2026-10-10: c4-e2e-sync passes — test(c4-e2e-sync): passes (P4-71 PASS)
+- 2026-10-10: folder-header-wrap passes — harness: folder-header-wrap passes (P4-72 PASS, designer verified)

@@ -6537,7 +6537,7 @@
     "id": "folder-header-wrap",
     "task": "p4-defects",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "The folder table headers stay on one line: .table th gets white-space: nowrap in folder.module.css, so columns keep their natural width and the table scrolls sideways (DEFECTS folder-table-header-wrap).",
     "steps": [
