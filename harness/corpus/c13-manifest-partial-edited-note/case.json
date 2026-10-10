@@ -1,0 +1,21 @@
+{
+  "id": "c13-manifest-partial-edited-note",
+  "capability": "C13",
+  "title": "Undo safe effects while keeping a later edit",
+  "covers": "model",
+  "source": "new (C13 preparation; snapshot only, scripted manifest lifecycle proof pending)",
+  "scope": "undo",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Undo the last tidy-up"
+    }
+  ],
+  "questions": [],
+  "bowerOwned": [
+    "Rules.md",
+    "Resources/Gardening/Seed collection.md"
+  ]
+}

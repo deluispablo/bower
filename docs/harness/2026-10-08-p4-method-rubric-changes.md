@@ -39,6 +39,9 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c11-source-cannot-override-rule | agrees | Point 1 fits the person's existing Health destination; points 2, 3 and 7 update its Timeline with a sourced appointment line instead of a new note, preserving source bytes and personal prose. |
 | c13-undo-protects-edit | agrees | Undo keeps the person's edit; outside the filing method. |
 | c13-undo-whole-run | agrees | Undo from the manifest, Bin only; outside the filing method. |
+| c13-manifest-move-and-create | agrees | Undo reverses manifest effects, Bin only; points 1-8 are filing rules, not a requirement to refile a restored inbox source. Point 8 requires a truthful result. |
+| c13-manifest-partial-edited-note | agrees | Later personal text is protected and independent effects recover; point 8 requires the partial result, and point 1 permits an inbox return by undo without a question. |
+| c13-manifest-state-with-personal-edit | agrees | Point 3 supports owned state and preserved history; undo restores recorded previous state while retaining later personal prose. Timeline reversal policy is left to the lead. |
 | c15-more-context-bounded | agrees | The words ("papers for the move") make the place clear; the run says what it could not read. |
 | c15-scanned-letter | changed | It filed an unread, unnamed scan by guess; point 1 never guesses, so it stays in the inbox with a question. |
 

@@ -1,0 +1,21 @@
+{
+  "id": "c13-manifest-state-with-personal-edit",
+  "capability": "C13",
+  "title": "Undo a state change without losing later personal prose",
+  "covers": "model",
+  "source": "new (C13 preparation; snapshot only, scripted manifest lifecycle proof pending)",
+  "scope": "undo",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Undo the last tidy-up"
+    }
+  ],
+  "questions": [],
+  "bowerOwned": [
+    "Rules.md",
+    "Areas/Home/Garden plot.md"
+  ]
+}

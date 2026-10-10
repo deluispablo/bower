@@ -52,6 +52,9 @@ Made-up cases for the capabilities C04 to C11, C13 and C15 (Alex, Larkspur Lane,
 | c11-source-cannot-answer | C11 | model | new (C11 preparation; scripted intent pending) |
 | c13-undo-protects-edit | C13 | model | new |
 | c13-undo-whole-run | C13 | model | new |
+| c13-manifest-move-and-create | C13 | model | new (C13 prep; scripted manifest lifecycle proof pending) |
+| c13-manifest-partial-edited-note | C13 | model | new (C13 prep; scripted manifest lifecycle proof pending) |
+| c13-manifest-state-with-personal-edit | C13 | model | new (C13 prep; scripted manifest lifecycle proof pending) |
 | c15-more-context-bounded | C15 | model | new |
 | c15-scanned-letter | C15 | model | bench:4-scanned-pdf, adapted (made-up; the original is in bench-4-scanned-pdf) |
 | c05-conflicting-fact-kept | C05 | scripted | new (preservation through the existing planner) |
