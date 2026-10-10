@@ -40,7 +40,7 @@ const question = (n: number) => ({ id: `q-${n}`, text: `Thread ${n}` });
 const hub = (n: number) => ({ path: `Projects/Focus-${n}`, lastSettledChange: '2026-10-09' });
 const change = (n: number) => ({ id: `c-${n}`, at: `2026-10-${String(n).padStart(2, '0')}T12:00:00Z`, text: `Change ${n}` });
 
-// Ignore separator blank lines and a final newline, which the packet does not specify.
+// Nonempty-row helpers; the empty-input test checks the exact text, including whitespace.
 const lines = (text: string): string[] => text.split('\n').filter((line) => line !== '');
 function section(text: string, heading: string): string[] {
   const all = lines(text);
@@ -78,14 +78,14 @@ it('B3a hot: exact section order and headings', async () => {
 it('B3a hot: empty inputs leave three bare headings', async () => {
   const { renderHot } = await hot('empty inputs leave three bare headings');
   expect(section(renderHot(inputs({ openQuestions: [question(1)] })).text, 'Open threads')).toEqual(['- Thread 1']);
-  expect(lines(renderHot(inputs()).text)).toEqual([
+  expect(renderHot(inputs()).text).toBe([
     '# Hot', `_Updated: ${TODAY}_`, '## Open threads', '## Current focus', '## Recent changes',
-  ]);
+  ].join('\n'));
   expect(lists(renderHot(inputs()).provenance).flat()).toEqual([]);
 });
 
-it('B3a hot: row caps keep 10 threads 5 hubs and 10 changes with marks', async () => {
-  const { renderHot } = await hot('row caps keep 10 threads 5 hubs and 10 changes with marks');
+it('B3a hot: row caps keep 10 threads 5 hubs and 10 changes with only a thread mark', async () => {
+  const { renderHot } = await hot('row caps keep 10 threads 5 hubs and 10 changes with only a thread mark');
   const questions = Array.from({ length: 13 }, (_, i) => question(i + 1));
   const hubs = Array.from({ length: 7 }, (_, i) => hub(i + 1));
   const changes = Array.from({ length: 13 }, (_, i) => ({ ...change(1), id: `c-${String(i + 1).padStart(2, '0')}`, text: `Change ${i + 1}` }));
@@ -96,8 +96,32 @@ it('B3a hot: row caps keep 10 threads 5 hubs and 10 changes with marks', async (
   expect(control.text).not.toContain('more');
   const result = renderHot(inputs({ openQuestions: questions, hubs, changes })).text;
   expect(section(result, 'Open threads')).toEqual([...questions.slice(0, 10).map((q) => `- ${q.text}`), '- and 3 more waiting on Home']);
-  expect(section(result, 'Current focus')).toEqual([...hubs.slice(0, 5).map((h) => `- ${h.path} (2026-10-09)`), '- (2 more)']);
-  expect(section(result, 'Recent changes')).toEqual([...changes.slice(0, 10).map((c) => `- 2026-10-01 ${c.text}`), '- (3 more)']);
+  expect.soft(section(result, 'Current focus')).toEqual(hubs.slice(0, 5).map((h) => `- ${h.path} (2026-10-09)`));
+  expect(section(result, 'Recent changes')).toEqual(changes.slice(0, 10).map((c) => `- 2026-10-01 ${c.text}`));
+});
+
+it('B3a hot: 6 hubs and 11 changes keep exactly 300 capped words without marks', async () => {
+  const { renderHot } = await hot('6 hubs and 11 changes keep exactly 300 capped words without marks');
+  const hubs = Array.from({ length: 6 }, (_, i) => ({ path: `H${i}`, lastSettledChange: '2026-10-09' }));
+  const changes = Array.from({ length: 11 }, (_, i) => ({
+    id: `c${String(i).padStart(2, '0')}`, at: '2026-10-09', text: words(`change-${i}`, i === 0 ? 243 : 1),
+  }));
+  const expected = [
+    '# Hot', `_Updated: ${TODAY}_`, '## Open threads', '## Current focus',
+    ...hubs.slice(0, 5).map((h) => `- ${h.path} (2026-10-09)`), '## Recent changes',
+    ...changes.slice(0, 10).map((c) => `- 2026-10-09 ${c.text}`),
+  ].join('\n');
+  expect(wordCount(expected)).toBe(300);
+  // Positive control: the same retained evidence without over-cap inputs needs no cut.
+  expect(renderHot(inputs({ hubs: hubs.slice(0, 5), changes: changes.slice(0, 10) })).text).toBe(expected);
+  const result = renderHot(inputs({ hubs, changes }));
+  expect.soft(section(result.text, 'Current focus')).toEqual(hubs.slice(0, 5).map((h) => `- ${h.path} (2026-10-09)`));
+  expect(section(result.text, 'Recent changes')).toEqual(changes.slice(0, 10).map((c) => `- 2026-10-09 ${c.text}`));
+  expect(result.text).toBe(expected);
+  expect(wordCount(result.text)).toBe(300);
+  expect(result.text).not.toContain('more');
+  expect(lists(result.provenance)).toContainEqual(hubs.slice(0, 5).map((h) => h.path));
+  expect(lists(result.provenance)).toContainEqual(changes.slice(0, 10).map((c) => c.id));
 });
 
 it('B3a hot: day 30 is in day 31 and null are out', async () => {
@@ -176,6 +200,58 @@ it('B3a hot: multiline and heading text stays one row', async () => {
   expect(section(text, 'Recent changes')).toEqual(['- 2026-10-09 Saved ## Injected - Other change']);
   expect(lines(text).filter((line) => line.startsWith('## '))).toEqual([
     '## Open threads', '## Current focus', '## Recent changes',
+  ]);
+});
+
+// CommonMark 0.31.2 §2.4: escape the leading ASCII marker so list content starts literally.
+const blockInputs = [
+  { label: 'ATX heading', text: '## Injected' },
+  { label: 'level-one heading', text: '# x' },
+  { label: 'hyphen list', text: '- Extra row' },
+  { label: 'asterisk list', text: '* x' },
+  { label: 'plus list', text: '+ x' },
+  { label: 'ordered list', text: '1. x' },
+  { label: 'block quote', text: '> x' },
+  { label: 'backtick fence', text: '```' },
+  { label: 'tilde fence', text: '~~~' },
+  { label: 'heading after newline', text: ' \n## Injected\r\n' },
+  { label: 'list after newline', text: '\n- Extra\t row ' },
+];
+
+function literalRow(text: string, expected: string): string {
+  const rows = text.split('\n').filter((line) => line.startsWith('- '));
+  expect(rows).toHaveLength(1);
+  const row = rows[0] ?? '';
+  const content = row.slice(2);
+  // These fixtures cover headings, lists, quotes and both fence markers at content start.
+  expect(content, 'row content must not start a CommonMark block').not.toMatch(
+    /^(?:#{1,6}(?:\s|$)|[-*+](?:\s|$)|\d{1,9}[.)](?:\s|$)|>|`{3,}|~{3,})/u,
+  );
+  // Accept any valid ASCII punctuation escape while preserving the literal input.
+  expect(content.replace(/\\([!-/:-@[-`{-~])/gu, '$1')).toBe(expected);
+  return row;
+}
+
+it.each(blockInputs)('B3a hot: question $label starts literally in one top-level row', async ({ text }) => {
+  const { renderHot } = await hot('question block syntax starts literally in one top-level row');
+  expect(section(renderHot(inputs({ openQuestions: [question(1)] })).text, 'Open threads')).toEqual(['- Thread 1']);
+  const rendered = renderHot(inputs({ openQuestions: [{ id: 'q-block', text }] })).text;
+  const parsedLines = rendered.split('\n');
+  const row = literalRow(rendered, text.replace(/\s+/gu, ' ').trim());
+  expect(parsedLines).toEqual([
+    '# Hot', `_Updated: ${TODAY}_`, '## Open threads', row, '## Current focus', '## Recent changes',
+  ]);
+});
+
+it.each(blockInputs)('B3a hot: hub $label starts literally in one top-level row', async ({ text }) => {
+  const { renderHot } = await hot('hub block syntax starts literally in one top-level row');
+  expect(section(renderHot(inputs({ hubs: [hub(1)] })).text, 'Current focus')).toEqual(['- Projects/Focus-1 (2026-10-09)']);
+  const rendered = renderHot(inputs({ hubs: [{ path: text, lastSettledChange: '2026-10-09' }] })).text;
+  const parsedLines = rendered.split('\n');
+  const row = literalRow(rendered, `${text.replace(/\s+/gu, ' ').trim()} (2026-10-09)`);
+  expect(parsedLines).toEqual([
+    '# Hot', `_Updated: ${TODAY}_`, '## Open threads', '## Current focus',
+    row, '## Recent changes',
   ]);
 });
 
