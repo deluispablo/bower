@@ -6643,7 +6643,8 @@
       "New folder is still offered."
     ],
     "verify": "pnpm exec playwright test e2e/no-new-note.spec.ts -g \"no New note control on desktop or phone\"",
-    "note": "TL-P4-35 (1). Codex after c5-empty-note-help, then a Claude review and the designer. Packet 2026-10-10-c5-remove-new-note-packet.md. implementer: codex."
+    "note": "TL-P4-35 (1). Codex after c5-empty-note-help, then a Claude review and the designer. Packet 2026-10-10-c5-remove-new-note-packet.md. implementer: codex.",
+    "review": "P4-82 PASS"
   },
   {
     "id": "p4-docs-md-roundtrip",

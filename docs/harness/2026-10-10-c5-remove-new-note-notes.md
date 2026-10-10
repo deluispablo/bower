@@ -290,3 +290,5 @@ All output was redirected; only exit status and failures were read.
 No server, e2e, pnpm check, network, commit or git write was run. No new test is
 claimed green without the coordinator's run. Commits, verify replacements,
 full checks, e2e and the missing qa7 snapshot diagnosis remain with coordinator.
+
+Correction (coordinator): the immediate-typing New folder test left this entry (651bc79c); it is tree-name-first's red (lead ruling on new-folder-first-letters).
