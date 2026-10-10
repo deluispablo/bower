@@ -415,3 +415,8 @@ c5-test-margin,implementer,codex,gpt-5-codex,high,1,1056487,1043640,,976384,1284
 shell-page-column,reviewer (delta),claude,bower-reviewer,,2,35410,,,,,,3,0.3,PASS (P4-75b),2026-10-10
 c5-test-margin,reviewer,claude,bower-reviewer,,1,45211,,,,,,6,0.5,BLOCK (P4-76: undo parts lose fc failure report),2026-10-10
 c5-test-margin,reviewer (delta),claude,bower-reviewer,,2,34273,,,,,,4,0.3,PASS (P4-76b),2026-10-10
+c5-empty-note-help,reviewer,claude,bower-reviewer,,1,32195,,,,,,3,0.2,PASS (P4-77),2026-10-10
+c5-empty-note-help,implementer,codex,gpt-5-codex,medium,1,927466,920482,,869248,6984,,,,delivered,2026-10-10
+c5-test-margin,implementer (fix round 1),codex,gpt-5-codex,high,2,971588,957282,,896384,14306,,,,P4-76 findings fixed,2026-10-10
+d-v2-24a,implementer (round 3),codex,gpt-5-codex,high,1,2122694,2111442,,1987328,11252,,,,one apply() site,2026-10-10
+d-v2-24a,adversarial (round 3),codex,gpt-5-codex,high,1,1167476,1157320,,1075072,10156,,,,1 Important (sparkle),2026-10-10

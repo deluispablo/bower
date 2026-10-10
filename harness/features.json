@@ -6622,7 +6622,8 @@
       "On a phone the row wraps and the button keeps a 44 px target."
     ],
     "verify": "pnpm exec vitest run src/features/note -t \"an empty note says how to write in it and offers Open in Drive\"",
-    "note": "TL-P4-33 addenda 1 and 2. Codex, then a Claude review and the designer. Packet 2026-10-10-c5-empty-note-help-packet.md. implementer: codex."
+    "note": "TL-P4-33 addenda 1 and 2. Codex, then a Claude review and the designer. Packet 2026-10-10-c5-empty-note-help-packet.md. implementer: codex.",
+    "review": "P4-77 PASS"
   },
   {
     "id": "c5-remove-new-note",
