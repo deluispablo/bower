@@ -193,7 +193,8 @@ describe('uploads survive a reload without a second file', () => {
     expect(await files(env)).toHaveLength(0);
     const kept = await tab.store.list(ACCOUNT, FOLDER);
     expect(kept).toHaveLength(1);
-    expect(kept[0] && (await tab.store.body(kept[0]))).toBeInstanceOf(Blob);
+    const record = kept.find((record) => record.memberKey === 'member-1');
+    expect(record && (await tab.store.body(record))).toBeInstanceOf(Blob);
   });
 
   it('a reply lost after the file was made is confirmed by asking the session, one file', async () => {
@@ -291,8 +292,8 @@ describe('uploads survive a reload without a second file', () => {
     const look = indexedDbUploadStore(env.idb);
     const mid = await look.list(ACCOUNT, FOLDER);
     expect(mid).toHaveLength(1);
-    expect(mid[0]).toMatchObject({ confirmed: 4, declarationId: 'decl-1', memberKey: 'member-1', sha256: await sha256(new Blob([BYTES])) });
-    const record = mid[0];
+    const record = mid.find((record) => record.memberKey === 'member-1');
+    expect(record).toMatchObject({ confirmed: 4, declarationId: 'decl-1', memberKey: 'member-1', sha256: await sha256(new Blob([BYTES])) });
     expect(record?.fileId).toBeTruthy();
     const kept = record ? await look.body(record) : null;
     expect(kept && [...new Uint8Array(await kept.arrayBuffer())]).toEqual([...BYTES]);
@@ -545,7 +546,7 @@ describe('uploads survive a reload without a second file', () => {
     await tab.queue.start(ACCOUNT, FOLDER);
     const item = await tab.queue.add(await member(env));
     await reachedChunk(env, 4);
-    const kept = (await tab.store.list(ACCOUNT, FOLDER))[0];
+    const kept = (await tab.store.list(ACCOUNT, FOLDER)).find((record) => record.memberKey === item.memberKey);
     // The chunk on its way settles (aborted) before the discard ends.
     const discarding = tab.queue.discard(item.id);
     hold.open();
@@ -613,7 +614,8 @@ describe('uploads survive a reload without a second file', () => {
     expect(item).toMatchObject({ gone: true });
     const kept = await indexedDbUploadStore(env.idb).list(ACCOUNT, FOLDER);
     expect(kept).toHaveLength(1);
-    expect(kept[0] && (await indexedDbUploadStore(env.idb).body(kept[0]))).toBeInstanceOf(Blob);
+    const record = kept.find((record) => record.memberKey === 'member-1');
+    expect(record && (await indexedDbUploadStore(env.idb).body(record))).toBeInstanceOf(Blob);
     second.queue.retry();
     await second.queue.idle();
     expect(second.queue.items()[0]?.state).toBe('failed');

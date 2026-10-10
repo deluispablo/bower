@@ -6841,8 +6841,9 @@
     "steps": [
       "The prep's Q1a reds pass through runner main, answerQuestion, the Worker and the vault."
     ],
-    "verify": "",
-    "note": "TL-P4-44 and addenda 1-2. Escalated; implementation after B1a integrates. Packet 2026-10-10-q1a-stored-answers-packet.md. implementer: codex."
+    "verify": "pnpm -C runner exec vitest run test/q1-continuation.test.ts -t \"Q1a\"",
+    "note": "TL-P4-44 and addenda 1-2. Escalated; implementation after B1a integrates. Packet 2026-10-10-q1a-stored-answers-packet.md. implementer: codex.",
+    "review": "P4-100 PASS"
   },
   {
     "id": "smoke-request-slow",
@@ -6968,14 +6969,16 @@
     "id": "upload-resume-after-reload",
     "task": "p4-c02",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "Files added to a pile are kept on the device before Bower says saved, and resume after a reload with no picker and no second file (TL-P4-53).",
     "steps": [
       "The prep's E1 reds pass through the real queue, fake Drive and fake IndexedDB."
     ],
-    "verify": "",
-    "note": "C02 E1. Escalated. Designer verifies the reload behaviour (U3) before close. Packet 2026-10-10-upload-resume-after-reload-packet.md. implementer: codex."
+    "verify": "pnpm exec vitest run src/data/upload-resume.test.ts -t \"upload-resume-after-reload\"",
+    "note": "C02 E1. Escalated. Designer verifies the reload behaviour (U3) before close. Packet 2026-10-10-upload-resume-after-reload-packet.md. implementer: codex.",
+    "design": "verified",
+    "review": "P4-99 PASS"
   },
   {
     "id": "upload-sign-out-forget",
@@ -7054,5 +7057,31 @@
     ],
     "verify": "",
     "note": "Follow-up of rules-added-region; touches runner claude.ts, so after B1c and B3b (lead 2026-10-10). Packet to cut when it starts. implementer: codex."
+  },
+  {
+    "id": "pwa-update-one-reload",
+    "task": "p4-e",
+    "category": "fix",
+    "passes": true,
+    "ui": false,
+    "what": "One reload after a deploy runs the new build even before the new service worker installs; offline still opens (navigations network-first, 3 s timeout).",
+    "steps": [
+      "e2e:pwa: A open, B deployed and not installed, one reload runs B; offline opens; the old 6 stay green."
+    ],
+    "verify": "pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts -g \"pwa-update-one-reload\"",
+    "note": "DEFECT_LOG pwa-update-one-reload; ruling (a) after 32b43f82. Codex red and implementation, Claude review, live staging check. Packet 2026-10-10-pwa-update-one-reload-packet.md. implementer: codex."
+  },
+  {
+    "id": "undo-fifo-seed",
+    "task": "p4-e",
+    "category": "fix",
+    "passes": true,
+    "ui": false,
+    "what": "The Undo property model knows an inverse the drain retires without sending after its original is refused; seed -1937975690 path 40 is pinned and passes.",
+    "steps": [
+      "The named replay and the class table pass; unresolved heads still block."
+    ],
+    "verify": "pnpm exec vitest run src/data/vault/undo-compensate.property.test.ts -t \"undo-fifo-seed\"",
+    "note": "DEFECT_LOG undo-fifo-seed; ruling (b) after f885992c. Tests only. Packet 2026-10-10-undo-fifo-seed-packet.md. implementer: codex."
   }
 ]

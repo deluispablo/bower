@@ -337,7 +337,7 @@ describe('the upload queue on the real Drive client', () => {
     first.queue.stop();
     await first.queue.idle();
     env.drive.afterChunk = null;
-    const [kept] = await indexedDbUploadStore(env.idb).list(ACCOUNT, FOLDER);
+    const kept = (await indexedDbUploadStore(env.idb).list(ACCOUNT, FOLDER)).find((record) => record.memberKey === added.memberKey);
     const id = kept?.fileId;
     if (!id) throw new Error('no id kept on the device');
     expect([...env.drive.files.keys()]).toEqual([id]);

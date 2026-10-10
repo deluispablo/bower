@@ -10,7 +10,8 @@ function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
     if (statSync(path).isDirectory()) return sources(path);
-    return /\.(ts|tsx)$/.test(name) && !/\.test\.tsx?$/.test(name) && name !== 'test-setup.ts' ? [path] : [];
+    // sw.ts is built by injectManifest, never in Vite's dev pre-bundle.
+    return /\.(ts|tsx)$/.test(name) && !/\.test\.tsx?$/.test(name) && name !== 'test-setup.ts' && name !== 'sw.ts' ? [path] : [];
   });
 }
 
