@@ -1846,10 +1846,11 @@ export async function build(decided: Decided): Promise<Ended> {
     for (const f of line.files) moves.push(await add({ kind: 'move', before: seen(f), parent: archiveTo, name: f.name, properties: {} }, derived));
     if (paired.has(line.rec.id)) {
       reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: 0 } });
-    } else if (line.rec.undoes && line.rec.kind === 'rule') {
-      // An inverse arriving in a later run has its ordinary row, grounded by the rule write and archive.
-      reportPlan.push({ requires: [...derived, ...moves, ...archiveChain], when: 'applied', value: {
-        ...empty(), yourChanges: 1, updated: [{ path: RULES_PATH, what: line.rec.what, ...(rulesOp ? { op: rulesOp } : {}) }],
+    } else if (line.rec.undoes) {
+      // Every later inverse has its existing wording in an ordinary row, after its effects and archive.
+      const requires = [...moves, ...archiveChain, ...derived];
+      reportPlan.push({ requires, when: 'applied', value: {
+        ...empty(), yourChanges: 1, updated: [{ path: line.rec.path ?? RULES_PATH, what: line.rec.what, op: requires[0] }],
       } });
     } else if (rulesOp && rules.worded.has(line.rec.id)) {
       // A rule this run words: counted once it and its line's archive applied.

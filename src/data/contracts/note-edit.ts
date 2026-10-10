@@ -641,7 +641,7 @@ export function ruleSequence(rules: readonly Rule[], add: readonly RuleAdd[], re
   for (const step of steps) {
     if ('remove' in step) {
       // Resolve the add line's own words through the same rule identity used for additions.
-      const worded = ruleLike(rules.filter((r) => !removed.has(r.text)), step.remove.text);
+      const worded = inOrder ? ruleLike(rules.filter((r) => !removed.has(r.text)), step.remove.text) : undefined;
       removed.add(worded?.text ?? step.remove.text);
       accepted = accepted.filter((a) => !ruleLike([asRule(a)], step.remove.text));
       continue;
