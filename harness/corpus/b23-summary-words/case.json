@@ -1,0 +1,18 @@
+{
+  "id": "b23-summary-words",
+  "capability": "C17",
+  "covers": "model",
+  "allowWeb": false,
+  "questions": [],
+  "bowerOwned": [],
+  "title": "A multiline pile keeps its body and gets one quoted scalar summary",
+  "source": "TL-P4-39 B2; made-up words-only author route; proof pending",
+  "scope": "all",
+  "inbox": [
+    {
+      "line": "Alex plans a garden bed: use the \"amber\" label.\n\nKeep #mulch beside the gate in Saltmere; the path stays clear.",
+      "files": []
+    }
+  ],
+  "journal": []
+}

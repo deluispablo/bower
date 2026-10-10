@@ -41,7 +41,7 @@ interface UiState {
   restored: { path: string; at: number } | null;
   setRestored: (path: string | null) => void;
   /** A name asked for in a sheet (from a page, where there is no tree row to type in). */
-  naming: { rename: string } | { folder: string; type: 'folder' } | null;
+  naming: { rename: string } | { folder: string; type: 'folder'; inline?: boolean } | null;
   setNaming: (v: UiState['naming']) => void;
   /** Keeps only the bookmarks for which `exists` says yes (things gone from the folder are dropped). */
   pruneBookmarks: (exists: (path: string) => boolean) => void;
@@ -53,9 +53,6 @@ interface UiState {
   moved: Record<string, string>;
   /** The current path of something that was at `path`, if it moved this visit. */
   whereNow: (path: string) => string | null;
-  /** The folder just made with New folder, so Escape on its name takes it back. */
-  justMade: string | null;
-  setJustMade: (path: string | null) => void;
 }
 
 const SORT_KEY = 'bower:sort';
@@ -136,7 +133,7 @@ export const useUi = create<UiState>((set, get) => ({
   forgetPerson: () => {
     write(OPEN_KEY, []);
     write(BM_KEY, []);
-    set({ open: new Set(), selected: null, bookmarks: [], moved: {}, justMade: null, renaming: null, confirmBin: null, naming: null });
+    set({ open: new Set(), selected: null, bookmarks: [], moved: {}, renaming: null, confirmBin: null, naming: null });
     useTabs.getState().reset();
   },
   pruneBookmarks: (exists) => {
@@ -168,8 +165,6 @@ export const useUi = create<UiState>((set, get) => ({
     for (const k of Object.keys(m)) if ((path === k || path.startsWith(`${k}/`)) && k.length > best.length) best = k;
     return best ? (m[best] ?? '') + path.slice(best.length) : null;
   },
-  justMade: null,
-  setJustMade: (justMade) => set({ justMade }),
 }));
 
 /** Every ancestor folder of a path, nearest last. */

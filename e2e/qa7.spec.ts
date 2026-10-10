@@ -85,3 +85,17 @@ test('New folder in an empty folder asks for a name, then opens the folder', asy
   await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText('Plans');
   await expect(page.getByText('Nothing in here yet.', { exact: true })).toBeVisible();
 });
+
+test('New folder from the tree keeps the first letters typed', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree');
+  await open(page, '/files?source=fake');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  await tree.locator('[data-path="Resources"]').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'New folder', exact: true }).click();
+  // Type immediately: waiting for the textbox or filling it would hide lost first letters.
+  await page.keyboard.type('Garden plans');
+  await page.keyboard.press('Enter');
+  const folder = tree.locator('[data-path="Resources/Garden plans"]');
+  await expect(folder).toBeVisible();
+  await expect(folder.getByText('Garden plans', { exact: true })).toBeVisible();
+});

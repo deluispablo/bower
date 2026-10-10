@@ -1,0 +1,18 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Mulch notice.txt",
+        "to": "Resources/Gardening",
+        "name": "Mulch notice.txt",
+        "note": {
+          "name": "Mulch notice.md",
+          "summary": "Mulch: collection at #amber.",
+          "body": "Alex can collect mulch from the amber gate at the Saltmere garden.\n\nRelated: [[Gardening]] and [[Plot diary]]."
+        }
+      }
+    ]
+  }
+]

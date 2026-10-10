@@ -114,3 +114,14 @@ selects C04–C15 ids only; B1/C17 gate admission is a proposed small support en
 | b1-changes-person-edit | agrees | Supported edits to a person's own notes refresh derived retrieval before planning without adopting or rewriting their note (TL-P4-39 addendum 2; F9, F10). |
 | b1-moc-over-40 | agrees | A 41-member map folds through existing child maps, preserving all primary evidence and links; no invented count or model-written list (TL-P4-38 addenda 1–2; F2, F9, F10). |
 | b1-index-no-change | agrees | Zero-token index maintenance excludes root, Inbox and bookkeeping inputs and makes no stamp-only write or summary migration (TL-P4-38 appendix; F3, F9). |
+
+## B2/B3 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-41)
+
+Semantic review only: covers:model cases are not executed by the existing C04–C15 method gate.
+
+| Case | Verdict | Reason |
+| --- | --- | --- |
+| b23-summary-person-lint | agrees | Generated summaries are valid scalar metadata; personal missing summaries stay missing, with report-only lint deferred to B8 (R2, F2, F7). |
+| b23-hot-question-answer | agrees | The actual app answer settles the question identity; hot reflects that state and actual effects before done, never owns pending work (F3, F5, F10). |
+| b23-summary-words | agrees | A words-only note preserves primary prose while adding a one-line scalar summary; unrelated personal metadata is never adopted (F2, F7, R2). |
+| b23-hot-evidence-only | agrees | An instruction-only run rebuilds hot from primary evidence and settled outcomes, dropping unsupported old claims without inventing focus or report rows (F3, F7, F10). |

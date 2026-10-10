@@ -25,7 +25,10 @@ test('no New note control on desktop or phone', async ({ page }) => {
     await expectAxeClean(page, { include: width === 1280 ? '[role="menu"]' : '[role="dialog"]', wcag22: true });
     await actions.getByRole(width === 1280 ? 'menuitem' : 'button', { name: 'New folder', exact: true }).click();
     if (width === 1280) {
-      const name = page.getByRole('tree').getByRole('textbox', { name: /^New name for / });
+      const name = page.getByRole('tree').getByRole('textbox', { name: 'New folder in Resources', exact: true });
+      await expect(name).toBeFocused();
+      await expect(name).toHaveValue('');
+      await expect(name).toHaveAttribute('placeholder', 'Name');
       await name.fill(folderName);
       await name.press('Enter');
       await page.getByRole('tree').locator(`[data-path="Resources/${folderName}"]`).click({ button: 'right' });

@@ -545,3 +545,9 @@ v2-name-sheet	b5c008c7d937a526	2026-10-10	known-green: behaviour unchanged; its 
 c4-e2e-sync	91f635d31f4a1e8b	2026-10-10	known-green: behaviour unchanged; its old tests were removed with New note (TL-P4-35); the verify now names surviving or new tests that pass after c5-remove-new-note
 c5-remove-new-note	5555460dc7c8a571	2026-10-10	known-green: red 3cc13c38 failed before fix 9040d9bf; the revert no longer applies after the create-named merge
 namesheet-names	754299b18fc0201f	2026-10-10	known-green: behaviour unchanged; old tests removed with New note (TL-P4-35); verify names surviving tests
+b1b-ports	23fb6da3e7a70d06	2026-10-10	known-green: reds proven failing by the red session (54 missing-port assertions) and each fix round's reds; the fix spans four commits, so a single revert does not isolate it
+tree-name-first	fa44ac674a547625	2026-10-10	known-green: red cda855c6 failed before the fix (red session; the immediate-typing guard failed 9-11/20 on the base, 20/20 green after); later merges touched the same lines
+create-name-speed	29ba89050dff1f30	2026-10-10	known-green: red cda855c6 failed before the fix (red session; the immediate-typing guard failed 9-11/20 on the base, 20/20 green after); later merges touched the same lines
+undo-miss-refresh	02825c3ddfe978c8	2026-10-10	red (fixed in 925594be)
+q-ui-3	f97fe2d0a58740b9	2026-10-10	known-green: e2e red proven by the coordinator at the tests-only commit; fix 92c2801c
+new-note-escape	9a8d1dd5add25238	2026-10-10	known-green: re-proved after c5-remove-new-note; note committed

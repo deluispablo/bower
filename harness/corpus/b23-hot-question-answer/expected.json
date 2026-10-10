@@ -1,0 +1,137 @@
+{
+  "files": {
+    "present": [
+      "Projects/Flat hunt/Appointment letter.txt",
+      "Projects/Flat hunt/Appointment letter.md",
+      "hot.md"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "unchanged": [
+    "Projects/Flat hunt/Flat hunt.md",
+    "Resources/Housing/Home visits.md"
+  ],
+  "notes": [
+    {
+      "path": "hot.md",
+      "contains": [
+        "# Hot",
+        "_Updated:",
+        "## Current focus",
+        "## Open threads",
+        "## Recent changes",
+        "Appointment letter"
+      ],
+      "excludes": [
+        "- Inbox: Letter.txt — Is this appointment for the flat hunt?",
+        "Is this appointment for the flat hunt?"
+      ]
+    },
+    {
+      "path": "Projects/Flat hunt/Appointment letter.md",
+      "contains": [
+        "summary: An appointment confirmed for Alex in Saltmere.",
+        "[[Flat hunt]]",
+        "[[Home visits]]"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "createdAtLeast": 1,
+    "questionsExactly": 0
+  },
+  "runs": [
+    {
+      "files": {
+        "present": [
+          "Inbox/*/Letter.txt",
+          "hot.md"
+        ],
+        "absent": [
+          "Projects/Flat hunt/Appointment letter.txt"
+        ]
+      },
+      "unchanged": [
+        "Projects/Flat hunt/Flat hunt.md",
+        "Resources/Housing/Home visits.md"
+      ],
+      "notes": [
+        {
+          "path": "hot.md",
+          "contains": [
+            "# Hot",
+            "_Updated:",
+            "## Current focus",
+            "## Open threads",
+            "## Recent changes",
+            "- Inbox: Letter.txt — Is this appointment for the flat hunt?"
+          ]
+        }
+      ],
+      "report": {
+        "filed": 0,
+        "questionsExactly": 1,
+        "questions": [
+          "q-ask-p-1"
+        ],
+        "questionSubjects": [
+          {
+            "kind": "inbox",
+            "path": "Inbox/Please file this letter./Letter.txt"
+          }
+        ]
+      }
+    },
+    {
+      "files": {
+        "present": [
+          "Projects/Flat hunt/Appointment letter.txt",
+          "Projects/Flat hunt/Appointment letter.md",
+          "hot.md"
+        ],
+        "absent": [
+          "Inbox/*"
+        ]
+      },
+      "unchanged": [
+        "Projects/Flat hunt/Flat hunt.md",
+        "Resources/Housing/Home visits.md"
+      ],
+      "notes": [
+        {
+          "path": "hot.md",
+          "contains": [
+            "# Hot",
+            "_Updated:",
+            "## Current focus",
+            "## Open threads",
+            "## Recent changes",
+            "Appointment letter"
+          ],
+          "excludes": [
+            "- Inbox: Letter.txt — Is this appointment for the flat hunt?",
+            "Is this appointment for the flat hunt?"
+          ]
+        },
+        {
+          "path": "Projects/Flat hunt/Appointment letter.md",
+          "contains": [
+            "summary: An appointment confirmed for Alex in Saltmere.",
+            "[[Flat hunt]]",
+            "[[Home visits]]"
+          ]
+        }
+      ],
+      "linksResolve": true,
+      "report": {
+        "filed": 1,
+        "createdAtLeast": 1,
+        "questionsExactly": 0
+      }
+    }
+  ]
+}
