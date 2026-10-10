@@ -375,3 +375,6 @@ d-v2-24a,reviewer,codex,gpt-5-codex,high,3,944899,936551,,833920,8348,,,,2 Impor
 d-v2-24a,implementer,codex,gpt-5-codex,high,7,832924,825951,,747392,6973,,,,tap fix (regex accommodation; reverted),2026-10-10
 c4-create-newer-words,property-red,codex,gpt-5-codex,medium,1,387547,384642,,328576,2905,,,,reds,2026-10-10
 d-v2-24a,implementer,claude,bower-escalated,,8,120306,,,,,,33,11.7,escalated round done,2026-10-10
+d-v2-24a,reviewer,codex,gpt-5-codex,high,4,1143532,1137664,,1037440,5868,,,,2 Important (escalated round),2026-10-10
+c4-create-newer-words,implementer,codex,gpt-5-codex,high,1,846273,838916,,785536,7357,,,,done,2026-10-10
+c4-create-newer-words,adversarial,codex,gpt-5-codex,medium,1,176346,174897,,134912,1449,,,,0 findings,2026-10-10
