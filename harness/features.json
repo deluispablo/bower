@@ -6595,7 +6595,8 @@
       "The landing loads under its CSP with no violation."
     ],
     "verify": "pnpm exec vitest run src/landing-csp.test.ts -t \"fix-landing removes the runtime eval from an export|the landing CSP has no unsafe-eval\"",
-    "note": "P4-E (TL-P4-31 ruling 2). Codex, then a Claude review and the designer. Packet 2026-10-10-landing-csp-packet.md. implementer: codex."
+    "note": "P4-E (TL-P4-31 ruling 2). Codex, then a Claude review and the designer. Packet 2026-10-10-landing-csp-packet.md. implementer: codex.",
+    "design": "verified"
   },
   {
     "id": "c5-test-margin",

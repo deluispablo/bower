@@ -87,3 +87,7 @@ the conflict with preserving today's landing. Other browser/axe results are unve
 
 Coordinator, 2026-10-10: the packet's sign-in link requirement was a packet error (the landing has none); the packet is corrected and the assertion removed from e2e/landing-csp.spec.ts. The delivery is no longer blocked.
 Coordinator, 2026-10-10: the axe scan was removed from e2e/landing-csp.spec.ts (packet error): the exported landing has pre-existing landmark-one-main and region findings with or without this change (defect landing-axe-regions).
+
+## Designer check
+
+Verified at 9be1cc80 against claude/p3 474e2b06, served with each build's own _headers at 1440 and 375: no unsafe-eval, no CSP violations or console errors; reduced-motion scroll captures byte-identical, same heights; same running animations; 12 links identical.
