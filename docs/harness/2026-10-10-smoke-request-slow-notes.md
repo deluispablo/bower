@@ -934,3 +934,5 @@ removed: archive-to-changes copying and obsolete restored/already-active driver 
 
 Round-5 owned changes: runner/test/corpus-run.ts, runner/test/corpus-driver.test.ts,
 runner/test/c05-person-notes.test.ts, and this required notes append. No corpus file changed.
+
+tests changed: src/data/drive/fake-drive.test.ts: new red for DEFECT_LOG fake-drive-snapshot-feed (lead ruling round 4): snapshot, restore, listChanges still answers a stored token.
