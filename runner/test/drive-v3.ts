@@ -178,7 +178,7 @@ async function answer(wire: DriveV3, method: string, url: URL, body: RequestInit
   if (method === 'GET' && path === '/drive/v3/changes') {
     const feed = await drive.listChanges(url.searchParams.get('pageToken') ?? '');
     return json(200, { newStartPageToken: feed.newStartPageToken, changes: feed.changes.map((change) => ({
-      fileId: change.fileId, removed: change.removed, ...(change.file ? { file: wireFile(change.file, false) } : {}),
+      fileId: change.fileId, removed: change.removed, ...(change.file ? { file: wireFile(change.file, change.file.trashed === true) } : {}),
     })) });
   }
   if (method === 'GET' && one) {

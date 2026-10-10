@@ -572,3 +572,132 @@ it('B1a contract: pass 1 5: newly discovered hidden descendants advance only the
       .operations).filter((op) => op.effect.kind === 'maintain'), 'a hidden-only feed never schedules maintain').toEqual([]);
   }
 });
+
+it('B1a contract: round 3 1: vanished indexed notes drop without failing and ordinary edits refresh', async () => {
+  for (const mode of ['ordinary edit', 'trashed feed', 'removed feed', 'not-found read']) {
+    const { c, drive, root, plot, state, admission } = await feedBaseline();
+    const summary = 'Alex now grows peas in a raised bed.';
+    const text = `---\nsummary: ${summary}\n---\nAlex changed the planting plan.\n`;
+    let version = plot.modifiedTime;
+    let throughCursor = state.cursor;
+    let feedReads = 0;
+    let missingReads = 0;
+    const original = maintenance.withMaintenance;
+    const planned = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest) => {
+      const listed = (await adapter.planReads().listAll(root)).find((f) => f.id === plot.id);
+      expect(listed?.modifiedTime, `${mode}: planner cached the indexed version`).toBe(state.files[plot.id]?.version);
+      return original(adapter, manifest);
+    });
+    const around = (fetch: typeof globalThis.fetch): typeof globalThis.fetch => async (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      if (url.pathname === '/drive/v3/changes' && feedReads++ === 0) {
+        // The real feed read races the planner's cached listing, on the same FakeDrive.
+        version = (await drive.writeText(plot.id, text, plot.modifiedTime)).modifiedTime;
+        if (mode === 'trashed feed' || mode === 'removed feed') await drive.trash(plot.id);
+        const response = await fetch(input, init);
+        const feed = await response.json() as { newStartPageToken: string; changes: Array<{
+          fileId: string; removed: boolean; file?: { modifiedTime: string; trashed: boolean };
+        }> };
+        expect(response.ok).toBe(true);
+        expect(feed.changes.filter((change) => change.fileId === plot.id).at(-1)?.file)
+          .toMatchObject({ modifiedTime: version, trashed: mode === 'trashed feed' || mode === 'removed feed' });
+        throughCursor = feed.newStartPageToken;
+        if (mode === 'removed feed') {
+          // Drive may report a removal without metadata; only the wire representation changes.
+          feed.changes = feed.changes.map((change) => change.fileId === plot.id ? { fileId: plot.id, removed: true } : change);
+        }
+        if (mode === 'not-found read') await drive.trash(plot.id); // Feed drained; maintenance's content read now returns 404.
+        return new Response(JSON.stringify(feed), { status: response.status, headers: response.headers });
+      }
+      const response = await fetch(input, init);
+      if (mode === 'not-found read' && url.pathname === `/drive/v3/files/${plot.id}` && response.status === 404) missingReads++;
+      return response;
+    };
+    const run = await runOnDrive(c, drive, root, { admission, pacing, around }, 1);
+    expect(planned).toHaveBeenCalledTimes(1);
+    planned.mockRestore();
+    expect(feedReads).toBeGreaterThan(0);
+    expect(version).not.toBe(state.files[plot.id]?.version);
+    if (mode === 'not-found read') expect(missingReads, 'real maintenance read answers not-found').toBeGreaterThan(0);
+    expect.soft(run.code, `${mode}: a vanished note never fails the run`).toBe(0);
+    expect.soft(run.wire?.statuses.at(-1)?.phase, `${mode}: main reaches done`).toBe('done');
+    const after = JSON.parse(run.after['.bower/retrieval.json'] ?? 'null') as RetrievalFile;
+    expect(after).not.toBeNull();
+    expect.soft(after.cursor, `${mode}: state commits the drained feed cursor`).toBe(throughCursor);
+    if (mode === 'ordinary edit') {
+      expect(after.files[plot.id]).toMatchObject({ path: 'Resources/Gardening/Plot.md', version, summary });
+      expect(run.after['.bower/index.md']).toContain(`[[Plot]] — ${summary}`);
+      expect(await drive.readText(plot.id)).toBe(text);
+    } else {
+      expect((await drive.evidence(plot.id))?.trashed).toBe(true);
+      expect.soft(after.files[plot.id], `${mode}: retrieval drops the exact vanished id`).toBeUndefined();
+      expect.soft(run.after['.bower/index.md'], `${mode}: projection drops the vanished note`).not.toContain('[[Plot]]');
+    }
+  }
+});
+
+it('B1a contract: round 3 2: unrelated account changes drain once and the next run has two discovery reads', async () => {
+  for (const hiddenChange of [false, true]) {
+    vi.setSystemTime(AT);
+    const { c, drive, root, plot, hidden, state, index, admission } = await feedBaseline();
+    const outside = await drive.createFolder('root', 'Elsewhere');
+    const unrelated = await drive.createText(outside.id, 'Plot.md', '---\nsummary: Alex keeps an unrelated plan.\n---\n');
+    const ignoredIds = new Set([outside.id, unrelated.id]);
+    if (hiddenChange) ignoredIds.add((await drive.createText(hidden.id, 'workspace.json', '{"madeUp":true}')).id);
+    const throughCursor = await drive.getStartPageToken();
+    const drained = await drive.listChanges(state.cursor);
+    expect(drained.newStartPageToken).toBe(throughCursor);
+    expect(new Set(drained.changes.map((change) => change.fileId))).toEqual(ignoredIds);
+    expect(VaultIndex.build(root, await drive.listAll(root)).pathOf(unrelated.id)).toBeUndefined();
+    const run = await runOnDrive(c, drive, root, { admission, pacing }, 1);
+    expect(run.code).toBe(0);
+    expect(run.wire?.statuses.at(-1)?.phase).toBe('done');
+    const after = JSON.parse(run.after['.bower/retrieval.json'] ?? 'null') as RetrievalFile;
+    expect.soft(after.cursor, 'outside and hidden entries advance to newStartPageToken').toBe(throughCursor);
+    expect({ ...after, cursor: state.cursor }).toEqual(state);
+    expect(run.after['.bower/index.md']).toBe(index);
+    expect(after.files[plot.id]).toEqual(state.files[plot.id]);
+    expect.soft((await drive.listChanges(after.cursor)).changes.filter((change) => ignoredIds.has(change.fileId)),
+      'drained unrelated entries never remain pending').toEqual([]);
+
+    const requests: Array<{ method: string; url: URL }> = [];
+    let discovery: typeof requests = [];
+    const original = maintenance.withMaintenance;
+    const planned = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest) => {
+      expect(manifest.operations).toEqual([]);
+      const from = requests.length;
+      const maintained = await original(adapter, manifest);
+      discovery = requests.slice(from);
+      return maintained;
+    });
+    const repeated: string[] = [];
+    const around = (fetch: typeof globalThis.fetch): typeof globalThis.fetch => async (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      if (url.origin === 'https://www.googleapis.com') requests.push({ method: (init?.method ?? 'GET').toUpperCase(), url });
+      const response = await fetch(input, init);
+      if (url.pathname === '/drive/v3/changes') {
+        const feed = await response.clone().json() as { changes: Array<{ fileId: string }> };
+        repeated.push(...feed.changes.filter((change) => ignoredIds.has(change.fileId)).map((change) => change.fileId));
+      }
+      return response;
+    };
+    // The existing dispatch override gives main a fresh run id without adding a journal request.
+    vi.setSystemTime(AT + 1);
+    const next = await runOnDrive(c, drive, root, { admission: { ...admission, id: 'feed-contract-next', at: AT + 1 }, pacing, around,
+      answerStart: { scope: 'all', requestId: 'feed-contract-next' } }, 2);
+    expect(next.code).toBe(0);
+    expect(next.wire?.statuses.at(-1)?.phase).toBe('done');
+    expect(planned).toHaveBeenCalledTimes(1);
+    planned.mockRestore();
+    const retrieval = (await drive.listAll(root)).find((f) => f.name === 'retrieval.json');
+    expect(retrieval).toBeDefined();
+    expect.soft(discovery.map((r) => [r.method, r.url.pathname, r.url.searchParams.get('alt')]),
+      'the next no-change run makes exactly the two discovery reads').toEqual([
+      ['GET', `/drive/v3/files/${retrieval?.id}`, 'media'], ['GET', '/drive/v3/changes', null],
+    ]);
+    expect.soft(discovery.find((r) => r.url.pathname === '/drive/v3/changes')?.url.searchParams.get('pageToken'),
+      'next discovery starts after the unrelated entries').toBe(throughCursor);
+    expect.soft(repeated, 'the next feed never repeats outside or hidden entries').toEqual([]);
+    expect(next.after['.bower/index.md']).toBe(index);
+  }
+});
