@@ -239,3 +239,50 @@ Offline standard reference supplied by the repair instruction:
 [CommonMark 0.31.2 §2.4: backslash escapes](https://spec.commonmark.org/0.31.2/#backslash-escapes).
 No page was fetched. The assertion decodes only ASCII punctuation escapes and
 checks heading/list/quote/fence syntax at the start of each parsed row's content.
+
+## Fix round 1
+
+Changed only `runner/src/hot.ts` for the two adversarial blockers; this section
+records the repair. The amended tests were not changed.
+
+- The existing one-line projection now escapes leading block punctuation after
+  collapsing whitespace. Ordered markers escape their period or closing
+  parenthesis, since CommonMark backslash escapes apply to ASCII punctuation,
+  not digits. Questions, hub paths and change text reuse the same pure helper.
+- Focus and recent section totals start at their capped row counts. Their caps
+  add no mark; later word-budget removals produce `- (N more)` counting those
+  removed rows. Threads retain the full input count and their Home mark.
+- The exactly-300-word over-cap fixture now keeps all five focus rows and ten
+  recent rows. Provenance still names only displayed identities. No I/O, model,
+  clock, dependencies or additional mechanism were added.
+
+removed: focus and recent cap-only omission marks.
+removed: unescaped leading block markers after whitespace collapse.
+tests changed: none
+
+### Fix round 1 verification
+
+Output is under `tmp-logs/`; only failure records were read.
+
+- Before the fix, `pnpm -C runner exec vitest run test/b23-hot.test.ts --maxWorkers=2`
+  exited 1: 24 assertion failures and 10 passes. The 22 leading-block cases,
+  corrected cap case and exactly-300-word case reproduce both blockers.
+  Log: `tmp-logs/b3a-fix-round-1-red.log`.
+- After the fix, the same pinned command exited 0; all 34 amended tests passed.
+  Log: `tmp-logs/b3a-fix-round-1-verify.log`.
+- `pnpm -C runner exec vitest run --maxWorkers=2`: exit 0.
+  Log: `tmp-logs/b3a-fix-round-1-suite.log`.
+- `pnpm -C runner exec tsc --noEmit -p .`: exit 0.
+  Log: `tmp-logs/b3a-fix-round-1-tsc.log`.
+- `pnpm -C runner exec eslint src/hot.ts`: exit 0.
+  Log: `tmp-logs/b3a-fix-round-1-eslint.log`.
+
+No network, git-writing command, `pnpm check` or e2e ran, as instructed for this
+fix round. The coordinator owns commits; the fix and notes remain separate files.
+
+### Fix round 1 sources
+
+Offline references already supplied by the packet and Red repair:
+[CommonMark 0.31.2 §2.4: backslash escapes](https://spec.commonmark.org/0.31.2/#backslash-escapes)
+and [Redux: prerequisite reducer concepts](https://redux.js.org/usage/structuring-reducers/prerequisite-concepts).
+No pages were fetched. The same typed, deterministic projection remains pure.
