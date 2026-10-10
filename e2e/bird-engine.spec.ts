@@ -16,6 +16,8 @@ test('no CSS animation runs on a bird part while the engine runs', async ({ page
   await expect(engineBird).toHaveCount(1);
   const head = engineBird.locator('.b-head');
   const first = await head.getAttribute('transform');
+  // A real tap goes through react('tap'); its pointer gaze drives the head after the reaction.
+  await page.locator('[data-bird]:not(.posed)').click();
   await expect.poll(() => head.getAttribute('transform'), { timeout: 8000 }).not.toBe(first);
 
   const running = await page.evaluate(

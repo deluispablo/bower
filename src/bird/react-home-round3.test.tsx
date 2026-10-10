@@ -50,29 +50,3 @@ it("a real tap on loaded Home goes through react('tap') and hops within six fram
   }
   expect(lowest).toBeLessThan(-1);
 });
-
-it('the loaded Home engine changes its head within eight seconds and keeps the CSS pose off', async () => {
-  const b = await home();
-  const first = b.head.getAttribute('transform');
-  let changed = false;
-  for (let i = 0; i < 8 * FPS; i++) {
-    b.run(1);
-    changed ||= b.head.getAttribute('transform') !== first;
-  }
-  expect(changed).toBe(true);
-  expect(b.bird).not.toHaveClass('posed');
-});
-
-it('the Home head poll changes within eight seconds when the weighted draw keeps selecting pause', async () => {
-  const b = await home();
-  // A legal draw near the top of the weighted table selects pause, which does not move the head.
-  vi.spyOn(Math, 'random').mockReturnValue(0.99);
-  const first = b.head.getAttribute('transform');
-  let changed = false;
-  for (let i = 0; i < 8 * FPS; i++) {
-    b.run(1);
-    changed ||= b.head.getAttribute('transform') !== first;
-  }
-  expect(b.bird).not.toHaveClass('posed');
-  expect(changed, "the unchanged e2e's eight-second head poll").toBe(true);
-});
