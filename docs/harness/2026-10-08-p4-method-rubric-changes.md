@@ -19,7 +19,10 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c06-stored-project-connection | agrees | The source note links its hub and the relevant stored project; both hubs receive sourced news, with no invented commute or acceptance (points 1, 3, 4, 7). |
 | c06-two-sources-attributed | agrees | Known facts receive separate confirmation lines citing their own letters, without redundant notes or an invented connection (points 1, 2, 3, 4, 7). |
 | c07-answer-yes | agrees | Already asks a model run to rewrite the Current state and keep the old figure in the Timeline (point 3). |
+| c07-dated-rent-change | changed | Points 1, 3, 7: dated terms fit the flat project and update sourced history; removed the historical-state retention requirement so owned state can reflect the new period. expected.json is unchanged and still pins the old state in the scripted draft. |
 | c07-rent-disagrees | agrees | The disagreement is asked with both notes and both figures, never resolved silently (point 3). |
+| c07-same-period-rent | changed | Points 1, 3, 4, 7: file the listing, link both sources and mark both same-period claims; removed the Current state preservation requirement so owned state can mark uncertainty. expected.json is unchanged and still pins the old state in the scripted draft. |
+| c07-tentative-closure | changed | Points 1, 3, 4, 7: file the notice, link both sources and record conditional risk without inventing cancellation; removed the Current state preservation requirement so owned state can include the risk. expected.json is unchanged and still pins the old state in the scripted draft. |
 | c08-compare-flats | agrees | A requested comparison is a new generated note linking its sources (point 4). |
 | c08-revise-comparison | agrees | The same note is revised, not a second one made (value gate, point 2); the revision is a Timeline line. |
 | c09-burst-pipe | agrees | An answer from the notes; nothing filed or changed. |

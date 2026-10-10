@@ -33,6 +33,9 @@ Made-up cases for the capabilities C04 to C11, C13 and C15 (Alex, Larkspur Lane,
 | c06-two-sources-attributed | C06 | model | new (C06 preparation; scripted intent proof pending) |
 | c07-answer-yes | C07 | scripted | p2-journey:C07 (the answer run) |
 | c07-rent-disagrees | C07 | scripted | p2-journey:C07 (a words-only pile) |
+| c07-same-period-rent | C07 | model | new (C07 prep; scripted intent proof pending) |
+| c07-tentative-closure | C07 | model | new (C07 prep; scripted intent proof pending) |
+| c07-dated-rent-change | C07 | model | new (C07 prep; scripted intent proof pending) |
 | c08-compare-flats | C08 | scripted | p2-journey:C08 |
 | c08-revise-comparison | C08 | model | new (no revision path is scripted) |
 | c09-burst-pipe | C09 | model | bench:5-question-about-filed-pdf, adapted (made-up policy; the original is in bench-5-question-about-filed-pdf) |
