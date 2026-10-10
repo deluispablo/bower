@@ -2050,7 +2050,8 @@
       "The note is Soup ideas, not a name missing its first letters."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa7.spec.ts -g \"New folder from the tree keeps the first letters typed\"",
-    "passes": false
+    "passes": false,
+    "note": " Reopened by c5-remove-new-note: its New note half is withdrawn (TL-P4-33/35); its New folder half fails (DEFECTS new-folder-first-letters, ruling (b)) and closes with entry 2, whose red is this test."
   },
   {
     "id": "situation-address-clean",
@@ -6515,7 +6516,7 @@
       "The new-folder name is typed into the name box, never the tree.",
       "An answered row shows after Write it without a reload race."
     ],
-    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/qa7.spec.ts e2e/capabilities.spec.ts --project=desktop -g \"New folder from the tree keeps the first letters typed|write it shows the state written, re-asks on a clash and settles as an answered row\"",
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/qa7.spec.ts e2e/capabilities.spec.ts --project=desktop -g \"New folder in an empty folder asks for a name, then opens the folder|write it shows the state written, re-asks on a clash and settles as an answered row\"",
     "note": "Lead 2026-10-10 (stage-4 close): sync fixes. Codex, then a Claude review and repeat runs. Packet 2026-10-10-c4-e2e-sync-packet.md.",
     "review": "P4-71 PASS"
   },
