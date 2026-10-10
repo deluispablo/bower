@@ -10,8 +10,7 @@
     ]
   },
   "unchanged": [
-    "Rules.md",
-    "Resources/Gardening/Gardening.md"
+    "Rules.md"
   ],
   "notes": [
     {
@@ -31,7 +30,6 @@
     "created": [
       "Resources/Gardening/Garden opening.md"
     ],
-    "updated": [],
     "setAside": 0,
     "questionsExactly": 0,
     "rulesWorded": 0

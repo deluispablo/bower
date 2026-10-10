@@ -30,6 +30,9 @@
     "updated": [],
     "setAside": 0,
     "questionsExactly": 1,
+    "questions": [
+      "q-ask-p-1"
+    ],
     "rulesWorded": 0
   }
 }
