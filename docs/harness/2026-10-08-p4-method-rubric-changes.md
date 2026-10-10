@@ -6,6 +6,7 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 
 | Case | Verdict | Reason |
 | --- | --- | --- |
+| b1-maintenance-crash-resume | agrees | B1 prep case 6: derived maintenance resumes before the report, with no fabricated facts or rows; the person's bytes stay intact (method points 2, 3 and 7; TL-P4-41 Q4/Q5/Q11). Scripted recovery only, no model quality claim. |
 | c04-garden-newsletter | agrees | A garden topic in Resources is a fit when the note links the plot note and the plot note gets a line (points 1, 4, 7). |
 | c04-hardware-receipt | agrees | The person's rule decides the place (fit); the note states only the receipt's facts. |
 | c04-offer-and-flat | agrees | Each thing fits an existing project or a new Area said with its responsibility (point 1, addendum 3). |

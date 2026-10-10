@@ -1,0 +1,13 @@
+{
+  "id": "b1-maintenance-crash-resume",
+  "capability": "C05",
+  "title": "Resume hidden maintenance with the same manifest after a lost write reply",
+  "covers": "scripted",
+  "source": "new (TL-P4-41 Q4/Q5/Q11; B1 prep case 6; fault injected by the B1a contract test)",
+  "scope": "instructions",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [{ "kind": "rule", "text": "Keep gardening notes in Resources." }],
+  "questions": [],
+  "bowerOwned": []
+}
