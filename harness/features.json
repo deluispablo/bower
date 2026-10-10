@@ -6570,7 +6570,7 @@
     "id": "p4-corpus-answers",
     "task": "p4-semantic",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "ui": null,
     "what": "The corpus driver answers questions through the real answer path between presses, asserts per run, compares protected byte ranges and Drive properties directly, and tells a replay of the original request from a new tidy-up (TL-P4-32 finding 7).",
     "steps": [

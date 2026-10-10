@@ -287,3 +287,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-10: c4-e2e-sync passes — test(c4-e2e-sync): passes (P4-71 PASS)
 - 2026-10-10: folder-header-wrap passes — harness: folder-header-wrap passes (P4-72 PASS, designer verified)
 - 2026-10-10: c5-codex-run passes — harness: c5-codex-run passes (P4-73 PASS)
+- 2026-10-10: p4-corpus-answers passes — harness: p4-corpus-answers passes (P4-74b PASS)
