@@ -15,19 +15,44 @@ test("Escape on a new folder's name takes it back", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await open(page, '/files');
   const tree = page.getByRole('tree', { name: 'Your Bower folder' });
-  await tree.locator('[data-path="Resources"]').click({ button: 'right' });
+  const resources = tree.locator('[data-path="Resources"]');
+  await expect(resources).toBeVisible();
+  const openerId = await resources.getAttribute('id');
+  expect(openerId).toBeTruthy();
+  await resources.click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'New folder', exact: true }).click();
-  const draft = tree.locator('[data-path="Resources/New folder"]');
-  const name = draft.getByRole('textbox', { name: 'New name for New folder', exact: true });
+  const name = tree.getByRole('textbox', { name: 'New folder in Resources', exact: true });
+  const draft = tree.getByRole('treeitem').filter({
+    has: page.getByRole('textbox', { name: 'New folder in Resources', exact: true }),
+  });
   await expect(name).toBeVisible();
+  await expect(name).toBeFocused();
+  await expect(name).toHaveValue('');
+  await expect(name).toHaveAttribute('placeholder', 'Name');
+  await expect(draft).toHaveCount(1);
+  const rowsWithoutDraft = await tree.getByRole('treeitem').count() - 1;
+  await expect(tree.locator('[data-path="Resources/New folder"]')).toHaveCount(0);
   await name.fill('Soup ideas');
   await name.press('Escape');
   await expect(draft).toHaveCount(0);
+  await expect(tree.getByRole('treeitem')).toHaveCount(rowsWithoutDraft);
+  await expect(tree.locator('[data-path="Resources/New folder"]')).toHaveCount(0);
   await expect(tree.locator('[data-path="Resources/Soup ideas"]')).toHaveCount(0);
   await expect(tree.getByRole('textbox')).toHaveCount(0);
   await expect(tree).toBeFocused();
+  await expect(tree).toHaveAttribute('aria-activedescendant', openerId ?? '');
   await expect(page).toHaveURL(/\/files(?:\?|$)/);
   await expect(page.getByRole('main').getByRole('heading', { name: 'Your Bower folder', exact: true })).toBeVisible();
+  // Positive control: the same entry makes the named folder when Enter confirms it.
+  await resources.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'New folder', exact: true }).click();
+  await expect(name).toBeFocused();
+  await name.fill('Soup ideas');
+  await name.press('Enter');
+  await expect(tree.locator('[data-path="Resources/Soup ideas"]')).toHaveCount(1);
+  await expect(tree.getByRole('treeitem')).toHaveCount(rowsWithoutDraft + 1);
+  await expect(tree.getByRole('textbox')).toHaveCount(0);
+  await expect(page.getByRole('main').getByRole('heading', { name: 'Soup ideas', exact: true })).toBeVisible();
 });
 
 test('one counting rule for folders', async ({ page, isMobile }) => {

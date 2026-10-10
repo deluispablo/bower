@@ -157,3 +157,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `9040d9bf` | c5-remove-new-note | none for stored data: the New note controls and their name-sheet path are removed; vault.createNote, the journal create kind and its fixtures stay. |
 | `b6fb31c0` | create-named | none: tests only (the createNamed red). |
 | `cf04e6ae` | create-named | none: refactor; NameSheet makes a folder through createNamed with the same call, strings and navigation. |
+| `cda855c6` | tree-name-first | none: tests only (the name-first reds and the restored immediate-typing guard). |
+| `0295e5f2` | tree-name-first | none for stored data: the tree's New folder asks for the name before making the folder, then makes it once; Escape makes nothing. |

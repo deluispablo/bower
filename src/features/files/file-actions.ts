@@ -76,8 +76,7 @@ export function useFileActions() {
           return e instanceof BowerError ? (e.applied?.path ?? null) : null;
         }
       },
-      /** `quiet`: a thing just made gets its own word ("New folder in …"), not a rename one. */
-      async rename(path: string, name: string, opts: { quiet?: boolean; onPartial?: () => void } = {}): Promise<string | null> {
+      async rename(path: string, name: string): Promise<string | null> {
         try {
           const folder = findNode(await vault.tree(), path)?.type === 'folder';
           const label = (p: string): string => folder ? nameOf(p) : thingName(nameOf(p));
@@ -85,14 +84,13 @@ export function useFileActions() {
           useUi.getState().relocate(path, to);
           follow(path, to);
           const slash = /[/\\]/.test(name) ? ' Names cannot have slashes; Bower used a dash.' : '';
-          if (!opts.quiet && to !== path) toast(`Renamed to ${label(to)}.${slash}`);
+          if (to !== path) toast(`Renamed to ${label(to)}.${slash}`);
           else if (slash) toast(slash.trim());
           return to;
         } catch (e) {
           if (e instanceof BowerError && e.applied?.path) {
             useUi.getState().relocate(path, e.applied.path);
             follow(path, e.applied.path);
-            opts.onPartial?.();
           }
           report(e, 'That did not work. Try again.');
           return e instanceof BowerError ? (e.applied?.path ?? null) : null;
@@ -119,38 +117,28 @@ export function useFileActions() {
           report(e, 'That did not work. Try again.');
         }
       },
-      async createNamed(folder: string, name: string): Promise<void> {
+      askFolderName(folder: string, inline = false): void {
+        if (inline) useUi.getState().openAll([...ancestors(folder), folder]);
+        useUi.getState().setNaming({ folder, type: 'folder', inline });
+      },
+      async createNamed(folder: string, name: string, response?: {
+        made: (path: string) => void;
+        failed: (sentence: string) => void;
+      }): Promise<void> {
         try {
           const path = await vault.create(folder, 'folder', name);
           open({ path, type: 'folder' });
+          response?.made(path);
         } catch (e) {
-          if (e instanceof BowerError && e.applied?.path) open({ path: e.applied.path, type: 'folder' });
-          report(e, 'The folder was not made. Try again.');
-        }
-      },
-      async create(folder: string): Promise<void> {
-        try {
-          const path = await vault.create(folder, 'folder');
-          useUi.getState().openAll([...ancestors(path)]);
-          // The new thing gets its name in place; the selection stays, so New folder twice makes two siblings.
-          useUi.getState().setJustMade(path);
-          useUi.getState().setRenaming(path);
-        } catch (e) {
-          if (e instanceof BowerError && e.applied?.path) {
-            useUi.getState().openAll([...ancestors(e.applied.path)]);
-            useUi.getState().setJustMade(e.applied.path);
-            useUi.getState().setRenaming(e.applied.path);
+          const applied = e instanceof BowerError ? e.applied?.path : null;
+          if (applied) {
+            open({ path: applied, type: 'folder' });
+            response?.made(applied);
           }
-          report(e, 'That did not work. Try again.');
-        }
-      },
-      /** Takes back a thing just made (Escape on its name), with no Bin and no journal line. */
-      async discard(path: string): Promise<void> {
-        try {
-          await vault.trash(path);
-          useUi.getState().relocate(path, null);
-        } catch (e) {
-          report(e, 'That did not work. Try again.');
+          if (response && !applied) {
+            console.error(e);
+            response.failed('The folder was not made. Try again.');
+          } else report(e, 'The folder was not made. Try again.');
         }
       },
       copyLink(node: Pick<TreeNode, 'path' | 'type'>): void {

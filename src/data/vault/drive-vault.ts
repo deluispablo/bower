@@ -1350,7 +1350,7 @@ export class DriveVault implements VaultSource {
   }
 
   async removeRule(id: string): Promise<() => Promise<void>> {
-    const r = (await this.rules()).find((x) => x.id === id);
+    const r = (await this.rulesForRemoval(id)).find((x) => x.id === id);
     if (!r) throw new BowerError('not-found', 'That rule is no longer there.');
     if (r.pending) {
       // Not worded yet: its line goes when never sent, and Undo writes it again. Sent, it is taken out by a forward
@@ -1370,6 +1370,14 @@ export class DriveVault implements VaultSource {
     return () => this.undoRuleLine(line.id, r.text);
   }
 
+  /** Another page may have sent a rule and drained the shared outbox since this listing was cached. */
+  private async rulesForRemoval(id: string): Promise<Rule[]> {
+    const rules = await this.rules();
+    if (rules.some((r) => r.id === id)) return rules;
+    await this.refresh();
+    return this.rules();
+  }
+
   /**
    * The Undo of a rule line (TL-P4-27 addenda 2 and 4 (3)): dropped when never sent; otherwise its inverse is recorded,
    * the rule again for a removal, its removal for a rule kept.
@@ -1377,7 +1385,7 @@ export class DriveVault implements VaultSource {
   private async undoRuleLine(id: string, text: string, kept = false): Promise<void> {
     if ((await this.journal.retract(id)) === 'sent') {
       if (kept) {
-        const { removed } = ruleSequence(await this.rules(), [], [{ recordId: id, text }]);
+        const { removed } = ruleSequence(await this.rulesForRemoval(id), [], [{ recordId: id, text }]);
         const words = [...removed][0] ?? text;
         await this.journal.record('rule', `Removed the rule "${words}"`, { path: 'Rules.md', removes: words, undoes: id });
       } else await this.journal.record('rule', `New rule: "${text}"`, { path: 'Rules.md', text, undoes: id });

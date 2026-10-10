@@ -42,6 +42,30 @@ export interface DrivePatch {
   appProperties?: Record<string, string | null>;
 }
 
+/** One account-feed entry, including removals with no file metadata. */
+export interface DriveChange {
+  fileId: string;
+  removed: boolean;
+  file?: DriveFile;
+}
+
+export interface DriveChangePage {
+  changes: DriveChange[];
+  nextPageToken?: string;
+  newStartPageToken?: string;
+}
+
+export interface DriveChanges {
+  changes: DriveChange[];
+  newStartPageToken: string;
+}
+
+export interface DriveScope {
+  inScopeIds: string[];
+  outOfScopeIds: string[];
+  needsFullListing: boolean;
+}
+
 /** A file in the Bin that carries a `bowerItem` key, with its stored size and SHA-256 when known. */
 export interface BinnedItem {
   file: DriveFile;
@@ -72,6 +96,16 @@ export interface DriveApi extends ResumableDrive {
   readText(id: string): Promise<string>;
   /** Available undecoded media bytes; each returned array is an independent copy. */
   readBytes(id: string): Promise<Uint8Array>;
+  /** First 4,096 UTF-8 bytes, omitting an incomplete trailing character; null for folders and exports. */
+  readPrefix(id: string): Promise<string | null>;
+  /** Capture before the bootstrap listing; persistence belongs to the caller. */
+  getStartPageToken(): Promise<string>;
+  /** Drain every My Drive page, preserving order, repeated entries and unrelated changes. */
+  listChanges(pageToken: string): Promise<DriveChanges>;
+  /** Metadata only, including parents of a folder in the Bin. */
+  parents(id: string): Promise<string[]>;
+  /** Walk unknown live ids; above 50, report that the caller needs a bounded full listing. */
+  resolveScope(rootId: string, unknownIds: readonly string[]): Promise<DriveScope>;
   /** With `id`, reserved by `generateIds`: a file with that id there already rejects `conflict` (Drive's 409). */
   createFolder(parentId: string, name: string, appProperties?: Record<string, string>, id?: string): Promise<DriveFile>;
   createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>, id?: string): Promise<DriveFile>;
@@ -111,6 +145,72 @@ export const SEARCH_MAX_PAGES = 2;
 /** Item keys looked up in one Bin query (`binnedByItem`); each query reads at most `SEARCH_MAX_PAGES` pages. */
 export const BIN_KEYS = 20;
 export const SEARCH_FOLDERS = 40;
+
+export const PREFIX_BYTES = 4096;
+
+/** Streaming decode holds back an incomplete final UTF-8 character without adding a replacement character. */
+export const decodePrefix = (bytes: Uint8Array): string =>
+  new TextDecoder().decode(bytes.subarray(0, PREFIX_BYTES), { stream: true });
+
+/** One ancestry walk for scope discovery and Bin lookups; share parent reads and stop cycles. */
+export function ancestryLookup(
+  inside: ReadonlySet<string>,
+  readParents: (id: string) => Promise<string[]>,
+  maxDepth = Infinity,
+): (id: string) => Promise<boolean> {
+  const kept = new Map<string, Promise<string[]>>();
+  const below = async (id: string, seen: ReadonlySet<string>): Promise<boolean> => {
+    if (inside.has(id)) return true;
+    if (seen.size >= maxDepth || seen.has(id)) return false;
+    let parents = kept.get(id);
+    if (!parents) {
+      parents = readParents(id).catch((e: unknown) => {
+        // expected: a missing or unshared ancestor cannot establish membership; other failures stop the lookup.
+        if (e instanceof BowerError && e.code === 'not-found') return [];
+        throw e;
+      });
+      kept.set(id, parents);
+    }
+    const path = new Set(seen).add(id);
+    return (await Promise.all((await parents).map((p) => below(p, path)))).some(Boolean);
+  };
+  return (id) => below(id, new Set());
+}
+
+export async function resolveDriveScope(
+  rootId: string,
+  unknownIds: readonly string[],
+  readParents: (id: string) => Promise<string[]>,
+): Promise<DriveScope> {
+  const result: DriveScope = { inScopeIds: [], outOfScopeIds: [], needsFullListing: unknownIds.length > 50 };
+  if (result.needsFullListing) return result;
+  const below = ancestryLookup(new Set([rootId]), readParents);
+  for (const id of unknownIds) (await below(id) ? result.inScopeIds : result.outOfScopeIds).push(id);
+  return result;
+}
+
+/** No partial drain is returned as a completed feed; only the terminal page supplies the new cursor. */
+export async function drainChanges(pageToken: string, read: (token: string) => Promise<DriveChangePage>): Promise<DriveChanges> {
+  const changes: DriveChange[] = [];
+  const seen = new Set<string>();
+  for (;;) {
+    if (!pageToken || seen.has(pageToken)) throw changesError('Missing or repeated changes page token');
+    seen.add(pageToken);
+    const page = await read(pageToken);
+    changes.push(...page.changes);
+    if (page.nextPageToken) {
+      pageToken = page.nextPageToken;
+    } else {
+      if (!page.newStartPageToken) throw changesError('Changes drain has no terminal token');
+      return { changes, newStartPageToken: page.newStartPageToken };
+    }
+  }
+}
+
+export function changesError(detail: string): BowerError {
+  console.error(detail);
+  return new BowerError('unknown', "Bower could not read Drive's changes.");
+}
 
 /** What a resumable upload creates: the reserved file id, where it goes and what it is. */
 export interface ResumableTarget {
@@ -190,6 +290,11 @@ export const DRIVE_OPS = {
   get: 'read',
   readText: 'read',
   readBytes: 'read',
+  readPrefix: 'read',
+  getStartPageToken: 'read',
+  listChanges: 'read',
+  parents: 'read',
+  resolveScope: 'read',
   fullText: 'read',
   binnedByItem: 'read',
   storedDigest: 'read',

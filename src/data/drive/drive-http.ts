@@ -10,7 +10,7 @@ import type { Digest } from '../pile-readiness';
 import { sha256 } from '../vault/hashes';
 import { answerKind, askAgainNow, isNoAnswer, mayHaveLanded, noAnswer, send, type Context, type Fetch, type Pacing } from './transport';
 import { confirmedFrom, chunkRange } from './resumable-upload';
-import { BIN_KEYS, DRIVE_MESSAGES, driveError, driveFailure, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type Fence, type ResumableTarget, type SessionStatus, type WriteOptions } from './drive-api';
+import { ancestryLookup, BIN_KEYS, changesError, decodePrefix, drainChanges, DRIVE_MESSAGES, driveError, driveFailure, PREFIX_BYTES, resolveDriveScope, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveChange, type DriveChanges, type DriveFile, type DrivePatch, type DriveScope, type Fence, type ResumableTarget, type SessionStatus, type WriteOptions } from './drive-api';
 
 const API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
@@ -170,9 +170,65 @@ export class DriveHttp implements DriveApi {
 
   async readBytes(id: string): Promise<Uint8Array> {
     const response = await this.call(`${API}/files/${id}?alt=media`);
+    // Copy even when an injected transport retains its returned body buffer.
+    return this.readBody(async () => new Uint8Array(new Uint8Array(await response.arrayBuffer())));
+  }
+
+  async readPrefix(id: string): Promise<string | null> {
+    return this.readBody(async () => {
+      const meta = (await (await this.call(`${API}/files/${id}?fields=mimeType,trashed`)).json()) as Pick<WireFile, 'mimeType' | 'trashed'>;
+      if (meta.trashed) throw driveError('not-found');
+      if (meta.mimeType?.startsWith('application/vnd.google-apps.')) return null;
+      const response = await this.call(`${API}/files/${id}?alt=media`, { headers: { Range: `bytes=0-${PREFIX_BYTES - 1}` } }, [416]);
+      if (response.status === 416) return '';
+      return decodePrefix(new Uint8Array(await response.arrayBuffer()));
+    });
+  }
+
+  async getStartPageToken(): Promise<string> {
+    return this.readBody(async () => {
+      const body = (await (await this.call(`${API}/changes/startPageToken?fields=startPageToken`)).json()) as { startPageToken?: string };
+      if (!body.startPageToken) throw changesError('Drive returned no start page token');
+      return body.startPageToken;
+    });
+  }
+
+  async listChanges(pageToken: string): Promise<DriveChanges> {
+    return this.readBody(() => drainChanges(pageToken, async (token) => {
+      const params = new URLSearchParams({
+        pageToken: token, pageSize: String(SEARCH_PAGE_SIZE), spaces: 'drive',
+        restrictToMyDrive: 'true', includeRemoved: 'true',
+        fields: `nextPageToken,newStartPageToken,changes(fileId,removed,file(${FIELDS}))`,
+      });
+      const body = await this.readBody(async () =>
+        (await (await this.call(`${API}/changes?${params}`)).json()) as {
+          changes?: Array<Omit<DriveChange, 'file'> & { file?: WireFile }>;
+          nextPageToken?: string;
+          newStartPageToken?: string;
+        });
+      return {
+        changes: (body.changes ?? []).map((c) => ({ fileId: c.fileId, removed: c.removed ?? false, ...(c.file ? { file: toFile(c.file) } : {}) })),
+        nextPageToken: body.nextPageToken,
+        newStartPageToken: body.newStartPageToken,
+      };
+    }));
+  }
+
+  async parents(id: string): Promise<string[]> {
+    return this.readBody(async () => {
+      const body = (await (await this.call(`${API}/files/${id}?fields=id,parents`)).json()) as { parents?: string[] };
+      return body.parents ?? [];
+    });
+  }
+
+  async resolveScope(rootId: string, unknownIds: readonly string[]): Promise<DriveScope> {
+    return resolveDriveScope(rootId, unknownIds, (id) => this.parents(id));
+  }
+
+  /** Consume response bodies under the same error mapping as media bytes. */
+  private async readBody<T>(read: () => Promise<T>): Promise<T> {
     try {
-      // Copy even when an injected transport retains its returned body buffer.
-      return new Uint8Array(new Uint8Array(await response.arrayBuffer()));
+      return await read();
     } catch (e) {
       console.error(e);
       if (e instanceof BowerError) throw e;
@@ -252,29 +308,10 @@ export class DriveHttp implements DriveApi {
     const hits = new Map<string, BinnedItem>();
     // A file in a folder that is itself in the Bin is trashed too (`trashed` true, `explicitlyTrashed` false), and its
     // folder is in no listing: its place is found by walking up the folders it names, a few `files.get` at most.
-    const placed = new Map<string, Promise<boolean>>();
-    const below = (id: string, depth = 0): Promise<boolean> => {
-      if (inside.has(id)) return Promise.resolve(true);
-      if (depth >= BIN_DEPTH) return Promise.resolve(false);
-      let known = placed.get(id);
-      if (!known) {
-        known = (async () => {
-          beforeGet?.();
-          let res: Response;
-          try {
-            res = await this.call(`${API}/files/${id}?fields=id,parents`);
-          } catch (e) {
-            // expected: a folder outside this Drive (or not shared) is not below the folder; anything else stops the look.
-            if (e instanceof BowerError && e.code === 'not-found') return false;
-            throw e;
-          }
-          const parents = ((await res.json()) as { parents?: string[] }).parents ?? [];
-          return (await Promise.all(parents.map((p) => below(p, depth + 1)))).some(Boolean);
-        })();
-        placed.set(id, known);
-      }
-      return known;
-    };
+    const below = ancestryLookup(inside, async (id) => {
+      beforeGet?.();
+      return this.parents(id);
+    }, BIN_DEPTH);
     for (let i = 0; i < keys.length; i += BIN_KEYS) {
       const has = keys.slice(i, i + BIN_KEYS).map((k) => `appProperties has { key='bowerItem' and value=${quote(k)} }`).join(' or ');
       for (const file of await this.query(`trashed = true and (${has})`, SEARCH_MAX_PAGES, LISTED_FIELDS)) {

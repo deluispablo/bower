@@ -6,10 +6,220 @@
  * - `pageSize`: https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list (at most 1000 a page,
  *   then `nextPageToken`); `DriveHttp.fullText` reads two pages for each batch of 40 folders.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DRIVE_OPS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE } from './drive-api';
-import { DriveHttp } from './drive-http';
+import { DriveHttp, FOLDER, type WireFile } from './drive-http';
 import { FakeDrive } from './fake-drive';
+import { B1_FEED_CASES, B1_PREFIX_CASES, makeB1Drive as makeB1Fixture, runB1CacheCase, runB1FeedCase, runB1PrefixCase } from './drive-contract';
+
+const makeB1Drive = (kind: 'http' | 'fake', prefix?: Parameters<typeof makeB1Fixture>[2]) =>
+  makeB1Fixture(kind, {
+    restore: (snapshot, options) => FakeDrive.restore(snapshot, options),
+    http: (options) => new DriveHttp(options),
+  }, prefix);
+
+/** Recorded Drive metadata includes inherited trash and Workspace MIME types, independently of fake normalization. */
+function makeFixRound1Drive() {
+  const time = '2026-10-10T10:00:00.000Z';
+  const wire = (id: string, name: string, parents: string[], mimeType: string): WireFile => ({
+    id, name, parents, mimeType, modifiedTime: time, createdTime: time,
+  });
+  const files: Record<string, WireFile> = {
+    root: wire('root', 'My Drive', [], FOLDER),
+    FOLDER_ID: wire('FOLDER_ID', 'Bower', ['root'], FOLDER),
+    PROJECTS_ID: wire('PROJECTS_ID', 'Projects', ['FOLDER_ID'], FOLDER),
+    NOTE_ID: wire('NOTE_ID', 'Plan.md', ['PROJECTS_ID'], 'text/markdown'),
+    CONTROL_ID: wire('CONTROL_ID', 'Control.md', ['FOLDER_ID'], 'text/markdown'),
+    DOCUMENT_ID: wire('DOCUMENT_ID', 'Draft', ['FOLDER_ID'], 'application/vnd.google-apps.document'),
+  };
+  const recordedFile = (id: string): WireFile => {
+    const file = files[id];
+    if (!file) throw new Error('Unrecorded fix-round file.');
+    return file;
+  };
+  const fake = FakeDrive.restore(JSON.stringify({
+    v: 1, seq: 0, last: Date.parse(time),
+    files: Object.values(files).map((file) => ({
+      meta: {
+        id: file.id, name: file.name, parents: file.parents, folder: file.mimeType === FOLDER,
+        modifiedTime: time, createdTime: time,
+        ...(file.id === 'DOCUMENT_ID' ? { mimeType: file.mimeType } : {}),
+      },
+      trashed: false, content: file.mimeType === FOLDER ? null : { text: 'A short note.' },
+    })),
+  }), { clock: () => Date.parse(time), latency: 0 });
+  const changes: Array<{ fileId: string; removed: false; file: WireFile }> = [];
+  const json = (body: unknown) => new Response(JSON.stringify(body));
+  const http = new DriveHttp({
+    token: async () => 'made-up-token', pacing: { baseMs: 0 },
+    fetch: async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('/changes/startPageToken')) return json({ startPageToken: String(changes.length) });
+      if (url.pathname.endsWith('/changes')) return json({
+        changes: changes.slice(Number(url.searchParams.get('pageToken'))), newStartPageToken: String(changes.length),
+      });
+      const file = files[url.pathname.split('/').at(-1) ?? ''];
+      if (!file) throw new Error('Unrecorded fix-round request.');
+      if (url.searchParams.get('alt') === 'media') return new Response('A short note.', { status: 206 });
+      return json(file);
+    },
+  });
+  const record = async (id: string) => {
+    const file = { ...recordedFile(id), modifiedTime: (await fake.get(id, { binned: true })).modifiedTime };
+    files[id] = file;
+    changes.push({ fileId: id, removed: false, file: { ...file } });
+  };
+  return {
+    fake, http,
+    touch: async (id: string) => { fake.touch(id); await record(id); },
+    binProjects: async () => {
+      await fake.trash('PROJECTS_ID');
+      // Drive's files resource marks descendants trashed even when they are not explicitly trashed.
+      files.PROJECTS_ID = { ...recordedFile('PROJECTS_ID'), trashed: true };
+      files.NOTE_ID = { ...recordedFile('NOTE_ID'), trashed: true };
+      await record('PROJECTS_ID');
+    },
+  };
+}
+
+describe('B1b HTTP and fake port parity', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('b1b fix 2: native fake sizes are UTF-8 bytes for Unicode creates and updates', async () => {
+    const fake = new FakeDrive({ clock: () => Date.parse('2026-10-10T10:00:00.000Z'), latency: 0 });
+    const root = await fake.createFolder('root', 'Bower');
+    const changes: Array<{ fileId: string; removed: false; file: WireFile }> = [];
+    const media = new Map<string, string>();
+    const json = (body: unknown) => new Response(JSON.stringify(body));
+    const http = new DriveHttp({
+      token: async () => 'made-up-token', pacing: { baseMs: 0 },
+      fetch: async (input) => {
+        const url = new URL(String(input));
+        if (url.pathname.endsWith('/changes/startPageToken')) return json({ startPageToken: String(changes.length) });
+        if (url.pathname.endsWith('/changes')) return json({
+          changes: changes.slice(Number(url.searchParams.get('pageToken'))), newStartPageToken: String(changes.length),
+        });
+        const id = url.pathname.split('/').at(-1) ?? '';
+        if (url.searchParams.get('alt') === 'media' && media.has(id)) return new Response(media.get(id));
+        throw new Error('Unrecorded Unicode size request.');
+      },
+    });
+    const verify = async (text: string, existingId?: string) => {
+      const tokens = await Promise.all([http.getStartPageToken(), fake.getStartPageToken()]);
+      const written = existingId
+        ? await fake.writeText(existingId, text, (await fake.get(existingId)).modifiedTime)
+        : await fake.createText(root.id, 'Unicode.md', text, { bowerItem: 'SIZE_ITEM' });
+      const expected = new TextEncoder().encode(text);
+      // Drive's wire size is bytes, independently of the fake's native metadata calculation.
+      media.set(written.id, text);
+      changes.push({ fileId: written.id, removed: false, file: {
+        id: written.id, name: written.name, parents: written.parents, mimeType: 'text/markdown',
+        createdTime: written.createdTime, modifiedTime: written.modifiedTime, size: String(expected.byteLength),
+      } });
+      for (const [kind, drive, token] of [['http', http, tokens[0]], ['fake', fake, tokens[1]]] as const) {
+        const bytes = await drive.readBytes(written.id);
+        expect(Array.from(bytes), `${kind} stored media`).toEqual(Array.from(expected));
+        const feed = await drive.listChanges(token);
+        expect(feed.changes).toHaveLength(1);
+        expect(feed.changes[0]).toMatchObject({ fileId: written.id, removed: false });
+        expect.soft(feed.changes[0]?.file?.size, `${kind} native feed: ${existingId ? 'update' : 'create'} ${text}`)
+          .toBe(bytes.byteLength);
+      }
+      const evidence = await fake.evidence(written.id);
+      const restored = FakeDrive.restore(await fake.snapshot(), { latency: 0 });
+      const sizes = {
+        write: written.size,
+        get: (await fake.get(written.id)).size,
+        checksums: (await fake.get(written.id, { checksums: true })).size,
+        listing: (await fake.listAll(root.id)).find((file) => file.id === written.id)?.size,
+        search: (await fake.fullText(root.id, 'Unicode')).find((file) => file.id === written.id)?.size,
+        digest: (await fake.storedDigest(written.id))?.size,
+        evidenceFile: evidence?.file.size,
+        evidenceContent: evidence?.content?.size,
+        restored: (await restored.get(written.id)).size,
+      };
+      expect.soft(sizes, `fake size paths: ${existingId ? 'update' : 'create'} ${text}`)
+        .toEqual(Object.fromEntries(Object.keys(sizes).map((key) => [key, expected.byteLength])));
+      const trashed = await fake.trash(written.id);
+      const binned = (await fake.binnedByItem(root.id, ['SIZE_ITEM'])).find((item) => item.file.id === written.id);
+      const untrashed = await fake.untrash(written.id);
+      expect.soft([trashed.size, binned?.file.size, binned?.size, untrashed.size], `fake Bin size paths: ${text}`)
+        .toEqual(Array<number>(4).fill(expected.byteLength));
+      return written.id;
+    };
+    const asciiId = await verify('ASCII');
+    await verify('é🙂');
+    await verify('é🙂', asciiId);
+  });
+
+  it('b1b fix 1 finding 1: inherited Bin status in prefix and feed', async () => {
+    const u = makeFixRound1Drive();
+    for (const drive of [u.http, u.fake]) {
+      expect(await drive.readPrefix('NOTE_ID'), 'live child positive control').toBe('A short note.');
+      expect(await drive.readPrefix('CONTROL_ID'), 'unrelated live note positive control').toBe('A short note.');
+    }
+    await u.binProjects();
+    const tokens = await Promise.all([u.http.getStartPageToken(), u.fake.getStartPageToken()]);
+    await u.touch('NOTE_ID');
+    const [http, fake] = await Promise.all([u.http.listChanges(tokens[0]), u.fake.listChanges(tokens[1])]);
+    expect(http.changes).toHaveLength(1);
+    expect(fake.changes).toHaveLength(1);
+    expect(http.changes[0]).toMatchObject({ fileId: 'NOTE_ID', removed: false, file: { trashed: true } });
+    expect.soft(fake.changes[0], 'fake feed must inherit the parent Bin status').toEqual(http.changes[0]);
+    await expect(u.http.readPrefix('NOTE_ID')).rejects.toMatchObject({ code: 'not-found' });
+    await expect.soft(u.fake.readPrefix('NOTE_ID'), 'fake prefix must reject an inherited Bin status')
+      .rejects.toMatchObject({ code: 'not-found' });
+    for (const drive of [u.http, u.fake]) {
+      expect(await drive.readPrefix('CONTROL_ID'), 'Bin leaves the unrelated control readable').toBe('A short note.');
+    }
+  });
+
+  it('b1b fix 1 finding 2: Workspace change has the public HTTP shape', async () => {
+    const u = makeFixRound1Drive();
+    const controlTokens = await Promise.all([u.http.getStartPageToken(), u.fake.getStartPageToken()]);
+    await u.touch('CONTROL_ID');
+    const control = await Promise.all([u.http.listChanges(controlTokens[0]), u.fake.listChanges(controlTokens[1])]);
+    expect(control[0].changes).toHaveLength(1);
+    expect(control[0].changes[0]).toMatchObject({ fileId: 'CONTROL_ID', removed: false, file: { folder: false } });
+    expect(control[1].changes, 'ordinary note change positive control').toEqual(control[0].changes);
+    for (const drive of [u.http, u.fake]) {
+      expect(await drive.readPrefix('DOCUMENT_ID'), 'Workspace metadata positive control').toBeNull();
+    }
+    const tokens = await Promise.all([u.http.getStartPageToken(), u.fake.getStartPageToken()]);
+    await u.touch('DOCUMENT_ID');
+    const [http, fake] = await Promise.all([u.http.listChanges(tokens[0]), u.fake.listChanges(tokens[1])]);
+    expect(http.changes).toHaveLength(1);
+    expect(fake.changes).toHaveLength(1);
+    expect(http.changes[0]).toMatchObject({ fileId: 'DOCUMENT_ID', removed: false });
+    expect(http.changes[0]?.file).not.toHaveProperty('mimeType');
+    expect(fake.changes[0]?.file, 'Workspace changes expose exactly the normalized public metadata').toEqual(http.changes[0]?.file);
+  });
+
+  it.each(B1_PREFIX_CASES)('b1-ports-parity prefix $name', async (prefix) => {
+    const [fake, http] = await Promise.all([
+      runB1PrefixCase(makeB1Drive('fake', prefix), prefix),
+      runB1PrefixCase(makeB1Drive('http', prefix), prefix),
+    ]);
+    expect(http).toEqual(fake);
+  });
+
+  it('b1-ports-parity full-media cache separation', async () => {
+    const [fake, http] = await Promise.all([
+      runB1CacheCase(makeB1Drive('fake')),
+      runB1CacheCase(makeB1Drive('http')),
+    ]);
+    expect(http).toEqual(fake);
+  });
+
+  it.each(B1_FEED_CASES)('b1-ports-parity changes feed %s', async (name) => {
+    const [fake, http] = await Promise.all([
+      runB1FeedCase(makeB1Drive('fake'), name),
+      runB1FeedCase(makeB1Drive('http'), name),
+    ]);
+    expect(http).toEqual(fake);
+  });
+});
 
 const PAGE_SIZE = SEARCH_PAGE_SIZE;
 const PAGES = SEARCH_MAX_PAGES;
