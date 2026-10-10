@@ -122,8 +122,10 @@ it('upload-sign-out-forget: upload forget cannot be undone by an in-flight devic
       const adding = inputs.map((input) => outcome(q.add(input)));
       await entered.promise;
       try {
-        // Pin clear-before-late-commit, exactly the preparation's interleaving.
-        await q.forgetAccount('ACCOUNT_A');
+        // Start forgetting with staging/cleanup outstanding, then let it finish.
+        const forgetting = q.forgetAccount('ACCOUNT_A');
+        release.open();
+        await forgetting;
       } finally { release.open(); }
       const settled = await Promise.all(adding);
       await q.idle();

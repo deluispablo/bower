@@ -436,3 +436,17 @@ tests changed: none
 Evidence: `/private/tmp/upload-sign-out-fix-round-1-implementation-evidence/`.
 Logs: fix-round-1-red.log, fix-round-1-data.log, fix-round-1-tsc-app.log,
 fix-round-1-tsc-node.log, fix-round-1-eslint.log. tmp-logs deleted before delivery.
+
+## Fix round 1 red repair
+
+tests changed: src/data/upload-sign-out.test.ts: pass 1 finding 2: release staging while sign-out is pending, since forgetting now awaits it
+
+Only the barrier ordering and its comment changed; every assertion, both explicit examples
+([2, true], [2, false]), and every other test remain unchanged.
+Offline verification: `pnpm --config.verifyDepsBeforeRun=false --config.offline=true exec vitest run src/data/upload-sign-out.test.ts --maxWorkers=2`
+exited 1: seven passed, three existing finding assertions failed (both fix 1.1 cases at line 371,
+fix 1.2 remove-fails case at line 428). The repaired property test passed without a timeout.
+No production edits, network, Git writes, check or e2e. Research inherited from the existing
+IndexedDB transaction-lifecycle reference above; no new mechanism introduced.
+Evidence: `/private/tmp/upload-sign-out-red-repair-evidence/red-repair.log`.
+Output was redirected to tmp-logs and that directory was deleted before delivery.
