@@ -6747,7 +6747,7 @@
     "steps": [
       "At 1280x720 a sheet taller than the window ends inside it and scrolls."
     ],
-    "verify": "",
+    "verify": "pnpm exec playwright test e2e/q-ui-3.spec.ts --project=desktop -g \"tall desktop sheet stays inside the window and scrolls\"",
     "note": "TL-P4-43 item 1. Codex, then a Claude review and the designer. Packet 2026-10-10-q-ui-3-packet.md. implementer: codex."
   }
 ]
