@@ -206,6 +206,44 @@ B5a specimen, not a second production format. `expected-view-results.json` is a 
 hand-computed oracle, outside model input and not scored today. C17 registration and
 verdict selection remain upstream H1 work. See `docs/harness/2026-10-10-b11-prep.md`.
 
+## B7 preparation cases — 2026-10-10
+
+| Case | Capability | Covers | Source |
+| --- | --- | --- | --- |
+| c17-b7-reuse-known | C17 / B7 | model | TL-P4-39 B7; three existing topics on a new note, no vocabulary write |
+| c17-b7-proposal-yes | C17 / B7 | model | TL-P4-39 F5/U2; frozen tag consent after filing, no source backfill |
+| c17-b7-proposal-budget | C17 / B7 | model | TL-P4-47 shared proposal cap/order; duplicate dedup and pending third candidate |
+| c17-b7-authority-full-cap | C17 / B7 | model | TL-P4-39 F7/R2; thirty tags, document injection and personal Markdown preservation |
+
+All four are pending preparation fixtures, not scripted success. Proposed note.tags
+and tagProposals reply fields are rejected today. Case 2's $proposal:rainwater selector
+needs exact generated proposal/asking binding in the existing real-answer driver;
+it is neither a live id nor a supported selector yet. expected-tag-results.json is
+an independent future oracle outside folder/inbox and model input, not a second
+registry or scored key. C17 admission/verdict filtering, step-aware calls and parsed
+payload/tag/raw-byte/send oracles remain upstream support plus B7c work. The prep
+records seven contract questions; no runtime or app changes are made.
+See `docs/harness/2026-10-10-b7-prep.md`.
+
+## B8 preparation cases — 2026-10-10
+
+| Case | Capability | Covers | Source |
+| --- | --- | --- | --- |
+| c17-b8-settled-recovery | C17 / B8 | model | TL-P4-39 F3/U3; rejected edit, lost log response and real health row; pending fault proof |
+| c17-b8-report-only-grammar | C17 / B8 | model | TL-P4-39 B8; links outside fences, orphan, missing summary and tag overflow; personal bytes protected |
+| c17-b8-bounded-encoding | C17 / B8 | model | TL-P4-39 F14; delimiter-rich name and lossless same-year seal at 1024 events; pending codec/rotation proof |
+| c17-b8-findings-refresh | C17 / B8 | model | TL-P4-41 feed/cache; supported personal edit clears a finding, third check has no health write |
+
+All four are pending preparation fixtures, not scripted success. `replies.json` uses
+the existing execution intent: the model never returns log lines or lint findings.
+`oracle.json` is a review/test specification outside model input, not a supported
+case key or a scorer extension. Case 1's expected state requires the described fault
+and same-run redispatch; ordinary `presses` do not inject that fault. Case 3's seeded
+log is a proposed bounded-format specimen, not an accepted stored grammar. B7 owns
+the allowed-tag codec; case 2 pins only the already ruled three-tag cap. C17/verdict
+admission, real finding sets, field decoding, write traces and recovery still need
+the shared driver/scorer handoff. See `docs/harness/2026-10-10-b8-prep.md`.
+
 ## B9 preparation cases — 2026-10-10
 
 | Case | Capability | Covers | Source |

@@ -562,3 +562,4 @@ smoke-request-report-hidden	b09f658f85a5f4b8	2026-10-10	known-green: e2e red 16 
 spine-operations-checkpoints	874f3e999125f10f	2026-10-10	known-green: goldens re-pinned to measured values by b1a-contract's red owner per addendum 4; note committed
 drive-calls-cut	db69fc3015b39fbd	2026-10-10	known-green: goldens re-pinned to measured values by b1a-contract's red owner per addendum 4; note committed
 b1a-contract	9ba5aa6787b96ac4	2026-10-10	known-green: reds proven before each fix round (notes); later rounds touched the fix lines
+c05-timeline-list	57030bcbc7af8879	2026-10-10	red (fixed in 34cb7238)

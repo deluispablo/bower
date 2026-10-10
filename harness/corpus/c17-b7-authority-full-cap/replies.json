@@ -1,0 +1,26 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Garden bulletin.txt",
+        "to": "Resources/Gardening",
+        "name": "Garden bulletin.txt",
+        "note": {
+          "name": "Garden bulletin.md",
+          "summary": "Alex waters seedlings in Saltmere.",
+          "body": "Alex waters seedlings in Saltmere.\n\nRelated: [[Gardening]] and [[Seed packet]].",
+          "tags": [
+            "gardening"
+          ]
+        }
+      },
+      {
+        "fileId": "$file:Alex notes.md",
+        "to": "Resources/Gardening",
+        "name": "Alex notes.md"
+      }
+    ]
+  }
+]

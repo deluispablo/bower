@@ -199,6 +199,37 @@ numeric evidence under R7, never an exception for model-authored numbers.
 | c17-b11-flat-formulas | agrees | Points 1–8: raw typed flat inputs alone yield derived metrics, zero/missing areas remain unavailable and personal prose/metadata are protected; Table uses the approved B5 projection, multiple columns await Q7 (F13/R5). |
 | c17-b11-proposal-authority | agrees | Points 1–8: file clear source beside its linked map while optional trusted consent waits; document imperatives grant nothing and one immutable ignored proposal survives filing without schema changes (F5/F7). |
 
+## B7 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-48)
+
+Semantic review of four proposed cases against TL-P4-08 points 1–8, not executed
+C17 acceptance. No existing rubric, test or numeric bound changed. Tags are topics,
+not a new filing hierarchy; schema consent is B5/Q1's exact-payload mechanism.
+
+| Case | Verdict | Reason |
+| --- | --- | --- |
+| c17-b7-reuse-known | agrees | Points 1–8: reuse the Gardening destination and allowed topics, create only its useful linked source note, retain original evidence/history and personal prose, and report actual filing; three generated tags do not cause a vocabulary write. |
+| c17-b7-proposal-yes | agrees | Points 1–8: clear filing proceeds with an existing topic while optional schema consent waits; the real yes installs only the frozen tag once, and immutable source/personal text is never retroactively rewritten (F5/U2/F7/R2). |
+| c17-b7-proposal-budget | agrees | Points 1–8: file three clear sources with grounded linked notes, deduplicate topic proposals before the shared two-per-run cap and keep the explicit third request remainder pending through B5, without a tag queue or guessed schema (TL-P4-47 Q3). |
+| c17-b7-authority-full-cap | agrees | Points 1–8: sources fit the existing topic, full vocabulary does not evict or grow from document instructions, and the moved person note keeps its legacy four-tag frontmatter/prose byte-identical; only new Bower notes receive generated caps (F7/R2; TL-P4-42 addendum 3). |
+
+Current method-test selection omits C17; these rows are lead-review evidence until
+H1/B7c admits them. expected-tag-results.json stays outside model input and is not
+scored today. Proposed reply extensions/consent selector are pending contracts/driver
+work, so the requested gate cannot prove tag semantics, growth or proposal acceptance.
+
+## B8 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-48)
+
+These are method verdicts, not execution verdicts. C17 is not selected by today's
+C04–C15 method gate. Diagnostic notes and internal log rows do not add source facts,
+write permissions, automatic repairs or another report mechanism.
+
+| Case | Verdict | Reason |
+| --- | --- | --- |
+| c17-b8-settled-recovery | agrees | Points 1–8: fit the notice, preserve its original/history, link the useful source note, and report/log only applied outcomes; rejected hub work grants no success, recovery makes no duplicate fact or note (F3/U3). Fault proof remains pending. |
+| c17-b8-report-only-grammar | agrees | Points 1–8: useful diagnostics reuse Bower health and the actual graph, never fill personal metadata, rewrite notes, repair links, invent related links or teach tags; semantic reads stay bounded and only the health create is reported (R2/U3). |
+| c17-b8-bounded-encoding | agrees | Points 1–8: clear filing fits Gardening with a grounded linked note and unchanged original; reversible fields and bounded lossless sealing preserve primary outcomes without schema growth, fabricated facts or visible internal-file rows (F14). Bounds await the lead. |
+| c17-b8-findings-refresh | agrees | Points 1–8: the supported personal edit remains exact, fresh evidence clears the actual defect, and unchanged diagnostics produce no false update; no redundant note, personal metadata adoption, policy, repair or external-edit Bower log event (F3/F10/U3). No-change policy awaits Q7. |
+
 ## B9 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-48)
 
 Each case was reviewed against TL-P4-08 points 1–8. These are semantic preparation
