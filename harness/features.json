@@ -6759,7 +6759,7 @@
     "id": "undo-miss-refresh",
     "task": "p4-consolidation",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "Undo of a rule another tab confirmed finds it: a cached miss refreshes the listing once before saying not-found (DEFECTS undo-compensate-counterexample, option (1)).",
     "steps": [

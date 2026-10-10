@@ -303,3 +303,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-10: b1b-ports passes — b1b-ports passes: prefix read, changes feed with parents scope, fake parity (P4-83 PASS)
 - 2026-10-10: tree-name-first passes — tree-name-first passes: the tree's New folder names first and keeps every typed letter (P4-85 PASS, designer verified)
 - 2026-10-10: create-name-speed passes — create-name-speed passes: the tree's New folder names first and keeps every typed letter (P4-85 PASS, designer verified)
+- 2026-10-10: undo-miss-refresh passes — undo-miss-refresh passes: a missing rule id refreshes the listing once before not-found (P4-84 PASS)
