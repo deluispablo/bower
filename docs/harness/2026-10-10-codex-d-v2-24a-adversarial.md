@@ -7,3 +7,15 @@
 3. **Important — [engine.ts:708](src/bird/engine.ts:708): Re-enabling moves strands a queued pose.** Disable moves on idle, queue alarm after 0.2 s, then enable moves before release. `beginReaction()` discards the blend without consuming `queuedPose`; only `endSettle()` consumes it. After four seconds, the component says alarm but draws idle’s tuft at 0°, rather than 18°. Violates TL-P4-26 addendum 7(2)’s deferred-pose requirement and packet item 6’s moves-on behavior.
 
 findings: 3
+
+## Pass round 2 on the fix round (986a01fb..ab1d16b4), 2026-10-10
+
+The three earlier findings are not reported again (fixed).
+
+1. **Important — [src/bird/engine.ts:1848](src/bird/engine.ts:1848): Resize redraws motion after release.** The layer’s resize handler calls `snapHome()`, which reaches `apply()` outside the motion gate. It draws live state or a retained unfinished blend instead of the released still frame.
+
+   Reproduced through mounted `BowerLayer` with injected frames: run idle for 1 s, disable moves, finish the 0.6 s settle, then dispatch resize. The released rig changes from identity to scale `(1.008, 0.988)` while moves remain off. Also, play `hide`, disable moves, enable reduced motion halfway through settlement, then resize: the released wing jumps from 0° to −4.01° while reduced motion remains enabled.
+
+   Violates packet item 6 and TL-P4-26 point 3’s held still frame and immediate reduced-motion behavior; the resize path bypasses addendum 7’s single output gate.
+
+findings: 1
