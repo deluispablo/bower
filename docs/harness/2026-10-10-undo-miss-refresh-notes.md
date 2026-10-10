@@ -77,3 +77,6 @@ using the existing listing mechanism. Source:
 The external page was not fetched, respecting the no-network instruction.
 
 Left out: broader cache freshness, UI changes, journal changes, integration, and commits.
+
+tests changed: src/data/vault/drive-vault.test.ts: add the hit/miss listing-call red for removeRule (new test; nothing existing changed)
+tests changed: src/data/vault/undo-compensate.property.test.ts: add the fixed replay of seed 752195386 path 49 beside the property (new test; property unchanged)
