@@ -6780,8 +6780,9 @@
     "steps": [
       "renderHot gives the three sections in order with their caps, cuts and provenance; sameExceptDate and boundHot hold."
     ],
-    "verify": "",
-    "note": "TL-P4-42. Codex red, Codex implementation, Codex pass, Claude review. Packet 2026-10-10-b3a-hot-reduce-packet.md. implementer: codex."
+    "verify": "pnpm -C runner exec vitest run test/b23-hot.test.ts -t \"B3a hot:\"",
+    "note": "TL-P4-42. Codex red, Codex implementation, Codex pass, Claude review. Packet 2026-10-10-b3a-hot-reduce-packet.md. implementer: codex.",
+    "review": "P4-88 PASS"
   },
   {
     "id": "e2e-resize-helper",
