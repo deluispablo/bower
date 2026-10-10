@@ -52,6 +52,8 @@ You are the one explicitly assigned integration coordinator for this batch. Foll
   - filter reviewer findings on two questions: is it a correctness or contract gap, and is it a second way?
   - in trial: an escalated entry's reviewer signs off its acceptance contract before implementation starts.
   - plugin agents are not roles: use `pr-review-toolkit:silent-failure-hunter` and `pr-test-analyzer` only as extra passes on escalated entries, when the packet names them (addendum 1).
+- Red-repair prompts (lead, 2026-10-10): quote the existing behaviour the tests must preserve, then state only the new rule as the change; never phrase a repair so it could flip behaviour outside the ruling (the p4-rate-limits stale-logout 401 came from that).
+- Wait on Codex only through tracked background jobs (run_in_background), never `&`-detached waiters: a lost waiter idled the coordinator 2.5 h on 2026-10-10.
 - Research first, always (owner rule, 2026-10-06). Every packet tells the worker to look up the standard solution, recommended practice and specifications before designing a fix. The worker cites them in its delivery. A worker's own mechanism needs a stated reason why no standard approach fits.
 - Freeze evaluator targets and serialize shared browser resources. Return integrated/closure SHAs, evidence, remaining findings and next assignment. A documentation maintenance request authorizes its narrow files, not takeover of an implementation batch.
 
