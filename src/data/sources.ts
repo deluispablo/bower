@@ -49,6 +49,8 @@ export interface Session {
 }
 
 export interface VaultSource {
+  /** Pending files on this device, passed straight from the upload queue. */
+  pendingUploadCount?(): number | Promise<number>;
   /** Whether this source represents an actual Google Drive folder. */
   readonly driveLinks: boolean;
   /** The selected folder or file in Drive; null if it is missing or simulated. */

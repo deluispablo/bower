@@ -199,3 +199,94 @@ The Add assertion remains behind the expected missing-summary failure in the no-
 E2e spec tsc passed (exit 0): `pnpm exec tsc --ignoreConfig --noEmit --target ES2023 --lib ES2023,DOM --module ESNext --moduleResolution bundler --types node --strict --skipLibCheck --allowImportingTsExtensions --verbatimModuleSyntax e2e/c02-orphan-count.spec.ts`.
 Log: `/tmp/c02-red-repair-tsc.log`. `git diff --check` passed.
 pnpm check and e2e execution omitted under the explicit repository-write and port-binding constraints.
+
+## Implementation
+
+Implemented U1–U3 after the committed Red repair 1. No remaining test/spec contradiction was found.
+
+Home reads `vault.orphanSummary` through today's `useLoad` and vault subscription. Its helper chooses the
+singular/plural, incomplete and unknown sentences outside JSX. The static paragraph sits under `inboxSub`,
+waits for both the summary and Inbox readiness, remains visible during tidying, and uses 15 px with
+`--accent-line` or today's muted class. Zero complete leaves today's Inbox and Add a pile unchanged.
+
+Settings reads the queue's own pending count at the Sign out press. Today's Sheet and Button provide the
+confirmation, first focus on Keep sending, Escape dismissal, focus trap and focus restoration. Confirming
+calls today's sign-out and its purge; a zero count calls it directly. Today's failure sentence remains.
+The sheet's React state is the presentation snapshot, not a second upload store or a recomputed count.
+
+### Owned files and strictly needed pass-through
+
+- `src/features/home/Home.tsx`
+- `src/features/home/home.module.css`
+- `src/features/settings/Settings.tsx`
+- `src/data/sources.ts`: optional `VaultSource.pendingUploadCount` screen door.
+- `src/data/live/index.ts`: direct forwarding to the existing queue's `pendingCount`, on the stable vault door.
+  No provider change, queue change, count computation or additional production store.
+- `src/data/demo/world.ts`: the explicitly authorized demo fixture gap, described below.
+- This notes file only; committed tests are unchanged.
+
+### Demo pending-upload fixture gap
+
+The spec's sending/reload and sign-out rows need two actual persistent pending records on demo as well as fake.
+Demo file bodies now enter the existing `createUploadQueue`, over today's IndexedDB store and Web Locks,
+with a made-up FakeDrive destination. Account/folder identities isolate demo scenarios from the fake source.
+Pile text rides with existing queue metadata so the pending pile can be shown after reload; no new persistence
+store or schema is added. The queue owns pending bytes and state; demo paragraphs never calculate a count.
+The existing demo pile array keeps only item metadata, with no extra copy of file bodies.
+
+Reload projects those queue members into today's pile rows and preserves the queue's storage-fallback notice.
+Demo sign-out/deletion calls the queue's existing forget path before today's session changes; purge failure
+reports a BowerError and keeps the person signed in. Disposal stops the queue. Removing a pending pile discards
+its queue members; retry uses the existing queue retry. Completed members do not resurrect a filed/removed pile.
+Completed demo content otherwise keeps today's in-memory demo behavior. This fixture is demo-only;
+no real/fake persistence, queue implementation, declarations or production upload behavior was changed.
+
+removed: the demo pile array's accidental retained copy of file body/url input fields.
+removed: none of today's Inbox controls, sign-out purge, focus behavior or storage-fallback sentences.
+tests changed: none
+
+### Offline standard solution and reuse
+
+No network was used. Inspected today's `src/ui/Sheet.tsx` (Radix Dialog), Button, Inbox,
+`src/data/upload-queue.ts`, upload store and live data doors. Reused those mechanisms.
+The upload store cites the original app's `app/src/cache.ts` as its adaptation source.
+Standard references, cited without a network fetch:
+- https://www.radix-ui.com/primitives/docs/components/dialog
+- https://github.com/deluispablo/bower
+
+### Verification
+
+All outputs and Vite caches went to OS temp. The previously supplied OS-temp Vitest configs preserve the
+app's React/jsdom/alias setup and omit only the repository-writing CPU report setup, as documented above.
+No test, node_modules, git state, server, port or network configuration was changed.
+
+- Unit reds before edits: 8 failed assertions, 18 passed; `/tmp/c02-ui-red.log`.
+- All named unit reds after edits: 26 passed; `/tmp/c02-ui-green.log`.
+- Final Home/Settings/demo unit verification: 61 passed; `/tmp/c02-ui-final-unit.log`.
+- `pnpm exec tsc -p tsconfig.app.json --incremental false`: pass; `/tmp/c02-ui-tsc.log`.
+- ESLint on all touched TypeScript files: pass; `/tmp/c02-ui-eslint.log`.
+- `git diff --check`: pass (read-only).
+- Full requested src suite: `/tmp/c02-ui-src.log`; final result recorded below.
+- pnpm check not run: it writes repository artifacts, prohibited in this assignment.
+- E2e/axe not run: coordinator owns those runs; this environment cannot bind ports.
+- Commits not made: all git writes are prohibited in this assignment.
+
+### Final full-src evidence
+
+Command: `pnpm exec vitest run src --maxWorkers=2 --config /private/tmp/c02-upload-count-ui-all-vitest.mjs --configLoader native`.
+Result: 167 files; 164 passed, 3 failed. 5,585 tests; 5,581 passed, 4 failed; one unhandled error.
+All UI reds passed. Failures outside this implementation's owned code:
+- `src/docs.test.ts:134`: `every change since the P2 freeze is listed`; commit `0b299ffd` is absent from the list.
+- `src/e2e-port.test.ts:37`: `a server from another worktree is never reused`; listen was denied with EPERM,
+  followed by the test timeout and one unhandled error. No port was successfully bound.
+- `src/data/vault/undo-compensate.property.test.ts:737`: random batch 4 and random batch 5 exceeded the existing
+  5,000 ms timeout under the full suite. Neither asserts a contradiction with this UI spec.
+
+Reran only the two timed-out cases, with the same config, worker limit and original timeout:
+`pnpm exec vitest run src/data/vault/undo-compensate.property.test.ts --testNamePattern 'random batch (4|5)\)' --maxWorkers=2 --config /private/tmp/c02-upload-count-ui-all-vitest.mjs --configLoader native`.
+Both passed (2 passed; 34 filtered by the command), `/tmp/c02-ui-property-rerun.log`.
+No timeout, seed, bound, test assertion or fixture was changed.
+
+Final code also passed the 61 Home/Settings/demo tests, tsc, touched-file eslint and read-only diff whitespace check.
+Coordinator still owns pnpm check, demo/fake e2e and axe, and commits. The full-src command is not claimed green.
+tests changed: none

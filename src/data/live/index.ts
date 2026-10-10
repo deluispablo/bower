@@ -405,6 +405,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
   fresh();
   const vault = door(v, () => v, vaultListeners, connectVault);
   vaultDoor = vault;
+  Object.assign(vault, { pendingUploadCount: () => queue.pendingCount?.() ?? 0 });
   // Completion/admission use the stable vault door, including its concrete capabilities.
   r.dispose();
   r = new LiveRuns(guardWorker(epoch, root, ready), vault, opts.pollMs);

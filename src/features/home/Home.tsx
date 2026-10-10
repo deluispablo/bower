@@ -35,6 +35,20 @@ function useUploadNotice(): string | null | undefined {
   return useLoad(async (from) => (await from.vault.uploadNotice?.()) ?? null, (from, cb) => from.vault.subscribe(cb)).data;
 }
 
+/** The summary already owns the count; this hook only chooses its sentence. */
+function useArrivalLine() {
+  const summary = useLoad(async (from) => (await from.vault.orphanSummary?.()) ?? null,
+    (from, cb) => from.vault.subscribe(cb));
+  if (summary.loading) return null;
+  const value = summary.error ? { count: 0, complete: false } : summary.data;
+  if (!value || (value.complete && value.count === 0)) return null;
+  if (value.count === 0) return { text: "Bower couldn't check that everything you added arrived.", unknown: true };
+  const text = value.count === 1
+    ? "1 pile didn't finish arriving. Add it again if you still need it."
+    : `${value.count} piles didn't finish arriving. Add them again if you still need them.`;
+  return { text: `${value.complete ? '' : 'At least '}${text}`, unknown: false };
+}
+
 export function Home() {
   const { data: user } = useUser();
   const name = user?.name.trim() ?? '';
@@ -161,6 +175,7 @@ function Inbox({ piles, error, waiting, ready, bird, running }: { piles: Pile[] 
   const { setTidy } = useUi();
   const nav = useNavigate();
   const notice = useUploadNotice();
+  const arrival = useArrivalLine();
   return (
     <section className={`${s.card} ${s.inbox}`} aria-labelledby="inbox">
       <div className={s.inboxHead}>
@@ -172,6 +187,7 @@ function Inbox({ piles, error, waiting, ready, bird, running }: { piles: Pile[] 
           <p className={`muted ${s.inboxSub}`}>
             {error.error ? 'Your inbox is not showing.' : piles === undefined || !ready ? 'Looking…' : waiting ? `${plural(waiting, 'thing')} waiting${running ? '' : '. Tidy up when you have added everything.'}` : 'Nothing waiting. Add something and it stays here until the next tidy-up.'}
           </p>
+          {ready && arrival && <p className={`${s.arrival} ${arrival.unknown ? 'muted' : s.unfinished}`}>{arrival.text}</p>}
         </div>
       </div>
       {/* Always there, so a notice that comes later is heard. */}
