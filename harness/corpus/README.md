@@ -177,3 +177,19 @@ The current C04–C15 method test does not select `b1-*` ids or admit C17. See `
 The four `b23-*` cases are pending B2/B3 preparation fixtures, with exact execution replies and existing scored keys.
 They need C17 admission, scalar/context/maintenance oracles and B1’s step-aware driver before scripted acceptance.
 See `docs/harness/2026-10-10-b23-prep.md`; hot is hidden maintenance, not authoritative pending state.
+
+## B11 preparation cases — 2026-10-10
+
+| Case | Capability | Covers | Source |
+| --- | --- | --- | --- |
+| c17-b11-skills-tally | C17 / B11 | model | TL-P4-39 F13/R5/R7; active typed skills tally; pending scripted production proof |
+| c17-b11-monthly-money | C17 / B11 | model | TL-P4-39 F13; monthly money partition, missing/invalid amounts; pending proof |
+| c17-b11-flat-formulas | C17 / B11 | model | TL-P4-39 F13/R5; raw formulas, unavailable divisor, personal exception; pending Q7 |
+| c17-b11-proposal-authority | C17 / B11 | model | TL-P4-39 F5/F7; suggestion survives filing/ignore, document is not authority |
+
+All four remain preparation fixtures. Proposed `replies.json` extends the future B11
+execution reply; today's strict schema rejects `views`. Request/note/folder selectors
+need the existing driver's step-aware extension. Type-table field spelling is a pending
+B5a specimen, not a second production format. `expected-view-results.json` is a separate
+hand-computed oracle, outside model input and not scored today. C17 registration and
+verdict selection remain upstream H1 work. See `docs/harness/2026-10-10-b11-prep.md`.
