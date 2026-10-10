@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
 import { seedFakeDrive } from '../fake/seed';
 import { DriveVault } from './drive-vault';
 import { sha256 } from './hashes';
+
+beforeEach(() => vi.setSystemTime(new Date('2026-10-10T12:00:00Z')));
+afterEach(() => vi.useRealTimers());
 
 describe('telling a file you already have', () => {
   it('sha256 of a known blob', async () => {

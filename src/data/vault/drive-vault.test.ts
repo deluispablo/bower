@@ -29,11 +29,14 @@ let root: string;
 let vault: DriveVault;
 
 beforeEach(async () => {
+  vi.setSystemTime(new Date('2026-10-10T12:00:00Z'));
   localStorage.clear();
   drive = new FakeDrive();
   root = (await seedFakeDrive(drive, 'default', Date.now())) ?? '';
   vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
 });
+
+afterEach(() => vi.useRealTimers());
 
 const idOf = async (path: string): Promise<string> => {
   const all = await drive.listAll(root);

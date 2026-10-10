@@ -112,7 +112,7 @@ export class DriveVault implements VaultSource {
   protected readonly runningPiles: () => ReadonlySet<string>;
   protected readonly journal: Journal;
   /** The ids reserved for the creates a person means to make, until each is confirmed (`write-once.ts`). */
-  private readonly intended = new Intended();
+  private readonly intended = new Intended<Holder & { loose?: DriveFile }>();
   /** The words each try of a kept pile-note create sent, so a retry writes only over a note that still holds them. */
   private readonly pileNoteSent = new Map<string, string[]>();
   private readonly declarePiles: boolean;
@@ -1063,11 +1063,14 @@ export class DriveVault implements VaultSource {
     const text = input.trim();
     if (!pile.items.length && !text) throw new BowerError('conflict', 'A pile with no files needs its note.');
     const ix = await this.index();
-    const f = pile.path ? ix.file(pile.path) : undefined;
+    const folderKey = `pile-folder:${id}`;
+    const pendingFolder = this.intended.holder(folderKey);
+    // A refresh may select the half-made folder: resume the loose thing this holder started converting instead.
+    const f = pendingFolder?.loose ?? (pile.path ? ix.file(pile.path) : undefined);
     if (!f || !pile.path) throw new BowerError('not-found', 'That pile is already filed.');
     // The folder as listed, unless it already holds this very edit's rename or move (its answer lost): then the retry
     // goes on, and `once` takes that landed write as done.
-    const keptFolder = this.intended.kept(`pile-folder:${id}`);
+    const keptFolder = this.intended.kept(folderKey);
     const folderIntent = f.folder ? (text ? `rename:${freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text }), pile.path)}` : null) : keptFolder !== undefined ? `move:${keptFolder}` : null;
     await this.fence(seenPlace(f), f.id, folderIntent === null ? undefined : landing(f, folderIntent));
     const note = ix.file(join(pile.path, PILE_NOTE));
@@ -1094,9 +1097,10 @@ export class DriveVault implements VaultSource {
         await this.toBin(copy);
         ix.drop(copy.id);
       }
-      folderPath = join('Inbox', freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text })));
-      const parent = f.parents[0] ?? (await this.rootId());
-      const folder = await this.intended.make(`pile-folder:${id}`, this.drive, sentAs(parent, nameOf(folderPath)), (made, sent) => makeFolder(this.drive, this.drive, { ...sent, props: { [PROP.pile]: id }, id: made }));
+      // Keep the conversion's original read with its create, in the existing holder. A retry uses its first intent.
+      const fresh = pendingFolder?.sent ?? sentAs(f.parents[0] ?? (await this.rootId()), freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text })));
+      this.intended.keep(folderKey, pendingFolder ?? { loose: f });
+      const folder = await this.intended.make(folderKey, this.drive, fresh, (made, sent) => makeFolder(this.drive, this.drive, { ...sent, props: { [PROP.pile]: id }, id: made }));
       folderPath = join('Inbox', folder.name);
       ix.put(folder);
       ix.put(await this.once(f, `move:${folder.id}`, (op, fence) => this.drive.update(f.id, { addParent: folder.id, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}), appProperties: op }, { fence })));
