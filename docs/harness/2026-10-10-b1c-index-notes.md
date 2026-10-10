@@ -381,3 +381,85 @@ No golden or time bound was raised. The final Drive-call test reports C04 88 (bo
 99 (bound 102): each saves the unchanged index's three verification/fence/send calls. The goldens were not edited.
 Final status: blocked, with partial index and instruction-lifecycle edits retained. Baseline HEAD is
 `e1b0e3922f2345ab42eccc36c18aed54f4751cb3`; no commit was made by this worker.
+
+## Addendum 7 reds
+
+Red-only assignment under TL-P4-41 addendum 7, lead 2026-10-10; completed across midnight on 2026-10-11.
+Unchanged baseline HEAD: `2f151135` (`b1c-index: codex delivery`).
+Applied the bower-session and bower-implement instructions within the owner's tests-only scope.
+The only edits are the appended tests/imports/helpers and this expressly requested notes section.
+No production changes, network, writing git command, commit, dependency installation or shared harness edit.
+The coordinator owns the tests commit and the separate notes commit.
+
+Offline research reuses the sources cited above, the existing ownership parser's CommonMark heading/boundary
+rules, the B1a contract's production-manifest guard patterns, and the corpus driver's real-main entry point.
+The parser's stable reference is [CommonMark 0.31.2 ATX headings](https://spec.commonmark.org/0.31.2/#atx-headings).
+No source was fetched. The contract test leaves the new snapshot envelope to the existing production home:
+it checks frozen region bytes recursively, without prescribing a second parser or an invented field grammar.
+
+All five new tests fail at HEAD on assertions, after their applicable passing controls:
+
+| Exact name | Location | HEAD assertion failure |
+| --- | --- | --- |
+| `B1c index: legacy MOC migrates on its first maintain and keeps every other byte` | `runner/test/b1-index.test.ts:481` | The maintained note is still `legacy`, expected `v2`. |
+| `B1c index: legacy MOC second maintain is idempotent with no MOC write` | `runner/test/b1-index.test.ts:497` | The second maintained note is still `legacy`, expected `v2`. |
+| `B1c index: legacy MOC without Overview and Notes is untouched` | `runner/test/b1-index.test.ts:518` | The admitted-heading positive counterpart is still `legacy`, expected `v2`. |
+| `B1c index: legacy MOC belonging to a person with the same headings is untouched` | `runner/test/b1-index.test.ts:539` | The Bower-owned positive counterpart is still `legacy`, expected `v2`. |
+| `B1c index: maintain MOC targets pass the fenced-edit guard and personal targets are refused` | `runner/test/b1-index.test.ts:562` | All three frozen region-byte assertions fail; the explicitly declared Bower MOC target is refused as `shape`, expected `ok: true`. |
+
+Controls and acceptance checks:
+
+- First maintain: the made-up stored note is independently confirmed legacy and by:bower; main succeeds,
+  writes retrieval once, indexes the member summary and preserves both member notes before the red.
+  Acceptance requires exactly one pair of each MOC frame, in overview/figures/members order, exact Overview
+  bytes, regenerated unique membership by Drive id, no Removed link, and one MOC send.
+  The byte oracle removes only inserted framing/the format declaration/new figures, restores the replaced
+  Notes payload, and compares every remaining byte with the original. It covers front matter, personal prose,
+  trailing spaces, a task, multibyte café text, and the unrelated appendix after Notes. No whitespace normalization.
+- Second maintain: the first retrieval write is observed, then the member version is touched without changing
+  its summary or membership. Both real manifests contain maintain; the second state records the new version.
+  Exact MOC equality and zero second MOC sends already pass at HEAD, but framed migration is also required,
+  preventing an unchanged unimplemented legacy note from satisfying the idempotence test.
+  The downstream positive control requires exactly one first migration send, with the byte oracle again.
+- Missing headings: neither heading, missing Overview alone, and missing Notes alone each run through main,
+  retain the complete MOC bytes, and send no MOC write; retrieval commits once in each protected fixture.
+  Only the exact two-heading counterpart's missing migration causes the red. No heading is inferred from prose.
+- Person's MOC: the same headings survive byte-for-byte, with no send and a visible Book index control, before
+  the Bower-owned counterpart fails. Both notes share the same real maintain; ownership cannot be inferred
+  solely from a MOC type, title, or headings.
+- Contract: runner main persists a real manifest that passes parseRunManifestV2 before mutation.
+  A person-target mutation with real listing metadata, verified original content and a resealed operation id
+  is refused. A separate owned-target mutation declares the Bower MOC with its verified original content,
+  retains main's actual frozen snapshot, and reseals identities/report references before admission.
+  Soft assertions expose all three missing region inputs, and the final assertion exposes the owned-target
+  guard refusal independently. No production helper is mocked or replaced and no future export is imported.
+
+tests changed: runner/test/b1-index.test.ts:481: add the first-maintain legacy migration red and byte-preservation control.
+tests changed: runner/test/b1-index.test.ts:497: add the forced second-maintain idempotence red and first-send control.
+tests changed: runner/test/b1-index.test.ts:518: add three missing-heading protections and an admitted-heading counterpart.
+tests changed: runner/test/b1-index.test.ts:539: add personal-MOC protection with a Bower-owned counterpart on the same main run.
+tests changed: runner/test/b1-index.test.ts:562: add real-main snapshot and resealed owned/personal target guard checks.
+tests changed: runner/test/b1-index.test.ts: imports and appended helpers only; all 14 committed test bodies/assertions preserved.
+removed: none
+
+Final verification runs the complete touched file, without a name filter, with `--maxWorkers=2`:
+
+```sh
+# cwd: /private/tmp/bower-b1c-index/runner
+node ../node_modules/vitest/vitest.mjs run test/b1-index.test.ts --config=/tmp/b1c-addendum7-vitest.config.mjs --configLoader=runner --maxWorkers=2 --reporter=default --reporter=json --outputFile=/tmp/b1c-addendum7-red.json > /tmp/b1c-addendum7-red.log 2>&1
+# cwd: /private/tmp/bower-b1c-index
+node node_modules/typescript/bin/tsc --noEmit -p runner/tsconfig.json > /tmp/b1c-addendum7-tsc.log 2>&1
+# cwd: /private/tmp/bower-b1c-index/runner
+node ../node_modules/eslint/bin/eslint.js test/b1-index.test.ts > /tmp/b1c-addendum7-eslint.log 2>&1
+```
+
+Result: **19 tests; 5 pass, 14 fail**. The five new tests are assertion reds; the original nine reds and five
+passing tests retain their results. Every failure is an AssertionError; there are no load, import, transform
+or runtime failures. Runner tsc and touched-file ESLint pass with empty error logs. Git diff --check passes.
+An initial incorrect test import was corrected before the final run; its runtime failure is not red evidence.
+
+The OS-temp config retains the runner's Node environment, timer-gate setup and test include; it redirects
+Vite and module caches to OS temp and disables the result cache. The runner config loader avoids bundled
+config scratch writes. Reports, logs, driver fixture files and caches stay outside the repository.
+Local Node binaries bypass pnpm's automatic installation; no pnpm check, full suites, e2e or build is run.
+No bound, assertion, corpus fixture, golden or method verdict was changed. These reds are ready for coordinator commits.

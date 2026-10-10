@@ -5,7 +5,10 @@ import type { FakeDrive } from '../../src/data/drive/fake-drive';
 import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { parseOwnership, type MocRegion } from '../../src/data/contracts/ownership-format';
 import { parseNote } from '../../src/data/contracts/note-format';
-import { SYSTEM, isHidden, type RetrievalFile } from '../../src/data/vault/layout';
+import { parseRunManifestV2, type ManifestV2 } from '../../src/data/contracts/run-manifest';
+import { canonical } from '../../src/data/spine/records';
+import { sha256Hex } from '../../src/data/contracts/hashes';
+import { RUNNER_WRITES, SYSTEM, isHidden, type RetrievalFile } from '../../src/data/vault/layout';
 import { loadCase, type LoadedCase } from '../src/corpus';
 import { AT, redispatchCase, replySequence, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive, paging } from './drive-v3';
@@ -415,4 +418,207 @@ it('B1c index: corpus b1-moc-over-40 folds 41 leaves with complete reachable chi
   expect(parent.sort()).toEqual(['Resources/Gardening/Soil.md', 'Resources/Gardening/Water.md'].map((path) => idAt(result, path)).sort());
   folded(result, 'Gardening', 41);
   expect(result.after[SYSTEM.index]).not.toContain('- [[Garden clipping');
+});
+
+const legacyPath = 'Resources/Garden/Garden.md';
+const legacyOverview = '## Overview\n\nAlex recorded café observations.  \n\n';
+const legacyMembers = '## Notes\n\n- [[Removed]]\n- [[Removed]]\n\n';
+/** Unframed, made-up stored bytes, including prose outside both admitted headings. */
+function legacyMoc(own = true, headings = true): string {
+  return `---\nsummary: Garden evidence.\ntype: moc\n${own ? 'by: bower\n' : ''}custom: kept exactly\n---\n\n`
+    + '# Garden\n\nAlex keeps these words.  \n- [ ] Keep this task\n\n'
+    + (headings ? legacyOverview + legacyMembers : '## Description\n\nOverview is only a word here.\n\n## Links\n\n- [[Removed]]\n\n')
+    + '## Personal appendix\n\nAlex keeps this suffix, too.\n';
+}
+const legacyFolder = (text: string): Record<string, string> => ({
+  [legacyPath]: text,
+  'Resources/Garden/Seed.md': note('Seed control.'),
+  'Resources/Garden/Soil.md': note('Soil control.'),
+});
+
+/** Remove only new framing/format declaration and the new figures; restore the one regenerated section. */
+function restoredLegacyBytes(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  const own = parseOwnership(bytes);
+  expect(own.status, 'first maintain migrates the legacy MOC to framed ownership').toBe('v2');
+  if (own.status !== 'v2') return text;
+  const members = own.payloads['moc-members'];
+  const figures = own.payloads['moc-figures'];
+  expect(members).toBeDefined(); expect(figures).toBeDefined();
+  // Byte offsets come from the production ownership parser, so multibyte prose is protected too.
+  const replacements = [
+    { span: members, text: legacyMembers }, { span: figures, text: '' },
+  ].sort((a, b) => (b.span?.start ?? 0) - (a.span?.start ?? 0));
+  let out = bytes;
+  for (const { span, text: replacement } of replacements) {
+    if (!span) continue;
+    const insert = new TextEncoder().encode(replacement);
+    const next = new Uint8Array(out.length - (span.end - span.start) + insert.length);
+    next.set(out.subarray(0, span.start)); next.set(insert, span.start);
+    next.set(out.subarray(span.end), span.start + insert.length); out = next;
+  }
+  return new TextDecoder().decode(out)
+    .replace(/^bower_format: ownership\/2\r?\n/gm, '')
+    .replace(/^<!-- bower:ownership\/2 (?:begin|end) (?:current|personal|timeline|bower-note|moc-overview|moc-figures|moc-members) -->\r?\n/gm, '');
+}
+
+function expectLegacyMigrated(result: CaseRun, path = legacyPath): void {
+  const text = result.after[path];
+  expect(region(text, 'moc-overview')).toBe(legacyOverview);
+  const names = ['moc-overview', 'moc-figures', 'moc-members'];
+  for (const name of names) {
+    expect(text?.match(new RegExp(`^<!-- bower:ownership/2 begin ${name} -->$`, 'gm'))).toHaveLength(1);
+    expect(text?.match(new RegExp(`^<!-- bower:ownership/2 end ${name} -->$`, 'gm'))).toHaveLength(1);
+  }
+  const positions = names.map((name) => text?.indexOf(`<!-- bower:ownership/2 begin ${name} -->`) ?? -1);
+  expect(positions[0]).toBeLessThan(positions[1] ?? -1);
+  expect(positions[1]).toBeLessThan(positions[2] ?? -1);
+  expect(membersById(result, path).sort()).toEqual(['Resources/Garden/Seed.md', 'Resources/Garden/Soil.md']
+    .map((p) => idAt(result, p)).sort());
+  expect(region(text, 'moc-members')).not.toContain('[[Removed]]');
+}
+
+it('B1c index: legacy MOC migrates on its first maintain and keeps every other byte', async () => {
+  const original = legacyMoc();
+  expect(parseOwnership(new TextEncoder().encode(original)).status).toBe('legacy');
+  expect(parseNote(legacyPath, original).byBower).toBe(true);
+  const base = await setup(legacyFolder(original));
+  const sent: Sent[] = [];
+  const result = await run(base, sent);
+  expect(result.code).toBe(0);
+  expect(sent.filter((s) => s.path === SYSTEM.retrieval), 'positive control: main really maintains the state').toHaveLength(1);
+  expect(stateOf(result).files[idAt(result, 'Resources/Garden/Seed.md')]?.summary).toBe('Seed control.');
+  for (const path of ['Resources/Garden/Seed.md', 'Resources/Garden/Soil.md']) expect(result.after[path]).toBe(base.c.folder[path]);
+  expectLegacyMigrated(result);
+  expect(restoredLegacyBytes(result.after[legacyPath] ?? ''), 'all bytes outside the regenerated Notes survive').toBe(original);
+  expect(sent.filter((s) => s.path === legacyPath)).toHaveLength(1);
+});
+
+it('B1c index: legacy MOC second maintain is idempotent with no MOC write', async () => {
+  const base = await setup(legacyFolder(legacyMoc()));
+  const firstSent: Sent[] = [];
+  const first = await run(base, firstSent);
+  expect(first.code).toBe(0);
+  expect(firstSent.filter((s) => s.path === SYSTEM.retrieval), 'positive control: first maintain ran').toHaveLength(1);
+  const seedId = idAt(first, 'Resources/Garden/Seed.md');
+  base.drive.touch(seedId); // Same summary and membership, new version: force a real second maintain.
+  const sent: Sent[] = [];
+  const second = await run(base, sent, undefined, 2);
+  expect(second.code).toBe(0);
+  expect(stateOf(second).files[seedId]?.version).not.toBe(stateOf(first).files[seedId]?.version);
+  const ops = manifests(second).flatMap(([, text]) => (JSON.parse(text) as ManifestV2).operations);
+  expect(ops.filter((op) => op.effect.kind === 'maintain'), 'both real presses reached maintain').toHaveLength(2);
+  expect(second.after[legacyPath], 'second maintain keeps the exact migrated bytes').toBe(first.after[legacyPath]);
+  expect(sent.filter((s) => s.path === legacyPath), 'second maintain sends no MOC write').toEqual([]);
+  expectLegacyMigrated(second); // An untouched legacy note cannot masquerade as an idempotent migration.
+  expect(firstSent.filter((s) => s.path === legacyPath), 'positive control: migration wrote once').toHaveLength(1);
+  expect(restoredLegacyBytes(second.after[legacyPath] ?? '')).toBe(base.c.folder[legacyPath]);
+});
+
+it('B1c index: legacy MOC without Overview and Notes is untouched', async () => {
+  // A missing pair, either single missing heading, and near-matches never grant migration by guessing.
+  const originals = [legacyMoc(true, false), legacyMoc().replace('## Overview\n', '## Description\n'),
+    legacyMoc().replace('## Notes\n', '## Links\n')];
+  for (const original of originals) {
+    const base = await setup(legacyFolder(original));
+    const sent: Sent[] = [];
+    const result = await run(base, sent);
+    expect(result.code).toBe(0);
+    expect(result.after[legacyPath]).toBe(original);
+    expect(sent.filter((s) => s.path === legacyPath)).toEqual([]);
+    expect(result.after['Resources/Garden/Seed.md']).toBe(base.c.folder['Resources/Garden/Seed.md']);
+    expect(sent.filter((s) => s.path === SYSTEM.retrieval), 'main reached maintenance for the protected fixture').toHaveLength(1);
+  }
+  const controlSent: Sent[] = [];
+  const control = await run(await setup(legacyFolder(legacyMoc())), controlSent);
+  expect(control.code).toBe(0);
+  expectLegacyMigrated(control); // Positive counterpart: the exact admitted headings really migrate.
+  expect(controlSent.filter((s) => s.path === legacyPath)).toHaveLength(1);
+});
+
+it('B1c index: legacy MOC belonging to a person with the same headings is untouched', async () => {
+  const person = 'Resources/Reading/Reading.md';
+  const original = legacyMoc(false);
+  const base = await setup({ ...legacyFolder(legacyMoc()), [person]: original,
+    'Resources/Reading/Book.md': note('Book control.') });
+  const sent: Sent[] = [];
+  const result = await run(base, sent);
+  expect(result.code).toBe(0);
+  expect(parseNote(person, original).byBower).toBe(false);
+  expect(result.after[person]).toBe(original);
+  expect(sent.filter((s) => s.path === person)).toEqual([]);
+  expect(result.after[SYSTEM.index]).toContain('[[Book]]');
+  expectLegacyMigrated(result); // Same maintain, same headings: only the Bower-owned counterpart migrates.
+  expect(sent.filter((s) => s.path === legacyPath)).toHaveLength(1);
+});
+
+/** A snapshot may choose its envelope; assert the frozen region bytes without inventing a second schema. */
+function snapshotStrings(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap((item: unknown) => snapshotStrings(item));
+  return value && typeof value === 'object' ? Object.values(value).flatMap(snapshotStrings) : [];
+}
+
+it('B1c index: maintain MOC targets pass the fenced-edit guard and personal targets are refused', async () => {
+  const person = 'Resources/Reading/Reading.md';
+  const ownText = moc('Garden evidence.');
+  const personText = moc('Personal map.', false);
+  const base = await setup({ ...legacyFolder(ownText), [person]: personText,
+    'Resources/Reading/Book.md': note('Book control.') });
+  const result = await run(base);
+  expect(result.code).toBe(0);
+  const recorded = manifests(result).find(([, text]) => (JSON.parse(text) as ManifestV2).runId === result.dispatch?.runId);
+  expect(recorded, 'positive control: main persists a real manifest').toBeDefined();
+  const encode = (value: unknown): Uint8Array => new TextEncoder().encode(JSON.stringify(value));
+  const manifest = JSON.parse(recorded?.[1] ?? '{}') as ManifestV2;
+  expect(await parseRunManifestV2(encode(manifest), base.root, RUNNER_WRITES), 'real main manifest passes the guard').toMatchObject({ ok: true });
+  const op = manifest.operations.find((item) => item.effect.kind === 'maintain');
+  expect(op).toBeDefined();
+  if (!op || op.effect.kind !== 'maintain') return;
+  const inputs = op.effect.inputs;
+  const ownId = idAt(result, legacyPath);
+  const personId = idAt(result, person);
+  const ownBefore = inputs.listing?.find((f) => f.fileId === ownId);
+  const personalBefore = inputs.listing?.find((f) => f.fileId === personId);
+  expect(ownBefore).toBeDefined();
+  expect(personalBefore).toBeDefined();
+  const reseal = async (value: ManifestV2): Promise<void> => {
+    const item = value.operations.find((entry) => entry.effect.kind === 'maintain');
+    if (!item) throw new Error('Missing copied maintain effect');
+    const oldId = item.operationId;
+    item.operationId = (await canonical({ runId: value.runId, captureId: value.captureId,
+      ordinal: item.ordinal, effect: item.effect })).hash;
+    for (const row of value.reportPlan) row.requires = row.requires.map((id) => id === oldId ? item.operationId : id);
+  };
+  // Keep the real captured person snapshot. Retarget only the declared send and reseal the operation,
+  // so rejection must come from the fenced contract, never a stale operation digest.
+  const refused = structuredClone(manifest);
+  const badOp = refused.operations.find((item) => item.operationId === op.operationId);
+  if (!badOp || badOp.effect.kind !== 'maintain') throw new Error('Missing copied maintain effect');
+  const badTarget = badOp.effect.inputs.targets?.find((t) => t.fileId === ownId) ?? badOp.effect.inputs.targets?.[0];
+  expect(badTarget).toBeDefined();
+  Object.assign(badTarget ?? {}, { path: person, fileId: personId, parentId: personalBefore?.parents[0],
+    beforeContent: { encoding: 'utf8', size: new TextEncoder().encode(personText).length,
+      sha256: await sha256Hex(personText), provenance: 'fake-stored', observedModifiedTime: personalBefore?.modifiedTime } });
+  await reseal(refused);
+  expect(await parseRunManifestV2(encode(refused), base.root, RUNNER_WRITES), 'a person target is refused with valid identities').toMatchObject({ ok: false });
+  // Submit an explicit owned target even before main knows to declare one. The snapshot remains main's
+  // real frozen input, so these assertions cover both its region inputs and the existing admission guard.
+  const admitted = structuredClone(manifest);
+  const ownOp = admitted.operations.find((item) => item.operationId === op.operationId);
+  if (!ownOp || ownOp.effect.kind !== 'maintain') throw new Error('Missing copied maintain effect');
+  Object.assign(ownOp.effect.inputs, { targets: [
+    ...(inputs.targets ?? []).filter((t) => t.fileId !== ownId),
+    { path: legacyPath, fileId: ownId, parentId: ownBefore?.parents[0], beforeContent: {
+      encoding: 'utf8', size: new TextEncoder().encode(ownText).length, sha256: await sha256Hex(ownText),
+      provenance: 'fake-stored', observedModifiedTime: ownBefore?.modifiedTime,
+    } },
+  ] });
+  await reseal(admitted);
+  const frozen = snapshotStrings(inputs.snapshot?.[ownId]);
+  for (const name of ['moc-overview', 'moc-figures', 'moc-members'] as const) {
+    const previous = region(ownText, name);
+    expect.soft(frozen.some((text) => text.includes(previous)), `${name} bytes are frozen in maintain snapshot inputs`).toBe(true);
+  }
+  expect(await parseRunManifestV2(encode(admitted), base.root, RUNNER_WRITES), 'MOC snapshot and target pass the same existing guard').toMatchObject({ ok: true });
 });
