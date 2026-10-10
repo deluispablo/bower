@@ -41,7 +41,14 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
   const old = ix.file(SYSTEM.retrieval);
   let state: RetrievalState | undefined;
   if (old) {
-    const value: unknown = JSON.parse(await drive.readListedText(old));
+    const text = await drive.readListedText(old);
+    let value: unknown;
+    try {
+      value = JSON.parse(text);
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) throw error;
+      console.error(new BowerError('unknown', 'Bower could not read its saved notes and will rebuild them.', undefined, { cause: error }));
+    }
     if (isRunnerFile(SYSTEM.retrieval, value) && value.folderId === rootId) {
       const stored = value as RetrievalState;
       // Older state has no ancestry. Ignore malformed optional metadata rather than changing its notes.

@@ -6,6 +6,7 @@
  */
 import type { DriveFile } from '../drive/drive-api';
 import type { NotesSeen } from '../contracts/questions';
+import { isHub } from '../contracts/hub';
 import { displayName, extOf, kindOf, nameOf, type Entries, type Entry } from '../tree';
 import { isHidden, PROP } from './layout';
 import { seenNow } from './seen';
@@ -25,11 +26,7 @@ export class VaultIndex {
   }
 
   /** The shared hub/MOC recognition for the explorer and edit contract. */
-  static isHub(path: string, name = nameOf(path), type?: string): boolean {
-    if (type === 'moc' || type === 'hub') return true;
-    const parent = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
-    return !!parent && name === `${parent.slice(parent.lastIndexOf('/') + 1)}.md`;
-  }
+  static readonly isHub = isHub;
 
   idOf(path: string): string | undefined {
     return path === '' ? this.rootId : this.ids.get(path);
