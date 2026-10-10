@@ -15,6 +15,9 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c05-line-not-repeated | agrees | A line saying the same thing is not added twice: the Timeline only grows with new facts (points 2, 3). |
 | c06-clipping-compared | agrees | The new note links the job hunt hub and the Ferrowick offer (point 4); the hub gets a line (point 7). |
 | c06-offer-and-listing-linked | agrees | Links only where the connection is real (point 4). |
+| c06-shared-name-unrelated | agrees | The update fits the timber note and adds cited history without a redundant note; shared names do not justify unrelated links (points 1, 2, 3, 4, 7). |
+| c06-stored-project-connection | agrees | The source note links its hub and the relevant stored project; both hubs receive sourced news, with no invented commute or acceptance (points 1, 3, 4, 7). |
+| c06-two-sources-attributed | agrees | Known facts receive separate confirmation lines citing their own letters, without redundant notes or an invented connection (points 1, 2, 3, 4, 7). |
 | c07-answer-yes | agrees | Already asks a model run to rewrite the Current state and keep the old figure in the Timeline (point 3). |
 | c07-rent-disagrees | agrees | The disagreement is asked with both notes and both figures, never resolved silently (point 3). |
 | c08-compare-flats | agrees | A requested comparison is a new generated note linking its sources (point 4). |

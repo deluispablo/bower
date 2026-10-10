@@ -1,0 +1,58 @@
+{
+  "files": {
+    "present": [
+      "Projects/Workshop/Workshop delivery.txt",
+      "Projects/Moving day/Moving collection.txt"
+    ],
+    "absent": [
+      "Inbox/*",
+      "Projects/Workshop/Workshop delivery.md",
+      "Projects/Moving day/Moving collection.md"
+    ]
+  },
+  "notes": [
+    {
+      "path": "Projects/Workshop/Workshop.md",
+      "contains": [
+        "Delivery is due on 12 October 2026."
+      ],
+      "excludes": [
+        "[[Moving collection.txt]]",
+        "16 October",
+        "Bramblehaven"
+      ],
+      "timeline": [
+        "2026-10-02 \u00b7 Delivery date recorded.",
+        "The letter confirms Workshop delivery on 12 October 2026. \u00b7 [[Workshop delivery.txt]]"
+      ],
+      "timelineCount": 2
+    },
+    {
+      "path": "Projects/Moving day/Moving day.md",
+      "contains": [
+        "Collection is due on 16 October 2026."
+      ],
+      "excludes": [
+        "[[Workshop delivery.txt]]",
+        "12 October",
+        "Saltmere"
+      ],
+      "timeline": [
+        "2026-10-02 \u00b7 Collection date recorded.",
+        "The letter confirms Moving day collection on 16 October 2026. \u00b7 [[Moving collection.txt]]"
+      ],
+      "timelineCount": 2
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 2,
+    "created": [],
+    "updated": [
+      "Projects/Workshop/Workshop.md",
+      "Projects/Moving day/Moving day.md"
+    ],
+    "questionsExactly": 0,
+    "setAside": 0
+  }
+}
