@@ -1174,3 +1174,7 @@ Final read-only `git diff --check` passes. The tracked diff contains only vault-
 and this notes append; every test is unchanged. No git write command or external network was used.
 left out: full-check/e2e completion (sandbox listen EPERM), commits/integration (coordinator-owned),
 and the review's unrelated minor plan.ts archive path.
+
+## Known-green close (coordinator)
+
+done.sh could not revert 4286793b (fix rounds 1-2 touched the same lines of scripted.ts and vault-index.ts). The red is proved by hand: at the red commits the bounded-reads reds failed as assertions (50 archive + 75 run-record media reads, 143 reads against 20, no pending move, manifest-age horizon; implementation notes, tmp-logs implementation-reds*), fix rounds 1 and 2 each committed a red that failed at its HEAD (duplicate completion; second completion), and all pass after the fix. Gates at 9142d472: pnpm check green, e2e demo 51 and fake 75 pass. Codex pass 3 PASS, P4-96 PASS.
