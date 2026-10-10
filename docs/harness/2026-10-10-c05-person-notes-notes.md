@@ -759,3 +759,66 @@ compatibility: FIXSHA
 
 Sources: the existing RunRecords walk and checkpoint chain (local), timeline-line.ts, CommonMark ATX headings
 (https://spec.commonmark.org/0.31.2/#atx-headings), RFC 9110 If-Match (https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.1).
+## Round 4 reds (TL-P4-32 addendum 3)
+
+Red-owning session on HEAD `88d7762244605daf0d82a62ce6cbeca933582629`, branch `c05-person-notes`,
+worktree `/private/tmp/bower-c05-person-notes`. Scope is exactly addendum 3's three rulings and the owner's
+explicit pass-3 restored-request reproduction. Only `runner/test/c05-person-notes.test.ts` and this notes
+section changed. No production change, network, git write, commit, server, real timer, `.only` or `.skip`.
+The coordinator commits the tests and these notes separately.
+
+### Tests and positive controls
+
+All three new tests call the existing owned-note positive control first: the same corpus fixture, production
+runner `main`, planner, author, manifest validation and Drive adapter file the source and append its sourced line.
+All production runs use `runOnDrive` with the corpus driver's injected clock and pretend Drive. No settlement
+helper is called in place of `main`. `round4Records` reads the real persisted manifest and checkpoint chain via
+`RunRecords.found`/`walk`, including the originating-manifest checks, then independently runs
+`parseRunCheckpoint` and `verifyCheckpointChain` on each observed chain. All these parser controls pass.
+Later no-line filing replies include a grounded generated source note, as the existing document-note-required
+contract requires; no failed planner load or invalid reply is used as a red.
+
+| Exact new test name | Controls and contract assertions | Observed red at HEAD |
+| --- | --- | --- |
+| `C05 person notes: round 4 1: settlement survives recovery and retention` | First complete `change-1`: one sourced append, request archived, exact local checkpoint completion. On an independent Drive, interrupt the request's archive PATCH before it reaches Drive, after the append lands. The transport failure is reconciled against the still-active request; the verified originating checkpoint records completion while the archive outcome is not applied. The next new run archives that exact request without any note edit or second append. On the original Drive, twenty newer runs each succeed, file their own distinct made-up source, and have verified persisted records; none admits the archived `change-1` or changes Garden plot. Retention removes the original manifest. Restore the exact request via the corpus driver, add another source and offer different wording only if the planner shows Garden plot. | Recovery and all twenty newer-run controls pass. The restored `change-1` is admitted and captured again, gets another completion, and adds `The new water butt is here now.` citing the new source. Exact original note bytes and no re-admission fail. |
+| `C05 person notes: round 4 2: pending retries keep target and source ids` | Each pending fixture causes exactly one after-manifest personal edit, proves the real append was rejected for conflict, files the original source, and verifies its persisted `(change-1, targetFileId, sourceFileId)`. A retry without a rename writes exactly once to the original id and archives the request. Then independently rename the target to Beds and the bound source to Renamed letter, first without a replacement, then with a different new Garden plot and another source. The retry must append the original line to Beds using the original source id's current name; the replacement must keep all its bytes. A separate pending target goes to the Bin: no edit, the existing `ASK_GONE` Not done why in the run report, and request archive. | Baseline retries and every persisted-conflict control pass. Without a replacement, Beds receives no line and the request stays active. With a replacement, the new Garden plot receives the new model line: persisted consent changes from target `f11` / source `f13` to target `f14` / source `f15`. The binned target produces no Not done why and its request stays active. All variants reach their final record assertions. |
+| `C05 person notes: round 4 3: only settlement archives scripted requests` | Two unfinished requests name Garden plot, oldest first. Call `main` without a Claude override, selecting the actual scripted provider and its generic request handler. Filing succeeds; the note stays exact, the unfinished oldest request stays active, and the verified checkpoint has no append completion. The younger request must keep its active path, bytes, parents, modifiedTime and appProperties; it must have no capture or archive operation. | The oldest and successful scripted-filing controls pass. `change-2` moves into the archive, receives a `bowerOp` stamp and new modifiedTime/parents, and is captured with an archive operation. Its bytes stay the same, but the active-path and exact metadata assertions fail. |
+
+The restored-after-retention case is included because this session's owner explicitly requested it, even though
+addendum 3 also labels a person's manual restore as outside supported use. It keeps the archived original and
+restores an exact copy through the existing corpus driver, matching pass-3 finding 1. No new ledger or
+production mechanism is introduced by these tests.
+
+### Existing-test amendment
+
+tests changed: runner/test/c05-person-notes.test.ts: fix 1 finding 4 previously required admission of both the completed restored change-1 and unfinished change-2. That admission expectation contradicts this session's explicit no-re-admission contract. It now requires change-2 and excludes change-1. The exclusion is a soft assertion so all original filing, exact-once append, local binding/completion and no-inherited-evidence assertions still execute. All other expectations and all numeric bounds are unchanged.
+
+The amended test's exact name is
+`C05 person notes: fix 1 finding 4: a completed replay cannot consume the new request for the same note`.
+At HEAD, only its new exclusion fails: admission includes `change-1`. Its other controls and earlier assertions pass.
+No other existing test changed.
+
+### Verification
+
+```sh
+pnpm -C runner exec vitest run test/c05-person-notes.test.ts -t 'C05 person notes: round 4|C05 person notes: fix 1 finding 4' --maxWorkers=2 > tmp-logs/c05-round4-runner-final.log 2>&1
+pnpm -C runner exec tsc --noEmit -p . > tmp-logs/c05-round4-tsc-runner-final.log 2>&1
+pnpm -C runner exec eslint test/c05-person-notes.test.ts > tmp-logs/c05-round4-eslint-runner-final.log 2>&1
+```
+
+Final targeted run: **4 expected failing tests** (three new reds and one required existing-test amendment),
+with **22 assertion failures** against the specified contract. The other 35 cases were excluded by the command's
+name filter; no test source is skipped. Only failure blocks and result counts were read. Each red reaches its
+stated scenario with passing positive controls; there is no load error, unhandled exception or timer-gate failure.
+The injected archive transport error is intentional and completes its verified recovery control.
+Runner TypeScript (including the touched test and its imports) and touched-file ESLint both exit 0.
+Read-only `git diff --check` passes. Logs stay local under `tmp-logs/`.
+
+Offline research/reuse: the existing Drive file-id resource and metadata interface, cited locally in the corpus
+adapter ([Drive files](https://developers.google.com/drive/api/reference/rest/v3/files)), and the existing
+conditional-write contract ([RFC 9110 If-Match](https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.1)).
+The production corpus driver, note author, RunRecords recovery chain and checkpoint parsers are reused.
+No external lookup was made under the owner's no-network instruction.
+
+compatibility: tests only; no stored format, parser or production behavior changed.
+left out: implementation, additional findings, full suites, pnpm check, e2e, shared harness state, git writes and commits.
