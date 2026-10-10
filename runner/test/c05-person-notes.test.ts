@@ -8,6 +8,7 @@ import { subjectOf } from '../../src/data/contracts/questions';
 import { SYSTEM } from '../../src/data/vault/layout';
 import { caseReplies, runOnDrive, runScripted, runWithClaude, scoreCase, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
+import { RunRecords } from '../../src/data/spine/records';
 
 const PATH = 'Areas/Home/Garden plot.md';
 const SOURCE = 'Water butt update.txt';
@@ -413,6 +414,14 @@ describe('C05 person notes through runner main', () => {
       `- 2026-10-07 · The committee will replace the shared water butt.\n- 2026-10-07 · ${NEWS} · [[${SOURCE}]]`));
     expect(reportOf(final).updated).toEqual(expect.arrayContaining([expect.objectContaining({ path: PATH, what: APPENDED })]));
     assertPersonal(final);
+    const replay = await runOnDrive(c, drive, root, { request: { kind: 'replay', id: 'change-1' },
+      claude: retry }, 24);
+    expect(replay.after[PATH]).toBe(final.after[PATH]);
+    const found = await new RunRecords(drive, root).found('abc123-run1-24');
+    expect(found.kind).toBe('run');
+    if (found.kind !== 'run') return;
+    expect(found.manifest).not.toHaveProperty('appendEvidence');
+    expect(found.manifest.completedAppends ?? []).toEqual([]);
   }, 30_000);
 
   it('C05 person notes: fix 1 finding 3: article-equivalent titles stay ambiguous in context and writes', async () => {
@@ -456,6 +465,12 @@ describe('C05 person notes through runner main', () => {
     expect(reportOf(r).filed).toHaveLength(1);
     expect(r.after[PATH]).toContain(` · ${text} · [[Next water butt update.txt]]`);
     expect(r.after[PATH]?.split(` · ${NEWS}`).length).toBe(2);
+    const found = await new RunRecords(drive, root).found('abc123-run1-2');
+    expect(found.kind).toBe('run');
+    if (found.kind !== 'run') return;
+    expect(found.chain.at(-1)?.appendBindings?.map((b) => b.requestId)).toEqual(['change-2']);
+    expect(found.chain.at(-1)?.completedAppends).toEqual([{ requestId: 'change-2', targetFileId: idOf(r, PATH) }]);
+    expect(found.manifest).not.toHaveProperty('appendEvidence');
     assertPersonal(r);
   });
 
@@ -504,4 +519,188 @@ describe('C05 person notes through runner main', () => {
     expect(r.after[PATH]).toBe(c.folder[PATH]); expect(reportOf(r).updated).toEqual([]);
     expect(reportOf(r).leftAsWritten).toEqual([expect.objectContaining({ why: NO_TIMELINE, fileId: idOf(r, PATH) })]);
   });
+
+  it('C05 person notes: round 3 2: only the oldest unfinished request settles for one note', async () => {
+    await positiveControl();
+    const c = await fixture();
+    c.journal.push({ kind: 'request', text: 'Update Garden plot from the next committee letter.' });
+    const drive = fixedDrive(); const root = await seedCase(drive, c);
+    const files = await drive.listAll(root);
+    const younger = files.find((f) => f.name === 'change-2.json');
+    expect(younger).toBeDefined();
+    if (!younger) return;
+    const before = await drive.readText(younger.id);
+    const seen = await drive.get(younger.id);
+    const r = await runOnDrive(c, drive, root, { claude: appendReply() }, 1);
+    expect(r.after[PATH]).toContain(` · ${NEWS} · [[${SOURCE}]]`);
+    const found = await new RunRecords(drive, root).found('abc123-run1');
+    expect(found.kind).toBe('run');
+    if (found.kind !== 'run') return;
+    expect(found.chain.at(-1)?.completedAppends).toEqual([{ requestId: 'change-1', targetFileId: idOf(r, PATH) }]);
+    expect.soft(r.after[`${SYSTEM.changes}/change-2.json`]).toBe(before);
+    expect.soft(await drive.get(younger.id)).toEqual(seen);
+    expect(found.manifest.capture.journal.map((j) => j.recordId)).not.toContain('change-2');
+    expect(found.manifest.operations.some((o) => o.effect.kind === 'move' && o.effect.before.fileId === younger.id)).toBe(false);
+    const source = await addNextSource(r, false);
+    const next = await runOnDrive(c, drive, root, { claude: nextReply(source, 'Alex received the second update.') }, 2);
+    expect(next.after[PATH]).toContain(' · Alex received the second update. · [[Next water butt update.txt]]');
+    expect(next.after[PATH]?.split(` · ${NEWS}`).length).toBe(2);
+    assertPersonal(next);
+  });
+
+  it.each(['ambiguity', 'overflow', 'missing Timeline', 'unreadable Timeline'] as const)(
+    'C05 person notes: round 3 1: %s settles and reports without a model line', async (reason) => {
+      await positiveControl();
+      const c = await fixture();
+      const paths = [PATH];
+      let rows = [expect.objectContaining({ fileId: expect.any(String), why: NO_TIMELINE })];
+      if (reason === 'ambiguity') {
+        paths.push('Projects/Garden/Garden plot.md');
+        c.folder[paths[1] ?? ''] = c.folder[PATH] ?? '';
+        rows = paths.map((path) => expect.objectContaining({ fileId: expect.any(String),
+          why: whyDuplicate(path.startsWith('Projects/') ? 'Projects / Garden' : 'Areas / Home') }));
+      } else if (reason === 'overflow') {
+        paths.push('Areas/Home/Shed roof.md', 'Areas/Home/Apple tree.md', 'Areas/Home/Pond liner.md');
+        for (const path of paths.slice(1)) c.folder[path] = c.folder[PATH] ?? '';
+        c.journal = [{ kind: 'request', text: 'Update Garden plot, Shed roof, Apple tree and Pond liner from this letter.' }];
+        rows = [expect.objectContaining({ why: OVERFLOW })];
+      } else if (reason === 'missing Timeline') c.folder[PATH] = (c.folder[PATH] ?? '').replace(/## Timeline[\s\S]*$/, '');
+      else {
+        c.folder[PATH] = (c.folder[PATH] ?? '').replace('- 2026-09-12 · Planted garlic.', '* September: planted garlic.');
+        rows = [expect.objectContaining({ fileId: expect.any(String), why: UNREADABLE })];
+      }
+      const r = await runWithClaude(c, reply((_ctx, source) => ({ kind: 'tidy-intent', v: 1,
+        things: [{ fileId: source, to: 'Areas/Home', name: SOURCE, note: { name: 'Committee letter.md',
+          summary: 'Alex received a committee letter.', body: NEWS } }] })));
+      expect(r.code).toBe(0);
+      expect(reportOf(r).filed).toHaveLength(1);
+      expect.soft(reportOf(r).leftAsWritten).toEqual(rows);
+      expect(reportOf(r).updated).toEqual([]); expect(questionsOf(r)).toEqual([]);
+      for (const path of paths) expect(r.after[path]).toBe(c.folder[path]);
+      expect(r.after[`Areas/Home/${SOURCE}`]).toBe(c.inboxFiles[SOURCE]);
+      const found = await new RunRecords(r.drive, r.root).found('abc123-run1');
+      expect(found.kind).toBe('run');
+      if (found.kind !== 'run') return;
+      const sourceId = idOf(r, `Areas/Home/${SOURCE}`);
+      const sourceMove = found.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === sourceId);
+      expect(sourceMove).toBeDefined();
+      const requestFiles = found.manifest.capture.journal.find((j) => j.recordId === 'change-1')?.fileIds ?? [];
+      const archive = found.manifest.operations.find((o) => o.effect.kind === 'move' && requestFiles.includes(o.effect.before.fileId));
+      expect.soft(archive).toBeDefined();
+      expect.soft(archive?.dependsOn ?? []).toContain(sourceMove?.operationId);
+      expect(found.chain.at(-1)?.completedAppends ?? []).toEqual([]);
+      for (const row of reportOf(r).leftAsWritten ?? []) {
+        if (reason === 'overflow') expect(row).not.toHaveProperty('fileId');
+        else expect(paths.map((path) => idOf(r, path))).toContain(row.fileId);
+      }
+    });
+
+  it.each(['overflow', 'ambiguity'] as const)(
+    'C05 person notes: round 3 3: %s refuses its source on an unnamed owned hub', async (reason) => {
+      await positiveControl();
+      const c = await fixture(); const hub = 'Areas/Home/Home.md';
+      c.folder[hub] = (c.folder[PATH] ?? '').replace('summary:', 'by: bower\nsummary:'); c.bowerOwned = [hub];
+      const control = await runWithClaude(c, reply((_ctx, source) => ({ ...filing(source),
+        lines: [PATH, hub].map((note) => ({ note, text: NEWS, cites: source })) })));
+      expect(control.after[hub]).toContain(` · ${NEWS} · [[${SOURCE}]]`);
+      const paths = reason === 'overflow' ? [PATH, 'Areas/Home/Shed roof.md', 'Areas/Home/Apple tree.md', 'Areas/Home/Pond liner.md']
+        : [PATH, 'Projects/Garden/Garden plot.md', 'Areas/Home/Shed roof.md'];
+      for (const path of paths.slice(1)) c.folder[path] = c.folder[PATH] ?? '';
+      c.journal = [{ kind: 'request', text: reason === 'overflow'
+        ? 'Update Garden plot, Shed roof, Apple tree and Pond liner from this letter.'
+        : 'Update Garden plot and Shed roof from this letter.' }];
+      const r = await runWithClaude(c, reply((_ctx, source) => ({ ...filing(source),
+        lines: [...paths, hub].map((note) => ({ note, text: NEWS, cites: source })),
+        states: [{ note: hub, lines: [NEW_STATE], cites: source }] })));
+      expect(r.code).toBe(0); expect(reportOf(r).filed).toHaveLength(1);
+      expect.soft(r.after[hub]).toBe(c.folder[hub]);
+      for (const path of paths) expect(r.after[path]).toBe(c.folder[path]);
+      expect.soft(reportOf(r).updated).toEqual([]); expect.soft(questionsOf(r)).toEqual([]);
+      const found = await new RunRecords(r.drive, r.root).found('abc123-run1');
+      expect(found.kind).toBe('run');
+      if (found.kind !== 'run') return;
+      expect(found.manifest.operations.filter((o) => o.effect.kind === 'edit-text')).toEqual([]);
+    });
+
+  it.each(['invalid bullet count', 'plain note'] as const)(
+    'C05 person notes: round 3 5: %s state proposal leaves the valid append independent', async (shape) => {
+      await positiveControl();
+      const c = await fixture();
+      const control = await runWithClaude(c, reply((_ctx, source) => ({ ...filing(source),
+        lines: [{ note: PATH, text: NEWS, cites: source }], states: [{ note: PATH, lines: [NEW_STATE], cites: source }] })));
+      expect(control.after[PATH]).toContain(` · ${NEWS} · [[${SOURCE}]]`);
+      expect(questionsOf(control)).toHaveLength(1);
+      if (shape === 'plain note') c.folder[PATH] = (c.folder[PATH] ?? '').slice((c.folder[PATH] ?? '').indexOf('## Current state'));
+      const before = c.folder[PATH] ?? '';
+      const r = await runWithClaude(c, reply((_ctx, source) => ({ ...filing(source),
+        lines: [{ note: PATH, text: NEWS, cites: source }],
+        states: [{ note: PATH, lines: shape === 'plain note' ? [NEW_STATE] : [NEW_STATE, OTHER], cites: source }] })));
+      expect(r.code).toBe(0); expect(reportOf(r).filed).toHaveLength(1);
+      expect.soft(r.after[PATH]).toBe(before.replace('- 2026-10-07 · The committee will replace the shared water butt.',
+        `- 2026-10-07 · The committee will replace the shared water butt.\n- 2026-10-07 · ${NEWS} · [[${SOURCE}]]`));
+      expect(questionsOf(r)).toEqual([]);
+      expect(reportOf(r).updated).toEqual([expect.objectContaining({ path: PATH, what: APPENDED })]);
+      const found = await new RunRecords(r.drive, r.root).found('abc123-run1');
+      expect(found.kind).toBe('run');
+      if (found.kind === 'run') expect(found.chain.at(-1)?.completedAppends).toEqual([{ requestId: 'change-1', targetFileId: idOf(r, PATH) }]);
+      assertPersonal(r);
+    });
+
+  it('C05 person notes: round 3 6: retry cites the bound source id after its rename', async () => {
+    await positiveControl();
+    const c = await fixture(); const drive = fixedDrive(); const root = await seedCase(drive, c);
+    const noteId = (await drive.listAll(root)).find((f) => f.name === 'Garden plot.md')?.id ?? '';
+    let clashes = 0;
+    const first = await runOnDrive(c, drive, root, { claude: appendReply(), around: (fetch) => async (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      const response = await fetch(input, init);
+      const body = init?.body ? await new Response(init.body).text() : '';
+      if (!clashes && init?.method === 'POST' && url.pathname === '/upload/drive/v3/files' && body.includes('run-manifest')) {
+        clashes++;
+        const file = await drive.get(noteId);
+        await drive.writeText(noteId, (c.folder[PATH] ?? '').replace('## My words\n', '## My words\nAlex added a reminder.\n'), file.modifiedTime);
+      }
+      return response;
+    } }, 1);
+    expect(clashes).toBe(1); expect(reportOf(first).updated).toEqual([]);
+    const sourceId = idOf(first, `Areas/Home/${SOURCE}`) ?? '';
+    expect(sourceId).toBeTruthy();
+    await drive.update(sourceId, { name: 'Renamed letter.txt' });
+    // No model line: the persisted retry binding must resolve the citation from this exact id.
+    const next = await runOnDrive(c, drive, root, { claude: reply(() => ({ kind: 'tidy-intent', v: 1, things: [] })) }, 2);
+    expect(next.code).toBe(0);
+    expect(next.after[PATH]).toContain('Alex added a reminder.');
+    expect(next.after[PATH]?.split(` · ${NEWS}`).length).toBe(2);
+    expect.soft(next.after[PATH]).toContain(` · ${NEWS} · [[Renamed letter.txt]]`);
+    expect(next.after[PATH]).not.toContain(` · ${NEWS} · [[${SOURCE}]]`);
+    expect(idOf(next, 'Areas/Home/Renamed letter.txt')).toBe(sourceId);
+    assertPersonal(next);
+  });
+
+  it('C05 person notes: round 3 6: satisfaction follows final citation naming on a filing collision', async () => {
+    await positiveControl();
+    const c = await fixture();
+    c.folder[PATH] = (c.folder[PATH] ?? '').trimEnd() + `\n- 2026-10-07 · ${NEWS} · [[${SOURCE}]]\n`;
+    const control = await runWithClaude(c, appendReply());
+    expect(control.code).toBe(0); expect(control.after[PATH]).toBe(c.folder[PATH]);
+    expect(reportOf(control).updated).toEqual([]); expect(reportOf(control).filed).toHaveLength(1);
+    c.folder[`Areas/Home/${SOURCE}`] = 'Alex received an older, different letter.';
+    const r = await runWithClaude(c, appendReply());
+    expect.soft(r.code).toBe(0);
+    expect.soft(reportOf(r).filed).toHaveLength(1);
+    expect(r.after[`Areas/Home/${SOURCE}`]).toBe(c.folder[`Areas/Home/${SOURCE}`]);
+    const newSource = Object.entries(r.after).find(([path, text]) => path.startsWith('Areas/Home/') && text === c.inboxFiles[SOURCE]);
+    expect.soft(newSource).toBeDefined();
+    if (!newSource) return;
+    const name = newSource[0].split('/').at(-1);
+    expect(name).not.toBe(SOURCE);
+    expect(r.after[PATH]).toBe((c.folder[PATH] ?? '').trimEnd() + `\n- 2026-10-07 · ${NEWS} · [[${name}]]\n`);
+    const found = await new RunRecords(r.drive, r.root).found('abc123-run1');
+    expect(found.kind).toBe('run');
+    if (found.kind === 'run') expect(found.chain.at(-1)?.completedAppends).toEqual([{ requestId: 'change-1', targetFileId: idOf(r, PATH) }]);
+    const replay = await runOnDrive(c, r.drive, r.root, { request: { kind: 'replay', id: 'change-1' },
+      claude: reply(() => ({ kind: 'tidy-intent', v: 1, things: [], lines: [{ note: PATH, text: 'Different replay wording.', cites: idOf(r, newSource[0]) }] })) }, 2);
+    expect(replay.after[PATH]).toBe(r.after[PATH]); assertPersonal(replay);
+  });
+
 });
