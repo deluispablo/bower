@@ -465,3 +465,4 @@ tree-name-first,implementer,codex,gpt-5-codex,high,1,1014450,1001658,,932992,127
 tree-name-first,merge (remove-new-note),codex,gpt-5-codex,high,1,515074,509491,,464256,5583,,,,4 files,2026-10-10
 tree-name-first,red-owner (repair),codex,gpt-5-codex,medium,1,375095,371466,,325248,3629,,,,2 old tests,2026-10-10
 p4-q1-prep,drafter,codex,gpt-5-codex,high,1,2103848,2085864,,1939712,17984,,,,doc,2026-10-10
+c05-person-notes,red-owner (r5 add6),codex,gpt-5-codex,high,1,1334092,1322322,,1224576,12770,,,,2 reds (1 pin),2026-10-10
