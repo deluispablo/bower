@@ -16,7 +16,7 @@ const seen = (f: DriveFile): SeenFile => ({ fileId: f.id, name: f.name, parents:
 const file = (f: SeenFile): DriveFile => ({ id: f.fileId, name: f.name, parents: f.parents, folder: f.folder, modifiedTime: f.modifiedTime, createdTime: f.modifiedTime });
 const unavailable = (): BowerError => new BowerError('unknown', 'Bower could not update its notes. It will try again.');
 
-/** A hidden-only cursor advance is an ordinary manifest write, never maintenance. */
+/** An ignored-feed cursor advance is an ordinary manifest write, never maintenance. */
 async function cursorOnly(drive: RunnerDrive, manifest: RunManifest, old: DriveFile, state: RetrievalFile, cursor: string): Promise<RunManifest> {
   if (state.cursor === cursor) return manifest;
   const text = JSON.stringify({ ...state, cursor });
@@ -50,58 +50,61 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
   // An empty first run has neither indexed changes nor effects to settle.
   if (!state && !notesIn(ix).length && !manifest.operations.length) return manifest;
   const feed = state ? await drive.listChanges(state.cursor) : undefined;
-  let cursor = feed?.newStartPageToken ?? await drive.getStartPageToken();
+  const cursor = feed?.newStartPageToken ?? await drive.getStartPageToken();
   if (!state) {
     // A bootstrap token must precede its snapshot, so changes racing the listing stay on the next feed.
     listing = await drive.listAll(rootId);
     ix = VaultIndex.build(rootId, listing);
   }
   const previous = ix;
+  ix = VaultIndex.build(rootId, listing);
+  const files = new Map(listing.map((f) => [f.id, f]));
+  // Feed removals and missing content reads forget the same indexed file and descendants.
+  const drop = (id: string): void => {
+    ix.drop(id);
+    for (const fileId of files.keys()) if (!ix.byId(fileId)) files.delete(fileId);
+  };
   if (feed) {
     // Feed metadata supersedes the planner's listing; the read cache keys content by this version.
-    const files = new Map(listing.map((f) => [f.id, f]));
     for (const change of feed.changes) {
-      if (change.removed) files.delete(change.fileId);
+      if (change.removed || change.file?.trashed) drop(change.fileId);
       else if (change.file) {
         const listed = files.get(change.fileId);
-        if (!listed || listed.modifiedTime <= change.file.modifiedTime) files.set(change.fileId, change.file);
+        if (!listed || listed.modifiedTime <= change.file.modifiedTime) {
+          files.set(change.fileId, change.file);
+          ix.put(change.file);
+        }
       }
     }
-    listing = [...files.values()];
-    ix = VaultIndex.build(rootId, listing);
   }
-  const notes = notesIn(ix).filter(({ file }) => {
-    // Newly discovered visible notes wait for a fresh snapshot; old feed metadata may describe a note now in the Bin.
-    if (feed && !previous.byId(file.id)) {
-      cursor = state?.cursor ?? cursor;
-      return false;
-    }
-    return true;
-  });
-  const pathOfChange = (change: { fileId: string; removed?: boolean }): string | undefined => ix.pathOf(change.fileId)
-    ?? (change.removed ? previous.pathOf(change.fileId) ?? state?.files[change.fileId]?.path : undefined);
-  // Without a resolved full path, leave the feed entry after the committed cursor for a later snapshot.
-  if (state && feed?.changes.some((c) => pathOfChange(c) === undefined || (!c.removed && !c.file))) cursor = state.cursor;
+  const notes = notesIn(ix);
+  const pathOfChange = (change: { fileId: string; removed?: boolean; file?: DriveFile }): string | undefined => ix.pathOf(change.fileId)
+    ?? (change.removed || change.file?.trashed ? previous.pathOf(change.fileId) ?? state?.files[change.fileId]?.path : undefined);
   // The existing dot-path rule judges the resolved full path, including newly discovered descendants.
   const changes = (feed?.changes ?? notes.map(({ file }) => ({ fileId: file.id, file }))).filter((c) => {
     const path = pathOfChange(c);
     return path !== undefined && !isHidden(path);
   }).map((c) => c.fileId);
   if (state && !changes.length && !manifest.operations.length) {
-    // Bower's own bookkeeping must not start a cursor-write feedback loop on otherwise idle runs.
-    const hiddenOutsideRunner = feed?.changes.some((c) => {
-      const path = pathOfChange(c);
-      return path !== undefined && isHidden(path) && path.split('/')[0] !== SYSTEM.dir;
-    });
-    return old && hiddenOutsideRunner ? cursorOnly(drive, manifest, old, state, cursor) : manifest;
+    return old ? cursorOnly(drive, manifest, old, state, cursor) : manifest;
   }
   const snapshot: RetrievalFile['files'] = {};
   for (const { path, file: f } of notes) {
     const cached = state?.files[f.id];
-    const text = cached?.version === f.modifiedTime && cached.path === path ? null : await drive.readListedText(f);
+    let text: string | null;
+    try {
+      text = cached?.version === f.modifiedTime && cached.path === path ? null : await drive.readListedText(f);
+    } catch (error) {
+      // Drive also reports a trashed media read as not-found; other failures still stop the run.
+      if (!(error instanceof BowerError) || error.code !== 'not-found') throw error;
+      console.error(error);
+      drop(f.id);
+      continue;
+    }
     snapshot[f.id] = cached?.version === f.modifiedTime && cached.path === path ? cached
       : { path, version: f.modifiedTime, summary: text === null ? '(no summary)' : parseNote(path, text).summary || '(no summary)', coverage: { kind: 'prefix', bytes: 4096 } };
   }
+  listing = [...files.values()];
   const own = ix.file(SYSTEM.dir);
   if (!own?.folder) throw unavailable();
   const paths = [SYSTEM.index, SYSTEM.retrieval] as const;
