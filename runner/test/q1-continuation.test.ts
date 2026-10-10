@@ -1083,7 +1083,7 @@ describe('Q1a fix round 1 through production entry points', () => {
   });
 
   it('Q1a fix 1.5: missing or outside-root stored option folders cannot authorize alternative filing', async () => {
-    for (const destination of ['ordinary', 'valid', 'gone', 'outside'] as const) {
+    for (const destination of ['ordinary', 'valid', 'renamed', 'moved', 'gone', 'outside'] as const) {
       const w = await world((w) => ({ ...emptyIntent, things: [{ fileId: w.ids.unclear, to: 'Projects/Job hunt', name: 'Unclear.md' }] }));
       // Clear siblings have already left; otherwise the model's omitted sibling holds the entire pile.
       await w.drive.update(w.ids.clear, { addParent: w.ids.home, removeParent: w.ids.pile });
@@ -1092,6 +1092,12 @@ describe('Q1a fix round 1 through production entry points', () => {
       const value = destination === 'ordinary' ? true : { option: 'home-choice' };
       expect((await answer(w, q, value))?.outcome.kind).toBe('now');
       expect(answerValue((await journal(w))[0])).toEqual(value);
+      if (destination === 'renamed') await w.drive.update(w.ids.home, { name: 'Room' });
+      if (destination === 'moved') {
+        const home = await w.drive.get(w.ids.home);
+        const job = await w.drive.get(w.ids.job);
+        await w.drive.update(home.id, { addParent: job.parents[0], removeParent: home.parents[0] });
+      }
       if (destination === 'gone') await w.drive.trash(w.ids.home);
       if (destination === 'outside') {
         const home = await w.drive.get(w.ids.home);
@@ -1102,7 +1108,13 @@ describe('Q1a fix round 1 through production entry points', () => {
       const bytes = await w.drive.readText(w.ids.unclear);
       expect(await run(w, 0)).toBe(0);
       expect(w.calls.length).toBeLessThanOrEqual(1);
-      if (destination === 'ordinary' || destination === 'valid') {
+      if (destination === 'renamed' || destination === 'moved') {
+        expect.soft(w.calls, 'TL-P4-44 addendum 4: changed folder name or place still permits continuation').toHaveLength(1);
+        expect.soft((await w.drive.get(w.ids.unclear)).parents,
+          `TL-P4-44 addendum 4: ${destination} folder receives the item by its stored id`).toEqual([w.ids.home]);
+        expect.soft(await w.drive.readText(w.ids.unclear),
+          'TL-P4-44 addendum 4: filing by the same folder id preserves the item bytes').toBe(bytes);
+      } else if (destination === 'ordinary' || destination === 'valid') {
         // Positive controls: ordinary model filing works, and a valid stored id overrides it.
         expect(w.calls).toHaveLength(1);
         expect((await w.drive.get(w.ids.unclear)).parents).toEqual([destination === 'valid' ? w.ids.home : w.ids.job]);
@@ -1115,6 +1127,64 @@ describe('Q1a fix round 1 through production entry points', () => {
           'no alternative item filing is planned').toEqual([]);
       }
     }
+  });
+
+  it('Q1a fix 1.5b: a gone option folder leaves the item waiting and the next run asks again as the next round', async () => {
+    let phase: 'first' | 'gone' | 'again' = 'first';
+    let freshFolder = '';
+    const w = await world((w) => phase === 'gone'
+      ? { ...emptyIntent, things: [{ fileId: w.ids.unclear, to: 'Projects/Job hunt', name: 'Unclear.md' }] }
+      : { ...emptyIntent, asks: [phase === 'first' ? optionAsk(w) : {
+        fileId: w.ids.unclear, ...yesNo,
+        options: [freshFolder, w.ids.job].map((folderId) => ({ folderId, label: 'A place' })),
+      }] });
+    const first = await firstAsking(w);
+    expect(first.options?.map((o) => o.action.folderId).sort(),
+      'TL-P4-44 addendum 4: production asking starts with the original script folders')
+      .toEqual([w.ids.home, w.ids.job].sort());
+    expect(await roundHistory(w), 'TL-P4-44 addendum 4: first durable asking counts as round one')
+      .toEqual([expect.objectContaining({ count: 1 })]);
+    const chosen = first.options?.find((o) => o.action.folderId === w.ids.home);
+    expect(chosen, 'TL-P4-44 addendum 4: consent binds the original folder id').toBeDefined();
+    expect((await answer(w, first, { option: chosen?.id ?? '' }))?.outcome.kind,
+      'TL-P4-44 addendum 4: the stored option answer starts the real continuation').toBe('now');
+    await w.drive.trash(w.ids.home);
+    const before = await w.drive.evidence(w.ids.unclear);
+    const hash = (await w.drive.get(w.ids.unclear, { checksums: true })).md5Checksum;
+    expect(hash, 'TL-P4-44 addendum 4: item content identifies any unwanted copy').toBeTypeOf('string');
+    const copies = async () => (await Promise.all((await w.drive.listAll(w.rootId))
+      .filter((f) => !f.folder).map((f) => w.drive.get(f.id, { checksums: true }))))
+      .filter((f) => f.md5Checksum === hash).map((f) => f.id);
+    phase = 'gone';
+    expect(await run(w, 1), 'TL-P4-44 addendum 4: gone-folder continuation completes without filing').toBe(0);
+    expect.soft(await w.drive.evidence(w.ids.unclear),
+      'TL-P4-44 addendum 4: gone consent leaves the original item untouched').toEqual(before);
+    expect.soft((await manifestOf(w, 1))?.operations.filter((o) => o.effect.kind === 'move' && o.effect.before?.fileId === w.ids.unclear),
+      'TL-P4-44 addendum 4: gone consent plans no alternative filing').toEqual([]);
+    expect.soft(await roundHistory(w), 'TL-P4-44 addendum 4: a run with no new asking counts no new round')
+      .toEqual([expect.objectContaining({ count: 1 })]);
+    expect.soft(await copies(), 'TL-P4-44 addendum 4: gone consent makes no copy').toEqual([w.ids.unclear]);
+
+    const job = await w.drive.get(w.ids.job);
+    expect(job.parents[0], 'TL-P4-44 addendum 4: fresh option folder is created inside an allowed root').toBeTypeOf('string');
+    freshFolder = (await w.drive.createFolder(job.parents[0] ?? '', 'Room')).id;
+    phase = 'again';
+    tick();
+    await press(w);
+    expect(await run(w, 2), 'TL-P4-44 addendum 4: the next run completes with a fresh asking').toBe(0);
+    const next = await questions(w);
+    expect.soft(next, 'TL-P4-44 addendum 4: the same waiting item gets exactly one new asking')
+      .toEqual([expect.objectContaining({ subject: w.ids.unclear })]);
+    expect.soft(next[0]?.askedAt, 'TL-P4-44 addendum 4: the next asking has a new asking identity')
+      .toBeGreaterThan(first.askedAt);
+    expect.soft(next[0]?.options?.map((o) => o.action.folderId).sort(),
+      'TL-P4-44 addendum 4: fresh script options bind current folders and omit the gone folder')
+      .toEqual([freshFolder, w.ids.job].sort());
+    expect.soft(await roundHistory(w), 'TL-P4-44 addendum 4: writing the next asking raises the round count by one')
+      .toEqual([expect.objectContaining({ count: 2 })]);
+    expect.soft(await w.drive.evidence(w.ids.unclear),
+      'TL-P4-44 addendum 4: asking again leaves the original item untouched').toEqual(before);
+    expect.soft(await copies(), 'TL-P4-44 addendum 4: the next round makes no new copy').toEqual([w.ids.unclear]);
   });
 
   it('Q1a fix 1.6: words-only pile consent places its generated note in the chosen stored folder', async () => {

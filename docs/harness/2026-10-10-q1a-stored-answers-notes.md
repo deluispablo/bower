@@ -696,6 +696,55 @@ Validation (all commands exit 0):
 - Test ESLint: `pnpm -C runner exec eslint test/q1-continuation.test.ts`; pass; `tmp-logs/q1-red-repair-3-eslint.log`.
 Full gates, e2e, implementation and integration remain outside this authorized test-only repair.
 
+## Red repair 4
+
+2026-10-10. Codex red owner, lead-supplied TL-P4-44 addendum 4 (not yet in this checkout's DECISIONS).
+Unchanged production HEAD: `f6e1be5062f3f7050bf5acf5b0a8eec872a540c8`.
+Only the authorized test additions and this requested notes section were edited. The coordinator owns commits.
+No network, git write, production change, dependency change, real timer, `.only` or `.skip` was used.
+
+tests changed: runner/test/q1-continuation.test.ts: TL-P4-44 addendum 4: add positive same-id filing after folder rename or allowed-root move, and gone-folder waiting followed by a fresh next-round asking without a copy; preserve all existing assertions.
+removed: none (no existing assertion removed or weakened).
+
+Exact names:
+
+- `Q1a fix 1.5: missing or outside-root stored option folders cannot authorize alternative filing`
+- `Q1a fix 1.5b: a gone option folder leaves the item waiting and the next run asks again as the next round`
+
+Fix 1.5 now also exercises Home renamed to Room and Home moved from Areas to Projects.
+Both still receive the item by the same stored folder id despite the model naming Job hunt.
+The case called `outside` moves Home under Inbox: Inbox is not a filing destination, so it still refuses.
+All gone-case assertions (no alternative move, unchanged parents and complete item evidence), ordinary/valid
+controls, and every assertion of fix 1.6 remain byte-identical. Fix 1.6 still pins where a words-only pile's note is created.
+Every new assertion explicitly cites TL-P4-44 addendum 4.
+
+Fix 1.5b obtains asking one and count one from production main, answers its generated option id, then bins
+that folder. The answer continuation completes with the original item untouched, no alternative move,
+no new round and no copy. A new allowed folder is created before the next run; main then writes exactly
+one asking for the same item with a newer askedAt, options for the new folder and Job hunt (excluding the
+gone folder), and count two. The original evidence is unchanged; checksum-matching files contain only
+the original id after both runs, including any copy under another name. No counter format is seeded.
+
+Offline research reuses the existing realWorld/main and in-process /process fixtures and the references
+already recorded under Research: Hono testing, tagged unions, tolerant readers and stable request identity.
+No online verification is claimed; no new mechanism was introduced.
+
+Validation (final test-file revision, all output in `tmp-logs/`):
+
+```sh
+TMPDIR=/private/tmp/bower-q1a-stored-answers/tmp-logs pnpm -C runner exec vitest run test/q1-continuation.test.ts --maxWorkers=2 --reporter=json --outputFile=../tmp-logs/q1a-red-repair-4.json > tmp-logs/q1a-red-repair-4.log 2>&1
+```
+
+- Whole file: exit 0; 36/36 pass, no skips, load errors or timeouts. Both named tests pass at unchanged HEAD.
+  The new assertions do **not** fail at HEAD; no red failure is claimed. Evidence: `tmp-logs/q1a-red-repair-4.json` and `.log`.
+- Runner tsc: exit 0; `tmp-logs/q1a-red-repair-4-tsc.log`. An initial optional-parent type error in the new fixture was corrected.
+- Touched-file ESLint: exit 0; `tmp-logs/q1a-red-repair-4-eslint.log`.
+- Read-only preservation comparison: removing only the new test, two positive loop cases and their branches
+  reconstructs the entire HEAD test file exactly. Every other test and every preexisting assertion is unchanged.
+- Read-only `git diff --check`: pass; HEAD unchanged. No test/ruling contradiction was observed.
+
+Left out: production fixes, full check/e2e, commits and integration; this is the requested test-only red repair.
+
 ## Fix round 1 reds
 
 2026-10-10. Codex red owner, TL-P4-29. Production HEAD `a568d4cc6023f7d59b5d569028410609e4de93e6` remains unchanged.
