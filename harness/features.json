@@ -6867,7 +6867,7 @@
       "After a request-only run with a Left as you wrote them row, Home shows the report card and the reopened sheet shows the report, never Nothing to tidy."
     ],
     "verify": "pnpm exec vitest run src/features/tidy/request-report-hidden.test.tsx -t \"request report: status bar reopens unseen instructions leftAsWritten instead of Nothing to tidy\"",
-    "note": "Lead ruling (a), DECISIONS after bd2671ba and d57e04e0; exempt under TL-P4-40. Codex, Codex pass, Claude review, designer check. Packet 2026-10-10-smoke-request-report-hidden-packet.md. implementer: codex.",
+    "note": "Lead ruling (a), DECISIONS after bd2671ba and d57e04e0; exempt under TL-P4-40. Codex, Codex pass, Claude review, designer check. Packet 2026-10-10-smoke-request-report-hidden-packet.md. implementer: codex. Known green: the coordinator proved the e2e red at fcd23584 (16 failed on demo and fake, green after 0c696a61); the component reds failed before each fix (Codex red evidence); later fixes touched the same lines, so the verify pins round 1.",
     "review": "P4-93 PASS",
     "design": "verified"
   },
