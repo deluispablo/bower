@@ -44,6 +44,8 @@ function asAdded(name: string): Record<string, string> {
 export interface CaseRun {
   /** Request records actually admitted to this press, retaining each journal line's identity. */
   requests?: Array<{ id: string; text: string }>;
+  /** How a later explicit or default request reached the active journal before admission. */
+  requestAction?: { kind: 'replay'; id: string; outcome: 'already-active' | 'restored' } | { kind: 'tidy'; id: string };
   /** The final expectations and, when supplied, every press's expectations. */
   score?: Score;
   /** The folder after the run, path to text; folders and the Bin are left out. */
@@ -213,7 +215,7 @@ async function submitAnswer(c: LoadedCase, previous: CaseRun, step: Extract<Corp
 }
 
 /** Only an exact archived or active journal record id can be replayed. */
-async function addRequest(drive: FakeDrive, root: string, press: number, request: CorpusPress['request']): Promise<void> {
+async function addRequest(drive: FakeDrive, root: string, press: number, request: CorpusPress['request']): Promise<NonNullable<CaseRun['requestAction']>> {
   const seen = await snapshot(drive, root);
   const changes = Object.entries(seen.pathsById).find(([, path]) => path === SYSTEM.changes)?.[0];
   if (!changes) throw new Error('The changes folder is missing.');
@@ -223,18 +225,22 @@ async function addRequest(drive: FakeDrive, root: string, press: number, request
       .filter((r) => isJournalRecord(r.record) && r.record.kind === 'request' && r.record.id === request.id);
     const original = records[0]?.record;
     if (!isJournalRecord(original)) throw new Error(`replay: missing request ${request.id}`);
-    if (records.some((r) => !r.path.startsWith(`${SYSTEM.changes}/archive/`))) return;
+    if (records.some((r) => !r.path.startsWith(`${SYSTEM.changes}/archive/`))) {
+      return { kind: 'replay', id: original.id, outcome: 'already-active' };
+    }
     await drive.createText(changes, `${original.id}.json`, `${JSON.stringify(original)}\n`);
+    return { kind: 'replay', id: original.id, outcome: 'restored' };
   } else {
     await drive.createText(changes, `press-${press}.json`, JSON.stringify({ v: 1, id: `press-${press}`, device: 'device-1', at: AT + press,
       kind: 'request', what: 'Asked Bower to update the notes', text: request?.text ?? 'Update these notes.' }));
+    return { kind: 'tidy', id: `press-${press}` };
   }
 }
 
 /** Each press admits the current folder and uses the production runner/planner/write path. */
 export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, { around, realTokens = false, claude, env: more = {}, request, answerStart }: CaseOptions, press: number): Promise<CaseRun> {
   const current = await snapshot(drive, root);
-  if (press > 1 && !answerStart) await addRequest(drive, root, press, request);
+  const requestAction = press > 1 && !answerStart ? await addRequest(drive, root, press, request) : undefined;
   const scope = answerStart?.scope ?? (press > 1 && !Object.keys(current.after).some((p) => p.startsWith('Inbox/')) ? 'instructions' : c.scope);
   const admitted = await planAdmission(fakeRead(drive), root, { scope: scope === 'undo' ? 'instructions' : scope,
     clock: () => AT + press - 1, newId: () => `admission-${press}`, ...(answerStart?.subject ? { subject: answerStart.subject } : {}) });
@@ -243,7 +249,7 @@ export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, 
   wire.folderId = root;
   // The token route's expiry on the real clock, as the Worker's is, so the runner keeps a token as it does on Actions.
   if (realTokens) wire.now = Date.now();
-  if (admitted.kind !== 'manifest') return { ...(await snapshot(drive, root)), lastRun: null, code: -1, drive, root };
+  if (admitted.kind !== 'manifest') return { ...(await snapshot(drive, root)), lastRun: null, code: -1, drive, root, requestAction };
   wire.manifest = admitted.manifest;
   const requests = (await Promise.all(admitted.manifest.journal.map((f) => drive.readText(f.fileId))))
     .map((text) => JSON.parse(text) as unknown).filter(isJournalRecord).filter((r) => r.kind === 'request')
@@ -255,7 +261,7 @@ export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, 
   const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env, ...more }, { fetch: around ? around(wire.fetch) : wire.fetch, ...(claude ? { claude } : {}) });
   const { after, props: kept, pathsById } = await snapshot(drive, root);
   const lastRun: unknown = after[SYSTEM.lastRun] ? JSON.parse(after[SYSTEM.lastRun] ?? 'null') : null;
-  return { after, props: kept, pathsById, lastRun, code, drive, root, requests };
+  return { after, props: kept, pathsById, lastRun, code, drive, root, requests, requestAction };
 }
 
 async function snapshot(drive: FakeDrive, root: string): Promise<{ after: Record<string, string>; props: Record<string, Record<string, string>>; pathsById: Record<string, string> }> {
@@ -363,6 +369,8 @@ function scorePress(c: LoadedCase, run: CaseRun, expected: Expected): Score {
     else if (!before.equals(after)) unmet.push(`${path}: protected range changed: ${name}`);
   }
   for (const want of expected.properties ?? []) {
+    if (want.absent?.length === 0) unmet.push(`${want.path}: properties.absent: expected a non-empty list`);
+    if (want.equals && Object.keys(want.equals).length === 0) unmet.push(`${want.path}: properties.equals: expected at least one key`);
     if (!(want.path in run.after)) { unmet.push(`missing file for properties: ${want.path}`); continue; }
     const props = run.props[want.path] ?? {};
     for (const key of want.absent ?? []) if (Object.hasOwn(props, key)) unmet.push(`${want.path}: appProperty ${key} should be absent`);
@@ -371,6 +379,7 @@ function scorePress(c: LoadedCase, run: CaseRun, expected: Expected): Score {
     }
   }
   if (expected.report?.questionSubjects) {
+    if (expected.report.questionSubjects.length === 0) unmet.push('report.questionSubjects: expected a non-empty list');
     const report = (run.lastRun as { run?: { report?: { questions?: unknown } } } | null)?.run?.report;
     const questions = Array.isArray(report?.questions) ? report.questions as unknown[] : [];
     for (const want of expected.report.questionSubjects) {

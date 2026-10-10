@@ -86,11 +86,16 @@ An explicit `request` and an automatically scheduled answer run need separate it
 With neither, a later press keeps the old fresh-request default (`press-N`, "Update these notes."). A replay restores the
 exact original active or archived request journal record, retaining its id and words. A new tidy-up has a fresh id.
 `CaseRun.requests` records the request ids and words actually admitted, so tests can distinguish those inputs.
+`CaseRun.requestAction` reports a later request's kind and id. For a replay, `outcome: "already-active"` means the
+original record was still waiting and nothing was written; `outcome: "restored"` means the archived record was written
+back to the active journal. `kind: "tidy"` means a new request was written. First and answer presses have no request action.
 A provider that leaves a request unanswered still leaves it waiting: the driver does not fabricate an outcome.
 
 `expected.json` can add one `runs` item per press, including the first. Top-level expectations still check the final press.
-The driver returns `CaseRun.score` and exports `scoreCase(case, result)` for assertions over saved run snapshots. Existing
-single-run cases and the pure scorer are unchanged. The driver adds these checks alongside the existing substring checks:
+The driver returns `CaseRun.score` and exports `scoreCase(case, result)` for assertions over saved run snapshots.
+The scripted corpus loop asserts this full driver score, so later-press, range, property and subject expectations all
+count. `scoreCase` is the one home for these checks and calls the existing pure scorer for the shared substring checks;
+existing single-run cases and the pure scorer are unchanged.
 
 ```json
 {
@@ -109,6 +114,8 @@ single-run cases and the pure scorer are unchanged. The driver adds these checks
 ```
 
 `questionSubjects` accepts the same typed subjects as an answer selector (without an id selector).
+When supplied, `questionSubjects`, a property's `absent` list and its `equals` map must be non-empty; an empty value
+fails the case score, including inside a `runs` item. Omit a field when it makes no assertion.
 Protected ranges compare raw UTF-8 bytes with the seeded note, preserving CRLF, spaces and Unicode. Front matter includes
 its fences. The existing ownership parser supplies front matter and Bower section spans; other headings select a personal
 ATX section through the next heading of equal or lesser depth, excluding headings in fenced code. Missing ranges fail;
