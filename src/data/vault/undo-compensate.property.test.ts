@@ -566,6 +566,10 @@ const command = fc.oneof(
 const property = fc.asyncProperty(fc.commands([command], { maxCommands: 24 }), fc.boolean(), checkUndo);
 const name = 'TL-P4-28(2): compensating Undo preserves FIFO and the Drive-only person-state oracle';
 
+it('replays undo-compensate-counterexample', async () => {
+  await fc.assert(property, { seed: 752195386, path: '49', numRuns: 1, endOnFailure: true });
+});
+
 async function assertPart<Ts>(property: fc.IAsyncProperty<Ts>, seed: number, part: { from: number; to: number }): Promise<void> {
   // A root-only path resumes generation at that run index, including its original bias.
   // Native reporting keeps the seed, absolute replay path and commands' toString().

@@ -449,3 +449,19 @@ landing-csp,reviewer,claude,bower-reviewer,,1,35648,,,,,,9,0.4,PASS (P4-80),2026
 new-folder-first-letters,diagnoser,claude,bower-diagnoser,,1,90596,,,,,,43,5.8,diagnosed,2026-10-10
 c5-remove-new-note,reviewer,claude,bower-reviewer,,1,53898,,,,,,11,0.7,PASS (P4-82),2026-10-10
 p4-b1-prep,drafter,codex,gpt-5-codex,high,1,2511995,2489551,,2327680,22444,,,,4 cases + doc,2026-10-10
+c05-person-notes,implementer (fix round 1),codex,gpt-5-codex,high,1,3398818,3379762,,3244672,19056,,,,9 findings + 6 regressions,2026-10-10
+tree-name-first,red,codex,gpt-5-codex,high,1,1263039,1246709,,1163904,16330,,,,15 reds,2026-10-10
+p4-b23-prep,drafter,codex,gpt-5-codex,high,1,3114418,3093561,,2915584,20857,,,,4 cases + doc,2026-10-10
+c05-person-notes,adversarial (pass 2),codex,gpt-5-codex,high,1,4164345,4142691,,3985792,21654,,,,BLOCK (re-plan),2026-10-10
+c05-person-notes,red (round 3),codex,gpt-5-codex,high,1,2178111,2159508,,2030592,18603,,,,amended + new reds,2026-10-10
+b1b-ports,red,codex,gpt-5-codex,high,1,1380076,1358419,,1249792,21657,,,,54 reds,2026-10-10
+b1b-ports,implementer,codex,gpt-5-codex,high,1,440085,436162,,383360,3923,,,,blocked: DriveApi table,2026-10-10
+b1b-ports,red-owner (table),codex,gpt-5-codex,low,1,0,,,,,,,,table entries,2026-10-10
+b1b-ports,implementer,codex,gpt-5-codex,high,2,1396758,1381722,,1287040,15036,,,,3 red-side blockers,2026-10-10
+b1b-ports,red-owner (repair 2),codex,gpt-5-codex,medium,1,452483,448625,,396032,3858,,,,wrapper + My Drive + bytes,2026-10-10
+b1b-ports,adversarial (pass 1),codex,gpt-5-codex,high,1,803630,795824,,702848,7806,,,,BLOCK: 2 Important,2026-10-10
+b1b-ports,red (fix round 1),codex,gpt-5-codex,medium,1,621764,615985,,569472,5779,,,,2 reds,2026-10-10
+tree-name-first,implementer,codex,gpt-5-codex,high,1,1014450,1001658,,932992,12792,,,,name-first,2026-10-10
+tree-name-first,merge (remove-new-note),codex,gpt-5-codex,high,1,515074,509491,,464256,5583,,,,4 files,2026-10-10
+tree-name-first,red-owner (repair),codex,gpt-5-codex,medium,1,375095,371466,,325248,3629,,,,2 old tests,2026-10-10
+p4-q1-prep,drafter,codex,gpt-5-codex,high,1,2103848,2085864,,1939712,17984,,,,doc,2026-10-10

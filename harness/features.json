@@ -205,8 +205,9 @@
       "Explorer New note",
       "Name it"
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"a new note opens and says how to write in it\"",
-    "passes": true
+    "verify": "bash scripts/e2e-both.sh e2e/no-new-note.spec.ts e2e/empty-note-help.spec.ts -g \"no New note control on desktop or phone|empty-note help and Open in Drive\"",
+    "passes": false,
+    "note": "Re-proved after c5-remove-new-note (TL-P4-35): New note was removed, so the verify names surviving behaviour on New folder and the empty note; known green."
   },
   {
     "id": "search-everything",
@@ -1054,8 +1055,9 @@
       "Type \"Soup ideas\", then press Escape",
       "No note opens, and neither \"Untitled\" nor \"Soup ideas\" is left in the tree"
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"Escape on a new note's name takes it back\"",
-    "passes": true
+    "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"Escape on a new folder's name takes it back\"",
+    "passes": true,
+    "note": "Re-proved after c5-remove-new-note (TL-P4-35): New note was removed, so the verify names surviving behaviour on New folder and the empty note; known green."
   },
   {
     "id": "failed-card-dismiss",
@@ -1580,7 +1582,7 @@
       "Read those tests",
       "Green now: each one checks what the screen or the Drive shows, and fails if the fix is undone"
     ],
-    "verify": "pnpm vitest run src/features/files src/data/demo src/data/live src/data/vault/drive-vault.test.ts -t \"ConfirmBin|repeats a rule|toured|late file\" && bash scripts/e2e-both.sh e2e/qa7.spec.ts -g \"New note in an empty folder\"",
+    "verify": "pnpm vitest run src/features/files src/data/demo src/data/live src/data/vault/drive-vault.test.ts -t \"ConfirmBin|repeats a rule|toured|late file\" && bash scripts/e2e-both.sh e2e/qa7.spec.ts -g \"New folder in an empty folder asks for a name, then opens the folder\"",
     "passes": true,
     "note": "Tests only, so done.sh has no code to set aside. Red checked by hand on 2026-10-04 by breaking the code each pins: ConfirmBin without nested words, toured kept at sign-out, a question repeating a rule, the late file's Bin without its retry, New note in an empty folder made without asking. The vacuous demo-question test is gone."
   },
@@ -2000,8 +2002,9 @@
       "Open http://localhost:5190/?scenario=default&time=instant at phone width, a folder page, ⋯ New note, type Tyres.md: the note is Tyres.",
       "Type a/b: a toast says Bower used a dash."
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"the name sheet takes a name as typed\"",
-    "passes": true
+    "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"the New folder name sheet preserves dots and explains slashes|the rename name sheet keeps one note extension\"",
+    "passes": true,
+    "note": "Re-proved after c5-remove-new-note (TL-P4-35): New note was removed, so the verify names surviving behaviour on New folder and the empty note; known green."
   },
   {
     "id": "move-no-match",
@@ -2049,8 +2052,9 @@
       "Right-click Resources, New note, type Soup ideas at once, Enter.",
       "The note is Soup ideas, not a name missing its first letters."
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts e2e/qa7.spec.ts -g \"a new note opens and says how|New note in an empty folder\"",
-    "passes": true
+    "verify": "bash scripts/e2e-both.sh e2e/qa7.spec.ts -g \"New folder from the tree keeps the first letters typed\"",
+    "passes": true,
+    "note": " Reopened by c5-remove-new-note: its New note half is withdrawn (TL-P4-33/35); its New folder half fails (DEFECTS new-folder-first-letters, ruling (b)) and closes with entry 2, whose red is this test."
   },
   {
     "id": "situation-address-clean",
@@ -6179,7 +6183,7 @@
       "At 375 the rename field is at least 300 px with a 16 px font and the name selected.",
       "A folder New note opens NameSheet."
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/v2-name-sheet.spec.ts -g \"the rename field spans the sheet and selects the name|new note from a folder uses the name sheet\"",
+    "verify": "bash scripts/e2e-both.sh e2e/v2-name-sheet.spec.ts -g \"the rename field spans the sheet and selects the name\"",
     "note": "TL-P4-21 order 3; spec d-v2-09 (after v2-field). Starting model bower-implementer. Packet 2026-10-09-v2-name-sheet-packet.md; e2e file may differ. Red 332410b1, fix 51978d36. Designer verified a764e350.",
     "design": "verified"
   },
@@ -6517,7 +6521,7 @@
       "The new-folder name is typed into the name box, never the tree.",
       "An answered row shows after Write it without a reload race."
     ],
-    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/qa7.spec.ts e2e/capabilities.spec.ts --project=desktop -g \"New note in an empty folder asks for a name, then opens the note|write it shows the state written, re-asks on a clash and settles as an answered row\"",
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/qa7.spec.ts e2e/capabilities.spec.ts --project=desktop -g \"New folder in an empty folder asks for a name, then opens the folder|write it shows the state written, re-asks on a clash and settles as an answered row\"",
     "note": "Lead 2026-10-10 (stage-4 close): sync fixes. Codex, then a Claude review and repeat runs. Packet 2026-10-10-c4-e2e-sync-packet.md.",
     "review": "P4-71 PASS"
   },
@@ -6634,7 +6638,7 @@
     "id": "c5-remove-new-note",
     "task": "p4-polish",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "New note is removed everywhere it is offered (explorer button and row menu, folder page, its name-sheet path); New folder stays; code only it used goes (TL-P4-35).",
     "steps": [
@@ -6642,7 +6646,9 @@
       "New folder is still offered."
     ],
     "verify": "pnpm exec playwright test e2e/no-new-note.spec.ts -g \"no New note control on desktop or phone\"",
-    "note": "TL-P4-35 (1). Codex after c5-empty-note-help, then a Claude review and the designer. Packet 2026-10-10-c5-remove-new-note-packet.md. implementer: codex."
+    "note": "TL-P4-35 (1). Codex after c5-empty-note-help, then a Claude review and the designer. Packet 2026-10-10-c5-remove-new-note-packet.md. implementer: codex. Known green: red 3cc13c38 failed before fix 9040d9bf (red session log); the revert no longer applies after the create-named merge.",
+    "review": "P4-82 PASS",
+    "design": "verified"
   },
   {
     "id": "p4-docs-md-roundtrip",
@@ -6693,14 +6699,75 @@
     "id": "tree-name-first",
     "task": "p4-consolidation",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "The tree's New folder (row menu and header) opens the name box before any await and creates once with the name, so no typed letter is lost (DEFECTS new-folder-first-letters, ruling (b), entry 2).",
     "steps": [
       "Typing at once after New folder keeps every letter (20/20).",
       "Escape makes nothing; blur with a name makes it once; a failed create keeps the name."
     ],
+    "verify": "pnpm exec vitest run src/features/files/tree-name-first.test.tsx -t \"New folder focuses its name before an unresolved create|pending row is the first child with folder icon|Escape drops the pending row without a write|blur with a name makes that folder once|keeps the name and inline FieldError|after create the new row is selected and focused\" && bash scripts/e2e-both.sh e2e/qa7.spec.ts e2e/tree-name-first.spec.ts -g \"New folder from the tree keeps the first letters typed|desktop pending New folder row passes WCAG 2.2\"",
+    "note": "After create-named. Codex red, Codex implementation, Claude review, designer check once (rows signed 2026-10-10). Packet 2026-10-10-tree-name-first-packet.md. Closes create-name-speed.",
+    "review": "P4-85 PASS",
+    "design": "verified"
+  },
+  {
+    "id": "b1b-ports",
+    "task": "p4-brain",
+    "category": "feature",
+    "passes": true,
+    "ui": false,
+    "what": "Drive ports for B1: a 4 KB prefix read (Range, tolerating 200) and the changes feed (start token, drained pages, parents lookup), with fake parity (TL-P4-41 Q3, Q10).",
+    "steps": [
+      "A prefix read returns at most 4,096 bytes on whole characters for 206 and 200 responses.",
+      "The feed drains every page to the new token; unknown ids resolve scope through parents."
+    ],
+    "verify": "pnpm exec vitest run src/data/drive -t \"b1-prefix-read never poisons the full-media cache|b1-feed-bootstrap-new-folder|b1b fix 1 finding 1|b1b fix 1 finding 2|b1b fix 2: native fake sizes|b1-ports-parity full-media cache separation\"",
+    "note": "Escalated (transport): Codex red, implementation, Codex pass, Claude review. Packet 2026-10-10-b1b-packet.md. Before B1a (lead). Codex passes 1-3; restore legacy size is a Minor by ruling (TL-P4-41 addendum 2).",
+    "review": "P4-83 PASS"
+  },
+  {
+    "id": "b1a-contract",
+    "task": "p4-brain",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "The B1 contract: MOC regions, the closed selection reply, retrieval.json with its cursor in one write, and the maintain effect (TL-P4-41 Q1, Q2, Q4, Q5).",
+    "steps": [
+      "A person's MOC is never edited except by the link rewrite.",
+      "maintain is idempotent, adds no rows for refused effects and is skipped on a done run."
+    ],
     "verify": "",
-    "note": "After create-named. Codex red, Codex implementation, Claude review, designer check once (rows signed 2026-10-10). Packet 2026-10-10-tree-name-first-packet.md. Closes create-name-speed."
+    "note": "Escalated (contracts): Codex red, implementation, Codex pass, Claude review. Packet 2026-10-10-b1a-packet.md. After c05-person-notes lands."
+  },
+  {
+    "id": "q-ui-3",
+    "task": "p4-q1",
+    "category": "fix",
+    "passes": true,
+    "ui": true,
+    "what": "A tall sheet stays inside the window on desktop and scrolls (questions UI spec Q-UI-3, owner OK).",
+    "steps": [
+      "At 1280x720 a sheet taller than the window ends inside it and scrolls."
+    ],
+    "verify": "pnpm exec playwright test e2e/q-ui-3.spec.ts --project=desktop -g \"tall desktop sheet stays inside the window and scrolls\"",
+    "note": "TL-P4-43 item 1. Codex, then a Claude review and the designer. Packet 2026-10-10-q-ui-3-packet.md. implementer: codex. Known green: the coordinator proved the e2e red at the tests-only commit (demo and fake, 2 failed on toHaveCount); done.sh cannot read a Playwright red.",
+    "review": "P4-86 PASS",
+    "design": "verified"
+  },
+  {
+    "id": "undo-miss-refresh",
+    "task": "p4-consolidation",
+    "category": "fix",
+    "passes": true,
+    "ui": false,
+    "what": "Undo of a rule another tab confirmed finds it: a cached miss refreshes the listing once before saying not-found (DEFECTS undo-compensate-counterexample, option (1)).",
+    "steps": [
+      "The seed 752195386 path 49 replay passes.",
+      "A hit makes no extra listing call; a miss makes exactly one."
+    ],
+    "verify": "pnpm exec vitest run src/data/vault -t \"replays undo-compensate-counterexample|removeRule lists zero times on a hit and once on each miss\"",
+    "note": "Lead ruling option (1). Codex, then a Claude review. Packet 2026-10-10-undo-miss-refresh-packet.md. implementer: codex.",
+    "review": "P4-84 PASS"
   }
 ]

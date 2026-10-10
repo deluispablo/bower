@@ -60,7 +60,7 @@ test('every listed phone control is at least 44 px', async ({ page, isMobile }) 
   await axeTargets(page, 'main');
 
   await open(page, '/files');
-  await atLeast('files toolbar', page.getByRole('button', { name: /^(New note|New folder|Change sort order)$/ }), 44, true);
+  await atLeast('files toolbar', page.getByRole('button', { name: /^(New folder|Change sort order)$/ }), 44, true);
   await axeTargets(page, 'main');
 
   await open(page, '/bower');
@@ -105,7 +105,7 @@ test('desktop control sizes stay at least 24', async ({ page, isMobile }) => {
   await open(page, '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Larkspur%20Lane.md');
   await axeTargets(page, 'main');
   await open(page, '/files/Projects/Flat%20hunt');
-  await atLeast('files toolbar', page.getByRole('button', { name: /^(New note|New folder|Change sort order)$/ }), 24, true);
+  await atLeast('files toolbar', page.getByRole('button', { name: /^(New folder|Change sort order)$/ }), 24, true);
   await axeTargets(page, 'main');
   await open(page, '/bower');
   await atLeast('tell bower segments', page.getByRole('radiogroup', { name: 'What is it?' }).getByRole('radio'), 24);

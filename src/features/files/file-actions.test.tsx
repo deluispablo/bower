@@ -52,14 +52,14 @@ it('a change kept only on this page follows its applied path without a saved or 
 
 it('a named thing made before its journal warning opens once without a retry prompt', async () => {
   const base = loadingSources();
-  const failure = new BowerError('unknown', 'Your change was made; keep this page open so Bower can remember it.', { path: 'Projects/New note.md', changeId: 'CHANGE_ID' });
+  const failure = new BowerError('unknown', 'Your change was made; keep this page open so Bower can remember it.', { path: 'Projects/New folder', changeId: 'CHANGE_ID' });
   const create = vi.fn(async (): Promise<never> => { throw failure; });
   history.replaceState(null, '', '/files/Projects');
-  useUi.getState().setNaming({ folder: 'Projects', type: 'note' });
+  useUi.getState().setNaming({ folder: 'Projects', type: 'folder' });
   render(<BrowserRouter><DataProvider sources={{ ...base, vault: { ...base.vault, tree: async () => [], subscribe: () => () => undefined, create, markSeen: async () => undefined } }}><Actions /><NameSheet /></DataProvider></BrowserRouter>);
-  fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'New note' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Make the note' }));
-  await vi.waitFor(() => expect(screen.getByLabelText('Page').textContent).toBe('/note/Projects/New%20note.md'));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'New folder' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Make the folder' }));
+  await vi.waitFor(() => expect(screen.getByLabelText('Page').textContent).toBe('/files/Projects/New%20folder'));
   expect(create).toHaveBeenCalledOnce();
   expect(toast).toHaveBeenCalledWith(failure.message);
   expect(screen.queryByRole('dialog')).toBeNull();

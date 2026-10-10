@@ -335,6 +335,30 @@ describe('DriveVault inbox and Bower', () => {
     expect(drive.dump(root).get('Rules.md')).not.toContain('dentist');
   });
 
+  it('removeRule lists zero times on a hit and once on each miss', async () => {
+    const hit = await vault.addRule('Keep sketches together');
+    const other = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    try {
+      const stale = await other.addRule('Keep drafts together');
+      const listAll = vi.spyOn(drive, 'listAll');
+      await expect(vault.removeRule(hit.id)).resolves.toBeTypeOf('function');
+      expect(listAll).not.toHaveBeenCalled();
+
+      await expect(vault.removeRule('missing-rule-id')).rejects.toMatchObject({ code: 'not-found' });
+      expect(listAll).toHaveBeenCalledTimes(1);
+      expect(listAll).toHaveBeenLastCalledWith(root);
+
+      // Cache the absence before another page adds the next rule.
+      const late = await other.addRule('Keep outlines together');
+      await expect(vault.removeRule(late.id)).resolves.toBeTypeOf('function');
+      expect(listAll).toHaveBeenCalledTimes(2);
+      await expect(vault.removeRule(stale.id)).resolves.toBeTypeOf('function');
+      expect(listAll).toHaveBeenCalledTimes(2);
+    } finally {
+      other.dispose();
+    }
+  });
+
   it('keeping a suggestion adds it as a rule and hides it', async () => {
     const [a] = await vault.suggestions();
     if (!a) throw new Error('no suggestion');

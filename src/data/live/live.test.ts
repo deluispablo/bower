@@ -1302,7 +1302,9 @@ describe('foreground discovery', () => {
   function client(backend: FakeDrive): DriveApi {
     return {
       listAll: (root) => backend.listAll(root), get: (id, opts) => backend.get(id, opts), readText: (id) => backend.readText(id),
-      readBytes: (id) => backend.readBytes(id),
+      readBytes: (id) => backend.readBytes(id), readPrefix: (id) => backend.readPrefix(id),
+      getStartPageToken: () => backend.getStartPageToken(), listChanges: (token) => backend.listChanges(token),
+      parents: (id) => backend.parents(id), resolveScope: (root, ids) => backend.resolveScope(root, ids),
       createFolder: (parent, name, props, id) => backend.createFolder(parent, name, props, id),
       createText: (parent, name, text, props, id) => backend.createText(parent, name, text, props, id),
       writeText: (id, text, version, props) => backend.writeText(id, text, version, props), update: (id, patch) => backend.update(id, patch),
