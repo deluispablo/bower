@@ -615,10 +615,10 @@ export class DriveVault implements VaultSource {
     });
     const ix = await this.index();
     const out: Pile[] = [];
-    // Your changes, read at most once for this listing, and only if a pile needs them.
+    // Current context-removal lines, read at most once for this listing, only if a pile needs them.
     let journal: Promise<unknown[]> | null = null;
     const changes = (): Promise<unknown[]> =>
-      (journal ??= journalValues(ix.journalFiles(true), (id) => this.readTextOnce(id)).catch((e: unknown) => {
+      (journal ??= journalValues(ix.journalFiles(), (id) => this.readTextOnce(id)).catch((e: unknown) => {
         // Logged once for this listing; each pile that needed them says it could not be checked.
         console.error(e);
         throw e;
