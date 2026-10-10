@@ -6749,5 +6749,19 @@
     ],
     "verify": "",
     "note": "TL-P4-43 item 1. Codex, then a Claude review and the designer. Packet 2026-10-10-q-ui-3-packet.md. implementer: codex."
+  },
+  {
+    "id": "undo-miss-refresh",
+    "task": "p4-consolidation",
+    "category": "fix",
+    "passes": false,
+    "ui": false,
+    "what": "Undo of a rule another tab confirmed finds it: a cached miss refreshes the listing once before saying not-found (DEFECTS undo-compensate-counterexample, option (1)).",
+    "steps": [
+      "The seed 752195386 path 49 replay passes.",
+      "A hit makes no extra listing call; a miss makes exactly one."
+    ],
+    "verify": "",
+    "note": "Lead ruling option (1). Codex, then a Claude review. Packet 2026-10-10-undo-miss-refresh-packet.md. implementer: codex."
   }
 ]
