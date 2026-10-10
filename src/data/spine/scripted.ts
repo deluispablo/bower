@@ -24,7 +24,7 @@ import { PROP, RUNNER_WRITES, SYSTEM, isRunnerFile, type HashesFile, type Questi
 import { ruleLike } from '../rules';
 import { savedLinkAddress } from '../search-text';
 import { EMPTY_MD5, md5Hex } from '../contracts/hashes';
-import { STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
+import { ASK_GONE, STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
 import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
 import { parseTimelineLine } from '../contracts/timeline-line';
@@ -142,7 +142,7 @@ const LEFT_AS_WRITTEN = {
 const LINE_ADDED = 'One line added to its Timeline, as you asked.';
 
 /** What earlier runs did with requests' bound lines, read only through their own verified records. */
-type AppendHistory = { completed: AppendCompletion[]; lines: Array<{ consent: TimelineConsent; entry: EditEntry; applied: boolean }> };
+type AppendHistory = { completed: AppendCompletion[]; lines: Array<{ consent: TimelineConsent; entry: EditEntry; applied: boolean; path: string }> };
 
 /**
  * A verified checkpoint outcome is the durable completion (or pending retry) of its manifest's request binding: each run
@@ -175,7 +175,7 @@ export async function personalAppendHistory(read: ScriptedRead, rootId: string, 
         const sourceLanded = filed ? outcomes.some((o) => o.operationId === filed.operationId && o.state === 'applied')
           : found.manifest.capture.places.some((p) => p.file.fileId === c.consent?.sourceFileId);
         if (outcome?.state === 'applied' || (sourceLanded && outcome?.state === 'rejected' && outcome.failure.code === 'conflict'))
-          lines.push({ consent: c.consent, entry: c.entries[0], applied: outcome.state === 'applied' });
+          lines.push({ consent: c.consent, entry: c.entries[0], applied: outcome.state === 'applied', path: op.effect.path });
       }
     }
   }
@@ -202,16 +202,41 @@ type LeftRow = LeftAsWritten & { requestId: string; sources: string[] | null };
  * A request settles only when every note it binds has its line written or there, or a row; otherwise it waits whole.
  */
 function settleRequest(requests: readonly JournalLine[], listing: readonly DriveFile[], ix: VaultIndex, history: AppendHistory) {
-  const done = (requestId: string, targetFileId: string): boolean => history.completed.some((h) => h.requestId === requestId && h.targetFileId === targetFileId);
+  // A request already archived settled before (`archivedRecords`): it binds nothing again, past the records' retention.
+  const settled = new Set(requests.filter((l) => l.archived).map((l) => l.rec.id));
+  const done = (requestId: string, targetFileId: string): boolean => settled.has(requestId)
+    || history.completed.some((h) => h.requestId === requestId && h.targetFileId === targetFileId);
   const bound = new Map<string, { requestId: string; path: string; file: DriveFile }>();
+  const owned = new Set<string>();
   const admitted = new Set<string>();
   const blocked = new Set<string>();
   const rows: LeftRow[] = [];
   const sources = new Map<string, Set<string> | null>();
+  // A line refused at the fence waits with its binding, still the person's consent; the next run appends it (6).
+  const retries = new Map<string, { consent: TimelineConsent; entry: EditEntry }>();
   let refusesSources = false;
   for (const l of requests) {
+    // A request waiting on such a line keeps the notes and the source it was bound to, by id, never its words' titles
+    // again (TL-P4-32 addendum 3 (2)): a renamed note still gets its line; one gone or in the Bin gets the "Not done" why.
+    const waiting = new Map(history.lines.filter((h) => !h.applied && h.consent.requestId === l.rec.id && !done(l.rec.id, h.consent.targetFileId))
+      .map((h) => [h.consent.targetFileId, h]));
+    if (waiting.size) {
+      owned.add(l.rec.id);
+      if ([...waiting.keys()].some((id) => bound.has(id))) continue;
+      admitted.add(l.rec.id);
+      for (const [target, h] of waiting) {
+        const file = listing.find((f) => f.id === target && !f.folder && !f.trashed);
+        const path = file && ix.pathOf(file.id);
+        if (file && path) {
+          bound.set(target, { requestId: l.rec.id, path, file });
+          retries.set(target, { consent: h.consent, entry: h.entry });
+        } else rows.push({ requestId: l.rec.id, sources: [], name: h.path, why: ASK_GONE });
+      }
+      continue;
+    }
     const { notes, refused } = requestTargets(listing, ix, l.rec.text ?? l.rec.what);
     if (!notes.length) continue;
+    owned.add(l.rec.id);
     const open = notes.filter((n) => !done(l.rec.id, n.file.id));
     // An older request settles this note first: this one waits untouched (2).
     if (open.some((n) => bound.has(n.file.id))) continue;
@@ -225,13 +250,6 @@ function settleRequest(requests: readonly JournalLine[], listing: readonly Drive
     else for (const n of notes.filter((m) => notes.filter((x) => x.titleKey === m.titleKey).length > 1)) {
       rows.push({ requestId: l.rec.id, sources: null, name: n.path, fileId: n.file.id, why: LEFT_AS_WRITTEN.ambiguous(parentOf(n.path).split('/').join(' / ')) });
     }
-  }
-  // A line refused at the fence waits with its binding, still the person's consent; the next run appends it (6).
-  const retries = new Map<string, { consent: TimelineConsent; entry: EditEntry }>();
-  for (const h of history.lines) {
-    const b = bound.get(h.consent.targetFileId);
-    if (h.applied || !b || b.requestId !== h.consent.requestId || blocked.has(h.consent.targetFileId)) continue;
-    retries.set(h.consent.targetFileId, { consent: h.consent, entry: h.entry });
   }
   const consents: TimelineConsent[] = [];
   const given = new Set<string>();
@@ -247,6 +265,8 @@ function settleRequest(requests: readonly JournalLine[], listing: readonly Drive
   return {
     /** Requests that settle in this run; any other C05 request waits. */
     admitted: admitted as ReadonlySet<string>,
+    /** The requests this settlement decides (C05: they name a note, or wait on a line); a generic handler takes no other. */
+    owned: owned as ReadonlySet<string>,
     /** Notes a refused request names: nothing is written there this run. */
     blocked: blocked as ReadonlySet<string>,
     /** A refused request in the run refuses every source it files (3). */
@@ -266,7 +286,7 @@ function settleRequest(requests: readonly JournalLine[], listing: readonly Drive
       return [...retries.values()].flatMap((r) => {
         const b = bound.get(r.consent.targetFileId);
         const source = nameOfSource(r.consent.sourceFileId);
-        if (!b || source === null) return [];
+        if (!b || source === null || blocked.has(r.consent.targetFileId)) return [];
         return [{ consent: give(r.consent), entry: { ...r.entry, source }, file: b.file, path: b.path }];
       });
     },
@@ -698,7 +718,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const row = answeredGone(q, seenFirst, notesSeen, notePath, (id) => binnedNames.get(id));
     return row ? [[l.rec.id, row] as const] : [];
   }));
-  let journal = lines.filter((l) => (l.rec.kind === 'request' ? !!d.request || settlement.admitted.has(l.rec.id) : l.rec.kind === 'answer' ? (d.settles?.(l.rec.questionId ?? '') ?? settled.has(l.rec.questionId ?? '')) : true));
+  let journal = lines.filter((l) => (l.rec.kind === 'request' ? (settlement.owned.has(l.rec.id) ? settlement.admitted.has(l.rec.id) : !!d.request) : l.rec.kind === 'answer' ? (d.settles?.(l.rec.questionId ?? '') ?? settled.has(l.rec.questionId ?? '')) : true));
   // Your rules (TL-P2-20 rules-wording): one change for every rule line, worded below in one edit of Rules.md, or
   // Rules.md made when it is missing; a line whose words cannot be worded stays pending.
   const ruleWords = ruleChangesOf(journal, d.wordRule ?? tidiedRule);
@@ -2154,11 +2174,15 @@ export async function build(decided: Decided): Promise<Ended> {
     for (const p of satisfied.filter((x) => x.consent.requestId === line.rec.id)) if (moves[0]) {
       satisfiedAppends.push({ consent: p.consent, entry: p.line.entry, before: seen(p.file), path: p.path, text: new TextDecoder().decode(p.bytes), content: p.before, operationId: moves[0] });
     }
-    // Its "Left as you wrote them" rows, once a source it settles on is filed, or with its archive when none is.
+    // Its "Left as you wrote them" rows, once a source it settles on is filed, or in its archive's one row when none is
+    // (an archive move has exactly one row, `grounded`).
+    const withArchive: LeftAsWritten[] = [];
     for (const { requestId: _, sources: rowSources, ...row } of line.rec.kind === 'request' ? settlement.rowsOf(line.rec.id) : []) {
       const filed = (rowSources ?? runSources).flatMap((id) => moveOf.get(id) ?? []);
-      for (const requires of filed.length ? filed.map((op) => [op]) : [moves]) reportPlan.push({ requires, when: 'applied', value: { ...empty(), leftAsWritten: [row] } });
+      if (!filed.length) withArchive.push(row);
+      for (const op of filed) reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), leftAsWritten: [row] } });
     }
+    const left = withArchive.length ? { leftAsWritten: withArchive } : {};
     if (paired.has(line.rec.id)) {
       reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: 0 } });
     } else if (line.rec.undoes) {
@@ -2171,12 +2195,12 @@ export async function build(decided: Decided): Promise<Ended> {
       // A rule this run words: counted once it and its line's archive applied.
       reportPlan.push({ requires: [rulesOp, ...moves, ...archiveChain], when: 'applied', value: { ...empty(), rulesWorded: 1 } });
     } else if (line.rec.kind === 'request' && requestsOp) {
-      reportPlan.push({ requires: [requestsOp, ...moves, ...archiveChain], when: 'applied', value: { ...empty(), requests: [line.rec.text ?? line.rec.what] } });
+      reportPlan.push({ requires: [requestsOp, ...moves, ...archiveChain], when: 'applied', value: { ...empty(), requests: [line.rec.text ?? line.rec.what], ...left } });
     } else {
       // A rule taken out or already there is a rule record, not one of your other changes (TL-P2-23, TL-P2-33 §3).
       // An answer whose subject was gone says so in its answered row, never as a thing set aside.
       const gone = answeredRows.get(line.rec.id);
-      reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: line.rec.kind === 'rule' ? 0 : 1, ...(gone ? { answered: [gone] } : {}) } });
+      reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: line.rec.kind === 'rule' ? 0 : 1, ...(gone ? { answered: [gone] } : {}), ...left } });
     }
   }
 
@@ -2243,8 +2267,36 @@ function refused(why: string): never {
   throw e;
 }
 
-/** A journal line as a B run captures it: the record, every file it was written to, and their one digest. */
-type JournalLine = { rec: JournalRecord; files: DriveFile[]; sha256: string };
+/**
+ * A journal line as a B run captures it: the record, every file it was written to, and their one digest; `archived`
+ * when the same record is already in the archive (`archivedRecords`).
+ */
+type JournalLine = { rec: JournalRecord; files: DriveFile[]; sha256: string; archived: boolean };
+
+/**
+ * Whether a line of your changes is already archived (TL-P4-32 addendum 3 (1)): a run archives a line by moving its
+ * file, under its own name, into `changes/archive`, and settles it there. A copy of the same record back in your
+ * changes (restored by hand) is that settled request again, never a new one, whatever its age: `settleRequest` binds
+ * no note for it. The name only finds the archived file to read; its record id decides. Only archived files sharing a
+ * line's name are read, so a run reads none when nothing was restored.
+ */
+function archivedRecords(drive: ScriptedRead, ix: VaultIndex): (f: DriveFile, id: string) => Promise<boolean> {
+  const active = new Set(ix.journalFiles().map((x) => x.id));
+  const archived = ix.journalFiles(true).filter((x) => !active.has(x.id));
+  return async (f, id) => {
+    for (const a of archived.filter((x) => x.name === f.name)) {
+      let rec: unknown;
+      try {
+        rec = JSON.parse(await ownText(drive, a));
+      } catch (e) {
+        if (!(e instanceof SyntaxError)) throw e;
+        continue;
+      }
+      if (isJournalRecord(rec) && rec.id === id) return true;
+    }
+    return false;
+  };
+}
 
 /**
  * Your changes since the last tidy-up, each once by its id with all its
@@ -2289,13 +2341,14 @@ async function journalOf(drive: ScriptedRead, ix: VaultIndex): Promise<JournalLi
     copies.set(rec.id, [...(copies.get(rec.id) ?? []), { rec, file: f, sha256: digest.sha256 }]);
   }
   const lines: JournalLine[] = [];
+  const archived = archivedRecords(drive, ix);
   for (const [, all] of copies) {
     const [first] = all;
     if (!first || all.some((c) => c.sha256 !== first.sha256 || c.file.parents.length !== 1)) {
       left += all.length;
       continue;
     }
-    lines.push({ rec: first.rec, files: all.map((c) => c.file), sha256: first.sha256 });
+    lines.push({ rec: first.rec, files: all.map((c) => c.file), sha256: first.sha256, archived: await archived(first.file, first.rec.id) });
   }
   lines.sort((a, b) => a.rec.at - b.rec.at || a.rec.id.localeCompare(b.rec.id));
   if (left) console.error(new BowerError('unknown', JOURNAL_LEFT), `${left} journal files left uncaptured`);
