@@ -25,3 +25,15 @@ Read-only, medium effort. Tokens: input 983128 (cached 892032), output 6767.
 4. **Important — [note-edit.ts:644](/private/tmp/bower-c4-compensate/src/data/contracts/note-edit.ts:644): an old manifest without `since` changes meaning.** Reproduced with a stored rule “Keep PDFs whole.” whose “You wrote” text is “dont split pdfs”, and a legacy removal targeting “dont split pdfs”. The baseline leaves Rules.md unchanged; HEAD removes the rule through `ruleLike`. Legacy ordering survives, but legacy exact-match removal does not. Breaks packet §1 / addendum 4(1), requiring old manifests without `since` to behave as before.
 
 findings: 4
+
+## Re-plan pass (reds 8da56079, fix 4953b1ae; TL-P4-27 addenda 9, 10)
+
+Read-only, high effort. Tokens: input 1289914 (cached 1191808), output 8199.
+
+1. **Important — [journal.ts:236](/private/tmp/bower-c4-compensate/src/data/vault/journal.ts:236): a stale page copy can send after `retract()` returns `dropped`.** Reproduced with two Journal instances using separate page memory and shared storage. B queues X without a reservation. A flushes; storage reads become unavailable between `keepHeld()` reading X and `keep()` validating storage. The early return retains A’s reserved copy while shared storage still contains bare X. Drive remains offline. Storage recovers, B retracts X and answers `dropped`, then A flushes online and sends its retained X. Breaks TL-P4-27 addenda 2(2), 8(1), and 10: a stored outbox’s failed keep must not create an authoritative volatile shadow, and a dropped line must never send.
+
+2. **Important — [journal.ts:405](/private/tmp/bower-c4-compensate/src/data/vault/journal.ts:405): failed refusal cleanup lets a dropped original send again.** Reproduced: queue X offline, then permanently refuse its create during `flush()`. Make removal of the outbox storage key fail while failed-list storage succeeds. The ignored `keep()` failure leaves X queued; `retract(X)` returns `dropped` immediately because X is on the failed list ([line 541](/private/tmp/bower-c4-compensate/src/data/vault/journal.ts:541)). Restore storage and let Drive accept creates: the next flush sends X. The drain checks failed originals only when processing their inverses. Breaks packet §3 and §5 / TL-P4-27 addendum 4(3), (5): a failed original is dropped and never sent again.
+
+3. **Important — [note-edit.ts:633](/private/tmp/bower-c4-compensate/src/data/contracts/note-edit.ts:633): legacy manifests with no removals still change meaning.** `remove.every(...)` is true for an empty array, so equal-time additions receive the new record-ID ordering. Reproduced against pre-entry `c5e8093a`: an old change has `remove: []` and equal-time additions ordered Z then A. Z says “Keep scans together.” / “scans”; A says “keep scans together” / “scans in one place”. Baseline keeps Z’s wording and attribution; HEAD keeps A’s. Breaks TL-P4-27 addendum 9(4) and packet §1: old manifests must behave exactly as before, with byte-equal output.
+
+findings: 3
