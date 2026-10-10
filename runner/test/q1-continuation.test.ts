@@ -36,6 +36,7 @@ interface Pile {
   setAside?: string;
 }
 interface Vault {
+  subscribe(cb: () => void): () => void;
   questions(): Promise<Question[]>;
   answer(id: string, answer: Answer): Promise<void>;
   pilesListed(): Promise<Pile[]>;
@@ -102,6 +103,35 @@ async function app(): Promise<App> {
 async function vaultOf(w: World): Promise<Vault> {
   const { DriveVault } = await app();
   return new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'device-1' });
+}
+/** TL-P4-44 addendum 3: Home's questions read supplies the zero-read pile projection. */
+async function listedQuestionAfterRead(w: World, v: Vault, marker: 'waiting' | 'exhausted'): Promise<void> {
+  const reads = vi.spyOn(w.drive, 'readText');
+  const bytes = vi.spyOn(w.drive, 'readBytes');
+  try {
+    expect.soft((await v.pilesListed()).find((p) => p.id === 'pile-mixed')?.question).toBeUndefined();
+    expect.soft(reads).not.toHaveBeenCalled();
+    expect.soft(bytes).not.toHaveBeenCalled();
+  } finally {
+    reads.mockRestore();
+    bytes.mockRestore();
+  }
+  const observed: Array<Promise<{ listed: Pile['question']; full: Pile['question'] }>> = [];
+  const off = v.subscribe(() => {
+    observed.push(Promise.all([v.pilesListed(), v.piles()]).then(([listed, full]) => ({
+      listed: listed.find((p) => p.id === 'pile-mixed')?.question,
+      full: full.find((p) => p.id === 'pile-mixed')?.question,
+    })));
+  });
+  try {
+    await v.questions();
+  } finally {
+    off();
+  }
+  expect.soft(await Promise.all(observed), 'the questions read re-emits listed and full markers').toContainEqual({
+    listed: marker, full: marker,
+  });
+  expect.soft((await v.pilesListed()).find((p) => p.id === 'pile-mixed')?.question).toBe(marker);
 }
 function stored(w: World, subject = w.ids.unclear, options = false, askedAt = AT - 1000): Question {
   return { id: `q-ask-${subject}`, subject, ...yesNo, askedAt, ...(options ? { options: [
@@ -632,7 +662,7 @@ describe('Q1a stored answers through production entry points', () => {
     for (const subject of [w.ids.unclear, 'pile-mixed']) {
       await putQuestions(w, [stored(w, subject)]);
       const fresh = await vaultOf(w);
-      expect.soft((await fresh.pilesListed()).find((p) => p.id === 'pile-mixed')?.question).toBe('waiting');
+      await listedQuestionAfterRead(w, fresh, 'waiting');
       expect.soft((await fresh.piles()).find((p) => p.id === 'pile-mixed')?.question).toBe('waiting');
     }
     await w.drive.update(w.ids.pile, { addParent: w.ids.home, removeParent: w.ids.inbox });
@@ -749,13 +779,13 @@ describe('Q1a stored answers through production entry points', () => {
   it('Q1a q1-pile-projection: exhausted persists on reload waiting wins and word edit clears both', async () => {
     await control();
     const w = await exhaust();
-    expect.soft((await (await vaultOf(w)).pilesListed()).find((p) => p.id === 'pile-mixed')?.question).toBe('exhausted');
+    await listedQuestionAfterRead(w, await vaultOf(w), 'exhausted');
     expect.soft((await (await vaultOf(w)).piles()).find((p) => p.id === 'pile-mixed')?.question).toBe('exhausted');
     // Keep the actual producer's history. A new pending member is an ordinary asking, not a lineage store.
     const sibling = await w.drive.createText(w.ids.pile, 'Waiting.md', '# A room\n\nAnother unclear room paper.\n');
     await putQuestions(w, [stored(w, sibling.id)]);
     const waiting = await vaultOf(w);
-    expect.soft((await waiting.pilesListed()).find((p) => p.id === 'pile-mixed')?.question).toBe('waiting');
+    await listedQuestionAfterRead(w, waiting, 'waiting');
     expect.soft((await waiting.piles()).find((p) => p.id === 'pile-mixed')?.question).toBe('waiting');
     await waiting.updatePile('pile-mixed', 'The room papers are for home.');
     const edited = await vaultOf(w);

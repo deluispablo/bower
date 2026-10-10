@@ -149,3 +149,215 @@ No network was used. These established references were already cited in the loca
 
 Implementation and integration; Q1c live publication/status merging; Q1b UI/focus/lines; which-note; B12 lineage;
 new corpus support, full gates and e2e. The timing retry accounting remains with B1d as described above.
+
+
+## Implementation
+
+2026-10-10, Codex implementation session after the supplied integration of B1a, C05 and smoke-request-slow.
+Status: **blocked; production changes remain uncommitted and are not ready for integration**.
+No network call, git write, test edit, fixture edit, dependency addition or UI edit was made.
+Temporary production diagnostic prints were removed before the final checks.
+
+### Stop: incompatible listing assertions
+
+The completed targeted suites expose one contract contradiction. TL-P4-44 Q10 and packet contract 6 require
+**listed as well as full** piles to derive waiting/exhausted from questions.json and open questions, with no second store.
+The committed Q1 red calls a newly constructed vault's `pilesListed()` directly and requires that projection.
+The old `home-inbox-first` test requires that same first listing to read no file whatsoever. Its fixture already has
+questions.json, but neither the constructor nor any earlier vault call has read it. Drive listing metadata does not
+contain the asking, its subject or the retained round state. The existing read cache cannot provide bytes never read.
+These expectations cannot both hold on that entry point without changing the contract or adding another source of truth.
+Implementation stopped after running the whole reds, data and runner suites, as instructed; tests were not weakened.
+
+| Contradicting assertions | Ruling / evidence |
+| --- | --- |
+| `src/data/vault/drive-vault.test.ts:2963` (`lists the piles without reading a file, and concurrent digests of one file ask Drive once`) | Requires zero text reads on the first listed-pile call; Q10 requires the stored projection on that call. `tmp-logs/q1-final-data.log`. |
+| `src/data/vault/drive-vault.test.ts:2964` (same test) | Also forbids reading the same required bytes through readBytes; changing the transport would not resolve it. |
+| `runner/test/q1-continuation.test.ts:635` (`q1-pile-projection: waiting on a member or pile appears on listed and full piles and clears on leaving`) | The Q10 positive assertion on a fresh vault, for both member and pile subjects, passes with the stored read. `tmp-logs/q1-final-reds.log`. |
+
+The other failing tests listed below are **unfinished implementation/regression work**, not additional claimed
+contract contradictions. In particular, the old prompt fingerprints can be preserved on paths with fewer than two
+script candidates; they are not a reason to change a golden. The request-completion failure has not been ruled a
+contradiction: today's generic request handler is absent from modelDecisions, so that red remains for diagnosis.
+
+### Work left in place
+
+- One shared typed answer validator and journal value reader; boolean plus option/text objects, asking identity,
+  later-record selection, trim/length/control checks, and inbox-only object answers.
+- QuestionOption has only stored `file-to` folder ids. Model options select existing folder ids; labels cannot retarget
+  consent. Report rows explicitly omit stored actions and internal question fields.
+- QuestionRound history is additive in questions.json, using the subject/hash and pile words. New askings and history
+  are written through the existing manifest effect, with its read modifiedTime and recovery, not a separate writer.
+- Pile projection uses the existing vault read cache, journal and shared subject policy. Readiness/upload fields remain
+  intact. Hash metadata for a reupload is requested with checksums when the listing omitted it.
+- Continuation still uses answerRequestId, the existing /process admission, subject capture, durable Worker batching,
+  quota and manifest. No scheduler, lineage, member freeze, option kind or separate round counter was added.
+- The provider aggregates validation retries into the existing RunTiming.model field; timing.ts and its ledger are untouched.
+
+**Known remaining implementation gaps:** the stored option is resolved by the planner but the provider's whole-pile
+`held` decision still prevents its effect in the duplicate-label/renamed-folder red. The generic independent request
+in the clear-work red is not completed. Additional first-listing reads break old error isolation, latency, accounting
+and source-session tests. The added candidate input is not yet restricted to the 2–4 applicable candidate path, so old
+C04 prompt/ID-normalization fixtures regress. The shared policy must reuse EMPTY_MD5 instead of its literal, and its
+control-character regex needs the repository's lint-compatible form. These were left in place on the required stop.
+
+### Research (offline)
+
+Source references were read in the assigned prep and existing production modules; no remote documentation was fetched.
+The existing design follows [TypeScript discriminated unions](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions)
+and the [tolerant reader](https://martinfowler.com/bliki/TolerantReader.html): add optional fields and tagged values,
+preserve legacy boolean/text meaning and explicitly project public report rows. Strict model replies reuse the existing
+[Zod strict-object/refinement](https://zod.dev/api#refinements) validation path.
+Continuation reuses the existing [Idempotency-Key pattern](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/):
+one request id derived from question id plus askedAt, recovered by the current Worker/run lifecycle.
+References are citations carried by the local implementation and prep, not claims of current online verification.
+
+### Removed lines and tests
+
+removed: runner/src/claude.ts: 11 lines; boolean-only answer reading and last-call-only usage assignment replaced.
+removed: src/data/answer-loop.ts: 3 lines; boolean-only signature/import replaced by the additive answer boundary.
+removed: src/data/contracts/journal-record.ts: 1 line; validator widened for optional asking identity and answer value.
+removed: src/data/contracts/questions.ts: 5 lines; id-only closure and report rest-spread replaced with explicit policy.
+removed: src/data/contracts/types.ts: 0 lines; additive fields only.
+removed: src/data/demo/world.ts: 2 lines; answer map/signature now uses the shared answer type.
+removed: src/data/sources.ts: 1 line; VaultSource.answer signature widened.
+removed: src/data/spine/scripted.ts: 28 lines; boolean-only checks and asking-only JSON replaced in the existing planner.
+removed: src/data/vault/drive-vault.ts: 18 lines; id-only answer filtering replaced with the shared asking/projection policy.
+removed: src/data/vault/layout.ts: 3 lines; stored questions validator widened additively.
+tests changed: none
+
+### Compatibility row drafts (not accepted)
+
+| Boundary / files | Old reader / old meaning | New shape and validation evidence | Draft disposition |
+| --- | --- | --- | --- |
+| `src/data/contracts/types.ts`, `questions.ts` | Existing yes/no questions and subject forms still read; report rows stay their old public shape. | Optional options/words, one file-to action; explicit report projection; P2 control in q1-legacy-question-answer-status passes. | Review pending; no contracts commit. |
+| `src/data/contracts/journal-record.ts` | Old text yes/no reads as boolean; new boolean writes also carry legacy text so old readers retain their meaning. | Optional askedAt and answer, strict object values; old P2 journal fixture and asking/later-answer reds pass. | Review pending. |
+| `src/data/vault/layout.ts` (stored questions boundary) | `{v:1,questions}` still reads unchanged; no mandatory new field. | Optional rounds retained in that same file; options checked for known kind and folder-id shape; P2 fixtures pass. | Review pending; listing contract conflict remains. |
+| Manifest/checkpoint/report contracts | No format/version change or fixture rewrite. Existing guarded content write and move effects remain in use. | New stored JSON passes the actual manifest/checkpoint/report readers; report options do not leak actions. | Draft unchanged reader row; no edits in these contracts. |
+| `src/data/sources.ts`, answer-loop | Boolean callers remain valid; current request-id and start options are unchanged. | Typed option/text values accepted through the same answer entry point. | Review pending. |
+| `src/features/` | No feature or screen file changed; yes/no callers compile with the additive port. | App tsc passes; Q1b owns option/text UI and visible projection. | No feature compatibility change; draft unchanged row. |
+
+### Validation
+
+All output is under tmp-logs. Final results and every failing test location are appended below once the runs finish.
+`pnpm check` and e2e were not run after the contract stop; there is no green mark or integration claim.
+App, node and runner tsc were run; ESLint was run on every touched production TS file.
+
+
+Final checks (no tests changed):
+
+| Command / final log | Result |
+| --- | --- |
+| `pnpm -C runner exec vitest run test/q1-continuation.test.ts --maxWorkers=2`, `tmp-logs/q1-final-reds.log` | 26 passed, 2 failed of 28. |
+| `pnpm exec vitest run src/data --maxWorkers=2`, `tmp-logs/q1-final-data.log` | 4,130 passed, 11 failed of 4,141; 72 green files, 5 failed. |
+| `pnpm -C runner exec vitest run --maxWorkers=2`, `tmp-logs/q1-final-runner.log` | 571 passed, 13 failed of 584; 39 green files, 6 failed. This includes the corpus suite. |
+| `pnpm exec tsc -p tsconfig.app.json`, `tmp-logs/q1-final-tsc-app.log` | Pass. |
+| `pnpm exec tsc -p tsconfig.node.json`, `tmp-logs/q1-final-tsc-node.log` | Pass. |
+| `pnpm -C runner exec tsc --noEmit`, `tmp-logs/q1-final-tsc-runner.log` | Pass. |
+| ESLint on the nine touched app files, `tmp-logs/q1-final-eslint-app.log` | Fail: `src/data/contracts/questions.ts:32`, no-control-regex. |
+| ESLint on runner/src/claude.ts, `tmp-logs/q1-final-eslint-runner.log` | Pass. |
+| `git diff --check` (read-only) | Pass. |
+| `pnpm check`; e2e app/capabilities demo/fake | Not run after the contract stop. No screen changes. |
+
+### Every remaining test failure (final runs)
+
+The two Q1 reds below remain assertion failures, not test-loading failures. All other Q1 cases are green.
+The full suites were completed before delivery; the list distinguishes regressions from the one conflict above.
+
+| Suite | Test | Failure location | First failure |
+| --- | --- | --- | --- |
+| reds | `test/q1-continuation.test.ts > Q1a stored answers through production entry points > Q1a q1-clear-work-with-waiting-item: an option asking leaves its item and files clear work` | `runner/test/q1-continuation.test.ts:248` | AssertionError: independent request is completed: expected true to be false // Object.is equality |
+| reds | `test/q1-continuation.test.ts > Q1a stored answers through production entry points > Q1a q1-options-exact-action: consent resolves stored folder id despite duplicate labels and rename` | `runner/test/q1-continuation.test.ts:263` | AssertionError: expected [ 'f14' ] to deeply equal [ 'f8' ] |
+| data | `src/data/fake/fake-worker.test.ts > report save failure cannot publish done or repeat effects on the B path > journal changes take the recoverable path > leaves unreadable lines, differing copies and lines in two places where they are, logs once and goes on` | `src/data/fake/fake-worker.test.ts:1721` | BowerError: Bower could not read your changes. |
+| data | `src/data/fake/fake-worker.test.ts > report save failure cannot publish done or repeat effects on the B path > journal changes take the recoverable path > replaces an unreadable questions.json when an answer needs it, recording the bytes it replaced` | `src/data/fake/fake-worker.test.ts:1750` | BowerError: Bower could not read its latest update. Try again. |
+| data | `src/data/fake/fake-worker.test.ts > report save failure cannot publish done or repeat effects on the B path > Bower's own files take the recoverable path > unreadable runner files never send a run down the legacy path` | `src/data/fake/fake-worker.test.ts:1937` | AssertionError: text of .bower/questions.json: expected BowerError: You're offline. Try again whe… { …(2) } to match object { Object (message) } |
+| data | `src/data/fake/fake-worker.test.ts > report save failure cannot publish done or repeat effects on the B path > Bower's own files take the recoverable path > a missing journal plans as an empty one on the recoverable path` | `src/data/fake/fake-worker.test.ts:2034` | AssertionError: text, all: expected BowerError: You're offline. Try again whe… { …(2) } to match object { Object (message) } |
+| data | `src/data/contracts/hashes.test.ts > one digest module serves app, runner and Worker > no file outside hashes.ts calls a hash primitive or spells an empty-file constant` | `src/data/contracts/hashes.test.ts:44` | AssertionError: expected [ 'src/data/contracts/questions.ts' ] to deeply equal [] |
+| data | `src/data/live/home-cache.test.ts > Home on the latency fake > Home is complete within 35% of the call minimum on the latency fake` | `src/data/live/home-cache.test.ts:103` | AssertionError: expected 1349 to be less than 1200 |
+| data | `src/data/live/live.test.ts > session and folder isolation > reused sources isolate account and folder changes (queued admissions cannot block or dispatch in B, flushJournal)` | `src/data/live/live.test.ts:418` | AssertionError: expected "process" to be called 1 times, but got 0 times |
+| data | `src/data/live/live.test.ts > session and folder isolation > reused sources isolate account and folder changes (queued admissions cannot block or dispatch in B, process)` | `src/data/live/live.test.ts:418` | AssertionError: expected "process" to be called 2 times, but got 1 times |
+| data | `src/data/vault/drive-vault.test.ts > a set-aside pile shows its reason in the inbox > your changes are read once per listing, and one that cannot be read affects only its pile` | `src/data/vault/drive-vault.test.ts:2017` | BowerError: You're offline. Try again when you're back. |
+| data | `src/data/vault/drive-vault.test.ts > a set-aside pile shows its reason in the inbox > offline, a declared pile logs one error per listing` | `src/data/vault/drive-vault.test.ts:2269` | BowerError: You're offline. Try again when you're back. |
+| data | `src/data/vault/drive-vault.test.ts > the inbox from the listing alone (home-inbox-first) > lists the piles without reading a file, and concurrent digests of one file ask Drive once` | `src/data/vault/drive-vault.test.ts:2963` | AssertionError: expected "readText" to not be called at all, but actually been called 1 times |
+| runner | `test/c05-bounded-reads.test.ts > C05 bounded reads: golden: 50 archived requests and 25 kept runs cost no historical media` | `runner/test/c05-bounded-reads.test.ts:262` | AssertionError: expected 21 to be 20 // Object.is equality |
+| runner | `test/c05-bounded-reads.test.ts > C05 bounded reads: pending: a clash moves by run id and retries only its bound evidence` | `runner/test/c05-bounded-reads.test.ts:262` | AssertionError: expected 21 to be 20 // Object.is equality |
+| runner | `test/drive-calls-golden.test.ts > the C04 run makes the golden number of Drive calls per step > the C04 run makes the golden number of Drive calls per step` | `runner/test/drive-calls-golden.test.ts:25` | AssertionError: expected 89 to be 88 // Object.is equality |
+| runner | `test/drive-calls-golden.test.ts > the C04 run past 20 earlier runs (retention-never-wired, round 2) > with 25 earlier runs a run makes 99 Drive calls` | `runner/test/drive-calls-golden.test.ts:80` | AssertionError: expected 89 to be 88 // Object.is equality |
+| runner | `test/model-input-fingerprint.test.ts > model input fingerprint > the model input on the C04 fixture equals its golden copy` | `runner/test/model-input-fingerprint.test.ts:81` | AssertionError: expected 'You plan one Bower tidy-up. You have …' to be 'You plan one Bower tidy-up. You have …' // Object.is equality |
+| runner | `test/model-input-fingerprint.test.ts > model input fingerprint > the raw model input on the C04 fixture equals its golden copy` | `runner/test/model-input-fingerprint.test.ts:92` | AssertionError: expected 'You plan one Bower tidy-up. You have …' to be 'You plan one Bower tidy-up. You have …' // Object.is equality |
+| runner | `test/model-input-fingerprint.test.ts > model input fingerprint > the same case with other ids has the same fingerprint` | `runner/test/model-input-fingerprint.test.ts:174` | AssertionError: expected '580611a48577' to be '1e1d2c8f3615' // Object.is equality |
+| runner | `test/model-input-fingerprint.test.ts > model input fingerprint > two fresh fake folders on the same case give the same input fingerprint through main` | `runner/test/model-input-fingerprint.test.ts:267` | AssertionError: expected 'You plan one Bower tidy-up. You have …' to be 'You plan one Bower tidy-up. You have …' // Object.is equality |
+| runner | `test/q1-continuation.test.ts > Q1a stored answers through production entry points > Q1a q1-clear-work-with-waiting-item: an option asking leaves its item and files clear work` | `runner/test/q1-continuation.test.ts:248` | AssertionError: independent request is completed: expected true to be false // Object.is equality |
+| runner | `test/q1-continuation.test.ts > Q1a stored answers through production entry points > Q1a q1-options-exact-action: consent resolves stored folder id despite duplicate labels and rename` | `runner/test/q1-continuation.test.ts:263` | AssertionError: expected [ 'f14' ] to deeply equal [ 'f8' ] |
+| runner | `test/reads-report.test.ts > the runner plan reads and report > plan reads finish under the budget with modelled Drive latency` | `runner/test/reads-report.test.ts:40` | AssertionError: expected 2730 to be less than 2675 |
+| runner | `test/reads-report.test.ts > the runner plan reads and report > with 25 earlier runs plan reads stay within their measured maintenance delta` | `runner/test/reads-report.test.ts:47` | AssertionError: expected 3180 to be less than or equal to 3030 |
+| runner | `test/timing-counts.test.ts > timing counts > the timing line counts calls and bytes per phase and names the region` | `runner/test/timing-counts.test.ts:13` | AssertionError: expected 89 to be 88 // Object.is equality |
+
+
+### Files retained uncommitted
+
+All ten production files below remain in place, alongside this appended notes file. No test or shared harness record changed.
+
+- runner/src/claude.ts
+- src/data/answer-loop.ts
+- src/data/contracts/journal-record.ts
+- src/data/contracts/questions.ts
+- src/data/contracts/types.ts
+- src/data/demo/world.ts
+- src/data/sources.ts
+- src/data/spine/scripted.ts
+- src/data/vault/drive-vault.ts
+- src/data/vault/layout.ts
+
+Logs and generated, made-up test event files remain in tmp-logs/. The coordinator owns any future commit or cleanup.
+
+## Red repair 1
+
+2026-10-10, Codex red-owning session; TL-P4-29, TL-P4-44 addendum 3, TL-P4-51 sweep.
+Repair complete; the corrected reds fail on the uncommitted implementation, ready for its owning session.
+The local DECISIONS search has no TL-P4-44 addendum 3 entry. Applied the supplied lead ruling (a),
+2026-10-10: listing reads no file; Home's existing questions read populates the vault's cached questions;
+the vault subscription re-emits so listed and full piles project waiting/exhausted after that read.
+This supersedes only the first-call marker timing in the Implementation stop section above.
+
+tests changed: runner/test/q1-continuation.test.ts:665: TL-P4-44 addendum 3: formerly :635; member and pile waiting markers are observed on listed and full piles through the subscription after questions(), with a zero-read first listing.
+tests changed: runner/test/q1-continuation.test.ts:782: TL-P4-44 addendum 3: formerly :752; reloaded exhaustion is observed through the same subscription after questions(), with a zero-read first listing.
+tests changed: runner/test/q1-continuation.test.ts:788: TL-P4-44 addendum 3: formerly :758; waiting over retained exhaustion is observed through the same subscription after questions(), with a zero-read first listing.
+
+The shared helper subscribes before questions(), captures listed/full projections from the notification,
+and checks that at least one notification supplies both expected markers. It never waits on a real timer.
+It also retains the listed-marker assertion after the read. Existing full-pile, leaving, word-reset,
+precedence, upload and readiness assertions are unchanged.
+The repository-wide test grep for pilesListed found no other first-listing waiting/exhausted pin.
+The readiness test already reads full piles before its listed assertion and needs no timing repair.
+The edited-pile first listing asserts absence, not a waiting/exhausted marker, and remains unchanged.
+src/data/vault/drive-vault.test.ts, including :2963–2964, is entirely unchanged (empty git diff).
+No production file was edited, reverted or formatted; no network or git write was used.
+Only this test file and this notes section were edited. The coordinator owns commits.
+Offline research reused the local vault subscription and existing fixture entry points;
+the established references in Research above remain applicable, with no new online verification.
+
+### Validation
+
+| Command | Result / log |
+| --- | --- |
+| `pnpm -C runner exec vitest run test/q1-continuation.test.ts --maxWorkers=2` | 24 pass, 4 fail; `tmp-logs/q1a-red-repair-1-tests.log`. |
+| `pnpm exec vitest run src/data/vault/drive-vault.test.ts --maxWorkers=2` | Preservation sweep: 226 pass, 3 fail; `tmp-logs/q1a-red-repair-1-drive-vault.log`. |
+| `pnpm -C runner exec tsc --noEmit -p tsconfig.json` | Pass, including the touched test; `tmp-logs/q1a-red-repair-1-tsc.log`. |
+| `pnpm exec eslint runner/test/q1-continuation.test.ts` | Pass; `tmp-logs/q1a-red-repair-1-eslint.log`. |
+| `git diff --check` | Pass; read-only. |
+
+Both test files ran to completion. Every failing test is listed below; none was changed to hide a failure.
+
+| Test / location | Failure |
+| --- | --- |
+| `q1-clear-work-with-waiting-item`, runner/test/q1-continuation.test.ts:278 | Existing unfinished implementation: independent request remains pending. |
+| `q1-options-exact-action`, runner/test/q1-continuation.test.ts:293 | Existing unfinished implementation: parents are f14 rather than stored destination f8. |
+| `q1-pile-projection: waiting on a member or pile...`, runner/test/q1-continuation.test.ts:665 | For both subjects, fresh listing already has waiting and reads questions; questions() emits no subscription update. Helper failures :112, :113, :131. |
+| `q1-pile-projection: exhausted persists...`, runner/test/q1-continuation.test.ts:782, :788 | Fresh listings already have exhausted/waiting and read files; questions() emits no update. Helper failures :112, :113, :131. |
+| `your changes are read once per listing...`, src/data/vault/drive-vault.test.ts:2017 | Existing offline BowerError escapes. |
+| `offline, a declared pile logs one error per listing`, src/data/vault/drive-vault.test.ts:2269 | Existing offline BowerError escapes. |
+| `home-inbox-first`, src/data/vault/drive-vault.test.ts:2963 | Preserved assertion fails: first listing performs one readText. :2964 is unchanged. |
+
+No remaining test-contract contradiction was found in the listing-marker sweep; these are production failures.
+Production repair, full gates, e2e and integration remain outside this test-only repair session.
