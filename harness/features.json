@@ -6388,8 +6388,10 @@
       "Each kind queues its engine action.",
       "A reaction starts within 0.1 s; during a flight only the latest plays on landing."
     ],
-    "verify": "",
-    "note": "TL-P4-21 ruling 4 (24a, Opus, escalated); spec d-v2-24; bower-map.md. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-d-v2-24a-packet.md."
+    "verify": "pnpm exec vitest run src/bird -t \"apply has exactly one call site|settle begin clears every engine-toggled animated CSS class|a real tap on loaded Home goes through|a pose change during the moves-off settle waits until release|during moves-off gaze moves only the iris|turns first, then moves-off reaches x-scale|Settings draws the closing settle|a reaction starts within 0.1 s and cuts the running one|with moves off only the settle runs|a layer keeps its home position across moves-off release|rule carries the paper from the hop start\" && bash scripts/e2e-both.sh e2e/bird-engine.spec.ts -g \"a tap goes through react\"",
+    "note": "TL-P4-21 ruling 4 (24a, Opus, escalated); spec d-v2-24; bower-map.md. Contract sign-off trial (TL-P4-20) and designer sign-off before dispatch. Packet 2026-10-09-d-v2-24a-packet.md.",
+    "design": "verified",
+    "review": "P4-79 PASS (round 4); rule fix 4209d72f gated, designer verified"
   },
   {
     "id": "c4-undo-compensate",
