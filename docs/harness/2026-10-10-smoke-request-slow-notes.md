@@ -1037,3 +1037,42 @@ left out: full-check/e2e completion (sandbox server-listen EPERM); commits and i
 tests changed: runner/test/c05-person-notes.test.ts: red repairs 1-5 per the lead's smoke-request-slow rulings (pending location, own-run read, hand restores are a v1 limit, archive move after pending); per-assertion lines above.
 tests changed: runner/test/corpus-driver.test.ts: red round 5 (TL-P4-51): driver replay is a redispatch of the same run, never a hand restore.
 tests changed: runner/test/corpus-run.ts: red round 5 (TL-P4-51): addRequest({kind:"replay"}) no longer copies archived JSON into changes/.
+
+## Fix round 2 red
+
+- Authority: owner assignment, TL-P4-29, BLOCK 1 in
+  `docs/harness/2026-10-10-codex-smoke-request-slow-adversarial-2.md`.
+- Exact red: `C05 bounded reads: fix 2: a waiting retry whose pending relocation failed completes once`.
+- Positive control: `C05 bounded reads: fix 2 control: a waiting retry whose pending relocation lands completes once`.
+- Pre-append check: `C05 bounded reads: fix 2: a waiting retry interrupted after its pointer and before its append appends once`.
+- HEAD: `7877a456c5610806d28647bcc0757c3f4ba6977e`. No network, production edits or git writes.
+  All three checks use runner main via runOnDrive, FakeDrive transport and injected time.
+- A clashes after manifest publication: fresh personal bytes remain intact, its edit is rejected with
+  conflict, no completion is recorded, and unchanged request bytes physically land in pending/A.
+  B publishes bowerRun=B before its append. The red throws before the pending/B PATCH lands;
+  B's append and completion succeed, the relocation and dependent archive remain unapplied,
+  and the unchanged request remains exactly in pending/A with bowerRun=B. No archive restore occurs.
+- Confirmed HEAD failure: C records a second completion with unchanged wording. With different
+  wording it also adds a second personal Timeline line, append effect and updated report row.
+  All fixture assertions before those independent soft assertions pass. Log below captures both variants.
+- Positive control: B's pending relocation and archive land; C records no second completion,
+  append, effect or update for either wording. All five existing tests also pass unchanged.
+- Pre-append interruption: B's pointer lands before the note upload is refused, with no completion
+  recorded. The dependent pending relocation is not attempted; the request remains in pending/A
+  with bowerRun=B and exact original bytes. C appends exactly one bound-source line, records one
+  completion and one update, and archives the original bytes. Both wording variants pass at HEAD.
+  Exact personal bytes plus a single line (original or freshly offered wording) and one append effect
+  verify the requested once-only contract without adding a wording-retention requirement.
+- Final command: `pnpm -C runner exec vitest run test/c05-bounded-reads.test.ts --maxWorkers=2`.
+  Result: 1 expected failing red, 7 passing tests. Log: `tmp-logs/smoke-request-slow-fix2-red.log`.
+- Touched-file ESLint and runner typecheck pass; logs:
+  `tmp-logs/smoke-request-slow-fix2-lint.log`, `tmp-logs/smoke-request-slow-fix2-typecheck.log`.
+  Read-only git diff --check passes. Full check/e2e and production repair are outside this red-only task.
+- Research: no fetching under the owner's no-network instruction. Reused the existing runner-main
+  harness, before-landing transport interruption, RunRecords parsing and checkpoint-chain verification.
+  Packet sources: https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list and
+  https://developers.google.com/workspace/drive/api/guides/search-files. Existing pointers select evidence;
+  no second store or recovery mechanism is introduced.
+- Notes are the explicitly requested exception to the test-only edit scope. Commits are coordinator-owned.
+
+tests changed: runner/test/c05-bounded-reads.test.ts: additive fix-round-2 pending-relocation red, landing control and pre-append interruption check through main; every existing assertion and bound is unchanged.
