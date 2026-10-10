@@ -810,6 +810,68 @@ it('B1c fix 2: unchanged legacy MOC without Drive ownership is discovered migrat
   folded(second, 'Garden', 2);
 });
 
+it('B1c fix 3: legacy MOC ownership comes from the index prefix with zero extra reads', async () => {
+  const originalMaintain = maintenance.withMaintenance;
+  for (const own of [false, true]) {
+    const original = legacyMoc(own);
+    const { [legacyPath]: omitted, ...siblings } = legacyFolder(original);
+    expect(omitted).toBe(original);
+    const base = await setup(siblings);
+    const garden = (await base.drive.listAll(base.root)).find((f) => f.folder
+      && base.drive.pathOf(f.id, base.root) === 'Resources/Garden');
+    expect(garden).toBeDefined();
+    const legacy = await base.drive.createText(garden?.id ?? '', 'Garden.md', original);
+    expect(legacy.appProperties?.by, 'neither control has Drive ownership').toBeUndefined();
+    const { state } = await seedState(base, '# Index\nOld B1a projection.\n');
+    expect(state.files[legacy.id]?.version).toBe(legacy.modifiedTime);
+    expect(Object.values(state.files).every((f) => Object.keys(f).sort().join(',')
+      === 'coverage,path,summary,version'), 'the upgrade starts with the exact B1a state shape').toBe(true);
+    // Losing only the projection invokes the real planning index's ordinary prefix reads.
+    // The saved versions stay unchanged; ownership is never supplied by a fixture marker.
+    const index = (await base.drive.listAll(base.root)).find((f) => base.drive.pathOf(f.id, base.root) === SYSTEM.index);
+    expect(index).toBeDefined();
+    await base.drive.trash(index?.id ?? '');
+    const reads: Array<{ id: string; range: string | null; maintain: boolean }> = [];
+    let maintaining = false;
+    const planned = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (...args) => {
+      maintaining = true;
+      return originalMaintain(...args);
+    });
+    const sent: Sent[] = [];
+    const result = await runOnDrive(base.c, base.drive, base.root, { admission: base.admission, pacing,
+      claude: replySequence([empty]),
+      around: (fetch) => observe(base.drive, base.root, sent)(async (input, init) => {
+        const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+        const id = /^\/drive\/v3\/files\/([^/]+)$/.exec(url.pathname)?.[1];
+        if ((init?.method ?? 'GET') === 'GET' && url.searchParams.get('alt') === 'media'
+          && id && id in state.files) reads.push({ id, range: new Headers(init?.headers).get('range'), maintain: maintaining });
+        return fetch(input, init);
+      }),
+    }, 1);
+    planned.mockRestore();
+    expect(result.code).toBe(0);
+    const prefixes = reads.filter((r) => r.range !== null);
+    expect.soft(prefixes.map((r) => r.id).sort(), 'each indexed version uses its one ordinary prefix read')
+      .toEqual(Object.keys(state.files).sort());
+    expect.soft(prefixes.every((r) => r.range === 'bytes=0-4095' && !r.maintain),
+      'ownership uses only the 4096-byte planning prefix').toBe(true);
+    expect.soft(reads.filter((r) => r.range === null), 'only the MOC maintain migrates is read fully')
+      .toEqual(own ? [{ id: legacy.id, range: null, maintain: true }] : []);
+    expect.soft(result.after[SYSTEM.retrieval], 'no separate ownership-check pass is stored').not.toContain('mocChecked');
+    if (own) {
+      expectLegacyMigrated(result);
+      expect(restoredLegacyBytes(result.after[legacyPath] ?? '')).toBe(original);
+      folded(result, 'Garden', 2);
+      expect(sent.filter((s) => s.path === legacyPath)).toHaveLength(1);
+    } else {
+      expect(result.after[legacyPath], 'the personal MOC positive control remains untouched').toBe(original);
+      expect(sent.filter((s) => s.path === legacyPath)).toEqual([]);
+      expect(result.after[SYSTEM.index]).toContain('[[Seed]]');
+      expect(result.after[SYSTEM.index]).not.toContain('→ [[Garden]]');
+    }
+  }
+});
+
 it.each(['instructions', 'all'] as const)(
   'B1c fix 2: warm %s planning preserves calls without Inbox or declaration reads for the index',
   async (scope) => {
@@ -850,10 +912,16 @@ it.each(['instructions', 'all'] as const)(
       ]);
       return fetch(input, init);
     };
-    // Positive control: the pre-addendum main path has no planning-index step.
+    // Positive control: listAll's shared traversal, without building a planning index.
     // Everything else, including scope aiming and the real provider, still runs.
     const baseline = await warmFixture();
-    const planning = vi.spyOn(maintenance, 'planningIndex').mockResolvedValue(undefined);
+    const listingCalls: typeof requests = [];
+    const planning = vi.spyOn(maintenance, 'planningIndex').mockImplementation(async (drive, root) => {
+      const from = requests.length;
+      await drive.planReads().listAll(root, { readAhead: false });
+      listingCalls.push(...requests.slice(from));
+      return undefined;
+    });
     const before = await runOnDrive(baseline.base.c, baseline.base.drive, baseline.base.root, {
       admission: { ...baseline.base.admission, scope }, pacing, around,
     }, 1);
@@ -879,8 +947,10 @@ it.each(['instructions', 'all'] as const)(
     }, 1);
     expect(result.code).toBe(0);
     expect(planning).toHaveBeenCalledOnce();
-    expect.soft(indexCalls, 'index discovery is one shared listing with zero unrelated media reads')
-      .toEqual([['GET', '/drive/v3/files', null]]);
+    expect.soft(indexCalls, 'index discovery reuses the positive control listing traversal with zero media reads')
+      .toEqual(listingCalls);
+    expect.soft(indexCalls.every(([method, path, alt]) => method === 'GET' && path === '/drive/v3/files' && alt === null),
+      'the planning index never reads an Inbox pile note or declaration').toBe(true);
     expect.soft(callsAtPlan, 'exact pre-addendum warm calls; all reads its Inbox only through the provider')
       .toEqual([expected]);
     expect(result.after[`Inbox/Waiting evidence/${PILE_NOTE}`]).toBe('Alex keeps this for a later press.\n');

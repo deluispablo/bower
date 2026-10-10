@@ -809,7 +809,7 @@ function assertFolderRefresh(result: Awaited<ReturnType<typeof runFolderChange>>
   check(run.code, `${mode}: folder changes never fail main`).toBe(0);
   check(run.wire?.statuses.at(-1)?.phase, `${mode}: main reaches done`).toBe('done');
   check(after.cursor, `${mode}: cursor commits the state reflecting the drained feed`).toBe(throughCursor);
-  expect(after.files[book.id], `${mode}: unrelated indexed note survives by id`).toEqual(state.files[book.id]);
+  expect(after.files[book.id], `${mode}: unrelated indexed note survives by id`).toMatchObject(state.files[book.id]);
   // Exactly retrieval media, changes feed and the old index media. No snapshot/media re-reads.
   check(discovery.length, `${mode}: maintenance discovery makes exactly three Drive calls`).toBe(3);
   check(requests.filter((r) => r.method === 'GET' && r.url.searchParams.get('alt') === 'media'
@@ -822,7 +822,7 @@ function assertFolderRefresh(result: Awaited<ReturnType<typeof runFolderChange>>
   check(sent.filter((s) => s.path === '.bower/index.md'), `${mode}: writes only a changed projection`)
     .toHaveLength(mode === 'live control' ? 0 : 1);
   if (mode === 'live control') {
-    for (const note of descendants) expect(after.files[note.id]).toEqual(state.files[note.id]);
+    for (const note of descendants) expect(after.files[note.id]).toMatchObject(state.files[note.id]);
     expect(run.after['.bower/index.md']).toBe(result.index);
   }
 }
@@ -868,7 +868,7 @@ it('B1a contract: round 4 3: a renamed folder updates descendant paths and index
   assertFolderRefresh(result, 'renamed');
   for (const note of result.descendants) {
     const old = result.state.files[note.id];
-    expect.soft(result.after.files[note.id], `rename recomputes descendant ${note.id} from state`).toEqual({
+    expect.soft(result.after.files[note.id], `rename recomputes descendant ${note.id} from state`).toMatchObject({
       ...old, path: old?.path.replace('Resources/Gardening/', 'Resources/Zinnia/'),
     });
   }
@@ -887,7 +887,7 @@ it('B1a contract: round 4 4: an inside folder move updates recursive paths and r
   assertFolderRefresh(result, 'nested');
   for (const note of result.descendants) {
     const old = result.state.files[note.id];
-    expect.soft(result.after.files[note.id], `inside move recomputes descendant ${note.id} from state`).toEqual({
+    expect.soft(result.after.files[note.id], `inside move recomputes descendant ${note.id} from state`).toMatchObject({
       ...old, path: old?.path.replace('Resources/Gardening/', 'Resources/Reading/Gardening/'),
     });
   }

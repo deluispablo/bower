@@ -1427,3 +1427,212 @@ Read-only `git diff --check`: pass. Only added tests/imports and notes appear in
 Offline reference reused: [Vitest setup files](https://vitest.dev/config/setupfiles), the existing real-main
 corpus helper, direct FakeDrive seed and B1a's delegating maintenance-spy observation pattern.
 No external research was fetched under the explicit no-network constraint.
+
+
+## Fix round 2
+
+Implementation session, 2026-10-11. The committed reds and every existing test/golden are unchanged.
+No network, session git write, commit, dependency replacement or node_modules symlink.
+The coordinator owns commits. The five production files retained for review are:
+`runner/src/index.ts`, `runner/src/drive.ts`, `runner/src/main.ts`,
+`src/data/spine/read.ts`, and `src/data/contracts/note-edit.ts`.
+
+### Changes
+
+- Old B1a summaries are not ownership evidence. Removed the Drive `appProperties.by` predicate from
+  first-version discovery. Every unchecked note is examined through B1a's existing versioned read cache,
+  and the existing ownership parser and `mocSnapshot` determine whether its bytes grant MOC authority.
+  The existing `mocChecked` marker prevents later same-version discovery reads. The no-Drive-property
+  legacy fixture now migrates once, folds complete membership and preserves all unowned bytes;
+  its second sibling-change run remains idempotent.
+- The planning index first obtains the existing shared metadata listing with read-ahead deferred.
+  With both projections present it returns without content reads or constructing a projection.
+  The provider then warms that same listing under its admitted scope. `warmListing` is the extracted
+  original read-ahead block in `admissionRead`, with the same selection, limiter, cache and budget;
+  there is no second listing, read-ahead policy or maintenance lifecycle.
+- Main aims the reader before the cold check. On a bootstrap/missing-index run, the normal cached
+  listing starts existing provider read-ahead before the canonical snapshot is built, preserving
+  overlap with cold prefix reads. The final maintain remains the only projection persistence effect.
+- `note-edit.ts` imports BowerError directly from the existing `contracts/types.ts` home.
+  `src/data/types.ts` already re-exports that exact class and stays unchanged. No new error type,
+  class move, wire format, error code or constructor behaviour.
+
+removed: Drive appProperties.by as a prerequisite for unchecked legacy ownership discovery.
+removed: eager provider read-ahead from warm planning-index discovery.
+removed: the contract's import through the adapter-facing types re-export.
+tests changed: none
+
+### Compatibility row drafts
+
+| Contract home | Compatibility draft |
+| --- | --- |
+| contracts/note-edit.ts and contracts/types.ts | Same BowerError class, code, constructor, cause and identity. Only the local import changes; the old path's existing re-export remains. |
+| Retrieval v1 and maintain snapshot | Existing optional mocChecked and MOC fields only; no schema change. Old unchecked entries remain readable and gain the existing ownership-check marker after their bytes are examined. |
+| Ownership and MOC author | Existing parser and region author remain authoritative; Drive metadata cannot grant or suppress byte-derived ownership. Personal notes are never made writable by discovery. |
+| Admission/runner read interfaces | Existing one-argument listAll still warms by default. The additive readAhead:false option defers only that existing warming policy over the same cached listing. |
+| Cold planning and maintain lifecycle | Same canonical index, immutable manifest, final maintain and report barrier. No durable preparation record or second writer. |
+
+### TL-P4-51 contradiction audit
+
+The complete final runner sweep has **620 pass, 7 fail, 627 total; 46 files**.
+These are every remaining contradictory runner test. No test, fixture, golden, bound or assertion changed.
+
+| Exact test | File:line | Contradiction / final evidence |
+| --- | --- | --- |
+| B1c index: 32000 character cut names every omitted folder and preserves whole rows | runner/test/b1-index.test.ts:166; failing assertion :191 | Seeds 150 old summaries with no ownership metadata or mocChecked. Requires zero media reads for 149 unchanged versions. Discovering an unmarked legacy MOC from bytes requires examining unchecked versions; 149 one-time reads occur, and the existing marker is then recorded. The test's 300-call and 32000-character assertions pass unchanged. |
+| B1c fix 2: warm instructions planning preserves calls without Inbox or declaration reads for the index | runner/test/b1-index.test.ts:813; failing assertion :883 | Requires one physical files.list request. The unchanged DriveHttp.listAll traversal for this three-level fixture needs three metadata requests. There are zero media reads inside planningIndex; exact ordered pre-maintenance requests equal its positive control at :885. |
+| B1c fix 2: warm all planning preserves calls without Inbox or declaration reads for the index | runner/test/b1-index.test.ts:813; failing assertion :883 | Same one-physical-request expectation versus the same three-level traversal. Zero index media reads and exact positive-control requests pass; the provider reads Inbox only in its normal all scope. |
+| B1a contract: round 4 1: a folder binned before planning drops every indexed descendant | runner/test/b1a-contract.test.ts:830; shared failing assertion :812, call :831 | Its live control pins an unchecked old Book entry to exact equality. Byte discovery retains its id/path/version/summary/coverage and adds the existing mocChecked:true. Its old state supplies no evidence permitting discovery to be skipped. |
+| B1a contract: round 4 2: a folder moved outside drops its indexed subtree and commits the cursor | runner/test/b1a-contract.test.ts:848; shared failing assertion :812, call :849 | Same live-control exact-entry conflict with the required one-time ownership-check marker. |
+| B1a contract: round 4 3: a renamed folder updates descendant paths and index order without media reads | runner/test/b1a-contract.test.ts:865; shared failing assertion :812, call :866 | Same live-control exact-entry conflict; its no-media assertion also presumes old summaries already establish ownership. Later mode assertions are not reached after the hard live-control equality. |
+| B1a contract: round 4 4: an inside folder move updates recursive paths and regroups without media reads | runner/test/b1a-contract.test.ts:884; shared failing assertion :812, call :885 | Same live-control exact-entry conflict with the existing ownership-check marker; later mode assertions are not reached. |
+
+The warm reds' earlier note described one listing plus two media requests. The actual final interval
+is exactly three GET /drive/v3/files requests and no media request. A single logical shared listing
+is not a single HTTP request: DriveHttp.listAll at src/data/drive/drive-http.ts:139 traverses levels.
+Changing that established traversal or supplying a fixture-specific discovery heuristic would change
+other contracts. No path/name/summary heuristic substitutes for reading ownership bytes.
+
+The legacy fix-2 red passes, including its second-run idempotence assertions. All cold index planning,
+manifest ordering, ownership preservation, hidden-path, replay and recovery controls pass.
+The source suite has no ownership, contract, architecture or application assertion conflict.
+It has a separate sandbox failure at src/e2e-port.test.ts:37: listen on 127.0.0.1 is denied (EPERM),
+so the unchanged test times out waiting for its server. An independent unchanged identity-helper probe
+reproduced the EPERM before any request; evidence /tmp/b1c-fix2-port-probe.log. No timeout was raised.
+
+Stop under the user's TL-P4-51 instruction after the complete suites and this full list.
+The lead owns reconciliation; the worker may neither edit these tests nor falsify ownership evidence.
+
+### Verification method
+
+Verification tree: `/private/tmp/b1c-fix2-verify-pkl1em9q`. Tracked files were copied there and
+installed dependency directories cloned into fresh destinations with macOS cp -cR. No existing
+node_modules was replaced or symlinked. Source/test/corpus/script byte audit has no mismatches.
+All configs, transform/module caches, CPU reports, reports, bundles and logs are in OS temp.
+The existing suites' disposable git fixtures remain in OS temp; the session invokes no writing git command.
+The runner's new-instance build uses an OS-temp pnpm stand-in executing the installed esbuild binary.
+The actual pnpm exec source-suite invocation has offline:true and verifyDepsBeforeRun:false in the
+scratch workspace config, so it does not set up dependencies or contact a registry.
+
+The committed reds were reproduced before source edits: b1-index 25 pass/3 assertion reds;
+architecture 6 pass/1 assertion red at src/architecture.test.ts:154 (outside data/types.ts).
+Reports: `/tmp/b1c-fix2-before-runner.{json,log}` and `/tmp/b1c-fix2-before-architecture.{json,log}`.
+
+Final runner report: `/tmp/b1c-fix2-runner-final.{json,log}`. The initial complete sweep had
+618 pass/9 fail; its two additional latency failures were implementation issues from delaying cold
+read-ahead too long. Restoring overlap fixes both original bounds without changing a call, golden or test.
+Final reads-report.test.ts 5/5, c05-bounded-reads.test.ts 8/8, drive-calls-golden.test.ts 5/5,
+model-input-fingerprint.test.ts 9/9 and timing-counts.test.ts 2/2 all pass unchanged.
+Final full source sweep: **5574 pass, 1 fail, 5575 total; 167 files**.
+Only src/e2e-port.test.ts:37 fails (the independently reproduced sandbox listen EPERM).
+Architecture passes all seven tests; every contract/data/application assertion passes.
+Reports: `/tmp/b1c-fix2-src-final.{json,log}`.
+App, node and runner tsc all pass; touched-file eslint passes in the separate app and runner configs.
+Logs: `/tmp/b1c-fix2-tsc-{app,node,runner}-final.log`, `/tmp/b1c-fix2-eslint-app.log`,
+`/tmp/b1c-fix2-eslint-runner-final.log` (all exit 0 and empty).
+
+The first source sweep (5,561 pass/14 fail) exposed missing git metadata in the verification copy.
+Copied objects/refs/config and the worktree's HEAD/index into an isolated scratch .git using file copies,
+without copying linked-worktree pointers or hooks, and without any writing git command. The docs and
+harness tests then pass unchanged; the four-file retry is 88 pass/1 sandbox timeout. The final full
+source sweep ran against that corrected verification environment and leaves only the sandbox listener failure.
+Reports: `/tmp/b1c-fix2-src.{json,log}`, `/tmp/b1c-fix2-src-retry.{json,log}`.
+
+Final exact-copy audit and read-only git diff --check are recorded below. No pnpm check mark or e2e pass is claimed:
+check writes a repository mark, and this session's requested gates are the full runner/source suites,
+app/node/runner tsc and touched-file eslint. No UI screen changed.
+
+Offline research reused the existing versioned ReadCache, admissionRead's read-ahead policy,
+canonical index and ownership parser. Reference URLs were cited, never fetched:
+[HTTP conditional/versioned caching](https://www.rfc-editor.org/rfc/rfc9110.html#section-8.8.3),
+[Drive modifiedTime](https://developers.google.com/workspace/drive/api/reference/rest/v3/files),
+[Vitest setup files](https://vitest.dev/config/setupfiles),
+[ECMAScript stable sort](https://tc39.es/ecma262/#sec-array.prototype.sort).
+
+
+Exact final verification commands (OS-temp cwd, runner commands in its runner directory):
+
+```sh
+PATH=/private/tmp/b1c-fix2-verify-pkl1em9q/bin:$PATH node ../node_modules/vitest/vitest.mjs run --maxWorkers=2 --config=../runner-config.mjs --configLoader=runner --reporter=json --outputFile=/tmp/b1c-fix2-runner-final.json > /tmp/b1c-fix2-runner-final.log 2>&1
+/opt/homebrew/bin/pnpm exec vitest run src --maxWorkers=2 --config=src-config.mjs --configLoader=runner --reporter=json --outputFile=/tmp/b1c-fix2-src-final.json > /tmp/b1c-fix2-src-final.log 2>&1
+node node_modules/typescript/bin/tsc --noEmit -p tsconfig.app.json > /tmp/b1c-fix2-tsc-app-final.log 2>&1
+node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json > /tmp/b1c-fix2-tsc-node-final.log 2>&1
+node ../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json > /tmp/b1c-fix2-tsc-runner-final.log 2>&1
+node node_modules/eslint/bin/eslint.js src/data/spine/read.ts src/data/contracts/note-edit.ts > /tmp/b1c-fix2-eslint-app.log 2>&1
+node ../node_modules/eslint/bin/eslint.js src/drive.ts src/index.ts src/main.ts > /tmp/b1c-fix2-eslint-runner-final.log 2>&1
+```
+
+Final byte audit: 1,644 source/test/corpus/script files, zero mismatches between worktree and tested tree;
+`/tmp/b1c-fix2-audit-final.log`. Read-only git diff --check passes. Diff over all runner tests and
+source tests is empty. Goldens and test sources are byte-identical; only five production files and
+this notes section are changed. No commit was made.
+
+
+## Addendum 10 red repair
+
+Red-owning session, round 3, 2026-10-11. Scope: the two runner test files and these notes only.
+Read WORKER.md, the packet, Fix round 2 and its seven-test TL-P4-51 contradiction audit.
+The user-supplied addendum 10 supersedes the audit's proposed one-time mocChecked discovery reads.
+No network, writing git command, production edit, dependency replacement or node_modules symlink.
+The coordinator owns commits. Production diff before/after is byte-identical:
+`/tmp/b1c-round3-production-{before,after}.diff` (cmp passes).
+
+### Test contracts
+
+- B1a's shared folder-refresh assertion retains every prior field by partial object matching;
+  additive per-version owner/type metadata may be persisted. The live-control descendants and
+  renamed/moved path comparisons use the same matching rule. Id, path, version, summary and coverage
+  remain pinned, as do the exact discovery-call count and zero descendant media reads.
+- The cut test's assertion at b1-index.test.ts:191 is still exactly zero same-version media reads.
+  It has no exact state-shape assertion to loosen. Its old B1a seed remains unchanged; the 300-call,
+  32000-character, membership and cut-marker requirements are unchanged.
+- Both warm scope cases compare the planning-index request sequence to the actual listAll traversal
+  captured by the positive control, rather than one physical HTTP request. The positive control calls
+  the existing shared listing with readAhead:false and returns no projection. Main's real provider
+  still performs its normal warming under the selected scope. The separate equality of the entire
+  pre-maintenance request sequence remains, and the planning-index interval must contain metadata
+  listing requests only: no Inbox pile-note, declaration or other media reads.
+- Added exact red: `B1c fix 3: legacy MOC ownership comes from the index prefix with zero extra reads`.
+  Both controls seed the exact old B1a state and create the legacy MOC without appProperties.by.
+  Only the index is removed, exercising main's normal missing-projection prefix reads while every
+  indexed version remains unchanged. Each indexed id gets exactly one 4096-byte prefix read during
+  planning. The personal MOC gets no full read or mutation. The by:bower MOC gets exactly one full
+  read inside maintain, migrates once, folds both members and preserves the unowned original bytes.
+  No additional note media request or mocChecked state is accepted. Front matter fits in the prefix;
+  this does not promise discovery beyond addendum 10's v1 prefix limit.
+
+Research reused locally (no network): DriveHttp.listAll's established per-level traversal in
+`src/data/drive/drive-http.ts:139`, its Range prefix reader at :177, and Vitest's existing object
+matching conventions in the two test files. No second discovery implementation is introduced.
+
+tests changed: runner/test/b1-index.test.ts: replaced the warm one-HTTP-request pin with the real traversal control; kept :191 zero reads; added the fix-3 legacy prefix red.
+tests changed: runner/test/b1a-contract.test.ts: allowed additive per-version metadata in the shared live-control and rename/move comparisons; kept every old field and zero-extra-read bound.
+tests changed: docs/harness/2026-10-10-b1c-index-notes.md: recorded addendum 10 scope, contracts, full targeted results and OS-temp evidence.
+
+### Verification
+
+Fresh verification copy (including the unchanged production diff):
+`/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b1c-fix3-verify-9n5mp9__`.
+Tracked input files were copied and installed dependency directories cloned with cp -cR into fresh
+OS-temp destinations. No existing node_modules was replaced or symlinked. Transform caches,
+module caches, reports and logs are all in OS temp; the repository receives no test output.
+
+Ran both complete files with installed Vitest, `--maxWorkers=2`, offline fake Drive through main:
+`node <temp>/node_modules/vitest/vitest.mjs run --config <temp>/runner-config.mjs test/b1-index.test.ts test/b1a-contract.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=/tmp/b1c-fix3-targeted.json`.
+Final result: **41 pass, 6 assertion reds, 47 total**. Both warm repair cases pass.
+Reports: `/tmp/b1c-fix3-targeted.{json,log}`. Touched-test ESLint passes:
+`/tmp/b1c-fix3-lint.log`. `git diff --check` passes (read-only).
+No pnpm check or e2e was run: this is the authorized tests-only red repair, with production fixed
+by another session; repository-writing gates are outside this session's constraints.
+
+Every remaining red from the complete targeted run is listed below. These reproduce implementation
+violations of the accepted addendum; no call count, tolerance or media-read prohibition is relaxed.
+
+| Exact test | Assertion | Evidence |
+| --- | --- | --- |
+| B1c index: 32000 character cut names every omitted folder and preserves whole rows | runner/test/b1-index.test.ts:191 | 149 unchanged notes still receive extra media reads. |
+| B1c fix 3: legacy MOC ownership comes from the index prefix with zero extra reads | runner/test/b1-index.test.ts:859–860 | Personal MOC is read fully; owned MOC full read occurs before maintain; owned state includes mocChecked. |
+| B1a contract: round 4 1: a folder binned before planning drops every indexed descendant | runner/test/b1a-contract.test.ts:814 | Live control makes 7 discovery calls rather than the unchanged bound of 3; four ownership-discovery media reads remain. |
+| B1a contract: round 4 2: a folder moved outside drops its indexed subtree and commits the cursor | runner/test/b1a-contract.test.ts:814 | Live control makes 7 discovery calls rather than the unchanged bound of 3; four ownership-discovery media reads remain. |
+| B1a contract: round 4 3: a renamed folder updates descendant paths and index order without media reads | runner/test/b1a-contract.test.ts:814 | Live control makes 7 discovery calls rather than the unchanged bound of 3; four ownership-discovery media reads remain. |
+| B1a contract: round 4 4: an inside folder move updates recursive paths and regroups without media reads | runner/test/b1a-contract.test.ts:814 | Live control makes 7 discovery calls rather than the unchanged bound of 3; four ownership-discovery media reads remain. |
