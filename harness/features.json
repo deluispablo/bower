@@ -6546,6 +6546,7 @@
     ],
     "verify": "pnpm exec playwright test e2e/folder-table.spec.ts -g \"folder table headers stay on one line and the table scrolls sideways\"",
     "note": "DEFECTS folder-table-header-wrap (lead ruling, owner-reported). Codex, then a Claude review and the designer. Packet 2026-10-10-folder-header-wrap-packet.md. implementer: codex.",
-    "design": "designer verifies"
+    "design": "designer verifies",
+    "review": "P4-72 PASS"
   }
 ]
