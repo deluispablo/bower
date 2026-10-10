@@ -687,3 +687,117 @@ Research/reuse is inherited from the packet and existing local mechanisms, witho
 [IndexedDB transaction lifetime](https://w3c.github.io/IndexedDB/#transaction-lifetime).
 Existing queue, store, resumable transport, write-once reconciliation and takeover calls
 remain their mechanism homes. No second mechanism was introduced. Coordinator owns commits.
+
+## Fix round 3
+
+Implementer: Codex, 2026-10-10. Baseline HEAD:
+`21d34ad4c056bd2e755445a1d3fe3edea76673a1`.
+Status: blocked under TL-P4-51 after the complete requested data suite.
+No network, git-writing command, test edit, dependency change or shared harness edit.
+The narrow production candidate is retained uncommitted; it is not a verified green fix.
+
+### Narrow candidate and reuse
+
+The existing queue bus carries an optional completion with the full `uploadId` member
+identity and reserved file ID. Ordinary change notifications remain supported, including
+legacy `changed` messages. The browser bus validates the message shape before forwarding it.
+On confirmed completion, the owner sends that identity through the existing broadcast after
+removing the pending record. The listener matches the existing entry by its full identity,
+and fills only a previously unknown reservation. It learns the reservation synchronously,
+including while paused, before read-back waits or Use here changes the generation.
+Discarded/forgotten entries are not recreated; an existing reservation is not replaced.
+
+The existing refresh reads that reserved ID before publishing completion and before the
+owner pump selects anything to send. Its generation/entry guards remain unchanged. The
+existing missing-bytes branch still uses `arrivedFile` to verify the reserved ID, size and
+hash before offering reselection. Neither path needs a second lookup mechanism or store.
+The candidate adds no queue, store, state machine, completion ledger, Drive scan, protocol,
+reservation allocator or session fence. No vault file or UI copy was changed.
+
+removed: `src/data/upload-queue.ts`: 7 replaced lines; 28 lines added, no mechanism removed.
+removed: payload-free bus signatures, browser forwarding and completion post replaced.
+removed: combined scope/paused early return split to retain the reservation while paused.
+tests changed: none.
+
+### Every contradiction (complete requested-suite audit)
+
+One contradicting test; no other failed test in the entire requested data suite:
+
+- `src/data/upload-resume.test.ts:701`:
+  `upload-resume-after-reload: fix 3: two-tab reload, completion and takeover need no picker and no second create`.
+  Its combined assertion at `src/data/upload-resume.test.ts:677` requires the observer
+  to recover the sibling's unseen reservation and read it back by reserved ID. However,
+  the injected owner bus at `src/data/upload-resume.test.ts:579` accepts no message;
+  `src/data/upload-resume.test.ts:582` calls the observer without forwarding the completion.
+  The callback variable at `src/data/upload-resume.test.ts:575` likewise accepts no payload.
+  The fixture therefore discards exactly the member/reservation evidence the ruling says
+  to communicate through the existing broadcast. The observer's existing record remains
+  null after the owner removes the device record, and the narrow queue cannot recover an
+  unknown ID from the payload-free notification. `ResumableClient` exposes read-back by ID,
+  not a lookup by member. Adding a Drive scan or another store would exceed this ruling.
+
+The reserved-sibling positive control passes because it already knows the ID. All earlier
+fix-round reds and controls remain green. No assertion, fixture, bound or timeout was
+weakened. A red repair that forwards the completion payload belongs to the lead/red owner;
+this assignment explicitly prohibits any test change. Work stops here under TL-P4-51.
+
+### Verification
+
+All command output is under `tmp-logs/`; only failures and aggregate results were inspected.
+
+```sh
+pnpm exec vitest run src/data/upload-resume.test.ts --maxWorkers=2 > tmp-logs/resume-fix3-reds-before.log 2>&1
+pnpm exec vitest run src/data/upload-resume.test.ts --maxWorkers=2 > tmp-logs/resume-fix3-reds-after.log 2>&1
+pnpm exec vitest run src/data --maxWorkers=2 > tmp-logs/resume-fix3-data.log 2>&1
+pnpm exec tsc -p tsconfig.app.json --noEmit > tmp-logs/resume-fix3-tsc-app.log 2>&1
+pnpm exec tsc -p tsconfig.node.json --noEmit > tmp-logs/resume-fix3-tsc-node.log 2>&1
+pnpm exec eslint src/data/upload-queue.ts > tmp-logs/resume-fix3-eslint.log 2>&1
+```
+
+- Baseline reds: 11 passed, one intended assertion failure; exit 1, 1.63 seconds.
+- Candidate reds: 11 passed, the same sole failure; exit 1, 610 ms.
+- Entire data suite: 4,151 passed, one failed, 4,152 total across 78 files;
+  exit 1, 52.02 seconds. The sole failure is the contradicting red listed above.
+- Final app tsc, node tsc and touched-production-file eslint: exit 0, empty logs.
+  An initial app tsc found optional-payload narrowing errors; the explicit guard was
+  corrected and app tsc rerun successfully. The guard has the same runtime behaviour
+  as the candidate tested by the completed data sweep.
+- Read-only `git diff --check`: exit 0. Tests are unchanged in the production diff.
+- Full `pnpm check` was not run: its harness fixtures execute git-writing commands,
+  which this assignment prohibits. No full-check mark or browser e2e result is claimed.
+  Coordinator owns commits, delivery gates, independent review and designer U3 verification.
+
+### Sources
+
+No sources were fetched. Research is inherited from the packet/prep and local mechanisms:
+[Drive resumable uploads](https://developers.google.com/workspace/drive/api/guides/manage-uploads#resumable),
+[Drive pre-generated IDs](https://developers.google.com/workspace/drive/api/guides/manage-uploads#pre-generated-ids),
+and [IndexedDB transaction lifetime](https://w3c.github.io/IndexedDB/#transaction-lifetime).
+The existing reserved identity, read-back, confirmed completion and committed device
+staging remain their mechanism homes. This session does not claim the contradictory red is green.
+
+## Fix round 3 red repair
+
+Red-owning Codex session, 2026-10-10, TL-P4-53 addendum 4.
+
+tests changed: src/data/upload-resume.test.ts: TL-P4-53 addendum 4: the fake bus forwards the completion payload like the real broadcast
+
+Only the sibling takeover fixture's injected bus callback type, post parameter and
+forwarded callback argument changed. Every assertion, bound, positive control and
+other test remains unchanged. The implementer's uncommitted production candidate
+was not edited. No network or git-writing command was used; coordinator owns commits.
+
+Verification, output redirected to tmp-logs/:
+
+- Before repair: full file, --maxWorkers=2, exit 1; the assertion at line 677 failed,
+  with 11 passes. Log: tmp-logs/resume-fix3-repair-before.log.
+- After repair: full file, --maxWorkers=2, exit 0; all 12 tests passed, including
+  the exact fix 3 regression and its positive control.
+  Log: tmp-logs/resume-fix3-repair-vitest.log.
+- App tsc (--noEmit) and touched-test eslint: exit 0.
+  Logs: tmp-logs/resume-fix3-repair-tsc.log and tmp-logs/resume-fix3-repair-eslint.log.
+- Read-only git diff --check passed. Full check and e2e remain coordinator-owned;
+  full check includes git-writing harness fixtures prohibited by this assignment.
+
+Research/reuse: existing QueueBus and browser broadcast forwarding in
+src/data/upload-queue.ts; no sources fetched and no second mechanism introduced.

@@ -572,14 +572,14 @@ async function siblingTakeoverCase(hydrateBeforeReservation: boolean): Promise<v
       await releaseLater.wait;
     }
   };
-  let onCompletion = (): void => undefined;
+  let onCompletion: Parameters<NonNullable<UploadQueueDeps['bus']>['listen']>[0] = () => undefined;
   let ownerFinished = false;
   let completions = 0;
   const owner = page(env, storeFor(env), {
-    bus: { post: () => {
+    bus: { post: (completion) => {
       completions += 1;
       ownerFinished = completions === 2;
-      onCompletion();
+      onCompletion(completion);
     }, listen: () => undefined },
   });
   let observer: Page | undefined;
