@@ -153,7 +153,94 @@ new corpus support, full gates and e2e. The timing retry accounting remains with
 
 ## Implementation
 
-### Round 3 — current delivery after supplied red repair 2 HEAD
+### Round 4 — current completion
+
+2026-10-10. Final status: **implementation complete; gate verification blocked by sandbox local-listener EPERM**.
+Continued the 12 retained production files at HEAD `bb4300628f12aaeeccce43e01081459fe11d2e25`.
+Two minimal production repairs were needed after the full check: log a cached-note parse refusal, and move
+the existing expected-error ownership comment beside its ReadCache rejection handler. No test was edited;
+no remote network or writing git command was used. Required local-listener gates were attempted and refused.
+The checked-in fixture is Red repair 3 (recorded below): it files a clear sibling and preserves the undecided
+request as pending. This supersedes the historical round-3 request contradiction; no implicit completion was added.
+TL-P4-44 addenda 1–2 are in DECISIONS; addendum 3 is the supplied cached-listing/subscription ruling recorded below.
+The retained implementation satisfies that ruling without media reads on the first listing or a second data store.
+All retained production changes stay uncommitted; the coordinator owns commits and integration.
+
+#### Final validation
+
+Every targeted suite ran to completion. **No contradicting tests or regressions remain** in the 28 Q1,
+4,141 data and 584 runner tests (including corpus, fingerprints, call goldens and bounded-read controls).
+All test output is under `tmp-logs/`; only failures and result summaries were read.
+
+| Command | Result / log |
+| --- | --- |
+| Q1 reds, `pnpm -C runner exec vitest run test/q1-continuation.test.ts --maxWorkers=2` | 28/28 pass; `tmp-logs/q1-finish-reds.log`. |
+| `pnpm exec vitest run src/data --maxWorkers=2` | 4,141/4,141 pass; 77 files; `tmp-logs/q1-finish-data.log`. |
+| Runner suite, `pnpm -C runner exec vitest run --maxWorkers=2` | 584/584 pass; 45 files; `tmp-logs/q1-finish-runner.log`. |
+| App tsc, `pnpm exec tsc -p tsconfig.app.json --noEmit` | Pass; `tmp-logs/q1-finish-tsc-app.log`. |
+| Node tsc, `pnpm exec tsc -p tsconfig.node.json --noEmit` | Pass; `tmp-logs/q1-finish-tsc-node.log`. |
+| Runner tsc, `pnpm -C runner exec tsc --noEmit` | Pass; `tmp-logs/q1-finish-tsc-runner.log`. |
+| ESLint on all 11 retained app files | Pass; `tmp-logs/q1-finish-eslint-app.log`. |
+| Runner ESLint on `src/claude.ts` from runner cwd | Pass; `tmp-logs/q1-finish-eslint-runner.log`. |
+| `pnpm check`, existing heavy-run lock | Fail: architecture error-policy assertion (repaired below) and sandbox listener EPERM; `tmp-logs/q1-finish-check.log`. |
+| app/capabilities/capabilities-b e2e, demo and fake, existing heavy-run lock | Both blocked before tests: dev server listen EPERM on ::1:7047; `tmp-logs/q1-finish-e2e-demo.log`, `tmp-logs/q1-finish-e2e-fake.log`. |
+| `pnpm exec vitest run src/architecture.test.ts --maxWorkers=2`, after repair | 7/7 pass; `tmp-logs/q1-finish-architecture.log`. |
+| Read-only `git diff --check`; test diff | Pass; no uncommitted test changes. |
+
+The initial mixed-root ESLint invocation encountered tsconfigRootDir ambiguity; the required checks were
+rerun separately in each existing config's cwd and passed. No ESLint configuration was edited.
+
+#### Whole-check failure ledger (not contract contradictions)
+
+The full app suite completed: 5,485 pass, two fail of 5,487; 162 green files and two failed files.
+Every failed test is listed; neither test was changed. No Q1/data/runner contract contradiction remains.
+
+| Test | File:line | Outcome |
+| --- | --- | --- |
+| `the shape of the code > errors are never swallowed` | `src/architecture.test.ts:110` | Detected ReadCache rejection comment placement at :109 and cached-note catch at drive-vault.ts:1424. Repaired in production; all seven architecture tests then pass. |
+| `the e2e port and server identity > a server from another worktree is never reused` | `src/e2e-port.test.ts:37` | Local test server cannot listen on 127.0.0.1: EPERM, then timeout. No production contract conflict. |
+
+Both e2e sources stopped before collecting/running test cases because the dev server cannot listen on ::1:7047.
+No green check mark is claimed. Later pnpm-check stages were not reached after the app-suite failure.
+The local-listener failure is unchanged by this entry and cannot be repaired within the permitted sandbox.
+The complete requested suites and all three tsc checks passed again after the error-policy repairs;
+their final logs use `q1-finish-*`. The full check is not repeated because its server-identity listener will still be refused.
+
+#### Removed lines and tests — retained production diff against supplied HEAD
+
+removed: runner/src/claude.ts: 13 lines; additive answer input, conditional candidates and accumulated usage replace old forms.
+removed: src/data/answer-loop.ts: 3 lines; boolean-only signature/import widened at the existing answer boundary.
+removed: src/data/contracts/journal-record.ts: 1 line; existing validator accepts asking identity and additive values.
+removed: src/data/contracts/questions.ts: 5 lines; explicit asking and report policies replace id-only closure/rest spread.
+removed: src/data/contracts/types.ts: 0 lines; additive fields only.
+removed: src/data/demo/world.ts: 2 lines; shared answer type replaces boolean map/signature.
+removed: src/data/drive/read-cache.ts: 5 lines; existing entries track completed text and notification.
+removed: src/data/sources.ts: 1 line; existing VaultSource.answer signature widened.
+removed: src/data/spine/scripted.ts: 30 lines; existing planner handles additive values, stored choices and durable rounds.
+removed: src/data/vault/drive-vault.ts: 19 lines; shared cached projection and asking policy replace id-only filtering.
+removed: src/data/vault/journal.ts: 2 lines; existing list/parser accepts completed-cache-only projection.
+removed: src/data/vault/layout.ts: 3 lines; existing stored questions validator widened additively.
+tests changed: none
+
+#### Compatibility row drafts — current, review pending
+
+| Boundary | Preserved old meaning | Additive evidence / draft disposition |
+| --- | --- | --- |
+| contracts/types.ts, questions.ts | Legacy yes/no, subjects and public report fields still read. | Optional file-to options, words and asking identity; all Q1 legacy controls pass. Review pending. |
+| contracts/journal-record.ts | Legacy text yes/no remains boolean; later record still wins. | Strict optional answer/askedAt values with trim, length and control checks; Q1 identity/text reds and data suite pass. Review pending. |
+| vault/layout.ts | `{v:1,questions}` remains readable with no new required field/version. | Optional durable rounds and validated actions; retries, exhaustion, reset, reupload and old reader controls pass. Review pending. |
+| drive/read-cache.ts, vault/journal.ts, vault/drive-vault.ts | Existing single-flight/version/session lifetime, outbox and owning-reader errors remain. | Zero-media first listing and subscription projection after Home's existing questions read; supplied addendum 3 reds and all data tests pass. Review pending. |
+| sources.ts, answer-loop.ts, demo/world.ts | Existing boolean callers and continuation request identity remain. | Typed option/text on the same ports; actual /process/main batching, replay and quota reds pass. Review pending. |
+| Manifest/checkpoint/report | Existing versions and reader meanings unchanged. | Q1 frozen P2 fixtures, guarded writes/moves and runner controls pass. Draft unchanged-reader row. |
+| Features/model inputs | No screen changes; existing prompts outside eligible 2–4 candidates retain bytes. | App tsc and all raw/normalized prompt fingerprints pass. Q1b owns UI. |
+| Generic model requests | Missing request decision remains pending. | Committed Red repair 3 supplies a clear sibling filing while preserving the pending request; all Q1 and runner controls pass. Review pending. |
+
+Sources: the offline references in Research (TypeScript unions, tolerant readers, stable request identities),
+and the existing versioned read-cache mechanism. No remote documentation was fetched.
+Left out: Q1c live publication, Q1b UI, which-note, B12, commits and integration. Compatibility rows are drafts
+for the coordinator/reviewer, not accepted contract commits. All 12 production files remain uncommitted, with the two minimal error-policy repairs above.
+
+### Round 3 — historical delivery (superseded by round 4)
 
 2026-10-10. Final status: **blocked under TL-P4-51; one unchanged fixture contradiction**.
 Resumed all 12 retained production changes at `2589a3418ba0bb376220bc1e0d166849cc97b916`.
