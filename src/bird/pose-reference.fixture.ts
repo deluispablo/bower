@@ -16,7 +16,7 @@
  * Blink (5.2 s) is left out.
  */
 import type { Pose } from './Bower';
-import type { ReactionKind } from './react';
+import { REACTIONS, type ReactionKind } from './react';
 import { ACT_NAMES, POSE_NAMES, type ActName, type BirdEngine } from './engine';
 
 export type PartKey =
@@ -278,14 +278,15 @@ export const ACTION_REFERENCE: Partial<Record<ActionName, ActionRef>> = {
 
 /**
  * Every public member of the engine, and how its motion is checked. `acts`
- * and `poses` are checked name by name (ACT_REFERENCE, POSE_REFERENCE); an
+ * and `poses` are checked name by name (ACT_REFERENCE, POSE_REFERENCE);
+ * `reactions` dispatches every REACTIONS kind through REACTION_REFERENCE; an
  * `action` names its ACTION_REFERENCE row; `script` is a layer script step
  * (the court's flights, pecks and displays), and `control` moves nothing.
  * A new public member fails to compile until it is listed here. A `script` or
  * `control` label is not an exemption: the member must also be on
  * EXEMPT_MEMBERS (TL-P4-22 addendum 21).
  */
-export type EngineMember = 'control' | 'script' | 'acts' | 'poses' | { action: ActionName };
+export type EngineMember = 'control' | 'script' | 'acts' | 'poses' | 'reactions' | { action: ActionName };
 
 export const ENGINE_MEMBERS: Record<keyof BirdEngine, EngineMember> = {
   speed: 'control',
@@ -301,6 +302,7 @@ export const ENGINE_MEMBERS: Record<keyof BirdEngine, EngineMember> = {
   busy: 'control',
   settled: 'control',
   act: 'acts',
+  play: 'reactions',
   interrupt: 'control',
   then: 'control',
   wait: 'control',
@@ -363,6 +365,9 @@ export function unreferencedMembers(
       const [dispatcher, names, rows] = kind === 'acts' ? (['act', ACT_NAMES, ACT_REFERENCE] as const) : (['setPose', POSE_NAMES, POSE_REFERENCE] as const);
       if (member !== dispatcher) missing.push(`${member}: ${kind}, but not the ${kind === 'acts' ? 'act' : 'pose'} dispatcher, so no reference row`);
       else missing.push(...names.filter((n) => !Object.hasOwn(rows, n)).map((n) => `${member}('${n}')`));
+    } else if (kind === 'reactions') {
+      if (member !== 'play') missing.push(`${member}: reactions, but not the reaction dispatcher, so no reference row`);
+      else missing.push(...Object.keys(REACTIONS).filter((n) => !Object.hasOwn(REACTION_REFERENCE, n)).map((n) => `${member}('${n}')`));
     }
     else if (typeof kind === 'object' && !ACTION_REFERENCE[kind.action]) missing.push(`${member}: ${kind.action}`);
   }
