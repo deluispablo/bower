@@ -8,7 +8,8 @@ const { baseURL, webServer } = e2eServer('dev');
 export default defineConfig({
   testDir: 'e2e',
   // pwa.spec.ts needs a production build: pnpm e2e:pwa (e2e/pwa.config.ts).
-  testIgnore: [/_explore-/, /pwa\.spec\.ts/],
+  // The landing CSP test uses dist with real headers (e2e/landing-csp.config.ts).
+  testIgnore: [/_explore-/, /pwa\.spec\.ts/, /landing-csp\.spec\.ts/],
   timeout: 30_000,
   // A committed test.only would silently run one test (https://playwright.dev/docs/api/class-testconfig#test-config-forbid-only).
   forbidOnly: true,
