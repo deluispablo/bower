@@ -35,16 +35,16 @@ describe('the runner plan reads and report', () => {
     if (process.env.DUMP) console.log('DUMP\n' + calls.map((c, i) => `${i} ${c.at} ${c.kind} ${c.method} ${c.name ?? ''} ${c.path.slice(0, 90)}`).join('\n'));
     console.log(`reads: modelled=${p.readsMs}ms (was ${READS_BEFORE_MS}) drive reads=${p.reads.length} (was 25)`);
     expect(code).toBe(0);
-    // Addendum 4: measured 1,980 -> 2,580 ms adds 600 to the prior 2,075 bound.
+    // TL-P4-41 addendum 11: measured 1,980 -> 2,730 ms adds 750 to the prior 2,075 bound.
     // Never use the 505 ms boundary excess; the whole-run constraint is under 20%.
-    expect(p.readsMs).toBeLessThan(READS_BEFORE_MS / 2 + 600);
+    expect(p.readsMs).toBeLessThan(READS_BEFORE_MS / 2 + 750);
   });
 
   it('with 25 earlier runs plan reads stay within their measured maintenance delta', async () => {
     const { calls, ms, code } = await modelled(async (drive, root) => { await finishedBefore(drive, root, 25); });
     expect(code).toBe(0);
-    // Exact fixture delta 2,280 -> 3,030 ms: +750; phase overruns are authorized.
-    expect(phases(calls, ms).readsMs).toBeLessThanOrEqual(2280 + 750);
+    // TL-P4-41 addendum 11: measured fixture delta 2,280 -> 3,180 ms is +900.
+    expect(phases(calls, ms).readsMs).toBeLessThanOrEqual(2280 + 900);
   });
 
   it('the report keeps its barrier order in fewer calls', async () => {

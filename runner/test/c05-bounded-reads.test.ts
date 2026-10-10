@@ -258,8 +258,8 @@ async function pileBaseline() {
   const baseline = await traced(c, drive, root);
   expect(baseline.result.code).toBe(0);
   expect(reportOf(baseline.result).filed.length).toBeGreaterThan(0);
-  // TL-P4-41 addendum 9: bootstrap planning adds two real prefix reads before maintain reuses them.
-  expect(baseline.trace.reads).toBe(22);
+  // TL-P4-41 addendum 11: measured cold C05 planning is 24 reads; historical media stays unchanged.
+  expect(baseline.trace.reads).toBe(24);
   expect(baseline.trace.media.filter((p) => p.startsWith('.bower/runs/'))).toEqual([]);
   return baseline;
 }

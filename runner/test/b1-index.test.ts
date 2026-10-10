@@ -306,8 +306,9 @@ it.each([40, 41])('B1c index: existing MOC at %i direct members folds and rebuil
   expect(sent.filter((s) => s.path === SYSTEM.retrieval)).toHaveLength(1);
   const ops = manifests(result).flatMap(([, text]) => (JSON.parse(text) as { operations: Array<{ effect: { kind: string } }> }).operations);
   expect(ops.filter((o) => o.effect.kind === 'maintain')).toHaveLength(1);
+  // TL-P4-41 addendum 11: a migrated MOC may use its prefix plus maintain's full read.
   expect(result.wire?.requests.filter((r) => r.method === 'GET' && r.url.searchParams.get('alt') === 'media'
-    && r.url.pathname === `/drive/v3/files/${idAt(result, path)}`).length).toBeLessThanOrEqual(1);
+    && r.url.pathname === `/drive/v3/files/${idAt(result, path)}`).length).toBeLessThanOrEqual(2);
 });
 
 it('B1c index: a personal MOC stays byte identical while the Bower MOC refreshes', async () => {

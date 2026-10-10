@@ -1782,3 +1782,51 @@ node ../node_modules/eslint/bin/eslint.js src/index.ts src/drive.ts src/main.ts 
 Final source/test/corpus/script byte audit: 1710 tracked input files, zero mismatches between worktree
 and verification tree: /tmp/b1c-add10-audit-final.log. Test/fixture/golden diff is empty:
 /tmp/b1c-add10-test-diff.log. Read-only git diff --check passes. No commit was made.
+
+
+## Addendum 11 red repair
+
+Red-owning session, 2026-10-11. Applied the owner's TL-P4-41 addendum 11 sweep ruling
+only to the ten tests in Addendum 10's failure-audit table, plus its two runner-tsc faults.
+Production remains committed and unchanged. The coordinator owns commits. No network,
+writing git command, dependency replacement or node_modules symlink was used.
+
+### Tests changed
+
+tests changed: runner/test/drive-calls-golden.test.ts: cold C04 90 -> 92; reads 22 -> 24 only. The retained-history fixture is also cold: measured 101 -> 103, reads 25 -> 27; every later phase and whole-run bound is retained.
+tests changed: runner/test/timing-counts.test.ts: cold total 90 -> 92 and reads 22 -> 24; other phase counters and timing fields unchanged.
+tests changed: runner/test/c05-bounded-reads.test.ts: shared cold C05 baseline 22 -> 24 for both audited cases; historical-media and pending-evidence assertions unchanged.
+tests changed: runner/test/reads-report.test.ts: measured 2730 ms replaces 2580 ms in the existing delta formula (1980 + 750; strict budget remains 4150 / 2 + 750). Retained-history measured 3180 ms replaces 3030 ms (2280 + 900, existing inclusive comparison).
+tests changed: runner/test/b1-index.test.ts: both migrated-MOC 40/41 cases permit at most two media requests, the ordinary prefix plus maintain's full read; region, membership, preservation and write assertions unchanged.
+tests changed: runner/test/b1a-contract.test.ts: observe the real changed-version prefix promise rejecting with code not-found, rather than demand a physical 404. Narrow both prior-state entries with explicit throwing checks; both toMatchObject assertions retained.
+tests changed: docs/harness/2026-10-10-b1c-index-notes.md: record this authorized red repair and verification evidence.
+
+Every assertion change and both type narrowings cite TL-P4-41 addendum 11 in a comment.
+Warm-run assertions and all other runner tests are unchanged. The not-found spy delegates to
+the original method: it neither manufactures the rejection nor changes requests or responses.
+Offline reference: reused Vitest's existing call-through spy, rejects and toMatchObject patterns
+(https://vitest.dev/api/expect.html); no reference URL was fetched.
+
+### Verification
+
+The six-file baseline sweep reproduced exactly the ten audited assertion failures:
+57 passed, 10 failed, 67 total. Evidence: /tmp/b1c-add11-red.{json,log}.
+Verification uses a fresh OS-temp copy named in /tmp/b1c-add11-verify-path. Tracked inputs
+were copied and installed dependency directories cloned with cp -cR into fresh destinations.
+No existing node_modules was replaced or symlinked. The new-instance fixtures' real runner
+build uses the existing esbuild command via an offline PATH helper in the scratch copy.
+All build outputs, fixture repositories, transform/module caches, reports and logs stay in OS temp.
+
+Runner tsc: pass; /tmp/b1c-add11-tsc-runner.log. The exact command is
+node ../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json in the scratch runner directory.
+Full runner command: node ../node_modules/vitest/vitest.mjs run --maxWorkers=2
+--config=../runner-config.mjs --configLoader=runner --reporter=json
+--outputFile=/tmp/b1c-add11-runner.json, with the scratch bin directory prepended to PATH.
+No pnpm check/e2e or repository mark is claimed: this session's authorized gates are the whole
+runner suite and runner tsc, and repository-writing gates are outside the owner's constraints.
+
+Full runner suite: **628 passed, 0 failed, 628 total; 46 files**.
+Reports: /tmp/b1c-add11-runner.{json,log}. Runner tsc passes with both prior-state faults resolved.
+Verification tree: /var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b1c-add11-verify-1qz_9ltu.
+Final input byte audit: 3453 tracked inputs (excluding this evolving notes file), zero mismatches.
+Read-only git diff --check passes. The final diff is exactly six runner test files and these notes.

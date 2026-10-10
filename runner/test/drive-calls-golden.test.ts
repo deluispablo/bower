@@ -22,14 +22,14 @@ describe('the C04 run makes the golden number of Drive calls per step', () => {
     // Bootstrap: start token + root/folder/nested listings (4); each index/retrieval create:
     // .bower child listing + live parent metadata fence + create (3 each).
     // Removed: log name-check child listing, .bower parent fence and .bower/log.md create.
-    // TL-P4-41 addendum 9: this cold bootstrap adds two prefix reads before planning.
-    expect(totalDriveCalls).toBe(90);
+    // TL-P4-41 addendum 11: measured cold C04 is 92; only reads gains two calls.
+    expect(totalDriveCalls).toBe(92);
     // The counts are timing's own (`timing.ts`), read from the line the runner logs; the golden infers no phase.
-    expect(drivecalls(timing)).toBe(90);
+    expect(drivecalls(timing)).toBe(92);
     // By timing's phases (the Worker's token, model and status calls are not Drive calls; the two read outside any phase
     // are the run's first listings, before the plan reads).
     const calls_ = Object.fromEntries(Object.entries(countsOf(timing).phases).map(([k, v]) => [k, v.calls]));
-    expect(calls_).toEqual({ token: 0, reads: 22, model: 0, apply: 52, checkpoints: 4, report: 10, status: 0, runner: 2 });
+    expect(calls_).toEqual({ token: 0, reads: 24, model: 0, apply: 52, checkpoints: 4, report: 10, status: 0, runner: 2 });
   });
 });
 
@@ -78,12 +78,12 @@ describe('the C04 run past 20 earlier runs (retention-never-wired, round 2)', ()
     // +3: the children of the 3 run folders it bins are listed first (retention round 6, option A).
     // The same 10 maintenance calls plus listing earlier-run folders at the snapshot's extra depth.
     // Round 3 removes the log name-check listing, .bower parent fence and .bower/log.md create.
-    // TL-P4-41 addendum 9: the C04 control is cold; two prefix reads now precede planning.
-    expect(driveCalls(c04)).toBe(90);
-    // TL-P4-41 addendum 9: finishedBefore seeds records, not projections; this run is also cold (+2).
-    expect(driveCalls(past)).toBe(101);
+    // TL-P4-41 addendum 11: re-pin the measured cold C04 control to 92.
+    expect(driveCalls(c04)).toBe(92);
+    // TL-P4-41 addendum 11: retained history is also cold; measured reads delta is +2.
+    expect(driveCalls(past)).toBe(103);
     expect(Object.fromEntries(Object.entries(countsOf(past.timing).phases).map(([k, v]) => [k, v.calls])))
-      .toEqual({ token: 0, reads: 25, model: 0, apply: 51, checkpoints: 4, report: 10, status: 0, runner: 11 });
+      .toEqual({ token: 0, reads: 27, model: 0, apply: 51, checkpoints: 4, report: 10, status: 0, runner: 11 });
     // Addendum 4 bounds the whole run under 20%, even when individual phases exceed 20%.
     expect(c04.ms).toBeLessThan(10520 * 1.2);
     expect(past.ms).toBeLessThan(11940 * 1.2);
