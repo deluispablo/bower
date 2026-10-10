@@ -241,3 +241,110 @@ Research basis: existing method-table and lease-policy tests, with protocol refe
 already recorded in the Drive docs section; no online verification was performed.
 removed: none
 left out: product implementation, pnpm check and e2e; this assignment repairs the red only.
+
+## Implementation — product ports (2026-10-10)
+
+Status: **blocked on unchanged test contracts**, with the product implementation left in this
+worktree for the coordinator. Base HEAD: `cfd2ec605d046bbc93dcf0a7032636680416322b`.
+No test, shared harness record, runner file or src/data/contracts file was changed. No git command
+that writes, network request, pnpm check or e2e was run. The coordinator owns the fix/notes commits.
+
+### Product changes
+
+- `src/data/drive/drive-api.ts`: the five required ports are required DriveApi methods and are
+  classified as reads in DRIVE_OPS. Added the normalized change/page/drain/scope types, shared
+  4,096-byte streaming UTF-8 decode, terminal-token page drain and ancestry lookup. The drain
+  retains raw order, repeats, removed stubs and unrelated entries; missing terminal tokens and
+  repeated page tokens reject with a one-sentence BowerError and console details.
+- `src/data/drive/drive-http.ts`: prefix metadata excludes Google Workspace media before a
+  download; media uses the existing call/authorized/send transport with Range bytes=0-4095.
+  Both 206 and ignored-Range 200 are cut and decoded; 416 returns empty text without interpreting
+  its error body as content. Start-token and My Drive changes requests use that same transport;
+  changes.list requests parents and drains every page. Parents lookup is metadata only.
+  The existing media-body error mapping is extracted and reused for the new response bodies.
+  Full-media readBytes retains its existing double Uint8Array copy expression.
+- `src/data/drive/fake-drive.ts`: consumes the recorded prefix/status and feed-page options from
+  the committed fixtures, including Workspace MIME metadata retained in snapshots. It uses the
+  same decode, drain and scope helpers as HTTP. Without recorded pages, tokens address this
+  instance's in-memory change sequence, recorded through the existing changed hook and touch.
+  That simulation is not durable across snapshot restoration; no persisted cursor/state is added.
+- `src/data/drive/read-cache.ts`: prefix gets its own kind in the existing once/single-flight
+  version cache, separate from full text and bytes, including cached null results.
+
+Scope resolution walks every parent path to the root, shares metadata reads and stops cycles.
+The 51-id case returns needsFullListing before any parent read or listing. No new scoped tree or
+transport was added. HTTP Bin ancestry keeps its existing depth-eight bound and beforeGet hook;
+the fake's Bin lookup also uses the shared ancestry helper without adding gated Drive calls.
+
+removed: src/data/drive/drive-http.ts: inline Bin ancestry implementation, replaced by ancestryLookup and parents.
+removed: src/data/drive/fake-drive.ts: inline first-parent Bin walk, replaced by the shared ancestry lookup.
+removed: src/data/drive/drive-http.ts: inline readBytes body catch, extracted unchanged into readBody.
+tests changed: none in this implementation session; the repaired method-table red is unchanged.
+
+### Verification and logs
+
+Every command redirected its output under tmp-logs; only failures and aggregate counts were read.
+
+| Log | Command / result |
+| --- | --- |
+| `tmp-logs/b1b-implementation-red.log` | `pnpm exec vitest run src/data/drive src/data/vault --maxWorkers=2`: exit 1; 56 expected missing-port/table assertion failures, 638 passing tests. |
+| `tmp-logs/b1b-implementation-green.log` | Same command after the first product pass: exit 1; 18 failures, 676 passes. |
+| `tmp-logs/b1b-implementation-final.log` | Same command after final body-error mapping: exit 1; the same 18 failures, 676 passes, no unhandled error. |
+| `tmp-logs/b1b-implementation-tsc-app.log` | `pnpm exec tsc -p tsconfig.app.json --noEmit`: exit 2; one test-only DriveApi wrapper lacks the five required methods. |
+| `tmp-logs/b1b-implementation-tsc-node.log` | `pnpm exec tsc -p tsconfig.node.json --noEmit`: exit 0. |
+| `tmp-logs/b1b-implementation-tsc-runner.log` | `pnpm -C runner exec tsc --noEmit`: exit 0, repeated after final edits. |
+| `tmp-logs/b1b-implementation-eslint.log` | `pnpm exec eslint src/data/drive/drive-api.ts src/data/drive/drive-http.ts src/data/drive/fake-drive.ts src/data/drive/read-cache.ts`: exit 0, repeated after final edits. |
+
+`git diff --check` passed. `git diff --numstat -- '*.test.ts' src/data/drive/drive-contract.ts`
+was empty. All 638 pre-existing targeted tests pass, including their Drive-call expectations;
+no golden or bound was edited. Both repaired drive-ops.test.ts assertions now pass. All direct
+fake B1b cases pass. Runner drive tests were not run because runner/src/drive.ts was untouched.
+
+### Remaining failures and required red-owner decisions
+
+1. **App TypeScript:** `src/data/live/live.test.ts:1303` returns an explicit DriveApi object from
+   `client(backend)` that forwards all old methods but omits readPrefix, getStartPageToken,
+   listChanges, parents and resolveScope. Required public ports make this a TS2739 error.
+   The red owner needs to extend that test-only wrapper. Making these ports optional, dropping
+   them from DriveApi or excluding the test from compilation would weaken the public contract.
+
+2. **Two bootstrap assertions:** `b1-feed-bootstrap-new-folder` in drive-http.test.ts and
+   `b1-ports-parity changes feed b1-feed-bootstrap-new-folder` in parity.test.ts reach
+   `drive-contract.ts:333`. `b1AssertMyDrive` filters every URL containing `/changes`, including
+   `/changes/startPageToken`, then requires restrictToMyDrive=true. The same file's start-token
+   case at line 345 and this notes file's Drive docs explicitly state that getStartPageToken has
+   no such parameter. The bootstrap drain, new folder/note membership, unrelated id exclusion,
+   removed stub and repeated change assertions all pass before this contradictory assertion.
+   The red owner needs to apply the My Drive parameter assertion to changes.list requests.
+   No unsupported parameter was added to product requests solely to satisfy that assertion.
+
+3. **Sixteen byte-equality assertions:** seven non-export prefix cases plus the cache case in
+   each of the HTTP and parity suites reach `drive-contract.ts:316` or `:451` after prefix/text
+   checks pass. Vitest reports `Compared values have no visual difference`, including empty
+   Uint8Arrays. Expected bytes are from TextEncoder; HTTP bytes use the unchanged Uint8Array
+   copy expression from the existing readBytes implementation. The likely cause is cross-realm
+   typed-array equality in the jsdom environment (`vite.config.ts:45`), rather than truncated
+   full media. This is a diagnosis inference, not an independently instrumented runtime proof.
+   The red owner should verify the realm mismatch and compare normalized byte arrays without
+   weakening the expected content or copy guarantee. No test-environment or byte-constructor
+   workaround was added to production code to force those assertions green.
+
+The first blocker alone prevents a green app typecheck under the assignment's no-test-edit rule.
+These failures are not claimed as green or waived. Product edits remain reviewable and uncommitted.
+
+### Research and compatibility
+
+Research used the packet, Q3/Q10, B1b prep's mechanism/documentation sections and the official
+protocol links already supplied locally. No online verification or live probe is claimed:
+
+- https://developers.google.com/workspace/drive/api/guides/manage-downloads
+- https://developers.google.com/workspace/drive/api/guides/manage-changes
+- https://developers.google.com/workspace/drive/api/reference/rest/v3/changes/getStartPageToken
+- https://developers.google.com/workspace/drive/api/reference/rest/v3/changes/list
+- https://www.rfc-editor.org/rfc/rfc9110.html#section-14
+
+No src/data/contracts file changed, so no compatibility-row draft is needed. The public DriveApi
+extension requires callers that build explicit adapter objects to forward the new read methods.
+
+left out: retrieval.json, cursor commit, index building, shared drives, UI, pnpm check and e2e as instructed.
+left out: red-owner repairs above; this implementer is explicitly forbidden to change any test.
