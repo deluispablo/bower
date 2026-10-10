@@ -284,3 +284,59 @@ Offline standard references reused from the packet's previous research and the r
 One home per mechanism remains: journal outbox/relay and lock in journal.ts; rule order/wording in note-edit.ts;
 ordinary report construction in scripted.ts, with only structural validation in grounded.ts. The coordinator must
 substitute the eventual fix SHA for 4953b1ae and commit these notes separately after resolving the failed gate.
+
+
+## Last round (addendum 11)
+
+Implementation on the last-round red commit `e22c4408`, using the owner's three explicit contracts.
+This checkout's DECISIONS.md contains addenda 8-10 but no addendum 11, and the adversarial note has no
+"Re-plan pass" section. The owner's instructions and `/tmp/compensate-a11-red-notes.md` supply this round's
+acceptance criteria. No network or Git write command was used; the coordinator owns both commits.
+
+1. `src/data/vault/journal.ts:552`: a failed retract now leaves memory retention to the existing `keep`
+   mechanism (`:224`), which retains only page-only lines when a stored outbox's keep fails. It no longer
+   reinstates the stored waiting list as a page copy. The relay still rereads each line under the outbox lock
+   (`:382`), so another tab's successful drop cannot be resurrected and sent. The volatile-outbox contract
+   and the existing storage-failure sentence remain in the existing homes.
+2. `src/data/vault/journal.ts:385`: the one relay skips a line whose own id is already on the failed list,
+   settles its outcome as refused, and removes its stale outbox copy without sending. `:411` keeps newly
+   refused background lines on the failed list before `:419` removes them from the outbox. A failed removal
+   therefore leaves an idempotent refusal on replay, including a fresh page. The existing immediate caller
+   refusal, inverse-of-refused handling, FIFO, reservation and first-intent recovery contracts are preserved.
+3. `src/data/contracts/note-edit.ts:633`: the new journal-id tie order and rule identity for removals apply
+   only when there is at least one removal and every removal has `since`. With no removals, or any removal
+   lacking `since`, the existing stable add order and exact-text legacy removal behavior remain. The literal
+   no-removal golden passes byte for byte for LF and CRLF, alongside all earlier legacy fixtures.
+
+One home per mechanism remains: outbox retention and the locked relay in journal.ts; rule order and wording
+in ruleSequence/wordRules in note-edit.ts. No other production file was changed.
+
+tests changed: none
+compatibility: d20eeaa3
+
+Verification (output redirected; only failures and summaries read):
+- Baseline confirmation of all three committed reds: FAIL, three tests / three files;
+  `/tmp/compensate-a11-red-confirm.log`. The second red has two failed assertions (ordering and replay).
+- The exact three reds after the fix: PASS, three tests / three files, 116 skipped;
+  `/tmp/compensate-a11-red-green.log`.
+  - `a page whose keep failed never sends its in-memory copy after another tab dropped the line`: PASS.
+  - `a refused original stays dropped when removing it from the outbox fails`: PASS.
+  - `an old manifest with no removals keeps its equal-time add order`: PASS, LF and CRLF.
+- `pnpm exec tsc -p tsconfig.app.json > /tmp/compensate-a11-tsc.log 2>&1`: PASS, exit 0; empty log.
+- `pnpm exec vitest run src/data > /tmp/compensate-a11-unit.log 2>&1`: FAIL, exit 1;
+  73 files passed / 1 failed, 3,822 tests passed / 1 failed. Every entry test, earlier contract test and
+  unchanged Undo property batch passed. The only failure is the owner's known, out-of-scope create-landed
+  UTC-date defect at drive-vault.test.ts:4029, with assertions at :4059/:4074 and test entry at :3997:
+  seed 20261009, path "59", `["pile folder", "none", "after a refresh, before the retry"]`.
+  This run began at 2026-10-10 00:14:18 UTC, inside its first-20-minutes window. No app-create code or test
+  was changed; no separate diagnosis or repair was attempted.
+- `pnpm -C runner exec vitest run > /tmp/compensate-a11-runner.log 2>&1`: PASS, exit 0;
+  40 files / 314 tests. Unchanged drive-calls-golden.test.ts:21 and :69 assert exactly 78 and 88.
+- `git diff --check`: PASS. No test file is modified. No pnpm check or e2e was run, as instructed.
+
+Offline standard references reused from the packet's previous research:
+- https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API
+- https://learn.microsoft.com/en-us/azure/architecture/patterns/compensating-transaction
+
+The coordinator commits only journal.ts and note-edit.ts as the fix, replaces d20eeaa3 above with that commit's
+SHA, then commits this notes section separately. No Git write command was run by this implementation session.

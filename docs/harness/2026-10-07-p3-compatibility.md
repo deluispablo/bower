@@ -146,3 +146,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `eb909a67` | c4-parse-once | none for stored data or formats: pile reads (listedPiles, capturePiles, the fake pile read) take the attempt's ownership context; bytes and sections unchanged. |
 | `8da56079` | c4-undo-compensate | none: tests only (re-plan reds: later-inverse rows, old-manifest golden, refused original, cross-tab FIFO, property interleavings). |
 | `4953b1ae` | c4-undo-compensate | none for stored formats: one locked send path for the outbox (the unlocked fast path removed); old manifests without since word rules byte for byte as before; a later inverse of any kind reports its own row. |
+| `e22c4408` | c4-undo-compensate | none: tests only (last-round reds: stale page copy, refused original stays dropped, old manifest with no removals). |
+| `d20eeaa3` | c4-undo-compensate | none for stored formats: sends read the outbox under the lock; the failed list is written before outbox removal; old manifests without dated removals keep their order byte for byte. |
