@@ -206,6 +206,25 @@ B5a specimen, not a second production format. `expected-view-results.json` is a 
 hand-computed oracle, outside model input and not scored today. C17 registration and
 verdict selection remain upstream H1 work. See `docs/harness/2026-10-10-b11-prep.md`.
 
+## B7 preparation cases — 2026-10-10
+
+| Case | Capability | Covers | Source |
+| --- | --- | --- | --- |
+| c17-b7-reuse-known | C17 / B7 | model | TL-P4-39 B7; three existing topics on a new note, no vocabulary write |
+| c17-b7-proposal-yes | C17 / B7 | model | TL-P4-39 F5/U2; frozen tag consent after filing, no source backfill |
+| c17-b7-proposal-budget | C17 / B7 | model | TL-P4-47 shared proposal cap/order; duplicate dedup and pending third candidate |
+| c17-b7-authority-full-cap | C17 / B7 | model | TL-P4-39 F7/R2; thirty tags, document injection and personal Markdown preservation |
+
+All four are pending preparation fixtures, not scripted success. Proposed note.tags
+and tagProposals reply fields are rejected today. Case 2's $proposal:rainwater selector
+needs exact generated proposal/asking binding in the existing real-answer driver;
+it is neither a live id nor a supported selector yet. expected-tag-results.json is
+an independent future oracle outside folder/inbox and model input, not a second
+registry or scored key. C17 admission/verdict filtering, step-aware calls and parsed
+payload/tag/raw-byte/send oracles remain upstream support plus B7c work. The prep
+records seven contract questions; no runtime or app changes are made.
+See `docs/harness/2026-10-10-b7-prep.md`.
+
 ## B8 preparation cases — 2026-10-10
 
 | Case | Capability | Covers | Source |
