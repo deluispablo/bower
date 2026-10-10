@@ -169,3 +169,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `33404e73` | c05-person-notes | none for stored shapes: settled requests stay settled, pending retries bind by persisted ids, and only settleRequest archives (TL-P4-32 addenda 3-4). |
 | `cda855c6` | tree-name-first | none: tests only (the name-first reds and the restored immediate-typing guard). |
 | `0295e5f2` | tree-name-first | none for stored data: the tree's New folder asks for the name before making the folder, then makes it once; Escape makes nothing. |
+| `f9da5278` | b1a-contract | none: tests only (the B1 contract reds; a new corpus case with its method verdict row). |
+| `254e728f` | b1a-contract | ownership-format: plain, legacy and v2 notes keep their statuses and spans; three optional framed MOC regions are additive. note-edit: existing edits keep their meaning; a person's MOC or hub admits only the link rewrite. run-manifest: stored v1/v2 manifests and checkpoints keep their values; MOC changes and the maintain effect are additive. layout: root index.md, hot.md and log.md are ordinary notes; the runner's files live in .bower/ (TL-P4-45). |
