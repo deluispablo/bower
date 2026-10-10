@@ -30,7 +30,7 @@ import {
 } from './google.js';
 import type { FetchLike } from './google.js';
 import type { PersonAccount } from './person.js';
-import { requireSameOrigin } from './security.js';
+import { clientIp, enforceRateLimit, rateLimit, requireSameOrigin } from './security.js';
 import {
   SESSION_TTL_SECONDS,
   SessionError,
@@ -195,7 +195,7 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
   const keys = deps.keys ?? googleKeys(deps.fetchImpl);
   const auth = new Hono<AppEnv>();
 
-  auth.get('/auth/login', async (c) => {
+  auth.get('/auth/login', rateLimit('AUTH_RATE_LIMIT'), async (c) => {
     const env = c.get('env');
     const state = createState();
     const nonce = createNonce();
@@ -231,6 +231,8 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     try {
       return await finishSignIn(c);
     } catch (err) {
+      // A refused request is not a failed sign-in: the person is told to wait, not sent back.
+      if (err instanceof HttpError && err.code === 'rate-limited') throw err;
       return backToSignIn('failed', err);
     }
   });
@@ -241,6 +243,8 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const state = c.req.query('state');
     if (code === undefined || code === '' || state === undefined) throw signedOut('callback without code or state');
     const { verifier, nonce } = await readOAuthCookie(c.req.header('cookie'), env.SESSION_SECRET, state);
+    // Counted only once the cookie proves a sign-in was begun here, and before Google is asked.
+    await enforceRateLimit(c, 'AUTH_RATE_LIMIT', clientIp(c));
 
     const tokens = await exchangeCode(
       {
@@ -286,7 +290,7 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
 
   // Signing out retires every session of the person (the stored generation moves on),
   // so a copied or forgotten cookie on another device stops working too.
-  auth.post('/auth/logout', requireSameOrigin, async (c) => {
+  auth.post('/auth/logout', requireSameOrigin, rateLimit('AUTH_RATE_LIMIT'), async (c) => {
     const env = c.get('env');
     let session: Authenticated | undefined;
     try {

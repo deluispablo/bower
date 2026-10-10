@@ -54,7 +54,7 @@ import type { AppEnv, Env } from './env.js';
 import { HttpError } from './errors.js';
 import { personFor, signedInSub } from './route-helpers.js';
 import type { FetchLike } from './google.js';
-import { requireSameOrigin } from './security.js';
+import { personKey, rateLimit, requireSameOrigin } from './security.js';
 import { requireLease } from './session-lease.js';
 import { FOLDER_TEMPLATE, PLACEHOLDER_FILE } from '../../src/data/contracts/folder-template.js';
 import type { FolderTemplateFile } from '../../src/data/contracts/folder-template.js';
@@ -425,7 +425,7 @@ export function createVaultRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
   const vault = new Hono<AppEnv>();
 
   // Only the window holding the person's session lease may make or find the folder (TL-P3-14).
-  vault.post('/vault', requireSameOrigin, requireSession, requireLease, async (c) => {
+  vault.post('/vault', requireSameOrigin, requireSession, requireLease, rateLimit('VAULT_RATE_LIMIT', personKey), async (c) => {
     const sub = signedInSub(c.get('userId'));
     const options: VaultOptions = {};
     if (deps.fetchImpl !== undefined) options.fetchImpl = deps.fetchImpl;

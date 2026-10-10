@@ -17,6 +17,7 @@ import type { AuthDeps } from './auth.js';
 import { CryptoError, decrypt, importEncryptionKey } from './crypto.js';
 import type { AppEnv, Env } from './env.js';
 import { HttpError } from './errors.js';
+import { enforceRateLimit, personKey } from './security.js';
 import { personFor, signedInSub } from './route-helpers.js';
 import { refreshAccessToken } from './google.js';
 import { clearSessionCookie } from './session.js';
@@ -110,6 +111,7 @@ export function createDriveRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     if ((await person.folderId()) === null) {
       throw new HttpError(409, 'no-folder', 'Choose a folder for Bower first.');
     }
+    await enforceRateLimit(c, 'DRIVE_RATE_LIMIT', personKey(c));
     const options: DriveTokenOptions = { fresh: c.req.query('fresh') === '1' };
     if (deps.fetchImpl !== undefined) options.fetchImpl = deps.fetchImpl;
     let minted: DriveToken;
