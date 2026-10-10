@@ -6638,7 +6638,7 @@
     "id": "c5-remove-new-note",
     "task": "p4-polish",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "New note is removed everywhere it is offered (explorer button and row menu, folder page, its name-sheet path); New folder stays; code only it used goes (TL-P4-35).",
     "steps": [
