@@ -143,6 +143,8 @@ const LEFT_AS_WRITTEN = {
  * addendum 5 (3); the designer's row, owner OK 2026-10-10): it fails closed, with no line, and is archived.
  */
 export const TOO_OLD_WHY = "Bower didn't add the line: this request is too old for Bower to know if it already did. Ask again if you still want it.";
+/** A named target with no line in this run (TL-P4-32 addendum 6; the designer's owner-signed row). */
+export const NOTHING_FOUND_WHY = "Bower didn't add the line: it found nothing about this note in what you added.";
 /** Row 1's line, under "Brought up to date". */
 const LINE_ADDED = 'One line added to its Timeline, as you asked.';
 
@@ -230,8 +232,10 @@ type LeftRow = LeftAsWritten & { requestId: string; sources: string[] | null };
  * - A refused request (more than three named, a name two notes share) is refused whole, by source (3): no note named
  *   is touched, and no edit in the run cites a source it files, Bower's own hubs included. A request is not tied to one
  *   pile, so every thing the run files is its source.
- * - A bound note takes one line: the model's, citing a thing filed now, or a waiting retry's, cited by its source's id
- *   as named now (6). A person's note with no Timeline, or one `timeline-line.ts` cannot read, gets its row instead.
+ * - Every named note binds at first admission, whether the model offers a line or not (addendum 6). A bound note takes
+ *   one line: the model's, citing a thing filed now, or a waiting retry's, cited by its source's id as named now (6).
+ *   A person's note with no Timeline, or one `timeline-line.ts` cannot read, gets its row instead; no line gets the
+ *   nothing-found row. Only a clashed append carries its bound ids to another run.
  * - A line already there is satisfied only under its source's final name (6); otherwise it is appended.
  * A request settles only when every note it binds has its line written or there, or a row; otherwise it waits whole.
  */
@@ -367,8 +371,13 @@ function settleRequest(requests: readonly JournalLine[], listing: readonly Drive
       }
       return { satisfied, append };
     },
-    /** Requests that cannot settle now: a bound note with neither its line written or there, nor a row. */
+    /** Settle targets with no offered line; requests with an unwritten bound line still wait for it. */
     unsettled(lineDone: (requestId: string, targetFileId: string) => boolean): string[] {
+      for (const [target, b] of bound) if (!blocked.has(target) && !rowed.has(target) && !given.has(target) && !retries.has(target)) {
+        rowed.add(target);
+        sources.set(b.requestId, null);
+        rows.push({ requestId: b.requestId, sources: null, name: b.path, fileId: target, why: NOTHING_FOUND_WHY });
+      }
       return [...admitted].filter((id) => [...bound].some(([target, b]) => b.requestId === id && !blocked.has(target)
         && !rowed.has(target) && !lineDone(id, target)));
     },
