@@ -94,3 +94,70 @@ pnpm -C runner exec vitest run test/c05-person-notes.test.ts --maxWorkers=2 > tm
 Only failures and exit statuses were inspected. Typecheck and lint logs are empty on success.
 
 Left out: implementation, full pnpm check and e2e belong to the later implementation session. No commits were made; keep the tests and these notes in separate coordinator commits as the packet requires.
+
+
+## Implementation
+
+Status: **blocked by a committed assertion that contradicts the packet**. No network or git writes. Production changes are left in the worktree for review; no tests were changed in this session.
+
+The initial exact-name run reproduced 14 assertion failures and 2 passes. After the fix, all 16 `C05 timeline list:` cases pass. The C05 app tests and the complete `src/data` suite pass. App, node and runner TypeScript checks and ESLint on the three touched production files pass.
+
+The full runner suite has **547 passes and 1 failure**. `C05 person notes: round 3 1: unreadable Timeline settles and reports without a model line` still constructs `* September: planted garlic.` at `runner/test/c05-person-notes.test.ts:578`, then expects UNREADABLE at line 586. The packet makes that star list appendable, so the no-line reply produces NOTHING_FOUND_WHY. This is a second copy of the old fixture; the committed red session replaced only the row-8 copy at line 221. No production special case can honestly preserve that assertion alongside the ruling. Per the owner's explicit instruction, implementation stopped when this conflict was found. The lead must correct the conflicting test before the entry can be delivered green.
+
+### Mechanism
+
+`timelineAppendability` replaces the content-format refusal in note-edit. Both `personalTimelineRefusal` and `appendLines` call it. It returns a refusal or the original-text insertion offset, bounded section end and last top-level marker. It admits opaque dash/star item wording, blank lines and indented subtrees, stops before a following heading, and inserts after the last nonblank subtree line. The existing empty-Timeline behavior remains. All original bytes, trailing blanks and final-newline state are retained; UTF-8 ownership spans still convert to original-text offsets before splicing.
+
+`timeline-line.ts` remains the only Bower-line grammar and writer. Its reader accepts dash/star, and its writer accepts an optional typed marker with the historical dash default. note-format extracts both markers for display and re-parse. There is no colon-date parser. Consent, sourced-line bounds, modifiedTime checks and durable record-id completion are unchanged. Existing text-plus-source identity now recognizes stored Bower-shaped star lines.
+
+Source: [CommonMark 0.31.2 list items](https://spec.commonmark.org/0.31.2/#list-items), the packet's offline reference for bullet markers, nesting and blanks. No online document was fetched. Placement reuses note-edit's existing line-offset and byte-splice mechanism, already derived from the original app.
+
+removed: note-edit.ts: timelineRefusal's per-line parseTimelineLine admission requirement and its two call sites.
+removed: timeline-line.ts: dash-only stored-line pattern and fixed dash writer prefix.
+removed: note-format.ts: dash-only Timeline bullet filters.
+tests changed: none
+
+### Compatibility row drafts
+
+| Behavior | Implementation evidence | Draft result |
+| --- | --- | --- |
+| Dated-colon list with no offered line | Exact-name runner-main red 1 passes | Nothing-found row, unchanged bytes, zero completions. |
+| Plain list, with and without front matter | Exact-name runner-main red 2 cases pass | One append, updated report, archived request, durable completion and replay. |
+| Personal prose | Exact-name runner-main red 3 passes | Unreadable row, unchanged bytes and zero completions. |
+| Personal and Bower-owned controls | Exact-name runner-main red 4 and paired controls pass | Existing author behavior retained. |
+| Star marker and mixed top-level markers | Exact-name runner-main red 5 cases pass | Writer uses the last top-level marker; re-parse retains both. |
+| Nested subtree and trailing blanks | Exact-name main/API byte fixtures pass | Appends at top level after the subtree, before trailing blanks. |
+| CRLF, Unicode and final-newline state | Exact-name main/API byte fixtures pass | Original bytes and ending state preserved. |
+| Following heading | Both exact-name main/API fixtures pass | Added line precedes the next section. |
+| Stored Bower-shaped star line | Exact-name preseed/replay case passes | Text-plus-source identity prevents duplication; record completion persists. |
+| Consent and modifiedTime checks | C05 app tests and full data suite pass | Existing bounds and write rechecks retained. |
+| Older unreadable-list assertion | Runner round-3 fixture at line 578 fails | Contradicts the ruling; requires lead-owned test correction. |
+
+### Implementation checks
+
+All command output is under `tmp-logs/`; only failure details and command status were inspected.
+
+| Check | Result | Log |
+| --- | --- | --- |
+| Exact `C05 timeline list:` reds before fix, maxWorkers=2 | Expected red: 14 fail, 2 pass | `c05-timeline-list-implementation-red.log` |
+| Exact `C05 timeline list:` after fix, maxWorkers=2 | PASS: 16 cases | `c05-timeline-list-reds-green.log` |
+| C05 app contracts, reports and tidy tests, maxWorkers=2 | PASS | `c05-timeline-list-app.log` |
+| Full src/data suite, maxWorkers=2 | PASS | `c05-timeline-list-data.log` |
+| Full runner suite including C05, maxWorkers=2 | FAIL: conflicting fixture, 547 pass | `c05-timeline-list-runner.log` |
+| App tsc | PASS | `c05-timeline-list-implementation-tsc-app.log` |
+| Node tsc | PASS | `c05-timeline-list-implementation-tsc-node.log` |
+| Runner tsc | PASS | `c05-timeline-list-implementation-tsc-runner.log` |
+| ESLint on touched production files | PASS | `c05-timeline-list-implementation-eslint.log` |
+| pnpm check through its heavy-run lock | Started before the contradiction surfaced; status below | `c05-timeline-list-check.log` |
+| Demo/fake C05, capabilities and app e2e | Not started: owner instructed stop on contradictory red | None |
+
+No commits were made. The coordinator must keep production changes and these implementation notes in separate commits.
+
+
+Final gate status: `pnpm check` exited 1 during the app unit suite: 5,485 passed, one failed, one unhandled error. `src/e2e-port.test.ts:37` timed out after `listen EPERM: operation not permitted 127.0.0.1`; the sandbox forbids the local listener. This gate failure is separate from the conflicting runner assertion. No tests or sandbox settings were changed and no gate was rerun after the owner-mandated stop. The check did not reach its downstream API/runner/build gates. The separately requested data/runner suites and three tsc checks have the results above.
+
+## Red repair
+
+tests changed: runner/test/c05-person-notes.test.ts: round 3 unreadable Timeline fixture at line 578 now uses real prose `September: planted garlic.`; preserves the UNREADABLE row and no-model-line assertions under the bullet-list ruling.
+
+Verification: `pnpm -C runner exec vitest run test/c05-person-notes.test.ts --maxWorkers=2` passed: 60/60 tests, exit 0. Log: `tmp-logs/c05-timeline-list-red-repair.log`. Read-only `git diff --check` passed. No production files or assertions changed; no network or git writes.
