@@ -9,7 +9,7 @@ import * as liveExports from './live/index';
 import type { LiveSources } from './live/index';
 import * as queueExports from './upload-queue';
 import type { AddUpload, StorageLike, UploadQueue } from './upload-queue';
-import { indexedDbUploadStore, type PendingUpload, type UploadStore } from './upload-store';
+import { indexedDbUploadStore, UploadForgottenError, type PendingUpload, type UploadStore } from './upload-store';
 import { BowerError } from './types';
 import { sha256 } from './vault/hashes';
 import { outboxKey } from './vault/journal';
@@ -382,23 +382,29 @@ it.each(['sign-out', 'auth expiry'] as const)(
 it.each([false, true])('upload-sign-out-forget: fix 1.2: sign-out waits for staging cleanup and reports a late remove failure (remove fails: %s)', async (removeFails) => {
   const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
   const f = await twoTabFixture();
-  // Tab A stages too: even its existing per-instance fence must propagate cleanup failure to sign-out.
+  // Tab A stages too: sign-out must await staging cleanup even when the purge fails.
   const stage = await delayedStaging(f.storeA, f.inbox);
   const adding = outcome(f.a.add(stage.input));
   await stage.entered.promise;
   const cleared = barrier(), cleaning = barrier(), releaseCleanup = barrier();
+  const cause = new Error('Synthetic purge removal refused');
   const clear = f.storeA.clear.bind(f.storeA);
   vi.spyOn(f.storeA, 'clear').mockImplementation(async (account, folder) => {
+    // Exercise a purge removal on metadata that existed before sign-out.
+    let failure: { cause: unknown } | undefined;
+    try { await f.storeA.remove(f.control[0]); }
+    catch (cause) { failure = { cause }; }
+    // Finish the account clear too; a removal failure must still be reported.
     await clear(account, folder);
     cleared.open();
+    if (failure) throw failure.cause;
   });
-  const cause = new Error('Synthetic late removal refused');
   const remove = f.storeA.remove.bind(f.storeA);
   vi.spyOn(f.storeA, 'remove').mockImplementation(async (record) => {
+    if (record === f.control[0] && removeFails) throw cause;
     if (record.memberKey !== stage.input.memberKey) return remove(record);
     cleaning.open();
     await releaseCleanup.promise;
-    if (removeFails) throw cause;
     await remove(record);
   });
   let ended = false;
@@ -412,31 +418,33 @@ it.each([false, true])('upload-sign-out-forget: fix 1.2: sign-out waits for stag
     const endedDuringStaging = ended;
     stage.release.open();
     await cleaning.promise;
-    const retained = await fresh.list(f.account, f.root);
-    expect(retained).toHaveLength(1);
-    expect(await keptBytes(fresh, stage.records)).toEqual([[...new TextEncoder().encode('Synthetic bytes')]]);
+    expect(await fresh.list(f.account, f.root)).toEqual([]);
+    expect(await keptBytes(fresh, stage.records)).toEqual([null]);
+    expect(await outcome(vi.mocked(f.storeA.add).mock.results[0].value)).toEqual({
+      error: expect.any(UploadForgottenError),
+    });
     const endedDuringCleanup = ended;
     releaseCleanup.open();
     const result = await signingOut;
     await adding;
     if (!removeFails) {
-      // Positive cleanup control: the same late write is actually removed when remove succeeds.
+      // Positive cleanup control: the refused late write leaves nothing when cleanup succeeds.
       expect(result).toEqual({ value: undefined });
       expect(await fresh.list(f.account, f.root)).toEqual([]);
       expect(await keptBytes(fresh, stage.records)).toEqual([null]);
       expect(log.mock.calls.flat()).not.toContain(cause);
       return;
     }
-    expect(result, 'a late failed remove belongs to sign-out, not only the stopped add').toMatchObject({
+    expect(result, 'a failed purge removal belongs to sign-out, not only the stopped add').toMatchObject({
       error: { name: 'BowerError', message: 'Signing out did not finish. Try again.' },
     });
     expect('error' in result && result.error).toBeInstanceOf(BowerError);
     expect(log.mock.calls.flat()).toContain(cause);
     expect(endedDuringStaging, 'sign-out must wait for the outstanding Blob read').toBe(false);
     expect(endedDuringCleanup, 'sign-out must wait for the late remove').toBe(false);
-    // The injected refusal really leaves bytes behind; reporting success would be a privacy defect.
-    expect(await fresh.list(f.account, f.root)).toHaveLength(1);
-    expect(await keptBytes(fresh, stage.records)).toEqual([[...new TextEncoder().encode('Synthetic bytes')]]);
+    // Even after the purge failure surfaces, the stale write must never restore this account.
+    expect(await fresh.list(f.account, f.root)).toEqual([]);
+    expect(await keptBytes(fresh, stage.records)).toEqual([null]);
   } finally {
     stage.release.open();
     releaseCleanup.open();

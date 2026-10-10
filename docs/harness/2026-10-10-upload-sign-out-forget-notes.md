@@ -910,3 +910,30 @@ TypeScript build-info paths remain under OS temp; tests write no artifacts into 
 
 removed: none (0 production lines; 0 test lines).
 tests changed: none
+
+## Fix round 3 red repair
+
+tests changed: src/data/upload-sign-out.test.ts: TL-P4-53 addendum 8: replace the two fix-1.2 cases' retained late record and 15-byte expectations with absence before cleanup settles and after sign-out; assert the real store add rejects with UploadForgottenError. Inject the removal failure on the pre-sign-out control record during the purge, rather than on the refused late write.
+
+The clear spy attempts removal of the existing control record, preserves any removal error,
+finishes the real account clear, opens the post-clear barrier, then rethrows that error.
+The late staging cleanup retains its separate barrier and successful real removal. Existing
+BowerError sentence, console.error cause, staging wait, cleanup wait, successful sign-out,
+control-byte deletion and all other tests/assertions remain in place. Production is unchanged.
+The two fix-1.2 test names remain unchanged for the existing verification contract.
+
+No network. Research reused the IndexedDB transaction lifecycle and Drive resumable upload
+references in the preceding section. No Git-writing command; the coordinator owns commits.
+
+Verification: file run with --maxWorkers=2, exit 1; 32 tests, 24 pass and 8 assertion reds.
+Both repaired fix-1.2 cases fail at src/data/upload-sign-out.test.ts:421 because the current
+store still admits one late record. The six existing fix-3 reds remain: Undo awaits untrash,
+addPile awaits declaration hashing, and chooseAgain awaits hashing, each for sign-out and auth
+expiry. No other failures. Complete output: /private/tmp/upload-forget-round3-red-repair.log.
+Command: node_modules/.bin/vitest run src/data/upload-sign-out.test.ts --config
+/private/tmp/upload-forget-round3-h6wxwpmt/vitest.config.mjs --maxWorkers=2, invoked using the
+absolute local binary from OS-temp cwd, with offline settings. The existing temporary config
+and timer setup keep Vite cache and CPU reports in OS temp. Tests write nothing to the repo.
+No pnpm check or e2e for this authorized test-only red repair. git diff --check passed.
+
+removed: none (0 production lines; only the authorized retained-record/byte expectations replaced).
