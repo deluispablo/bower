@@ -6820,7 +6820,7 @@
     "id": "b2a-summary-format",
     "task": "p4-b2",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "A note summary is written as a safe one-line YAML scalar and read back exactly (TL-P4-42 Q1, Q2).",
     "steps": [
