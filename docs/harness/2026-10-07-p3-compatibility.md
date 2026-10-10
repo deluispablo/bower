@@ -190,3 +190,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `f6e1be50` | q1a-stored-answers | questions: round history is matched through the shared subject identity (pile and member, reupload hash) and exhaustion is recorded after the second answer; stored shapes unchanged from ddfba738; old files read as before. |
 | `c72e4fa2` | q1a-stored-answers | none: tests only (fix round 3 reds). |
 | `1ead8678` | q1a-stored-answers | questions/layout: round history is kept per member subject (a pile-level asking records each waiting member it covers); the stored {v:1} shape is unchanged and old round records read as before. |
+| `59d4dfbb` | c02-upload-count-ui | none: tests only (Home and Settings reds). |
