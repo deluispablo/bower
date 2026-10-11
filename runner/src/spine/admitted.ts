@@ -16,7 +16,7 @@ import { READ_AHEAD, limiter } from '../../../src/data/spine/read';
 import type { Admitted, Deferred } from '../../../src/data/spine/provider';
 import type { RunManifest } from '../../../src/data/spine/records';
 import type { RunnerToken } from '../token';
-import { ABOUT_REGIONS } from '../../../src/data/contracts/ownership-format';
+import { applyChanges } from '../../../src/data/contracts/note-edit';
 import { aboutArchivePath, type ObservationOrigin } from '../../../src/data/contracts/observations';
 import { targetPath } from '../../../src/data/contracts/run-manifest';
 import { PILE_NOTE } from '../../../src/data/piles';
@@ -143,8 +143,10 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
         if (kinds.has('about-append') || kinds.has('about-rewrite')) {
           const targets = m.capture.places.filter((p) => p.path === 'About me.md');
           if (e.path !== 'About me.md' || targets.length !== 1 || targets[0]?.file.fileId !== e.before.fileId
-            || e.changes.some((c) => c.kind !== 'about-append' && c.kind !== 'about-rewrite'
-              || c.kind === 'about-rewrite' && !ABOUT_REGIONS.includes(c.region))) return 'an About me edit outside its marked sections';
+            || e.changes.some((c) => c.kind !== 'about-append' && c.kind !== 'about-rewrite')) return 'an About me edit outside its marked sections';
+          if (e.beforeText === undefined) return 'an About me edit without its read bytes';
+          const authored = applyChanges(new TextEncoder().encode(e.beforeText), e.changes);
+          if (!authored.ok || authored.text !== e.text) return 'an About me edit outside its marked sections';
         }
         const rules = e.path === RULES_PATH;
         if (rules ? kinds.has('timeline-append') || kinds.has('state-rewrite') : kinds.has('rules-wording')) return 'a note edit outside what the runner authors';

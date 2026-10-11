@@ -936,6 +936,8 @@ function appendAbout(text: string, addition: string): Step {
   const after = parseOwnership(encoder.encode(appended));
   if (before.status === 'invalid' || after.status === 'invalid'
     || ABOUT_REGIONS.some((region) => before.payloads?.[region])
+    || Object.entries(after.payloads ?? {}).some(([region, span]) => !(ABOUT_REGIONS as readonly string[]).includes(region)
+      && span.start >= encoder.encode(text).length)
     || !addition.startsWith('## What Bower has learned\n') && !addition.startsWith('## What Bower has learned\r\n')
     || !ABOUT_REGIONS.every((region) => (after.payloads?.[region]?.start ?? -1) >= encoder.encode(text).length)) return { refused: 'not-bower' };
   return { text: appended, added: [], rules: null };
@@ -949,9 +951,13 @@ function rewriteRegion(text: string, change: RegionChange, fetched?: FetchedOwne
   const bytes = encoder.encode(framed);
   const own = framed === text && fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
   const note = parseNote('note.md', framed);
-  const span = own.status !== 'invalid' ? own.payloads?.[regionOf(change)] : undefined;
+  if (own.status === 'invalid') return { refused: 'not-bower' };
+  const span = own.payloads?.[regionOf(change)];
   if (change.kind === 'template-rewrite' && (!note.byBower || !note.properties.some((p) => p.key === 'type' && p.value === 'project'))) return { refused: 'not-bower' };
   if ((change.kind === 'moc-rewrite' && (!note.byBower || !note.properties.some((p) => p.key === 'type' && p.value === 'moc'))) || !span) return { refused: 'not-bower' };
+  if (change.kind === 'about-rewrite' && (ABOUT_REGIONS.some((region) => !own.payloads?.[region])
+    || Object.entries(own.payloads ?? {}).some(([region, payload]) => !(ABOUT_REGIONS as readonly string[]).includes(region)
+      && payload.start >= (own.payloads?.['about-you']?.start ?? 0)))) return { refused: 'not-bower' };
   const at = spanOf(bytes, span);
   if (framed.slice(at.start, at.end) !== change.previous) return { refused: 'person-edited' };
   return { text: framed.slice(0, at.start) + change.text + framed.slice(at.end), added: [], rules: null };

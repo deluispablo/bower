@@ -115,9 +115,11 @@ function resolve(events: Event[], undone: readonly string[] = []): Ledger {
       || blockedSources.has(event.source.fileId)) continue;
     if (event.remembers && !events.slice(0, events.indexOf(event)).some((e) => e.kind === 'tombstone' && e.factId === event.remembers
       && e.runId !== event.origin.runId)) continue;
-    if (forgotten.some((fact) => fact.section === event.section && normalizedText(fact.text) === normalizedText(event.text)
-      && (!event.remembers || event.remembers !== fact.factId || event.source.fileId === fact.source.fileId
-        || tombstones.some((t) => t.factId === fact.factId && events.indexOf(t) >= events.indexOf(event))))) continue;
+    const matching = forgotten.filter((fact) => normalizedText(fact.text) === normalizedText(event.text));
+    if (matching.length && (event.origin.kind !== 'words' || !matching.some((fact) => fact.factId === event.remembers)
+      || matching.some((fact) => event.source.fileId === fact.source.fileId
+        || tombstones.some((t) => t.factId === fact.factId
+          && (t.date >= event.date || events.indexOf(t) >= events.indexOf(event)))))) continue;
     live.push(event);
   }
   return { events, live, tombstones };

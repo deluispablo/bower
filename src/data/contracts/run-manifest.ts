@@ -828,16 +828,19 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> 
           (event.kind === 'observation' ? event.origin.runId : event.runId) === runId))) return false;
         const rebuilt = c.undoneRunIds?.length && (lastLedger.effect.kind === 'write-runner-json' || lastLedger.effect.kind === 'create-text')
           ? parseObservations(enc.encode(lastLedger.effect.text), c.undoneRunIds) : ledger;
-        const reason = c.undoneRunIds?.length ? 'undo' : ledger.tombstones.some((t) => t.runId === value.runId
-          && ledger.events.some((fact) => fact.kind === 'observation' && fact.factId === t.factId && fact.section === c.region))
+        const reason = c.undoneRunIds?.length ? 'undo' : ledger.tombstones.some((t) => t.runId === value.runId)
           ? 'forget' : 'consolidate';
         if (!aboutEvidenceOk(c.text, c.region, rebuilt, c.factIds)) return false;
-        if (!c.factIds || c.factIds.some((id) => !rebuilt.live.some((fact) => fact.factId === id && fact.section === c.region))
-          || !c.archive) return false;
+        if (!c.factIds || c.factIds.some((id) => !rebuilt.live.some((fact) => fact.factId === id && fact.section === c.region))) return false;
+        const rebuild = canRebuildAboutSection({ ledger: rebuilt, section: c.region, text: c.previous, reason });
+        if (!rebuild) {
+          if (c.archive || !c.text.startsWith(c.previous)) return false;
+          continue;
+        }
+        if (!c.archive) return false;
         const archive = archives.get(c.archive);
         if (!archive || !op.dependsOn.includes(archive.operationId) || archive.effect.text !== c.previous
           || c.archive.split('/')[3] !== c.region || !c.factIds
-          || !canRebuildAboutSection({ ledger: rebuilt, section: c.region, text: c.previous, reason })
           || rebuilt.live.filter((fact) => fact.section === c.region).some((fact) => !c.factIds?.includes(fact.factId))) return false;
         // A frontier is a separate, dependent ledger effect, frozen along with this edit.
         if (reason === 'consolidate' && !operations.some((next) => next.ordinal > op.ordinal && next.effect.kind === 'write-runner-json'
