@@ -978,3 +978,89 @@ the commit-plan file are dirty.
 ### Round 2 coordinator pin (addendum 4)
 
 tests changed: runner/test/claude-provider.test.ts: the RUNNER_WRITES pin now lists '.bower/observations.jsonl', the runner file that B4a added to the allowlist (TL-P4-48); no bound or assertion about bytes was loosened.
+
+
+## Round 3 reds (addendum 5)
+
+Red-owning session only, following TL-P4-48 addendum 5 and
+`docs/harness/2026-10-11-b4a-adversarial-3.md`. Scope: one new contract test file,
+these appended notes, and the runner's commit plan. No production code, existing
+test, fixture, config, export or caller was changed. No second mechanism added.
+
+Research: reused the packet's prior offline references, including
+https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+and https://zod.dev/api, plus the existing round-2 public-contract test pattern.
+These citations are prior research, not freshly verified; no network was used.
+
+Public boundaries: `parseObservations`, `applyChanges`, `parseRunManifestV2`,
+`outsideAdmitted` and `canRebuildAboutSection`. Manifest content hashes, capture
+identities and operation identities are sealed independently with node:crypto and
+`canonicalRecordJson`. Expected after-bytes are supplied independently so an
+invalid authoring request can still be checked at the manifest/admission boundary.
+All facts, identities, dates and content in the fixtures are made up.
+
+Exactly four new reds, each with passing positive controls:
+
+1. `b4a-r3 1 tombstone holds across sections, last word wins`
+   - Controls: the original fact is live; Forget preserves unrelated evidence;
+     later own words explicitly remembering the fact are live; replay/document
+     fixtures are valid and live in isolation.
+   - Red: normalised cross-section replay and document replay are live after
+     Forget. Explicit words dated before or on the tombstone date also become
+     live. All four must remain blocked. Fresh event/fact ids and source hashes,
+     full-width/case/whitespace normalization, and a fresh document source are covered.
+2. `b4a-r3 2 exactly the three ruled regions`
+   - Controls: all three ruled regions author, validate and admit, both empty
+     and with a live evidence-bound preference. The ownership/2 prefix includes
+     the existing current/personal/timeline/bower-note frames.
+   - Red: an appended profile region authors, validates and admits with either
+     ledger. An unknown region already fails authoring/validation but admission
+     still accepts it. Soft assertions exercise every boundary and both ledgers;
+     all failures belong to the extra-region finding.
+3. `b4a-r3 3 below budget a write is a plain append`
+   - Controls: 201 authored words plus five new live observations consolidate
+     successfully with the exact previous-section archive and dependent frontier.
+     Missing archive, missing frontier, only four observations, and exactly 200
+     words each refuse consolidation. The ordinary append authors exact expected
+     bytes and admits; it has only ledger, edit and maintain effects, no archive
+     or consolidation frontier.
+   - Red: adding one live preference to initialized empty sections returns
+     `{ok:false, reason:"shape"}` from the manifest validator instead of success.
+4. `b4a-r3 4 remember, Forget, remember, Forget, remember: the third remember is live`
+   - Controls: first remember is live, first Forget leaves none, second remember
+     is live, second Forget leaves none, and both tombstones remain retained.
+   - Red: the third remember, with fresh source/run and later date, yields no
+     live fact instead of `fact-third`.
+
+Verification (all test runs use `--maxWorkers=2`):
+
+- New file alone: exactly 4 tests, all 4 fail only on the findings above; controls
+  pass, with no import, fixture-shape or runtime error. Report and failure log:
+  `/private/tmp/b4a-r3-red.json`, `/private/tmp/b4a-r3-red.log`.
+- New file plus unchanged `b4a-r2.test.ts`: 8 tests, 4 existing tests pass and
+  exactly the 4 new reds fail. No additional contract contradiction found.
+  `/private/tmp/b4a-r3-compat.json`, `/private/tmp/b4a-r3-compat.log`.
+- Targeted ESLint passes: `/private/tmp/b4a-r3-lint.log`.
+- App TypeScript check passes with `--noEmit --incremental false`:
+  `/private/tmp/b4a-r3-types.log`.
+- Temp-only test configuration: `/private/tmp/b4a-r3-4dydlrwh/vitest.config.mjs`.
+  It preserves jsdom, the app setup and timer-gate setup. The setup wrapper changes
+  each fork's working directory to that OS-temp directory before loading the
+  existing setups, so their CPU reports also go to temp. Config loader is runner,
+  cache is disabled, and cache/attachment destinations are in OS temp. No test
+  writes into the repository; node_modules was neither replaced nor symlinked.
+
+Command for the final combined run (the first run's temp config included only r3):
+
+```sh
+node node_modules/vitest/vitest.mjs run --config /private/tmp/b4a-r3-4dydlrwh/vitest.config.mjs --configLoader runner --no-cache --maxWorkers=2 --reporter=default --reporter=json --outputFile=/private/tmp/b4a-r3-compat.json > /private/tmp/b4a-r3-compat.log 2>&1
+```
+
+tests changed: src/data/contracts/b4a-r3.test.ts: new file; four addendum-5 reds with positive controls.
+tests changed: no existing test was modified or deleted; no bounds, skips or focused tests added.
+removed: none.
+
+The runner owns committing. `.codex-commits.json` declares one test-only commit
+and one notes-only commit. No git-writing command, production fix, pnpm check,
+full suite, server, e2e or B4b/B4c runtime wiring was attempted. The four contract
+failures remain intentionally unresolved for the implementation session.
