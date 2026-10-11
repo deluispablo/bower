@@ -11,7 +11,8 @@ import { pathToFileURL } from 'node:url';
 
 const [scriptDir, target, prompt, ...args] = process.argv.slice(2);
 const { scanStaged } = await import(pathToFileURL(resolve(scriptDir, '../scripts/scan-staged.mjs')).href);
-const options = { entry: '', role: 'implementer', sandbox: 'workspace-write', effort: 'medium', attempt: '1', e2e: '' };
+// Model and speed per run (TL-P4-57): the workhorse by default, the frontier model for escalated, adversarial and closing work.
+const options = { entry: '', role: 'implementer', sandbox: 'workspace-write', effort: 'medium', attempt: '1', e2e: '', model: 'gpt-6.1-sol', tier: 'fast' };
 let invalid = '';
 for (let i = 0; i < args.length; i += 2) {
   const key = args[i].slice(2);
@@ -22,7 +23,8 @@ for (let i = 0; i < args.length; i += 2) {
 }
 if (!target || !prompt || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(options.entry) ||
     !/^[1-9][0-9]*$/.test(options.attempt) || /[\r\n]/.test(options.role) ||
-    !['workspace-write', 'read-only'].includes(options.sandbox) || !['low', 'medium', 'high'].includes(options.effort)) {
+    !['workspace-write', 'read-only'].includes(options.sandbox) || !['low', 'medium', 'high', 'xhigh'].includes(options.effort) ||
+    !/^[a-z0-9][a-z0-9._-]*$/.test(options.model) || !['fast', 'standard'].includes(options.tier)) {
   invalid = 'Invalid runner arguments.';
 }
 if (invalid) { console.error(invalid); process.exit(2); }
@@ -47,7 +49,7 @@ const logs = { 'json-log': `${prefix}.jsonl`, 'codex-log': `${prefix}.codex.log`
 const result = { status: 'refused', branch: '', commits: '', tokens: '', check: 'not-run', 'e2e-demo': 'not-run', 'e2e-fake': 'not-run', ...logs };
 let card = '';
 let usage;
-let model = 'unknown';
+let model = options.model;
 let initialHead;
 let tokenFile;
 let recorded = false;
@@ -127,7 +129,8 @@ try {
   let run;
   try {
     run = spawnSync(process.env.CODEX_BIN || 'codex', ['exec', '--json', '--sandbox', options.sandbox,
-      '-C', wt, '-c', `model_reasoning_effort=${options.effort}`, '-'], { cwd: wt, stdio: [input, stream, errors] });
+      '-C', wt, '-m', options.model, '-c', `model_reasoning_effort=${options.effort}`,
+      ...(options.tier === 'fast' ? ['-c', 'service_tier="priority"'] : []), '-'], { cwd: wt, stdio: [input, stream, errors] });
   } finally { closeSync(input); closeSync(stream); closeSync(errors); }
   for (const line of readFileSync(logs['json-log'], 'utf8').split('\n')) {
     if (!line.trim()) continue;

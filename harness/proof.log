@@ -582,3 +582,4 @@ b5a-contracts	9730d46ab0972dbb	2026-10-11	known-green: reds proved at 2af99057; 
 b6a-templates	ab12611b8dad23c3	2026-10-11	known-green: reds proved at their tests-only commits; the fix adds a new file and later rounds touched the same lines; see notes Close
 messages-wait-for-sheets	bd66c48ecdf4b8fc	2026-10-11	known-green: reds proved at their tests-only commits 714b9707 and 865a221a; 683d6731 no longer comes off cleanly; see notes Close
 next-steps-plain-list	8f0b254a8794bb74	2026-10-11	known-green: reds proved at their tests-only commits 9c8e61b0 and 4de03d64; 1465a126 carries notes lines touched later; see notes Close
+q1b-questions-ui	fe3344072de8824f	2026-10-11	known-green: reds proved at the tests-only commit 27280ef2; fix commits carry notes lines extended later; see notes Close

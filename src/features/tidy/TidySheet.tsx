@@ -15,6 +15,7 @@ import { hasReplay, reportWaiting, isRunning, runClock, runDetail, runTitle, ste
 import { useNow } from './useNow';
 import { TidyScene } from './TidyScene';
 import { RunLinks } from './RunLinks';
+import { Questions } from '@/features/home/Home';
 import s from './tidy.module.css';
 
 /** The tidy-up: confirm, then the real phases, then the result. One sheet. */
@@ -134,6 +135,7 @@ function RunView({ run }: { run: RunState }) {
       <p className={s.detail} role="status" aria-live="polite">
         {runDetail(run)}
       </p>
+      <Questions run={run} />
       {run.phase !== 'done' && (
         <ol className={s.steps}>
           {RUN_STEPS.map((step) => {
