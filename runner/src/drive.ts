@@ -38,7 +38,7 @@ import { sha256 } from '../../src/data/contracts/hashes';
 import { ReadCache } from '../../src/data/drive/read-cache';
 import { destinationOf, SeenFiles, targetOf, type FenceTarget, type StoredNow } from '../../src/data/drive/seen-files';
 import { staleAttempt, type RunnerToken } from './token';
-import type { RunTiming } from './timing';
+import { LedgerExhausted, type RunTiming } from './timing';
 import { decodePrefix } from '../../src/data/drive/drive-api';
 import { indexedFront, type IndexedFront } from '../../src/data/contracts/note-format';
 
@@ -269,7 +269,7 @@ export class RunnerDrive implements RunDrive {
       get: (id, opts) => this.http.get(id, opts),
       getUploaded: (id) => this.http.getUploaded(id),
       binnedByItem: (rootId, keys, budget) => this.http.binnedByItem(rootId, keys, budget),
-    }, out.scope);
+    }, out.scope, undefined, (error) => error instanceof LedgerExhausted);
     const current = (): NonNullable<typeof listed> => {
       if (!listed || listed.generation !== this.generation) listed = { generation: this.generation, scope: out.scope, reads: reader(), listings: new Map(), warmed: new Set() };
       return listed;

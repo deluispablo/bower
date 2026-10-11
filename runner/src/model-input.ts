@@ -27,7 +27,8 @@ function fixKeys(value: unknown, references: ReadonlyMap<string, string>): unkno
   const out: Record<string, unknown> = {};
   for (const [key, inner] of Object.entries(value)) {
     // Type-row ids are stable configuration, rather than physical ids assigned to this run.
-    if (key === 'types') out[key] = inner;
+    if (key === 'members' && Array.isArray(inner)) out[key] = inner.map((id: unknown) => typeof id === 'string' ? references.get(id) ?? id : fixKeys(id, references));
+    else if (key === 'types') out[key] = inner;
     else if (['indexed', 'foldersById', 'allowedTargets'].includes(key) && inner !== null && typeof inner === 'object' && !Array.isArray(inner)) {
       // Dictionary keys are physical ids too. Keep every row, ordered by its stable content.
       out[key] = Object.fromEntries(Object.values(inner).map((row) => fixKeys(row, references))

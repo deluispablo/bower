@@ -60,7 +60,7 @@ import { sha256Sync } from '../../src/data/contracts/hashes';
 import { outsideAdmitted } from './spine/admitted';
 import { LedgerExhausted, RunTiming, type ModelStats } from './timing';
 import type { MaintenanceNote } from '../../src/data/contracts/run-manifest';
-import { parseNote } from '../../src/data/contracts/note-format';
+import { indexedFront, noteRefusal, parseNote } from '../../src/data/contracts/note-format';
 import { checkCreationName } from '../../src/data/contracts/tree';
 import { readTypeTable } from './type-table';
 import { mocMembership, mocSnapshot } from './moc';
@@ -187,7 +187,7 @@ interface Shown {
   own?: string;
   piles: Array<{ pileId: string; words: string; things: ShownThing[] }>;
   notes: Array<{ path: string; text: string; cut: number }>;
-  suppressed?: ReadonlySet<string>;
+  suppressed?: Set<string>;
   personalNotes?: ReadonlySet<string>;
   retrySources?: ReadonlySet<string>;
   /** Script-resolved read pins, keyed by the admitted request file; the scripted planner owns consent. */
@@ -1361,8 +1361,10 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       const front = await read.indexedFront?.(file);
       if (!indexed[file.id]) indexed[file.id] = { path, version: file.modifiedTime, summary: front?.summary ?? '(no summary)',
         coverage: { kind: 'prefix', bytes: 4096 }, ...(front ? { owner: front.owner, type: front.type } : {}) };
+      const entry = indexed[file.id];
+      if (front?.incomplete && entry) entry.incomplete = true;
       metadata[file.id] = { summary: indexed[file.id]?.summary ?? '', type: front?.type ?? indexed[file.id]?.type,
-        ...(prefix && (front?.type ?? indexed[file.id]?.type) !== 'moc' ? { links: parseNote(path, prefix).links } : {}) };
+        ...(prefix ? { links: indexedFront(prefix, true).links } : {}) };
     }
     const sources = shownTook.taken.piles.flatMap((pile) => {
       const p = shown.piles.find((p) => p.pileId === pile.pileId);
@@ -1374,13 +1376,22 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     for (const line of shownTook.taken.journal) sources.push({ itemId: line.fileId, words: await read.readText(line.fileId), ids: Object.keys(indexed) });
     const pinsFor = (itemId: string): string[] => [...new Set([
       ...answers.filter((a) => a.sourceId === itemId || subjectKey(a.question) === itemId).flatMap(answerPins),
-      ...Object.values(shown.requestNotes ?? {}).flat(),
+      ...shown.requestNotes?.[itemId] ?? [],
     ])];
     const captureMaps = async (ids: readonly string[]): Promise<void> => {
       for (const id of new Set(ids)) {
         const note = indexed[id];
-        if (note?.type === 'moc' && !note.moc && !shown.suppressed?.has(note.path)) {
-          note.moc = mocSnapshot(await read.readText(id)) ?? undefined;
+        if (note?.type !== 'moc' || shown.suppressed?.has(note.path)) continue;
+        try {
+          const text = note.moc?.text ?? await read.readText(id);
+          note.moc = mocSnapshot(text) ?? undefined;
+          metadata[id] = { ...metadata[id], summary: note.summary, links: parseNote(note.path, text).links };
+        } catch (error) {
+          if (!noteRefusal(error)) throw error;
+          console.error(error);
+          shown.suppressed?.add(note.path);
+          delete note.moc;
+          delete note.members;
         }
       }
     };
@@ -1388,14 +1399,13 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     for (const source of sources) {
       const waiting = ix.waitingRun(source.itemId) !== null;
       const matched = [...new Set([...pinsFor(source.itemId), ...(waiting ? [] : ix.neighbourhood(source.words, metadata))])];
+      await captureMaps(matched);
       for (const id of matched) {
         const file = ix.byId(id); const path = ix.pathOf(id);
         if (!file || !path || metadata[id]?.links || shown.suppressed?.has(path)) continue;
-        const note = indexed[id];
-        const text = note?.type === 'moc' ? note.moc?.text ?? await read.readText(id) : await setup.prefixes?.(file, true);
+        const text = await setup.prefixes?.(file, true);
         if (text) {
-          metadata[id] = { ...metadata[id], summary: metadata[id]?.summary ?? '', links: parseNote(path, text).links };
-          if (note?.type === 'moc') note.moc = mocSnapshot(text) ?? undefined;
+          metadata[id] = { ...metadata[id], summary: metadata[id]?.summary ?? '', links: indexedFront(text, true).links };
         }
       }
       const neighbourhood = waiting ? matched : ix.neighbourhood(source.words, metadata);
@@ -1409,7 +1419,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       }))];
       const parents = listing.filter((f) => f.folder && (MAIN_FOLDERS.includes(ix.pathOf(f.id) ?? '')
         || notes.some((id) => ix.byId(id)?.parents.includes(f.id)))).map((f) => f.id);
-      source.ids = [...new Set([...pinned, ...pinsFor(source.itemId), ...notes, ...parents])].slice(0, 30);
+      source.ids = [...new Set([...pinned, ...Object.values(shown.requestNotes ?? {}).flat(), ...pinsFor(source.itemId), ...notes, ...parents])].slice(0, 30);
     }
     await captureMaps(sources.flatMap((source) => source.ids));
     shown.sources = sources.map((source) => ({ itemId: source.itemId, candidates: source.ids.flatMap((id) => {
@@ -1427,7 +1437,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     };
     const typeFile = ix.file(SYSTEM.typeTable);
     shown.types = readTypeTable(typeFile ? await read.readText(typeFile.id) : null).table.rows;
-    // Answer pins count only for their source; script request pins retain their existing accounting.
+    // Answer and request pins count only for their own source.
     const context: SelectionContext = { itemIds: [...sources.map((s) => s.itemId), ...shownTook.taken.journal.map((j) => j.fileId)],
       kinds: shown.types.map((row) => row.id),
       candidates: Object.keys(shown.indexed), folders: folders.map((f) => ({ id: f.id, hubId: hubId(f.id) })),
@@ -1492,7 +1502,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       const selection = await twice(inputSelection,
         (value) => { const checked = selectionCheck(value); return checked.ok ? checked : null; });
       await captureMaps(Object.values(selection.allowedTargets).flat());
-      const wanted = new Set(selection.value.items.flatMap((item) => selection.allowedTargets[item.itemId] ?? [])
+      const wanted = new Set(Object.values(selection.allowedTargets).flat()
         .filter((id) => indexed[id] && (indexed[id]?.type !== 'moc' || selection.value.items.some((item) => item.wants.includes(id)))));
       const readable = new Set([...wanted].filter((id) => !shown.suppressed?.has(ix.pathOf(id) ?? '')));
       shown.notes = await notesShown(read, listing, ix, pinned, readable, readable);
@@ -1526,6 +1536,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           if (id && Object.values(selection.allowedTargets).some((targets) => targets.includes(id))
             && typeof row.text === 'string' && seen.presentLines?.has(JSON.stringify([row.note, row.text.trim(), row.cites]))) return true;
           return !!id && (chosen(row.cites) ? selection.allowedTargets[String(row.cites)]?.includes(id) === true
+            || Object.keys(shown.requestNotes ?? {}).some((requestId) => selection.allowedTargets[requestId]?.includes(id))
             : wanted.has(id) && (row.cites === undefined || shown.retrySources?.has(String(row.cites))) && shownTook.taken.journal.length > 0
               || row.cites === undefined && !shown.personalNotes?.has(String(row.note))
                 && Object.values(selection.allowedTargets).some((targets) => targets.includes(id)));
@@ -1566,7 +1577,13 @@ export function selectionOf(value: unknown, context: SelectionContext):
   { ok: true; value: z.output<typeof SelectionShape>; allowedTargets: Record<string, string[]> } | { ok: false } {
   const parsed = SelectionShape.safeParse(value);
   if (!parsed.success) return { ok: false };
+  // Script-bound pins belong to their admitted source even when it needs no selected destination.
   const allowedTargets: Record<string, string[]> = {};
+  for (const itemId of context.itemIds) {
+    const pins = [...new Set(context.pinned[itemId] ?? [])];
+    if (pins.length > 5 || pins.some((id) => !context.candidates.includes(id))) return { ok: false };
+    if (pins.length) allowedTargets[itemId] = pins;
+  }
   const seen = new Set<string>();
   for (const item of parsed.data.items) {
     const folderId = typeof item.destination === 'string' ? item.destination : item.destination.parentId;

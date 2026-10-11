@@ -1,6 +1,6 @@
 /** Derived maintenance uses the manifest, its settled outcomes and the ordinary fenced effects. */
 import { sha256Hex } from '../../src/data/contracts/hashes';
-import { indexedFront, timelineBullets } from '../../src/data/contracts/note-format';
+import { indexedFront, noteRefusal, timelineBullets } from '../../src/data/contracts/note-format';
 import { opKey } from '../../src/data/contracts/op-key';
 import type { EditText, EffectV2, Maintain, MaintenanceDeclaration, MaintenanceNote, RunnerWrite, SeenFile, VerifiedContent } from '../../src/data/contracts/run-manifest';
 import type { DriveFile, StoredEvidence } from '../../src/data/drive/drive-api';
@@ -22,7 +22,6 @@ import { subjectOf } from '../../src/data/contracts/questions';
 import { parseTimelineLine } from '../../src/data/contracts/timeline-line';
 import { renderHot, sameExceptDate, type HotInputs } from './hot';
 import { LedgerExhausted, type RunTiming } from './timing';
-import { parseOwnership } from '../../src/data/contracts/ownership-format';
 
 /** Every derived kind joins this slot; declarations persist inside maintain, never in a separate store. */
 export interface DeclaredTarget {
@@ -292,7 +291,7 @@ const notesIn = (index: VaultIndex) => [...index.entries()].flatMap(([path]) => 
 
 /** The index's ordinary prefix supplies summary and per-version owner/type, without a discovery read. */
 async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: RetrievalState | undefined, drop: (id: string) => void, prefix = false): Promise<Notes> {
-  const limit = limiter(prefix ? READ_AHEAD : 1);
+  const limit = limiter(prefix ? READ_AHEAD : 1, (error) => error instanceof LedgerExhausted);
   // A projection left by partial maintenance already has a listed snapshot; catch-up needs only Range reads.
   const cold = prefix && !ix.file(SYSTEM.index);
   const entries = await Promise.all(notesIn(ix).map(({ path, file: f }) => limit(async (): Promise<Array<readonly [string, MaintenanceNote]>> => {
@@ -310,7 +309,8 @@ async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: Retrieva
       drop(f.id);
       return [];
     }
-    let entry: MaintenanceNote = same ? { path, version: cached.version, summary: cached.summary, coverage: cached.coverage }
+    let entry: MaintenanceNote = same ? { path, version: cached.version, summary: cached.summary, coverage: cached.coverage,
+      ...(cached.incomplete === true ? { incomplete: true } : {}) }
       : { path, version: f.modifiedTime, summary: '(no summary)', coverage: { kind: 'prefix', bytes: 4096 } };
     if (text !== null) entry = { ...entry, ...indexedFront(text) };
     else if (cached?.owner === 'bower' || cached?.owner === 'person') entry = { ...entry, owner: cached.owner,
@@ -401,9 +401,9 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   for (const [id, note] of Object.entries(snapshot)) {
     const before = files.get(id);
     if (note.owner !== 'bower' || note.type !== 'moc' || note.moc || !before) continue;
-    const prefix = await drive.keptPrefix(before);
-    if (prefix && parseOwnership(new TextEncoder().encode(prefix)).status === 'invalid') {
-      console.log(`Skipped MOC ${note.path}: its ownership regions cross the prefix and it is not a candidate or target.`);
+    // Advisory incomplete regions cannot authorize an unrelated map edit.
+    if (note.incomplete) {
+      console.log(`Skipped ${note.path}: its prefix has incomplete regions and this run does not need its full text.`);
       continue;
     }
     try {
@@ -411,6 +411,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
       if (moc) note.moc = moc;
       else delete note.members;
     } catch (error) {
+      if (noteRefusal(error)) { console.error(error); continue; }
       if (!(error instanceof BowerError) || error.code !== 'not-found') throw error;
       console.error(error);
       drop(id);

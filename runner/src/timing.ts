@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { BowerError } from '../../src/data/types';
 
 /**
@@ -58,7 +59,7 @@ export class RunTiming {
   private sectionHashes: SectionHashes | null = null;
   private readonly traffic = new Map<Phase, Traffic>();
   private region = 'unknown';
-  private maintenanceDepth = 0;
+  private readonly maintenanceContext = new AsyncLocalStorage<boolean>();
   private maintenanceCalls = 0;
   private maintenanceItems = 0;
 
@@ -85,9 +86,7 @@ export class RunTiming {
   /** Discovery, declaration and settling share maintenance's one whole-run allowance. */
   async maintenance<T>(f: () => Promise<T>, items?: number): Promise<T> {
     if (items !== undefined) this.maintenanceItems = items;
-    this.maintenanceDepth++;
-    try { return await f(); }
-    finally { this.maintenanceDepth--; }
+    return this.maintenanceContext.run(true, f);
   }
 
   /** Set the input fingerprint (first 12 hex of sha256 of the model input). */
@@ -115,7 +114,7 @@ export class RunTiming {
    */
   meter(fetchFn: Fetch): Fetch {
     return async (url, init) => {
-      if (this.maintenanceDepth) {
+      if (this.maintenanceContext.getStore()) {
         if (this.maintenanceCalls >= 300) throw new LedgerExhausted(this.maintenanceItems);
         this.maintenanceCalls++;
       }

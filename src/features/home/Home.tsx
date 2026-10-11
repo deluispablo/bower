@@ -289,7 +289,8 @@ function SearchField() {
 /** One question surface and answer path, on Home and in the run's sheet. */
 export function Questions({ run }: { run?: RunState }) {
   const questionsState = useQuestions();
-  const headingId = useId();
+  const sheetHeadingId = useId();
+  const headingId = run ? sheetHeadingId : 'qs';
   const { data: all } = questionsState;
   const { vault, runs } = useSources();
   const { data: tree } = useTree();
