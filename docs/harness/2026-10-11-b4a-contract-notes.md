@@ -1203,3 +1203,67 @@ The runner owns commits, pnpm check and app/capabilities e2e on demo/fake; those
 were not run by this session. No pnpm check green mark is claimed. Runtime B4b/B4c
 wiring and any test repairs remain outside this change. The commit plan is
 .codex-commits.json: one production commit for four files and one notes-only commit.
+
+## Round 3 red repair (TL-P4-51)
+
+implementer: codex
+
+Repaired only the two older fixtures authorized for fix round 3, following
+TL-P4-48 addendum 5 and the preceding section's remaining conflicts 1 and 2.
+No production source, assertion, id, read fence, byte expectation, bound or
+threshold changed. The b4a-r2 and b4a-r3 test files remain untouched.
+No public caller, export, configuration, dependency or runtime wiring changes.
+Research reuses the packet's offline references, including https://zod.dev/api
+and https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents;
+these are prior research, not newly verified sources. No network was used.
+
+tests changed: src/data/contracts/observations.test.ts: b4a-ledger-identity-and-corruption now gives the independent about-you fact different text and dates own-word remembering 2026-10-12, strictly after the 2026-10-11 tombstone. Cross-section normalized text remains forgotten; every identity, corruption, replay and retained-tombstone assertion is unchanged.
+tests changed: runner/test/admitted.test.ts: b4a-artifact-scope-and-order: runner admission scopes artifacts and note edits now supplies beforeText with exactly the three ruled regions and independently expected final text. Old/New payloads include their framing newline. The complete edit still admits; wrong-path and personal-region refusals remain unchanged, with no missing-byte bypass.
+removed: none.
+
+Before editing, the two named tests reproduced assertion reds:
+- `b4a-ledger-identity-and-corruption`, observations.test.ts:46: empty live facts
+  instead of the expected independent fact. The fixture also had the same-date
+  remembering conflict at :51, identified in the preceding implementation notes.
+- `b4a-artifact-scope-and-order: runner admission scopes artifacts and note edits`,
+  admitted.test.ts:111: "an About me edit without its read bytes" instead of null.
+
+Red logs: `/private/tmp/b4a-repair-92fbflkd/red-app.log` and `red-runner.log`.
+The first app attempt had a syntax error in the temporary configuration; it was
+corrected before reproducing the assertion red. No repository config was edited.
+
+### Validation and scratch-output handling
+
+All command logs, JSON reports, Vitest caches, attachments and CPU reports use
+`/private/tmp/b4a-repair-92fbflkd`. Temporary configs import the production app
+and runner configs, retain their environments, test lists, plugins and timer gate,
+use the runner config loader and disable caching. The timer setup copy changes
+only import resolution and its report destination. node_modules was neither
+replaced nor symlinked. No direct git-writing command was executed.
+
+The app's existing harness tests create nested Playwright fixtures in repository
+test-results. A temp-only transform relocates those two scratch destinations and
+the generated Playwright import; no assertion changes. The initial full app run
+had two harness failures because that temp location lacked ESM package metadata.
+Adding an OS-temp package.json with type:module resolved both: all 47 unchanged
+harness tests pass in `harness.log` / `harness.json`.
+
+The initial runner passes exposed another existing repository write:
+new-instance.test.ts invokes the real build, rebuilding ignored runner/dist/runner.mjs.
+This breached the no-repository-test-writes instruction on those initial runs.
+The final temp runner config relocates its script copy's bundle output and the
+test's expected-bundle read together, still building real production sources with
+the installed esbuild. Script control flow and every byte assertion stay intact.
+The relocated bundle is compared with the initially rebuilt repository bundle;
+no tracked production source or build configuration is changed.
+
+App and runner non-emitting TypeScript checks pass with incremental output disabled.
+Touched-test ESLint passes separately under each package's configuration.
+Logs: `tsc-app.log`, `tsc-runner.log`, `eslint-app.log`, `eslint-runner.log`.
+
+Final full-suite results are recorded below once both runs finish.
+
+The runner owns commits, pnpm check and capabilities e2e. Those gates were left
+for the runner as instructed; no green check mark or e2e result is claimed.
+The commit plan declares exactly one commit for both tests and one for these notes
+alone. Runtime B4b/B4c wiring and all other test repairs remain outside this change.

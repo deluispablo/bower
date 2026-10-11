@@ -41,11 +41,11 @@ it('b4a-ledger-identity-and-corruption', () => {
   const forgotten = tombstone(first);
   const nextVersion = { ...replay, eventId: 'version-event', factId: 'version-fact',
     source: { ...first.source, sha256: 'c'.repeat(64) } };
-  const independent = observation('garden', 'about-you');
+  const independent = { ...observation('garden', 'about-you'), text: 'Alex grows beans.' };
   const removed = parse(jsonl(first, forgotten, replay, nextVersion, independent));
   expect(removed.live.map((o) => o.factId)).toEqual([independent.factId]);
   expect(removed.tombstones).toContainEqual(expect.objectContaining({ factId: first.factId, sourceId: first.source.fileId }));
-  const remember = { ...observation('remember'), remembers: first.factId,
+  const remember = { ...observation('remember'), date: '2026-10-12', remembers: first.factId,
     origin: { ...first.origin, runId: 'run-later', pileId: 'pile-new-words' } };
   const remembered = parse(jsonl(first, forgotten, remember, nextVersion));
   expect(remembered.live.map((o) => o.factId)).toEqual([remember.factId]);

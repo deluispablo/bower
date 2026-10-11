@@ -106,8 +106,13 @@ it('b4a-artifact-scope-and-order: runner admission scopes artifacts and note edi
     expect.soft(outsideAdmitted(plan(archive, path), took, 'own-id'), path).not.toBeNull();
   }
   expect(outsideAdmitted(plan({ ...ledger, before: file('ledger-id', 'observations.jsonl', 'outside-id') }), took, 'own-id')).not.toBeNull();
+  const beforeText = '## What Bower has learned\n'
+    + '<!-- bower:ownership/2 begin about-you -->\nOld\n<!-- bower:ownership/2 end about-you -->\n'
+    + '<!-- bower:ownership/2 begin about-working-on -->\n<!-- bower:ownership/2 end about-working-on -->\n'
+    + '<!-- bower:ownership/2 begin about-preferences -->\n<!-- bower:ownership/2 end about-preferences -->\n';
   const edit = { kind: 'edit-text', before: file('about-id', 'About me.md', 'FOLDER_ID'), path: 'About me.md',
-    changes: [{ kind: 'about-rewrite', region: 'about-you', previous: 'Old', text: 'New', recordIds: [] }] };
+    beforeText, text: beforeText.replace('\nOld\n', '\nNew\n'),
+    changes: [{ kind: 'about-rewrite', region: 'about-you', previous: 'Old\n', text: 'New\n', recordIds: [] }] };
   expect(outsideAdmitted(plan(edit), took, 'own-id')).toBeNull();
   expect.soft(outsideAdmitted(plan({ ...edit, path: 'Resources/Other.md' }), took, 'own-id'), 'About me permission cannot escape its target').not.toBeNull();
   expect.soft(outsideAdmitted(plan({ ...edit, changes: [{ ...edit.changes[0], region: 'personal' }] }), took, 'own-id')).not.toBeNull();
