@@ -236,7 +236,7 @@ describe('Q1c durable publication through main and createApp().request', () => {
     expect.soft(reports.at(-1)?.phase).toBe('done');
     expect.soft((await status()).run?.questions).toEqual(expected);
     const lines = logs.flatMap((spy) => spy.mock.calls.map((args) => args.map(String).join(' ')))
-      .filter((line) => !/^(?:Tidy-up |timing: |The Claude provider planned )/.test(line));
+      .filter((line) => line.startsWith('Live question publication failed; the next status report will carry the snapshot again. '));
     expect.soft(lines).toHaveLength(1);
     expect.soft(lines[0] ?? '').toMatch(/503|publish|question|snapshot/i);
     expect.soft(lines[0] ?? '').not.toContain('\n');
