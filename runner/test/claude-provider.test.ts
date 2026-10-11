@@ -596,7 +596,8 @@ describe('the Claude provider contract (TL-P4-01 P4-2)', () => {
       admitted: { 'questions.json': null, 'requests.json': null, 'hashes.json': null, 'suggestions.json': not, 'last-run.json': not },
       contract: { 'questions.json': 'ok', 'requests.json': 'ok', 'hashes.json': 'ok', 'suggestions.json': 'shape', 'last-run.json': 'shape' },
     });
-    expect(RUNNER_WRITES).toEqual([SYSTEM.questions, SYSTEM.requests, SYSTEM.hashes, SYSTEM.retrieval, SYSTEM.index, SYSTEM.hot, SYSTEM.log]);
+    // TL-P4-47 Q1: the type table uses the existing runner allowlist and effect.
+    expect(RUNNER_WRITES).toEqual([SYSTEM.questions, SYSTEM.requests, SYSTEM.hashes, SYSTEM.retrieval, SYSTEM.index, SYSTEM.hot, SYSTEM.log, '.bower/type-table.json']);
   });
 
   it('a Claude reply that targets a thing not admitted is refused and writes nothing', async () => {
