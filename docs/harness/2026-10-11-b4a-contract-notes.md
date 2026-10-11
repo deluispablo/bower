@@ -413,3 +413,88 @@ the unowned compatibility rows and the deferred runner pin; no all-green gate is
 The former architecture and scripted type failures are resolved. Full src/runner runs
 exercise the B4a tests and landed compatibility controls. Full pnpm check and e2e remain
 the coordinator's integration gates under the packet; this entry touches no screen.
+
+## Fix round 1 reds
+
+implementer: codex
+
+Red-only delivery for TL-P4-48 addendum 3 and all nine findings in
+`docs/harness/2026-10-11-b4a-adversarial-1.md`. One new test per finding in
+`src/data/contracts/b4a-fr1.test.ts`; no existing test or production file changed.
+Each test calls the existing production contracts and runs its positive controls before
+its failing assertions. Soft assertions collect variants of the same finding only.
+The manifest fixtures use independent SHA-256/canonical identities, real frozen content,
+and ordered dependencies; they do not mock validation, admission or the note author.
+
+| Exact test name | Assertion red | Passing positive control |
+| --- | --- | --- |
+| b4a-fr1 1 ledger target identity | Manifest validation and admission accept questions JSON targeting ledger-id/observations.jsonl, replacing stored evidence and its Forget tombstone. | Valid ledger/consolidation and an ordinary questions write both validate and are admitted. |
+| b4a-fr1 2 fenced markers stay personal | Backtick and tilde fenced About me marks in outside bytes expose writable spans and applyChanges rewrites the code example. | Existing ownership/2 framing and real unfenced About me regions remain valid and writable. |
+| b4a-fr1 3 forget only named facts | Forget of beans removes mint from the same source. | Both facts start live; a settled Bin invalidates the whole source. |
+| b4a-fr1 4 undo cannot resurrect replay | Undo of run A promotes run B's same-source/hash/text replay with fresh ids. | Repeated event ids dedupe; original evidence wins; Undo of the replay preserves the original and independent evidence. |
+| b4a-fr1 5 consolidation requires archive and fact ids | Four facts with archive/frontier omitted shorten 201 words; an empty ledger with factIds omitted also authorizes an unbound rewrite. | Five facts, exact archive, confirmed dependencies, edit, frontier and maintain validate. |
+| b4a-fr1 6 damaged boundary refuses initialization | The truncated `begin abo` mark parses as plain and initialization writes a second learned section. | An ordinary personal note initializes. |
+| b4a-fr1 7 rereads do not supply five observations | Five versions of one unchanged fact, differing only in hashes and issued ids, pass the 201-word consolidation gate. | Five independent observations qualify, four do not; five rereads with the same hash do not qualify. |
+| b4a-fr1 8 first archive accepts created parent | Admission rejects an archive under a section folder created earlier through parent.createdBy. | The existing-folder manifest validates and is admitted; the correctly ordered createdBy manifest also validates. |
+| b4a-fr1 9 initialization adds missing final newline | Ordinary and BOM/CRLF/Unicode prefixes without a final newline refuse initialization. | A terminated prefix appends exactly once; successful output must preserve every input byte and refuse a second initialization. |
+
+Finding 7 preserves both formulations: the ruling's same-hash reread guard already passes;
+the adversarial finding's unchanged fact across five different hashes is the failing case.
+No threshold was changed: preferences remain 201 authored words with five new observations.
+Finding 9 expects the author to add the single missing separator newline before its supplied
+learned section. Existing bytes, including BOM, CRLF, combining characters and emoji, stay exact.
+
+Validation used `--maxWorkers=2` throughout. All logs, reports, module/Vite caches and CPU
+reports are in the OS temp folder; the existing temporary configuration retains production
+app settings and the timer gate. `--configLoader runner` avoids bundled config output in
+node_modules. Test data is made up and entirely in memory. Uint8Array.from gives the new
+fixture bytes the current test realm's Uint8Array identity, avoiding a jsdom/Node realm
+mismatch at rebuildObservations' input guard.
+
+- Final red run: nine tests failed, all on their assigned finding; every positive control passed.
+  Log: `/private/tmp/b4a-fr1-reds.log`.
+- Full selected app contracts: 1,840 tests, 1,831 passed, exactly these nine reds failed.
+  Log: `/private/tmp/b4a-fr1-contracts.log`;
+  report: `/private/tmp/b4a-fr1-app-results.json`.
+- Selected runner contracts: all 113 tests passed across six files.
+  Log: `/private/tmp/b4a-fr1-runner.log`;
+  report: `/private/tmp/b4a-fr1-runner-results.json`.
+- App non-emitting TypeScript check passed: `/private/tmp/b4a-fr1-types.log`.
+- New test ESLint passed: `/private/tmp/b4a-fr1-lint.log`.
+- No import, runtime, timer or unrelated assertion failure in the final selected suites.
+  No contradictory existing assertion found; no existing test modified or deleted.
+
+Commands (output redirected to the logs above):
+
+```sh
+./node_modules/.bin/vitest run src/data/contracts/b4a-fr1.test.ts --config /private/tmp/b4a-contract-validation/app-full.mjs --configLoader runner --maxWorkers=2
+./node_modules/.bin/vitest run src/data/contracts/b4a-fr1.test.ts src/data/contracts/observations.test.ts src/data/vault/ownership-format.test.ts src/data/contracts/note-edit.test.ts src/data/contracts/run-manifest.test.ts src/data/contracts/questions.test.ts src/data/contracts/b1a-contract.test.ts src/data/contracts/note-templates.test.ts src/data/vault/note-format.test.ts --config /private/tmp/b4a-contract-validation/app-full.mjs --configLoader runner --maxWorkers=2
+# From runner/:
+../node_modules/.bin/vitest run test/admitted.test.ts test/b4-contract.test.ts test/b1a-contract.test.ts test/b1-index.test.ts test/type-table.test.ts test/q1-continuation.test.ts --config /private/tmp/b4a-contract-validation/runner.mjs --configLoader runner --maxWorkers=2
+# From the worktree root:
+./node_modules/.bin/tsc -p tsconfig.app.json --noEmit
+./node_modules/.bin/eslint src/data/contracts/b4a-fr1.test.ts
+```
+
+Compatibility includes the owned contracts, ownership and note format, B1a contracts,
+B1c index, B5a type table, B6a templates and Q1a continuation. Full check remains with the
+coordinator per packet; no screen changed and no e2e was run. The reds intentionally stay red.
+Initial fixture setup failures (missing manifest envelope fields, a v2 questions-only
+manifest without maintain, and cross-realm bytes) were corrected before the final runs;
+none is presented as evidence of a product finding.
+
+Offline research reused from the packet, not fetched or newly verified:
+https://arxiv.org/pdf/2605.12978
+https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+https://zod.dev/api
+Existing homes remain the ownership parser, note author, ledger reducer, manifest validator
+and runner admission. No second production mechanism was added.
+
+tests changed: src/data/contracts/b4a-fr1.test.ts: new additive fix-round-1 tests 1–9 with positive controls; no existing test changed.
+tests changed: none of the existing test files or assertions.
+removed: none.
+
+No network, git-writing command, node_modules replacement/symlink, production change or
+repository test output. The runner commits the diff. `.codex-commits.json` declares exactly
+two commits: the new test file, then this notes file alone. Implementation is left to the
+fresh implementation session; this red-only assignment is complete.
