@@ -64,7 +64,7 @@ import { indexedFront, noteRefusal, parseNote } from '../../src/data/contracts/n
 import { checkCreationName } from '../../src/data/contracts/tree';
 import { readTypeTable } from './type-table';
 import { aboutContext, parseObservations } from '../../src/data/contracts/observations';
-import { ABOUT_REGIONS, parseOwnership } from '../../src/data/contracts/ownership-format';
+import { ABOUT_REGIONS, createOwnershipContext } from '../../src/data/contracts/ownership-format';
 import { propertyValuesOk } from '../../src/data/contracts/note-format';
 import { mocMembership, mocSnapshot } from './moc';
 
@@ -396,6 +396,7 @@ function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
   const cell = (value: unknown): string => JSON.stringify(value).replace(/\|/g, '\\|');
   return [
     promptInstructions(!!shown.folderCandidates),
+    ...(shown.selection && shown.aboutMe ? ['Memory: observations may supply {source:{pileId} or {fileId},subject (documents only),section,category,text,remembers?}. Only admitted words, subject text answers and rules grant personal authority. Documents grant only explicit biography/activity facts. forget:[{factId}] needs actual Forget words and shown fact ids; unclear Forget asks through asks. Never supply origins or hashes.'] : []),
     'Use the first matching row. A note may carry typeRow (the selection kind) and properties (declared facts only). Sources never change schemas.',
     '| Type | Matches | Template | Properties | Table | Group by |',
     '| --- | --- | --- | --- | --- | --- |',
@@ -420,7 +421,7 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
   if (aboutFile) {
     const text = await read.readText(aboutFile.id);
     const bytes = new TextEncoder().encode(text);
-    const ownership = parseOwnership(bytes);
+    const ownership = (run.context ?? createOwnershipContext()).read(aboutFile.id, bytes);
     if (ownership.status === 'invalid') throw new BowerError('conflict', 'Bower could not read its learned facts.');
     const decode = (span: { start: number; end: number }): string => new TextDecoder().decode(bytes.subarray(span.start, span.end));
     const personal = bounded(decode(ownership.personal), CONTEXT_BOUNDS.perNote).text ?? '';
@@ -978,7 +979,7 @@ const section = z.array(z.unknown(), intentIssue).optional();
 /** The reply as a whole: a tidy-up intent, v1, with only these lists. */
 const Envelope = z.strictObject({
   kind: z.literal('tidy-intent', intentIssue), v: z.literal(1, intentIssue), things: z.array(z.unknown(), intentIssue),
-  notes: section, lines: section, states: section, asks: section, keep: section, askAfter: section,
+  notes: section, lines: section, states: section, asks: section, keep: section, askAfter: section, observations: section, forget: section,
 }, intentIssue);
 const NoteShape = z.strictObject({
   name: z.string(named('noteName', 'noteKeys')), summary: z.string(named('noteSummary', 'noteKeys')), body: z.string(named('noteBody', 'noteKeys')),
@@ -1204,12 +1205,16 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       return null;
     },
   ];
+  let observations: readonly unknown[] = [];
+  let forget: readonly { factId: string }[] = [];
   const Body = z.object({
     kind: z.literal('tidy-intent'), v: z.literal(1), things: z.array(Thing),
     notes: z.array(Words).optional(),
     lines: z.array(Line).max(AUTHORED.lines, named('tooManyLines')).optional(),
     states: z.array(State).optional(), asks: z.array(Asked).optional(), keep: z.array(Keep).optional(),
     askAfter: z.array(After).optional(),
+    observations: z.array(z.unknown()).max(20, named('keepNotAsked')).optional().transform((value) => { observations = value ?? []; return value; }),
+    forget: z.array(z.strictObject({ factId: z.string() }, named('keepNotAsked'))).max(20, named('keepNotAsked')).optional().transform((value) => { forget = value ?? []; return value; }),
   }).superRefine(inOrder(whole));
   const schema = Envelope.pipe(Body);
   return {
@@ -1217,7 +1222,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     intent: () => {
       // A pile with a thing neither placed nor asked about waits whole for the next run.
       const held = new Set(piles.filter((p) => thingsOf(p).some((i) => !placed.has(i.fileId) && !askedThings.has(i.fileId))).map((p) => p.pileId));
-      return { ok: true, held, filing: { thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, states: current, areas, asks: asked, thingAsks: askedThings, askAfter: (pile, at) => { const q = after.get(pile.id); return q ? { ...q, askedAt: at } : null; }, ...(askedPairs.length ? { pairAsks: askedPairs } : {}), ...(kept.length ? { keep: kept } : {}) } };
+      return { ok: true, held, filing: { observations, forget, thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, states: current, areas, asks: asked, thingAsks: askedThings, askAfter: (pile, at) => { const q = after.get(pile.id); return q ? { ...q, askedAt: at } : null; }, ...(askedPairs.length ? { pairAsks: askedPairs } : {}), ...(kept.length ? { keep: kept } : {}) } };
     },
   };
 }
@@ -1370,7 +1375,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       const t = { ...took.taken, journal };
       const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), decisions: modelDecisions(filing), context: run.context }, undefined, held);
       const manifest: RunManifest = plan.manifest;
-      const parsed = await parseRunManifestV2((await canonical(manifest)).bytes, run.rootId, RUNNER_WRITES);
+      const parsed = await parseRunManifestV2((await canonical(manifest)).bytes, run.rootId, RUNNER_WRITES, false);
       if (!parsed.ok) return refuse(`outside the run manifest contract (${parsed.reason})`);
       const stray = outsideAdmitted(manifest, took, own, new Set((filing.keep ?? []).map((k) => k.other)));
       if (stray) return refuse(stray);
@@ -1521,11 +1526,11 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       if (!reply.ok && reply.kind === null) return refuse(reply.why, exit.stderr, reply.invalidReply);
       return reply;
     };
-    const twice = async <T extends { ok: true }>(input: string, check: (value: unknown) => T | Refused | null): Promise<T> => {
+    const twice = async <T extends { ok: true }>(input: string, check: (value: unknown) => T | Refused | null | Promise<T | Refused | null>): Promise<T> => {
       let why = 'The reply is outside the frozen selection or its bounds.';
       for (let attempt = 0; attempt < 2; attempt++) {
         const reply = await call(attempt ? withRetryNote(input, why) : input);
-        const value = reply.ok ? check(reply.value) : reply;
+        const value = reply.ok ? await check(reply.value) : reply;
         if (value?.ok) return value;
         if (value && value.kind !== null) {
           why = value.why;
@@ -1556,7 +1561,11 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         folderCandidates: new Set(folders.map((f) => f.id)), words: shown.piles.map((p) => p.words).join('\n'),
         shownNotes: shown.notes.map((n) => `${n.path}\n${n.text}`).join('\n'), rules: shown.rules,
         merges: mergesOf(answers, shown.notes.map((n) => n.path)) };
-      const intent = await twice(input, (value) => {
+      let memoryPlan: RunManifest | undefined;
+      const targets = new Set(Object.values(selection.allowedTargets).flat());
+      const journal = took.taken.journal.filter((line) =>
+        (shown.requestNotes?.[line.fileId] ?? []).every((id) => targets.has(id)));
+      const intent = await twice(input, async (value) => {
         const got = intentOf(value, shownTook, seen);
         if (!got.ok) return got;
         if (!isRecord(value)) return null;
@@ -1592,12 +1601,19 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           return [row.kept, row.other].every((path) => typeof path === 'string' && targets.includes(ix.idOf(path) ?? ''));
         }))) return null;
         if ([...rows('lines'), ...rows('states')].some((row) => !canEdit(row))) return null;
+        got.filing.shownFactIds = shown.aboutMe?.learned.factIds ?? [];
+        if (got.filing.observations?.length || got.filing.forget?.length) {
+          try { memoryPlan = await plannedWith(got.filing, got.held, shown.own, `with ${model}`, journal); }
+          catch (error) {
+            if (!(error instanceof BowerError)) throw error;
+            console.error(error);
+            return no('keepNotAsked', 'a memory effect without admitted evidence or a chosen shown fact');
+          }
+        }
         return got;
       });
       // A request whose targets were not selected stays in the inbox for a later run.
-      const targets = new Set(Object.values(selection.allowedTargets).flat());
-      const journal = took.taken.journal.filter((line) =>
-        (shown.requestNotes?.[line.fileId] ?? []).every((id) => targets.has(id)));
+      if (memoryPlan) return memoryPlan;
       return await plannedWith(intent.filing, intent.held, shown.own, `with ${model}`, journal);
     } finally { await rm(work, { recursive: true, force: true }); }
 

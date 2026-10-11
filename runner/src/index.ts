@@ -22,6 +22,7 @@ import { subjectOf } from '../../src/data/contracts/questions';
 import { parseTimelineLine } from '../../src/data/contracts/timeline-line';
 import { renderHot, sameExceptDate, type HotInputs } from './hot';
 import { LedgerExhausted, type RunTiming } from './timing';
+import { parseObservations } from '../../src/data/contracts/observations';
 
 /** Every derived kind joins this slot; declarations persist inside maintain, never in a separate store. */
 export interface DeclaredTarget {
@@ -476,6 +477,21 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
       if (!createdBy) throw unavailable();
       effect = { ...effect, parent: { createdBy } };
     }
+    if (effect.kind === 'write-runner-json' && effect.path === '.bower/observations.jsonl'
+      || effect.kind === 'create-text' && effect.purpose === 'runner-json' && effect.name === 'observations.jsonl') {
+      const events = parseObservations(new TextEncoder().encode(effect.text)).events;
+      const lines = effect.text ? effect.text.slice(0, -1).split('\n') : [];
+      const text = lines.map((line) => {
+        if (!line) return line;
+        const event = events.find((e) => e.eventId === (JSON.parse(line) as { eventId: string }).eventId);
+        if (event?.kind === 'observation' && event.origin.runId === manifest.runId)
+          return JSON.stringify({ ...event, origin: { ...event.origin, captureId } });
+        if (event?.kind === 'consolidation' && event.runId === manifest.runId)
+          return JSON.stringify({ ...event, operationId: ids.get(event.operationId) ?? event.operationId });
+        return line;
+      }).join('\n') + (effect.text ? '\n' : '');
+      effect = { ...effect, text, content: { encoding: 'utf8', size: new TextEncoder().encode(text).length, sha256: await rawHash(text) } };
+    }
     if (effect.kind === 'write-runner-json' && effect.path === SYSTEM.questions
       || effect.kind === 'create-text' && effect.purpose === 'runner-json' && effect.name === 'questions.json') {
       const questions: unknown = JSON.parse(effect.text);
@@ -505,10 +521,14 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   const effect: Maintain = { kind: 'maintain', inputs };
   const ordinal = manifest.operations.length;
   const operationId = (await canonical({ runId: manifest.runId, captureId, ordinal, effect })).hash;
+  const lastMemory = operations.findLast(({ effect: e }) => e.kind === 'write-runner-json' && e.path === '.bower/observations.jsonl'
+    || e.kind === 'edit-text' && e.path === 'About me.md'
+    || e.kind === 'create-text' && (e.purpose === 'about-archive' || e.purpose === 'runner-json' && e.name === 'observations.jsonl'
+      || e.name === 'About me.md' && 'fileId' in e.parent && e.parent.fileId === rootId));
   return { ...manifest, v: 2, capture, captureId, reportPlan,
     ...(manifest.satisfiedAppends ? { satisfiedAppends: manifest.satisfiedAppends.map((row) => ({ ...row,
       operationId: ids.get(row.operationId) ?? row.operationId })) } : {}),
-    operations: [...operations, { ordinal, operationId, dependsOn: [], effect }] };
+    operations: [...operations, { ordinal, operationId, dependsOn: lastMemory ? [lastMemory.operationId] : [], effect }] };
 }
 
 export function maintenanceEffects(drive: RunnerDrive, declared: readonly DeclaredTarget[] = [hotTarget], timing?: RunTiming): Effects {

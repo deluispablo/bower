@@ -41,7 +41,7 @@ export type Effect =
   | { kind: 'write-runner-json'; before: SeenFile; beforeContent: VerifiedContent;
     /** One of the runner-writable files the reader is given (`RUNNER_WRITES` in `vault/layout.ts`). */
     path: RunnerWrite; text: string; content: Content }
-  | { kind: 'write-runner-json'; before: null; beforeContent: null; path: '.bower/type-table.json';
+  | { kind: 'write-runner-json'; before: null; beforeContent: null; path: '.bower/type-table.json' | '.bower/observations.jsonl';
     parent: Target; createKey: string; text: string; content: Content }
   | { kind: 'bin'; before: SeenFile; capturedChildIds: string[] };
 /**
@@ -321,7 +321,7 @@ function effect(value: unknown): value is Effect {
       && oneOf(value.purpose, ['generated', 'runner-json', 'about-archive']);
     case 'write-runner-json': return text(value.text) && content(value.content) && (value.before === null
       ? closed(value, ['kind', 'before', 'beforeContent', 'path', 'parent', 'createKey', 'text', 'content'])
-        && value.beforeContent === null && value.path === '.bower/type-table.json' && target(value.parent) && id(value.createKey)
+        && value.beforeContent === null && oneOf(value.path, ['.bower/type-table.json', '.bower/observations.jsonl']) && target(value.parent) && id(value.createKey)
       : closed(value, ['kind', 'before', 'beforeContent', 'path', 'text', 'content'])
         && seenFile(value.before) && verifiedContent(value.beforeContent) && text(value.path));
     case 'bin': return closed(value, ['kind', 'before', 'capturedChildIds'])
@@ -557,6 +557,7 @@ export async function parseRunManifest(bytes: Uint8Array, expectedRootId: string
 /** The guards every manifest version shares, in the v1 order; identities are computed as in v1. */
 async function admit<M extends Manifest | ManifestV2>(
   parsed: unknown, expectedRootId: string, guard: (value: unknown) => value is M, writes: readonly RunnerWrite[],
+  finalized = true,
 ): Promise<{ ok: true; value: M; sha256: string } | { ok: false; reason: ManifestRefusal }> {
   if (!guard(parsed)) return { ok: false, reason: 'shape' };
   if (parsed.operations.some(({ effect: e }) => e.kind === 'write-runner-json' && (!writes.includes(e.path)
@@ -566,7 +567,7 @@ async function admit<M extends Manifest | ManifestV2>(
     || parsed.capture.places.some((p) => p.file.fileId === e.before.fileId
       && (p.path !== e.path || !sameSeen(p.file, e.before))))))) return { ok: false, reason: 'shape' };
   const value = parsed;
-  if (!await aboutArtifactsOk(value) || !await planningArtifactsOk(value)) return { ok: false, reason: 'shape' };
+  if (!await aboutArtifactsOk(value, finalized) || !await planningArtifactsOk(value)) return { ok: false, reason: 'shape' };
   if (!driveId(expectedRootId) || expectedRootId !== value.scope.rootId) return { ok: false, reason: 'scope' };
   if (!await satisfiedProven(value)) return { ok: false, reason: 'shape' };
   for (const item of texts(value)) {
@@ -714,15 +715,17 @@ function edits(value: ManifestV2): EditGuardRule | null {
 /**
  * Reads v1 exactly as `parseRunManifest` (same path, digests and identities) and v2: v1's guards plus `edit-text`.
  * A later version refuses as `version`, so a build that reads v2 can say it needs a newer Bower (R3-7 m9).
+ * Before maintenance, `finalized: false` checks the plan without requiring its terminal memory barrier.
  */
-export async function parseRunManifestV2(bytes: Uint8Array, expectedRootId: string, writes: readonly RunnerWrite[]): Promise<ManifestV2Result> {
+export async function parseRunManifestV2(bytes: Uint8Array, expectedRootId: string, writes: readonly RunnerWrite[], finalized = true): Promise<ManifestV2Result> {
   const parsed = parseRecordJson(bytes);
   if (!parsed.ok) return parsed;
   const v = record(parsed.value) ? parsed.value.v : undefined;
-  if (v === 1) return parseRunManifest(bytes, expectedRootId, writes);
+  if (v === 1) return finalized ? parseRunManifest(bytes, expectedRootId, writes)
+    : admit(parsed.value, expectedRootId, manifest, writes, false);
   if (integer(v) && v > 2) return { ok: false, reason: 'version' };
   if (v === 2 && bytes.byteLength > MANIFEST_V2_LIMIT) return { ok: false, reason: 'edit', rule: 'size' };
-  const admitted = await admit(parsed.value, expectedRootId, manifestV2, writes);
+  const admitted = await admit(parsed.value, expectedRootId, (value): value is ManifestV2 => finalized ? manifestV2(value) : manifestOf(value, 2, operationV2), writes, finalized);
   if (!admitted.ok) return admitted;
   const broken = edits(admitted.value);
   return broken === null ? admitted : { ok: false, reason: 'edit', rule: broken };
@@ -730,7 +733,7 @@ export async function parseRunManifestV2(bytes: Uint8Array, expectedRootId: stri
 
 
 /** B4 uses the same effects and confirmed dependency edges; these checks add no dispatch lifecycle. */
-async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> {
+async function aboutArtifactsOk(value: Manifest | ManifestV2, finalized: boolean): Promise<boolean> {
   const operations: readonly OperationV2[] = value.operations;
   const ledgerPath = '.bower/observations.jsonl';
   const enc = new TextEncoder();
@@ -778,7 +781,7 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> 
         || e.kind === 'create-text' && `${targetPath(value, e.parent)}/${e.name}` === ledgerPath) {
         const bytes = enc.encode(e.text);
         let priorBytes = new Uint8Array();
-        if (e.kind === 'write-runner-json') {
+        if (e.kind === 'write-runner-json' && e.before !== null) {
           const place = value.capture.places.find((p) => p.file.fileId === e.before.fileId);
           if (e.before.folder || e.before.name !== 'observations.jsonl' || place?.path !== ledgerPath
             || !sameSeen(place.file, e.before) || e.beforeContent.observedModifiedTime !== e.before.modifiedTime
@@ -787,11 +790,11 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> 
         } else if (lastLedger || value.capture.places.some((p) => p.path === ledgerPath)) return false;
         const prior = parseObservations(priorBytes);
         const priorText = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(priorBytes);
-        if (e.kind === 'write-runner-json' && !await describes(e.beforeContent, priorText)) return false;
+        if (e.kind === 'write-runner-json' && e.beforeContent !== null && !await describes(e.beforeContent, priorText)) return false;
         const ledger = parseObservations(bytes);
         if (lastLedger) {
           const prev = lastLedger.effect;
-          if (e.kind !== 'write-runner-json' || prev.kind !== 'write-runner-json' && prev.kind !== 'create-text'
+          if (e.kind !== 'write-runner-json' || e.before === null || prev.kind !== 'write-runner-json' && prev.kind !== 'create-text'
             || prev.kind === 'write-runner-json' && prev.before?.fileId !== e.before.fileId
             || prev.text !== priorText || !op.dependsOn.some((dep) => dep === lastMemory?.operationId)) return false;
         }
@@ -874,7 +877,7 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> 
     if (!operations.some((o) => o.effect.kind === 'edit-text' && o.dependsOn.includes(archive.operationId)
       && o.effect.changes.some((c) => c.kind === 'about-rewrite' && c.archive === path))) return false;
   }
-  return !lastMemory || operations.at(-1)?.effect.kind === 'maintain';
+  return !finalized || !lastMemory || operations.at(-1)?.effect.kind === 'maintain';
 }
 
 /** Type tables use the existing write effect; proposals are immutable creates bound to their stored question. */
