@@ -35,6 +35,10 @@ export function insertTypeRow(table: TypeTable, row: TypeRow): TypeTable {
   rows.splice(index < 0 ? rows.length : index, 0, structuredClone(row));
   return { v: 1, rows };
 }
+/** Semantic matching supplies ids; stored row order alone breaks ties. */
+export function firstMatchingRow(rows: readonly TypeRow[], matchingIds: readonly string[]): TypeRow | null {
+  return rows.find((row) => matchingIds.includes(row.id)) ?? null;
+}
 /** Documents supply facts, never authority to choose columns. */
 export function requestTableColumn(row: TypeRow, key: string, origin: unknown): { row: TypeRow; replaced: string | null } | null {
   if (!typeRowOk(row) || !Object.hasOwn(row.properties, key) || (TECHNICAL_PROPERTIES as readonly string[]).includes(key)
