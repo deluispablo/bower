@@ -6,6 +6,7 @@ import p2Checkpoints from '../../src/data/contracts/fixtures/p2/run-checkpoint.j
 import p2Report from '../../src/data/contracts/fixtures/p2/run-report.json';
 import { parseRunManifestV2 } from '../../src/data/contracts/run-manifest';
 import { parseRunCheckpoint, parseRunReport } from '../../src/data/contracts/run-checkpoint';
+import { stateMark } from '../../src/data/contracts/note-edit';
 import { canonicalRecordJson } from '../../src/data/contracts/record-json';
 import { RUNNER_WRITES } from '../../src/data/vault/layout';
 import { main } from '../src/main';
@@ -13,6 +14,7 @@ import { API, TICKET, driveV3 } from './drive-v3';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClaudeSpawn } from '../src/claude';
 import { ORIGIN, realWorld } from './real-world';
+import type { RealWorld } from './real-world-types';
 
 vi.mock('cloudflare:workers', () => ({ DurableObject: class {
   constructor(readonly ctx: unknown, readonly env: unknown) {}
@@ -38,7 +40,7 @@ function latch() {
   return { promise, resolve };
 }
 
-async function mixed(count = 1, withOptions = false) {
+async function mixed(count = 1, withOptions = false, setup?: (w: RealWorld) => Promise<void>) {
   let clearId = '', waitingId = '', calls = 0;
   const waitingIds: string[] = [], folderIds: string[] = [];
   const model: ClaudeSpawn = async () => {
@@ -73,6 +75,7 @@ async function mixed(count = 1, withOptions = false) {
     }
     return root;
   } });
+  await setup?.(w);
   const lease = await (await w.api.browser(`${ORIGIN}/session`, { method: 'POST', headers: JSON_HEADERS,
     body: JSON.stringify({ place: 'Q1C_TAB', action: 'check', gen: 0 }) })).json() as { epoch: number };
   const res = await w.api.browser(`${ORIGIN}/process`, { method: 'POST',
@@ -114,6 +117,75 @@ async function legacyRecords() {
 }
 
 describe('Q1c durable publication through main and createApp().request', () => {
+  it.each([
+    { test: 'q1-live-question-long-note-name-publishes', name: 'N'.repeat(80), lines: ['Alex has two tasks.'] },
+    // Empty shown text is accepted in storage, but is an invalid shape for the public card.
+    { test: 'q1-live-question-invalid-shape-publishes', name: 'Tasks', lines: [''] },
+  ])('$test', async ({ name, lines: shownLines }) => {
+    let questionId = '', storedId = '', noteId = '';
+    const noteText = `---\nsummary: Alex's tasks.\nby: bower\nbower_state: ${stateMark(['Alex had one task.'])}\n---\n\n## Current state\n- Alex changed this after the update was shown.\n`;
+    const { w, clearId, status } = await mixed(1, false, async (w) => {
+      const files = await w.drive.listAll(w.rootId);
+      const resources = files.find((f) => w.drive.pathOf(f.id, w.rootId) === 'Resources');
+      const stored = files.find((f) => w.drive.pathOf(f.id, w.rootId) === '.bower/questions.json');
+      const changes = files.find((f) => w.drive.pathOf(f.id, w.rootId) === '.bower/changes');
+      expect(resources).toBeDefined();
+      expect(stored).toBeDefined();
+      expect(changes).toBeDefined();
+      noteId = (await w.drive.createText(resources?.id ?? '', `${name}.md`, noteText)).id;
+      questionId = `q-state-${noteId}`;
+      storedId = stored?.id ?? '';
+      await w.drive.writeText(storedId, JSON.stringify({ v: 1, questions: [{
+        id: questionId, text: 'Should Bower write its update there?', yes: 'Write it', no: 'Keep mine',
+        about: `Resources/${name}.md`, state: stateMark(['Alex had one task.']), askedAt: AT - 1,
+        shown: { lines: shownLines, md5: '0'.repeat(32) },
+      }] }), stored?.modifiedTime ?? '');
+      await w.drive.createText(changes?.id ?? '', 'answer-reask.json', JSON.stringify({
+        v: 1, id: 'answer-reask', device: 'device-2', at: AT, kind: 'answer',
+        what: 'Answered a question', questionId, askedAt: AT - 1, answer: true,
+      }));
+    });
+    const logs = [vi.spyOn(console, 'log'), vi.spyOn(console, 'warn'), vi.spyOn(console, 'error')]
+      .map((spy) => spy.mockImplementation(() => {}));
+    const code = await w.runJob(0);
+    const current = await status();
+    const { questions } = JSON.parse(await w.drive.readText(storedId)) as { questions: StoredQuestion[] };
+    const text = `The current state of ${name} changed after Bower showed you its update, so nothing was written. Should Bower write its update there now?`;
+    if (name.length === 80) {
+      expect(name).toHaveLength(80);
+      expect(text).toHaveLength(209);
+    }
+    const manifests = (await w.drive.listAll(w.rootId)).filter((f) => /^manifest-.*\.json$/.test(f.name));
+    expect(manifests).toHaveLength(1);
+    const manifest = JSON.parse(await w.drive.readText(manifests[0]?.id ?? '')) as {
+      operations: Array<{ effect: { kind: string; path?: string; text?: string } }>;
+    };
+    const effect = manifest.operations.find(({ effect }) => effect.kind === 'write-runner-json'
+      && effect.path === '.bower/questions.json')?.effect;
+    expect(effect).toBeDefined();
+    const planned = JSON.parse(effect?.text ?? '{}') as { questions: StoredQuestion[] };
+    expect(planned.questions).toHaveLength(2);
+    expect(planned.questions).toContainEqual(expect.objectContaining({ id: questionId, text, askedAt: AT,
+      shown: expect.objectContaining({ lines: shownLines }) }));
+    expect.soft(code).toBe(0);
+    expect.soft(current.run?.phase).toBe('done');
+    expect.soft(w.drive.pathOf(clearId, w.rootId)).toBe('Resources/Clear.md');
+    expect.soft(questions).toContainEqual(expect.objectContaining({ id: questionId, text, askedAt: AT,
+      shown: expect.objectContaining({ lines: shownLines }) }));
+    expect.soft(await w.drive.readText(noteId)).toBe(noteText);
+    const other = questions.filter((q) => q.id !== questionId);
+    expect.soft(other).toHaveLength(1);
+    expect.soft(current.run?.questions).toEqual(other.map(({ id, text, askedAt }) =>
+      expect.objectContaining({ id, text, askedAt })));
+    expect.soft((current.run?.questions ?? []).map((q) => q.id)).not.toContain(questionId);
+    const lines = logs.flatMap((spy) => spy.mock.calls.map((args) => args.map(String).join(' ')))
+      .filter((line) => /question/i.test(line));
+    expect.soft(lines).toHaveLength(1);
+    expect.soft(lines[0] ?? '').toMatch(/live|snapshot/i);
+    expect.soft(lines[0] ?? '').toMatch(/omit|skip|trim|left out|not.*(?:publish|share)|cannot.*(?:publish|share)/i);
+    expect.soft(lines[0] ?? '').not.toContain('\n');
+  });
+
   it('Q1c fix 1: eleven askings keep clear work and publish the first ten by askedAt', async () => {
     const { w, clearId, status } = await mixed(11);
     expect(await w.runJob(0)).toBe(0);

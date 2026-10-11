@@ -672,3 +672,41 @@ Production file hashes before and after match; the retained runner/src/main.ts a
 diff is untouched. No git write, dependency replacement/symlink or repository test output.
 pnpm check and e2e remain coordinator work; this assignment requests the runner file only.
 commits: none; coordinator owns commits.
+
+## Addendum 8 reds
+
+tests changed: runner/test/q1c-live.test.ts: add two main-entry publication reds; optional pre-admission fixture setup only.
+No existing test name, body or assertion changed. The mixed fixture accepts an optional setup callback before
+/process takes the journal; its existing callers and production model replies remain unchanged.
+
+Red owner at 41797a88, TL-P4-44 addendum 8 and P4-108 Important 1. Only runner tests and these notes edited.
+No network, git writes, node_modules replacement/symlink, or repository test output.
+
+- `q1-live-question-long-note-name-publishes`: an 80-character made-up note display name produces the exact
+  209-character scripted state re-ask. A stored yes grants the shown update, but the person edited Current state.
+  main plans the re-ask with its full text, alongside one ordinary question and the clear sibling's filing.
+- `q1-live-question-invalid-shape-publishes`: same main path, a short name with shown.lines containing an empty
+  string. Storage and the persisted manifest accept that legacy shape; the public card requires nonempty lines.
+  This exercises a shape mismatch without changing the scripted asker or any production bound.
+
+Both reds first verify that the durable manifest contains exactly two questions, including the exact new re-ask
+text, timestamp and unchanged shown lines. Those controls pass. Both require done, filed clear work, the full
+re-ask in the final Drive questions.json, an unchanged note, only the other question in the live snapshot, and
+exactly one single console line about omitting questions from live publication. Console log/warn/error are
+observed together; ordinary timing/provider messages are excluded by the question diagnostic filter.
+
+Final targeted run:
+`pnpm -C runner exec vitest run test/q1c-live.test.ts --maxWorkers=2 --reporter=default --no-cache --configLoader=native`
+Exit 1: two assertion reds, four existing tests pass. Both fail at runner/test/q1c-live.test.ts:171:
+phase is failed rather than done. Clear.md remains in Inbox, the stored asking remains the original short asking,
+and no live snapshot is published. The two failure console lines do not meet the one omission-line contract.
+All persisted-plan controls pass; no import, helper or matcher TypeError remains.
+Log: /tmp/q1c-addendum8-red.log.
+
+Runner tsc --noEmit and ESLint of test/q1c-live.test.ts pass.
+Logs: /tmp/q1c-addendum8-tsc.log and /tmp/q1c-addendum8-eslint.log.
+git diff --check passes. pnpm check and e2e not run: red-only assignment, no screen touched.
+The native config loader, disabled cache and default-only reporter prevent repository verification artifacts.
+Offline standard reused: Node temporary files via os.tmpdir(), https://nodejs.org/api/os.html#ostmpdir;
+existing main/realWorld and persisted-manifest assertions in this file; no source fetched.
+commits: none; coordinator owns commits. Production fix and integration gates remain coordinator work.
