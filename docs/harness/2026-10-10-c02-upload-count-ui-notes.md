@@ -417,3 +417,7 @@ passed: 1 file, all 4 tests. Log: `/tmp/c02-red-repair2-settings.log`. `git diff
 The existing OS-temp config keeps caches outside the repository and omits the CPU-report-writing setup.
 No git writes, network requests, port binding or node_modules changes. pnpm check/e2e omitted under
 the explicit repository-write and port restrictions; coordinator owns commits and integration gates.
+
+## Close (coordinator, 2026-10-11)
+
+known-green: the 8 behaviour reds were proved failing at the tests-only commits 59d4dfbb/46f07c59 (repaired 0b299ffd) before ab3f9b32 (notes "Implementation", 8 failed / 18 passed) and pass at HEAD; fix 1 (5c84961f) then touched the same Settings lines, so done.sh cannot revert ab3f9b32 alone, and 5c84961f alone is pinned only by the fake e2e (c02-upload-reload :97, 4 failures before it, green after). P4-106 PASS; designer verified at e9033cfd; check green; e2e demo 71 / fake 95.
