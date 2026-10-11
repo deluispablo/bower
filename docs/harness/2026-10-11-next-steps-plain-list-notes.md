@@ -430,3 +430,89 @@ replacement/symlink occurred. No git write command was run; the runner owns
 the commits. `pnpm check` was not run because it writes repository reports
 and marks; the owner's separate requested checks are run above. Browser e2e
 and designer verification remain for their assigned sessions.
+
+## E2e repair
+
+Scope: the owner's offline repair of the coordinator's HEAD browser failures.
+Only the owned e2e spec and these notes changed. No app code, existing spec,
+B6a assertion, dependency link or harness record changed. No network, git write,
+install, server or e2e run occurred. The runner owns commits and browser gates.
+
+### Cause of each failing row (original line numbers)
+
+| Row | Cause and evidence | Repair |
+| --- | --- | --- |
+| `e2e/next-steps-plain-list.spec.ts:130` | Spec timing: `own.uncheck()` immediately verifies an uncontrolled-style state change, before Water mint's asynchronous content write and note refresh finish. The log fails at line 136, before the byte or index assertions. | Click once, retain the complete raw-byte comparison and `[4]`, then wait for the named checkbox to be unchecked. All positive controls remain. |
+| `e2e/next-steps-plain-list.spec.ts:144` | Spec timing: `own.check()` makes the same immediate-state assumption for Plant mint, without Bower ownership framing. The log fails at line 152, before the byte or `[1]` assertions. | Assert the initial unchecked state, click once, poll the complete personal-note bytes and wait for the checked state. All headings, checkbox-count and checked-item controls remain. |
+| `e2e/next-steps-plain-list.spec.ts:157` | Spec timing: the first named `check()` fails at line 161. Its later `uncheck()` and first-checkbox `check()` have the same race. Waiting for bytes alone between clicks would still race the note refresh. | Replace all three actions with single clicks, waiting for both unchanged full-byte assertions and the named checkbox state before the next action. Keep `[3, 3, 3]` and the first-visible-checkbox isolation assertion. |
+| `e2e/next-steps-plain-list.spec.ts:172` | Fixture scope: the project note was seeded at the folder root. `parentOf(path)` is empty, and PhoneBar renders `crumbs(folder)` without the desktop fallback. Axe reports `link-name` and `target-size` on `._phoneCrumb_skam3_4` at width 375. This is an actual root-note breadcrumb defect outside the owned tick wiring, not a task/index defect. | Seed both fixture notes inside the named `NSPL garden` folder, and positively assert its breadcrumb before scanning the same full `main article` at WCAG 2.2. The project-note contract, all matrix cells, rule set and plain-list assertions remain. No rule or element is excluded. |
+
+Both supplied logs show the four `toEqual` failures in `axe.ts:44`, reached
+from the original line 176, not in `toggleIndexes`. The index assertions appear
+in nearby source excerpts in checkbox failures; none reports an index mismatch.
+`/tmp/gates-nspl/e2e.log` contains 24 immediate checkbox-state failures and four
+axe failures; `/tmp/gates-nspl/e2e-fake.log` contains 23 and four respectively
+(one no-Bower-region cell succeeds). Both commands exercise the spec's explicit
+demo/fake and 375/1440 matrix under both Playwright projects.
+
+The production wiring is correct for these rows. Markdown counts all body
+tasks, captures each checkbox's body index, and passes it unchanged through
+NoteScreen to `vault.toggleTask`. DriveVault awaits its content write, updates
+the cached parsed note, records the journal line and emits the refresh. React's
+controlled Checkbox therefore retains the fetched state until that refresh.
+No optimistic state, index mapping or second task mechanism was added.
+The unchanged B6a tests exercise the production screen callback, await the real
+mutation inside `act`, check whole-note isolation and refuse a Bower-region
+identity with no write. Both pass in this repair's targeted run.
+
+The separate root-note breadcrumb defect is logged here for lead diagnosis and
+ruling; it remains unfixed. NoteScreen's authorized scope is tick wiring only.
+The fixture repair limits this entry's accessibility row to its promised
+project-note case with a named containing folder, like the existing note-screen
+browser fixtures. It does not claim root-note accessibility coverage.
+
+tests changed: e2e/next-steps-plain-list.spec.ts: replace all five synchronous check/uncheck actions with click plus written-state waits; retain every byte, body-index, isolation assertion and positive control; add initial/final checkbox-state assertions.
+tests changed: e2e/next-steps-plain-list.spec.ts: seed the same two notes under a named parent folder and assert its breadcrumb; retain the entire article WCAG 2.2 scan and all demo/fake, phone/desktop cells.
+removed: only check/uncheck actions and the root-level fixture placement; no assertion, positive control, matrix cell, accessibility rule or app mechanism removed.
+
+### Offline precedent and verification
+
+The installed Playwright type documentation describes `check` and `uncheck`
+as clicking and immediately ensuring the resulting checked state, throwing
+when it has not changed. Its assertion documentation recommends retrying
+`expect(locator).toBeChecked()` for observable checkbox state:
+https://playwright.dev/docs/api/class-locator#locator-check
+https://playwright.dev/docs/api/class-locator#locator-uncheck
+https://playwright.dev/docs/test-assertions
+These were read locally; no browsing or network request occurred.
+`e2e/v2-field.spec.ts:155-164` is the existing task-control precedent: a real
+interaction (focus and Space), followed by a retrying checked-state assertion.
+The repaired spec uses click plus the same retrying assertion, while retaining
+its stronger complete stored-byte comparisons. `e2e/empty-note-help.spec.ts`
+uses a containing folder and the same full-article WCAG 2.2 scan.
+
+Verification: 15/15 targeted tests pass in the three files below, including
+both unchanged B6a tests and all NSPL component/source/compatibility tests.
+Strict node/e2e TypeScript and touched-spec ESLint pass. `git diff --check`
+passes. All logs, reports, module caches and build-info files are in OS temp.
+
+```sh
+nspl_run_dir=$(cat /tmp/next-steps-plain-list-run-dir)
+pnpm exec vitest run src/features/note/markdown.test.tsx \
+  src/features/note/next-steps-plain-list.test.tsx \
+  src/features/note/b6a-task-regions.test.tsx --maxWorkers=2 \
+  --config "$nspl_run_dir/vitest.config.mjs" --configLoader runner \
+  --fsModuleCachePath /tmp/nspl-e2e-repair-module-cache \
+  --reporter=default --reporter=json --outputFile /tmp/nspl-e2e-repair-unit.json \
+  > /tmp/nspl-e2e-repair-unit.log 2>&1
+pnpm exec tsc -p tsconfig.node.json \
+  --tsBuildInfoFile /tmp/nspl-e2e-repair-node.tsbuildinfo \
+  > /tmp/nspl-e2e-repair-tsc.log 2>&1
+pnpm exec eslint e2e/next-steps-plain-list.spec.ts \
+  > /tmp/nspl-e2e-repair-eslint.log 2>&1
+```
+
+E2e was not run, as instructed; browser green remains for the runner on demo
+and fake. `pnpm check` was not rerun because it writes reports and marks into
+the repository, contrary to this session's instruction. The owner reports
+`pnpm check` and the four existing browser specs passed on the supplied HEAD.

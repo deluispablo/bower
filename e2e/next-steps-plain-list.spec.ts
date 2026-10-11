@@ -4,8 +4,9 @@ import { expect, test } from './fixtures';
 import { expectAxeClean } from './axe';
 import { resize } from './viewport';
 
-const PROJECT = 'NSPL project.md';
-const PERSONAL = 'NSPL personal.md';
+const FOLDER = 'NSPL garden';
+const PROJECT = `${FOLDER}/NSPL project.md`;
+const PERSONAL = `${FOLDER}/NSPL personal.md`;
 const BODY = [
   '## Goal', 'Grow mint.', '- A normal bullet.', '- [ ] Plan the bed.', '',
   '## Next steps', '- [ ] Plant mint.', '- [x] Choose seeds.', '',
@@ -42,10 +43,11 @@ async function openFixture(page: Page, source: 'demo' | 'fake', width: number, p
         ]);
         const drive = new FakeDrive({ clock: () => 0 });
         const root = (await drive.createFolder('root', 'Bower')).id;
+        const folder = (await drive.createFolder(root, ${JSON.stringify(FOLDER)})).id;
         const paths = ${JSON.stringify([PROJECT, PERSONAL])};
         const texts = ${JSON.stringify([RAW, BODY])};
         const ids = new Map();
-        for (const [i, path] of paths.entries()) ids.set(path, (await drive.createText(root, path, texts[i])).id);
+        for (const [i, path] of paths.entries()) ids.set(path, (await drive.createText(folder, path.split('/').at(-1), texts[i])).id);
         const fixture = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
         const base = result.sources;
         window.__nsplRead = (path) => drive.readText(ids.get(path));
@@ -133,8 +135,9 @@ for (const source of ['demo', 'fake'] as const) {
       // Positive control: an existing done personal task can still be unticked.
       await expect(own).toBeEnabled();
       await expect(own).toBeChecked();
-      await own.uncheck();
+      await own.click();
       await expect.poll(() => read(page)).toBe(RAW.replace('- [x] Water mint.', '- [ ] Water mint.'));
+      await expect(own).not.toBeChecked();
       await expect(article(page).getByRole('checkbox', { name: 'Buy a pot.', exact: true })).not.toBeChecked();
       expect(await toggleIndexes(page)).toEqual([4]);
       await expect(article(page).getByRole('checkbox')).toHaveCount(2);
@@ -149,8 +152,10 @@ for (const source of ['demo', 'fake'] as const) {
       await expect(article(page).getByRole('checkbox', { name: 'Choose seeds.', exact: true })).toBeChecked();
       const own = article(page).getByRole('checkbox', { name: 'Plant mint.', exact: true });
       await expect(own).toBeEnabled();
-      await own.check();
+      await expect(own).not.toBeChecked();
+      await own.click();
       await expect.poll(() => read(page, PERSONAL)).toBe(BODY.replace('- [ ] Plant mint.', '- [x] Plant mint.'));
+      await expect(own).toBeChecked();
       expect(await toggleIndexes(page)).toEqual([1]);
     });
 
@@ -158,11 +163,14 @@ for (const source of ['demo', 'fake'] as const) {
       await openFixture(page, source, width);
       const named = article(page).getByRole('checkbox', { name: 'Buy a pot.', exact: true });
       // Positive control: real screen ticks and unticks are checked against fetched raw bytes.
-      await named.check();
+      await expect(named).not.toBeChecked();
+      await named.click();
       await expect.poll(() => read(page)).toBe(RAW.replace('- [ ] Buy a pot.', '- [x] Buy a pot.'));
-      await named.uncheck();
+      await expect(named).toBeChecked();
+      await named.click();
       await expect.poll(() => read(page)).toBe(RAW);
-      await article(page).getByRole('checkbox').first().check();
+      await expect(named).not.toBeChecked();
+      await article(page).getByRole('checkbox').first().click();
       await expect.poll(() => read(page)).toBe(RAW.replace('- [ ] Buy a pot.', '- [x] Buy a pot.'));
       await expect(named).toBeChecked();
       // Bower tasks occupy indexes 0–2; the first visible checkbox owns index 3.
@@ -173,6 +181,7 @@ for (const source of ['demo', 'fake'] as const) {
       await openFixture(page, source, width);
       await expect(item(page, 'Plant mint.')).toBeVisible();
       await expect(article(page).getByRole('checkbox', { name: 'Buy a pot.', exact: true })).toBeEnabled();
+      await expect(article(page).getByRole('link', { name: FOLDER, exact: true })).toBeVisible();
       await expectAxeClean(page, { include: 'main article', wcag22: true });
       await expect(item(page, 'Plant mint.').getByRole('checkbox')).toHaveCount(0);
       await expect(item(page, 'Choose seeds.').getByRole('checkbox')).toHaveCount(0);
