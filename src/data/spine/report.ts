@@ -232,7 +232,11 @@ export function wordsNotes(manifest: RunManifest, pileId: string): string[] {
   const binned = new Set([pile.anchor?.fileId, pile.context.kind === 'text' ? pile.context.file.fileId : undefined].filter((id): id is string => id !== undefined));
   const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
   const notes = manifest.operations.flatMap((o) => (o.effect.kind === 'bin' && binned.has(o.effect.before.fileId) ? o.dependsOn : []));
-  return [...new Set(notes)].filter((id) => ops.get(id)?.effect.kind === 'create-text' || ops.get(id)?.effect.kind === 'edit-text');
+  return [...new Set(notes)].filter((id) => {
+    const effect = ops.get(id)?.effect;
+    return effect?.kind === 'create-text' || effect?.kind === 'edit-text'
+      || effect?.kind === 'write-runner-json' && effect.path === '.bower/observations.jsonl';
+  });
 }
 
 /**
@@ -265,7 +269,8 @@ export function reportContradictions(admission: AdmissionManifest, manifest: Run
         && (p.anchor?.fileId === fileId || p.context.kind === 'text' && p.context.file.fileId === fileId));
       if (piles.length) return piles.flatMap((p) => (pileItems.get(p.pileId) ?? []).filter((f) => !members.has(f)));
     }
-    if (op?.effect.kind !== 'create-text' && op?.effect.kind !== 'edit-text') return thingOf(id);
+    if (op?.effect.kind !== 'create-text' && op?.effect.kind !== 'edit-text'
+      && !(op?.effect.kind === 'write-runner-json' && op.effect.path === '.bower/observations.jsonl')) return thingOf(id);
     const piles = [...notesOf].filter(([, notes]) => notes.includes(id)).map(([pileId]) => pileId);
     return [...piles.flatMap((p) => (pileItems.get(p) ?? []).filter((f) => !members.has(f))), ...op.dependsOn.flatMap(thingOf)];
   }));

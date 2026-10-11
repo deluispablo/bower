@@ -13,16 +13,18 @@ import { BowerError } from '../../src/data/types';
 import { RUNNER_WRITES, SYSTEM, isHidden, isRunnerFile, type RetrievalFile } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import type { RunnerDrive } from './drive';
-import { isBowerMoc, timelineDate } from '../../src/data/contracts/note-edit';
+import { applyChanges, isBowerMoc, timelineDate } from '../../src/data/contracts/note-edit';
 import { leafCount, mocEdit, mocMembership, mocSnapshot, noteLinks, type Notes } from './moc';
 
 import type { Outcome } from '../../src/data/contracts/run-checkpoint';
 import { isJournalRecord, pairsOf, type JournalRecord } from '../../src/data/contracts/journal-record';
 import { subjectOf } from '../../src/data/contracts/questions';
-import { parseTimelineLine } from '../../src/data/contracts/timeline-line';
+import { parseTimelineLine, timelineLine } from '../../src/data/contracts/timeline-line';
 import { renderHot, sameExceptDate, type HotInputs } from './hot';
 import { LedgerExhausted, type RunTiming } from './timing';
-import { parseObservations } from '../../src/data/contracts/observations';
+import { parseObservations, validLearnedBlock } from '../../src/data/contracts/observations';
+import { ABOUT_REGIONS, parseOwnership } from '../../src/data/contracts/ownership-format';
+import { FOLDER_TEMPLATE } from '../../src/data/contracts/folder-template';
 
 /** Every derived kind joins this slot; declarations persist inside maintain, never in a separate store. */
 export interface DeclaredTarget {
@@ -37,6 +39,63 @@ export interface DeclaredTarget {
 }
 
 const indexTarget: DeclaredTarget = { kind: 'index', path: SYSTEM.index, render: (_declaration, state) => projectIndex(state.files) };
+
+/** About me is a projection of settled ledger events, never a primary memory effect. */
+const aboutTarget: DeclaredTarget = {
+  kind: 'about', path: 'About me.md', unchanged: (before, after) => before === after,
+  async declare(drive, manifest, index) {
+    const sources: MaintenanceDeclaration['sources'] = [];
+    for (const path of ['About me.md', '.bower/observations.jsonl']) {
+      const f = index.file(path);
+      if (!f) continue;
+      const text = await drive.readListedText(f);
+      sources.push({ path, file: seen(f), text, content: { encoding: 'utf8', size: new TextEncoder().encode(text).length,
+        sha256: await rawHash(text), provenance: drive.provenance, observedModifiedTime: f.modifiedTime } });
+    }
+    return { at: new Date(manifest.requestedAt).toISOString(), sources };
+  },
+  render(declaration, _state, outcomes, manifest) {
+    if (!declaration) throw unavailable();
+    let ledgerText = declaration.sources.find((s) => s.path === '.bower/observations.jsonl')?.text ?? '';
+    for (const op of manifest.operations) {
+      if (!outcomes.some((o) => o.operationId === op.operationId && o.state === 'applied')) continue;
+      const e = op.effect;
+      if (e.kind === 'write-runner-json' && e.path === '.bower/observations.jsonl'
+        || e.kind === 'create-text' && e.purpose === 'runner-json' && e.name === 'observations.jsonl') ledgerText = e.text;
+    }
+    const ledger = parseObservations(new TextEncoder().encode(ledgerText));
+    const before = declaration.sources.find((s) => s.path === 'About me.md')?.text
+      ?? FOLDER_TEMPLATE.find((f) => f.path === 'About me.md')?.content;
+    if (before === undefined) throw unavailable();
+    const bytes = new TextEncoder().encode(before);
+    const ownership = parseOwnership(bytes);
+    if (ownership.status === 'invalid') throw unavailable();
+    const changes: EditText['changes'] = [];
+    const payloads = ABOUT_REGIONS.map((region) => {
+      const label = { 'about-you': 'About you', 'about-working-on': "What you're working on", 'about-preferences': 'How you like things' }[region];
+      const span = ownership.payloads?.[region];
+      const previous = span ? new TextDecoder().decode(bytes.subarray(span.start, span.end)).split(/\r?\n/) : [];
+      return `### ${label}\n` + ledger.live.filter((f) => f.section === region).map((f) => {
+        const stored = previous.find((line) => { const entry = parseTimelineLine(line); return entry?.text === f.text && entry.date === f.date; });
+        return (stored ?? timelineLine({ date: f.date, text: f.text, source: f.origin.kind === 'document' ? 'Source' : 'Your words' })) + '\n';
+      }).join('');
+    });
+    if (!ownership.payloads?.['about-you']) {
+      changes.push({ kind: 'about-append', recordIds: [], text: '## What Bower has learned\n'
+        + ABOUT_REGIONS.map((region, i) => `<!-- bower:ownership/2 begin ${region} -->\n${payloads[i]}<!-- bower:ownership/2 end ${region} -->\n`).join('') });
+    } else for (const [i, region] of ABOUT_REGIONS.entries()) {
+      const span = ownership.payloads?.[region];
+      if (!span) throw unavailable();
+      const previous = new TextDecoder().decode(bytes.subarray(span.start, span.end));
+      const text = payloads[i] ?? '';
+      if (previous !== text) changes.push({ kind: 'about-rewrite', region, recordIds: [], previous, text,
+        factIds: ledger.live.filter((f) => f.section === region).map((f) => f.factId) });
+    }
+    const result = changes.length ? applyChanges(bytes, changes) : { ok: true, text: before };
+    if (!result.ok || !validLearnedBlock(result.text, ledger)) throw unavailable();
+    return { text: result.text, changes };
+  },
+};
 
 const hub = (path: string, note: MaintenanceNote): boolean => note.owner === 'bower'
   && ['Projects', 'Areas'].includes(path.split('/')[0] ?? '')
@@ -394,8 +453,15 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   let { listing, snapshot } = refreshed;
   const { ix, old, state, cursor, changes, drop } = refreshed;
   const files = new Map(listing.map((f) => [f.id, f]));
-  if (!state && !notesIn(ix).length && !manifest.operations.length && !ix.file(SYSTEM.hot) && !manifest.capture.journal.length) return manifest;
-  if (state && ix.file(SYSTEM.index) && !changes.length && !manifest.operations.length) {
+  const ledgerFile = ix.file('.bower/observations.jsonl');
+  const hasLedgerEffect = manifest.operations.some(({ effect: e }) => e.kind === 'write-runner-json' && e.path === '.bower/observations.jsonl');
+  const aboutDeclaration = ledgerFile || hasLedgerEffect ? await aboutTarget.declare?.(drive, manifest, ix, snapshot) : undefined;
+  const ledgerText = aboutDeclaration?.sources.find((s) => s.path === '.bower/observations.jsonl')?.text ?? '';
+  const aboutBefore = aboutDeclaration?.sources.find((s) => s.path === 'About me.md')?.text;
+  const aboutRendered = ledgerText ? aboutTarget.render(aboutDeclaration, { v: 1, folderId: rootId, account: state?.account ?? rootId, cursor, files: snapshot }, [], manifest) : undefined;
+  const needsAbout = hasLedgerEffect || !!ledgerText && (typeof aboutRendered === 'object' && aboutRendered.text !== aboutBefore);
+  if (!needsAbout && !state && !notesIn(ix).length && !manifest.operations.length && !ix.file(SYSTEM.hot) && !manifest.capture.journal.length) return manifest;
+  if (!needsAbout && state && ix.file(SYSTEM.index) && !changes.length && !manifest.operations.length) {
     return old ? cursorOnly(drive, manifest, old, state, cursor) : manifest;
   }
   // A write or migration needs complete owned regions; unchanged maps reuse retrieval state's snapshot and members.
@@ -426,7 +492,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   listing = [...files.values()];
   const own = ix.file(SYSTEM.dir);
   if (!own?.folder) throw unavailable();
-  const kinds = [indexTarget, ...declared];
+  const kinds = [indexTarget, ...declared, ...(needsAbout ? [aboutTarget] : [])];
   if (new Set(kinds.map((kind) => kind.path)).size !== kinds.length) throw unavailable();
   const paths = [...kinds.map((kind) => kind.path), SYSTEM.retrieval];
   const missing = paths.filter((path) => !ix.file(path));
@@ -439,7 +505,12 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
     const text = before ? await drive.readListedText(before) : undefined;
     const bytes = text === undefined ? undefined : new TextEncoder().encode(text);
     const kind = kinds.find((kind) => kind.path === path);
-    const declaration = await kind?.declare?.(drive, manifest, ix, snapshot);
+    const declaration = kind === aboutTarget ? aboutDeclaration : await kind?.declare?.(drive, manifest, ix, snapshot);
+    if (kind === aboutTarget) for (const source of declaration?.sources ?? []) {
+      const resolved = ix.pathOf(source.file.fileId);
+      if (resolved === undefined) throw unavailable();
+      places.set(source.file.fileId, { file: source.file, path: resolved });
+    }
     const parentPath = path.split('/').slice(0, -1).join('/');
     const parentId = ix.idOf(parentPath);
     if (!parentId || (parentPath && !ix.byId(parentId)?.folder)) throw unavailable();
@@ -600,7 +671,23 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
         const frozen = op.effect.inputs.listing?.find((f) => f.fileId === target.fileId);
         const settled = state.listing?.find((f) => f.id === target.fileId);
         const before = settled ? seen(settled) : frozen;
-        const kind = [indexTarget, ...declared].find((kind) => target.kind ? kind.kind === target.kind && kind.path === target.path : kind.path === target.path);
+        const kind = [indexTarget, ...declared, aboutTarget].find((kind) => target.kind ? kind.kind === target.kind && kind.path === target.path : kind.path === target.path);
+        if (kind === aboutTarget) {
+          const source = target.declaration?.sources.find((s) => s.path === '.bower/observations.jsonl');
+          const written = manifest.operations.findLast((o) => o.effect.kind === 'write-runner-json'
+            && o.effect.path === '.bower/observations.jsonl' && head.outcomes.some((outcome) =>
+              outcome.operationId === o.operationId && outcome.state === 'applied'));
+          const outcome = written && head.outcomes.find((o) => o.operationId === written.operationId);
+          const expected = outcome?.state === 'applied' ? outcome.evidence.file : source?.file;
+          const hash = written?.effect.kind === 'write-runner-json' ? written.effect.content.sha256 : source?.content.sha256;
+          const live = expected ? await drive.evidence(expected.fileId) : null;
+          if (expected && (!live || live.trashed || live.content?.sha256 !== hash
+            || live.file.modifiedTime !== expected.modifiedTime || live.file.name !== expected.name
+            || live.file.parents.join() !== expected.parents.join())) {
+            const error = unavailable(); console.error(error);
+            return { state: 'rejected', failure: { code: 'unknown' as const, message: error.message } };
+          }
+        }
         const owned = !(RUNNER_WRITES as readonly string[]).includes(target.path);
         const rendered = kind ? kind.render(target.declaration, state, head.outcomes, manifest)
           : owned ? mocEdit(target.fileId, state.files, members)
@@ -621,7 +708,8 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
         if (before && kind?.unchanged && kind.unchanged(await drive.readListedText(file(before)), text)) continue;
         const ev = (before && !kind?.cachedCheck) || replaying.has(op.operationId) ? await drive.evidence(target.fileId) : null;
         const content = { encoding: 'utf8' as const, size: new TextEncoder().encode(text).length, sha256: await rawHash(text) };
-        const beforeText = state.files[target.fileId]?.moc?.text;
+        const beforeText = kind === aboutTarget ? target.declaration?.sources.find((s) => s.path === 'About me.md')?.text
+          : state.files[target.fileId]?.moc?.text;
         const beforeContent: VerifiedContent | undefined = owned && before && beforeText !== undefined ? { encoding: 'utf8' as const,
           size: new TextEncoder().encode(beforeText).length, sha256: await rawHash(beforeText),
           provenance: drive.provenance, observedModifiedTime: before.modifiedTime } : target.beforeContent;
@@ -652,7 +740,10 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
         } finally {
           cachedCheck = undefined;
         }
-        if (last.state !== 'applied') throw unavailable();
+        if (last.state !== 'applied') {
+          if (kind === aboutTarget) return last;
+          throw unavailable();
+        }
         if (owned && state.files[target.fileId]) {
           state.files[target.fileId] = { ...state.files[target.fileId] as MaintenanceNote,
             version: last.evidence.file.modifiedTime, moc: mocSnapshot(text) ?? undefined };

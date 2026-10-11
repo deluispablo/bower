@@ -52,6 +52,7 @@ export function grounded(manifest: RunManifest): boolean {
   const places = new Set(manifest.capture.places.map((p) => p.file.fileId));
   const pathOf = (t: Target): string | null => placePath(manifest, t);
   const madeAt = (e: EffectV2): string | null => {
+    if (e.kind === 'write-runner-json' && e.path === '.bower/observations.jsonl') return 'About me.md';
     // The fixed root notes use the same generated-note effects.
     if (e.kind === 'create-text' && [RULES, 'About me.md'].includes(e.name) && 'fileId' in e.parent && e.parent.fileId === manifest.scope.rootId) return e.name;
     const parent = e.kind === 'create-text' ? pathOf(e.parent) : null;
@@ -140,6 +141,9 @@ export function grounded(manifest: RunManifest): boolean {
         || (Object.hasOwn(e.properties, 'bowerRun') && e.properties.bowerRun !== null) || mine.length !== 1) return false;
     } else if (e.kind === 'bin' && places.has(e.before.fileId)) {
       asides.set(o.operationId, 1);
+    } else if (e.kind === 'write-runner-json' && e.path === '.bower/observations.jsonl') {
+      if (mine.length !== 1 || mine[0]?.value.updated.length !== 1
+        || mine[0].value.updated[0]?.op !== o.operationId) return false;
     } else if (e.kind === 'edit-text') {
       // One row per Timeline line it writes, or one for a Current state alone; a kept note's lines carried from the
       // other note are said in the keep's one row instead.

@@ -21,7 +21,7 @@ export type ObservationOrigin = { runId: string; captureId: string } & (
   { kind: 'words'; pileId: string } | { kind: 'document'; subject: string }
   | { kind: 'answer'; recordId: string; subject: string } | { kind: 'rule'; recordId: string }
 );
-type Evidence = ObservationOrigin & { source: Source };
+type Evidence = ObservationOrigin & { source: Source; words?: string };
 type Observation = { v: 1; kind: 'observation'; eventId: string; factId: string; section: AboutRegion;
   date: string; at?: number; text: string; category: 'biography' | 'activity' | 'preference' | 'sensitive' | 'rule' | 'schema';
   source: Source; origin: ObservationOrigin; remembers?: string };
@@ -141,11 +141,11 @@ export function observationOf(candidate: unknown, context: {
     : Object.keys(ref).join() === 'fileId' && ref.fileId === e.source.fileId);
   if (matches.length !== 1) return { ok: false };
   const evidence = matches[0];
-  if (!evidence) return { ok: false };
-  const { source, ...rest } = evidence;
+  if (!evidence || evidence.kind === 'document' || typeof candidate.text !== 'string'
+    || !candidate.text.trim() || !evidence.words?.includes(candidate.text)) return { ok: false };
+  const { source, words: _words, ...rest } = evidence;
   // Validated lineage's bookkeeping is not part of the persisted origin.
   const origin = Object.fromEntries(Object.entries(rest).filter(([key]) => key !== 'validated'));
-  if (evidence.kind === 'document' && (candidate.subject !== evidence.subject || candidate.category !== 'biography')) return { ok: false };
   const value = { v: 1, kind: 'observation', eventId: context.eventId, factId: context.factId, date: context.date,
     ...(context.at === undefined ? {} : { at: context.at }), section: candidate.section, text: candidate.text, category: candidate.category, source, origin,
     ...(candidate.remembers === undefined ? {} : { remembers: candidate.remembers }) };

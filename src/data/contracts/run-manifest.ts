@@ -2,7 +2,7 @@
 import { ABOUT_REGIONS, type AboutRegion, MOC_REGIONS, createOwnershipContext, type MocRegion } from './ownership-format';
 import { sha256 } from './hashes';
 import { proposalOk, isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
-import { readTypeTable, typeRowOk, typeTableOk } from './note-format';
+import { parseNote, readTypeTable, typeRowOk, typeTableOk } from './note-format';
 import { BowerError, type UpdatedRow } from './types';
 import { parseObservations, canRebuildAboutSection, aboutArchivePath, validLearnedBlock } from './observations';
 import { applyChanges, mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, profileTextOk, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
@@ -605,6 +605,16 @@ async function admit<M extends Manifest | ManifestV2>(
       for (const source of target.declaration?.sources ?? []) {
         if (!await describes(source.content, source.text)) return { ok: false, reason: 'shape' };
       }
+      if (target.path === 'About me.md' && maintenanceTargetOk(value, target)) {
+        const source = target.declaration?.sources.find((s) => s.path === 'About me.md');
+        const before = e.inputs.listing?.find((f) => f.fileId === target.fileId);
+        if (before ? before.folder || before.name !== 'About me.md' || before.parents.length !== 1
+          || before.parents[0] !== target.parentId || !source || !sameSeen(before, source.file) || !target.beforeContent
+          || target.beforeContent.observedModifiedTime !== before.modifiedTime
+          || !await describes(target.beforeContent, source.text) : source !== undefined || target.beforeContent !== undefined)
+          return { ok: false, reason: 'shape' };
+        continue;
+      }
       if ((writes as readonly string[]).includes(target.path)) continue;
       const input = e.inputs.snapshot?.[target.fileId];
       const before = e.inputs.listing?.find((f) => f.fileId === target.fileId);
@@ -820,9 +830,9 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2, finalized: boolean
             if (origin.kind === 'words') {
               const pile = value.capture.piles.find((p) => p.pileId === origin.pileId);
               if (pile?.context.kind !== 'text' || pile.context.file.fileId !== event.source.fileId
-                || pile.context.content.sha256 !== event.source.sha256) return false;
+                || pile.context.content.sha256 !== event.source.sha256 || !parseNote(pile.context.file.name, pile.context.text).body.includes(event.text)) return false;
             } else if (origin.kind === 'document') {
-              if (!value.capture.members.some((m) => m.file.fileId === event.source.fileId && m.content.sha256 === event.source.sha256)) return false;
+              return false;
             } else if (!value.capture.journal.some((j) => j.recordId === origin.recordId && j.fileIds.includes(event.source.fileId)
               && j.sha256 === event.source.sha256)) return false;
           } else if (event.kind === 'tombstone') {
@@ -944,6 +954,14 @@ async function planningArtifactsOk(value: Manifest | ManifestV2): Promise<boolea
 /** Maintenance names must agree with captured identity and cannot alias protected memory. */
 export function maintenanceTargetOk(value: { capture: Capture; operations: readonly OperationV2[] }, target: NonNullable<Maintain['inputs']['targets']>[number]): boolean {
   const resolved = targetPath(value, { fileId: target.fileId });
+  if (resolved === 'About me.md' && target.path === resolved) return target.kind === 'about'
+    && target.declaration !== undefined
+    && new Set(target.declaration.sources.map((s) => s.path)).size === target.declaration.sources.length
+    && target.declaration.sources.every((s) => {
+      const place = value.capture.places.find((p) => p.file.fileId === s.file.fileId);
+      return (s.path === 'About me.md' || s.path === '.bower/observations.jsonl')
+        && place?.path === s.path && sameSeen(place.file, s.file);
+    });
   return resolved === target.path && ![resolved, target.path].some((path) => path === 'About me.md'
     || path === '.bower/observations.jsonl' || path?.startsWith('.bower/archive/about-me/'));
 }
