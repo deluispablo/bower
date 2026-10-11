@@ -666,3 +666,102 @@ with production fixes for all nine retained for review. The coordinator/red owne
 resolve the three invalid-target fixtures and the jsdom byte-array assertion under the
 ruling, and update the shared compatibility list. B1d still owns the deferred runner pin.
 The worker made no commit and requests no permission to change those owner-frozen files.
+
+
+## Fix round 1 red repair
+
+implementer: codex
+
+Tests-only TL-P4-51 repair of the frozen conflicts listed in Fix round 1's
+"Frozen test conflicts and handoff", under TL-P4-48 addendum 3.
+
+- The requests.json and hashes.json supported variants now change the target's
+  `before.name` with the declared path. The suggestions.json parameter fixture does
+  the same before resealing its operation identity. All original acceptance and
+  refusal assertions remain unchanged; the supplied writable list still decides
+  which correctly identified file may be written. No identity guard was weakened.
+- Red 9 now constructs its unterminated input with `new TextEncoder().encode(prefix)`,
+  matching the production encoder's Uint8Array realm. Its exact byte-prefix equality,
+  complete resulting text, single learned heading and repeat-init refusal remain.
+  Both plain text and BOM/CRLF/accented/combining/emoji input remain covered.
+
+tests changed: src/data/contracts/run-manifest.test.ts: match requests.json, hashes.json and suggestions.json target names to declared paths; preserve writable-list subjects and all assertions.
+tests changed: src/data/contracts/b4a-fr1.test.ts: encode red 9's input with TextEncoder to preserve exact byte-prefix equality across jsdom realms; retain complete text and repeat-init refusal.
+
+Production code and runner/test/claude-provider.test.ts are unchanged. No dependency,
+node_modules replacement/symlink, network access, or repository-writing git command
+was used. The runner owns commits; .codex-commits.json has tests and notes separately.
+
+Prior packet research is reused offline, without new verification or dependencies:
+https://arxiv.org/pdf/2605.12978
+https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+https://zod.dev/api
+No production mechanism changed or second mechanism was introduced.
+
+### Red and focused green
+
+- Before repair: two files, 1,425 passed and four assigned failures: requests.json
+  supported variant, hashes.json supported variant, writable-files parameter,
+  and b4a-fr1 9 initialization adds missing final newline.
+  Log: /private/tmp/b4a-red-repair-before.log.
+- After repair, same focused command and jsdom environment: two files and all
+  1,429 tests passed. Log: /private/tmp/b4a-red-repair-focused.log.
+
+Commands (stdout/stderr redirected to the temp logs):
+
+```sh
+pnpm exec vitest run src/data/contracts/run-manifest.test.ts src/data/contracts/b4a-fr1.test.ts --config /private/tmp/b4a-contract-validation/app-full.mjs --configLoader runner --maxWorkers=2
+NODE_OPTIONS='--require=/private/tmp/b4a-red-repair-validation/scratch-output.cjs' NODE_PATH=/private/tmp/bower-b4a-contract/node_modules pnpm exec vitest run src --maxWorkers=2 --config /private/tmp/b4a-red-repair-validation/app-full.mjs --configLoader runner
+pnpm exec eslint src/data/contracts/run-manifest.test.ts src/data/contracts/b4a-fr1.test.ts
+pnpm exec tsc -p tsconfig.app.json --noEmit --incremental false
+```
+
+The full src run preserves the production Vite config, jsdom, React, aliases, CSS
+and timer guard. Its temporary config/setup redirect only reports and caches.
+The preload relocates the harness's legacy test-results mkdir/mkdtemp scratch
+fixture paths to /private/tmp/b4a-red-repair-validation/fixture-results; fixture
+assertions are unchanged. NODE_PATH supplies the installed modules to those
+external Playwright fixtures without replacing or linking node_modules.
+A temp package.json preserves the repository's ESM mode. The preload changes only
+those generated fixtures' @playwright/test import to the same installed index.mjs;
+assertions and production imports remain unchanged.
+Full-suite final log: /private/tmp/b4a-red-repair-src-final.log.
+Full-suite JSON: /private/tmp/b4a-red-repair-validation/app-results.json.
+Full pnpm check remains coordinator-owned under the packet; no UI/e2e screen
+changed. No screen e2e or app server was started by this repair worker.
+
+### Temporary fixture setup correction
+
+The first full src run had 5,759 passed and three failed: expected e2e-port EPERM
+plus two harness scratch-fixture failures introduced by relocation outside the
+repository's ESM/package-resolution context. No repository file was changed to
+address these setup failures. The temp ESM package metadata and generated import
+resolution correction above preserve the same installed Playwright package.
+All 47 harness tests then passed with all scratch fixtures still in OS temp:
+/private/tmp/b4a-red-repair-harness.log.
+The entire requested src suite was rerun with that corrected temp setup.
+Initial full log: /private/tmp/b4a-red-repair-src.log.
+Initial full JSON: /private/tmp/b4a-red-repair-validation/app-initial-results.json.
+The earlier Fix round 1 docs compatibility-bookkeeping conflict is absent in this
+checkout: src/docs.test.ts passed all 19 tests in the initial full run.
+
+Touched-test ESLint passed: /private/tmp/b4a-red-repair-eslint.log.
+App TypeScript no-emit/non-incremental check passed: /private/tmp/b4a-red-repair-types.log.
+
+### Final verification and handoff
+
+Final requested full src run: 173 files passed; only src/e2e-port.test.ts failed
+(174 files total). Tests: 5,761 passed and one expected listener test failed
+(5,762 total). The only unhandled error is that same `listen EPERM` for 127.0.0.1,
+which causes src/e2e-port.test.ts:37's timeout. Exit 1 is expected in this sandbox.
+Every other src test passed, including the three repaired manifest subjects, all
+nine fix-round reds, all 47 harness tests and all 19 docs tests.
+Log: /private/tmp/b4a-red-repair-src-final.log.
+JSON: /private/tmp/b4a-red-repair-validation/app-results.json.
+
+Final git diff --check passed. The only tracked changes are the two authorized
+test files and this notes file; .codex-commits.json is the requested runner plan.
+The plan has exactly two commits: tests first, notes alone second. No local commit
+was made. Production files and the deferred runner provider test remain untouched.
+Repair status: done; pnpm check stays with the coordinator, and no touched-screen
+e2e is applicable to this tests-only entry.
