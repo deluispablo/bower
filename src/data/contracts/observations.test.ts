@@ -101,7 +101,8 @@ it('b4a-admitted-origin-only: observation author issues identity and validates e
   type Result = { ok: boolean; value?: Observation };
   const author = contract<(candidate: unknown, context: unknown) => Result>('observationOf');
   const source = { fileId: 'source-words', sha256: 'a'.repeat(64) };
-  const admitted = { kind: 'words', runId: 'run-one', captureId: 'b'.repeat(64), pileId: 'pile-words', source };
+  const admitted = { kind: 'words', runId: 'run-one', captureId: 'b'.repeat(64), pileId: 'pile-words', source,
+    words: 'Remember: Alex prefers remote roles except when local mentoring is offered.' };
   const context = { admitted: [admitted], lineage: [], eventId: 'script-event', factId: 'script-fact', date: '2026-10-11' };
   const candidate = { source: { pileId: 'pile-words' }, section: 'about-preferences', category: 'preference',
     text: 'Alex prefers remote roles except when local mentoring is offered.' };
@@ -115,8 +116,8 @@ it('b4a-admitted-origin-only: observation author issues identity and validates e
   const document = { kind: 'document', runId: 'run-one', captureId: 'b'.repeat(64),
     source: { fileId: 'cv-id', sha256: 'c'.repeat(64) }, subject: 'Alex' };
   const biography = { source: { fileId: 'cv-id' }, section: 'about-you', category: 'biography', subject: 'Alex', text: 'Alex grows beans.' };
-  expect(author(biography, { ...context, admitted: [document] })).toMatchObject({ ok: true,
-    value: { origin: { kind: 'document' } } });
+  expect(author(biography, { ...context, admitted: [document] })).toMatchObject({ ok: false });
+  expect(author({ ...candidate, text: 'Alex prefers office roles.' }, context)).toMatchObject({ ok: false });
   for (const category of ['preference', 'sensitive', 'rule', 'schema']) {
     expect(author({ ...biography, category }, { ...context, admitted: [document] })).toMatchObject({ ok: false });
   }

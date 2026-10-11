@@ -28,7 +28,7 @@ import { proposalOk, isQuestionOption, answeredAskings, answersAsking, journalAn
 import { sha256 } from '../vault/hashes';
 import { indexedFront, parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
 import { linkTarget } from '../contracts/links';
-import { parseTimelineLine } from '../contracts/timeline-line';
+import { parseTimelineLine, timelineLine } from '../contracts/timeline-line';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
 import { grounded, groundedKeys, seen } from './grounded';
@@ -41,6 +41,8 @@ import type { ScriptedRead } from './read';
 import { STAMP, stampOf } from './write-once';
 import { NOTE_TEMPLATES, type NoteTemplate } from '../contracts/note-templates';
 import { typeRowOk, readTypeTable, propertyValuesOk, insertTypeRow, requestTableColumn, rewriteTypeTable } from '../contracts/note-format';
+
+import { aboutContext, hasVerbatimQuote, normalizedText, observationOf, parseObservations } from '../contracts/observations';
 
 export { SET_ASIDE, listedPiles };
 
@@ -432,6 +434,9 @@ export interface AuthoredState {
  * `applyChanges` alone adds a line, on Bower's notes only.
  */
 export interface Filing {
+  observations?: readonly unknown[];
+  forget?: readonly { factId: string; quote?: string }[];
+  shownFactIds?: readonly string[];
   thing(fileId: string): Placement | null;
   words(pileId: string): Placement | null;
   note?(fileId: string): AuthoredNote | null;
@@ -527,6 +532,9 @@ export interface Disagreement {
  * A part a reply leaves out is not done: requests and answers it does not settle wait for a run that can act on them.
  */
 export interface Decisions {
+  observations?: readonly unknown[];
+  forget?: readonly { factId: string; quote?: string }[];
+  shownFactIds?: readonly string[];
   thing(t: ThingSeen): Placement | null;
   words(pileId: string, words: string): Placement | null;
   pileAsk(pile: Pile): Ask | null;
@@ -559,6 +567,7 @@ export interface Decisions {
 /** The model's intent as decisions: what it placed, wrote and asked, nothing more. */
 export function modelDecisions(filing: Filing): Decisions {
   return {
+    observations: filing.observations, forget: filing.forget, shownFactIds: filing.shownFactIds,
     thing: (t) => filing.thing(t.fileId),
     words: (pileId) => filing.words(pileId),
     pileAsk: (pile) => filing.asks?.get(pile.id) ?? null,
@@ -650,12 +659,13 @@ type Ended = { kind: 'plan'; plan: RunPlan } | { kind: 'again'; attempt: Attempt
  */
 export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOptions) {
   const all = opts.scope === 'all';
+  const context = opts.context ?? createOwnershipContext();
   const listing = await drive.listAll(rootId);
   const ix = VaultIndex.build(rootId, listing);
   const read = await journalOf(drive, ix);
   const lines = opts.taken ? tookLines(read, opts.taken) : read;
   // An instructions run takes no pile: it reads only your changes.
-  const inbox = all ? await drive.piles(rootId, opts.context) : [];
+  const inbox = all ? await drive.piles(rootId, context) : [];
   // Bower's own files (TL-P2-17): a failed read refuses before admission and any effect; a malformed one is
   // replaced when the run writes it, its old entries never claimed; a missing one is made again.
   const sys = ix.file(SYSTEM.dir);
@@ -695,9 +705,12 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   const questionValue = questionsFile && (questionsFile.size === undefined || questionsFile.size > 40 || lines.some((l) => l.rec.kind === 'answer'))
     ? parsed(await ownText(drive, questionsFile)) : null;
   const questionState: QuestionsFile = isRunnerFile(SYSTEM.questions, questionValue) ? questionValue : { v: 1, questions: [] };
+  const memoryFile = ix.file('.bower/observations.jsonl');
+  const memoryText = memoryFile ? await ownText(drive, memoryFile) : '';
+  const memoryLedger = parseObservations(new TextEncoder().encode(memoryText));
   const piles = opts.taken ? tookPiles(inbox, opts.taken) : inbox;
   // The capture the Worker's admission shares (TL-P3-21), with the one pile note each pile records read and checked.
-  const readiness = await capturePiles(drive, rootId, piles.map(pileShape), { notes: true, context: opts.context });
+  const readiness = await capturePiles(drive, rootId, piles.map(pileShape), { notes: true, context });
   // Things already saved (`duplicates.ts`, TL-P4-10 addendum 2), by their content.
   const dups = duplicatesOf(listing, ix, piles.flatMap((p) => p.items.map((i) => i.id)));
   const appends = await personalAppendHistory(drive, rootId, listing, ix, lines);
@@ -705,7 +718,7 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   const unrecorded = lines.some((l) => l.rec.kind === 'request' && !appends.completed.some((h) => h.requestId === l.rec.id)
     && !appends.lines.some((h) => h.consent.requestId === l.rec.id));
   const since = unrecorded ? retainedSince(listing, ix) : null;
-  return { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, types, typeFile, typeText, proposals, proposalIds };
+  return { context, rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, types, typeFile, typeText, proposals, proposalIds, memoryFile, memoryText, memoryLedger };
 }
 type Captured = Awaited<ReturnType<typeof capture>>;
 
@@ -715,9 +728,10 @@ type Captured = Awaited<ReturnType<typeof capture>>;
  * edits, the generated notes, the questions. It ends decided, or with a try again that holds more back.
  */
 export async function decide(drive: ScriptedRead, snapshot: Captured, opts: PlanOptions, attempt: Attempt = { editCap: EDITS_PER_RUN, held: new Set() }) {
-  const { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, types, typeFile, typeText, proposals, proposalIds } = snapshot;
+  const { context, rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, types, typeFile, typeText, proposals, proposalIds, memoryFile, memoryText, memoryLedger } = snapshot;
   const { editCap, held } = attempt;
   const newKey = opts.mintKey ?? mintKey;
+
   /**
    * What the reply decided. A part it leaves out is not done (P4-2 review I1): your requests and answers then wait for
    * a run that can act on them, never archived unanswered.
@@ -733,6 +747,42 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   }).filter((r, _, records) => !all || roundFor(records.filter((s) => s.subject === r.subject && s.wordsOnly === r.wordsOnly),
     { id: askId(r.subject), subject: r.subject, hash: r.hash }, inbox, inboxHashes) === r);
   // Presence is consent for this stored action only; null means its destination is unavailable, never a fallback.
+  const memoryWords = new Set<string>();
+  for (const candidate of opts.decisions.observations ?? []) {
+    if (candidate && typeof candidate === 'object' && 'source' in candidate && candidate.source
+      && typeof candidate.source === 'object' && 'pileId' in candidate.source && typeof candidate.source.pileId === 'string')
+      memoryWords.add(candidate.source.pileId);
+  }
+  const forgetChoices = new Map<string, { factId: string; recordId: string }>();
+  for (const q of questionState.questions) {
+    const answers = lines.filter((l) => answersAsking(l.rec, q)).sort((a, b) => b.rec.at - a.rec.at);
+    const l = answers[0]; const answer = l && journalAnswer(l.rec);
+    const option = typeof answer === 'object' && 'option' in answer ? q.options?.find((o) => o.id === answer.option) : undefined;
+    const action = isQuestionOption(option) ? option.action : undefined;
+    if (action?.kind === 'forget-fact' && q.subject && (memoryLedger.live.some((f) => f.factId === action.factId)
+      || memoryLedger.tombstones.some((t) => t.reason === 'forget' && t.factId === action.factId))) {
+      forgetChoices.set(q.subject, { factId: action.factId, recordId: l?.rec.id ?? '' });
+      memoryWords.add(q.subject);
+    }
+  }
+  const forgetWords = piles.filter((p) => /\bforget\b/i.test(p.text));
+  const boundedLearned = aboutContext({ personal: '', learned: memoryLedger.live.map((f) =>
+    timelineLine({ date: f.date, text: f.text, source: f.origin.kind === 'document' ? 'Source' : 'Your words' })).join('\n'), factIds: [] }).learned.text;
+  const shownText = new Set(boundedLearned.split(/\r?\n/).flatMap((line) => parseTimelineLine(line)?.text ?? []));
+  const shownIds = new Set(memoryLedger.live.filter((f) => shownText.has(f.text)
+    && (!opts.decisions.shownFactIds || opts.decisions.shownFactIds.includes(f.factId))).map((f) => f.factId));
+  const forgetFacts = [...memoryLedger.live, ...memoryLedger.events.flatMap((f) => f.kind === 'observation'
+    && memoryLedger.tombstones.some((t) => t.factId === f.factId) ? [f] : [])];
+  const boundForget = new Map<string, string[]>();
+  for (const { factId, quote } of opts.decisions.forget ?? []) {
+    const matching = forgetWords.filter((p) => hasVerbatimQuote(p.text, quote));
+    if (matching.length !== 1) continue;
+    const facts = forgetFacts.filter((f) => normalizedText(f.text).includes(normalizedText(quote ?? '')));
+    if (facts.length !== 1 || facts[0]?.factId !== factId
+      || memoryLedger.live.some((f) => f.factId === factId) && !shownIds.has(factId)) continue;
+    const pile = matching[0];
+    if (pile) { boundForget.set(pile.id, [...(boundForget.get(pile.id) ?? []), factId]); memoryWords.add(pile.id); }
+  }
   const chosen = new Map<string, { place: Placement | null; record: string }>();
   const hasChoice = (id: string): boolean => !!chosen.get(id)?.place;
   const latest = new Map<string, JournalLine>();
@@ -814,7 +864,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     pileAsk: (p) => {
       if (chosen.has(p.id) || p.items.some((i) => chosen.has(i.id))) return null;
       const subjects = subjectMembers({ id: askId(p.id), subject: p.id }, [p], PILE_NOTE, inboxHashes);
-      return opts.decisions.pileAsk(p) ?? (subjects.length === 1 && subjects[0] === p.id ? reaskOf(p.id) ?? null : null);
+      return opts.decisions.pileAsk(p) ?? (/\bforget\b/i.test(p.text) && !boundForget.has(p.id) && !forgetChoices.has(p.id)
+        ? { text: 'Which fact should Bower forget?', yes: 'Use this', no: 'Keep it' } : null) ?? (subjects.length === 1 && subjects[0] === p.id ? reaskOf(p.id) ?? null : null);
     },
     ...(opts.decisions.merge ? { merge: (item, yes) => chosen.has(item.id) || reaskOf(item.id) ? null : opts.decisions.merge?.(item, yes) ?? null } : {}),
   };
@@ -824,16 +875,33 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   };
   const exhausted = (id: string): boolean => !!roundOf(id)?.exhausted;
   const mayAsk = (id: string): boolean => (roundOf(id)?.count ?? 0) < 2;
-  const optionsOf = (ask: Ask): Pick<Question, 'options'> => {
+  const optionsOf = (ask: Ask, pile?: Pile): Pick<Question, 'options'> | null => {
+    const unavailable = (): null => {
+      console.error(new BowerError('conflict', 'Bower could not ask that question.'));
+      return null;
+    };
+    if (pile && /\bforget\b/i.test(pile.text)) {
+      const facts = memoryLedger.live.filter((fact, i, all) => shownIds.has(fact.factId)
+        && all.findIndex((f) => f.text === fact.text) === i).slice(0, 4);
+      // shortcut: offer the first four shown facts; add narrowed retrieval when more choices are needed.
+      if (facts.length < 2) return unavailable();
+      const options = facts.map((fact, i) => ({ id: `fact-${i + 1}`,
+        label: fact.text.length <= 40 ? fact.text : fact.text.slice(0, 39).replace(/\s+\S*$|[\uD800-\uDBFF]$/u, '') + '…',
+        action: { kind: 'forget-fact' as const, factId: fact.factId } }));
+      if (new Set(options.map((o) => o.label)).size !== options.length) return unavailable();
+      return { options };
+    }
     if (!ask.options) return {};
     if (ask.options.length < 2 || ask.options.length > 4 || new Set(ask.options.map((o) => o.folderId)).size !== ask.options.length)
-      throw new BowerError('conflict', 'Bower could not ask that question.');
-    return { options: ask.options.map((o, i) => {
+      return unavailable();
+    const options = [];
+    for (const [i, o] of ask.options.entries()) {
       const folder = ix.byId(o.folderId);
       const path = folder && ix.pathOf(folder.id);
-      if (!folder?.folder || !path || !MAIN_FOLDERS.includes(path.split('/')[0] ?? '')) throw new BowerError('conflict', 'Bower could not ask that question.');
-      return { id: `place-${i + 1}`, label: o.label, action: { kind: 'file-to' as const, folderId: folder.id } };
-    }) };
+      if (!folder?.folder || !path || !MAIN_FOLDERS.includes(path.split('/')[0] ?? '')) return unavailable();
+      options.push({ id: `place-${i + 1}`, label: o.label, action: { kind: 'file-to' as const, folderId: folder.id } });
+    }
+    return { options };
   };
   // A person's request (C05): the one settlement decides what it binds, refuses, reports and waits for.
   const settlement = settleRequest(lines.filter((l) => l.rec.kind === 'request' && !columnRequests.has(l.rec.id)), listing, ix, appends, since);
@@ -844,7 +912,6 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     for (const l of d.hubLines?.filter((l) => l.path === b.path) ?? [])
       for (const p of piles) for (const item of p.items) if (item.name === l.cites) dups.delete(item.id);
   }
-  const context = opts.context ?? createOwnershipContext();
   const fetched = (fileId: string) => ({ fileId, context, consents: settlement.consents, path: ix.pathOf(fileId), name: ix.byId(fileId)?.name });
   /** Whether a refused request in the run refuses what cites this thing (TL-P4-32 addendum 2 (3)). */
   const refusedSource = (fileId: string | null | undefined): boolean => settlement.refusesSources && !!fileId && things.some((t) => t.file.id === fileId);
@@ -1001,12 +1068,12 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const asking = new Map<string, Question>();
   /** Questions about piles that stay in the inbox untouched, since their place is unclear (TL-P4-08 point 1). */
   const askedPiles: Question[] = [];
-  const fromWords: Array<{ pileId: string; folder: DriveFile; words: string; context: DriveFile | null }> = [];
+  const fromWords: Array<{ pileId: string; folder: DriveFile; words: string }> = [];
   /**
    * Piles of words only whose news a Timeline line on a note carries instead of a note of their own (c3-pair-ask, the
    * value gate for words): each goes to the Bin only once every line citing it is written, and waits whole otherwise.
    */
-  const citedWords = new Map<string, { folder: DriveFile; context: DriveFile | null; lines: WantedLine[]; notes: Set<string> }>();
+  const citedWords = new Map<string, { folder: DriveFile; lines: WantedLine[]; notes: Set<string> }>();
   const citedByLine = (pileId: string): boolean => all && keepDay && !chosen.has(pileId) && d.lines.some((l) => l.cites === pileId);
   /** Piles with things asked about (TL-P4-08 addendum 4): the rest is filed, the folder and its words stay. */
   const partly = new Set<string>();
@@ -1052,22 +1119,27 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (chosen.has(pile.id) && !hasChoice(pile.id)) continue;
     const subjects = subjectMembers({ id: askId(pile.id), subject: pile.id }, [pile], PILE_NOTE, inboxHashes);
     if (ask) {
+      const options = optionsOf(ask, pile);
+      if (!options) continue;
       const waiting = subjects.filter((id) => mayAsk(id) && !exhausted(id));
       // A pile card can cover every waiting member only when none has reached its own cap.
       for (const id of waiting.length === subjects.length ? [pile.id] : waiting) {
         const hash = id === pile.id ? undefined : inboxHashes.get(id);
         askedPiles.push({ id: askId(id), text: ask.text, yes: ask.yes, no: ask.no, subject: id,
-          words: pile.text, ...optionsOf(ask), ...(hash ? { hash } : {}), askedAt: opts.requestedAt });
+          words: pile.text, ...options, ...(hash ? { hash } : {}), askedAt: opts.requestedAt });
       }
       continue;
     }
-    if (subjects.length === 1 && subjects[0] === pile.id && exhausted(pile.id)) continue;
+    if (subjects.length === 1 && subjects[0] === pile.id && exhausted(pile.id) && !forgetChoices.has(pile.id)) continue;
     // Things the model asks about: each stays where it is, named by its question; the rest of the pile goes on.
     const thingAsk = (fileId: string): Ask | undefined => d.thingAsk(fileId) ?? undefined;
     for (const item of pile.items) {
       const q = thingAsk(item.id);
       const hash = listing.find((f) => f.id === item.id)?.md5Checksum;
-      if (q && mayAsk(item.id)) askedPiles.push({ id: askId(item.id), text: q.text, yes: q.yes, no: q.no, about: join(pile.path ?? '', item.name), subject: item.id, words: pile.text, ...optionsOf(q), ...(hash ? { hash } : {}), askedAt: opts.requestedAt });
+      if (q && mayAsk(item.id)) {
+        const options = optionsOf(q);
+        if (options) askedPiles.push({ id: askId(item.id), text: q.text, yes: q.yes, no: q.no, about: join(pile.path ?? '', item.name), subject: item.id, words: pile.text, ...options, ...(hash ? { hash } : {}), askedAt: opts.requestedAt });
+      }
     }
     // What stays where it is: what is asked about, and a copy of a thing this run does not file.
     const stays = (fileId: string): boolean => (chosen.has(fileId) && !hasChoice(fileId)) || ((chosen.size > 0 || rounds.some((r) => r.reask)) && !chosen.has(fileId) && fileId !== ix.file(join(pile.path ?? '', PILE_NOTE))?.id && !d.thing({ fileId, name: ix.byId(fileId)?.name ?? '', fileName: ix.byId(fileId)?.name ?? '', kind: kindOf(ix.byId(fileId)?.name ?? ''), words: pile.text, linkText: null })) || !!thingAsk(fileId) || (exhausted(fileId) && !hasChoice(fileId)) || staying.has(fileId);
@@ -1102,6 +1174,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     }
     // Where its things go is guessed from the bound note's words only, never from an unbound note listed first.
     const words = !note ? '' : note.id === notes[0]?.id ? pile.text : parseNote(join(pile.path ?? '', PILE_NOTE), noteText, fetched(note.id)).body.trim();
+    if (note && d.observations?.some((candidate) => candidate && typeof candidate === 'object'
+      && 'source' in candidate && candidate.source && typeof candidate.source === 'object'
+      && 'fileId' in candidate.source && candidate.source.fileId === note.id)) memoryWords.add(pile.id);
     const keys: Array<string | null> = [];
     const taken: string[] = [];
     let askedKeys = 0;
@@ -1144,7 +1219,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // under a main folder; its other pile notes stay as uncaptured children. A pile with no words either has nothing
     // to write, so it is left as it is, untouched, like a held pile.
     const wordsOnly = !partial && (!pile.items.length || (!taken.length && !declared));
-    const asLine = wordsOnly && citedByLine(pile.id);
+    const asLine = wordsOnly && (citedByLine(pile.id) || memoryWords.has(pile.id));
     if (wordsOnly && (!words.trim() || (!asLine && !generatedPlace(wordsPlace(pile.id, words).to)))) continue;
     // Every member still in the folder is taken; those accounted for were filed already and are not captured again.
     if (!lost && ((!taken.length && !wordsOnly) || (declared && keys.length + askedKeys !== declared.memberKeys.size))) lost = 'one of its members is not among its things';
@@ -1185,8 +1260,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       context,
     });
     if (partial) partly.add(pile.id);
-    if (asLine) citedWords.set(pile.id, { folder, context: !declared && note ? note : null, lines: [], notes: new Set() });
-    else if (wordsOnly) fromWords.push({ pileId: pile.id, folder, words, context: !declared && note ? note : null });
+    if (asLine || memoryWords.has(pile.id)) citedWords.set(pile.id, { folder, lines: [], notes: new Set() });
+    else if (wordsOnly) fromWords.push({ pileId: pile.id, folder, words });
     // The question the reply asks about this pile, asked once it is filed.
     const after = d.askAfter?.(pile, opts.requestedAt);
     if (after) asking.set(pile.id, after);
@@ -1740,7 +1815,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const as = wordsSaved(w.lines.map((l) => lineState.get(l)), [...w.notes].flatMap((n) => listing.find((f) => f.id === n) ?? []));
     return as ? [[id, as] as const] : [];
   }));
-  const wordsWaiting = [...citedWords].filter(([id, w]) => !savedWords.has(id) && (!w.lines.some((l) => lineState.get(l) === 'planned') || !w.lines.every((l) => ['planned', 'present'].includes(lineState.get(l) ?? '')))).map(([id]) => id);
+  const wordsWaiting = [...citedWords].filter(([id, w]) => !savedWords.has(id) && !memoryWords.has(id) && (!w.lines.some((l) => lineState.get(l) === 'planned') || !w.lines.every((l) => ['planned', 'present'].includes(lineState.get(l) ?? '')))).map(([id]) => id);
   if (wordsWaiting.length) {
     console.error('A pile of words could not be added to its note now; it waits for the next tidy-up');
     return tryAgain({ editCap, held: new Set([...held, ...wordsWaiting]) });
@@ -1861,7 +1936,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // Inbox, `.md`, unique against the folder as it will be. A filed thing's own note is written only where none is
   // yet, as the legacy runner did; it follows its thing's move. The words of a pile become its note.
   const noteDate = timelineDate(opts.requestedAt) ?? 'Today';
-  const generated: Array<{ to: string; name: string; text: string; what: string; after: string | null; pileId: string | null; aside: string; context: DriveFile | null }> = [];
+  const generated: Array<{ to: string; name: string; text: string; what: string; after: string | null; pileId: string | null; aside: string }> = [];
   for (const { thing, name } of filing) {
     const own = d.ownNote?.(thing.item.name) ?? undefined;
     if (!own || !generatedPlace(parentOf(own))) continue;
@@ -1870,7 +1945,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     plannedFile(own);
     const what = `A note for ${displayName(name)}.`;
     const text = serializeNote({ summary: what, properties: [], tags: [], currentState: [], body: '', timeline: [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
-    generated.push({ to: parentOf(own), name: nameOf(own), text, what, after: thing.file.id, pileId: null, aside: thing.file.name, context: null });
+    generated.push({ to: parentOf(own), name: nameOf(own), text, what, after: thing.file.id, pileId: null, aside: thing.file.name });
   }
   /** The name each filed thing is cited by, as the run makes it: its note's, else its own. */
   const madeAs = new Map(filing.map(({ thing, name, note }) => [thing.file.id, note?.name ?? name]));
@@ -1943,7 +2018,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const text = serializeNote({ template, typeRow, summary: authored.summary, properties, tags: [], currentState: [], body: authored.body,
       ...(template === 'source' ? { original: name } : {}),
       timeline: template && !NOTE_TEMPLATES[template].timeline ? [] : [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
-    generated.push({ to, name: noteName, text, what: authored.summary, after: thing.file.id, pileId: null, aside: thing.file.name, context: null });
+    generated.push({ to, name: noteName, text, what: authored.summary, after: thing.file.id, pileId: null, aside: thing.file.name });
   }
   // A request's line already there is satisfied only under the name its source is filed as (TL-P4-32 addendum 2 (6)):
   // under another, it is appended now, after that move.
@@ -1965,14 +2040,14 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     edits.push({ file: p.file, path: p.path, rows: [{ what: LINE_ADDED, line: 0 }], before: p.before, bytes: p.bytes, changes: [change], text: result.text, after: [p.consent.sourceFileId], keeps: [] });
   }
   for (const p of satisfied) places.set(p.file.id, p.file);
-  for (const { pileId, folder, words, context } of fromWords) {
+  for (const { pileId, folder, words } of fromWords) {
     const { to, name: title } = wordsPlace(pileId, words);
     destination(to);
     const name = freeName(planned, to, title);
     plannedFile(join(to, name));
     const what = 'Written from a note you added.';
     const text = serializeNote({ summary: words, properties: [{ key: 'kind', label: 'Kind', value: 'Note' }], tags: [], currentState: [], body: words, timeline: [{ date: noteDate, text: what }], byBower: true });
-    generated.push({ to, name, text, what, after: null, pileId, aside: folder.name, context });
+    generated.push({ to, name, text, what, after: null, pileId, aside: folder.name });
   }
   // Words you added that disagree with a stored note (C07): the question linking both, asked once the note written
   // from those words is there. The stored note is read now; one that cannot be read asks nothing.
@@ -2172,11 +2247,79 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const tableWrite = tableChanged ? { file: typeFile ?? null, text: rewriteTypeTable(typeText, types.table, nextTable),
     content: typeFile ? await ownVerified(typeFile) : null } : null;
   if (tableWrite && !typeFile && sys) places.set(sys.id, sys);
+  const memoryRecords = new Set<string>();
+  const forgetIds = new Set<string>();
+  const selectedForget = [...forgetChoices.values()].map((c) => c.factId);
+  for (const choice of forgetChoices.values()) { forgetIds.add(choice.factId); memoryRecords.add(choice.recordId); }
+  for (const f of d.forget ?? []) {
+    const words = forgetWords.filter((p) => boundForget.get(p.id)?.includes(f.factId));
+    const questions = questionState.questions.filter((q) => (words.length ? words : forgetWords).some((p) => q.subject === p.id));
+    if (questions.length && !selectedForget.includes(f.factId))
+      return refused('Forget must name the shown fact selected by the person');
+    if (!words.length) continue;
+    forgetIds.add(f.factId);
+  }
+  const tombstones = memoryLedger.live.flatMap((fact) => {
+    const bin = journal.find((l) => l.rec.kind === 'trash' && l.rec.fileId === fact.source.fileId);
+    if (!forgetIds.has(fact.factId) && !bin) return [];
+    if (bin) memoryRecords.add(bin.rec.id);
+    return [{ v: 1 as const, kind: 'tombstone' as const, eventId: newKey('tombstone'), date: noteDate, at: opts.requestedAt,
+      factId: fact.factId, sourceId: fact.source.fileId, reason: forgetIds.has(fact.factId) ? 'forget' as const : 'bin' as const,
+      runId: opts.runId }];
+  });
+  const hasMemory = (d.observations?.length ?? 0) > 0 || forgetIds.size > 0 || tombstones.length > 0;
+  if (hasMemory) {
+    if (!sys?.folder) return refused('learned facts need a readable ledger');
+    if (memoryFile) places.set(memoryFile.id, memoryFile);
+    places.set(sys.id, sys);
+  }
   const capturedPlaces = [...places.values()].map((f) => ({ file: seen(f), path: ix.pathOf(f.id) ?? '' })).sort((a, b) => a.path.localeCompare(b.path));
   const captured = journal.map((l) => ({ recordId: l.rec.id, sha256: l.sha256, fileIds: l.files.map((f) => f.id) }));
   const captureValue: ManifestCapture = { piles: capturedPiles, members, journal: captured, places: capturedPlaces };
   const scope = { rootId };
   const captureId = (await canonical({ scope, runScope: opts.scope, capture: captureValue })).hash;
+  const evidence: Parameters<typeof observationOf>[1]['admitted'][number][] = [];
+  for (const pile of capturedPiles) if (pile.context.kind === 'text') evidence.push({ kind: 'words',
+    runId: opts.runId, captureId, pileId: pile.pileId,
+    source: { fileId: pile.context.file.fileId, sha256: pile.context.content.sha256 }, words: parseNote(PILE_NOTE, pile.context.text, fetched(pile.context.file.fileId)).body });
+  for (const l of journal) {
+    const q = questionState.questions.find((q) => answersAsking(l.rec, q));
+    const answer = journalAnswer(l.rec);
+    if (l.rec.kind !== 'rule' && !(l.rec.kind === 'answer' && q?.subject && typeof answer === 'object' && 'text' in answer)) continue;
+    for (const file of l.files) evidence.push({ runId: opts.runId, captureId,
+      source: { fileId: file.id, sha256: l.sha256 },
+      words: l.rec.kind === 'rule' ? l.rec.text ?? '' : typeof answer === 'object' && 'text' in answer ? answer.text : '',
+      ...(l.rec.kind === 'rule' ? { kind: 'rule' as const, recordId: l.rec.id }
+        : { kind: 'answer' as const, recordId: l.rec.id, subject: q?.subject ?? '' }) });
+  }
+  const observations = [];
+  for (const candidate of d.observations ?? []) {
+    if (candidate && typeof candidate === 'object' && 'source' in candidate && candidate.source
+      && typeof candidate.source === 'object' && 'pileId' in candidate.source
+      && typeof candidate.source.pileId === 'string' && held.has(candidate.source.pileId)) continue;
+    const resolved = observationOf(candidate, { admitted: evidence, lineage: [], date: noteDate, at: opts.requestedAt,
+      eventId: newKey('observation'), factId: newKey('fact') });
+    if (!resolved.ok) return refused('the observation has no admitted authority for that fact');
+    if (resolved.value.origin.kind === 'answer' || resolved.value.origin.kind === 'rule') memoryRecords.add(resolved.value.origin.recordId);
+    observations.push(resolved.value);
+  }
+  const added = [...tombstones, ...observations];
+  let memoryWrite: { file: DriveFile | undefined; before: VerifiedContent | null; text: string } | null = null;
+  if (hasMemory) {
+    const trialText = memoryText + added.map((e) => JSON.stringify(e) + '\n').join('');
+    const trial = parseObservations(new TextEncoder().encode(trialText));
+    const liveIds = new Set(trial.live.map((f) => f.factId));
+    // Replayed/tombstoned candidates are inert, including new hashes and archive copies.
+    const accepted = added.filter((e) => e.kind === 'tombstone' || liveIds.has(e.factId));
+    const nextText = memoryText + accepted.map((e) => JSON.stringify(e) + '\n').join('');
+    const nextLedger = parseObservations(new TextEncoder().encode(nextText));
+    const unwritten = observations.filter((fact) => fact.origin.kind === 'words' && !nextLedger.live.some((live) =>
+      live.source.fileId === fact.source.fileId && live.source.sha256 === fact.source.sha256 && live.text === fact.text));
+    if (unwritten.length) return tryAgain({ editCap, held: new Set([...held, ...unwritten.flatMap((fact) =>
+      fact.origin.kind === 'words' ? [fact.origin.pileId] : [])]) });
+    if (nextText !== memoryText) memoryWrite = { file: memoryFile, before: memoryFile ? await ownVerified(memoryFile) : null, text: nextText };
+    else for (const pileId of memoryWords) savedWords.set(pileId, { as: 'About me', notes: 1 });
+  }
   /**
    * What a request's done line says (C09, TL-P2-40): a scripted answer names what was found, with links to the notes
    * it used, when every one is there; the plain line only when nothing specific can be named.
@@ -2220,7 +2363,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     kind: 'decided' as const, context, settlement, satisfied, runSources: things.filter((t) => !t.merge).map((t) => t.file.id), run: { runId: opts.runId, requestId: opts.requestId, scope: opts.scope, allowWeb: opts.allowWeb, requestedAt: opts.requestedAt },
     rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas: d.areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
-    requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
+    memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
     tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows,
   };
 }
@@ -2234,7 +2377,7 @@ export async function build(decided: Decided): Promise<Ended> {
   const fetched = (fileId: string) => ({ fileId, context: decided.context, consents: decided.settlement.consents, path: decided.ix.pathOf(fileId), name: decided.ix.byId(fileId)?.name });
   const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
-    requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
+    memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
     tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources } = decided;
 
   // The fixed operations, in order: clear last run's marks, make folders, file, the note edits, the merges, Bin the piles,
@@ -2243,7 +2386,7 @@ export async function build(decided: Decided): Promise<Ended> {
   const add = async (effect: EffectV2, dependsOn: string[] = []): Promise<string> => {
     const ordinal = operations.length;
     const operationId = (await canonical({ runId: opts.runId, captureId, ordinal, effect })).hash;
-    operations.push({ operationId, ordinal, dependsOn, effect });
+    operations.push({ operationId, ordinal, dependsOn: [...dependsOn], effect });
     return operationId;
   };
   // An edited note keeps its mark: it is marked new again after its edit (rule 3), never cleared in the same run.
@@ -2327,6 +2470,7 @@ export async function build(decided: Decided): Promise<Ended> {
   for (const f of filing.filter((x) => !x.merge)) await fileOne(f);
   // Each generated note, keyed by its own createKey; a pile of words goes to the Bin only after its note is written.
   const notesOf = new Map<string, string>();
+  const wordsFiled = new Map<string, ReportContribution>();
   for (const note of generated) {
     const after = note.after === null ? undefined : moveOf.get(note.after);
     const op = await add({ kind: 'create-text', parent: targetOf(note.to), name: note.name, createKey: newKey('note'), text: note.text, content: await utf8(note.text), purpose: 'generated' }, after ? [after] : []);
@@ -2337,10 +2481,12 @@ export async function build(decided: Decided): Promise<Ended> {
       const choice = chosen.get(note.pileId);
       if (choice) derive(choice.record, op);
     }
-    // An observed pile's context note goes to the Bin once its words are written, so a folder kept by another
-    // child (a second pile note, a late thing) never has the same words written again on the next run.
-    if (note.context) await add({ kind: 'bin', before: seen(note.context), capturedChildIds: [] }, [op]);
-    reportPlan.push({ requires: [op, ...chainOf(note.to)], when: 'applied', value: { ...empty(), filed, created: [{ path, what: note.what }] } });
+    reportPlan.push({ requires: [op, ...chainOf(note.to)], when: 'applied', value: { ...empty(), created: [{ path, what: note.what }] } });
+    if (filed.length) {
+      const row: ReportContribution = { requires: [op, ...chainOf(note.to)], when: 'applied', value: { ...empty(), filed } };
+      reportPlan.push(row);
+      if (note.pileId !== null) wordsFiled.set(note.pileId, row);
+    }
     reportPlan.push({ requires: [op], when: 'rejected', value: { ...empty(), setAside: [{ name: note.aside, why: note.pileId === null ? NOTE_NOT_WRITTEN : WORDS_NOT_WRITTEN }] } });
   }
   // A model's line cites the name its thing or note was given (a free name when the one asked for was taken): its
@@ -2439,29 +2585,50 @@ export async function build(decided: Decided): Promise<Ended> {
     reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), alreadySaved: [{ name: s.file.name, as }] } });
     reportPlan.push({ requires: [op], when: 'rejected', value: { ...empty(), setAside: [{ name: s.file.name, why: SAVED_STAYS }] } });
   }
-  // A pile of words whose news went onto notes as Timeline lines: its context note and folder go to the Bin once those
-  // notes' edits are written; an edit refused leaves the pile in the inbox, whole, for the next tidy-up (as any line
-  // refused while it is written, it has no row of its own).
-  const wordsLines = new Map<string, string[]>();
+  const memoryOps: string[] = [];
+  if (memoryWrite) {
+    const effect: EffectV2 = memoryWrite.file && memoryWrite.before
+      ? { kind: 'write-runner-json', before: seen(memoryWrite.file), beforeContent: memoryWrite.before,
+        path: '.bower/observations.jsonl', text: memoryWrite.text, content: await utf8(memoryWrite.text) }
+      : { kind: 'write-runner-json', before: null, beforeContent: null, parent: { fileId: sys?.id ?? '' },
+        createKey: newKey('ledger'), path: '.bower/observations.jsonl', text: memoryWrite.text, content: await utf8(memoryWrite.text) };
+    memoryOps.push(await add(effect, [...memoryOps]));
+  }
+  for (const op of memoryOps) reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(),
+    updated: [{ path: 'About me.md', what: 'Brought up to date.', op }] } });
+  for (const record of memoryRecords) derive(record, ...memoryOps);
+  // Every captured words item waits for its filing or memory effects and carries its read version to the Bin.
   /** The Bin a pile of words already saved is reported by: its pile note's, or (none bound) its folder's. */
   const savedWordsBin = new Map<string, string>();
-  for (const [pileId, w] of citedWords) {
-    const lines = [...w.notes].flatMap((id) => editOf.get(id) ?? []);
-    wordsLines.set(pileId, lines);
-    const context = w.context ? await add({ kind: 'bin', before: seen(w.context), capturedChildIds: [] }, lines) : null;
-    if (context !== null && savedWords.has(pileId)) {
+  for (const pile of capturedPiles) {
+    if (pile.context.kind !== 'text') continue;
+    const pileId = pile.pileId;
+    const w = citedWords.get(pileId);
+    const generated = notesOf.get(pileId);
+    if (!w && !generated) continue;
+    const lines = w ? [...w.notes].flatMap((id) => editOf.get(id) ?? []) : generated ? [generated] : [];
+    lines.push(...movesOf.get(pileId) ?? []);
+    if (memoryWords.has(pileId)) lines.push(...memoryOps);
+    const context = await add({ kind: 'bin', before: pile.context.file, capturedChildIds: [] }, [...new Set(lines)]);
+    wordsFiled.get(pileId)?.requires.push(context);
+    if ((w || generated) && !savedWords.has(pileId)) {
+      reportPlan.push({ requires: [context], when: 'rejected', value: { ...empty(),
+        setAside: [{ name: pile.anchor?.name ?? pile.context.file.name, why: WORDS_NOT_WRITTEN }] } });
+    }
+    if (savedWords.has(pileId)) {
       savedWordsBin.set(pileId, context);
-      wordsLines.set(pileId, [context]);
     }
     // Filed as the note its news went into (the first, when it went into more than one), once every such edit applied.
     const into = edits.find((e) => editOf.get(e.file.id) === lines[0]);
-    if (into) reportPlan.push({ requires: lines, when: 'applied', value: { ...empty(), filed: [{ name: 'Your note', title: displayName(nameOf(into.path)), kind: 'note', to: parentOf(into.path), note: into.path }] } });
+    if (w && into) reportPlan.push({ requires: [...new Set(lines), context], when: 'applied', value: { ...empty(), filed: [{ name: 'Your note', title: displayName(nameOf(into.path)), kind: 'note', to: parentOf(into.path), note: into.path }] } });
   }
   for (const pile of capturedPiles) {
-    const note = notesOf.get(pile.pileId);
     // A pile partly asked about keeps its folder, with what is asked about and its words.
     if (!pile.anchor || partly.has(pile.pileId)) continue;
-    const op = await add({ kind: 'bin', before: pile.anchor, capturedChildIds: pile.childFileIds }, [...(movesOf.get(pile.pileId) ?? []), ...(note ? [note] : []), ...(wordsLines.get(pile.pileId) ?? [])]);
+    // Every child's Bin must settle before its parent can hide it; effects belong to the child's dependencies.
+    const children = operations.filter((o) => (o.effect.kind === 'bin' || o.effect.kind === 'move')
+      && o.effect.before.parents.includes(pile.anchor?.fileId ?? '')).map((o) => o.operationId);
+    const op = await add({ kind: 'bin', before: pile.anchor, capturedChildIds: pile.childFileIds }, children);
     if (savedWords.has(pile.pileId) && !savedWordsBin.has(pile.pileId)) savedWordsBin.set(pile.pileId, op);
   }
   // A pile of words already saved (`duplicates.ts`): reported as a copy is, by its folder's name and the note it is
@@ -2655,7 +2822,7 @@ export async function build(decided: Decided): Promise<Ended> {
   // v1 whenever the plan has no edit (TL-P2-20 Format): its identities and bytes are exactly as before.
   const v1: Operation[] = operations.flatMap((o) => (o.effect.kind === 'edit-text' || o.effect.kind === 'maintain' ? [] : [{ ...o, effect: o.effect }]));
   const manifest: Manifest | ManifestV2 = v1.length === operations.length ? { v: 1, ...head, operations: v1 } : { v: 2, ...head, operations };
-  const checked = await parseRunManifestV2((await canonical(manifest)).bytes, rootId, RUNNER_WRITES);
+  const checked = await parseRunManifestV2((await canonical(manifest)).bytes, rootId, RUNNER_WRITES, false);
   if (!checked.ok) {
     // Past the guard's own size limit: the last edit in path order waits for the next run, and the run is planned again.
     if (checked.reason === 'edit' && checked.rule === 'size' && edits.length) return tryAgain({ editCap: edits.length - 1, held });
@@ -2680,7 +2847,7 @@ async function nothingReadyPlan(rootId: string, opts: PlanOptions): Promise<RunP
     v: 1, kind: 'run-manifest', scope, runId: opts.runId, requestId: opts.requestId, runScope: opts.scope,
     allowWeb: opts.allowWeb, requestedAt: opts.requestedAt, captureId, capture, reportPlan: [], operations: [],
   };
-  const checked = await parseRunManifestV2((await canonical(manifest)).bytes, rootId, RUNNER_WRITES);
+  const checked = await parseRunManifestV2((await canonical(manifest)).bytes, rootId, RUNNER_WRITES, false);
   if (!checked.ok) return refused(`the manifest guard refused the plan (${checked.reason})`);
   return { path: 'b', manifest, needs: new Map() };
 }

@@ -14,7 +14,7 @@ import { PARA_ROOTS } from '../types';
 import { sha256 } from '../vault/hashes';
 import { SYSTEM, isRunnerFile } from '../vault/layout';
 import type { RunManifest } from './records';
-import { filingMove } from './report';
+import { filingMove, wordsNotes } from './report';
 import { stampOf } from './write-once';
 
 /** The runner files a run may make again when they are missing (TL-P2-33 §2a). */
@@ -52,8 +52,9 @@ export function grounded(manifest: RunManifest): boolean {
   const places = new Set(manifest.capture.places.map((p) => p.file.fileId));
   const pathOf = (t: Target): string | null => placePath(manifest, t);
   const madeAt = (e: EffectV2): string | null => {
-    // Rules is the one generated root note; its creation words the person's rules too.
-    if (e.kind === 'create-text' && e.name === RULES && 'fileId' in e.parent && e.parent.fileId === manifest.scope.rootId) return RULES;
+    if (e.kind === 'write-runner-json' && e.path === '.bower/observations.jsonl') return 'About me.md';
+    // The fixed root notes use the same generated-note effects.
+    if (e.kind === 'create-text' && [RULES, 'About me.md'].includes(e.name) && 'fileId' in e.parent && e.parent.fileId === manifest.scope.rootId) return e.name;
     const parent = e.kind === 'create-text' ? pathOf(e.parent) : null;
     return e.kind === 'create-text' && parent !== null ? join(parent, e.name) : e.kind === 'edit-text' ? e.path : null;
   };
@@ -128,6 +129,9 @@ export function grounded(manifest: RunManifest): boolean {
     } else if (savedWordsPile(manifest, o) !== null) {
       // A pile of words already saved: its Bin is told as a copy's is, once for each outcome.
       asides.set(o.operationId, 1);
+    } else if (e.kind === 'bin' && aside && manifest.capture.piles.some((p) => wordsNotes(manifest, p.pileId).length > 0
+      && (p.anchor?.fileId === e.before.fileId || p.context.kind === 'text' && p.context.file.fileId === e.before.fileId))) {
+      asides.set(o.operationId, 1);
     } else if (e.kind === 'move' && lines.has(e.before.fileId)) {
       const relocating = requestMoveKind(manifest, o);
       if (relocating) {
@@ -137,11 +141,14 @@ export function grounded(manifest: RunManifest): boolean {
         || (Object.hasOwn(e.properties, 'bowerRun') && e.properties.bowerRun !== null) || mine.length !== 1) return false;
     } else if (e.kind === 'bin' && places.has(e.before.fileId)) {
       asides.set(o.operationId, 1);
+    } else if (e.kind === 'write-runner-json' && e.path === '.bower/observations.jsonl') {
+      if (mine.length !== 1 || mine[0]?.value.updated.length !== 1
+        || mine[0].value.updated[0]?.op !== o.operationId) return false;
     } else if (e.kind === 'edit-text') {
       // One row per Timeline line it writes, or one for a Current state alone; a kept note's lines carried from the
       // other note are said in the keep's one row instead.
       const entries = e.changes.reduce((n, c) => n + (c.kind === 'timeline-append' ? c.entries.length : 0), 0);
-      const want = entries || (e.changes.some((c) => c.kind === 'state-rewrite') ? 1 : 0);
+      const want = entries || (e.changes.some((c) => c.kind === 'state-rewrite' || c.kind === 'about-append' || c.kind === 'about-rewrite') ? 1 : 0);
       const own = mine.filter((c) => c.requires.length === 1).reduce((n, c) => n + c.value.updated.length, 0);
       // Each line row names one line the edit appended (its ordinal), once, with the note as the run leaves it: the
       // edit's bytes and its New mark's stamp (TL-P4-19 addenda 4 and 5); a Current state's row names none.
@@ -156,10 +163,11 @@ export function grounded(manifest: RunManifest): boolean {
     } else if (e.kind === 'create-text') {
       const parent = pathOf(e.parent);
       const rootRules = e.name === RULES && 'fileId' in e.parent && e.parent.fileId === manifest.scope.rootId;
+      const rootAbout = e.name === 'About me.md' && 'fileId' in e.parent && e.parent.fileId === manifest.scope.rootId;
       const made = parent === SYSTEM.dir ? RUNNER_MADE.find((x) => x === join(parent, e.name)) : undefined;
       if (e.purpose === 'runner-json' && (parent === SYSTEM.proposals ? !holdsProposal(e.name, e.text) : made === undefined || !holds(made, e.text))) return false;
       if (e.purpose !== 'generated' || rootRules) continue;
-      if (!MAIN_FOLDERS.includes(parent?.split('/')[0] ?? '') || mine.reduce((n, c) => n + c.value.created.length, 0) !== 1) return false;
+      if ((!rootAbout && !MAIN_FOLDERS.includes(parent?.split('/')[0] ?? '')) || mine.reduce((n, c) => n + c.value.created.length, 0) !== 1) return false;
       // A link's note is set aside with its link; a request's note with the answer that names it.
       const waited = manifest.operations.some((x) => x.dependsOn.includes(o.operationId)
         && (filingMove(manifest, x) || (x.effect.kind === 'write-runner-json' ? x.effect.path : madeAt(x.effect)) === SYSTEM.requests));

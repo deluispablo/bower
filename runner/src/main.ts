@@ -318,6 +318,11 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
     return { phase: 'failed', why: end.why };
   }
 
+  for (const outcome of end.chain.at(-1)?.outcomes ?? []) {
+    if (outcome.state === 'rejected') console.error(new BowerError(outcome.failure.code, outcome.failure.message),
+      { runId: opts.runId, operationId: outcome.operationId });
+  }
+
   // 4. Barrier: `saving` only once "effects done, report pending" is in the chain, and only when it changed something.
   const finished = await timing.time('report', () => finishRun(
     {

@@ -2,9 +2,9 @@
 import { ABOUT_REGIONS, type AboutRegion, MOC_REGIONS, createOwnershipContext, type MocRegion } from './ownership-format';
 import { sha256 } from './hashes';
 import { proposalOk, isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
-import { readTypeTable, typeRowOk, typeTableOk } from './note-format';
+import { parseNote, readTypeTable, typeRowOk, typeTableOk } from './note-format';
 import { BowerError, type UpdatedRow } from './types';
-import { parseObservations, canRebuildAboutSection, aboutArchivePath, validLearnedBlock } from './observations';
+import { parseObservations, canRebuildAboutSection, aboutArchivePath, validLearnedBlock, hasVerbatimQuote } from './observations';
 import { applyChanges, mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, profileTextOk, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 import { TEMPLATE_REGIONS, type TemplateRegion } from './note-templates';
@@ -41,7 +41,7 @@ export type Effect =
   | { kind: 'write-runner-json'; before: SeenFile; beforeContent: VerifiedContent;
     /** One of the runner-writable files the reader is given (`RUNNER_WRITES` in `vault/layout.ts`). */
     path: RunnerWrite; text: string; content: Content }
-  | { kind: 'write-runner-json'; before: null; beforeContent: null; path: '.bower/type-table.json';
+  | { kind: 'write-runner-json'; before: null; beforeContent: null; path: '.bower/type-table.json' | '.bower/observations.jsonl';
     parent: Target; createKey: string; text: string; content: Content }
   | { kind: 'bin'; before: SeenFile; capturedChildIds: string[] };
 /**
@@ -87,9 +87,10 @@ export type Change =
  * Manifest v2's one new effect: `text` is the whole file after every change, authored by `applyChanges`. `beforeText`
  * (optional, `keep-one-note-merge`): the whole file as read, described by `beforeContent`, so an undo can put it back
  * (`undoEdit`) where the changes alone cannot be taken back (a link rewrite).
+ * `createdBy` binds a new About me edit to its template create; `before.fileId` is that create's key until dispatch.
  */
 export type EditText = {
-  kind: 'edit-text'; before: SeenFile; path: string; beforeContent: VerifiedContent;
+  kind: 'edit-text'; before: SeenFile; createdBy?: string; path: string; beforeContent: VerifiedContent;
   changes: Change[]; text: string; content: Content; beforeText?: string;
 };
 export type MaintenanceNote = { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number }; owner?: 'bower' | 'person'; type?: string | null; incomplete?: boolean; moc?: MocSnapshot; members?: string[] };
@@ -321,7 +322,7 @@ function effect(value: unknown): value is Effect {
       && oneOf(value.purpose, ['generated', 'runner-json', 'about-archive']);
     case 'write-runner-json': return text(value.text) && content(value.content) && (value.before === null
       ? closed(value, ['kind', 'before', 'beforeContent', 'path', 'parent', 'createKey', 'text', 'content'])
-        && value.beforeContent === null && value.path === '.bower/type-table.json' && target(value.parent) && id(value.createKey)
+        && value.beforeContent === null && oneOf(value.path, ['.bower/type-table.json', '.bower/observations.jsonl']) && target(value.parent) && id(value.createKey)
       : closed(value, ['kind', 'before', 'beforeContent', 'path', 'text', 'content'])
         && seenFile(value.before) && verifiedContent(value.beforeContent) && text(value.path));
     case 'bin': return closed(value, ['kind', 'before', 'capturedChildIds'])
@@ -398,8 +399,9 @@ const changeOrder = (c: Change): number => c.kind === 'about-rewrite' ? CHANGE_O
 const canonical = (changes: Change[]): boolean => changes.length > 0
   && changes.every((item, i) => i === 0 || changeOrder(changes[i - 1] ?? item) < changeOrder(item));
 function editText(value: unknown): value is EditText {
-  return closed(value, ['kind', 'before', 'path', 'beforeContent', 'changes', 'text', 'content'], ['beforeText']) && value.kind === 'edit-text'
-    && seenFile(value.before) && path(value.path) && verifiedContent(value.beforeContent)
+  return closed(value, ['kind', 'before', 'path', 'beforeContent', 'changes', 'text', 'content'], ['beforeText', 'createdBy']) && value.kind === 'edit-text'
+    && seenFile(value.before) && (value.createdBy === undefined || hash(value.createdBy))
+    && path(value.path) && verifiedContent(value.beforeContent)
     && list(value.changes, change) && canonical(value.changes as Change[]) && text(value.text) && content(value.content)
     && (!Object.hasOwn(value, 'beforeText') || text(value.beforeText));
 }
@@ -557,6 +559,7 @@ export async function parseRunManifest(bytes: Uint8Array, expectedRootId: string
 /** The guards every manifest version shares, in the v1 order; identities are computed as in v1. */
 async function admit<M extends Manifest | ManifestV2>(
   parsed: unknown, expectedRootId: string, guard: (value: unknown) => value is M, writes: readonly RunnerWrite[],
+  finalized = true,
 ): Promise<{ ok: true; value: M; sha256: string } | { ok: false; reason: ManifestRefusal }> {
   if (!guard(parsed)) return { ok: false, reason: 'shape' };
   if (parsed.operations.some(({ effect: e }) => e.kind === 'write-runner-json' && (!writes.includes(e.path)
@@ -566,7 +569,7 @@ async function admit<M extends Manifest | ManifestV2>(
     || parsed.capture.places.some((p) => p.file.fileId === e.before.fileId
       && (p.path !== e.path || !sameSeen(p.file, e.before))))))) return { ok: false, reason: 'shape' };
   const value = parsed;
-  if (!await aboutArtifactsOk(value) || !await planningArtifactsOk(value)) return { ok: false, reason: 'shape' };
+  if (!await aboutArtifactsOk(value, finalized) || !await planningArtifactsOk(value)) return { ok: false, reason: 'shape' };
   if (!driveId(expectedRootId) || expectedRootId !== value.scope.rootId) return { ok: false, reason: 'scope' };
   if (!await satisfiedProven(value)) return { ok: false, reason: 'shape' };
   for (const item of texts(value)) {
@@ -601,6 +604,16 @@ async function admit<M extends Manifest | ManifestV2>(
     for (const target of e.inputs.targets ?? []) {
       for (const source of target.declaration?.sources ?? []) {
         if (!await describes(source.content, source.text)) return { ok: false, reason: 'shape' };
+      }
+      if (target.path === 'About me.md' && maintenanceTargetOk(value, target)) {
+        const source = target.declaration?.sources.find((s) => s.path === 'About me.md');
+        const before = e.inputs.listing?.find((f) => f.fileId === target.fileId);
+        if (before ? before.folder || before.name !== 'About me.md' || before.parents.length !== 1
+          || before.parents[0] !== target.parentId || !source || !sameSeen(before, source.file) || !target.beforeContent
+          || target.beforeContent.observedModifiedTime !== before.modifiedTime
+          || !await describes(target.beforeContent, source.text) : source !== undefined || target.beforeContent !== undefined)
+          return { ok: false, reason: 'shape' };
+        continue;
       }
       if ((writes as readonly string[]).includes(target.path)) continue;
       const input = e.inputs.snapshot?.[target.fileId];
@@ -662,7 +675,17 @@ function edits(value: ManifestV2): EditGuardRule | null {
     const place = places.get(e.before.fileId);
     const segments = e.path.split('/');
     if (edited.has(e.before.fileId) || paths.has(e.path)) return 'one-per-file';
-    const target = !e.before.folder && place !== undefined && sameSeen(place.file, e.before) && place.path === e.path
+    const create = e.createdBy ? operations.find((op) => op.operationId === e.createdBy) : undefined;
+    if (e.createdBy && (!create || create.ordinal >= item.ordinal || !item.dependsOn.includes(e.createdBy)
+      || create.effect.kind !== 'create-text' || create.effect.purpose !== 'generated'
+      || e.path !== 'About me.md' || create.effect.name !== e.before.name || create.effect.createKey !== e.before.fileId
+      || !('fileId' in create.effect.parent) || create.effect.parent.fileId !== value.scope.rootId
+      || e.before.parents.join() !== value.scope.rootId || e.before.folder
+      || e.before.modifiedTime !== new Date(value.requestedAt).toISOString()
+      || e.beforeContent.observedModifiedTime !== e.before.modifiedTime
+      || e.beforeText !== create.effect.text || e.beforeContent.sha256 !== create.effect.content.sha256
+      || e.beforeContent.size !== create.effect.content.size || places.has(e.before.fileId) || captured.has(e.before.fileId))) return 'target';
+    const target = !!create || !e.before.folder && place !== undefined && sameSeen(place.file, e.before) && place.path === e.path
       && segments[segments.length - 1] === e.before.name && e.path.endsWith('.md')
       && segments[0] !== '.bower' && segments[0] !== 'Inbox' && !captured.has(e.before.fileId);
     if (!target) return 'target';
@@ -714,15 +737,17 @@ function edits(value: ManifestV2): EditGuardRule | null {
 /**
  * Reads v1 exactly as `parseRunManifest` (same path, digests and identities) and v2: v1's guards plus `edit-text`.
  * A later version refuses as `version`, so a build that reads v2 can say it needs a newer Bower (R3-7 m9).
+ * Before maintenance, `finalized: false` checks the plan without requiring its terminal memory barrier.
  */
-export async function parseRunManifestV2(bytes: Uint8Array, expectedRootId: string, writes: readonly RunnerWrite[]): Promise<ManifestV2Result> {
+export async function parseRunManifestV2(bytes: Uint8Array, expectedRootId: string, writes: readonly RunnerWrite[], finalized = true): Promise<ManifestV2Result> {
   const parsed = parseRecordJson(bytes);
   if (!parsed.ok) return parsed;
   const v = record(parsed.value) ? parsed.value.v : undefined;
-  if (v === 1) return parseRunManifest(bytes, expectedRootId, writes);
+  if (v === 1) return finalized ? parseRunManifest(bytes, expectedRootId, writes)
+    : admit(parsed.value, expectedRootId, manifest, writes, false);
   if (integer(v) && v > 2) return { ok: false, reason: 'version' };
   if (v === 2 && bytes.byteLength > MANIFEST_V2_LIMIT) return { ok: false, reason: 'edit', rule: 'size' };
-  const admitted = await admit(parsed.value, expectedRootId, manifestV2, writes);
+  const admitted = await admit(parsed.value, expectedRootId, (value): value is ManifestV2 => finalized ? manifestV2(value) : manifestOf(value, 2, operationV2), writes, finalized);
   if (!admitted.ok) return admitted;
   const broken = edits(admitted.value);
   return broken === null ? admitted : { ok: false, reason: 'edit', rule: broken };
@@ -730,7 +755,7 @@ export async function parseRunManifestV2(bytes: Uint8Array, expectedRootId: stri
 
 
 /** B4 uses the same effects and confirmed dependency edges; these checks add no dispatch lifecycle. */
-async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> {
+async function aboutArtifactsOk(value: Manifest | ManifestV2, finalized: boolean): Promise<boolean> {
   const operations: readonly OperationV2[] = value.operations;
   const ledgerPath = '.bower/observations.jsonl';
   const enc = new TextEncoder();
@@ -778,7 +803,7 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> 
         || e.kind === 'create-text' && `${targetPath(value, e.parent)}/${e.name}` === ledgerPath) {
         const bytes = enc.encode(e.text);
         let priorBytes = new Uint8Array();
-        if (e.kind === 'write-runner-json') {
+        if (e.kind === 'write-runner-json' && e.before !== null) {
           const place = value.capture.places.find((p) => p.file.fileId === e.before.fileId);
           if (e.before.folder || e.before.name !== 'observations.jsonl' || place?.path !== ledgerPath
             || !sameSeen(place.file, e.before) || e.beforeContent.observedModifiedTime !== e.before.modifiedTime
@@ -787,26 +812,27 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> 
         } else if (lastLedger || value.capture.places.some((p) => p.path === ledgerPath)) return false;
         const prior = parseObservations(priorBytes);
         const priorText = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(priorBytes);
-        if (e.kind === 'write-runner-json' && !await describes(e.beforeContent, priorText)) return false;
+        if (e.kind === 'write-runner-json' && e.beforeContent !== null && !await describes(e.beforeContent, priorText)) return false;
         const ledger = parseObservations(bytes);
         if (lastLedger) {
           const prev = lastLedger.effect;
-          if (e.kind !== 'write-runner-json' || prev.kind !== 'write-runner-json' && prev.kind !== 'create-text'
+          if (e.kind !== 'write-runner-json' || e.before === null || prev.kind !== 'write-runner-json' && prev.kind !== 'create-text'
             || prev.kind === 'write-runner-json' && prev.before?.fileId !== e.before.fileId
             || prev.text !== priorText || !op.dependsOn.some((dep) => dep === lastMemory?.operationId)) return false;
         }
         const oldIds = new Set(prior.events.map((event) => event.eventId));
         for (const event of ledger.events.filter((event) => !oldIds.has(event.eventId))) {
-          if (event.date !== timelineDate(value.requestedAt)) return false;
+          if (event.date !== timelineDate(value.requestedAt)
+            || event.kind !== 'consolidation' && event.at !== undefined && event.at !== value.requestedAt) return false;
           if (event.kind === 'observation') {
             const origin = event.origin;
             if (origin.runId !== value.runId || origin.captureId !== value.captureId) return false;
             if (origin.kind === 'words') {
               const pile = value.capture.piles.find((p) => p.pileId === origin.pileId);
               if (pile?.context.kind !== 'text' || pile.context.file.fileId !== event.source.fileId
-                || pile.context.content.sha256 !== event.source.sha256) return false;
+                || pile.context.content.sha256 !== event.source.sha256 || !hasVerbatimQuote(parseNote(pile.context.file.name, pile.context.text).body, event.text)) return false;
             } else if (origin.kind === 'document') {
-              if (!value.capture.members.some((m) => m.file.fileId === event.source.fileId && m.content.sha256 === event.source.sha256)) return false;
+              return false;
             } else if (!value.capture.journal.some((j) => j.recordId === origin.recordId && j.fileIds.includes(event.source.fileId)
               && j.sha256 === event.source.sha256)) return false;
           } else if (event.kind === 'tombstone') {
@@ -824,7 +850,8 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> 
       }
       if (e.kind !== 'edit-text' || !(e.path === 'About me.md' || about.some((p) => p.file.fileId === e.before.fileId)
         || e.changes.some((c) => c.kind === 'about-append' || c.kind === 'about-rewrite'))) continue;
-      if (about.length !== 1 || about[0]?.file.fileId !== e.before.fileId || e.path !== 'About me.md'
+      if ((e.createdBy ? about.length !== 0 || finalAbout !== e.beforeText
+        : about.length !== 1 || about[0]?.file.fileId !== e.before.fileId) || e.path !== 'About me.md'
         || e.beforeText === undefined || e.beforeContent.observedModifiedTime !== e.before.modifiedTime
         || lastLedger && !op.dependsOn.includes(lastLedger.operationId)) return false;
       const authored = applyChanges(enc.encode(e.beforeText), e.changes);
@@ -839,7 +866,7 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> 
         ? parseObservations(enc.encode(lastLedger.effect.text), undoneRunIds) : ledger;
       for (const c of e.changes) {
         if (c.kind !== 'about-rewrite') continue;
-        const reason = c.undoneRunIds?.length ? 'undo' : ledger.tombstones.some((t) => t.runId === value.runId)
+        const reason = c.undoneRunIds?.length ? 'undo' : !c.text.startsWith(c.previous) && ledger.tombstones.length > 0
           ? 'forget' : 'consolidate';
         if (!c.factIds) return false;
         const rebuild = canRebuildAboutSection({ ledger: rebuilt, section: c.region, text: c.previous, reason });
@@ -874,7 +901,7 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> 
     if (!operations.some((o) => o.effect.kind === 'edit-text' && o.dependsOn.includes(archive.operationId)
       && o.effect.changes.some((c) => c.kind === 'about-rewrite' && c.archive === path))) return false;
   }
-  return !lastMemory || operations.at(-1)?.effect.kind === 'maintain';
+  return !finalized || !lastMemory || operations.at(-1)?.effect.kind === 'maintain';
 }
 
 /** Type tables use the existing write effect; proposals are immutable creates bound to their stored question. */
@@ -927,6 +954,14 @@ async function planningArtifactsOk(value: Manifest | ManifestV2): Promise<boolea
 /** Maintenance names must agree with captured identity and cannot alias protected memory. */
 export function maintenanceTargetOk(value: { capture: Capture; operations: readonly OperationV2[] }, target: NonNullable<Maintain['inputs']['targets']>[number]): boolean {
   const resolved = targetPath(value, { fileId: target.fileId });
+  if (resolved === 'About me.md' && target.path === resolved) return target.kind === 'about'
+    && target.declaration !== undefined
+    && new Set(target.declaration.sources.map((s) => s.path)).size === target.declaration.sources.length
+    && target.declaration.sources.every((s) => {
+      const place = value.capture.places.find((p) => p.file.fileId === s.file.fileId);
+      return (s.path === 'About me.md' || s.path === '.bower/observations.jsonl')
+        && place?.path === s.path && sameSeen(place.file, s.file);
+    });
   return resolved === target.path && ![resolved, target.path].some((path) => path === 'About me.md'
     || path === '.bower/observations.jsonl' || path?.startsWith('.bower/archive/about-me/'));
 }
