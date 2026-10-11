@@ -498,3 +498,171 @@ No network, git-writing command, node_modules replacement/symlink, production ch
 repository test output. The runner commits the diff. `.codex-commits.json` declares exactly
 two commits: the new test file, then this notes file alone. Implementation is left to the
 fresh implementation session; this red-only assignment is complete.
+
+
+## Fix round 1
+
+implementer: codex
+
+Implemented TL-P4-48 addendum 3's nine findings in the five existing production homes.
+No test, dependency, fixture, shared harness record or runtime memory wiring changed.
+No network, repository-writing git command, node_modules replacement or symlink was used.
+The runner owns commits; `.codex-commits.json` declares production and notes separately.
+
+### Changes and removed paths
+
+1. `run-manifest.ts` binds each declared runner-write path to its target name and, when
+   captured, that file id's path and read identity. `admitted.ts` checks the same path/name
+   binding against the captured identity and the admitted system folder. A questions path
+   cannot disguise a ledger overwrite, including a forged target name on the ledger id.
+2. `ownership-format.ts` uses the existing `fenceAfter` transition both outside and inside
+   payloads, including the first-region lookup. Fenced examples never grant ownership.
+   A truncated marker is no longer ignored because its region lacks `about-`. Complete
+   older marker-shaped text without a format declaration remains plain personal text,
+   preserving the existing `plain-marker-looking` fixture; it grants no region authority.
+3. `observations.ts` applies source-wide tombstones only for settled Bin. Forget blocks
+   named facts, leaving other facts from the same source live.
+4. The same reducer reserves each evidence identity before applying Undo or tombstones.
+   Event ids retain their existing strict replay/conflict validation. A duplicate cannot
+   become the surviving observation just because the original run was undone or forgotten.
+5. Frozen manifest About me rewrites require explicit live fact ids and the confirmed,
+   exact archive. Omitting the archive no longer skips the existing gate/frontier checks.
+   The pure Forget/Undo rebuild contract and its gate bypass remain unchanged; runtime
+   intake, invalidation, rebuild scheduling and recovery still belong to B4b/B4c.
+6. Damaged boundaries are refused by the one ownership parser before any note author writes.
+7. The reducer's evidence key excludes the source hash: rereading the same source fact,
+   even at another source version with fresh issued ids, adds no live evidence at the gate.
+   Different facts and independent sources remain distinct; thresholds stay 400/400/200
+   authored words and five new live observations after the section frontier.
+8. Admission imports the existing `targetPath` resolver from run-manifest. It resolves
+   captured parents and createdBy chains through the same implementation. No runner-side
+   path resolver was added.
+9. `note-edit.ts` appends one separator newline when the existing file is nonempty and
+   unterminated. Its existing byte-append invariant permits exactly that separator and the
+   supplied section, keeping BOM, CRLF, Unicode and every pre-existing byte unchanged.
+
+removed: path-only runner-write admission that could bypass ledger protections.
+removed: optional archive/fact-id bypass in frozen About me rewrite validation.
+removed: active-payload-only fence tracking and the about- substring damage blind spot.
+removed: Forget's source-wide suppression of unrelated facts.
+removed: post-invalidation evidence claiming and source-version-based duplicate identities.
+removed: admission's separate existing-parent-only archive lookup; reused targetPath.
+removed: the newline-free initialization assumption in the author and its invariant.
+tests changed: none
+
+### Research and mechanism reuse
+
+Prior packet research reused offline, without new verification or library installation:
+https://arxiv.org/pdf/2605.12978
+https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+https://zod.dev/api
+The established mechanisms remain the ownership parser/fence transition, note author,
+observation reducer, manifest validator and admission. No second parser, writer, event
+store, effect lifecycle, path resolver or region mechanism was introduced.
+
+### Compatibility draft rows
+
+| Contract home | Fix-round change | Evidence and compatibility |
+| --- | --- | --- |
+| run-manifest / admitted | Declared runner-write path must match target identity | `b4a-fr1 1 ledger target identity`; ordinary questions and valid ledger controls pass. Three legacy manifest tests intentionally alter only path and contradict addendum 3; listed below. |
+| run-manifest | Frozen rewrites require factIds and confirmed exact archive | `b4a-fr1 5 consolidation requires archive and fact ids`; original `b4a-artifact-scope-and-order` passes. No stored event field or version changed. |
+| ownership-format | Fences apply outside payloads and damaged marks refuse initialization | `b4a-fr1 2 fenced markers stay personal`, `b4a-fr1 6 damaged boundary refuses initialization`; all 52 ownership tests pass, including legacy/plain-marker-looking controls. |
+| observations | Forget by fact; Bin by source; evidence claimed before origin invalidation | `b4a-fr1 3 forget only named facts`, `b4a-fr1 4 undo cannot resurrect replay`; existing corruption, explicit remembering and Undo controls pass. Stored events and tombstones remain intact. |
+| observations | Source-version-only rereads add no gate evidence | `b4a-fr1 7 rereads do not supply five observations`; independent five-fact and four-fact controls pass; original section gate passes unchanged. |
+| admitted / run-manifest | Share existing createdBy path resolver | `b4a-fr1 8 first archive accepts created parent`; existing-parent archive and runner admission controls pass. |
+| note-edit | Add missing final newline with byte-preserving append | `b4a-fr1 9 initialization adds missing final newline` passes in Node, including Unicode/BOM/CRLF and repeat-init refusal; jsdom's cross-realm typed-array assertion remains a test-environment conflict at line 275. |
+
+### Verification
+
+Logs, Vitest reports, Vite/module caches and timer CPU reports are under OS temp.
+The already supplied `/private/tmp/b4a-contract-validation/app-full.mjs` imports the
+production Vite config and preserves its React, alias, CSS, environment and timer settings.
+The temporary timer setup changes only import resolution and CPU-report destination.
+`--configLoader runner` avoids writing a bundled config to node_modules. Full app tests
+use jsdom as configured; the supplemental pure-contract run explicitly uses Node.
+Tests are unchanged: no `.skip`, `.only`, threshold, assertion or fixture edit.
+
+| Check | Result | Log in /private/tmp/ |
+| --- | --- | --- |
+| Original fix-round reds before changes | 9 failed on the assigned assertions | b4a-fr1-before.log |
+| All nine final reds, unchanged, Node environment | 9 passed | b4a-fr1-nine-node.log |
+| All named B4a app contracts including fix-round reds, Node | 18 passed; 1,556 unrelated tests name-filtered | b4a-fr1-b4a-node.log |
+| Ownership compatibility after parser refinement | 52 passed | b4a-fr1-ownership.log |
+| Full app src suite, final production tree | 5,756 passed, 6 failed; 1 expected EPERM unhandled error; 174 files | b4a-fr1-src-final.log |
+| Full runner suite | 669 passed, 1 expected RUNNER_WRITES pin failure | b4a-fr1-runner-full.log |
+| tsc app, node, runner, no emit | All passed | b4a-fr1-tsc-app.log, b4a-fr1-tsc-node.log, b4a-fr1-tsc-runner.log |
+| ESLint, four touched app files and runner file from respective roots | Passed | b4a-fr1-eslint-app.log, b4a-fr1-eslint-runner.log |
+| node scripts/check-unused-gate.mjs | Passed: 3 ordinary / 33 production baseline findings, none new or stale | b4a-fr1-unused.log |
+
+Commands used (stdout and stderr redirected to the logs above):
+
+```sh
+pnpm exec vitest run src/data/contracts/b4a-fr1.test.ts --config /private/tmp/b4a-contract-validation/app-full.mjs --configLoader runner --maxWorkers=2
+pnpm exec vitest run src/data/contracts/b4a-fr1.test.ts --config /private/tmp/b4a-contract-validation/app-full.mjs --configLoader runner --maxWorkers=2 --environment node
+pnpm exec vitest run src --config /private/tmp/b4a-contract-validation/app-full.mjs --configLoader runner --maxWorkers=2 --outputFile.json=/private/tmp/b4a-fr1-src-final.json
+# From runner/:
+pnpm exec vitest run --config /private/tmp/b4a-contract-validation/runner.mjs --configLoader runner --maxWorkers=2
+# From the worktree root:
+pnpm exec tsc -p tsconfig.app.json --noEmit
+pnpm exec tsc -p tsconfig.node.json --noEmit
+pnpm exec tsc -p runner/tsconfig.json --noEmit
+pnpm exec eslint src/data/contracts/observations.ts src/data/contracts/ownership-format.ts src/data/contracts/note-edit.ts src/data/contracts/run-manifest.ts
+# From runner/:
+pnpm exec eslint src/spine/admitted.ts
+# From the worktree root:
+node scripts/check-unused-gate.mjs
+```
+
+An initial combined app/runner ESLint invocation hit ambiguous tsconfigRootDir discovery.
+Running the same checks from their respective config roots passed; no lint config changed.
+An initial parser scan also treated complete legacy marker examples as damaged. The final
+scan preserves those complete plain examples and still refuses truncated boundaries; the
+52-test ownership suite verifies that compatibility refinement.
+
+### Frozen test conflicts and handoff
+
+The full targeted suite was run before classifying contradictions, per TL-P4-51.
+These are not repaired by weakening production guards or changing owner-frozen tests:
+
+- `src/data/contracts/run-manifest.test.ts:371`, `accepts supported variant: requests.json write`:
+  changes only the path to requests.json but retains the questions.json target.
+- `src/data/contracts/run-manifest.test.ts:372`, `accepts supported variant: hashes.json write`:
+  changes only the path to hashes.json but retains the questions.json target.
+- `src/data/contracts/run-manifest.test.ts:840`, `the manifest takes the runner-writable files as a parameter`:
+  adds suggestions.json to the supplied list and expects a write with that path but the
+  questions.json target to pass. All three contradict addendum 3's declared-target equality.
+- `src/data/contracts/b4a-fr1.test.ts:275`, `b4a-fr1 9 initialization adds missing final newline`:
+  in jsdom, the test builds input via realm-local Uint8Array.from while the production
+  TextEncoder returns Node-realm Uint8Array. Vitest reports byte arrays with no visual
+  difference as unequal. The exact unchanged test passes in Node, proving the byte prefix,
+  complete resulting text and repeat-init refusal. Production encoding was not changed to
+  accommodate this matcher/realm difference; the default-environment result is not green.
+- `runner/test/claude-provider.test.ts:600`: expected exact RUNNER_WRITES pin omits
+  observations.jsonl. Deferred until after B1d under TL-P4-48 addendum 2; unchanged.
+
+Full pnpm check remains with the coordinator per packet. No screen, fixture or UI changed;
+no e2e or server was started by this worker. The app suite's e2e-port listener assertion
+hits the expected sandbox EPERM. Runtime memory wiring, consolidation recovery and the
+barrier remain B4b/B4c work. No green check mark or clean integration gate is claimed.
+
+
+Final full-src result: 5,756 passed, six failed across four files. The failures are exactly
+run-manifest's three declared-path contradictions, fix-round red 9's jsdom realm assertion,
+`src/docs.test.ts:134` (existing commit `75e64e67` missing from the shared compatibility list),
+and `src/e2e-port.test.ts:37` (expected listen EPERM and the resulting timeout). The one
+unhandled error is that same expected EPERM. No additional failure remains after preserving
+complete plain marker examples. The final JSON report is `/private/tmp/b4a-fr1-src-final.json`.
+B1a compatibility, B1c index, B5a type-table/questions, B6a template/ownership/note-format and
+Q1a continuation coverage is retained by the full src and runner suites.
+
+The earlier full-src run (`/private/tmp/b4a-fr1-src.log`) had four plain-marker compatibility
+failures before the parser refinement; all four pass in the final run. Its other six
+failures are the same final conflicts above. No rerun is presented as all green.
+Final `git diff --check` passed. The commit plan names only the five production files and
+this notes file in its separate commit; no test file is modified or included.
+
+Delivery status: blocked on the frozen test conflicts and shared compatibility bookkeeping,
+with production fixes for all nine retained for review. The coordinator/red owner must
+resolve the three invalid-target fixtures and the jsdom byte-array assertion under the
+ruling, and update the shared compatibility list. B1d still owns the deferred runner pin.
+The worker made no commit and requests no permission to change those owner-frozen files.
