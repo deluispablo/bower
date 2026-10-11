@@ -4,6 +4,7 @@
  * every operation and the spine validates it. No live call: scripted proposals first, then a recorded Claude reply,
  * each scored by the corpus scorer.
  */
+import { phaseAwareClaude } from './b1-planning-support';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -82,7 +83,7 @@ describe('what the model is shown (P4-3)', () => {
     const calls: ClaudeCall[] = [];
     const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit);
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn }, { rootId: root, runId: RUN_ID, allowWeb: false }, fakeScripted(drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
+    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn: phaseAwareClaude(spawn, () => ({ drive: drive, root: root })) }, { rootId: root, runId: RUN_ID, allowWeb: false }, fakeScripted(drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
     const input = calls[0]?.input ?? '';
     const ctx = contextOf(input);
     const things = new Map(ctx.piles.flatMap((p) => p.things).map((t) => [t.name, t]));
@@ -181,9 +182,9 @@ const PROPOSALS: Record<string, Proposal> = {
 
 /** Scripted proposals: `claude` answered by a script in the same intent shape, its file ids from the context. */
 function proposing(p: Proposal, seen: Context[]): ClaudeSpawn {
-  return async (call) => {
+  return phaseAwareClaude(async (call, _step, _attempt, phase) => {
     const ctx = contextOf(call.input);
-    seen.push(ctx);
+    if (phase === 'execution') seen.push(ctx);
     const ids = new Map(ctx.piles.flatMap((x) => x.things).map((t) => [t.name, t.fileId]));
     const id = (name: string): string => ids.get(name) ?? `no ${name}`;
     const intent = {
@@ -193,7 +194,7 @@ function proposing(p: Proposal, seen: Context[]): ClaudeSpawn {
       ...(p.lines ? { lines: p.lines.map(({ cites, ...rest }) => ({ ...rest, ...(cites ? { cites: id(cites) } : {}) })) } : {}),
     };
     return { code: 0, stderr: '', cut: null, stdout: envelope(intent) };
-  };
+  });
 }
 
 const scored = (c: LoadedCase, run: { after: Record<string, string>; lastRun: unknown }) => score({ expected: c.expected, before: c.folder, after: run.after, lastRun: run.lastRun });
@@ -272,7 +273,7 @@ async function gardenFolder(extra: Record<string, string> = {}, inbox: Record<st
 async function planned(g: Awaited<ReturnType<typeof gardenFolder>>, intent: (news: string) => unknown, calls: ClaudeCall[] = []): Promise<RunManifest> {
   const news = g.took.taken.piles.flatMap((p) => p.items).find((i) => i.name === 'Community garden newsletter, autumn.pdf')?.fileId ?? '';
   const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope(intent(news)) });
-  return claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, fakeScripted(g.drive))(g.took);
+  return claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn: phaseAwareClaude(spawn, () => ({ drive: g.drive, root: g.root })) }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, fakeScripted(g.drive))(g.took);
 }
 
 const newsletter = (news: string, body: string, line: Record<string, unknown> | null = null): unknown => ({
@@ -330,7 +331,7 @@ describe('the C04 slice, review round (P4-3)', () => {
     const calls: ClaudeCall[] = [];
     const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') });
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, counted)(g.took)).rejects.toThrow();
+    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn: phaseAwareClaude(spawn, () => ({ drive: g.drive, root: g.root })) }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, counted)(g.took)).rejects.toThrow();
     const things = new Map(contextOf(calls[0]?.input ?? '').piles.flatMap((p) => p.things).map((t) => [t.name, t as ShownThing & { pagesNotRead?: number }]));
     // Past the read limit by its listed size: never downloaded.
     expect(bytesRead).not.toContain(ids.get('Huge notes.txt'));

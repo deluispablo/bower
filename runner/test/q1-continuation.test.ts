@@ -4,6 +4,7 @@
  * Tagged answers: https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions
  * Request identity: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
  */
+import { phaseAwareClaude } from './b1-planning-support';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
@@ -141,7 +142,7 @@ function stored(w: World, subject = w.ids.unclear, options = false, askedAt = AT
     { id: 'job-choice', label: 'Keep here', action: { kind: 'file-to', folderId: w.ids.job } },
   ] } : {}) };
 }
-async function world(model: (w: World, call: ClaudeCall) => unknown = () => emptyIntent): Promise<World> {
+async function world(model: (w: World, call: ClaudeCall, step: number, attempt: number, phase: 'selection' | 'execution') => unknown = () => emptyIntent): Promise<World> {
   let ids: Ids | undefined;
   const holder: { world?: World } = {};
   const calls: ClaudeCall[] = [];
@@ -166,7 +167,13 @@ async function world(model: (w: World, call: ClaudeCall) => unknown = () => empt
     ids = { root, inbox, sys, changes, pile, anchor, unclear, clear, home, job };
     return root;
   };
-  const claude: ClaudeSpawn = async (call) => { calls.push(call); expect(holder.world).toBeDefined(); return reply(model(holder.world as World, call)); };
+  const claude = phaseAwareClaude(async (call, step, attempt, phase) => {
+    calls.push(call); expect(holder.world).toBeDefined();
+    return reply(model(holder.world as World, call, step, attempt, phase));
+  }, () => {
+    if (!holder.world) throw new Error('The question fixture must be seeded before its model calls.');
+    return { drive: holder.world.drive, root: holder.world.rootId };
+  });
   const real = await realWorld({ seed, claude });
   expect(ids, 'seed created made-up folder ids').toBeDefined();
   const w = Object.assign(real, { ids: ids as Ids, calls });
@@ -805,7 +812,8 @@ describe('Q1a stored answers through production entry points', () => {
 
   it('Q1a q1-two-rounds-no-third: retries failed saves and dispatch replay count only durable askings', async () => {
     await control();
-    const w = await world((w) => w.calls.length === 1 ? { ...emptyIntent, unexpected: true }
+    const w = await world((w, _call, step, attempt, phase) => phase === 'execution' && step === 0 && attempt === 0
+      ? { ...emptyIntent, unexpected: true }
       : { ...emptyIntent, asks: [{ fileId: w.ids.unclear, ...yesNo }] });
     await w.drive.update(w.ids.clear, { addParent: w.ids.home, removeParent: w.ids.pile });
     const qFile = await fileAt(w, SYSTEM.questions);
@@ -1027,8 +1035,8 @@ describe('Q1a fix round 1 through production entry points', () => {
     expect(await run(unchanged, 3)).toBe(0);
     expect(await questions(unchanged), 'positive control: a repeated member subject stays exhausted').toEqual([]);
     for (const firstKind of ['pile', 'thing'] as const) {
-      const w = await world((w) => {
-        const pile = w.calls.length === 1 ? firstKind === 'pile' : firstKind !== 'pile';
+      const w = await world((w, _call, step) => {
+        const pile = step === 0 ? firstKind === 'pile' : firstKind !== 'pile';
         return { ...emptyIntent, asks: [{ ...(pile ? { pileId: 'pile-mixed' } : { fileId: w.ids.unclear }), ...yesNo }] };
       });
       const second = await secondAsking(w);
@@ -1310,8 +1318,8 @@ describe('Q1a fix round 3 through production entry points', () => {
 
   it('Q1a fix 3.2: mixed member histories cap pile askings and count only the waiting member', async () => {
     // Positive control: a pile-level asking supplies round two to its sole waiting member.
-    const single = await world((w) => ({ ...emptyIntent, asks: [{
-      ...(w.calls.length === 1 ? { fileId: w.ids.unclear } : { pileId: 'pile-mixed' }), ...yesNo,
+    const single = await world((w, _call, step) => ({ ...emptyIntent, asks: [{
+      ...(step === 0 ? { fileId: w.ids.unclear } : { pileId: 'pile-mixed' }), ...yesNo,
     }] }));
     const second = await secondAsking(single);
     expect(second.subject).toBe('pile-mixed');
@@ -1512,7 +1520,7 @@ async function runWithSpawn(w: World, index: number, spawn: ClaudeSpawn): Promis
     return url.origin === ORIGIN ? w.api.fetch(input, init) : w.driveFetch(input, init);
   };
   return main({ BOWER_API_URL: ORIGIN, GITHUB_EVENT_PATH: file, BOWER_PROVIDER: 'claude',
-    CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' }, { fetch: fetcher, claude: spawn, pacing: { baseMs: 0, sleep: async () => {} } });
+    CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' }, { fetch: fetcher, claude: phaseAwareClaude(spawn, () => ({ drive: w.drive, root: w.rootId })), pacing: { baseMs: 0, sleep: async () => {} } });
 }
 async function allAnswerLines(w: World): Promise<RecordLine[]> {
   const files = (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && /^\.bower\/changes\//.test(w.drive.pathOf(f.id, w.rootId)));

@@ -1,3 +1,4 @@
+import { phaseAwareClaude } from './b1-planning-support';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as noteEdit from '../../src/data/contracts/note-edit';
@@ -45,13 +46,13 @@ async function fixture(): Promise<LoadedCase> {
 }
 
 function reply(make: (ctx: Context, source: string) => unknown, shown: Context[] = []): ClaudeSpawn {
-  return async (call) => {
+  return phaseAwareClaude(async (call, _step, _attempt, phase) => {
     const ctx = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Context;
-    shown.push(ctx);
+    if (phase === 'execution') shown.push(ctx);
     const source = ctx.piles.flatMap((p) => p.things).find((t) => t.name === SOURCE)?.fileId ?? 'previously-filed-source';
     return { code: 0, stderr: '', cut: null, stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: false,
       result: JSON.stringify(make(ctx, source)), usage: { input_tokens: 10, output_tokens: 10 } }) };
-  };
+  });
 }
 const filing = (source: string) => ({ kind: 'tidy-intent', v: 1,
   things: [{ fileId: source, to: 'Areas/Home', name: SOURCE }] });

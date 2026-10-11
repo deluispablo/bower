@@ -2,6 +2,7 @@
  * Model input fingerprint (TL-P4-07): the timing line adds input=<first 12 hex of sha256 of the model input>,
  * and a golden test of the C04 fixture input ensures future changes are intentional.
  */
+import { phaseAwareClaude } from './b1-planning-support';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -102,7 +103,7 @@ describe('model input fingerprint', () => {
     const timing = new RunTiming();
     const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit);
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn, timing }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
+    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn: phaseAwareClaude(spawn, () => ({ drive: g.drive, root: g.root })), timing }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
 
     // The timing line should have the model input fingerprint (calculated on the normalized input)
     const modelInput = calls[0]?.input ?? '';
@@ -124,7 +125,7 @@ describe('model input fingerprint', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     // First run with RUN_ID
-    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn, timing: timing1 }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
+    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn: phaseAwareClaude(spawn, () => ({ drive: g.drive, root: g.root })), timing: timing1 }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
     const input1 = calls1[0]?.input ?? '';
     const line1 = timing1.line('done');
 
@@ -133,7 +134,7 @@ describe('model input fingerprint', () => {
     const timing2 = new RunTiming();
     const spawn2: ClaudeSpawn = async (call) => (calls2.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit);
 
-    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn: spawn2, timing: timing2 }, { rootId: g.root, runId: 'different-run-id-2', allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
+    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn: phaseAwareClaude(spawn2, () => ({ drive: g.drive, root: g.root })), timing: timing2 }, { rootId: g.root, runId: 'different-run-id-2', allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
     const input2 = calls2[0]?.input ?? '';
     const line2 = timing2.line('done');
 
@@ -165,7 +166,7 @@ describe('model input fingerprint', () => {
       const timing = new RunTiming();
       const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit);
       vi.spyOn(console, 'error').mockImplementation(() => {});
-      await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn, timing }, { rootId: g.root, runId, allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
+      await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn: phaseAwareClaude(spawn, () => ({ drive: g.drive, root: g.root })), timing }, { rootId: g.root, runId, allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
       return { fingerprint: /input=([0-9a-f]{12})/.exec(timing.line('done'))?.[1] ?? '', input: calls[0]?.input ?? '' };
     };
     const a = await fingerprintOf(0, 'admission-1', 'run-a');
@@ -252,7 +253,7 @@ describe('model input fingerprint', () => {
       const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('{"kind":"tidy-intent","v":1,"things":[],"notes":[],"lines":[],"asks":[]}') } satisfies ClaudeExit);
       vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn }, { rootId: root, runId: `run-${spare}`, allowWeb: false }, fakeScripted(drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
+      await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn: phaseAwareClaude(spawn, () => ({ drive: drive, root: root })) }, { rootId: root, runId: `run-${spare}`, allowWeb: false }, fakeScripted(drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
 
       const input = calls[0]?.input ?? '';
       const normalized = normalizeModelInput(input);
@@ -282,7 +283,7 @@ describe('model input fingerprint', () => {
     const timing = new RunTiming();
     const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit);
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn, timing }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
+    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn: phaseAwareClaude(spawn, () => ({ drive: g.drive, root: g.root })), timing }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
 
     const line = timing.line('done');
 
@@ -319,7 +320,7 @@ describe('model input order', () => {
     const calls: ClaudeCall[] = [];
     const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit);
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn }, { rootId: root, runId: RUN_ID, allowWeb: false }, fakeScripted(drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
+    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn: phaseAwareClaude(spawn, () => ({ drive: drive, root: root })) }, { rootId: root, runId: RUN_ID, allowWeb: false }, fakeScripted(drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
     const sent = JSON.parse((calls[0]?.input ?? '').split('\n').at(-1) ?? '{}') as { piles: Array<{ things: Array<{ name: string }> }> };
     const lists = sent.piles.map((p) => p.things.map((t) => t.name));
     expect(lists.some((l) => l.length > 2)).toBe(true);

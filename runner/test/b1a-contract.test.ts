@@ -88,6 +88,15 @@ function trace(drive: FakeDrive, root: string, sent: Sent[], lost?: { path: stri
   };
 }
 
+/** Listing read-ahead may load admission bytes; discovery still means state/feed/index, in either phase. */
+function discoveryReads(requests: Array<{ method: string; url: URL }>, drive: FakeDrive, root: string) {
+  return requests.filter((r) => {
+    if (r.url.pathname === '/drive/v3/changes') return true;
+    const id = /^\/drive\/v3\/files\/([^/]+)$/.exec(r.url.pathname)?.[1];
+    return id !== undefined && ['.bower/retrieval.json', '.bower/index.md'].includes(drive.pathOf(id, root));
+  });
+}
+
 async function setup(): Promise<{ c: LoadedCase; drive: FakeDrive; root: string }> {
   const c = await loadCase(CASE);
   const drive = fixedDrive();
@@ -118,18 +127,22 @@ it('B1a contract: addendum 4: a no-change run adds exactly two discovery reads a
   expect(await drive.listChanges(cursor)).toEqual({ changes: [], newStartPageToken: cursor });
   const sent: Sent[] = [];
   const requests: Array<{ method: string; url: URL }> = [];
-  const original = maintenance.withMaintenance;
-  const calls = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest) => {
-    expect(manifest.operations).toEqual([]);
+  const refresh = maintenance.refreshPlanning;
+  vi.spyOn(maintenance, 'refreshPlanning').mockImplementation(async (...args) => {
     const from = requests.length;
-    const maintained = await original(adapter, manifest);
-    // Observe the real production wrapper inside main, after the planner's required reads.
-    expect(requests.slice(from).map((r) => [r.method, r.url.pathname, r.url.searchParams.get('alt')]))
+    const refreshed = await refresh(...args);
+    expect(discoveryReads(requests.slice(from), drive, root).map((r) => [r.method, r.url.pathname, r.url.searchParams.get('alt')]))
       .toEqual([
-        ['GET', `/drive/v3/files/${retrieval.id}`, 'media'], // read .bower/retrieval.json
-        ['GET', '/drive/v3/changes', null], // one changes-feed listing
+        ['GET', `/drive/v3/files/${retrieval.id}`, 'media'],
+        ['GET', '/drive/v3/changes', null],
       ]);
     expect(requests.at(-1)?.url.searchParams.get('pageToken')).toBe(cursor);
+    return refreshed;
+  });
+  const original = maintenance.withMaintenance;
+  const calls = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest, ...prepared) => {
+    expect(manifest.operations).toEqual([]);
+    const maintained = await original(adapter, manifest, ...prepared);
     expect(maintained).toEqual(manifest);
     return maintained;
   });
@@ -461,10 +474,10 @@ it('B1a contract: pass 1 1: the committed cursor never passes an unreflected con
     if (!racing) await edit(); // Positive control: the new version is in the planner's listing.
     let feedReads = 0;
     const original = maintenance.withMaintenance;
-    const planned = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest) => {
+    const planned = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest, ...prepared) => {
       const listed = (await adapter.planReads().listAll(root)).find((f) => f.id === plot.id);
       expect(listed?.modifiedTime).toBe(racing ? state.files[plot.id]?.version : version);
-      return original(adapter, manifest);
+      return original(adapter, manifest, ...prepared);
     });
     const around = (fetch: typeof globalThis.fetch): typeof globalThis.fetch => async (input, init) => {
       const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
@@ -538,12 +551,12 @@ it('B1a contract: pass 1 5: newly discovered hidden descendants advance only the
     };
     if (!racing) await create(); // Positive control: the hidden path is present in the cached listing.
     const original = maintenance.withMaintenance;
-    const planned = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest) => {
+    const planned = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest, ...prepared) => {
       const ix = VaultIndex.build(root, await adapter.planReads().listAll(root));
       expect(ix.pathOf(hidden.id)).toBe('.obsidian');
       expect([...ix.entries().keys()].some((path) => isHidden(path))).toBe(false);
       expect(childId ? ix.pathOf(childId) : undefined).toBe(racing ? undefined : '.obsidian/workspace.json');
-      return original(adapter, manifest);
+      return original(adapter, manifest, ...prepared);
     });
     const sent: Sent[] = [];
     const observed = trace(drive, root, sent);
@@ -586,10 +599,10 @@ it('B1a contract: round 3 1: vanished indexed notes drop without failing and ord
     // TL-P4-41 addendum 11: observe the actual prefix read outcome, independent of wire status.
     const prefixReads = vi.spyOn(RunnerDrive.prototype, 'readPrefix');
     const original = maintenance.withMaintenance;
-    const planned = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest) => {
+    const planned = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest, ...prepared) => {
       const listed = (await adapter.planReads().listAll(root)).find((f) => f.id === plot.id);
       expect(listed?.modifiedTime, `${mode}: planner cached the indexed version`).toBe(state.files[plot.id]?.version);
-      return original(adapter, manifest);
+      return original(adapter, manifest, ...prepared);
     });
     const around = (fetch: typeof globalThis.fetch): typeof globalThis.fetch => async (input, init) => {
       const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
@@ -669,13 +682,20 @@ it('B1a contract: round 3 2: unrelated account changes drain once and the next r
       'drained unrelated entries never remain pending').toEqual([]);
 
     const requests: Array<{ method: string; url: URL }> = [];
-    let discovery: typeof requests = [];
+    const discovery: typeof requests = [];
+    const refresh = maintenance.refreshPlanning;
+    const refreshing = vi.spyOn(maintenance, 'refreshPlanning').mockImplementation(async (...args) => {
+      const from = requests.length;
+      const value = await refresh(...args);
+      discovery.push(...discoveryReads(requests.slice(from), drive, root));
+      return value;
+    });
     const original = maintenance.withMaintenance;
-    const planned = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest) => {
+    const planned = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest, ...prepared) => {
       expect(manifest.operations).toEqual([]);
       const from = requests.length;
-      const maintained = await original(adapter, manifest);
-      discovery = requests.slice(from);
+      const maintained = await original(adapter, manifest, ...prepared);
+      discovery.push(...discoveryReads(requests.slice(from), drive, root));
       return maintained;
     });
     const repeated: string[] = [];
@@ -696,7 +716,7 @@ it('B1a contract: round 3 2: unrelated account changes drain once and the next r
     expect(next.code).toBe(0);
     expect(next.wire?.statuses.at(-1)?.phase).toBe('done');
     expect(planned).toHaveBeenCalledTimes(1);
-    planned.mockRestore();
+    planned.mockRestore(); refreshing.mockRestore();
     const retrieval = (await drive.listAll(root)).find((f) => f.name === 'retrieval.json');
     expect(retrieval).toBeDefined();
     expect.soft(discovery.map((r) => [r.method, r.url.pathname, r.url.searchParams.get('alt')]),
@@ -762,11 +782,18 @@ async function runFolderChange(mode: FolderChange) {
   for (const note of descendants) expect((await drive.evidence(note.id))?.file.modifiedTime).toBe(state.files[note.id]?.version);
   const vanished = ['trashed', 'removed', 'outside'].includes(mode);
   const requests: Array<{ method: string; url: URL }> = [];
-  let discovery: typeof requests = [];
+  const discovery: typeof requests = [];
   let feedReads = 0;
   const sent: Sent[] = [];
+  const refresh = maintenance.refreshPlanning;
+  const refreshing = vi.spyOn(maintenance, 'refreshPlanning').mockImplementation(async (...args) => {
+    const from = requests.length;
+    const value = await refresh(...args);
+    discovery.push(...discoveryReads(requests.slice(from), drive, root));
+    return value;
+  });
   const original = maintenance.withMaintenance;
-  const planned = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest) => {
+  const planned = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest, ...prepared) => {
     const listed = await adapter.planReads().listAll(root);
     // The change happened before the planner listed: it cannot recover ancestry from the old listing.
     const ix = VaultIndex.build(root, listed);
@@ -774,8 +801,8 @@ async function runFolderChange(mode: FolderChange) {
       : mode === 'renamed' ? 'Resources/Zinnia' : mode === 'nested' ? 'Resources/Reading/Gardening' : 'Resources/Gardening');
     for (const note of descendants) expect(listed.some((f) => f.id === note.id)).toBe(!vanished);
     const from = requests.length;
-    const maintained = await original(adapter, manifest);
-    discovery = requests.slice(from);
+    const maintained = await original(adapter, manifest, ...prepared);
+    discovery.push(...discoveryReads(requests.slice(from), drive, root));
     return maintained;
   });
   const observe = trace(drive, root, sent);
@@ -804,7 +831,7 @@ async function runFolderChange(mode: FolderChange) {
   const run = await runOnDrive(c, drive, root, { admission: { ...admission, id: 'folder-feed', at: AT + 1 }, pacing, around,
     answerStart: { scope: 'all', requestId: 'folder-feed' } }, 2);
   expect(planned).toHaveBeenCalledTimes(1);
-  planned.mockRestore();
+  planned.mockRestore(); refreshing.mockRestore();
   expect(feedReads, `${mode}: main drains the real feed once`).toBe(1);
   const after = JSON.parse(run.after['.bower/retrieval.json'] ?? 'null') as RetrievalFile;
   expect(after).not.toBeNull();
@@ -822,7 +849,7 @@ function assertFolderRefresh(result: Awaited<ReturnType<typeof runFolderChange>>
   if (!priorBook) throw new Error('missing prior-state book');
   expect(after.files[book.id], `${mode}: unrelated indexed note survives by id`).toMatchObject(priorBook);
   // Exactly retrieval media, changes feed and the old index media. No snapshot/media re-reads.
-  check(discovery.length, `${mode}: maintenance discovery makes exactly three Drive calls`).toBe(3);
+  check(discovery.length, `${mode}: planning refresh and maintain make exactly three discovery calls`).toBe(3);
   check(requests.filter((r) => r.method === 'GET' && r.url.searchParams.get('alt') === 'media'
     && descendants.some((note) => r.url.pathname === `/drive/v3/files/${note.id}`)),
   `${mode}: the whole run makes zero descendant media reads`).toEqual([]);

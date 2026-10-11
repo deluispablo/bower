@@ -2,6 +2,7 @@
  * Offline research reused from the packet: curated context / just-in-time retrieval, plan then execute,
  * stable prompt prefixes. Exact URLs and contract coverage are in the delivery notes.
  */
+import { phaseAwareClaude } from './b1-planning-support';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -398,7 +399,7 @@ it('b1-refresh-cache-hot-order', async () => {
       expect.soft(atHot, 'hot is prefix position 6').toBeGreaterThan(input.indexOf(prefix));
     }
     expect.soft(input.indexOf('Alex has a remote developer offer.')).toBeGreaterThan(atHot);
-    expect.soft(input).toContain('made-up-op');
+    expect.soft(input).toContain('012345abcdef');
   }
   expect.soft(r.traffic.filter((t) => t.url.pathname === '/drive/v3/changes' && t.url.searchParams.has('pageToken')),
     'discovery is shared, not drained again by planning').toHaveLength(1);
@@ -406,8 +407,8 @@ it('b1-refresh-cache-hot-order', async () => {
   expect.soft(media(r, f.id), 'chosen L3 is read once').toHaveLength(1);
   expect.soft(writes(r.events, SYSTEM.retrieval)).toHaveLength(1);
   const hot = r.after[SYSTEM.hot] ?? '';
-  expect.soft(hot).toContain('made-up-op');
-  expect.soft((hot.match(/made-up-op/g) ?? []).length).toBe(1);
+  expect.soft(hot).toContain('012345abcdef');
+  expect.soft((hot.match(/012345abcdef/g) ?? []).length).toBe(1);
 });
 
 it('b1-pre-manifest-retry', async () => {
@@ -426,10 +427,10 @@ it('b1-pre-manifest-retry', async () => {
   const responder = replySequence([fileIntent(b)]);
   // Explicit call-order replies, through the same immutable admission and attempt 2.
   const { reply } = await import('./b1-planning-support');
-  const retried = await redispatchCase(b.c, first, 2, { pacing: { baseMs: 0, sleep: async () => {} }, claude: async (call) => {
+  const retried = await redispatchCase(b.c, first, 2, { pacing: { baseMs: 0, sleep: async () => {} }, claude: phaseAwareClaude(async (call) => {
     calls.push(call.input);
     return calls.length === 1 ? reply(select(b, [personal.id])) : responder(call);
-  } });
+  }, () => ({ drive: b.drive, root: b.root, admission: b.admission }), true) });
   expect.soft(retried.code).toBe(0); expect.soft(calls).toHaveLength(2);
   expect.soft(calls[0]).toContain('Alex now prefers a remote developer offer.');
   expect.soft(calls[1]).toContain('NEW_REDISPATCH_EVIDENCE');
@@ -490,13 +491,25 @@ it('b1-neighbourhood-order-and-30-cap', async () => {
 });
 
 it('b1-expansion-is-not-a-read-picked-members-count-within-five', async () => {
-  const f = foldedFolder(); const b = await setup({ folder: f.folder }); await seedState(b);
+  const f = foldedFolder(); const b = await setup({ folder: f.folder }); const state = await seedState(b, true);
+  const mapBefore = await b.drive.readText(b.id(f.map));
   const picked = Object.keys(f.members).slice(0, 5).map(b.id);
-  const r = await run(b, [select(b, picked, 'Resources/Remote offers'), fileIntent(b, 'Resources/Remote offers')]);
+  const r = await run(b, [select(b, picked), fileIntent(b)]);
   completed(r); twoSteps(r);
   for (const id of picked) expect.soft(media(r, id), 'five selected members are five real cached reads').toHaveLength(1);
+  expect.soft(r.after[f.map], 'the unpicked map and its folder membership stay unchanged').toBe(mapBefore);
+  expect.soft(state.files[b.id(f.map)]?.members, 'folded membership is already in retrieval state').toEqual(Object.keys(f.members).sort().map(b.id));
   expect.soft(media(r, b.id(f.map)), 'showing a member list does not read the unpicked map body').toEqual([]);
   for (const path of Object.keys(f.members).slice(5)) expect.soft(media(r, b.id(path)), 'unpicked expansion members are not L3 reads').toEqual([]);
+  // The same unpicked map may be read fully when its version changes.
+  const changed = await setup({ folder: f.folder }); await seedState(changed, true);
+  const map = await changed.drive.get(changed.id(f.map));
+  const changedText = (await changed.drive.readText(map.id)) + '\nAlex adds a personal map comment.\n';
+  await changed.drive.writeText(map.id, changedText, map.modifiedTime);
+  const refreshed = await run(changed, [select(changed, Object.keys(f.members).slice(0, 5).map(changed.id)), fileIntent(changed)]);
+  completed(refreshed); twoSteps(refreshed);
+  expect.soft(media(refreshed, map.id), 'a changed map gets the one full ownership read').toHaveLength(1);
+  expect.soft(refreshed.after[f.map], 'the changed map keeps the personal comment').toBe(changedText);
   const bad = await setup({ folder: f.folder }); await seedState(bad);
   const sixth = select(bad, Object.keys(f.members).slice(0, 6).map(bad.id), 'Resources/Remote offers');
   leavesForNextRun(await run(bad, [sixth, sixth]));

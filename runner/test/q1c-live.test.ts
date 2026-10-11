@@ -1,3 +1,4 @@
+import { phaseAwareClaude } from './b1-planning-support';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -388,7 +389,7 @@ describe('Q1c durable publication through main and createApp().request', () => {
       attempt: 2, ticket: TICKET, scope: 'all', allow_web: false } }));
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: event,
       BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' }, { fetch: wire.fetch,
-      claude: model, pacing: { baseMs: 0, sleep: async () => {} } })).toBe(0);
+      claude: phaseAwareClaude(model, () => ({ drive: w.drive, root: w.rootId })), pacing: { baseMs: 0, sleep: async () => {} } })).toBe(0);
     expect(calls()).toBe(2);
     expect(wire.statuses.at(-1)?.phase).toBe('done');
     expect(w.drive.pathOf(clearId, w.rootId)).toBe('Resources/Clear.md');

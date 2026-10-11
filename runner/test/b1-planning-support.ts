@@ -10,7 +10,9 @@ import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
 import { PILE_NOTE } from '../../src/data/piles';
 import { checkCreationName } from '../../src/data/contracts/tree';
-import { parseNote } from '../../src/data/contracts/note-format';
+import { indexedFront, parseNote } from '../../src/data/contracts/note-format';
+import { mocEdit, mocMembership, mocSnapshot } from '../src/moc';
+import type { MaintenanceNote } from '../../src/data/contracts/run-manifest';
 import { SYSTEM, isHidden, type RetrievalFile } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import type { ClaudeCall, ClaudeExit, ClaudeSpawn } from '../src/claude';
@@ -41,60 +43,102 @@ export type Base = Awaited<ReturnType<typeof setup>>;
 /** Fixture data travels outside the model input and is never charged as production traffic. */
 export interface PlanningFixture { drive: FakeDrive; root: string; admission?: AdmissionManifest | null }
 
-/** Alternate semantic phases; validation retries keep their phase and execution-attempt index. */
+const phasedTransports = new WeakSet<ClaudeSpawn>();
+
+/** Alternate semantic phases; validation retries repeat their step's kind. */
 export function phaseAwareClaude(
   execution: (call: ClaudeCall, step: number, attempt: number, phase: 'selection' | 'execution') => ClaudeExit | Promise<ClaudeExit>,
-  fixture: (call: ClaudeCall) => PlanningFixture,
+  fixture: (call: ClaudeCall) => PlanningFixture = (call) => {
+    const value = (call as ClaudeCall & { fixture?: PlanningFixture }).fixture;
+    if (!value) throw new Error('A model fixture needs its seeded Drive.');
+    return value;
+  },
+  explicit = false,
 ): ClaudeSpawn {
-  let selection = false; let step = -1; let attempt = 0;
-  let admissionSeen: AdmissionManifest | undefined; let selected: ClaudeExit | undefined;
-  let cwd: string | undefined;
-  return async (call) => {
+  if (phasedTransports.has(execution as ClaudeSpawn)) return execution as ClaudeSpawn;
+  let step = -1; let attempt = 0; let cwd: string | undefined;
+  let selected: ClaudeExit | undefined;
+  const spawn: ClaudeSpawn = async (call) => {
     const { drive, root, admission } = fixture(call);
-    if (!admission) throw new Error('A selection fixture needs its admitted sources.');
-    if (admissionSeen !== admission || cwd !== call.cwd) { admissionSeen = admission; cwd = call.cwd; selection = false; selected = undefined; }
+    const context = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as {
+      piles: Array<{ pileId: string; things: Array<{ fileId: string }> }>;
+      sources?: Array<{ itemId: string }>; selection?: unknown;
+    };
+    const phase = context.selection === undefined ? 'selection' : 'execution';
     const retry = /^Your reply was refused:/m.test(call.input);
-    if (!retry) { selection = !selection; attempt = 0; if (selection) step++; }
-    else if (!selection) attempt++;
-    if (selection && retry && selected) return selected;
-    const exit = await execution(call, step, attempt, selection ? 'selection' : 'execution');
-    if (!selection) return exit;
+    if (cwd !== call.cwd) { cwd = call.cwd; step++; selected = undefined; attempt = 0; }
+    else if (retry) attempt++;
+    else attempt = 0;
+    if (explicit) return execution(call, step, attempt, phase);
+    if (phase === 'selection' && retry && selected) {
+      await execution(call, step, attempt, phase);
+      return selected;
+    }
+    const exit = await execution(call, step, attempt, phase);
+    if (phase === 'execution') return exit;
     const files = await drive.listAll(root);
     const paths = new Map(files.map((f) => [drive.pathOf(f.id, root), f]));
+    const titles = new Map<string, string[]>();
+    for (const [path, file] of paths) {
+      if (file.folder || !path.endsWith('.md')) continue;
+      const title = file.name.slice(0, -3);
+      titles.set(title, [...titles.get(title) ?? [], path]);
+    }
     let envelope: Record<string, unknown> = {}; let intent: Record<string, unknown> = {};
     try {
       envelope = JSON.parse(exit.stdout) as Record<string, unknown>;
       intent = JSON.parse(String(envelope.result)) as Record<string, unknown>;
-    } catch { /* Deliberately malformed execution fixtures still get a valid selection. */ }
+    } catch { /* Malformed execution stays malformed after an empty, valid selection. */ }
+    if (Array.isArray(intent.items) && !('kind' in intent)) { selected = exit; return exit; }
     const rows = (key: string): Record<string, unknown>[] => Array.isArray(intent[key])
       ? (intent[key] as unknown[]).filter((v): v is Record<string, unknown> => !!v && typeof v === 'object') : [];
     const placed = [...rows('things'), ...rows('notes'), ...rows('asks')];
-    const used = new Set(placed.flatMap((r) => [r.fileId, r.pileId]));
+    const used = new Set([...placed.flatMap((r) => [r.fileId, r.pileId]),
+      ...[...rows('lines'), ...rows('states')].map((r) => r.cites)].filter((id): id is string => typeof id === 'string'));
     if (Array.isArray(intent.bin)) intent.bin.forEach((id) => used.add(id));
-    const items = admission.piles.flatMap((pile) => {
-      const sources = pile.items.filter((i) => i.name !== PILE_NOTE);
-      return (sources.length ? sources.map((i) => i.fileId) : [pile.pileId]).filter((id) => intent.kind !== 'tidy-intent' || used.has(id)).map((itemId): Item => {
-        const row = placed.find((r) => r.fileId === itemId || r.pileId === itemId);
-        const path = typeof row?.to === 'string' ? row.to : 'Resources';
-        const existing = paths.get(path);
-        const parent = paths.get(path.slice(0, path.lastIndexOf('/')));
-        const name = path.split('/').at(-1) ?? '';
-        let validName = !!name && name.trim() === name && !/\p{C}/u.test(name);
-        try { checkCreationName(name, 'folder'); } catch { validName = false; }
-        const newArea = path.split('/').length === 2 && path.startsWith('Areas/');
-        const destination = existing?.folder && !/^(Inbox|\.bower)(\/|$)/.test(path) ? existing.id
-          : validName && (!newArea || typeof row?.responsibility === 'string' || typeof row?.basis === 'string') && parent?.folder && !/^(Inbox|\.bower)(\/|$)/.test(path)
-            ? { parentId: parent.id, name }
-            : paths.get('Resources')?.id ?? '';
-        const wants = [...new Set([...rows('lines').filter((r) => r.cites === itemId).map((r) => r.note), row?.basis]
-          .flatMap((path) => typeof path === 'string' && paths.get(path) && !paths.get(path)?.folder ? [paths.get(path)?.id ?? ''] : []))];
-        return { itemId, kind: 'unknown', destination, wants };
+    const available = context.sources?.map((s) => s.itemId) ?? context.piles.flatMap((pile) =>
+      pile.things.length ? pile.things.map((t) => t.fileId) : [pile.pileId]);
+    const pileIds = new Set(context.piles.flatMap((p) => [p.pileId, ...p.things.map((t) => t.fileId)]));
+    const journal = new Set(admission?.journal.map((j) => j.fileId) ?? available.filter((id) => !pileIds.has(id)));
+    const unboundPaths = [...rows('lines'), ...rows('states')].filter((r) => typeof r.cites !== 'string' || !available.includes(r.cites)).map((r) => r.note);
+    const pairPaths = [...rows('asks').flatMap((r) => Array.isArray(r.notes) ? r.notes : []),
+      ...rows('keep').flatMap((r) => [r.kept, r.other])];
+    // A journal or words source supplies uncited news/pair context; it grants no invented source id.
+    if (pairPaths.length && available[0] && !available.some((id) => used.has(id))) used.add(available[0]);
+    if (unboundPaths.length || pairPaths.length) {
+      for (const id of available) if (journal.has(id) || context.piles.some((p) => p.pileId === id && !p.things.length)) used.add(id);
+    }
+    const items = available.filter((id) => used.has(id)).map((itemId): Item => {
+      const row = placed.find((r) => r.fileId === itemId || r.pileId === itemId);
+      const targetPaths = [...rows('lines'), ...rows('states')].filter((r) => r.cites === itemId).map((r) => r.note);
+      const path = typeof row?.to === 'string' ? row.to
+        : typeof targetPaths[0] === 'string' ? targetPaths[0].slice(0, targetPaths[0].lastIndexOf('/')) : 'Resources';
+      const existing = paths.get(path);
+      const parent = paths.get(path.slice(0, path.lastIndexOf('/')));
+      const name = path.split('/').at(-1) ?? '';
+      let validName = !!name && name.trim() === name && !/\p{C}/u.test(name);
+      try { checkCreationName(name, 'folder'); } catch { validName = false; }
+      const newArea = path.split('/').length === 2 && path.startsWith('Areas/');
+      const destination = existing?.folder && !/^(Inbox|\.bower)(\/|$)/.test(path) ? existing.id
+        : validName && (!newArea || typeof row?.responsibility === 'string' || typeof row?.basis === 'string') && parent?.folder && !/^(Inbox|\.bower)(\/|$)/.test(path)
+          ? { parentId: parent.id, name } : paths.get('Resources')?.id ?? '';
+      const note = row?.note && typeof row.note === 'object' ? row.note as Record<string, unknown> : {};
+      const links = parseNote('', typeof note.body === 'string' ? note.body : '').links.flatMap((link) => {
+        const exact = paths.has(link) ? link : paths.has(link + '.md') ? link + '.md' : undefined;
+        const matches = exact ? [exact] : titles.get(link) ?? [];
+        return matches.length === 1 ? matches : [];
       });
+      const wants = [...new Set([...targetPaths, row?.basis, ...pairPaths, ...links,
+        ...(journal.has(itemId) ? unboundPaths : [])]
+        .flatMap((path) => typeof path === 'string' && paths.get(path) && !paths.get(path)?.folder ? [paths.get(path)?.id ?? ''] : []))];
+      return { itemId, kind: 'unknown', destination, wants };
     });
     selected = { code: 0, stderr: '', cut: null, stdout: JSON.stringify({ ...envelope, type: 'result', subtype: 'success',
-      is_error: false, result: JSON.stringify({ items, asks: [] }) }) };
+      is_error: false, result: JSON.stringify({ items, asks: rows('asks').filter((r) => r.notes === undefined) }) }) };
     return selected;
   };
+  phasedTransports.add(spawn);
+  return spawn;
 }
 
 export async function setup(options: {
@@ -160,12 +204,12 @@ export async function run(base: Base, replies: unknown[], options: {
     .map(async (file) => [file.id, await base.drive.evidence(file.id)] as const)));
   const errorStart = vi.mocked(console.error).mock.calls.length;
   const frames: Frame[] = []; const events: Observation[] = []; const traffic: Traffic[] = [];
-  const claude: ClaudeSpawn = async (call) => {
+  const claude = phaseAwareClaude(async (call) => {
     const frame = { call, value: JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Record<string, unknown>, events: [...events] };
     frames.push(frame);
     await options.beforeReply?.(frames.length, frame);
     return reply(replies[Math.min(frames.length - 1, replies.length - 1)], frames.length);
-  };
+  }, () => ({ drive: base.drive, root: base.root, admission: options.admission ?? base.admission }), true);
   const around = (fetch: typeof globalThis.fetch): typeof globalThis.fetch => {
     const observed = observe(base.drive, base.root, events)(fetch);
     const metered: typeof globalThis.fetch = async (input, init = {}) => {
@@ -213,12 +257,11 @@ export function leavesForNextRun(result: Awaited<ReturnType<typeof run>>) {
   expect.soft(result.code, 'ledger exhaustion is a done run').toBe(0);
   expect.soft(result.wire?.statuses.at(-1)?.phase, 'exhaustion ends done').toBe('done');
   expect.soft(report(result), 'exhausted items have no report row').toEqual({ filed: [], setAside: [], questions: [] });
-  const text = Object.entries(result.after).find(([p]) => p.endsWith('/dispositions.json'))?.[1];
-  const dispositions = JSON.parse(text ?? '{"items":[]}') as { items: Array<{ fileId: string; disposition: string }> };
-  const sources = result.dispatch?.admission.piles.flatMap((p) => p.items.filter((i) => i.name !== PILE_NOTE)) ?? [];
+  const sources = result.dispatch?.admission.piles.flatMap((p) => p.items) ?? [];
   for (const source of sources) {
-    expect.soft(dispositions.items.find((i) => i.fileId === source.fileId)?.disposition,
-      'exhausted sources stay visible as waiting').toBe('waiting');
+    const path = Object.entries(result.pathsById).find(([id]) => id === source.fileId)?.[1] ?? '';
+    expect.soft(path, 'waiting comes from the source still in the inbox').toMatch(/^Inbox\//);
+    expect.soft(Object.hasOwn(result.after, path), 'the next run can still read the waiting source').toBe(true);
   }
   expect.soft(result.events.filter((e) => ['PATCH', 'POST', 'DELETE'].includes(e.method) && !e.path.startsWith('.bower/')),
     'exhaustion never mutates source or personal evidence').toEqual([]);
@@ -261,25 +304,43 @@ export function media(result: Awaited<ReturnType<typeof run>>, id: string, full 
 }
 
 /** Durable warm cache made from made-up seed bytes; no production traffic is charged to seeding. */
-export async function seedState(base: Base) {
+export async function seedState(base: Base, settleMocs = false) {
   const wire = driveV3(base.drive); wire.folderId = base.root;
   const token = new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: wire.fetch, now: () => wire.now });
   const projection = await planningIndex(new RunnerDrive({ token, attempt: 1, fetch: wire.fetch,
     pacing: { baseMs: 0, sleep: async () => {} } }), base.root);
   expect(projection, 'warm fixture uses the real B1c projection').toBeTypeOf('string');
-  const files: RetrievalFile['files'] = {};
+  const files: Record<string, MaintenanceNote> = {};
   for (const f of await base.drive.listAll(base.root)) {
     const path = base.drive.pathOf(f.id, base.root) ?? '';
     if (f.folder || !path.endsWith('.md') || isHidden(path) || path.startsWith('Inbox/')) continue;
-    files[f.id] = { path, version: f.modifiedTime, summary: parseNote(path, await base.drive.readText(f.id)).summary || '(no summary)',
-      coverage: { kind: 'prefix', bytes: 4096 } };
+    const text = await base.drive.readText(f.id);
+    const front = indexedFront(text);
+    const moc = front.type === 'moc' ? mocSnapshot(text) : null;
+    files[f.id] = { path, version: f.modifiedTime, ...front,
+      coverage: { kind: 'prefix', bytes: 4096 }, ...(moc ? { moc } : {}) };
   }
-  const state: RetrievalFile = { v: 1, folderId: base.root, account: 'ACCOUNT_ID',
+  if (settleMocs) {
+    const members = mocMembership(files);
+    for (const [id, entry] of Object.entries(files)) {
+      if (!entry.moc) continue;
+      const edit = mocEdit(id, files, members);
+      if (!edit) continue;
+      const newer = await base.drive.writeText(id, edit.text, entry.version);
+      const moc = mocSnapshot(edit.text);
+      files[id] = { ...entry, version: newer.modifiedTime, ...(moc ? { moc } : {}) };
+    }
+  }
+  for (const [id, members] of mocMembership(files)) {
+    const entry = files[id];
+    if (entry?.moc) entry.members = members;
+  }
+  const state: RetrievalFile & { files: Record<string, MaintenanceNote> } = { v: 1, folderId: base.root, account: 'ACCOUNT_ID',
     cursor: String(Number(await base.drive.getStartPageToken()) + 1), files };
   const sys = base.id(SYSTEM.dir);
   await base.drive.createText(sys, 'retrieval.json', JSON.stringify(state));
   await base.drive.createText(sys, 'index.md', projection ?? '');
-  await base.drive.createText(sys, 'hot.md', '# Hot\n\n## Recent changes\n- Existing change. <!-- bower:op made-up-op -->\n');
+  await base.drive.createText(sys, 'hot.md', '# Hot\n\n## Recent changes\n- 2026-10-06 · Existing change. · op:012345abcdef\n');
   base.warm = true;
   return state;
 }

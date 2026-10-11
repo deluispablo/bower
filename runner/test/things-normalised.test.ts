@@ -1,3 +1,4 @@
+import { phaseAwareClaude } from './b1-planning-support';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -76,7 +77,7 @@ describe('things section normalisation', () => {
       vi.spyOn(console, 'error').mockImplementation(() => {});
 
       try {
-        await claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn, timing }, { rootId: g.root, runId, allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] });
+        await claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn: phaseAwareClaude(spawn, () => ({ drive: g.drive, root: g.root })), timing }, { rootId: g.root, runId, allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] });
       } catch {
         // Expected to throw
       }
@@ -150,7 +151,7 @@ describe('things section normalisation', () => {
       vi.spyOn(console, 'error').mockImplementation(() => {});
 
       try {
-        await claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn, timing }, { rootId: root, runId, allowWeb: false }, fakeScripted(drive))({ taken: admitted.manifest, deferred: [] });
+        await claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn: phaseAwareClaude(spawn, () => ({ drive: drive, root: root })), timing }, { rootId: root, runId, allowWeb: false }, fakeScripted(drive))({ taken: admitted.manifest, deferred: [] });
       } catch {
         // Expected to throw
       }

@@ -153,7 +153,7 @@ async function expectLeavesForNextRun(wire: DriveV3): Promise<void> {
   if (!before) throw new Error('Missing exhaustion baseline.');
   const files = await wire.drive.listAll(wire.folderId);
   const last = files.find((f) => f.name === 'last-run.json');
-  expect.soft(last).toBeDefined();
+  expect.soft(last, 'exhaustion writes no new report row').toEqual(before.files.find((f) => f.name === 'last-run.json'));
   const report = JSON.parse(last ? await wire.drive.readText(last.id) : '{"run":{"report":{"filed":[],"setAside":[]}}}') as {
     run: { report: { filed: unknown[]; setAside: unknown[] } };
   };
@@ -172,12 +172,10 @@ async function expectLeavesForNextRun(wire: DriveV3): Promise<void> {
   }
   expect.soft(files.filter((f) => !wire.drive.pathOf(f.id, wire.folderId).startsWith('.bower/')))
     .toEqual(before.files.filter((f) => !wire.drive.pathOf(f.id, wire.folderId).startsWith('.bower/')));
-  const dispositions = files.find((f) => f.name === 'dispositions.json');
-  const waiting = JSON.parse(dispositions ? await wire.drive.readText(dispositions.id) : '{"items":[]}') as {
-    items: Array<{ fileId: string; disposition: string }>;
-  };
-  for (const source of wire.manifest?.piles.flatMap((pile) => pile.items.filter((item) => item.name !== PILE_NOTE)) ?? []) {
-    expect.soft(waiting.items.find((item) => item.fileId === source.fileId)?.disposition).toBe('waiting');
+  expect.soft(wire.statuses.at(-1)?.phase, 'waiting is a completed run with untouched inbox work').toBe('done');
+  for (const source of wire.manifest?.piles.flatMap((pile) => pile.items) ?? []) {
+    expect.soft(wire.drive.pathOf(source.fileId, wire.folderId), 'waiting source stays in the inbox').toMatch(/^Inbox\//);
+    expect.soft(await wire.drive.evidence(source.fileId)).toEqual(before.evidence[source.fileId]);
   }
   const lines = vi.mocked(console.log).mock.calls.slice(before.logs).map((args) => args.map(String).join(' '))
     .filter((line) => /exhaust|next run|left.*inbox|wait/i.test(line) && !line.startsWith('timing:'));

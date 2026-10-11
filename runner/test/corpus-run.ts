@@ -263,7 +263,8 @@ export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, 
   const file = join(dir, 'event.json');
   await writeFile(file, JSON.stringify({ action: 'bower-tidy', client_payload: { run_id: runId, attempt: 1, ticket: TICKET, scope, allow_web: c.allowWeb } }));
   const env = claude ? { BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' } : {};
-  const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env, ...more }, { fetch: around ? around(wire.fetch) : wire.fetch, ...(claude ? { claude: (call: ClaudeCall) => claude(Object.assign(call, { fixture: { drive, root, admission: admitted.manifest } })) } : {}), ...(pacing ? { pacing } : {}) });
+  const model = claude ? phaseAwareClaude(claude, () => ({ drive, root, admission: admitted.manifest })) : undefined;
+  const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env, ...more }, { fetch: around ? around(wire.fetch) : wire.fetch, ...(model ? { claude: (call: ClaudeCall) => model(Object.assign(call, { fixture: { drive, root, admission: admitted.manifest } })) } : {}), ...(pacing ? { pacing } : {}) });
   const { after, props: kept, pathsById } = await snapshot(drive, root);
   const lastRun: unknown = after[SYSTEM.lastRun] ? JSON.parse(after[SYSTEM.lastRun] ?? 'null') : null;
   return { after, props: kept, pathsById, lastRun, code, drive, root, requests, requestAction, wire,
@@ -282,9 +283,10 @@ export async function redispatchCase(c: LoadedCase, previous: CaseRun, attempt: 
   await writeFile(file, JSON.stringify({ action: 'bower-tidy', client_payload: { run_id: dispatch.runId, attempt, ticket: TICKET, scope: dispatch.scope, allow_web: c.allowWeb } }));
   const claude = options.claude;
   const env = claude ? { BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' } : {};
+  const model = claude ? phaseAwareClaude(claude, () => ({ drive: previous.drive, root: previous.root, admission: dispatch.admission })) : undefined;
   const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env }, {
     fetch: options.around ? options.around(wire.fetch) : wire.fetch,
-    ...(claude ? { claude: (call: ClaudeCall) => claude(Object.assign(call, { fixture: { drive: previous.drive, root: previous.root, admission: dispatch.admission } })) } : {}), ...(options.pacing ? { pacing: options.pacing } : {}),
+    ...(model ? { claude: (call: ClaudeCall) => model(Object.assign(call, { fixture: { drive: previous.drive, root: previous.root, admission: dispatch.admission } })) } : {}), ...(options.pacing ? { pacing: options.pacing } : {}),
   });
   const observed = await snapshot(previous.drive, previous.root);
   return { ...observed, code, lastRun: JSON.parse(observed.after[SYSTEM.lastRun] ?? 'null') as unknown,

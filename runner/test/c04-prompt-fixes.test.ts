@@ -3,6 +3,7 @@
  * must be in its sources, a raw file name is replaced by a plain one, the kinds table describes an area and names no
  * ready-made folder, and the offer-and-flat rubric accepts the photo ask and any money area. No live call.
  */
+import { phaseAwareClaude } from './b1-planning-support';
 import { readdirSync, readFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -42,13 +43,14 @@ function reply(id: Id, over: Overrides = {}): unknown {
   };
 }
 
+/** The array observes execution validation; the helper separately answers selection. */
 function answering(replies: Array<(id: Id) => unknown>, calls: ClaudeCall[] = []): ClaudeSpawn {
-  return async (call) => {
-    calls.push(call);
+  return phaseAwareClaude(async (call, _step, attempt, phase) => {
+    if (phase === 'execution') calls.push(call);
     const ids = new Map(contextOf(call.input).piles.flatMap((p) => p.things).map((t) => [t.name, t.fileId]));
-    const make = replies[Math.min(calls.length, replies.length) - 1] ?? ((): unknown => '');
+    const make = replies[phase === 'selection' ? replies.length - 1 : Math.min(attempt, replies.length - 1)] ?? ((): unknown => '');
     return { code: 0, stderr: '', cut: null, stdout: envelope(make((name) => ids.get(name) ?? `no ${name}`)) };
-  };
+  });
 }
 
 describe('c04 prompt fixes (TL-P4-08 addendum 5)', () => {
