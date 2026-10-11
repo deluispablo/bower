@@ -1,7 +1,6 @@
 /** Versioned declaration reads only; execution keeps its existing manifest writer. */
-import { typeRowOk, typeTableOk, TECHNICAL_PROPERTIES } from '../../src/data/contracts/note-format';
-import { BowerError, type TypeRow, type TypeTable } from '../../src/data/contracts/types';
-export { typeTableOk, propertyValuesOk } from '../../src/data/contracts/note-format';
+import { typeRowOk } from '../../src/data/contracts/note-format';
+import { type TypeRow, type TypeTable } from '../../src/data/contracts/types';
 
 /** TL-P4-38's eight ordered seed classifications; later planning supplies the grounded destinations. */
 function seedTable(): TypeTable {
@@ -28,26 +27,4 @@ export function readTypeTable(text: string | null): { table: TypeTable; writeAll
     seen.add(row.id); return true;
   });
   return { table: { v: 1, rows }, writeAllowed: true };
-}
-export function insertTypeRow(table: TypeTable, row: TypeRow): TypeTable {
-  if (!typeTableOk(table) || !typeRowOk(row) || table.rows.some((old) => old.id === row.id)) throw new BowerError('conflict', 'Bower could not add that type.');
-  const index = table.rows.findIndex((old) => ['other-project-material', 'other-area-material'].includes(old.id));
-  const rows = structuredClone(table.rows);
-  rows.splice(index < 0 ? rows.length : index, 0, structuredClone(row));
-  return { v: 1, rows };
-}
-/** Semantic matching supplies ids; stored row order alone breaks ties. */
-export function firstMatchingRow(rows: readonly TypeRow[], matchingIds: readonly string[]): TypeRow | null {
-  return rows.find((row) => matchingIds.includes(row.id)) ?? null;
-}
-/** Documents supply facts, never authority to choose columns. */
-export function requestTableColumn(row: TypeRow, key: string, origin: unknown): { row: TypeRow; replaced: string | null } | null {
-  if (!typeRowOk(row) || !Object.hasOwn(row.properties, key) || (TECHNICAL_PROPERTIES as readonly string[]).includes(key)
-    || !origin || typeof origin !== 'object' || !('kind' in origin) || origin.kind !== 'words'
-    || !('recordId' in origin) || typeof origin.recordId !== 'string' || !origin.recordId.trim()) return null;
-  const next = structuredClone(row);
-  if (next.table.includes(key)) return { row: next, replaced: null };
-  const replaced = next.table.length === 4 ? next.table.pop() ?? null : null;
-  next.table.push(key);
-  return { row: next, replaced };
 }
