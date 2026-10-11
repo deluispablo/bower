@@ -4,10 +4,12 @@ import { appendFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, vi } from 'vitest';
+import type { FakeDrive } from '../../src/data/drive/fake-drive';
 import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
 import { PILE_NOTE } from '../../src/data/piles';
+import { checkCreationName } from '../../src/data/contracts/tree';
 import { parseNote } from '../../src/data/contracts/note-format';
 import { SYSTEM, isHidden, type RetrievalFile } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
@@ -35,6 +37,65 @@ export interface Selection { items: Item[]; asks: unknown[] }
 export interface Frame { call: ClaudeCall; value: Record<string, unknown>; events: Observation[] }
 export interface Traffic { method: string; url: URL; range: string | null; sent: number; got: number }
 export type Base = Awaited<ReturnType<typeof setup>>;
+
+/** Fixture data travels outside the model input and is never charged as production traffic. */
+export interface PlanningFixture { drive: FakeDrive; root: string; admission?: AdmissionManifest | null }
+
+/** Alternate semantic phases; validation retries keep their phase and execution-attempt index. */
+export function phaseAwareClaude(
+  execution: (call: ClaudeCall, step: number, attempt: number, phase: 'selection' | 'execution') => ClaudeExit | Promise<ClaudeExit>,
+  fixture: (call: ClaudeCall) => PlanningFixture,
+): ClaudeSpawn {
+  let selection = false; let step = -1; let attempt = 0;
+  let admissionSeen: AdmissionManifest | undefined; let selected: ClaudeExit | undefined;
+  let cwd: string | undefined;
+  return async (call) => {
+    const { drive, root, admission } = fixture(call);
+    if (!admission) throw new Error('A selection fixture needs its admitted sources.');
+    if (admissionSeen !== admission || cwd !== call.cwd) { admissionSeen = admission; cwd = call.cwd; selection = false; selected = undefined; }
+    const retry = /^Your reply was refused:/m.test(call.input);
+    if (!retry) { selection = !selection; attempt = 0; if (selection) step++; }
+    else if (!selection) attempt++;
+    if (selection && retry && selected) return selected;
+    const exit = await execution(call, step, attempt, selection ? 'selection' : 'execution');
+    if (!selection) return exit;
+    const files = await drive.listAll(root);
+    const paths = new Map(files.map((f) => [drive.pathOf(f.id, root), f]));
+    let envelope: Record<string, unknown> = {}; let intent: Record<string, unknown> = {};
+    try {
+      envelope = JSON.parse(exit.stdout) as Record<string, unknown>;
+      intent = JSON.parse(String(envelope.result)) as Record<string, unknown>;
+    } catch { /* Deliberately malformed execution fixtures still get a valid selection. */ }
+    const rows = (key: string): Record<string, unknown>[] => Array.isArray(intent[key])
+      ? (intent[key] as unknown[]).filter((v): v is Record<string, unknown> => !!v && typeof v === 'object') : [];
+    const placed = [...rows('things'), ...rows('notes'), ...rows('asks')];
+    const used = new Set(placed.flatMap((r) => [r.fileId, r.pileId]));
+    if (Array.isArray(intent.bin)) intent.bin.forEach((id) => used.add(id));
+    const items = admission.piles.flatMap((pile) => {
+      const sources = pile.items.filter((i) => i.name !== PILE_NOTE);
+      return (sources.length ? sources.map((i) => i.fileId) : [pile.pileId]).filter((id) => intent.kind !== 'tidy-intent' || used.has(id)).map((itemId): Item => {
+        const row = placed.find((r) => r.fileId === itemId || r.pileId === itemId);
+        const path = typeof row?.to === 'string' ? row.to : 'Resources';
+        const existing = paths.get(path);
+        const parent = paths.get(path.slice(0, path.lastIndexOf('/')));
+        const name = path.split('/').at(-1) ?? '';
+        let validName = !!name && name.trim() === name && !/\p{C}/u.test(name);
+        try { checkCreationName(name, 'folder'); } catch { validName = false; }
+        const newArea = path.split('/').length === 2 && path.startsWith('Areas/');
+        const destination = existing?.folder && !/^(Inbox|\.bower)(\/|$)/.test(path) ? existing.id
+          : validName && (!newArea || typeof row?.responsibility === 'string' || typeof row?.basis === 'string') && parent?.folder && !/^(Inbox|\.bower)(\/|$)/.test(path)
+            ? { parentId: parent.id, name }
+            : paths.get('Resources')?.id ?? '';
+        const wants = [...new Set([...rows('lines').filter((r) => r.cites === itemId).map((r) => r.note), row?.basis]
+          .flatMap((path) => typeof path === 'string' && paths.get(path) && !paths.get(path)?.folder ? [paths.get(path)?.id ?? ''] : []))];
+        return { itemId, kind: 'unknown', destination, wants };
+      });
+    });
+    selected = { code: 0, stderr: '', cut: null, stdout: JSON.stringify({ ...envelope, type: 'result', subtype: 'success',
+      is_error: false, result: JSON.stringify({ items, asks: [] }) }) };
+    return selected;
+  };
+}
 
 export async function setup(options: {
   fixture?: string; folder?: Record<string, string>; inbox?: Array<{ line: string; files: string[] }>;

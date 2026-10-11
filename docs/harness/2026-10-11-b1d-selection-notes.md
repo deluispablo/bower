@@ -423,3 +423,85 @@ Final verification: src/e2e-port.test.ts:37 timed out after its server could not
 127.0.0.1 (EPERM), with the associated unhandled listen error; this is the session's expected sandbox limitation. No other src failure.
 `git diff --check` passes. Final tree changes only this notes appendix. No git-write command,
 network call, node_modules replacement, repository test log/cache or production change was made.
+
+
+## Fixture repair (phase-aware transports)
+
+Owner-authorized mechanical follow-up to Implementation / Required allocations and contract conflicts,
+item 3. Tests and the B1d-owned corpus transport only; no production or assertion changes.
+Coordinator owns commits. No network, git-write command or dependency changes.
+
+tests changed: runner/test/b1-planning-support.ts: shared phaseAwareClaude adapter emits fixture-bound closed selection, then the original execution envelope.
+tests changed: runner/test/claude-provider.test.ts: recordedClaude and every inline execution transport reuse the adapter; retries retain execution attempt order.
+tests changed: runner/test/corpus-run.ts: replySequence reuses the adapter; main/redispatch attach their actual seeded fixture outside model input.
+tests changed: docs/harness/2026-10-11-b1d-selection-notes.md: fixture repair scope, verification and remaining failure inventory.
+removed: none.
+
+Selection uses actual admission ids and exact fixture path-to-id lookups. Words-only sources use their
+pile ids. Execution source ids, destinations and cited note ids become closed selection rows with
+unknown kind and asks: []; malformed execution fixtures receive a valid fixture-derived selection first.
+Invalid execution targets stay in the unchanged execution reply. Existing destinations become folder
+ids; one new child uses its existing parent id and name. Selection retries repeat the frozen selection;
+execution retries preserve the original execution sequence. Corrected inline retry fixtures supply their
+final destination for selection and keep their original first execution refusal. Result usage remains
+that of each fixture, so the sweep's two-call timing assertions remain unchanged.
+
+The existing provider scratch-directory boundary and admission identity identify each run step.
+Case reply sequences advance once per step, never per semantic call or validation retry. Fixture listing
+uses FakeDrive directly, outside main's measured HTTP wrapper. No extra production reads are introduced.
+All existing expect/expect.* assertion expressions match HEAD after removing the added transport fixture arguments.
+
+Verification:
+`pnpm -C runner exec vitest run test/claude-provider.test.ts test/corpus-driver.test.ts test/second-brain-method.test.ts test/q1-continuation.test.ts test/q1c-live.test.ts --maxWorkers=2 --reporter=default --cache=false`
+
+Final sweep: 5 files, 98 tests; 30 fail, 68 pass. Log: `/tmp/b1d-fixture-sweep.log`.
+All remaining failures trace to missing B1d behaviour: the current one-step provider rejects the valid
+closed selection and repeats it as its execution retry, so no execution call or plan follows. Downstream
+assertions see missing writes/reports/questions; the pair-answer driver stops because that missing plan
+published no question. Other unchanged Q1/method mocks still expose the missing second semantic call.
+There are no fixture-binding, import, TypeError, timeout or unhandled-error failures. The extra failures
+relative to the execution-only sweep are the old provider's refusal of a valid selection, not relaxed
+assertions or a new production defect.
+
+OS-temp adapter smoke: 1 pass. It checks actual seeded ids/destination, closed selection shape, repeated
+selection on retry, exact original execution replies and their retry indices, a new admission step, and a new scratch-directory run.
+Source/config/log: `/tmp/b1d-fixture-smoke.test.ts`, `/tmp/b1d-fixture-smoke.config.mjs`,
+`/tmp/b1d-fixture-smoke.log`. Runner TypeScript and ESLint on the three modified files pass:
+`/tmp/b1d-fixture-types.log`, `/tmp/b1d-fixture-lint.log`. `git diff --check` passes.
+Full pnpm check/e2e remain outside this fixture-only red repair: those commands write repository results;
+the owner explicitly requires that tests never write into the repository. No screen or corpus seed changed.
+The packet's offline context-engineering, plan-then-execute and prompt-cache citations were reused;
+no independent network verification. Production allocations/conflicts in Implementation items 1–2 remain.
+
+Remaining sweep inventory (exact test names; failure details remain in the OS-temp log):
+
+- test/claude-provider.test.ts > the Claude provider > a new Area with no cited rule or note is refused and retried once
+- test/claude-provider.test.ts > the Claude provider > a new Area with a responsibility is made and the report says why
+- test/claude-provider.test.ts > the Claude provider > a responsibility does not open a new Project
+- test/claude-provider.test.ts > the Claude provider > a rule basis is a whole rules line, never part of one or the cut marker
+- test/claude-provider.test.ts > the Claude provider > a new subfolder of an existing Area is not reported as a new area
+- test/claude-provider.test.ts > the Claude provider > a thing with text and no note or citing line is refused and retried once
+- test/claude-provider.test.ts > the Claude provider > a thing cited by a Timeline line on an existing note needs no note
+- test/claude-provider.test.ts > the Claude provider > a photo with no text needs no note
+- test/claude-provider.test.ts > the Claude provider > a second refusal ends the run honestly
+- test/claude-provider.test.ts > the Claude provider > a recorded Claude reply becomes operations the spine validates
+- test/claude-provider.test.ts > the Claude provider > the runner logs one timing line per run with the Claude reply's numbers
+- test/claude-provider.test.ts > the Claude provider contract (TL-P4-01 P4-2) > the Claude provider passes the scripted provider contract fixtures
+- test/claude-provider.test.ts > the Claude provider contract (TL-P4-01 P4-2) > a write the two runner lists judged differently is judged once by RUNNER_WRITES
+- test/claude-provider.test.ts > the Claude provider contract (TL-P4-01 P4-2) > the runner computes ids and digests, never the model
+- test/claude-provider.test.ts > the Claude provider writes only what it proposed (P4-2 review I1) > a Claude run writes no hub line or demo extra it did not propose
+- test/corpus-driver.test.ts > a case's between step runs between two runs
+- test/corpus-driver.test.ts > multi-press corpus > answers a pair question through the answer path between presses
+- test/corpus-driver.test.ts > multi-press corpus > keeps both notes and closes the question after Keep mine
+- test/corpus-driver.test.ts > multi-press corpus > checks the first press independently of the final report
+- test/corpus-driver.test.ts > multi-press corpus > empty expectations in the final score > refuses empty questionSubjects
+- test/corpus-driver.test.ts > multi-press corpus > empty expectations in the per-run score > refuses empty questionSubjects
+- test/corpus-driver.test.ts > multi-press corpus > reports a settled replay without writing another request
+- test/q1-continuation.test.ts > Q1a stored answers through production entry points > Q1a q1-options-exact-action: consent resolves stored folder id despite duplicate labels and rename
+- test/q1-continuation.test.ts > Q1a stored answers through production entry points > Q1a q1-continuation-budget-meter: typed waiting and replay do zero admission reads with ordinary model usage
+- test/q1-continuation.test.ts > Q1a fix round 1 through production entry points > Q1a fix 1.5: missing or outside-root stored option folders cannot authorize alternative filing
+- test/q1-continuation.test.ts > Q1a fix round 1 through production entry points > Q1a fix 1.7: pending text from another pile never reaches this subject planner without provenance
+- test/q1c-live.test.ts > Q1c durable publication through main and createApp().request > Q1c fix 1: a crash after manifest persistence recovers questions with stored option actions intact
+- test/q1c-live.test.ts > Q1c durable publication through main and createApp().request > Q1c q1-live-question-before-clear-effects-end: durable publication
+- test/q1c-live.test.ts > Q1c durable publication through main and createApp().request > Q1c q1-live-question-before-clear-effects-end: same-run recovery republishes without a second model reply
+- test/second-brain-method.test.ts > B3b hot: evidence-only method verdict covers hidden unarchived refresh
