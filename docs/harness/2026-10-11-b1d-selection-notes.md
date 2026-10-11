@@ -3555,3 +3555,81 @@ cache. This affects cache reuse only; no fingerprint code was added or changed.
 Left out: test repairs pending reconciliation of the 18 conflicts; runner-owned
 check and capabilities e2e. Risk: full runner compatibility is not green, and
 cut-context fingerprint cache misses remain the accepted v1 limit.
+
+## Round 7 red repair (TL-P4-51)
+
+Tests-only reconciliation of the 18 full-suite contradictions above, under
+TL-P4-41 addendum 24. A request pin nominates a candidate; the scripted selection
+must name the target before execution can write or consume that request. A
+request with an omitted target stays unconsumed in the inbox.
+
+Scope: three runner test files, this appended note and `.codex-commits.json`.
+The two local reply helpers now return explicit selections for the no-line
+settlement and persisted-retry cases. They reuse the real selection context's
+source, candidate and folder ids and the existing phase-aware corpus driver.
+The bounded-read reply selects before checking execution's `context.notes`,
+so its conditional line no longer silently produces a target-free selection.
+Renamed targets are selected from their current candidate rows; the original
+assertions still require the persisted target/source ids and exact citations.
+No production code, `runner/test/b1d-r7.test.ts`, fixtures, configuration,
+callers outside these tests, exports, dependencies or shared helper changed.
+No user data or production write path changes.
+
+tests changed: runner/test/c05-bounded-reads.test.ts — golden: 50 archived requests and 25 kept runs cost no historical media: select Garden plot in the no-line reply, including its old-format control, so settlement/archive is authorized; every read bound and historical-media assertion remains unchanged.
+tests changed: runner/test/c05-bounded-reads.test.ts — pending: a clash moves by run id and retries only its bound evidence: select both named targets before the clash, select the renamed bound target on retry, and select the completed target in the recovery control; retain exact bytes, ids, conflict outcome, five-file chain and read bounds.
+tests changed: runner/test/c05-bounded-reads.test.ts — fix 2 control: a waiting retry whose pending relocation lands completes once: the shared reply now selects the target for initial append and no-line retry; preserve pointer, relocation, consent, single-completion and archive assertions.
+tests changed: runner/test/c05-bounded-reads.test.ts — fix 2: a waiting retry whose pending relocation failed completes once: select the target through the shared reply so the failed-relocation recovery still exercises the original byte and id assertions.
+tests changed: runner/test/c05-bounded-reads.test.ts — fix 2: a waiting retry interrupted after its pointer and before its append appends once: select the target through the shared reply so the interruption reaches the append; retain exactly-once completion and pointer-before-append assertions.
+tests changed: runner/test/c05-bounded-reads.test.ts — fix 1 control: a waiting retry whose archive lands completes once: select the target for initial append and no-line retry through the shared reply; keep the applied archive outcome and no-second-append checks.
+tests changed: runner/test/c05-bounded-reads.test.ts — fix 1: a waiting retry whose archive move failed completes once: select the target through the shared reply so archive interruption and recovery still exercise persisted completion with unchanged bytes and ids.
+tests changed: runner/test/c05-bounded-reads.test.ts — horizon: past 20 runs uses listing age and TOO_OLD_WHY without a chain walk: select Garden plot for the positive append and no-line horizon replies; preserve the 20-run horizon, signed reasons, zero historical reads and no-edit assertions.
+tests changed: runner/test/c05-person-notes.test.ts — round 3 1: missing Timeline settles and reports without a model line: explicitly select the named note while execution still offers no line; preserve its exact bytes, linked reason, archive dependency and zero completions.
+tests changed: runner/test/c05-person-notes.test.ts — round 3 1: unreadable Timeline settles and reports without a model line: explicitly select the named note while execution still offers no line; preserve its exact bytes, linked reason, archive dependency and zero completions.
+tests changed: runner/test/c05-person-notes.test.ts — round 3 6: retry cites the bound source id after its rename: select Garden plot on the no-line retry; preserve the original source id, renamed citation and one appended line.
+tests changed: runner/test/c05-person-notes.test.ts — round 4 1: settlement survives recovery and retention: select Garden plot alongside the recovery source so the interrupted archive can settle; execution still offers no line, and retention and no-second-append assertions stay unchanged.
+tests changed: runner/test/c05-person-notes.test.ts — round 4 2: pending retries keep target and source ids: select the original target for the no-line control and Beds after its rename, plus the replacement when that adversarial reply uses it; preserve bound consent ids, replacement bytes, completion and archive checks.
+tests changed: runner/test/c05-person-notes.test.ts — round 5 2: a retained completion never resolves a renamed target by title again: explicitly select the completed target in recovery and both Beds and the replacement in the rename case; preserve request-wide completion, exact bytes and the absence of edit effects.
+tests changed: runner/test/c05-person-notes.test.ts — round 5 3: a request past retention is left as written and archived without an append: select Beds and the replacement in the retained-binding positive control; leave the expiry case and all retention, id, byte and no-edit assertions unchanged.
+tests changed: runner/test/c05-person-notes.test.ts — round 5 4: one line and one nothing-found row settle two named targets: select both Garden plot and Shed roof although execution offers only Garden plot's line; preserve both context ids, one edit/completion, the other linked reason and archive bytes.
+tests changed: runner/test/c05-person-notes.test.ts — round 5 5: only a clashed target retries on bound ids before archive: select both request targets on the no-line retry, including the already-completed sibling; preserve only one retry edit, exact consent/source/target ids, sibling bytes and final archive outcome.
+tests changed: runner/test/corpus-driver.test.ts — reports a settled replay without writing another request (renamed to reports an unselected replay without consuming or writing another request): keep the target-free replies and assert the request remains in changes with its id/text and byte-identical replay, absent from archive; preserve one request record, personal-note bytes, dispatch identity and replay outcome.
+
+### Verification
+
+The full runner suite reproduced all 18 contradictions before repair:
+695 passed, 18 failed, 713 total across 56 files. The first repair run reached
+712 passed and one failed. Its two-target retry selected only the clashed note;
+selecting the already-completed sibling as well admits the whole request under
+addendum 24 without granting another append. The final complete run passed
+**713 tests across all 56 files**, including the untouched round 7 tests.
+No bounds, fences, bytes, ids, thresholds or retry assertions were weakened.
+Only the unselected replay's consumption expectations change to the ruling.
+
+| Check | Result | Log |
+| --- | --- | --- |
+| Full runner baseline, maxWorkers=2 | 695 passed; 18 failed | `/tmp/b1d-r7-repair-red.log` |
+| Full runner first repair, maxWorkers=2 | 712 passed; 1 failed | `/tmp/b1d-r7-repair-green-1.log` |
+| Full runner final repair, maxWorkers=2 | 713 passed; 56 files passed | `/tmp/b1d-r7-repair-green.log` |
+| Runner TypeScript, no emit | PASS | `/tmp/b1d-r7-repair-types.log` |
+| ESLint all three touched test files | PASS | `/tmp/b1d-r7-repair-eslint.log` |
+| `git diff --check` | PASS | Read-only git command |
+
+```sh
+NODE_OPTIONS='--require=/tmp/b1d-r7-test-output.cjs' pnpm -C runner exec vitest run --maxWorkers=2 --reporter=default --cache=false --configLoader=native > /tmp/b1d-r7-repair-green.log 2>&1
+pnpm -C runner exec tsc --noEmit -p . > /tmp/b1d-r7-repair-types.log 2>&1
+pnpm -C runner exec eslint test/c05-bounded-reads.test.ts test/c05-person-notes.test.ts test/corpus-driver.test.ts > /tmp/b1d-r7-repair-eslint.log 2>&1
+```
+
+All logs and scratch output stay in OS temp. The existing temp preload redirects
+CPU reports there; default-only reporting, disabled cache and native config
+loading avoid repository output. No writing git command, node_modules replacement
+or symlink was used. `.codex-commits.json` declares one tests commit and one
+notes-only commit; the runner commits the diff.
+
+Research reused offline: the packet's [plan then execute](https://arxiv.org/html/2506.08837v1)
+and [curated context and just-in-time retrieval](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
+references and the existing explicit-selection corpus test pattern. No network
+or independent source reverification. No second mechanism was added.
+
+Left out: runner-owned commits, pnpm check and capabilities e2e. Production is
+unchanged; the accepted cut-context fingerprint cache-miss limit remains.
