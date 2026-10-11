@@ -1327,8 +1327,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const timing = setup.timing ?? new RunTiming();
     const count = itemCount + took.taken.journal.length;
     // The runner builds the manifest, every id, hash and digest its own, exactly as the scripted provider does.
-    const plannedWith = async (filing: Filing, held: ReadonlySet<string> | undefined, own: string | undefined, by: string): Promise<RunManifest> => {
-      const t = took.taken;
+    const plannedWith = async (filing: Filing, held: ReadonlySet<string> | undefined, own: string | undefined, by: string, journal = took.taken.journal): Promise<RunManifest> => {
+      const t = { ...took.taken, journal };
       const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), decisions: modelDecisions(filing), context: run.context }, undefined, held);
       const manifest: RunManifest = plan.manifest;
       const parsed = await parseRunManifestV2((await canonical(manifest)).bytes, run.rootId, RUNNER_WRITES);
@@ -1381,7 +1381,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const captureMaps = async (ids: readonly string[]): Promise<void> => {
       for (const id of new Set(ids)) {
         const note = indexed[id];
-        if (note?.type !== 'moc' || shown.suppressed?.has(note.path)) continue;
+        if (note?.type !== 'moc' || note.owner !== 'bower' || shown.suppressed?.has(note.path)) continue;
         try {
           const text = note.moc?.text ?? await read.readText(id);
           note.moc = mocSnapshot(text) ?? undefined;
@@ -1437,11 +1437,12 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     };
     const typeFile = ix.file(SYSTEM.typeTable);
     shown.types = readTypeTable(typeFile ? await read.readText(typeFile.id) : null).table.rows;
-    // Answer and request pins count only for their own source.
+    // Stored answers pin their own source; requests only nominate candidates.
     const context: SelectionContext = { itemIds: [...sources.map((s) => s.itemId), ...shownTook.taken.journal.map((j) => j.fileId)],
       kinds: shown.types.map((row) => row.id),
       candidates: Object.keys(shown.indexed), folders: folders.map((f) => ({ id: f.id, hubId: hubId(f.id) })),
-      pinned: Object.fromEntries(sources.map((s) => [s.itemId, pinsFor(s.itemId)])) };
+      pinned: Object.fromEntries(sources.map((s) => [s.itemId,
+        answers.filter((a) => a.sourceId === s.itemId || subjectKey(a.question) === s.itemId).flatMap(answerPins)])) };
     const selectionCheck = (value: unknown): ReturnType<typeof selectionOf> => {
       const result = selectionOf(value, context);
       if (!result.ok) { console.error('Selection shape or ids refused.'); return result; }
@@ -1554,7 +1555,11 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         if ([...rows('lines'), ...rows('states')].some((row) => !canEdit(row))) return null;
         return got;
       });
-      return await plannedWith(intent.filing, intent.held, shown.own, `with ${model}`);
+      // A request whose targets were not selected stays in the inbox for a later run.
+      const targets = new Set(Object.values(selection.allowedTargets).flat());
+      const journal = took.taken.journal.filter((line) =>
+        (shown.requestNotes?.[line.fileId] ?? []).every((id) => targets.has(id)));
+      return await plannedWith(intent.filing, intent.held, shown.own, `with ${model}`, journal);
     } finally { await rm(work, { recursive: true, force: true }); }
 
   };
@@ -1577,13 +1582,7 @@ export function selectionOf(value: unknown, context: SelectionContext):
   { ok: true; value: z.output<typeof SelectionShape>; allowedTargets: Record<string, string[]> } | { ok: false } {
   const parsed = SelectionShape.safeParse(value);
   if (!parsed.success) return { ok: false };
-  // Script-bound pins belong to their admitted source even when it needs no selected destination.
   const allowedTargets: Record<string, string[]> = {};
-  for (const itemId of context.itemIds) {
-    const pins = [...new Set(context.pinned[itemId] ?? [])];
-    if (pins.length > 5 || pins.some((id) => !context.candidates.includes(id))) return { ok: false };
-    if (pins.length) allowedTargets[itemId] = pins;
-  }
   const seen = new Set<string>();
   for (const item of parsed.data.items) {
     const folderId = typeof item.destination === 'string' ? item.destination : item.destination.parentId;
