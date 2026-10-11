@@ -1,9 +1,10 @@
 /** Pure internal raw-byte ownership boundary. No provider or public Sources API. */
 import { TASK_LINE } from './tasks';
 import { sha256Sync } from './hashes';
+import { TEMPLATE_REGIONS, type TemplateRegion } from './note-templates';
 export interface ByteSpan { readonly start: number; readonly end: number }
 export type MocRegion = 'moc-overview' | 'moc-figures' | 'moc-members';
-export type BowerRegion = MocRegion | 'profile';
+export type BowerRegion = MocRegion | 'profile' | TemplateRegion;
 export type Owner = 'current' | 'personal' | 'timeline' | 'bower-note';
 export type OwnershipFailure = 'unsupported-version' | 'damaged-boundary' | 'invalid-encoding';
 export interface PersonalTask {
@@ -241,7 +242,10 @@ export function parseOwnership(bytes: Uint8Array): OwnershipResult {
   if (sourceLines[close]?.text !== '---') return damaged();
   for (let i = 0; i < bytes.length; i++) if (bytes[i] === 13 && bytes[i + 1] !== 10) return damaged();
 
-  const owners: (Owner | BowerRegion)[] = [...OWNERS];
+  // Creation orders Goal/Next steps before Current state; stored appended regions remain readable.
+  const firstRegion = sourceLines.slice(close + 1).find((line) => line.text.startsWith('<!-- bower:ownership/2 begin'));
+  const owners: (Owner | BowerRegion)[] = firstRegion?.text === '<!-- bower:ownership/2 begin goal -->'
+    ? [...TEMPLATE_REGIONS, ...OWNERS] : [...OWNERS];
   const spans: Partial<Record<Owner | BowerRegion, ByteSpan>> = {};
   let next = 0;
   let active: Owner | BowerRegion | null = null;
@@ -261,6 +265,7 @@ export function parseOwnership(bytes: Uint8Array): OwnershipResult {
       if (next === owners.length && next >= OWNERS.length) {
         if (!spans['moc-overview'] && line.text === '<!-- bower:ownership/2 begin moc-overview -->') owners.push(...MOC_REGIONS);
         if (!spans.profile && line.text === '<!-- bower:ownership/2 begin profile -->') owners.push('profile');
+        if (!spans.goal && line.text === '<!-- bower:ownership/2 begin goal -->') owners.push(...TEMPLATE_REGIONS);
       }
       const owner = owners[next];
       if (owner && line.text === `<!-- bower:ownership/2 begin ${owner} -->`) {

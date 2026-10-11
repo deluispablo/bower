@@ -55,6 +55,31 @@ function framed(personal: string): string {
     + '<!-- bower:ownership/2 begin bower-note -->\n<!-- bower:ownership/2 end bower-note -->\n';
 }
 
+it('B6a templates: b6-project-next-steps-owned frames Goal and Next steps outside personal tasks', () => {
+  const control = encode(framed('- [ ] Personal task\n'));
+  expect(parseOwnership(control).status).toBe('v2');
+  expect(togglePersonalTask(control, request).kind).toBe('changed');
+  const base = framed('- [ ] Personal task\n').replace('bower_format: ownership/2', 'bower_format: ownership/2\nby: bower\ntype: project');
+  const raw = base + '<!-- bower:ownership/2 begin goal -->\n## Goal\nRepair the greenhouse.\n<!-- bower:ownership/2 end goal -->\n'
+    + '<!-- bower:ownership/2 begin next-steps -->\n## Next steps\n- [ ] Fit the stated replacement pane.\n<!-- bower:ownership/2 end next-steps -->\n';
+  const source = encode(raw);
+  const parsed = parseOwnership(source);
+  expect(parsed.status, 'Goal and Next steps must be declared Bower payloads').toBe('v2');
+  if (parsed.status !== 'v2') return;
+  const payloads = parsed.payloads as Readonly<Record<string, { start: number; end: number }>>;
+  for (const [region, text] of [['goal', '## Goal\nRepair the greenhouse.\n'],
+    ['next-steps', '## Next steps\n- [ ] Fit the stated replacement pane.\n']]) {
+    const at = payloads[region ?? ''];
+    expect(at, region).toBeDefined();
+    if (at) expect(decode(source.subarray(at.start, at.end))).toBe(text);
+  }
+  expect(parsed.tasks.map((task) => task.label)).toEqual(['Personal task']);
+  const toggled = togglePersonalTask(source, request);
+  expect(toggled.kind).toBe('changed');
+  if (toggled.kind === 'changed') expect(decode(toggled.bytes)).toBe(raw.replace('[ ] Personal task', '[x] Personal task'));
+  expect(togglePersonalTask(source, { ...request, index: 1, label: 'Fit the stated replacement pane.' })).toEqual({ kind: 'refused', reason: 'task-not-found' });
+});
+
 describe('ownership/2 raw byte authority', () => {
   it('pins the adopted grammar and every independent canonical bundle byte', () => {
     expect(hash(readFileSync(`${base}bower-protected-ownership-final.md`))).toBe('3a55bfe1d1f2b71e6e7bb2ac35f3fe9e95b9f0452f3e9fae672b84be17025120');

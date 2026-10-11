@@ -6,6 +6,7 @@ import { typeTableOk } from './note-format';
 import type { UpdatedRow } from './types';
 import { mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, profileTextOk, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
+import { TEMPLATE_REGIONS, type TemplateRegion } from './note-templates';
 
 export type Scope = { rootId: string };
 export type FileKind = 'note' | 'pdf' | 'image' | 'link' | 'doc' | 'sheet' | 'audio' | 'other';
@@ -70,6 +71,7 @@ export type AppendCompletion = { requestId: string; targetFileId: string };
 export type TimelineConsent = { requestId: string; targetFileId: string; sourceFileId: string };
 export type LeftAsWritten = { name: string; why: string; fileId?: string };
 export type Change =
+  | { kind: 'template-rewrite'; region: TemplateRegion; recordIds: string[]; previous: string; text: string }
   | { kind: 'profile-rewrite'; recordIds: string[]; previous: string; text: string }
   | { kind: 'moc-rewrite'; region: MocRegion; recordIds: string[]; previous: string; text: string }
   | { kind: 'state-rewrite'; recordIds: string[]; previous: string[]; lines: string[]; adopted?: true; release?: true; granted?: StateGrant; mark?: string }
@@ -326,7 +328,7 @@ function operation(value: unknown): value is Operation {
 }
 
 // Manifest v2 (TL-P2-20): v1 plus edit-text. Field rules shared with the author live in note-edit.ts.
-const CHANGE_ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'timeline-append', 'rules-wording', 'profile-rewrite', 'moc-rewrite'];
+const CHANGE_ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'timeline-append', 'rules-wording', 'profile-rewrite', 'moc-rewrite', 'template-rewrite'];
 const recordIds = (value: unknown): value is string[] => list(value, recordId) && unique(value);
 function editEntry(value: unknown): value is EditEntry {
   return closed(value, ['date', 'text', 'source']) && text(value.date) && text(value.text)
@@ -351,6 +353,8 @@ function stateGrant(value: unknown, ids: readonly string[]): value is StateGrant
 function change(value: unknown): value is Change {
   if (!record(value)) return false;
   switch (value.kind) {
+    case 'template-rewrite': return closed(value, ['kind', 'region', 'recordIds', 'previous', 'text']) && oneOf(value.region, TEMPLATE_REGIONS)
+      && recordIds(value.recordIds) && text(value.previous) && text(value.text) && !value.text.includes('<!-- bower:ownership');
     case 'profile-rewrite': return closed(value, ['kind', 'recordIds', 'previous', 'text'])
       && recordIds(value.recordIds) && text(value.previous) && text(value.text) && profileTextOk(value.text);
     case 'moc-rewrite': return closed(value, ['kind', 'region', 'recordIds', 'previous', 'text']) && oneOf(value.region, MOC_REGIONS)
@@ -374,7 +378,8 @@ function change(value: unknown): value is Change {
   }
 }
 /** 1+ changes, at most one of each kind, in the order state-rewrite, link-rewrite, timeline-append, rules-wording (R3-7 m4). */
-const changeOrder = (c: Change): number => c.kind === 'moc-rewrite' ? CHANGE_ORDER.length + ['moc-overview', 'moc-figures', 'moc-members'].indexOf(c.region) : CHANGE_ORDER.indexOf(c.kind);
+const changeOrder = (c: Change): number => c.kind === 'template-rewrite' ? CHANGE_ORDER.length + MOC_REGIONS.length + TEMPLATE_REGIONS.indexOf(c.region)
+  : c.kind === 'moc-rewrite' ? CHANGE_ORDER.length + MOC_REGIONS.indexOf(c.region) : CHANGE_ORDER.indexOf(c.kind);
 const canonical = (changes: Change[]): boolean => changes.length > 0
   && changes.every((item, i) => i === 0 || changeOrder(changes[i - 1] ?? item) < changeOrder(item));
 function editText(value: unknown): value is EditText {
