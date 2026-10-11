@@ -250,3 +250,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `08e5433e` | b5b-tables | none: tests only (B5b round 3 red: hidden keys spend no column place). |
 | `28a0f9bb` | b5b-tables | The stored table read keeps every declared key (a rewrite keeps them too); the cap of four applies only in the display projection, after keys that are never shown (name, modified, the technical keys) are dropped. Stored tables parse as before. |
 | `e9dd8703` | b4b-observations | The run manifest check has a plan mode (every rule except the terminal memory maintain) and a final mode (all rules, run once on the finalized manifest); an observations file may be created by a run like the type table file. Stored manifests parse as before. |
+| `c61a33ed` | b4b-observations | A note's observation origin may carry the journal's own record id (as a text answer's id), not only the narrow logical id; stored observations parse as before. |
