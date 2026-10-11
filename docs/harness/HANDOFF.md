@@ -19,7 +19,7 @@ This block is the whole current state; ACTIVE.md is the history log. A Codex suc
   - a staging smoke.
 - **Codex intensity (TL-P4-57 addendum 1, main d380d1a4; owner reset the usage on 2026-10-11).** Every run passes `--tier standard` (no Fast). Sol medium for normal work and repairs, Sol high for escalated work and closing reviews, Sol low for mechanical work; Astra high only for adversarial passes, never xhigh. Max 3 workers. A third failed attempt on the same red goes to the lead (no 4th run).
 - **STOP rule (TL-P4-61, main cafff851):** at 99% of Claude's weekly usage the lead sends STOP: start nothing new, commit partial diffs on their branches, make HANDOFF and ACTIVE exact for Codex, reply "READY <sha>". Keep both current at every step anyway.
-- Jobs running (3 of 3): B5b implementation (attempt 4, jobs/b5b-impl4.sh), B4a review P4-120 (jobs/p4-120.sh), B9 packet drafting (jobs/b9-markers-packet.sh).
+- Jobs running (2 of 3): B5b implementation (attempt 4, jobs/b5b-impl4.sh), B4a review P4-120 (jobs/p4-120.sh), one slot free.
 - Finished and waiting for slots: B6b reds (done), B7 packet (b7-tags 06e89b5c) and B8 packet (b8-log 6ae4813c): review each, merge into claude/p3, add the features.json entry, then their reds.
 - When a job ends, read the result's card. A check-failed status on a red is expected; on a fix, read the notes' newest round and the check log.
 - Pending designer checks: none yet (B5b needs one when built).
@@ -48,7 +48,7 @@ This block is the whole current state; ACTIVE.md is the history log. A Codex suc
 | b6b-fit-create-ask | b6b-fit-create-ask, /private/tmp/bower-b6b-fit-create-ask | 5d0313a3 | red done (attempt 1, six reds fail on findings, controls pass; worktree commits 8da71c0f, 5d0313a3) | Next: the implementation after B5b/B5c release scripted.ts and claude.ts (B1d is integrated); compatibility rows; gates; review. | TL-P4-47; lead GO for red-first |
 | b7-tags | b7-tags, /private/tmp/bower-b7-tags | 01839270 | red done (attempt 2; 15 rows fail, one already passes; commits a47cf6e8, 01839270); open seams in the notes: the automatic-candidate declaration and the complete generation-route matrix | Waits for B4a, B5b and B5c where files overlap; then the implementation (Sol high). | TL-P4-49 |
 | b8-log | b8-log, /private/tmp/bower-b8-log | a397198f | red done (attempt 2; 19 of 20 named reds fail, b8-done-redispatch-noop already passes; commits 0966ba19, a397198f); the settled B7 decision coverage is incomplete | Waits for B4a/B5b where files overlap; then the implementation. | TL-P4-50 |
-| b9-markers | b9-markers, /private/tmp/bower-b9-markers | claude/p3 | packet drafting by Codex (Sol medium, attempt 1; /private/tmp/claude-501/-Users-deluisp-Projects-bower-app/19ca090d-5e3d-4a2f-899c-8f2af3d7d836/scratchpad/jobs/b9-markers-packet.sh; result /tmp/codex-run/b9-markers-1.result) | Next: review the packet, merge into claude/p3, add the features.json entry (task p4-b9), then the red session. | TL-P4-50 (B9) |
+| b9-markers | b9-markers, /private/tmp/bower-b9-markers | 451b6605 (+ merge) | packet done and merged into claude/p3, entry added (58a705bd). Two questions to the lead: bundle the three stages into one entry, and allocate H1/H2 corpus support files | Waits for the lead's answer; then the red session (Sol high, standard tier). Overlaps B4a and B5b/B5c files. | TL-P4-50 (B9) |
 
 **Queue, in order.** (The lead's order for free slots: B6b red, then B7, B8 and B9 reds; B5c's red once B5b's red is committed; B4b and B4c after B4a settles.)
 1. B1d close, then B4a.
