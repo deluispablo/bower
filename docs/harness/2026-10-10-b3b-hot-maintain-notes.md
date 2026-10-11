@@ -595,3 +595,54 @@ their own throwaway git operations in OS-temp repositories; no git command issue
 writes to this worktree. Only `runner/src/hot.ts`, `runner/src/index.ts`, `runner/src/main.ts` and
 this notes file differ from the first implementation. The red owner owns the frozen re-pins;
 the coordinator owns commits and the shared change-list record.
+
+### Addendum 5 re-pins
+
+2026-10-11, red-owning session, TL-P4-51 sweep on production HEAD `9cad8b47`.
+Only the authorized runner assertions, raw golden and these notes are changed.
+Offline source: Addendum 5's Frozen measurements table and the existing Vitest exact
+request assertions; no network research or request was made.
+
+tests changed: runner/test/drive-calls-golden.test.ts: cold totals 96/107, reads 25/28, apply 55/54; ceiling 96. Each cold fixture adds questions media and hot name-check listing, live .bower fence and multipart create. Apply time and whole-run bounds stay unchanged.
+tests changed: runner/test/timing-counts.test.ts: cold total 96, reads 25 and apply 55 for the same four named calls; formatting, region and byte controls unchanged.
+tests changed: runner/test/c05-bounded-reads.test.ts: shared cold planning golden 25 for one questions.json media read; archive/history assertions, including the former :670, unchanged.
+tests changed: runner/test/reads-report.test.ts: measured cold 2,880 ms and retained 3,330 ms; add only the 150 ms questions media delta to existing strict < and inclusive <= bounds. Cold bound remains 2,975 ms (95 ms headroom); retained bound is 3,330 ms.
+tests changed: runner/test/fixtures/model-input-c04.raw.golden.txt: only reorder top-level keys to index, runId, admission, piles, notes, folders; all field bytes and preceding instructions preserved.
+tests changed: runner/test/model-input-fingerprint.test.ts: comment cites TL-P4-42 addendum 5's accepted key reorder; assertions unchanged.
+tests changed: runner/test/b1-index.test.ts: warm totals 42/43 are pre-hot 39/40 plus hot prompt media, live metadata fence and one PATCH. Assert those exact three requests and the single existing baseline questions media read (no duplicate); ordinary-note Range and no-metadata controls unchanged.
+
+The b1a-contract discovery assertion formerly at :825 is unchanged. Production and
+node_modules are untouched. No init, git-writing command, commit, install, symlink,
+pnpm check or screen e2e was run: this round authorizes runner-only tests and forbids
+repository outputs. The coordinator owns commits.
+
+Red: the six targeted runner files reproduced all ten frozen failing tests (50 pass),
+including B1c's four soft count cells; `/tmp/b3b-a5-repin-red.log`.
+Green command: `pnpm -C runner exec vitest run --config /tmp/b3b-a5-runner.config.mjs --maxWorkers=2`.
+The OS-temp config imports the unchanged runner config and moves cache and JSON
+report output to OS temp. Log: `/tmp/b3b-a5-repin-green.log`.
+
+Final full runner result: **646 pass / 1 fail, 647 total, 49 files**.
+Log: `/tmp/b3b-a5-repin-final.log`; JSON: `/tmp/b3b-a5-runner.json`.
+All authorized cold and warm count assertions, timing phase maps, raw fingerprint,
+reads bounds, B1a discovery and C05 archive controls pass. Raw golden SHA-256 is
+`e1e7c6c36b37d7d361a8cac042ea21bbe3fa4296d8a894c65560fc4f28200f2a`;
+read-only comparison to HEAD verifies identical instructions and JSON field values.
+
+TL-P4-51 contradiction (complete suite run before stopping):
+- `runner/test/drive-calls-golden.test.ts:94` (former :90), retained-history test's
+  cold C04 whole-run bound: actual **12,770 ms**, expected **<12,624 ms**
+  (`10520 * 1.2`). This unchanged assertion is outside the authorized re-pins.
+  Its following retained whole-run assertion at :95 is masked by this failure.
+  No bound, production implementation or unrelated assertion was changed.
+
+The first post-edit full run had 645 pass / 2 fail. Its extra failure was an overly
+strict new questions assertion: the warm fixture already has one baseline questions
+media request during maintain. The final assertion pins that exact single request
+(no duplicate), alongside the prompt hot media, live hot fence and single hot PATCH.
+Thus "no additional questions media" means no increment over the pre-hot baseline,
+not zero total baseline requests. The warm 42/43 counts pass in all four cells.
+
+Status: blocked on the unchanged whole-run timing contract; lead ruling required
+before any further assertion edit. `git diff --check` passes. No changes beyond the
+seven listed runner test/fixture files and this notes file.
