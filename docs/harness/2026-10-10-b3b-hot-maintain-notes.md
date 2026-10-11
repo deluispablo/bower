@@ -290,3 +290,18 @@ skipped or relaxed; the targeted rerun used -t and the full suite above ran ever
 Final read-only git diff --check passes. Only this notes file is modified. A modification-time
 inventory confirms no current-session report files remain under either repository test-results
 folder. TypeScript, runner ESLint and the production baseline checks were not needlessly rerun.
+
+## Fixture repair
+
+tests changed: harness/corpus/b23-hot-question-answer/expected.json: authoritative question id (TL-P4-42 addendum 4)
+
+Changed only q-ask-p-1 to q-ask-f18, matching askId(letterId) and the authoritative control
+at runner/test/b23-hot-context.test.ts:150. The rubric names neither id and needs no change.
+This resolves the question-id contradiction recorded under Implementation / Contract contradictions.
+
+Validation: the existing /tmp corpus probe ran b23-hot-question-answer through runScripted/main:
+`NODE_OPTIONS='--import=/tmp/b3b-hot-maintain-output.mjs' pnpm -C runner exec vitest run --config /tmp/b3b-hot-maintain-fixtures.config.mjs -t b23-hot-question-answer --maxWorkers=2`
+Exit 1: only six missing .bower/hot.md file/note expectations remain (final and both runs).
+No question-id failure remains. Log: /tmp/b3b-hot-maintain-fixture-repair.log.
+The unrelated evidence-only probe was filtered out. Reports, CPU artifacts and cache stayed in /tmp.
+No network, production edits, node_modules changes or writing git commands; coordinator commits.
