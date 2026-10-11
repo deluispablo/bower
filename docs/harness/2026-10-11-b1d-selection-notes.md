@@ -2738,3 +2738,63 @@ No pnpm check or e2e: their repository outputs conflict with the owner's output 
 the explicitly requested checks above ran. No screen, corpus fixture or golden changed.
 No acceptance, integration readiness or fully green runner suite is claimed. The lead must
 resolve the firstMatchingRow contract conflict; no unrelated repair is attempted.
+
+## Fix round 4 reds
+
+Tests-only delivery for TL-P4-41 addendum 21 and the seven Important findings in
+`docs/harness/2026-10-11-b1d-adversarial-final.md`. The runner owns the commit. No production,
+existing-test, fixture, golden, dependency, network or git-write changes were made.
+
+tests changed: runner/test/b1d-fr4.test.ts: seven new independent main-path reds, each with passing positive controls.
+tests changed: docs/harness/2026-10-11-b1d-selection-notes.md: appended this red evidence and verification record.
+removed: none.
+
+All seven use the existing `setup`, `seedState` and `run` helpers, then `runOnDrive` -> runner
+`main` -> the real Claude provider and adapters. Only Drive and Claude transports are fixtures.
+The answer fixtures use actual journal records and `planAdmission` with instructions scope;
+their initial seed pile is binned before admission, leaving no admitted piles. No helper or
+production file was changed. Finding 7 also runs through main, on a cold index, so prefix type
+discovery and neighbourhood construction are both covered without changing the vault-index test.
+
+| Exact red | Failing assertion and positive control |
+| --- | --- |
+| b1d-fr4 1 shown candidates bound notes and parents | An indexed Garden note absent from the source candidates is accepted and fully read; a new parent omitted by the 30-candidate cap is accepted. Control: shown hub filing and shown-parent child creation both complete. |
+| b1d-fr4 2 destination hub counts within five | Five requested evidence notes excluding the hub start execution and download six full notes. Control: four requested notes plus the hub download exactly five and complete. |
+| b1d-fr4 3 empty selection grants no keep or Bin | A valid admitted pair yes plus empty selection edits A and bins B. Control: explicitly selecting the same answer and pair merges, copies B's news into A and bins B. |
+| b1d-fr4 4 no-model answers share the 200-operation ledger | With no piles, 201 valid stored answers start no model but produce a 205-operation main manifest, change the target and archive all 201 records. Control: one stored shown-state yes writes its update and archives its answer within 200 operations. |
+| b1d-fr4 5 real link changes alter the fingerprint | In cut context, changing `[[Garden]]` to `[[Garden2]]` changes the id-only candidate while both actual fingerprints remain `fd329f8a2168`. Control: identical content with different actual run/admission ids produces distinct raw inputs but equal normalized inputs and fingerprints. |
+| b1d-fr4 6 near names collapse internal whitespace | An existing `Developer offers` sibling does not prevent creation of `Developer  offers`. Control: the distinct `Developer applications` child files successfully under the shown parent. |
+| b1d-fr4 7 neighbourhood includes the prefix typed MOC | Matching Offer plus nonmatching `Contents.md` with prefix `type: moc` omits Contents from candidates. Control: a conventional same-folder-name map is included, and both map fixtures receive a prefix read. |
+
+The finding 4 count is the complete main-path manifest, including main's maintenance effects;
+the adversarial provider-only reproduction reported 203. The contract remains at most 200.
+The test executes the real oversized plan to verify actual record consumption rather than
+intercepting its persistence. All 201 records are compared against their complete pre-run evidence
+and original changes paths. Failure output reports mismatch counts, with no relaxed bound.
+
+For finding 5, the two linked notes share a folder and are typed MOCs in the retrieval metadata.
+Their stable metadata remains present in both cut contexts; only the source's real resolved link
+candidate changes. This isolates normalization from path/metadata changes that could mask the
+id-only candidate collision. The same-content control uses different real run/admission ids.
+
+Verification:
+
+```sh
+pnpm -C runner exec vitest run test/b1d-fr4.test.ts --maxWorkers=2 --reporter=default --cache=false
+pnpm -C runner exec tsc --noEmit -p .
+pnpm exec eslint runner/test/b1d-fr4.test.ts
+```
+
+Final focused run: **7 tests, 7 assertion reds**, every positive control and fixture guard passes.
+No import, uncaught runtime, timeout or unrelated assertion failure. Logs:
+`/tmp/b1d-fr4-red.log`, `/tmp/b1d-fr4-types.log`, `/tmp/b1d-fr4-lint.log`.
+The existing observation helper writes under `os.tmpdir()`; caches are disabled and the default
+JSON reporter is overridden so tests write no repository artifacts. Runner TypeScript and the
+new file's ESLint pass. No full check/e2e or implementation was requested in this reds-only session.
+
+Offline sources reused from the packet, without network verification:
+https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents,
+https://arxiv.org/html/2506.08837v1,
+https://platform.claude.com/docs/en/build-with-claude/prompt-caching.
+Fingerprint canonicalization follows the existing cited RFC 8785:
+https://www.rfc-editor.org/rfc/rfc8785.
