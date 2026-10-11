@@ -148,7 +148,7 @@ export function grounded(manifest: RunManifest): boolean {
       // One row per Timeline line it writes, or one for a Current state alone; a kept note's lines carried from the
       // other note are said in the keep's one row instead.
       const entries = e.changes.reduce((n, c) => n + (c.kind === 'timeline-append' ? c.entries.length : 0), 0);
-      const want = entries || (e.changes.some((c) => c.kind === 'state-rewrite' || c.kind === 'about-append' || c.kind === 'about-rewrite') ? 1 : 0);
+      const want = entries || (e.changes.some((c) => c.kind === 'state-rewrite' || c.kind === 'profile-rewrite' || c.kind === 'about-append' || c.kind === 'about-rewrite') ? 1 : 0);
       const own = mine.filter((c) => c.requires.length === 1).reduce((n, c) => n + c.value.updated.length, 0);
       // Each line row names one line the edit appended (its ordinal), once, with the note as the run leaves it: the
       // edit's bytes and its New mark's stamp (TL-P4-19 addenda 4 and 5); a Current state's row names none.

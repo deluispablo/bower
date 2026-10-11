@@ -500,8 +500,8 @@ export function typeRowOk(v: unknown, stored = false): v is TypeRow {
     || !schemaObject(v.properties) || !schemaTexts(v.table) || (!stored && v.table.length > 4)
     || new Set(v.table).size !== v.table.length) return false;
   const properties = v.properties;
-  if (v.profile !== undefined && (!schemaObject(v.profile) || (!stored && !schemaClosed(v.profile, ['template', 'id']))
-    || v.profile.template !== 'profile' || (v.profile.id !== undefined && !schemaText(v.profile.id)))) return false;
+  if (v.profile !== undefined && (!schemaObject(v.profile) || (!stored && !schemaClosed(v.profile, ['template']))
+    || v.profile.template !== 'profile')) return false;
   if (!Object.entries(properties).every(([key, declaration]) => /^[a-z][a-z0-9_]*$/.test(key)
     && schemaObject(declaration) && (stored || schemaClosed(declaration, ['type', 'values']))
     && (declaration.type === 'enum' ? schemaTexts(declaration.values) && declaration.values.length > 0

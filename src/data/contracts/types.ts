@@ -137,7 +137,7 @@ export interface TypeRow {
   properties: Record<string, { type: string; values?: string[] }>;
   table: string[];
   group_by?: { property: string; bucket?: string };
-  profile?: { template: 'profile'; id?: string };
+  profile?: { template: 'profile' };
 }
 export interface TypeTable { v: 1; rows: TypeRow[] }
 export interface Proposal { id: string; payload: { kind: string; row: TypeRow } }

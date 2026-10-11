@@ -12,7 +12,7 @@
  */
 import { createOwnershipContext, type OwnershipContext } from '../contracts/ownership-format';
 import { UNCONFIRMED_WRITE_MESSAGE, type DriveFile } from '../drive/drive-api';
-import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate, personalTimelineRefusal } from '../contracts/note-edit';
+import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, profileTextOk, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate, personalTimelineRefusal } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent, type TimelineConsent, type AppendCompletion, type LeftAsWritten, type SatisfiedAppend } from '../contracts/run-manifest';
 import { PILE_NOTE, safeInboxName } from '../piles';
@@ -437,6 +437,8 @@ export interface Filing {
   observations?: readonly unknown[];
   forget?: readonly { factId: string; quote?: string }[];
   shownFactIds?: readonly string[];
+  profiles?: ReadonlyMap<string, string>;
+  kinds?: ReadonlyMap<string, string>;
   thing(fileId: string): Placement | null;
   words(pileId: string): Placement | null;
   note?(fileId: string): AuthoredNote | null;
@@ -531,10 +533,7 @@ export interface Disagreement {
  * (`modelDecisions`), or the scripted provider's, which also answers what no model reply does yet (the optional part).
  * A part a reply leaves out is not done: requests and answers it does not settle wait for a run that can act on them.
  */
-export interface Decisions {
-  observations?: readonly unknown[];
-  forget?: readonly { factId: string; quote?: string }[];
-  shownFactIds?: readonly string[];
+export interface Decisions extends Pick<Filing, 'observations' | 'forget' | 'shownFactIds' | 'profiles' | 'kinds'> {
   thing(t: ThingSeen): Placement | null;
   words(pileId: string, words: string): Placement | null;
   pileAsk(pile: Pile): Ask | null;
@@ -567,7 +566,7 @@ export interface Decisions {
 /** The model's intent as decisions: what it placed, wrote and asked, nothing more. */
 export function modelDecisions(filing: Filing): Decisions {
   return {
-    observations: filing.observations, forget: filing.forget, shownFactIds: filing.shownFactIds,
+    observations: filing.observations, forget: filing.forget, shownFactIds: filing.shownFactIds, profiles: filing.profiles, kinds: filing.kinds,
     thing: (t) => filing.thing(t.fileId),
     words: (pileId) => filing.words(pileId),
     pileAsk: (pile) => filing.asks?.get(pile.id) ?? null,
@@ -2020,6 +2019,61 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       timeline: template && !NOTE_TEMPLATES[template].timeline ? [] : [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
     generated.push({ to, name: noteName, text, what: authored.summary, after: thing.file.id, pileId: null, aside: thing.file.name });
   }
+  // Group the row-bound contributions before authoring: one ordinary edit/create per profile.
+  for (const row of types.table.rows.filter((row) => row.profile)) {
+    const contributions = filing.filter(({ thing }) => d.kinds?.get(thing.file.id) === row.id && d.profiles?.has(thing.file.id));
+    if (!contributions.length || /offer/iu.test(row.id)) continue;
+    const matches = listing.filter((file) => !file.folder && file.appProperties?.profile === row.id && file.appProperties.by === 'bower');
+    if (matches.length > 1) continue;
+    const target = matches[0];
+    const first = contributions[0];
+    if (!first) continue;
+    const to = target ? parentOf(ix.pathOf(target.id) ?? '') : first.to;
+    if (!generatedPlace(to)) continue;
+    const words = [...new Set(contributions.map(({ thing }) => d.profiles?.get(thing.file.id) ?? ''))].join('\n');
+    const citations = contributions.map(({ to, name }) => `[[${join(to, name)}]]`);
+    if (!target) {
+      const template = row.profile?.template;
+      const related = await groundedAuthoredLinks(to, { name: 'Profile.md', summary: 'Profile from documents.', body: words, template },
+        { file: first.thing.file, name: first.name });
+      const body = `${words} ${[...new Set(citations)].join(' ')}\n`;
+      if (!profileTextOk(body)) return refused('a profile beyond its 400 word bound');
+      const name = freeName(planned, to, 'Profile.md');
+      const text = serializeNote({ template, typeRow: { ...row, template: 'profile' }, summary: 'Profile from documents.',
+        properties: [{ key: 'type', label: 'Type', value: row.id }, { key: 'created', label: 'Created', value: noteDate },
+          { key: 'updated', label: 'Updated', value: noteDate }, { key: 'source', label: 'Source', value: first.name },
+          { key: 'related', label: 'Related', value: related.map((path) => `[[${path}]]`).join(', ') }],
+        tags: [], currentState: [], body, timeline: [{ date: noteDate, text: 'Filed by Bower.', source: first.name }], byBower: true });
+      plannedFile(join(to, name));
+      generated.push({ to, name, text, what: 'Profile from documents.', after: first.thing.file.id, pileId: null, aside: first.thing.file.name });
+      continue;
+    }
+    const path = ix.pathOf(target.id);
+    const before = await verified(target, 'utf8');
+    if (!path || !before) continue;
+    const bytes = await drive.readBytes(target.id);
+    if (before.size !== bytes.byteLength || before.sha256 !== await sha256(new Blob([bytes.slice()]))) continue;
+    const ownership = context.read(target.id, bytes);
+    const span = ownership.status !== 'invalid' ? ownership.payloads?.profile : undefined;
+    if (!span || !parseNote(path, new TextDecoder().decode(bytes), fetched(target.id)).byBower) continue;
+    const previous = new TextDecoder().decode(bytes.subarray(span.start, span.end));
+    const history = [...previous.matchAll(/\[\[[^\]\r\n]+\]\]/gu)].map(([link]) => link);
+    const text = `${words} ${[...new Set([...history, ...citations])].join(' ')}\n`;
+    if (!profileTextOk(text)) return refused('a profile beyond its 400 word bound');
+    if (text === previous) continue;
+    const change: Change = { kind: 'profile-rewrite', recordIds: [], previous, text };
+    const existing = edits.find((edit) => edit.file.id === target.id);
+    const changes = [...existing?.changes ?? [], change];
+    const result = applyChanges(bytes, changes, fetched(target.id));
+    if (!result.ok) continue;
+    const after = contributions.map(({ thing }) => thing.file.id);
+    if (existing) {
+      existing.changes = changes; existing.text = result.text; existing.after = [...new Set([...existing.after, ...after])];
+      if (!existing.rows.length) existing.rows.push({ what: 'Profile updated.' });
+    }
+    else edits.push({ file: target, path, before, bytes, changes, text: result.text, after, keeps: [], rows: [{ what: 'Profile updated.' }] });
+    places.set(target.id, target); edited.add(target.id);
+  }
   // A request's line already there is satisfied only under the name its source is filed as (TL-P4-32 addendum 2 (6)):
   // under another, it is appended now, after that move.
   const naming = settlement.named((id) => {
@@ -2527,7 +2581,7 @@ export async function build(decided: Decided): Promise<Ended> {
     // A line citing a thing filed by this run waits for that thing's move (C06).
     const cited = [...edit.after.flatMap((id) => moveOf.get(id) ?? []), ...edit.changes.flatMap((c) =>
       c.kind === 'timeline-append' && c.consent ? pointers.get(c.consent.requestId) ?? [] : [])];
-    const beforeText = edit.keeps.length ? { beforeText: new TextDecoder().decode(edit.bytes) } : {};
+    const beforeText = edit.keeps.length || edit.changes.some((change) => change.kind === 'profile-rewrite') ? { beforeText: new TextDecoder().decode(edit.bytes) } : {};
     const op = await add({ kind: 'edit-text', before: seen(edit.file), path: edit.path, beforeContent: edit.before, changes: edit.changes, text: edit.text, content: await utf8(edit.text), ...beforeText }, cited);
     editOf.set(edit.file.id, op);
     for (const answer of edit.keeps) derive(answer, op);

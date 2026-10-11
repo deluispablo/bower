@@ -14,6 +14,7 @@
 import { notAsSeenError, readForFence, refuseNotAsSeen } from '../contracts/still-as-seen';
 import type { DriveFile, FencedCall, FencedDrive } from './drive-api';
 import { isNoAnswer } from './transport';
+import { bowerNoteRole, parseNote } from '../contracts/note-format';
 
 /** A file as stored at the moment of the check; null when it is gone. */
 export interface StoredNow {
@@ -100,7 +101,13 @@ export class SeenFiles {
     return {
       generateIds: (count) => writes.generateIds(count),
       createFolder: async (parentId, name, appProperties, id) => this.note(await writes.createFolder(parentId, name, appProperties, id)),
-      createText: async (parentId, name, text, appProperties, id) => this.note(await writes.createText(parentId, name, text, appProperties, id)),
+      createText: async (parentId, name, text, appProperties, id) => {
+        // The shared Bower create boundary stamps the declared profile row, alongside the create key.
+        const profile = appProperties?.by === 'bower' && bowerNoteRole(text) === 'profile'
+          ? parseNote(name, text).properties.find((p) => p.key === 'type')?.value : undefined;
+        return this.note(await writes.createText(parentId, name, text,
+          profile ? { ...appProperties, profile } : appProperties, id));
+      },
       update: async (id, patch, opts) => this.note(await writes.update(id, patch, opts)),
       trash: async (id, appProperties, opts) => {
         const binned = await writes.trash(id, appProperties, opts);
