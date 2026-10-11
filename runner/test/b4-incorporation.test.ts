@@ -13,7 +13,14 @@ import { BowerError } from '../../src/data/contracts/types';
 import { PILE_NOTE } from '../../src/data/piles';
 import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
-import { SYSTEM } from '../../src/data/vault/layout';
+import { RUNNER_WRITES, SYSTEM } from '../../src/data/vault/layout';
+import * as manifests from '../../src/data/contracts/run-manifest';
+import type { ManifestV2, OperationV2 } from '../../src/data/contracts/run-manifest';
+import { canonical } from '../../src/data/spine/records';
+import { seen } from '../../src/data/spine/grounded';
+import * as providers from '../src/provider';
+import * as planner from '../../src/data/spine/scripted';
+import * as maintenance from '../src/index';
 import type { ClaudeSpawn } from '../src/claude';
 import type { LoadedCase } from '../src/corpus';
 import { phaseAwareClaude, reply } from './b1-planning-support';
@@ -492,3 +499,136 @@ function question(subject: string, options?: QuestionOption[]): Question & { opt
 
 const queued = () => ({ id: 'answer-run', phase: 'queued' as const, scope: 'all' as const,
   requestedAt: DAY, phaseAt: DAY, seen: false });
+
+// Supply an admitted plan at the provider boundary, independently of B4b's unfinished model-intent wiring.
+async function maintenancePlan(f: Fixture, runId: string, requestId: string, requestedAt: number): Promise<ManifestV2> {
+  const record = await f.drive.get(await f.id('.bower/changes/rule-finalizer.json'));
+  const recordText = await f.drive.readText(record.id);
+  const scope = { rootId: f.root };
+  const capture = { piles: [], members: [],
+    journal: [{ recordId: 'rule-finalizer', sha256: sha256Sync(recordText), fileIds: [record.id] }],
+    places: [{ file: seen(await f.drive.get(await f.id('.bower'))), path: '.bower' }] };
+  const captureId = (await canonical({ scope, runScope: 'all', capture })).hash;
+  const text = jsonl([{ v: 1, kind: 'observation', eventId: 'event-finalizer', factId: 'fact-finalizer',
+    date: '2026-10-07', text: REMOTE, category: 'preference', section: 'about-preferences',
+    source: { fileId: record.id, sha256: sha256Sync(recordText) },
+    origin: { kind: 'rule', runId, captureId, recordId: 'rule-finalizer' } }]);
+  // No existing ledger: create-text lets this fixture test the finalizer without view/edit settlement.
+  const effect: OperationV2['effect'] = { kind: 'create-text', parent: { fileId: await f.id('.bower') },
+    name: 'observations.jsonl', purpose: 'runner-json', createKey: 'finalizer-ledger', text,
+    content: { encoding: 'utf8', size: bytes(text).length, sha256: sha256Sync(text) } };
+  const operationId = (await canonical({ runId, captureId, ordinal: 0, effect })).hash;
+  return { v: 2, kind: 'run-manifest', scope, runId, requestId, requestedAt, runScope: 'all', allowWeb: false,
+    capture, captureId, operations: [{ ordinal: 0, operationId, dependsOn: [], effect }], reportPlan: [] };
+}
+
+async function finalizerFixture(realProvider = false) {
+  const f = await fixture();
+  await f.drive.trash(await f.id(LEDGER));
+  await f.drive.createText(await f.id('.bower/changes'), 'rule-finalizer.json',
+    JSON.stringify({ v: 1, id: 'rule-finalizer', device: 'made-up-device', at: DAY,
+      kind: 'rule', what: 'A rule', text: REMOTE }) + '\n');
+  const accepted = async (runId: string, requestId: string, requestedAt: number) => {
+    const plan = await maintenancePlan(f, runId, requestId, requestedAt);
+    // Validate all plan rules with a validation-only terminal barrier; return the unfinalized plan to main.
+    const barrier: OperationV2['effect'] = { kind: 'maintain', inputs: { folderId: f.root, account: f.root,
+      cursor: 'control-cursor', changes: [], operationIds: plan.operations.map((op) => op.operationId) } };
+    const operationId = (await canonical({ runId: plan.runId, captureId: plan.captureId, ordinal: 1, effect: barrier })).hash;
+    const control = { ...plan, operations: [...plan.operations, { ordinal: 1, operationId,
+      dependsOn: plan.operations.map((op) => op.operationId), effect: barrier }] };
+    expect(await manifests.parseRunManifestV2((await canonical(control)).bytes, f.root, RUNNER_WRITES),
+      'positive control: the observation satisfies every rule with a final barrier').toMatchObject({ ok: true });
+    return plan;
+  };
+  if (realProvider) vi.spyOn(planner, 'planScripted').mockImplementation(async (_read, _root, opts) => ({
+    path: 'b', manifest: await accepted(opts.runId, opts.requestId, opts.requestedAt), needs: new Map(),
+  }));
+  else vi.spyOn(providers, 'providerFor').mockImplementation((_name, _drive, run) => async ({ taken }) =>
+    accepted(run.runId, taken.id, taken.at));
+  return f;
+}
+
+const mainFinalizerRun = (f: Fixture) => runOnDrive(f.c, f.drive, f.root,
+  { pacing: { baseMs: 0, sleep: async () => {} } }, 1);
+
+it('b4b maintenance finalizer: an accepted observation passes end to end', async () => {
+  const f = await finalizerFixture(true);
+  const finalize = vi.spyOn(maintenance, 'withMaintenance');
+  const validate = vi.spyOn(manifests, 'parseRunManifestV2');
+  const create = vi.spyOn(f.drive, 'createText');
+  const resourceFolder = await f.id('Resources');
+  const run = await runOnDrive(f.c, f.drive, f.root, { claude: phaseAwareClaude(async (call, _step, _attempt, phase) => {
+    const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Frame;
+    return reply(phase === 'selection' ? { items: (frame.sources ?? []).map((source) => ({
+      itemId: source.itemId, kind: 'unknown', destination: resourceFolder, wants: [],
+    })), asks: [] } : EMPTY);
+  }, () => ({ drive: f.drive, root: f.root }), true), pacing: { baseMs: 0, sleep: async () => {} } }, 1);
+  expect(finalize, 'the real provider admits the validated plan without a final-maintain rule').toHaveBeenCalledOnce();
+  const final = await finalize.mock.results[0]?.value as ManifestV2;
+  const original = finalize.mock.calls[0]?.[1];
+  expect(original?.operations.every((op) => op.effect.kind !== 'maintain')).toBe(true);
+  expect(final.captureId).not.toBe(original?.captureId);
+  const finalCalls = validate.mock.calls.map(([input], i) => ({ value: JSON.parse(new TextDecoder().decode(input)) as ManifestV2, i }))
+    .filter(({ value }) => value.captureId === final.captureId);
+  expect(finalCalls, 'B4a validates the finalized manifest exactly once').toHaveLength(1);
+  const applied = create.mock.calls.findIndex(([, name]) => name === 'observations.jsonl');
+  if (applied >= 0) expect(validate.mock.invocationCallOrder[finalCalls[0]?.i ?? -1])
+    .toBeLessThan(create.mock.invocationCallOrder[applied] ?? 0);
+  const memory = final.operations[0];
+  if (!memory || !('text' in memory.effect)) throw new Error('Missing fixture ledger');
+  expect({ dependsOn: final.operations.at(-1)?.dependsOn,
+    origin: parseObservations(bytes(memory.effect.text)).live[0]?.origin.captureId,
+    landed: ledger(run).live.map((fact) => fact.text) }, 'the one finalizer orders, reseals and applies accepted memory').toEqual({
+    dependsOn: [final.operations[0]?.operationId], origin: final.captureId, landed: [REMOTE],
+  });
+});
+
+it('b4b maintenance finalizer: a stale-captureId origin is refused', async () => {
+  const f = await finalizerFixture();
+  const realFinalize = maintenance.withMaintenance;
+  let resealed = false;
+  vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (...args) => {
+    const final = await realFinalize(...args) as ManifestV2;
+    const ledgerOp = final.operations[0];
+    if (!ledgerOp || !('text' in ledgerOp.effect)) throw new Error('Missing fixture ledger');
+    const event = parseObservations(bytes(ledgerOp.effect.text)).live[0];
+    if (!event) throw new Error('Missing fixture observation');
+    resealed = event.origin.captureId === final.captureId;
+    // Corrupt only the origin after the real finalizer, keeping all outer hashes/dependencies valid.
+    const withOrigin = async (captureId: string): Promise<ManifestV2> => {
+      const text = jsonl([{ ...event, origin: { ...event.origin, captureId } }]);
+      const effect = { ...ledgerOp.effect, text,
+        content: { encoding: 'utf8' as const, size: bytes(text).length, sha256: sha256Sync(text) } };
+      const operationId = (await canonical({ runId: final.runId, captureId: final.captureId, ordinal: 0, effect })).hash;
+      const last = final.operations.at(-1);
+      if (!last || last.effect.kind !== 'maintain') throw new Error('Missing fixture maintenance');
+      const barrier = { ...last.effect, inputs: { ...last.effect.inputs, operationIds: [operationId] } };
+      const barrierId = (await canonical({ runId: final.runId, captureId: final.captureId, ordinal: 1, effect: barrier })).hash;
+      return { ...final, operations: [{ ...ledgerOp, operationId, effect },
+        { ...last, operationId: barrierId, dependsOn: [operationId], effect: barrier }] };
+    };
+    const control = await withOrigin(final.captureId);
+    expect(await manifests.parseRunManifestV2((await canonical(control)).bytes, f.root, RUNNER_WRITES),
+      'positive control: identical finalized bytes with the correct origin are admitted').toMatchObject({ ok: true });
+    return withOrigin(args[1].captureId);
+  });
+  const validate = vi.spyOn(manifests, 'parseRunManifestV2');
+  const create = vi.spyOn(f.drive, 'createText');
+  const write = vi.spyOn(f.drive, 'writeText');
+  const run = await mainFinalizerRun(f);
+  const staleCalls = validate.mock.calls.map(([input], i) => ({ value: JSON.parse(new TextDecoder().decode(input)) as ManifestV2, i }))
+    .filter(({ value }) => value.operations.at(-1)?.effect.kind === 'maintain'
+      && value.operations.some((op) => 'text' in op.effect && op.effect.text.includes('event-finalizer'))
+      && value.operations.some((op) => 'text' in op.effect
+        && parseObservations(bytes(op.effect.text)).live.some((fact) => fact.origin.captureId !== value.captureId)));
+  expect(staleCalls, 'the stale origin reaches the final validator exactly once').toHaveLength(1);
+  const stale = staleCalls[0];
+  if (!stale) throw new Error('Missing final validation');
+  expect(await validate.mock.results[stale.i]?.value).toMatchObject({ ok: false, reason: 'shape' });
+  expect(create.mock.calls.some(([, name]) => name === 'observations.jsonl')).toBe(false);
+  expect(write.mock.calls).toEqual([]);
+  expect(ledger(run).events).toEqual([]);
+  expect(run.after[ABOUT]).toBe(f.c.folder[ABOUT]);
+  expect(Object.keys(run.after).filter((path) => /\/(?:manifest|checkpoint)-/.test(path))).toEqual([]);
+  expect(resealed, 'the real finalizer reseals before the injected stale-origin fault').toBe(true);
+});
