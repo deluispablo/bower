@@ -505,3 +505,59 @@ Remaining sweep inventory (exact test names; failure details remain in the OS-te
 - test/q1c-live.test.ts > Q1c durable publication through main and createApp().request > Q1c q1-live-question-before-clear-effects-end: durable publication
 - test/q1c-live.test.ts > Q1c durable publication through main and createApp().request > Q1c q1-live-question-before-clear-effects-end: same-run recovery republishes without a second model reply
 - test/second-brain-method.test.ts > B3b hot: evidence-only method verdict covers hidden unarchived refresh
+
+
+## Addendum 14 sweep
+
+TL-P4-41 addendum 14 (2) supersedes the exhaustion-waits assertions in the earlier sweep.
+Ledger-exhausted items end done with set-aside dispositions and their existing report rows.
+The reason is pinned by `SET_ASIDE_TEXT['not-tidied']`, pending the designer's confirmation.
+The next run must admit and file the exhausted source again; it is not permanently retired.
+
+tests changed: runner/test/b1-planning-support.ts: replace the waiting exhaustion helper with set-aside assertions; retain done, no-filed and no-source-mutation checks; match each disposition's admitted source to its existing row using SET_ASIDE_TEXT['not-tidied'].
+tests changed: runner/test/b1-planning.test.ts: update all exhaustion-helper callers and the two exhaustion test names; add a fresh-admission, second-run filing control for both selection and execution exhaustion, preserving every call and operation bound.
+tests changed: runner/test/claude-provider.test.ts: adapt the earlier sweep's shared exhaustion assertion and its callers to set-aside dispositions and per-source existing rows with SET_ASIDE_TEXT['not-tidied']; preserve manifest, source protection and call-count assertions.
+
+Verification: `pnpm -C runner exec vitest run test/b1-planning.test.ts test/claude-provider.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=/tmp/b1d-addendum14-results.json`.
+Both touched test suites ran: 34 failed, 8 passed (42 total). This is a tests-only red delivery;
+production implementation remains outside scope. Logs: `/tmp/b1d-addendum14.log`,
+`/tmp/b1d-addendum14-results.json`. No network, git writes, dependency changes, repository
+test output, pnpm check or e2e (the latter gates write repository artifacts) were run.
+Offline sources: packet citations reused without re-verification; no new mechanism.
+
+Failed tests (complete targeted-suite list; first assertion location):
+
+- `runner/test/b1-planning-support.ts:204`: b1-index-job-offer.
+- `runner/test/b1-planning.test.ts:38`: b1-changes-person-edit.
+- `runner/test/b1-planning.test.ts:38`: b1-cut-index-no-new-destination.
+- `runner/test/b1-planning.test.ts:38`: b1-five-per-source.
+- `runner/test/b1-planning.test.ts:38`: b1-pinned-and-script-notes-count-within-five.
+- `runner/test/b1-planning.test.ts:38`: b1-selection-closed-ids.
+- `runner/test/b1-planning.test.ts:38`: b1-folded-moc-expansion.
+- `runner/test/b1-planning.test.ts:38`: b1-target-injection.
+- `runner/test/b1-planning.test.ts:38`: b1-read-to-act-fence.
+- `runner/test/b1-planning-support.ts:204`: b1-question-candidate-binding.
+- `runner/test/b1-planning.test.ts:338`: b1-shared-ledger.
+- `runner/test/b1-planning.test.ts:38`: b1-refresh-cache-hot-order.
+- `runner/test/b1-planning.test.ts:434`: b1-pre-manifest-retry.
+- `runner/test/b1-planning.test.ts:38`: b1-neighbourhood-order-and-30-cap.
+- `runner/test/b1-planning.test.ts:38`: b1-expansion-is-not-a-read-picked-members-count-within-five.
+- `runner/test/b1-planning.test.ts:38`: b1-new-subfolder-visible-parent-name-and-near-duplicate.
+- `runner/test/b1-planning.test.ts:38`: b1-one-new-subfolder-per-item.
+- `runner/test/b1-planning.test.ts:546`: b1-one-retry-per-step-four-calls-exhaustion-set-aside.
+- `runner/test/b1-planning.test.ts:38`: b1-200-operations-exhaustion-set-aside.
+- `runner/test/claude-provider.test.ts:197`: a new Area with no cited rule or note is refused and retried once.
+- `runner/test/claude-provider.test.ts:219`: a new Area with a responsibility is made and the report says why.
+- `runner/test/claude-provider.test.ts:239`: a responsibility does not open a new Project.
+- `runner/test/claude-provider.test.ts:289`: a rule basis is a whole rules line, never part of one or the cut marker.
+- `runner/test/claude-provider.test.ts:304`: a new subfolder of an existing Area is not reported as a new area.
+- `runner/test/claude-provider.test.ts:322`: a thing with text and no note or citing line is refused and retried once.
+- `runner/test/claude-provider.test.ts:352`: a thing cited by a Timeline line on an existing note needs no note.
+- `runner/test/claude-provider.test.ts:364`: a photo with no text needs no note.
+- `runner/test/claude-provider.test.ts:380`: a second refusal ends the run honestly.
+- `runner/test/claude-provider.test.ts:398`: a recorded Claude reply becomes operations the spine validates.
+- `runner/test/claude-provider.test.ts:463`: the runner logs one timing line per run with the Claude reply's numbers.
+- `runner/test/claude-provider.test.ts:550`: the Claude provider passes the scripted provider contract fixtures.
+- `runner/test/claude-provider.test.ts:624`: a write the two runner lists judged differently is judged once by RUNNER_WRITES.
+- `runner/test/claude-provider.test.ts:550`: the runner computes ids and digests, never the model.
+- `runner/test/claude-provider.test.ts:803`: a Claude run writes no hub line or demo extra it did not propose.

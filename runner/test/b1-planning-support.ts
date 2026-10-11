@@ -8,6 +8,7 @@ import type { FakeDrive } from '../../src/data/drive/fake-drive';
 import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
+import { SET_ASIDE_TEXT } from '../../src/data/pile-readiness';
 import { PILE_NOTE } from '../../src/data/piles';
 import { checkCreationName } from '../../src/data/contracts/tree';
 import { parseNote } from '../../src/data/contracts/note-format';
@@ -205,15 +206,19 @@ export function completed(result: Awaited<ReturnType<typeof run>>, files = 1) {
   expect.soft(result.frames, 'selection then execution, with no validation retry').toHaveLength(2);
   expect.soft(result.frames[1]?.call.input, 'step two receives the frozen source id').toContain(result.dispatch?.admission.piles[0]?.items.find((i) => i.name !== PILE_NOTE)?.fileId ?? '');
 }
-export function waits(result: Awaited<ReturnType<typeof run>>) {
-  expect.soft(result.code, 'selection exhaustion is a done run with waiting items').toBe(0);
-  expect.soft(result.wire?.statuses.at(-1)?.phase, 'exhaustion ends done, retaining waiting work').toBe('done');
+export function setAside(result: Awaited<ReturnType<typeof run>>) {
+  expect.soft(result.code, 'selection exhaustion is a done run with set-aside items').toBe(0);
+  expect.soft(result.wire?.statuses.at(-1)?.phase, 'exhaustion ends done, setting exhausted work aside').toBe('done');
   expect.soft(report(result).filed).toEqual([]);
   expect.soft(report(result).setAside.length, 'reuse the existing set-aside row').toBeGreaterThan(0);
   const text = Object.entries(result.after).find(([p]) => p.endsWith('/dispositions.json'))?.[1];
-  const dispositions = JSON.parse(text ?? '{"items":[]}') as { items: Array<{ disposition: string }> };
+  const dispositions = JSON.parse(text ?? '{"items":[]}') as { items: Array<{ fileId: string; disposition: string }> };
   expect.soft(dispositions.items.length).toBeGreaterThan(0);
-  expect.soft(dispositions.items.every((i) => i.disposition === 'waiting')).toBe(true);
+  expect.soft(dispositions.items.every((i) => i.disposition === 'set-aside')).toBe(true);
+  for (const item of dispositions.items) {
+    const name = result.dispatch?.admission.piles.flatMap((p) => p.items).find((i) => i.fileId === item.fileId)?.name;
+    expect.soft(report(result).setAside).toContainEqual({ name, why: SET_ASIDE_TEXT['not-tidied'] });
+  }
   expect.soft(result.events.filter((e) => ['PATCH', 'POST', 'DELETE'].includes(e.method) && !e.path.startsWith('.bower/')),
     'exhaustion never mutates source or personal evidence').toEqual([]);
 }

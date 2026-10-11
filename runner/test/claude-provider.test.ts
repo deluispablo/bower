@@ -9,6 +9,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SET_ASIDE_TEXT } from '../../src/data/pile-readiness';
 import { PILE_NOTE } from '../../src/data/piles';
 import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { planAdmission } from '../../src/data/spine/plan';
@@ -139,10 +140,10 @@ async function rehashed(edit: (text: string) => string): Promise<string> {
 
 const claudeEnv = (extra: Record<string, string> = {}): Record<string, string> => ({ BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: TOKEN, ...extra });
 
-/** Exhaustion persists the existing report, manifest and waiting dispositions without filing sources. */
+/** Exhaustion persists the existing report, manifest and set-aside dispositions without filing sources. */
 const claudeInput = (call: ClaudeCall | undefined): string => call?.input.split('\n').at(-1) ?? '{}';
 
-async function expectWaiting(wire: DriveV3): Promise<void> {
+async function expectSetAside(wire: DriveV3): Promise<void> {
   const files = await wire.drive.listAll(wire.folderId);
   const last = files.find((f) => f.name === 'last-run.json');
   expect(last).toBeDefined();
@@ -157,11 +158,15 @@ async function expectWaiting(wire: DriveV3): Promise<void> {
   expect(files.filter((f) => /^manifest-.*\.json$/.test(f.name))).toHaveLength(1);
   const dispositions = files.find((f) => f.name === 'dispositions.json');
   expect(dispositions).toBeDefined();
-  const waiting = JSON.parse(await wire.drive.readText(dispositions?.id ?? '')) as {
-    items: Array<{ disposition: string }>;
+  const aside = JSON.parse(await wire.drive.readText(dispositions?.id ?? '')) as {
+    items: Array<{ fileId: string; disposition: string }>;
   };
-  expect(waiting.items.length).toBeGreaterThan(0);
-  expect(waiting.items.every((item) => item.disposition === 'waiting')).toBe(true);
+  expect(aside.items.length).toBeGreaterThan(0);
+  expect(aside.items.every((item) => item.disposition === 'set-aside')).toBe(true);
+  for (const item of aside.items) {
+    const name = wire.manifest?.piles.flatMap((pile) => pile.items).find((source) => source.fileId === item.fileId)?.name;
+    expect(report.run.report.setAside).toContainEqual({ name, why: SET_ASIDE_TEXT['not-tidied'] });
+  }
 }
 
 describe('the Claude provider', () => {
@@ -233,7 +238,7 @@ describe('the Claude provider', () => {
     await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn });
     expect(calls).toHaveLength(3);
     expect(wire.statuses.at(-1)?.phase).toBe('done');
-    await expectWaiting(wire);
+    await expectSetAside(wire);
   });
 
   it('a cut Rules.md is marked as cut in the model input', async () => {
@@ -319,7 +324,7 @@ describe('the Claude provider', () => {
     expect(calls[2]?.input).toMatch(/no note/);
     expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
 
-    // Selection plus two execution attempts: exhausted items wait with a durable report.
+    // Selection plus two execution attempts: exhausted items are set aside with a durable report.
     const again = await wired(false, true);
     const stuck: ClaudeCall[] = [];
     const respondStuck = phaseAwareClaude(() => ({ code: 0, stderr: '', cut: null, stdout: plain }),
@@ -328,7 +333,7 @@ describe('the Claude provider', () => {
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: again.wire.fetch, claude: never })).toBe(0);
     expect(stuck).toHaveLength(3);
     expect(again.wire.statuses.at(-1)?.phase).toBe('done');
-    await expectWaiting(again.wire);
+    await expectSetAside(again.wire);
   });
 
   it('a thing cited by a Timeline line on an existing note needs no note', async () => {
@@ -371,10 +376,10 @@ describe('the Claude provider', () => {
 
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn })).toBe(0);
 
-    // Selection plus two execution attempts; waiting sources never fall back to Resources.
+    // Selection plus two execution attempts; set-aside sources never fall back to Resources.
     expect(calls).toHaveLength(3);
     expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
-    await expectWaiting(wire);
+    await expectSetAside(wire);
     expect(wire.requests.filter((r) => r.method === 'DELETE')).toEqual([]);
     const after = await wire.drive.listAll(wire.folderId);
     expect(after.filter((f) => !wire.drive.pathOf(f.id, wire.folderId).startsWith('.bower/')))

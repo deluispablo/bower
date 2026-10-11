@@ -16,7 +16,7 @@ import { AT, redispatchCase, replySequence } from './corpus-run';
 import { paging } from './drive-v3';
 import { writes } from './b23-hot-observe';
 import { candidates, completed, empty, fileIntent, folder, HUB, manifest, media, note, PERSONAL,
-  report, run, seedState, select, setup, waits, type Base, type Item } from './b1-planning-support';
+  report, run, seedState, select, setup, setAside, type Base, type Item } from './b1-planning-support';
 
 const oldPageSize = paging.size;
 beforeEach(() => {
@@ -104,7 +104,7 @@ it('b1-cut-index-no-new-destination', async () => {
   const selection = select(refused);
   selection.items[0] = { ...selection.items[0] as Item, destination: { parentId: refused.id('Projects/Remote search'), name: 'Missing remote offers' } };
   const r = await run(refused, [selection, selection]);
-  waits(r);
+  setAside(r);
   expect.soft(payload(r, 0)).toContain('index cut:');
   expect.soft(Object.values(r.pathsById)).not.toContain('Projects/Remote search/Missing remote offers');
   // Separate unresolved subject with a clear sibling: the asking does not stop the known filing.
@@ -135,7 +135,7 @@ it('b1-five-per-source', async () => {
   for (const id of five(b)) expect.soft(media(control, id), `shared selected note ${id} is physically read once`).toHaveLength(1);
   const rejected = await setup(options); await seedState(rejected);
   const six = select(rejected, Object.keys(sixNotes).map(rejected.id));
-  const r = await run(rejected, [six, six]); waits(r);
+  const r = await run(rejected, [six, six]); setAside(r);
   expect.soft(r.frames, 'over-five selection gets only one retry').toHaveLength(2);
   for (const path of Object.keys(sixNotes)) expect.soft(media(r, rejected.id(path)), 'invalid wants do not read L3').toEqual([]);
 });
@@ -164,7 +164,7 @@ it('b1-pinned-and-script-notes-count-within-five', async () => {
       for (const id of [...pins, ...wants]) expect.soft(media(r, id), 'two answer pins plus three wants use exactly five physical notes').toHaveLength(1);
       for (const id of pins) expect.soft(payload(r, 1), 'execution retains answer pins by id').toContain(id);
     } else {
-      waits(r);
+      setAside(r);
       expect.soft(r.frames, 'two pins plus four requested/script notes exhaust this source').toHaveLength(2);
     }
   }
@@ -180,11 +180,11 @@ it('b1-selection-closed-ids', async () => {
   for (const patch of patches) {
     const b = await setup(); await seedState(b);
     const selection = select(b); selection.items = [{ ...selection.items[0] as Item, ...patch }];
-    const bad = await run(b, [selection, selection]); waits(bad);
+    const bad = await run(b, [selection, selection]); setAside(bad);
     expect.soft(bad.frames, `one retry for ${JSON.stringify(patch)}`).toHaveLength(2);
   }
   const b = await setup(); await seedState(b);
-  const unclosed = { ...select(b), extra: true }; waits(await run(b, [unclosed, unclosed]));
+  const unclosed = { ...select(b), extra: true }; setAside(await run(b, [unclosed, unclosed]));
 });
 
 function foldedFolder(): { map: string; members: Record<string, string>; folder: Record<string, string> } {
@@ -257,12 +257,12 @@ it('b1-target-injection', async () => {
     expect.soft(result.after[path], `readable poisoned evidence grants no write to ${path}`).toBe(poisoned[path]);
     expect.soft(writes(result.events, path)).toEqual([]);
     expect.soft(result.frames).toHaveLength(3);
-    waits(result);
+    setAside(result);
   }
   const diverted = await setup(options); await seedState(diverted);
   const diversion = fileIntent(diverted, 'Resources/Careers');
   const changedDestination = await run(diverted, [select(diverted, [diverted.id(PERSONAL)]), diversion, diversion]);
-  waits(changedDestination);
+  setAside(changedDestination);
   expect.soft(changedDestination.after['Resources/Careers/Offer.txt'], 'execution cannot replace the frozen destination').toBeUndefined();
 });
 
@@ -324,7 +324,7 @@ it('b1-question-candidate-binding', async () => {
       const q = await b.drive.readText(b.id(SYSTEM.questions));
       expect.soft(q, 'stored option ids and folder actions survive a person rename').toBe(r.after[SYSTEM.questions]);
       expect.soft(Object.values(r.pathsById).some((p) => p.startsWith('Inbox/') && p.endsWith('/Second.txt'))).toBe(true);
-    } else { waits(r); expect.soft(report(r).questions).toEqual([]); }
+    } else { setAside(r); expect.soft(report(r).questions).toEqual([]); }
   }
 });
 
@@ -379,7 +379,7 @@ it('b1-shared-ledger', async () => {
   const exhausted = await run(expired, [select(expired), fileIntent(expired)], { beforeReply: async (turn, frame) => {
     if (turn === 1) vi.advanceTimersByTime(frame.call.timeoutMs);
   } });
-  waits(exhausted);
+  setAside(exhausted);
   expect.soft(exhausted.frames, 'execution never starts after the shared model budget expires').toHaveLength(1);
 });
 
@@ -499,7 +499,7 @@ it('b1-expansion-is-not-a-read-picked-members-count-within-five', async () => {
   for (const path of Object.keys(f.members).slice(5)) expect.soft(media(r, b.id(path)), 'unpicked expansion members are not L3 reads').toEqual([]);
   const bad = await setup({ folder: f.folder }); await seedState(bad);
   const sixth = select(bad, Object.keys(f.members).slice(0, 6).map(bad.id), 'Resources/Remote offers');
-  waits(await run(bad, [sixth, sixth]));
+  setAside(await run(bad, [sixth, sixth]));
 });
 
 it('b1-new-subfolder-visible-parent-name-and-near-duplicate', async () => {
@@ -520,7 +520,7 @@ it('b1-new-subfolder-visible-parent-name-and-near-duplicate', async () => {
     await seedState(bad);
     const selection = select(bad); selection.items[0] = { ...selection.items[0] as Item,
       destination: { parentId: parent === '' ? bad.root : bad.id(parent ?? ''), name: name ?? '' } };
-    const r = await run(bad, [selection, selection]); waits(r);
+    const r = await run(bad, [selection, selection]); setAside(r);
     expect.soft(Object.values(r.pathsById), `no invalid destination ${parent}/${name}`).not.toContain(`${parent}/${name}`);
   }
 });
@@ -534,12 +534,12 @@ it('b1-one-new-subfolder-per-item', async () => {
   const chosen = select(bad); chosen.items[0] = { ...chosen.items[0] as Item,
     destination: { parentId: bad.id('Projects/Remote search'), name: 'Developer offers' } };
   const nested = fileIntent(bad, 'Projects/Remote search/Developer offers/Another folder');
-  const r = await run(bad, [chosen, nested, nested]); waits(r);
+  const r = await run(bad, [chosen, nested, nested]); setAside(r);
   expect.soft(Object.values(r.pathsById)).not.toContain('Projects/Remote search/Developer offers/Another folder');
   expect.soft(r.frames).toHaveLength(3);
 });
 
-it('b1-one-retry-per-step-four-calls-exhaustion-waits', async () => {
+it('b1-one-retry-per-step-four-calls-exhaustion-set-aside', async () => {
   const good = await setup(); await seedState(good);
   const selection = select(good); const intent = fileIntent(good);
   const control = await run(good, [{ ...selection, extra: true }, selection, { ...intent, extra: true }, intent]);
@@ -549,13 +549,20 @@ it('b1-one-retry-per-step-four-calls-exhaustion-waits', async () => {
     const b = await setup(); await seedState(b);
     const bad = phase === 'selection' ? { ...select(b), extra: true } : { ...fileIntent(b), extra: true };
     const r = await run(b, phase === 'selection' ? [bad, bad, fileIntent(b)] : [select(b), bad, bad, fileIntent(b)]);
-    waits(r);
+    setAside(r);
     expect.soft(r.frames, `${phase} is never asked a third time`).toHaveLength(phase === 'selection' ? 2 : 3);
     expect.soft(r.frames.length).toBeLessThanOrEqual(4);
+    const admitted = await planAdmission(fakeRead(b.drive), b.root, { scope: 'all',
+      clock: () => AT + 1, newId: () => `retry-${phase}` });
+    expect(admitted.kind, 'the next run admits exhausted items again').toBe('manifest');
+    if (admitted.kind !== 'manifest') throw new Error('The exhausted source must be retried.');
+    const retried = await run(b, [select(b), fileIntent(b)], { press: 2, admission: admitted.manifest });
+    completed(retried);
+    expect.soft(retried.frames[0]?.call.input).toContain(b.sources[0]?.itemId ?? '');
   }
 });
 
-it('b1-200-operations-exhaustion-waits', async () => {
+it('b1-200-operations-exhaustion-set-aside', async () => {
   const scenario = async (count: number) => {
     const names = Array.from({ length: count }, (_, i) => `Offer ${String(i).padStart(3, '0')}.txt`);
     const b = await setup({ inbox: [{ line: 'Alex has remote developer offers.', files: names }],
@@ -579,7 +586,7 @@ it('b1-200-operations-exhaustion-waits', async () => {
   expect.soft(manifest(control).operations.length).toBeGreaterThan(0);
   expect.soft(manifest(control).operations.length).toBeLessThanOrEqual(200);
   // 201 admitted file moves alone exceed 200, before any derived or report operation.
-  const r = await scenario(201); waits(r);
+  const r = await scenario(201); setAside(r);
   expect.soft(manifest(r).operations.length, 'no oversized frozen execution plan').toBeLessThanOrEqual(200);
   expect.soft(Object.values(r.pathsById).filter((p) => p.startsWith('Inbox/') && /Offer \d{3}\.txt$/.test(p))).toHaveLength(201);
 });
