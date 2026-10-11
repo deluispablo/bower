@@ -167,11 +167,17 @@ it('b5-proposal-yes-no-ignore-replay: decline never returns while unrelated prop
   expect.soft(questionsOf(second).some((q) => q.proposal?.payload.row.id === 'lease')).toBe(false);
 });
 
-it.each([null, '{"v":1,"rows":[]}', '{"v":1,"rows":[{"id":"bad"}]}'])('b5-table-first-create-and-lenient-read: seeds and first creation for %s', async (stored) => {
+it.each([null])('b5-table-first-create-and-lenient-read: seeds and first creation for %s', async (stored) => {
   const base = await setup(['Garden.txt'], stored); decisions(); const result = await run(base);
   filed(result, ['Garden.txt']);
   expect.soft(tableOf(result)?.rows ?? [], 'eight fallback seeds survive into the stored table').toHaveLength(8);
   expect.soft(effectsOf(result).some((e) => e.kind === 'write-runner-json' && e.path === TABLE), 'creation uses the ruled existing effect').toBe(true);
+});
+it.each(['{"v":1,"rows":[]}', '{"v":1,"rows":[{"id":"bad"}]}'])('b5-table-first-create-and-lenient-read: readable stored table stays unchanged for %s', async (stored) => {
+  const base = await setup(['Garden.txt'], stored); decisions(); const result = await run(base);
+  filed(result, ['Garden.txt']);
+  expect.soft(result.after[TABLE], 'readable stored bytes retain empty and skipped rows exactly').toBe(stored);
+  expect.soft(effectsOf(result).filter((e) => e.path === TABLE), 'unrelated filing never rewrites a readable stored table').toEqual([]);
 });
 it('b5-table-first-create-and-lenient-read: control valid table works and unreadable bytes are never replaced', async () => {
   for (const stored of [JSON.stringify({ v: 1, rows: [row('offer')] }), '{unreadable']) {
