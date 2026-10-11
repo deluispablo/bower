@@ -40,7 +40,7 @@ import type { AdmissionManifest } from './admission';
 import type { ScriptedRead } from './read';
 import { STAMP, stampOf } from './write-once';
 import { NOTE_TEMPLATES, type NoteTemplate } from '../contracts/note-templates';
-import { typeRowOk, readTypeTable, propertyValuesOk, insertTypeRow, requestTableColumn } from '../contracts/note-format';
+import { typeRowOk, readTypeTable, propertyValuesOk, insertTypeRow, requestTableColumn, rewriteTypeTable } from '../contracts/note-format';
 
 export { SET_ASIDE, listedPiles };
 
@@ -2165,10 +2165,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     places.set(sys.id, sys);
     if (proposalFolder?.folder) places.set(proposalFolder.id, proposalFolder);
   }
-  const tableText = `${JSON.stringify(nextTable, null, 2)}\n`;
-  const tableChanged = types.writeAllowed && !!sys?.folder && (!typeFile || tableRecords.size > 0
-    || (typeText !== null && JSON.stringify(parsed(typeText)) !== JSON.stringify(nextTable)));
-  const tableWrite = tableChanged ? { file: typeFile ?? null, text: tableText, content: typeFile ? await ownVerified(typeFile) : null } : null;
+  const tableChanged = types.writeAllowed && !!sys?.folder && (!typeFile || tableRecords.size > 0);
+  const tableWrite = tableChanged ? { file: typeFile ?? null, text: rewriteTypeTable(typeText, types.table, nextTable),
+    content: typeFile ? await ownVerified(typeFile) : null } : null;
   if (tableWrite && !typeFile && sys) places.set(sys.id, sys);
   const capturedPlaces = [...places.values()].map((f) => ({ file: seen(f), path: ix.pathOf(f.id) ?? '' })).sort((a, b) => a.path.localeCompare(b.path));
   const captured = journal.map((l) => ({ recordId: l.rec.id, sha256: l.sha256, fileIds: l.files.map((f) => f.id) }));

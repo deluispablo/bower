@@ -2,7 +2,7 @@
 import { ABOUT_REGIONS, type AboutRegion, MOC_REGIONS, createOwnershipContext, type MocRegion } from './ownership-format';
 import { sha256 } from './hashes';
 import { proposalOk, isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
-import { typeTableOk } from './note-format';
+import { readTypeTable, typeRowOk, typeTableOk } from './note-format';
 import { BowerError, type UpdatedRow } from './types';
 import { parseObservations, canRebuildAboutSection, aboutArchivePath, validLearnedBlock } from './observations';
 import { applyChanges, mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, profileTextOk, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
@@ -890,8 +890,11 @@ async function planningArtifactsOk(value: Manifest | ManifestV2): Promise<boolea
         // expected: a new declaration write must contain readable JSON.
         return false;
       }
-      if (!typeTableOk(table, effect.before !== null)
-        || effect.before !== null && (effect.before.folder || effect.before.name !== 'type-table.json')) return false;
+      // A stored rewrite can carry skipped rows beside the valid declaration it changes or adds.
+      const valid = typeTableOk(table, effect.before !== null) || effect.before !== null && readTypeTable(effect.text).writeAllowed
+        && !!table && typeof table === 'object' && 'rows' in table && Array.isArray(table.rows)
+        && table.rows.some((row) => typeRowOk(row, true));
+      if (!valid || effect.before !== null && (effect.before.folder || effect.before.name !== 'type-table.json')) return false;
     }
     if (effect.kind !== 'create-text') continue;
     const parentPath = targetPath(value, effect.parent);

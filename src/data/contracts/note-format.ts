@@ -159,6 +159,14 @@ function ownershipOf(raw: string, fetched?: FetchedOwnership) {
   return { bytes, ownership };
 }
 
+/** A declared Source role survives classification; only old notes fall back to `type: source`. */
+export function bowerNoteRole(raw: string, fetched?: FetchedOwnership): NoteTemplate | null {
+  const { bytes, ownership } = ownershipOf(raw, fetched);
+  const front = ownership.layout.front ? frontOf(payloadDisplay(bytes, ownership.layout.front)) : null;
+  const role = front?.get('bower_template') ?? front?.get('type');
+  return front?.get('by') === 'bower' && role && Object.hasOwn(NOTE_TEMPLATES, role) ? role as NoteTemplate : null;
+}
+
 /** Display only; these normalized strings never supply mutation offsets. */
 function payloadDisplay(bytes: Uint8Array, span: ByteSpan, heading?: string): string {
   const text = trimLines(decoder.decode(bytes.subarray(span.start, span.end)).replace(/\r\n/g, '\n'));
@@ -488,7 +496,7 @@ const slug = (v: unknown): v is string => typeof v === 'string' && v.length <= 1
 export function typeRowOk(v: unknown, stored = false): v is TypeRow {
   if (!schemaObject(v) || (!stored && !schemaClosed(v, ['id', 'match', 'template', 'properties', 'table', 'group_by']))
     || !slug(v.id) || !schemaTexts(v.match) || !v.match.length || !schemaText(v.template)
-    || !schemaObject(v.properties) || !schemaTexts(v.table) || v.table.length > 4
+    || !schemaObject(v.properties) || !schemaTexts(v.table) || (!stored && v.table.length > 4)
     || new Set(v.table).size !== v.table.length) return false;
   const properties = v.properties;
   if (!Object.entries(properties).every(([key, declaration]) => /^[a-z][a-z0-9_]*$/.test(key)
@@ -553,8 +561,71 @@ export function readTypeTable(text: string | null): { table: TypeTable; writeAll
   const rows = value.rows.filter((row): row is TypeRow => {
     if (!typeRowOk(row, true) || seen.has(row.id)) return false;
     seen.add(row.id); return true;
-  });
+  }).map((row) => ({ ...row, table: row.table.slice(0, 4) }));
   return { table: { ...value, v: 1, rows: rows.length ? rows : seedTable().rows }, writeAllowed: true };
+}
+
+/** Locate direct JSON values for splicing only; JSON.parse and readTypeTable remain the validators. */
+function jsonValueSpans(text: string, start: number): Array<{ key: string | undefined; start: number; end: number }> {
+  const tokens = text.slice(start).matchAll(/"(?:\\[\s\S]|[^"\\])*"|[{}[\],:]|[^\s{}[\],:]+/g);
+  const object = tokens.next().value?.[0] === '{';
+  const spans: Array<{ key: string | undefined; start: number; end: number }> = [];
+  let depth = 0;
+  let key: string | undefined;
+  let at = -1;
+  for (const token of tokens) {
+    const value = token[0];
+    if (depth === 0 && (value === '}' || value === ']')) break;
+    if (depth === 0 && value === ',') { key = undefined; continue; }
+    if (depth === 0 && object && key === undefined) { key = JSON.parse(value) as string; continue; }
+    if (depth === 0 && value === ':') continue;
+    if (at < 0) at = start + token.index;
+    if (value === '{' || value === '[') depth++;
+    else if (value === '}' || value === ']') depth--;
+    if (depth === 0) {
+      spans.push({ key, start: at, end: start + token.index + value.length });
+      at = -1;
+    }
+  }
+  return spans;
+}
+
+/** Keep skipped rows and extension bytes; existing rows only change their requested table value. */
+export function rewriteTypeTable(text: string | null, before: TypeTable, next: TypeTable): string {
+  if (text === null) return `${JSON.stringify(next, null, 2)}\n`;
+  if (!readTypeTable(text).writeAllowed) throw new BowerError('conflict', 'Bower could not change that table.');
+  const rows = jsonValueSpans(text, 0).filter((span) => span.key === 'rows').at(-1);
+  if (!rows) throw new BowerError('conflict', 'Bower could not change that table.');
+  const spans = jsonValueSpans(text, rows.start);
+  const seen = new Set<string>();
+  const edits: Array<{ start: number; end: number; text: string }> = [];
+  const usable = spans.flatMap((span) => {
+    const row: unknown = JSON.parse(text.slice(span.start, span.end));
+    if (!typeRowOk(row, true) || seen.has(row.id)) return [];
+    seen.add(row.id);
+    const old = before.rows.find((item) => item.id === row.id);
+    const changed = next.rows.find((item) => item.id === row.id);
+    if (old && changed && JSON.stringify(old.table) !== JSON.stringify(changed.table)) {
+      const table = jsonValueSpans(text, span.start).filter((item) => item.key === 'table').at(-1);
+      if (!table) throw new BowerError('conflict', 'Bower could not change that table.');
+      edits.push({ ...table, text: JSON.stringify(changed.table) });
+    }
+    return [{ id: row.id, span }];
+  });
+  const added = next.rows.filter((row) => !before.rows.some((old) => old.id === row.id));
+  if (added.length) {
+    if (!added.every((row) => typeRowOk(row)) || added.some((row) => spans.some((span) => {
+      const stored: unknown = JSON.parse(text.slice(span.start, span.end));
+      return schemaObject(stored) && stored.id === row.id;
+    }))) throw new BowerError('conflict', 'Bower could not add that type.');
+    const fallback = usable.find((row) => ['other-project-material', 'other-area-material'].includes(row.id));
+    const addition = added.map((row) => JSON.stringify(row)).join(',');
+    const at = fallback?.span.start ?? spans.at(-1)?.end ?? rows.start + 1;
+    edits.push({ start: at, end: at, text: fallback ? `${addition},` : `${spans.length ? ',' : ''}${addition}` });
+  }
+  let result = text;
+  for (const edit of edits.sort((a, b) => b.start - a.start)) result = result.slice(0, edit.start) + edit.text + result.slice(edit.end);
+  return result;
 }
 
 export function insertTypeRow(table: TypeTable, row: TypeRow): TypeTable {
