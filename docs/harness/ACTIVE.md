@@ -2,7 +2,7 @@
 
 Earlier log: [archive](archive/2026-10-06-active-before-tl-p2-41.md). Token ledger: `harness/tokens.csv`.
 
-**Now:** the current state, in-flight table and queue are in HANDOFF.md, Resume (2026-10-11). This file is the history log.
+**Now:** the current state, in-flight table and queue are in HANDOFF.md, Resume (2026-10-11 wind-down). This file is the history log.
 
 P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([TL-P3-01](2026-10-06-tl-p3-01-p3-start.md), P3_DRAFT adopted). Integration branch `claude/p3` (from main 93d70e9), checkout `/Users/deluisp/Projects/bower-app`. Staging from 605bbaa (ec070ce8).
 

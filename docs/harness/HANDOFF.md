@@ -2,52 +2,57 @@
 
 Coordinator: the Claude Code session named "Orquestador". It integrates in `/Users/deluisp/Projects/bower-app` on branch `claude/p3`; P4 continues on it. Lead: the Planificador session ([DECISIONS.md](DECISIONS.md)). Output rule: [TL-P3-29](2026-10-07-tl-p3-29-output-rule-survives-compaction.md), in AGENTS.md. Minors: [P2_POLISH.md](P2_POLISH.md). Earlier handoffs: git history of this file.
 
-## Resume (2026-10-11, written for a successor who never saw the chat; TL-P4-56)
+## Resume (2026-10-11 wind-down before the CLI/tmux restart; TL-P4-56, TL-P4-57)
 
-This block is the whole current state; ACTIVE.md is the history log. If Claude's quota ends, a Codex session takes this role ([CODEX_TAKEOVER.md](CODEX_TAKEOVER.md), TL-P4-56).
+This block is the whole current state; ACTIVE.md is the history log. A Codex successor follows [CODEX_TAKEOVER.md](CODEX_TAKEOVER.md).
 
 **State.**
-- claude/p3 holds main b716e2d3 (merged), 520/532. After each lead ruling, merge main again (`git -C /Users/deluisp/Projects/bower-app merge -q --no-edit main`).
-- backup/main and staging are at 5bab1288 (staging bfa0c812, bundle index-DOzbpzq4.js).
-- Since 5bab1288, claude/p3 holds B1c, Q1c, B3b, B5a, B6a and the c02/E-entries. The next batch boundary needs the four suites (jobs/suites.sh), main moved (`git -C repo fetch -q . claude/p3:main`), backup after jobs/backup-scan.sh, the SHA to the lead, and a staging smoke.
+- claude/p3 holds main a22301d8 (merged): 523/537.
+- After each lead ruling, merge main again (`git -C /Users/deluisp/Projects/bower-app merge -q --no-edit main`).
+- Check `git -C /Users/deluisp/Projects/bower-app branch --show-current` before each integrate. An owner Codex Desktop thread once switched the checkout to main (DEFECT_LOG main-checkout-switched).
+- backup/main and staging are at 5bab1288.
+- Since then, claude/p3 has gained B1c, Q1c, B3b, B5a, B6a, c02/E, messages-wait-for-sheets, next-steps-plain-list and q1b-questions-ui. The next batch boundary needs:
+  - the four suites (harness/jobs/suites.sh);
+  - main moved (`git -C repo fetch -q . claude/p3:main`);
+  - a backup after harness/jobs/backup-scan.sh 5bab1288;
+  - the SHA sent to the lead;
+  - a staging smoke.
+- No job is running. Nothing is dispatched.
 
-**Loop per entry (TL-P4-29, TL-P4-31, TL-P4-51, TL-P4-54).**
-1. Codex red, committed by the coordinator.
-2. Codex implementation, committed by the coordinator.
-3. Gates: check, e2e and e2e:fake. Codex can't bind ports or commit, so the coordinator runs these.
-4. For escalated entries, a read-only Codex adversarial pass.
-5. A fresh Claude `bower-reviewer` PASS. This step is Claude-only; under takeover, CODEX_TAKEOVER.md says what replaces it.
-6. For ui entries, the designer's "verified".
-7. `harness/integrate.sh`, then `harness/done.sh <id> "<msg>" --fixed-in <sha>`, or `--known-green` with a committed Close note.
-A third round needs the lead.
+**Loop per entry (TL-P4-29/31/51/54, TL-P4-56 addendum 1, TL-P4-57).** Workers are Codex only, through `harness/codex-run.sh <worktree> <prompt> --entry <id> --attempt <n> --model … --effort …`. The result is `/tmp/codex-run/<entry>-<n>.result`, and codex-run commits per `.codex-commits.json`: a JSON array of {message, files}, with notes in their own commit so done.sh can revert the fix.
+- **Models:** escalated reds, implementations and closing reviews use gpt-6-astra high. Adversarial passes use gpt-6-astra xhigh. Normal and fix rounds use gpt-6.1-sol high, and mechanical work uses Sol medium. Cap: 4.
+- **Steps:**
+  1. A red.
+  2. The implementation.
+  3. The coordinator adds compatibility rows for every non-merge commit touching src/features or src/data/contracts.
+  4. Gates: `harness/jobs/gates.sh`. Codex can't bind ports.
+  5. An adversarial pass (escalated entries).
+  6. A fresh read-only Codex reviewer at high.
+  7. The designer's verified (ui entries).
+  8. `harness/jobs/integrate-done.sh`, or known-green with a committed Close note.
+- Set `BOWER_TOKENS=/tmp/codex-run/tokens-pending.csv` so runs don't dirty the main checkout. Fold that file into harness/tokens.csv at boundaries.
 
-**Job scripts.** They are in `harness/jobs/`, with one line each in harness/README.md (TL-P4-56). The prompts for the jobs in flight are in the Orquestador's scratchpad (`codex-<tag>-*-prompt.md`). A successor writes new prompts from the packets.
-- **Codex results:** `/tmp/codex-<tag>-red.jsonl` and `/tmp/codex-<tag>-impl.jsonl`. The card is the last agent_message.
-- **Gate results:** `/tmp/gates-<tag>/`.
-- **Claude-only steps:** Claude subagents (bower-reviewer, bower-diagnoser, bower-impact, bower-design-checker), tracked `run_in_background` jobs, and the browser-pane smoke on staging.
+**In flight.**
 
-**In flight.** All run under worktrees `/private/tmp/bower-<branch>`, with branch = id.
-
-| Entry | Attempt | Waits on | Next |
-| --- | --- | --- | --- |
-| b1d-selection (escalated) | Round 3 (TL-P4-41 addendum 16): sweep 3, then impl round 3. Round 2 is at 891ec869 and claude/p3 is merged in. | `/tmp/codex-b1d-r3-red.jsonl`, then `-impl.jsonl` | Commit; gates; Codex pass; Claude review; integrate. Not green → back to the lead with the list. No 4th round. |
-| messages-wait-for-sheets (ui) | Red then impl, round 1 | `/tmp/codex-mws-red.jsonl`, then `-impl.jsonl` | Commit; gates incl. the new e2e; Claude review; designer verified; integrate before Q1b. |
-| q1b-questions-ui (ui) | Red then impl, round 1 | `/tmp/codex-q1b-red.jsonl`, then `-impl.jsonl` | Same as above; integrates after messages-wait-for-sheets. |
-| next-steps-plain-list (ui) | Worktree made, not started (Codex cap) | — | Run `jobs/red-then-impl.sh` with `codex-nspl-red-prompt.md` and `codex-nspl-impl-prompt.md`, tag nspl. |
+| Entry | Branch / worktree | Last SHA | Attempt | Next step | Ruling |
+| --- | --- | --- | --- | --- | --- |
+| b1d-selection (escalated) | b1d-selection, /private/tmp/bower-b1d-selection | a187863c | round 6 done; adversarial pass 4 ruled (TL-P4-41 addendum 24, main 1034ad40) | Round 7 (no work done yet): one red for (1) and (2), then the fix, gates, Astra xhigh, Astra high review. (1) execution writes only ids the selection names; a request pin only makes its note a candidate, and if left out the request stays unconsumed in the inbox. (2) a person's note with type: moc and no by: bower is never snapshotted as a Bower MOC. (3) cut-context fingerprints are a v1 limit; write it in the notes. | TL-P4-41 addenda 13–24 |
+| b4a-contract (escalated) | b4a-contract, /private/tmp/bower-b4a-contract | dac89b29 | fix round 1 plus red repair (attempts 6–8) | src is green apart from the EPERM, and compatibility rows are added. Next: gates; then the Astra xhigh adversarial pass 2 (prompt from the B4a packet and addenda 1–3); then the Astra high review. After B1d integrates: merge claude/p3, update the RUNNER_WRITES pin at runner/test/claude-provider.test.ts:600 (observations.jsonl), then integrate. Watch for merge conflicts: B1d round 6 also changed ownership-format.ts, run-manifest.ts and note-format.ts. | TL-P4-48 addenda 1–3 |
 
 **Queue, in order.**
-1. B1d (in flight), then Q1b.
-2. B5b, which carries B5a's handoff list and three baseline lines: note-format propertyValuesOk, note-format tableProperties and runner type-table.ts.
-3. B5c.
-4. B6b. B6a closed at 9f478276.
-5. B4.
-6. rules-added-region-model (after B1d); rules-added-region, then rules-original-ui.
-7. B7, B8 and B9 per P4_PLAN. B8 reuses `src/data/contracts/op-key.ts`.
-8. The retest.
+1. B1d close, then B4a.
+2. B5b and B5c (packets ruled by TL-P4-47 addendum 5; they wait for B1d's claude.ts handoff; the designer confirmed B5b's table).
+3. B4b, then B4c (after B4a and B1d).
+4. B6b, after B1d (TL-P4-47).
+5. rules-added-region-model, after B1d. Then rules-added-region, then rules-original-ui.
+6. B7, B8 and B9 per P4_PLAN.
+7. The retest.
 
-**Open questions.** None open to the lead or the designer.
+**Open questions to the lead.** None (B1d pass 4 ruled in addendum 24).
 
-**B6a integrate fix (2026-10-11).** integrate.sh's check refused verify `-t "b6-"`. The rule in scripts/harness-rules.mjs is that a pattern needs at least 4 non-meta characters. The pattern became `"B6a templates|B6a fix"` over six files (bcc1b867).
+**Notes.**
+- B6a's integrate rule: a verify pattern needs at least 4 non-meta characters (scripts/harness-rules.mjs).
+- done.sh can't revert a fix commit that also carries notes lines touched later. Close those known-green with a committed Close note.
 
 ## Where things stand
 
