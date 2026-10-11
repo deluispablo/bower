@@ -7146,7 +7146,8 @@
       "The spec's test table passes on demo and fake at 375 and 1440."
     ],
     "verify": "pnpm exec vitest run src/ui/dock.test.tsx src/ui/toast.test.ts -t \"MWS \"",
-    "note": "DEFECT_LOG toast-over-sheet; TL-P4-55 (2). Not escalated. Designer verifies. Packet 2026-10-11-messages-wait-for-sheets-packet.md. implementer: codex."
+    "note": "DEFECT_LOG toast-over-sheet; TL-P4-55 (2). Not escalated. Designer verifies. Packet 2026-10-11-messages-wait-for-sheets-packet.md. implementer: codex.",
+    "review": "P4-115 PASS"
   },
   {
     "id": "q1b-questions-ui",
