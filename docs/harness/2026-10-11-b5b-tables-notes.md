@@ -704,6 +704,178 @@ are identical to the final full sweep. `.codex-commits.json` contains exactly th
 production, test sweep, notes alone. The runner commits those groups; this session wrote
 no commit or workspace git metadata. Full-suite method fixtures use only OS-temp repos.
 
+## Implementation 3 (B4a integrated)
+
+implementer: codex
+
+Attempt 5, after the B4a and claude/p3 integration. The missing-table and extension-rewrite
+blockers are implemented; closure still waits for the lead's outstanding assertions and
+the runner's check/e2e. No network, direct git write, node_modules replacement/symlink,
+manual server, pnpm check or manual e2e. `.codex-commits.json` describes production,
+test sweep and notes-only commits for the runner.
+
+### Scope and reuse
+
+- The existing write-runner-json effect gains an explicit expected-absence form for the
+  type table: null before/beforeContent, its captured parent and the usual create key.
+  No invented SeenFile, effect kind, writer, pre-manifest write or maintenance write.
+  Admission requires the resolved .bower parent and no captured table at that path;
+  outsideAdmitted also requires that exact admitted system-folder id.
+- Planning persists the eight seeds on first creation, and permits a frozen-payload yes
+  to install its exact row when the table is absent. Existing unreadable tables still
+  prohibit writes. Existing empty/all-invalid tables keep the same fenced normalization.
+- The engine translates that absence form into its existing runner-file create handling
+  only while executing it. The durable manifest retains write-runner-json. The opening
+  reserves its id; scheduling claims the destination folder exclusively; existing checks,
+  fences, stamped sends, answer-byte validation and reserved-id reconciliation all apply.
+  The table's create key uses the existing runKeys with its own table namespace, so repeated
+  builds and resumed fake runs retain the same ids/bytes without advancing another create's
+  injected key sequence.
+  An arriving table is kept byte-for-byte with no duplicate. A lost create reply recovers
+  the reserved file exactly once with the planned bytes.
+- typeTableOk stays strict by default. Manifest admission opts into stored-row validation
+  only for an existing-file rewrite, preserving envelope, row, property and grouping
+  extension keys. Duplicate ids, invalid known declarations and undeclared columns still
+  refuse. New tables and proposal payloads retain strict closed-object checks.
+- Existing consumers receive only the necessary null-before guards: the grounded/report
+  file-id filters, the runner hot projection and test read-id/hash helpers. The one-line
+  runner/src/index.ts guard is required by the additive effect union; it adds no provider,
+  model-input or maintenance behavior. B4a's validLearnedBlock and maintenanceTargetOk are
+  untouched; the ledger's prior-id comparison only gains a null guard for the union.
+- No files under src/features changed in this attempt. The previously landed Table
+  projection, source read, proposal planning, bounds and prompt/golden sweep are retained.
+
+Research: reused the packet's local closed-JSON-object and RFC 9413 citations, existing
+reserved-id/write-ahead engine and declaration reader. No citations fetched or independently
+reverified; no dependency added.
+
+removed: src/data/contracts/run-manifest.ts: existing-file-only restriction for the ruled type-table effect.
+removed: src/data/spine/scripted.ts: existing-table prerequisite for first creation and frozen-payload installation.
+removed: baselines/helpers: none; the earlier handed-off B5b removals remain removed.
+
+tests changed: runner/test/b5-incorporation.test.ts: add missing-table exact-yes parameter and arriving-table race; keep every existing bytes/ids/column/report/consent assertion.
+tests changed: runner/test/type-table.test.ts: expose the optional stored-validation argument in the test signature; add strict-new/stored-extension and malformed-known-field controls; preserve all existing bounds.
+tests changed: src/data/spine/engine.test.ts: add lost-reply table-create reserved-id, exact bytes and single-send controls; null-safe the existing rewrite-id lookup without changing its conflict assertion.
+tests changed: src/data/fake/fake-worker.test.ts: null-safe only before-id and beforeContent-hash lookups for the additive effect union; every expected digest, byte snapshot, id and count is unchanged.
+tests changed: src/data/fake/fake-worker.test.ts: bind the rejected-hashes lookup to SYSTEM.hashes instead of the first runner write; add the ruled table effect to the exact exhaustive effect list; rejection, hash equality and existing effects are unchanged.
+tests changed: runner/test/recovery.test.ts: omit an absent before-image from readIds; existing reserved-id recovery and all assertions stay unchanged.
+
+### Resolved after B4a
+
+- b5-table-first-create-and-lenient-read: missing, empty and all-invalid tables now store
+  eight seeds through write-runner-json; unreadable/valid-table controls still pass.
+- a trusted rewrite retains stored extension keys now passes through production main.
+- src/architecture.test.ts passes all nine tests, including the integrated literal/global
+  controls. This attempt makes no architecture-test edit.
+- The added first-create collision, missing-table exact-yes/replay and lost-reply recovery
+  controls pass. Strict-new/stored-rewrite validation controls pass.
+
+### Waiting for the lead
+
+Every final runner failure is listed here; no assertion or limit was weakened.
+
+1. runner/test/b5-incorporation.test.ts:210 (original :191): the trusted-column report
+   assertion still expects the formatted sentence inside last-run JSON. The exact assertion
+   is unchanged. Raw report.requests remains the wire contract and runDetail owns the
+   formatted done line. The actual fourth-column change succeeds.
+2. runner/test/b5-incorporation.test.ts:341, both nonboolean consent parameters, remains
+   red: neither installs a row or edits the artifact, and the journal answer stays pending,
+   but the existing shared closing rule drops the authoritative question. The questions
+   contract and its closing-rule allocation still need the lead's ruling.
+3. runner/test/drive-calls-golden.test.ts:27: C04 first creation sends 99 calls against
+   the unchanged exact 96-call pin.
+4. runner/test/drive-calls-golden.test.ts:53: the same 99 calls exceeds the unchanged
+   cold ceiling of 96. This bound is not loosened.
+5. runner/test/drive-calls-golden.test.ts:86: C04 again sends 99 against 96; the measured
+   25-earlier-run control sends 110, with later assertions not reached after the first failure.
+6. runner/test/timing-counts.test.ts:15: phase totals sum to 99 against the unchanged 96.
+
+The three-call creation delta uses the existing destination listing, parent fence and
+multipart create. C04's final named counts: reads 25, apply 58, checkpoints 4, report 10,
+runner 2. No new listing/reader during declaration capture, model call or maintenance
+effect. Thresholds/goldens outside this packet are unchanged and require the lead's ruling.
+The existing novel-type Claude transport allocation, accepted compatibility-ledger entries,
+designer verification and runner-owned check/e2e remain outstanding as previously recorded.
+
+Final src gate failures: src/docs.test.ts:134 still lacks compatibility rows for f45f2ca4,
+c98c686a and aa54844f; src/e2e-port.test.ts:37 has the expected sandbox EPERM timeout
+and one associated unhandled listen error. Both are unchanged; no workaround was added.
+The first complete src sweep exposed these four additional assertions, now resolved with all 243 focused tests
+passing in /tmp/b5b-attempt5-src-fix-controls.log:
+
+- src/data/spine/recovery.test.ts:133: random default table-create key changed manifest,
+  report hashes and table stamps between independent runs. The existing runKeys now supplies
+  that new create's stable key. Exact full-state/byte/hash equality is unchanged and passes.
+- src/data/spine/scripted.test.ts:273: table creation advanced a shared injected generator
+  on a second build. The same stable type-table key fixes it; exact manifest equality is
+  unchanged and passes. Neither recovery nor scripted test was edited.
+- runner/test/claude-provider.test.ts:777: the first stable namespace, type-table, included
+  a hyphen where the existing exact key-format assertion permits letters only. Production
+  now uses table, preserving that assertion and the run-derived key prefix unchanged.
+- src/data/fake/fake-worker.test.ts:1354: the hashes fixture selected the new table effect
+  by the first generic write kind. Its lookup now names SYSTEM.hashes, keeping the exact
+  rejected outcome and all recomputed hashes assertions.
+- src/data/fake/fake-worker.test.ts:5530: the exhaustive effect list omitted the newly ruled
+  write-runner-json type-table effect. It is added without removing any existing effect.
+
+### Compatibility draft
+
+One draft row per changed contract home; no feature home changed in this attempt.
+
+| Changed home | Contract change | Existing stored data / callers | Evidence |
+| --- | --- | --- | --- |
+| src/data/contracts/run-manifest.ts: effect/admission | Add explicit expected-absence type-table write | Historical existing-file effect shape and identities remain accepted; creates keep strict tables, captured system-folder identity, reserved ids and collision fences; B4a memory validators unchanged | missing/empty/all-invalid main cases; arriving-table and lost-reply controls; full manifest and B4a suites |
+| src/data/contracts/run-manifest.ts: planningArtifactsOk | Use stored validation only for an existing-file rewrite | New tables stay strict; historical extension-bearing declarations can be rewritten through the existing version/content fence | trusted-extension main case; strict-new/stored-validation controls; existing concurrent-rewrite case |
+| src/data/contracts/note-format.ts | Optional stored mode on typeTableOk, strict by default | Existing one-argument callers keep strict writes; trusted rewrites preserve unknown keys without accepting invalid known fields or duplicate ids | full type-table suite; strict-new/stored-validation controls; trusted-extension main case |
+
+### Verification
+
+Final checks:
+
+| Check | Result | OS-temp log |
+| --- | --- | --- |
+| Full runner, --maxWorkers=2 | 747 pass / 7 fail, 59 files; all failures listed under Waiting for the lead | /tmp/b5b-attempt5-runner-final.log |
+| Full vitest run src, --maxWorkers=2 | 5827 pass / 2 fail, 180 files; compatibility ledger and expected EPERM only | /tmp/b5b-attempt5-src-final.log |
+| Final table-key engine/recovery/scripted controls | 66/66 pass after the final namespace-only adjustment | /tmp/b5b-attempt5-table-key-controls.log |
+| App TypeScript, no emit/incremental | pass | /tmp/b5b-attempt5-tsc-app-final.log |
+| Node TypeScript, no emit/incremental | pass | /tmp/b5b-attempt5-tsc-node-final.log |
+| Runner TypeScript, no emit | pass | /tmp/b5b-attempt5-tsc-runner-final.log |
+| Touched app/contract/test ESLint | pass | /tmp/b5b-attempt5-eslint-app.log |
+| Touched runner/test ESLint | pass | /tmp/b5b-attempt5-eslint-runner.log |
+| node scripts/check-unused-gate.mjs | pass; 2 existing general / 29 existing production findings | /tmp/b5b-attempt5-unused.log |
+| git diff --check, read-only | pass | empty command output |
+
+Exact full-suite commands:
+
+```sh
+pnpm exec vitest run --config /tmp/b5b-attempt5-runner.config.mts --configLoader runner --maxWorkers=2 > /tmp/b5b-attempt5-runner-final.log 2>&1
+pnpm exec vitest run src --maxWorkers=2 --config /tmp/b5b-attempt5-app.config.mts --configLoader runner > /tmp/b5b-attempt5-src-final.log 2>&1
+pnpm exec tsc -p tsconfig.app.json --noEmit --incremental false > /tmp/b5b-attempt5-tsc-app-final.log 2>&1
+pnpm exec tsc -p tsconfig.node.json --noEmit --incremental false > /tmp/b5b-attempt5-tsc-node-final.log 2>&1
+pnpm exec tsc -p runner/tsconfig.json --noEmit > /tmp/b5b-attempt5-tsc-runner-final.log 2>&1
+node scripts/check-unused-gate.mjs > /tmp/b5b-attempt5-unused.log 2>&1
+```
+
+The complete src sweep passes all B4a, manifest, B6a, bounds and architecture tests. Its
+last create-key namespace change was checked afterward by the exact engine/recovery/
+scripted equality controls and the full runner suite. The unchanged modelled apply-time
+bound passes at 6530 ms against 8025 ms; whole-run 20% assertions in the retention golden
+are not reached after the exact-count failure, so no whole-run timing acceptance is claimed.
+The same tests, files, bounds, hashes and id-format assertions remain in the final tree.
+
+The initial direct Vitest commands used the default timer setup, which also wrote CPU
+reports into the checkout. Those full sweeps were stopped and 5 app / 31 runner reports
+created by this attempt were moved to /tmp/b5b-attempt5-accidental-cpu/. They changed no
+tracked file. Final suites use OS-temp configs/caches/JSON and a copied setup retaining
+the exact createTimerGate/fullName/allowed-tests check, with only CPU reporting omitted.
+The first temp app config omitted Vite's OS-temp allow-list and failed to load the setup;
+the final app run corrects that test-launch config only. Neither failure was treated as an
+app regression. No repository config, timer guard or dependency directory was replaced.
+
+Touched-file ESLint uses the installed config/parser with explicit package tsconfigRootDir
+in an OS-temp launcher, as in attempt 4. The initial combined CLI had the same ambiguous
+root-parser error; the final app/runner lint commands pass without repository config edits.
+
 Left out / risk: deferred manifest creation/rewrites and architecture merge, shared raw-answer
 closing rule, and the unresolved Claude novel-type transport; existing public API rejects raw
 nonboolean consent, but malformed stored answers can hide cards. No check/e2e/designer or
