@@ -558,3 +558,5 @@ orphan-pile-count-data,implementer,codex,unknown,high,1,3122384,3108779,,2986496
 upload-sign-out-forget,implementer,codex,unknown,high,1,5616541,5589597,,5462016,26944,,,,check-failed,2026-10-10
 orphan-pile-count-data,implementer,codex,unknown,high,2,1811588,1799054,,1707136,12534,,,,check-failed,2026-10-10
 b1c-index,implementer,codex,unknown,high,1,8857958,8822245,,8636928,35713,,,,check-failed,2026-10-10
+next-steps-plain-list,implementer,codex,unknown,high,2,1054422,1041357,,967936,13065,,,,check-failed,2026-10-11
+b1d-selection,implementer,codex,unknown,high,4,3531331,3512791,,3387008,18540,,,,check-failed,2026-10-11
