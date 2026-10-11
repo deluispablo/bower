@@ -1907,3 +1907,498 @@ notes-only commit; the runner commits the diff.
 
 Skipped: production fix, full suites, pnpm check, e2e and commits; this session is reds only.
 Risk: both boundaries still admit memory aliases and mismatched allowed paths until the implementation round.
+
+
+## Round 6 (addendum 8)
+
+Implemented P4-121 and TL-P4-48 addendum 8 with one shared helper,
+`maintenanceTargetOk`, in `src/data/contracts/run-manifest.ts`.
+It resolves the target's file ID through the existing `targetPath` mechanism,
+refuses unresolved IDs and declared/resolved path mismatches, and refuses
+About me, the observation ledger and About me archives by either identity or
+path. Both `aboutArtifactsOk` and `outsideAdmitted` call this helper;
+no second resolver, validator, dependency or maintenance writer was added.
+
+Scope: those two production files and these notes. Call-site search covered
+manifest parsing, runner admission, maintenance's producer in runner/src/index.ts,
+existing contract/runner consumers and the frozen round-6 tests. No caller,
+fixture, config, export consumer or test was modified beyond the two named
+boundaries. This entry does not own runner/src/index.ts.
+
+removed: run-manifest.ts aboutArtifactsOk's path-only maintenance memory ban.
+removed: admitted.ts outsideAdmitted's duplicated path-only maintenance memory ban.
+tests changed: none; no test, assertion, threshold, timeout or fixture was changed.
+tests changed: no older contradiction was repaired or weakened.
+
+### Compatibility draft rows
+
+| Contract home | Round-6 change | Compatibility evidence / consumer |
+| --- | --- | --- |
+| src/data/contracts/run-manifest.ts | One maintenanceTargetOk helper resolves file identity, bans protected memory and refuses a declared path that differs from its resolved path; aboutArtifactsOk uses it | No wire schema or stored bytes changed. Existing targetPath remains the sole resolver. Questions with matching captured ID/path pass; all three protected memory identities and an allowed-file path mismatch refuse at both boundaries. Strict identity binding also rejects existing maintenance manifests whose target IDs are missing from capture.places; 361 runner failures below block compatibility. Runner admission imports the same helper. B4b/B4c must consume the agreed identity contract. |
+
+### Red-first evidence and checks
+
+Before production edits, the frozen `src/data/contracts/b4a-r6.test.ts` failed
+all three tests with exactly twelve finding assertions. Positive questions and
+protected-path controls passed. Log: `/tmp/b4a-r6-before.log`.
+After the fix all three tests pass, including the allowed-file mismatch and
+identity controls. Log: `/tmp/b4a-r6-after.log`. Exact tests:
+- `b4a-r6 1 About me`
+- `b4a-r6 2 ledger`
+- `b4a-r6 3 archive`
+
+Verification folder: `/tmp/b4a-r6-checks-_2c676vs`.
+Final full runner command:
+`pnpm -C runner exec vitest run --maxWorkers=2 --config /tmp/b4a-r6-checks-_2c676vs/runner.mjs --configLoader runner`.
+Result: 58 files, 718 tests; 357 pass, 361 fail across 40 files (exit 1).
+Logs/report: runner-final.log and runner.json.
+
+Final full app command:
+`pnpm exec vitest run src --maxWorkers=2 --config /tmp/b4a-r6-checks-_2c676vs/app.mjs --configLoader runner`.
+App result is recorded below after the complete run.
+
+TypeScript app/node/runner (`pnpm exec tsc --noEmit -p <config>`): pass;
+logs tsc-app-final.log, tsc-node.log and tsc-runner-final.log.
+ESLint on run-manifest.ts from the app package and admitted.ts from the runner
+package: pass (eslint-app.log and eslint-runner.log). The initial combined
+invocation had parser-root ambiguity; separate package invocations resolve it.
+`node scripts/check-unused-gate.mjs`: pass, baselines 2 and 34 (unused.log).
+Read-only `git diff --check`: pass.
+
+Temporary configs import the real app/runner configs, preserve their setup and
+timer gate, and relocate caches, JSON reports, attachments and CPU output to OS
+temp. Output-only transforms relocate harness.test.ts's generated Playwright
+fixtures/import and new-instance.test.ts's copied build script/bundle. The copied
+script bundles the actual runner sources with installed esbuild into OS temp.
+No assertion or repository test/config/setup file was edited. The temp folder
+has type: module so generated Playwright configs keep the same module semantics.
+
+The initial runs incorrectly retained the older harness fixtures' repository
+output paths and new-instance's build destination. Their three newly generated
+fx directories and runner bundle were moved to initial-output/ in OS temp;
+pre-existing fixture directories were left alone. The app's initial run was
+interrupted, then both full suites were rerun with output relocation. This was
+an output-isolation mistake, not an assertion change. Final runs write test
+artifacts to OS temp. No git-writing command, network call or node_modules
+replacement/symlink was made by this worker. Suite-internal Git fixtures operate
+on their own made-up temporary repositories.
+
+Prior research reused offline: the packet's [Zod declarations](https://zod.dev/api)
+reference, not newly verified. The production identity resolver and sealed
+round-6 fixtures were reused; no network or new library was needed.
+
+### Compatibility blocker and every older runner failure
+
+The ruled mismatch refusal is implemented without an unresolved-ID exception.
+The existing maintenance producer in runner/src/index.ts:434–455 includes system,
+MOC and reserved future IDs from its listing/snapshot without adding each one
+to capture.places. targetPath resolves captured IDs only. Consequently ordinary
+runs report `The manifest planned ... is refused (shape)` before their promised
+maintenance/write results. This is a production integration blocker, not a
+reason to weaken old tests. Extending identity resolution or changing the
+producer requires a lead ruling; no extra mechanism or out-of-scope patch was
+added. The whole runner suite was run before stopping, as TL-P4-51 requires.
+All 361 failed tests are listed below with their failing assertion location;
+full messages and secondary assertions remain in runner.json/runner-final.log.
+
+- `runner/test/ask-answer-loop.test.ts:304` — an answer applies at once (TL-P4-08 addendum 8) a yes to keep one note starts a scoped run that merges
+- `runner/test/ask-answer-loop.test.ts:328` — an answer applies at once (TL-P4-08 addendum 8) answers reach the model path
+- `runner/test/ask-answer-loop.test.ts:358` — an answer applies at once (TL-P4-08 addendum 8) a yes to a pair ask merges through keep-one-note-merge
+- `runner/test/ask-answer-loop.test.ts:385` — an answer applies at once (TL-P4-08 addendum 8) a yes to a pair whose other note is in the Bin settles and says nothing was merged
+- `runner/test/ask-answer-loop.test.ts:403` — an answer applies at once (TL-P4-08 addendum 8) with no new input a second run leaves nothing held or waiting for the same reason
+- `runner/test/ask-answer-loop.test.ts:442` — an answer applies at once (TL-P4-08 addendum 8) an answer during a run is applied by the next
+- `runner/test/ask-answer-loop.test.ts:460` — an answer applies at once (TL-P4-08 addendum 8) a no closes the question with no run
+- `runner/test/ask-answer-loop.test.ts:501` — an answer applies at once (TL-P4-08 addendum 8) a yes to a thing asked about starts a run that takes only its pile, with the answer shown
+- `runner/test/ask-answer-loop.test.ts:521` — an answer applies at once (TL-P4-08 addendum 8) a yes to Write it writes the update in a scoped run
+- `runner/test/ask-answer-loop.test.ts:549` — an answer applies at once (TL-P4-08 addendum 8) a person edit after the question stops Write it
+- `runner/test/ask-answer-loop.test.ts:567` — an answer applies at once (TL-P4-08 addendum 8) undo of Write it restores the person's section
+- `runner/test/ask-answer-loop.test.ts:591` — an answer applies at once (TL-P4-08 addendum 8) a yes to write it applies the shown text with no model call
+- `runner/test/ask-answer-loop.test.ts:624` — an answer applies at once (TL-P4-08 addendum 8) write it re-asks when the section changed since it was shown
+- `runner/test/ask-answer-loop.test.ts:644` — an answer applies at once (TL-P4-08 addendum 8) a write it yes whose note is gone writes one answered row
+- `runner/test/ask-answer-loop.test.ts:673` — an answer applies at once (TL-P4-08 addendum 8) write it re-asks when the note changed elsewhere since it was shown
+- `runner/test/ask-answer-loop.test.ts:698` — an answer applies at once (TL-P4-08 addendum 8) a clash at write time leads to the re-ask with the new sentence and no extra press
+- `runner/test/ask-answer-loop.test.ts:744` — an answer applies at once (TL-P4-08 addendum 8) only a clash keeps an answer for a re-ask
+- `runner/test/ask-answer-loop.test.ts:773` — an answer applies at once (TL-P4-08 addendum 8) the same non-clash refusal never starts more runs than the cap, then shows the not-written row
+- `runner/test/ask-answer-loop.test.ts:823` — an answer applies at once (TL-P4-08 addendum 8) a write it refused for good writes one answered row on Home and on the note
+- `runner/test/ask-answer-loop.test.ts:844` — an answer applies at once (TL-P4-08 addendum 8) a write it with nothing to write writes one answered row
+- `runner/test/ask-answer-loop.test.ts:96` — an answer applies at once (TL-P4-08 addendum 8) a lone no to write it closes the question with no model call
+- `runner/test/ask-answer-loop.test.ts:890` — an answer applies at once (TL-P4-08 addendum 8) a yes to write it beside a pile asks the model
+- `runner/test/ask-answer-loop.test.ts:900` — an answer applies at once (TL-P4-08 addendum 8) of two answers to one question, the later one counts
+- `runner/test/ask-one-per-thing.test.ts:46` — one open question per thing (TL-P4-11 addendum) two differently worded asks about one thing give one question
+- `runner/test/ask-one-per-thing.test.ts:56` — one open question per thing (TL-P4-11 addendum) a thing that leaves the inbox closes its question
+- `runner/test/ask-one-per-thing.test.ts:67` — one open question per thing (TL-P4-11 addendum) an answer whose subject left is settled
+- `runner/test/ask-one-per-thing.test.ts:82` — one open question per thing (TL-P4-11 addendum) a re-upload of the same thing adds no question
+- `runner/test/ask-one-per-thing.test.ts:96` — one open question per thing (TL-P4-11 addendum) an instructions run keeps an open thing question
+- `runner/test/ask-one-per-thing.test.ts:111` — one open question per thing (TL-P4-11 addendum) a pile ask then a thing ask leave one question
+- `runner/test/ask-only-lines.test.ts:36` — a run that only asks keeps the Timeline lines the model added with no cites
+- `runner/test/b1-index.test.ts:97` — B1c index: exact PARA order direct notes shortest duplicate paths and recursive folded count
+- `runner/test/b1-index.test.ts:171` — B1c index: 32000 character cut names every omitted folder and preserves whole rows
+- `runner/test/b1-index.test.ts:220` — B1c index: hidden app settings and dot-folder notes never enter either projection
+- `runner/test/b1-index.test.ts:256` — B1c index: hidden-only feed changes only the cursor with a visible-feed positive control
+- `runner/test/b1-index.test.ts:275` — B1c index: unchanged summaries keep index bytes and stamp through a visible version change
+- `runner/test/b1-index.test.ts:97` — B1c index: existing MOC at 40 direct members folds and rebuilds complete regions by id
+- `runner/test/b1-index.test.ts:97` — B1c index: existing MOC at 41 direct members folds and rebuilds complete regions by id
+- `runner/test/b1-index.test.ts:327` — B1c index: a personal MOC stays byte identical while the Bower MOC refreshes
+- `runner/test/b1-index.test.ts:339` — B1c index: done replay keeps the folded projection and complete members without another write
+- `runner/test/b1-index.test.ts:358` — B1c index: lost reply for .bower/index.md resumes the same maintain before the report barrier
+- `runner/test/b1-index.test.ts:358` — B1c index: lost reply for Resources/Garden/Garden.md resumes the same maintain before the report barrier
+- `runner/test/b1-index.test.ts:358` — B1c index: lost reply for .bower/retrieval.json resumes the same maintain before the report barrier
+- `runner/test/b1-index.test.ts:403` — B1c index: corpus b1-index-no-change preserves the derived stamp on the second real instruction press
+- `runner/test/b1-index.test.ts:97` — B1c index: corpus b1-moc-over-40 folds 41 leaves with complete reachable child maps
+- `runner/test/b1-index.test.ts:494` — B1c index: legacy MOC migrates on its first maintain and keeps every other byte
+- `runner/test/b1-index.test.ts:507` — B1c index: legacy MOC second maintain is idempotent with no MOC write
+- `runner/test/b1-index.test.ts:535` — B1c index: legacy MOC without Overview and Notes is untouched
+- `runner/test/b1-index.test.ts:555` — B1c index: legacy MOC belonging to a person with the same headings is untouched
+- `runner/test/b1-index.test.ts:576` — B1c index: maintain MOC targets pass the fenced-edit guard and personal targets are refused
+- `runner/test/b1-index.test.ts:645` — B1c fix 1: 1 settled link rewrite supplies maintenance its new MOC text and version
+- `runner/test/b1-index.test.ts:672` — B1c fix 1: 2 B1a unchanged legacy MOC is discovered migrated once and folded
+- `runner/test/b1-index.test.ts:97` — B1c fix 1: 3 figures count 1 direct notes without a child map
+- `runner/test/b1-index.test.ts:97` — B1c fix 1: 3 figures count 40 direct notes without a child map
+- `runner/test/b1-index.test.ts:758` — B1c fix 1: 4 bootstrap plans with the in-memory index
+- `runner/test/b1-index.test.ts:758` — B1c fix 1: 4 missing-index plans with the in-memory index
+- `runner/test/b1-index.test.ts:800` — B1c fix 2: unchanged legacy MOC without Drive ownership is discovered migrated once and folded
+- `runner/test/b1-index.test.ts:873` — B1c fix 3: legacy MOC ownership comes from the index prefix with zero extra reads
+- `runner/test/b1-index.test.ts:1013` — B1c fix 4: a warm run with changed notes counted through maintain equals the pre-addendum-9 count
+- `runner/test/b1-planning.test.ts:62` — b1-scripted-two-step-reply-freezes-every-execution-target
+- `runner/test/b1-planning.test.ts:74` — b1-index-job-offer
+- `runner/test/b1-planning.test.ts:98` — b1-changes-person-edit
+- `runner/test/b1-planning.test.ts:127` — b1-cut-index-no-new-destination
+- `runner/test/b1-planning.test.ts:159` — b1-five-per-source
+- `runner/test/b1-planning.test.ts:201` — b1-selection-closed-ids
+- `runner/test/b1-planning.test.ts:252` — b1-folded-moc-expansion
+- `runner/test/b1-planning.test.ts:278` — b1-target-injection
+- `runner/test/b1-planning.test.ts:313` — b1-read-to-act-fence
+- `runner/test/b1-planning.test.ts:342` — b1-question-candidate-binding
+- `runner/test/b1-planning.test.ts:366` — b1-shared-ledger
+- `runner/test/b1-planning.test.ts:420` — b1-refresh-cache-hot-order
+- `runner/test/b1-planning.test.ts:464` — b1-pre-manifest-retry
+- `runner/test/b1-planning.test.ts:495` — b1-neighbourhood-order-and-30-cap
+- `runner/test/b1-planning.test.ts:526` — b1-expansion-is-not-a-read-picked-members-count-within-five
+- `runner/test/b1-planning.test.ts:552` — b1-new-subfolder-visible-parent-name-and-near-duplicate
+- `runner/test/b1-planning.test.ts:574` — b1-one-new-subfolder-per-item
+- `runner/test/b1-planning.test.ts:588` — b1-one-retry-per-step-four-calls-exhaustion-leaves-items-for-next-run
+- `runner/test/b1-planning.test.ts:643` — b1-200-operations-exhaustion-leaves-items-for-next-run
+- `runner/test/b1-planning.test.ts:657` — b1-invalid-reply-exhaustion-fails-after-one-retry
+- `runner/test/b1-planning.test.ts:687` — b1-ledger-exhaustion-valid-replies-done-with-items-left-in-inbox
+- `runner/test/b1a-contract.test.ts:217` — B1a contract: addendum 4: maintain writes only retrieval index once and changed MOC regions per run
+- `runner/test/b1a-contract.test.ts:251` — B1a contract: 3: retrieval state and cursor commit together before the hidden report barrier
+- `runner/test/b1a-contract.test.ts:279` — B1a contract: 4: settled maintenance replays without rows or duplicate writes and done skips it
+- `runner/test/b1a-contract.test.ts:303` — B1a contract: case 6: lost maintenance reply resumes the same manifest before done
+- `runner/test/b1a-contract.test.ts:368` — B1a contract: 4: maintenance uses settled refusals without fabricating rows or log entries
+- `runner/test/b1a-contract.test.ts:435` — B1a contract: TL-P4-45 addendum: root index is an ordinary indexed note and dot paths stay hidden
+- `runner/test/b1a-contract.test.ts:488` — B1a contract: pass 1 1: the committed cursor never passes an unreflected concurrent edit
+- `runner/test/b1a-contract.test.ts:535` — B1a contract: pass 1 4: maintain bootstraps and refreshes full valid ownership notes beyond 4096 bytes
+- `runner/test/b1a-contract.test.ts:644` — B1a contract: round 3 1: vanished indexed notes drop without failing and ordinary edits refresh
+- `runner/test/b1a-contract.test.ts:754` — B1a contract: round 4 1: a folder binned before planning drops every indexed descendant
+- `runner/test/b1a-contract.test.ts:754` — B1a contract: round 4 2: a folder moved outside drops its indexed subtree and commits the cursor
+- `runner/test/b1a-contract.test.ts:754` — B1a contract: round 4 3: a renamed folder updates descendant paths and index order without media reads
+- `runner/test/b1a-contract.test.ts:754` — B1a contract: round 4 4: an inside folder move updates recursive paths and regroups without media reads
+- `runner/test/b1d-fr4.test.ts:63` — b1d-fr4 1 shown candidates bound notes and parents
+- `runner/test/b1d-fr4.test.ts:130` — b1d-fr4 3 empty selection grants no keep or Bin
+- `runner/test/b1d-fr4.test.ts:160` — b1d-fr4 4 no-model answers share the 200-operation ledger
+- `runner/test/b1d-fr4.test.ts:217` — b1d-fr4 6 near names collapse internal whitespace
+- `runner/test/b1d-fr5.test.ts:31` — b1d-fr5 1 crossing MOC prefix
+- `runner/test/b1d-fr5.test.ts:89` — b1d-fr5 2 maintenance exhaustion after effects
+- `runner/test/b1d-fr5.test.ts:31` — b1d-fr5 3 answer pins belong to each source
+- `runner/test/b1d-fr5.test.ts:31` — b1d-fr5 4 refreshed MOC members are selectable
+- `runner/test/b1d-fr5.test.ts:31` — b1d-fr5 5 heading links resolve candidates
+- `runner/test/b1d-r6.test.ts:34` — b1d-r6 A1 crossing prefixes are advisory for every note type
+- `runner/test/b1d-r6.test.ts:34` — b1d-r6 A2 damaged full reads refuse only the needed note
+- `runner/test/b1d-r6.test.ts:34` — b1d-r6 B1 maintenance charges every send within 300
+- `runner/test/b1d-r6.test.ts:34` — b1d-r6 B2 exhaustion stops read-ahead and handles pending rejections
+- `runner/test/b1d-r6.test.ts:34` — b1d-r6 C1 request pins count per source
+- `runner/test/b1d-r6.test.ts:34` — b1d-r6 C2 MOC member ids have one stable fingerprint
+- `runner/test/b1d-r7.test.ts:41` — b1d-r7 1 request pin is only a candidate
+- `runner/test/b1d-r7.test.ts:78` — b1d-r7 2 personal type moc is not a Bower MOC
+- `runner/test/b1d-r8.test.ts:57` — b1d-r8 1 a keep-one merge rewrites backlinks in an unselected note
+- `runner/test/b1d-r8.test.ts:106` — b1d-r8 2 the model cannot add a non-backlink edit to an unselected note
+- `runner/test/b23-hot-context.test.ts:41` — B3b hot: filing writes hot once and the next prompt puts it at position 6
+- `runner/test/b23-hot-context.test.ts:101` — B3b fix 1: settled journal changes enter Recent changes on their own
+- `runner/test/b23-hot-context.test.ts:129` — B3b hot: an Undo run refreshes hot from restored evidence
+- `runner/test/b23-hot-context.test.ts:200` — B3b hot: an ordinary rule Undo keeps its own wording
+- `runner/test/b23-hot-context.test.ts:247` — B3b hot: recent rows carry their op key and dedupe by it
+- `runner/test/b23-hot-context.test.ts:282` — B3b hot: date-only refresh keeps the old bytes without another write
+- `runner/test/b23-hot-context.test.ts:309` — B3b hot: hidden-only feed drains its cursor and leaves hot untouched
+- `runner/test/b23-hot-context.test.ts:332` — B3b hot: a Home answer removes only its settled Open thread
+- `runner/test/b23-hot-recovery.test.ts:22` — B3b hot: pre-plan failure and done redispatch send no hot writes
+- `runner/test/b23-hot-recovery.test.ts:67` — B3b hot: a lost maintain reply resumes the same manifest and writes hot once
+- `runner/test/c04-incorporation.test.ts:224` — the C04 slice through the Claude provider (P4-3) the C04 corpus cases score green with scripted proposals
+- `runner/test/c04-incorporation.test.ts:246` — the C04 slice through the Claude provider (P4-3) a recorded Claude reply on a C04 case writes a note with its content
+- `runner/test/c04-prompt-fixes.test.ts:66` — c04 prompt fixes (TL-P4-08 addendum 5) a number not found in its sources is refused and retried once
+- `runner/test/c04-prompt-fixes.test.ts:101` — c04 prompt fixes (TL-P4-08 addendum 5) a raw file name is replaced by a plain name
+- `runner/test/c04-prompt-fixes.test.ts:163` — c04 prompt fixes (TL-P4-08 addendum 5) the offer-and-flat rubric accepts the photo ask and a money area
+- `runner/test/c05-between.test.ts:12` — a real first state write precedes the personal edit and shown update
+- `runner/test/c05-bounded-reads.test.ts:269` — C05 bounded reads: golden: 50 archived requests and 25 kept runs cost no historical media
+- `runner/test/c05-bounded-reads.test.ts:157` — C05 bounded reads: pending: a clash moves by run id and retries only its bound evidence
+- `runner/test/c05-bounded-reads.test.ts:507` — C05 bounded reads: fix 2 control: a waiting retry whose pending relocation lands completes once
+- `runner/test/c05-bounded-reads.test.ts:507` — C05 bounded reads: fix 2: a waiting retry whose pending relocation failed completes once
+- `runner/test/c05-bounded-reads.test.ts:507` — C05 bounded reads: fix 2: a waiting retry interrupted after its pointer and before its append appends once
+- `runner/test/c05-bounded-reads.test.ts:410` — C05 bounded reads: fix 1 control: a waiting retry whose archive lands completes once
+- `runner/test/c05-bounded-reads.test.ts:410` — C05 bounded reads: fix 1: a waiting retry whose archive move failed completes once
+- `runner/test/c05-bounded-reads.test.ts:157` — C05 bounded reads: horizon: past 20 runs uses listing age and TOO_OLD_WHY without a chain walk
+- `runner/test/c05-incorporation.test.ts:74` — the C05 slice through the Claude provider the C05 corpus cases score green with scripted proposals
+- `runner/test/c05-incorporation.test.ts:90` — the C05 slice through the Claude provider every Timeline line a run writes has its own report row
+- `runner/test/c05-marked-history.test.ts:10` — the marked state was actually written and its previous lines remain in undo evidence
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: title grammar case and punctuation shows the named note before hubs
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: title grammar the article shows the named note before hubs
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: title grammar my article shows the named note before hubs
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: title grammar Unicode NFC shows the named note before hubs
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: longest whole title wins and source-only or partial mentions grant nothing
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: row 6 files the source and lists 2 same-title notes by id and folder without asking
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: row 6 files the source and lists 3 same-title notes by id and folder without asking
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: row 7 files the source but four named notes produce one unlinked row and zero updates
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: consent refuses unrelated request id through main beside a legitimate append
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: consent refuses unrelated target id through main beside a legitimate append
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: consent refuses citation not filed in this run through main beside a legitimate append
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: row 5 missing Timeline is byte-identical, linked in leftAsWritten and never counted updated
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: row 8 unparseable Timeline is byte-identical, linked in leftAsWritten and never counted updated
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: corpus first append, protected ranges, state question and later non-adoption score per run
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: state answer true changes only the shown bullet or writes nothing and is never re-asked
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: state answer false changes only the shown bullet or writes nothing and is never re-asked
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: state changed before Write it re-asks and preserves the new personal bullet
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: append clash retries on the next main call with the fresh personal text and original citation
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: landed append with lost answer and failed read-back resumes exactly once
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: fix 1 finding 1: overflow blocks owned and personal note writes
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: fix 1 finding 2: a conflicted append retries its filed source within twenty retained runs
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: fix 1 finding 3: article-equivalent titles stay ambiguous in context and writes
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: fix 1 finding 4: a completed replay cannot consume the new request for the same note
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: fix 1 finding 5: an already-present bound append completes the request before replay
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: fix 1 finding 8: an unrelated filing failure preserves the filed source refusal row
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: round 3 2: only the oldest unfinished request settles for one note
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: round 3 1: ambiguity settles and reports without a model line
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: round 3 1: overflow settles and reports without a model line
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: round 3 1: missing Timeline settles and reports without a model line
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: round 3 1: unreadable Timeline settles and reports without a model line
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: round 3 3: overflow refuses its source on an unnamed owned hub
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: round 3 3: ambiguity refuses its source on an unnamed owned hub
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: round 3 5: invalid bullet count state proposal leaves the valid append independent
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: round 3 5: plain note state proposal leaves the valid append independent
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: round 3 6: retry cites the bound source id after its rename
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: round 3 6: satisfaction follows final citation naming on a filing collision
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: round 4 1: settlement survives recovery and retention
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: round 4 2: pending retries keep target and source ids
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: round 4 3: only settlement archives scripted requests
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: round 5 1: archived completion uses the record id inside differently named bytes
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: round 5 2: a retained completion never resolves a renamed target by title again
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: round 5 3: a request past retention is left as written and archived without an append
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: round 5 4: one line and one nothing-found row settle two named targets
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 person notes: round 5 5: only a clashed target retries on bound ids before archive
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 timeline list C05 timeline list: 1: dated-colon list with no offered line settles as nothing found
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 timeline list C05 timeline list: 2: plain list with front matter appends once, updates, archives and completes
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 timeline list C05 timeline list: 2: plain list without front matter appends once, updates, archives and completes
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 timeline list C05 timeline list: 3: prose stays unreadable even with a sourced line offered
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 timeline list C05 timeline list: 4: appendable person and Bower-owned notes remain positive controls
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 timeline list C05 timeline list: 5: exact bytes preserve CRLF and Unicode byte offsets through main and note-edit
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 timeline list C05 timeline list: 5: exact bytes preserve star marker through main and note-edit
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 timeline list C05 timeline list: 5: exact bytes preserve whole nested subtree at top level through main and note-edit
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 timeline list C05 timeline list: 5: exact bytes preserve last top-level star in mixed markers through main and note-edit
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 timeline list C05 timeline list: 5: exact bytes preserve last top-level dash in mixed markers through main and note-edit
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 timeline list C05 timeline list: 5: exact bytes preserve trailing blanks with final newline through main and note-edit
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 timeline list C05 timeline list: 5: exact bytes preserve no final newline through main and note-edit
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 timeline list C05 timeline list: 5: exact bytes preserve trailing blanks without final newline through main and note-edit
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 timeline list C05 timeline list: 5: exact bytes preserve following heading stays outside the list through main and note-edit
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 timeline list C05 timeline list: 5: exact bytes preserve plain CRLF star subtree before a following heading through main and note-edit
+- `runner/test/c05-person-notes.test.ts:77` — C05 person notes through runner main C05 timeline list C05 timeline list: 5: preseeded Bower star line completes once and replay keeps exact bytes
+- `runner/test/claude-provider.test.ts:217` — the Claude provider a new Area with no cited rule or note is refused and retried once
+- `runner/test/claude-provider.test.ts:236` — the Claude provider a new Area with a responsibility is made and the report says why
+- `runner/test/claude-provider.test.ts:330` — the Claude provider a new subfolder of an existing Area is not reported as a new area
+- `runner/test/claude-provider.test.ts:353` — the Claude provider a thing with text and no note or citing line is refused and retried once
+- `runner/test/claude-provider.test.ts:384` — the Claude provider a thing cited by a Timeline line on an existing note needs no note
+- `runner/test/claude-provider.test.ts:396` — the Claude provider a photo with no text needs no note
+- `runner/test/claude-provider.test.ts:430` — the Claude provider a recorded Claude reply becomes operations the spine validates
+- `runner/test/claude-provider.test.ts:495` — the Claude provider the runner logs one timing line per run with the Claude reply's numbers
+- `runner/test/claude-provider.test.ts:633` — the Claude provider contract (TL-P4-01 P4-2) the Claude provider passes the scripted provider contract fixtures
+- `runner/test/claude-provider.test.ts:850` — the Claude provider writes only what it proposed (P4-2 review I1) a Claude run writes no hub line or demo extra it did not propose
+- `runner/test/corpus-driver.test.ts:108` — multi-press corpus answers a pair question through the answer path between presses
+- `runner/test/corpus-driver.test.ts:137` — multi-press corpus keeps both notes and closes the question after Keep mine
+- `runner/test/corpus-driver.test.ts:156` — multi-press corpus checks the first press independently of the final report
+- `runner/test/corpus-driver.test.ts:214` — multi-press corpus replays the original request id separately from a new tidy-up
+- `runner/test/corpus-driver.test.ts:241` — multi-press corpus empty expectations in the final score refuses empty questionSubjects
+- `runner/test/corpus-driver.test.ts:241` — multi-press corpus empty expectations in the per-run score refuses empty questionSubjects
+- `runner/test/corpus-driver.test.ts:285` — multi-press corpus reports a same-run replay and a newly written tidy-up separately
+- `runner/test/corpus.test.ts:15` — the capability corpus the corpus scorer passes on the scripted provider outputs
+- `runner/test/corpus.test.ts:59` — the capability corpus the corpus scorer fails when an expected file is missing
+- `runner/test/drive-calls-golden.test.ts:27` — the C04 run makes the golden number of Drive calls per step the C04 run makes the golden number of Drive calls per step
+- `runner/test/drive-calls-golden.test.ts:61` — drive-calls-cut offer-and-flat apply keeps its half-time budget plus the measured maintenance delta
+- `runner/test/drive-calls-golden.test.ts:86` — the C04 run past 20 earlier runs (retention-never-wired, round 2) with 25 earlier runs a run makes 99 Drive calls
+- `runner/test/drive-calls-golden.test.ts:112` — run records carry their run mark (retention round 6) every record Bower writes in a run folder carries its run mark
+- `runner/test/duplicate-by-hash.test.ts:117` — a thing already saved (duplicate-by-hash) a thing whose content is already filed goes to the Bin as already saved
+- `runner/test/duplicate-by-hash.test.ts:84` — a thing already saved (duplicate-by-hash) undo brings an already-saved thing back to the inbox
+- `runner/test/duplicate-by-hash.test.ts:162` — a thing already saved (duplicate-by-hash) a copy inside the same pile keeps one and bins the other as already saved
+- `runner/test/duplicate-by-hash.test.ts:84` — a thing already saved (duplicate-by-hash) an empty file is never taken for one already saved
+- `runner/test/duplicate-by-hash.test.ts:84` — a thing already saved (duplicate-by-hash) a saved link with the same address as a filed one is filed as usual
+- `runner/test/duplicate-by-hash.test.ts:84` — a thing already saved (duplicate-by-hash) a filed copy the person already binned does not count
+- `runner/test/duplicate-by-hash.test.ts:84` — a thing already saved (duplicate-by-hash) a binned duplicate's open question closes
+- `runner/test/duplicate-by-hash.test.ts:84` — a thing already saved (duplicate-by-hash) a refused Bin keeps its question open
+- `runner/test/duplicate-by-hash.test.ts:84` — a thing already saved (duplicate-by-hash) a copy whose twin left during the run is not binned
+- `runner/test/duplicate-by-hash.test.ts:84` — a thing already saved (duplicate-by-hash) a copy changed during the run is not binned
+- `runner/test/duplicate-by-hash.test.ts:84` — a thing already saved (duplicate-by-hash) pile words with only a saved copy are kept
+- `runner/test/keep-one-note.test.ts:53` — keep one note keep one note carries the facts and bins the other
+- `runner/test/keep-one-note.test.ts:82` — keep one note undo of keep one note restores both notes and links
+- `runner/test/keep-one-note.test.ts:127` — keep one note the other note changed after the read is not binned
+- `runner/test/keep-one-note.test.ts:159` — keep one note keep-one says what happened when the other note moved or was binned
+- `runner/test/keep-one-note.test.ts:178` — keep one note a line that only starts like a kept line is carried
+- `runner/test/main.test.ts:86` — the runner process main applies real Drive effects through the adapter and the folder changes
+- `runner/test/main.test.ts:110` — the runner process every admitted item's disposition is readable after the run, journal lines included
+- `runner/test/main.test.ts:160` — the runner process main picks the scripted provider
+- `runner/test/main.test.ts:172` — the runner process main reports reading with total before writing
+- `runner/test/main.test.ts:184` — the runner process total counts things only
+- `runner/test/main.test.ts:252` — the runner process under a rate limit main sends no fenced write again after a takeover during the rate limit wait
+- `runner/test/network-retry.test.ts:196` — runner network retry a network error on a Drive write is reconciled by read-back, never retried blindly
+- `runner/test/network-retry.test.ts:229` — runner network retry an attempt that ends without a terminal report exits non-zero
+- `runner/test/overhead.test.ts:25` — the runner overhead the C04 run writes and counts exactly 4 checkpoints
+- `runner/test/overhead.test.ts:48` — the runner overhead the runner overhead cuts keep recovery and ordered status
+- `runner/test/overhead.test.ts:59` — the runner overhead a run writes one opening and one closing checkpoint per batch
+- `runner/test/pair-ask.test.ts:54` — two notes for one thing (keep-one-not-asked) two notes for one thing are asked as a pair
+- `runner/test/pair-ask.test.ts:71` — two notes for one thing (keep-one-not-asked) a words-only pile can become a Timeline line
+- `runner/test/pair-ask.test.ts:95` — two notes for one thing (keep-one-not-asked) a words-only pile whose lines are all in its note already is already saved
+- `runner/test/pair-ask.test.ts:113` — two notes for one thing (keep-one-not-asked) a yes to an older pair question whose note is in the Bin settles and names it
+- `runner/test/per-thing-ask.test.ts:76` — per-thing asks (TL-P4-08 addendum 4) an ask about one thing leaves it in the inbox and files the rest of its pile
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a notJson refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noText refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a notIntent refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a thingKeys refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a thingNotAdmitted refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a thingTwice refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a placeOutside refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a nameChangesKind refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a rawName refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a numbers refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a newFolder refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noteForNote refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noteKeys refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noteName refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noteSummary refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noteBody refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noteSections refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noteLink refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noteMdLink refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noteWeb refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a pileNotAdmitted refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a pileTwice refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a tooManyLines refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a lineKeys refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a lineNote refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a lineText refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a lineCites refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a lineUncited refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noNote refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a stateKeys refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a stateNote refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a stateTwice refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a stateText refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a stateCites refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a askKeys refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a askNotAdmitted refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a askNotes refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a askTwice refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a askAlsoFiles refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a askText refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a keepKeys refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a keepNote refusal is retried once with its reason
+- `runner/test/per-thing-ask.test.ts:206` — per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a keepNotAsked refusal is retried once with its reason
+- `runner/test/q1-continuation.test.ts:274` — Q1a stored answers through production entry points Q1a q1-clear-work-with-waiting-item: an option asking leaves its item and files clear work
+- `runner/test/q1-continuation.test.ts:310` — Q1a stored answers through production entry points Q1a q1-options-exact-action: consent resolves stored folder id despite duplicate labels and rename
+- `runner/test/q1-continuation.test.ts:350` — Q1a stored answers through production entry points Q1a q1-options-exact-action: two to four script candidates accepted and fabricated or fifth refused
+- `runner/test/q1-continuation.test.ts:464` — Q1a stored answers through production entry points Q1a q1-text-person-provenance: person words stay subject data and document instructions grant no consent
+- `runner/test/q1-continuation.test.ts:493` — Q1a stored answers through production entry points Q1a q1-continuation-members-and-journal: today takes new same-pile items and all journal but no new pile
+- `runner/test/q1-continuation.test.ts:526` — Q1a stored answers through production entry points Q1a q1-waits-one-run-and-replay: two typed answers wait batch once and replay does not dispatch
+- `runner/test/q1-continuation.test.ts:556` — Q1a stored answers through production entry points Q1a q1-two-rounds-no-third: thing exhausts after two saved askings and words reset
+- `runner/test/q1-continuation.test.ts:556` — Q1a stored answers through production entry points Q1a q1-two-rounds-no-third: pile exhausts after two saved askings and words reset
+- `runner/test/q1-continuation.test.ts:665` — Q1a stored answers through production entry points Q1a q1-legacy-question-answer-status: old stored records read and reports never leak option actions
+- `runner/test/q1-continuation.test.ts:1570` — Q1a stored answers through production entry points Q1a q1-pile-projection: exhausted persists on reload waiting wins and word edit clears both
+- `runner/test/q1-continuation.test.ts:835` — Q1a stored answers through production entry points Q1a q1-two-rounds-no-third: retries failed saves and dispatch replay count only durable askings
+- `runner/test/q1-continuation.test.ts:1570` — Q1a stored answers through production entry points Q1a q1-two-rounds-no-third: exhausted identity follows reuploaded content and leaving ends it
+- `runner/test/q1-continuation.test.ts:888` — Q1a stored answers through production entry points Q1a q1-legacy-question-answer-status: stored choices keep content and name-place fences
+- `runner/test/q1-continuation.test.ts:945` — Q1a fix round 1 through production entry points Q1a fix 1.1: second-answer placement precedes exhaustion after an unresolved second answer
+- `runner/test/q1-continuation.test.ts:945` — Q1a fix round 1 through production entry points Q1a fix 1.2: instructions scope preserves inbox counters and exhausted subjects without a third asking
+- `runner/test/q1-continuation.test.ts:1570` — Q1a fix round 1 through production entry points Q1a fix 1.3: pile and member share two rounds and only changed words permit another asking
+- `runner/test/q1-continuation.test.ts:1570` — Q1a fix round 1 through production entry points Q1a fix 1.4: a same-bytes reupload retains hash history through the planner and writes no asking
+- `runner/test/q1-continuation.test.ts:1135` — Q1a fix round 1 through production entry points Q1a fix 1.5: missing or outside-root stored option folders cannot authorize alternative filing
+- `runner/test/q1-continuation.test.ts:945` — Q1a fix round 1 through production entry points Q1a fix 1.5b: a gone option folder leaves the item waiting and the next run asks again as the next round
+- `runner/test/q1-continuation.test.ts:1218` — Q1a fix round 1 through production entry points Q1a fix 1.6: words-only pile consent places its generated note in the chosen stored folder
+- `runner/test/q1-continuation.test.ts:945` — Q1a fix round 3 through production entry points Q1a fix 3.1: unavailable chosen folders force a new asking before next-tidy model placement
+- `runner/test/q1-continuation.test.ts:945` — Q1a fix round 3 through production entry points Q1a fix 3.2: mixed member histories cap pile askings and count only the waiting member
+- `runner/test/q1-continuation.test.ts:1396` — Q1a fix round 3 through production entry points Q1a fix 3.3: exhausted members stay untouched while existing and later clear siblings file
+- `runner/test/q1-continuation.test.ts:1465` — Q1a fix round 4 through production entry points Q1a fix 4.1: a loose Inbox file whose chosen folder is gone is asked again as the next round
+- `runner/test/q1-continuation.test.ts:1465` — Q1a fix round 4 through production entry points Q1a fix 4.2: every member-subject path re-asks once after an unavailable folder: folder member
+- `runner/test/q1-continuation.test.ts:1465` — Q1a fix round 4 through production entry points Q1a fix 4.2: every member-subject path re-asks once after an unavailable folder: loose Inbox file
+- `runner/test/q1-continuation.test.ts:1465` — Q1a fix round 4 through production entry points Q1a fix 4.2: every member-subject path re-asks once after an unavailable folder: words-only pile
+- `runner/test/q1c-live.test.ts:148` — Q1c durable publication through main and createApp().request q1-live-snapshot-over-64kib-trims
+- `runner/test/q1c-live.test.ts:211` — Q1c durable publication through main and createApp().request q1-live-publication-transport-failure-keeps-the-run
+- `runner/test/q1c-live.test.ts:285` — Q1c durable publication through main and createApp().request q1-live-question-long-note-name-publish…
+- `runner/test/q1c-live.test.ts:285` — Q1c durable publication through main and createApp().request q1-live-question-invalid-shape-publishes
+- `runner/test/q1c-live.test.ts:319` — Q1c durable publication through main and createApp().request Q1c fix 1: eleven askings keep clear work and publish the first ten by askedAt
+- `runner/test/q1c-live.test.ts:359` — Q1c durable publication through main and createApp().request Q1c fix 1: a crash after manifest persistence recovers questions with stored option actions intact
+- `runner/test/q1c-live.test.ts:451` — Q1c durable publication through main and createApp().request Q1c q1-live-question-before-clear-effects-end: durable publication
+- `runner/test/q1c-live.test.ts:463` — Q1c durable publication through main and createApp().request Q1c q1-live-question-before-clear-effects-end: same-run recovery republishes without a second model reply
+- `runner/test/reads-report.test.ts:20` — the runner plan reads and report plan reads finish under the budget with modelled Drive latency
+- `runner/test/reads-report.test.ts:20` — the runner plan reads and report with 25 earlier runs plan reads stay within their measured maintenance delta
+- `runner/test/reads-report.test.ts:20` — the runner plan reads and report the report keeps its barrier order in fewer calls
+- `runner/test/real-adapters.test.ts:49` — real adapters: failure cases in the runner duplicate dispatch: a second job of the same attempt after the first ended changes nothing
+- `runner/test/real-adapters.test.ts:49` — real adapters: failure cases in the runner duplicate dispatch: a second job of the same attempt finishes a first one cut mid-run, with one set of effects
+- `runner/test/real-adapters.test.ts:49` — real adapters: failure cases in the runner expired attempt: a superseded attempt writes nothing
+- `runner/test/real-adapters.test.ts:49` — real adapters: failure cases in the runner lost callback: a status reply is lost, and the resend is idempotent
+- `runner/test/real-adapters.test.ts:49` — real adapters: failure cases in the runner lost callback: a lost reply to done fails the job visibly, and the run stays done with its effects once
+- `runner/test/real-adapters.test.ts:49` — real adapters: failure cases in the runner recovery: a dead job is redispatched and reaches done
+- `runner/test/rules-repair.test.ts:62` — real adapters: the old template Rules.md in an existing folder an existing folder with the old template Rules.md is repaired at plan time and the rule is worded
+- `runner/test/rules-repair.test.ts:71` — real adapters: the old template Rules.md in an existing folder a repair stopped between the text and the mark gets only its mark on the next run
+- `runner/test/rules-repair.test.ts:139` — real adapters: the old template Rules.md in an existing folder the runner's Rules.md repair whose answers were lost is resolved by its stamp
+- `runner/test/second-brain-method.test.ts:85` — the second-brain method (TL-P4-08) an ambiguous thing stays in the inbox with a question and the run goes on
+- `runner/test/second-brain-method.test.ts:127` — the second-brain method (TL-P4-08) a later run does not repeat an open question
+- `runner/test/second-brain-method.test.ts:146` — the second-brain method (TL-P4-08) a document that only confirms a known fact updates the note and makes none
+- `runner/test/second-brain-method.test.ts:196` — B3b hot: evidence-only method verdict covers hidden unarchived refresh
+- `runner/test/state-rewrite.test.ts:85` — a change kind of its own for Current state (C05) a Bower-owned Current state is rewritten and undo restores it
+- `runner/test/state-rewrite.test.ts:123` — a change kind of its own for Current state (C05) a Current state the person edited gets a line and a question, never a rewrite
+- `runner/test/state-rewrite.test.ts:141` — a change kind of its own for Current state (C05) no fallback line when the run already cites the same thing on that note
+- `runner/test/state-rewrite.test.ts:162` — a change kind of its own for Current state (C05) the fallback line names only what the section lacks
+- `runner/test/state-rewrite.test.ts:173` — a change kind of its own for Current state (C05) a person-edited section's fallback names none of Bower's last-written lines
+- `runner/test/state-rewrite.test.ts:187` — a change kind of its own for Current state (C05) Bower's last state is read from the previous state change, not searched
+- `runner/test/state-rewrite.test.ts:200` — a change kind of its own for Current state (C05) with no previous state change to read, every line the section lacks is news
+- `runner/test/state-rewrite.test.ts:221` — a change kind of its own for Current state (C05) a run manifest that cannot be read is passed over, and every line the section lacks is news
+- `runner/test/state-rewrite.test.ts:67` — a change kind of its own for Current state (C05) after a Bower append the next run only adds a line
+- `runner/test/state-rewrite.test.ts:67` — a change kind of its own for Current state (C05) an unmarked Current state is never adopted without a rule
+- `runner/test/state-rewrite.test.ts:280` — a change kind of its own for Current state (C05) a yes rule lets Bower adopt the section
+- `runner/test/state-rewrite.test.ts:296` — a change kind of its own for Current state (C05) undo restores an empty section empty
+- `runner/test/timing-counts.test.ts:15` — timing counts the timing line counts calls and bytes per phase and names the region
+- `runner/test/typed-rule.test.ts:46` — real adapters: a typed rule a typed rule is worded into Rules.md on the real adapter
+
+### Final app result and every failed app test
+
+Full src suite: 179 files, 5,787 tests; 5,780 pass, seven fail across three
+files, with one expected unhandled listen EPERM (exit 1). Reports/logs:
+app.json and app-final.log in the verification folder above.
+All 47 harness tests pass under the output-only temporary configuration.
+The three frozen round-6 tests pass again in this full run.
+
+Five real-adapter contract cases hit the same maintenance identity integration
+blocker as the runner suite. The other two failures are external:
+src/docs.test.ts:134 finds missing compatibility bookkeeping for an earlier
+commit; the worker does not own that ledger. src/e2e-port.test.ts:37 cannot listen
+on 127.0.0.1 under the sandbox (expected EPERM, timeout and unhandled error).
+Every failed app case is listed below; no test was changed.
+
+- `src/docs.test.ts:134` — what the repository promises every change since the P2 freeze is listed
+- `node_modules/.pnpm/vitest@5.0.3_@types+node@26.6.4_jsdom@30.1.1_@noble+hashes@1.8.0__vite@8.3.2_@types+nod_7b9e803fa99578876f85b579d849a22e/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:2681` — the e2e port and server identity a server from another worktree is never reused
+- `src/data/contract/vault-contract.ts:380` — vault contract: real adapters a tidy-up after tidyUp the journal is empty and the piles taken are gone
+- `src/data/contract/vault-contract.ts:391` — vault contract: real adapters a tidy-up answering yes to a merge makes the next tidy-up keep one note
+- `src/data/contract/vault-contract.ts:401` — vault contract: real adapters a tidy-up a tidy-up's report lists only the new questions it asked
+- `src/data/contract/vault-contract.ts:413` — vault contract: real adapters a tidy-up a pile added during a run waits for the next one
+- `src/data/contract/real.contract.test.ts:92` — real adapters: failure cases in the app browser close mid-run: the app goes away, and the runner plus the alarm finish
+
+### Delivery
+
+Status: blocked on the maintenance producer/captured-identity compatibility
+mismatch. The identity bypass itself is closed by the single shared helper;
+all identity reds and their positive controls pass. No unresolved-ID exemption
+was invented to make existing production paths pass. The lead needs to rule on
+binding maintenance targets, including reserved creates, to resolved identities
+before these 366 integration cases can return green.
+
+.codex-commits.json requests exactly one production-files commit and one
+notes-only commit. The runner owns commits, pnpm check and capabilities e2e on
+demo/fake. No check mark or e2e success is claimed by this worker.
+
+tests changed: none; every older failed runner/app test is preserved and listed above.
+Skipped: runner-owned commits, pnpm check, capabilities e2e and out-of-scope producer changes.
+Risk: existing maintenance targets absent from capture.places cause otherwise valid real-adapter runs to refuse.
