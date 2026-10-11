@@ -162,3 +162,38 @@ describe('type-row contracts through the declaration parser', () => {
     });
   });
 });
+
+
+describe('b5-table-first-create-and-lenient-read', () => {
+  it.each(['empty', 'all invalid'])('uses seeds when stored rows are %s', async (state) => {
+    const read = await contract<Read>('readTypeTable');
+    expect(read(JSON.stringify(table()))).toEqual({ table: table(), writeAllowed: true });
+    const stored = { v: 1, rows: state === 'empty' ? [] : [{ id: 'bad' }] };
+    expect(read(JSON.stringify(stored))).toEqual(read(null));
+  });
+  it('retains unknown stored envelope row and property keys when inserting a new accepted row', async () => {
+    const read = await contract<Read>('readTypeTable');
+    const insert = await contract<(table: Table, row: Row) => Table>('insertTypeRow');
+    const valid = await contract<TableOk>('typeTableOk');
+    const stored = { v: 1, future_envelope: { keep: 'Alex' }, rows: [{ ...offer(), future_row: 'kept',
+      properties: { ...offer().properties, role: { type: 'text', future_property: 'kept' } } }] };
+    expect(valid(table()), 'control strict writes accept a current declaration').toBe(true);
+    expect(valid(stored), 'new writes stay closed').toBe(false);
+    const readBack = read(JSON.stringify(stored));
+    expect(readBack.writeAllowed).toBe(true);
+    expect.soft(readBack.table).toMatchObject(stored);
+    let rewritten: Table | undefined;
+    expect(() => { rewritten = insert(readBack.table, { ...offer(), id: 'lease' }); }).not.toThrow();
+    expect.soft(rewritten).toMatchObject({ future_envelope: { keep: 'Alex' }, rows: [stored.rows[0], { ...offer(), id: 'lease' }] });
+  });
+});
+
+
+it('b5-explicit-column-replaces-fourth: control trusted words use the existing replacement helper', async () => {
+  const replace = await contract<(row: Row, key: string, origin: unknown) => { row: Row; replaced: string | null } | null>('requestTableColumn');
+  const original = offer();
+  expect(replace(original, 'hours', { kind: 'words', recordId: 'alex-column-request' }))
+    .toEqual({ row: { ...original, table: ['role', 'salary', 'posted', 'hours'] }, replaced: 'stage' });
+  expect(replace(original, 'hours', { kind: 'document', fileId: 'SOURCE_ID' })).toBeNull();
+  expect(original.table).toEqual(['role', 'salary', 'posted', 'stage']);
+});

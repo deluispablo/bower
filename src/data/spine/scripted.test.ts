@@ -273,3 +273,94 @@ describe('the scripted provider', () => {
     expect(built.plan?.manifest).toEqual(whole.manifest);
   });
 });
+
+
+it('b5-landed-contract-compatibility: control grounded templates plan and invented links are refused', async () => {
+  for (const target of ['note', 'source', 'missing'] as const) {
+    const { plan, failure, drive, before } = await fix3Plan('source', 'summary', target);
+    expect(await drive.snapshot()).toBe(before);
+    if (target === 'missing') {
+      expect(failure).toBeInstanceOf(BowerError); expect(plan).toBeUndefined();
+    } else {
+      expect(failure).toBeUndefined();
+      expect(plan?.manifest.operations.some((op) => op.effect.kind === 'create-text' && op.effect.name === 'Garden source.md')).toBe(true);
+    }
+  }
+});
+
+it('b5-table-first-create-and-lenient-read: control planning a valid stored declaration changes no Drive bytes', async () => {
+  const { drive, root, admitted } = await seeded();
+  const own = (await drive.listAll(root)).find((f) => f.name === '.bower' && f.parents[0] === root);
+  await drive.createText(own?.id ?? '', 'type-table.json', JSON.stringify({ v: 1, rows: [{
+    id: 'offer', match: ['job offer'], template: 'source', properties: {}, table: [],
+  }] }));
+  const before = await drive.snapshot();
+  const plan = await planRun(drive, root, { scope: 'all', allowWeb: false, runId: RUN,
+    requestId: admitted.id, requestedAt: admitted.at, mintKey: await runKeys(RUN) });
+  expect(plan.manifest.operations.length).toBeGreaterThan(0);
+  expect(await drive.snapshot()).toBe(before);
+});
+
+
+// The provider seam carries typed facts; no parser, writer or consent mechanism is replaced in this fixture.
+describe('b5-typed-property-bounds through planning', () => {
+  const row = { id: 'offer', match: ['job offer'], template: 'source', properties: {
+    role: { type: 'text' }, skills: { type: 'list' }, hours: { type: 'number' }, salary: { type: 'money' },
+    posted: { type: 'date' }, stage: { type: 'enum', values: Array.from({ length: 20 }, (_, i) => `stage-${i}`) },
+  }, table: ['role', 'salary', 'posted', 'stage'] };
+  const valid = { role: 'x'.repeat(200), skills: Array.from({ length: 10 }, () => 'x'.repeat(200)), hours: 1e15,
+    salary: { amount: 123.4567, currency: 'EUR' }, posted: '2024-02-29', stage: 'stage-19' };
+  async function plan(values: Record<string, unknown>) {
+    const { drive, root, admitted } = await seeded();
+    const files = await drive.listAll(root);
+    const own = files.find((f) => f.name === '.bower' && f.parents[0] === root);
+    const resources = files.find((f) => f.name === 'Resources' && f.parents[0] === root);
+    await drive.createText(own?.id ?? '', 'type-table.json', JSON.stringify({ v: 1, rows: [row] }));
+    const folder = await drive.createFolder(resources?.id ?? '', 'Applications');
+    await drive.createText(folder.id, 'Applications.md', '# Applications\nAlex considers offers.');
+    const item = admitted.piles.flatMap((pile) => pile.items).find((candidate) => candidate.name !== 'Pile note.md');
+    if (!item) throw new Error('Missing admitted source');
+    const decisions: Decisions = { ...scriptedDecisions([], []), ownNote: () => null,
+      thing: (seen) => ({ to: 'Resources/Applications', name: seen.fileName }),
+      pileAsk: () => null, thingAsk: () => null, merge: () => null,
+      note: (fileId) => fileId === item.fileId ? { name: 'Offer.md', template: 'source',
+        typeRow: row.id, properties: values, summary: 'Alex considers a job offer.',
+        body: '## Key points\nAlex considers a job offer. [[Applications]]',
+      } : null,
+    };
+    const before = await drive.snapshot();
+    let planned: RunPlan | undefined; let failure: unknown;
+    try {
+      planned = await planner.planScripted(fakeScripted(drive), root, { scope: 'all', allowWeb: false, runId: RUN,
+        requestId: admitted.id, requestedAt: admitted.at, taken: admitted, mintKey: await runKeys(RUN), decisions });
+    } catch (error) { failure = error; }
+    expect(await drive.snapshot(), 'planning and refusal never mutate Drive').toBe(before);
+    return { planned, failure };
+  }
+  it('control: all six bounded facts are admitted without rejecting a grounded Source', async () => {
+    const { planned, failure } = await plan(valid);
+    expect(failure).toBeUndefined();
+    expect(planned?.manifest.operations.some((op) => op.effect.kind === 'create-text' && op.effect.name === 'Offer.md')).toBe(true);
+  });
+  it('retains all six valid declared values in the planned note', async () => {
+    const { planned, failure } = await plan(valid);
+    expect(failure).toBeUndefined();
+    const effect = planned?.manifest.operations.find((op) => op.effect.kind === 'create-text' && op.effect.name === 'Offer.md')?.effect;
+    expect(effect?.kind).toBe('create-text');
+    if (effect?.kind !== 'create-text') throw new Error('No authored note');
+    const keys = parseNote('Offer.md', effect.text).properties.map((property) => property.key);
+    expect(keys).toEqual(expect.arrayContaining(Object.keys(valid)));
+    for (const value of ['123.4567', 'EUR', '2024-02-29', 'stage-19', String(1e15)]) expect(effect.text).toContain(value);
+    expect(effect.text.split('x'.repeat(200)).length - 1).toBe(11);
+  });
+  it.each([
+    ['undeclared', { invented: 'Alex' }], ['text', { role: 'x'.repeat(201) }],
+    ['list', { skills: Array.from({ length: 11 }, () => 'Alex') }], ['enum', { stage: 'stage-20' }],
+    ['number', { hours: 1e15 + 1 }], ['money', { salary: { amount: 123.45678, currency: 'EUR' } }],
+    ['currency', { salary: { amount: 48, currency: 'ZZZ' } }], ['date', { posted: '2026-02-29' }],
+  ])('refuses invalid %s facts before producing executable effects', async (_label, invalid) => {
+    const { planned, failure } = await plan({ ...valid, ...invalid });
+    expect(failure).toBeInstanceOf(BowerError);
+    expect(planned).toBeUndefined();
+  });
+});

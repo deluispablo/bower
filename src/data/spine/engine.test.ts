@@ -357,3 +357,50 @@ describe('c4-create-landed: a run reconciles on whether its write happened', () 
     }
   });
 });
+
+
+describe('b5-read-to-act-fence', () => {
+  it('control: unchanged id-bound targets apply once', async () => {
+    const result = await applied();
+    const moves = result.manifest.operations.filter((op) => op.effect.kind === 'move');
+    expect(moves.length).toBeGreaterThan(0);
+    for (const op of moves) {
+      expect(result.chain.at(-1)?.outcomes.find((outcome) => outcome.operationId === op.operationId)?.state).toBe('applied');
+      expect(result.calls.filter((call) => stampOfCall(call) === stampOf(RUN_ID, op.operationId))).toHaveLength(1);
+    }
+  });
+  it.each(['name', 'place'] as const)('refuses a changed %s at the actual move fence', async (field) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    let changed: string | null = null;
+    const result = await applied((call, drive) => {
+      if (changed !== null || call.op !== 'update' || call.patch.addParent === undefined) return 'pass';
+      changed = call.id;
+      const stored = (storedOf(drive) as unknown as Map<string, { meta: DriveFile }>).get(call.id);
+      if (!stored) throw new Error('Missing fenced target');
+      if (field === 'name') stored.meta.name = 'Alex renamed this.txt';
+      else stored.meta.parents = ['OTHER_FOLDER_ID'];
+      return 'pass';
+    });
+    expect(changed).not.toBeNull();
+    const op = result.manifest.operations.find((operation) => operation.effect.kind === 'move' && operation.effect.before.fileId === changed);
+    expect(result.chain.at(-1)?.outcomes.find((outcome) => outcome.operationId === op?.operationId))
+      .toMatchObject({ state: 'rejected', failure: { code: 'conflict' } });
+  });
+  it('refuses changed runner JSON bytes between plan and content write', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    let changed: string | null = null;
+    const result = await applied((call, drive) => {
+      if (changed !== null || call.op !== 'write-text') return 'pass';
+      const stored = (storedOf(drive) as unknown as Map<string, { meta: DriveFile; content: string | Blob | null }>).get(call.id);
+      if (stored?.meta.name !== 'questions.json') return 'pass';
+      changed = call.id;
+      stored.content = '{"v":1,"questions":[],"alex":"changed"}';
+      drive.touch(call.id);
+      return 'pass';
+    });
+    expect(changed, 'fixture reaches a runner JSON content write').not.toBeNull();
+    const op = result.manifest.operations.find((operation) => operation.effect.kind === 'write-runner-json' && operation.effect.before.fileId === changed);
+    expect(result.chain.at(-1)?.outcomes.find((outcome) => outcome.operationId === op?.operationId))
+      .toMatchObject({ state: 'rejected', failure: { code: 'conflict' } });
+  });
+});
