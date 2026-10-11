@@ -17,7 +17,7 @@ This block is the whole current state; ACTIVE.md is the history log. A Codex suc
   - a backup after harness/jobs/backup-scan.sh 5bab1288;
   - the SHA sent to the lead;
   - a staging smoke.
-- Jobs running (Codex 4 of 4): B4a red repair, B5b implementation, B7 packet drafting, B8 packet drafting. Each row of the table below names its script (in the coordinator scratchpad, `jobs/*.sh`, prompts in `codex-*-prompt.md`) and its result file.
+- **Codex usage limit hit (2026-10-11 ~11:13): retry after Oct 18 5:57 AM.** B5b implementation attempt 2 died mid-run: its partial diff (claude.ts, type-table.ts, note-format.ts, baseline, notes) is uncommitted in /private/tmp/bower-b5b-tables. Asked the lead whether Claude agents may run workers meanwhile; no new worker starts until the ruling. Finished: B7 and B8 packets committed in their worktrees (b7-tags 06e89b5c, b8-log 6ae4813c; review, merge into claude/p3, add entries), B6b reds. B4a test repair (attempt 15) may fail with the same limit; if so its worktree stays as it was after the merge (a464a533 + rows).
 - When a job ends, read the result's card. A check-failed status on a red is expected; on a fix, read the notes' newest round and the check log.
 - Pending designer checks: none yet (B5b needs one when built).
 - Pending designer checks: none (B1d and B4a are ui: false).
