@@ -574,3 +574,4 @@ c2-pile-records	a564e46e757d84fa	2026-10-11	known-green: verify renamed per adde
 upload-sign-out-forget	87fda9aad7e334f0	2026-10-11	known-green: reds proved at their tests-only commits; later rounds touched the same lines; see notes Close
 delete-account-purge	99c1289d92b9aa0e	2026-10-11	red (fixed in b5ae5ec1)
 pile-binned-context-hold	9c382d25050b3025	2026-10-11	red (fixed in 7a13d1eb)
+c02-upload-count-ui	82cb33bbb325ca66	2026-10-11	known-green: reds proved at their tests-only commits; fix 1 touched the same lines; see notes Close
