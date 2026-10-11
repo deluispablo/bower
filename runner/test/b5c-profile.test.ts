@@ -86,7 +86,7 @@ import { currentStateOf, stateMark, STATE_READ, STATE_WRITE, undoChanges, undoEd
 import { typeRowOk } from '../../src/data/contracts/note-format';
 import type { ManifestV2 } from '../../src/data/contracts/run-manifest';
 import { NOTE_TEMPLATES } from '../../src/data/contracts/note-templates';
-import { manifest, media, type Base } from './b1-planning-support';
+import { media, type Base } from './b1-planning-support';
 import { redispatchCase } from './corpus-run';
 import { readFileSync } from 'node:fs';
 import { planAdmission } from '../../src/data/spine/plan';
@@ -143,7 +143,12 @@ async function mainProfile(b: Base, words: string, options: Parameters<typeof ru
   return result;
 }
 function edits(result: Awaited<ReturnType<typeof run>>, id: string) {
-  const value = manifest(result) as ManifestV2;
+  const runId = result.dispatch?.runId;
+  expect(runId, 'profile edits belong to the current dispatch').toBeDefined();
+  const text = Object.entries(result.after).find(([path]) =>
+    path.startsWith(`.bower/runs/${runId}/`) && /\/manifest-[^/]+\.json$/.test(path))?.[1];
+  expect(text, 'the current dispatch has a retained manifest').toBeDefined();
+  const value = JSON.parse(text ?? '') as ManifestV2;
   return value.operations.flatMap((op) => op.effect.kind === 'edit-text' && op.effect.before.fileId === id ? [op.effect] : []);
 }
 

@@ -22,12 +22,13 @@ it('B6a templates: b6-five-template-shapes declares exactly five ordered section
     properties: [], tags: [], currentState: [], body: 'Grounded words.', timeline: [] });
   expect(parseNote('Gardening.md', raw).body).toBe('Grounded words.');
   const templates = await declarations();
-  expect(Object.keys(templates).sort()).toEqual(['area', 'concept', 'moc', 'project', 'source']);
+  expect(Object.keys(templates).sort()).toEqual(['area', 'concept', 'moc', 'profile', 'project', 'source']);
   expect(Object.fromEntries(Object.entries(templates).map(([key, value]) => [key, value.sections]))).toEqual({
     source: ['Summary', 'Key points', 'Related', 'Transcript'],
     concept: ['Current state', 'Notes', 'Related', 'Timeline'],
     project: ['Goal', 'Next steps', 'Current state', 'Notes', 'Timeline'],
     area: ['Standard to maintain', 'Current state', 'Notes', 'Timeline'],
     moc: ['Overview', 'Notes', 'Sources'],
+    profile: ['Profile', 'My notes', 'Timeline'],
   });
 });
