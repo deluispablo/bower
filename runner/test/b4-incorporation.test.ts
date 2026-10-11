@@ -18,6 +18,7 @@ import * as manifests from '../../src/data/contracts/run-manifest';
 import type { ManifestV2, OperationV2 } from '../../src/data/contracts/run-manifest';
 import { canonical } from '../../src/data/spine/records';
 import { seen } from '../../src/data/spine/grounded';
+import type { ItemDisposition } from '../../src/data/spine/report';
 import * as providers from '../src/provider';
 import * as planner from '../../src/data/spine/scripted';
 import * as maintenance from '../src/index';
@@ -67,6 +68,8 @@ const jsonl = (events: readonly unknown[]) => events.length ? events.map((e) => 
 const ledger = (run: CaseRun) => parseObservations(bytes(run.after[LEDGER] ?? ''));
 const report = (run: CaseRun): RunReport => (run.lastRun as { run?: { report?: RunReport } } | null)?.run?.report
   ?? { filed: [], created: [], updated: [], setAside: [], questions: [] };
+const reportedItems = (run: CaseRun) => (JSON.parse(Object.entries(run.after)
+  .find(([path]) => path.endsWith('/dispositions.json'))?.[1] ?? '{"items":[]}') as { items: ItemDisposition[] }).items;
 
 beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -325,6 +328,78 @@ describe('B4b through production entry points', () => {
     expect(replay.after[ABOUT]).toBe(run.after[ABOUT]);
   });
 
+  it('b4b-memory-update-report-success', async () => {
+    const control = await fixture({ offer: true });
+    const filed = await execute(control, fileOffer);
+    expect(filed.code, 'positive control: sibling filing settles through main and the report').toBe(0);
+    expect(filed.wire?.statuses.at(-1)?.phase).toBe('done');
+    expect(report(filed).filed).toHaveLength(1);
+    expect(memoryRows(filed)).toEqual([]);
+
+    const f = await fixture({ offer: true });
+    const wordsId = await f.id(`Inbox/${f.c.inbox[0]?.line.slice(0, 40)}/${PILE_NOTE}`);
+    const run = await execute(f, acceptedWords);
+    expect(run.code, run.errors).toBe(0);
+    expect(ledger(run).live.map((fact) => fact.text)).toEqual([REMOTE]);
+    expect(validLearnedBlock(run.after[ABOUT] ?? '', ledger(run))).toBe(true);
+    expect(run.after[ABOUT]?.startsWith(PERSONAL)).toBe(true);
+    expect(Object.keys(run.after).filter((path) => path.startsWith('Inbox/'))).toEqual([]);
+    expect(run.wire?.statuses.at(-1)?.phase).toBe('done');
+    expect(reportedItems(run)).toEqual(expect.arrayContaining([
+      { fileId: wordsId, pileId: 'p-1', disposition: 'filed' },
+    ]));
+    expect(report(run).updated.filter((row) => row.path === ABOUT)).toEqual([
+      expect.objectContaining({ path: ABOUT, op: expect.any(String) }),
+    ]);
+    expect(report(run).created.filter((row) => row.path === ABOUT)).toEqual([]);
+    expect(internalRows(run)).toEqual([]);
+    expect(report(run).setAside).toEqual([]);
+    expect(report(run).filed, 'the About me updated row settles the words; only the sibling is filed').toEqual(report(filed).filed);
+  });
+
+  it('b4b-memory-update-report-failure', async () => {
+    const control = await fixture();
+    const saved = await execute(control, words);
+    expect(saved.code, 'positive control: the same memory intent writes and settles without the refusal').toBe(0);
+    expect(saved.wire?.statuses.at(-1)?.phase).toBe('done');
+    expect(ledger(saved).live.map((fact) => fact.text)).toEqual([REMOTE]);
+    expect(report(saved).updated.filter((row) => row.path === ABOUT)).toHaveLength(1);
+    expect(Object.keys(saved.after).filter((path) => path.startsWith('Inbox/'))).toEqual([]);
+
+    const results = [];
+    for (const target of [LEDGER, ABOUT]) {
+      const f = await fixture();
+      const wordsPath = `Inbox/${f.c.inbox[0]?.line.slice(0, 40)}/${PILE_NOTE}`;
+      const wordsId = await f.id(wordsPath);
+      const targetId = await f.id(target);
+      const write = f.drive.writeText.bind(f.drive);
+      let attempts = 0;
+      const refusal = vi.spyOn(f.drive, 'writeText').mockImplementation(async (...args) => {
+        if (args[0] === targetId) { attempts++; throw new BowerError('conflict', 'This file changed elsewhere.'); }
+        return write(...args);
+      });
+      const run = await execute(f, words);
+      refusal.mockRestore();
+      expect(attempts, `${target}: the admitted memory write reaches the injected refusal`).toBeGreaterThan(0);
+      expect(run.refusals).toEqual([]);
+      expect(run.after[wordsPath], 'failed memory leaves the original words in the inbox').toBe(f.c.inbox[0]?.line + '\n');
+      expect(run.after[ABOUT]).toBe(f.c.folder[ABOUT]);
+      expect(memoryRows(run)).toEqual([]);
+      expect(internalRows(run)).toEqual([]);
+      expect(report(run).filed).toEqual([]);
+      expect(report(run).requests ?? []).toEqual([]);
+      results.push({ target, code: run.code, phase: run.wire?.statuses.at(-1)?.phase,
+        item: reportedItems(run).filter((item) => item.fileId === wordsId)
+          .map(({ pileId, disposition }) => ({ pileId, disposition })),
+        notDone: report(run).setAside });
+    }
+    expect(results, 'a refused memory write settles as not done, with no item or run left saving').toEqual(
+      [LEDGER, ABOUT].map((target) => ({ target, code: 0, phase: 'done',
+        item: [{ pileId: 'p-1', disposition: 'set-aside' }],
+        notDone: [{ name: control.c.inbox[0]?.line.slice(0, 40), why: expect.stringMatching(/\S/) }],
+      })));
+  });
+
   it('c17-b4-forget-no-return', async () => {
     const f = await fixture({ history: true, words: `Forget that ${REMOTE.toLowerCase()}` });
     const aboutId = await f.id(ABOUT); const ledgerId = await f.id(LEDGER);
@@ -410,7 +485,13 @@ describe('B4b through production entry points', () => {
     const answered = await f.answerQuestion(f.vault(), { start }, q.id, { option: 'remote' }, { allowWeb: false });
     expect(answered?.outcome.kind).toBe('now'); expect(start).toHaveBeenCalledOnce();
     const run = await execute(f, fileOffer);
-    expect(report(run).filed).toHaveLength(1);
+    expect(report(run).updated.filter((row) => row.path === ABOUT)).toEqual([
+      expect.objectContaining({ path: ABOUT, op: expect.any(String) }),
+    ]);
+    expect(report(run).created.filter((row) => row.path === ABOUT)).toEqual([]);
+    expect(report(run).filed, 'the consumed Forget words settle through the About me updated row').toEqual([
+      expect.objectContaining({ name: OFFER, to: 'Projects/Job hunt' }),
+    ]);
     expect(ledger(run).tombstones.map((t) => t.factId), 'Q1 applies the chosen stored fact id').toEqual(['fact-remote']);
     expect(ledger(run).live.map((x) => x.factId)).toEqual(['fact-garden', 'fact-independent']);
   });
