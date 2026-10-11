@@ -201,7 +201,7 @@ describe('B4b through production entry points', () => {
   });
 
   it('control: c17-b4-origin-not-authority', async () => {
-    const f = await fixture({ offer: true });
+    const f = await fixture({ offer: true, words: `Remember: ${REMOTE}` });
     const filing = await execute(f, fileOffer);
     expect(filing.code, filing.errors).toBe(0); expect(report(filing).filed).toHaveLength(1);
     const run = await execute(f, words);
@@ -290,16 +290,22 @@ describe('B4b through production entry points', () => {
   it('b4b-write-through-settlement', async () => {
     const results = [];
     for (const target of [LEDGER, ABOUT]) {
-      const f = await fixture(); const targetId = await f.id(target);
+      const f = await fixture({ words: `Remember: ${REMOTE}` }); const targetId = await f.id(target);
       const write = f.drive.writeText.bind(f.drive); let attempts = 0;
       vi.spyOn(f.drive, 'writeText').mockImplementation(async (...args) => {
         if (args[0] === targetId) { attempts++; throw new BowerError('conflict', 'This file changed elsewhere.'); }
         return write(...args);
       });
       const run = await execute(f, words);
-      expect(memoryRows(run)).toEqual([]);
-      expect(Object.keys(run.after).some((p) => p.startsWith('Inbox/') && p.endsWith(PILE_NOTE))).toBe(true);
-      expect(report(run).requests ?? [], 'the failed memory request is never claimed complete').toEqual([]);
+      expect(ledger(run).live).toHaveLength(target === LEDGER ? 0 : 1);
+      expect(report(run).updated.filter((row) => row.path === ABOUT)).toEqual(target === LEDGER ? []
+        : [expect.objectContaining({ path: ABOUT, op: expect.any(String) })]);
+      const wordsPath = `Inbox/${f.c.inbox[0]?.line.slice(0, 40)}/${PILE_NOTE}`;
+      expect(run.after[wordsPath]).toBe(target === LEDGER ? f.c.inbox[0]?.line + '\n' : undefined);
+      if (target === ABOUT) expect(Object.keys(run.after).filter((p) => p.startsWith('Inbox/'))).toEqual([]);
+      expect(report(run).created.filter((row) => row.path === ABOUT)).toEqual([]);
+      expect(run.after[ABOUT], 'a rejected projection keeps the previous view').toBe(f.c.folder[ABOUT]);
+      expect(report(run).requests ?? []).toEqual([]);
       results.push({ target, memoryAttempted: attempts > 0 });
       vi.restoreAllMocks();
       vi.spyOn(console, 'log').mockImplementation(() => undefined); vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -310,7 +316,7 @@ describe('B4b through production entry points', () => {
   });
 
   it('control: b4b-write-through-settlement', async () => {
-    const f = await fixture(); const aboutId = await f.id(ABOUT);
+    const f = await fixture({ words: `Remember: ${REMOTE}` }); const aboutId = await f.id(ABOUT);
     const write = vi.spyOn(f.drive, 'writeText');
     const run = await execute(f, words);
     const replay = await redispatchCase(f.c, run, 2, { claude: run.spawn, pacing: { baseMs: 0, sleep: async () => {} } });
@@ -329,14 +335,14 @@ describe('B4b through production entry points', () => {
   });
 
   it('b4b-memory-update-report-success', async () => {
-    const control = await fixture({ offer: true });
+    const control = await fixture({ offer: true, words: `Remember: ${REMOTE}` });
     const filed = await execute(control, fileOffer);
     expect(filed.code, 'positive control: sibling filing settles through main and the report').toBe(0);
     expect(filed.wire?.statuses.at(-1)?.phase).toBe('done');
     expect(report(filed).filed).toHaveLength(1);
     expect(memoryRows(filed)).toEqual([]);
 
-    const f = await fixture({ offer: true });
+    const f = await fixture({ offer: true, words: `Remember: ${REMOTE}` });
     const wordsId = await f.id(`Inbox/${f.c.inbox[0]?.line.slice(0, 40)}/${PILE_NOTE}`);
     const run = await execute(f, acceptedWords);
     expect(run.code, run.errors).toBe(0);
@@ -358,7 +364,7 @@ describe('B4b through production entry points', () => {
   });
 
   it('b4b-memory-update-report-failure', async () => {
-    const control = await fixture();
+    const control = await fixture({ words: `Remember: ${REMOTE}` });
     const saved = await execute(control, words);
     expect(saved.code, 'positive control: the same memory intent writes and settles without the refusal').toBe(0);
     expect(saved.wire?.statuses.at(-1)?.phase).toBe('done');
@@ -368,7 +374,7 @@ describe('B4b through production entry points', () => {
 
     const results = [];
     for (const target of [LEDGER, ABOUT]) {
-      const f = await fixture();
+      const f = await fixture({ words: `Remember: ${REMOTE}` });
       const wordsPath = `Inbox/${f.c.inbox[0]?.line.slice(0, 40)}/${PILE_NOTE}`;
       const wordsId = await f.id(wordsPath);
       const targetId = await f.id(target);
@@ -382,9 +388,13 @@ describe('B4b through production entry points', () => {
       refusal.mockRestore();
       expect(attempts, `${target}: the admitted memory write reaches the injected refusal`).toBeGreaterThan(0);
       expect(run.refusals).toEqual([]);
-      expect(run.after[wordsPath], 'failed memory leaves the original words in the inbox').toBe(f.c.inbox[0]?.line + '\n');
+      expect(run.after[wordsPath], 'only a failed ledger write retains the original words').toBe(
+        target === LEDGER ? f.c.inbox[0]?.line + '\n' : undefined);
+      expect(ledger(run).live.map((fact) => fact.text)).toEqual(target === LEDGER ? [] : [REMOTE]);
       expect(run.after[ABOUT]).toBe(f.c.folder[ABOUT]);
-      expect(memoryRows(run)).toEqual([]);
+      expect(report(run).updated.filter((row) => row.path === ABOUT)).toEqual(target === LEDGER ? []
+        : [expect.objectContaining({ path: ABOUT, op: expect.any(String) })]);
+      expect(report(run).created.filter((row) => row.path === ABOUT)).toEqual([]);
       expect(internalRows(run)).toEqual([]);
       expect(report(run).filed).toEqual([]);
       expect(report(run).requests ?? []).toEqual([]);
@@ -393,10 +403,10 @@ describe('B4b through production entry points', () => {
           .map(({ pileId, disposition }) => ({ pileId, disposition })),
         notDone: report(run).setAside });
     }
-    expect(results, 'a refused memory write settles as not done, with no item or run left saving').toEqual(
+    expect(results, 'ledger refusal is not done; projection refusal preserves settled memory, with no run left saving').toEqual(
       [LEDGER, ABOUT].map((target) => ({ target, code: 0, phase: 'done',
-        item: [{ pileId: 'p-1', disposition: 'set-aside' }],
-        notDone: [{ name: control.c.inbox[0]?.line.slice(0, 40), why: expect.stringMatching(/\S/) }],
+        item: [{ pileId: 'p-1', disposition: target === LEDGER ? 'set-aside' : 'filed' }],
+        notDone: target === LEDGER ? [{ name: control.c.inbox[0]?.line.slice(0, 40), why: expect.stringMatching(/\S/) }] : [],
       })));
   });
 
@@ -437,7 +447,7 @@ describe('B4b through production entry points', () => {
     const forgotten = await execute(f, { ...EMPTY, forget: [{ factId: 'fact-remote' }] });
     expect(ledger(forgotten).live.filter((x) => x.text === GARDEN)).toHaveLength(2);
     const inbox = await f.id('Inbox'); const pile = await f.drive.createFolder(inbox, 'Remember again', { pile: 'remember-new' });
-    await f.drive.createText(pile.id, PILE_NOTE, `Remember again that Alex ${REMOTE.toLowerCase()}\n`);
+    await f.drive.createText(pile.id, PILE_NOTE, `Remember again: ${REMOTE}\n`);
     const run = await execute(f, { ...EMPTY, observations: [{ source: { pileId: 'remember-new' }, section: 'about-preferences',
       category: 'preference', text: REMOTE, remembers: 'fact-remote' }] });
     const remembered = ledger(run).live.filter((x) => x.text === REMOTE);
@@ -563,7 +573,7 @@ describe('B4b through production entry points', () => {
   });
 
   it('control: b4b-memory-fences-and-report', async () => {
-    const f = await fixture({ offer: true });
+    const f = await fixture({ offer: true, words: `Remember: ${REMOTE}` });
     const run = await execute(f, acceptedWords);
     expect(run.code, 'unchanged memory target settles').toBe(0);
     expect(memoryRows(run)).toHaveLength(1); expect(internalRows(run)).toEqual([]);

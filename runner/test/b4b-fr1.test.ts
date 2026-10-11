@@ -102,9 +102,9 @@ interface Frame {
   sources?: Array<{ itemId: string }>; aboutMe?: unknown;
 }
 
-async function execute(f: Fixture, make: unknown | ((frame: Frame) => unknown), at?: number) {
+async function execute(f: Fixture, make: unknown | ((frame: Frame) => unknown), at?: number, scope: 'all' | 'instructions' = 'all') {
   f.press++;
-  const admission = await planAdmission(fakeRead(f.drive), f.root, { scope: 'all', clock: () => at ?? DAY + (f.press - 1) * 86_400_000,
+  const admission = await planAdmission(fakeRead(f.drive), f.root, { scope, clock: () => at ?? DAY + (f.press - 1) * 86_400_000,
     newId: () => `b4b-admission-${f.press}` });
   if (admission.kind !== 'manifest') throw new Error(`Fixture not admitted: ${admission.cause}`);
   const frames: Frame[] = []; const inputs: string[] = []; const refusals: string[] = [];
@@ -126,7 +126,7 @@ async function execute(f: Fixture, make: unknown | ((frame: Frame) => unknown), 
   const errorStart = vi.mocked(console.error).mock.calls.length;
   const result = await runOnDrive(f.c, f.drive, f.root, { claude: spawn, admission: admission.manifest,
     pacing: { baseMs: 0, sleep: async () => {} },
-    answerStart: { scope: 'all', requestId: `b4b-run-${f.press}` } }, f.press);
+    answerStart: { scope, requestId: `b4b-run-${f.press}` } }, f.press);
   const errors = vi.mocked(console.error).mock.calls.slice(errorStart).flat().map(String).join('\n');
   return { ...result, frames, inputs, refusals, errors };
 }
@@ -167,7 +167,7 @@ async function rememberAgain(delay: number) {
   expect(forgotten.dispatch?.admission.at).toBe(DAY);
   expect(ledger(forgotten).tombstones.map((t) => t.factId)).toEqual(['fact-remote']);
   expect(forgotten.after[ABOUT]).not.toContain(REMOTE);
-  await addWords(f, 'Remember my remote preference again.', 'remember-new');
+  await addWords(f, `Remember my remote preference again: ${REMOTE}`, 'remember-new');
   vi.setSystemTime(DAY + delay);
   const run = await execute(f, { ...EMPTY, observations: [{ source: { pileId: 'remember-new' },
     section: 'about-preferences', category: 'preference', text: REMOTE, remembers: 'fact-remote' }] }, DAY + delay);
@@ -188,7 +188,7 @@ async function distinctFacts(count: number) {
 
 describe('B4b fix round 1, addendum 13', () => {
   it('control: b4b-fr1-A-visible-settlement', async () => {
-    const f = await fixture(); const saved = await execute(f, words);
+    const f = await fixture({ words: `Remember: ${REMOTE}` }); const saved = await execute(f, words);
     expect(saved.code, saved.errors).toBe(0);
     expect(saved.after[ABOUT]).toContain(REMOTE);
     expect(ledger(saved).live).toHaveLength(1);
@@ -207,19 +207,39 @@ describe('B4b fix round 1, addendum 13', () => {
   });
 
   it('b4b-fr1-A-visible-settlement', async () => {
-    const f = await fixture();
+    const f = await fixture({ words: `Remember: ${REMOTE}` });
     const failed = await failAbout(f, words);
     expect(ledger(failed).live).toHaveLength(1);
     expect(failed.after[ABOUT]).not.toContain(REMOTE);
-    expect(inboxWords(failed)).toEqual([f.c.inbox[0]?.line]);
-    const retry = await execute(f, words);
+    expect(inboxWords(failed)).toEqual([]);
+    expect(report(failed).updated.filter((row) => row.path === ABOUT)).toEqual([
+      expect.objectContaining({ path: ABOUT, op: expect.any(String) }),
+    ]);
+    await f.drive.createText(await f.id('.bower/changes'), 'refresh.json', JSON.stringify({
+      v: 1, id: 'refresh-request', device: 'made-up-device', at: DAY + 86_400_000,
+      kind: 'request', what: 'Asked Bower to update the notes', text: 'Update these notes.',
+    }));
+    const retry = await execute(f, EMPTY, undefined, 'instructions');
+    expect(retry.code, retry.errors).toBe(0);
+    expect(retry.refusals).toEqual([]);
+    expect(retry.after[LEDGER]).toBe(failed.after[LEDGER]);
 
     const g = await fixture({ history: true, words: 'Forget my remote preference.' });
     const failedForget = await failAbout(g, forget);
     expect(ledger(failedForget).tombstones.map((t) => t.factId)).toEqual(['fact-remote']);
     expect(failedForget.after[ABOUT]).toContain(REMOTE);
-    expect(inboxWords(failedForget)).toEqual(['Forget my remote preference.']);
-    const rebuilt = await execute(g, EMPTY);
+    expect(inboxWords(failedForget)).toEqual([]);
+    expect(report(failedForget).updated.filter((row) => row.path === ABOUT)).toEqual([
+      expect.objectContaining({ path: ABOUT, op: expect.any(String) }),
+    ]);
+    await g.drive.createText(await g.id('.bower/changes'), 'refresh.json', JSON.stringify({
+      v: 1, id: 'refresh-request', device: 'made-up-device', at: DAY + 86_400_000,
+      kind: 'request', what: 'Asked Bower to update the notes', text: 'Update these notes.',
+    }));
+    const rebuilt = await execute(g, EMPTY, undefined, 'instructions');
+    expect(rebuilt.code, rebuilt.errors).toBe(0);
+    expect(rebuilt.refusals).toEqual([]);
+    expect(rebuilt.after[LEDGER]).toBe(failedForget.after[LEDGER]);
     const h = await fixture({ history: true, words: 'Forget that fact' });
     const unresolved = await execute(h, EMPTY);
     const options = questions(unresolved).flatMap((q) => q.options ?? []);
@@ -227,23 +247,26 @@ describe('B4b fix round 1, addendum 13', () => {
       retryWords: inboxWords(retry), rebuiltVisible: rebuilt.after[ABOUT]?.includes(REMOTE),
       unresolvedWords: inboxWords(unresolved), unresolvedTombstones: ledger(unresolved).tombstones.length,
       asksForgetFact: options.length >= 2 && options.every((o) => o.action.kind === 'forget-fact') },
-    'A: ledger success alone never settles words; rebuild hides tombstones; an unresolved Forget asks').toEqual({
+    'A: ledger settles words; maintain catches up the view; an unresolved Forget asks').toEqual({
       retryVisible: true, retryFacts: 1, retryWords: [], rebuiltVisible: false,
       unresolvedWords: ['Forget that fact'], unresolvedTombstones: 0, asksForgetFact: true,
     });
   });
 
   it('control: b4b-fr1-B-document-data', async () => {
-    const f = await fixture({ offer: true });
+    const f = await fixture({ offer: true, words: 'Remember: Alex prefers office roles.' });
     const run = await execute(f, (frame: Frame) => ({ ...fileOffer(frame), observations: [{
-      source: { fileId: frame.piles.flatMap((p) => p.things).find((t) => t.name === OFFER)?.fileId },
+      source: { pileId: frame.piles.find((p) => !p.things.length)?.pileId },
       subject: 'Alex', category: 'biography', section: 'about-you', text: 'Alex prefers office roles.',
     }] }));
     expect(run.code, run.errors).toBe(0);
     expect(run.refusals).toEqual([]);
     expect(ledger(run).live).toEqual([expect.objectContaining({ text: 'Alex prefers office roles.',
-      category: 'biography', origin: expect.objectContaining({ kind: 'document', subject: 'Alex' }) })]);
+      category: 'biography', origin: expect.objectContaining({ kind: 'words', pileId: 'p-1' }) })]);
     expect(run.after[ABOUT]).toContain('Alex prefers office roles.');
+    expect(report(run).filed).toHaveLength(1);
+    expect(inboxWords(run)).toEqual([]);
+    expect(validLearnedBlock(run.after[ABOUT] ?? '', ledger(run))).toBe(true);
   });
 
   it('b4b-fr1-B-document-data', async () => {
@@ -355,7 +378,7 @@ describe('B4b fix round 1, addendum 13', () => {
   });
 
   it('control: b4b-fr1-6-create-about-template', async () => {
-    const f = await fixture();
+    const f = await fixture({ words: `Remember: ${REMOTE}` });
     const template = FOLDER_TEMPLATE.find((file) => file.path === ABOUT)?.content;
     expect(template).toBeTypeOf('string');
     await f.write(ABOUT, template ?? 'missing-template');
@@ -369,29 +392,32 @@ describe('B4b fix round 1, addendum 13', () => {
   });
 
   it('b4b-fr1-6-create-about-template', async () => {
-    const f = await fixture(); const old = await f.id(ABOUT);
+    const f = await fixture({ words: `Remember: ${REMOTE}` }); const old = await f.id(ABOUT);
     await f.drive.trash(old);
     expect((await f.drive.evidence(old))?.trashed).toBe(true);
     const template = FOLDER_TEMPLATE.find((file) => file.path === ABOUT)?.content;
     expect(template).toBeTypeOf('string');
+    const ledgerId = await f.id(LEDGER);
     const creates = vi.spyOn(f.drive, 'createText');
     const writes = vi.spyOn(f.drive, 'writeText');
     const run = await execute(f, words);
     const creation = creates.mock.calls.find(([, name]) => name === ABOUT);
     const created = (await f.drive.listAll(f.root)).find((file) => file.name === ABOUT && file.parents.includes(f.root));
-    const visibleWrite = writes.mock.calls.find(([id, text]) => id === created?.id && text.includes(REMOTE));
+    expect(created?.id).toBeDefined();
+    expect(created?.id).not.toBe(old);
+    const ledgerWrite = writes.mock.calls.find(([id, text]) => id === ledgerId && parseObservations(bytes(text)).live.some((fact) => fact.text === REMOTE));
     const createIndex = creation ? creates.mock.calls.indexOf(creation) : -1;
-    const writeIndex = visibleWrite ? writes.mock.calls.indexOf(visibleWrite) : -1;
+    const writeIndex = ledgerWrite ? writes.mock.calls.indexOf(ledgerWrite) : -1;
     expect(run.frames.length, 'remember reaches the planner with About me absent').toBeGreaterThan(0);
-    expect({ code: run.code, templateCreatedBeforeWrite: !!creation && creation[2].startsWith(template ?? 'missing-template')
-      && !creation[2].includes(REMOTE) && !!visibleWrite
-      && (creates.mock.invocationCallOrder[createIndex] ?? Infinity) < (writes.mock.invocationCallOrder[writeIndex] ?? -1),
+    expect({ code: run.code, projectionCreatedAfterLedger: !!creation && creation[2].startsWith(template ?? 'missing-template')
+      && creation[2].includes(REMOTE) && !!ledgerWrite
+      && (writes.mock.invocationCallOrder[writeIndex] ?? Infinity) < (creates.mock.invocationCallOrder[createIndex] ?? -1),
       templateKept: run.after[ABOUT]?.startsWith(template ?? 'missing-template') ?? false,
       visible: run.after[ABOUT]?.includes(REMOTE) ?? false, facts: ledger(run).live.length,
       valid: run.after[ABOUT] !== undefined && validLearnedBlock(run.after[ABOUT] ?? '', ledger(run)),
       words: inboxWords(run), oldStillBinned: (await f.drive.evidence(old))?.trashed },
-    '6: a binned About me is recreated from the folder template before remembering').toEqual({
-      code: 0, templateCreatedBeforeWrite: true, templateKept: true, visible: true, facts: 1, valid: true, words: [], oldStillBinned: true,
+    '6: maintain recreates a binned About me from the template after ledger settlement').toEqual({
+      code: 0, projectionCreatedAfterLedger: true, templateKept: true, visible: true, facts: 1, valid: true, words: [], oldStillBinned: true,
     });
   });
 });
