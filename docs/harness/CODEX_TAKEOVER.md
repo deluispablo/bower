@@ -45,6 +45,14 @@ The mailbox is the directory `/Users/deluisp/Projects/bower-mail/`, outside ever
 - A receiver reads its file at the start of every turn and on every heartbeat. When it has handled the messages, it appends `handled up to <ISO time>`.
 - Nothing personal and no secrets go in the mailbox, as in the repo.
 
+## Owner rules that carry over
+
+- **Minimal text output (TL-P4-58):** reports to the owner are 1–3 lines.
+- **ponytail at full level (TL-P4-59):** always on for every session, and every worker prompt starts with "Use the ponytail skill (full)".
+- **Automatic compaction at about 50% (TL-P4-60):** state files are current after every decision.
+- **Codex models (TL-P4-57).**
+- **Newer rules:** read the last 40 lines of DECISIONS.
+
 ## What does not change
 
 - **Who talks to the owner.** Only the lead and the designer do, in Spanish, briefly, outcome first. The coordinator never asks the owner anything.
