@@ -4,7 +4,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { usePiles, useSources, useTree } from '@/data/provider';
 import { folderCount } from '@/data/piles';
 import { isRoot, thingName, findNode, parentOf, sortNodes } from '@/data/tree';
-import type { Note, TreeNode } from '@/data/types';
+import type { Note, TreeNode, TypeRow } from '@/data/types';
 import { crumbs, decodeSplat, folderRoute, paraColor, routeFor } from '@/app/paths';
 import { useUi } from '@/app/ui-store';
 import { ago, plural, agoInSentence } from '@/app/words';
@@ -17,6 +17,8 @@ import { Explorer } from './Explorer';
 import { useFileActions } from './file-actions';
 import s from './folder.module.css';
 import { useBookmarks } from './bookmarks';
+import { parseNote, scalarList, tableProperties, TECHNICAL_PROPERTIES, propertyValuesOk } from '@/data/contracts/note-format';
+import { timelineDay } from '@/data/dates';
 
 /** `/files`: the tree on a phone; `/files/<folder>`: a folder as a list or a table. */
 export function FolderScreen() {
@@ -231,10 +233,12 @@ function HubSummary({ hub }: { hub: TreeNode }) {
 function FolderTable({ items }: { items: TreeNode[] }) {
   const { vault } = useSources();
   const [notes, setNotes] = useState<Record<string, Note>>({});
+  const [declarations, setDeclarations] = useState<TypeRow[]>([]);
   const [sortBy, setSortBy] = useState<{ key: string; dir: 1 | -1 }>({ key: 'name', dir: 1 });
   useEffect(() => {
     let live = true;
     const md = items.filter((i) => i.kind === 'note');
+    void (vault.typeTable?.() ?? Promise.resolve([])).then((rows) => live && setDeclarations(rows), (e: unknown) => console.error(e));
     void Promise.all(md.map((i) => vault.note(i.path).then((n) => [i.path, n] as const, (e: unknown) => (console.error(e), null)))).then((pairs) => {
       if (!live) return;
       const m: Record<string, Note> = {};
@@ -245,29 +249,73 @@ function FolderTable({ items }: { items: TreeNode[] }) {
       live = false;
     };
   }, [items, vault]);
+  const selected = useMemo(() => {
+    let count = 0;
+    let row: TypeRow | undefined;
+    for (const candidate of declarations) {
+      if (['other-project-material', 'other-area-material'].includes(candidate.id)) continue;
+      const matches = Object.values(notes).filter((note) => note.properties.some((p) => p.key === 'type' && p.value === candidate.id)).length;
+      if (matches > count) { count = matches; row = candidate; }
+    }
+    return row;
+  }, [declarations, notes]);
   const propKeys = useMemo(() => {
     const seen = new Map<string, string>();
-    Object.values(notes).forEach((n) => n.properties.forEach((p) => p.key !== 'kind' && p.key !== 'folder' && !seen.has(p.key) && seen.set(p.key, p.label)));
-    return [...seen.entries()].slice(0, 4);
-  }, [notes]);
+    Object.values(notes).forEach((n) => n.properties.forEach((p) =>
+      !['kind', 'folder', ...TECHNICAL_PROPERTIES].includes(p.key) && !seen.has(p.key) && seen.set(p.key, p.label)));
+    if (!selected) return [...seen.entries()].slice(0, 4);
+    return tableProperties({ properties: selected.table.map((key) => ({ key,
+      label: seen.get(key) ?? parseNote('', `---\n${key}: \n---`).properties.find((p) => p.key === key)?.label ?? key,
+      value: '' })) }, selected).map((p) => [p.key, p.label] as [string, string]);
+  }, [notes, selected]);
   const value = (i: TreeNode, key: string): string => {
     if (key === 'name') return i.type === 'folder' ? i.name : thingName(i.name);
     if (key === 'modified') return String(i.modified);
     if (key === 'status') return notes[i.path]?.status ?? '';
-    return notes[i.path]?.properties.find((p) => p.key === key)?.value ?? '';
+    const note = notes[i.path];
+    if (selected && !note?.properties.some((p) => p.key === 'type' && p.value === selected.id)) return '';
+    return note?.properties.find((p) => p.key === key)?.value ?? '';
   };
+  const typed = (raw: string, key: string): unknown => {
+    const kind = selected?.properties[key]?.type;
+    if (!selected || !raw || !['number', 'money', 'list'].includes(kind ?? '')) return raw;
+    try {
+      const decoded: unknown = kind === 'list' ? scalarList(raw) : JSON.parse(raw);
+      return propertyValuesOk(selected, { [key]: decoded }) ? decoded : raw;
+    } catch (e) {
+      if (!(e instanceof SyntaxError)) throw e;
+      return raw;
+    }
+  };
+  const amount = (v: unknown): number | null => typeof v === 'number' ? v
+    : v && typeof v === 'object' && 'amount' in v && typeof v.amount === 'number' ? v.amount : null;
+  const display = (i: TreeNode, key: string): string => {
+    const raw = value(i, key);
+    const v = typed(raw, key);
+    if (Array.isArray(v)) return v.join(', ');
+    const number = amount(v);
+    if (number !== null) return new Intl.NumberFormat('en-US', {
+      ...(v && typeof v === 'object' && 'currency' in v && typeof v.currency === 'string'
+        ? { style: 'currency', currency: v.currency } : {}),
+      minimumFractionDigits: Number.isInteger(number) ? 0 : undefined, maximumFractionDigits: 4,
+    }).format(number);
+    return selected?.properties[key]?.type === 'date' ? timelineDay(raw) : raw;
+  };
+  const numeric = (key: string): boolean => ['money', 'number'].includes(selected?.properties[key]?.type ?? '');
   const rows = [...items].sort((a, b) => {
     const k = sortBy.key;
-    const av = value(a, k),
-      bv = value(b, k);
-    return (k === 'modified' ? Number(av) - Number(bv) : av.localeCompare(bv, undefined, { numeric: true })) * sortBy.dir;
+    const av = value(a, k), bv = value(b, k);
+    if (!av || !bv) return av ? -1 : bv ? 1 : 0;
+    const an = amount(typed(av, k)), bn = amount(typed(bv, k));
+    return (k === 'modified' ? Number(av) - Number(bv)
+      : an !== null && bn !== null ? an - bn : av.localeCompare(bv, undefined, { numeric: true })) * sortBy.dir;
   });
   // A Status column only when something here has a status.
   const hasStatus = items.some((i) => !!notes[i.path]?.status);
   const cols: Array<[string, string]> = [['name', 'Name'], ...(hasStatus ? [['status', 'Status'] as [string, string]] : []), ...propKeys, ['modified', 'Changed']];
   const head = (k: string, label: string) => (
-    <th key={k} aria-sort={sortBy.key === k ? (sortBy.dir === 1 ? 'ascending' : 'descending') : 'none'}>
-      <button type="button" onClick={() => setSortBy({ key: k, dir: sortBy.key === k ? (sortBy.dir === 1 ? -1 : 1) : 1 })}>
+    <th key={k} style={numeric(k) ? { textAlign: 'right', fontVariantNumeric: 'tabular-nums' } : undefined} aria-sort={sortBy.key === k ? (sortBy.dir === 1 ? 'ascending' : 'descending') : 'none'}>
+      <button type="button" style={numeric(k) ? { justifyContent: 'flex-end', marginLeft: 'auto' } : undefined} onClick={() => setSortBy({ key: k, dir: sortBy.key === k ? (sortBy.dir === 1 ? -1 : 1) : 1 })}>
         {label}
         {sortBy.key === k && <Icon name={sortBy.dir === 1 ? 'down' : 'chev'} size={13} className={sortBy.dir === 1 ? '' : s.up} />}
       </button>
@@ -290,7 +338,7 @@ function FolderTable({ items }: { items: TreeNode[] }) {
               </td>
               {hasStatus && <td>{value(i, 'status') && <span className={s.status}>{value(i, 'status')}</span>}</td>}
               {propKeys.map(([k]) => (
-                <td key={k}>{value(i, k)}</td>
+                <td key={k} style={numeric(k) ? { textAlign: 'right', fontVariantNumeric: 'tabular-nums' } : undefined}>{display(i, k)}</td>
               ))}
               <td className="muted">{ago(i.modified)}</td>
             </tr>

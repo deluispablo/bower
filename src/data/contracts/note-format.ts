@@ -77,7 +77,7 @@ function scalarOf(value: string): string {
 }
 
 /** Flow and collected block lists split only at commas outside quoted items. */
-function scalarList(value: string): string[] {
+export function scalarList(value: string): string[] {
   const text = value.trim().replace(/^\[|\]$/g, '');
   const items: string[] = [];
   let quote = '';
@@ -460,7 +460,7 @@ export function toggleTaskInText(raw: string, index: number): { text: string; la
 /** The declared projection never removes the note's other properties or grants schema authority. */
 export const TECHNICAL_PROPERTIES = ['type', 'status', 'summary', 'tags', 'created', 'updated', 'source', 'related'] as const;
 export function tableProperties(note: Pick<ParsedNote, 'properties'>, row: Pick<TypeRow, 'table'>): Property[] {
-  return [...new Set(row.table)].filter((key) => !(TECHNICAL_PROPERTIES as readonly string[]).includes(key)).slice(0, 4)
+  return [...new Set(row.table)].filter((key) => !['kind', 'folder', ...TECHNICAL_PROPERTIES].includes(key)).slice(0, 4)
     .flatMap((key) => note.properties.filter((property) => property.key === key));
 }
 /** `YYYY-MM-DD`, a real calendar date. */
@@ -489,7 +489,7 @@ export function typeRowOk(v: unknown, stored = false): v is TypeRow {
     && (declaration.type === 'enum' ? schemaTexts(declaration.values) && declaration.values.length > 0
       && declaration.values.length <= 20 && new Set(declaration.values).size === declaration.values.length
       : typeof declaration.type === 'string' && ['text', 'list', 'number', 'money', 'date'].includes(declaration.type) && !Object.hasOwn(declaration, 'values')))) return false;
-  if (!v.table.every((key) => Object.hasOwn(properties, key) && !(TECHNICAL_PROPERTIES as readonly string[]).includes(key))) return false;
+  if (!v.table.every((key) => Object.hasOwn(properties, key) && !['kind', 'folder', ...TECHNICAL_PROPERTIES].includes(key))) return false;
   if (v.group_by === undefined) return true;
   const group = v.group_by;
   if (!schemaObject(group) || (!stored && !schemaClosed(group, ['property', 'bucket'])) || typeof group.property !== 'string'
@@ -548,4 +548,25 @@ export function readTypeTable(text: string | null): { table: TypeTable; writeAll
     seen.add(row.id); return true;
   });
   return { table: { ...value, v: 1, rows: rows.length ? rows : seedTable().rows }, writeAllowed: true };
+}
+
+export function insertTypeRow(table: TypeTable, row: TypeRow): TypeTable {
+  if (!table || table.v !== 1 || !Array.isArray(table.rows) || !table.rows.every((old) => typeRowOk(old, true))
+    || new Set(table.rows.map((old) => old.id)).size !== table.rows.length
+    || !typeRowOk(row) || table.rows.some((old) => old.id === row.id)) throw new BowerError('conflict', 'Bower could not add that type.');
+  const index = table.rows.findIndex((old) => ['other-project-material', 'other-area-material'].includes(old.id));
+  const rows = structuredClone(table.rows);
+  rows.splice(index < 0 ? rows.length : index, 0, structuredClone(row));
+  return { ...structuredClone(table), rows };
+}
+/** Documents supply facts, never authority to choose columns. */
+export function requestTableColumn(row: TypeRow, key: string, origin: unknown): { row: TypeRow; replaced: string | null } | null {
+  if (!typeRowOk(row, true) || !Object.hasOwn(row.properties, key) || ['kind', 'folder', ...TECHNICAL_PROPERTIES].includes(key)
+    || !origin || typeof origin !== 'object' || !('kind' in origin) || origin.kind !== 'words'
+    || !('recordId' in origin) || typeof origin.recordId !== 'string' || !origin.recordId.trim()) return null;
+  const next = structuredClone(row);
+  if (next.table.includes(key)) return { row: next, replaced: null };
+  const replaced = next.table.length === 4 ? next.table.pop() ?? null : null;
+  next.table.push(key);
+  return { row: next, replaced };
 }

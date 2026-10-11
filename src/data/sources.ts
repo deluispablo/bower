@@ -14,6 +14,7 @@ import type {
   RunState,
   Suggestion,
   TreeNode,
+  TypeRow,
   User,
 } from './types';
 import type { PlaceSource } from './session';
@@ -89,6 +90,8 @@ export interface VaultSource {
   uploadNotice?(): string | null | Promise<string | null>;
   /** For each file, where you already have it (its path), or null. */
   duplicates(files: Array<{ name: string; body?: Blob }>): Promise<Array<string | null>>;
+  /** Stored declarations, through the same cached runner-file read as questions. */
+  typeTable?(): Promise<TypeRow[]>;
   questions(): Promise<Question[]>;
   answer(id: string, yes: QuestionAnswer): Promise<void>;
   rules(): Promise<Rule[]>;
