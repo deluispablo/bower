@@ -7119,5 +7119,18 @@
     "verify": "pnpm exec vitest run src/data/upload-sign-out.test.ts src/data/live/live.test.ts -t \"delete-account-purge\"",
     "note": "DEFECT_LOG delete-account-purge-skipped; TL-P4-53 addendum 12. Escalated (privacy). Packet 2026-10-11-delete-account-purge-packet.md. implementer: codex.",
     "review": "P4-104 PASS"
+  },
+  {
+    "id": "b1d-selection",
+    "task": "p4-b1",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Planning runs in two steps: the model selects from a script-built candidate list of ids, then executes only against what it chose, within one shared ledger.",
+    "steps": [
+      "The B1d reds pass through runner main and the corpus driver; goldens rise only by named calls."
+    ],
+    "verify": "",
+    "note": "TL-P4-41 (B1 contract) and addendum 13. Escalated. Packet 2026-10-11-b1d-selection-packet.md. implementer: codex."
   }
 ]
