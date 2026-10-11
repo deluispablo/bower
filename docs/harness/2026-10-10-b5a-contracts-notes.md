@@ -318,3 +318,9 @@ Only the assigned test and this notes file were edited; coordinator owns commits
 ## Coordinator: unused-production baseline (handoff to B5b)
 
 B5a is contracts only (no runtime table writer yet), so knip --production finds three unused items: `exports src/data/contracts/note-format.ts propertyValuesOk`, `exports src/data/contracts/note-format.ts tableProperties`, `files runner/src/type-table.ts`. They are baselined in harness/unused-production-baseline.json as hot.ts was for B3a→B3b; B5b removes all three lines when it wires the type table, and its check fails while any is listed.
+
+tests changed: src/data/contracts/note-edit.test.ts: B5a reds (TL-P4-47 Q4 profile region); additions only, no existing assertion changed.
+tests changed: src/data/contracts/questions.test.ts: B5a reds (TL-P4-47 Q3 proposal subject); additions plus widened imports, no existing assertion changed.
+tests changed: src/data/contracts/run-manifest.test.ts: B5a reds (TL-P4-47 Q1/Q3 type table and proposals in the manifest); additions only.
+tests changed: src/data/vault/note-format.test.ts: B5a reds (TL-P4-47 Q1/Q7 declared property projection); additions only.
+tests changed: src/data/vault/ownership-format.test.ts: B5a reds (TL-P4-47 Q4 profile mark); additions only.
