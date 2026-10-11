@@ -693,3 +693,53 @@ on the retained bound; the full suite is not green.
 This last round edited only runner/test/drive-calls-golden.test.ts and these notes.
 `git diff --check` passes. No git writes, commits, network, node_modules changes,
 pnpm check, screen e2e or repository test outputs. Coordinator owns commits.
+
+## Fix round 1 reds
+
+Red owner only; no production edits, network, git writes, commits, node_modules changes,
+or repository test output. Coordinator owns commits. Only the following runner tests
+and these notes changed.
+
+tests changed: runner/test/b23-hot-context.test.ts: added `B3b fix 1: settled journal changes enter Recent changes on their own`; two real rule changes settle through production main, update Rules, and leave their primary records in the archive. Recent changes must include both dated primary `what` rows independently of any report summary. Addendum 5 still requires zero archive media reads; observation excludes admission, seeding and post-run inspection. All existing assertions remain unchanged.
+tests changed: runner/test/drive-calls-golden.test.ts: re-pinned only the retained `past` base from 11,940 to 12,540 ms, adding the authorized four cold hot calls' measured 600 ms; the strict `<` assertion and 20% factor remain unchanged. Added a TL-P4-42 addendum 5 citation; C04, call counts, phase counts and all other assertions remain unchanged.
+
+Offline source: existing `runner/test/modelled.ts`, `DRIVE_MS = 150`, and the production-main
+corpus driver. The reconciliation reference already used by this entry is
+[Kubernetes controllers](https://kubernetes.io/docs/concepts/architecture/controller/)
+(offline citation, no page fetched). No new production mechanism is introduced.
+
+Branch measurement was repeated before the retained re-pin using the existing OS-temp
+probe/config, with `--maxWorkers=2`. C04 is 12,770 ms; retained history is 14,340 ms,
+assertion-red against `<14,328` (`11940 * 1.2`). Log: `/tmp/b3b-fix1-measure.log`.
+The four cold calls each take 150 modelled ms:
+
+| Named call | Modelled start (ms) | Duration (ms) |
+| --- | ---: | ---: |
+| Planning questions media, GET f9?alt=media | 2500 | 150 |
+| Hot name-check listing, GET children of .bower (f7) | 9280 | 150 |
+| Hot live .bower parent fence, GET metadata of f7 | 9430 | 150 |
+| Hot multipart create, POST upload, name hot.md | 9580 | 150 |
+
+Total authorized delta: 600 ms. Retained base: 11,940 + 600 = 12,540 ms;
+strict bound with the preserved factor: `<15,048 ms`. This is the same four-call
+measurement as C04, not an adjustment by the 12 ms boundary excess.
+
+Targeted red run: `pnpm -C runner exec vitest run test/b23-hot-context.test.ts
+--config /tmp/b3b-final-runner.config.mjs --maxWorkers=2`, exit 1, six pass and only
+the new red fails. Its two missing rows are `- 2026-10-07 A rule` and
+`- 2026-10-07 Added a garden reminder.`; actual Recent changes is only
+`- 2026-10-07 Rules updated.`. Both Rules edits, both archived primary records,
+zero archive media reads, and one hot write pass before the two soft row assertions.
+Log: `/tmp/b3b-fix1-red.log`.
+
+Full runner sweep: `pnpm -C runner exec vitest run --config
+/tmp/b3b-fix1-runner.config.mjs --maxWorkers=2`, exit 1 as expected.
+**647 pass / 1 fail, 648 total; 48 passing files / 1 failing file, 49 total.**
+The only failing test is `B3b fix 1: settled journal changes enter Recent changes on their own`
+at `runner/test/b23-hot-context.test.ts:113` (two assertion failures within that test).
+All five drive-calls-golden tests pass, including retained timing. No other contradiction,
+import failure or timer failure appears. Log: `/tmp/b3b-fix1-runner.log`;
+JSON: `/tmp/b3b-fix1-runner.json`. Config, cache and output are in OS temp.
+`git diff --check` passes. No pnpm check or screen e2e was run: this assignment is
+runner reds and the one authorized re-pin only. Production correction remains with
+its assigned implementer; no commit was created.

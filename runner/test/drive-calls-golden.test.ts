@@ -94,7 +94,9 @@ describe('the C04 run past 20 earlier runs (retention-never-wired, round 2)', ()
     // TL-P4-42 addendum 5: +600 ms (4 x 150 ms) for questions media, hot name-check listing,
     // live .bower parent fence and multipart create, measured on this branch.
     expect(c04.ms).toBeLessThan(11120 * 1.2);
-    expect(past.ms).toBeLessThan(11940 * 1.2);
+    // TL-P4-42 addendum 5, fix 1: retained base 11,940 + 600 ms for the same four
+    // measured cold hot calls above (4 x DRIVE_MS); preserve the 20% factor.
+    expect(past.ms).toBeLessThan(12540 * 1.2);
   });
 });
 

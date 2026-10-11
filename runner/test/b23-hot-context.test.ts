@@ -82,6 +82,38 @@ it('B3b hot: filing writes hot once and the next prompt puts it at position 6', 
   expect.soft(events.filter((e) => e.path === HOT && e.method === 'GET' && e.media), 'one shared cached hot read').toHaveLength(1);
 });
 
+it('B3b fix 1: settled journal changes enter Recent changes on their own', async () => {
+  const { c, drive, root } = await setup();
+  const pending = (await drive.listAll(root)).find((file) => drive.pathOf(file.id, root) === '.bower/changes');
+  expect(pending).toBeDefined();
+  const second = { v: 1, id: 'change-2', device: 'device-1', at: AT - 59_999, kind: 'rule',
+    what: 'Added a garden reminder.', text: 'Keep watering reminders with the garden notes.' };
+  await drive.createText(pending?.id ?? '', 'change-2.json', `${JSON.stringify(second)}\n`);
+  const events: Observation[] = [];
+  const run = await runOnDrive(c, drive, root, { pacing, claude: replySequence([empty]),
+    around: observe(drive, root, events) }, 1);
+  // Controls: both primary changes really settled through main, independently of the report summary.
+  expect(run.code).toBe(0);
+  expect(run.after['Rules.md']).toContain('Keep gardening notes in Resources.');
+  expect(run.after['Rules.md']).toContain(second.text);
+  const primary = [
+    { id: 'change-1', at: AT - 60_000, kind: 'rule', what: 'A rule', text: c.journal[0]?.text }, second,
+  ];
+  for (const record of primary) {
+    expect(run.after[`.bower/changes/${record.id}.json`]).toBeUndefined();
+    expect(JSON.parse(run.after[`.bower/changes/archive/${record.id}.json`] ?? 'null')).toMatchObject(record);
+  }
+  // TL-P4-42 addendum 5: hot uses captured primary bytes and settled outcomes, never archive media.
+  expect(events.filter((event) => event.method === 'GET' && event.media
+    && event.path.startsWith('.bower/changes/archive/'))).toEqual([]);
+  expect(writes(events, HOT)).toHaveLength(1);
+  const recent = section(run.after[HOT], 'Recent changes');
+  // A "Rules updated." report row cannot satisfy either primary journal row.
+  for (const record of primary) {
+    expect.soft(recent).toContain(`- ${new Date(record.at).toISOString().slice(0, 10)} ${record.what}`);
+  }
+});
+
 it('B3b hot: date-only refresh keeps the old bytes without another write', async () => {
   const { c, drive, root } = await setup();
   c.journal = [];
