@@ -224,3 +224,85 @@ No full gate is claimed green, and e2e/accessibility/desktop layout and designer
 
 The only other change is this append-only Implementation section in the authorized notes file.
 Commits: none; all git commands issued by the implementer were read-only.
+
+
+## E2e repair
+
+Implementer: codex. Read both coordinator logs: `/tmp/gates-q1b/e2e.log` (demo gate)
+and `/tmp/gates-q1b/e2e-fake.log` (fake gate). Each contains the same 22 failures:
+14 focus failures, six target-height failures, and two MWS visibility/not-found failures.
+Both gates run Q1's explicit demo/fake fixtures in both Playwright projects.
+
+### Cause for every failing row
+
+- `e2e/q1-questions.spec.ts:158`, assertion `:162` via `stack:119`: **app defect**.
+  Both explicit sources fail in the phone project resized to 1440: pointer remains coarse,
+  but the shared sm Button's 44 px rule applies only below 900 px. Its measured height is 40 px.
+  The spec correctly tests the packet's coarse-pointer requirement; its 44 px bound stays unchanged.
+- `e2e/q1-questions.spec.ts:193`, assertion `:201` via `nativeTargets:152`: **app defect**.
+  The same wide/coarse environment exposes 40 px yes/no/Something else controls. The yes/no layout,
+  native button, full width, eight-pixel gap and all positive controls remain asserted.
+- `e2e/q1-questions.spec.ts:214`: **two app defects**. Assertion `:225` via `stack:119`
+  fails on the same wide/coarse 40 px targets (two failures per gate). Assertion `:234` fails
+  on next-card focus in the other six project/source/width combinations per gate. After saving,
+  subscriptions remove the focused control before answerQuestion's async continuation completes.
+  Radix FocusScope's removal observer focuses the dialog itself. Questions.settle rejects every
+  connected active element other than body, so it rejects that fallback and never focuses the next card.
+  This is not a timeout or fixture failure: the next option is present throughout the five-second wait.
+- `e2e/q1-questions.spec.ts:270`, assertion `:298`: **app defect**, eight failures per gate.
+  The same Radix fallback prevents last-card focus from reaching the sheet title. The heading exists,
+  the save-failure draft retention and successful retry controls already pass, and the answer is recorded.
+  The correction allows the dialog container as a fallback; a focused real control still keeps focus.
+- `e2e/messages-wait-for-sheets.spec.ts:121`, assertion `:126`: **spec locator defect**,
+  two failures per gate. The fixed `section[aria-labelledby="qs"]` no longer exists because Questions
+  uses per-instance useId labels. Query the named question region and its listitem role instead.
+  Only that locator changes. All completion, hidden-message, uncovered-sheet and return assertions stay.
+
+### Changes and evidence
+
+Questions keeps its existing single answer/focus path; settle now accepts Radix's dialog-container
+fallback as well as body, then focuses the next direct card or the existing sheet title.
+The owned shared question-card stylesheet gives its buttons min-height 44 px on coarse pointers,
+including wide touch screens and both Home/sheet surfaces. Fine-pointer sm buttons keep their current size.
+No global Button/Sheet, data source, pile behavior, toast or Dock code changed.
+
+Added two deterministic component regressions:
+`Q1b Answer settles Radix removal focus after the continuation (next=false)` and `(next=true)`.
+They hold the existing runs.start continuation with a promise, assert the answer is saved and the card
+removed, assert Radix has focused the dialog, release the promise, and assert title/next-card focus.
+Both fail on the target-focus assertion before the app change and pass afterward. No real timers.
+The existing title, clock, steps and recorded-answer positive controls remain.
+
+All 79 Home/TidySheet/PileScreen tests pass. App and e2e TypeScript noEmit/incremental-false checks pass;
+ESLint on the changed TS/TSX files passes; read-only git diff --check passes.
+Logs: `/tmp/q1b-repair-red.log`, `/tmp/q1b-repair-green.log`, `/tmp/q1b-repair-tsc-app.log`,
+`/tmp/q1b-repair-tsc-e2e.log`, `/tmp/q1b-repair-eslint.log`.
+The component test cwd, Vite cache, config and CPU reports are in the OS temp directory
+`/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/q1b-e2e-repair-m58ln6q6`.
+
+No e2e was run: the user assigns demo/fake browser verification and commits to the runner.
+The supplied HEAD pnpm check/app.spec passes are prior coordinator evidence, not repair verification.
+Standard pnpm check was not rerun because its test/build scripts write repository artifacts;
+the user requires tests to write only to OS temp. No git write, network request, install,
+node_modules replacement/symlink, server or harness-record edit was performed.
+
+### Offline standard solution
+
+Read installed `@radix-ui/react-focus-scope` 1.1.16, `dist/index.js:89-94`: its mutation observer
+focuses the container when a focused descendant is removed and activeElement becomes body.
+Reuse that existing dialog mechanism rather than adding a focus timer or replacement focus scope.
+Official reference: https://www.radix-ui.com/primitives/docs/components/dialog
+Role/name query reference: https://testing-library.com/docs/queries/byrole/
+These cite locally inspected/reused patterns; no network or current web verification was used.
+
+### Change accounting
+
+tests changed: src/features/tidy/TidySheet.test.tsx: add two deferred-continuation focus regressions; shared fixture supports a promise gate. All existing assertions retained.
+tests changed: e2e/messages-wait-for-sheets.spec.ts: replace the obsolete fixed Questions id with region/listitem roles and accessible name; all assertions retained.
+tests changed: e2e/q1-questions.spec.ts: none; every signed row, assertion, bound and positive control remains unchanged.
+removed: obsolete MWS fixed-id locator; connected-dialog exclusion from answer focus settlement.
+removed: no test, assertion, positive control, focus mechanism, source port or behavior.
+
+Changed files: src/features/home/Home.tsx; src/features/home/home.module.css;
+src/features/tidy/TidySheet.test.tsx; e2e/messages-wait-for-sheets.spec.ts; this notes file.
+Left out: runner-owned e2e verification/commits, full pnpm check rerun, designer verification.

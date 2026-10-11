@@ -311,13 +311,15 @@ export function Questions({ run }: { run?: RunState }) {
   const after = useRef<number | null>(null);
   const settle = (): void => {
     const at = document.activeElement;
-    if (after.current === null || (at && at !== document.body && at.isConnected)) return;
+    const dialog = host.current?.closest('[role="dialog"]');
+    // Radix focuses the dialog when a focused answer control is removed. That fallback
+    // still needs our next-card/title focus; a person focusing another control keeps it.
+    if (after.current === null || (at && at !== document.body && at !== dialog && at.isConnected)) return;
     const rows = list.current?.querySelectorAll<HTMLElement>(':scope > li') ?? [];
     const next = rows[Math.min(after.current, rows.length - 1)]?.querySelector('button');
     after.current = null;
     if (next) next.focus();
     else if (run) {
-      const dialog = host.current?.closest('[role="dialog"]');
       const title = document.getElementById(dialog?.getAttribute('aria-labelledby') ?? '');
       if (title) {
         title.tabIndex = -1;
@@ -325,7 +327,7 @@ export function Questions({ run }: { run?: RunState }) {
       }
     } else focusHeading();
   };
-  useEffect(settle, [qs]);
+  useEffect(settle, [qs, run]);
   // A [[note]] opens as it does in a note; one not found reads as plain words.
   const link: LinkFn = (target, label, key) => {
     const path = resolve(target);

@@ -24,7 +24,7 @@ async function settle(): Promise<void> {
 function Place() { return <output data-testid="route">{useLocation().pathname}</output>; }
 
 // Existing public ports only: storage/subscriptions drive both cards; no mock of Questions or answerQuestion.
-async function fixture(qs: Question[], opts: { run?: RunState; withHome?: boolean; fails?: boolean; initialPath?: string } = {}) {
+async function fixture(qs: Question[], opts: { run?: RunState; withHome?: boolean; fails?: boolean; initialPath?: string; startGate?: Promise<void> } = {}) {
   const base = loadingSources();
   let open = [...qs];
   let current = opts.run ?? going;
@@ -34,7 +34,10 @@ async function fixture(qs: Question[], opts: { run?: RunState; withHome?: boolea
     if (opts.fails) throw new BowerError('offline', 'That answer did not save. Try again.');
     open = open.filter((q) => q.id !== id); notify();
   });
-  const start = vi.fn(async () => ({ ...current, ...(current.phase !== 'done' ? { waits: true as const } : {}) }));
+  const start = vi.fn(async () => {
+    await opts.startGate;
+    return { ...current, ...(current.phase !== 'done' ? { waits: true as const } : {}) };
+  });
   const methods: Record<string, unknown> = { questions: async () => open, tree: async () => [],
     piles: async () => [], pilesListed: async () => null, changes: async () => [], suggestions: async () => [],
     uploadNotice: async () => null, answer,
@@ -176,6 +179,26 @@ describe('Q1b tidy questions', () => {
     expect(within(sheet).getByRole('button', { name: 'File next' })).toHaveFocus();
     expect(within(sheet).queryByText('Later asking')).toBeNull();
     expect(within(sheet).getByRole('link', { name: '1 more question on Home' })).toBeVisible();
+  });
+
+  it.each([false, true])('Q1b Answer settles Radix removal focus after the continuation (next=%s)', async (hasNext) => {
+    let release = (): void => { throw new Error('Continuation gate missing'); };
+    const startGate = new Promise<void>((resolve) => { release = resolve; });
+    const qs = [ask(), ...(hasNext ? [ask({ id: 'q-ask-next', subject: 'next', text: 'Next asking',
+      askedAt: AT + 1, yes: 'File next' })] : [])];
+    const { sheet, answer, start } = await fixture(qs, { startGate });
+    const button = within(sheetCard(sheet)).getByRole('button', { name: 'File them' });
+    button.focus(); fireEvent.click(button); await settle();
+    expect(answer).toHaveBeenCalledExactlyOnceWith('q-ask-paper', true);
+    expect(start).toHaveBeenCalledOnce();
+    expect(within(sheet).queryByText('Where should these papers go?')).toBeNull();
+    // Radix's removal observer focuses the dialog while the answer continuation is still pending.
+    expect(sheet).toHaveFocus();
+    release(); await settle();
+    const target = hasNext ? within(sheet).getByRole('button', { name: 'File next' }) :
+      within(sheet).getByRole('heading', { name: 'Reading 1 thing' });
+    expect(target).toHaveFocus();
+    expect(within(sheet).getByText('Writing your notes')).toBeVisible();
   });
 
   it('Q1b Sheet save failure retains the card and draft', async () => {

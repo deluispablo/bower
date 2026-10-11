@@ -71,3 +71,7 @@
 .questionInSheet { background: var(--bg); }
 .questionWaiting { color: var(--accent-line); }
 .questionExhausted { color: var(--text-muted); }
+/* Wide touch screens need the same question targets as phones. */
+@media (pointer: coarse) {
+  .question button { min-height: 44px; }
+}

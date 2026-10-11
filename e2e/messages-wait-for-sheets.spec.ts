@@ -120,7 +120,7 @@ test.describe('messages wait for sheets', () => {
   
     test('MWS an answer completing while a sheet is open waits to show', async ({ page }) => {
       await open(page, '/', 'default');
-      const question = page.locator('section[aria-labelledby="qs"] li').filter({ hasText: /Keep both\?/ });
+      const question = page.getByRole('region', { name: /questions? for you/ }).getByRole('listitem').filter({ hasText: /Keep both\?/ });
       const answer = question.getByRole('button', { name: 'Keep one', exact: true });
       const tidy = page.getByRole('region', { name: 'Inbox' }).getByRole('button', { name: /^Tidy up \d+ things?$/ });
       await expect(answer).toBeVisible();
