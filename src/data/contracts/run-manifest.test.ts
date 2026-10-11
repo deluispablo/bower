@@ -368,8 +368,14 @@ describe('run manifests fix capture and operation identity', () => {
     // Was 'blob create content'; create-text content is now utf8 only (Unit G), refused in the consistency suite.
     ['blob member content', (value: Manifest): void => { set(value, ['capture', 'members', 0, 'content', 'encoding'], 'blob'); }],
     ['runner-json purpose', (value: Manifest): void => { set(value, ['operations', 2, 'effect', 'purpose'], 'runner-json'); }],
-    ['requests.json write', (value: Manifest): void => { set(value, ['operations', 3, 'effect', 'path'], '.bower/requests.json'); }],
-    ['hashes.json write', (value: Manifest): void => { set(value, ['operations', 3, 'effect', 'path'], '.bower/hashes.json'); }],
+    ['requests.json write', (value: Manifest): void => {
+      set(value, ['operations', 3, 'effect', 'path'], '.bower/requests.json');
+      set(value, ['operations', 3, 'effect', 'before', 'name'], 'requests.json');
+    }],
+    ['hashes.json write', (value: Manifest): void => {
+      set(value, ['operations', 3, 'effect', 'path'], '.bower/hashes.json');
+      set(value, ['operations', 3, 'effect', 'before', 'name'], 'hashes.json');
+    }],
     ['empty properties', (value: Manifest): void => { set(value, ['operations', 0, 'effect', 'properties'], {}); }],
     ['rejected contribution with no rows', (value: Manifest): void => { set(value, ['reportPlan', 3, 'value', 'setAside'], []); }],
     ['pile without members', (value: Manifest): void => { set(value, ['capture', 'piles', 2, 'memberKeys'], []); }],
@@ -830,7 +836,10 @@ describe('run manifests keep captured and written text consistent', () => {
 
 describe('runner-writable files (runner-paths-disagree, TL-P4-14 addendum 20)', () => {
   const writes = ['.bower/questions.json', '.bower/requests.json', '.bower/hashes.json'] as const;
-  const writing = (path: string): Manifest => variant((value) => { set(value, ['operations', 3, 'effect', 'path'], path); });
+  const writing = (path: string): Manifest => variant((value) => {
+    set(value, ['operations', 3, 'effect', 'path'], path);
+    set(value, ['operations', 3, 'effect', 'before', 'name'], path.slice(path.lastIndexOf('/') + 1));
+  });
   it('the manifest takes the runner-writable files as a parameter', async () => {
     // The list it is given decides, for both versions' reader: a path outside it is refused, one inside it admitted.
     const suggestions = writing('.bower/suggestions.json');

@@ -268,7 +268,7 @@ it('b4a-fr1 9 initialization adds missing final newline', () => {
   expect(terminated.ok, 'already terminated input appends exactly once').toBe(true);
   if (terminated.ok) expect(terminated.text).toBe(personal + '\n' + learned);
   for (const prefix of [personal, '\ufeff---\r\ncustom: café\r\n---\r\nAlex keeps e\u0301 and 😀.']) {
-    const before = utf8(prefix);
+    const before = new TextEncoder().encode(prefix);
     const result = applyChanges(before, [append]);
     expect.soft(result.ok, 'missing final newline is added without changing existing bytes').toBe(true);
     if (result.ok) {
