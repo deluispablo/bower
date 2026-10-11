@@ -45,7 +45,7 @@ import type { RunProvider } from '../../src/data/spine/provider';
 import { B_FAILURE } from '../../src/data/spine/scripted';
 import { BowerError } from '../../src/data/types';
 import { RunRecords, type RunManifest } from '../../src/data/spine/records';
-import { askingKey, publicQuestion, type PublicQuestion } from '../../src/data/contracts/questions';
+import { askingKey, type PublicQuestion } from '../../src/data/contracts/questions';
 import { isRunnerFile, SYSTEM } from '../../src/data/vault/layout';
 import type { ItemDisposition } from '../../src/data/spine/report';
 import { finishRun, shownDone } from '../../src/data/spine/barrier';
@@ -219,13 +219,13 @@ const totalOf = (total: number | undefined): { total?: number } => (total === un
 /** Read cards from the durable questions effect; report rows identify only this run's askings. */
 function plannedQuestions(manifest: RunManifest): PublicQuestion[] {
   const rows = manifest.reportPlan.flatMap((r) => r.value.questions);
-  const questions = new Map(rows.map((q) => [askingKey(q), publicQuestion(q)]));
+  const questions = new Map(rows.map((q) => [askingKey(q), q]));
   for (const { effect } of manifest.operations) {
     if (!(effect.kind === 'write-runner-json' && effect.path === SYSTEM.questions)
       && !(effect.kind === 'create-text' && effect.purpose === 'runner-json' && effect.name === 'questions.json')) continue;
     const value: unknown = JSON.parse(effect.text);
     if (!isRunnerFile(SYSTEM.questions, value)) throw new BowerError('unknown', 'Bower could not read its questions.');
-    for (const q of value.questions) if (questions.has(askingKey(q))) questions.set(askingKey(q), publicQuestion(q));
+    for (const q of value.questions) if (questions.has(askingKey(q))) questions.set(askingKey(q), q);
   }
   return [...questions.values()];
 }

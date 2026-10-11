@@ -710,3 +710,69 @@ The native config loader, disabled cache and default-only reporter prevent repos
 Offline standard reused: Node temporary files via os.tmpdir(), https://nodejs.org/api/os.html#ostmpdir;
 existing main/realWorld and persisted-manifest assertions in this file; no source fetched.
 commits: none; coordinator owns commits. Production fix and integration gates remain coordinator work.
+
+## Addendum 8
+
+Implemented TL-P4-44 addendum 8 and P4-108 Important 1 in the snapshot's existing home.
+`RunnerStatus.publishQuestions` projects the durable askings, sorts by askedAt and admits each card only
+when the accumulated snapshot passes the existing shared `isQuestionSnapshot` validator. Count, text,
+label, shown-line, option and duplicate-asking constraints therefore omit cards from live publication
+without changing the persisted manifest or questions.json. One console line records any omissions per
+publication call, including a count trim. There is no new bound in the scripted asker and no API change.
+The caller collects full durable questions; projection now belongs to publication, where stored option
+actions are stripped. The duplicate note-edit imports are merged.
+
+Offline standard reused: the strict-write/tolerant-read boundary documented by the existing question
+contract and https://martinfowler.com/bliki/TolerantReader.html; the existing publicQuestion projection
+and isQuestionSnapshot validator are reused. No source was fetched and no network was used.
+
+removed: the snapshot-validation exception that stopped effects for a stored but undisplayable asking.
+removed: the separate hardcoded ten-card slice; the shared snapshot validator supplies the count bound.
+removed: projection in plannedQuestions; publishQuestions owns the public projection.
+removed: the duplicate ./note-edit import declaration.
+tests changed: none
+
+Red evidence: both committed Addendum 8 reds failed at the expected main-entry assertions before the fix;
+run phase was failed instead of done, and clear work and the new stored asking were missing. Four existing
+cases passed. Log: /tmp/q1c-addendum8-impl-red.log.
+
+Green evidence: q1-live-question-long-note-name-publishes and
+q1-live-question-invalid-shape-publishes both pass, together with all four existing Q1c cases.
+The tests verify done, filed clear work, the full re-ask in Drive, the unchanged note, omission of only
+the invalid live card, and exactly one console line. Log: /tmp/q1c-addendum8-green.log.
+Full runner suite: 47 files and 636 tests passed. Log: /tmp/q1c-addendum8-runner.log.
+
+TypeScript app/node/runner/api with --noEmit: all passed.
+Logs: /tmp/q1c-addendum8-{app,runner}-types.log and /tmp/q1c-addendum8-{node,api}.log.
+ESLint on runner/src/status.ts and runner/src/main.ts, from the runner package: passed.
+ESLint on src/data/contracts/questions.ts, from the app package: passed.
+Logs: /tmp/q1c-addendum8-eslint-{runner,app}.log.
+The initial combined root ESLint invocation failed with an ambiguous tsconfigRootDir; rerunning in the
+respective packages resolved it. A temporary non-null assertion was removed before the final green run.
+
+API runtime tests, pnpm check and e2e remain coordinator work: API/e2e need ports, and pnpm check writes
+repository artifacts. No screen changed. All test runs use the native config loader, disabled cache and
+only the default reporter; TypeScript uses --noEmit. Logs and test scratch files stay in OS temp.
+No test, node_modules link, scripted asker, API or shared harness record was changed.
+No writing git command, dependency replacement/symlink or direct server start was used.
+commits: none; coordinator owns commits.
+
+App suite: 166 files and 5,616 tests passed; one existing environment failure and one unhandled error.
+`src/e2e-port.test.ts:37`, "a server from another worktree is never reused", times out because its
+fixture calls server.listen at :21 and the sandbox returns listen EPERM for 127.0.0.1.
+This is a port-dependent coordinator check, not a contradiction of the publication rule.
+Log: /tmp/q1c-addendum8-app.log. No test contradicting addendum 8 was found in the complete targeted suites.
+
+Commands:
+- pnpm -C runner exec vitest run --maxWorkers=2 --reporter=default --no-cache --configLoader=native
+- pnpm exec vitest run src --maxWorkers=2 --reporter=default --no-cache --configLoader=native
+- pnpm -C runner exec vitest run test/q1c-live.test.ts --maxWorkers=2 --reporter=default --no-cache --configLoader=native
+- pnpm exec tsc --noEmit -p tsconfig.app.json
+- pnpm exec tsc --noEmit -p tsconfig.node.json
+- pnpm -C runner exec tsc --noEmit -p .
+- pnpm -C api exec tsc --noEmit -p .
+- pnpm -C runner exec eslint src/status.ts src/main.ts
+- pnpm exec eslint src/data/contracts/questions.ts
+
+Final git diff --check: passed. Only runner/src/status.ts, runner/src/main.ts,
+src/data/contracts/questions.ts and this notes file changed. No test or repository test artifact changed.

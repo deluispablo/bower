@@ -13,7 +13,7 @@
  */
 import { attemptEnded } from '../../src/data/contracts/attempt-ended';
 import { PHASE_RANK as RANK } from '../../src/data/contracts/run-phases';
-import { isQuestionSnapshot, type PublicQuestion } from '../../src/data/contracts/questions';
+import { isQuestionSnapshot, publicQuestion, type PublicQuestion } from '../../src/data/contracts/questions';
 import { BowerError, type RunPhase } from '../../src/data/types';
 import { send, type Fetch, type Pacing } from '../../src/data/drive/transport';
 import { serverBusy, staleAttempt, unreached } from './token';
@@ -68,10 +68,15 @@ export class RunnerStatus {
     return this.endedAs !== null;
   }
 
-  /** The first ten durable askings by time, carried by every later report of this attempt as well. */
+  /** The first ten publishable durable askings by time; stored questions are never changed here. */
   async publishQuestions(questions: PublicQuestion[], extra: StatusExtra = {}): Promise<void> {
-    questions = [...questions].sort((a, b) => a.askedAt - b.askedAt).slice(0, 10);
-    if (!isQuestionSnapshot(questions)) throw new BowerError('unknown', 'Bower could not share its questions.');
+    const snapshot: PublicQuestion[] = [];
+    for (const q of [...questions].sort((a, b) => a.askedAt - b.askedAt)) {
+      const card = publicQuestion(q);
+      if (isQuestionSnapshot([...snapshot, card])) snapshot.push(card);
+    }
+    if (snapshot.length !== questions.length) console.error('Questions omitted from the live snapshot to fit its display bounds.');
+    questions = snapshot;
     const changed = JSON.stringify(this.questions) !== JSON.stringify(questions);
     const hadSnapshot = this.questions !== undefined;
     this.questions = questions;

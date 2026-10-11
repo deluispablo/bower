@@ -13,8 +13,7 @@ import type { Pile, Question } from './types';
 import type { JournalRecord } from './journal-record';
 import { BowerError } from './types';
 import { EMPTY_MD5 } from './hashes';
-import { keepAlreadyBinned } from './note-edit';
-import { STATE_READ } from './note-edit';
+import { keepAlreadyBinned, STATE_READ } from './note-edit';
 import { displayName, nameOf, thingName } from './tree';
 
 /** The id prefixes Bower's questions carry, spelled here alone. */
