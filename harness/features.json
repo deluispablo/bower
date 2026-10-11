@@ -6960,7 +6960,7 @@
     "id": "b6a-templates",
     "task": "p4-b6",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "Bower notes follow five declared templates (Source, Concept, Project, Area, MOC) from one declaration home; person notes never gain Bower metadata (TL-P4-47 Q5).",
     "steps": [
