@@ -5,6 +5,7 @@ import { ABOUT_REGIONS, parseOwnership, type AboutRegion } from './ownership-for
 import { parseRecordJson, canonicalRecordJson } from './record-json';
 import { parseTimelineLine } from './timeline-line';
 import { FOLDER_TEMPLATE } from './folder-template';
+import { recordableRecordId } from './run-manifest';
 
 const encoder = new TextEncoder();
 const object = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -37,8 +38,8 @@ function originOk(v: unknown): v is ObservationOrigin {
   switch (v.kind) {
     case 'words': return closed(v, [...base, 'pileId']) && id(v.pileId);
     case 'document': return closed(v, [...base, 'subject']) && typeof v.subject === 'string' && validSummary(v.subject);
-    case 'answer': return closed(v, [...base, 'recordId', 'subject']) && id(v.recordId) && id(v.subject);
-    case 'rule': return closed(v, [...base, 'recordId']) && id(v.recordId);
+    case 'answer': return closed(v, [...base, 'recordId', 'subject']) && typeof v.recordId === 'string' && recordableRecordId(v.recordId) && id(v.subject);
+    case 'rule': return closed(v, [...base, 'recordId']) && typeof v.recordId === 'string' && recordableRecordId(v.recordId);
     default: return false;
   }
 }

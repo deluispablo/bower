@@ -2318,10 +2318,11 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const changes: Change[] = [];
     const recordIds = [...memoryRecords];
     if (!aboutOwnership.payloads?.['about-you']) {
-      const block = '\n## What Bower has learned\n' + ABOUT_REGIONS.map((region) => {
+      const block = '## What Bower has learned\n' + ABOUT_REGIONS.map((region) => {
         const label = { 'about-you': 'About you', 'about-working-on': "What you're working on", 'about-preferences': 'How you like things' }[region];
         return `<!-- bower:ownership/2 begin ${region} -->\n### ${label}\n`
-          + nextLedger.live.filter((f) => f.section === region).map((f) => timelineLine({ date: f.date, text: f.text, source: 'Your words' }) + '\n').join('')
+          + nextLedger.live.filter((f) => f.section === region).map((f) => timelineLine({ date: f.date, text: f.text,
+            source: f.origin.kind === 'document' ? displayName(ix.byId(f.source.fileId)?.name ?? 'Source') : 'Your words' }) + '\n').join('')
           + `<!-- bower:ownership/2 end ${region} -->\n`;
       }).join('');
       changes.push({ kind: 'about-append', recordIds, text: block });
@@ -2625,7 +2626,7 @@ export async function build(decided: Decided): Promise<Ended> {
   if (memoryEdit) {
     const op = await add({ kind: 'edit-text', before: seen(memoryEdit.file), path: 'About me.md', beforeContent: memoryEdit.before,
       beforeText: memoryEdit.beforeText, text: memoryEdit.text, changes: memoryEdit.changes, content: await utf8(memoryEdit.text) }, memoryOps);
-    reportPlan.push({ requires: [op, ...memoryOps], when: 'applied', value: { ...empty(),
+    reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(),
       updated: [{ path: 'About me.md', what: 'Brought up to date.', op }] } });
     memoryOps.push(op);
   }
@@ -2641,14 +2642,17 @@ export async function build(decided: Decided): Promise<Ended> {
     if (memoryWords.has(pileId)) lines.push(...memoryOps);
     wordsLines.set(pileId, lines);
     const context = w.context ? await add({ kind: 'bin', before: seen(w.context), capturedChildIds: [] }, lines) : null;
+    if (context !== null && memoryWords.has(pileId) && memoryEdit) {
+      reportPlan.push({ requires: [context], when: 'rejected', value: { ...empty(),
+        setAside: [{ name: w.folder.name, why: WORDS_NOT_WRITTEN }] } });
+    }
     if (context !== null && savedWords.has(pileId)) {
       savedWordsBin.set(pileId, context);
       wordsLines.set(pileId, [context]);
     }
     // Filed as the note its news went into (the first, when it went into more than one), once every such edit applied.
-    const into = memoryWords.has(pileId) && memoryEdit ? { path: 'About me.md' }
-      : edits.find((e) => editOf.get(e.file.id) === lines[0]);
-    if (into) reportPlan.push({ requires: memoryWords.has(pileId) ? [...lines].reverse() : lines, when: 'applied', value: { ...empty(), filed: [{ name: 'Your note', title: displayName(nameOf(into.path)), kind: 'note', to: parentOf(into.path), note: into.path }] } });
+    const into = edits.find((e) => editOf.get(e.file.id) === lines[0]);
+    if (into) reportPlan.push({ requires: lines, when: 'applied', value: { ...empty(), filed: [{ name: 'Your note', title: displayName(nameOf(into.path)), kind: 'note', to: parentOf(into.path), note: into.path }] } });
   }
   for (const pile of capturedPiles) {
     const note = notesOf.get(pile.pileId);

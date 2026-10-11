@@ -226,7 +226,7 @@ export function itemDispositions(admission: AdmissionManifest, manifest: RunMani
  * The notes a pile's words are written into (a pile of words only): the made notes, or the notes whose Timeline lines
  * carry its news (c3-pair-ask), its folder or its pile note go to the Bin after. None for a pile of things.
  */
-function wordsNotes(manifest: RunManifest, pileId: string): string[] {
+export function wordsNotes(manifest: RunManifest, pileId: string): string[] {
   const pile = manifest.capture.piles.find((p) => p.pileId === pileId);
   if (!pile) return [];
   const binned = new Set([pile.anchor?.fileId, pile.context.kind === 'text' ? pile.context.file.fileId : undefined].filter((id): id is string => id !== undefined));
@@ -259,6 +259,12 @@ export function reportContradictions(admission: AdmissionManifest, manifest: Run
     const op = ops.get(id);
     const saved = op ? savedWordsPile(manifest, op) : null;
     if (saved !== null) return (pileItems.get(saved) ?? []).filter((f) => !members.has(f));
+    if (op?.effect.kind === 'bin') {
+      const fileId = op.effect.before.fileId;
+      const piles = manifest.capture.piles.filter((p) => wordsNotes(manifest, p.pileId).length > 0
+        && (p.anchor?.fileId === fileId || p.context.kind === 'text' && p.context.file.fileId === fileId));
+      if (piles.length) return piles.flatMap((p) => (pileItems.get(p.pileId) ?? []).filter((f) => !members.has(f)));
+    }
     if (op?.effect.kind !== 'create-text' && op?.effect.kind !== 'edit-text') return thingOf(id);
     const piles = [...notesOf].filter(([, notes]) => notes.includes(id)).map(([pileId]) => pileId);
     return [...piles.flatMap((p) => (pileItems.get(p) ?? []).filter((f) => !members.has(f))), ...op.dependsOn.flatMap(thingOf)];
@@ -283,6 +289,7 @@ export function reportContradictions(admission: AdmissionManifest, manifest: Run
   // Each row through the contribution that gave it, by its operations: never by the name or fields it carries.
   for (const c of given) {
     for (const row of c.value.filed) trace(`filed ${row.name}`, [c], ['filed'], named.filed);
+    if (c.value.updated.length && subjects(c).size) trace('updated note', [c], ['filed'], named.filed);
     for (const row of c.value.alreadySaved ?? []) trace(`already saved ${row.name}`, [c], ['filed'], named.filed);
     if (c.requires.every(keptBin)) continue;
     for (const row of c.value.setAside) trace(`set aside ${row.name}`, [c], ['filed', 'set-aside'], named.setAside);
