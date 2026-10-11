@@ -2481,9 +2481,11 @@ export async function build(decided: Decided): Promise<Ended> {
     }
     // An observed pile's context note goes to the Bin once its words are written, so a folder kept by another
     // child (a second pile note, a late thing) never has the same words written again on the next run.
-    if (note.context) await add({ kind: 'bin', before: seen(note.context), capturedChildIds: [] }, [op]);
-    reportPlan.push({ requires: [op, ...chainOf(note.to)], when: 'applied', value: { ...empty(), filed, created: [{ path, what: note.what }] } });
+    const context = note.context ? await add({ kind: 'bin', before: seen(note.context), capturedChildIds: [] }, [op]) : null;
+    reportPlan.push({ requires: [op, ...chainOf(note.to)], when: 'applied', value: { ...empty(), created: [{ path, what: note.what }] } });
+    if (filed.length) reportPlan.push({ requires: [op, ...(context ? [context] : []), ...chainOf(note.to)], when: 'applied', value: { ...empty(), filed } });
     reportPlan.push({ requires: [op], when: 'rejected', value: { ...empty(), setAside: [{ name: note.aside, why: note.pileId === null ? NOTE_NOT_WRITTEN : WORDS_NOT_WRITTEN }] } });
+    if (context) reportPlan.push({ requires: [context], when: 'rejected', value: { ...empty(), setAside: [{ name: note.aside, why: WORDS_NOT_WRITTEN }] } });
   }
   // A model's line cites the name its thing or note was given (a free name when the one asked for was taken): its
   // note's text is authored again with it, by `applyChanges` as before; one that cannot be cites nothing.
@@ -2594,33 +2596,31 @@ export async function build(decided: Decided): Promise<Ended> {
     updated: [{ path: 'About me.md', what: 'Brought up to date.', op }] } });
   for (const record of memoryRecords) derive(record, ...memoryOps);
   // A pile of words whose news went onto notes as Timeline lines: its context note and folder go to the Bin once those
-  // notes' edits are written; an edit refused leaves the pile in the inbox, whole, for the next tidy-up (as any line
-  // refused while it is written, it has no row of its own).
-  const wordsLines = new Map<string, string[]>();
+  // notes' edits are written; a refused edit or Bin leaves the words with their existing not-done row.
   /** The Bin a pile of words already saved is reported by: its pile note's, or (none bound) its folder's. */
   const savedWordsBin = new Map<string, string>();
   for (const [pileId, w] of citedWords) {
     const lines = [...w.notes].flatMap((id) => editOf.get(id) ?? []);
     if (memoryWords.has(pileId)) lines.push(...memoryOps);
-    wordsLines.set(pileId, lines);
     const context = w.context ? await add({ kind: 'bin', before: seen(w.context), capturedChildIds: [] }, lines) : null;
-    if (context !== null && memoryWords.has(pileId) && memoryOps.length) {
+    if (context !== null && !savedWords.has(pileId)) {
       reportPlan.push({ requires: [context], when: 'rejected', value: { ...empty(),
         setAside: [{ name: w.folder.name, why: WORDS_NOT_WRITTEN }] } });
     }
     if (context !== null && savedWords.has(pileId)) {
       savedWordsBin.set(pileId, context);
-      wordsLines.set(pileId, [context]);
     }
     // Filed as the note its news went into (the first, when it went into more than one), once every such edit applied.
     const into = edits.find((e) => editOf.get(e.file.id) === lines[0]);
-    if (into) reportPlan.push({ requires: lines, when: 'applied', value: { ...empty(), filed: [{ name: 'Your note', title: displayName(nameOf(into.path)), kind: 'note', to: parentOf(into.path), note: into.path }] } });
+    if (into) reportPlan.push({ requires: [...lines, ...(context ? [context] : [])], when: 'applied', value: { ...empty(), filed: [{ name: 'Your note', title: displayName(nameOf(into.path)), kind: 'note', to: parentOf(into.path), note: into.path }] } });
   }
   for (const pile of capturedPiles) {
-    const note = notesOf.get(pile.pileId);
     // A pile partly asked about keeps its folder, with what is asked about and its words.
     if (!pile.anchor || partly.has(pile.pileId)) continue;
-    const op = await add({ kind: 'bin', before: pile.anchor, capturedChildIds: pile.childFileIds }, [...(movesOf.get(pile.pileId) ?? []), ...(note ? [note] : []), ...(wordsLines.get(pile.pileId) ?? [])]);
+    // Every child's Bin must settle before its parent can hide it; effects belong to the child's dependencies.
+    const children = operations.filter((o) => (o.effect.kind === 'bin' || o.effect.kind === 'move')
+      && o.effect.before.parents.includes(pile.anchor?.fileId ?? '')).map((o) => o.operationId);
+    const op = await add({ kind: 'bin', before: pile.anchor, capturedChildIds: pile.childFileIds }, children);
     if (savedWords.has(pile.pileId) && !savedWordsBin.has(pile.pileId)) savedWordsBin.set(pile.pileId, op);
   }
   // A pile of words already saved (`duplicates.ts`): reported as a copy is, by its folder's name and the note it is

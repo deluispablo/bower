@@ -71,10 +71,17 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
     // A set-aside row is its contribution's one move's (`grounded`): by op id, never by the name a row carries (two
     // things may share one) nor by position.
     const own = c.when === 'rejected' && c.requires.length === 1 ? byId.get(c.requires[0] ?? '') : undefined;
+    const operation = own ? ops.get(own.operationId) : undefined;
+    // A failed generated note already has its not-done row; its dependent Bin does not add the same pile again.
+    const alreadyTold = operation?.effect.kind === 'bin' && operation.dependsOn.some((id) =>
+      ops.get(id)?.effect.kind === 'create-text' && state.get(id) === 'rejected'
+      && manifest.reportPlan.some((row) => row.when === 'rejected' && row.requires[0] === id && row.value.setAside.length));
     // A keep's other note that stayed says what its Bin's refusal found (P4-19b): moved, binned by the person, or changed.
     const kept = own?.state === 'rejected' && keptOther(ops.get(own.operationId), manifest) && KEEP_REFUSED.includes(own.failure.message) ? own.failure.message : null;
     if (kept !== null) report.setAside.push(...c.value.setAside.map((row) => ({ ...row, why: kept })));
-    else if (own?.state !== 'rejected' || ops.get(own.operationId)?.effect.kind !== 'move') report.setAside.push(...c.value.setAside);
+    else if (own?.state !== 'rejected' || ops.get(own.operationId)?.effect.kind !== 'move') {
+      if (!alreadyTold) report.setAside.push(...c.value.setAside);
+    }
     else {
       const moved = own.failure.code === 'conflict' && own.failure.message === SOURCE_NOT_AS_SEEN;
       const why = own.failure.code === 'unknown' ? own.failure.message : null;
@@ -195,6 +202,10 @@ export function itemDispositions(admission: AdmissionManifest, manifest: RunMani
   const whole = (pileId: string): boolean => {
     const things = manifest.capture.members.filter((m) => m.pileId === pileId);
     const notes = wordsNotes(manifest, pileId);
+    const pile = manifest.capture.piles.find((p) => p.pileId === pileId);
+    const contextBins = manifest.operations.filter((o) => o.effect.kind === 'bin'
+      && pile?.context.kind === 'text' && o.effect.before.fileId === pile.context.file.fileId);
+    if (!contextBins.every((o) => applied.has(o.operationId))) return false;
     // A pile of words already saved (`duplicates.ts`) is filed once its Bin is done, as a copy is.
     if (!things.length && !notes.length) return manifest.operations.some((o) => applied.has(o.operationId) && savedWordsPile(manifest, o) === pileId);
     return things.every((m) => filed.has(m.file.fileId)) && notes.every((id) => applied.has(id));
@@ -294,7 +305,8 @@ export function reportContradictions(admission: AdmissionManifest, manifest: Run
   // Each row through the contribution that gave it, by its operations: never by the name or fields it carries.
   for (const c of given) {
     for (const row of c.value.filed) trace(`filed ${row.name}`, [c], ['filed'], named.filed);
-    if (c.value.updated.length && subjects(c).size) trace('updated note', [c], ['filed'], named.filed);
+    // A settled update stands even when the consumed words' Bin was refused.
+    if (c.value.updated.length && subjects(c).size) trace('updated note', [c], ['filed', 'set-aside'], named.filed);
     for (const row of c.value.alreadySaved ?? []) trace(`already saved ${row.name}`, [c], ['filed'], named.filed);
     if (c.requires.every(keptBin)) continue;
     for (const row of c.value.setAside) trace(`set aside ${row.name}`, [c], ['filed', 'set-aside'], named.setAside);

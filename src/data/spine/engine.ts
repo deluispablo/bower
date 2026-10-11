@@ -545,9 +545,8 @@ export function driveEffects(drive: RunDrive, context?: OwnershipContext, mainte
       drive.expectSeen(e.before, true);
       return (await drive.list(e.before.fileId)).length ? { refused: refused('conflict', ARRIVED) } : { parentId, modifiedTime: null };
     }
-    // A move or a Bin: the source by the name and place the plan saw. The fence reads it right before the send and
-    // refuses it if either differs (`expectSeen`): that one read is the check, with no earlier one to go stale.
-    drive.expectSeen(e.before);
+    // A consumed item's Bin also checks the version read, so unread words stay in the inbox.
+    drive.expectSeen(e.before, e.kind === 'bin' && !e.before.folder);
     if (e.kind === 'bin' && (await drive.list(e.before.fileId)).some((f) => !e.capturedChildIds.includes(f.id))) return { refused: refused('conflict', ARRIVED) };
     return { parentId, modifiedTime: null };
   };
@@ -671,7 +670,7 @@ export function driveEffects(drive: RunDrive, context?: OwnershipContext, mainte
         if (notRead(e)) throw e;
         // Refused by the fence's own read before anything was sent: an honest rejection.
         const k = op.effect.kind;
-        if (e instanceof BowerError && (notAsSeenReason(e) !== null || (e.code === 'conflict' && (k === 'write-runner-json' || k === 'edit-text')))) {
+        if (e instanceof BowerError && (notAsSeenReason(e) !== null || (e.code === 'conflict' && (k === 'write-runner-json' || k === 'edit-text' || k === 'bin')))) {
           console.error(e);
           // The folder it goes into is gone (a create's, or a move's, told by its code).
           if (k === 'create-folder' || k === 'create-text' || (k === 'move' && e.code === 'not-found')) return refused('not-found', NO_FOLDER);
