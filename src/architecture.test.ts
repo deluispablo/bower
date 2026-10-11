@@ -8,6 +8,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { afterAll, describe, expect, it } from 'vitest';
 import { fixture, removeFixtures, ROOT, run } from '@/testing/dependency-gate';
 
@@ -114,7 +115,21 @@ describe('the shape of the code', () => {
     const CONTRACTS = join(SRC, 'data', 'contracts');
     /** Pure libraries a contract may import. @noble/hashes for SHA-256 and MD5 in hashes.ts. */
     const ALLOWLIST: Record<string, string> = { '@noble/hashes/sha2': 'pure', '@noble/hashes/legacy': 'pure' };
-    const FORBIDDEN = /\b(window|document|localStorage|sessionStorage|indexedDB|fetch|React|import\.meta\.env|process\.env)\b|from 'react/;
+    const FORBIDDEN = /^(window|document|localStorage|sessionStorage|indexedDB|fetch|React)$/;
+    /** Parse syntax so literals/comments are inert, but expressions inside templates still count. */
+    const usesForbiddenGlobal = (text: string, fileName: string): boolean => {
+      const source = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest);
+      const visit = (node: ts.Node): true | undefined => {
+        if (ts.isIdentifier(node) && FORBIDDEN.test(node.text)) return true;
+        if (ts.isPropertyAccessExpression(node) && node.name.text === 'env') {
+          const object = node.expression;
+          if (ts.isIdentifier(object) && object.text === 'process') return true;
+          if (ts.isMetaProperty(object) && object.keywordToken === ts.SyntaxKind.ImportKeyword && object.name.text === 'meta') return true;
+        }
+        return ts.forEachChild(node, visit);
+      };
+      return visit(source) === true;
+    };
     const specs = (text: string): string[] =>
       [...text.matchAll(/(?:^|\n)\s*(?:import|export)\b[^'"]*?from\s+'([^']+)'|import\(\s*'([^']+)'\s*\)|(?:^|\n)\s*import\s+'([^']+)'/g)].map((m) => m[1] ?? m[2] ?? m[3] ?? '');
     const resolve = (from: string, spec: string): string | null => {
@@ -147,10 +162,38 @@ describe('the shape of the code', () => {
       return { seen, external };
     };
 
+    it.each(['src/data/contracts/control.ts', 'runner/src/control.ts'])('the global scan ignores literals and comments but rejects real access in %s', (fileName) => {
+      for (const text of [
+        "export const origin = 'document';",
+        'export const label = "window.document";',
+        'export const label = `document. window.`;',
+        'export const label = `document ${"window"} process.env`;',
+        'export const pattern = /document.window/;',
+        '// document.title; window.location\nexport const value = 1;',
+        '/** document.title; window.location */\nexport const value = 1;',
+        '/* window. */ export const value = "https://example.com/document";',
+      ]) expect(usesForbiddenGlobal(text, fileName), text).toBe(false);
+      for (const text of [
+        'export const value = document.title;',
+        'export const value = window.location;',
+        'export const value = `safe ${document.title}`;',
+        'export const value = `safe ${`nested ${window.location}`}`;',
+        'export const value = "https://example.com"; document.title;',
+        '/* safe */ window.location;',
+        'export const value = process /* safe */ . env;',
+        'export const value = import.meta /* safe */ . env;',
+        'export const value = localStorage.getItem("key");',
+        'export const value = sessionStorage.getItem("key");',
+        'export const value = indexedDB.open("key");',
+        'export const value = fetch("https://example.com");',
+        'export const value = React.createElement("div");',
+      ]) expect(usesForbiddenGlobal(text, fileName), text).toBe(true);
+    });
+
     it('contracts import only themselves and allowlisted pure libraries', () => {
       const { seen, external } = closure(files(CONTRACTS));
       const outside = [...seen].filter((f) => !f.startsWith(CONTRACTS + '/')).map((f) => relative(SRC, f));
-      const impure = [...seen].filter((f) => FORBIDDEN.test(readFileSync(f, 'utf8').replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, ''))).map((f) => relative(SRC, f));
+      const impure = [...seen].filter((f) => usesForbiddenGlobal(readFileSync(f, 'utf8'), f)).map((f) => relative(SRC, f));
       expect({ outside, external, impure }, 'The contracts run in the Worker too. Move the pure helper under src/data/contracts/ (leave a re-export at the old path), or split the module so only its pure part moves.').toEqual({ outside: [], external: [], impure: [] });
     });
 
@@ -162,7 +205,7 @@ describe('the shape of the code', () => {
       // in one rule's text.
       const KNOWN = new Set(['data/vault/seen.ts', 'data/demo/fixture.ts']);
       const { seen, external } = closure(files(join(SRC, 'data', 'spine')));
-      const impure = [...seen].filter((f) => FORBIDDEN.test(readFileSync(f, 'utf8').replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, ''))).map((f) => relative(SRC, f)).filter((f) => !KNOWN.has(f));
+      const impure = [...seen].filter((f) => usesForbiddenGlobal(readFileSync(f, 'utf8'), f)).map((f) => relative(SRC, f)).filter((f) => !KNOWN.has(f));
       expect({ external, impure }, 'The spine runs in the Worker and the runner too. Keep browser and network code in an adapter, outside src/data/spine and what it imports.').toEqual({ external: [], impure: [] });
     });
 
