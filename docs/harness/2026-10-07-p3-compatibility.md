@@ -245,3 +245,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `d873c904` | b5b-tables | none: tests only (ruled pins and proposal answer contracts). |
 | `c1fb8575` | b5b-tables | none: tests only (existing-table pin 97). |
 | `25a0ea1b` | b5b-tables | One helper decides the source role (a row declared as a source kind, or a legacy type: source), so a classified Source stays immutable; a stored row with more than four columns reads its first four and is never reseeded or dropped; a table rewrite splices at row level so unchanged rows and unknown keys keep their exact bytes. Stored tables and notes parse as before. |
+| `3d04fc96` | b5b-tables | none: tests only (B5b round 2 reds). |
+| `4711f8a5` | b5b-tables | A proposal artifact is written after its question is published, so a refused publication leaves nothing that suppresses the proposal; declared table properties get ids distinct from the built-in controls, and a declared name or modified is not shown again (Name and Changed already show it). Stored tables and notes parse as before. |
