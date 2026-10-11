@@ -48,3 +48,9 @@ Prove all semantic capabilities in PRODUCT and the shared corpus, including rese
 ## Ownership and portability
 
 The app never writes `index.md`, `hot.md`, `log.md` or Bower-owned note sections under the current contract. New preparation caches use separately versioned artifacts. A proposed broader editing capability needs its own ownership contract. Drive is the durable knowledge store; no personal content belongs in source repositories. Development stays local; the owner-authorized private main backup follows harness/BACKUP.md. It neither deploys the app nor accepts a phase.
+
+## Later improvements (owner)
+
+Ideas the owner wants kept for after P4. None is planned yet; each needs its own contract when it is picked up.
+
+- **About me learns from documents** (owner, 2026-10-11). In v1, About me learns only from the person's own words (TL-P4-48 addendum 14). Later, it could also learn from the documents the person adds. That needs script-checked evidence for each fact and a guard against sensitive facts and instructions, which a model's label alone did not give in B4b's adversarial passes.
