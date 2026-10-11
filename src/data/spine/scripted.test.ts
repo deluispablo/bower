@@ -25,6 +25,9 @@ async function seeded(): Promise<{ drive: FakeDrive; root: string; admitted: Adm
 
 it('B6a templates: b6-source-absent-url plans a Source with its original and no invented address', async () => {
   const { drive, root, admitted } = await seeded();
+  const resources = (await drive.listAll(root)).find((file) => file.folder && file.name === 'Resources');
+  const gardening = await drive.createFolder(resources?.id ?? '', 'Gardening');
+  await drive.createText(gardening.id, 'Gardening.md', '# Gardening\n');
   const item = admitted.piles.flatMap((pile) => pile.items).find((candidate) => candidate.name !== 'Pile note.md');
   expect(item).toBeDefined();
   if (!item) return;
