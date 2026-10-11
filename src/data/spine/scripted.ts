@@ -1807,19 +1807,25 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const path = ix.pathOf(file.id);
     return !file.folder && path?.endsWith('.md') && generatedPlace(parentOf(path)) ? [{ file, path }] : [];
   });
-  const templateLinks = async (to: string, body: string): Promise<string[]> => {
+  const groundedAuthoredLinks = async (to: string, note: AuthoredNote, source: { file: DriveFile; name: string }): Promise<string[]> => {
     // Resolve evidence against actual note identities; a name shared by notes is not grounding.
     const authored = new Map<string, typeof linkable[number]>();
-    for (const match of body.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)) {
+    // All authored strings share this admission check, including every section in the body and the summary.
+    const words = Object.values(note).filter((value): value is string => typeof value === 'string').join('\n');
+    for (const match of words.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)) {
       const target = linkTarget(match[1] ?? '').replace(/\.md$/, '');
       const candidates = linkable.filter(({ path }) => target.includes('/')
         ? path.slice(0, -3).toLowerCase() === target
         : displayName(nameOf(path)).toLowerCase() === target);
       const local = candidates.filter(({ path }) => parentOf(path) === to);
       const resolved = local.length ? local : candidates;
+      const bound = [source.file.name, source.name, ix.pathOf(source.file.id), join(to, source.name)]
+        .some((name) => name !== undefined && linkTarget(name).replace(/\.md$/, '') === target);
+      if (bound && resolved.every(({ file }) => file.id === source.file.id)) continue;
       if (resolved.length !== 1 || !resolved[0]) return refused('a template note with an ungrounded authored link');
       authored.set(resolved[0].file.id, resolved[0]);
     }
+    if (!note.template) return [];
     // Sources subfolders use their nearest destination hub. Never choose an unrelated fallback note.
     for (let folder = to; folder && generatedPlace(folder); folder = parentOf(folder)) {
       const hubs: typeof linkable = [];
@@ -1848,7 +1854,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const template = authored.template;
     if (template && !Object.hasOwn(NOTE_TEMPLATES, template)) refused('a note with an unknown template');
     // Only declared, relevant links in the authored evidence; never pad with the folder's other notes.
-    const related = template ? await templateLinks(to, authored.body) : [];
+    const related = await groundedAuthoredLinks(to, authored, { file: thing.file, name });
     const properties = template ? [
       { key: 'type', label: 'Type', value: template },
       { key: 'created', label: 'Created', value: noteDate },

@@ -669,3 +669,114 @@ App tsc (`--noEmit --incremental false -p tsconfig.app.json`) passes:
 is additions only, and the second test file is new. No pnpm check (writes repo
 outputs), e2e/server or broader gate under this explicitly test-only red scope.
 Red delivery is done; implementation and commits remain with their owners.
+
+## Fix round 3
+
+Implementation session, 2026-10-11, TL-P4-47 addendum 3. Read WORKER, the B6a
+packet, adversarial pass 2 and the notes' Fix round 3 reds. No network, writing
+git command, commit, test edit, node_modules replacement or symlink. The
+coordinator owns commits. Only note-format, scripted planning and these notes
+change; the display and screen code retain their existing form.
+
+The committed round 3 reds reproduce nine assertion failures and 29 passes in
+`/tmp/b6a-round3-red.log`: five summary admission failures, two bound-source
+admission failures and two Project task identity failures. The complete six-file
+B6a target then passes all 422 tests in `/tmp/b6a-round3-targeted.log`.
+
+`scripted.ts` has one `groundedAuthoredLinks` function over every authored string
+(name, summary, body and template). Every authored section remains in body and
+passes that same check. Real-note links resolve against existing file identities;
+unresolved or ambiguous links refuse the whole plan before an executable manifest
+or effects. A bound original is admitted by its captured file identity and the
+names/paths it has before and after its planned move. Non-note originals are not
+padded into related notes. The existing destination-hub selection supplies the
+related metadata, and the existing serializer remains the sole writer.
+
+`note-format.ts` reuses its existing template-section parser for both the display
+and a private region identity table. It retains each source line's exact UTF-8
+byte offset, including CRLF and hidden Bower prose, then matches a displayed
+checkbox to the ownership table's personal checkbox byte. The identity carries
+its personal-region index; protected/unclaimed task bytes carry no personal
+authority. Toggle delegates only that region index to `togglePersonalTask`.
+A Bower task throws `BowerError` with one short sentence before note/journal
+writes; NoteScreen's existing report handler logs the error once. No logging or
+mutation path is added. note-edit's existing personal-task and per-payload
+re-parse invariants remain the edit boundary; no change there is needed.
+
+removed: body-only authored-link admission and refusal of bound non-note originals.
+removed: aliasing template display positions to personal-region task indices.
+removed: no files, tests, display form, serializer, ownership author or dependency.
+tests changed: none
+
+### Offline standards and compatibility
+
+Read the installed runner Zod README's declaration/parse examples, and reused
+NOTE_TEMPLATES, TASK_LINE, the existing section/fence parser, parseOwnership and
+togglePersonalTask. Offline references: [Zod schemas](https://zod.dev/api),
+[CommonMark list items](https://spec.commonmark.org/0.31.2/#list-items) and
+[GFM task lists](https://github.github.com/gfm/#task-list-items-extension-).
+These references were not fetched. No second declaration or serializer.
+
+| Uncommitted contracts fix | Stored format | Compatibility evidence |
+| --- | --- | --- |
+| Fix round 3 | Legacy/plain notes and old Source/MOC Timelines | Complete B6a target retains all existing assertions |
+| Fix round 3 | ownership/2 Project Goal/Next steps and personal Notes | Screen/Drive toggle changes only the requested personal checkbox; Bower refusal has no effects |
+| Fix round 3 | All five templates, LF/CRLF and repeated task labels | Exact ownership-byte mapping; untouched display/serialization retained |
+| Fix round 3 | Project regions stored after personal content | Declaration display order still maps to the correct fetched personal byte |
+
+Supplemental production-API probe: 68 checks pass in `/tmp/b6a-round3-probe.log`;
+source/bundle are `/tmp/b6a-round3-probe.{ts,mjs}`. It covers all five templates,
+repeated labels in distinct regions, LF/CRLF, reordered stored Project regions,
+exact toggled bytes and unchanged parse/serialize output. An initial probe
+assumption incorrectly treated Concept Related as protected; it was corrected to
+use the existing personal region. A reversed Goal/Next steps fixture was invalid
+ownership framing; the valid appended-region fixture was used instead. No repo
+test, assertion or runtime rule changed for either probe correction.
+
+### Verification
+
+All Vitest runs use `NODE_OPTIONS='--require=/tmp/b6a-test-output.cjs'` and
+`--configLoader runner`. The existing OS-temp preload redirects reporter, cache
+and scratch writes to `/tmp/b6a-test-artifacts`; no test writes the repository.
+Runner JSON is explicitly `/tmp/b6a-round3-runner.json`. All logs are OS temp.
+
+| Requested check | Result | OS-temp log |
+| --- | --- | --- |
+| Complete six-file B6a target, maxWorkers=2 | 422 pass, including all round 3 reds | `/tmp/b6a-round3-targeted.log` |
+| Full src suite, maxWorkers=2 | 168 files / 5,683 tests pass; two failures listed below | `/tmp/b6a-round3-src.log` |
+| Runner tests, maxWorkers=2 | 50 files / 667 tests pass | `/tmp/b6a-round3-runner.log` |
+| App/node/runner tsc, noEmit/incremental false | All pass | `/tmp/b6a-round3-tsc-{app,node,runner}.log` |
+| ESLint on both touched runtime files | Pass | `/tmp/b6a-round3-eslint.log` |
+| Supplemental production-API probe | 68 pass | `/tmp/b6a-round3-probe.log` |
+| Read-only git diff --check; test diff | Pass; empty test diff | `/tmp/b6a-round3-diff-check.log` |
+
+Log index: `/tmp/b6a-round3-gates.txt`. No screen code or display-form change
+(`ui: false`), so no touched-screen e2e. The owner's explicit separate checks
+replace pnpm check, whose scripts write repository outputs/check marks. No pnpm
+check pass or check mark is claimed. No agent-issued writing git command.
+
+### Complete failure list and scope stop
+
+- `src/docs.test.ts:134`, `what the repository promises > every change since the
+  P2 freeze is listed`: the existing committed round 3 red SHA `291a9cf6` is
+  missing from `docs/harness/2026-10-07-p3-compatibility.md`. The assertion reads
+  that shared change list and committed history, not either changed runtime
+  file or these notes. Read-only `git show --stat 291a9cf6` confirms it is the
+  already-committed round 3 reds. No git state, commit or change-list row was
+  written by this session. The coordinator owns the missing compatibility row;
+  it is outside the packet's owned files. This is a pre-existing guard failure,
+  not a contradictory task/grounding assertion or a runtime regression.
+- `src/e2e-port.test.ts:37`, `the e2e port and server identity > a server from
+  another worktree is never reused`: expected listen EPERM in the restricted
+  environment, reported as a 5,000 ms timeout and one unhandled listen EPERM.
+
+All requested suites/checks ran before the scope stop. No test contradicts the
+owner's grounding/task contract; all nine round 3 reds and every other runtime
+assertion pass. Implementation is complete, but the requested entirely green
+non-exempt suite is blocked by the coordinator-owned compatibility row above.
+No test or shared history record was weakened or edited to hide the failure.
+
+Owned files for this round:
+- `src/data/contracts/note-format.ts`
+- `src/data/spine/scripted.ts`
+- `docs/harness/2026-10-10-b6a-templates-notes.md`

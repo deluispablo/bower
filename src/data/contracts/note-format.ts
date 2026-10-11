@@ -23,6 +23,7 @@ import { BowerError, type Note, type Property, type SourceKind, type TimelineEnt
 import { timelineLine, parseTimelineLine } from './timeline-line';
 import { fenceAfter, parseOwnership, togglePersonalTask, type ByteSpan, type Fence, type FetchedOwnership } from './ownership-format';
 import { NOTE_TEMPLATES, type NoteTemplate } from './note-templates';
+import { TASK_LINE } from './tasks';
 
 /** Frontmatter keys that are not properties. */
 export const BOWER_KEYS = ['summary', 'status', 'tags', 'by', 'original', 'bower_source', 'bower_state', 'bower_template'] as const;
@@ -165,6 +166,37 @@ function payloadDisplay(bytes: Uint8Array, span: ByteSpan, heading?: string): st
   return heading && text.startsWith(`${heading}\n`) ? trimLines(text.slice(heading.length + 1)) : text;
 }
 
+type DisplayTask = { region: 'personal'; index: number } | { region: 'bower' };
+
+/** Project display positions back to the fetched region's task identity, never to another region's index. */
+function templateProjection(bytes: Uint8Array, ownership: ReturnType<typeof ownershipOf>['ownership'], front: Map<string, string> | null):
+  { kind: NoteTemplate; body: string; tasks: DisplayTask[] } | null {
+  const template = front?.get('bower_template');
+  if (ownership.status !== 'v2' || front?.get('by') !== 'bower' || !template || !Object.hasOwn(NOTE_TEMPLATES, template)) return null;
+  const kind = template as NoteTemplate;
+  const { layout } = ownership;
+  const hidden = kind !== 'source' ? layout.bowerNote : null;
+  const content = hidden
+    ? decoder.decode(bytes.subarray(layout.frontEnd, hidden.start)) + decoder.decode(bytes.subarray(hidden.end))
+    : decoder.decode(bytes.subarray(layout.frontEnd));
+  const bySection = new Map<string, DisplayTask[]>();
+  const personal = new Map(ownership.tasks.map((task) => [task.checkboxByte, task.index]));
+  const sections = templateSections(content, kind, true, (section, line, offset) => {
+    const match = TASK_LINE.exec(line);
+    if (!match) return;
+    let byte = layout.frontEnd + offset + encoder.encode(match[1]).length;
+    if (hidden && byte >= hidden.start) byte += hidden.end - hidden.start;
+    const index = personal.get(byte);
+    const tasks = bySection.get(section) ?? [];
+    tasks.push(index === undefined ? { region: 'bower' } : { region: 'personal', index });
+    bySection.set(section, tasks);
+  });
+  const headings = NOTE_TEMPLATES[kind].sections.filter((heading) => heading !== 'Current state' && heading !== 'Timeline');
+  const body = [trimLines(sections.get('') ?? ''), ...headings
+    .map((heading) => `## ${heading}\n${trimLines(sections.get(heading) ?? '')}`)].filter(Boolean).join('\n\n');
+  return { kind, body, tasks: ['', ...headings].flatMap((heading) => bySection.get(heading) ?? []) };
+}
+
 /** The properties between the fences: `key: value` lines, and the YAML block lists Obsidian writes for tags. */
 function frontOf(block: string): Map<string, string> {
   const front = new Map<string, string>();
@@ -255,19 +287,10 @@ export function parseNote(path: string, raw: string, fetched?: FetchedOwnership)
   // A v2 note with nothing in Bower's note has none; a legacy heading with nothing under it keeps an empty one.
   const note = sectionOf(layout.bowerNote, BOWER_NOTE);
   let bowerNote = ownership.status === 'v2' ? note || null : note;
-  const template = front?.get('bower_template');
-  if (ownership.status === 'v2' && front?.get('by') === 'bower' && template && Object.hasOwn(NOTE_TEMPLATES, template)) {
-    const kind = template as NoteTemplate;
-    // Display projection only: ownership spans remain the sole mutation authority.
-    const hidden = kind !== 'source' ? layout.bowerNote : null;
-    const content = hidden
-      ? decoder.decode(bytes.subarray(layout.frontEnd, hidden.start)) + decoder.decode(bytes.subarray(hidden.end))
-      : decoder.decode(bytes.subarray(layout.frontEnd));
-    const sections = templateSections(content.replace(/\r\n/g, '\n'), kind, true);
-    body = [trimLines(sections.get('') ?? ''), ...NOTE_TEMPLATES[kind].sections
-      .filter((heading) => heading !== 'Current state' && heading !== 'Timeline')
-      .map((heading) => `## ${heading}\n${trimLines(sections.get(heading) ?? '')}`)].filter(Boolean).join('\n\n');
-    if (kind === 'source') {
+  const projection = templateProjection(bytes, ownership, front);
+  if (projection) {
+    body = projection.body;
+    if (projection.kind === 'source') {
       current = [];
       bowerNote = null;
     }
@@ -355,18 +378,26 @@ export function serializeNote(n: NoteFile): string {
 }
 
 /** Writer and display reader use the declared sections and the shared fence grammar. */
-function templateSections(body: string, template: NoteTemplate, framed = false): Map<string, string> {
+function templateSections(body: string, template: NoteTemplate, framed = false,
+  onLine?: (section: string, line: string, byteOffset: number) => void): Map<string, string> {
   const shape = NOTE_TEMPLATES[template];
   const contents = new Map<string, string>();
   let section = '';
   let fence: Fence | null = null;
-  for (const line of body.split('\n')) {
+  let byteOffset = 0;
+  for (const rawLine of body.split('\n')) {
+    const offset = byteOffset;
+    byteOffset += encoder.encode(rawLine).length + 1;
+    const line = framed ? rawLine.replace(/\r$/, '') : rawLine;
     const previous = fence;
     fence = fenceAfter(line, fence);
     if (framed && !previous && !fence && /^<!-- bower:ownership\/2 (?:begin|end) [a-z-]+ -->$/.test(line)) continue;
     const heading = !previous && !fence ? /^## (.+)$/.exec(line)?.[1] : undefined;
     if (heading && (shape.sections as readonly string[]).includes(heading)) section = heading;
-    else contents.set(section, `${contents.get(section) ?? ''}${line}\n`);
+    else {
+      contents.set(section, `${contents.get(section) ?? ''}${line}\n`);
+      onLine?.(section, line, offset);
+    }
   }
   return contents;
 }
@@ -403,9 +434,14 @@ function templateBody(n: NoteFile, template: NoteTemplate): string[] {
 /** Ticks or unticks the n-th task of the body; Bower's sections are never touched. */
 export function toggleTaskInText(raw: string, index: number): { text: string; label: string; done: boolean } {
   const { bytes, ownership } = ownershipOf(raw);
-  const task = ownership.tasks.find((candidate) => candidate.index === index);
+  const front = ownership.layout.front ? frontOf(payloadDisplay(bytes, ownership.layout.front)) : null;
+  const projection = templateProjection(bytes, ownership, front);
+  const identity = Number.isInteger(index) && index >= 0 ? projection?.tasks[index] : undefined;
+  if (identity?.region === 'bower') throw new BowerError('unknown', 'Bower keeps this line unchanged.');
+  const personalIndex = projection ? identity?.region === 'personal' ? identity.index : undefined : index;
+  const task = ownership.tasks.find((candidate) => candidate.index === personalIndex);
   if (!task) throw new BowerError('not-found', 'That line is no longer in the note.');
-  const result = togglePersonalTask(bytes, { index, label: task.label, previousDone: task.done, done: !task.done });
+  const result = togglePersonalTask(bytes, { index: task.index, label: task.label, previousDone: task.done, done: !task.done });
   if (result.kind === 'refused') throw ownershipError(result.reason);
   return { text: decoder.decode(result.bytes), label: result.label, done: result.done };
 }
