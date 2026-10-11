@@ -323,3 +323,110 @@ Offline standard/reuse precedent is unchanged: CommonMark list items
 (https://github.github.com/gfm/#task-list-items-extension-), cited by the local
 note-template contract. All ownership/projection checks use B6a's existing
 parser and serializer; no new production mechanism is introduced.
+
+## Implementation (addendum 1)
+
+Implemented the expanded packet's ruling. `Note.taskRegions` is an additive
+optional array of `personal` / `bower`, one entry per displayed body task.
+`parseNote` derives it directly from B6a's existing `templateProjection.tasks`,
+whose order is already the displayed body's order. The field is display
+metadata, not a mutation offset or a new source of write authority.
+
+`DriveVault.note` already spreads the parsed model at its return boundary, so
+it carries the new field without an additional transformation or file edit.
+The fake source uses that same DriveVault read after `seedFakeDrive` serializes
+the demo notes. Both real source reds now pass. DemoWorld builds seeded
+template notes through the existing serializer/parser and keeps the projected
+body together with its task regions. Legacy seeds retain their existing body.
+No heading inference, second region parser or index mapping was introduced.
+
+NoteScreen passes the regions straight to Markdown. Markdown counts every
+body task, including Bower's, and retains each personal checkbox's body index.
+Bower items use ordinary `li` semantics with a text span, no control or
+`md-task`. Done Bower items use `md-done` on the list item, so the existing
+`.md-done span` rule supplies today's muted and struck appearance. Missing
+regions leave every task as a personal checkbox, even with `byBower: true`
+and project headings. The production tick callback and mutation protections
+are unchanged, including both B6a tests.
+
+Owned files changed:
+
+- `src/data/contracts/types.ts`
+- `src/data/contracts/note-format.ts`
+- `src/data/demo/world.ts`
+- `src/features/note/markdown.tsx`
+- `src/features/note/NoteScreen.tsx` (region prop wiring only)
+- `docs/harness/2026-10-11-next-steps-plain-list-notes.md`
+
+removed: the unconditional checkbox rendering for Bower-region body tasks.
+removed: none of B6a's projection, mutation guards, indexes or stored framing.
+tests changed: none
+
+### Contract compatibility draft row
+
+| Contract | Draft change | Compatibility and storage | Evidence |
+| --- | --- | --- | --- |
+| `Note` returned by `parseNote` / `VaultSource.note` | Add optional `taskRegions?: Array<'personal' \| 'bower'>`, in displayed body task order; populated only from B6a's projection. | Old producers may omit it: all tasks render as personal and emit unchanged global body indexes. Existing consumers can ignore it. No stored format, bytes, write identity or serializer framing changes. | `NSPL Note without task regions renders every task as personal`; `NSPL no Bower region`; parser, DriveVault, demo and fake NSPL source rows; unchanged B6a refusal/isolation rows. |
+
+### Research and verification
+
+Offline standard precedent remains the local note-template contract's
+CommonMark list items (https://spec.commonmark.org/0.31.2/#list-items) and
+GFM task lists (https://github.github.com/gfm/#task-list-items-extension-).
+Reused the existing renderer, Checkbox, `md-done`, serializer and B6a
+projection. No network request was made.
+
+The unchanged targeted suite first reproduced all eight assertion-level NSPL
+reds listed in "Red repair (addendum 1)"; seven regressions passed, including
+both B6a tests. Logs: `/tmp/nspl-impl1-red.log`, `/tmp/nspl-impl1-red.json`.
+After implementation, all 15 targeted tests pass, with no skips or unhandled
+errors. Logs: `/tmp/nspl-impl1-target.log`, `/tmp/nspl-impl1-target.json`.
+
+Commands use the existing OS-temp Vitest config named by
+`/tmp/next-steps-plain-list-run-dir`, with default/JSON reporters, Vite/module
+caches in temp and the existing timer gate retained. No tests changed.
+
+```sh
+nspl_run_dir=$(cat /tmp/next-steps-plain-list-run-dir)
+pnpm exec vitest run src/features/note/markdown.test.tsx \
+  src/features/note/next-steps-plain-list.test.tsx \
+  src/features/note/b6a-task-regions.test.tsx --maxWorkers=2 \
+  --config "$nspl_run_dir/vitest.config.mjs" --configLoader runner \
+  --fsModuleCachePath "$nspl_run_dir/module-cache" \
+  --reporter=default --reporter=json --outputFile /tmp/nspl-impl1-target.json \
+  > /tmp/nspl-impl1-target.log 2>&1
+pnpm exec vitest run src --maxWorkers=2 \
+  --config "$nspl_run_dir/vitest.config.mjs" --configLoader runner \
+  --fsModuleCachePath "$nspl_run_dir/module-cache" \
+  --reporter=default --reporter=json --outputFile /tmp/nspl-impl1-src.json \
+  > /tmp/nspl-impl1-src.log 2>&1
+pnpm exec tsc -p tsconfig.app.json \
+  --tsBuildInfoFile /tmp/nspl-impl1-app.tsbuildinfo > /tmp/nspl-impl1-tsc-app.log 2>&1
+pnpm exec tsc -p tsconfig.node.json \
+  --tsBuildInfoFile /tmp/nspl-impl1-node.tsbuildinfo > /tmp/nspl-impl1-tsc-node.log 2>&1
+pnpm exec eslint src/data/contracts/types.ts src/data/contracts/note-format.ts \
+  src/data/demo/world.ts src/features/note/markdown.tsx \
+  src/features/note/NoteScreen.tsx > /tmp/nspl-impl1-eslint.log 2>&1
+node scripts/check-unused-gate.mjs > /tmp/nspl-impl1-unused.log 2>&1
+```
+
+App/node TypeScript and touched-file ESLint pass. The unused-code gate passes
+both baseline comparisons (2 all-code findings, 29 production findings).
+The complete requested src run finishes with 5,700 tests: 5,698 passed,
+two failed, no skips. The full note suite passes, including the ten NSPL
+cases and both unchanged B6a cases. The two failures are outside this diff:
+
+- `src/docs.test.ts:134`, `every change since the P2 freeze is listed`:
+  commit rows `4de03d64` and `9c8e61b0` are missing from the shared list.
+  No commit or shared harness record is changed in this implementation.
+- `src/e2e-port.test.ts:37`, `a server from another worktree is never reused`:
+  expected sandbox `listen EPERM` on `127.0.0.1`, followed by the test's
+  5,000 ms timeout and one unhandled EPERM. The owner's request explicitly
+  anticipates this port failure.
+
+Full src logs: `/tmp/nspl-impl1-src.log`, `/tmp/nspl-impl1-src.json` (exit 1).
+Logs are the paths in the commands above. No installation or node_modules
+replacement/symlink occurred. No git write command was run; the runner owns
+the commits. `pnpm check` was not run because it writes repository reports
+and marks; the owner's separate requested checks are run above. Browser e2e
+and designer verification remain for their assigned sessions.
