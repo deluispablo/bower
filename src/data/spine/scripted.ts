@@ -1935,7 +1935,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // Inbox, `.md`, unique against the folder as it will be. A filed thing's own note is written only where none is
   // yet, as the legacy runner did; it follows its thing's move. The words of a pile become its note.
   const noteDate = timelineDate(opts.requestedAt) ?? 'Today';
-  const generated: Array<{ to: string; name: string; text: string; what: string; after: string | null; pileId: string | null; aside: string }> = [];
+  const generated: Array<{ to: string; name: string; text: string; what: string; after: string[]; pileId: string | null; aside: string }> = [];
   for (const { thing, name } of filing) {
     const own = d.ownNote?.(thing.item.name) ?? undefined;
     if (!own || !generatedPlace(parentOf(own))) continue;
@@ -1944,7 +1944,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     plannedFile(own);
     const what = `A note for ${displayName(name)}.`;
     const text = serializeNote({ summary: what, properties: [], tags: [], currentState: [], body: '', timeline: [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
-    generated.push({ to: parentOf(own), name: nameOf(own), text, what, after: thing.file.id, pileId: null, aside: thing.file.name });
+    generated.push({ to: parentOf(own), name: nameOf(own), text, what, after: [thing.file.id], pileId: null, aside: thing.file.name });
   }
   /** The name each filed thing is cited by, as the run makes it: its note's, else its own. */
   const madeAs = new Map(filing.map(({ thing, name, note }) => [thing.file.id, note?.name ?? name]));
@@ -2017,7 +2017,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const text = serializeNote({ template, typeRow, summary: authored.summary, properties, tags: [], currentState: [], body: authored.body,
       ...(template === 'source' ? { original: name } : {}),
       timeline: template && !NOTE_TEMPLATES[template].timeline ? [] : [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
-    generated.push({ to, name: noteName, text, what: authored.summary, after: thing.file.id, pileId: null, aside: thing.file.name });
+    generated.push({ to, name: noteName, text, what: authored.summary, after: [thing.file.id], pileId: null, aside: thing.file.name });
   }
   // Group the row-bound contributions before authoring: one ordinary edit/create per profile.
   for (const row of types.table.rows.filter((row) => row.profile)) {
@@ -2045,7 +2045,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
           { key: 'related', label: 'Related', value: related.map((path) => `[[${path}]]`).join(', ') }],
         tags: [], currentState: [], body, timeline: [{ date: noteDate, text: 'Filed by Bower.', source: first.name }], byBower: true });
       plannedFile(join(to, name));
-      generated.push({ to, name, text, what: 'Profile from documents.', after: first.thing.file.id, pileId: null, aside: first.thing.file.name });
+      generated.push({ to, name, text, what: 'Profile from documents.', after: contributions.map(({ thing }) => thing.file.id), pileId: null, aside: first.thing.file.name });
       continue;
     }
     const path = ix.pathOf(target.id);
@@ -2101,7 +2101,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     plannedFile(join(to, name));
     const what = 'Written from a note you added.';
     const text = serializeNote({ summary: words, properties: [{ key: 'kind', label: 'Kind', value: 'Note' }], tags: [], currentState: [], body: words, timeline: [{ date: noteDate, text: what }], byBower: true });
-    generated.push({ to, name, text, what, after: null, pileId, aside: folder.name });
+    generated.push({ to, name, text, what, after: [], pileId, aside: folder.name });
   }
   // Words you added that disagree with a stored note (C07): the question linking both, asked once the note written
   // from those words is there. The stored note is read now; one that cannot be read asks nothing.
@@ -2526,8 +2526,8 @@ export async function build(decided: Decided): Promise<Ended> {
   const notesOf = new Map<string, string>();
   const wordsFiled = new Map<string, ReportContribution>();
   for (const note of generated) {
-    const after = note.after === null ? undefined : moveOf.get(note.after);
-    const op = await add({ kind: 'create-text', parent: targetOf(note.to), name: note.name, createKey: newKey('note'), text: note.text, content: await utf8(note.text), purpose: 'generated' }, after ? [after] : []);
+    const after = note.after.flatMap((id) => moveOf.get(id) ?? []);
+    const op = await add({ kind: 'create-text', parent: targetOf(note.to), name: note.name, createKey: newKey('note'), text: note.text, content: await utf8(note.text), purpose: 'generated' }, after);
     const path = join(note.to, note.name);
     const filed = note.pileId === null ? [] : [{ name: 'Your note', title: thingName(note.name), kind: 'note' as const, to: note.to, note: path }];
     if (note.pileId !== null) {
