@@ -1830,3 +1830,77 @@ Reports: /tmp/b1c-add11-runner.{json,log}. Runner tsc passes with both prior-sta
 Verification tree: /var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b1c-add11-verify-1qz_9ltu.
 Final input byte audit: 3453 tracked inputs (excluding this evolving notes file), zero mismatches.
 Read-only git diff --check passes. The final diff is exactly six runner test files and these notes.
+
+
+## Addendum 12 reds
+
+Red-owning session, 2026-10-11. Scope: the owner's warm-call ruling and its read-cache control.
+Only runner/test/b1-index.test.ts and these notes changed. No existing assertion changed.
+No network, writing git command, commit, production edit, dependency replacement or symlink.
+The coordinator owns commits.
+
+tests changed: runner/test/b1-index.test.ts: add `B1c fix 4: a warm run with changed notes counted through maintain equals the pre-addendum-9 count`; pin all Drive calls through main, maintain and the done report at the measured f7e210f7 count, for instructions/all and one/two changed ordinary notes; require exactly one Range media request per changed note and no metadata precheck.
+tests changed: runner/test/b1-index.test.ts: add `B1c fix 4: a version change during a prefix read keeps the newer read cache response`; delay an actual older media response, change the note version, read the newer version, then release the older response and prove the newer prefix remains cached without another call.
+tests changed: docs/harness/2026-10-10-b1c-index-notes.md: record Addendum 12 reds, offline baseline measurement and verification.
+
+### Baseline measurement
+
+Read-only git archive of f7e210f7b12fbdfc88daf5229657d7cc619377a0 was extracted into OS temp.
+The same warm fixture has both index.md and retrieval.json, an empty Inbox and no admitted
+journal items. All indexed notes are ordinary personal notes; their summary bytes and versions
+change after the state is seeded. They are never read by the provider: each GET of a changed
+note is observed after entry into the real withMaintenance, and exactly one maintain operation
+is persisted. Requests are counted through the terminal done report, whose `after` equals the
+whole production request count. Seed and final FakeDrive snapshots are outside that count.
+
+| Scope | Changed notes | f7e210f7 calls through done | Current calls through done |
+| --- | ---: | ---: | ---: |
+| instructions | 1 | 39 | 40 |
+| instructions | 2 | 40 | 42 |
+| all | 1 | 39 | 40 |
+| all | 2 | 40 | 42 |
+
+The pinned whole-run formula is **38 + changed notes**. Baseline has exactly one media GET
+per changed note and no metadata GET. It predates the prefix path, so its media GET has no
+Range header. Only the OS-temp baseline probe adapts that new Range expectation to null;
+its exact whole-run counts, maintain entry, report, refreshed summaries and versions all pass.
+The committed red requires `bytes=0-4095` as addendum 12 specifies. Current code adds the
+mimeType/trashed metadata precheck per changed note, reproducing the blocker in both scopes.
+The initial baseline measurement probe used a temporary zero placeholder to expose the four
+counts; that placeholder never remains in the delivered test. The pinned baseline replay passes.
+
+### Control and verification
+
+The control uses the real RunnerDrive.readPrefix and its existing ReadCache, with in-memory
+Drive responses and promise-controlled ordering. The older response starts before the version
+change and completes after the newer prefix is cached. Its caller can still receive its older
+bytes; it cannot overwrite the newer version's cached response. The newer read is still returned
+on subsequent asks with zero additional calls. This is the existing cache response rule, not a
+new metadata fence or a manufactured conflict response. No timers, network or production mocks.
+
+Offline research: reused the one existing version-keyed ReadCache response rule and runner
+Drive/corpus helpers. Its existing reference is RFC 9110 versioned cache validators:
+https://www.rfc-editor.org/rfc/rfc9110.html#section-8.8.3. Reference URL was not fetched.
+
+Full requested file run: **30 passed, 1 failed, 31 total**. The sole failing test is the named
+warm-run red: all four exact counts and all per-note no-precheck assertions fail as expected.
+All existing assertions pass, and the concurrent-version cache control passes.
+Runner tsc (--noEmit): pass; /tmp/b1c-add12-tsc.log.
+No pnpm check/e2e or repository mark is claimed; repository-writing gates are outside scope.
+
+Verification trees:
+- Baseline: /var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b1c-add12-baseline-3sd7n_83
+- Current red: /var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b1c-add12-red-ldx9v_hx (archive of 9e48a38a91550b9d680c5041a5ab4ee2ec1b638c, plus delivered test).
+
+Installed node_modules directories were cloned with cp -cR into fresh OS-temp destinations;
+no existing node_modules directory was replaced or symlinked. All caches, run fixtures,
+reports and logs stay in OS temp. Config uses OS-temp cacheDir and fsModuleCachePath.
+Both commands ran from their scratch runner directory:
+
+```sh
+node ../node_modules/vitest/vitest.mjs run test/b1-index.test.ts -t 'B1c fix 4: a warm' --maxWorkers=2 --config=../runner-config.mjs --configLoader=runner --reporter=json --outputFile=/tmp/b1c-add12-baseline.json > /tmp/b1c-add12-baseline.log 2>&1
+node ../node_modules/vitest/vitest.mjs run test/b1-index.test.ts --maxWorkers=2 --config=../runner-config.mjs --configLoader=runner --reporter=json --outputFile=/tmp/b1c-add12-red.json > /tmp/b1c-add12-red.log 2>&1
+node ../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json > /tmp/b1c-add12-tsc.log 2>&1
+```
+
+Read-only git diff --check passes. Existing test assertions remain byte-identical.

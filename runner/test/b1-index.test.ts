@@ -13,7 +13,9 @@ import { sha256Hex } from '../../src/data/contracts/hashes';
 import { RUNNER_WRITES, SYSTEM, isHidden, type RetrievalFile } from '../../src/data/vault/layout';
 import { loadCase, type LoadedCase } from '../src/corpus';
 import { AT, redispatchCase, replySequence, runOnDrive, seedCase, type CaseRun } from './corpus-run';
-import { fixedDrive, paging, RUN_ID } from './drive-v3';
+import { API, TICKET, driveV3, fixedDrive, paging, RUN_ID } from './drive-v3';
+import { RunnerDrive } from '../src/drive';
+import { RunnerToken } from '../src/token';
 
 const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
 const METHOD = resolve(import.meta.dirname, '../../docs/harness/2026-10-08-p4-method-rubric-changes.md');
@@ -958,3 +960,101 @@ it.each(['instructions', 'all'] as const)(
     expect(result.after[SYSTEM.index]).toBe('# Index\nExisting warm projection.\n');
   },
 );
+
+
+it('B1c fix 4: a warm run with changed notes counted through maintain equals the pre-addendum-9 count', async () => {
+  // TL-P4-41 addendum 12: listing/feed versions need one media read, without a metadata precheck.
+  for (const scope of ['instructions', 'all'] as const) {
+    for (const count of [1, 2]) {
+      const folder = Object.fromEntries(Array.from({ length: count }, (_, i) => [
+        `Resources/Ordinary ${i}.md`, note(`Previous evidence ${i}.`),
+      ]));
+      const base = await setup(folder);
+      base.c.scope = scope;
+      const { state } = await seedState(base, '# Index\nExisting warm projection.\n');
+      const listing = await base.drive.listAll(base.root);
+      expect(listing.some((f) => base.drive.pathOf(f.id, base.root) === SYSTEM.index)).toBe(true);
+      expect(listing.some((f) => base.drive.pathOf(f.id, base.root) === SYSTEM.retrieval)).toBe(true);
+      const changed = listing.filter((f) => f.id in state.files);
+      expect(changed).toHaveLength(count);
+      for (const file of changed) await base.drive.writeText(file.id,
+        note(`Changed evidence ${file.name}.`), file.modifiedTime);
+      const requests: Array<{ method: string; path: string; alt: string | null; range: string | null; maintaining: boolean }> = [];
+      let maintaining = false;
+      const original = maintenance.withMaintenance;
+      const planned = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (...args) => {
+        maintaining = true;
+        return original(...args);
+      });
+      const result = await runOnDrive(base.c, base.drive, base.root, {
+        admission: { ...base.admission, scope }, pacing,
+        around: (fetch) => async (input, init) => {
+          const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+          if (url.origin === 'https://www.googleapis.com') requests.push({
+            method: (init?.method ?? 'GET').toUpperCase(), path: url.pathname,
+            alt: url.searchParams.get('alt'), range: new Headers(init?.headers).get('range'), maintaining,
+          });
+          return fetch(input, init);
+        },
+      }, 1);
+      expect(planned).toHaveBeenCalledOnce();
+      planned.mockRestore();
+      expect(result.code).toBe(0);
+      expect(result.wire?.statuses.at(-1)?.phase).toBe('done');
+      expect(manifests(result).flatMap(([, text]) => (JSON.parse(text) as ManifestV2).operations)
+        .filter((op) => op.effect.kind === 'maintain')).toHaveLength(1);
+      const done = result.wire?.statuses.at(-1);
+      expect(done?.after, `${scope}/${count}: the report includes every production Drive call`).toBe(requests.length);
+      // Exact whole-run counts measured with this fixture at f7e210f7 in an OS-temp copy.
+      expect.soft(requests.length, `${scope}/${count}: pre-addendum-9 whole-run count`).toBe(38 + count);
+      for (const file of changed) {
+        const reads = requests.filter((r) => r.method === 'GET' && r.path === `/drive/v3/files/${file.id}`);
+        expect.soft(reads, `${scope}/${count}: provider skips this note; maintain reads its one Range without metadata`)
+          .toEqual([{ method: 'GET', path: `/drive/v3/files/${file.id}`, alt: 'media',
+            range: 'bytes=0-4095', maintaining: true }]);
+        expect(stateOf(result).files[file.id]).toMatchObject({
+          version: (await base.drive.get(file.id)).modifiedTime, summary: `Changed evidence ${file.name}.`,
+        });
+        expect(result.after[SYSTEM.index]).toContain(`Changed evidence ${file.name}.`);
+      }
+    }
+  }
+});
+
+
+it('B1c fix 4: a version change during a prefix read keeps the newer read cache response', async () => {
+  // Existing ReadCache rule: a late response for an older key cannot replace the newer version's prefix.
+  const drive = fixedDrive();
+  const root = await drive.createFolder('root', 'Bower');
+  const old = await drive.createText(root.id, 'Ordinary.md', note('Previous evidence.'));
+  const wire = driveV3(drive);
+  let release: () => void = () => { throw new Error('Missing pending response'); };
+  let started: () => void = () => { throw new Error('Missing read observer'); };
+  const pending = new Promise<void>((resolve) => { release = resolve; });
+  const reading = new Promise<void>((resolve) => { started = resolve; });
+  let held = false;
+  const fetch: typeof globalThis.fetch = async (input, init) => {
+    const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+    const response = await wire.fetch(input, init);
+    if (!held && url.pathname === `/drive/v3/files/${old.id}` && url.searchParams.get('alt') === 'media') {
+      held = true;
+      started();
+      await pending; // Injected ordering, with no timer or real network.
+    }
+    return response;
+  };
+  const token = new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch, now: () => wire.now });
+  const adapter = new RunnerDrive({ token, attempt: 1, fetch });
+  const olderResponse = adapter.readPrefix(old);
+  await reading;
+  const newer = await drive.writeText(old.id, note('Changed during the read.'), old.modifiedTime);
+  expect(newer.modifiedTime).not.toBe(old.modifiedTime);
+  expect(await adapter.readPrefix(newer)).toBe(note('Changed during the read.'));
+  release();
+  expect(await olderResponse).toBe(note('Previous evidence.'));
+  const calls = wire.requests.length;
+  expect(await adapter.keptPrefix(newer), 'older response never poisons the newer cached key')
+    .toBe(note('Changed during the read.'));
+  expect(await adapter.readPrefix(newer)).toBe(note('Changed during the read.'));
+  expect(wire.requests.length, 'newer response remains cached after the old read completes').toBe(calls);
+});
