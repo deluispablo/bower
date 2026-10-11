@@ -228,3 +228,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `685451f9` | b1d-selection | Prefix reads are advisory for every note type: the lenient prefix parse marks a cut region incomplete and never throws; strict ownership only on a full read of a note the run edits or a candidate MOC (TL-P4-41 addendum 23). Stored bytes unchanged. |
 | `940a9394` | b4a-contract | none: tests only (B4a fix round 3 reds). |
 | `8f9b7eec` | b4a-contract | A Forget tombstone matches the fact's text across all About me sections and only the person's later own words supersede it; Bower's section accepts exactly the three ruled regions; below the budget a write is a plain append, and consolidation applies only over budget with five new observations. Older notes and ledgers parse as before. |
+| `2a1514ec` | b4a-contract | none: tests only (the two older B4a tests repaired to the addendum 5 ruling: fixtures only). |
