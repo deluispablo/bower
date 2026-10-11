@@ -316,3 +316,100 @@ runtime B4b/B4c completion is claimed. The two requested commits are declared in
 Final delivery: **blocked**, pending the unowned caller and frozen gate/compatibility rulings above.
 All 12 B4a named red tests are green. No test changes, git writes or runtime wiring were made.
 A compact result index is `/private/tmp/b4a-implementation.txt`.
+
+
+## Addendum 2
+
+implementer: codex
+
+Applied the lead's 2026-10-11 TL-P4-48 addendum 2. This section supersedes the
+Implementation section's caller/architecture blockers and its two-commit handoff.
+The production change is one discriminant guard at scripted.ts:723: only `file-to`
+reaches the folder lookup. `forget-fact` remains a declared action for later wiring.
+No action payload, origin word, manifest contract or RUNNER_WRITES member changed.
+
+The shared architecture scan now walks TypeScript syntax with the already installed
+TypeScript compiler API. Identifier checks exclude comments and literal contents;
+property-access checks retain `process.env` and `import.meta.env`, including comments
+between tokens. Template expressions remain executable syntax and are still scanned.
+Both existing contract/spine assertions use this same helper, with their closure,
+external-import checks, expected results and existing exceptions unchanged.
+
+Offline research: inspected the installed TypeScript declarations for createSourceFile,
+forEachChild, isIdentifier, isPropertyAccessExpression and isMetaProperty in
+`node_modules/typescript/lib/typescript.d.ts`. This reuses the existing parser dependency,
+with no new package or custom string/comment lexer. Canonical compiler API reference:
+https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API
+The reference was not fetched or newly verified; no network was used.
+
+Test-first evidence: both new instances of `the global scan ignores literals and comments
+but rejects real access in %s` failed on `export const origin = 'document';` (expected
+false, received true) with the old scan. The two existing contract/spine assertions also
+failed on observations.ts/run-manifest.ts. The pre-fix app tsc reproduced TS2339 at
+scripted.ts:723. After the fix all nine architecture tests passed.
+
+The new control exercises contract and runner source snippets in memory, without
+writing fixtures into the repository. It checks real `document.title` and
+`window.location`, template/nested-template expressions, access after a URL string or
+comment, both environment accesses, storage, indexedDB, fetch and React. Those snippets
+must be rejected by the same helper used by the existing assertions. Strings, template
+text, regex literals, line/block/JSDoc comments and URL strings must remain accepted.
+
+tests changed: src/architecture.test.ts: replace raw-text browser/environment detection in the two existing shared-core assertions with syntax traversal; add contract/runner controls accepting literals/comments and rejecting real global accesses. Expected closure/import results and existing exceptions are unchanged.
+removed: duplicated regex comment stripping in the two shared-core scans, replaced by their shared syntax visitor.
+removed: no tests, fixtures, runtime mechanisms, dependencies or contract words.
+
+The frozen `runner/test/claude-provider.test.ts` is unchanged. Its RUNNER_WRITES pin
+remains allocated after B1d integrates, as the addendum requires. The commit manifest
+`.codex-commits.json` declares exactly three commits: architecture scan/control,
+scripted kind guard, and these notes alone. No git-writing command was run and
+node_modules was neither replaced nor symlinked.
+
+
+### Addendum 2 verification
+
+All logs below are under `/private/tmp/b4a-contract-validation/`. The existing temporary
+configs retain the production app configuration and timer gate, redirecting caches,
+JSON results and CPU reports to the OS temp folder. `--configLoader runner` avoids
+writing a config bundle into node_modules. Tests used two workers; no repo output,
+dependency replacement, network access or git-writing command was introduced.
+
+| Check | Result | Log |
+| --- | --- | --- |
+| Architecture before fix | 4 assertion failures: two new controls and two existing shared-core checks | addendum2-red.log |
+| App tsc before guard | TS2339 at scripted.ts:723 | addendum2-red-app-types.log |
+| Architecture after fix | 9 passed, including both runner/contract controls and both shared-core checks | addendum2-architecture.log |
+| Full src | 5,751 passed, 2 failed in 173 files; one EPERM unhandled error | addendum2-src.log |
+| Full runner | 669 passed, 1 failed in 51 files | addendum2-runner.log |
+| App / node / runner tsc | All passed | addendum2-app-types.log; addendum2-node-types.log; addendum2-runner-types.log |
+| Touched-file ESLint | Passed | addendum2-eslint.log |
+| Diff whitespace and frozen runner test | Passed; claude-provider.test.ts has no diff | git diff --check; git diff --exit-code -- runner/test/claude-provider.test.ts |
+
+Commands (stdout/stderr redirected to the logs above):
+
+- `pnpm exec vitest run src/architecture.test.ts --maxWorkers=2 --config /private/tmp/b4a-contract-validation/app-full.mjs --configLoader runner` (red, then green).
+- `pnpm exec vitest run src --maxWorkers=2 --config /private/tmp/b4a-contract-validation/app-full.mjs --configLoader runner`.
+- `pnpm -C runner exec vitest run --maxWorkers=2 --config /private/tmp/b4a-contract-validation/runner.mjs --configLoader runner`.
+- `pnpm exec tsc -p tsconfig.app.json --noEmit`.
+- `pnpm exec tsc -p tsconfig.node.json --noEmit`.
+- `pnpm exec tsc -p runner/tsconfig.json --noEmit`.
+- `pnpm exec eslint src/architecture.test.ts src/data/spine/scripted.ts`.
+
+Complete remaining failure inventory after running both full suites:
+
+1. `src/docs.test.ts:134`, `every change since the P2 freeze is listed`: existing
+   commits `181274e5` and `0b047d16` are absent from the shared compatibility list.
+   The list and test are outside this addendum's scope; no commits were made here.
+2. `src/e2e-port.test.ts:37`, `a server from another worktree is never reused`:
+   expected sandbox `listen EPERM` on 127.0.0.1 and the resulting 5,000 ms timeout;
+   Vitest also records that EPERM as one unhandled error.
+3. `runner/test/claude-provider.test.ts:600`, `a write the two runner lists judged
+   differently is judged once by RUNNER_WRITES`: expected frozen exact-list failure,
+   with `.bower/observations.jsonl` as the additional member. The addendum assigns
+   the pin update after B1d integrates, so it remains unchanged.
+
+All requested code changes and checks are complete. Entry closure remains blocked by
+the unowned compatibility rows and the deferred runner pin; no all-green gate is claimed.
+The former architecture and scripted type failures are resolved. Full src/runner runs
+exercise the B4a tests and landed compatibility controls. Full pnpm check and e2e remain
+the coordinator's integration gates under the packet; this entry touches no screen.
