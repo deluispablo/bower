@@ -1586,3 +1586,240 @@ Where a shared exhaustion/manifest helper fails first, the assertion's helper lo
 Coordinator handoff: tests/fixtures/goldens/notes only, uncommitted in the entry worktree.
 The worker card is blocked on the remaining contract decisions/implementation gaps, not on a tool,
 network or dependency issue. No additional assertions were rewritten to conceal them.
+
+
+## Implementation round 2
+
+implementer: codex
+status: blocked; owned-file fixes are uncommitted, not accepted or merge-ready.
+
+The owner authorized implementation plan (2), no network, no git-writing commands, no test changes,
+no node_modules replacement or symlinking, and OS-temp-only test output. Those constraints were kept.
+Changed production paths: runner/src/claude.ts, runner/src/index.ts, runner/src/main.ts, runner/src/timing.ts.
+This notes appendix is the only other changed repository file. The coordinator owns all commits.
+
+### Owned-file implementation and evidence
+
+- One combined serialized index-context bound now counts index text, indexed metadata and every
+  source's candidate rows, including JSON escaping and cut notices, within 32,000 characters.
+  Small contexts retain their exact bytes. Large contexts use candidate id references to the same
+  indexed dictionary, keep neighbourhood and hub metadata ahead of unrelated rows, and cut whole
+  projection lines. Validation accepts only retained dictionary ids. It never substitutes truncated
+  versions, ids or coverage records. A cut still refuses a new destination justified by absence.
+- RunTiming, the existing run ledger and metered Drive transport, grants at most 300 physical
+  maintenance sends across discovery/refresh, declarations and settling/reconciliation. An attempted
+  301st send is refused before the transport; retries consume their actual sends. Ordinary operation
+  traffic keeps its existing phase accounting. Pre-manifest exhaustion uses the existing untouched-inbox
+  outcome; a nonempty persisted checkpoint chain keeps exhaustion on the existing recovery path.
+  The ledger carries the admission count for the existing counted waiting message. No second budget object exists.
+- Execution retries retain the actual closed-intent refusal kind and reason and the existing
+  asking-once-more diagnostic. Uncited Bower updates can use the frozen selected ids and destination hub;
+  personal evidence keeps the existing journal/ownership checks. Frozen destination and injection reds
+  remain green. No execution-only fallback to inferred production selection was added.
+- The timing fingerprint and section hashes bind the first selection input, including failed selection,
+  rather than being overwritten by execution. Both phases and retries still aggregate actual usage.
+- planningIndex accepts the already prepared refresh, so its production compatibility path uses the
+  same observations without another discovery/feed/prefix call. The helper remains usable by existing
+  callers. This also eliminates the newly unused production planningIndex export without a baseline edit.
+- Per ruling (a), settled unpicked folded maps reuse retrieval state's full snapshot and membership;
+  maintain needs complete owned regions when it writes or migrates a map. The unchanged-map control
+  reads the map zero times, and the person-edited-map control reads it once and keeps the comment.
+  The existing MOC parser/author and strict manifest format are preserved. No second membership writer,
+  prefix-only MOC writer, or new stored format was introduced.
+
+removed: the separate uncounted index metadata/candidate envelope.
+removed: the generic frozen-selection reason replacing actual execution validation refusals.
+removed: execution overwriting the first selection's timing fingerprint and section hashes.
+removed: the added production-unused planningIndex finding, by reusing prepared observations.
+removed: treating post-checkpoint ledger exhaustion as untouched pre-manifest exhaustion.
+removed: the experimental MOC path/affected-members walker; existing MOC ownership remains the one home.
+tests changed: none
+
+### Versioned listing handoff: scope blocker, concrete patch pending
+
+The draft's stale-listing gap remains unresolved in the repository. refreshPlanning returns the newer
+feed metadata and snapshot, but RunnerDrive.planReads still holds its earlier listing and versions map.
+Its inner admission reader also memoizes read-ahead by id, so merely changing an outer version map is
+insufficient: a new cache key must not receive the previous reader's stale bytes. This requires a handoff
+inside runner/src/drive.ts's existing planReads/ReadCache mechanism. That file is not in the packet's
+owned-file allocation. No proxy, parallel cache, prototype patch or duplicate discovery was substituted.
+
+A concrete proposed patch is in /tmp/b1d-round2-listing-handoff.patch. It adds planReads.handoff:
+replace the existing listing with the prepared listing, update its version map, reset admission's
+id-only read-ahead reader, and retain the existing versioned ReadCache for shared physical reads.
+main hands the refreshed listing over before constructing the semantic provider. This proposed patch
+is not applied or validated, and is not counted as delivered code. The owner was asked to allocate
+runner/src/drive.ts; no reply or scope expansion was received before this card.
+
+The [bower-implement skill](../../.agents/skills/bower-implement/SKILL.md) says “Commit only the owned files.”
+The explicit editing restriction comes from [WORKER.md](WORKER.md): “Touch only the files the packet owns.”
+WORKER.md also says “if it cannot do what you need, stop and report `blocked`.” Those explicit worker
+scope/mechanism requirements caused this blocker; no extra editing restriction was inferred from the skill. The owner was shown the
+concrete patch before the scope question. Current ownership was retained while finishing every requested
+sweep and recording every remaining failure; no permission or approval was inferred from elapsed time.
+
+### One deferred gap
+
+Selection still accepts the built-in kinds payslip, invoice, job-offer, rental-listing, contract,
+booking and recipe, plus unknown. B5a's configured type-row table is not on this branch; the coordinator
+merges it next round. This is the one deliberately deferred feature gap. The pending cache allocation
+and existing red compatibility contracts below are blockers, not silently deferred acceptance work.
+
+### Verification
+
+Baseline full runner: 673 tests, 568 passed, 105 failed. /tmp/b1d-round2-before.json and .log.
+Initial failing assertion used for retry diagnostics: per-thing-ask.test.ts, “a numbers refusal is
+retried once with its reason”; it received the generic frozen-selection reason. All 45 formerly failing
+per-thing-ask tests now pass. All 11 state-rewrite tests and both c04-prompt-fixes tests now pass.
+
+Final full runner: 673 tests, 629 passed, 44 failed; 61 baseline failures repaired, zero new failures.
+All 19 B1d planning reds/controls and 3 phase-adapter controls pass. B1a/B1c: 49/49.
+B3b: 135/135. Q1c live: 8/8. Drive traffic goldens: 5/5. Timing traffic counts: 2/2.
+The complete remaining failure inventory is below, with full messages/stacks in JSON.
+
+Src: 168 files, 5617 passed, one failed. The sole failure is src/e2e-port.test.ts:37, the expected
+EPERM listen refusal and subsequent timeout. No app or node source file was changed this round.
+App, node and runner TypeScript: pass. Touched-file ESLint: pass. Git diff whitespace: pass.
+Unused-code gate: fail on two stale baseline rows, both exports runner/src/claude.ts selectionOf:
+harness/unused-baseline.json and harness/unused-production-baseline.json. There is no new unused
+production finding in the final gate output. Those harness files are outside the owned scope.
+
+Commands and final logs (all artifacts outside the repository; Vitest cache disabled):
+- pnpm -C runner exec vitest run --maxWorkers=2 --reporter=json --outputFile=/tmp/b1d-round2-complete.json --cache=false
+  /tmp/b1d-round2-complete.log
+- pnpm exec vitest run src --maxWorkers=2 --reporter=json --outputFile=/tmp/b1d-round2-src.json --cache=false
+  /tmp/b1d-round2-src.log
+- pnpm exec tsc --noEmit -p tsconfig.app.json --tsBuildInfoFile /tmp/b1d-round2-app.tsbuildinfo
+  /tmp/b1d-round2-app-types.log
+- pnpm exec tsc --noEmit -p tsconfig.node.json --tsBuildInfoFile /tmp/b1d-round2-node.tsbuildinfo
+  /tmp/b1d-round2-node-types.log
+- pnpm -C runner exec tsc --noEmit -p .
+  /tmp/b1d-round2-runner-types.log
+- pnpm -C runner exec eslint --config /tmp/b1d-round2-eslint-runner.mjs src/claude.ts src/index.ts src/main.ts src/timing.ts
+  /tmp/b1d-round2-eslint.log
+- node scripts/check-unused-gate.mjs
+  /tmp/b1d-round2-unused.log
+
+The OS-temp ESLint config imports the unchanged repository config and sets tsconfigRootDir to the
+runner checkout. No rule was disabled. No pnpm check or e2e was run: their normal commands write
+repository build/results/check-mark files, contrary to this session's explicit output restriction.
+No fixture or UI file changed.
+
+Two OS-temp diagnostics exercised the actual ledger and extracted production bound helper without
+editing any test: /tmp/b1d-round2-ledger-probe.log grants 150 + 150 maintenance sends, refuses the
+301st with the injected admission count of two, and allows ordinary traffic afterward; /tmp/b1d-round2-index-probe.log bounds 3,507,943 serialized
+characters to 31,988, retains each candidate's exact dictionary version/coverage, and marks the cut.
+No diagnostic contacted a network service. Scratch sources/bundles are in /tmp only.
+
+### Golden table: measured, none changed
+
+Moved golden files: none in round 2. The raw golden assertion passes through corpus -> main; therefore
+its pinned bytes are also the measured first selection input. Applying the existing normalizer to those
+measured bytes matches the normalized golden exactly. Its test still stops earlier at its unchanged
+physical-call assertion (expected 2, measured 3: selection, execution, execution validation retry).
+No accepted traffic or prompt golden was raised, and no test or fixture was changed.
+
+| Golden file:line | Assertion file:line | Named call | Pinned chars | Measured chars | Measured bytes | Delta |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| runner/test/fixtures/model-input-c04.raw.golden.txt:1 | runner/test/model-input-fingerprint.test.ts:94 | selection | 10830 | 10830 | 10832 | 0 |
+| runner/test/fixtures/model-input-c04.golden.txt:1 | runner/test/model-input-fingerprint.test.ts:82 | selection, normalized | 10832 | 10832 | 10834 | 0 |
+
+Measured raw SHA256: c0973cdc4163fc5a625fe000a2fe9e197bd5492268349d89e472f61f9151beb0.
+Measured normalized SHA256: da7b69240701098f3f24c4418eecb22db6b08b8122d27800a11d94bd26e8f26b.
+The C04 combined index context is 1,206 serialized characters. Full measurements:
+/tmp/b1d-round2-goldens.json. Semantic names remain selection, selection validation retry,
+execution and execution validation retry. This round adds no physical discovery, feed, prefix or full
+media call on a settled within-bound run; the cap is a grant check, and planningIndex consumes prepared data.
+
+C05's archived-request traffic golden cannot be measured as a successfully completed run:
+c05-bounded-reads.test.ts:197 fails its precondition that a legacy request was archived (measured 0,
+expected 1), before its golden pins. Report/retention controls remain in the failure inventory, rather
+than being treated as approval to change a traffic golden. No deployment latency, >20% time-delta
+acceptance or real cold/warm latency claim is made from injected model timings.
+
+### Remaining contradictions and baseline implementation gaps
+
+All remaining tests ran before stopping. Tests were not changed to reconcile these contracts:
+
+- model-input-fingerprint.test.ts:74 and claude-provider.test.ts:295 require two physical calls for
+  selection plus two execution attempts; measured three. ask-answer-loop.test.ts:888 similarly expects
+  three where the added selection makes four. q1-continuation.test.ts:840 still pins two-result token
+  totals for a three-result retry path.
+- c04-incorporation.test.ts:124 and corpus-driver.test.ts:30 require full L3 text in the first selection
+  input; the ruled metadata-only selection moves picked full-note evidence to execution.
+- ask-answer-loop.test.ts:323 and q1-continuation.test.ts:407/458/540/628 expect one projection of answer
+  provenance; both semantic phases carry it. Their observations cannot be hidden to make them green.
+- claude-provider.test.ts:403/461/583 and q1-continuation.test.ts:374 expect saving/failed persistence
+  after exhausted validation; the inbox/no-write ruling uses done and leaves the admission untouched.
+- claude-provider.test.ts:318 and the c04-hardware-receipt corpus case require a new subfolder under a
+  parent absent from that source's visible neighbourhood. The ruled visible-parent restriction is kept.
+- The remaining C05 pending/retention/source-id controls and stored-answer action controls are actual
+  baseline implementation gaps, not fixture import failures. No broader title/id authority or second
+  pending-state mechanism was added to make them pass.
+- Fresh-id fingerprint normalization still misses new item ids and indexed/folder dictionary keys in
+  runner/src/model-input.ts, outside the owned allocation. Selection timing now binds the correct input,
+  but that does not fix its normalization home or justify refreshing a golden.
+
+### Complete final runner failure inventory
+
+Each row names one failed test and its first observed assertion. Additional soft assertions and complete
+stacks remain in /tmp/b1d-round2-complete.json; none of these failures is new relative to the baseline.
+
+| File:line | Failed test | First observed failure |
+| --- | --- | --- |
+| runner/test/ask-answer-loop.test.ts:323 | an answer applies at once (TL-P4-08 addendum 8) answers reach the model path | AssertionError: expected [ { …(2) }, { …(2) } ] to deeply equal [ ObjectContaining{…} ] |
+| runner/test/ask-answer-loop.test.ts:590 | an answer applies at once (TL-P4-08 addendum 8) a yes to write it applies the shown text with no model call | AssertionError: expected undefined to deeply equal [ 'Two applications open.', …(1) ] |
+| runner/test/ask-answer-loop.test.ts:623 | an answer applies at once (TL-P4-08 addendum 8) write it re-asks when the section changed since it was shown | AssertionError: expected undefined to be 'now' // Object.is equality |
+| runner/test/ask-answer-loop.test.ts:643 | an answer applies at once (TL-P4-08 addendum 8) a write it yes whose note is gone writes one answered row | AssertionError: expected undefined to be 'now' // Object.is equality |
+| runner/test/ask-answer-loop.test.ts:672 | an answer applies at once (TL-P4-08 addendum 8) write it re-asks when the note changed elsewhere since it was shown | AssertionError: expected undefined to be 'now' // Object.is equality |
+| runner/test/ask-answer-loop.test.ts:697 | an answer applies at once (TL-P4-08 addendum 8) a clash at write time leads to the re-ask with the new sentence and no extra press | AssertionError: expected undefined to be 'now' // Object.is equality |
+| runner/test/ask-answer-loop.test.ts:743 | an answer applies at once (TL-P4-08 addendum 8) only a clash keeps an answer for a re-ask | AssertionError: expected undefined to be 'now' // Object.is equality |
+| runner/test/ask-answer-loop.test.ts:772 | an answer applies at once (TL-P4-08 addendum 8) the same non-clash refusal never starts more runs than the cap, then shows the not-written row | AssertionError: expected undefined to be 'now' // Object.is equality |
+| runner/test/ask-answer-loop.test.ts:843 | an answer applies at once (TL-P4-08 addendum 8) a write it with nothing to write writes one answered row | AssertionError: expected undefined to be 'now' // Object.is equality |
+| runner/test/ask-answer-loop.test.ts:96 | an answer applies at once (TL-P4-08 addendum 8) a lone no to write it closes the question with no model call | AssertionError: expected 409 to be 200 // Object.is equality |
+| runner/test/ask-answer-loop.test.ts:888 | an answer applies at once (TL-P4-08 addendum 8) a yes to write it beside a pile asks the model | AssertionError: expected 4 to be 3 // Object.is equality |
+| runner/test/ask-only-lines.test.ts:36 | a run that only asks keeps the Timeline lines the model added with no cites | AssertionError: expected '---\nsummary: Looking for a flat near…' to contain 'Viewing moved to Saturday.' |
+| runner/test/c04-incorporation.test.ts:124 | what the model is shown (P4-3) the model context carries bounded extracted text for each admitted thing | AssertionError: expected [] to deeply equal [ 'Areas/Garden/Garden.md' ] |
+| runner/test/c04-incorporation.test.ts:210 | the C04 slice through the Claude provider (P4-3) the C04 corpus cases score green with scripted proposals | AssertionError: expected { id: 'c04-hardware-receipt', …(2) } to deeply equal { id: 'c04-hardware-receipt', …(2) } |
+| runner/test/c05-bounded-reads.test.ts:197 | C05 bounded reads: golden: 50 archived requests and 25 kept runs cost no historical media | AssertionError: expected +0 to be 1 // Object.is equality |
+| runner/test/c05-bounded-reads.test.ts:148 | C05 bounded reads: pending: a clash moves by run id and retries only its bound evidence | AssertionError: production records must form a verified run: expected 'new' to be 'run' // Object.is equality |
+| runner/test/c05-bounded-reads.test.ts:498 | C05 bounded reads: fix 2 control: a waiting retry whose pending relocation lands completes once | AssertionError: expected +0 to be 1 // Object.is equality |
+| runner/test/c05-bounded-reads.test.ts:498 | C05 bounded reads: fix 2: a waiting retry whose pending relocation failed completes once | AssertionError: expected +0 to be 1 // Object.is equality |
+| runner/test/c05-bounded-reads.test.ts:498 | C05 bounded reads: fix 2: a waiting retry interrupted after its pointer and before its append appends once | AssertionError: expected +0 to be 1 // Object.is equality |
+| runner/test/c05-bounded-reads.test.ts:401 | C05 bounded reads: fix 1 control: a waiting retry whose archive lands completes once | AssertionError: expected +0 to be 1 // Object.is equality |
+| runner/test/c05-bounded-reads.test.ts:401 | C05 bounded reads: fix 1: a waiting retry whose archive move failed completes once | AssertionError: expected +0 to be 1 // Object.is equality |
+| runner/test/c05-bounded-reads.test.ts:148 | C05 bounded reads: horizon: past 20 runs uses listing age and TOO_OLD_WHY without a chain walk | AssertionError: production records must form a verified run: expected 'new' to be 'run' // Object.is equality |
+| runner/test/c05-incorporation.test.ts:74 | the C05 slice through the Claude provider the C05 corpus cases score green with scripted proposals | AssertionError: expected { …(11) } to deeply equal { …(11) } |
+| runner/test/c05-person-notes.test.ts:434 | C05 person notes through runner main C05 person notes: fix 1 finding 2: a conflicted append retries its filed source within twenty retained runs | AssertionError: expected 'new' to be 'run' // Object.is equality |
+| runner/test/c05-person-notes.test.ts:448 | C05 person notes through runner main C05 person notes: fix 1 finding 3: article-equivalent titles stay ambiguous in context and writes | AssertionError: expected [ 'Areas/Home/Garden plot.md', …(1) ] to not include 'Areas/Home/Garden plot.md' |
+| runner/test/c05-person-notes.test.ts:921 | C05 person notes through runner main C05 person notes: round 4 2: pending retries keep target and source ids | AssertionError: renamed target, replacement=true: expected '---\nsummary: Alex\'s plot at the Lar…' to be '---\nsummary: Alex\'s plot at the Lar…' // Object.is equality |
+| runner/test/c05-person-notes.test.ts:748 | C05 person notes through runner main C05 person notes: round 5 2: a retained completion never resolves a renamed target by title again | AssertionError: expected 'new' to be 'run' // Object.is equality |
+| runner/test/c05-person-notes.test.ts:1127 | C05 person notes through runner main C05 person notes: round 5 3: a request past retention is left as written and archived without an append | AssertionError: expected '---\nsummary: Alex\'s plot at the Lar…' to be '---\nsummary: Alex\'s plot at the Lar…' // Object.is equality |
+| runner/test/claude-provider.test.ts:295 | the Claude provider the retry runs the model in a folder that still exists | AssertionError: expected [ true, true, true ] to deeply equal [ true, true ] |
+| runner/test/claude-provider.test.ts:326 | the Claude provider a new subfolder of an existing Area is not reported as a new area | BowerError: That isn't in your Bower folder any more. |
+| runner/test/claude-provider.test.ts:403 | the Claude provider a second refusal ends the run honestly | AssertionError: expected [ 'reading', 'writing', 'done' ] to deeply equal [ Array(4) ] |
+| runner/test/claude-provider.test.ts:461 | the Claude provider a malformed or out-of-schema Claude reply fails truthfully and writes nothing | AssertionError: prose instead of JSON: expected [ 'reading', 'writing', 'done' ] to deeply equal [ 'reading', 'writing', 'failed' ] |
+| runner/test/claude-provider.test.ts:583 | the Claude provider contract (TL-P4-01 P4-2) a Claude reply that targets a thing not admitted is refused and writes nothing | AssertionError: a manifest that bins Resources: expected [ 'reading', 'writing', 'done' ] to deeply equal [ 'reading', 'writing', 'failed' ] |
+| runner/test/claude-provider.test.ts:583 | the Claude provider contract (TL-P4-01 P4-2) the runner computes ids and digests, never the model | AssertionError: a reply with an operation id: expected [ 'reading', 'writing', 'done' ] to deeply equal [ 'reading', 'writing', 'failed' ] |
+| runner/test/corpus-driver.test.ts:30 | a case's between step runs between two runs | AssertionError: expected 'Select context first. Return only {"i…' to contain 'Alex wants an amber kitchen.' |
+| runner/test/model-input-fingerprint.test.ts:74 | model input fingerprint the model input on the C04 fixture equals its golden copy | AssertionError: expected [ { command: 'claude', …(7) }, …(2) ] to have a length of 2 but got 3 |
+| runner/test/model-input-fingerprint.test.ts:176 | model input fingerprint the same case with other ids has the same fingerprint | AssertionError: expected '694fd8a53d2c' to be 'e9cb58a5faf6' // Object.is equality |
+| runner/test/model-input-fingerprint.test.ts:269 | model input fingerprint two fresh fake folders on the same case give the same input fingerprint through main | AssertionError: expected 'Select context first. Return only {"i…' to be 'Select context first. Return only {"i…' // Object.is equality |
+| runner/test/q1-continuation.test.ts:374 | Q1a stored answers through production entry points Q1a q1-options-exact-action: two to four script candidates accepted and fabricated or fifth refused | AssertionError: five is refused by validated main: expected 'done' to be 'failed' // Object.is equality |
+| runner/test/q1-continuation.test.ts:407 | Q1a stored answers through production entry points Q1a q1-text-person-provenance: later answer wins within one asking and older asking cannot answer a new one | AssertionError: expected [ …(2) ] to deeply equal [ Array(1) ] |
+| runner/test/q1-continuation.test.ts:458 | Q1a stored answers through production entry points Q1a q1-text-person-provenance: person words stay subject data and document instructions grant no consent | AssertionError: expected [ { …(3) }, { …(3) } ] to deeply equal [ ObjectContaining{…} ] |
+| runner/test/q1-continuation.test.ts:540 | Q1a stored answers through production entry points Q1a q1-waits-one-run-and-replay: two typed answers wait batch once and replay does not dispatch | AssertionError: expected [ 'This is also for the room.', …(3) ] to deeply equal [ 'This is also for the room.', …(1) ] |
+| runner/test/q1-continuation.test.ts:628 | Q1a stored answers through production entry points Q1a q1-continuation-budget-meter: typed waiting and replay do zero admission reads with ordinary model usage | AssertionError: expected [ …(2) ] to deeply equal [ Array(1) ] |
+| runner/test/q1-continuation.test.ts:840 | Q1a stored answers through production entry points Q1a q1-two-rounds-no-third: retries failed saves and dispatch replay count only durable askings | AssertionError: both validation calls count their model usage: expected 'timing: end=saving total=0 start=3391…' to match /in=20 out=20/ |
+
+
+### Offline sources and boundary
+
+Research reused from the packet without network or independent reverification:
+- https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+- https://arxiv.org/html/2506.08837v1
+- https://platform.claude.com/docs/en/build-with-claude/prompt-caching
+
+Final diff: /tmp/b1d-round2-implementation.diff. No commit, integration, backup, deployment,
+acceptance or full-green claim is made. Pending scope and the 44 baseline compatibility failures
+must be ruled or fixed in their existing homes; B5a kinds alone are intentionally deferred.

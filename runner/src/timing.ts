@@ -58,6 +58,9 @@ export class RunTiming {
   private sectionHashes: SectionHashes | null = null;
   private readonly traffic = new Map<Phase, Traffic>();
   private region = 'unknown';
+  private maintenanceDepth = 0;
+  private maintenanceCalls = 0;
+  private maintenanceItems = 0;
 
   /** `startMs`: how long the job took to start this process (Node's uptime when the runner began). */
   constructor(
@@ -78,6 +81,14 @@ export class RunTiming {
     } : stats;
   }
   requireOperations(count: number, items: number): void { if (count > 200) throw new LedgerExhausted(items); }
+
+  /** Discovery, declaration and settling share maintenance's one whole-run allowance. */
+  async maintenance<T>(f: () => Promise<T>, items?: number): Promise<T> {
+    if (items !== undefined) this.maintenanceItems = items;
+    this.maintenanceDepth++;
+    try { return await f(); }
+    finally { this.maintenanceDepth--; }
+  }
 
   /** Set the input fingerprint (first 12 hex of sha256 of the model input). */
   setInputFingerprint(fingerprint: string): void {
@@ -104,6 +115,10 @@ export class RunTiming {
    */
   meter(fetchFn: Fetch): Fetch {
     return async (url, init) => {
+      if (this.maintenanceDepth) {
+        if (this.maintenanceCalls >= 300) throw new LedgerExhausted(this.maintenanceItems);
+        this.maintenanceCalls++;
+      }
       const phase = this.stack.at(-1)?.phase ?? 'runner';
       const res = await fetchFn(url, init);
       const got = (await res.clone().arrayBuffer()).byteLength;

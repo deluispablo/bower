@@ -21,6 +21,7 @@ import { isJournalRecord, pairsOf, type JournalRecord } from '../../src/data/con
 import { subjectOf } from '../../src/data/contracts/questions';
 import { parseTimelineLine } from '../../src/data/contracts/timeline-line';
 import { renderHot, sameExceptDate, type HotInputs } from './hot';
+import type { RunTiming } from './timing';
 
 /** Every derived kind joins this slot; declarations persist inside maintain, never in a separate store. */
 export interface DeclaredTarget {
@@ -374,8 +375,9 @@ export async function refreshPlanning(drive: RunnerDrive, rootId: string) {
   return { index: projectIndex(snapshot), listing: [...files.values()], ix, old, state, cursor, changes, snapshot, drop };
 }
 
-export async function planningIndex(drive: RunnerDrive, rootId: string): Promise<string | undefined> {
-  return (await refreshPlanning(drive, rootId)).index;
+export async function planningIndex(drive: RunnerDrive, rootId: string,
+  prepared?: Awaited<ReturnType<typeof refreshPlanning>>): Promise<string | undefined> {
+  return (prepared ?? await refreshPlanning(drive, rootId)).index;
 }
 
 /** Freeze declared inputs and reserved ids in the existing immutable manifest. */
@@ -390,7 +392,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   if (state && ix.file(SYSTEM.index) && !changes.length && !manifest.operations.length) {
     return old ? cursorOnly(drive, manifest, old, state, cursor) : manifest;
   }
-  // Only maintain fetches complete candidate MOCs; prefix ownership alone never grants a write.
+  // A write or migration needs complete owned regions; unchanged maps reuse retrieval state's snapshot and members.
   for (const [id, note] of Object.entries(snapshot)) {
     const before = files.get(id);
     if (note.owner !== 'bower' || note.type !== 'moc' || note.moc || !before) continue;
@@ -448,7 +450,14 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   return { ...manifest, v: 2, operations: [...manifest.operations, { ordinal, operationId, dependsOn: [], effect }] };
 }
 
-export function maintenanceEffects(drive: RunnerDrive, declared: readonly DeclaredTarget[] = [hotTarget]): Effects {
+export function maintenanceEffects(drive: RunnerDrive, declared: readonly DeclaredTarget[] = [hotTarget], timing?: RunTiming): Effects {
+  if (timing) {
+    const effects = maintenanceEffects(drive, declared);
+    return { ...effects,
+      readBack: (...args) => timing.maintenance(() => effects.readBack(...args)),
+      apply: (...args) => timing.maintenance(() => effects.apply(...args)),
+    };
+  }
   // The ordinary edit guard still reads live metadata; unchanged bytes share B1a's versioned read cache.
   let cachedCheck: StoredEvidence | undefined;
   const ordinary = driveEffects(new Proxy(drive, {
