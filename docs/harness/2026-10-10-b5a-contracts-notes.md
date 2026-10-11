@@ -314,3 +314,7 @@ Read-only production diff snapshots before and after compare byte-for-byte equal
 `/tmp/b5a-q1-production-before.diff`, `/tmp/b5a-q1-production-after.diff`.
 No network, writing git command, dependency replacement or symlink was used.
 Only the assigned test and this notes file were edited; coordinator owns commits.
+
+## Coordinator: unused-production baseline (handoff to B5b)
+
+B5a is contracts only (no runtime table writer yet), so knip --production finds three unused items: `exports src/data/contracts/note-format.ts propertyValuesOk`, `exports src/data/contracts/note-format.ts tableProperties`, `files runner/src/type-table.ts`. They are baselined in harness/unused-production-baseline.json as hot.ts was for B3a→B3b; B5b removes all three lines when it wires the type table, and its check fails while any is listed.
