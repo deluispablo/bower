@@ -170,7 +170,7 @@ export function grounded(manifest: RunManifest): boolean {
   // every file is moved once.
   return manifest.operations.every((o) => (rejected.get(o.operationId) ?? 0) === (asides.get(o.operationId) ?? 0))
     && [...members].every((id) => told.applied.has(id) && told.rejected.has(id))
-    && [...lines].every((id) => manifest.operations.filter((o) => 'before' in o.effect && o.effect.before.fileId === id && !requestMoveKind(manifest, o)).length === 1);
+    && [...lines].every((id) => manifest.operations.filter((o) => 'before' in o.effect && o.effect.before?.fileId === id && !requestMoveKind(manifest, o)).length === 1);
 }
 
 /** Whether a runner file made again holds what its path holds (a list of questions holds questions, TL-P2-37 Q1). */

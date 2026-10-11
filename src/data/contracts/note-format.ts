@@ -504,9 +504,9 @@ export function typeRowOk(v: unknown, stored = false): v is TypeRow {
   const declaration = properties[group.property] as TypeRow['properties'][string];
   return declaration.type === 'enum' ? group.bucket === undefined : declaration.type === 'date' && group.bucket === 'year';
 }
-export function typeTableOk(v: unknown): v is TypeTable {
-  return schemaObject(v) && schemaClosed(v, ['v', 'rows']) && v.v === 1 && Array.isArray(v.rows)
-    && v.rows.every((row) => typeRowOk(row)) && new Set(v.rows.map((row) => row.id)).size === v.rows.length;
+export function typeTableOk(v: unknown, stored = false): v is TypeTable {
+  return schemaObject(v) && (stored || schemaClosed(v, ['v', 'rows'])) && v.v === 1 && Array.isArray(v.rows)
+    && v.rows.every((row) => typeRowOk(row, stored)) && new Set(v.rows.map((row) => row.id)).size === v.rows.length;
 }
 /** ISO 4217 codes supplied by ICU, plus the ISO fund, metal and testing units ICU omits. */
 const currencies = new Set([...Intl.supportedValuesOf('currency'),

@@ -768,7 +768,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (!line || typeof answer !== 'boolean') continue;
     if (!answer) { proposalSettled.add(line.rec.id); continue; }
     const frozen = proposals.get(q.proposal.id);
-    if (!types.writeAllowed || !typeFile || !frozen
+    if (!types.writeAllowed || !sys?.folder || !frozen
       || (await canonical(frozen)).hash !== (await canonical(q.proposal)).hash) continue;
     const existing = nextTable.rows.find((row) => row.id === frozen.payload.row.id);
     if (existing && (!typeRowOk(existing) || (await canonical(existing)).hash !== (await canonical(frozen.payload.row)).hash)) continue;
@@ -777,7 +777,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     proposalSettled.add(line.rec.id);
   }
   const columnRequests = new Set<string>();
-  if (types.writeAllowed && typeFile) for (const line of lines) {
+  if (types.writeAllowed && sys?.folder) for (const line of lines) {
     if (line.rec.kind !== 'request') continue;
     const request = /^Show (.+) in the (.+) table[.!]?$/i.exec(line.rec.text ?? '');
     if (!request) continue;
@@ -2163,9 +2163,10 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (proposalFolder?.folder) places.set(proposalFolder.id, proposalFolder);
   }
   const tableText = `${JSON.stringify(nextTable, null, 2)}\n`;
-  const tableChanged = types.writeAllowed && !!typeFile && (tableRecords.size > 0
+  const tableChanged = types.writeAllowed && !!sys?.folder && (!typeFile || tableRecords.size > 0
     || (typeText !== null && JSON.stringify(parsed(typeText)) !== JSON.stringify(nextTable)));
-  const tableWrite = tableChanged && typeFile ? { file: typeFile, text: tableText, content: await ownVerified(typeFile) } : null;
+  const tableWrite = tableChanged ? { file: typeFile ?? null, text: tableText, content: typeFile ? await ownVerified(typeFile) : null } : null;
+  if (tableWrite && !typeFile && sys) places.set(sys.id, sys);
   const capturedPlaces = [...places.values()].map((f) => ({ file: seen(f), path: ix.pathOf(f.id) ?? '' })).sort((a, b) => a.path.localeCompare(b.path));
   const captured = journal.map((l) => ({ recordId: l.rec.id, sha256: l.sha256, fileIds: l.files.map((f) => f.id) }));
   const captureValue: ManifestCapture = { piles: capturedPiles, members, journal: captured, places: capturedPlaces };
@@ -2477,8 +2478,12 @@ export async function build(decided: Decided): Promise<Ended> {
     }
   }
   if (tableWrite) {
-    const op = await add({ kind: 'write-runner-json', before: seen(tableWrite.file), beforeContent: tableWrite.content,
-      path: SYSTEM.typeTable, text: tableWrite.text, content: await utf8(tableWrite.text) });
+    const content = await utf8(tableWrite.text);
+    const op = tableWrite.file && tableWrite.content
+      ? await add({ kind: 'write-runner-json', before: seen(tableWrite.file), beforeContent: tableWrite.content,
+        path: SYSTEM.typeTable, text: tableWrite.text, content })
+      : await add({ kind: 'write-runner-json', before: null, beforeContent: null, parent: { fileId: sys?.id ?? '' },
+        createKey: (await runKeys(opts.runId))('table'), path: SYSTEM.typeTable, text: tableWrite.text, content });
     for (const id of tableRecords) derive(id, op);
   }
   // Your changes: requests completed in requests.json, answered questions dropped, then each line archived.
