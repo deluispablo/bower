@@ -331,3 +331,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-11: pile-binned-context-hold passes — a pile note binned through Drive gets the same answer from the app and the runner (P4-105 PASS)
 - 2026-10-11: c02-upload-count-ui passes — the Inbox counts unfinished piles; Sign out now? while sending (P4-106 PASS, designer verified)
 - 2026-10-11: b1c-index passes — the derived index at .bower/index.md folds folders into owned MOCs; legacy MOCs migrate; cold runs plan with the in-memory index (P4-107 PASS)
+- 2026-10-11: q1c-live-questions passes — questions publish live at the persisted plan; the vault merges live and stored; publication never fails a run (P4-109 PASS)

@@ -6944,7 +6944,7 @@
     "id": "q1c-live-questions",
     "task": "p4-q1",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "A question is answerable on Home while its run is still going: published in the run status at the plan-persisted point and merged by vault.questions() (TL-P4-44 Q2).",
     "steps": [
