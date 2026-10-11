@@ -25,7 +25,7 @@ Today's Sheet/Button/Field and tokens only. Q-UI-3 owns global sheet CSS and its
 | Cancel | The options come back; focus is on "Something else…". |
 | An answer on Home, no run live | The card goes; today's `answeredNow` toast. |
 | A question during the run, sheet open | The label "Bower has a question" and the card above the steps; "N more questions on Home" when there are more. |
-| An answer during the run | The card goes; today's `waits` toast. |
+| An answer during the run | The card goes; today's `waits` toast, shown once the sheet closes (messages wait while a sheet is open, 2026-10-11). |
 | The run ends with a question unanswered | Done sheet: today's "… and 1 question for you", and the card above RunLinks. |
 | The pile row while a question waits | "Waiting for your answer" in accent-line. |
 | After 2 rounds | Row: "Bower couldn't place this" (muted). Pile page: the full sentence as a plain line. |
@@ -45,4 +45,5 @@ Red, fix, notes (`docs/harness/2026-10-11-q1b-questions-ui-notes.md`, line 3 `im
 ## Ruled (lead)
 
 - TL-P4-44 addendum 9: a question belongs to the current run when its askedAt is at or after the run's start time in the public RunState (the one the clock already shows). The sheet shows the earliest open one; "N more" counts the other open ones in that window. Live and stored askings alike. No runId on Question, no data-port or runner change: Q1b stays UI-only.
-- The table is signed by the designer before the red session starts (TL-P4-43).
+- The table is signed by the designer before the red session starts (TL-P4-43). Signed 2026-10-11 (claude/design d697bf38), with the "An answer during the run" row amended as above.
+- TL-P4-55 (3): Q1b's red asserts the amended row. Q1b integrates after `messages-wait-for-sheets`, which owns the Dock rule; Q1b changes no toast or Dock code.

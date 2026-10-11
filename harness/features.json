@@ -7134,5 +7134,44 @@
     ],
     "verify": "",
     "note": "TL-P4-41 (B1 contract) and addendum 13. Escalated. Packet 2026-10-11-b1d-selection-packet.md. implementer: codex."
+  },
+  {
+    "id": "messages-wait-for-sheets",
+    "task": "p4-consolidation",
+    "category": "fix",
+    "passes": false,
+    "ui": true,
+    "what": "While a sheet is open, messages wait: the Dock shows nothing and timers pause, then the stack returns with its remaining time (spec 2026-10-11-messages-wait-for-sheets.md).",
+    "steps": [
+      "The spec's test table passes on demo and fake at 375 and 1440."
+    ],
+    "verify": "",
+    "note": "DEFECT_LOG toast-over-sheet; TL-P4-55 (2). Not escalated. Designer verifies. Packet 2026-10-11-messages-wait-for-sheets-packet.md. implementer: codex."
+  },
+  {
+    "id": "q1b-questions-ui",
+    "task": "p4-q1",
+    "category": "feature",
+    "passes": false,
+    "ui": true,
+    "what": "Questions show with options, Something else… and own words on Home and in the tidy sheet during a run; pile rows show waiting or couldn't-place (Q-UI-1, -2, -4).",
+    "steps": [
+      "The packet's test table passes on demo and fake at 375 and 1440."
+    ],
+    "verify": "",
+    "note": "TL-P4-43/44 (addendum 9), TL-P4-55 (3): integrates after messages-wait-for-sheets. Not escalated. Designer verifies. Packet 2026-10-11-q1b-questions-ui-packet.md. implementer: codex."
+  },
+  {
+    "id": "next-steps-plain-list",
+    "task": "p4-b6",
+    "category": "feature",
+    "passes": false,
+    "ui": true,
+    "what": "Task lines in Bower's regions (Next steps) show as a plain list; the person's own tasks keep working boxes and ticks count only them (spec 2026-10-11-next-steps-plain-list.md).",
+    "steps": [
+      "The spec's test table passes on demo and fake at 375 and 1440."
+    ],
+    "verify": "",
+    "note": "TL-P4-47 addendum 3, TL-P4-55 (1). Not escalated. Designer verifies. Packet 2026-10-11-next-steps-plain-list-packet.md. implementer: codex."
   }
 ]
