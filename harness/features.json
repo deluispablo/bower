@@ -4098,7 +4098,7 @@
       "After a run finishes, run folders beyond the newest 20 finished go to the Drive Bin, never deleted.",
       "A contract test runs the same operations on the fake drive and on the adapter over a fake fetch and gets the same chain."
     ],
-    "verify": "pnpm exec vitest run src/data -t \"the shared operations give the same chain on the fake and on Drive|the run folder is made with Bower's mark in its create request\" && pnpm -C runner exec vitest run -t \"a restarted runner resumes after its last checkpoint|an applied operation is never applied twice|after 21 finished runs, 20 run folders remain and the oldest is in the Bin|a run whose retention Bin fails still ends done and logs it|a backlog of run folders drains at most 3 per run|with 25 earlier runs a run makes 99 Drive calls|failed runs are kept to 20 like finished ones|a stopped attempt that will be retried is not stamped as ended|an old redispatch never bins one of the 20 newest|a marked run folder two days old beyond 20 is binned|a folder the person made in .bower/runs is never binned|an ended stamp with no mark, or a broken one, is never counted|an unstamped run folder an hour old is kept|a failed run does not list its folders again before it ends|a lost failed report, redispatched, keeps the first stamp and ends failed|the Bin cap counts folders, duplicates of one run included|the accepted app's files read the same in P3: the runner's readers|a run folder holding a file the person moved in is kept|a run folder holding a folder the person moved in is kept|a clean marked run folder beyond 20 is binned|every record Bower writes in a run folder carries its run mark|a marked run folder renamed at rest is kept\"",
+    "verify": "pnpm exec vitest run src/data -t \"the shared operations give the same chain on the fake and on Drive|the run folder is made with Bower's mark in its create request\" && pnpm -C runner exec vitest run -t \"a restarted runner resumes after its last checkpoint|an applied operation is never applied twice|after 21 finished runs, 20 run folders remain and the oldest is in the Bin|a run whose retention Bin fails still ends done and logs it|a backlog of run folders drains at most 3 per run|with 25 earlier runs and first creation of the type table a run makes 110 Drive calls|failed runs are kept to 20 like finished ones|a stopped attempt that will be retried is not stamped as ended|an old redispatch never bins one of the 20 newest|a marked run folder two days old beyond 20 is binned|a folder the person made in .bower/runs is never binned|an ended stamp with no mark, or a broken one, is never counted|an unstamped run folder an hour old is kept|a failed run does not list its folders again before it ends|a lost failed report, redispatched, keeps the first stamp and ends failed|the Bin cap counts folders, duplicates of one run included|the accepted app's files read the same in P3: the runner's readers|a run folder holding a file the person moved in is kept|a run folder holding a folder the person moved in is kept|a clean marked run folder beyond 20 is binned|every record Bower writes in a run folder carries its run mark|a marked run folder renamed at rest is kept\"",
     "passes": true,
     "note": "TL-P3-21 points 2 and 3 (extract, not port; checkpoints in .bower/runs/<run_id>/, retention 20 to the Bin). Reopened 2026-10-09 (retention-never-wired, main f9e2515): keepFinished was never called by a run; wire it at run end after the report barrier through the engine and write-once helper; a Bin failure is logged, never fails the run; test through a real run: \"after 21 finished runs, 20 run folders remain and the oldest is in the Bin\" (replaces the direct-call test name in the verify). Reopened (main e1c4a22): stamp at any terminal end (done, failed, final stop); retention keeps the last 20 terminal runs of any kind; test \"failed runs are kept to 20 like finished ones\". Ruling (main 38f0370): an unstamped run folder whose listed createdTime is over 24 h old and that is not the current run counts as terminal (no extra read or write); tests \"an unstamped run folder two days old beyond 20 is binned\" and \"an unstamped run folder an hour old is kept\". If P4-38b confirms the +11 failure-path calls on the real runner, the failure path reuses the run's listing (no relist after a refused report write), same round. Round 5 (lead, after P4-38c): bowerRun stamped at the folder's create; retention touches only marked folders; tests \"a folder the person made in .bower/runs is never binned\" and \"a marked run folder two days old beyond 20 is binned\". Reopened (lead, after P4-38d): bin a marked run folder only if every item inside it, known from the listing the runner already holds, carries Bower's mark; otherwise skip and log, no extra call; test \"a run folder holding a folder the person moved in is kept, and a clean one beyond 20 is binned\". Re-proof after b1a-contract (TL-P4-41 addendum 4): its golden tests were re-pinned and renamed (88→99 calls; C04 cut plus 13 maintenance calls; apply half-time plus the measured delta); re-closed known-green by the coordinator."
   },
@@ -7185,14 +7185,16 @@
     "id": "b5b-tables",
     "task": "p4-b5",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "Planning reads the type table; type and column proposals keep their exact payload until answered; an approved folder shows its Table (spec claude/design cd85b5ce).",
     "steps": [
       "The packet reds pass through runner main and the app; the spec table passes on demo and fake at 375 and 1440."
     ],
-    "verify": "",
-    "note": "TL-P4-47. Escalated. Packet 2026-10-11-b5b-tables-packet.md (draft; open items to the lead). implementer: codex."
+    "verify": "pnpm -C runner exec vitest run test/b5-incorporation.test.ts test/b5b-r2.test.ts test/b5b-r2-proposal.test.ts test/b5b-r3.test.ts -t \"b5-|b5b-r\" && pnpm exec vitest run src/data/contracts/b5b-r4.test.ts src/features/files/folder-table-r3.test.tsx -t \"b5b-r\"",
+    "note": "TL-P4-47. Escalated. Packet 2026-10-11-b5b-tables-packet.md (draft; open items to the lead). implementer: codex.",
+    "review": "P4-123 BLOCK answered by fix rounds 2 and 3 (TL-P4-47 addendum 11, designer finding); no new review",
+    "design": "verified"
   },
   {
     "id": "b5c",
@@ -7211,14 +7213,15 @@
     "id": "b4a-contract",
     "task": "p4-b4",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "About me has byte-preserving regions and typed memory contracts (observations, facts) in their contract homes.",
     "steps": [
       "The packet contract reds pass; stored bytes of existing notes are unchanged."
     ],
-    "verify": "",
-    "note": "TL-P4-48. Escalated. Packet 2026-10-11-b4a-contract-packet.md (draft; open items to the lead). implementer: codex."
+    "verify": "pnpm exec vitest run src/data/contracts/b4a-r4.test.ts src/data/contracts/b4a-r5.test.ts src/data/contracts/b4a-r6.test.ts src/architecture-bracket.test.ts -t \"b4a-r|bracket-global\"",
+    "note": "TL-P4-48. Escalated. Packet 2026-10-11-b4a-contract-packet.md (draft; open items to the lead). implementer: codex.",
+    "review": "P4-122 contract checks PASS; scanner finding fixed in round 7 (TL-P4-48 addendum 10)"
   },
   {
     "id": "b4b-observations",
@@ -7258,5 +7261,44 @@
     ],
     "verify": "",
     "note": "TL-P4-47. After B1d integrates (implementation); red-first now. Packet 2026-10-11-b6b-fit-create-ask-packet.md. implementer: codex."
+  },
+  {
+    "id": "b7-tags",
+    "task": "p4-b7",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Notes Bower creates get at most three tags from a small list that grows by itself, at most two new tags per run, each logged.",
+    "steps": [
+      "The packet reds pass through runner main and the corpus driver."
+    ],
+    "verify": "",
+    "note": "TL-P4-49. Escalated. Packet 2026-10-11-b7-tags-packet.md. Shared files wait for B4a, B5b and B5c. implementer: codex."
+  },
+  {
+    "id": "b8-log",
+    "task": "p4-b8",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Bower keeps a readable monthly log of what it did and checks its notes for broken links and duplicate names, with a health note.",
+    "steps": [
+      "The packet reds pass through runner main and the corpus driver."
+    ],
+    "verify": "",
+    "note": "TL-P4-50 (B8 Q1-Q8). Packet 2026-10-11-b8-log-packet.md. implementer: codex."
+  },
+  {
+    "id": "b9-markers",
+    "task": "p4-b9",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Bower marks its own changes in notes in a way the person can see and Bower can find again, through the existing note effects.",
+    "steps": [
+      "The packet reds pass through runner main and the corpus driver."
+    ],
+    "verify": "",
+    "note": "TL-P4-50 (B9 markers, 6 questions). Packet 2026-10-11-b9-markers-packet.md. implementer: codex."
   }
 ]

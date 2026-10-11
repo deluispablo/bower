@@ -2,7 +2,7 @@
 import { sha256Hex } from '../../src/data/contracts/hashes';
 import { indexedFront, noteRefusal, timelineBullets } from '../../src/data/contracts/note-format';
 import { opKey } from '../../src/data/contracts/op-key';
-import type { EditText, EffectV2, Maintain, MaintenanceDeclaration, MaintenanceNote, RunnerWrite, SeenFile, VerifiedContent } from '../../src/data/contracts/run-manifest';
+import type { EditText, EffectV2, Maintain, MaintenanceDeclaration, MaintenanceNote, OperationV2, RunnerWrite, SeenFile, VerifiedContent } from '../../src/data/contracts/run-manifest';
 import type { DriveFile, StoredEvidence } from '../../src/data/drive/drive-api';
 import { driveEffects, type Effects, type Settled } from '../../src/data/spine/engine';
 import { filingMove, materialize, refreshed } from '../../src/data/spine/report';
@@ -97,7 +97,7 @@ export const hotTarget: DeclaredTarget = {
         }
       }
       if (e.kind === 'edit-text' || e.kind === 'write-runner-json') {
-        const source = sources.get(e.before.fileId);
+        const source = e.before && sources.get(e.before.fileId);
         if (source) source.text = e.text;
         if ('path' in e && e.path === SYSTEM.questions) questions = e.text;
       }
@@ -432,6 +432,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   const holders: Holder[] = missing.map(() => ({}));
   await reserveFor(drive.fencedWrites(), holders);
   const targets: NonNullable<Maintain['inputs']['targets']> = [];
+  const places = new Map(manifest.capture.places.map((place) => [place.file.fileId, place]));
   for (const path of paths) {
     const before = ix.file(path);
     const text = before ? await drive.readListedText(before) : undefined;
@@ -441,24 +442,73 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
     const parentPath = path.split('/').slice(0, -1).join('/');
     const parentId = ix.idOf(parentPath);
     if (!parentId || (parentPath && !ix.byId(parentId)?.folder)) throw unavailable();
-    targets.push({ path, ...(kind ? { kind: kind.kind } : {}), ...(declaration ? { declaration } : {}), fileId: before?.id ?? holders[missing.indexOf(path)]?.reserved ?? '', parentId,
+    const fileId = before?.id ?? holders[missing.indexOf(path)]?.reserved;
+    const resolvedParent = ix.pathOf(parentId);
+    const name = path.split('/').at(-1);
+    const resolvedPath = before ? ix.pathOf(before.id) : resolvedParent === undefined ? undefined : [resolvedParent, name].filter(Boolean).join('/');
+    if (!fileId || !name || resolvedPath === undefined) throw unavailable();
+    places.set(fileId, { file: before ? seen(before) : { fileId, name, parents: [parentId], folder: false,
+      modifiedTime: new Date(manifest.requestedAt).toISOString() }, path: resolvedPath });
+    targets.push({ path, ...(kind ? { kind: kind.kind } : {}), ...(declaration ? { declaration } : {}), fileId, parentId,
       ...(before && bytes ? { beforeContent: { encoding: 'utf8', size: bytes.length, sha256: await sha256Hex(bytes), provenance: drive.provenance, observedModifiedTime: before.modifiedTime } } : {}) });
   }
   // MOC inputs contain the exact original bytes and every owned region; no whole-note permission is inferred.
   for (const [id, note] of Object.entries(snapshot)) {
     const before = files.get(id);
     if (!note.moc || !before || before.parents.length !== 1 || paths.includes(note.path)) continue;
+    const path = ix.pathOf(id);
+    if (path === undefined) throw unavailable();
+    places.set(id, { file: seen(before), path });
     const bytes = new TextEncoder().encode(note.moc.text);
     targets.splice(targets.length - 1, 0, { path: note.path, fileId: id, parentId: before.parents[0] ?? '',
       beforeContent: { encoding: 'utf8', size: bytes.length, sha256: await sha256Hex(bytes), provenance: drive.provenance, observedModifiedTime: before.modifiedTime } });
   }
+  const capture = { ...manifest.capture, places: [...places.values()] };
+  const captureId = (await canonical({ scope: manifest.scope, runScope: manifest.runScope, capture })).hash;
+  // Added places change the capture digest, so every operation and reference must be sealed against it again.
+  const ids = new Map<string, string>();
+  const stamps = new Map<string, string>();
+  const operations: OperationV2[] = [];
+  for (const op of manifest.operations) {
+    let effect = op.effect;
+    if ('parent' in effect && 'createdBy' in effect.parent) {
+      const createdBy = ids.get(effect.parent.createdBy);
+      if (!createdBy) throw unavailable();
+      effect = { ...effect, parent: { createdBy } };
+    }
+    if (effect.kind === 'write-runner-json' && effect.path === SYSTEM.questions
+      || effect.kind === 'create-text' && effect.purpose === 'runner-json' && effect.name === 'questions.json') {
+      const questions: unknown = JSON.parse(effect.text);
+      if (!isRunnerFile(SYSTEM.questions, questions)) throw unavailable();
+      let changed = false;
+      for (const question of questions.questions) {
+        const stamp = question.shown?.stamp && stamps.get(question.shown.stamp);
+        if (stamp && question.shown) { question.shown.stamp = stamp; changed = true; }
+      }
+      if (changed) {
+        const text = `${JSON.stringify(questions, null, 2)}\n`;
+        effect = { ...effect, text, content: { encoding: 'utf8', size: new TextEncoder().encode(text).length, sha256: await rawHash(text) } };
+      }
+    }
+    const operationId = (await canonical({ runId: manifest.runId, captureId, ordinal: op.ordinal, effect })).hash;
+    ids.set(op.operationId, operationId);
+    stamps.set(stampOf(manifest.runId, op.operationId), stampOf(manifest.runId, operationId));
+    operations.push({ ...op, operationId, effect, dependsOn: op.dependsOn.map((id) => ids.get(id) ?? id) });
+  }
+  const reportPlan = manifest.reportPlan.map((row) => ({ ...row, requires: row.requires.map((id) => ids.get(id) ?? id),
+    value: { ...row.value, updated: row.value.updated.map((note) => ({ ...note,
+      ...(note.op ? { op: ids.get(note.op) ?? note.op } : {}),
+      ...(note.stamp ? { stamp: stamps.get(note.stamp) ?? note.stamp } : {}) })) } }));
   const inputs: Maintain['inputs'] = { folderId: rootId, account: state?.account ?? rootId, cursor,
-    changes: [...new Set(changes)], operationIds: manifest.operations.map((o) => o.operationId), targets,
+    changes: [...new Set(changes)], operationIds: operations.map((o) => o.operationId), targets,
     snapshot, listing: listing.map(seen) };
   const effect: Maintain = { kind: 'maintain', inputs };
   const ordinal = manifest.operations.length;
-  const operationId = (await canonical({ runId: manifest.runId, captureId: manifest.captureId, ordinal, effect })).hash;
-  return { ...manifest, v: 2, operations: [...manifest.operations, { ordinal, operationId, dependsOn: [], effect }] };
+  const operationId = (await canonical({ runId: manifest.runId, captureId, ordinal, effect })).hash;
+  return { ...manifest, v: 2, capture, captureId, reportPlan,
+    ...(manifest.satisfiedAppends ? { satisfiedAppends: manifest.satisfiedAppends.map((row) => ({ ...row,
+      operationId: ids.get(row.operationId) ?? row.operationId })) } : {}),
+    operations: [...operations, { ordinal, operationId, dependsOn: [], effect }] };
 }
 
 export function maintenanceEffects(drive: RunnerDrive, declared: readonly DeclaredTarget[] = [hotTarget], timing?: RunTiming): Effects {

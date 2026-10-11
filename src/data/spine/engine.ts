@@ -194,7 +194,8 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
    */
   const opening = async (): Promise<void> => {
     // Each create still to go is named with an id Drive reserved for it, so a lost answer is read back by that id.
-    const creates = manifest.operations.filter((o) => (o.effect.kind === 'create-folder' || o.effect.kind === 'create-text') && unnamed(outcomes.find((x) => x.operationId === o.operationId))).map((o) => o.operationId);
+    const creates = manifest.operations.filter((o) => (o.effect.kind === 'create-folder' || o.effect.kind === 'create-text'
+      || o.effect.kind === 'write-runner-json' && o.effect.before === null) && unnamed(outcomes.find((x) => x.operationId === o.operationId))).map((o) => o.operationId);
     const w = run.fenced?.() ?? (await run.batch());
     const ids = creates.length ? await w.generateIds(creates.length) : [];
     const named = outcomes.map((o): Outcome => {
@@ -334,7 +335,14 @@ const NOT_SAVED = 'It changed, or the copy Bower found was moved, so it stays in
 const LIST_CHANGED = "Bower's list of your files changed meanwhile.";
 const UNRESOLVED = 'Bower could not check one of the things it moved. It will look again later.';
 
-type Effect = Exclude<OperationV2['effect'], { kind: 'maintain' }>;
+type Effect = Exclude<OperationV2['effect'], { kind: 'maintain' } | { kind: 'write-runner-json'; before: null }>;
+
+/** Expected absence uses the same reserved-id create, checks and recovery as other runner files. */
+function executable(e: OperationV2['effect']): Exclude<OperationV2['effect'], { kind: 'write-runner-json'; before: null }> {
+  return e.kind === 'write-runner-json' && e.before === null
+    ? { kind: 'create-text', parent: e.parent, name: e.path.slice('.bower/'.length), createKey: e.createKey,
+      text: e.text, content: e.content, purpose: 'runner-json' } : e;
+}
 
 /** Whether stored evidence shows exactly this effect applied under `parentId` (null when the effect has no parent). */
 export function shows(effect: ManifestEffect, ev: StoredEvidence, parentId: string | null): boolean {
@@ -348,6 +356,10 @@ export function shows(effect: ManifestEffect, ev: StoredEvidence, parentId: stri
     case 'bin':
       return ev.trashed;
     case 'write-runner-json':
+      if (effect.before === null) {
+        const create = executable(effect);
+        return create.kind === 'create-text' && shows(create, ev, parentId);
+      }
       return !ev.trashed && ev.content?.size === effect.content.size && ev.content.sha256 === effect.content.sha256;
     case 'create-text':
       // A made file, a generated note or a runner file (TL-P2-17, TL-P2-33 §2a): its create key, place, name and exact
@@ -462,7 +474,7 @@ export function driveEffects(drive: RunDrive, context?: OwnershipContext, mainte
    * stored bytes it was planned on. Gives the modifiedTime a content write must carry, or why it is refused.
    */
   const check = async (op: OperationV2, head: Checkpoint, manifest: RunManifest): Promise<{ refused: Settled } | { parentId: string; modifiedTime: string | null }> => {
-    const e = afterMove(op, head, manifest).effect;
+    const e = executable(afterMove(op, head, manifest).effect);
     if (e.kind === 'maintain') throw new BowerError('unknown', UNRESOLVED);
     const parentId = parentOf(head, e) ?? '';
     if (e.kind === 'create-folder' || e.kind === 'create-text' || e.kind === 'move') {
@@ -562,7 +574,7 @@ export function driveEffects(drive: RunDrive, context?: OwnershipContext, mainte
    * the stamp sent) and, for text, the checksum of the very bytes sent. Null when the answer does not show it.
    */
   const answered = async (op: OperationV2, parentId: string, answer: DriveFile, stamp: string): Promise<EffectEvidence | null> => {
-    const e = op.effect;
+    const e = executable(op.effect);
     if (e.kind === 'maintain') throw new BowerError('unknown', UNRESOLVED);
     if (answer.appProperties?.[STAMP] !== stamp) return null;
     if (e.kind === 'bin' || e.kind === 'create-folder' || e.kind === 'move') {
@@ -592,7 +604,7 @@ export function driveEffects(drive: RunDrive, context?: OwnershipContext, mainte
    * - a read fails, or a create the chain names no id for: unreadable, since making it again could make it twice.
    */
   const reconcile = async (op: OperationV2, head: Checkpoint, manifest: RunManifest, reserved = reservedIn(head, op.operationId)): Promise<ReadBack> => {
-    const e = op.effect;
+    const e = executable(op.effect);
     if (e.kind === 'maintain') {
       if (!maintenance) throw new BowerError('unknown', UNRESOLVED);
       return maintenance.readBack(op, head, manifest);
@@ -638,8 +650,8 @@ export function driveEffects(drive: RunDrive, context?: OwnershipContext, mainte
       let back: ReadBack | null = null;
       let sent: Sent;
       try {
-        const kind = op.effect.kind;
-        const go = async (id: string): Promise<Sent> => ({ answer: await send(afterMove(op, head, manifest).effect as Effect, w, ok.parentId, ok.modifiedTime, stamp, id) });
+        const kind = executable(op.effect).kind;
+        const go = async (id: string): Promise<Sent> => ({ answer: await send(executable(afterMove(op, head, manifest).effect) as Effect, w, ok.parentId, ok.modifiedTime, stamp, id) });
         sent = kind !== 'create-folder' && kind !== 'create-text' ? await go('') : await createById(reserved ?? (await reserveId(w)), go, async (id) => {
           back = await reconcile(op, head, manifest, id);
           return back.state === 'landed' ? { landed: back.evidence } : null;

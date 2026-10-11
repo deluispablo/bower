@@ -21,7 +21,7 @@
  */
 import { BowerError, type Note, type Property, type SourceKind, type TimelineEntry, type TypeRow, type TypeTable } from './types';
 import { timelineLine, parseTimelineLine } from './timeline-line';
-import { fenceAfter, parseOwnership, togglePersonalTask, type ByteSpan, type Fence, type FetchedOwnership } from './ownership-format';
+import { ABOUT_REGIONS, fenceAfter, parseOwnership, togglePersonalTask, type ByteSpan, type Fence, type FetchedOwnership } from './ownership-format';
 import { NOTE_TEMPLATES, type NoteTemplate } from './note-templates';
 import { TASK_LINE } from './tasks';
 
@@ -34,7 +34,7 @@ const TIMELINE = '## Timeline';
 const BOWER_NOTE = "## Bower's note";
 
 export type ParsedNote = Omit<Note, 'backlinks'>;
-export type NoteFile = Omit<Note, 'backlinks' | 'path' | 'title' | 'links'> & { template?: NoteTemplate };
+export type NoteFile = Omit<Note, 'backlinks' | 'path' | 'title' | 'links'> & { template?: NoteTemplate; typeRow?: TypeRow };
 
 // Retain source bytes for an untouched parsed personal note, outside its display model.
 const personalSources = new WeakMap<NoteFile, { raw: string; serialized: string }>();
@@ -77,7 +77,7 @@ function scalarOf(value: string): string {
 }
 
 /** Flow and collected block lists split only at commas outside quoted items. */
-function scalarList(value: string): string[] {
+export function scalarList(value: string): string[] {
   const text = value.trim().replace(/^\[|\]$/g, '');
   const items: string[] = [];
   let quote = '';
@@ -157,6 +157,14 @@ function ownershipOf(raw: string, fetched?: FetchedOwnership) {
   // Do not silently replace unpaired surrogates when editing a declared v2 note.
   if (ownership.status === 'v2' && decoder.decode(bytes) !== raw) throw ownershipError('text-cannot-round-trip');
   return { bytes, ownership };
+}
+
+/** A declared Source role survives classification; only old notes fall back to `type: source`. */
+export function bowerNoteRole(raw: string, fetched?: FetchedOwnership): NoteTemplate | null {
+  const { bytes, ownership } = ownershipOf(raw, fetched);
+  const front = ownership.layout.front ? frontOf(payloadDisplay(bytes, ownership.layout.front)) : null;
+  const role = front?.get('bower_template') ?? front?.get('type');
+  return front?.get('by') === 'bower' && role && Object.hasOwn(NOTE_TEMPLATES, role) ? role as NoteTemplate : null;
 }
 
 /** Display only; these normalized strings never supply mutation offsets. */
@@ -295,6 +303,11 @@ export function parseNote(path: string, raw: string, fetched?: FetchedOwnership)
   // A v2 note with nothing in Bower's note has none; a legacy heading with nothing under it keeps an empty one.
   const note = sectionOf(layout.bowerNote, BOWER_NOTE);
   let bowerNote = ownership.status === 'v2' ? note || null : note;
+  const learned = ABOUT_REGIONS.flatMap((region) => {
+    const span = ownership.payloads?.[region];
+    return span ? [payloadDisplay(bytes, span)] : [];
+  });
+  if (learned.length) bowerNote = [bowerNote, '## What Bower has learned', ...learned].filter(Boolean).join('\n\n');
   const projection = templateProjection(bytes, ownership, front);
   if (projection) {
     body = projection.body;
@@ -304,7 +317,9 @@ export function parseNote(path: string, raw: string, fetched?: FetchedOwnership)
     }
   }
   front?.delete('bower_format');
-  if (!front) return retainPersonalSource({ path, title, summary: '', properties: [], tags: [], currentState: [], body, timeline: [], links: linksIn(text), byBower: false }, raw);
+  if (!front) return retainPersonalSource({ path, title, summary: '', properties: [], tags: [], currentState: [], body, timeline: [],
+    ...(bowerNote !== null ? { bowerNote: { text: bowerNote, source: 'notes' as const } } : {}),
+    links: linksIn(text), byBower: false }, raw);
   const f = front;
   const properties: Property[] = [];
   for (const [key, value] of f) {
@@ -352,7 +367,8 @@ export function serializeNote(n: NoteFile): string {
       || new Set(n.properties.map((p) => p.key)).size !== n.properties.length
       || n.properties.some((p) => !/^[a-z][a-z0-9_]*$/.test(p.key) || p.key === 'bower_format'
         || (BOWER_KEYS as readonly string[]).includes(p.key))
-      || (property('type') !== undefined && property('type')?.value !== n.template)
+      || (n.typeRow !== undefined && (!typeRowOk(n.typeRow, true) || n.typeRow.template !== n.template))
+      || (property('type') !== undefined && property('type')?.value !== (n.typeRow?.id ?? n.template))
       || !dateOk(property('created')?.value ?? '') || !dateOk(property('updated')?.value ?? '')
       || !validSummary(property('source')?.link ?? property('source')?.value ?? '')
       || !links.length || links.length > 5 || links.length !== [...relatedText.matchAll(/\[\[([^\]|]+)\]\]/g)].length
@@ -372,7 +388,7 @@ export function serializeNote(n: NoteFile): string {
   for (const p of n.properties) front.push(`${p.key}: ${n.template && n.byBower ? summaryScalar(p.link ? `[[${p.link}]]` : oneLine(p.value)) : p.link ? `[[${p.link}]]` : oneLine(p.value)}`);
   if (n.template && n.byBower) {
     const type = n.properties.find((p) => p.key === 'type');
-    if (!type) front.push(`type: ${n.template}`);
+    if (!type) front.push(`type: ${n.typeRow?.id ?? n.template}`);
     front.push('bower_format: ownership/2', `bower_template: ${n.template}`);
     return ['---', ...front, '---', '', ...templateBody(n, n.template)].join('\n');
   }
@@ -459,7 +475,7 @@ export function toggleTaskInText(raw: string, index: number): { text: string; la
 /** The declared projection never removes the note's other properties or grants schema authority. */
 export const TECHNICAL_PROPERTIES = ['type', 'status', 'summary', 'tags', 'created', 'updated', 'source', 'related'] as const;
 export function tableProperties(note: Pick<ParsedNote, 'properties'>, row: Pick<TypeRow, 'table'>): Property[] {
-  return [...new Set(row.table)].filter((key) => !(TECHNICAL_PROPERTIES as readonly string[]).includes(key)).slice(0, 4)
+  return [...new Set(row.table)].filter((key) => !['name', 'modified', 'kind', 'folder', ...TECHNICAL_PROPERTIES].includes(key)).slice(0, 4)
     .flatMap((key) => note.properties.filter((property) => property.key === key));
 }
 /** `YYYY-MM-DD`, a real calendar date. */
@@ -476,35 +492,35 @@ const schemaClosed = (v: Record<string, unknown>, keys: readonly string[]): bool
 const schemaText = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= 200;
 const schemaTexts = (v: unknown): v is string[] => Array.isArray(v) && v.every(schemaText);
 const slug = (v: unknown): v is string => typeof v === 'string' && v.length <= 128 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(v);
-/** JSON Schema-style closed objects on write; tolerance belongs only to readTypeTable. */
-export function typeRowOk(v: unknown): v is TypeRow {
-  if (!schemaObject(v) || !schemaClosed(v, ['id', 'match', 'template', 'properties', 'table', 'group_by'])
+/** JSON Schema-style closed writes; stored reads and rewrites retain extension keys. */
+export function typeRowOk(v: unknown, stored = false): v is TypeRow {
+  if (!schemaObject(v) || (!stored && !schemaClosed(v, ['id', 'match', 'template', 'properties', 'table', 'group_by']))
     || !slug(v.id) || !schemaTexts(v.match) || !v.match.length || !schemaText(v.template)
-    || !schemaObject(v.properties) || !schemaTexts(v.table) || v.table.length > 4
+    || !schemaObject(v.properties) || !schemaTexts(v.table) || (!stored && v.table.length > 4)
     || new Set(v.table).size !== v.table.length) return false;
   const properties = v.properties;
   if (!Object.entries(properties).every(([key, declaration]) => /^[a-z][a-z0-9_]*$/.test(key)
-    && schemaObject(declaration) && schemaClosed(declaration, ['type', 'values'])
+    && schemaObject(declaration) && (stored || schemaClosed(declaration, ['type', 'values']))
     && (declaration.type === 'enum' ? schemaTexts(declaration.values) && declaration.values.length > 0
       && declaration.values.length <= 20 && new Set(declaration.values).size === declaration.values.length
       : typeof declaration.type === 'string' && ['text', 'list', 'number', 'money', 'date'].includes(declaration.type) && !Object.hasOwn(declaration, 'values')))) return false;
-  if (!v.table.every((key) => Object.hasOwn(properties, key) && !(TECHNICAL_PROPERTIES as readonly string[]).includes(key))) return false;
+  if (!v.table.every((key) => Object.hasOwn(properties, key) && !['kind', 'folder', ...TECHNICAL_PROPERTIES].includes(key))) return false;
   if (v.group_by === undefined) return true;
   const group = v.group_by;
-  if (!schemaObject(group) || !schemaClosed(group, ['property', 'bucket']) || typeof group.property !== 'string'
+  if (!schemaObject(group) || (!stored && !schemaClosed(group, ['property', 'bucket'])) || typeof group.property !== 'string'
     || !Object.hasOwn(properties, group.property)) return false;
   const declaration = properties[group.property] as TypeRow['properties'][string];
   return declaration.type === 'enum' ? group.bucket === undefined : declaration.type === 'date' && group.bucket === 'year';
 }
-export function typeTableOk(v: unknown): v is TypeTable {
-  return schemaObject(v) && schemaClosed(v, ['v', 'rows']) && v.v === 1 && Array.isArray(v.rows)
-    && v.rows.every(typeRowOk) && new Set(v.rows.map((row) => row.id)).size === v.rows.length;
+export function typeTableOk(v: unknown, stored = false): v is TypeTable {
+  return schemaObject(v) && (stored || schemaClosed(v, ['v', 'rows'])) && v.v === 1 && Array.isArray(v.rows)
+    && v.rows.every((row) => typeRowOk(row, stored)) && new Set(v.rows.map((row) => row.id)).size === v.rows.length;
 }
 /** ISO 4217 codes supplied by ICU, plus the ISO fund, metal and testing units ICU omits. */
 const currencies = new Set([...Intl.supportedValuesOf('currency'),
   'BOV', 'CHE', 'CHW', 'CLF', 'COU', 'MXV', 'USN', 'UYI', 'UYW', 'XAG', 'XAU', 'XBA', 'XBB', 'XBC', 'XBD', 'XDR', 'XPD', 'XPT', 'XSU', 'XTS', 'XUA', 'XXX']);
 export function propertyValuesOk(row: TypeRow, value: unknown): boolean {
-  if (!typeRowOk(row) || !schemaObject(value)) return false;
+  if (!typeRowOk(row, true) || !schemaObject(value)) return false;
   return Object.entries(value).every(([key, item]) => {
     if (!Object.hasOwn(row.properties, key)) return false;
     const declaration = row.properties[key];
@@ -512,11 +528,123 @@ export function propertyValuesOk(row: TypeRow, value: unknown): boolean {
       case 'text': return typeof item === 'string' && item.length <= 200;
       case 'list': return Array.isArray(item) && item.length <= 10 && item.every((v) => typeof v === 'string' && v.length <= 200);
       case 'enum': return typeof item === 'string' && !!declaration.values?.includes(item);
-      case 'number': return typeof item === 'number' && Number.isFinite(item);
+      case 'number': return typeof item === 'number' && Number.isFinite(item) && Math.abs(item) <= 1e15;
       case 'money': return schemaObject(item) && Object.keys(item).length === 2 && schemaClosed(item, ['amount', 'currency'])
-        && typeof item.amount === 'number' && Number.isFinite(item.amount) && typeof item.currency === 'string' && currencies.has(item.currency);
+        && typeof item.amount === 'number' && Number.isFinite(item.amount) && Number(item.amount.toFixed(4)) === item.amount
+        && typeof item.currency === 'string' && currencies.has(item.currency);
       case 'date': return typeof item === 'string' && dateOk(item);
       default: return false;
     }
   });
+}
+
+/** TL-P4-38's eight ordered seed classifications; later planning supplies the grounded destinations. */
+function seedTable(): TypeTable {
+  return { v: 1, rows: ([
+    ['article', ['article', 'web clip']], ['offer', ['job offer']], ['cv', ['CV']],
+    ['cover-letter', ['cover letter']], ['certificate', ['certificate']], ['identity-document', ['identity document']],
+    ['other-project-material', ['other project material']], ['other-area-material', ['other area material']],
+  ] satisfies [string, string[]][]).map(([id, match]) => ({ id, match, template: 'source', properties: {}, table: [] })) };
+}
+/** Bounded tolerant reader: bad rows are skipped; an unreadable envelope grants no write that run. */
+export function readTypeTable(text: string | null): { table: TypeTable; writeAllowed: boolean } {
+  if (text === null) return { table: seedTable(), writeAllowed: true };
+  let value: unknown;
+  try { value = JSON.parse(text); }
+  catch {
+    // expected: an unreadable declaration uses the seed without authorizing a replacement.
+    return { table: seedTable(), writeAllowed: false };
+  }
+  if (!value || typeof value !== 'object' || !('v' in value) || value.v !== 1
+    || !('rows' in value) || !Array.isArray(value.rows)) return { table: seedTable(), writeAllowed: false };
+  const seen = new Set<string>();
+  const rows = value.rows.filter((row): row is TypeRow => {
+    if (!typeRowOk(row, true) || seen.has(row.id)) return false;
+    seen.add(row.id); return true;
+  });
+  return { table: { ...value, v: 1, rows: rows.length ? rows : seedTable().rows }, writeAllowed: true };
+}
+
+/** Locate direct JSON values for splicing only; JSON.parse and readTypeTable remain the validators. */
+function jsonValueSpans(text: string, start: number): Array<{ key: string | undefined; start: number; end: number }> {
+  const tokens = text.slice(start).matchAll(/"(?:\\[\s\S]|[^"\\])*"|[{}[\],:]|[^\s{}[\],:]+/g);
+  const object = tokens.next().value?.[0] === '{';
+  const spans: Array<{ key: string | undefined; start: number; end: number }> = [];
+  let depth = 0;
+  let key: string | undefined;
+  let at = -1;
+  for (const token of tokens) {
+    const value = token[0];
+    if (depth === 0 && (value === '}' || value === ']')) break;
+    if (depth === 0 && value === ',') { key = undefined; continue; }
+    if (depth === 0 && object && key === undefined) { key = JSON.parse(value) as string; continue; }
+    if (depth === 0 && value === ':') continue;
+    if (at < 0) at = start + token.index;
+    if (value === '{' || value === '[') depth++;
+    else if (value === '}' || value === ']') depth--;
+    if (depth === 0) {
+      spans.push({ key, start: at, end: start + token.index + value.length });
+      at = -1;
+    }
+  }
+  return spans;
+}
+
+/** Keep skipped rows and extension bytes; existing rows only change their requested table value. */
+export function rewriteTypeTable(text: string | null, before: TypeTable, next: TypeTable): string {
+  if (text === null) return `${JSON.stringify(next, null, 2)}\n`;
+  if (!readTypeTable(text).writeAllowed) throw new BowerError('conflict', 'Bower could not change that table.');
+  const rows = jsonValueSpans(text, 0).filter((span) => span.key === 'rows').at(-1);
+  if (!rows) throw new BowerError('conflict', 'Bower could not change that table.');
+  const spans = jsonValueSpans(text, rows.start);
+  const seen = new Set<string>();
+  const edits: Array<{ start: number; end: number; text: string }> = [];
+  const usable = spans.flatMap((span) => {
+    const row: unknown = JSON.parse(text.slice(span.start, span.end));
+    if (!typeRowOk(row, true) || seen.has(row.id)) return [];
+    seen.add(row.id);
+    const old = before.rows.find((item) => item.id === row.id);
+    const changed = next.rows.find((item) => item.id === row.id);
+    if (old && changed && JSON.stringify(old.table) !== JSON.stringify(changed.table)) {
+      const table = jsonValueSpans(text, span.start).filter((item) => item.key === 'table').at(-1);
+      if (!table) throw new BowerError('conflict', 'Bower could not change that table.');
+      edits.push({ ...table, text: JSON.stringify(changed.table) });
+    }
+    return [{ id: row.id, span }];
+  });
+  const added = next.rows.filter((row) => !before.rows.some((old) => old.id === row.id));
+  if (added.length) {
+    if (!added.every((row) => typeRowOk(row)) || added.some((row) => spans.some((span) => {
+      const stored: unknown = JSON.parse(text.slice(span.start, span.end));
+      return schemaObject(stored) && stored.id === row.id;
+    }))) throw new BowerError('conflict', 'Bower could not add that type.');
+    const fallback = usable.find((row) => ['other-project-material', 'other-area-material'].includes(row.id));
+    const addition = added.map((row) => JSON.stringify(row)).join(',');
+    const at = fallback?.span.start ?? spans.at(-1)?.end ?? rows.start + 1;
+    edits.push({ start: at, end: at, text: fallback ? `${addition},` : `${spans.length ? ',' : ''}${addition}` });
+  }
+  let result = text;
+  for (const edit of edits.sort((a, b) => b.start - a.start)) result = result.slice(0, edit.start) + edit.text + result.slice(edit.end);
+  return result;
+}
+
+export function insertTypeRow(table: TypeTable, row: TypeRow): TypeTable {
+  if (!table || table.v !== 1 || !Array.isArray(table.rows) || !table.rows.every((old) => typeRowOk(old, true))
+    || new Set(table.rows.map((old) => old.id)).size !== table.rows.length
+    || !typeRowOk(row) || table.rows.some((old) => old.id === row.id)) throw new BowerError('conflict', 'Bower could not add that type.');
+  const index = table.rows.findIndex((old) => ['other-project-material', 'other-area-material'].includes(old.id));
+  const rows = structuredClone(table.rows);
+  rows.splice(index < 0 ? rows.length : index, 0, structuredClone(row));
+  return { ...structuredClone(table), rows };
+}
+/** Documents supply facts, never authority to choose columns. */
+export function requestTableColumn(row: TypeRow, key: string, origin: unknown): { row: TypeRow; replaced: string | null } | null {
+  if (!typeRowOk(row, true) || !Object.hasOwn(row.properties, key) || ['kind', 'folder', ...TECHNICAL_PROPERTIES].includes(key)
+    || !origin || typeof origin !== 'object' || !('kind' in origin) || origin.kind !== 'words'
+    || !('recordId' in origin) || typeof origin.recordId !== 'string' || !origin.recordId.trim()) return null;
+  const next = structuredClone(row);
+  if (next.table.includes(key)) return { row: next, replaced: null };
+  const replaced = next.table.length === 4 ? next.table.pop() ?? null : null;
+  next.table.push(key);
+  return { row: next, replaced };
 }
