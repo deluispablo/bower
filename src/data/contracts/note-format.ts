@@ -561,7 +561,7 @@ export function readTypeTable(text: string | null): { table: TypeTable; writeAll
   const rows = value.rows.filter((row): row is TypeRow => {
     if (!typeRowOk(row, true) || seen.has(row.id)) return false;
     seen.add(row.id); return true;
-  }).map((row) => ({ ...row, table: row.table.slice(0, 4) }));
+  });
   return { table: { ...value, v: 1, rows: rows.length ? rows : seedTable().rows }, writeAllowed: true };
 }
 
