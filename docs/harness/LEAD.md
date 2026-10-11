@@ -40,6 +40,7 @@ The lead keeps this file current under [TL-P2-43](2026-10-06-tl-p2-43-session-st
   - send one combined message per decision;
   - never leave the coordinator blocked on a message alone: a STOP names the `main` commit or DECISIONS line that lifts it, so the coordinator can lift it itself;
   - after about 8 sends, tell the owner.
+- **Auto-compact (TL-P4-60):** sessions compact automatically at about 50%, so keep this file current after every ruling round.
 - **Session rule:** never clear this session; the owner compacts by hand ([TL-P2-45](2026-10-06-tl-p2-45-manual-compact.md)). After a compaction, re-read this file.
 - **Recurring duties:**
   - Keep the coordinator watchdog cron running (lead brief, TL-P4-46 addendum 1); after a compaction, check CronList and re-create it if missing.
