@@ -3633,3 +3633,57 @@ or independent source reverification. No second mechanism was added.
 
 Left out: runner-owned commits, pnpm check and capabilities e2e. Production is
 unchanged; the accepted cut-context fingerprint cache-miss limit remains.
+
+## Addendum 25 tests
+
+Tests-only addition under TL-P4-41 addendum 25 and the Important finding in
+`2026-10-11-b1d-adversarial-final-5.md`. Scope: new `runner/test/b1d-r8.test.ts`,
+this appended note, and the runner's `.codex-commits.json` instructions. No
+existing test, production code, fixture, configuration, caller, export or
+dependency changed. All data is made up; Drive is in memory, and execution uses
+the existing corpus driver through runner main.
+
+tests changed: runner/test/b1d-r8.test.ts — new test "b1d-r8 1 a keep-one merge rewrites backlinks in an unselected note": admit a keep-one A/B answer, select only A/B, assert personal C is absent from candidates and allowed targets, verify exact backlink-only bytes, whole merge, existing merge report contribution depending on the rewrite and Bin, read-version evidence, and manifest-backed Undo restoring A/B/C.
+tests changed: runner/test/b1d-r8.test.ts — new test "b1d-r8 2 the model cannot add a non-backlink edit to an unselected note": offer an unauthorized Timeline line for the same C, observe the validation refusal and valid merge retry, and require C's exact original bytes except the scripted backlink rewrite.
+
+### Verification and stop
+
+The requested targeted suite ran once with `--maxWorkers=2`: **1 passed,
+1 failed**. The second test passed. The first passed all merge, backlink,
+report-dependency, fence-evidence and exact Undo byte assertions, then failed
+at `runner/test/b1d-r8.test.ts:98`: the restored note's optional `trashed` field
+was `undefined`, while the final assertion expected `false`.
+
+This is a test-authoring mismatch, not evidence of a production merge or Undo
+regression: B was successfully read by id and its exact original bytes were
+restored before the failing assertion. The requested stop-on-failure rule was
+followed: no test edit or rerun after that failure, and no production change.
+The new test remains failing at that assertion and needs reconciliation before
+integration. No existing assertion was modified or weakened.
+
+| Check | Result | Log |
+| --- | --- | --- |
+| New tests, maxWorkers=2 | 1 passed; 1 failed | `/tmp/b1d-r8-tests.log` |
+| Runner TypeScript, no emit | PASS | `/tmp/b1d-r8-types.log` |
+| ESLint touched test file | PASS | `/tmp/b1d-r8-eslint.log` |
+
+```sh
+NODE_OPTIONS='--require=/tmp/b1d-r7-test-output.cjs' pnpm -C runner exec vitest run test/b1d-r8.test.ts --maxWorkers=2 --reporter=default --cache=false --configLoader=native > /tmp/b1d-r8-tests.log 2>&1
+pnpm -C runner exec tsc --noEmit -p . > /tmp/b1d-r8-types.log 2>&1
+pnpm -C runner exec eslint test/b1d-r8.test.ts > /tmp/b1d-r8-eslint.log 2>&1
+```
+
+All logs and test scratch output stayed in OS temp. The existing temp preload
+redirected CPU reports there; default-only reporting, disabled cache and native
+config loading avoided repository test output. No network, writing git command,
+node_modules replacement or symlink was used. `.codex-commits.json` assigns one
+tests commit and one notes-only commit; the runner owns actual commits.
+
+Research reused offline: the packet's [plan then execute](https://arxiv.org/html/2506.08837v1)
+reference, addendum 25's Obsidian rename-updates-links precedent, and the existing
+`keep-one-note.test.ts` manifest-backed Undo pattern. No independent source
+reverification; no second planner, writer, report or Undo mechanism was added.
+
+Left out: runner-owned commits, pnpm check and capabilities e2e; additional
+tests or production changes after failure. Risk: the first new test remains red
+on its final optional-metadata assertion and must not be treated as green.
