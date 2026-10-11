@@ -22,14 +22,15 @@ describe('the C04 run makes the golden number of Drive calls per step', () => {
     // Bootstrap: start token + root/folder/nested listings (4); each index/retrieval create:
     // .bower child listing + live parent metadata fence + create (3 each).
     // Removed: log name-check child listing, .bower parent fence and .bower/log.md create.
-    // TL-P4-41 addendum 11: measured cold C04 is 92; only reads gains two calls.
-    expect(totalDriveCalls).toBe(92);
+    // TL-P4-42 addendum 5: questions.json media (+1 reads); hot name-check listing,
+    // live .bower parent fence and multipart create (+3 apply).
+    expect(totalDriveCalls).toBe(96);
     // The counts are timing's own (`timing.ts`), read from the line the runner logs; the golden infers no phase.
-    expect(drivecalls(timing)).toBe(92);
+    expect(drivecalls(timing)).toBe(96);
     // By timing's phases (the Worker's token, model and status calls are not Drive calls; the two read outside any phase
     // are the run's first listings, before the plan reads).
     const calls_ = Object.fromEntries(Object.entries(countsOf(timing).phases).map(([k, v]) => [k, v.calls]));
-    expect(calls_).toEqual({ token: 0, reads: 24, model: 0, apply: 52, checkpoints: 4, report: 10, status: 0, runner: 2 });
+    expect(calls_).toEqual({ token: 0, reads: 25, model: 0, apply: 55, checkpoints: 4, report: 10, status: 0, runner: 2 });
   });
 });
 
@@ -46,8 +47,10 @@ describe('drive-calls-cut', () => {
     const { calls, code } = await modelled();
     expect(code).toBe(0);
     const drive = calls.filter((c) => c.kind === 'read' || c.kind === 'write').length;
-    // Plus the 2 reads of a move's folder by its fence (c2-one-engine fix round), for the lead to weigh.
-    expect(drive).toBeLessThanOrEqual(Math.floor(DRIVE_CALLS_BEFORE * 0.6) + 2 + MAINTENANCE_CALLS);
+    // TL-P4-42 addendum 5: questions.json media (+1 reads); hot name-check listing,
+    // live .bower parent fence and multipart create (+3 apply).
+    // Measured cold ceiling: 96 calls.
+    expect(drive).toBeLessThanOrEqual(Math.floor(DRIVE_CALLS_BEFORE * 0.6) + 2 + MAINTENANCE_CALLS + 1);
   });
 
   it('offer-and-flat apply keeps its half-time budget plus the measured maintenance delta', async () => {
@@ -78,15 +81,22 @@ describe('the C04 run past 20 earlier runs (retention-never-wired, round 2)', ()
     // +3: the children of the 3 run folders it bins are listed first (retention round 6, option A).
     // The same 10 maintenance calls plus listing earlier-run folders at the snapshot's extra depth.
     // Round 3 removes the log name-check listing, .bower parent fence and .bower/log.md create.
-    // TL-P4-41 addendum 11: re-pin the measured cold C04 control to 92.
-    expect(driveCalls(c04)).toBe(92);
-    // TL-P4-41 addendum 11: retained history is also cold; measured reads delta is +2.
-    expect(driveCalls(past)).toBe(103);
+    // TL-P4-42 addendum 5: questions.json media (+1 reads); hot name-check listing,
+    // live .bower parent fence and multipart create (+3 apply).
+    expect(driveCalls(c04)).toBe(96);
+    // TL-P4-42 addendum 5: questions.json media (+1 reads); hot name-check listing,
+    // live .bower parent fence and multipart create (+3 apply).
+    // Retained fixture: the same four calls; no hot history media.
+    expect(driveCalls(past)).toBe(107);
     expect(Object.fromEntries(Object.entries(countsOf(past.timing).phases).map(([k, v]) => [k, v.calls])))
-      .toEqual({ token: 0, reads: 27, model: 0, apply: 51, checkpoints: 4, report: 10, status: 0, runner: 11 });
+      .toEqual({ token: 0, reads: 28, model: 0, apply: 54, checkpoints: 4, report: 10, status: 0, runner: 11 });
     // Addendum 4 bounds the whole run under 20%, even when individual phases exceed 20%.
-    expect(c04.ms).toBeLessThan(10520 * 1.2);
-    expect(past.ms).toBeLessThan(11940 * 1.2);
+    // TL-P4-42 addendum 5: +600 ms (4 x 150 ms) for questions media, hot name-check listing,
+    // live .bower parent fence and multipart create, measured on this branch.
+    expect(c04.ms).toBeLessThan(11120 * 1.2);
+    // TL-P4-42 addendum 5, fix 1: retained base 11,940 + 600 ms for the same four
+    // measured cold hot calls above (4 x DRIVE_MS); preserve the 20% factor.
+    expect(past.ms).toBeLessThan(12540 * 1.2);
   });
 });
 

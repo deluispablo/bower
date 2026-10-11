@@ -1,10 +1,11 @@
 /** Derived maintenance uses the manifest, its settled outcomes and the ordinary fenced effects. */
 import { sha256Hex } from '../../src/data/contracts/hashes';
-import { indexedFront } from '../../src/data/contracts/note-format';
-import type { EffectV2, Maintain, MaintenanceNote, SeenFile, VerifiedContent } from '../../src/data/contracts/run-manifest';
-import type { DriveFile } from '../../src/data/drive/drive-api';
+import { indexedFront, timelineBullets } from '../../src/data/contracts/note-format';
+import { opKey } from '../../src/data/contracts/op-key';
+import type { EditText, EffectV2, Maintain, MaintenanceDeclaration, MaintenanceNote, RunnerWrite, SeenFile, VerifiedContent } from '../../src/data/contracts/run-manifest';
+import type { DriveFile, StoredEvidence } from '../../src/data/drive/drive-api';
 import { driveEffects, type Effects, type Settled } from '../../src/data/spine/engine';
-import { refreshed } from '../../src/data/spine/report';
+import { filingMove, materialize, refreshed } from '../../src/data/spine/report';
 import { limiter, READ_AHEAD } from '../../src/data/spine/read';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { happened, reserveFor, stampOf, type Holder } from '../../src/data/spine/write-once';
@@ -12,8 +13,170 @@ import { BowerError } from '../../src/data/types';
 import { RUNNER_WRITES, SYSTEM, isHidden, isRunnerFile, type RetrievalFile } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import type { RunnerDrive } from './drive';
-import { isBowerMoc } from '../../src/data/contracts/note-edit';
+import { isBowerMoc, timelineDate } from '../../src/data/contracts/note-edit';
 import { leafCount, mocEdit, mocMembership, mocSnapshot, noteLinks, type Notes } from './moc';
+
+import type { Outcome } from '../../src/data/contracts/run-checkpoint';
+import { isJournalRecord, pairsOf, type JournalRecord } from '../../src/data/contracts/journal-record';
+import { subjectOf } from '../../src/data/contracts/questions';
+import { parseTimelineLine } from '../../src/data/contracts/timeline-line';
+import { renderHot, sameExceptDate, type HotInputs } from './hot';
+
+/** Every derived kind joins this slot; declarations persist inside maintain, never in a separate store. */
+export interface DeclaredTarget {
+  kind: string;
+  path: string;
+  declare?(drive: RunnerDrive, manifest: RunManifest, index: VaultIndex, notes: Notes): Promise<MaintenanceDeclaration>;
+  /** Visible notes supply their guarded changes along with the rendered bytes. */
+  render(declaration: MaintenanceDeclaration | undefined, state: ReturnType<typeof refreshed>, outcomes: readonly Outcome[], manifest: RunManifest): string | Pick<EditText, 'text' | 'changes'>;
+  unchanged?(before: string, after: string): boolean;
+  /** Use declared bytes for the first content check; the live version/place fence still runs before sending. */
+  cachedCheck?: boolean;
+}
+
+const indexTarget: DeclaredTarget = { kind: 'index', path: SYSTEM.index, render: (_declaration, state) => projectIndex(state.files) };
+
+const hub = (path: string, note: MaintenanceNote): boolean => note.owner === 'bower'
+  && ['Projects', 'Areas'].includes(path.split('/')[0] ?? '')
+  && VaultIndex.isHub(path, path.split('/').at(-1) ?? '', note.type ?? undefined);
+
+/** Hot rebuilds live sections from primary evidence and carries its bounded recent-change window. */
+export const hotTarget: DeclaredTarget = {
+  kind: 'hot', path: SYSTEM.hot, unchanged: sameExceptDate, cachedCheck: true,
+  async declare(drive, manifest, index, notes) {
+    const at = timelineDate(manifest.requestedAt);
+    if (!at) throw unavailable();
+    const sources: MaintenanceDeclaration['sources'] = [];
+    const questions = index.file(SYSTEM.questions);
+    const previous = index.file(SYSTEM.hot);
+    // The existing question reader uses the same listing-size shortcut for an empty list.
+    const readQuestions = questions && (!previous || questions.size === undefined || questions.size > 40);
+    // Keep primary request wording too: a whole-run Undo request may not be admitted.
+    // These versioned reads reuse the planner's cache and never include the archive.
+    const journal = index.journalFiles();
+    const candidates = [...(previous ? [previous] : []), ...(readQuestions ? [questions] : []), ...journal,
+      ...Object.entries(notes).flatMap(([id, note]) => {
+        const f = index.byId(id);
+        return f && hub(note.path, note) ? [f] : [];
+      })];
+    for (const f of candidates) {
+      const path = index.pathOf(f.id);
+      if (!path) continue;
+      const text = await drive.readListedText(f);
+      sources.push({ path, file: seen(f), text, content: { encoding: 'utf8', size: new TextEncoder().encode(text).length,
+        sha256: await rawHash(text), provenance: drive.provenance, observedModifiedTime: f.modifiedTime } });
+    }
+    return { at: new Date(manifest.requestedAt).toISOString(), sources };
+  },
+  render(declaration, state, outcomes, manifest) {
+    if (!declaration) throw unavailable();
+    const today = timelineDate(Date.parse(declaration.at));
+    if (!today) throw unavailable();
+    const sources = new Map(declaration.sources.map((source) => [source.file.fileId, { ...source }]));
+    let questions = declaration.sources.find((source) => source.path === SYSTEM.questions)?.text;
+    const applied = new Set(outcomes.filter((outcome) => outcome.state === 'applied').map((outcome) => outcome.operationId));
+    const archived = new Set<string>();
+    // Explorer ancestry omits hidden folders. Use the planner's captured archive place,
+    // or the settled creation of that place, without discovering or reading its contents.
+    const archiveParents = new Set(manifest.capture.places.filter((place) => place.path === SYSTEM.archive).map((place) => place.file.fileId));
+    for (const op of manifest.operations) {
+      if (op.effect.kind !== 'create-folder' || op.effect.name !== SYSTEM.archive.split('/').at(-1)) continue;
+      const outcome = outcomes.find((outcome) => outcome.operationId === op.operationId);
+      if (outcome?.state === 'applied' && outcome.evidence.file.parents.some((id) =>
+        manifest.capture.places.some((place) => place.file.fileId === id && place.path === SYSTEM.changes))) archiveParents.add(outcome.evidence.file.fileId);
+    }
+    for (const op of manifest.operations) {
+      if (!applied.has(op.operationId)) continue;
+      const e = op.effect;
+      if (e.kind === 'bin') sources.delete(e.before.fileId);
+      if (e.kind === 'move' && manifest.capture.journal.some((line) => line.fileIds.includes(e.before.fileId))) {
+        const outcome = outcomes.find((outcome) => outcome.operationId === op.operationId);
+        if (outcome?.state === 'applied' && outcome.evidence.file.parents.some((id) => archiveParents.has(id))) {
+          archived.add(e.before.fileId);
+        }
+      }
+      if (e.kind === 'edit-text' || e.kind === 'write-runner-json') {
+        const source = sources.get(e.before.fileId);
+        if (source) source.text = e.text;
+        if ('path' in e && e.path === SYSTEM.questions) questions = e.text;
+      }
+      if (e.kind === 'create-text' && e.purpose === 'runner-json' && e.name === 'questions.json') questions = e.text;
+    }
+    const parsed = (text: string): unknown => {
+      try { return JSON.parse(text); } catch (cause) {
+        console.error(new BowerError('unknown', 'Bower could not read its saved context.', undefined, { cause }));
+        return null;
+      }
+    };
+    const questionValue = questions === undefined ? null : parsed(questions);
+    const hubs: HotInputs['hubs'][number][] = [];
+    for (const [id, note] of Object.entries(state.files)) {
+      if (!hub(note.path, note)) continue;
+      const created = manifest.operations.find((op) => applied.has(op.operationId) && op.effect.kind === 'create-text'
+        && outcomes.some((outcome) => outcome.operationId === op.operationId && outcome.state === 'applied' && outcome.evidence.file.fileId === id));
+      const text = created?.effect.kind === 'create-text' ? created.effect.text : sources.get(id)?.text;
+      if (text === undefined) continue;
+      const dates = timelineBullets(text).flatMap((line) => {
+        const entry = parseTimelineLine(line);
+        const date = entry && timelineDate(Date.parse(entry.date));
+        return date === entry?.date ? [date] : [];
+      }).filter((date): date is string => date !== null).sort();
+      hubs.push({ path: note.path, lastSettledChange: dates.at(-1) ?? null });
+    }
+    // Only captured lines whose archive move settled belong to this run; no archive is read.
+    const journal: JournalRecord[] = [...sources.values()].flatMap((source) => {
+      if (!archived.has(source.file.fileId) || !source.path.startsWith(SYSTEM.changes + '/')
+        || source.path.startsWith(SYSTEM.archive + '/')) return [];
+      const value = parsed(source.text);
+      return isJournalRecord(value) ? [value] : [];
+    });
+    const undone = pairsOf(journal);
+    // Run folder names in the persisted listing supply key namespaces, without record or archive reads.
+    const listing = manifest.operations.flatMap((op) => op.effect.kind === 'maintain' ? op.effect.inputs.listing ?? [] : []);
+    const index = VaultIndex.build(manifest.scope.rootId, listing.map(file));
+    const runIds = new Set([manifest.runId, ...index.filesIn('.bower/runs').filter((f) => f.folder).map((f) => f.name)]);
+    const removedKeys = journal.flatMap((line) => line.undoes === undefined ? []
+      : [...runIds].map((runId) => opKey(manifest.scope.rootId, runId, line.undoes ?? '')));
+    const changes: HotInputs['changes'][number][] = journal.flatMap((line) => {
+      const day = timelineDate(line.at);
+      return day && !undone.has(line.id) ? [{ id: line.id, at: new Date(line.at).toISOString(), text: line.what }] : [];
+    });
+    // Inverses keep their own wording. Only a primary whole-run request supplies Undo's label.
+    if (journal.some((line) => line.undoes !== undefined && !undone.has(line.id))) {
+      for (const source of sources.values()) {
+        if (!source.path.startsWith(SYSTEM.changes + '/') || source.path.startsWith(SYSTEM.archive + '/')) continue;
+        const request = parsed(source.text);
+        if (isJournalRecord(request) && request.kind === 'request' && request.text === 'Undo the last tidy-up'
+          && !journal.some((line) => line.id === request.id)) {
+          changes.push({ id: request.id, at: new Date(request.at).toISOString(), text: request.what });
+        }
+      }
+    }
+    // The settled run's report is its journal of Bower changes; proposed rows never enter hot.
+    const operations = manifest.operations.filter((op) => op.effect.kind !== 'maintain');
+    for (const contribution of manifest.reportPlan) {
+      const report = materialize({ ...manifest, operations, reportPlan: [contribution] }, '', outcomes)?.report;
+      if (!report) continue;
+      const required = contribution.requires.flatMap((id) => operations.filter((op) => op.operationId === id && applied.has(id)));
+      const filing = required.find((op) => filingMove(manifest, op))
+        ?? required.find((op) => op.effect.kind === 'create-text' || op.effect.kind === 'edit-text');
+      const created = required.find((op) => op.effect.kind === 'create-text');
+      if (filing) for (const row of report.filed) changes.push({ id: filing.operationId, at: declaration.at, text: `Filed ${row.title}.` });
+      for (const row of report.updated) {
+        if (row.op && applied.has(row.op)) changes.push({ id: row.op, at: declaration.at, text: row.what });
+      }
+      if (created) for (const row of report.created) changes.push({ id: created.operationId, at: declaration.at, text: row.what });
+    }
+    const openQuestions = isRunnerFile(SYSTEM.questions, questionValue) ? questionValue.questions.map((question) => {
+      const subject = subjectOf(question);
+      const named = subject.kind === 'inbox' ? manifest.capture.members.find((member) => member.file.fileId === subject.id)?.file
+        ?? manifest.operations.flatMap((op) => op.effect.kind === 'maintain' ? op.effect.inputs.listing ?? [] : []).find((f) => f.fileId === subject.id) : undefined;
+      return { id: question.id, text: named ? `Inbox: ${named.name} — ${question.text}` : question.text };
+    }) : [];
+    return renderHot({ today, rootId: manifest.scope.rootId, runId: manifest.runId, removedKeys, openQuestions, hubs, changes,
+      previousHot: declaration.sources.find((source) => source.path === SYSTEM.hot)?.text }).text;
+  },
+};
 
 const seen = (f: DriveFile): SeenFile => ({ fileId: f.id, name: f.name, parents: f.parents, folder: f.folder, modifiedTime: f.modifiedTime });
 const file = (f: SeenFile): DriveFile => ({ id: f.fileId, name: f.name, parents: f.parents, folder: f.folder, modifiedTime: f.modifiedTime, createdTime: f.modifiedTime });
@@ -174,14 +337,14 @@ export async function planningIndex(drive: RunnerDrive, rootId: string): Promise
 }
 
 /** Freeze declared inputs and reserved ids in the existing immutable manifest. */
-export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest): Promise<RunManifest> {
+export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest, declared: readonly DeclaredTarget[] = [hotTarget]): Promise<RunManifest> {
   const rootId = manifest.scope.rootId;
   let listing = await drive.planReads().listAll(rootId);
   let ix = VaultIndex.build(rootId, listing);
   const old = ix.file(SYSTEM.retrieval);
   const state = await readState(drive, rootId, old);
   // An empty first run has neither indexed changes nor effects to settle.
-  if (!state && !notesIn(ix).length && !manifest.operations.length) return manifest;
+  if (!state && !notesIn(ix).length && !manifest.operations.length && !ix.file(SYSTEM.hot) && !manifest.capture.journal.length) return manifest;
   const feed = state ? await drive.listChanges(state.cursor) : undefined;
   const cursor = feed?.newStartPageToken ?? await drive.getStartPageToken();
   if (!state) {
@@ -246,7 +409,9 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
   listing = [...files.values()];
   const own = ix.file(SYSTEM.dir);
   if (!own?.folder) throw unavailable();
-  const paths = [SYSTEM.index, SYSTEM.retrieval] as const;
+  const kinds = [indexTarget, ...declared];
+  if (new Set(kinds.map((kind) => kind.path)).size !== kinds.length) throw unavailable();
+  const paths = [...kinds.map((kind) => kind.path), SYSTEM.retrieval];
   const missing = paths.filter((path) => !ix.file(path));
   const holders: Holder[] = missing.map(() => ({}));
   await reserveFor(drive.fencedWrites(), holders);
@@ -255,13 +420,18 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
     const before = ix.file(path);
     const text = before ? await drive.readListedText(before) : undefined;
     const bytes = text === undefined ? undefined : new TextEncoder().encode(text);
-    targets.push({ path, fileId: before?.id ?? holders[missing.indexOf(path)]?.reserved ?? '', parentId: own.id,
+    const kind = kinds.find((kind) => kind.path === path);
+    const declaration = await kind?.declare?.(drive, manifest, ix, snapshot);
+    const parentPath = path.split('/').slice(0, -1).join('/');
+    const parentId = ix.idOf(parentPath);
+    if (!parentId || (parentPath && !ix.byId(parentId)?.folder)) throw unavailable();
+    targets.push({ path, ...(kind ? { kind: kind.kind } : {}), ...(declaration ? { declaration } : {}), fileId: before?.id ?? holders[missing.indexOf(path)]?.reserved ?? '', parentId,
       ...(before && bytes ? { beforeContent: { encoding: 'utf8', size: bytes.length, sha256: await sha256Hex(bytes), provenance: drive.provenance, observedModifiedTime: before.modifiedTime } } : {}) });
   }
   // MOC inputs contain the exact original bytes and every owned region; no whole-note permission is inferred.
   for (const [id, note] of Object.entries(snapshot)) {
     const before = files.get(id);
-    if (!note.moc || !before || before.parents.length !== 1) continue;
+    if (!note.moc || !before || before.parents.length !== 1 || paths.includes(note.path)) continue;
     const bytes = new TextEncoder().encode(note.moc.text);
     targets.splice(targets.length - 1, 0, { path: note.path, fileId: id, parentId: before.parents[0] ?? '',
       beforeContent: { encoding: 'utf8', size: bytes.length, sha256: await sha256Hex(bytes), provenance: drive.provenance, observedModifiedTime: before.modifiedTime } });
@@ -275,10 +445,16 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest)
   return { ...manifest, v: 2, operations: [...manifest.operations, { ordinal, operationId, dependsOn: [], effect }] };
 }
 
-export function maintenanceEffects(drive: RunnerDrive): Effects {
+export function maintenanceEffects(drive: RunnerDrive, declared: readonly DeclaredTarget[] = [hotTarget]): Effects {
   // The ordinary edit guard still reads live metadata; unchanged bytes share B1a's versioned read cache.
+  let cachedCheck: StoredEvidence | undefined;
   const ordinary = driveEffects(new Proxy(drive, {
     get(target, key) {
+      if (key === 'evidence') return async (id: string) => {
+        const cached = cachedCheck;
+        cachedCheck = undefined;
+        return cached?.file.id === id ? cached : target.evidence(id);
+      };
       if (key === 'readBytes') return async (id: string) => new TextEncoder().encode(await target.readListedText(await target.get(id)));
       const value: unknown = Reflect.get(target, key);
       return typeof value === 'function' ? value.bind(target) : value;
@@ -318,11 +494,16 @@ export function maintenanceEffects(drive: RunnerDrive): Effects {
         const frozen = op.effect.inputs.listing?.find((f) => f.fileId === target.fileId);
         const settled = state.listing?.find((f) => f.id === target.fileId);
         const before = settled ? seen(settled) : frozen;
+        const kind = [indexTarget, ...declared].find((kind) => target.kind ? kind.kind === target.kind && kind.path === target.path : kind.path === target.path);
         const owned = !(RUNNER_WRITES as readonly string[]).includes(target.path);
-        const edit = owned ? mocEdit(target.fileId, state.files, members) : null;
-        if (owned && !edit) continue;
-        const text = owned ? edit?.text : target.path === SYSTEM.index ? index : target.path === SYSTEM.retrieval ? JSON.stringify(state) : undefined;
+        const rendered = kind ? kind.render(target.declaration, state, head.outcomes, manifest)
+          : owned ? mocEdit(target.fileId, state.files, members)
+          : target.path === SYSTEM.retrieval ? JSON.stringify(state) : undefined;
+        if (!kind && owned && !rendered) continue;
+        const edit = typeof rendered === 'object' && rendered !== null ? rendered : null;
+        const text = typeof rendered === 'string' ? rendered : edit?.text;
         if (text === undefined) throw unavailable();
+        if (owned && before && !edit) throw unavailable();
         // Versions and the feed cursor belong to state, not to the derived projection's date.
         if (target.path === SYSTEM.index && before) {
           const previous = (await drive.readListedText(file(before))).replace(/^> Generated by Bower[^\n]*\n/gm, '').trim();
@@ -331,7 +512,8 @@ export function maintenanceEffects(drive: RunnerDrive): Effects {
             .map((f) => `- [[${f.path.split('/').at(-1)?.replace(/\.md$/, '')}]] — ${f.summary}\n`).join('').trim();
           if (previous === index.trim() || (previous === legacy && projectIndex(snapshot) === index)) continue;
         }
-        const ev = before || replaying.has(op.operationId) ? await drive.evidence(target.fileId) : null;
+        if (before && kind?.unchanged && kind.unchanged(await drive.readListedText(file(before)), text)) continue;
+        const ev = (before && !kind?.cachedCheck) || replaying.has(op.operationId) ? await drive.evidence(target.fileId) : null;
         const content = { encoding: 'utf8' as const, size: new TextEncoder().encode(text).length, sha256: await rawHash(text) };
         const beforeText = state.files[target.fileId]?.moc?.text;
         const beforeContent: VerifiedContent | undefined = owned && before && beforeText !== undefined ? { encoding: 'utf8' as const,
@@ -339,9 +521,9 @@ export function maintenanceEffects(drive: RunnerDrive): Effects {
           provenance: drive.provenance, observedModifiedTime: before.modifiedTime } : target.beforeContent;
         const effect: EffectV2 = owned && before && beforeContent && edit ? { kind: 'edit-text', before,
           path: target.path, beforeContent, changes: edit.changes, beforeText, text, content }
-          : before && target.beforeContent ? { kind: 'write-runner-json' as const, before, path: target.path as typeof SYSTEM.index | typeof SYSTEM.retrieval,
+          : before && target.beforeContent ? { kind: 'write-runner-json' as const, before, path: target.path as RunnerWrite,
           beforeContent: target.beforeContent, text, content }
-          : { kind: 'create-text' as const, parent: { fileId: target.parentId }, name: target.path.split('/').at(-1) ?? '', createKey: op.operationId, purpose: 'runner-json' as const, text, content };
+          : { kind: 'create-text' as const, parent: { fileId: target.parentId }, name: target.path.split('/').at(-1) ?? '', createKey: op.operationId, purpose: owned ? 'generated' as const : 'runner-json' as const, text, content };
         const sub = { ...op, effect };
         const subHead = { ...head, outcomes: head.outcomes.map((o) => o.operationId === op.operationId ? { operationId: o.operationId, state: 'possible-effect' as const, dispatchId: op.operationId, fileId: target.fileId } : o) };
         if (ev && happened({ stamp: stampOf(head.runId, op.operationId) }, ev.file)) {
@@ -356,7 +538,14 @@ export function maintenanceEffects(drive: RunnerDrive): Effects {
           continue;
         }
         await sending();
-        last = await ordinary.apply(sub, subHead, w, manifest, async () => target.fileId);
+        // Reconciliation always reads live evidence; only this fresh precheck reuses exact declared bytes.
+        if (kind?.cachedCheck && before && beforeContent) cachedCheck = { file: file(before), trashed: false,
+          content: { size: beforeContent.size, sha256: beforeContent.sha256 } };
+        try {
+          last = await ordinary.apply(sub, subHead, w, manifest, async () => target.fileId);
+        } finally {
+          cachedCheck = undefined;
+        }
         if (last.state !== 'applied') throw unavailable();
         if (owned && state.files[target.fileId]) {
           state.files[target.fileId] = { ...state.files[target.fileId] as MaintenanceNote,

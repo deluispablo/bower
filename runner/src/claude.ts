@@ -182,6 +182,8 @@ interface Shown {
   presentLines?: ReadonlySet<string>;
   /** The person's `Rules.md`, bounded, when the folder has one. */
   rules?: string;
+  aboutMe?: string;
+  index?: string;
   /** Your answers this run took, each with its question and what it is about (TL-P4-08 addendum 8). */
   answers?: Array<{ question: string; answer: string; fileId?: string; pileId?: string; note?: string; notes?: string[] }>;
   /** The paths and names of the folder's files, for the check on a note's links; not shown to the model. */
@@ -332,7 +334,7 @@ function inStableOrder(piles: Shown['piles']): Shown['piles'] {
 function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
   return [
     promptInstructions(!!shown.folderCandidates),
-    JSON.stringify({ runId: run.runId, admission: took.taken.id, ...(run.index !== undefined ? { index: run.index } : {}), piles: inStableOrder(shown.piles), notes: shown.notes, folders: shown.folders, ...(shown.folderCandidates ? { folderCandidates: shown.folderCandidates } : {}), ...(shown.rules ? { rules: shown.rules } : {}), ...(shown.answers?.length ? { answers: shown.answers } : {}) }),
+    JSON.stringify({ ...(shown.rules ? { rules: shown.rules } : {}), ...(shown.aboutMe ? { aboutMe: shown.aboutMe } : {}), ...(shown.index !== undefined ? { index: shown.index } : {}), ...(run.hot ? { hot: run.hot } : {}), runId: run.runId, admission: took.taken.id, piles: inStableOrder(shown.piles), notes: shown.notes, folders: shown.folders, ...(shown.folderCandidates ? { folderCandidates: shown.folderCandidates } : {}), ...(shown.answers?.length ? { answers: shown.answers } : {}) }),
   ].join('\n');
 }
 
@@ -347,6 +349,10 @@ const MAIN_FOLDERS: readonly string[] = PARA_ROOTS.filter((root) => root !== 'In
 async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, first: ReadonlySet<string> = new Set()): Promise<Shown> {
   const listing = await read.listAll(run.rootId);
   const ix = VaultIndex.build(run.rootId, listing);
+  const aboutFile = ix.file('About me.md');
+  const aboutMe = aboutFile ? bounded(await read.readText(aboutFile.id), CONTEXT_BOUNDS.perNote).text : null;
+  const indexFile = ix.file(SYSTEM.index);
+  const index = run.index ?? (indexFile ? bounded(await read.readText(indexFile.id), 32_000).text ?? undefined : undefined);
   const inMain = (path: string | undefined): path is string => path !== undefined && MAIN_FOLDERS.includes(path.split('/')[0] ?? '');
   const folders = listing.flatMap((f) => {
     const path = f.folder ? ix.pathOf(f.id) : undefined;
@@ -439,7 +445,7 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
   }));
   const folderCandidates = listing.flatMap((f) => { const path = f.folder ? ix.pathOf(f.id) : undefined;
     return inMain(path) && path.includes('/') ? [{ folderId: f.id, path }] : []; });
-  return { own: ix.file(SYSTEM.dir)?.id, piles, notes, folders, ...(folderCandidates.length >= 2 && folderCandidates.length <= 4 ? { folderCandidates } : {}), names, suppressed, retrySources, presentLines, personalNotes: new Set(listing.flatMap((f) => {
+  return { ...(aboutMe ? { aboutMe } : {}), ...(index !== undefined ? { index } : {}), own: ix.file(SYSTEM.dir)?.id, piles, notes, folders, ...(folderCandidates.length >= 2 && folderCandidates.length <= 4 ? { folderCandidates } : {}), names, suppressed, retrySources, presentLines, personalNotes: new Set(listing.flatMap((f) => {
     const path = ix.pathOf(f.id);
     return !f.folder && f.appProperties?.by !== 'bower' && path?.endsWith('.md') && MAIN_FOLDERS.includes(path.split('/')[0] ?? '') ? [path] : [];
   })), ...(rules ? { rules } : {}) };

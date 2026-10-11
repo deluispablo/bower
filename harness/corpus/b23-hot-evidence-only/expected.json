@@ -1,7 +1,7 @@
 {
   "files": {
     "present": [
-      "hot.md"
+      ".bower/hot.md"
     ],
     "absent": [
       "Projects/Evergreen launch/*",
@@ -10,7 +10,7 @@
   },
   "notes": [
     {
-      "path": "hot.md",
+      "path": ".bower/hot.md",
       "contains": [
         "# Hot",
         "_Updated:",

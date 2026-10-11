@@ -1005,8 +1005,24 @@ it('B1c fix 4: a warm run with changed notes counted through maintain equals the
         .filter((op) => op.effect.kind === 'maintain')).toHaveLength(1);
       const done = result.wire?.statuses.at(-1);
       expect(done?.after, `${scope}/${count}: the report includes every production Drive call`).toBe(requests.length);
-      // Exact whole-run counts measured with this fixture at f7e210f7 in an OS-temp copy.
-      expect.soft(requests.length, `${scope}/${count}: pre-addendum-9 whole-run count`).toBe(38 + count);
+      // TL-P4-42 addendum 5: pre-hot (38 + count), hot prompt media (+1), live fence (+1), PATCH (+1).
+      // Prior hot and questions are reused from the read cache; at most one extra fenced hot write.
+      expect.soft(requests.length, `${scope}/${count}: whole-run count with one fenced hot write`).toBe(41 + count);
+      const hot = listing.find((f) => base.drive.pathOf(f.id, base.root) === SYSTEM.hot);
+      expect(hot).toBeDefined();
+      const hotCalls = requests.filter((r) => r.path === `/drive/v3/files/${hot?.id}`
+        || r.path === `/upload/drive/v3/files/${hot?.id}`);
+      expect.soft(hotCalls, `${scope}/${count}: hot prompt media, live fence, then one PATCH`).toEqual([
+        { method: 'GET', path: `/drive/v3/files/${hot?.id}`, alt: 'media', range: null, maintaining: false },
+        { method: 'GET', path: `/drive/v3/files/${hot?.id}`, alt: null, range: null, maintaining: true },
+        { method: 'PATCH', path: `/upload/drive/v3/files/${hot?.id}`, alt: null, range: null, maintaining: true },
+      ]);
+      const questions = listing.find((f) => base.drive.pathOf(f.id, base.root) === '.bower/questions.json');
+      expect(questions).toBeDefined();
+      expect.soft(requests.filter((r) => r.path === `/drive/v3/files/${questions?.id}` && r.alt === 'media'),
+        `${scope}/${count}: questions reuse the one baseline media read`).toEqual([
+          { method: 'GET', path: `/drive/v3/files/${questions?.id}`, alt: 'media', range: null, maintaining: true },
+        ]);
       for (const file of changed) {
         const reads = requests.filter((r) => r.method === 'GET' && r.path === `/drive/v3/files/${file.id}`);
         expect.soft(reads, `${scope}/${count}: provider skips this note; maintain reads its one Range without metadata`)

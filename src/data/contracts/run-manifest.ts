@@ -84,7 +84,8 @@ export type EditText = {
   changes: Change[]; text: string; content: Content; beforeText?: string;
 };
 export type MaintenanceNote = { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number }; owner?: 'bower' | 'person'; type?: string | null; moc?: MocSnapshot; members?: string[] };
-export type Maintain = { kind: 'maintain'; inputs: { folderId: string; account: string; cursor: string; changes: string[]; operationIds: string[]; targets?: { path: string; fileId: string; parentId: string; beforeContent?: VerifiedContent }[]; snapshot?: Record<string, MaintenanceNote>; listing?: SeenFile[]; log?: string } };
+export type MaintenanceDeclaration = { at: string; sources: { path: string; file: SeenFile; text: string; content: VerifiedContent }[] };
+export type Maintain = { kind: 'maintain'; inputs: { folderId: string; account: string; cursor: string; changes: string[]; operationIds: string[]; targets?: { path: string; fileId: string; parentId: string; beforeContent?: VerifiedContent; kind?: string; declaration?: MaintenanceDeclaration }[]; snapshot?: Record<string, MaintenanceNote>; listing?: SeenFile[]; log?: string } };
 export type EffectV2 = Effect | EditText | Maintain;
 export type OperationV2 = { operationId: string; ordinal: number; dependsOn: string[]; effect: EffectV2 };
 export type ReportFiled = { name: string; title: string; kind: FileKind; to: string; note?: string; area?: string };
@@ -394,7 +395,11 @@ function maintain(value: unknown): value is Maintain {
     && (value.inputs.snapshot === undefined || (record(value.inputs.snapshot) && Object.entries(value.inputs.snapshot).every(([key, f]) => driveId(key) && closed(f, ['path', 'version', 'summary', 'coverage'], ['moc', 'mocChecked', 'members', 'owner', 'type']) && path(f.path) && rfc3339(f.version) && text(f.summary) && closed(f.coverage, ['kind', 'bytes']) && f.coverage.kind === 'prefix' && integer(f.coverage.bytes) && (f.mocChecked === undefined || f.mocChecked === true) && (f.owner === undefined || f.owner === 'bower' || f.owner === 'person') && (f.type === undefined || f.type === null || text(f.type)) && (f.moc === undefined || mocInput(f.moc)) && (f.members === undefined || (f.moc !== undefined && list(f.members, driveId) && unique(f.members))))))
     && (value.inputs.listing === undefined || list(value.inputs.listing, seenFile))
     && (value.inputs.log === undefined || text(value.inputs.log))
-    && (value.inputs.targets === undefined || list(value.inputs.targets, (t) => closed(t, ['path', 'fileId', 'parentId'], ['beforeContent'])
+    && (value.inputs.targets === undefined || list(value.inputs.targets, (t) => closed(t, ['path', 'fileId', 'parentId'], ['beforeContent', 'kind', 'declaration'])
+      && (t.kind === undefined || text(t.kind))
+      && (t.declaration === undefined || (text(t.kind) && closed(t.declaration, ['at', 'sources']) && rfc3339(t.declaration.at)
+        && list(t.declaration.sources, (s) => closed(s, ['path', 'file', 'text', 'content']) && path(s.path) && seenFile(s.file)
+          && !s.file.folder && typeof s.text === 'string' && verifiedContent(s.content) && s.content.observedModifiedTime === s.file.modifiedTime)))
       && path(t.path) && driveId(t.fileId) && driveId(t.parentId) && (t.beforeContent === undefined || verifiedContent(t.beforeContent))));
 }
 const effectV2 = (value: unknown): value is EffectV2 => effect(value) || editText(value) || maintain(value);
@@ -563,6 +568,9 @@ async function admit<M extends Manifest | ManifestV2>(
     if (new Set(e.inputs.targets?.map((t) => t.path)).size !== (e.inputs.targets?.length ?? 0)
       || new Set(e.inputs.targets?.map((t) => t.fileId)).size !== (e.inputs.targets?.length ?? 0)) return { ok: false, reason: 'shape' };
     for (const target of e.inputs.targets ?? []) {
+      for (const source of target.declaration?.sources ?? []) {
+        if (!await describes(source.content, source.text)) return { ok: false, reason: 'shape' };
+      }
       if ((writes as readonly string[]).includes(target.path)) continue;
       const input = e.inputs.snapshot?.[target.fileId];
       const before = e.inputs.listing?.find((f) => f.fileId === target.fileId);
