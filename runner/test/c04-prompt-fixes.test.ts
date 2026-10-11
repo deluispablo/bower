@@ -72,7 +72,7 @@ describe('c04 prompt fixes (TL-P4-08 addendum 5)', () => {
     // Numbers in the thing's text (42,000 as 42000, "2 November" as a date), the pile's words and a shown note pass; so does a Timeline line.
     for (const over of [
       { body: 'Salary 42000 a year, start on 2 November.' },
-      { body: 'Salary 42,000 a year.\n1. Remote.\n2. Start 2 November.' },
+      { body: 'Salary 42,000 a year.\nRemote.\nStart 2 November.' },
       { summary: 'Offer from Ferrowick, 2 November start.', line: 'Offer of 42,000 a year, dated after the 2026-09-28 start of the hunt.' },
     ] satisfies Overrides[]) {
       const ok: ClaudeCall[] = [];

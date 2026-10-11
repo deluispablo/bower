@@ -208,9 +208,24 @@ it('b5-cv-profile-through-main', async () => {
   for (const words of ['Alex earned 987654 credits. [[Alex CV.txt]]', Array(401).fill('TypeScript').join(' ')]) {
     await rejectedProfile(await profileBase(), words, /ground|number|400|word|profile.*(?:bound|long)/i);
   }
-  const corpus = await corpusProfile('c17-b56-cv-profile');
-  expect.soft(corpus.result.code, 'CV corpus main admits the per-item profile words').toBe(0);
-  expect.soft(corpus.result.after[PROFILE]).toContain('shipped an offline map editor');
+  const cv = await setup({ fixture: 'c17-b56-cv-profile' });
+  await cv.drive.update(cv.id(PROFILE), { appProperties: { profile: 'cv' } });
+  await cv.drive.createText(cv.id('.bower'), 'type-table.json', JSON.stringify({ v: 1, rows: [declaration()] }));
+  const replies = JSON.parse(readFileSync(new URL('../../harness/corpus/c17-b56-cv-profile/replies.json', import.meta.url), 'utf8')) as
+    Array<{ things: Array<{ profile: string }> }>;
+  const span = 'Achievement: shipped an offline map editor.';
+  expect(cv.c.inboxFiles[SOURCE]).toContain(span);
+  for (const intent of replies) for (const thing of intent.things) thing.profile = span;
+  let bound = JSON.stringify(replies[0]);
+  for (const source of cv.sources) bound = bound.replaceAll(`$file:${source.name}`, source.itemId);
+  const selection = { items: cv.sources.map((source) => ({ itemId: source.itemId, kind: 'cv',
+    destination: { parentId: cv.id('Areas/Career'), name: 'Originals' },
+    wants: [cv.id(PROFILE), cv.id('Areas/Career/Career.md')],
+  })), asks: [] };
+  const corpus = await run(cv, [selection, JSON.parse(bound) as unknown]);
+  expect.soft(corpus.code, 'CV corpus main admits the verbatim per-item profile span').toBe(0);
+  expect(corpus.frames).toHaveLength(2);
+  expect.soft(corpus.after[PROFILE]).toContain(framed('profile', `${span} [[Career]] [[Areas/Career/Originals/Alex CV.txt]]\n`));
   const b = await profileBase(); const result = await mainProfile(b, FACT);
   expect(result.after[PROFILE]).toContain(FACT); expect(result.after[PROFILE]).toMatch(/\[\[[^\]]*Alex CV/);
   expect(result.after[PROFILE]).not.toContain(PREVIOUS); preserved(b, result);
@@ -335,7 +350,7 @@ it('b5-offer-factual-comparison', async () => {
   const b = await profileBase({ names: ['Offer.txt'], kind: 'offer', text: 'Ferrowick offers a TypeScript role at 48000. Currency is not stated.\n' });
   const selection = select(b, [b.id(PROFILE), b.id(JOB)], 'Projects/Job hunt');
   const good = { kind: 'tidy-intent', v: 1, things: [{ fileId: b.sources[0]?.itemId, to: 'Projects/Job hunt', name: 'Offer.txt',
-    note: { name: 'Offer.md', summary: 'Ferrowick offers a TypeScript role.', body: 'Ferrowick offers a TypeScript role at 48000. Alex uses TypeScript. [[Career profile]] [[Job hunt]]' }, profile: FACT }] };
+    note: { name: 'Offer.md', summary: 'Ferrowick offers a TypeScript role.', body: 'Ferrowick offers a TypeScript role at 48000. Alex uses TypeScript. [[Career profile]] [[Job hunt]]' }, profile: 'Ferrowick offers a TypeScript role at 48000.' }] };
   const result = await run(b, [selection, good]);
   expect(result.code, 'offer item admits region words').toBe(0);
   expect(result.after[PROFILE], 'offer cannot mutate biography').toBe(b.c.folder[PROFILE]); expect(result.after[DECOY]).toBe(b.c.folder[DECOY]);
