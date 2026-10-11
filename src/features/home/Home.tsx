@@ -1,22 +1,23 @@
 import { LoadError } from '@/ui/LoadError';
-import { useEffect, useId, useMemo, useRef } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { report, undoToast } from '@/ui/report';
 import { focusHeading, focusMain } from '@/ui/focus';
 import { answered, answerToast } from './answer-words';
 import { answerQuestion } from '@/data/answer-loop';
+import { askingKey, isQuestionSnapshot, subjectOf, type QuestionAnswer } from '@/data/contracts/questions';
 import { usePrefs } from '@/app/prefs';
 import { startRun } from '@/features/tidy/start-run';
 import { pileName, waitingIn } from '@/data/piles';
 import { Link, useNavigate } from 'react-router';
 import { useChanges, useLoad, usePiles, usePilesListed, useQuestions, useRun, useSources, useSuggestions, useTree, useUser, type Loaded } from '@/data/provider';
-import type { Pile, RunState, TreeNode } from '@/data/types';
+import type { Pile, Question, RunState, TreeNode } from '@/data/types';
 import { displayName, nameOf, parentOf, thingName } from '@/data/tree';
 import { useUi } from '@/app/ui-store';
 import { ago, greeting, plural } from '@/app/words';
 import { crumbs, noteRoute, paraColor, routeFor } from '@/app/paths';
 import { PoseBower } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
-import { fieldBox } from '@/ui/Field';
+import { FieldError, fieldBox, Textarea } from '@/ui/Field';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
 import { filedWords, hasReplay, landedSummary, notesUpdated, reportWaiting, isRunning, PHASE_POSE, runDetail, runTitle, stoppedUnseen } from '@/features/tidy/run-words';
@@ -210,9 +211,17 @@ function Inbox({ piles, error, waiting, ready, bird, running }: { piles: Pile[] 
                     {pileName(p)}
                   </span>
                   <span className={s.pileSub}>
-                    {!p.items.length ? (p.text.trim() ? 'A note' : 'Nothing in it') : p.text ? plural(p.items.length, 'thing') : p.items[0]?.origin}
-                    <span aria-hidden="true" className={s.sep} />
-                    {ago(p.createdAt)}
+                    {!p.setAside && !p.noteLocked && !p.items.some((it) => it.changed || it.upload !== undefined) && p.question ? (
+                      <span className={p.question === 'waiting' ? s.questionWaiting : s.questionExhausted}>
+                        {p.question === 'waiting' ? 'Waiting for your answer' : "Bower couldn't place this"}
+                      </span>
+                    ) : (
+                      <>
+                        {!p.items.length ? (p.text.trim() ? 'A note' : 'Nothing in it') : p.text ? plural(p.items.length, 'thing') : p.items[0]?.origin}
+                        <span aria-hidden="true" className={s.sep} />
+                        {ago(p.createdAt)}
+                      </>
+                    )}
                   </span>
                 </span>
                 <Icon name="chev" size={16} />
@@ -277,98 +286,158 @@ function SearchField() {
   );
 }
 
-function Questions() {
+/** One question surface and answer path, on Home and in the run's sheet. */
+export function Questions({ run }: { run?: RunState }) {
   const questionsState = useQuestions();
-  const updateId = useId();
-  const { data: qs } = questionsState;
+  const headingId = useId();
+  const { data: all } = questionsState;
   const { vault, runs } = useSources();
   const { data: tree } = useTree();
-  // By today's names only: the journal is read once on Home, by Since the last tidy-up.
   const resolve = useMemo(() => resolverFor(tree ?? [], []), [tree]);
-  // After an answer, the answered question goes; the keyboard moves on to the next question (the one now
-  // at its place), or to the Home heading when none is left, never to the body.
+  // The public clock's start is inclusive, for stored and live askings alike.
+  const askings = useMemo(() => (all ?? []).filter((q) => !run || q.askedAt >= run.requestedAt)
+    .sort((a, b) => a.askedAt - b.askedAt), [all, run]);
+  const qs = useMemo(() => {
+    if (!run || !isRunning(run)) return askings;
+    return askings.filter((q) => {
+      if (isQuestionSnapshot([q])) return true;
+      console.error('Question omitted from the live card: outside display bounds.', q.id);
+      return false;
+    }).slice(0, 10);
+  }, [askings, run]);
+  const shown = run ? qs.slice(0, 1) : qs;
+  const host = useRef<HTMLElement>(null);
   const list = useRef<HTMLUListElement>(null);
   const after = useRef<number | null>(null);
   const settle = (): void => {
     const at = document.activeElement;
     if (after.current === null || (at && at !== document.body && at.isConnected)) return;
-    const rows = list.current?.querySelectorAll<HTMLElement>('li') ?? [];
+    const rows = list.current?.querySelectorAll<HTMLElement>(':scope > li') ?? [];
     const next = rows[Math.min(after.current, rows.length - 1)]?.querySelector('button');
     after.current = null;
     if (next) next.focus();
-    else focusHeading();
+    else if (run) {
+      const dialog = host.current?.closest('[role="dialog"]');
+      const title = document.getElementById(dialog?.getAttribute('aria-labelledby') ?? '');
+      if (title) {
+        title.tabIndex = -1;
+        title.focus({ preventScroll: true });
+      }
+    } else focusHeading();
   };
   useEffect(settle, [qs]);
-  if (questionsState.error) return <LoadError state={questionsState} />;
-  if (!qs?.length) return null;
-  // A [[note]] the question names opens it, as in a note; one not found reads as plain words.
+  // A [[note]] opens as it does in a note; one not found reads as plain words.
   const link: LinkFn = (target, label, key) => {
     const path = resolve(target);
-    return path ? (
-      <Link key={key} to={noteRoute(path)}>
-        {label}
-      </Link>
-    ) : (
-      <span key={key}>{label}</span>
-    );
+    return path ? <Link key={key} to={noteRoute(path)}>{label}</Link> : <span key={key}>{label}</span>;
   };
-  const answer = (id: string, yes: boolean, label: string): void => {
-    const index = (qs ?? []).findIndex((q) => q.id === id);
-    // Stored once; a yes a tidy-up can act on starts a small one at once (TL-P4-08 addendum 8).
-    answerQuestion(vault, runs, id, yes, { allowWeb: usePrefs.getState().lookUpWeb }).then(
-      (done) => {
-        toast(done ? answerToast(done.outcome, label) : answered(label));
-        after.current = Math.max(index, 0);
-        // The list may already have changed, or change a moment later (then the effect lands it).
-        setTimeout(settle, 0);
-      },
-      (e: unknown) => report(e, 'That answer did not save. Try again.'),
-    );
+  const answer = async (q: Question, value: QuestionAnswer, label: string): Promise<void> => {
+    const index = shown.findIndex((row) => askingKey(row) === askingKey(q));
+    try {
+      const done = await answerQuestion(vault, runs, q.id, value, { allowWeb: usePrefs.getState().lookUpWeb });
+      toast(done ? answerToast(done.outcome, label) : answered(label));
+      after.current = Math.max(index, 0);
+      // The subscription may have landed already, or it will settle focus in the effect.
+      settle();
+    } catch (e) {
+      report(e, 'That answer did not save. Try again.');
+    }
+  };
+  if (questionsState.error) return <LoadError state={questionsState} />;
+  if (!run && !shown.length) return null;
+  return (
+    <section ref={host} aria-labelledby={shown.length ? headingId : undefined}>
+      {shown.length > 0 && (
+        run ? <p id={headingId} className={runStyles.linksLabel}>Bower has a question</p> :
+          <h2 id={headingId} className={s.h2}>{plural(qs.length, 'question')} for you</h2>
+      )}
+      <ul ref={list} className={s.questions}>
+        {shown.map((q) => <QuestionCard key={askingKey(q)} question={q} link={link} inSheet={!!run} answer={answer} />)}
+      </ul>
+      {run && shown.length > 0 && askings.length > 1 && (
+        <Link to="/" className={runStyles.moreQuestions} onClick={() => useUi.getState().setTidy(false)}>
+          {plural(askings.length - 1, 'more question')} on Home
+        </Link>
+      )}
+    </section>
+  );
+}
+
+function QuestionCard({ question: q, link, inSheet, answer }: {
+  question: Question; link: LinkFn; inSheet: boolean;
+  answer: (q: Question, value: QuestionAnswer, label: string) => Promise<void>;
+}) {
+  const updateId = useId();
+  const textId = useId();
+  const errorId = useId();
+  const [writing, setWriting] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const working = useRef(false);
+  const field = useRef<HTMLTextAreaElement>(null);
+  const other = useRef<HTMLButtonElement>(null);
+  const wasWriting = useRef(false);
+  useEffect(() => {
+    if (writing) field.current?.focus();
+    else if (wasWriting.current) other.current?.focus();
+    wasWriting.current = writing;
+  }, [writing]);
+  const text = draft.trim();
+  const tooLong = text.length > 1000;
+  const options = q.options?.length ? q.options : undefined;
+  const ownWords = subjectOf(q).kind === 'inbox';
+  const send = async (value: QuestionAnswer, label: string): Promise<void> => {
+    if (working.current) return;
+    working.current = true;
+    setBusy(true);
+    await answer(q, value, label);
+    working.current = false;
+    setBusy(false);
   };
   return (
-    <section aria-labelledby="qs">
-      <h2 id="qs" className={s.h2}>
-        {plural(qs.length, 'question')} for you
-      </h2>
-      <ul ref={list} className={s.questions}>
-        {qs.map((q) => (
-          <li key={q.id} className={s.question}>
-            <p>
-              <Inline text={q.text} link={link} />
-            </p>
-            {q.about && (
-              <p className={s.about}>
-                <Link to={noteRoute(q.about)}>{displayName(nameOf(q.about))}</Link>
-              </p>
-            )}
-            {q.shown && q.shown.lines.length > 0 && (
-              // The update a yes writes, every line, labelled as the run result's lists are and shown as a Current
-              // state is (TL-P4-19 addendum 17): the person reads what they say yes to.
+    <li className={`${s.question} ${inSheet ? s.questionInSheet : ''}`}>
+      <p><Inline text={q.text} link={link} /></p>
+      {q.about && <p className={s.about}><Link to={noteRoute(q.about)}>{displayName(nameOf(q.about))}</Link></p>}
+      {q.shown && q.shown.lines.length > 0 && (
+        <>
+          <p id={updateId} className={runStyles.linksLabel}>{"Bower's update"}</p>
+          <div className={noteStyles.state}>
+            <ul aria-labelledby={updateId}>{q.shown.lines.map((l) => <li key={l}>{l}</li>)}</ul>
+          </div>
+        </>
+      )}
+      {writing ? (
+        <form className={s.questionWords} onSubmit={(e) => {
+          e.preventDefault();
+          if (text && !tooLong) void send({ text }, 'your words');
+        }}>
+          <label htmlFor={textId}>In your own words</label>
+          <Textarea ref={field} id={textId} rows={3} value={draft} onChange={(e) => setDraft(e.target.value)}
+            invalid={tooLong} errorId={errorId} />
+          {tooLong && <FieldError id={errorId}>Use 1,000 characters at most.</FieldError>}
+          <div className={s.row2}>
+            <Button type="submit" size="sm" disabled={!text || tooLong || busy}>Tell Bower</Button>
+            <Button size="sm" variant="ghost" disabled={busy} onClick={() => setWriting(false)}>Cancel</Button>
+          </div>
+        </form>
+      ) : (
+        <>
+          <div className={options ? s.questionOptions : s.row2}>
+            {options ? options.map((option) => (
+              <Button key={option.id} size="sm" variant="ghost" block disabled={busy}
+                onClick={() => void send({ option: option.id }, option.label)}>{option.label}</Button>
+            )) : (
               <>
-                <p id={`${updateId}-${q.id}`} className={runStyles.linksLabel}>
-                  {"Bower's update"}
-                </p>
-                <div className={noteStyles.state}>
-                  <ul aria-labelledby={`${updateId}-${q.id}`}>
-                    {q.shown.lines.map((l) => (
-                      <li key={l}>{l}</li>
-                    ))}
-                  </ul>
-                </div>
+                <Button size="sm" disabled={busy} onClick={() => void send(true, q.yes)}>{q.yes}</Button>
+                <Button size="sm" variant="ghost" disabled={busy} onClick={() => void send(false, q.no)}>{q.no}</Button>
               </>
             )}
-            <div className={s.row2}>
-              <Button size="sm" onClick={() => answer(q.id, true, q.yes)}>
-                {q.yes}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => answer(q.id, false, q.no)}>
-                {q.no}
-              </Button>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
+          </div>
+          {ownWords && <Button ref={other} size="sm" variant="ghost" block className={s.questionOther}
+            disabled={busy} onClick={() => setWriting(true)}>Something else…</Button>}
+        </>
+      )}
+    </li>
   );
 }
 

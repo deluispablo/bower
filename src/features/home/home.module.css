@@ -36,7 +36,7 @@
 .h2 { font-size: 20px; margin-bottom: 8px; }
 .questions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .question { padding: 14px 16px; border-radius: 16px; background: var(--bg-alt); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent); }
-.question p { color: var(--heading); }
+.question > p { color: var(--heading); }
 .question .row2 { margin-top: 10px; }
 .question .about { margin-top: 6px; font-size: 15px; }
 .about a { color: var(--brand-line); font-weight: 600; padding: 2px 0; }
@@ -62,3 +62,12 @@
 
 .arrival { font-size: 15px; }
 .unfinished { color: var(--accent-line); }
+
+.questionOptions { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.questionOptions button, .questionOther { justify-content: flex-start; text-align: left; }
+.questionOther { margin-top: 8px; color: var(--brand-line); }
+.questionWords { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.questionWords label { font-size: 15px; color: var(--text-muted); }
+.questionInSheet { background: var(--bg); }
+.questionWaiting { color: var(--accent-line); }
+.questionExhausted { color: var(--text-muted); }

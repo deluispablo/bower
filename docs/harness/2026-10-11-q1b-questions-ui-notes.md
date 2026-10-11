@@ -115,3 +115,112 @@ References are citations for the reused local patterns; no current web verificat
 ## Left out
 
 Implementation, commits (coordinator owns them), backend scenarios, pnpm check, executable e2e and designer verification.
+
+## Implementation
+
+Implemented Q-UI-1, Q-UI-2 and Q-UI-4 in the six owned application files only.
+Home exports Questions, and RunView renders that component between its detail and steps/RunLinks.
+QuestionCard is private to Home.tsx; both surfaces use Questions' one answer handler and answerQuestion.
+Native Button, Field Textarea/FieldError, Sheet and existing tokens provide the controls and appearance.
+No store, data-port write, runner, toast, Dock or global Sheet change was added.
+
+Questions sort by askedAt, use id plus askedAt as React asking identity, and filter the sheet window
+inclusively against RunState.requestedAt, for stored and live questions alike. The merged public
+questions port remains the only source. Live display bounds reuse isQuestionSnapshot per asking;
+overbound cards produce a console line and are omitted from the first ten sorted valid askings.
+The overflow link counts all other open stored askings in this run's window, navigates Home and closes.
+Unanswered cards remain at done. The existing answerToast preserves every answer-loop outcome.
+
+Option answers carry option ids, text is trimmed, and inbox subjects alone offer Something else…,
+including under yes/no. Unique useId ids label each textarea, error, update and Questions section.
+Text mode focuses the textarea; Cancel restores controls and focuses Something else….
+Tell Bower is disabled for empty/over-1,000 trimmed text and during a save. A failed save retains the draft.
+The one answer handler settles focus immediately if the subscription has already rendered, or through
+its Questions effect when it renders later. Focus selects direct card rows, then Home's heading or the
+sheet's own aria-labelledby title, made focusable with tabIndex -1. The immediate settlement removes
+an unnecessary timer race observed in the first full-suite run without changing any test.
+
+Pile.question drives the Home waiting/exhausted sentences and the plain 17px exhaustion paragraph.
+Existing readiness, note-lock, changed-item and upload states suppress those projections. The source
+owns waiting precedence and words resets; existing words and removal controls are unchanged.
+The packet's observation about the absence of a standalone Move button still applies; no button was added.
+
+removed: Home's boolean-only private answer signature; the shared handler now accepts QuestionAnswer.
+removed: fixed Questions heading/update ids; per-instance ids avoid collisions across Home and sheet.
+removed: descendant li focus indexing; only direct question cards take part in focus settlement.
+removed: zero-delay answer focus timer; immediate settlement plus the source-render effect owns it.
+removed: descendant paragraph color override; FieldError keeps today's Field error color inside the form.
+removed: no application mechanism, test, source port, runner path, toast or Dock behavior.
+tests changed: none
+
+### Verification setup and boundaries
+
+All verification logs, JSON reports, Vite cache and timer-gate CPU reports are under
+/tmp/q1b-implementation-4iimhjpd. Vitest starts from that OS-temp cwd with the repository root in a temp
+config. Repository-relative reads in the full suite use temp links to source/config directories;
+node_modules was never replaced or symlinked. The temp manifest contains no dependencies and the
+final commands use npm_config_offline=true. No writing git command was issued by this session;
+unchanged harness tests create their own disposable repositories as part of the requested src suite.
+
+The first src run exposed missing cwd-relative fixture/script paths; the final run restores those
+read paths in the OS-temp directory. Two intermediate invocations were stopped after copying the
+full manifest caused pnpm to attempt dependency downloads; those requests failed DNS. The worktree's
+dependencies were not changed. Those stopped invocations are not verification evidence.
+
+Offline standard references and reuse remain those in the red handoff: Testing Library role queries,
+WAI-ARIA APG modal-dialog focus and existing @axe-core/playwright patterns. Shared askingKey,
+subjectOf, isQuestionSnapshot and answerQuestion are reused without an alternate implementation.
+No network research, pnpm check, e2e, build, deployment or designer verification was performed.
+pnpm check writes repository artifacts; the requested no-write verification uses the explicit gates instead.
+The coordinator owns commits, e2e and the combined Q-UI-3 desktop stack check; the designer owns visual approval.
+
+### Final verification results
+
+- Committed reds reproduced before implementation: 77 tests, 23 Q1b assertion failures; 52 existing tests passed.
+  Logs: `/tmp/q1b-implementation-4iimhjpd/red.log`, `red.json`.
+- Final Home/TidySheet/PileScreen regressions and Q1b reds: **76/77 pass; 24/25 Q1b pass**.
+  Logs: `/tmp/q1b-implementation-4iimhjpd/targeted-final.log`, `targeted-final.json`.
+- Required `pnpm exec vitest run src --maxWorkers=2`: **5,710/5,715 pass**, 5 failed, 1 unhandled EPERM.
+  Logs: `/tmp/q1b-implementation-4iimhjpd/src-final.log`, `src-final.json`, `failures.txt`.
+  The final full run passes every Home and PileScreen test, all other TidySheet tests and all backend question tests.
+- `pnpm exec tsc -p tsconfig.app.json --noEmit --incremental false`: pass (`tsc-app.log`).
+- `pnpm exec tsc -p tsconfig.node.json --noEmit --incremental false`: pass (`tsc-node.log`).
+- ESLint on the three touched TSX files: pass (`eslint.log`). CSS and notes are outside this ESLint configuration.
+- `node scripts/check-unused-gate.mjs`: pass for normal and production passes (`unused.log`).
+- Read-only `git diff --check`: pass. Tests, spec, ports, runner, Dock and toast files unchanged.
+
+Every final failure, with exact test and assertion location:
+
+1. `src/features/tidy/TidySheet.test.tsx:106`, `Q1b An answer during the run`:
+   the waits toast renders while the sheet is open. The answer is saved, the card is removed and steps remain.
+   This is the signed amended row's **messages-wait-for-sheets** dependency. Q1b deliberately changes no Dock/toast code;
+   this row may remain red until that entry merges, as the user authorized. All other Q1b rows pass.
+2. `src/e2e-port.test.ts:37`, `a server from another worktree is never reused`:
+   5,000ms timeout accompanied by `listen EPERM: operation not permitted 127.0.0.1` in the same file.
+   This sandbox exception is expected by the user. No e2e command or server was started by the implementer;
+   the unchanged required src test owns this port attempt.
+3. `src/harness.test.ts:631`, `a test that passes only on retry fails a batch run`:
+   its browser-free Playwright fixture cannot resolve `@playwright/test` from OS-temp `test-results/fx-*`.
+4. `src/harness.test.ts:643`, `a quarantined test that passes on retry is reported, not failed`:
+   the same OS-temp Playwright fixture resolution makes the spawned command exit 1.
+   NODE_PATH is present but Node ESM package resolution does not use it. Keeping tests/results out of the repository
+   and declining to replace/symlink node_modules leaves these environment failures recorded for the coordinator.
+5. `src/docs.test.ts:134`, `every change since the P2 freeze is listed`:
+   committed SHA `27280ef2` is missing from the change list. No implementation commit was made;
+   shared history records are outside this packet's ownership and remain unchanged.
+
+No frozen assertion contradicts the packet/ruling. No tests were changed to resolve these failures.
+The first, cwd-incomplete full run and the interrupted intermediate commands are superseded by `src-final`.
+No full gate is claimed green, and e2e/accessibility/desktop layout and designer verification remain with their owners.
+
+### Changed application files
+
+- `src/features/home/Home.tsx`
+- `src/features/home/home.module.css`
+- `src/features/tidy/TidySheet.tsx`
+- `src/features/tidy/tidy.module.css`
+- `src/features/piles/PileScreen.tsx`
+- `src/features/piles/piles.module.css`
+
+The only other change is this append-only Implementation section in the authorized notes file.
+Commits: none; all git commands issued by the implementer were read-only.

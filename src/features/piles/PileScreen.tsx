@@ -57,6 +57,13 @@ export function PileScreen() {
         </div>
       </div>
 
+      {pile.question === 'exhausted' && !pile.setAside && !pile.noteLocked &&
+        !pile.items.some((it) => it.changed || it.upload !== undefined) && (
+          <p className={s.questionExhausted}>
+            Bower couldn't place this. Tell it more in the pile's words, or move it yourself.
+          </p>
+        )}
+
       <PileNote key={pile.id} pile={pile} locked={running} />
 
       {pile.items.length > 0 && (
