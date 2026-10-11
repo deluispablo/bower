@@ -1059,3 +1059,78 @@ No external citation independently checked under the no-network instruction.
 Left out: pnpm check and capabilities/folder-table e2e belong to the runner after commits.
 Risk: those deferred gates remain unverified here. The commit manifest separates tests
 from this notes-only commit; no commits were made by this session.
+
+## Round 1 reds (addendum 10)
+
+Tests-only fix-round evidence for TL-P4-47 addendum 10 findings (1)–(3), reproduced in
+`2026-10-11-b5b-adversarial-1.md`. One new file contains exactly three reds. Existing
+tests, production code, fixtures, configs, bounds and the 99/97 call pins are unchanged.
+No network, git command, commit, dependency replacement or symlink was used. All data
+is made up; the runner owns the two commits listed in `.codex-commits.json`.
+
+Scope: reuse the existing `providerFor` decisions seam, production `planScripted` and
+`main`, admission, manifests and the in-memory Drive v3 transport. No parser, writer,
+Source-role helper or store is replaced. The table read assertion uses the shared
+`readTypeTable` called by capture; the same stored fixture also runs through real main.
+Only the new test, this notes append and the runner's commit manifest were written.
+
+Research: reused the packet's local bounded-tolerant-read precedent
+https://www.rfc-editor.org/rfc/rfc9413.html and closed-write schema precedent
+https://json-schema.org/understanding-json-schema/reference/object#additionalproperties.
+These sources were not independently fetched or reverified under the no-network rule.
+
+tests changed: runner/test/b5b-r2.test.ts: add "b5b-r2 1 source role by one helper"; create the offer Source, unclassified Source and Concept through main, then submit timeline lines through a second main run; include a legacy by: bower / type: source fixture.
+tests changed: runner/test/b5b-r2.test.ts: add "b5b-r2 2 more than four columns"; five- and six-column stored rows must read their first four and retain original bytes through unrelated main runs; four-column row is the unchanged control.
+tests changed: runner/test/b5b-r2.test.ts: add "b5b-r2 3 row-level splice"; trusted request changes column four through main while unchanged rows, unknown keys and surrounding bytes retain their exact stored text, including 9007199254740993.
+
+### Final red results
+
+Each named run used `--maxWorkers=2`, exited 1 with exactly one failing test, and failed
+only on its named finding. The combined final file run has exactly three failing tests,
+with no other tests or runtime/collection failures. Every hard positive-control assertion
+passes before the finding's soft assertions; there are no `.skip` or `.only` declarations.
+The two filtered-out tests in each named run are Vitest's ordinary name filtering.
+
+| Exact name | Passing controls | Finding assertions | OS-temp log / JSON |
+| --- | --- | --- | --- |
+| `b5b-r2 1 source role by one helper` | Main creates type offer/source/concept; Concept gains the line; unclassified and legacy Sources retain exact bytes and refuse with unsupported | Offer Source gains a Timeline; only two unsupported refusals instead of three | `/tmp/b5b-r2-1.log`, `/tmp/b5b-r2-1.json` |
+| `b5b-r2 2 more than four columns` | Each unrelated item files; four-column row reads unchanged and stays byte-identical | Five/six-column lease row is absent from the read and replaced by eight seeds in storage | `/tmp/b5b-r2-2.log`, `/tmp/b5b-r2-2.json` |
+| `b5b-r2 3 row-level splice` | Main completes; trusted request changes lease columns from e/d/c/a to e/d/c/b | Whole-table serialization changes untouched text and rounds unknown 9007199254740993 to 9007199254740992 | `/tmp/b5b-r2-3.log`, `/tmp/b5b-r2-3.json` |
+
+Combined: `/tmp/b5b-r2-all.log` and `/tmp/b5b-r2-all.json`, 3 expected failures, no skips.
+Runner TypeScript (`--noEmit`) passes: `/tmp/b5b-r2-tsc.log`.
+ESLint on the new test passes: `/tmp/b5b-r2-eslint.log`.
+No existing test was modified, deleted, weakened or run for a replacement assertion.
+
+An initial fixture gave all three Source/Concept inputs identical bytes, so normal
+deduplication correctly filed only the first input. The final fixture uses distinct
+made-up content; no production behavior or contract assertion was relaxed. A temporary
+diagnostic of result paths was removed before final verification.
+
+### Exact commands and output isolation
+
+Run from `runner/`. The OS-temp config imports the existing runner configuration,
+disables test cache, moves Vite cache and JSON output to OS temp, and substitutes an
+OS-temp setup retaining the exact existing timer gate. Only its optional repository-writing
+CPU report is omitted; the repository setup and node_modules are unchanged.
+
+Config: `/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b5b-r2-runner.config.mts`.
+Setup: `/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b5b-r2-timer-setup.ts`.
+The existing corpus-run helper also writes its main event files to `os.tmpdir()`.
+
+```sh
+pnpm exec vitest run test/b5b-r2.test.ts -t 'b5b-r2 1 source role by one helper' --config /var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b5b-r2-runner.config.mts --configLoader runner --maxWorkers=2 --outputFile.json=/tmp/b5b-r2-1.json > /tmp/b5b-r2-1.log 2>&1
+pnpm exec vitest run test/b5b-r2.test.ts -t 'b5b-r2 2 more than four columns' --config /var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b5b-r2-runner.config.mts --configLoader runner --maxWorkers=2 --outputFile.json=/tmp/b5b-r2-2.json > /tmp/b5b-r2-2.log 2>&1
+pnpm exec vitest run test/b5b-r2.test.ts -t 'b5b-r2 3 row-level splice' --config /var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b5b-r2-runner.config.mts --configLoader runner --maxWorkers=2 --outputFile.json=/tmp/b5b-r2-3.json > /tmp/b5b-r2-3.log 2>&1
+pnpm exec vitest run test/b5b-r2.test.ts --config /var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b5b-r2-runner.config.mts --configLoader runner --maxWorkers=2 --outputFile.json=/tmp/b5b-r2-all.json > /tmp/b5b-r2-all.log 2>&1
+pnpm exec eslint test/b5b-r2.test.ts > /tmp/b5b-r2-eslint.log 2>&1
+# From the worktree root:
+pnpm exec tsc -p runner/tsconfig.json --noEmit > /tmp/b5b-r2-tsc.log 2>&1
+```
+
+removed: none; no existing test or production mechanism changed.
+Contradictions: none in the requested controls or ruling; unrelated suites were not run.
+Calls/timing: no call budget or timing acceptance measured or changed in this red session.
+Left out: addendum 10 (4)'s live-proposal red remains the ruled second step; implementation,
+full suites, pnpm check, e2e and designer verification remain for later authorized sessions.
+Risk: the three production data-safety defects remain intentionally unfixed here.
