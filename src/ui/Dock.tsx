@@ -1,5 +1,6 @@
-import { useEffect, useRef, type ReactNode } from 'react';
-import { Toasts } from './toast';
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { Toasts, useToasts } from './toast';
+import { useOverlaysOpen } from './back';
 import s from './ui.module.css';
 
 /**
@@ -9,6 +10,14 @@ import s from './ui.module.css';
  * (https://developer.mozilla.org/docs/Web/API/ResizeObserver).
  */
 export function Dock({ children }: { children?: ReactNode }) {
+  const overlayOpen = useOverlaysOpen();
+  const pause = useToasts((state) => state.pause);
+  // WAI-ARIA APG modal dialog: outside content is inert, so messages wait to be used and announced.
+  // https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/
+  useLayoutEffect(() => {
+    pause(overlayOpen);
+    return () => pause(false);
+  }, [overlayOpen, pause]);
   const stack = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = stack.current;
@@ -29,7 +38,7 @@ export function Dock({ children }: { children?: ReactNode }) {
   return (
     <div className={s.dock}>
       <div className={s.dockStack} ref={stack} data-testid="dock-stack">
-        <Toasts />
+        <Toasts visible={!overlayOpen} />
         {children}
       </div>
     </div>

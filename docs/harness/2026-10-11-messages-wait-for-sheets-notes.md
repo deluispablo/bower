@@ -106,3 +106,62 @@ https://vitest.dev/api/vi.html#vi-usefaketimers
 https://playwright.dev/docs/clock
 Existing e2e/fixtures.ts, viewport.ts and axe.ts own source setup, viewport settlement and accessibility scanning.
 No external page was fetched, and no app code, CSS, z-index, source data, or harness records changed.
+
+## Implementation
+
+Implemented TL-P4-55 in `src/ui/Dock.tsx`, `src/ui/back.ts` and `src/ui/toast.tsx` only.
+The existing `useBackCloses` lifecycle publishes an open-overlay count in back.ts, independently of pending
+history backs. Its external-store subscription reports whether any overlay is open, including nested sheets.
+There is no second registry, DOM query, per-sheet handler or change to Sheet markup or appearance.
+Dock owns the rule: it passes visibility to Toasts and pauses the existing toast expiry mechanism before paint.
+The run-chip slot stays rendered. Hidden messages have no action surface or live region; closing the final sheet
+restores the retained stack and its existing entrance animation. Existing reduced-motion CSS still governs it.
+
+Expiry records keep each message's remaining time and the start of its active interval. Pausing subtracts only
+active time; messages raised or replaced while paused receive their normal lifetime without starting a timeout.
+Final close schedules the remaining interval. The existing four/eight-second durations, action promise hold,
+identity, replacement, oldest-first ordering and three-message limit remain in the existing toast home.
+Pointer and keyboard holds retain their existing restart-on-release contract. Removing their visible surface
+releases those holds without returning focus out of the modal; an action hold still waits for its promise.
+Dropped or dismissed messages also clear their timer and holder records through the existing dismiss method.
+
+removed: unconditional Toasts presentation in Dock; messages now wait while the overlay home reports open.
+removed: timeout-handle-only bookkeeping; remaining time now survives a modal interval.
+removed: separate list-only removal in dismissAction and silent oldest eviction; both use dismiss cleanup.
+tests changed: none
+
+Standard: WAI-ARIA APG modal dialog, https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/.
+The owner-approved spec provides the offline standard basis: content outside a modal is inert.
+Dock cites this URL and the reason messages/actions/announcements wait in a code comment. No network was used.
+
+Verification (all logs and generated test artifacts are in OS temp):
+
+- Before implementation: the committed targeted suite reproduced all seven missing-rule assertion failures;
+  its eight positive/existing controls passed. Log: `/private/tmp/mws-implementation-red.log`.
+- After implementation: all 15 targeted tests passed, including every exact MWS unit name listed above.
+  Command: `pnpm exec vitest run src/ui/dock.test.tsx src/ui/toast.test.ts --maxWorkers=2
+  --config /private/tmp/mws-red-2bbfek65/vitest.config.mts --configLoader runner --reporter=default`.
+  Log: `/private/tmp/mws-implementation-targeted.log`.
+- Full src suite: 5,699 passed; one expected failure in `src/e2e-port.test.ts:37` (169 files passed, one failed).
+  `a server from another worktree is never reused` times out because its server cannot listen; the associated
+  uncaught error is `listen EPERM: operation not permitted 127.0.0.1`. No other tests failed. All UI tests passed,
+  including Dock, Sheet, toast focus, Undo and replacement coverage. This matches the assignment's expected EPERM.
+  Command: `pnpm exec vitest run src --maxWorkers=2
+  --config /private/tmp/mws-red-2bbfek65/vitest.config.mts --configLoader runner --reporter=default`.
+  Log: `/private/tmp/mws-implementation-src.log`.
+- App TypeScript: pass (`pnpm exec tsc -p tsconfig.app.json --incremental false`).
+  Log: `/private/tmp/mws-implementation-tsc-app.log`.
+- Node/e2e TypeScript: pass (`pnpm exec tsc -p tsconfig.node.json --incremental false`).
+  Log: `/private/tmp/mws-implementation-tsc-node.log`.
+- ESLint: pass (`pnpm exec eslint src/ui/Dock.tsx src/ui/toast.tsx src/ui/back.ts`).
+  Log: `/private/tmp/mws-implementation-eslint.log`.
+- Unused-code gate: pass (`node scripts/check-unused-gate.mjs`), both normal and production baselines unchanged.
+  Log: `/private/tmp/mws-implementation-unused.log`.
+
+The pre-existing OS-temp Vitest config from the red handoff is reused unchanged. It retains the repository
+configuration and both setup behaviours, relocates Vite's cache and CPU reports to OS temp, and keeps the
+timer gate active. No tests, node_modules, CSS, z-index, feature files or shared harness records were changed.
+No git-writing command was run; the coordinator owns the fix and notes commits.
+`pnpm check` was not run because its generated outputs write into the repository, contrary to this assignment.
+E2E was not run: the coordinator owns the new matrix and v2-dock/v2-name-sheet baselines, followed by designer
+verification before closure. No contradictions were found in the targeted acceptance assertions.
