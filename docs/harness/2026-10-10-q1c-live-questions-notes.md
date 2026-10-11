@@ -776,3 +776,55 @@ Commands:
 
 Final git diff --check: passed. Only runner/src/status.ts, runner/src/main.ts,
 src/data/contracts/questions.ts and this notes file changed. No test or repository test artifact changed.
+
+## Addendum 8 reds 2
+
+tests changed: runner/test/q1c-live.test.ts: add the two pass-3 Blocking reproductions through main; no existing assertion changed.
+
+Red owner at 29259286. Scope: runner/test/q1c-live.test.ts and these notes only.
+No production edit, git writing command, network, node_modules replacement or symlink.
+Coordinator owns commits and integration gates.
+
+- `q1-live-snapshot-over-64kib-trims`: ten distinct waiting subjects, each moved into its own pile
+  folder with a 7,000-character made-up Pile note, plus the existing clear sibling. The persisted
+  questions effect contains all ten full askings; the shared snapshot validator accepts all ten,
+  and their complete writing report exceeds 64 * 1024 bytes. Nine cards fit. Fresh askings share
+  requestedAt, so stable askedAt order breaks that tie: the final card must be removed first.
+  Assertions require the exact first-nine public projection, one single omission console line,
+  successful later reports retaining that projection, done, filed clear work, and all ten full
+  questions in Drive. The planned-question, validator, count, words and byte-size controls pass.
+- `q1-live-publication-transport-failure-keeps-the-run`: two fresh askings plus the clear sibling.
+  The in-memory request interceptor refuses only the first question-bearing writing report's seq,
+  on all four sends, with 503; all later requests reach the in-process API normally. Controls prove
+  the full two-question manifest, valid public cards, exactly four refused writing sends and their
+  identical snapshots. Assertions require done, filed work, both stored askings, one single failure
+  console line, and the immediately next successful status request carrying the snapshot again.
+  Ordinary provider/start/end/timing console messages are excluded from that diagnostic count.
+  Only Date is frozen in this case; the fixture's zero-delay retry timers resolve without a real
+  backoff wait. The unchanged timer gate remains installed.
+
+Verification:
+`pnpm -C runner exec vitest run test/q1c-live.test.ts --maxWorkers=2 --reporter=default --no-cache --configLoader=native --config=/tmp/q1c-reds2-config/vitest.config.mjs`
+Exit 1: two assertion reds, six unchanged existing tests pass. No import, matcher or timeout failure.
+- Size red: runner/test/q1c-live.test.ts:166 exit code 1 rather than 0; :167 phase writing rather
+  than done; clear work and stored questions are missing, and subsequent oversized reports fail too.
+- Transport red: runner/test/q1c-live.test.ts:227 phase failed rather than done; clear work and
+  stored questions are missing. The next status request succeeds with the snapshot but reports
+  failed; seven diagnostic console calls violate the single-line contract.
+Log: /tmp/q1c-addendum8-reds2.log.
+Runner tsc --noEmit and test-file ESLint pass; logs /tmp/q1c-addendum8-reds2-tsc.log and
+/tmp/q1c-addendum8-reds2-eslint.log. git diff --check passes.
+
+The first verification attempt exposed the default setup's CPU-report write to runner/test-results/cpu.
+Removed only its own report (71308-1791681719386.json); existing reports were preserved. Final verification
+uses a temporary config with the same Node environment and unchanged timer-gate setup, excluding only
+its CPU-report hook. Native config loading, disabled cache and the default reporter prevent other
+repository output. Event files and logs stay in OS temp. No repository test artifact remains from this work.
+
+Offline references reused, not fetched: the existing main/realWorld fixture, shared publicQuestion and
+isQuestionSnapshot contracts, and the shipped transport's RETRIES = 3 policy. Node temporary files:
+https://nodejs.org/api/os.html#ostmpdir. Vitest timer selection:
+https://vitest.dev/api/vi.html#vi-usefaketimers. No network research was permitted or performed.
+
+pnpm check and e2e not run: this is a runner-red-only assignment, with no screen or production change.
+commits: none; coordinator commits tests and notes separately.

@@ -8,6 +8,8 @@ import { parseRunManifestV2 } from '../../src/data/contracts/run-manifest';
 import { parseRunCheckpoint, parseRunReport } from '../../src/data/contracts/run-checkpoint';
 import { stateMark } from '../../src/data/contracts/note-edit';
 import { canonicalRecordJson } from '../../src/data/contracts/record-json';
+import { isQuestionSnapshot, publicQuestion } from '../../src/data/contracts/questions';
+import type { Question } from '../../src/data/types';
 import { RUNNER_WRITES } from '../../src/data/vault/layout';
 import { main } from '../src/main';
 import { API, TICKET, driveV3 } from './drive-v3';
@@ -117,6 +119,129 @@ async function legacyRecords() {
 }
 
 describe('Q1c durable publication through main and createApp().request', () => {
+  it('q1-live-snapshot-over-64kib-trims', async () => {
+    const words = 'W'.repeat(7000);
+    const { w, clearId, status } = await mixed(10, false, async (w) => {
+      const files = await w.drive.listAll(w.rootId);
+      const waiting = files.filter((f) => /^Inbox\/Waiting(?: \d+)?\.md$/.test(w.drive.pathOf(f.id, w.rootId)));
+      expect(waiting).toHaveLength(10);
+      for (const file of waiting) {
+        const folder = await w.drive.createFolder(file.parents[0] ?? '', `Context ${file.id}`, file.appProperties);
+        await w.drive.update(file.id, { addParent: folder.id, removeParent: file.parents[0] ?? '' });
+        await w.drive.createText(folder.id, 'Pile note.md', words);
+      }
+    });
+    const logs = [vi.spyOn(console, 'log'), vi.spyOn(console, 'warn'), vi.spyOn(console, 'error')]
+      .map((spy) => spy.mockImplementation(() => {}));
+    const reports: Array<{ phase: string; questions?: Question[] }> = [];
+    const bodies: string[] = [];
+    const code = await w.runJob(0, async (url, init, next) => {
+      if (url.origin === ORIGIN && url.pathname.endsWith('/status') && init.method === 'POST') {
+        bodies.push(String(init.body));
+        reports.push(JSON.parse(String(init.body)) as typeof reports[number]);
+      }
+      return next();
+    });
+    const files = await w.drive.listAll(w.rootId);
+    const manifestFile = files.find((f) => /^manifest-.*\.json$/.test(f.name));
+    expect(manifestFile).toBeDefined();
+    const manifest = JSON.parse(await w.drive.readText(manifestFile?.id ?? '')) as {
+      operations: Array<{ effect: { kind: string; path?: string; text?: string } }>;
+    };
+    const effect = manifest.operations.find(({ effect }) => effect.kind === 'write-runner-json'
+      && effect.path === '.bower/questions.json')?.effect;
+    expect(effect).toBeDefined();
+    const planned = (JSON.parse(effect?.text ?? '{}') as { questions: Question[] }).questions;
+    expect(planned).toHaveLength(10);
+    expect(planned.every((q) => q.words === words)).toBe(true);
+    const full = planned.map(publicQuestion);
+    expect(isQuestionSnapshot(full)).toBe(true);
+    expect(new TextEncoder().encode(JSON.stringify({ attempt: 1, seq: 3, phase: 'writing', questions: full }))
+      .byteLength).toBeGreaterThan(64 * 1024);
+    const expected = [...full].sort((a, b) => a.askedAt - b.askedAt).slice(0, 9);
+    // Fresh askings share requestedAt; stable order breaks the tie, so the final card is removed first.
+    expect(new Set(full.map((q) => q.askedAt)).size).toBe(1);
+    expect(new TextEncoder().encode(JSON.stringify({ attempt: 1, seq: 3, phase: 'writing', questions: expected }))
+      .byteLength).toBeLessThanOrEqual(64 * 1024);
+    expect.soft(code).toBe(0);
+    expect.soft((await status()).run?.phase).toBe('done');
+    expect.soft(w.drive.pathOf(clearId, w.rootId)).toBe('Resources/Clear.md');
+    const stored = files.find((f) => w.drive.pathOf(f.id, w.rootId) === '.bower/questions.json');
+    expect.soft(JSON.parse(await w.drive.readText(stored?.id ?? '')).questions).toEqual(planned);
+    expect.soft((await status()).run?.questions).toEqual(expected);
+    const publication = reports.findIndex((r) => r.questions !== undefined);
+    expect.soft(publication).toBeGreaterThanOrEqual(0);
+    const later = reports.slice(publication + 1);
+    expect.soft(later.length).toBeGreaterThan(0);
+    expect.soft(later.at(-1)?.phase).toBe('done');
+    for (const report of reports.slice(Math.max(0, publication))) expect.soft(report.questions).toEqual(expected);
+    for (const body of bodies) expect.soft(new TextEncoder().encode(body).byteLength).toBeLessThanOrEqual(64 * 1024);
+    const lines = logs.flatMap((spy) => spy.mock.calls.map((args) => args.map(String).join(' ')))
+      .filter((line) => /question|snapshot/i.test(line));
+    expect.soft(lines).toHaveLength(1);
+    expect.soft(lines[0] ?? '').toMatch(/omit|trim|left out/i);
+    expect.soft(lines[0] ?? '').not.toContain('\n');
+  });
+
+  it('q1-live-publication-transport-failure-keeps-the-run', async () => {
+    // Only Date is frozen; the fixture's zero-delay retry waits can resolve without waiting on real time.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const { w, clearId, status } = await mixed(2);
+    const logs = [vi.spyOn(console, 'log'), vi.spyOn(console, 'warn'), vi.spyOn(console, 'error')]
+      .map((spy) => spy.mockImplementation(() => {}));
+    const reports: Array<{ seq: number; phase: string; questions?: Question[] }> = [];
+    const replies: number[] = [];
+    let publicationSeq: number | undefined;
+    const code = await w.runJob(0, async (url, init, next) => {
+      if (url.origin !== ORIGIN || !url.pathname.endsWith('/status') || init.method !== 'POST') return next();
+      const report = JSON.parse(String(init.body)) as typeof reports[number];
+      reports.push(report);
+      if (publicationSeq === undefined && report.questions?.length) publicationSeq = report.seq;
+      if (report.seq === publicationSeq) {
+        replies.push(503);
+        return new Response(JSON.stringify({ error: { code: 'server-busy' } }), { status: 503, headers: JSON_HEADERS });
+      }
+      const response = await next();
+      replies.push(response.status);
+      return response;
+    });
+    const files = await w.drive.listAll(w.rootId);
+    const manifestFile = files.find((f) => /^manifest-.*\.json$/.test(f.name));
+    expect(manifestFile).toBeDefined();
+    const manifest = JSON.parse(await w.drive.readText(manifestFile?.id ?? '')) as {
+      operations: Array<{ effect: { kind: string; path?: string; text?: string } }>;
+    };
+    const effect = manifest.operations.find(({ effect }) => effect.kind === 'write-runner-json'
+      && effect.path === '.bower/questions.json')?.effect;
+    expect(effect).toBeDefined();
+    const planned = (JSON.parse(effect?.text ?? '{}') as { questions: Question[] }).questions;
+    expect(planned).toHaveLength(2);
+    const expected = planned.map(publicQuestion).sort((a, b) => a.askedAt - b.askedAt);
+    expect(isQuestionSnapshot(expected)).toBe(true);
+    const failed = reports.filter((r) => r.seq === publicationSeq);
+    expect(failed).toHaveLength(4);
+    expect(failed.every((r) => r.phase === 'writing')).toBe(true);
+    for (const report of failed) expect(report.questions).toEqual(expected);
+    expect(replies.filter((s) => s === 503)).toHaveLength(4);
+    expect.soft(code).toBe(0);
+    expect.soft((await status()).run?.phase).toBe('done');
+    expect.soft(w.drive.pathOf(clearId, w.rootId)).toBe('Resources/Clear.md');
+    const stored = files.find((f) => w.drive.pathOf(f.id, w.rootId) === '.bower/questions.json');
+    expect.soft(JSON.parse(await w.drive.readText(stored?.id ?? '')).questions).toEqual(planned);
+    const next = reports.findIndex((r) => publicationSeq !== undefined && r.seq > publicationSeq);
+    expect.soft(next).toBeGreaterThanOrEqual(0);
+    expect.soft(reports[next]?.questions).toEqual(expected);
+    expect.soft(replies[next]).toBe(200);
+    expect.soft(reports[next]?.phase).not.toBe('failed');
+    expect.soft(reports.at(-1)?.phase).toBe('done');
+    expect.soft((await status()).run?.questions).toEqual(expected);
+    const lines = logs.flatMap((spy) => spy.mock.calls.map((args) => args.map(String).join(' ')))
+      .filter((line) => !/^(?:Tidy-up |timing: |The Claude provider planned )/.test(line));
+    expect.soft(lines).toHaveLength(1);
+    expect.soft(lines[0] ?? '').toMatch(/503|publish|question|snapshot/i);
+    expect.soft(lines[0] ?? '').not.toContain('\n');
+  });
+
   it.each([
     { test: 'q1-live-question-long-note-name-publishes', name: 'N'.repeat(80), lines: ['Alex has two tasks.'] },
     // Empty shown text is accepted in storage, but is an invalid shape for the public card.
