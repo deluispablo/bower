@@ -63,6 +63,10 @@ Read the adopted planning revision, PRODUCT, WORK_PLAN and current phase accepta
 
 Boundary assignments follow `docs/ARCHITECTURE.md`: preserve consumer compatibility, test versioned fixtures and recovery, and keep shared schema changes serialized. Read only the affected contract sections. The coordinator uses `docs/harness/ORCHESTRATOR_START.md` for dependency order; bounded P2 probes do not authorize P3 implementation.
 
+## Codex models (TL-P4-57)
+
+Pass `--model` and `--effort` to every `harness/codex-run.sh` run. Escalated reds, implementations and closing reviews use `gpt-6-astra` at `high`, and adversarial passes use `gpt-6-astra` at `xhigh`. Normal implementation and fix rounds use the default `gpt-6.1-sol` at `high`, and mechanical work uses it at `medium`. Every run uses the Fast tier, which is the default.
+
 ## Running in Codex (TL-P4-56)
 
 If this role runs in Codex, follow [CODEX_TAKEOVER](../../docs/harness/CODEX_TAKEOVER.md). Claude subagents become fresh `harness/codex-run.sh` sessions that follow `.claude/agents/<name>.md`, and the closing review is a fresh Codex reviewer at high effort. Tracked jobs become `/tmp/codex-run/*.result` files, which your heartbeat automation reads. Job scripts live in the repository (`harness/`), never in a session scratchpad. The rules above are unchanged.
