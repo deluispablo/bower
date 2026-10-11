@@ -1525,3 +1525,71 @@ status/diff confirm only the four production files and this notes file changed. 
 Skipped: runner-owned commits, pnpm check, capabilities e2e and B4b/B4c runtime wiring.
 Risk: acceptance needs the lead's frozen-test repair and coordinator's compatibility record;
 the four adversarial defects and all seven shared-validation path controls are green.
+
+
+## Round 4 red repair (TL-P4-51)
+
+Scope: repair only the two older fixtures authorized by TL-P4-48 addendum 6.
+The shared production validator and source-id/hash/normalized-text identity stay unchanged.
+No production code, b4a-r2/r3/r4 tests, callers, exports, dependencies or repository config changed.
+No byte, id, fence, word budget or independent-evidence assertion was loosened.
+
+Prior research reused offline from the packet: https://zod.dev/api and
+https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents.
+No network request or new dependency was needed for these fixture repairs.
+
+Red evidence before edits:
+- `b4a-fr1 7 rereads do not supply five observations`, src/data/contracts/b4a-fr1.test.ts:243:
+  changed-hash fixture returned true where the old test expected false; 8 other tests passed.
+- `b4a-artifact-scope-and-order: runner admission scopes artifacts and note edits`,
+  runner/test/admitted.test.ts:116: expected null, received `an invalid learned section`;
+  3 other tests passed.
+
+tests changed: src/data/contracts/b4a-fr1.test.ts: `b4a-fr1 7 rereads do not supply five observations` now varies capture ids while retaining identical source id, hash and text. Addendum 6 makes distinct hashes distinct evidence; this fixture again checks rereads. Same-hash replay refusal and the five/four independent-evidence controls retain their assertions.
+tests changed: runner/test/admitted.test.ts: `b4a-artifact-scope-and-order: runner admission scopes artifacts and note edits` now orders a JSONL ledger effect containing a live `New` observation before the edit, and cites its factId. Its source id comes from admitted words. Addendum 6 requires live evidence at every write boundary; all existing allowed-artifact, outside-folder, path and region assertions remain, with identical grounding for positive and negative edit controls.
+
+Verification uses OS-temp configs copied from the preceding round's documented setup.
+They retain the app/runner environments, setup and timer gate, relocate CPU reports and
+harness scratch fixtures, and build/read the new-instance bundle in OS temp.
+All assertions stay intact; no node_modules replacement or symlink was made.
+No git-writing command was issued by this worker. Full-suite new-instance fixtures use
+only their isolated, synthetic OS-temp repositories, as in the preceding round.
+
+
+Logs and JSON reports: `/private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-red-repair-ldw9wi8k`.
+- Full runner: `pnpm exec vitest run --maxWorkers=2 --config /private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-red-repair-ldw9wi8k/runner.mjs --configLoader runner`
+  from runner/: 58 files, 718 tests pass; runner-full.log and runner.json.
+- App TypeScript: `pnpm exec tsc --noEmit --incremental false -p tsconfig.app.json` passes; tsc-app.log.
+- Runner TypeScript: `pnpm exec tsc --noEmit --incremental false -p runner/tsconfig.json` passes; tsc-runner.log.
+- Touched-file ESLint passes with each package's configuration; eslint-app.log and eslint-runner.log.
+- Pre-edit targeted assertion failures: red-app.log and red-runner.log.
+The first pre-edit app attempt used a noncanonical /var temp path and failed setup resolution;
+canonicalizing it to /private/var allowed the assertion red above to run. No repo change was needed.
+
+
+First full app run: 177 files, 5,781 tests; 5,778 pass and 3 fail.
+The repaired b4a-fr1 test and all frozen round-2/3/4 controls pass.
+Failures: src/e2e-port.test.ts:37 (expected listen EPERM and timeout, one unhandled error),
+src/harness.test.ts:631 and :643 (the relocated fixture config loaded as CommonJS).
+The OS-temp directory lacked the preceding round's `package.json` with `type: module`.
+Adding that declaration only in OS temp resolves both harness failures: all 47 harness
+tests pass on the focused rerun (harness.log/harness.json). No assertion or repository
+configuration changed. The full app suite is rerun with that corrected temp setup.
+The previously recorded src/docs.test.ts:134 compatibility failure does not occur in this checkout.
+
+
+Final full app command:
+`pnpm exec vitest run src --maxWorkers=2 --config /private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-red-repair-ldw9wi8k/app.mjs --configLoader runner --outputFile.json=/private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-red-repair-ldw9wi8k/app-final.json`
+177 files, 5,781 tests: 176 files and 5,780 tests pass. The only failure is
+src/e2e-port.test.ts:37, `a server from another worktree is never reused`:
+expected sandbox listen EPERM at 127.0.0.1, its timeout and one unhandled error.
+Logs: app-final.log/app-final.json. Both repaired tests and all b4a-r2/r3/r4 controls pass.
+No new contradiction remains. Full runner: 58 files and all 718 tests pass.
+
+Delivery: `.codex-commits.json` contains exactly two objects, tests first and these
+notes alone second. The runner owns actual commits, pnpm check and capabilities e2e.
+Read-only git status/diff show only the two authorized tests, these notes and the
+commit metadata changed; git diff --check passes. No production code changed.
+
+Skipped: runner-owned commits, pnpm check and capabilities e2e; no runtime changes needed.
+Risk: the app suite remains nonzero solely for expected sandbox EPERM; runner gates remain pending.
