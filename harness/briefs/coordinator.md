@@ -65,7 +65,7 @@ Boundary assignments follow `docs/ARCHITECTURE.md`: preserve consumer compatibil
 
 ## Codex models (TL-P4-57)
 
-Pass `--model` and `--effort` to every `harness/codex-run.sh` run. Escalated reds, implementations and closing reviews use `gpt-6-astra` at `high`, and adversarial passes use `gpt-6-astra` at `xhigh`. Normal implementation and fix rounds use the default `gpt-6.1-sol` at `high`, and mechanical work uses it at `medium`. Every run uses the Fast tier, which is the default.
+Pass `--model`, `--effort` and `--tier` to every `harness/codex-run.sh` run. Every run uses `--tier standard`. At most **2** Codex workers at once. Normal implementation, fix rounds and reds use `gpt-6.1-sol` at `medium`, and mechanical work uses it at `low`. Escalated work, adversarial passes and closing reviews use `gpt-6.1-sol` at `high`. `gpt-6-astra` and `xhigh` are not used (TL-P4-57 addendum 2: the owner's Codex quota).
 
 ## Running in Codex (TL-P4-56)
 
