@@ -7179,5 +7179,70 @@
     "note": "TL-P4-47 addendum 3, TL-P4-55 (1). Not escalated. Designer verifies. Packet 2026-10-11-next-steps-plain-list-packet.md. implementer: codex.",
     "design": "verified",
     "review": "P4-117 PASS"
+  },
+  {
+    "id": "b5b-tables",
+    "task": "p4-b5",
+    "category": "feature",
+    "passes": false,
+    "ui": true,
+    "what": "Planning reads the type table; type and column proposals keep their exact payload until answered; an approved folder shows its Table (spec claude/design cd85b5ce).",
+    "steps": [
+      "The packet reds pass through runner main and the app; the spec table passes on demo and fake at 375 and 1440."
+    ],
+    "verify": "",
+    "note": "TL-P4-47. Escalated. Packet 2026-10-11-b5b-tables-packet.md (draft; open items to the lead). implementer: codex."
+  },
+  {
+    "id": "b5c",
+    "task": "p4-b5",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Grounded source facts are incorporated into id-bound Bower profiles through the existing note effects.",
+    "steps": [
+      "The packet reds and the C17 profile corpus cases pass through runner main."
+    ],
+    "verify": "",
+    "note": "TL-P4-47. After B5b. Packet 2026-10-11-b5c-packet.md (draft; open items to the lead). implementer: codex."
+  },
+  {
+    "id": "b4a-contract",
+    "task": "p4-b4",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "About me has byte-preserving regions and typed memory contracts (observations, facts) in their contract homes.",
+    "steps": [
+      "The packet contract reds pass; stored bytes of existing notes are unchanged."
+    ],
+    "verify": "",
+    "note": "TL-P4-48. Escalated. Packet 2026-10-11-b4a-contract-packet.md (draft; open items to the lead). implementer: codex."
+  },
+  {
+    "id": "b4b-observations",
+    "task": "p4-b4",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Admitted sources record observations; Forget removes a shown fact and a settled Bin removes facts bound only to that source.",
+    "steps": [
+      "The packet reds pass through runner main."
+    ],
+    "verify": "",
+    "note": "TL-P4-48. Escalated. After B4a and the B1d handoff. Packet 2026-10-11-b4b-observations-packet.md (draft). implementer: codex."
+  },
+  {
+    "id": "b4c-consolidation",
+    "task": "p4-b4",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Live evidence consolidates into About me with exact archives first and recoverable ordered writes.",
+    "steps": [
+      "The packet reds and the C17 B4 corpus cases pass through runner main."
+    ],
+    "verify": "",
+    "note": "TL-P4-48. Escalated. After B4b. Packet 2026-10-11-b4c-consolidation-packet.md (draft). implementer: codex."
   }
 ]
