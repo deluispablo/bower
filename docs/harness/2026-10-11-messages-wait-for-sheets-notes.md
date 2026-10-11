@@ -198,3 +198,46 @@ No implementation or green gates were run: this assignment authorizes one red on
 Offline standard basis supplied with the finding: MDN ARIA live regions explains that the live region
 must exist before its content changes for reliable announcements.
 Source: https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Guides/Live_regions
+
+## Fix round 1
+
+Applied review minor 1 in `src/ui/toast.tsx`: the polite status region stays mounted;
+only its message children are removed while an overlay is open. Closing the overlay
+inserts the retained messages into the existing live region. Hidden messages have
+no rendered text or action surface. No CSS or z-index changes.
+Applied folded minor 3 in `src/ui/Dock.tsx`: the overlay effect calls pause once per
+change; a separate unmount cleanup still releases the pause when Dock goes away.
+
+removed: Toasts' hidden-state null return and consequent status-region remount.
+removed: pause(false) cleanup on every overlay-state change; retained unmount cleanup.
+tests changed: none
+
+Offline standard basis: the supplied MDN live-region reference above explains that
+the region must exist before its content changes. No network was used.
+
+Before the fix, the full requested UI suite reproduced the status-node identity red:
+`MWS the status region stays mounted while a sheet is open`, dock.test.tsx:73 and :76.
+Result: 48 passed, one failed. Log: `/private/tmp/mws-fix1-before.log`.
+After the fix, that identity red passes; the full UI suite has 48 passed, one failed.
+Log: `/private/tmp/mws-fix1-ui.log`.
+Both runs used `pnpm exec vitest run src/ui --maxWorkers=2` with the existing OS-temp
+config and runner config loader, keeping cache and active timer-gate output outside
+the repository. No test or setup file was changed.
+
+Contradicting assertion (the whole targeted suite was run; no others found):
+`src/ui/dock.test.tsx:133`, `MWS a message raised while a sheet is open waits to show
+and be announced`, requires `screen.queryByRole('status')` to return null. The real
+Sheet fixture does not hide the newly rendered empty region from that query. The
+requested fix keeps this same region mounted and hides only its children, so the
+assertion now receives the empty status element. No workaround or test change made.
+Per WORKER.md TL-P4-51, delivery is blocked pending a ruling on this assertion.
+
+App TypeScript: pass (`pnpm exec tsc -p tsconfig.app.json --incremental false`).
+Log: `/private/tmp/mws-fix1-tsc.log`.
+Touched-file ESLint: pass (`pnpm exec eslint src/ui/toast.tsx src/ui/Dock.tsx`).
+Log: `/private/tmp/mws-fix1-eslint.log`.
+Unused-code gate: pass (`node scripts/check-unused-gate.mjs`).
+Log: `/private/tmp/mws-fix1-unused.log`.
+No git-writing commands or node_modules changes. Runner owns commits.
+pnpm check and e2e were not run under this fix-round assignment; pnpm check writes
+repository outputs, contrary to the assignment. All generated output is in OS temp.

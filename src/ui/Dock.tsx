@@ -16,8 +16,8 @@ export function Dock({ children }: { children?: ReactNode }) {
   // https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/
   useLayoutEffect(() => {
     pause(overlayOpen);
-    return () => pause(false);
   }, [overlayOpen, pause]);
+  useLayoutEffect(() => () => pause(false), [pause]);
   const stack = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = stack.current;

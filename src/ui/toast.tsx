@@ -165,10 +165,9 @@ export function Toasts({ visible = true }: { visible?: boolean }) {
     }
     shown.current = now;
   }, [list, hold, visible]);
-  if (!visible) return null;
   return (
     <div className={s.toasts} role="status" aria-live="polite">
-      {list.map((t) => (
+      {visible && list.map((t) => (
         <div
           key={t.id}
           className={s.toast}
