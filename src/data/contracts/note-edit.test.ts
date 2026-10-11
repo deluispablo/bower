@@ -91,6 +91,39 @@ it('B6a templates: legacy MOC Timeline stays unrewritten by ordinary history upd
     'A legacy MOC Timeline stays unrewritten').toBe(false);
   expect(bytes).toEqual(enc(raw));
 });
+it.each([
+  { type: 'source', name: 'b6-person-typed-source-still-relinks' },
+  { type: 'moc', name: 'b6-person-typed-moc-still-appends' },
+])('B6a templates: $name', ({ type }) => {
+  // C05 permits Timeline insertion into an ownership/2 person note; type grants no authorship.
+  const before = v2('\n', ['## Timeline']).replace('summary: Lease\n', `summary: Lease\ntype: ${type}\n`);
+  expect(parseNote('Alex.md', before).byBower).toBe(false);
+  const permits = (changes: Change[], after: string): void => {
+    const bytes = enc(before);
+    expect.soft(applyChanges(bytes, changes)).toEqual({ ok: true, text: after, bytes: enc(after) });
+    expect(bytes).toEqual(enc(before));
+  };
+  permits([relink(['Old', 'New'])], before.replaceAll('[[Old', '[[New'));
+  const line = '- 2026-10-06 · Merged Lease draft · [[Lease draft]]\n';
+  permits([append(entry('Merged Lease draft', 'Lease draft'))],
+    before.replace(E('timeline'), `${line}${E('timeline')}`));
+  permits([relink(['Old', 'New']), append(entry('Merged Lease draft', 'Lease draft'))],
+    before.replaceAll('[[Old', '[[New').replace(E('timeline'), `${line}${E('timeline')}`));
+});
+it('B6a templates: b6-person-typed-source-still-relinks plain review reproduction', () => {
+  expectEdit('---\ntype: source\n---\nSee [[Old]].\n', [relink(['Old', 'New'])],
+    '---\ntype: source\n---\nSee [[New]].\n');
+});
+it.each(['source', 'moc'])('B6a templates: Bower-written %s still refuses protected edits', (type) => {
+  const before = b6Legacy(type);
+  expect(parseNote('Alex.md', before).byBower).toBe(true);
+  expect(applyChanges(enc(before), [append(entry('Merged Lease draft', 'Lease draft'))]))
+    .toEqual({ ok: false, reason: 'unsupported' });
+  if (type === 'source') {
+    expect(applyChanges(enc(before), [relink(['Garden bulletin', 'New bulletin'])]))
+      .toEqual({ ok: false, reason: 'unsupported' });
+  }
+});
 const b6Project = (byBower = true): string => [
   '---', 'bower_format: ownership/2', 'summary: Repair the greenhouse.', 'type: project',
   ...(byBower ? ['by: bower'] : []), '---',

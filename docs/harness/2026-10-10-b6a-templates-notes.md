@@ -780,3 +780,27 @@ Owned files for this round:
 - `src/data/contracts/note-format.ts`
 - `src/data/spine/scripted.ts`
 - `docs/harness/2026-10-10-b6a-templates-notes.md`
+
+## Fix round 4 reds
+
+tests changed: `src/data/contracts/note-edit.test.ts`: added only; no existing assertion changed.
+
+- `b6-person-typed-source-still-relinks`: a person-owned ownership/2 Source must allow
+  mechanical relinking, C05 Timeline insertion, and both in canonical order. All three
+  exact text/byte assertions fail with `unsupported`; input bytes stay unchanged.
+- `b6-person-typed-moc-still-appends`: the equivalent person-owned MOC permits relinking
+  today; Timeline insertion and the combined edit fail with `unsupported`.
+- The plain Source fixture reproduces the review's exact `See [[Old]].` rename refusal.
+- Two Bower-written legacy controls pass: Source still refuses relinking and Timeline
+  insertion, and MOC still refuses Timeline insertion. Existing controls remain untouched.
+- Expected text is handwritten using the existing ownership fixture and Timeline format;
+  soft assertions exercise every operation independently despite the intended reds.
+
+Verification: `NODE_OPTIONS='--require=/tmp/b6a-test-output.cjs' pnpm exec vitest run
+src/data/contracts/note-edit.test.ts --maxWorkers=2 --configLoader runner`.
+Result: 3 failed tests (6 failed assertions), 76 passed, 79 total; exit 1.
+Log: `/tmp/b6a-round4-red.log`. Existing OS-temp preload redirects test output/cache
+writes outside the repository. No network, node_modules changes, runtime edits, or
+writing git commands. Read-only `git diff --check` passes. Green gates are left to
+implementation; this session owns only reds. Reference: the supplied
+`docs/harness/2026-10-11-p4-113-review.md`, TL-P4-32 addendum 1, and C05.
