@@ -217,3 +217,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `9c8e61b0` | next-steps-plain-list | none: tests only (NSPL reds for the spec rows). |
 | `4de03d64` | next-steps-plain-list | none: tests only (NSPL reds repaired to body indexes; task-region source reds, TL-P4-55 addendum 1). |
 | `1465a126` | next-steps-plain-list | Note gains optional `taskRegions` (personal or bower per body task, in body order) from B6a's projection, filled by parseNote, DriveVault, demo and fake; absent means every task is the person's. The note view renders Bower-region tasks as plain items; toggles keep global body indexes. Stored bytes unchanged. |
+| `034336a1` | q1b-questions-ui | Home's Questions focus settles after the answer continuation, so Radix's removal focus no longer wins; option and Something else… buttons keep 44 px targets at every width. Stored bytes unchanged. |
