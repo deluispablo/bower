@@ -165,3 +165,10 @@ No git-writing command was run; the coordinator owns the fix and notes commits.
 `pnpm check` was not run because its generated outputs write into the repository, contrary to this assignment.
 E2E was not run: the coordinator owns the new matrix and v2-dock/v2-name-sheet baselines, followed by designer
 verification before closure. No contradictions were found in the targeted acceptance assertions.
+
+## E2e repair
+Cause: spec mechanics, not the implementation. The installed clock runs in real time, so `pauseAt(Date.now() read from the page)` was already past on arrival ("Cannot fast-forward to the past"); the expectUncovered failures were the same race (a sheet opened under a half-paused clock) and did not recur.
+Fix: fixed install time as in v2-boot-states, `pauseClock` pauses 500 ms ahead (nothing is due in it); no src change.
+tests changed: e2e/messages-wait-for-sheets.spec.ts: clock pause made deterministic; source and width loops dropped (fixtures add source, phone/desktop projects give width); 375 edges now relative to the project's phone width; sign-out row skips on desktop
+removed: the in-spec `for source` and `for width` loops and `resize`; no assertion or positive control removed
+Gates: new spec 3x green on demo and fake (13 passed, 1 skipped each); v2-dock and v2-name-sheet 5 passed; vitest src/ui 48 passed. Logs /tmp/mws2.
