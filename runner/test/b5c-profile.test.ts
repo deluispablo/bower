@@ -217,10 +217,20 @@ it('b5-profile-five-note-budget control: selected notes use the shared read cach
 it('b5-profile-five-note-budget', async () => {
   const b = await profileBase({ names: [SOURCE, 'Second CV.txt'] });
   const wants = [b.id(PROFILE), b.id('Areas/Career/Career.md'), ...Array.from({ length: 3 }, (_, i) => b.id(`Areas/Career/Neighbour ${i}.md`))];
-  const result = await mainProfile(b, FACT, {}, wants);
+  const planningReads: URL[] = [];
+  const result = await mainProfile(b, FACT, { around: (fetch) => async (input, init) => {
+    const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+    if ((!init?.method || init.method === 'GET') && url.pathname === `/drive/v3/files/${b.id(PROFILE)}`
+      && url.searchParams.get('alt') === 'media' && !new Headers(init?.headers).has('Range')
+      // The persisted manifest ends planning; later reads include the required apply fence.
+      && !(await b.drive.listAll(b.root)).some((f) => /\/manifest-[^/]+\.json$/.test(b.drive.pathOf(f.id, b.root)))) {
+      planningReads.push(url);
+    }
+    return fetch(input, init);
+  } }, wants);
   const allowed = result.frames[1]?.value.allowedTargets as Record<string, string[]>;
   for (const s of b.sources) { expect(allowed[s.itemId]).toContain(b.id(PROFILE)); expect((allowed[s.itemId] ?? []).filter((id) => id !== b.id('Areas/Career')).length).toBeLessThanOrEqual(5); }
-  expect(media(result, b.id(PROFILE))).toHaveLength(1); expect(edits(result, b.id(PROFILE))).toHaveLength(1);
+  expect(planningReads).toHaveLength(1); expect(edits(result, b.id(PROFILE))).toHaveLength(1);
   const saturated = await profileBase({ names: [SOURCE, 'Second CV.txt'] });
   const over = await run(saturated, [select(saturated, [...wants, saturated.id('Areas/Career/Neighbour 3.md')], 'Areas/Career')]);
   expect(over.code, 'six requested notes refused before execution').toBe(1);
