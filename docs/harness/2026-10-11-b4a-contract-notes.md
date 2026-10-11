@@ -1367,3 +1367,161 @@ Commit plan: one tests-only commit and one notes-only commit in
 `.codex-commits.json`; the runner owns commits. Left out: implementation,
 pnpm check, e2e, full app/runner suites and B4b/B4c runtime wiring. The four
 contract gaps remain intentionally red for the implementation session.
+
+## Round 4 (addendum 6)
+
+implementer: codex
+
+Re-plan: observations.ts owns one validLearnedBlock. It reads the existing ownership
+parser's spans, validates the entire trailing learned block, and, when supplied the
+ledger at a write boundary, binds every claim to live evidence and rejects forgotten
+text anywhere in that block. The pure note author has no ledger and uses the same
+validator for framing; manifest and admission supply the resolved live ledger.
+Create, init, write-through, consolidation, Forget, Undo and rebuild share this home.
+The reducer's evidence identity becomes source id, source hash and normalized text;
+claiming that identity before invalidation prevents section replays surviving Undo.
+Budget/frontier, exact archives, dependencies and read fences keep their existing homes.
+
+Scope: observations.ts, note-edit.ts, run-manifest.ts and runner/src/spine/admitted.ts;
+all their existing callers and frozen tests are exercised, without changing tests,
+fixtures, configuration, exports outside these homes, dependencies or runtime wiring.
+Privacy risk: incomplete Forget must refuse the entire write, including untouched regions.
+Compatibility risk: older duplicate-hash assumptions may contradict addendum 6 and will
+be listed after the full suites. Missing-note creation must retain template-only support.
+
+Offline research reuses the packet's prior references, not newly verified:
+https://zod.dev/api
+https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+https://arxiv.org/pdf/2605.12978
+
+Red: all 11 frozen b4a-r4 cases failed on assertions before production changes;
+all positive controls passed. Log: /private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-r4-fix-wut5iuce/red.log.
+The first invocation could not resolve the temporary setup through the macOS /var
+alias; canonicalizing the scratch path fixed it before the assertion-red run.
+
+### Shared mechanism and removals
+
+validLearnedBlock reuses parseOwnership's byte spans and reconstructs the expected
+heading plus exactly three framed regions. Comparing it with the complete trailing
+block refuses gaps, additional regions, unknown marks, fenced marker text and trailing
+prose, including outside bytes which ownership/2 correctly keeps opaque on read.
+The person prefix remains byte-identical. A BOM-preserving decoder keeps Unicode and
+CRLF offsets correct. Exact template-only creation remains accepted with no learned
+claims; learned creation uses the same ledger-backed block check as every edit.
+
+Manifest and admission validate the complete after-text with the ledger visible at that
+operation, resolving all Undo run ids together before checking every region. Per-region
+factIds still constrain the rewritten claims, while untouched regions must independently
+bind to live evidence. Retained tombstones forbid their normalized text anywhere in the
+block unless live evidence has superseded the forgetting through the existing remembering
+rule. The four frozen adversarial findings now refuse at their production boundaries.
+The pure author remains mechanical: it validates framing, not unavailable ledger state;
+the round-4 Forget control intentionally confirms that its splice alone can leave a copy,
+which manifest and admission must then refuse. rebuildObservations rebuilds evidence only;
+its existing undoneRunIds About me write uses this same final whole-block validation.
+
+Authorization/read fencing and consolidation scheduling stay separate from block validity:
+initialization refuses existing About regions, appends only a learned section, and preserves
+the prefix; rewrite keeps its exact previous payload and immutable-byte invariant. No new
+parser, writer, region mechanism, evidence store, runtime dispatcher or dependency exists.
+The 400/400/200-word budgets, over-budget plus five-new-live-observations frontier, ordinary
+append without archive/frontier, and archive-backed Forget/Undo exemption remain unchanged.
+
+removed: aboutEvidenceOk, the separate per-payload evidence checker; validLearnedBlock owns every claim check.
+removed: appendAbout's after-parser, extra-region scan and per-region location scan; shared framing validates them.
+removed: rewriteRegion's About-only complete-region/extra-region scan; shared final-block validation replaces it.
+removed: manifest's initialization-only payload loop and rewrite-only evidence check; the complete after-block is checked once.
+removed: manifest's per-change Undo ledger reduction and live-fact-id scan; one resolved ledger and validator cover all regions.
+removed: section from observation identity and the source-version-collapsing rule; identity is source/hash/normalized text.
+tests changed: none; no repository test, fixture, assertion, threshold, timeout or skip changed.
+
+### Compatibility draft rows
+
+| Contract home | Round-4 change | Compatibility evidence / consumer |
+| --- | --- | --- |
+| src/data/contracts/observations.ts | Replace aboutEvidenceOk with validLearnedBlock; source/hash/normalized-text identity excludes section | Stored v1 JSONL schema and lenient stored reads unchanged; reducer/corruption/remembering/Undo controls pass. A changed hash is now distinct evidence under addendum 6. B4b/B4c use the shared block validator; retired helper has no remaining caller. |
+| src/data/contracts/note-edit.ts | Shared learned-block framing at initialization and final About edit; remove per-path region scans | Frozen round-4 author controls, BOM/CRLF/Unicode prefix, missing newline, read fence and existing MOC/profile/template controls pass. Personal bytes remain immutable; ownership parsing itself is unchanged. Author supplies framing only; write boundaries supply the ledger. |
+| src/data/contracts/run-manifest.ts | Validate generated root About me creation and every entire About after-text with one resolved ledger | No persisted effect/schema changes; all 1,420 run-manifest tests and frozen round-2/3/4 controls pass. Existing dependencies, exact archive bytes, successful frontier, budgets and Forget/Undo exemption stay enforced. Legacy manifests remain readable; learned writes with unsupported claims now refuse. |
+
+### Verification setup
+
+All logs, reports, CPU reports, attachments, config caches, synthetic repositories and
+bundle output are under /private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-r4-fix-wut5iuce, or the tests' own OS-temp folders.
+Every Vitest invocation uses --maxWorkers=2 and --configLoader runner. The temp configs
+import the existing app/runner configs and retain environments, setup and the real timer
+gate. The gate copy changes only imports and CPU destination. As in the prior red-repair
+session, temp-only transforms relocate harness.test.ts's two scratch destinations and
+its generated Playwright import, plus new-instance.test.ts's bundle script/read destination.
+The copied new-instance.sh builds real runner sources to the OS-temp bundle. All assertions
+remain unchanged; no repository test/config/setup or node_modules was edited or replaced.
+Unchanged new-instance tests operate only on their synthetic local git repositories; this
+worker ran no git-writing command and did not commit, push, replace or symlink node_modules.
+
+The first full app run exposed the new validator's BOM-offset bug. Its decoder now retains
+the BOM, rather than shifting the calculated section start by one character. The final
+1,524-test targeted run passes every contract, including the byte-preservation and read-fence
+controls. The initial lint/tsc run also caught a retired parseOwnership import; removing it
+made both app/runner TypeScript and touched-app ESLint pass. Neither transient failure
+remains; the final full app run follows these corrections.
+
+Green targeted command:
+`pnpm exec vitest run src/data/contracts/b4a-r4.test.ts src/data/contracts/note-edit.test.ts src/data/contracts/observations.test.ts src/data/contracts/b4a-r2.test.ts src/data/contracts/b4a-r3.test.ts src/data/contracts/run-manifest.test.ts --maxWorkers=2 --config /private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-r4-fix-wut5iuce/app.mjs --configLoader runner --outputFile.json=/private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-r4-fix-wut5iuce/contracts-final.json`
+1,524/1,524 pass, including all 11 frozen round-4 cases and all positive controls.
+Logs/reports: contracts-final.log, contracts-final.json. Before-change assertion reds:
+red.log. First round-4 green: round4.log.
+
+Full runner command, from runner/:
+`pnpm exec vitest run --maxWorkers=2 --config /private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-r4-fix-wut5iuce/runner.mjs --configLoader runner`
+58 files, 718 tests: 717 pass, one older contradiction below. Logs/reports:
+runner-full.log, runner.json. No loader, fixture, timer or unrelated runner failure.
+
+Non-emitting checks pass:
+`pnpm exec tsc --noEmit --incremental false -p tsconfig.app.json`
+`pnpm exec tsc --noEmit --incremental false -p tsconfig.node.json`
+`pnpm exec tsc --noEmit --incremental false -p runner/tsconfig.json`
+Touched production ESLint passes under app and runner package configurations.
+`node scripts/check-unused-gate.mjs` passes both ordinary (2) and production (34) baselines.
+Logs: tsc-app.log, tsc-node.log, tsc-runner.log, eslint-app.log, eslint-runner.log, unused.log.
+
+### Frozen contradictions and external failures
+
+1. src/data/contracts/b4a-fr1.test.ts:243, `b4a-fr1 7 rereads do not supply five observations`:
+   expects changed source hashes to remain a single observation. Addendum 6 explicitly
+   includes hash in identity; five distinct hashes now provide five observations. The
+   same-hash replay refusal and five/four independent-evidence controls still pass.
+   No test changed and no second identity was added just for the consolidation gate.
+2. runner/test/admitted.test.ts:116, `b4a-artifact-scope-and-order: runner admission scopes
+   artifacts and note edits`: expects admission of ungrounded `New` with no ledger effect,
+   live observation or factIds. The frozen round-4 ruling requires live evidence at every
+   write boundary. The shared validator correctly returns `an invalid learned section`.
+   The round-4 complete admission controls pass; no test or missing-evidence bypass changed.
+3. src/docs.test.ts:134, `every change since the P2 freeze is listed`: existing commit
+   98abf5a3 is missing from the shared compatibility ledger. The three contract draft rows
+   above are ready for the coordinator; this worker does not edit the shared ledger.
+4. src/e2e-port.test.ts:37, `a server from another worktree is never reused`: expected
+   sandbox listen EPERM at 127.0.0.1, a timeout and one unhandled error. No assertion,
+   timeout or environment restriction changed.
+
+The runner owns commits, pnpm check and capabilities e2e on demo/fake; these were not run
+here and no check green mark is claimed. Runtime B4b/B4c wiring and all test repairs remain
+outside the change. .codex-commits.json declares one production commit for the four owned
+production files and one commit for these notes alone. Acceptance remains blocked on the
+frozen contradictions and shared compatibility bookkeeping, not on the round-4 reds.
+
+### Final full-suite result
+
+Final full app command from the worktree:
+`pnpm exec vitest run src --maxWorkers=2 --config /private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-r4-fix-wut5iuce/app.mjs --configLoader runner --outputFile.json=/private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-r4-fix-wut5iuce/app-final.json`
+177 files, 5,781 tests: 5,778 pass, exactly the three documented failures remain:
+changed-hash identity at b4a-fr1.test.ts:243, shared compatibility bookkeeping at
+docs.test.ts:134 and expected listen EPERM at e2e-port.test.ts:37 (plus its one unhandled
+error). Logs/reports: app-final.log, app-final.json. All BOM, CRLF, Unicode, missing-newline,
+author, read-fence and round-4 controls now pass in the full suite. The runner's one frozen
+admission contradiction is the only other full-suite failure; every failure is listed above.
+No test was edited to make any result green. Final git diff --check passes; read-only git
+status/diff confirm only the four production files and this notes file changed. The ignored
+.codex-commits.json is present and contains exactly the requested two commit objects.
+
+Skipped: runner-owned commits, pnpm check, capabilities e2e and B4b/B4c runtime wiring.
+Risk: acceptance needs the lead's frozen-test repair and coordinator's compatibility record;
+the four adversarial defects and all seven shared-validation path controls are green.
