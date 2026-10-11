@@ -349,3 +349,162 @@ filesystem artifact or network request is introduced. Globals and both client so
 
 removed: none.
 commits: none; coordinator commits tests and notes separately.
+
+
+## Implementation — after the v15 red repair, 2026-10-11
+
+Current status: blocked under TL-P4-51; the uncommitted implementation is retained for coordinator inspection.
+The earlier migration blocker above is resolved by the committed v15 red repair. This session changes no test.
+No network, direct writing git command, node_modules replacement/symlink, server or API-vitest run was used.
+The explicitly requested src suite runs its existing scratch-repository git fixtures and port fixture;
+the port fixture's bind was refused with EPERM. All session verification output goes to /tmp.
+
+### Research and implementation
+
+Offline sources, not fetched (the assignment forbids network):
+- [RFC 9110 §8.8.3, ETag](https://www.rfc-editor.org/rfc/rfc9110.html#section-8.8.3): a validator identifies
+  the whole representation. The existing Worker revision identifies the full replacement snapshot;
+  it rises on a visible change, with phaseAt changing only on a phase transition.
+- [Kafka delivery semantics / idempotent production](https://kafka.apache.org/documentation/#semantics):
+  sequence numbers identify replayed sends. Reuse RunnerStatus retries and Person's existing
+  attempt/ticket/seq transaction fences, including duplicate terminal-report handling.
+- [SQLite ALTER TABLE](https://www.sqlite.org/lang_altertable.html): append the nullable column through
+  Person's shipped migration mechanism. Step 15 is exactly the SQL in “v15 red repair”; steps 1–14 are unchanged.
+  Offline SHA-256 of its JSON SQL array matches the committed pin:
+  d7fda87dff33915a0039de7b54bf893b61751588eb64155e5b0adc11e62b0917.
+
+Changes in the existing homes:
+- `src/data/spine/engine.ts`: optional awaited onPlan callback immediately after the validated manifest
+  is persisted or recovered, before the opening checkpoint or any effect.
+- `runner/src/main.ts`: derive this run's asking identities from reportPlan, project their complete cards
+  from the durable questions effect, and publish via RunnerStatus. Completed recovery uses the same projection.
+  No manifest/report/checkpoint format changes, extra model call or per-item streaming.
+- `runner/src/status.ts`: carry the snapshot on subsequent reports, including done recovery; refuse snapshots
+  outside ten cards or existing question bounds and reports over 64 KiB. Empty first snapshots accompany
+  the next ordinary report, preserving legacy phase sequences; later replacement-to-empty is publishable.
+- `api/src/person-schema.ts`: schema version 15 and the exact sole statement
+  `ALTER TABLE runs ADD COLUMN open_questions_snapshot TEXT`, no default/check/NOT NULL.
+- `api/src/person.ts`, `run-ticket.ts`, `runner.ts`: validate the additive public field, keep its JSON in
+  the existing runs row, update it only after existing fences, and raise revision only for changed state.
+  Same-phase snapshot changes preserve phaseAt. Omission preserves the existing snapshot; SQL NULL omits
+  questions on GET /status; a present [] retains its separate wire meaning.
+- `src/data/contracts/{questions,types,run-wire}.ts`: public option ids/labels, an explicit action-free projection,
+  strict snapshot validation, and the additive optional RunWire.questions. ReportQuestion remains unchanged.
+  `src/data/spine/scripted.ts` resolves an action only after the existing stored-option validator narrows it.
+- `src/data/live/{runs,index}.ts`: bind each concrete vault lifetime to a read of LiveRuns' accepted wire,
+  and emit the vault after an accepted run-state change. The stable asynchronous I/O door stays in place;
+  binding uses its concrete lifetime. Existing revision/run/generation/session fences and polling remain.
+- `src/data/vault/drive-vault.ts`: merge by id plus askedAt, prefer Drive, strip stored actions, and run the
+  existing journal/subject/words policy on both sources. Pile projection uses that same reduction.
+  A live merged view uses asking order; stored-only legacy reads retain their existing order.
+
+There is no copied vault snapshot, new store, channel, poll loop, journal path or write to runner-owned files.
+
+### Contradicting tests — complete inventory after the full targeted suites
+
+[WORKER.md](WORKER.md), “List every contradiction before stopping (TL-P4-51)”, says:
+“run the whole targeted suite first and list every contradicting test with file:line in the notes, then stop”.
+Both cases below passed their initial live-snapshot positive control and then failed with an auth error,
+not a missing snapshot or a load error. Their setup signs out successfully and never establishes another
+signed-in session. LiveSession deliberately keeps current() null after sign-out; the stable run door must
+resolve a signed-in folder before asking for status. Allowing these calls would contradict sign-out's existing
+meaning and the instruction to keep every other test green. No authentication or lifetime fence was weakened.
+
+| Exact test | File:line | Conflict |
+| --- | --- | --- |
+| `Q1c q1-stored-and-live-question-merge: folder fence discards an old snapshot` | `src/data/live/live.test.ts:1876` (parameterized declaration :1846, sign-out :1868) | Requires run status to resolve after successful sign-out without a new sign-in; rootId correctly refuses with auth. Changing the mocked remote folder and calling session.current at :1875 does not authenticate again. |
+| `Q1c q1-stored-and-live-question-merge: session fence discards an old snapshot` | `src/data/live/live.test.ts:1876` (parameterized declaration :1846, sign-out :1868) | Same impossible signed-out-to-signed-in fixture transition. It requires stored questions to be readable at :1881 without restoring a session. |
+
+Existing positive controls: `signs in and out`, `src/data/live/live.test.ts:1153` (null assertion :1159);
+`stale-session logout answering 204 forgets this person and keeps the folder outbox`, null assertion :1688;
+`failed remote logout forgets bytes and metadata before the successful retry`, null assertion :1701.
+All remain green. The successful-logout path in `src/data/live/session.ts:91–104` caches null;
+`rootId` refuses it at :60. The live door's folder/lifetime checks remain unchanged.
+
+Both fixture branches also await the obsolete call at `src/data/live/live.test.ts:1878` without handling
+its existing epoch conflict. That line is not reached in these runs; it is an additional setup concern for
+red-owner inspection, not a separately claimed observed failure.
+
+`old questions without a subject still read`, `src/data/compat-p2.test.ts:119`, initially exposed an
+implementation ordering regression. It is avoided by retaining stored-only legacy order; no test was changed.
+`a server from another worktree is never reused`, `src/e2e-port.test.ts:37`, is an environment failure:
+its listen at :21 is refused with EPERM. It is not a packet contradiction and requires coordinator execution.
+
+### Verification
+
+- Observed unchanged-production reds: runner/test/q1c-live.test.ts :141 and :173 (2 AssertionErrors),
+  and all 14 Q1c merge reds in src/data/live/live.test.ts (AssertionErrors).
+  Logs: /tmp/q1c-impl-runner-red.log and /tmp/q1c-impl-live-red.log.
+- Final runner suite: 47 files, 632 tests pass, including both Q1c publication/recovery reds and all Q1a regressions.
+  `pnpm -C runner exec vitest run --maxWorkers=2 --reporter=default`.
+  Log: /tmp/q1c-impl-runner-all.log. Default reporter avoids repository JSON output.
+- Final full src suite: 165 passing files, 5,613 passing tests; 3 failures in 2 files.
+  Exactly the two contradictory Q1c session/folder cases listed above and the EPERM port fixture fail.
+  All other existing tests and the other 12 Q1c merge cases pass; the one unhandled error is listen EPERM.
+  `pnpm exec vitest run src --maxWorkers=2`; log /tmp/q1c-impl-src-all.log.
+- tsc app/node/runner/api: pass, no emitted files.
+  Logs: /tmp/q1c-impl-tsc-{app,node,runner,api}.log.
+- ESLint touched app/runner/api files: pass.
+  Logs: /tmp/q1c-impl-eslint-{app,runner,api}.log; final changed-file rechecks:
+  /tmp/q1c-impl-eslint-vault.log and /tmp/q1c-impl-eslint-status.log.
+- pnpm check and demo/fake app/capabilities e2e: coordinator work. They need ports and their default
+  commands write repository artifacts, both forbidden in this session. No gate/e2e pass is claimed.
+- API tests: not run (ports). No test body, name, number, fixture or test configuration changed.
+
+### API reds and coordinator commands
+
+Run every exact `Q1c q1-status-seq-revision-recovery` name in the 23-row table under
+“API reds — not run: api (ports)” above, plus:
+- `Q1c v15: a null snapshot means no live questions`, `api/test/q1-questions.test.ts:189`.
+- `Q1c v15: a pre-v15 Person migrates and keeps every run`, `api/test/person.test.ts:596`.
+
+This includes same-phase replacement/no-op/empty/revision/phaseAt; duplicate/lost response; seq/attempt/ticket/run
+fences; takeover/restart; every malformed/over-bound refusal; ten cards; 64 KiB; action-free public options;
+shown-state reconnect; legacy omission; SQL NULL; and preservation of all pre-v15 rows.
+Also run the immutable schema hash and repaired historical-rewind regression files, then the full API suite:
+
+```sh
+pnpm -C api exec vitest run test/q1-questions.test.ts test/person.test.ts test/deadlines.test.ts test/schema-steps.test.ts --maxWorkers=2 --reporter=default > /tmp/q1c-impl-api-targeted.log 2>&1
+pnpm -C api exec vitest run --maxWorkers=2 --reporter=default > /tmp/q1c-impl-api-all.log 2>&1
+```
+
+The coordinator also owns src/e2e-port.test.ts, pnpm check, and demo/fake app/capabilities e2e.
+The red owner must repair/rule on the two session fixtures before Q1c can be delivered; the implementation
+is not ready for integration. No permission request is sent to the owner by this worker.
+
+### Compatibility row drafts for the contracts change
+
+| Changed contract | Existing reader / compatibility proof | Current evidence |
+| --- | --- | --- |
+| RunWire.questions? / runner status snapshot | Existing WorkerHttp → LiveRuns; omission reads old status as before. Person omission retains an accepted snapshot; [] replaces it. | Legacy src/runner regressions pass; 12 merge reds pass; API omission/empty/refusal rows pending coordinator. |
+| runs.open_questions_snapshot / append-only v15 | Nullable TEXT; old rows acquire NULL and GET omits questions. Shipped steps 1–14 byte-identical; the exact v15 SQL hash is already pinned. | Runner realWorld uses the production Person/migration; API migration/hash/rewind/null reds pending coordinator. |
+| Durable plan callback | P2 manifest/checkpoint/report fixtures through their existing parsers. No new stored record field or interpretation of an old effect. | Both main publication/recovery reds and runner P2 compatibility pass. |
+| Question card option projection | Stored questions/actions retain their existing runtime validator and format; only public option ids/labels leave storage. ReportQuestion unchanged. | Q1a runner suite and old yes/no src readers pass; API projection/options/state reconnect pending coordinator. |
+| DriveVault merged question/pile projection | Existing stored order preserved when no live snapshot; asking-key Drive preference, existing boolean/option/text journal filtering and subject policy shared. | 12 Q1c merge cases pass; two session fixtures conflict as listed. Full src has no other production regression. |
+
+removed: stored option actions from public card/status projections; stored actions and ReportQuestion remain in their homes.
+removed: none of the existing attempt/seq/ticket/revision/session/phase fences, polling, stored schemas or journal filters.
+tests changed: none.
+commits: none; the coordinator owns commits and this assignment forbids git writes.
+
+## Red repair 3
+
+tests changed: src/data/live/live.test.ts: sign in again after sign-out before the fence check
+
+Repaired only the folder/session cases of
+`Q1c q1-stored-and-live-question-merge: %s fence discards an old snapshot`.
+After sign-out, the existing Worker sign-in mock pattern establishes a new signed-in session;
+the folder case uses the new folder and the session case retains the original folder.
+The obsolete call captures its epoch rejection immediately and verifies a BowerError, following
+the existing outcome pattern at src/data/live/live.test.ts:434–443. The stale/current snapshot
+exclusion and stored-question assertions keep their original intent; no test name changed.
+Offline local references: Worker sign-in mocking at src/data/live/live.test.ts:60 and :698,
+and the sign-out/sign-in transition at :73–77. No network research was performed.
+
+Before repair, the full live suite reproduced exactly the two listed auth failures: 114 passed, 2 failed.
+Log: /tmp/q1c-repair3-live-before.log.
+After repair, all 116 tests in src/data/live/live.test.ts pass with the retained implementation:
+`pnpm exec vitest run src/data/live/live.test.ts --maxWorkers=2 --reporter=default --no-cache --configLoader=native`.
+Log: /tmp/q1c-repair3-live.log. Native config loading and disabled caching avoid repository test artifacts.
+Production diff preserved byte-for-byte against /tmp/q1c-repair3-production-before.diff.
+No git writes, node_modules changes, pnpm check, e2e or API run; broader gates remain coordinator work.

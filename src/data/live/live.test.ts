@@ -1864,7 +1864,7 @@ describe('Q1c live questions through makeLiveSources and WorkerHttp', () => {
           const response = await new Promise<Response>((yes) => { release = yes; });
           return response.json();
         });
-        const old = s.runs.current();
+        const old = s.runs.current().then((value) => ({ value }), (error: unknown) => ({ error }));
         await s.session.signOut();
         if (fence === 'folder') {
           const other = (await drive.createFolder('root', 'Other made-up folder')).id;
@@ -1872,10 +1872,11 @@ describe('Q1c live questions through makeLiveSources and WorkerHttp', () => {
           setFolder(other);
         } else setFolder(root);
         setReply({ revision: 1, run: q1cWire([], 'Q1C_NEW_SESSION') });
-        await s.session.current();
+        vi.spyOn(s.worker, 'signIn').mockResolvedValueOnce(undefined);
+        await s.session.signIn();
         await s.runs.current();
         release(Response.json({ revision: 99, run: q1cWire([q1cQuestion('Q1C_STALE')]) }));
-        await old;
+        expect(await old).toMatchObject({ error: { name: 'BowerError' } });
         status.mockRestore();
         expect((await s.vault.questions()).some((q) => q.id === 'Q1C_STALE' || q.id === current.id)).toBe(false);
         if (fence === 'session') expect((await s.vault.questions()).map((q) => q.id)).toContain(legacy.id);
