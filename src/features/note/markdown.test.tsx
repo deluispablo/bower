@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import { Markdown, outlineOf } from './markdown';
 
 describe('the note reader', () => {
@@ -29,4 +29,34 @@ describe('the note outline', () => {
       ['Timeline', 'tl'],
     ]);
   });
+});
+
+it('NSPL no Bower region', () => {
+  const onToggle = vi.fn();
+  const { container } = render(<Markdown text={[
+    '## Next steps', '- A normal bullet.', '- [ ] Plant mint.', '- [x] Choose seeds.',
+    '', '## Notes', '- [ ] Buy a pot.',
+  ].join('\n')} link={(target) => target} onToggle={onToggle} />);
+  // Positive control: ordinary Markdown is still a real unordered list.
+  const ordinary = screen.getByText('A normal bullet.');
+  expect(ordinary.tagName).toBe('LI');
+  expect(ordinary.parentElement?.tagName).toBe('UL');
+  expect(ordinary).not.toHaveClass('md-task');
+  expect(within(ordinary).queryByRole('checkbox')).not.toBeInTheDocument();
+  // A heading alone grants no Bower ownership: all three tasks remain personal.
+  expect(screen.getAllByRole('checkbox')).toHaveLength(3);
+  const open = screen.getByRole('checkbox', { name: 'Plant mint.' });
+  const done = screen.getByRole('checkbox', { name: 'Choose seeds.' });
+  const next = screen.getByRole('checkbox', { name: 'Buy a pot.' });
+  expect(open).toBeEnabled();
+  expect(open).not.toBeChecked();
+  expect(done).toBeEnabled();
+  expect(done).toBeChecked();
+  expect(done.closest('label')).toHaveClass('md-done');
+  expect(container.querySelectorAll('li')).toHaveLength(4);
+  fireEvent.click(open);
+  fireEvent.click(done);
+  fireEvent.click(next);
+  expect(onToggle.mock.calls).toEqual([[0], [1], [2]]);
+  cleanup();
 });
