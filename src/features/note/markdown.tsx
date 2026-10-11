@@ -37,11 +37,12 @@ export function Inline({ text, link }: { text: string; link: LinkFn }) {
 interface MarkdownProps {
   text: string;
   link: LinkFn;
+  taskRegions?: Note['taskRegions'];
   /** Makes task boxes tickable; gets the task's position among the note's tasks. */
   onToggle?: (index: number) => void;
 }
 
-export function Markdown({ text, link, onToggle }: MarkdownProps) {
+export function Markdown({ text, link, taskRegions, onToggle }: MarkdownProps) {
   const lines = text.split('\n');
   let task = -1;
   const blocks: ReactNode[] = [];
@@ -71,13 +72,16 @@ export function Markdown({ text, link, onToggle }: MarkdownProps) {
         const box = TASK_BOX.exec(t);
         if (box) task++;
         const n = task;
+        const personalTask = box && taskRegions?.[n] !== 'bower';
         items.push(
-          <li key={`${key}-${items.length}`} className={box ? 'md-task' : undefined}>
-            {box ? (
+          <li key={`${key}-${items.length}`} className={personalTask ? 'md-task' : box?.[1] === 'x' ? 'md-done' : undefined}>
+            {personalTask ? (
               <label className={box[1] === 'x' ? 'md-done' : undefined}>
                 <Checkbox checked={box[1] === 'x'} readOnly={!onToggle} disabled={!onToggle} onChange={() => onToggle?.(n)} />
                 <span>{inline(t.slice(box[0].length), link, `${key}-${items.length}`)}</span>
               </label>
+            ) : box ? (
+              <span>{inline(t.slice(box[0].length), link, `${key}-${items.length}`)}</span>
             ) : (
               inline(t, link, `${key}-${items.length}`)
             )}
