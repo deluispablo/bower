@@ -57,6 +57,26 @@ describe('messages wait for sheets', () => {
     expect(screen.getByRole('button', { name: 'Undo' })).toBeVisible();
   });
 
+  it('MWS the status region stays mounted while a sheet is open', () => {
+    const view = render(<ModalDock />);
+    const status = screen.getByRole('status');
+    act(() => { toast('Pile kept'); });
+    expect(screen.getByRole('status')).toBe(status);
+    expect(status).toHaveTextContent('Pile kept');
+    expect(screen.getByText('Pile kept')).toBeVisible();
+
+    view.rerender(<ModalDock first />);
+    expect(screen.getByRole('dialog', { name: 'Pile details' })).toBeVisible();
+    // Positive control: retaining the region must not expose its message over the sheet.
+    expectMessageHidden('Pile kept');
+    // Radix makes the background inaccessible; include hidden nodes to check DOM identity.
+    expect.soft(screen.queryByRole('status', { hidden: true })).toBe(status);
+
+    view.rerender(<ModalDock />);
+    expect.soft(screen.getByRole('status')).toBe(status);
+    expect(screen.getByText('Pile kept')).toBeVisible();
+  });
+
   it.each([
     { kind: 'plain', duration: 4000, action: undefined },
     { kind: 'action', duration: 8000, action: { label: 'Undo', run: () => undefined } },

@@ -172,3 +172,29 @@ Fix: fixed install time as in v2-boot-states, `pauseClock` pauses 500 ms ahead (
 tests changed: e2e/messages-wait-for-sheets.spec.ts: clock pause made deterministic; source and width loops dropped (fixtures add source, phone/desktop projects give width); 375 edges now relative to the project's phone width; sign-out row skips on desktop
 removed: the in-spec `for source` and `for width` loops and `resize`; no assertion or positive control removed
 Gates: new spec 3x green on demo and fake (13 passed, 1 skipped each); v2-dock and v2-name-sheet 5 passed; vitest src/ui 48 passed. Logs /tmp/mws2.
+
+## Fix round 1 red
+
+Designer finding: P4-115 minor 1. The Dock's polite status region unmounts while a sheet is open,
+then remounts already holding the message. This red requires the same DOM node before, during and after
+the real Sheet lifecycle. The hidden-role query includes Radix's inaccessible background, so accessibility
+tree hiding cannot be mistaken for unmounting. Soft identity assertions check both open and closed states.
+Positive controls: the message is visible before opening, hidden during the sheet, and visible after closing.
+
+tests changed: src/ui/dock.test.tsx: added one status-region DOM identity red with message visibility controls.
+Existing tests and assertions are unchanged. Only the test file and these notes changed.
+
+Exact test: `MWS the status region stays mounted while a sheet is open`.
+Command: `pnpm exec vitest run src/ui/dock.test.tsx src/ui/toast.test.ts --maxWorkers=2
+--config /private/tmp/mws-red-2bbfek65/vitest.config.mts --configLoader runner --reporter=default`.
+Log: `/private/tmp/mws-fix-round-1-red.log`.
+Result: 16 tests, 15 pass, this one fails only on the unmount/remount identity assertions:
+open returns null instead of the original status node; close returns a new node instead of that original.
+All positive controls pass; no import, setup or timer-gate failures. No contradicting existing tests found.
+Reused the existing OS-temp configuration, preserving both setups and the active timer gate;
+cache, CPU reports and logs remain outside the repository. No network, git writes or node_modules changes.
+No implementation or green gates were run: this assignment authorizes one red only.
+
+Offline standard basis supplied with the finding: MDN ARIA live regions explains that the live region
+must exist before its content changes for reliable announcements.
+Source: https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Guides/Live_regions
