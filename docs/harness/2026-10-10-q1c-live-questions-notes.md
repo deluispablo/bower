@@ -179,3 +179,105 @@ Validation:
 
 removed: none.
 commits: none; coordinator owns commits.
+
+## Implementation
+
+Implementation session, 2026-10-11. Status: blocked under TL-P4-51. No production file or test was changed.
+Read the worker card, packet contracts 1–5, Q1 contract, prep file/overlap ledgers and these notes.
+No network, successfully bound port, direct writing git command or dependency replacement was used.
+The explicitly required full src suite runs its existing git fixtures in scratch repositories; no worktree git write
+was requested. Its existing port fixture attempted a listen and was refused, as recorded below.
+
+### Research and intended mechanism
+
+Offline references (not fetched): [RFC 9110 §8.8.3, ETag](https://www.rfc-editor.org/rfc/rfc9110.html#section-8.8.3)
+identifies the representation; use the existing monotonic Worker revision to identify the replacement snapshot.
+[Kafka delivery semantics](https://kafka.apache.org/documentation/#semantics) describes idempotent production;
+reuse the existing attempt/ticket/sequence fences so a lost-response retry cannot replace an accepted asking.
+Local research: `RunnerStatus.request/post`, `Person.runnerReport`, `LiveRuns.current/take`,
+`DriveVault.questionSnapshot/questions`, `makeLiveSources` lifetime wiring and `runOperations` manifest persistence.
+These homes already provide the transport, polling, journal filtering and fencing required by the packet.
+
+The intended publication hook belongs immediately after the existing engine has written a validated manifest,
+before the first effect, and also receives a recovered manifest. The runner would project its questions effect
+into action-free cards, capped at ten, and reuse RunnerStatus. A completed recovery must also carry the snapshot
+on its terminal report. DriveVault would merge the accepted LiveRuns snapshot with Drive by id plus askedAt,
+prefer Drive, then run the existing journal/subject policy. No alternate polling or storage home is warranted.
+
+### Contract/test contradictions, complete inventory from the permitted reads
+
+The existing `runs` row has no snapshot field. Contract 2 requires durable replacement across a fresh Person;
+contract 4 requires the existing run state and forbids a second question store. The standard implementation
+adds a nullable snapshot column through an appended schema step, preserving the shipped steps. The following
+committed tests must be updated for that additive migration, but this assignment explicitly forbids every test edit.
+These are inspection findings, **not claimed API execution failures**; the coordinator owns API execution.
+
+| Test / file:line | Conflict |
+| --- | --- |
+| `shipped person schema steps never change`, `api/test/schema-steps.test.ts:66` | Requires SCHEMA_VERSION's step count to equal the 14 hashes in SHIPPED. An additive step must have its hash pinned in this test. Editing a shipped step also fails the preceding hash assertion at :64. |
+| `person storage migrates from v7 to v8 keeping every row`, `api/test/person.test.ts:440` (rewind :449) | The rewind drops only shipped columns through v14, retains a new runs column, then replays the added ALTER at restart; duplicate-column failure. |
+| `person storage migrates from v8 to v9 keeping every run`, `api/test/person.test.ts:477` (rewind :486) | Same retained-column/replayed-migration conflict. |
+| `person storage migrates from v9 to v10 keeping every ticket`, `api/test/person.test.ts:510` (rewind :517) | Same retained-column/replayed-migration conflict, even though no run row is needed. |
+| `person storage migrates from v10 to v11 keeping every row`, `api/test/person.test.ts:528` (rewind :543) | Same retained-column/replayed-migration conflict. |
+| `storage from before the deadline table keeps its deadlines`, `api/test/deadlines.test.ts:99` (rewind :107) | undoV14 leaves the new runs column while setting schema version 11; restart replays its ALTER. |
+| `a v13 object with a run going and a gone ticket moves to v14 with no second dispatch`, `api/test/deadlines.test.ts:135` (rewind :143) | Same conflict when replaying from version 13. |
+| `deadlines kept at schema v12 keep their times and start with no attempts`, `api/test/deadlines.test.ts:239` (rewind :245) | Same conflict when replaying from version 12. |
+
+Earlier person migration fixtures recreate `runs`, so they do not have the retained-column conflict.
+The main phase-sequence assertions noted in the red delivery are avoidable: keep the phase-only writing report
+and publish an additional same-phase report only when a nonempty question snapshot first becomes durable.
+They are not counted as contradictions. No production workaround was added to bypass a schema test.
+No immutable admission manifest was repurposed as mutable status storage, and no second KV question store was added.
+
+### Compatibility row drafts (no contract change delivered)
+
+| Proposed contract change | Legacy compatibility / required proof | State |
+| --- | --- | --- |
+| RunWire / runner status `questions?` | Omission keeps existing status meanings and any accepted snapshot; a present empty array replaces it. Validate public fields/count/body bounds without actions. API Q1c contract 2/4/5 rows. | Draft; blocked |
+| Person run snapshot column / appended migration | Existing rows default to null and continue omitting questions; existing phaseAt and revision rules retain their meaning. Fresh Person returns accepted snapshots. Shipped migration hashes remain unchanged; new hash and rewind fixtures require test-owner repair. | Draft; blocked |
+| Durable plan publication hook | No new stored manifest field; legacy P2 manifests/checkpoints/reports read identically. New and recovered manifests publish before effects; report projection remains unchanged. runner/test/q1c-live.test.ts. | Draft; blocked |
+| DriveVault question projection | Stored questions and actions remain in their existing format; public cards expose only option ids/labels. Asking-key merge, Drive preference and existing journal suppression keep old boolean and new option/text answers meaningful. src/data/live/live.test.ts Q1c rows. | Draft; blocked |
+
+### Coordinator execution needed
+
+All 23 API reds listed in “API reds — not run: api (ports)” above remain required, now at the current checkout:
+`pnpm -C api exec vitest run test/q1-questions.test.ts --maxWorkers=2`.
+This runs every `Q1c q1-status-seq-revision-recovery` case: same-phase replacement/revision/phaseAt,
+duplicate seq and lost response, four stale fences, takeover/restart, all eleven malformed/over-bound cases,
+ten-card acceptance, 64 KiB body refusal, action-free projection, reconnect and omitted-field compatibility.
+Also run `api/test/schema-steps.test.ts`, `api/test/person.test.ts` and `api/test/deadlines.test.ts`
+after the lead resolves the test-edit restriction. Full API regressions, pnpm check and demo/fake
+app/capabilities e2e remain coordinator work because this session cannot bind ports; pnpm check also writes
+repository test/build/check artifacts, forbidden here. No gate pass is claimed.
+
+### Executed validation at the unchanged production tree
+
+- `pnpm -C runner exec vitest run test/q1c-live.test.ts --maxWorkers=2 --reporter=default`:
+  both committed reds reproduced as assertions at :141 and :173. Log: `/tmp/q1c-runner-red.log`.
+- `pnpm -C runner exec vitest run --maxWorkers=2 --reporter=default`:
+  630 passed, exactly those two Q1c reds failed; 46 passing files and one failing file.
+  Log: `/tmp/q1c-runner-all.log`. The default-only reporter avoids repository JSON output.
+- `pnpm exec vitest run src --maxWorkers=2`: 5,601 passed, 14 committed Q1c merge reds failed, plus
+  `a server from another worktree is never reused`, `src/e2e-port.test.ts:37`, timed out after its
+  `server.listen` at :21 emitted `listen EPERM: operation not permitted 127.0.0.1`.
+  This fifteenth failure is an environment restriction, not a Q1 contract contradiction or a production regression.
+  165 passing files, two failing files, one unhandled listen error. Log: `/tmp/q1c-src-all.log`.
+  The coordinator must also run this port fixture. No retry, test edit or port workaround was attempted.
+- TypeScript app, node, runner and API all passed with no emitted files:
+  `pnpm exec tsc --noEmit -p tsconfig.app.json`, `pnpm exec tsc --noEmit -p tsconfig.node.json`,
+  `pnpm -C runner exec tsc --noEmit -p .`, `pnpm -C api exec tsc --noEmit -p .`.
+  Logs: `/tmp/q1c-tsc-{app,node,runner,api}.log`.
+- ESLint passed over the inspected prospective implementation files in their respective packages:
+  contracts run-wire/questions/types, spine engine, DriveVault, live runs/index, runner main/status,
+  and API person/person-schema/run-ticket/runner. No code file was touched.
+  Logs: `/tmp/q1c-eslint-{app,runner,api}.log`.
+- Read-only `git diff --check` passed; `git status --short` shows only this notes file changed.
+  All command logs are in the OS temporary folder. No test was altered, removed or skipped.
+
+Lead/coordinator action required: authorize the schema hash pin and historical-fixture repair on the test-owner
+side before an implementation session can satisfy both durable run snapshots and the unchanged-test restriction.
+The immutable shipped steps must remain unchanged. These notes contain drafts only, not a delivered implementation.
+
+removed: none.
+tests changed: none.
+commits: none; git writes are forbidden and the coordinator owns commits.
