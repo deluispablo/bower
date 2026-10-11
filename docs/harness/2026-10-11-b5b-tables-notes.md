@@ -1296,3 +1296,51 @@ new reds green. No further implementation or test edit is implied by that status
 
 left out: live proposal path (addendum 10 (4)), runner-owned commits/pnpm check/e2e and coordinator compatibility records.
 Risk: unchanged older reseed tests block the runner suite; deferred browser gates remain unverified here.
+
+
+## Round 1 red repair (TL-P4-51)
+
+Tests-only repair authorized for TL-P4-47 addendum 10 (2). The two entries in
+Round 1's "All old runner contradictions" list above are now resolved; that
+list and its blocked result remain historical evidence of the production round.
+No production code, fixtures, ids, byte assertions or fences were changed.
+
+Scope: runner/test/b5-incorporation.test.ts, this notes append and the runner's
+commit manifest. No callers, exports, dependencies or repository configs need changes.
+The existing real main, fake Drive, filing helper and manifest-effects helper are reused.
+Research: local packet and addendum 10, with the packet's bounded tolerant-read
+reference https://www.rfc-editor.org/rfc/rfc9413.html; no network verification.
+
+tests changed: runner/test/b5-incorporation.test.ts: empty stored table parameter
+now asserts exact original bytes and no table-targeted effect, because a readable
+stored table must never be reseeded during unrelated filing (addendum 10 (2)).
+tests changed: runner/test/b5-incorporation.test.ts: all-invalid stored table parameter
+now asserts exact original bytes, including the skipped {"id":"bad"} row, and no
+table-targeted effect, because skipped rows must survive (addendum 10 (2)).
+Both parameters still require code 0 and Garden.txt filed at Resources/Garden.
+The null/missing-table control keeps its existing fixture, eight-seed assertion
+and write-runner-json creation assertion. Every other test stays unchanged.
+
+Before repair, the full b5-incorporation file reproduced both contradictions:
+28 passed / 2 failed; each failed on the eight-seed and rewrite assertions.
+Log: /tmp/b5b-repair-red.log; JSON: /tmp/b5b-repair-red.json.
+
+Verification, in the requested order (targeted file, full runner, then static checks):
+
+- b5-incorporation.test.ts: 30/30 passed; /tmp/b5b-repair-target.log and .json.
+- Full runner with --maxWorkers=2: 758/758 passed, 60 files;
+  /tmp/b5b-repair-runner.log and .json. No remaining runner contradictions.
+- tsc -p runner/tsconfig.json --noEmit: passed; /tmp/b5b-repair-tsc.log.
+- ESLint test/b5-incorporation.test.ts from runner/: passed;
+  /tmp/b5b-repair-eslint.log.
+- git diff --check (read-only): passed.
+
+Vitest reused the existing OS-temp b5b-r2-runner.config.mts with --configLoader runner,
+cache disabled, OS-temp cacheDir/outputFile and the existing OS-temp timer setup.
+The same timer gate and allowlist are retained; only repository-writing CPU reporting
+is omitted. No test outputs were written into the repository. node_modules untouched.
+
+Commit groups are supplied in .codex-commits.json: test repair, then notes alone.
+The runner owns committing; no git write command was run.
+left out: production changes, pnpm check and browser/e2e gates; this assignment is tests only.
+Risk: broader app/browser gates remain unverified in this repair; all requested checks passed.
