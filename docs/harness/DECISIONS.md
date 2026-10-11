@@ -607,3 +607,18 @@ One line per ruling, newest last. Read only the decision a task needs. Later rul
   - **(C) Small bugs, fixed in the same round:** request pins count per source, like answer pins; MOC `members` ids go through the same fresh-id normalisation, so identical runs give one fingerprint; and the e2e:fake regression `capabilities.spec.ts:210` (write it settles as an answered row) is a B1d regression to fix, with that spec as its red.
 
   One red covers (A), (B) and (C), then the fix, gates, Astra xhigh and the high review. **Loop end after this round:** only data-safety or hard-rule findings come back. Everything else is recorded as a v1 limit, and B1d closes
+- TL-P4-48 addendum 3 (B4a Astra xhigh pass 1, 9 findings, `2026-10-11-b4a-adversarial-1.md`): **fix round 1 approved on all 9, with one red covering all 9.** Each fix goes in its existing home:
+  1. a declared runner-write target must equal the file written;
+  2. Bower markers inside a code fence are text, a rule in the one ownership parser, so it holds for every note;
+  3. Forget tombstones the named facts only, and only a settled Bin tombstones by source (Q3);
+  4. events dedupe by id on replay and on Undo;
+  5. a consolidation without its confirmed archive is refused (Q6 order);
+  6. damaged boundaries mean no write that run (Q1);
+  7. a reread of the same source hash is not a new observation at the gate;
+  8. a parent created earlier in the same run is accepted through its createdBy;
+  9. a file without a final newline gets the byte append with the newline added.
+
+  Then gates, Astra xhigh and the high review. The loop-end rule (TL-P4-41 addendum 21) applies after this round
+- TL-P4-41 addendum 24 (B1d pass 4 at a187863c, `2026-10-11-b1d-adversarial-final-4.md`): (1) **Data safety, fixed:** execution writes only ids that the selection names. A request pin, such as "Update [[Remote search]]", puts its note among the candidates, but the edit needs the selection to name it, as for merges (addendum 21 (3)). If the selection leaves a pinned request note out, that request stays unconsumed in the inbox for the next run (addendum 15), and nothing is applied silently. (2) **Fixed as well, although the pass labelled it a v1 limit:** a person's note with `type: moc` and no `by: bower` is a person's note (addendum 4). It is never snapshotted as a Bower MOC, so a run cannot fail on it. Such notes are common in the owner's vault, so this is normal use, not a rare case. (3) Unnormalised member ids in cut contexts are a v1 limit: they cost only a cache miss. One red covers (1) and (2), then the fix, gates, Astra xhigh and the high review. The loop end of addendum 23 stands
+- TL-P4-58 (owner, 2026-10-11, CLI move): every session's text output is minimal. Lead and designer report to the owner in 1–3 lines, outcome first, with no tables or explanation blocks unless asked. The coordinator and workers keep TL-P3-17 (no narration, one-line turn end). Messages between sessions stay complete but short
+- TL-P4-59 (owner, 2026-10-11): the ponytail skill (full level) is always on for the three sessions and for every Codex worker, since it is installed as a Codex plugin. The smallest complete change, reuse before new code, and every reply ends with what was skipped or not checked. Every Codex prompt starts with "Use the ponytail skill (full)". It never overrides the gates, the reds, the hard rules or the TL-P4-29 review chain

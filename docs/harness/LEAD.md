@@ -11,6 +11,12 @@ The lead keeps this file current under [TL-P2-43](2026-10-06-tl-p2-43-session-st
   - **Queue to the owner's retest:** B1d, Q1b, B5b (Table spec cd85b5ce) and B5c, B6b, B4 (About me, TL-P4-48), next-steps-plain-list after B6a, and rules-added-region-model after B1d. Then deploy staging, turn live Claude on, and tell the owner (see "Owner waits for the brain").
   - **After the retest:** B7, B8, B9, B11, B12, B10 with C15, C02 and the rules UI, then C06 onward per P4_PLAN.
   - **Open with others:** p4-docs-md-roundtrip needs an owner edit in Google Docs. The P3 Codex review is due 2026-10-12.
+- **Desktop → CLI move (owner, 2026-10-11, about 09:40).** The owner closes Claude Desktop and resumes the three sessions with `claude --resume <id>` in tmux. On resume:
+  - re-create the watchdog cron: minutes 7, 27 and 47, with the prompt in the lead brief (TL-P4-46 addendum 1). It is session-only, so it does not survive the move;
+  - check ListAgents for Orquestador and Designer, and their permission mode, which must match;
+  - check `git -C /Users/deluisp/Projects/bower-app branch --show-current` is `claude/p3`.
+
+  At the move, B1d is under its re-plan (TL-P4-41 addendum 23), B4a is in fix round 1 (TL-P4-48 addendum 3), and B5b and B5c wait for B1d's claude.ts. Codex-only workers (TL-P4-56 addendum 1) and the TL-P4-57 models apply. The owner's question about a tmux and Codex bridge is answered in chat: monitors only, no bridge for now.
 - **Codex takeover (TL-P4-56, owner 2026-10-11).** If Claude's quota runs out, the owner opens the three roles in Codex. The runbook is [CODEX_TAKEOVER](CODEX_TAKEOVER.md); the owner's prompts are in the SecondBrain note "Bower Codex Takeover Prompts". A Codex lead keeps this file exactly as a Claude lead would.
 - **Method (2026-10-09).** TL-P4-17 to TL-P4-20 changed the method; the owner's SecondBrain vault keeps the method wiki (see the lead's local memory). Read it first when the method comes up, and update it after. Plugins installed at user scope: pr-review-toolkit, typescript-lsp, context7 (TL-P4-20 addenda 1 and 2). context7 needs authorizing through `/mcp`.
 - **Owner away (2026-10-11, morning):** Codex-only workers (TL-P4-56 addendum 1) because Claude's usage is near its limit. Rulings go on, UI waits for the owner's OK through the designer, and the owner hears only of blockers or that the brain is ready. The watchdog cron stays on.
