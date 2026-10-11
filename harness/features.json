@@ -7284,5 +7284,18 @@
     ],
     "verify": "",
     "note": "TL-P4-50 (B8 Q1-Q8). Packet 2026-10-11-b8-log-packet.md. implementer: codex."
+  },
+  {
+    "id": "b9-markers",
+    "task": "p4-b9",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Bower marks its own changes in notes in a way the person can see and Bower can find again, through the existing note effects.",
+    "steps": [
+      "The packet reds pass through runner main and the corpus driver."
+    ],
+    "verify": "",
+    "note": "TL-P4-50 (B9 markers, 6 questions). Packet 2026-10-11-b9-markers-packet.md. implementer: codex."
   }
 ]
