@@ -2255,3 +2255,7 @@ pnpm exec vitest run --config /tmp/b5b-r3-fix-app.config.mts
 src/data/contracts/b5b-r4.test.ts --maxWorkers=2;
 pnpm exec tsc --project runner/tsconfig.json --noEmit;
 pnpm exec eslint runner/test/b5b-r2.test.ts.
+
+## Close (coordinator, 2026-10-11)
+
+Closed known-green. Reds were proved at their tests-only commits (the B5b reds 406c6132, round 1 5dfda276, step 2 b20c93cb, round 2 3d04fc96, round 3 08e5433e); the fix commits no longer come off cleanly, because the notes lines they carried were extended later and later rounds build on them. Gates: pnpm check and the app, capabilities and folder-table e2e on demo and fake green (b5b-g5). Reviews: adversarial pass 1 BLOCK (Source role, columns, splice, live proposals) answered by fix round 1 and step 2; P4-123 BLOCK (unpublished proposal, control keys, e2e row) answered by fix round 2 (TL-P4-47 addendum 11), no new review; the designer's finding (hidden keys spend no column place) fixed in round 3 and the designer then verified at 375 and 1440 on demo and fake. Pins: the creating run 99, an existing-table run 97, the 110-call control (TL-P4-47 addenda 8 and 9; spine-operations-checkpoints re-proved at bfeb6366). Hand-offs: B5c takes the profile incorporation next; B4b, B6b, B7, B8 and B9 follow on scripted.ts and claude.ts.

@@ -7191,8 +7191,10 @@
     "steps": [
       "The packet reds pass through runner main and the app; the spec table passes on demo and fake at 375 and 1440."
     ],
-    "verify": "",
-    "note": "TL-P4-47. Escalated. Packet 2026-10-11-b5b-tables-packet.md (draft; open items to the lead). implementer: codex."
+    "verify": "pnpm -C runner exec vitest run test/b5-incorporation.test.ts test/b5b-r2.test.ts test/b5b-r2-proposal.test.ts test/b5b-r3.test.ts -t \"b5-|b5b-r\" && pnpm exec vitest run src/data/contracts/b5b-r4.test.ts src/features/files/folder-table-r3.test.tsx -t \"b5b-r\"",
+    "note": "TL-P4-47. Escalated. Packet 2026-10-11-b5b-tables-packet.md (draft; open items to the lead). implementer: codex.",
+    "review": "P4-123 BLOCK answered by fix rounds 2 and 3 (TL-P4-47 addendum 11, designer finding); no new review",
+    "design": "verified"
   },
   {
     "id": "b5c",
