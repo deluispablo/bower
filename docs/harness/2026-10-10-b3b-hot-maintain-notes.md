@@ -1309,3 +1309,9 @@ removed: runner/src/index.ts: unconditional synthetic whole-run Undo row under a
 removed: runner/src/index.ts: captured-only declaration filter that omitted the whole-run request's primary wording.
 removed: no test, assertion, fixture, golden, threshold, dependency, write fence or checkpoint mechanism.
 tests changed: none
+
+tests changed: runner/test/b23-hot.test.ts: TL-P4-42 addendum 6: row-format pins carry the ` · op:<key>` suffix, so the word-bound fixture shrinks from 243 to 223 words to keep the same bound behaviour.
+
+## Close (coordinator, 2026-10-11)
+
+known-green: every red was proved failing at its tests-only commit (511968f2, 0b816ced, 4da9f517, b6a6adf0, 30ae6d41, dde8870d, ec272cdf; see each reds section) and passes at HEAD; later rounds touched the same lines. Codex pass 4 PASS, P4-111 PASS (after P4-110 BLOCK, fixed under TL-P4-42 addendum 6); check green (517/528); runner tsc clean; e2e app/capabilities demo 35 / fake 59.

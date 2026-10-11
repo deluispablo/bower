@@ -6937,8 +6937,9 @@
     "steps": [
       "Through runner main: hot written after a filing run and read on the next; unchanged hot not rewritten; failure or done redispatch writes nothing."
     ],
-    "verify": "",
-    "note": "TL-P4-42. Escalated (hot target); red now, implementation after B1c and the scripted.ts handoff. Packet 2026-10-10-b3b-packet.md. implementer: codex."
+    "verify": "pnpm -C runner exec vitest run test/b23-hot-context.test.ts test/b23-hot-recovery.test.ts -t \"B3b hot\"",
+    "note": "TL-P4-42. Escalated (hot target); red now, implementation after B1c and the scripted.ts handoff. Packet 2026-10-10-b3b-packet.md. implementer: codex.",
+    "review": "P4-110 BLOCK fixed; P4-111 PASS"
   },
   {
     "id": "q1c-live-questions",
