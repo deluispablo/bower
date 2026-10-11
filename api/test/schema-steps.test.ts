@@ -22,6 +22,7 @@ const SHIPPED: readonly string[] = [
   'f165fd3557d2ff5f29d095b926c6abe9b93232fe9649593ea580eed034388885', // 12: deadlines
   '968095f857dd5d1e72f4233c1e27c7b27cad9f555a8542401e83bd5d03964721', // 13: deadline attempts
   'bb88bb4aa32bfbbc233a61499b04642febee41bff10b9ee28c7b3d075388f7a5', // 14: run dispatch deadline and version
+  'd7fda87dff33915a0039de7b54bf893b61751588eb64155e5b0adc11e62b0917', // 15: open-questions snapshot
 ];
 
 /** The statements `migrate` runs on a database recorded at `current`, without its own schema_version bookkeeping. */

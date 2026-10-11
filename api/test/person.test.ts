@@ -449,7 +449,9 @@ describe('person storage migration', () => {
       undoV8(sql);
       sql.exec('INSERT INTO run_ticket (hash, run_id, epoch, retired) VALUES (?, ?, ?, 0)', 'hash-1', 'run-1', 2);
       sql.exec('UPDATE schema_version SET version = 7 WHERE id = 1');
-      return Object.fromEntries(TABLES_BEFORE_V12.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
+      const rows = Object.fromEntries(TABLES_BEFORE_V12.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
+      sql.exec('ALTER TABLE runs DROP COLUMN open_questions_snapshot');
+      return rows;
     });
     await evictDurableObject(alex);
 
@@ -485,7 +487,9 @@ describe('person storage migration', () => {
       const sql = state.storage.sql;
       undoV9(sql);
       sql.exec('UPDATE schema_version SET version = 8 WHERE id = 1');
-      return Object.fromEntries(TABLES_BEFORE_V12.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
+      const rows = Object.fromEntries(TABLES_BEFORE_V12.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
+      sql.exec('ALTER TABLE runs DROP COLUMN open_questions_snapshot');
+      return rows;
     });
     await evictDurableObject(alex);
 
@@ -516,7 +520,9 @@ describe('person storage migration', () => {
       sql.exec('INSERT INTO run_ticket (hash, run_id, attempt, retired, expires_at, report_seq) VALUES (?, ?, ?, 0, 5, 3)', 'hash-1', 'run-1', 2);
       undoV10(sql);
       sql.exec('UPDATE schema_version SET version = 9 WHERE id = 1');
-      return sql.exec('SELECT hash, run_id, epoch, retired, expires_at, report_seq FROM run_ticket').toArray();
+      const rows = sql.exec('SELECT hash, run_id, epoch, retired, expires_at, report_seq FROM run_ticket').toArray();
+      sql.exec('ALTER TABLE runs DROP COLUMN open_questions_snapshot');
+      return rows;
     });
     await evictDurableObject(alex);
 
@@ -545,7 +551,9 @@ describe('person storage migration', () => {
       sql.exec('INSERT INTO admission (id, active_run_id, request_id) VALUES (1, ?, ?)', 'run-old', 'req-old');
       sql.exec('UPDATE control SET head = ?, claim = ?, epoch = 5 WHERE id = 1', 'head-1', 'claim-1');
       sql.exec('UPDATE schema_version SET version = 10 WHERE id = 1');
-      return Object.fromEntries(PERSON_TABLES.filter((t) => t !== 'deadlines').map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
+      const rows = Object.fromEntries(PERSON_TABLES.filter((t) => t !== 'deadlines').map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
+      sql.exec('ALTER TABLE runs DROP COLUMN open_questions_snapshot');
+      return rows;
     });
     await evictDurableObject(alex);
 
@@ -583,5 +591,34 @@ describe('person storage migration', () => {
       gh.restore();
     }
     expect((await alex.runStatus(Date.now())).revision).toBe(before.control?.[0]?.status_revision);
+  });
+
+  it('Q1c v15: a pre-v15 Person migrates and keeps every run', async () => {
+    const alex = personFor(`q1c-v14-${crypto.randomUUID()}`);
+    await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
+    const before = await runInDurableObject(alex, (_instance, state) => {
+      const sql = state.storage.sql;
+      // At red HEAD this is already v14; once v15 lands, remove only its appended column.
+      // Keep the shipped table and every constraint intact in both cases.
+      if (sql.exec<{ name: string }>('PRAGMA table_info(runs)').toArray().some((c) => c.name === 'open_questions_snapshot')) {
+        sql.exec('ALTER TABLE runs DROP COLUMN open_questions_snapshot');
+      }
+      const at = farAhead();
+      for (const [id, phase] of [['Q1C_OLD_DONE', 'done'], ['Q1C_OLD_FAILED', 'failed'], ['Q1C_OLD_QUEUED', 'queued']] as const) {
+        sql.exec(`INSERT INTO runs (id, request_id, scope, allow_web, phase, requested_at, phase_at, manifest, version)
+          VALUES (?, ?, 'all', 0, ?, ?, ?, ?, 0)`, id, `${id}_PRESS`, phase, at, at, JSON.stringify(MANIFEST));
+      }
+      sql.exec('UPDATE schema_version SET version = 14 WHERE id = 1');
+      return sql.exec('SELECT * FROM runs ORDER BY id').toArray();
+    });
+    expect(before).toHaveLength(3);
+    await evictDurableObject(alex);
+    expect(await alex.schemaVersion()).toBe(15);
+    const after = await runInDurableObject(alex, (_instance, state) => ({
+      columns: state.storage.sql.exec<{ name: string; type: string; notnull: number }>('PRAGMA table_info(runs)').toArray(),
+      rows: state.storage.sql.exec('SELECT * FROM runs ORDER BY id').toArray(),
+    }));
+    expect(after.columns.find((c) => c.name === 'open_questions_snapshot')).toMatchObject({ type: 'TEXT', notnull: 0 });
+    expect(after.rows).toEqual(before.map((r) => ({ ...r, open_questions_snapshot: null })));
   });
 });

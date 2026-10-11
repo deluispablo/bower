@@ -281,3 +281,71 @@ The immutable shipped steps must remain unchanged. These notes contain drafts on
 removed: none.
 tests changed: none.
 commits: none; git writes are forbidden and the coordinator owns commits.
+
+## v15 red repair
+
+Red-owning repair for TL-P4-44 addendum 6, 2026-10-11. This supersedes the schema-test restriction
+and the seven rewind conflicts listed in “Contract/test contradictions” above. Production is unchanged.
+
+### Verbatim implementation contract
+
+Append schema step 15, bump SCHEMA_VERSION to 15, and leave steps 1–14 byte-identical.
+Step 15 contains exactly this one SQL statement (the string has no leading/trailing whitespace or semicolon):
+
+```sql
+ALTER TABLE runs ADD COLUMN open_questions_snapshot TEXT
+```
+
+`open_questions_snapshot` is nullable TEXT, with no NOT NULL, default, check or second storage home.
+Existing runs acquire SQL NULL. NULL means no live questions: GET /status omits `questions`, and the
+vault keeps showing only stored questions. A present empty snapshot retains its distinct wire meaning.
+
+`api/test/schema-steps.test.ts` pins the step's SHA-256 as
+`d7fda87dff33915a0039de7b54bf893b61751588eb64155e5b0adc11e62b0917`.
+Computed by extracting and executing that test's own `sha256` function, with
+`JSON.stringify(['ALTER TABLE runs ADD COLUMN open_questions_snapshot TEXT'])` as its input.
+No shipped hash changed. The existing count assertion intentionally stays red until step 15 lands.
+Offline standard (not fetched): SQLite ALTER TABLE ADD COLUMN adds nullable columns without a default as NULL;
+https://www.sqlite.org/lang_altertable.html. Reuse the existing append-only Person migration mechanism.
+
+### Test changes
+
+No existing assertion, test name, bound or shipped schema step changed.
+The four Person rewind callbacks read the same baseline rows before dropping the new column, then return
+those rows unchanged. This retains the baseline's NULL field for their existing whole-row equality assertions;
+the restarted migration recreates it as NULL. Only that capture/drop is added to their existing rewinds.
+The three deadline rewinds drop the column before undoV14; all their other lines and assertions stay unchanged.
+
+tests changed: api/test/schema-steps.test.ts: append the exact v15 hash; retain all 14 shipped hashes and assertions.
+tests changed: api/test/person.test.ts: four rewind callbacks drop the snapshot after baseline capture; add the pre-v15 migration red.
+tests changed: api/test/deadlines.test.ts: the three named rewinds also drop open_questions_snapshot; no other change.
+tests changed: api/test/q1-questions.test.ts: add the null-snapshot red; all existing snapshot assertions remain unchanged.
+
+Added exact test names:
+- `Q1c v15: a pre-v15 Person migrates and keeps every run`: keep the real shipped table/constraints,
+  seed three distinct done/failed/queued runs in a v14 database, restart the Person, require version 15,
+  nullable TEXT metadata and exact preservation of every row with only the new NULL field added.
+  At the unchanged implementation the intended first failing assertion is schema version 14 versus 15.
+- `Q1c v15: a null snapshot means no live questions`: positive controls read the stored question and
+  accept/display a distinct live asking; replace the database snapshot with SQL NULL and raise the existing
+  revision, restart Person, require authenticated GET /status to omit questions, then require the existing
+  LiveRuns/WorkerHttp/DriveVault path to remove the stale live asking and retain exactly the stored asking.
+  At the unchanged implementation the intended first failure is the accepted report's missing live snapshot.
+
+The second test imports the existing browser modules through Vitest's variable module loader, with narrow
+public test interfaces, so browser DOM globals do not conflict with Worker globals in API tsc. It uses only
+in-memory FakeDrive/localStorage and explicit current() calls; no polling subscription, server, timer wait,
+filesystem artifact or network request is introduced. Globals and both client sources are cleaned up in finally.
+
+### Validation and coordinator handoff
+
+- `pnpm -C api exec tsc --noEmit -p .`: pass. Final log: `/tmp/q1c-v15-api-tsc.log`.
+- API tests are not executed here: this session cannot bind ports. The two new tests are authored reds,
+  not claimed observed assertion failures. Coordinator runs q1-questions, person, deadlines and schema-steps.
+- Suggested coordinator command (default reporter prevents repository JSON output):
+  `pnpm -C api exec vitest run test/q1-questions.test.ts test/person.test.ts test/deadlines.test.ts test/schema-steps.test.ts --maxWorkers=2 --reporter=default > /tmp/q1c-v15-api-red.log 2>&1`.
+- No network, writing git command, production edit, dependency replacement or symlink was used.
+- pnpm check and e2e remain coordinator work under this explicitly API-test-only repair assignment.
+
+removed: none.
+commits: none; coordinator commits tests and notes separately.
