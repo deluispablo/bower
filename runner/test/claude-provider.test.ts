@@ -27,6 +27,7 @@ import { listedPiles, runKeys } from '../../src/data/spine/scripted';
 import { claudeProvider, type ClaudeCall, type ClaudeExit } from '../src/claude';
 import { outsideAdmitted } from '../src/spine/admitted';
 import { main } from '../src/main';
+import { candidates, phaseAwareClaude, type PlanningFixture } from './b1-planning-support';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 
 const AT = Date.UTC(2026, 9, 7, 9);
@@ -42,6 +43,8 @@ const recorded = (name: string): string => readFileSync(new URL(`./fixtures/clau
  * what the demo's folder has and the scripted plan does more for: two of Bower's hub notes it brings up to date, a
  * saved link filed as a note, an offer that gets its own note, and a pile of words only that becomes a note.
  */
+const exhaustionBefore = new WeakMap<DriveV3, { files: Awaited<ReturnType<DriveV3['drive']['listAll']>>; logs: number; evidence: Record<string, unknown> }>();
+
 async function wired(rich = false, withText = false): Promise<{ wire: DriveV3; root: string; admission: AdmissionManifest }> {
   const drive = fixedDrive();
   const root = (await drive.createFolder('root', 'Bower')).id;
@@ -84,6 +87,10 @@ async function wired(rich = false, withText = false): Promise<{ wire: DriveV3; r
   const wire = driveV3(drive);
   wire.folderId = root;
   wire.manifest = admitted.manifest;
+  if (!vi.isMockFunction(console.log)) vi.spyOn(console, 'log').mockImplementation(() => {});
+  const files = await drive.listAll(root);
+  exhaustionBefore.set(wire, { files, logs: vi.mocked(console.log).mock.calls.length,
+    evidence: Object.fromEntries(await Promise.all(files.map(async (file) => [file.id, await drive.evidence(file.id)] as const))) });
   return { wire, root, admission: admitted.manifest };
 }
 
@@ -94,10 +101,11 @@ async function eventFile(): Promise<string> {
   return file;
 }
 
-/** A pretend `claude` that answers every call with `reply`, and keeps the calls. */
-function recordedClaude(reply: Partial<ClaudeExit> & { stdout: string }): { calls: ClaudeCall[]; spawn: (call: ClaudeCall) => Promise<ClaudeExit> } {
+/** A recorded execution reply after a fixture-bound selection, keeping every call. */
+function recordedClaude(reply: Partial<ClaudeExit> & { stdout: string }, fixture: PlanningFixture): { calls: ClaudeCall[]; spawn: (call: ClaudeCall) => Promise<ClaudeExit> } {
   const calls: ClaudeCall[] = [];
-  return { calls, spawn: async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, ...reply }) };
+  const respond = phaseAwareClaude(() => ({ code: 0, stderr: '', cut: null, ...reply }), () => fixture);
+  return { calls, spawn: async (call) => { calls.push(call); return respond(call); } };
 }
 
 /** The recorded success with its intent changed by `edit`: a reply that is JSON but outside the intent. */
@@ -137,10 +145,51 @@ async function rehashed(edit: (text: string) => string): Promise<string> {
 
 const claudeEnv = (extra: Record<string, string> = {}): Record<string, string> => ({ BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: TOKEN, ...extra });
 
+/** Invalid replies preserve admitted work for a later run. */
+const claudeInput = (call: ClaudeCall | undefined): string => call?.input.split('\n').at(-1) ?? '{}';
+
+async function expectFailedReply(wire: DriveV3): Promise<void> {
+  const before = exhaustionBefore.get(wire);
+  if (!before) throw new Error('Missing exhaustion baseline.');
+  const files = await wire.drive.listAll(wire.folderId);
+  const last = files.find((f) => f.name === 'last-run.json');
+  expect.soft(last, 'exhaustion writes no new report row').toEqual(before.files.find((f) => f.name === 'last-run.json'));
+  const report = JSON.parse(last ? await wire.drive.readText(last.id) : '{"run":{"report":{"filed":[],"setAside":[]}}}') as {
+    run: { report: { filed: unknown[]; setAside: unknown[] } };
+  };
+  const sourceIds = new Set(wire.manifest?.piles.flatMap((pile) => pile.items.map((item) => item.fileId)));
+  expect.soft(wire.requests.filter((request) => request.method !== 'GET'
+    && sourceIds.has(request.url.pathname.split('/').at(-1) ?? ''))).toEqual([]);
+  expect.soft(report.run.report.filed).toEqual([]);
+  expect.soft(report.run.report.setAside).toEqual([]);
+  expect.soft(files.filter((f) => /^manifest-.*\.json$/.test(f.name)))
+    .toEqual(before.files.filter((f) => /^manifest-.*\.json$/.test(f.name)));
+  for (const file of before.files) {
+    const path = wire.drive.pathOf(file.id, wire.folderId);
+    if (!path.startsWith('.bower/') || path.startsWith('.bower/changes/')) {
+      expect.soft(await wire.drive.evidence(file.id), 'sources, declarations and requests remain').toEqual(before.evidence[file.id]);
+    }
+  }
+  expect.soft(files.filter((f) => !wire.drive.pathOf(f.id, wire.folderId).startsWith('.bower/')))
+    .toEqual(before.files.filter((f) => !wire.drive.pathOf(f.id, wire.folderId).startsWith('.bower/')));
+  expect.soft(wire.statuses.at(-1)?.phase, 'invalid reply after the retry fails with untouched inbox work').toBe('failed');
+  for (const source of wire.manifest?.piles.flatMap((pile) => pile.items) ?? []) {
+    expect.soft(wire.drive.pathOf(source.fileId, wire.folderId), 'waiting source stays in the inbox').toMatch(/^Inbox\//);
+    expect.soft(await wire.drive.evidence(source.fileId)).toEqual(before.evidence[source.fileId]);
+  }
+  const admitted = await planAdmission(fakeRead(wire.drive), wire.folderId,
+    { scope: 'all', clock: () => AT + 1, newId: () => 'exhaustion-next-run' });
+  expect.soft(admitted.kind, 'next run takes the untouched items').toBe('manifest');
+  if (admitted.kind === 'manifest') {
+    expect.soft(admitted.manifest.piles).toEqual(wire.manifest?.piles);
+    expect.soft(admitted.manifest.journal).toEqual(wire.manifest?.journal);
+  }
+}
+
 describe('the Claude provider', () => {
   it('the prompt says a thing with no fitting folder goes to Resources', async () => {
     const { wire } = await wired();
-    const claude = recordedClaude({ stdout: recorded('reply-ok.json') });
+    const claude = recordedClaude({ stdout: recorded('reply-ok.json') }, { drive: wire.drive, root: wire.folderId, admission: wire.manifest });
     await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: claude.spawn });
     const prompt = claude.calls[0]?.input ?? '';
     expect(prompt).toMatch(/fits no folder below[^.]*goes to Resources/);
@@ -154,32 +203,40 @@ describe('the Claude provider', () => {
     const toResources = edited((m) => { for (const t of m.things as Array<{ to: string }>) t.to = 'Resources'; });
     const replies = [newArea, toResources];
     const calls: ClaudeCall[] = [];
-    const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: replies[calls.length - 1] ?? toResources });
+    const respond = phaseAwareClaude((_call, _step, attempt, phase) => ({ code: 0, stderr: '', cut: null, stdout: replies[phase === 'selection' ? replies.length - 1 : attempt] ?? toResources }),
+      () => ({ drive: wire.drive, root: wire.folderId, admission: wire.manifest }));
+    const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => { calls.push(call); return respond(call); };
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn })).toBe(0);
 
-    // Asked once more, told why; the second reply passes and the run completes.
-    expect(calls).toHaveLength(2);
-    expect(calls[1]?.input).toContain('Areas/Community garden');
-    expect(calls[1]?.input).toMatch(/refused/);
+    // After selection, execution is retried once, told why; the corrected reply completes.
+    expect(calls).toHaveLength(3);
+    expect(calls[2]?.input).toContain('Areas/Community garden');
+    expect(calls[2]?.input).toMatch(/refused/);
     expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
     const folders = (await wire.drive.listAll(wire.folderId)).filter((f) => f.name === 'Community garden');
     expect(folders).toEqual([]);
   });
 
   it('a new Area with a responsibility is made and the report says why', async () => {
-    const { wire } = await wired();
-    const money = edited((m) => { for (const t of (m.things as Array<Record<string, string>>).slice(0, 1)) Object.assign(t, { to: 'Areas/Finance/Payslips', responsibility: 'pay and tax records' }); });
+    const { wire, admission } = await wired();
+    const areas = (await wire.drive.listAll(wire.folderId)).find((f) => f.folder && f.name === 'Areas');
+    const money = edited((m) => { for (const t of (m.things as Array<Record<string, string>>).slice(0, 1)) Object.assign(t, { to: 'Areas/Finance', responsibility: 'pay and tax records' }); });
     const calls: ClaudeCall[] = [];
-    const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: money });
+    const respond = phaseAwareClaude(() => ({ code: 0, stderr: '', cut: null, stdout: money }),
+      () => ({ drive: wire.drive, root: wire.folderId, admission: wire.manifest }));
+    const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => { calls.push(call); return respond(call); };
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn })).toBe(0);
 
-    // Asked once: the responsibility is the basis for the new Area, and the report says why it was made.
-    expect(calls).toHaveLength(1);
+    // Selection then execution: the responsibility is the basis for the new Area, and the report says why it was made.
+    expect(calls).toHaveLength(2);
     expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
+    const selectionContext = JSON.parse(claudeInput(calls[0])) as Record<string, unknown>;
+    expect(candidates(calls[0] ? { call: calls[0], value: selectionContext, events: [] } : undefined, admission.piles[0]?.items[0]?.fileId ?? ''))
+      .toContain(areas?.id);
     const listing = await wire.drive.listAll(wire.folderId);
     expect(listing.filter((f) => f.folder && f.name === 'Finance')).toHaveLength(1);
     const last = listing.find((f) => f.name === 'last-run.json');
@@ -191,18 +248,22 @@ describe('the Claude provider', () => {
     const { wire } = await wired();
     const project = edited((m) => { for (const t of (m.things as Array<Record<string, string>>).slice(0, 1)) Object.assign(t, { to: 'Projects/Garden', responsibility: 'the garden' }); });
     const calls: ClaudeCall[] = [];
-    const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: project });
+    const respond = phaseAwareClaude(() => ({ code: 0, stderr: '', cut: null, stdout: project }),
+      () => ({ drive: wire.drive, root: wire.folderId, admission: wire.manifest }));
+    const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => { calls.push(call); return respond(call); };
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn });
-    expect(calls).toHaveLength(2);
+    const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn });
+    expect(code).toBe(1);
+    expect(calls).toHaveLength(3);
     expect(wire.statuses.at(-1)?.phase).toBe('failed');
+    await expectFailedReply(wire);
   });
 
   it('a cut Rules.md is marked as cut in the model input', async () => {
     const { wire, root } = await wired();
     const long = `---\nsummary: Rules.\nby: bower\nkind: Rules\n---\n\n## Rules\n\n${'- Receipts go to Areas / Money / Receipts.\n'.repeat(200)}`;
     await wire.drive.createText(root, 'Rules.md', long, { by: 'bower' });
-    const claude = recordedClaude({ stdout: recorded('reply-ok.json') });
+    const claude = recordedClaude({ stdout: recorded('reply-ok.json') }, { drive: wire.drive, root: wire.folderId, admission: wire.manifest });
     await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: claude.spawn });
     const context = JSON.parse((claude.calls[0]?.input ?? '').split('\n').at(-1) ?? '{}') as { rules?: string };
     expect(context.rules?.length).toBeLessThan(long.length);
@@ -216,17 +277,20 @@ describe('the Claude provider', () => {
     const replies = [newArea, toResources];
     const there: boolean[] = [];
     const home: boolean[] = [];
+    const respond = phaseAwareClaude((_call, _step, attempt, phase) => ({ code: 0, stderr: '', cut: null, stdout: replies[phase === 'selection' ? replies.length - 1 : attempt] ?? toResources }),
+      () => ({ drive: wire.drive, root: wire.folderId, admission: wire.manifest }));
     const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => {
       there.push(existsSync(call.cwd));
       home.push(existsSync(call.env.HOME ?? ''));
-      return { code: 0, stderr: '', cut: null, stdout: replies[there.length - 1] ?? toResources };
+      return respond(call);
     };
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn })).toBe(0);
 
-    expect(there).toEqual([true, true]);
-    expect(home).toEqual([true, true]);
+    // Selection, execution and its validation retry all retain their working directories.
+    expect(there).toEqual([true, true, true]);
+    expect(home).toEqual([true, true, true]);
   });
 
   it('a rule basis is a whole rules line, never part of one or the cut marker', async () => {
@@ -236,25 +300,34 @@ describe('the Claude provider', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const asks = async (basis: string): Promise<number> => {
       const reply = edited((m) => { for (const t of (m.things as Array<Record<string, string>>).slice(0, 1)) Object.assign(t, { to: 'Projects/Community garden', basis }); });
-      const claude = recordedClaude({ stdout: reply });
+      const claude = recordedClaude({ stdout: reply }, { drive: wire.drive, root: wire.folderId, admission: wire.manifest });
       await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: claude.spawn });
       return claude.calls.length;
     };
     
-    expect(await asks('more characters of the rules not shown')).toBe(2);
-    expect(await asks('Receipts go to Areas / Money')).toBe(2);
-    expect(await asks('Receipts go to Areas / Money / Receipts.')).toBe(1);
+    expect(await asks('more characters of the rules not shown')).toBe(3);
+    expect(await asks('Receipts go to Areas / Money')).toBe(3);
+    expect(await asks('Receipts go to Areas / Money / Receipts.')).toBe(2);
   });
 
   it('a new subfolder of an existing Area is not reported as a new area', async () => {
-    const { wire } = await wired();
+    const { wire, admission } = await wired();
+    const money = (await wire.drive.listAll(wire.folderId)).find((f) => wire.drive.pathOf(f.id, wire.folderId) === 'Areas/Money');
+    expect(money).toBeDefined();
+    const hub = await wire.drive.createText(money?.id ?? '', 'Money.md', serializeNote({
+      summary: 'Payslip records and bank statements.', properties: [], tags: [], currentState: [],
+      body: '', timeline: [], byBower: true,
+    }), { by: 'bower' });
     const sub = edited((m) => { for (const t of (m.things as Array<Record<string, string>>).slice(0, 1)) Object.assign(t, { to: 'Areas/Money/Statements', responsibility: 'bank statements' }); });
-    const claude = recordedClaude({ stdout: sub });
+    const claude = recordedClaude({ stdout: sub }, { drive: wire.drive, root: wire.folderId, admission: wire.manifest });
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: claude.spawn })).toBe(0);
 
-    expect(claude.calls).toHaveLength(1);
+    expect(claude.calls).toHaveLength(2);
+    const value = JSON.parse(claudeInput(claude.calls[0])) as Record<string, unknown>;
+    expect(candidates({ call: claude.calls[0] as ClaudeCall, value, events: [] }, admission.piles.flatMap((p) => p.items).find((t) => t.name === 'Payslip_Aug.pdf')?.fileId ?? '')).toContain(hub.id);
+    expect((await wire.drive.listAll(wire.folderId)).some((f) => wire.drive.pathOf(f.id, wire.folderId) === 'Areas/Money/Statements')).toBe(true);
     const last = (await wire.drive.listAll(wire.folderId)).find((f) => f.name === 'last-run.json');
     expect(JSON.stringify(JSON.parse(await wire.drive.readText(last?.id ?? '')))).not.toContain('New area');
   });
@@ -267,51 +340,59 @@ describe('the Claude provider', () => {
     const noted = edited((m) => { (m.things as unknown[]).push({ fileId: id, to: 'Resources', name: 'Leek soup.txt', note: { name: 'Leek soup.md', summary: 'A simple leek soup.', body: 'Leeks, potatoes and stock.' } }); });
     const replies = [plain, noted];
     const calls: ClaudeCall[] = [];
-    const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: replies[calls.length - 1] ?? noted });
+    const respond = phaseAwareClaude((_call, _step, attempt, phase) => ({ code: 0, stderr: '', cut: null, stdout: replies[phase === 'selection' ? replies.length - 1 : attempt] ?? noted }),
+      () => ({ drive: wire.drive, root: wire.folderId, admission: wire.manifest }));
+    const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => { calls.push(call); return respond(call); };
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn })).toBe(0);
 
-    expect(calls).toHaveLength(2);
-    expect(calls[1]?.input).toMatch(/refused/);
-    expect(calls[1]?.input).toMatch(/no note/);
+    expect(calls).toHaveLength(3);
+    expect(calls[2]?.input).toMatch(/refused/);
+    expect(calls[2]?.input).toMatch(/no note/);
     expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
 
-    // Never a third ask: a second bare reply ends the run as C12 does, with nothing written.
+    // Selection plus two execution attempts: repeated invalid replies fail with untouched sources.
     const again = await wired(false, true);
     const stuck: ClaudeCall[] = [];
-    const never = async (call: ClaudeCall): Promise<ClaudeExit> => (stuck.push(call), { code: 0, stderr: '', cut: null, stdout: plain });
-    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: again.wire.fetch, claude: never })).toBe(0);
-    expect(stuck).toHaveLength(2);
+    const respondStuck = phaseAwareClaude(() => ({ code: 0, stderr: '', cut: null, stdout: plain }),
+      () => ({ drive: again.wire.drive, root: again.wire.folderId, admission: again.wire.manifest }));
+    const never = async (call: ClaudeCall): Promise<ClaudeExit> => { stuck.push(call); return respondStuck(call); };
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: again.wire.fetch, claude: never })).toBe(1);
+    expect(stuck).toHaveLength(3);
     expect(again.wire.statuses.at(-1)?.phase).toBe('failed');
-    expect(again.wire.requests.filter((r) => r.method !== 'GET')).toEqual([]);
+    await expectFailedReply(again.wire);
   });
 
   it('a thing cited by a Timeline line on an existing note needs no note', async () => {
     const { wire } = await wired(true, true);
+    const resources = (await wire.drive.listAll(wire.folderId)).find((f) => f.folder && f.name === 'Resources');
+    const recipes = await wire.drive.createFolder(resources?.id ?? '', 'Recipes');
+    await wire.drive.createText(recipes.id, 'Leek soup.md', serializeNote({ summary: 'A leek soup recipe.',
+      properties: [], tags: [], currentState: [], body: '', timeline: [], byBower: true }));
     const id = (await wire.drive.listAll(wire.folderId)).find((f) => f.name === 'Leek soup.txt')?.id ?? '';
     const cited = edited((m) => {
       (m.things as unknown[]).push({ fileId: id, to: 'Resources', name: 'Leek soup.txt' });
-      m.lines = [{ note: 'Projects/Flat hunt/Flat hunt.md', text: 'Matches what this note already says.', cites: id }];
+      m.lines = [{ note: 'Resources/Recipes/Leek soup.md', text: 'Matches what this note already says.', cites: id }];
     });
-    const claude = recordedClaude({ stdout: cited });
+    const claude = recordedClaude({ stdout: cited }, { drive: wire.drive, root: wire.folderId, admission: wire.manifest });
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: claude.spawn })).toBe(0);
 
-    expect(claude.calls).toHaveLength(1);
+    expect(claude.calls).toHaveLength(2);
     expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
   });
 
   it('a photo with no text needs no note', async () => {
     const { wire } = await wired();
     const photo = edited((m) => { m.things = (m.things as Array<{ fileId: string }>).filter((t) => t.fileId === 'f14'); });
-    const claude = recordedClaude({ stdout: photo });
+    const claude = recordedClaude({ stdout: photo }, { drive: wire.drive, root: wire.folderId, admission: wire.manifest });
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: claude.spawn })).toBe(0);
 
-    expect(claude.calls).toHaveLength(1);
+    expect(claude.calls).toHaveLength(2);
     expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
   });
 
@@ -319,27 +400,31 @@ describe('the Claude provider', () => {
     const { wire } = await wired();
     const newArea = edited((m) => { for (const t of (m.things as Array<{ to: string }>).slice(0, 1)) t.to = 'Projects/Community garden'; });
     const calls: ClaudeCall[] = [];
-    const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: newArea });
+    const respond = phaseAwareClaude(() => ({ code: 0, stderr: '', cut: null, stdout: newArea }),
+      () => ({ drive: wire.drive, root: wire.folderId, admission: wire.manifest }));
+    const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => { calls.push(call); return respond(call); };
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const before = await wire.drive.listAll(wire.folderId);
 
-    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn })).toBe(0);
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn })).toBe(1);
 
-    // Two asks, never a third; the run ends failed saying nothing changed, with no fallback to Resources.
-    expect(calls).toHaveLength(2);
+    // Selection plus two execution attempts; untouched sources stay in the inbox.
+    expect(calls).toHaveLength(3);
     expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'failed']);
-    expect(wire.statuses.at(-1)?.failure).toBe(B_FAILURE);
-    expect(wire.requests.filter((r) => r.method !== 'GET')).toEqual([]);
-    expect(await wire.drive.listAll(wire.folderId)).toEqual(before);
+    await expectFailedReply(wire);
+    expect(wire.requests.filter((r) => r.method === 'DELETE')).toEqual([]);
+    const after = await wire.drive.listAll(wire.folderId);
+    expect(after.filter((f) => !wire.drive.pathOf(f.id, wire.folderId).startsWith('.bower/')))
+      .toEqual(before.filter((f) => !wire.drive.pathOf(f.id, wire.folderId).startsWith('.bower/')));
   });
 
   it('a recorded Claude reply becomes operations the spine validates', async () => {
     const { wire, admission } = await wired();
-    const claude = recordedClaude({ stdout: recorded('reply-ok.json') });
+    const claude = recordedClaude({ stdout: recorded('reply-ok.json') }, { drive: wire.drive, root: wire.folderId, admission: wire.manifest });
 
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: claude.spawn })).toBe(0);
 
-    expect(claude.calls).toHaveLength(1);
+    expect(claude.calls).toHaveLength(2);
     // The prepared context went in: the admitted set it took, never an instruction to touch Drive itself.
     expect(claude.calls[0]?.input).toContain(admission.id);
     expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
@@ -380,7 +465,7 @@ describe('the Claude provider', () => {
       const before = await wire.drive.listAll(wire.folderId);
       const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: recordedClaude(reply).spawn }), what).toBe(0);
+      expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: recordedClaude(reply, { drive: wire.drive, root: wire.folderId, admission: wire.manifest }).spawn }), what).toBe(1);
 
       // Truthful: the run ends failed, saying nothing changed, and nothing did.
       expect(wire.statuses.map((s) => s.phase), what).toEqual(['reading', 'writing', 'failed']);
@@ -398,7 +483,7 @@ describe('the Claude provider', () => {
     const keep = (...args: unknown[]): void => void said.push(args.map(String).join(' '));
     for (const level of ['log', 'info', 'warn', 'error', 'debug'] as const) vi.spyOn(console, level).mockImplementation(keep);
 
-    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: recordedClaude({ stdout: recorded('reply-ok.json') }).spawn })).toBe(0);
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: recordedClaude({ stdout: recorded('reply-ok.json') }, { drive: wire.drive, root: wire.folderId, admission: wire.manifest }).spawn })).toBe(0);
 
     const lines = said.filter((l) => l.startsWith('timing:'));
     expect(lines).toHaveLength(1);
@@ -409,8 +494,8 @@ describe('the Claude provider', () => {
     expect(Object.keys(fields)).toEqual(['end', 'total', 'start', 'token', 'reads', 'model', 'api', 'turns', 'in', 'out', 'input', 'sections', 'apply', 'checkpoints', 'report', 'status', 'drive', 'region']);
     expect(fields.end).toBe('done');
     for (const [name, value] of Object.entries(fields)) if (name !== 'end') expect(value, name).toMatch(name === 'checkpoints' ? /^\d+\/[1-9]\d*$/ : name === 'drive' ? /^(?:\w+:\d+\/\d+,?)+$/ : name === 'region' ? /^[\w-]+$/ : name === 'input' ? /^[0-9a-f]{12}$/ : name === 'sections' ? /^prompt:[0-9a-f]{6},tree:[0-9a-f]{6},things:[0-9a-f]{6},notes:[0-9a-f]{6}(?:,rules:[0-9a-f]{6})?$/ : /^\d+$/);
-    // The model step as the recorded reply reports it: wall and API time, turns and tokens.
-    expect(fields).toMatchObject({ model: '41250', api: '40980', turns: '1', in: '5120', out: '3890' });
+    // Both semantic calls return this recorded usage: sum wall/API time, turns and tokens.
+    expect(fields).toMatchObject({ model: '82500', api: '81960', turns: '2', in: '10240', out: '7780' });
     expect(line).not.toContain(TOKEN);
     // No path or content: no folder or file name from the run.
     expect(line).not.toMatch(/Inbox|Payslip|Dentist|Flat photos|\.pdf|\.jpg/);
@@ -424,10 +509,10 @@ describe('the Claude provider', () => {
     const envelope = JSON.parse(recorded('reply-ok.json')) as { usage: Record<string, number> };
     envelope.usage = { ...envelope.usage, input_tokens: 120, cache_creation_input_tokens: 1000, cache_read_input_tokens: 4000 };
 
-    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: recordedClaude({ stdout: JSON.stringify(envelope) }).spawn })).toBe(0);
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: recordedClaude({ stdout: JSON.stringify(envelope) }, { drive: wire.drive, root: wire.folderId, admission: wire.manifest }).spawn })).toBe(0);
 
     const line = said.find((l) => l.startsWith('timing:')) ?? '';
-    expect(line).toMatch(/ in=5120 /);
+    expect(line).toMatch(/ in=10240 /);
   });
 
   it('the Claude provider runs under the original permission policy and never logs the token', async () => {
@@ -438,7 +523,7 @@ describe('the Claude provider', () => {
     vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => (said.push(String(chunk)), true));
     vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => (said.push(String(chunk)), true));
     // A failing reply that echoes the credential on both streams: still never repeated.
-    const claude = recordedClaude({ stdout: `{"type":"result","subtype":"error_during_execution","is_error":true,"result":"bad ${TOKEN}"}`, stderr: `auth with ${TOKEN} failed`, code: 1 });
+    const claude = recordedClaude({ stdout: `{"type":"result","subtype":"error_during_execution","is_error":true,"result":"bad ${TOKEN}"}`, stderr: `auth with ${TOKEN} failed`, code: 1 }, { drive: wire.drive, root: wire.folderId, admission: wire.manifest });
 
     const env = { BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), GITHUB_ACTIONS: 'true', HOME: '/home/runner', PATH: '/usr/bin', BOWER_API_KEY: 'not-for-claude', ...claudeEnv() };
     expect(await main(env, { fetch: wire.fetch, claude: claude.spawn })).toBe(0);
@@ -475,7 +560,7 @@ describe('the Claude provider', () => {
 
     // The model and the turn cap are the environment's when it sets them.
     const other = await wired();
-    const set = recordedClaude({ stdout: recorded('reply-prose.json') });
+    const set = recordedClaude({ stdout: recorded('reply-prose.json') }, { drive: other.wire.drive, root: other.wire.folderId, admission: other.wire.manifest });
     await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv({ BOWER_MODEL: 'claude-opus-5-5', BOWER_MAX_TURNS: '12' }) }, { fetch: other.wire.fetch, claude: set.spawn });
     const setArgs = set.calls[0]?.args ?? [];
     expect(setArgs[setArgs.indexOf('--model') + 1]).toBe('claude-opus-5-5');
@@ -492,7 +577,7 @@ function fakeScripted(drive: FakeDrive): ScriptedRead {
 /** Runs the same folder through the scripted provider and the Claude provider (on a recorded reply). */
 async function both(drive: FakeDrive, root: string, took: Admitted, reply: string): Promise<{ scripted: RunManifest; claude: RunManifest; calls: ClaudeCall[] }> {
   const run = { rootId: root, runId: RUN_ID, allowWeb: false };
-  const claude = recordedClaude({ stdout: reply });
+  const claude = recordedClaude({ stdout: reply }, { drive, root, admission: took.taken });
   const scripted = await scriptedProvider(fakeScripted(drive), run)(took);
   const planned = await claudeProvider({ env: claudeEnv(), spawn: claude.spawn }, run, fakeScripted(drive))(took);
   return { scripted, claude: planned, calls: claude.calls };
@@ -504,7 +589,7 @@ async function refusedWhole(what: string, stdout: string, before?: (wire: DriveV
   await before?.(wire, root);
   const listed = await wire.drive.listAll(wire.folderId);
   const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
-  expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: recordedClaude({ stdout }).spawn }), what).toBe(0);
+  expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: recordedClaude({ stdout }, { drive: wire.drive, root, admission: wire.manifest }).spawn }), what).toBe(1);
   expect(wire.statuses.map((s) => s.phase), what).toEqual(['reading', 'writing', 'failed']);
   expect(wire.statuses.at(-1)?.failure, what).toBe(B_FAILURE);
   expect(wire.requests.filter((r) => r.method !== 'GET'), what).toEqual([]);
@@ -534,7 +619,7 @@ describe('the Claude provider contract (TL-P4-01 P4-2)', () => {
     const notes = (m: RunManifest): string[] => m.operations.flatMap((o) => (o.effect.kind === 'create-text' ? [o.effect.name] : []));
     expect(notes(onRich.claude)).toEqual(notes(onRich.scripted).filter((n) => n !== 'Industrial Designer, Ferrowick.md'));
     // Deterministic, as the scripted provider is: the same folder and reply give the same plan.
-    expect(await claudeProvider({ env: claudeEnv(), spawn: recordedClaude({ stdout: recorded('reply-rich.json') }).spawn }, { rootId: seeded.root, runId: RUN_ID, allowWeb: false }, fakeScripted(seeded.wire.drive))(took)).toEqual(onRich.claude);
+    expect(await claudeProvider({ env: claudeEnv(), spawn: recordedClaude({ stdout: recorded('reply-rich.json') }, { drive: seeded.wire.drive, root: seeded.wire.folderId, admission: seeded.wire.manifest }).spawn }, { rootId: seeded.root, runId: RUN_ID, allowWeb: false }, fakeScripted(seeded.wire.drive))(took)).toEqual(onRich.claude);
 
     // Alex's folder (main.test.ts's): the same, and the spine runs it to done.
     const { wire, admission } = await wired();
@@ -544,14 +629,14 @@ describe('the Claude provider contract (TL-P4-01 P4-2)', () => {
     expect(effects(onAlex.claude)).toEqual(effects(onAlex.scripted));
     expect(onAlex.claude.capture).toEqual(onAlex.scripted.capture);
     const ran = await wired();
-    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: ran.wire.fetch, claude: recordedClaude({ stdout: recorded('reply-ok.json') }).spawn })).toBe(0);
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: ran.wire.fetch, claude: recordedClaude({ stdout: recorded('reply-ok.json') }, { drive: ran.wire.drive, root: ran.wire.folderId, admission: ran.wire.manifest }).spawn })).toBe(0);
     expect(ran.wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
 
     // A thing the reply leaves out waits with its whole pile: the plan is the scripted one without that pile.
     const left = await wired();
     const partial = intent([{ fileId: 'f10', to: 'Areas/Money/Payslips', name: 'Payslip August.pdf' }]);
     const run = { rootId: left.wire.folderId, runId: RUN_ID, allowWeb: false };
-    const planned = await claudeProvider({ env: claudeEnv(), spawn: recordedClaude({ stdout: partial }).spawn }, run, fakeScripted(left.wire.drive))({ taken: left.admission, deferred: [] });
+    const planned = await claudeProvider({ env: claudeEnv(), spawn: recordedClaude({ stdout: partial }, { drive: left.wire.drive, root: left.root, admission: left.admission }).spawn }, run, fakeScripted(left.wire.drive))({ taken: left.admission, deferred: [] });
     expect(planned.capture.piles.map((p) => p.pileId)).toEqual(['p-payslip']);
     const alone = await scriptedProvider(fakeScripted(left.wire.drive), run)({ taken: { ...left.admission, piles: left.admission.piles.filter((p) => p.pileId === 'p-payslip') }, deferred: [] });
     expect(effects(planned)).toEqual(effects(alone));
@@ -568,7 +653,7 @@ describe('the Claude provider contract (TL-P4-01 P4-2)', () => {
     const listing = await wire.drive.listAll(wire.folderId);
     const run = { rootId: wire.folderId, runId: RUN_ID, allowWeb: false };
     const took = { taken: admission, deferred: [] };
-    const planned = await claudeProvider({ env: claudeEnv(), spawn: recordedClaude({ stdout: recorded('reply-ok.json') }).spawn }, run, fakeScripted(wire.drive))(took);
+    const planned = await claudeProvider({ env: claudeEnv(), spawn: recordedClaude({ stdout: recorded('reply-ok.json') }, { drive: wire.drive, root: wire.folderId, admission: wire.manifest }).spawn }, run, fakeScripted(wire.drive))(took);
     // The run's own writes pass both checks, and each one names a file on the list.
     const writes = planned.operations.flatMap(({ effect: e }) => (e.kind === 'write-runner-json' ? [e.path] : []));
     expect(writes.length).toBeGreaterThan(0);
@@ -694,7 +779,7 @@ describe('the Claude provider contract (TL-P4-01 P4-2)', () => {
 
   it('claude runs with no checkout or home settings and the secret only reaches the claude step', async () => {
     const { wire } = await wired();
-    const claude = recordedClaude({ stdout: recorded('reply-ok.json') });
+    const claude = recordedClaude({ stdout: recorded('reply-ok.json') }, { drive: wire.drive, root: wire.folderId, admission: wire.manifest });
     const env = { BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), HOME: '/home/runner', PATH: '/usr/bin', ...claudeEnv() };
     expect(await main(env, { fetch: wire.fetch, claude: claude.spawn })).toBe(0);
     const call = claude.calls[0];
@@ -748,7 +833,7 @@ describe('the Claude provider writes only what it proposed (P4-2 review I1)', ()
     // The offer filed exactly as the demo's plan would, the listing too: still no extra of the demo's.
     const reply = intent([...ok, offer, { fileId: 'f19', to: 'Projects/Flat hunt', name: 'Flat 9, Wrenfield Road.md' }], { notes: [{ pileId: 'p-garden', to: 'Resources/Ideas', name: 'Garden ideas.md' }] });
     const run = { rootId: root, runId: RUN_ID, allowWeb: true };
-    const planned = await claudeProvider({ env: claudeEnv(), spawn: recordedClaude({ stdout: reply }).spawn }, run, fakeScripted(wire.drive))({ taken: (await wired(true)).admission, deferred: [] });
+    const planned = await claudeProvider({ env: claudeEnv(), spawn: recordedClaude({ stdout: reply }, { drive: wire.drive, root: wire.folderId, admission: wire.manifest }).spawn }, run, fakeScripted(wire.drive))({ taken: (await wired(true)).admission, deferred: [] });
     expect(planned.operations.filter((o) => o.effect.kind === 'edit-text')).toEqual([]);
     const made = planned.operations.flatMap((o) => (o.effect.kind === 'create-text' ? [o.effect.name] : []));
     expect(made).not.toContain('Industrial Designer, Ferrowick.md');
@@ -761,7 +846,7 @@ describe('the Claude provider writes only what it proposed (P4-2 review I1)', ()
     const ran = await wired(true);
     const questions = (await ran.wire.drive.listAll(ran.root)).find((f) => f.name === 'questions.json');
     const asked = questions ? await ran.wire.drive.readText(questions.id) : '';
-    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: ran.wire.fetch, claude: recordedClaude({ stdout: reply }).spawn })).toBe(0);
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: ran.wire.fetch, claude: recordedClaude({ stdout: reply }, { drive: ran.wire.drive, root: ran.wire.folderId, admission: ran.wire.manifest }).spawn })).toBe(0);
     expect(ran.wire.statuses.at(-1)?.phase).toBe('done');
     expect(await ran.wire.drive.readText(jobHunt.id)).toBe(hubText.job);
     expect(await ran.wire.drive.readText(flatHunt.id)).toBe(hubText.flat);

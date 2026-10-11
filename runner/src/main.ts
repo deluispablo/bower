@@ -55,15 +55,15 @@ import { NO_LONGER_ALLOWED, RunnerToken, isGone, isStaleAttempt } from './token'
 import { driveEffects, runOperations, type Effects } from '../../src/data/spine/engine';
 import { POOL } from '../../src/data/spine/schedule';
 import { admittedPlan } from './spine/admitted';
-import type { ClaudeSpawn } from './claude';
+import { InvalidModelReply, type ClaudeSpawn } from './claude';
 import { providerFor, providerNamed, type ProviderName } from './provider';
 import { runnerReads } from './spine/records';
 import { keepFinishedAtEnd } from './spine/retention';
 import { repairRules } from './rules-repair';
-import { RunTiming } from './timing';
+import { LedgerExhausted, RunTiming } from './timing';
 import { boundHot } from './hot';
 import { VaultIndex } from '../../src/data/vault/vault-index';
-import { planningIndex, withMaintenance, maintenanceEffects } from './index';
+import { refreshPlanning, planningIndex, withMaintenance, maintenanceEffects } from './index';
 
 export { RunnerDrive, type RunnerDriveOptions } from './drive';
 export { RunnerToken, isStaleAttempt, type RunnerTokenOptions, type TokenGrant } from './token';
@@ -96,7 +96,7 @@ export interface TidyOptions {
 export type TidyEnd =
   | { phase: 'done'; dispositions: ItemDisposition[] }
   | { phase: 'saving'; why: string }
-  | { phase: 'failed'; why: string };
+  | { phase: 'failed'; why: string; invalidReply?: true };
 
 /** What a run whose chain cannot be verified says: it is not touched again. */
 const UNREADABLE = 'Bower could not read what it did. Try again later.';
@@ -173,7 +173,11 @@ async function tidyRun(opts: TidyOptions, timing: RunTiming, status: RunnerStatu
       if (!status.finished) await status.post('failed', { failure: NO_LONGER_ALLOWED }).catch((err: unknown) => console.error(err));
       return { phase: 'failed', why: NO_LONGER_ALLOWED };
     }
-    if (mayNotReport(e) || status.finished) throw e;
+    if (e instanceof LedgerExhausted && !seen.chain?.length) {
+      console.log(`${e.count} items left in the inbox for the next run.`);
+      end = { phase: 'done', dispositions: [] };
+    } else if (mayNotReport(e) || status.finished) throw e;
+    else
     end = { phase: 'stopped', why: e instanceof Error ? e.message : String(e), error: e };
   }
   if (end.phase === 'done') {
@@ -198,7 +202,7 @@ async function tidyRun(opts: TidyOptions, timing: RunTiming, status: RunnerStatu
   // Failed for good (the final stop): retention, as at done, before the report the Worker takes.
   await seen.retain?.((opts.clock ?? Date.now)());
   await status.post('failed', { failure: B_FAILURE });
-  return { phase: 'failed', why: end.why };
+  return { phase: 'failed', why: end.why, ...(end.error instanceof InvalidModelReply ? { invalidReply: true as const } : {}) };
 }
 
 /** What `tidy` saw: the run's chain as read and as it grew (null until it was read), and whether `saving` was reported. */
@@ -368,8 +372,8 @@ export interface MainOptions {
  * `BOWER_API_URL`, and the dispatch from the event file at `GITHUB_EVENT_PATH`, which is where the ticket stays: it
  * is never put in the environment or printed, and on Actions it is masked in the log first
  * (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#masking-a-value-in-a-log).
- * Gives the exit code: 0 once the Worker took a terminal report (`done` or `failed`, or it already held the run
- * ended); 1 when it could not start, stopped on an error, or was left in `saving` for a redispatch to finish, said in
+ * Gives the exit code: 0 once the Worker took a terminal report (or already held the run ended); 1 with no valid
+ * model reply, when the run could not start, stopped on an error, or was left in `saving` for a redispatch, said in
  * the log. Past the dispatch, `runTidy`'s one exit (`leave`) has already told the Worker the attempt ended. Nothing runs after `done` is taken (the report is saved and read back before it), so a run already done
  * never ends non-zero by a later step.
  */
@@ -417,19 +421,25 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
           const listed = await drive.planReads().listAll(rootId, { readAhead: false });
           const persistedHot = VaultIndex.build(rootId, listed).file(SYSTEM.hot);
           const hot = persistedHot ? boundHot(await drive.planReads().readText(persistedHot.id)) : '';
-          const index = await planningIndex(drive, rootId);
-          const provider = providerFor(name, drive, { rootId, runId, allowWeb, context, index, ...(hot ? { hot } : {}) }, { env, timing, ...(opts.claude ? { spawn: opts.claude } : {}) });
-          return withMaintenance(drive, await provider(admitted));
+          const items = admitted.taken.piles.reduce((count, pile) => count + Math.max(1, pile.items.length), 0)
+            + admitted.taken.journal.length;
+          const refreshed = await timing.maintenance(() => refreshPlanning(drive, rootId), items);
+          drive.planReads().handoff(rootId, refreshed.listing);
+          const index = await planningIndex(drive, rootId, refreshed);
+          const provider = providerFor(name, drive, { rootId, runId, allowWeb, context, index, ...(hot ? { hot } : {}) }, { env, timing, retrieval: refreshed.snapshot, prefixes: async (file, discover) => discover ? drive.readPrefix(file) : drive.keptPrefix(file), ...(opts.claude ? { spawn: opts.claude } : {}) });
+          const manifest = await provider(admitted);
+          return timing.maintenance(() => withMaintenance(drive, manifest, undefined, refreshed));
         };
       },
       timing,
-      effects: (drive, context) => driveEffects(drive, context, maintenanceEffects(drive)),
+      effects: (drive, context) => driveEffects(drive, context, maintenanceEffects(drive, undefined, timing)),
     });
     console.log(`Tidy-up ${runId} ended ${end.phase}.`);
     if (end.phase !== 'done') console.error(end.why);
     // Left in saving with no terminal report: the job fails, so it never shows success for an unfinished run; the
     // Worker's recovery, told the attempt ended, redispatches it (TL-P3-28; TL-P4-16 addendum 4).
-    return end.phase === 'saving' ? 1 : 0;
+    // No valid model reply also fails the job even when the Worker accepted its failure report.
+    return end.phase === 'saving' || (end.phase === 'failed' && end.invalidReply) ? 1 : 0;
   } catch (e) {
     console.error(e);
     return 1;

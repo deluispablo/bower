@@ -6,8 +6,10 @@ import { isHidden } from '../../src/data/vault/layout';
 // Keep the import variable: Vite must not resolve a not-yet-created module at collection.
 const moduleUrl = new URL('../src/type-table.ts', import.meta.url);
 async function contract<T>(name: string): Promise<T> {
-  const path = moduleUrl.href;
-  const module: Record<string, unknown> = existsSync(moduleUrl) ? await import(/* @vite-ignore */ path) : {};
+  const contractUrl = ['typeTableOk', 'propertyValuesOk'].includes(name)
+    ? new URL('../../src/data/contracts/note-format.ts', import.meta.url) : moduleUrl;
+  const path = contractUrl.href;
+  const module: Record<string, unknown> = existsSync(contractUrl) ? await import(/* @vite-ignore */ path) : {};
   const value = module[name];
   expect(value, `type-table must export ${name}`).toBeTypeOf('function');
   return value as T;

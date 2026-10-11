@@ -4,6 +4,7 @@
  * Drive Bin, is reported "already saved as <name>", and gets no note and no Timeline line. The spine decides it, not
  * the model, which never sees it. No live call: `claude` is answered by scripted proposals for what it is shown.
  */
+import { phaseAwareClaude } from './b1-planning-support';
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -40,10 +41,11 @@ const NAMES: Record<string, { to: string; name: string }> = {
  * Files every thing it is shown, with a note for each one that takes one, and (as on staging) a confirmation line on
  * the job hunt note for the offer when it is shown the offer. Keeps what it was shown, by name.
  */
-function modelFiling(shown: string[]): ClaudeSpawn {
-  return async (call) => {
+function modelFiling(shown: string[], act?: () => Promise<void>): ClaudeSpawn {
+  return phaseAwareClaude(async (call, _step, _attempt, phase) => {
+    if (phase === 'execution') await act?.();
     const things = shownOf(call.input).piles.flatMap((p) => p.things);
-    shown.push(...things.map((t) => t.name));
+    if (phase === 'execution') shown.push(...things.map((t) => t.name));
     const offer = things.find((t) => NAMES[t.name]?.name === 'Offer letter.pdf');
     const intent = {
       kind: 'tidy-intent',
@@ -56,18 +58,16 @@ function modelFiling(shown: string[]): ClaudeSpawn {
       ...(offer ? { lines: [{ note: HUB, text: 'The offer letter came in again.', cites: offer.fileId }] } : {}),
     };
     return { code: 0, stderr: '', cut: null, stdout: envelope(JSON.stringify(intent)) };
-  };
+  });
 }
 
 /** The model's filing, after something the person does in the folder while the model works. */
-const during = (act: () => Promise<void>): ClaudeSpawn => async (call) => {
-  await act();
-  return modelFiling([])(call);
-};
+const during = (act: () => Promise<void>): ClaudeSpawn => modelFiling([], act);
 
 async function offerCase(): Promise<LoadedCase> {
   const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-offer-and-flat');
   if (!c) throw new Error('no corpus case c04-offer-and-flat');
+  c.folder[HUB] = (c.folder[HUB] ?? '').replace('Applications and offers.', 'Applications and offer letters.');
   return c;
 }
 
