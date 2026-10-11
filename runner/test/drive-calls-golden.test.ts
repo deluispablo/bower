@@ -43,13 +43,13 @@ describe('the C04 run makes the golden number of Drive calls per step', () => {
     const calls_ = Object.fromEntries(Object.entries(countsOf(timing).phases).map(([k, v]) => [k, v.calls]));
     expect(calls_).toEqual({ token: 0, reads: 25, model: 0, apply: 58, checkpoints: 4, report: 10, status: 0, runner: 2 });
   });
-  it('an existing type table keeps the 96-call pin', async () => {
+  it('reading the type table: one media read', async () => {
     const run = await modelled(existingTable);
     expect(run.code).toBe(0);
-    expect(run.calls.filter((c) => c.kind === 'read' || c.kind === 'write')).toHaveLength(96);
-    expect(drivecalls(run.timing)).toBe(96);
+    expect(run.calls.filter((c) => c.kind === 'read' || c.kind === 'write')).toHaveLength(97);
+    expect(drivecalls(run.timing)).toBe(97);
     expect(Object.fromEntries(Object.entries(countsOf(run.timing).phases).map(([k, v]) => [k, v.calls])))
-      .toEqual({ token: 0, reads: 25, model: 0, apply: 55, checkpoints: 4, report: 10, status: 0, runner: 2 });
+      .toEqual({ token: 0, reads: 26, model: 0, apply: 55, checkpoints: 4, report: 10, status: 0, runner: 2 });
   });
 });
 
