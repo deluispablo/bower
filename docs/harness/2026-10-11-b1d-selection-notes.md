@@ -2998,3 +2998,72 @@ empty on success. The final full run includes all seven fix-round-4 regression t
 previously red controls; no assertion change was needed.
 
 **Remaining runner reds: none.** All 14 tests from the remaining-runner inventory pass.
+
+## Fix round 5 reds
+
+Tests-only delivery for TL-P4-41 addendum 22 and
+`docs/harness/2026-10-11-b1d-adversarial-final-2.md`. The owner's session instruction
+requires one red per finding, so these are five separate tests in one new file.
+No production code or existing test was changed. All scenarios run through the existing
+`setup` / `run` corpus driver into runner `main`, with fake Drive, made-up data, fake time,
+and the existing production-traffic observer. A local reply transport repeats the same
+selection on a selection retry and supplies the intent only in the execution phase.
+It does not substitute for selection, cache, budget, ownership, or maintenance logic.
+
+### Exact tests and observed failures
+
+| Test | Passing positive control | Red and assertions |
+| --- | --- | --- |
+| `b1d-fr5 1 crossing MOC prefix` | Valid 967-byte ownership/2 MOC: two accepted calls, done, offer filed, one full map read. | Valid 5,287-byte map, with the personal region crossing byte 4,096, tested as candidate, selected target, and unrelated map. Each currently ends failed before either call with “This note cannot be read safely.” Needed maps must receive exactly one cached full read; an unrelated map must receive none, remain intact, and produce one skip line. `main` currently returns code 0 despite its failed status; the status assertion detects this. |
+| `b1d-fr5 2 maintenance exhaustion after effects` | Three baseline notes, 139 short archive notes, one offer: two accepted calls, primary filing and derived state complete. | At 140 archive notes both replies are accepted and the primary move lands, but code is 1 and phase remains saving. Assert done, applied filing retained in the report, unreached cold state still absent, and no cursor commit. A new admitted update request on the same Drive then runs `main` again: currently it also exhausts maintenance and leaves retrieval absent. The red requires that next run to complete its index, hot, cursor and all 140 archive entries while retaining the filed offer. |
+| `b1d-fr5 3 answer pins belong to each source` | One admitted keep-one answer selecting its two notes merges the pair and bins the other. | Three independent admitted answers select two disjoint notes each (six globally, two per source). Both selection attempts are refused, code 1, failed. Assert execution accepts each source within its own five and all three pairs merge. |
+| `b1d-fr5 4 refreshed MOC members are selectable` | The small map already links Record: selection and execution succeed and Record receives one full read. | Seed warm retrieval with an empty map, then add Record with unrelated summary. Refresh shows the folded map with one member, while its stored body still has no Record link. Both calls omit the membership expansion and reject the selected member. Assert membership reaches the prompt, selection reaches execution, and member evidence uses one full cached read. |
+| `b1d-fr5 5 heading links resolve candidates` | Terms links to `[[Garden]]`; Garden becomes a candidate, is read once, and filing succeeds. | Change only the link to `[[Garden#Soil]]`: Garden disappears from candidates and both selections fail. Assert candidate membership, accepted execution, one cached full read, and completed filing. |
+
+The five positive controls have code 0, exactly two model calls and no console errors.
+The failures are assertions on the corresponding findings, with no import, typing, timer,
+or fixture-admission failures in the final run. The maintenance catch-up request uses the
+normal instructions admission, since an empty Inbox does not admit an all-scope run.
+The catch-up failure remains the same maintenance-budget finding, not a second defect class.
+Cold previous state in that boundary fixture is absence: targets not sent stay absent,
+and retrieval (the cursor commit) is absent until catch-up succeeds.
+
+### Verification
+
+| Check | Result | Log |
+| --- | --- | --- |
+| Five new reds, two workers | Expected exit 1: 5 tests fail on their respective findings; all 5 controls pass | `/tmp/b1d-fr5-reds.log` |
+| Production traffic and control observations, final 13 scenarios | Recorded, including the second maintenance run | `/tmp/b1d-fr5-observations.ndjson` |
+| Runner TypeScript | Pass, exit 0 | `/tmp/b1d-fr5-types.log` |
+| New test ESLint | Pass, exit 0 | `/tmp/b1d-fr5-lint.log` |
+
+```sh
+pnpm -C runner exec vitest run test/b1d-fr5.test.ts --maxWorkers=2 --reporter=default --cache=false
+pnpm -C runner exec tsc --noEmit -p .
+pnpm -C runner exec eslint test/b1d-fr5.test.ts
+```
+
+All command output was redirected to OS temp. The default reporter and disabled Vitest
+cache avoid repository test artifacts. `pnpm check` and e2e were not run: this session is
+explicitly reds-only, permits only targeted tests, and forbids repository test output;
+the standard gates write reports, caches, build outputs and a check mark there. No screen
+was touched. The runner will commit the test and notes separately using `.codex-commits.json`;
+this session ran no writing git command and did not replace or symlink node_modules.
+
+tests changed: runner/test/b1d-fr5.test.ts: new red 1 plus 967-byte control for crossing MOC prefixes and cached reads.
+tests changed: runner/test/b1d-fr5.test.ts: new red 2 plus 139-note control for the 140-note maintenance boundary and catch-up.
+tests changed: runner/test/b1d-fr5.test.ts: new red 3 plus one-pair control for three per-source keep-one answers.
+tests changed: runner/test/b1d-fr5.test.ts: new red 4 plus stored-link control for refreshed MOC membership and member selection.
+tests changed: runner/test/b1d-fr5.test.ts: new red 5 plus plain-link control for heading normalization through linkTarget.
+tests changed: existing tests: none.
+removed: none.
+
+Research reused offline from the packet (no network or independent re-verification):
+[curated context and just-in-time retrieval](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents),
+[plan then execute](https://arxiv.org/html/2506.08837v1), and
+[stable prompt prefixes](https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
+The test fixtures reuse the existing ownership format, admission, fake Drive, and corpus
+driver; the fixes remain with the existing read cache, maintenance ledger, selection and
+`linkTarget` homes named by the ruling.
+
+**Remaining runner reds: the five exact fix-round-5 tests above.** Implementation is outside this session.
