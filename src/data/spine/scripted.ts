@@ -771,12 +771,15 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const shownText = new Set(boundedLearned.split(/\r?\n/).flatMap((line) => parseTimelineLine(line)?.text ?? []));
   const shownIds = new Set(memoryLedger.live.filter((f) => shownText.has(f.text)
     && (!opts.decisions.shownFactIds || opts.decisions.shownFactIds.includes(f.factId))).map((f) => f.factId));
+  const forgetFacts = [...memoryLedger.live, ...memoryLedger.events.flatMap((f) => f.kind === 'observation'
+    && memoryLedger.tombstones.some((t) => t.factId === f.factId) ? [f] : [])];
   const boundForget = new Map<string, string[]>();
   for (const { factId, quote } of opts.decisions.forget ?? []) {
     const matching = forgetWords.filter((p) => hasVerbatimQuote(p.text, quote));
     if (matching.length !== 1) continue;
-    const facts = memoryLedger.live.filter((f) => normalizedText(f.text).includes(normalizedText(quote ?? '')));
-    if (facts.length !== 1 || facts[0]?.factId !== factId || !shownIds.has(factId)) continue;
+    const facts = forgetFacts.filter((f) => normalizedText(f.text).includes(normalizedText(quote ?? '')));
+    if (facts.length !== 1 || facts[0]?.factId !== factId
+      || memoryLedger.live.some((f) => f.factId === factId) && !shownIds.has(factId)) continue;
     const pile = matching[0];
     if (pile) { boundForget.set(pile.id, [...(boundForget.get(pile.id) ?? []), factId]); memoryWords.add(pile.id); }
   }
