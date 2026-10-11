@@ -1693,3 +1693,161 @@ the scope; the commit metadata is separately validated as a JSON array.
 
 Skipped: implementation, pnpm check, full suites and e2e; this session writes reds only.
 Risk: the three reviewed data-safety gaps remain intentionally unfixed for the next implementer.
+
+
+## Round 5 (addendum 7)
+
+implementer: codex
+
+Implemented the three P4-120 findings under TL-P4-48 addenda 6 and 7, with the
+existing validLearnedBlock, ownership parser and note author. Scope reaches
+observations.ts, note-edit.ts, run-manifest.ts and runner/src/spine/admitted.ts;
+their callers, frozen contract tests, app tests and runner tests are exercised.
+No test, fixture, repository configuration, dependency or runtime wiring changed.
+No network was used; node_modules was neither replaced nor symlinked. No worker
+command committed, staged, switched, merged, pushed or otherwise wrote git state
+in this checkout. The unchanged suites create synthetic git repositories only in
+OS temp; their instance command uses a local gh stand-in, never GitHub.
+
+Prior offline research from the packet, not newly verified:
+https://zod.dev/api
+https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+https://arxiv.org/pdf/2605.12978
+
+### Final-state validation and scope
+
+Manifest validation and runner admission recognize an About me edit by its path,
+captured file id or About change, rather than admitting only two change kinds.
+They retain captured identity, exact authored bytes, read fences, archive grammar,
+archive bytes, budgets, frontier and dependency checks. At the end of the manifest,
+the latest complete About me text is checked against the last ledger write, with
+all declared Undo origins invalidated. Late Forget now removes its evidence before
+validLearnedBlock judges the final text. All regions are judged together, even
+when the note edit is a generic link rewrite or contains multiple change kinds.
+
+Per-edit fact-id subsets no longer decide final validity: a later Forget can
+invalidate a selected fact while a valid final block already omits its sentence.
+The final live ledger is authoritative. Archives, selected rebuild coverage and
+consolidation/frontier scheduling retain their separate existing checks.
+
+Generic link rewriting excludes learned payload offsets returned by the existing
+ownership parser, in both ownership/2 notes and trailing-region notes with a legacy
+personal prefix. Personal links still rewrite normally. Learned links retain their
+bytes until the existing evidence rebuild refreshes them; no second link mechanism,
+parser, author, dispatcher or ledger was introduced.
+
+Creation uses validLearnedBlock's creation check: precisely the current folder
+template bytes followed by the heading and the three canonical empty, labelled
+regions. Extra personal prose, learned claims, template-only creation, extra blanks
+and alternate line endings cannot enter as generated trusted personal context.
+Existing template-only notes still pass the ordinary read/edit block check.
+Repeated creates are refused. Maintain cannot write memory targets; admission now
+matches the existing manifest refusal for About me, its ledger and its archives.
+
+removed: manifest/admission's About-only change-kind trigger and exclusive append/rewrite restriction.
+removed: operation-time learned-block evidence checks; one final-block/final-ledger check replaces them.
+removed: per-change factIds maps and validLearnedBlock's unused fact-id-subset argument/filter.
+removed: unconditional requirement for a preceding ledger effect on every About edit; an empty final ledger still rejects learned claims.
+tests changed: none; all existing and round-5 tests, assertions, bounds, thresholds and timeouts remain unchanged.
+
+### Compatibility draft rows
+
+| Contract home | Round-5 change | Compatibility evidence / consumer |
+| --- | --- | --- |
+| src/data/contracts/observations.ts | The existing validator enforces exact template plus empty regions for creation; retires per-edit fact-id subsets | Stored JSONL and ownership formats remain unchanged. Existing two-argument consumers retain whole-block validation. Every production caller of the retired third argument was updated; creation is the new optional third boolean. Round-2/3/4/5 controls pass, including remembering, Undo, tombstones and canonical creation. B4b/B4c consume this same validator. |
+| src/data/contracts/note-edit.ts | Generic renames preserve every learned payload byte using existing parser spans | Personal link rewrites, read/version fences, legacy prefixes, Unicode/BOM/CRLF, MOC/profile/template and Current state controls remain exercised by the full app suite. A rename solely inside learned regions is unchanged/refused; evidence rebuilds continue to refresh learned links. |
+| src/data/contracts/run-manifest.ts | Validate the final About me block against the final ledger across all edit kinds and Undo origins; require exact empty creation | No manifest/effect schema changed. Captured file identity and write fences, archive ordering/bytes, successful frontier, budgets and rebuild coverage remain checked. Late Forget is refused when its text survives. A final block already excluding that fact passes, even if the earlier rewrite's factIds selected it. No second validity mechanism exists. |
+
+### Red and verification setup
+
+Before editing production, all three frozen b4a-r5 tests failed with the expected
+16 finding assertions and passing controls (red.log). Exact names:
+- b4a-r5 1 final block against final ledger
+- b4a-r5 2 link rewrites never edit the learned section
+- b4a-r5 3 creation is exactly the template plus empty regions
+
+All four targeted round-2/3/4/5 files pass after the final production changes:
+22/22 tests, including all three round-5 reds and their positive controls.
+Logs/reports: targeted-final.log and targeted-final.json.
+
+OS-temp verification folder: `/private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-r5-fix-uwf86_9n`.
+`/tmp/b4a-r5-fix-path` contains its exact path. Temporary configs import the real
+app/runner configs, retain jsdom/node, app setup and the real-timer gate, and
+relocate caches, attachments, reports and the gate's CPU output to that folder.
+No test assertions or production imports are altered. Temporary Vite transforms
+relocate only harness.test.ts's generated Playwright fixture directory/import and
+new-instance.test.ts's build script/bundle destination. The copied instance script
+builds the real runner sources with the installed esbuild into OS temp. The temp
+folder declares type: module so relocated generated Playwright configs retain the
+repository's ES module interpretation.
+
+The initial full runs inadvertently exercised the older harness tests' repository
+output destinations: three test-results/fx-* directories and runner/dist/runner.mjs.
+Those generated outputs were moved to the verification folder's initial-output/
+subdirectory; pre-existing fixture directories were left alone. The final full runs
+use the OS-temp transforms. No repository test/setup/config file was edited.
+
+Final requested commands, with --maxWorkers=2 and only output relocation flags:
+- From runner/: `pnpm exec vitest run --maxWorkers=2 --config /private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-r5-fix-uwf86_9n/runner.mjs --configLoader runner`.
+  58 files, 718/718 tests pass. Logs/reports: runner-final.log and runner.json.
+- From the checkout: `pnpm exec vitest run src --maxWorkers=2 --config /private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-r5-fix-uwf86_9n/app.mjs --configLoader runner`.
+  178 files, 5,784 tests: 5,782 pass, two external failures and one expected
+  unhandled port error. Logs/reports: app-final.log and app.json.
+- `pnpm exec tsc --noEmit --incremental false -p tsconfig.app.json`: pass.
+- `pnpm exec tsc --noEmit --incremental false -p tsconfig.node.json`: pass.
+- `pnpm exec tsc --noEmit --incremental false -p runner/tsconfig.json`: pass.
+- ESLint on the three touched contract files in the app package: pass.
+- ESLint on src/spine/admitted.ts in the runner package: pass.
+  A combined-package invocation had parser-root ambiguity; separate package invocations pass without config changes.
+- `node scripts/check-unused-gate.mjs`: pass, ordinary baseline 2 and production baseline 34.
+
+Type/lint/unused logs: tsc-app-final.log, tsc-node-final.log, tsc-runner-final.log,
+eslint-app-final.log, eslint-runner-final.log and unused-final.log. Exit codes are
+recorded beside these logs. Read-only git diff --check passes.
+
+### Older contradictions and external failures
+
+The first full app run completed 178 files and 5,784 tests: 5,782 passed, two failed,
+and one unhandled expected port error. No older test contradicting addendum 7 was
+found. In particular all unchanged runner tests and all prior B4a fixtures pass.
+The two app failures are external to this fix:
+1. src/docs.test.ts:134, `every change since the P2 freeze is listed`: shared
+   compatibility bookkeeping omits existing commit 9054e66d. This worker does not
+   own that shared ledger. The three draft rows above are ready for the coordinator.
+2. src/e2e-port.test.ts:37, `a server from another worktree is never reused`:
+   expected sandbox listen EPERM at 127.0.0.1, with its test timeout and one unhandled
+   error. No test, timeout or environment constraint was changed.
+
+tests changed: no older contradiction was repaired or weakened; no repository test was changed.
+
+.codex-commits.json is a JSON array with one production commit for the four owned
+files, then one notes-only commit. The runner owns commits, pnpm check and the
+capabilities e2e on demo/fake. No worker check mark or e2e success is claimed.
+
+Skipped: runner-owned commits, pnpm check, capabilities e2e and B4b/B4c runtime wiring.
+Risk: final integration still needs the runner's gates and the shared compatibility ledger entry.
+
+The first output-relocated app run had two extra harness failures at
+src/harness.test.ts:631 and :643 because generated Playwright configs in OS temp
+lacked the repository's type: module package declaration. Adding that declaration
+in OS temp resolved the setup issue: all 47 unchanged harness tests pass in
+harness-final.log / harness-final.json. No assertion or repository config changed.
+The full app suite is rerun with that corrected output-only setup; the transient
+report is retained as app-relocation-initial.json / app-relocation-initial.log.
+
+### Final full app result
+
+The corrected full app run completes 178 files and 5,784 tests: 5,782 pass,
+exactly the two external failures listed above remain, and the expected listen
+EPERM is its one unhandled error. All 47 harness tests pass in this full run;
+all B4a rounds, note-edit, observations, run-manifest, ownership, existing contract
+compatibility and screen tests pass. No old test contradicting addendum 7 remains.
+Logs/reports: app-final.log and app.json. The app-final.exit file records exit 1;
+runner-final.exit and every requested TypeScript/ESLint/unused final exit record 0.
+Only the four production files, these notes and requested commit metadata are in
+the delivery. Read-only git diff --check passes; no repository test was changed.
+Final artifact inventory retains only the pre-existing repository fixture
+folders; all outputs of the corrected final runs are in OS temp.
+
+Skipped: runner-owned commits, pnpm check, capabilities e2e and B4b/B4c runtime wiring.
+Risk: shared compatibility bookkeeping still lacks 9054e66d; the expected sandbox port EPERM remains.
