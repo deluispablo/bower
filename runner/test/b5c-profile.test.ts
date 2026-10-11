@@ -107,8 +107,8 @@ const profileNote = () => note(FACT, '## Current state\n' + framed('current', '-
   + framed('bower-note', "## Bower's note\nEarlier CV saved.\n") + REGION, true)
   .replace('summary:', 'bower_format: ownership/2\nsummary:')
   .replace('by: bower\n', `by: bower\nbower_state: ${stateMark(['Alex uses JavaScript.'])}\n`);
-const declaration = (id?: string, kind = 'cv') => ({ id: kind, match: [kind], template: 'source',
-  properties: {}, table: [], profile: { template: 'profile', ...(id ? { id } : {}) } });
+const declaration = (kind = 'cv') => ({ id: kind, match: [kind], template: 'source',
+  properties: {}, table: [], profile: { template: 'profile' } });
 
 async function profileBase(options: { names?: string[]; text?: string; missing?: boolean; kind?: string } = {}) {
   const names = options.names ?? [SOURCE];
@@ -121,7 +121,8 @@ async function profileBase(options: { names?: string[]; text?: string; missing?:
       [`Areas/Career/Neighbour ${i}.md`, note(FACT, 'Alex uses TypeScript.\n')])),
   }, inbox: [{ line: '', files: names }],
   inboxFiles: Object.fromEntries(names.map((name, i) => [name, options.text ?? `${FACT}\n${i ? 'Alex uses SQL.\n' : ''}`])) });
-  const table = JSON.stringify({ v: 1, rows: [declaration(options.missing ? undefined : b.id(PROFILE), options.kind)] });
+  if (!options.missing) await b.drive.update(b.id(PROFILE), { appProperties: { profile: options.kind ?? 'cv' } });
+  const table = JSON.stringify({ v: 1, rows: [declaration(options.kind)] });
   await b.drive.createText(b.id('.bower'), 'type-table.json', table);
   b.c.folder[TABLE] = table;
   return b;
@@ -168,7 +169,9 @@ async function rejectedProfile(b: Base, words: string, reason: RegExp) {
 
 async function corpusProfile(slug: string, control = false) {
   const b = await setup({ fixture: slug });
-  const rows = [declaration(b.id(PROFILE), 'cv'), declaration(b.id(PROFILE), 'offer')];
+  const kind = slug.endsWith('cv-profile') ? 'cv' : 'offer';
+  const rows = [declaration(kind)];
+  await b.drive.update(b.id(PROFILE), { appProperties: { profile: kind } });
   await b.drive.createText(b.id('.bower'), 'type-table.json', JSON.stringify({ v: 1, rows }));
   const replies = JSON.parse(readFileSync(new URL(`../../harness/corpus/${slug}/replies.json`, import.meta.url), 'utf8')) as
     Array<{ things: Array<{ profile?: string }> }>;
@@ -269,8 +272,8 @@ it('b5-first-document-creates-profile', async () => {
   expect(refusal.code, 'ungrounded creation retry still files the source').toBe(0);
   expect(Object.values(refusal.after).some((text) => text.includes('begin profile'))).toBe(false);
   const ambiguous = await profileBase({ missing: true });
-  const a = await ambiguous.drive.createText(ambiguous.id('Areas/Career'), 'Career profile.md', profileNote(), { by: 'bower' });
-  const b2 = await ambiguous.drive.createText(ambiguous.id('Areas/Career'), 'Career profile.md', profileNote(), { by: 'bower' });
+  const a = await ambiguous.drive.createText(ambiguous.id('Areas/Career'), 'Career profile.md', profileNote(), { by: 'bower', profile: 'cv' });
+  const b2 = await ambiguous.drive.createText(ambiguous.id('Areas/Career'), 'Career profile.md', profileNote(), { by: 'bower', profile: 'cv' });
   const omitted = await mainProfile(ambiguous, FACT);
   expect(await ambiguous.drive.readText(a.id)).toBe(profileNote());
   expect(await ambiguous.drive.readText(b2.id)).toBe(profileNote());
@@ -280,11 +283,14 @@ it('b5-first-document-creates-profile', async () => {
   for (const file of await b.drive.listAll(b.root)) if (!file.folder && file.name.endsWith('.md')
     && (await b.drive.readText(file.id)).includes('begin profile')) profiles.push(file);
   expect(profiles).toHaveLength(1);
-  const stored = JSON.parse(first.after[TABLE] ?? 'null') as { rows: Array<{ profile: { id: string } }> };
-  expect(stored.rows[0]?.profile.id).toBe(profiles[0]?.id);
+  const stored = JSON.parse(first.after[TABLE] ?? 'null') as { rows: Array<{ profile: { template: string } }> };
+  expect(stored.rows[0]?.profile).toEqual({ template: 'profile' });
+  expect(first.after[TABLE]).toBe(b.c.folder[TABLE]);
+  expect(profiles[0]?.appProperties?.profile).toBe('cv');
   const next = await redispatchCase(b.c, first, 2, { pacing: { sleep: async () => undefined } });
   expect(next.after[TABLE]).toBe(first.after[TABLE]);
-  expect(next.after[TABLE]).toContain(profiles[0]?.id ?? 'missing-created-id');
+  expect(next.after[TABLE]).toBe(b.c.folder[TABLE]);
+  expect((await b.drive.listAll(b.root)).filter((f) => f.appProperties?.profile === 'cv')).toHaveLength(1);
   const later = await b.drive.createText(b.id('Inbox'), 'Later CV.txt', 'Alex uses TypeScript and SQL.\n');
   const admitted = await planAdmission(fakeRead(b.drive), b.root, { scope: 'all', clock: () => AT + 1, newId: () => 'later-profile-cv' });
   expect(admitted.kind).toBe('manifest');
@@ -417,4 +423,89 @@ it('b5-profile-template-compatibility', async () => {
   const sourcePath = 'Areas/Career/Alex CV.md'; expect(result.after[sourcePath]).toBeDefined();
   const replay = await redispatchCase(b.c, result, 2, { pacing: { sleep: async () => undefined } });
   expect(replay.after[sourcePath]).toBe(result.after[sourcePath]); preserved(b, result);
+});
+
+// Addendum 14: identity comes from the run listing's app property, never a stored Drive id.
+async function propertyRun(b: Base, words?: string, press = 1) {
+  const selection = select(b, [], 'Areas/Career');
+  for (const item of selection.items) item.kind = 'cv';
+  const result = await run(b, [selection, itemReply(b, words), itemReply(b)], { press });
+  expect(result.code, result.errors).toBe(0);
+  expect(result.wire?.statuses.at(-1)?.phase).toBe('done');
+  for (const source of b.sources) expect(result.after[`Areas/Career/${source.name}`]).toBe(b.c.inboxFiles[source.name]);
+  expect(result.after[TABLE]).toBe(b.c.folder[TABLE]);
+  return result;
+}
+
+it('b5-profile-property-first-create control: ordinary document filing creates no profile', async () => {
+  const b = await profileBase({ missing: true });
+  const result = await propertyRun(b);
+  expect(result.errors).toBe(''); expect(result.frames).toHaveLength(2);
+  expect((await b.drive.listAll(b.root)).filter((f) => f.appProperties?.profile === 'cv')).toHaveLength(0);
+});
+it('b5-profile-property-first-create', async () => {
+  const b = await profileBase({ missing: true });
+  const result = await propertyRun(b, FACT);
+  const profiles = (await b.drive.listAll(b.root)).filter((f) => f.appProperties?.profile === 'cv');
+  expect(profiles, 'first document creates exactly one profile carrying the row id').toHaveLength(1);
+  const profile = profiles[0]; expect(profile).toBeDefined(); if (!profile) return;
+  const text = await b.drive.readText(profile.id);
+  expect(text).toContain('begin profile'); expect(text).toContain(FACT); expect(text).toMatch(/\[\[[^\]]*Alex CV/);
+  expect(parseOwnership(bytes(text)).status).toBe('v2');
+  expect(result.errors).toBe(''); expect(result.frames).toHaveLength(2);
+  await redispatchCase(b.c, result, 2, { pacing: { sleep: async () => undefined } });
+  expect((await b.drive.listAll(b.root)).filter((f) => f.appProperties?.profile === 'cv')).toHaveLength(1);
+});
+
+async function laterDocument() {
+  const b = await profileBase();
+  await propertyRun(b);
+  // Model a profile from an earlier tidy-up; neither its title nor its location identifies it.
+  await b.drive.update(b.id(PROFILE), { name: 'Earlier skills.md', addParent: b.id('Projects/Job hunt'),
+    removeParent: b.id('Areas/Career') });
+  const later = await b.drive.createText(b.id('Inbox'), 'Later CV.txt', 'Alex uses TypeScript and SQL.\n');
+  const admitted = await planAdmission(fakeRead(b.drive), b.root,
+    { scope: 'all', clock: () => AT + 1, newId: () => 'property-later-cv' });
+  expect(admitted.kind).toBe('manifest'); if (admitted.kind !== 'manifest') throw new Error('Expected made-up admission.');
+  const pile = admitted.manifest.piles.find((p) => p.items.some((i) => i.fileId === later.id));
+  expect(pile).toBeDefined();
+  b.sources = [{ itemId: later.id, pileId: pile?.pileId ?? '', name: later.name }];
+  b.admission = admitted.manifest; b.c.inboxFiles[later.name] = 'Alex uses TypeScript and SQL.\n';
+  return b;
+}
+it('b5-profile-property-second-document control: later filing preserves the property-bound profile', async () => {
+  const b = await laterDocument();
+  await propertyRun(b, undefined, 2);
+  expect(await b.drive.readText(b.id(PROFILE))).toBe(profileNote());
+});
+it('b5-profile-property-second-document', async () => {
+  const b = await laterDocument(); const id = b.id(PROFILE);
+  const result = await propertyRun(b, 'Alex uses TypeScript and SQL.', 2);
+  expect(edits(result, id), 'one listing match updates the existing profile by id').toHaveLength(1);
+  const text = await b.drive.readText(id);
+  expect(text).toContain('Alex uses TypeScript and SQL.'); expect(text).toMatch(/\[\[[^\]]*Later CV/);
+  expect(text).not.toContain(PREVIOUS); expect(text).toContain(PERSONAL); expect(text).toContain(HISTORY);
+  expect((await b.drive.listAll(b.root)).filter((f) => f.appProperties?.profile === 'cv')).toHaveLength(1);
+  expect(result.errors).toBe(''); expect(result.frames).toHaveLength(2);
+});
+
+async function duplicateProfiles(words?: string) {
+  const b = await profileBase();
+  const copy = await b.drive.createText(b.id('Projects/Job hunt'), 'Copied skills.md', profileNote(),
+    { by: 'bower', profile: 'cv' });
+  const result = await propertyRun(b, words);
+  for (const id of [b.id(PROFILE), copy.id]) {
+    expect(await b.drive.readText(id)).toBe(profileNote()); expect(edits(result, id)).toHaveLength(0);
+  }
+  expect((await b.drive.listAll(b.root)).filter((f) => f.appProperties?.profile === 'cv')).toHaveLength(2);
+  return result;
+}
+it('b5-profile-property-duplicate control: duplicate properties do not obstruct ordinary filing', async () => {
+  const result = await duplicateProfiles();
+  expect(result.errors).toBe(''); expect(result.frames).toHaveLength(2);
+});
+it('b5-profile-property-duplicate', async () => {
+  const result = await duplicateProfiles(FACT);
+  expect(result.errors, 'duplicate identity is unresolved, not a planning error').toBe('');
+  expect(result.frames, 'unresolved duplicate target omits the update without refusing valid words').toHaveLength(2);
 });
