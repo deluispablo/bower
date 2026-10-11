@@ -974,3 +974,7 @@ Those gates were not run here; no server or browser was started. B4b/B4c runtime
 wiring stays outside this entry. .codex-commits.json declares one code/spec commit
 and one notes-only commit. git diff --check passes; only those five owned files and
 the commit-plan file are dirty.
+
+### Round 2 coordinator pin (addendum 4)
+
+tests changed: runner/test/claude-provider.test.ts: the RUNNER_WRITES pin now lists '.bower/observations.jsonl', the runner file that B4a added to the allowlist (TL-P4-48); no bound or assertion about bytes was loosened.
