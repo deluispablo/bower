@@ -231,3 +231,195 @@ The packet's sources were reused without network access or independent reverific
 
 They support curated context, just-in-time retrieval, plan then execute and stable prefix reuse. The hard
 numbers and authority rules come from the packet and addendum 13, not from these external references.
+
+## Implementation
+
+Status: **blocked before production edits**. The full runner sweep was completed before stopping;
+no production, test, fixture, golden, dependency or git changes were made in this session.
+Only this notes appendix is changed. No partial planner is left in the tree.
+
+implementer: codex
+tests changed: none
+removed: none (blocked before implementation).
+removed: no old planner, cache, ledger or writer was replaced or duplicated.
+
+### Required allocations and contract conflicts
+
+1. **Refresh has an unallocated home.** `runner/src/index.ts:329–336` owns `planningIndex`,
+   `snapshotNotes`, `readState` and the canonical projection. A warm index returns `undefined`
+   at line 332. The changes drain is currently inside `withMaintenance` at lines 348–353, after
+   the provider has already returned its plan (`runner/src/main.ts:422`). The cold bootstrap
+   start token also happens there, after the planning listing. Contract 1 requires both semantic
+   calls to consume the refresh; contract 4 and addenda 3/4 require maintenance to share that
+   discovery and its prefix reads. Moving this work within its existing home requires allocation
+   of `runner/src/index.ts`, which neither Owned files nor H2/H6 includes. Reimplementing its
+   projection/snapshot in main or claude would add the second mechanism expressly forbidden by
+   the assignment. Running maintain on a fabricated preparation manifest would also introduce
+   a preparation plan and reserve ids before the real frozen plan, contrary to the lifecycle ruling.
+
+2. **Exhaustion cannot reach the existing done barrier with the ruled report.** Contract 9's
+   waiting disposition and Ruled 2's existing set-aside row conflict with the report invariant:
+   `src/data/spine/report.ts:239–245` expressly says waiting items have no rows, lines 288 and
+   293–295 reject a set-aside row for a waiting item, and `src/data/spine/barrier.ts:328–331`
+   stops saving on that contradiction. Rows require operation-grounded subjects; an empty-requires
+   set-aside contribution names no admitted item and fails too (`report.ts:275–281`). Both files
+   are unallocated. The counterexample is the committed exhaustion red: it requires done,
+   nonempty setAside and every disposition waiting (`runner/test/b1-planning-support.ts:147–157`).
+   Refusing a fictional move to ground a row would violate the frozen-authority contract;
+   changing waiting to set-aside would violate the red. A bypass in main would be a second report path.
+
+3. **The committed assertion sweep leaves direct transports execution-only.** The notes' Sweep
+   section already records that fixture protocol was unchanged. `recordedClaude` and the inline
+   transports in `runner/test/claude-provider.test.ts` emit tidy-intent at every call, including
+   selection. For example the new-Area control at lines 199–202 always returns `money`, a tidy-intent,
+   but lines 208–215 now require a valid selection and its folder candidates. The allocated H2 driver
+   can adapt `replySequence` in `runner/test/corpus-run.ts`; it cannot adapt direct recorded transports
+   or inline providers in unchanged tests. Production may not interpret an execution reply as an
+   accepted Q2 closed selection. The 21 failures below identify every affected test in this sweep.
+
+The bower-implement workflow ([SKILL.md](../../.agents/skills/bower-implement/SKILL.md)) delegates
+scope and mechanism rules to [WORKER.md](WORKER.md): “if it cannot do what you need, stop and report
+`blocked`.” The owner's explicit owned-files-only and no-test-changes instructions are also binding.
+No permission was assumed to change these homes, tests, report contracts or golden pins.
+
+### Compatibility drafts for the lead (not implemented)
+
+| Home / contract | Concrete draft needed to unblock |
+| --- | --- |
+| B1c refresh/index and shared run reads | Allocate index.ts; expose one read-only refresh result to planning and reuse it when declaring maintain. Keep cold bootstrap-token ordering, versioned prefixes, canonical projection and same-artifact cursor commit. No preparation checkpoint or additional cache. |
+| Exhaustion / report provenance | Rule an operation-free, admitted-id-grounded set-aside contribution for waiting items, consumed by the existing manifest/report/disposition checker. Allocate the existing report and manifest contract homes and their tests. Keep the engine/barrier checks; do not bypass them. |
+| Model fixture protocol | Authorize a separate transport-only handoff that supplies closed selection replies to the direct mocks. Adapt the allocated corpus driver in the implementation after that handoff; keep every semantic assertion and zero-model recovery control. |
+| Eight B1a/B1c assertions below | Lead-owned sweep must preserve no duplicate discovery/media and pre-manifest no-writes while moving refresh before both calls. |
+
+These are proposed compatibility drafts, not accepted contract changes. Stored formats and runtime
+behavior remain unchanged. The previously listed eight deferred assertions all still pass against
+this unchanged implementation; they remain contradictions with the requested future implementation:
+
+| File:line | Required reconciliation |
+| --- | --- |
+| runner/test/b1a-contract.test.ts:127 | Refresh discovery is pinned inside maintain after planning. |
+| runner/test/b1a-contract.test.ts:132 | Final warm-maintain request is pinned to its own cursor call. |
+| runner/test/b1a-contract.test.ts:825 | Maintain alone is pinned to all three discovery calls. |
+| runner/test/b1-index.test.ts:751 | Cold main is pinned to one semantic call. |
+| runner/test/b1-index.test.ts:754 | Pre-model write observations are pinned to [0], rather than both calls. |
+| runner/test/b1-index.test.ts:755 | Pre-model read observations are pinned to [1], rather than both calls. |
+| runner/test/b1-index.test.ts:1022 | Question media is pinned inside maintain rather than the shared earlier read. |
+| runner/test/b1-index.test.ts:1028 | Changed Range is pinned inside maintain rather than before planning. |
+
+### Verification of the unchanged tree
+
+All tests used `--reporter=default --cache=false`, at most two workers, and OS-temp logs.
+No pnpm check was run: its documented script writes test-results, build artifacts and the check
+mark into the repository, contrary to the explicit session restriction. No fixture or UI changed,
+so e2e:fake and screen e2e were not triggered. The specified runner/src/type/lint sweep was run.
+
+| Check | Result | OS-temp log |
+| --- | --- | --- |
+| B1d reds, test/b1-planning.test.ts | 19 failed on assertions / 19 tests, no import/type/timeout failure | /tmp/b1d-implementation-red.log |
+| Whole runner suite | 40 failed, 630 passed / 670 tests; 6 failed, 44 passed / 50 files | /tmp/b1d-implementation-runner.log |
+| Whole src suite | 5617 passed, 1 failed / 5618 tests; 167 passed, 1 failed / 168 files; expected e2e-port EPERM only | /tmp/b1d-implementation-src.log |
+| tsc app, --noEmit --incremental false | pass | /tmp/b1d-implementation-tsc-app.log |
+| tsc node, --noEmit --incremental false | pass | /tmp/b1d-implementation-tsc-node.log |
+| tsc runner, --noEmit --incremental false | pass | /tmp/b1d-implementation-tsc-runner.log |
+| ESLint app owned production file | pass | /tmp/b1d-implementation-eslint-app.log |
+| ESLint runner owned production/driver files | pass | /tmp/b1d-implementation-eslint-runner.log |
+
+The initial combined ESLint invocation hit automatic tsconfigRootDir ambiguity. Scratch configs in
+/tmp/b1d-eslint-{app,runner}.mjs import the unchanged repository configs and supply their actual root;
+rerunning each directory's files with those configs passed. No lint rules or repository configs changed.
+There are no touched TypeScript files; these lint checks cover the slated production/driver ownership.
+
+The full runner sweep includes provider/main/timing, B1a/B1c, Q1a/Q1c, B3b, corpus, method and traffic
+pins. All 40 failures consist of the 19 new reds plus these 21 committed sweep tests:
+
+| Current assertion location | Exact failing test |
+| --- | --- |
+| runner/test/claude-provider.test.ts:189 | a new Area with no cited rule or note is refused and retried once |
+| runner/test/claude-provider.test.ts:208 | a new Area with a responsibility is made and the report says why |
+| runner/test/claude-provider.test.ts:227 | a responsibility does not open a new Project |
+| runner/test/claude-provider.test.ts:275 | a rule basis is a whole rules line, never part of one or the cut marker |
+| runner/test/claude-provider.test.ts:288 | a new subfolder of an existing Area is not reported as a new area |
+| runner/test/claude-provider.test.ts:306 | a thing with text and no note or citing line is refused and retried once |
+| runner/test/claude-provider.test.ts:333 | a thing cited by a Timeline line on an existing note needs no note |
+| runner/test/claude-provider.test.ts:345 | a photo with no text needs no note |
+| runner/test/claude-provider.test.ts:360 | a second refusal ends the run honestly |
+| runner/test/claude-provider.test.ts:375 | a recorded Claude reply becomes operations the spine validates |
+| runner/test/claude-provider.test.ts:446 | the runner logs one timing line per run with the Claude reply's numbers |
+| runner/test/claude-provider.test.ts:463 | the timing line counts cache-read input tokens |
+| runner/test/corpus-driver.test.ts:28 | a case's between step runs between two runs |
+| runner/test/q1-continuation.test.ts:304 | Q1a q1-options-exact-action: consent resolves stored folder id despite duplicate labels and rename |
+| runner/test/q1-continuation.test.ts:617 | Q1a q1-continuation-budget-meter: typed waiting and replay do zero admission reads with ordinary model usage |
+| runner/test/q1-continuation.test.ts:1112 | Q1a fix 1.5: missing or outside-root stored option folders cannot authorize alternative filing |
+| runner/test/q1-continuation.test.ts:1253 | Q1a fix 1.7: pending text from another pile never reaches this subject planner without provenance |
+| runner/test/q1c-live.test.ts:392 | Q1c fix 1: a crash after manifest persistence recovers questions with stored option actions intact |
+| runner/test/q1c-live.test.ts:438 | Q1c q1-live-question-before-clear-effects-end: durable publication |
+| runner/test/q1c-live.test.ts:474 | Q1c q1-live-question-before-clear-effects-end: same-run recovery republishes without a second model reply |
+| runner/test/second-brain-method.test.ts:195 | B3b hot: evidence-only method verdict covers hidden unarchived refresh |
+
+The exact new reds all failed; definition locations are listed here. The full assertion-location
+inventory (103 distinct failing locations) is /tmp/b1d-implementation-failures.tsv.
+
+| Definition location | Exact red |
+| --- | --- |
+| runner/test/b1-planning.test.ts:41 | b1-index-job-offer |
+| runner/test/b1-planning.test.ts:68 | b1-changes-person-edit |
+| runner/test/b1-planning.test.ts:95 | b1-cut-index-no-new-destination |
+| runner/test/b1-planning.test.ts:123 | b1-five-per-source |
+| runner/test/b1-planning.test.ts:143 | b1-pinned-and-script-notes-count-within-five |
+| runner/test/b1-planning.test.ts:173 | b1-selection-closed-ids |
+| runner/test/b1-planning.test.ts:220 | b1-folded-moc-expansion |
+| runner/test/b1-planning.test.ts:239 | b1-target-injection |
+| runner/test/b1-planning.test.ts:269 | b1-read-to-act-fence |
+| runner/test/b1-planning.test.ts:298 | b1-question-candidate-binding |
+| runner/test/b1-planning.test.ts:331 | b1-shared-ledger |
+| runner/test/b1-planning.test.ts:386 | b1-refresh-cache-hot-order |
+| runner/test/b1-planning.test.ts:413 | b1-pre-manifest-retry |
+| runner/test/b1-planning.test.ts:451 | b1-neighbourhood-order-and-30-cap |
+| runner/test/b1-planning.test.ts:492 | b1-expansion-is-not-a-read-picked-members-count-within-five |
+| runner/test/b1-planning.test.ts:505 | b1-new-subfolder-visible-parent-name-and-near-duplicate |
+| runner/test/b1-planning.test.ts:528 | b1-one-new-subfolder-per-item |
+| runner/test/b1-planning.test.ts:542 | b1-one-retry-per-step-four-calls-exhaustion-waits |
+| runner/test/b1-planning.test.ts:558 | b1-200-operations-exhaustion-waits |
+
+### Measured golden table; no golden changes
+
+These are baseline measurements from the unchanged full sweep. Every accepted pin passed; there
+is no moved pinned golden. No named call was added in this session, so every implementation delta
+is zero. Modelled times are injected fixture measurements, not live performance claims.
+
+| Pin file:line / fixture | Measured value | Implementation delta | Named added calls |
+| --- | --- | ---: | --- |
+| runner/test/timing-counts.test.ts:15; drive-calls-golden.test.ts:27,29 / C04 cold | 96 Drive calls | 0 | none |
+| runner/test/timing-counts.test.ts:21; drive-calls-golden.test.ts:33 / C04 phases | token 0, reads 25, model 0, apply 55, checkpoints 4, report 10, status 0, runner 2 | 0 in every phase | none |
+| runner/test/drive-calls-golden.test.ts:90 / 25 earlier runs | 107 Drive calls | 0 | none |
+| runner/test/drive-calls-golden.test.ts:92 / retained phases | token 0, reads 28, model 0, apply 54, checkpoints 4, report 10, status 0, runner 11 | 0 in every phase | none |
+| runner/test/drive-calls-golden.test.ts:66 / offer-and-flat apply | 6230 ms, within existing 8025 ms bound | 0 | none |
+
+B1d's failing fixture observations below come from this session's first red run. They are not
+accepted B1d goldens: selection is currently rejected and retried as execution. Seeding and
+inspection traffic are excluded by the committed driver. Exact production bytes are captured
+by that same run; none are estimated from note lengths.
+
+| Fixture / condition | Drive calls | Bytes | Prefix media | Full media | Semantic calls | Operations |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| b1-index-job-offer cold | 54 | 24800 | 16 | 14 | 2 | 0 |
+| b1-index-job-offer warm | 24 | 20171 | 0 | 16 | 2 | 0 |
+| b1-changes-person-edit bootstrap | 49 | 37944 | 3 | 3 | 2 | 1 |
+| b1-changes-person-edit warm edit | 43 | 48482 | 1 | 12 | 2 | 1 |
+| b1-refresh-cache-hot-order warm | 61 | 55421 | 1 | 10 | 2 | 5 |
+
+Measured warm-minus-cold baseline deltas: job offer -30 calls / -4629 bytes / -16 prefixes /
++2 full media; person edit -6 calls / +10538 bytes / -2 prefixes / +9 full media. These reproduce
+missing refresh/selection behavior; they are not implementation increases or quality acceptance.
+No golden was raised, and no >20% implementation time delta is claimed.
+
+The packet's offline citations were reused without network or independent reverification:
+https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents,
+https://arxiv.org/html/2506.08837v1, and
+https://platform.claude.com/docs/en/build-with-claude/prompt-caching.
+No new standard, package, cache, writer, ledger or planner was introduced.
+
+Final verification: src/e2e-port.test.ts:37 timed out after its server could not bind
+127.0.0.1 (EPERM), with the associated unhandled listen error; this is the session's expected sandbox limitation. No other src failure.
+`git diff --check` passes. Final tree changes only this notes appendix. No git-write command,
+network call, node_modules replacement, repository test log/cache or production change was made.
