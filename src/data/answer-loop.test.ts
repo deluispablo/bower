@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { QuestionAnswer } from './contracts/questions';
 import { answerQuestion } from './answer-loop';
 import { answerToast } from '@/features/home/answer-words';
 import type { RunSource, StartedRun, VaultSource } from './sources';
@@ -46,5 +47,43 @@ describe('answering a question (TL-P4-08 addendum 8)', () => {
     const no = sources([state], null);
     expect((await answerQuestion(no.vault, no.runs, state.id, false, { allowWeb: false }))?.outcome).toEqual({ kind: 'next' });
     expect(no.start).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('b5-proposal-yes-no-ignore-replay', () => {
+  const proposal: Question = { id: 'q-proposal-lease', text: 'Remember leases as a type?', yes: 'Yes', no: 'No', askedAt: 3,
+    proposal: { id: 'lease', payload: { kind: 'type-row', row: { id: 'lease', match: ['lease'], template: 'source',
+      properties: { rent: { type: 'money' } }, table: ['rent'] } } } };
+  it('control: exact boolean yes starts one instructions continuation and no starts none', async () => {
+    for (const yes of [true, false]) {
+      let open = true;
+      const { vault, runs, start } = sources([proposal], null);
+      vault.questions = async () => open ? [structuredClone(proposal)] : [];
+      vault.answer = vi.fn(async () => { open = false; });
+      await answerQuestion(vault, runs, proposal.id, yes, { allowWeb: false });
+      expect(vault.answer).toHaveBeenCalledExactlyOnceWith(proposal.id, yes);
+      expect(start).toHaveBeenCalledTimes(yes ? 1 : 0);
+      if (yes) expect(start).toHaveBeenCalledWith('instructions', {
+        allowWeb: false, answer: true, requestId: expect.stringMatching(/^answer-[0-9a-f]{40}$/),
+      });
+      expect(await answerQuestion(vault, runs, proposal.id, yes, { allowWeb: false })).toBeNull();
+      expect(start).toHaveBeenCalledTimes(yes ? 1 : 0);
+    }
+  });
+  it('person text starts the existing instructions continuation without granting consent', async () => {
+    const { vault, runs, start } = sources([proposal], null);
+    const answer = { text: 'Yes' };
+    await expect(answerQuestion(vault, runs, proposal.id, answer, { allowWeb: false }))
+      .resolves.toMatchObject({ outcome: { kind: 'now' } });
+    expect(vault.answer).toHaveBeenCalledExactlyOnceWith(proposal.id, answer);
+    expect(start).toHaveBeenCalledExactlyOnceWith('instructions', {
+      allowWeb: false, answer: true, requestId: expect.stringMatching(/^answer-[0-9a-f]{40}$/),
+    });
+  });
+  it.each(['yes', { option: 'accept' }, { option: 'yes' }])('rejects an invalid proposal answer %j before recording or starting', async (answer) => {
+    const { vault, runs, start } = sources([proposal], null);
+    await expect(answerQuestion(vault, runs, proposal.id, answer as QuestionAnswer, { allowWeb: false })).rejects.toThrow();
+    expect(vault.answer).not.toHaveBeenCalled(); expect(start).not.toHaveBeenCalled();
   });
 });

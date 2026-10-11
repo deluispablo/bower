@@ -284,6 +284,25 @@ describe('write once by the bowerOp stamp', () => {
 });
 
 describe('c2-create-by-id: a run makes each thing by its reserved id', () => {
+  it('b5-table-first-create-and-lenient-read: a missing table uses its reserved id after a lost reply', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    let lost: (FencedCall & { op: 'create-text' }) | undefined;
+    const result = await applied((call) => {
+      if (lost || call.op !== 'create-text' || call.name !== 'type-table.json') return 'pass';
+      lost = call;
+      return 'lose-reply';
+    });
+    expect(lost?.reserved).toBeTruthy();
+    const op = result.manifest.operations.find((o) => o.effect.kind === 'write-runner-json'
+      && o.effect.path === SYSTEM.typeTable && o.effect.before === null);
+    expect(op).toBeDefined();
+    const outcome = result.chain.at(-1)?.outcomes.find((o) => o.operationId === op?.operationId);
+    expect(outcome).toMatchObject({ state: 'applied', evidence: { file: { fileId: lost?.reserved } } });
+    expect(result.calls.filter((call) => call.op === 'create-text' && call.name === 'type-table.json')).toEqual([lost]);
+    const tables = (await result.drive.listAll(result.root)).filter((f) => f.name === 'type-table.json');
+    expect(tables.map((f) => f.id)).toEqual([lost?.reserved]);
+    expect(await result.drive.readText(tables[0]?.id ?? '')).toBe(op?.effect.kind === 'write-runner-json' ? op.effect.text : null);
+  });
   it("a run's create whose answer was lost is read back by its reserved id, though a search misses it", async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     let lost: (FencedCall & { op: 'create-text' }) | null = null;
@@ -355,5 +374,52 @@ describe('c4-create-landed: a run reconciles on whether its write happened', () 
       const after = calls.slice(calls.indexOf(sent) + 1);
       expect(after.filter((c) => ('id' in c && c.id === t) || (c.op === 'create-text' && sent.op === 'create-text' && c.name === sent.name && c.parentId === sent.parentId))).toEqual([]);
     }
+  });
+});
+
+
+describe('b5-read-to-act-fence', () => {
+  it('control: unchanged id-bound targets apply once', async () => {
+    const result = await applied();
+    const moves = result.manifest.operations.filter((op) => op.effect.kind === 'move');
+    expect(moves.length).toBeGreaterThan(0);
+    for (const op of moves) {
+      expect(result.chain.at(-1)?.outcomes.find((outcome) => outcome.operationId === op.operationId)?.state).toBe('applied');
+      expect(result.calls.filter((call) => stampOfCall(call) === stampOf(RUN_ID, op.operationId))).toHaveLength(1);
+    }
+  });
+  it.each(['name', 'place'] as const)('refuses a changed %s at the actual move fence', async (field) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    let changed: string | null = null;
+    const result = await applied((call, drive) => {
+      if (changed !== null || call.op !== 'update' || call.patch.addParent === undefined) return 'pass';
+      changed = call.id;
+      const stored = (storedOf(drive) as unknown as Map<string, { meta: DriveFile }>).get(call.id);
+      if (!stored) throw new Error('Missing fenced target');
+      if (field === 'name') stored.meta.name = 'Alex renamed this.txt';
+      else stored.meta.parents = ['OTHER_FOLDER_ID'];
+      return 'pass';
+    });
+    expect(changed).not.toBeNull();
+    const op = result.manifest.operations.find((operation) => operation.effect.kind === 'move' && operation.effect.before.fileId === changed);
+    expect(result.chain.at(-1)?.outcomes.find((outcome) => outcome.operationId === op?.operationId))
+      .toMatchObject({ state: 'rejected', failure: { code: 'conflict' } });
+  });
+  it('refuses changed runner JSON bytes between plan and content write', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    let changed: string | null = null;
+    const result = await applied((call, drive) => {
+      if (changed !== null || call.op !== 'write-text') return 'pass';
+      const stored = (storedOf(drive) as unknown as Map<string, { meta: DriveFile; content: string | Blob | null }>).get(call.id);
+      if (stored?.meta.name !== 'questions.json') return 'pass';
+      changed = call.id;
+      stored.content = '{"v":1,"questions":[],"alex":"changed"}';
+      drive.touch(call.id);
+      return 'pass';
+    });
+    expect(changed, 'fixture reaches a runner JSON content write').not.toBeNull();
+    const op = result.manifest.operations.find((operation) => operation.effect.kind === 'write-runner-json' && operation.effect.before?.fileId === changed);
+    expect(result.chain.at(-1)?.outcomes.find((outcome) => outcome.operationId === op?.operationId))
+      .toMatchObject({ state: 'rejected', failure: { code: 'conflict' } });
   });
 });

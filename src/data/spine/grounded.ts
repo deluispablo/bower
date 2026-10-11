@@ -3,6 +3,7 @@
  * and a saved link's note keeps its key (`groundedKeys`). The run records live in `records.ts`, the report in
  * `report.ts`, and the pure record guards in `contracts/`.
  */
+import { proposalOk } from '../contracts/questions';
 import type { DriveFile } from '../drive/drive-api';
 import { requestMoveKind, type EffectV2, type OperationV2, type ReportContribution, type SeenFile, type Target } from '../contracts/run-manifest';
 import { savedLinkKey } from '../contracts/note-edit';
@@ -17,7 +18,7 @@ import { filingMove } from './report';
 import { stampOf } from './write-once';
 
 /** The runner files a run may make again when they are missing (TL-P2-33 §2a). */
-const RUNNER_MADE = [SYSTEM.requests, SYSTEM.hashes, SYSTEM.questions] as const;
+const RUNNER_MADE = [SYSTEM.requests, SYSTEM.hashes, SYSTEM.questions, SYSTEM.typeTable] as const;
 /** The one note rules are worded in, at the root of the Bower folder. */
 const RULES = 'Rules.md';
 
@@ -156,7 +157,7 @@ export function grounded(manifest: RunManifest): boolean {
       const parent = pathOf(e.parent);
       const rootRules = e.name === RULES && 'fileId' in e.parent && e.parent.fileId === manifest.scope.rootId;
       const made = parent === SYSTEM.dir ? RUNNER_MADE.find((x) => x === join(parent, e.name)) : undefined;
-      if (e.purpose === 'runner-json' && (made === undefined || !holds(made, e.text))) return false;
+      if (e.purpose === 'runner-json' && (parent === SYSTEM.proposals ? !holdsProposal(e.name, e.text) : made === undefined || !holds(made, e.text))) return false;
       if (e.purpose !== 'generated' || rootRules) continue;
       if (!MAIN_FOLDERS.includes(parent?.split('/')[0] ?? '') || mine.reduce((n, c) => n + c.value.created.length, 0) !== 1) return false;
       // A link's note is set aside with its link; a request's note with the answer that names it.
@@ -169,13 +170,28 @@ export function grounded(manifest: RunManifest): boolean {
   // every file is moved once.
   return manifest.operations.every((o) => (rejected.get(o.operationId) ?? 0) === (asides.get(o.operationId) ?? 0))
     && [...members].every((id) => told.applied.has(id) && told.rejected.has(id))
-    && [...lines].every((id) => manifest.operations.filter((o) => 'before' in o.effect && o.effect.before.fileId === id && !requestMoveKind(manifest, o)).length === 1);
+    && [...lines].every((id) => manifest.operations.filter((o) => 'before' in o.effect && o.effect.before?.fileId === id && !requestMoveKind(manifest, o)).length === 1);
 }
 
 /** Whether a runner file made again holds what its path holds (a list of questions holds questions, TL-P2-37 Q1). */
 function holds(path: (typeof RUNNER_MADE)[number], text: string): boolean {
   try {
     return isRunnerFile(path, JSON.parse(text));
+  } catch (e) {
+    if (!(e instanceof SyntaxError)) throw e;
+    console.error(e);
+    return false;
+  }
+}
+
+/** Immutable artifacts use the same frozen payload guard as the authoritative question. */
+function holdsProposal(name: string, text: string): boolean {
+  try {
+    const value: unknown = JSON.parse(text);
+    return !!value && typeof value === 'object' && 'v' in value && value.v === 1
+      && Object.keys(value).every((key) => ['v', 'id', 'payload'].includes(key))
+      && 'id' in value && 'payload' in value && proposalOk({ id: value.id, payload: value.payload })
+      && name === `${String(value.id)}.json`;
   } catch (e) {
     if (!(e instanceof SyntaxError)) throw e;
     console.error(e);

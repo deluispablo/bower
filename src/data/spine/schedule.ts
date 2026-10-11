@@ -45,8 +45,9 @@ export function claimsOf(op: OperationV2): Claim[] {
       return [{ key: `file:${e.before.fileId}`, shared: false }, ...intoClaims(e.parent, false)];
     case 'bin':
     case 'edit-text':
-    case 'write-runner-json':
       return [{ key: `file:${e.before.fileId}`, shared: false }];
+    case 'write-runner-json':
+      return e.before === null ? intoClaims(e.parent, true) : [{ key: `file:${e.before.fileId}`, shared: false }];
     default:
       return ALL;
   }
@@ -60,6 +61,6 @@ export const conflicts = (a: OperationV2, b: OperationV2): boolean => clash(clai
 /** What an operation waits for: its `dependsOn`, and the operation that made the folder it goes into. */
 export function needsOf(op: OperationV2): string[] {
   const e = op.effect;
-  const made = (e.kind === 'create-folder' || e.kind === 'create-text' || e.kind === 'move') && 'createdBy' in e.parent ? [e.parent.createdBy] : [];
+  const made = 'parent' in e && 'createdBy' in e.parent ? [e.parent.createdBy] : [];
   return [...op.dependsOn, ...made.filter((id) => !op.dependsOn.includes(id))];
 }

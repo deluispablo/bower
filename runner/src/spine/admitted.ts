@@ -139,6 +139,13 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
         if (!taken.has(e.before.fileId) && !keptOther(e.before.fileId)) return 'a Bin of a thing it was not admitted to take';
         break;
       case 'write-runner-json':
+        if (e.before === null) {
+          if (own === undefined || !('fileId' in e.parent) || e.parent.fileId !== own
+            || targetPath(m, e.parent) !== SYSTEM.dir || m.capture.places.some((p) => p.path === e.path)) {
+            return "a write to a file that is not Bower's own";
+          }
+          break;
+        }
         if (own === undefined || !sameParents([own], e.before.parents) || e.before.folder
           || e.path !== `${SYSTEM.dir}/${e.before.name}` || !(RUNNER_WRITES as readonly string[]).includes(e.path)
           || m.capture.places.some((p) => p.file.fileId === e.before.fileId

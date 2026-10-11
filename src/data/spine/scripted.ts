@@ -18,13 +18,13 @@ import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as M
 import { PILE_NOTE, safeInboxName } from '../piles';
 import { recordablePile, sameText, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
-import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type Request, type StateShown } from '../types';
+import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type Request, type StateShown, type Proposal } from '../types';
 import { isJournalRecord, pairsOf, type JournalRecord } from '../contracts/journal-record';
 import { PROP, RUNNER_WRITES, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
 import { ruleLike } from '../rules';
 import { savedLinkAddress } from '../search-text';
 import { md5Hex } from '../contracts/hashes';
-import { isQuestionOption, answeredAskings, answersAsking, journalAnswer, roundFor, relatedSubjects, sameSubjectContent, subjectMembers, subjectPile, type QuestionRound, ASK_GONE, STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
+import { proposalOk, isQuestionOption, answeredAskings, answersAsking, journalAnswer, roundFor, relatedSubjects, sameSubjectContent, subjectMembers, subjectPile, type QuestionRound, ASK_GONE, STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
 import { sha256 } from '../vault/hashes';
 import { indexedFront, parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
 import { linkTarget } from '../contracts/links';
@@ -40,6 +40,7 @@ import type { AdmissionManifest } from './admission';
 import type { ScriptedRead } from './read';
 import { STAMP, stampOf } from './write-once';
 import { NOTE_TEMPLATES, type NoteTemplate } from '../contracts/note-templates';
+import { typeRowOk, readTypeTable, propertyValuesOk, insertTypeRow, requestTableColumn, rewriteTypeTable } from '../contracts/note-format';
 
 export { SET_ASIDE, listedPiles };
 
@@ -403,6 +404,8 @@ export interface AuthoredNote {
   summary: string;
   body: string;
   template?: NoteTemplate;
+  typeRow?: string;
+  properties?: Record<string, unknown>;
 }
 
 /** A Timeline line a model wrote for a note it was shown (P4-3), citing a thing this run files, or none. */
@@ -448,6 +451,8 @@ export interface Filing {
   keep?: readonly KeepOne[];
   /** Two notes it was shown that may be one thing, each pair with its question: a yes keeps one (c3-pair-ask). */
   pairAsks?: readonly PairAsk[];
+  /** A question asked once this pile is filed. */
+  askAfter?(pile: Pile, at: number): Question | null;
 }
 
 /**
@@ -564,6 +569,7 @@ export function modelDecisions(filing: Filing): Decisions {
     areas: filing.areas ?? new Map(),
     keep: filing.keep ?? [],
     pairAsks: filing.pairAsks ?? [],
+    askAfter: filing.askAfter,
   };
 }
 
@@ -658,6 +664,28 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   const requestsValue = requests ? parsed(await ownText(drive, requests)) : null;
   const requestsBroken = !!requests && !isRunnerFile(SYSTEM.requests, requestsValue);
   const requestsDone = isRunnerFile(SYSTEM.requests, requestsValue) ? requestsValue.done : [];
+  const typeFile = ix.file(SYSTEM.typeTable);
+  const typeText = typeFile ? await ownText(drive, typeFile) : null;
+  const types = readTypeTable(typeText);
+  const proposals = new Map<string, Proposal>();
+  const proposalIds = new Set<string>();
+  for (const file of listing) {
+    const path = ix.pathOf(file.id);
+    if (!path || file.folder || parentOf(path) !== SYSTEM.proposals || !path.endsWith('.json')) continue;
+    const id = nameOf(path).replace(/\.json$/, '');
+    if (proposalIds.has(id)) {
+      proposals.delete(id);
+      console.error(new BowerError('conflict', 'Bower could not read that suggestion.'));
+      continue;
+    }
+    proposalIds.add(id);
+    const value = parsed(await ownText(drive, file));
+    if (value && typeof value === 'object' && 'v' in value && value.v === 1 && 'id' in value && 'payload' in value
+      && Object.keys(value).every((key) => ['v', 'id', 'payload'].includes(key))
+      && proposalOk({ id: value.id, payload: value.payload }) && value.id === id) {
+      proposals.set(id, { id, payload: value.payload as Proposal['payload'] });
+    } else console.error(new BowerError('conflict', 'Bower could not read that suggestion.'));
+  }
   const hashesText = hashesFile ? await ownText(drive, hashesFile) : null;
   const hashesBroken = hashesText !== null && !isRunnerFile(SYSTEM.hashes, parsed(hashesText));
   // An inbox emptied after the Worker looked at it: the Worker's own refusal, before any effect. A run the Worker
@@ -677,7 +705,7 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   const unrecorded = lines.some((l) => l.rec.kind === 'request' && !appends.completed.some((h) => h.requestId === l.rec.id)
     && !appends.lines.some((h) => h.consent.requestId === l.rec.id));
   const since = unrecorded ? retainedSince(listing, ix) : null;
-  return { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState };
+  return { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, types, typeFile, typeText, proposals, proposalIds };
 }
 type Captured = Awaited<ReturnType<typeof capture>>;
 
@@ -687,7 +715,7 @@ type Captured = Awaited<ReturnType<typeof capture>>;
  * edits, the generated notes, the questions. It ends decided, or with a try again that holds more back.
  */
 export async function decide(drive: ScriptedRead, snapshot: Captured, opts: PlanOptions, attempt: Attempt = { editCap: EDITS_PER_RUN, held: new Set() }) {
-  const { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState } = snapshot;
+  const { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, types, typeFile, typeText, proposals, proposalIds } = snapshot;
   const { editCap, held } = attempt;
   const newKey = opts.mintKey ?? mintKey;
   /**
@@ -733,6 +761,41 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
         chosen.set(item.id, { place: to === null ? null : { to, name: item.name }, record: l.rec.id });
     }
   }
+  let nextTable = types.table;
+  const tableRecords = new Set<string>();
+  const proposalSettled = new Set<string>();
+  for (const q of questionState.questions) {
+    if (!q.proposal) continue;
+    const line = latest.get(q.id);
+    const answer = line && journalAnswer(line.rec);
+    if (!line) continue;
+    if (typeof answer === 'object' && 'text' in answer) { proposalSettled.add(line.rec.id); continue; }
+    if (typeof answer !== 'boolean') continue;
+    if (!answer) { proposalSettled.add(line.rec.id); continue; }
+    const frozen = proposals.get(q.proposal.id);
+    if (!types.writeAllowed || !sys?.folder || !frozen
+      || (await canonical(frozen)).hash !== (await canonical(q.proposal)).hash) continue;
+    const existing = nextTable.rows.find((row) => row.id === frozen.payload.row.id);
+    if (existing && (!typeRowOk(existing) || (await canonical(existing)).hash !== (await canonical(frozen.payload.row)).hash)) continue;
+    if (!existing) nextTable = insertTypeRow(nextTable, frozen.payload.row);
+    tableRecords.add(line.rec.id);
+    proposalSettled.add(line.rec.id);
+  }
+  const columnRequests = new Set<string>();
+  if (types.writeAllowed && sys?.folder) for (const line of lines) {
+    if (line.rec.kind !== 'request') continue;
+    const request = /^Show (.+) in the (.+) table[.!]?$/i.exec(line.rec.text ?? '');
+    if (!request) continue;
+    const matches = nextTable.rows.filter((row) => [row.id, ...row.match].some((name) => name.toLowerCase() === request[2]?.toLowerCase()));
+    const row = matches.length === 1 ? matches[0] : undefined;
+    const keys = row && Object.keys(row.properties).filter((key) => [key, key.replaceAll('_', ' ')].includes(request[1]?.toLowerCase() ?? ''));
+    const key = keys?.length === 1 ? keys[0] : undefined;
+    const changed = row && key ? requestTableColumn(row, key, { kind: 'words', recordId: line.rec.id }) : null;
+    if (!changed) continue;
+    nextTable = { ...nextTable, rows: nextTable.rows.map((old) => old.id === row?.id ? changed.row : old) };
+    tableRecords.add(line.rec.id);
+    columnRequests.add(line.rec.id);
+  }
   // A refused stored destination stays waiting in the same round record until a new asking is saved.
   const reaskOf = (id: string): Ask | undefined => {
     const q = roundFor(rounds, { id: askId(id), subject: id, hash: inboxHashes.get(id) }, inbox, inboxHashes)?.reask;
@@ -773,7 +836,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     }) };
   };
   // A person's request (C05): the one settlement decides what it binds, refuses, reports and waits for.
-  const settlement = settleRequest(lines.filter((l) => l.rec.kind === 'request'), listing, ix, appends, since);
+  const settlement = settleRequest(lines.filter((l) => l.rec.kind === 'request' && !columnRequests.has(l.rec.id)), listing, ix, appends, since);
   // A thing a request's line on a person's note cites is filed and cited, never taken for a copy of one already saved.
   for (const [, b] of settlement.bound) {
     if (b.file.appProperties?.by === 'bower') continue;
@@ -860,7 +923,14 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const row = answeredGone(q, seenFirst, notesSeen, notePath, (id) => binnedNames.get(id));
     return row ? [[l.rec.id, row] as const] : [];
   }));
-  let journal = lines.filter((l) => (l.rec.kind === 'request' ? (settlement.owned.has(l.rec.id) ? settlement.admitted.has(l.rec.id) : !!d.request) : l.rec.kind === 'answer' ? (d.settles?.(l.rec.questionId ?? '') ?? settled.has(l.rec.questionId ?? '')) : true));
+  let journal = lines.filter((l) => {
+    if (l.rec.kind === 'request') return columnRequests.has(l.rec.id)
+      || (settlement.owned.has(l.rec.id) ? settlement.admitted.has(l.rec.id) : !!d.request);
+    if (l.rec.kind !== 'answer') return true;
+    const question = questionState.questions.find((q) => answersAsking(l.rec, q));
+    if (question && subjectOf(question).kind === 'proposal') return proposalSettled.has(l.rec.id);
+    return d.settles?.(l.rec.questionId ?? '') ?? settled.has(l.rec.questionId ?? '');
+  });
   // Your rules (TL-P2-20 rules-wording): one change for every rule line, worded below in one edit of Rules.md, or
   // Rules.md made when it is missing; a line whose words cannot be worded stays pending.
   const ruleWords = ruleChangesOf(journal, d.wordRule ?? tidiedRule);
@@ -1812,7 +1882,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // Resolve evidence against actual note identities; a name shared by notes is not grounding.
     const authored = new Map<string, typeof linkable[number]>();
     // All authored strings share this admission check, including every section in the body and the summary.
-    const words = Object.values(note).filter((value): value is string => typeof value === 'string').join('\n');
+    const words = [...Object.values(note).filter((value): value is string => typeof value === 'string'), JSON.stringify(note.properties ?? {})].join('\n');
     for (const match of words.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)) {
       const target = linkTarget(match[1] ?? '').replace(/\.md$/, '');
       const candidates = linkable.filter(({ path }) => target.includes('/')
@@ -1852,17 +1922,25 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const noteName = freeName(planned, to, authored.name);
     madeAs.set(thing.file.id, noteName);
     plannedFile(join(to, noteName));
-    const template = authored.template;
+    const typeRow = authored.typeRow === undefined ? undefined : types.table.rows.find((row) => row.id === authored.typeRow);
+    if ((authored.typeRow !== undefined && !typeRow) || (authored.properties !== undefined && !typeRow)
+      || (typeRow && !propertyValuesOk(typeRow, authored.properties ?? {}))) return refused('invalid declared note properties');
+    const template = authored.template ?? (typeRow && Object.hasOwn(NOTE_TEMPLATES, typeRow.template) ? typeRow.template as NoteTemplate : undefined);
+    if (typeRow && typeRow.template !== template) return refused('a note template outside its declared type');
     // Only declared, relevant links in the authored evidence; never pad with the folder's other notes.
-    const related = await groundedAuthoredLinks(to, authored, { file: thing.file, name });
+    const related = await groundedAuthoredLinks(to, { ...authored, template }, { file: thing.file, name });
     const properties = template ? [
-      { key: 'type', label: 'Type', value: template },
+      { key: 'type', label: 'Type', value: typeRow?.id ?? template },
       { key: 'created', label: 'Created', value: noteDate },
       { key: 'updated', label: 'Updated', value: noteDate },
       { key: 'source', label: 'Source', value: name },
       { key: 'related', label: 'Related', value: related.map((link) => `[[${link}]]`).join(', ') },
     ] : [];
-    const text = serializeNote({ template, summary: authored.summary, properties, tags: [], currentState: [], body: authored.body,
+    for (const [key, value] of Object.entries(authored.properties ?? {})) {
+      if (properties.some((property) => property.key === key)) return refused('a declared fact replacing a template property');
+      properties.push({ key, label: key, value: typeof value === 'string' ? value : JSON.stringify(value) });
+    }
+    const text = serializeNote({ template, typeRow, summary: authored.summary, properties, tags: [], currentState: [], body: authored.body,
       ...(template === 'source' ? { original: name } : {}),
       timeline: template && !NOTE_TEMPLATES[template].timeline ? [] : [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
     generated.push({ to, name: noteName, text, what: authored.summary, after: thing.file.id, pileId: null, aside: thing.file.name, context: null });
@@ -1948,8 +2026,34 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const answered = answeredAskings(journal.map((l) => l.rec));
   // A question asked again (a granted section changed since) replaces the one its answer drops, under the same id.
   const again = new Set(reasked.map((q) => q.id));
-  const toAsk = [...asking.values(), ...disagreeing.map((d) => d.question), ...reasked, ...askedPiles]
+  let toAsk = [...asking.values(), ...disagreeing.map((d) => d.question), ...reasked, ...askedPiles]
     .filter((q, i, all) => (subjectOf(q).kind === 'inbox' || again.has(q.id) || !answered.has(q.id)) && all.findIndex((x) => x.id === q.id) === i);
+  // Immutable artifacts retain payload identity after a card closes, including declines.
+  const knownPayloads = new Set<string>();
+  for (const proposal of [...proposals.values(), ...questionState.questions.flatMap((q) => q.proposal ?? [])]) {
+    knownPayloads.add((await canonical(proposal.payload)).hash);
+  }
+  const declinedIds = new Set<string>();
+  if (toAsk.some((q) => q.proposal)) for (const file of listing) {
+    const path = ix.pathOf(file.id);
+    if (!path || file.folder || parentOf(path) !== SYSTEM.archive || !path.endsWith('.json')) continue;
+    const value = parsed(await ownText(drive, file));
+    if (isJournalRecord(value) && value.kind === 'answer' && journalAnswer(value) === false && value.questionId) declinedIds.add(value.questionId);
+  }
+  const openProposals = questionState.questions.filter((q) => q.proposal && !answered.has(q.id) && !answered.has(`${q.id}\n${q.askedAt}`)).length;
+  let admittedProposals = 0;
+  const admitted: Question[] = [];
+  for (const q of toAsk) {
+    if (!q.proposal) { admitted.push(q); continue; }
+    if (!proposalOk(q.proposal) || q.id !== `q-proposal-${q.proposal.id}`
+      || [q.subject, q.hash, q.state, q.shown, q.words, q.options].some((field) => field !== undefined)) continue;
+    const key = (await canonical(q.proposal.payload)).hash;
+    if (knownPayloads.has(key) || proposalIds.has(q.proposal.id) || declinedIds.has(q.id)
+      || admittedProposals >= 2 || openProposals + admittedProposals >= 5
+      || nextTable.rows.some((row) => row.id === q.proposal?.payload.row.id)) continue;
+    knownPayloads.add(key); admittedProposals++; admitted.push(structuredClone(q));
+  }
+  toAsk = admitted;
   const questionsFile = ix.file(SYSTEM.questions);
   let questionsText: string | null = null;
   /** The questions that write holds: written by the build, once it has set on each one asked now the note as left. */
@@ -2058,6 +2162,16 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   if ((!requests || !hashesFile || (!questionsFile && questionsText !== null)) && sys?.folder) places.set(sys.id, sys);
   // The file a thing already saved copies is recorded as the run saw it, so its report row names a captured file.
   for (const s of saved) if (s.dup.of === 'filed') places.set(s.dup.file.id, s.dup.file);
+  const newProposals = fresh.flatMap((q) => q.proposal ?? []);
+  const proposalFolder = ix.file(SYSTEM.proposals);
+  if (newProposals.length && sys?.folder) {
+    places.set(sys.id, sys);
+    if (proposalFolder?.folder) places.set(proposalFolder.id, proposalFolder);
+  }
+  const tableChanged = types.writeAllowed && !!sys?.folder && (!typeFile || tableRecords.size > 0);
+  const tableWrite = tableChanged ? { file: typeFile ?? null, text: rewriteTypeTable(typeText, types.table, nextTable),
+    content: typeFile ? await ownVerified(typeFile) : null } : null;
+  if (tableWrite && !typeFile && sys) places.set(sys.id, sys);
   const capturedPlaces = [...places.values()].map((f) => ({ file: seen(f), path: ix.pathOf(f.id) ?? '' })).sort((a, b) => a.path.localeCompare(b.path));
   const captured = journal.map((l) => ({ recordId: l.rec.id, sha256: l.sha256, fileIds: l.files.map((f) => f.id) }));
   const captureValue: ManifestCapture = { piles: capturedPiles, members, journal: captured, places: capturedPlaces };
@@ -2107,7 +2221,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas: d.areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
     requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows,
+    tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows,
   };
 }
 type Decided = Extract<Awaited<ReturnType<typeof decide>>, { kind: 'decided' }>;
@@ -2121,7 +2235,7 @@ export async function build(decided: Decided): Promise<Ended> {
   const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
     requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources } = decided;
+    tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources } = decided;
 
   // The fixed operations, in order: clear last run's marks, make folders, file, the note edits, the merges, Bin the piles,
   // your changes, the hashes.
@@ -2359,6 +2473,15 @@ export async function build(decided: Decided): Promise<Ended> {
     reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), alreadySaved: [{ name: w.folder.name, ...as }] } });
     reportPlan.push({ requires: [op], when: 'rejected', value: { ...empty(), setAside: [{ name: w.folder.name, why: SAVED_STAYS }] } });
   }
+  if (tableWrite) {
+    const content = await utf8(tableWrite.text);
+    const op = tableWrite.file && tableWrite.content
+      ? await add({ kind: 'write-runner-json', before: seen(tableWrite.file), beforeContent: tableWrite.content,
+        path: SYSTEM.typeTable, text: tableWrite.text, content })
+      : await add({ kind: 'write-runner-json', before: null, beforeContent: null, parent: { fileId: sys?.id ?? '' },
+        createKey: (await runKeys(opts.runId))('table'), path: SYSTEM.typeTable, text: tableWrite.text, content });
+    for (const id of tableRecords) derive(id, op);
+  }
   // Your changes: requests completed in requests.json, answered questions dropped, then each line archived.
   // A line's archive move depends on every write derived from it, so a rejected write keeps it unarchived.
   const asked = journal.filter((l) => l.rec.kind === 'request');
@@ -2375,7 +2498,7 @@ export async function build(decided: Decided): Promise<Ended> {
       notes.push(op);
     }
     // An answer that names what a request did is written once that is done (a lookup's Timeline line, a note).
-    const answered = [...new Set([...asked.flatMap((l) => need(l.rec.id).edits), ...notes])];
+    const answered = [...new Set([...asked.flatMap((l) => [...need(l.rec.id).edits, ...need(l.rec.id).derived]), ...notes])];
     // A request done before (its line not archived then) keeps one row: the new one.
     const again = new Set(done.map((r) => r.id));
     const text = `${JSON.stringify({ v: 1, done: [...done, ...requestsDone.filter((r) => !again.has(r.id))].slice(0, 20) } satisfies RequestsFile, null, 2)}\n`;
@@ -2413,6 +2536,15 @@ export async function build(decided: Decided): Promise<Ended> {
     }
     // The question's row is grounded by that one write, with the same fields (contract B).
     if (questionsOp && fresh.length) reportPlan.push({ requires: [questionsOp], when: 'applied', value: { ...empty(), questions: fresh.map(reportRowOf) } });
+  }
+  // Only a published question leaves a frozen artifact that suppresses a later offer.
+  if (questionsOp && newProposals.length && sys?.folder) {
+    const parent: Target = proposalFolder?.folder ? { fileId: proposalFolder.id }
+      : { createdBy: await add({ kind: 'create-folder', parent: { fileId: sys.id }, name: nameOf(SYSTEM.proposals), createKey: newKey('folder') }, [questionsOp]) };
+    for (const proposal of newProposals) {
+      const text = `${JSON.stringify({ v: 1, ...proposal }, null, 2)}\n`;
+      await add({ kind: 'create-text', parent, name: `${proposal.id}.json`, createKey: newKey('runner'), text, content: await utf8(text), purpose: 'runner-json' }, [questionsOp]);
+    }
   }
   // Rules.md made from the template's empty one when it is missing (R3-4); every rule line it words waits for it.
   // When it is there, its rules are worded by its one note edit above, which their archives wait for (rule 7).

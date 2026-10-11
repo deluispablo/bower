@@ -240,7 +240,7 @@ function kindOf(chain: readonly Checkpoint[], at: number): string {
 function readIds(op: OperationV2, head: Checkpoint): string[] {
   const e = op.effect;
   const out: string[] = [];
-  if ('before' in e) out.push(e.before.fileId);
+  if ('before' in e && e.before) out.push(e.before.fileId);
   if ('parent' in e) {
     if ('fileId' in e.parent) out.push(e.parent.fileId);
     else {

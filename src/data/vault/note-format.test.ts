@@ -5,6 +5,8 @@ import type { NoteFile } from '../contracts/note-format';
 import { NOTES } from '../demo/notes';
 import { BowerError } from '../types';
 import { noteRefusal, parseNote, serializeNote, toggleTaskInText } from './note-format';
+import { applyChanges } from '../contracts/note-edit';
+import type { Change } from '../contracts/run-manifest';
 import { resolverFor } from '../../features/note/resolve';
 
 // Explicit creation intent keeps the legacy serializer readable without templating stored notes on a read.
@@ -683,4 +685,67 @@ describe('a note Bower refuses to parse', () => {
     expect(noteRefusal(new BowerError('unknown', 'This note uses an unsupported format.'))).toBeNull();
     expect(noteRefusal(new BowerError('unknown', 'This note cannot be read safely.'))).toBeNull();
   });
+});
+
+
+describe('b5-typed-property-bounds', () => {
+  const row = { id: 'offer', match: ['job offer'], template: 'source', properties: {
+    role: { type: 'text' }, skills: { type: 'list' }, hours: { type: 'number' }, salary: { type: 'money' },
+    posted: { type: 'date' }, stage: { type: 'enum', values: Array.from({ length: 20 }, (_, i) => `stage-${i}`) },
+  }, table: ['role', 'hours', 'salary', 'posted'] };
+  const good = { role: 'x'.repeat(200), skills: Array.from({ length: 10 }, () => 'x'.repeat(200)),
+    hours: 1e15, salary: { amount: 123.4567, currency: 'EUR' }, posted: '2024-02-29', stage: 'stage-19' };
+  it('control: all six types at their ruled boundaries validate', () => {
+    expect(summaryFormat.typeRowOk(row)).toBe(true);
+    expect(summaryFormat.propertyValuesOk(row, good)).toBe(true);
+    expect(summaryFormat.propertyValuesOk(row, { ...good, hours: -1e15 })).toBe(true);
+  });
+  it.each([
+    ['number above positive bound', { hours: 1e15 + 1 }],
+    ['number below negative bound', { hours: -1e15 - 1 }],
+    ['money five decimals', { salary: { amount: 123.45678, currency: 'EUR' } }],
+    ['undeclared property', { invented: 'Alex' }],
+    ['text 201', { role: 'x'.repeat(201) }],
+    ['list 11', { skills: Array.from({ length: 11 }, () => 'Alex') }],
+    ['list item 201', { skills: ['x'.repeat(201)] }],
+    ['infinity', { hours: Infinity }], ['NaN', { hours: NaN }],
+    ['non-ISO currency', { salary: { amount: 48, currency: 'ZZZ' } }],
+    ['missing currency', { salary: { amount: 48 } }],
+    ['impossible date', { posted: '2026-02-29' }],
+    ['date with time', { posted: '2026-10-11T00:00:00Z' }],
+    ['unknown enum value', { stage: 'stage-20' }],
+  ])('rejects %s', (_name, invalid) => {
+    expect(summaryFormat.propertyValuesOk(row, good)).toBe(true);
+    expect(summaryFormat.propertyValuesOk(row, { ...good, ...invalid })).toBe(false);
+  });
+});
+
+it('b5-landed-contract-compatibility: control B6a scalar serialization and legacy Timeline remain readable', () => {
+  const source = b6Note('source');
+  const text = serializeNote(source);
+  expect(parseNote('Source.md', text)).toMatchObject({ byBower: true, summary: source.summary, timeline: [] });
+  expect(text).not.toContain('## Timeline');
+  expect(parseNote('Legacy.md', '---\ntype: source\n---\nAlex wrote this.\n\n## Timeline\n- 10 Oct · Alex saved a bulletin.'))
+    .toMatchObject({ byBower: false, body: 'Alex wrote this.', timeline: [{ date: '10 Oct', text: 'Alex saved a bulletin.' }] });
+});
+
+
+it.each(['source', 'moc'])('b5-landed-contract-compatibility: control personal typed %s edits retain legacy bytes', (type) => {
+  const raw = `---\ntype: ${type}\nsummary: Alex keeps a note.\n---\nSee [[Old]].\n\n## Timeline\n- 10 Oct · Kept by Alex.\n`;
+  const change: Change = { kind: 'link-rewrite', recordIds: ['alex-change'], renames: [{ from: 'Old', to: 'New' }] };
+  const edited = applyChanges(new TextEncoder().encode(raw), [change]);
+  expect(edited.ok).toBe(true);
+  if (edited.ok) expect(edited.text).toBe(raw.replace('[[Old]]', '[[New]]'));
+  const owned = raw.replace('type:', 'by: bower\ntype:');
+  if (type === 'source') expect(applyChanges(new TextEncoder().encode(owned), [change]).ok).toBe(false);
+  expect(parseNote('Legacy.md', raw).timeline).toEqual([{ date: '10 Oct', text: 'Kept by Alex.' }]);
+});
+
+it('b5-folder-table-approved-states: declared kind and folder stay excluded without changing stored properties', () => {
+  const note = parseNote('Resources/Offer.md', '---\nkind: Note\nfolder: Applications\ncompany: Acorn Studio\n---\nAlex keeps these words.');
+  const before = structuredClone(note.properties);
+  expect(summaryFormat.tableProperties(note, { table: ['kind', 'folder', 'company'] }).map((p) => p.key)).toEqual(['company']);
+  expect(note.properties).toEqual(before);
+  expect(summaryFormat.scalarList('["Writing, editing", "Design"]')).toEqual(['Writing, editing', 'Design']);
+  expect(summaryFormat.scalarList('[Writing, Design]')).toEqual(['Writing', 'Design']);
 });
