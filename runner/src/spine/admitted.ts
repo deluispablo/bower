@@ -120,6 +120,8 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
   const taken = new Set([...anchors, ...t.piles.flatMap((p) => p.items.map((i) => i.fileId)), ...t.journal.map((j) => j.fileId)]);
   const edited = new Set(m.operations.flatMap((o) => (o.effect.kind === 'edit-text' ? [o.effect.before.fileId] : [])));
   let ledgerBytes = new Uint8Array();
+  let finalAbout: string | undefined;
+  const undone: string[] = [];
   for (const { effect: e } of m.operations) {
     if (e.kind === 'write-runner-json' && e.path === '.bower/observations.jsonl'
       || e.kind === 'create-text' && `${targetPath(m, e.parent)}/${e.name}` === '.bower/observations.jsonl') {
@@ -145,16 +147,15 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
         break;
       case 'edit-text': {
         const kinds = new Set(e.changes.map((c) => c.kind));
-        if (kinds.has('about-append') || kinds.has('about-rewrite')) {
-          const targets = m.capture.places.filter((p) => p.path === 'About me.md');
-          if (e.path !== 'About me.md' || targets.length !== 1 || targets[0]?.file.fileId !== e.before.fileId
-            || e.changes.some((c) => c.kind !== 'about-append' && c.kind !== 'about-rewrite')) return 'an About me edit outside its marked sections';
+        const targets = m.capture.places.filter((p) => p.path === 'About me.md');
+        if (e.path === 'About me.md' || targets.some((p) => p.file.fileId === e.before.fileId)
+          || kinds.has('about-append') || kinds.has('about-rewrite')) {
+          if (e.path !== 'About me.md' || targets.length !== 1 || targets[0]?.file.fileId !== e.before.fileId) return 'an About me edit outside its marked sections';
           if (e.beforeText === undefined) return 'an About me edit without its read bytes';
           const authored = applyChanges(new TextEncoder().encode(e.beforeText), e.changes);
           if (!authored.ok || authored.text !== e.text) return 'an About me edit outside its marked sections';
-          const undone = e.changes.flatMap((c) => c.kind === 'about-rewrite' ? c.undoneRunIds ?? [] : []);
-          const facts = Object.fromEntries(e.changes.flatMap((c) => c.kind === 'about-rewrite' ? [[c.region, c.factIds]] : []));
-          if (!validLearnedBlock(e.text, parseObservations(ledgerBytes, undone), facts)) return 'an invalid learned section';
+          finalAbout = e.text;
+          undone.push(...e.changes.flatMap((c) => c.kind === 'about-rewrite' ? c.undoneRunIds ?? [] : []));
         }
         const rules = e.path === RULES_PATH;
         if (rules ? kinds.has('timeline-append') || kinds.has('state-rewrite') : kinds.has('rules-wording')) return 'a note edit outside what the runner authors';
@@ -162,9 +163,11 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
       }
       case 'create-text': {
         const parentId = 'fileId' in e.parent ? e.parent.fileId : undefined;
-        if (e.name === 'About me.md' && parentId === m.scope.rootId
-          && (e.purpose !== 'generated' || m.capture.places.some((p) => p.path === 'About me.md')
-            || !validLearnedBlock(e.text, parseObservations(ledgerBytes)))) return 'an invalid learned section';
+        if (e.name === 'About me.md' && parentId === m.scope.rootId) {
+          if (e.purpose !== 'generated' || m.capture.places.some((p) => p.path === 'About me.md')
+            || finalAbout !== undefined || !validLearnedBlock(e.text, undefined, true)) return 'an invalid learned section';
+          finalAbout = e.text;
+        }
         const parent = targetPath(m, e.parent);
         if (e.name === 'observations.jsonl' && (e.purpose !== 'runner-json' || parent !== SYSTEM.dir
           || own === undefined || parentId !== own)) return 'a ledger outside the admitted system folder';
@@ -175,8 +178,13 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
       }
       case 'create-folder':
         break;
+      case 'maintain':
+        if (e.inputs.targets?.some((p) => p.path === '.bower/observations.jsonl' || p.path === 'About me.md'
+          || p.path.startsWith('.bower/archive/about-me/'))) return 'a memory write outside its marked edit';
+        break;
     }
   }
+  if (finalAbout !== undefined && !validLearnedBlock(finalAbout, parseObservations(ledgerBytes, undone))) return 'an invalid learned section';
   return null;
 }
 

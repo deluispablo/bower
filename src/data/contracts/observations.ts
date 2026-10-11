@@ -197,9 +197,9 @@ export function aboutArchivePath(path: string): boolean {
 }
 
 /** One whole-block check; the pure splice checks framing, and write boundaries supply live evidence. */
-export function validLearnedBlock(text: string, ledger?: Ledger,
-  factIds: Partial<Record<AboutRegion, readonly string[]>> = {}): boolean {
-  if (text === FOLDER_TEMPLATE.find((file) => file.path === 'About me.md')?.content) return true;
+export function validLearnedBlock(text: string, ledger?: Ledger, creating = false): boolean {
+  const template = FOLDER_TEMPLATE.find((file) => file.path === 'About me.md')?.content;
+  if (text === template) return !creating;
   const bytes = encoder.encode(text);
   const own = parseOwnership(bytes);
   if (own.status === 'invalid') return false;
@@ -216,17 +216,17 @@ export function validLearnedBlock(text: string, ledger?: Ledger,
     if (!span) return false;
     const payload = decode(span.start, span.end);
     if (payload.includes('<!-- bower:ownership')) return false;
-    block += begin(region) + payload + `<!-- bower:ownership/2 end ${region} -->\n`;
-    if (!ledger) continue;
-    const allowed = factIds[region];
-    if (allowed?.some((id) => !ledger.live.some((fact) => fact.factId === id && fact.section === region))) return false;
     const label = { 'about-you': '### About you', 'about-working-on': "### What you're working on",
       'about-preferences': '### How you like things' }[region];
+    if (creating && payload !== label + '\n') return false;
+    block += begin(region) + payload + `<!-- bower:ownership/2 end ${region} -->\n`;
+    if (!ledger) continue;
     if (!payload.split('\n').every((line) => !line.trim() || line.trim() === label
-      || ledger.live.some((fact) => fact.section === region && (!allowed || allowed.includes(fact.factId))
+      || ledger.live.some((fact) => fact.section === region
         && normalizedText(parseTimelineLine(line)?.text ?? line.replace(/^[-*] /, '')) === normalizedText(fact.text)))) return false;
   }
   const start = prefix.length - heading.length - begin('about-you').length;
+  if (creating && text !== template + block) return false;
   if (text.replace(/\r\n/g, '\n').slice(start).trimEnd() !== block.trimEnd()) return false;
   if (!ledger) return true;
   return !ledger.events.some((event) => event.kind === 'observation'

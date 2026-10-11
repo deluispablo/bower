@@ -676,7 +676,16 @@ function relink(text: string, change: Extract<Change, { kind: 'link-rewrite' }>,
   }
   // One simultaneous pass: each target is replaced once, right to left so earlier offsets hold.
   let next = text;
-  for (const item of [...out].sort((a, b) => b.at - a.at)) next = next.slice(0, item.at) + item.to + next.slice(item.at + item.length);
+  for (const item of [...out].sort((a, b) => b.at - a.at)) {
+    // Learned links refresh from evidence at rebuild, never through generic renames.
+    if (ABOUT_REGIONS.some((region) => {
+      const payload = own.payloads?.[region];
+      if (!payload) return false;
+      const span = spanOf(bytes, payload);
+      return item.at >= span.start && item.at < span.end;
+    })) continue;
+    next = next.slice(0, item.at) + item.to + next.slice(item.at + item.length);
+  }
   return { text: next, added: [], rules: null };
 }
 

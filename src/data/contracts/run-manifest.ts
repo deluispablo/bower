@@ -732,10 +732,13 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> 
   const archives = new Map<string, OperationV2 & { effect: Extract<Effect, { kind: 'create-text' }> }>();
   let lastLedger: OperationV2 | undefined;
   let lastMemory: OperationV2 | undefined;
+  let finalAbout: string | undefined;
+  const undoneRunIds: string[] = [];
   const about = value.capture.places.filter((p) => p.path === 'About me.md');
   if (about.length > 1 && operations.some(({ effect: e }) => e.kind === 'write-runner-json' && e.path === ledgerPath
     || e.kind === 'create-text' && (e.purpose === 'about-archive' || `${targetPath(value, e.parent)}/${e.name}` === ledgerPath)
-    || e.kind === 'edit-text' && e.changes.some((c) => c.kind === 'about-append' || c.kind === 'about-rewrite'))) return false;
+    || e.kind === 'edit-text' && (e.path === 'About me.md' || about.some((p) => p.file.fileId === e.before.fileId)
+      || e.changes.some((c) => c.kind === 'about-append' || c.kind === 'about-rewrite')))) return false;
   try {
     for (const op of operations) {
       const e = op.effect;
@@ -747,7 +750,8 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> 
         if (e.name === 'About me.md' && 'fileId' in e.parent && e.parent.fileId === value.scope.rootId) {
           if (about.length || e.purpose !== 'generated'
             || lastLedger && !op.dependsOn.includes(lastLedger.operationId)
-            || !validLearnedBlock(e.text, lastLedger ? ledgers.get(lastLedger.operationId) : parseObservations(new Uint8Array()))) return false;
+            || finalAbout !== undefined || !validLearnedBlock(e.text, undefined, true)) return false;
+          finalAbout = e.text;
           lastMemory = op;
           continue;
         }
@@ -812,22 +816,21 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> 
         ledgers.set(op.operationId, ledger);
         lastLedger = op; lastMemory = op;
       }
-      if (e.kind !== 'edit-text' || !e.changes.some((c) => c.kind === 'about-append' || c.kind === 'about-rewrite')) continue;
+      if (e.kind !== 'edit-text' || !(e.path === 'About me.md' || about.some((p) => p.file.fileId === e.before.fileId)
+        || e.changes.some((c) => c.kind === 'about-append' || c.kind === 'about-rewrite'))) continue;
       if (about.length !== 1 || about[0]?.file.fileId !== e.before.fileId || e.path !== 'About me.md'
         || e.beforeText === undefined || e.beforeContent.observedModifiedTime !== e.before.modifiedTime
-        || !lastLedger || !op.dependsOn.includes(lastLedger.operationId)
-        || e.changes.some((c) => c.kind !== 'about-append' && c.kind !== 'about-rewrite')) return false;
+        || lastLedger && !op.dependsOn.includes(lastLedger.operationId)) return false;
       const authored = applyChanges(enc.encode(e.beforeText), e.changes);
       if (!authored.ok || authored.text !== e.text) return false;
-      const ledger = ledgers.get(lastLedger.operationId);
+      finalAbout = e.text;
+      const ledger = lastLedger ? ledgers.get(lastLedger.operationId) : parseObservations(new Uint8Array());
       if (!ledger) return false;
-      const undoneRunIds = e.changes.flatMap((c) => c.kind === 'about-rewrite' ? c.undoneRunIds ?? [] : []);
+      undoneRunIds.push(...e.changes.flatMap((c) => c.kind === 'about-rewrite' ? c.undoneRunIds ?? [] : []));
       if (undoneRunIds.some((runId) => !ledger.events.some((event) =>
         (event.kind === 'observation' ? event.origin.runId : event.runId) === runId))) return false;
-      const rebuilt = undoneRunIds.length && (lastLedger.effect.kind === 'write-runner-json' || lastLedger.effect.kind === 'create-text')
+      const rebuilt = undoneRunIds.length && lastLedger && (lastLedger.effect.kind === 'write-runner-json' || lastLedger.effect.kind === 'create-text')
         ? parseObservations(enc.encode(lastLedger.effect.text), undoneRunIds) : ledger;
-      const factIds = Object.fromEntries(e.changes.flatMap((c) => c.kind === 'about-rewrite' ? [[c.region, c.factIds]] : []));
-      if (!validLearnedBlock(e.text, rebuilt, factIds)) return false;
       for (const c of e.changes) {
         if (c.kind !== 'about-rewrite') continue;
         const reason = c.undoneRunIds?.length ? 'undo' : ledger.tombstones.some((t) => t.runId === value.runId)
@@ -850,6 +853,11 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> 
             && event.successful && event.operationId === op.operationId && event.section === c.region))) return false;
       }
       lastMemory = op;
+    }
+    if (finalAbout !== undefined) {
+      const e = lastLedger?.effect;
+      const ledger = parseObservations(enc.encode(e && (e.kind === 'write-runner-json' || e.kind === 'create-text') ? e.text : ''), undoneRunIds);
+      if (!validLearnedBlock(finalAbout, ledger)) return false;
     }
   } catch (error) {
     if (!(error instanceof BowerError)) throw error;
