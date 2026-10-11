@@ -3369,3 +3369,59 @@ was used. As explicitly assigned, the runner owns committing, `pnpm check`, and
 capabilities e2e on demo and fake. Those aggregate/browser gates are not claimed
 as passed here. `.codex-commits.json` contains exactly two groups: production
 files together, then this notes file alone.
+
+## Round 7 reds (addendum 24)
+
+Tests-only delivery for `2026-10-11-b1d-adversarial-final-4.md` and
+TL-P4-41 addendum 24. Scope is the new test file, this appended note and the
+runner's commit manifest. No production code, existing test, fixture, config,
+caller or export changed. Both tests reuse the existing corpus/main driver,
+fake Drive and injected clock; all data is made up.
+
+tests changed: runner/test/b1d-r7.test.ts: added the two addendum 24 reds with positive controls.
+tests changed: existing tests: none.
+
+- `b1d-r7 1 request pin is only a candidate`: admits `Update [[Remote search]]`
+  alongside `Offer.txt`. The positive control explicitly selects the request
+  and Remote search, files the offer into Resources/Careers, appends its line
+  and archives the consumed request in two model calls. The red selects only
+  the offer into Resources/Careers with empty wants, then offers the same
+  append. The offer files, but Remote search changes and the omitted request
+  is archived. Three soft assertions expose that one authority/consumption
+  finding: original note bytes, request location and retained request bytes.
+  A filing-only execution reply is available on the existing retry, so a fix
+  that refuses the unauthorized append can still complete the clear work.
+- `b1d-r7 2 personal type moc is not a Bower MOC`: a matching personal note
+  has no `by: bower`. The positive control uses `type: concept`, finishes in
+  two calls and files the offer. Changing only that type to `moc` still
+  accepts both model replies and returns code 0, but ends failed and leaves
+  the offer unfiled. A pass-through spy observes three attempts to snapshot
+  those personal bytes as a Bower MOC. Four soft assertions expose that one
+  classification/manifest finding: no personal snapshot, done status, filed
+  report and destination bytes. Both cases preserve the personal note bytes.
+
+The entire new file ran together with `--maxWorkers=2`: two expected failed
+tests, seven finding-specific assertion failures, no control or setup failures.
+Runner TypeScript and the new file's ESLint check pass. Logs are in OS temp:
+
+```sh
+NODE_OPTIONS='--require=/tmp/b1d-r7-test-output.cjs' pnpm -C runner exec vitest run test/b1d-r7.test.ts --maxWorkers=2 --reporter=default --cache=false --configLoader=native > /tmp/b1d-r7-red.log 2>&1
+pnpm -C runner exec tsc --noEmit -p . > /tmp/b1d-r7-types.log 2>&1
+pnpm -C runner exec eslint test/b1d-r7.test.ts > /tmp/b1d-r7-eslint.log 2>&1
+```
+
+The OS-temp preload copies the existing round 6 CPU-report redirect, retaining
+its OS-temp `b1d-r6-cpu` destination; no test logic changes. Default-only reporting,
+disabled Vitest cache and the native config loader avoid repository output.
+The driver already writes its observations and scratch files under `os.tmpdir()`.
+
+Research reused offline: the packet's
+[curated context and just-in-time retrieval reference](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
+and its existing main-path regression pattern. Sources were not independently
+reverified; no network was used. No new mechanism, dependency or implementation
+was introduced. No writing git command, node_modules replacement or symlink was
+used. `.codex-commits.json` assigns the test file and notes to separate commits;
+the runner owns committing.
+
+Left out: production fixes, full compatibility suites, pnpm check and e2e, as
+this session writes reds only. The two production defects intentionally remain.
