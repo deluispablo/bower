@@ -244,3 +244,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `b48366e7` | b5b-tables | Nonboolean proposal answers close the question, install nothing, and reach the continuation as the person's words through the existing answer loop; option answers to a proposal are refused. No stored data changes. |
 | `d873c904` | b5b-tables | none: tests only (ruled pins and proposal answer contracts). |
 | `c1fb8575` | b5b-tables | none: tests only (existing-table pin 97). |
+| `25a0ea1b` | b5b-tables | One helper decides the source role (a row declared as a source kind, or a legacy type: source), so a classified Source stays immutable; a stored row with more than four columns reads its first four and is never reseeded or dropped; a table rewrite splices at row level so unchanged rows and unknown keys keep their exact bytes. Stored tables and notes parse as before. |
