@@ -10,7 +10,6 @@
     "exports src/data/contracts/hashes.ts EMPTY_SHA256",
     "exports src/data/contracts/note-edit.ts undoChanges",
     "exports src/data/contracts/note-edit.ts undoEdit",
-    "exports src/data/contracts/note-format.ts propertyValuesOk",
     "exports src/data/contracts/note-format.ts tableProperties",
     "exports src/data/contracts/run-checkpoint.ts parseRunReport",
     "exports src/data/fake/fake-runner.ts NOTE_NOT_WRITTEN",

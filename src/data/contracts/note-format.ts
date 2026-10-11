@@ -34,7 +34,7 @@ const TIMELINE = '## Timeline';
 const BOWER_NOTE = "## Bower's note";
 
 export type ParsedNote = Omit<Note, 'backlinks'>;
-export type NoteFile = Omit<Note, 'backlinks' | 'path' | 'title' | 'links'> & { template?: NoteTemplate };
+export type NoteFile = Omit<Note, 'backlinks' | 'path' | 'title' | 'links'> & { template?: NoteTemplate; typeRow?: TypeRow };
 
 // Retain source bytes for an untouched parsed personal note, outside its display model.
 const personalSources = new WeakMap<NoteFile, { raw: string; serialized: string }>();
@@ -352,7 +352,8 @@ export function serializeNote(n: NoteFile): string {
       || new Set(n.properties.map((p) => p.key)).size !== n.properties.length
       || n.properties.some((p) => !/^[a-z][a-z0-9_]*$/.test(p.key) || p.key === 'bower_format'
         || (BOWER_KEYS as readonly string[]).includes(p.key))
-      || (property('type') !== undefined && property('type')?.value !== n.template)
+      || (n.typeRow !== undefined && (!typeRowOk(n.typeRow, true) || n.typeRow.template !== n.template))
+      || (property('type') !== undefined && property('type')?.value !== (n.typeRow?.id ?? n.template))
       || !dateOk(property('created')?.value ?? '') || !dateOk(property('updated')?.value ?? '')
       || !validSummary(property('source')?.link ?? property('source')?.value ?? '')
       || !links.length || links.length > 5 || links.length !== [...relatedText.matchAll(/\[\[([^\]|]+)\]\]/g)].length
@@ -372,7 +373,7 @@ export function serializeNote(n: NoteFile): string {
   for (const p of n.properties) front.push(`${p.key}: ${n.template && n.byBower ? summaryScalar(p.link ? `[[${p.link}]]` : oneLine(p.value)) : p.link ? `[[${p.link}]]` : oneLine(p.value)}`);
   if (n.template && n.byBower) {
     const type = n.properties.find((p) => p.key === 'type');
-    if (!type) front.push(`type: ${n.template}`);
+    if (!type) front.push(`type: ${n.typeRow?.id ?? n.template}`);
     front.push('bower_format: ownership/2', `bower_template: ${n.template}`);
     return ['---', ...front, '---', '', ...templateBody(n, n.template)].join('\n');
   }
@@ -504,7 +505,7 @@ export function typeTableOk(v: unknown): v is TypeTable {
 const currencies = new Set([...Intl.supportedValuesOf('currency'),
   'BOV', 'CHE', 'CHW', 'CLF', 'COU', 'MXV', 'USN', 'UYI', 'UYW', 'XAG', 'XAU', 'XBA', 'XBB', 'XBC', 'XBD', 'XDR', 'XPD', 'XPT', 'XSU', 'XTS', 'XUA', 'XXX']);
 export function propertyValuesOk(row: TypeRow, value: unknown): boolean {
-  if (!typeRowOk(row) || !schemaObject(value)) return false;
+  if (!typeRowOk(row, true) || !schemaObject(value)) return false;
   return Object.entries(value).every(([key, item]) => {
     if (!Object.hasOwn(row.properties, key)) return false;
     const declaration = row.properties[key];
@@ -520,4 +521,31 @@ export function propertyValuesOk(row: TypeRow, value: unknown): boolean {
       default: return false;
     }
   });
+}
+
+/** TL-P4-38's eight ordered seed classifications; later planning supplies the grounded destinations. */
+function seedTable(): TypeTable {
+  return { v: 1, rows: ([
+    ['article', ['article', 'web clip']], ['offer', ['job offer']], ['cv', ['CV']],
+    ['cover-letter', ['cover letter']], ['certificate', ['certificate']], ['identity-document', ['identity document']],
+    ['other-project-material', ['other project material']], ['other-area-material', ['other area material']],
+  ] satisfies [string, string[]][]).map(([id, match]) => ({ id, match, template: 'source', properties: {}, table: [] })) };
+}
+/** Bounded tolerant reader: bad rows are skipped; an unreadable envelope grants no write that run. */
+export function readTypeTable(text: string | null): { table: TypeTable; writeAllowed: boolean } {
+  if (text === null) return { table: seedTable(), writeAllowed: true };
+  let value: unknown;
+  try { value = JSON.parse(text); }
+  catch {
+    // expected: an unreadable declaration uses the seed without authorizing a replacement.
+    return { table: seedTable(), writeAllowed: false };
+  }
+  if (!value || typeof value !== 'object' || !('v' in value) || value.v !== 1
+    || !('rows' in value) || !Array.isArray(value.rows)) return { table: seedTable(), writeAllowed: false };
+  const seen = new Set<string>();
+  const rows = value.rows.filter((row): row is TypeRow => {
+    if (!typeRowOk(row, true) || seen.has(row.id)) return false;
+    seen.add(row.id); return true;
+  });
+  return { table: { ...value, v: 1, rows: rows.length ? rows : seedTable().rows }, writeAllowed: true };
 }

@@ -63,6 +63,7 @@ import type { MaintenanceNote } from '../../src/data/contracts/run-manifest';
 import { indexedFront, noteRefusal, parseNote } from '../../src/data/contracts/note-format';
 import { checkCreationName } from '../../src/data/contracts/tree';
 import { readTypeTable } from './type-table';
+import { propertyValuesOk } from '../../src/data/contracts/note-format';
 import { mocMembership, mocSnapshot } from './moc';
 
 export const DEFAULT_MODEL = 'claude-sonnet-5-5';
@@ -315,16 +316,9 @@ function promptInstructions(options = false): string {
     '- Numbers: write only a figure, date or amount that is in the thing\'s own text, the pile\'s words or a note below, as it',
     '  is written there. Never work one out or round one, and never add a limit, a score or a count that no input has.',
     '',
-    'Kinds of document (where each usually goes, and what its note says first):',
-    '- receipt or bill: the person\'s money area (by month when a rule says so); shop or sender, date, total.',
-    '- payslip: the person\'s money area; employer, month, net pay.',
-    '- job offer: the person\'s project for finding a job; role, employer, salary, start, reply by.',
-    '- rental listing: the person\'s project for finding a flat; address, rent, rooms, available.',
-    '- contract or agreement: the project or area it binds; parties, start, end, notice.',
-    '- booking or ticket: the trip\'s project; what, when, where, reference.',
-    '- recipe: a Resources topic; dish, serves, time.',
-    'A kind not listed is handled like the closest kind; a letter or newsletter goes with what it is about.',
-    'Each line says what the place is for. Look at the folders below for the one that is: never copy the words of a line as a folder name.',
+    'Kinds of document: the first matching row controls. For example, payslip: the person\'s money area; employer, month, net pay.',
+    'A kind not listed files immediately like the closest kind.',
+    'Each row describes what the material is, never a new folder name. Choose its place among the grounded folders below.',
     '',
     'Budget: decide each thing\'s kind and place from its name and the pile\'s words first, then read its text.',
     'Use at most 5 of the notes below for one thing. A long text is cut where marked "[cut here: ...]": work from what is shown. When',
@@ -401,6 +395,7 @@ function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
   const cell = (value: unknown): string => JSON.stringify(value).replace(/\|/g, '\\|');
   return [
     promptInstructions(!!shown.folderCandidates),
+    'Use the first matching row. A note may carry typeRow (the selection kind) and properties (declared facts only). Sources never change schemas.',
     '| Type | Matches | Template | Properties | Table | Group by |',
     '| --- | --- | --- | --- | --- | --- |',
     ...(shown.types ?? []).map((row) => `| ${[row.id, row.match, row.template, row.properties, row.table, row.group_by ?? null].map(cell).join(' | ')} |`),
@@ -809,6 +804,7 @@ const lineOk = (text: unknown, max: number): text is string =>
 /** What the model was shown that its reply is checked against: the notes it may update, and (for links) the folder's
  * file paths and names and each thing's text. */
 export interface Seen {
+  types?: readonly TypeRow[];
   folderCandidates?: ReadonlySet<string>;
   suppressed?: ReadonlySet<string>;
   personalNotes?: ReadonlySet<string>;
@@ -967,6 +963,7 @@ const Envelope = z.strictObject({
 }, intentIssue);
 const NoteShape = z.strictObject({
   name: z.string(named('noteName', 'noteKeys')), summary: z.string(named('noteSummary', 'noteKeys')), body: z.string(named('noteBody', 'noteKeys')),
+  typeRow: z.string().optional(), properties: z.record(z.string(), z.unknown()).optional(),
 }, named('noteKeys'));
 const ThingShape = z.strictObject({
   fileId: z.string(named('thingNotAdmitted', 'thingKeys')), to: z.string(named('placeOutside', 'thingKeys')), name: z.string(named('nameChangesKind', 'thingKeys')),
@@ -1061,11 +1058,18 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       const body = bodyOf(t.note);
       return body.length <= AUTHORED.body && !CONTROL.test(body) && !HIDDEN_CHARS.test(body);
     }),
+    rule('noteKeys', (t) => {
+      if (!t.note || (t.note.typeRow === undefined && t.note.properties === undefined)) return true;
+      const row = seen.types?.find((row) => row.id === t.note?.typeRow);
+      return !!row && propertyValuesOk(row, t.note.properties ?? {});
+    }),
     rule('noteSections', (t) => t.note === undefined || !OWN_SECTION.test(bodyOf(t.note))),
-    rule('numbers', (t) => t.note === undefined || grounded(t.fileId, [t.note.summary, bodyOf(t.note)], 'the note for')),
+    rule('numbers', (t) => t.note === undefined || grounded(t.fileId, [t.note.summary, bodyOf(t.note), JSON.stringify(t.note.properties ?? {})], 'the note for')),
   ], (t) => {
     placed.set(t.fileId, { to: t.to, name: t.name });
-    if (t.note) authored.set(t.fileId, { name: t.note.name, summary: t.note.summary.trim(), body: bodyOf(t.note).trim() });
+    if (t.note) authored.set(t.fileId, { name: t.note.name, summary: t.note.summary.trim(), body: bodyOf(t.note).trim(),
+      ...(t.note.typeRow === undefined ? {} : { typeRow: t.note.typeRow }),
+      ...(t.note.properties === undefined ? {} : { properties: t.note.properties }) });
   }));
   const Words = WordsShape.superRefine(inOrder<z.output<typeof WordsShape>>([
     rule('pileNotAdmitted', (n) => byPile.has(n.pileId)),
@@ -1515,7 +1519,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       shown.selection = selection.value; shown.allowedTargets = selection.allowedTargets;
       const input = prepared(run, shownTook, shown);
       const texts = new Map(shown.piles.flatMap((p) => p.things.flatMap((t) => t.text === null ? [] : [[t.fileId, t.text] as const])));
-      const seen: Seen = { notes: new Set(shown.notes.map((n) => n.path)), personalNotes: shown.personalNotes,
+      const seen: Seen = { types: shown.types, notes: new Set(shown.notes.map((n) => n.path)), personalNotes: shown.personalNotes,
         suppressed: shown.suppressed, retrySources: shown.retrySources, presentLines: shown.presentLines,
         names: shown.names ?? new Set(), texts, folders: new Set(shown.folders),
         folderCandidates: new Set(folders.map((f) => f.id)), words: shown.piles.map((p) => p.words).join('\n'),
@@ -1532,7 +1536,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           if (!item) return null;
           const path = typeof item.destination === 'string' ? ix.pathOf(item.destination)
             : `${ix.pathOf(item.destination.parentId)}/${item.destination.name}`;
-          if (row.to !== path) return null;
+          if (row.to !== path || (isRecord(row.note) && row.note.typeRow !== undefined && row.note.typeRow !== item.kind)) return null;
         }
         const canEdit = (row: Record<string, unknown>): boolean => {
           const id = typeof row.note === 'string' ? ix.idOf(row.note) : undefined;

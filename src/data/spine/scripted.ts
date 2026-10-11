@@ -40,6 +40,7 @@ import type { AdmissionManifest } from './admission';
 import type { ScriptedRead } from './read';
 import { STAMP, stampOf } from './write-once';
 import { NOTE_TEMPLATES, type NoteTemplate } from '../contracts/note-templates';
+import { readTypeTable, propertyValuesOk } from '../contracts/note-format';
 
 export { SET_ASIDE, listedPiles };
 
@@ -403,6 +404,8 @@ export interface AuthoredNote {
   summary: string;
   body: string;
   template?: NoteTemplate;
+  typeRow?: string;
+  properties?: Record<string, unknown>;
 }
 
 /** A Timeline line a model wrote for a note it was shown (P4-3), citing a thing this run files, or none. */
@@ -658,6 +661,8 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   const requestsValue = requests ? parsed(await ownText(drive, requests)) : null;
   const requestsBroken = !!requests && !isRunnerFile(SYSTEM.requests, requestsValue);
   const requestsDone = isRunnerFile(SYSTEM.requests, requestsValue) ? requestsValue.done : [];
+  const typeFile = ix.file(SYSTEM.typeTable);
+  const types = readTypeTable(typeFile ? await ownText(drive, typeFile) : null);
   const hashesText = hashesFile ? await ownText(drive, hashesFile) : null;
   const hashesBroken = hashesText !== null && !isRunnerFile(SYSTEM.hashes, parsed(hashesText));
   // An inbox emptied after the Worker looked at it: the Worker's own refusal, before any effect. A run the Worker
@@ -677,7 +682,7 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   const unrecorded = lines.some((l) => l.rec.kind === 'request' && !appends.completed.some((h) => h.requestId === l.rec.id)
     && !appends.lines.some((h) => h.consent.requestId === l.rec.id));
   const since = unrecorded ? retainedSince(listing, ix) : null;
-  return { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState };
+  return { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, types };
 }
 type Captured = Awaited<ReturnType<typeof capture>>;
 
@@ -687,7 +692,7 @@ type Captured = Awaited<ReturnType<typeof capture>>;
  * edits, the generated notes, the questions. It ends decided, or with a try again that holds more back.
  */
 export async function decide(drive: ScriptedRead, snapshot: Captured, opts: PlanOptions, attempt: Attempt = { editCap: EDITS_PER_RUN, held: new Set() }) {
-  const { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState } = snapshot;
+  const { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, types } = snapshot;
   const { editCap, held } = attempt;
   const newKey = opts.mintKey ?? mintKey;
   /**
@@ -1811,7 +1816,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // Resolve evidence against actual note identities; a name shared by notes is not grounding.
     const authored = new Map<string, typeof linkable[number]>();
     // All authored strings share this admission check, including every section in the body and the summary.
-    const words = Object.values(note).filter((value): value is string => typeof value === 'string').join('\n');
+    const words = [...Object.values(note).filter((value): value is string => typeof value === 'string'), JSON.stringify(note.properties ?? {})].join('\n');
     for (const match of words.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)) {
       const target = linkTarget(match[1] ?? '').replace(/\.md$/, '');
       const candidates = linkable.filter(({ path }) => target.includes('/')
@@ -1851,17 +1856,25 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const noteName = freeName(planned, to, authored.name);
     madeAs.set(thing.file.id, noteName);
     plannedFile(join(to, noteName));
-    const template = authored.template;
+    const typeRow = authored.typeRow === undefined ? undefined : types.table.rows.find((row) => row.id === authored.typeRow);
+    if ((authored.typeRow !== undefined && !typeRow) || (authored.properties !== undefined && !typeRow)
+      || (typeRow && !propertyValuesOk(typeRow, authored.properties ?? {}))) return refused('invalid declared note properties');
+    const template = authored.template ?? (typeRow && Object.hasOwn(NOTE_TEMPLATES, typeRow.template) ? typeRow.template as NoteTemplate : undefined);
+    if (typeRow && typeRow.template !== template) return refused('a note template outside its declared type');
     // Only declared, relevant links in the authored evidence; never pad with the folder's other notes.
-    const related = await groundedAuthoredLinks(to, authored, { file: thing.file, name });
+    const related = await groundedAuthoredLinks(to, { ...authored, template }, { file: thing.file, name });
     const properties = template ? [
-      { key: 'type', label: 'Type', value: template },
+      { key: 'type', label: 'Type', value: typeRow?.id ?? template },
       { key: 'created', label: 'Created', value: noteDate },
       { key: 'updated', label: 'Updated', value: noteDate },
       { key: 'source', label: 'Source', value: name },
       { key: 'related', label: 'Related', value: related.map((link) => `[[${link}]]`).join(', ') },
     ] : [];
-    const text = serializeNote({ template, summary: authored.summary, properties, tags: [], currentState: [], body: authored.body,
+    for (const [key, value] of Object.entries(authored.properties ?? {})) {
+      if (properties.some((property) => property.key === key)) return refused('a declared fact replacing a template property');
+      properties.push({ key, label: key, value: typeof value === 'string' ? value : JSON.stringify(value) });
+    }
+    const text = serializeNote({ template, typeRow, summary: authored.summary, properties, tags: [], currentState: [], body: authored.body,
       ...(template === 'source' ? { original: name } : {}),
       timeline: template && !NOTE_TEMPLATES[template].timeline ? [] : [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
     generated.push({ to, name: noteName, text, what: authored.summary, after: thing.file.id, pileId: null, aside: thing.file.name, context: null });
