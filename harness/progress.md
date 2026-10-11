@@ -338,3 +338,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-11: messages-wait-for-sheets passes — while a modal overlay is open the Dock hides its messages and pauses their timers; the status region stays mounted (P4-116 PASS, designer verified)
 - 2026-10-11: next-steps-plain-list passes — Bower-region tasks show as a plain list; the person's tasks keep working boxes on their body indexes (P4-117 PASS, designer verified)
 - 2026-10-11: q1b-questions-ui passes — questions show with options, Something else and own words on Home and in the run sheet; pile rows show waiting or couldn't-place (P4-118 PASS, designer verified)
+- 2026-10-11: b1d-selection passes — B1d: two-step selection and execution within one shared ledger (P4-119 PASS)

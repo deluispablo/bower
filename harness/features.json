@@ -7126,7 +7126,7 @@
     "id": "b1d-selection",
     "task": "p4-b1",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "Planning runs in two steps: the model selects from a script-built candidate list of ids, then executes only against what it chose, within one shared ledger.",
     "steps": [
