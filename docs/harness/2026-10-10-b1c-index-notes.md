@@ -2014,3 +2014,7 @@ All remaining source tests, including the shared prefix/Bin/Workspace controls, 
 
 Contradicting tests: none. Delivery status is blocked solely on the existing socket test's
 verification environment; implementation and all other requested checks are complete.
+
+## Close (coordinator, 2026-10-11)
+
+known-green: every red was proved failing at its own tests-only commit (bed662ad, 9b8a4f69, 920c3dfc, 9b7dd1f1, d9d02b1d, 18ab65e2, 8b4ca962, a67a9ad6, 68213dd7, 4a74e285; see each reds section) and passes at HEAD; later rounds touched the same lines, so no single-commit revert isolates them. Codex pass 4 PASS, P4-107 PASS; check green; e2e app/capabilities demo 35 / fake 59; runner 630.
