@@ -2523,3 +2523,54 @@ still pins pre-maintenance operation IDs and requires a lead-approved red repair
 Tests changed: none; no assertion, threshold, timeout, fixture or setup file was modified.
 Skipped: runner-owned commits, pnpm check and capabilities e2e; no network research.
 Risk: full runner green is blocked by the old-ID assertion; app bookkeeping and EPERM remain external failures.
+
+
+## Round 6 red repair (TL-P4-51)
+
+Authorized assertion repair for TL-P4-48 addenda 8 and 9 only. No production
+code changed. Scope: runner/test/main.test.ts, these notes, and the runner's
+.codex-commits.json commit instructions; no callers, fixtures, config or exports
+changed. No user-data or runtime behavior changes.
+
+tests changed: runner/test/main.test.ts:154-155, `the runner process main picks the scripted provider`: compare the scripted operations against canonically resealed IDs after maintenance registers captured places, rather than the pre-maintenance IDs.
+
+The test still compares every operation in order with full deep equality. It
+retains kinds, targets, paths, exact text/content bytes, fences, bounds and
+ordinals. Only operationId and its dependsOn/parent.createdBy references are
+resealed. The expected IDs are computed from the scripted effects using the
+existing canonical helper; references map to those independently computed IDs.
+The maintenance operationIds must equal that ordered list. Every operation,
+including maintenance, also has its ID checked against the canonical hash of
+runId, resealed captureId, ordinal and effect. The captureId is checked against
+the full final capture and original scope/runScope. The existing final comparison
+of the manifest recorded by main against the complete expected manifest remains.
+
+Offline source: src/data/spine/records.ts:75 (canonical) and
+src/data/contracts/run-manifest.ts:569-574 (capture and operation hash admission).
+These are the existing mechanism; no second production mechanism was added.
+No network research or new dependency.
+
+Verification artifacts: /var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-r6-red-repair-37b3qutk
+
+- Red: pnpm -C runner exec vitest run test/main.test.ts --maxWorkers=2 --config <logs>/runner.mjs --configLoader runner.
+  main-red.log: the old :154 deep equality failed on resealed IDs and their references; 1 failed, 6 passed.
+- Green: same main command after repair. main-green.log: 7 passed.
+- Full runner: pnpm -C runner exec vitest run --maxWorkers=2 --config <logs>/runner.mjs --configLoader runner.
+  runner-full.log and runner.json: 58 files, 718 tests passed; no remaining runner contradiction.
+- TypeScript: pnpm exec tsc --noEmit -p runner/tsconfig.json. tsc-runner.log: exit 0.
+- ESLint: pnpm -C runner exec eslint test/main.test.ts. eslint.log: exit 0.
+- Read-only git diff --check: pass.
+
+The temporary output-only config reuses the preceding round's isolation: caches,
+JSON report, attachments, CPU output, copied new-instance build script and its
+bundle all reside in OS temp. Assertions, setup and timer gates remain intact.
+No test output went into the repository. Suite-internal Git fixtures stay in
+temp repositories; this worker invoked no git-writing command. node_modules
+was neither replaced nor symlinked.
+
+removed: the requirement to retain obsolete pre-maintenance operation IDs; no
+bytes, paths, fences, bounds or order assertions removed.
+
+.codex-commits.json requests one test-only commit and one notes-only commit.
+Skipped: runner-owned commits, pnpm check and capabilities e2e; no production edits.
+Risk: pnpm check and capabilities e2e remain unverified here and are owned by the runner.
