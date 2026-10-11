@@ -2574,3 +2574,5 @@ bytes, paths, fences, bounds or order assertions removed.
 .codex-commits.json requests one test-only commit and one notes-only commit.
 Skipped: runner-owned commits, pnpm check and capabilities e2e; no production edits.
 Risk: pnpm check and capabilities e2e remain unverified here and are owned by the runner.
+
+tests changed: runner/test/main.test.ts: the maintenance operationId assertions (:154, :155) compare the ids by the canonical rule against the resealed capture id instead of the pre-maintenance values, because addendum 9 registers captured places for maintenance targets; kinds, targets, paths, content and order are still asserted.
