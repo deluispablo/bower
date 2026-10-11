@@ -121,6 +121,8 @@ describe('the shape of the code', () => {
       const source = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest);
       const visit = (node: ts.Node): true | undefined => {
         if (ts.isIdentifier(node) && FORBIDDEN.test(node.text)) return true;
+        if (ts.isElementAccessExpression(node) && ts.isStringLiteral(node.argumentExpression)
+          && FORBIDDEN.test(node.argumentExpression.text)) return true;
         if (ts.isPropertyAccessExpression(node) && node.name.text === 'env') {
           const object = node.expression;
           if (ts.isIdentifier(object) && object.text === 'process') return true;

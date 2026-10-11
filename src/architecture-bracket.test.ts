@@ -1,10 +1,12 @@
 /// <reference types="node" />
 import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { expect, it } from 'vitest';
 
 // Execute the unexported production declarations without importing its repository-wide tests.
-const text = readFileSync(new URL('./architecture.test.ts', import.meta.url), 'utf8');
+const text = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'architecture.test.ts'), 'utf8');
 const source = ts.createSourceFile('architecture.test.ts', text, ts.ScriptTarget.Latest);
 const declarations = new Map<string, string>();
 const visit = (node: ts.Node): void => {
