@@ -539,3 +539,51 @@ Validation:
 
 removed: only Worker-pool browser imports, ad hoc browser interfaces and their localStorage shim; vault coverage moved intact.
 commits: none; coordinator commits tests and notes separately.
+
+## Fix round 1 reds
+
+tests changed: runner/test/q1c-live.test.ts: add eleven-asking/clear-sibling and pre-effect crash recovery cases; keep both original tests and assertions.
+tests changed: api/test/q1-questions.test.ts: give stored-action rejection two valid options; move that row to a Q1c fix 1 named test with the same rejection/status assertions.
+
+Contract: TL-P4-44 addendum 7 keeps every asking in questions.json and publishes the first ten by askedAt.
+A question count must never fail the run or block its clear sibling. Drive remains authoritative at the end.
+
+- `Q1c fix 1: eleven askings keep clear work and publish the first ten by askedAt` uses eleven distinct
+  waiting subjects with distinct bytes, plus the original clear sibling. Its positive control finds one persisted
+  manifest whose questions effect contains all eleven before checking done, the filed sibling, all eleven stored
+  identities, and the exact first-ten public projection in asking order. Newly planned askings share requestedAt;
+  the expected slice preserves their stable order for that tie.
+- `Q1c fix 1: stored action payload is refused with two otherwise valid options` keeps the 415 and unchanged
+  status assertions. Only one option carries an action; both have valid distinct identities and bounded labels.
+  The count no longer supplies an independent reason for refusal. Every other malformed-fixture row is unchanged.
+- `Q1c fix 1: a crash after manifest persistence recovers questions with stored option actions intact` throws
+  on the first question-bearing status request and every later request in that attempt. It proves that the
+  persisted plan has two grounded stored option actions while questions.json is still empty, the clear sibling
+  is still in Inbox, no checkpoint exists, and the waiting subject is untouched. Attempt 2 runs main with the
+  same Claude adapter; no second model reply occurs. Recovery ends done, publishes action-free options,
+  files the sibling, and writes the exact planned question with both stored actions intact.
+
+Offline references (not fetched; no network permitted):
+- Existing realWorld/main fixture in runner/test/q1c-live.test.ts and optionAsk/grounded candidate coverage
+  in runner/test/q1-continuation.test.ts. Reuse in-memory Drive and API adapters; scratch event files use os.tmpdir().
+- [Vitest test API](https://vitest.dev/api/): retain assertion-driven cases and the existing injected/fake clock.
+- [TypeScript compiler options](https://www.typescriptlang.org/docs/handbook/compiler-options.html): noEmit
+  verifies API tests without executing the Workers pool or writing build output.
+
+Verification:
+- `pnpm -C runner exec vitest run test/q1c-live.test.ts --maxWorkers=2 --reporter=default --no-cache --configLoader=native`:
+  3 pass, 1 expected red. The eleven-question positive control passes; runner/test/q1c-live.test.ts:130 fails
+  with expected done, received failed. The cause is RunnerStatus.publishQuestions rejecting the eleven-card
+  snapshot at runner/src/status.ts:73, before clear effects. Log: /tmp/q1c-fix1-runner.log.
+- The pre-effect crash recovery case and both unchanged original runner cases pass.
+- `pnpm -C api exec tsc --noEmit -p .`: pass; /tmp/q1c-fix1-api-tsc.log. maxWorkers is a Vitest option,
+  so it applies to the runner execution, not tsc.
+- `pnpm -C runner exec tsc --noEmit -p .`: pass; /tmp/q1c-fix1-runner-tsc.log.
+- API execution, pnpm check, and e2e remain coordinator work. No API runtime pass is claimed.
+  Coordinator command: `pnpm -C api exec vitest run test/q1-questions.test.ts --maxWorkers=2 --reporter=default`.
+
+No production edit, network, port binding, git writing command, node_modules replacement/symlink,
+repository test artifact, or change to another assertion. Default reporter, disabled cache, native config
+loading and noEmit keep verification writes outside the repository. The coordinator owns commits.
+removed: none of the original runner assertions; only the stored-action row moved out of it.each.
+commits: none.

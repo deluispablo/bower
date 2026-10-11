@@ -127,11 +127,17 @@ describe('Q1c snapshots through createApp().request', () => {
     ['201-character question', [{ ...card(), text: 'x'.repeat(201) }]],
     ['41-character yes', [{ ...card(), yes: 'x'.repeat(41) }]],
     ['41-character no', [{ ...card(), no: 'x'.repeat(41) }]],
-    ['stored action payload', [{ ...card(), options: [{ id: 'Q1C_OPTION', label: 'Projects',
-      action: { kind: 'file-to', folderId: 'FOLDER_ID' } }] }]],
   ];
   it.each(invalid)('Q1c q1-status-seq-revision-recovery: contract 2 refuses %s without changing status', async (_why, payload) => {
     const { post, get, legacy } = await aRun();
+    expect((await post(2, payload)).status).toBe(415);
+    expect(await get()).toEqual(legacy);
+  });
+
+  it('Q1c fix 1: stored action payload is refused with two otherwise valid options', async () => {
+    const { post, get, legacy } = await aRun();
+    const payload = [{ ...card(), options: [{ id: 'Q1C_OPTION', label: 'Projects',
+      action: { kind: 'file-to', folderId: 'FOLDER_ID' } }, { id: 'Q1C_OTHER_OPTION', label: 'Areas' }] }];
     expect((await post(2, payload)).status).toBe(415);
     expect(await get()).toEqual(legacy);
   });

@@ -21,6 +21,9 @@ vi.mock('cloudflare:workers', () => ({ DurableObject: class {
 const AT = Date.UTC(2026, 9, 10, 12);
 const JSON_HEADERS = { 'content-type': 'application/json' };
 interface PublicQuestion { id: string; text: string; askedAt: number }
+interface StoredQuestion extends PublicQuestion {
+  options?: Array<{ id: string; label: string; action: { kind: 'file-to'; folderId: string } }>;
+}
 interface Status { revision: number; run: { id: string; phase: string; questions?: PublicQuestion[] } | null }
 
 beforeEach(() => {
@@ -35,13 +38,16 @@ function latch() {
   return { promise, resolve };
 }
 
-async function mixed() {
+async function mixed(count = 1, withOptions = false) {
   let clearId = '', waitingId = '', calls = 0;
+  const waitingIds: string[] = [], folderIds: string[] = [];
   const model: ClaudeSpawn = async () => {
     calls++;
     const intent = { kind: 'tidy-intent', v: 1,
       things: [{ fileId: clearId, to: 'Resources', name: 'Clear.md' }],
-      asks: [{ fileId: waitingId, text: 'Where should Alex keep this?', yes: 'In projects', no: 'Keep here' }],
+      asks: waitingIds.map((fileId) => ({ fileId, text: 'Where should Alex keep this?', yes: 'In projects', no: 'Keep here',
+        ...(withOptions ? { options: folderIds.slice(0, 2).map((folderId, i) => ({ folderId, label: `Place ${i + 1}` })) } : {}),
+      })),
     };
     return { code: 0, stderr: '', cut: null, stdout: JSON.stringify({ type: 'result', subtype: 'success',
       is_error: false, duration_ms: 1, duration_api_ms: 1, num_turns: 1, result: JSON.stringify(intent),
@@ -50,12 +56,21 @@ async function mixed() {
   const w = await realWorld({ claude: model, seed: async (drive) => {
     const root = (await drive.createFolder('root', 'Bower')).id;
     const inbox = (await drive.createFolder(root, 'Inbox')).id;
-    for (const name of ['Projects', 'Areas', 'Resources', 'Archive']) await drive.createFolder(root, name);
+    for (const name of ['Projects', 'Areas', 'Resources', 'Archive']) folderIds.push((await drive.createFolder(root, name)).id);
+    if (withOptions) {
+      const projects = (await drive.createFolder(folderIds[0] ?? '', 'Made-up project')).id;
+      const area = (await drive.createFolder(folderIds[1] ?? '', 'Made-up area')).id;
+      folderIds.splice(0, folderIds.length, projects, area);
+    }
     const sys = (await drive.createFolder(root, '.bower')).id;
     await drive.createFolder(sys, 'changes');
     await drive.createText(sys, 'questions.json', JSON.stringify({ v: 1, questions: [] }));
     clearId = (await drive.createText(inbox, 'Clear.md', 'Made-up clear words.', { pile: 'CLEAR' })).id;
     waitingId = (await drive.createText(inbox, 'Waiting.md', 'Made-up waiting words.', { pile: 'WAITING' })).id;
+    waitingIds.push(waitingId);
+    for (let i = 1; i < count; i++) {
+      waitingIds.push((await drive.createText(inbox, `Waiting ${i + 1}.md`, `Made-up waiting words ${i + 1}.`, { pile: `WAITING_${i}` })).id);
+    }
     return root;
   } });
   const lease = await (await w.api.browser(`${ORIGIN}/session`, { method: 'POST', headers: JSON_HEADERS,
@@ -66,7 +81,7 @@ async function mixed() {
   expect(res.status).toBe(200);
   expect(w.dispatched).toHaveLength(1);
   const status = async (): Promise<Status> => await (await w.api.browser(`${ORIGIN}/status`)).json() as Status;
-  return { w, clearId, waitingId, status, calls: () => calls };
+  return { w, clearId, waitingId, waitingIds, folderIds, model, status, calls: () => calls };
 }
 
 async function legacyRecords() {
@@ -99,6 +114,90 @@ async function legacyRecords() {
 }
 
 describe('Q1c durable publication through main and createApp().request', () => {
+  it('Q1c fix 1: eleven askings keep clear work and publish the first ten by askedAt', async () => {
+    const { w, clearId, waitingIds, status } = await mixed(11);
+    expect(await w.runJob(0)).toBe(0);
+    const manifests = (await w.drive.listAll(w.rootId)).filter((f) => /^manifest-.*\.json$/.test(f.name));
+    expect(manifests).toHaveLength(1);
+    const manifest = JSON.parse(await w.drive.readText(manifests[0]?.id ?? '')) as {
+      operations: Array<{ effect: { kind: string; path?: string; text?: string } }>;
+    };
+    const effect = manifest.operations.find(({ effect }) => effect.kind === 'write-runner-json'
+      && effect.path === '.bower/questions.json')?.effect;
+    expect(effect).toBeDefined();
+    const planned = JSON.parse(effect?.text ?? '{}') as { questions: StoredQuestion[] };
+    expect(planned.questions).toHaveLength(11);
+    expect((await status()).run?.phase).toBe('done');
+    expect(w.drive.pathOf(clearId, w.rootId)).toBe('Resources/Clear.md');
+    const stored = (await w.drive.listAll(w.rootId)).find((f) => w.drive.pathOf(f.id, w.rootId) === '.bower/questions.json');
+    expect(stored).toBeDefined();
+    const { questions } = JSON.parse(await w.drive.readText(stored?.id ?? '')) as { questions: StoredQuestion[] };
+    expect(questions).toHaveLength(11);
+    expect(new Set(questions.map((q) => q.id))).toEqual(new Set(waitingIds.map((id) => `q-ask-${id}`)));
+    expect((await status()).run?.questions).toEqual([...questions].sort((a, b) => a.askedAt - b.askedAt)
+      .slice(0, 10).map(({ id, text, askedAt }) => expect.objectContaining({ id, text, askedAt })));
+  });
+
+  it('Q1c fix 1: a crash after manifest persistence recovers questions with stored option actions intact', async () => {
+    const { w, clearId, waitingId, folderIds, model, status, calls } = await mixed(1, true);
+    const before = await w.drive.get(waitingId);
+    const bytes = await w.drive.readText(waitingId);
+    let crashed = false;
+    expect(await w.runJob(0, async (url, init, next) => {
+      if (url.origin === ORIGIN && url.pathname.endsWith('/status') && init.method === 'POST') {
+        const body = JSON.parse(String(init.body)) as { questions?: PublicQuestion[] };
+        if (body.questions?.length) crashed = true;
+      }
+      // Stop at the onPlan publication boundary, before a checkpoint or any planned effect can be sent.
+      if (crashed) throw new Error('Simulated runner crash after manifest persistence');
+      return next();
+    })).toBe(1);
+    expect(crashed).toBe(true);
+    const files = await w.drive.listAll(w.rootId);
+    const manifests = files.filter((f) => /^manifest-.*\.json$/.test(f.name));
+    expect(manifests).toHaveLength(1);
+    expect(files.filter((f) => /^checkpoint-.*\.json$/.test(f.name))).toHaveLength(0);
+    const manifest = JSON.parse(await w.drive.readText(manifests[0]?.id ?? '')) as {
+      operations: Array<{ effect: { kind: string; path?: string; text?: string } }>;
+    };
+    const effect = manifest.operations.find(({ effect }) => effect.kind === 'write-runner-json'
+      && effect.path === '.bower/questions.json')?.effect;
+    expect(effect).toBeDefined();
+    const planned = JSON.parse(effect?.text ?? '{}') as { questions: StoredQuestion[] };
+    expect(planned.questions).toHaveLength(1);
+    expect(planned.questions[0]?.options?.map(({ action }) => action).sort((a, b) => a.folderId.localeCompare(b.folderId))).toEqual(folderIds.slice(0, 2)
+      .sort().map((folderId) => ({ kind: 'file-to', folderId })));
+    const stored = files.find((f) => w.drive.pathOf(f.id, w.rootId) === '.bower/questions.json');
+    expect(stored).toBeDefined();
+    expect(JSON.parse(await w.drive.readText(stored?.id ?? ''))).toEqual({ v: 1, questions: [] });
+    expect(w.drive.pathOf(clearId, w.rootId)).toBe('Inbox/Clear.md');
+    expect(await w.drive.get(waitingId)).toEqual(before);
+    expect(await w.drive.readText(waitingId)).toBe(bytes);
+    expect((await status()).run?.questions ?? []).toEqual([]);
+
+    const wire = driveV3(w.drive, 2, w.dispatched[0]?.run_id);
+    wire.folderId = w.rootId;
+    const dir = join(tmpdir(), 'bower-q1c-tests');
+    await mkdir(dir, { recursive: true });
+    const event = join(dir, `q1c-crash-recovery-event-${crypto.randomUUID()}.json`);
+    await writeFile(event, JSON.stringify({ action: 'bower-tidy', client_payload: { run_id: wire.runId,
+      attempt: 2, ticket: TICKET, scope: 'all', allow_web: false } }));
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: event,
+      BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' }, { fetch: wire.fetch,
+      claude: model, pacing: { baseMs: 0, sleep: async () => {} } })).toBe(0);
+    expect(calls()).toBe(1);
+    expect(wire.statuses.at(-1)?.phase).toBe('done');
+    expect(w.drive.pathOf(clearId, w.rootId)).toBe('Resources/Clear.md');
+    expect(JSON.parse(await w.drive.readText(stored?.id ?? ''))).toEqual(planned);
+    const reported = wire.statuses.at(-1) as { questions?: StoredQuestion[] } | undefined;
+    expect(reported?.questions).toEqual(planned.questions.map(({ options, ...q }) => ({ ...q,
+      options: options?.map(({ id, label }) => ({ id, label })),
+    })));
+    expect(JSON.stringify(reported?.questions)).not.toContain('action');
+    expect(await w.drive.get(waitingId)).toEqual(before);
+    expect(await w.drive.readText(waitingId)).toBe(bytes);
+  });
+
   it('Q1c q1-live-question-before-clear-effects-end: durable publication', async () => {
     const { w, clearId, waitingId, status, calls } = await mixed();
     const before = await w.drive.get(waitingId);
