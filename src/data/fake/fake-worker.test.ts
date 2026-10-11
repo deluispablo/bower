@@ -3541,9 +3541,15 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(new Set(creates.map((o) => o.effect.createKey)).size).toBe(2);
       const words = creates.find((o) => o.effect.name === `${WORDS} (2).md`);
       expect(words?.effect.parent).toEqual({ fileId: w.ideas.id });
-      // The pile's folder goes to the Bin only after its words are written.
+      // The item Bin waits for its words to be written; the parent waits for every item Bin.
       const bin = out.manifest.operations.find((o) => o.effect.kind === 'bin' && o.effect.capturedChildIds.length === 1);
-      expect(bin?.dependsOn).toContain(words?.operationId);
+      if (!bin || bin.effect.kind !== 'bin') throw new Error('no pile Bin');
+      const parentId = bin.effect.before.fileId;
+      const items = out.manifest.operations.filter((o) => o.effect.kind === 'bin' && o.effect.before.parents.includes(parentId));
+      expect(items.map((o) => o.effect.kind === 'bin' ? o.effect.before.fileId : '')).toEqual(bin.effect.capturedChildIds);
+      expect(bin.dependsOn).toEqual(items.map((o) => o.operationId));
+      expect(items).toHaveLength(1);
+      expect(items[0]?.dependsOn).toEqual([words?.operationId]);
 
       // Both replies are lost: recovery finds each note by its key and never writes it again.
       w.rules.push(once(isCreateOf(`${WORDS} (2).md`), 'lose-reply'), once(isCreateOf('Industrial Designer, Ferrowick.md'), 'lose-reply'));
@@ -3883,16 +3889,23 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         const m = structuredClone(out.manifest);
         const op = m.operations.find((o) => o.effect.kind === 'create-text');
         if (!op || op.effect.kind !== 'create-text') throw new Error('no generated note');
+        const context = m.operations.find((o) => o.effect.kind === 'bin' && !o.effect.before.folder && o.dependsOn.includes(op.operationId));
+        if (!context) throw new Error('no words Bin');
         const folder = path ? at(path) : undefined;
         if (path && !folder) throw new Error(`no ${path}`);
         op.effect.parent = { fileId: folder?.id ?? w.rootId };
         if (folder) m.capture.places.push({ file: { fileId: folder.id, name: folder.name, parents: [...folder.parents], folder: true, modifiedTime: folder.modifiedTime }, path });
         const note = path ? `${path}/${op.effect.name}` : op.effect.name;
         for (const c of m.reportPlan.filter((x) => x.requires[0] === op.operationId && x.when === 'applied')) {
-          c.requires = [op.operationId];
-          c.value.created = [{ path: note, what: c.value.created[0]?.what ?? '' }];
+          c.requires = c.requires.filter((id) => id === op.operationId || id === context.operationId);
+          c.value.created = c.value.created.map((row) => ({ ...row, path: note }));
           c.value.filed = c.value.filed.map((f) => ({ ...f, to: path, note }));
         }
+        const rows = m.reportPlan.filter((c) => c.requires[0] === op.operationId && c.when === 'applied');
+        expect(rows.flatMap((c) => c.value.created)).toHaveLength(1);
+        expect(rows.flatMap((c) => c.value.filed)).toHaveLength(1);
+        expect(rows.find((c) => c.value.created.length)?.requires).toEqual([op.operationId]);
+        expect(rows.find((c) => c.value.filed.length)?.requires).toEqual([op.operationId, context.operationId]);
         return grounded(m);
       };
       expect(placed('Resources'), 'a main folder').toBe(true);
