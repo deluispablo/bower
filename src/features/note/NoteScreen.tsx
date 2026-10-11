@@ -159,6 +159,7 @@ function NoteView({ path }: { path: string }) {
       <div className={s.body}>
         <Markdown
           text={note.body}
+          taskRegions={note.taskRegions}
           link={link}
           onToggle={(i) =>
             void vault.toggleTask(path, i).catch((e: unknown) => report(e, 'That did not save. Try again.'))

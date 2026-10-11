@@ -64,6 +64,7 @@ import {
 import { keepSignedIn, keptSignedIn, PHASE_MS, type Scenario, type TimeScale } from './scenario';
 import { placeOf, plainSnippet, plainText, searchLines } from '../search-text';
 import { TASK_LINE } from '../tasks';
+import { parseNote, serializeNote } from '../vault/note-format';
 import { forgetThisPerson, sayGoodbye } from '../device';
 import { ruleLike } from '../rules';
 import { formerNames, rewriteLinks } from '../links';
@@ -459,6 +460,12 @@ export class DemoWorld {
           backlinks,
           byBower: !!e.byBower,
         };
+    // Seeded template notes use the same body order and ownership projection as Drive reads.
+    const parsed = parseNote(path, serializeNote(note));
+    if (parsed.taskRegions) {
+      note.body = parsed.body;
+      note.taskRegions = parsed.taskRegions;
+    }
     this.notes.set(path, note);
     return note;
   }

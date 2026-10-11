@@ -318,6 +318,7 @@ export function parseNote(path: string, raw: string, fetched?: FetchedOwnership)
     tags,
     currentState: current,
     body,
+    ...(projection ? { taskRegions: projection.tasks.map((task) => task.region) } : {}),
     timeline: timelineOf(timeline),
     ...(bowerNote !== null ? { bowerNote: { text: bowerNote, source: src } } : {}),
     links: linksIn(text),

@@ -26,26 +26,46 @@ interface Toasts {
   dismissAction: (label: string) => void;
   /** The pointer or the keyboard is on a toast: it waits; when they leave, its time starts again. */
   hold: (id: number, on: boolean, by: Holder) => void;
+  /** The Dock pauses expiry while its messages cannot be shown; closing resumes the time left. */
+  pause: (on: boolean) => void;
 }
 
 /** Long enough to read a sentence and reach its button (WCAG 2.2.1 asks for room to act). */
 const ACTION_MS = 8000;
 const PLAIN_MS = 4000;
 let n = 0;
-const timers = new Map<number, ReturnType<typeof setTimeout>>();
+interface Timer {
+  remaining: number;
+  started: number;
+  handle?: ReturnType<typeof setTimeout>;
+}
+const timers = new Map<number, Timer>();
 const held = new Map<number, Set<string>>();
 export const useToasts = create<Toasts>((set, get) => {
+  let paused = false;
+  const stop = (id: number): void => {
+    const timer = timers.get(id);
+    if (timer?.handle === undefined) return;
+    clearTimeout(timer.handle);
+    timer.remaining = Math.max(0, timer.remaining - (Date.now() - timer.started));
+    delete timer.handle;
+  };
+  const start = (id: number): void => {
+    const timer = timers.get(id);
+    if (!timer || paused || held.get(id)?.size) return;
+    timer.started = Date.now();
+    timer.handle = setTimeout(() => get().dismiss(id), timer.remaining);
+  };
   const later = (id: number, ms: number): void => {
-    clearTimeout(timers.get(id));
-    timers.set(
-      id,
-      setTimeout(() => get().dismiss(id), ms),
-    );
+    stop(id);
+    timers.set(id, { remaining: ms, started: Date.now() });
+    start(id);
   };
   return {
     list: [],
     show: (text, action) => {
       const id = ++n;
+      for (const dropped of get().list.slice(0, -2)) get().dismiss(dropped.id);
       set({ list: [...get().list.slice(-2), action ? { id, text, action } : { id, text }] });
       later(id, action ? ACTION_MS : PLAIN_MS);
       return id;
@@ -59,8 +79,7 @@ export const useToasts = create<Toasts>((set, get) => {
       set({ list: get().list.map((t) => (t.id !== id ? t : action ? { id, text, action } : { id, text })) });
       const holders = held.get(id);
       holders?.delete('action');
-      if (holders?.size) clearTimeout(timers.get(id));
-      else later(id, action ? ACTION_MS : PLAIN_MS);
+      later(id, action ? ACTION_MS : PLAIN_MS);
     },
     press: (id) => {
       const t = get().list.find((x) => x.id === id);
@@ -86,22 +105,32 @@ export const useToasts = create<Toasts>((set, get) => {
       else holders.delete(by);
       held.set(id, holders);
       // It waits while the pointer or the keyboard is on it; its time starts again when both have left.
-      if (holders.size) clearTimeout(timers.get(id));
+      if (holders.size) stop(id);
       else later(id, t.action ? ACTION_MS : PLAIN_MS);
     },
+    pause: (on) => {
+      if (paused === on) return;
+      paused = on;
+      for (const { id } of get().list) {
+        if (on) stop(id);
+        else start(id);
+      }
+    },
     dismiss: (id) => {
-      clearTimeout(timers.get(id));
+      stop(id);
       timers.delete(id);
       held.delete(id);
       set({ list: get().list.filter((t) => t.id !== id) });
     },
-    dismissAction: (label) => set({ list: get().list.filter((t) => t.action?.label !== label) }),
+    dismissAction: (label) => {
+      for (const t of get().list) if (t.action?.label === label) get().dismiss(t.id);
+    },
   };
 });
 
 export const toast = (text: string, action?: Toast['action']): number => useToasts.getState().show(text, action);
 
-export function Toasts() {
+export function Toasts({ visible = true }: { visible?: boolean }) {
   const { list, press, hold } = useToasts();
   // Where the keyboard was before a toast took it, so that closing the toast gives it back
   // (WAI-ARIA APG: on close, focus returns to what it came from). A toast that never had it changes nothing.
@@ -109,6 +138,18 @@ export function Toasts() {
   const had = useRef(new Set<number>());
   const shown = useRef<number[]>([]);
   useEffect(() => {
+    if (!visible) {
+      // Removing the message's surface ends pointer/keyboard holds without taking focus from the modal.
+      for (const { id } of list) {
+        for (const by of ['pointer', 'keyboard'] as const) {
+          if (held.get(id)?.has(by)) hold(id, false, by);
+        }
+      }
+      shown.current = [];
+      had.current.clear();
+      from.current.clear();
+      return;
+    }
     const now = list.map((t) => t.id);
     for (const id of shown.current) {
       const current = list.find((t) => t.id === id);
@@ -123,10 +164,10 @@ export function Toasts() {
       if (wasIn && (!document.activeElement || document.activeElement === document.body || !document.activeElement.isConnected)) returnFocusTo(opener);
     }
     shown.current = now;
-  }, [list, hold]);
+  }, [list, hold, visible]);
   return (
     <div className={s.toasts} role="status" aria-live="polite">
-      {list.map((t) => (
+      {visible && list.map((t) => (
         <div
           key={t.id}
           className={s.toast}

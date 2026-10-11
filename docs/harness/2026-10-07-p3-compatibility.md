@@ -212,3 +212,6 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `aaecdea3` | b6a-templates | note-format: task identity is per region; a toggle never reaches another region's line, and a toggle on a Bower-region task (Next steps) is refused with no change and a logged BowerError. Stored bytes unchanged; the display stays as it was pending its own UI entry. |
 | `c30f7adc` | b6a-templates | none: tests only (person-typed source/moc reds). |
 | `d9f74804` | b6a-templates | note-edit: the Source/MOC-only refusals apply only to Bower-written notes (byBower plus type); a person's note with type: source or type: moc keeps the mechanical link rewrite and C05's append. Template names come from NOTE_TEMPLATES. Stored bytes unchanged. |
+| `9c8e61b0` | next-steps-plain-list | none: tests only (NSPL reds for the spec rows). |
+| `4de03d64` | next-steps-plain-list | none: tests only (NSPL reds repaired to body indexes; task-region source reds, TL-P4-55 addendum 1). |
+| `1465a126` | next-steps-plain-list | Note gains optional `taskRegions` (personal or bower per body task, in body order) from B6a's projection, filled by parseNote, DriveVault, demo and fake; absent means every task is the person's. The note view renders Bower-region tasks as plain items; toggles keep global body indexes. Stored bytes unchanged. |
