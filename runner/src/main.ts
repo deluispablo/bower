@@ -416,7 +416,7 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
           // Control recovery has completed; defer semantic read-ahead until hot is in the shared cache.
           const listed = await drive.planReads().listAll(rootId, { readAhead: false });
           const persistedHot = VaultIndex.build(rootId, listed).file(SYSTEM.hot);
-          const hot = persistedHot ? boundHot(await drive.readListedText(persistedHot)) : '';
+          const hot = persistedHot ? boundHot(await drive.planReads().readText(persistedHot.id)) : '';
           const index = await planningIndex(drive, rootId);
           const provider = providerFor(name, drive, { rootId, runId, allowWeb, context, index, ...(hot ? { hot } : {}) }, { env, timing, ...(opts.claude ? { spawn: opts.claude } : {}) });
           return withMaintenance(drive, await provider(admitted));

@@ -461,3 +461,137 @@ harness/unused-production-baseline.json, and this notes file. No test/fixture so
 
 Validation index: /tmp/b3b-validation.md. Final read-only diff check passes; the changed-file inventory
 contains only the eight production/baseline files and these notes. All tests and corpus fixtures are unchanged.
+
+## Addendum 5
+
+2026-10-11, TL-P4-42 addendum 5. The first implementation is committed at `9e23ad6e`;
+this continuation leaves the three owned production files and these notes uncommitted for the coordinator.
+The owner authorizes per-fixture cold golden re-pins and the raw fingerprint reorder, and reserves every
+assertion edit to the red owner. Implementation is complete; the frozen assertions remain unchanged.
+
+### Implementation and existing homes
+
+- `runner/src/hot.ts` now prepends this run's validated settled rows to the prior hot's dated
+  Recent changes rows, keeps their prior order and exact row bytes, and trims the combined window
+  to ten. With no prior hot, only this run contributes. Undated/malformed prior claims are excluded.
+  Open threads and Current focus are still rebuilt from authoritative questions and hub Timelines.
+  The 300-word reduction and date-only guard remain. Provenance names only this run's primary ids;
+  carried prose does not invent journal ids.
+- `runner/src/index.ts` persists the already-read previous hot as a versioned declaration source.
+  Only this run's captured, unarchived journal files can join the declaration; their archive moves
+  must have settled into the archive before they contribute. These current inputs share the
+  planner's read cache. No archived journal file is listed as a hot input or read for hot.
+  Successful report rows join those settled current changes; rejected proposals never do.
+- The existing declared-target slot has a `cachedCheck` option. Hot's first content precheck uses
+  its declared bytes/hash/version, then the ordinary writer performs the live name/place/version
+  fence immediately before the send. Fresh hot refreshes no longer fetch reconciliation evidence
+  and precheck evidence separately. Replay still fetches live stamped evidence. The cached evidence
+  is consumed once before sending and cleared in `finally`, so lost-reply readback is live.
+  This extends the same maintain target loop, ordinary effects and checkpoint engine; no second
+  writer, write protocol, read cache or persisted store was added. Retrieval still commits last.
+- `runner/src/main.ts` loads prior hot through `planReads().readText` after recovery/done checks
+  and before semantic read-ahead. Declare, unchanged comparison and prompt share that exact version.
+  The existing question reader's small-empty-list shortcut is reused on warm hot declarations;
+  nonempty questions use the same versioned cache as the provider. Applied question writes update
+  the frozen hot inputs before rendering, including Home's settled answer.
+
+Offline sources remain [Anthropic prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching),
+[Kubernetes controllers](https://kubernetes.io/docs/concepts/architecture/controller/) and the repository's
+ReadCache/SeenFiles/ordinary-effects implementation. ReadCache cites RFC 9110's versioned-response model.
+No network request was made for research, models, Drive or documentation.
+
+### Frozen measurements, per fixture and assertion
+
+Values below are measured through production `main`, including maintain. The full runner suite ran all
+647 tests. A separate OS-temp observer wraps timing's existing meter without changing any frozen test,
+assertion, fixture or production result. It records named requests and their actual phases. Numbers are
+measurements for the red owner, not edited goldens.
+
+| Frozen test and assertion (runner/test/) | New value; pre-hot control | Named calls and disposition |
+| --- | --- | --- |
+| `drive-calls-golden.test.ts:7`, total :26 and timing total :28 | **96**; 92 (+4) | questions.json media in reads (+1); hot create name-check child listing, live .bower parent fence, multipart create in apply (+3). |
+| Same test, phases :32 | **token 0, reads 25, model 0, apply 55, checkpoints 4, report 10, status 0, runner 2** | reads was 24 and apply 52; all four calls named above. Other phases unchanged. |
+| `drive-calls-golden.test.ts:45`, ceiling :50 | **96** against frozen 95 | Same four cold hot calls. Apply-time control at :53 passes: **6,230 ms**, against 8,025 ms. |
+| `drive-calls-golden.test.ts:71`, cold :82 / retained :84 / phases :85 | Cold **96**; retained **107** (controls 92 / 103, both +4) | Same questions media and three hot-create calls per fixture. Retained phases: **token 0, reads 28, model 0, apply 54, checkpoints 4, report 10, status 0, runner 11** (reads was 27, apply 51). No hot history media. |
+| `b1a-contract.test.ts:846`, discovery :825, binned folder (trashed and removed cells) | **3**, was 3; first implementation 4 | retrieval media, changes feed, old index media. Hot was already loaded into cache; empty questions require no new declaration media. Both cells pass. |
+| `b1a-contract.test.ts:864`, discovery :825, outside folder | **3**, was 3; first implementation 4 | Same retrieval media, feed and index media; passes. |
+| `b1a-contract.test.ts:881`, discovery :825, renamed folder | **3**, was 3; first implementation 4 | Same three calls; passes with zero descendant media. |
+| `b1a-contract.test.ts:900`, discovery :825, inside folder move | **3**, was 3; first implementation 4 | Same three calls; passes with zero descendant media. |
+| `c05-bounded-reads.test.ts:267`, shared planning golden :262 | **25**, was 24 (+1) | Cold declared questions.json media. No hot journal-archive input/media. The shared hard assertion still stops this test before its later history cells. |
+| `c05-bounded-reads.test.ts:302`, shared planning golden :262 | **25**, was 24 (+1) | Same cold questions media. Its preceding append/recovery controls execute; later pending cells remain masked by the shared frozen assertion. |
+| `c05-bounded-reads.test.ts:639`, horizon archive media :670 | **0**, frozen 0; first implementation 50 | Zero historical archive media and zero manifest/checkpoint media. Positive append and all three horizon-age cells pass; four independently traced runs each have zero archive media at request time. |
+| `b1-index.test.ts:965`, warm count :1009, instructions/1 | **42**, was 39; first implementation 45 | +1 hot media before semantic reads, +1 live target metadata fence, +1 hot PATCH. **One** additional fenced write. Zero hot reconciliation/precheck metadata calls and zero additional questions media. |
+| Same warm test, instructions/2 | **43**, was 40; first implementation 46 | Same three named calls; one additional fenced hot PATCH. |
+| Same warm test, all/1 | **42**, was 39; first implementation 45 | Same three named calls; one additional fenced hot PATCH. |
+| Same warm test, all/2 | **43**, was 40; first implementation 46 | Same three named calls; one additional fenced hot PATCH. |
+| `reads-report.test.ts:33`, plan reads :40 | **2,880 ms**, was 2,730 (+150); frozen bound <2,825 | One sequential cold questions media at modelled 150 ms. Pre-first-write read count **26**, including the runner-phase read; timing's reads-phase count is 25. |
+| `reads-report.test.ts:43`, retained plan reads :47 | **3,330 ms**, was 3,180 (+150); frozen bound <=3,180 | Same additional cold questions media; retained timing reads-phase count 28. |
+| `reads-report.test.ts:50`, report control | **2,280 ms, 22 calls**, within its 31-call bound | Report/barrier order passes; no hot reporting row or archive call. Hot settles earlier, in maintain. |
+| `timing-counts.test.ts:6`, total :14 and phases :20 | **96** and the cold phase map above | Same questions media plus three hot-create calls, observed by timing's own meter. Raw formatting/region controls still pass in the complete suite. |
+| `model-input-fingerprint.test.ts:84`, raw golden :92 | JSON key order **index, runId, admission, piles, notes, folders**; prior **runId, admission, index, piles, notes, folders** | Accepted stable-prefix reorder only. All field values and the preceding instructions are identical. No hot exists in this cold fingerprint fixture. |
+
+Warm whole-run requests are 25 GET + 13 POST + 4 PATCH for one changed note, and
+26 GET + 13 POST + 4 PATCH for two. Each fixture adds exactly one write over the pre-hot
+control (16 -> 17 write-classified requests). The +3 total is +2 reads and +1 write: the single
+prior-hot media load and the mandatory live fence read remain explicit. Maintain performs no
+second hot media read and no additional questions media in these fixtures. The ordinary changed
+notes retain exactly one `bytes=0-4095` Range read each, with no metadata precheck.
+
+Fingerprint measurements: normalized golden and actual SHA-256 are both
+`5b7a9ded44476b2f6cd611187597ed56cdc1b97ba74757b63c4963cf9673cc6f`
+(fingerprint `5b7a9ded4447`); the normalized golden test passes. Raw SHA-256 changes from
+`349ea35f8d0bbebad489a2a9d8e0d4a1dbbf8b4795c59c043ef27981f4bb3946` to
+`e1e7c6c36b37d7d361a8cac042ea21bbe3fa4296d8a894c65560fc4f28200f2a`.
+Exact raw bytes and unified diff: `/tmp/b3b-a5-fingerprint.actual.txt` and
+`/tmp/b3b-a5-fingerprint.diff`; hash measurements: `/tmp/b3b-a5-fingerprint.json`.
+
+Rolling-window measurement through main: a prior ten-row hot plus the C04 run's nine settled
+changes produces exactly ten rows, all nine current rows followed by the first prior row.
+A date-only reduction preserves all prior row bytes. The unchanged bootstrap/context/recovery
+controls pass. Artifact: `/tmp/b3b-a5-rolling.json`; no historical journal is needed to retain rows.
+
+### Validation and remaining frozen assertions
+
+- Test-first frozen red: B1c's four cells measured 45/46 and C05's horizon measured 50 archive
+  media before edits. The targeted suite had 35 passes / 4 failing tests, with seven assertion
+  failures; `/tmp/b3b-a5-red.log`.
+- Complete runner command: `pnpm -C runner exec vitest run --maxWorkers=2` with an OS-temp config
+  importing the unchanged runner config and relocating cache/JSON output. **637 pass / 10 fail,
+  647 total, 49 files**. Logs: `/tmp/b3b-a5-runner-final.log`, `/tmp/b3b-a5-runner.json`.
+  All ten failures are the unchanged goldens in the table: B1c warm (four soft cells), the two
+  shared C05 planning goldens, three Drive-count goldens, raw fingerprint, two reads budgets,
+  and timing total. There are no new hot behaviour failures or non-assertion runner errors.
+- Final B3a/B3b/context/recovery/method: **149/149 pass**, `/tmp/b3b-a5-hot.log` and `.json`.
+  Includes all nine original B3b reds, date-only, hidden-only, authoritative Home answers,
+  failure/done protection, lost reply and unchanged production-baseline controls.
+- Both unchanged hot corpus fixtures: **2/2 pass**, `/tmp/b3b-a5-fixtures.log`.
+  OS-temp rolling/fingerprint measurement probe: 2/2 executions complete, `/tmp/b3b-a5-probe.log`.
+- Exact requested app command `pnpm exec vitest run src --maxWorkers=2`, with OS-temp cache config
+  and output preload: **5,615 pass / 2 fail**, 167 files; `/tmp/b3b-a5-src.log`.
+  `src/e2e-port.test.ts:37` times out following sandbox `listen EPERM` on 127.0.0.1 (one unhandled
+  error). `src/docs.test.ts:134`, “every change since the P2 freeze is listed”, reports the already
+  committed `9e23ad6e` missing from the shared change list. Both are outside this entry's files;
+  no shared record or test was changed. The earlier relocated harness-fixture failures are absent.
+- App, node and runner `tsc --noEmit`: pass, logs `/tmp/b3b-a5-tsc-{app,node,runner}.log`.
+  Runner ESLint on `src/hot.ts src/index.ts src/main.ts`: pass, `/tmp/b3b-a5-eslint.log`.
+- Per-fixture request observer: `/tmp/b3b-a5-trace.jsonl`, `/tmp/b3b-a5-measure-summary.txt` and
+  `/tmp/b3b-a5-measure.log`. The final horizon-only measurement, `/tmp/b3b-a5-horizon.log`,
+  verifies zero archive media in all four executions using paths recorded at request time.
+  The original observer's final-path labels misclassified a run's own pre-move request media as
+  archive media; that observer label was corrected in OS temp, without changing a frozen test.
+- No `pnpm check` mark or screen e2e: this owner-directed round requests the component gates
+  above, reserves golden changes to the red owner, forbids repository test outputs, and touches
+  no screen (`ui:false`). Read-only `git diff --check` passes.
+
+removed: runner/src/index.ts: hot's journal-archive discovery and archived-record media inputs.
+removed: runner/src/index.ts: fresh hot reconciliation metadata read and duplicate live content-precheck metadata read.
+removed: runner/src/index.ts: warm empty-questions declaration media read via the existing small-list shortcut.
+removed: no test, assertion, fixture, threshold, live fence, checkpoint, node_modules entry or alternate writer.
+tests changed: none
+
+No network, direct git-writing command, commit, node_modules replacement or symlink. Test logs,
+reports, cache, fixture scratch and measurement files are in OS temp. The src harness tests retain
+their own throwaway git operations in OS-temp repositories; no git command issued by this session
+writes to this worktree. Only `runner/src/hot.ts`, `runner/src/index.ts`, `runner/src/main.ts` and
+this notes file differ from the first implementation. The red owner owns the frozen re-pins;
+the coordinator owns commits and the shared change-list record.

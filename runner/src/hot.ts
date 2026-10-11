@@ -2,6 +2,7 @@ import { BowerError } from '../../src/data/types';
 
 export interface HotInputs {
   today: string;
+  previousHot?: string;
   openQuestions: readonly { id: string; text: string }[];
   hubs: readonly { path: string; lastSettledChange: string | null }[];
   changes: readonly { id: string; at: string; text: string }[];
@@ -88,9 +89,15 @@ export function renderHot(inputs: HotInputs): HotResult {
     identity: hub.path,
     text: `- ${oneLine(hub.path)} (${hub.lastSettledChange?.slice(0, 10)})`,
   })), 5);
-  const recent = section('Recent changes', changes.map((change) => ({
+  // Only dated rows from the generated section survive; other prior prose is never evidence.
+  const previous = inputs.previousHot?.split(/^## Recent changes\s*$/m)[1]?.split(/^## /m)[0] ?? '';
+  const priorRows = previous.split('\n').flatMap((text, i) => {
+    const day = /^- (\d{4}-\d{2}-\d{2}) .+$/u.exec(text)?.[1];
+    return day && validDate(day) && Date.parse(day) <= today ? [{ identity: `prior-${i}`, text }] : [];
+  });
+  const recent = section('Recent changes', [...changes.map((change) => ({
     identity: change.id, text: `- ${change.at.slice(0, 10)} ${oneLine(change.text)}`,
-  })), 10);
+  })), ...priorRows], 10);
   const render = (): string => [
     '# Hot', `_Updated: ${inputs.today}_`,
     ...renderSection(threads), ...renderSection(focus), ...renderSection(recent),
@@ -109,7 +116,7 @@ export function renderHot(inputs: HotInputs): HotResult {
     provenance: {
       questionIds: threads.rows.map((row) => row.identity),
       hubPaths: focus.rows.map((row) => row.identity),
-      changeIds: recent.rows.map((row) => row.identity),
+      changeIds: changes.slice(0, Math.min(recent.rows.length, changes.length)).map((change) => change.id),
     },
   };
 }

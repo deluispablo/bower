@@ -2,7 +2,7 @@
 import { sha256Hex } from '../../src/data/contracts/hashes';
 import { indexedFront, timelineBullets } from '../../src/data/contracts/note-format';
 import type { EffectV2, Maintain, MaintenanceDeclaration, MaintenanceNote, SeenFile, VerifiedContent } from '../../src/data/contracts/run-manifest';
-import type { DriveFile } from '../../src/data/drive/drive-api';
+import type { DriveFile, StoredEvidence } from '../../src/data/drive/drive-api';
 import { driveEffects, type Effects, type Settled } from '../../src/data/spine/engine';
 import { materialize, refreshed } from '../../src/data/spine/report';
 import { limiter, READ_AHEAD } from '../../src/data/spine/read';
@@ -28,6 +28,8 @@ export interface DeclaredTarget {
   declare?(drive: RunnerDrive, manifest: RunManifest, index: VaultIndex, notes: Notes): Promise<MaintenanceDeclaration>;
   render(declaration: MaintenanceDeclaration | undefined, state: ReturnType<typeof refreshed>, outcomes: readonly Outcome[], manifest: RunManifest): string;
   unchanged?(before: string, after: string): boolean;
+  /** Use declared bytes for the first content check; the live version/place fence still runs before sending. */
+  cachedCheck?: boolean;
 }
 
 const indexTarget: DeclaredTarget = { kind: 'index', path: SYSTEM.index, render: (_declaration, state) => projectIndex(state.files) };
@@ -36,18 +38,20 @@ const hub = (path: string, note: MaintenanceNote): boolean => note.owner === 'bo
   && ['Projects', 'Areas'].includes(path.split('/')[0] ?? '')
   && VaultIndex.isHub(path, path.split('/').at(-1) ?? '', note.type ?? undefined);
 
-/** Hot consumes complete, versioned primary evidence and successful outcomes, never its previous prose. */
+/** Hot rebuilds live sections from primary evidence and carries its bounded recent-change window. */
 export const hotTarget: DeclaredTarget = {
-  kind: 'hot', path: SYSTEM.hot, unchanged: sameExceptDate,
+  kind: 'hot', path: SYSTEM.hot, unchanged: sameExceptDate, cachedCheck: true,
   async declare(drive, manifest, index, notes) {
     const at = timelineDate(manifest.requestedAt);
     if (!at) throw unavailable();
     const sources: MaintenanceDeclaration['sources'] = [];
     const questions = index.file(SYSTEM.questions);
-    const pending = new Set(index.journalFiles().map((f) => f.id));
+    const previous = index.file(SYSTEM.hot);
+    // The existing question reader uses the same listing-size shortcut for an empty list.
+    const readQuestions = questions && (!previous || questions.size === undefined || questions.size > 40);
     const captured = new Set(manifest.capture.journal.flatMap((line) => line.fileIds));
-    const journal = index.journalFiles(true).filter((f) => !pending.has(f.id) || captured.has(f.id));
-    const candidates = [...(questions ? [questions] : []), ...journal,
+    const journal = index.journalFiles().filter((f) => captured.has(f.id));
+    const candidates = [...(previous ? [previous] : []), ...(readQuestions ? [questions] : []), ...journal,
       ...Object.entries(notes).flatMap(([id, note]) => {
         const f = index.byId(id);
         return f && hub(note.path, note) ? [f] : [];
@@ -69,11 +73,17 @@ export const hotTarget: DeclaredTarget = {
     let questions = declaration.sources.find((source) => source.path === SYSTEM.questions)?.text;
     const applied = new Set(outcomes.filter((outcome) => outcome.state === 'applied').map((outcome) => outcome.operationId));
     const archived = new Set<string>();
+    const settledIndex = VaultIndex.build(manifest.scope.rootId, state.listing ?? []);
     for (const op of manifest.operations) {
       if (!applied.has(op.operationId)) continue;
       const e = op.effect;
       if (e.kind === 'bin') sources.delete(e.before.fileId);
-      if (e.kind === 'move' && manifest.capture.journal.some((line) => line.fileIds.includes(e.before.fileId))) archived.add(e.before.fileId);
+      if (e.kind === 'move' && manifest.capture.journal.some((line) => line.fileIds.includes(e.before.fileId))) {
+        const outcome = outcomes.find((outcome) => outcome.operationId === op.operationId);
+        if (outcome?.state === 'applied' && outcome.evidence.file.parents.some((id) => settledIndex.pathOf(id) === SYSTEM.archive)) {
+          archived.add(e.before.fileId);
+        }
+      }
       if (e.kind === 'edit-text' || e.kind === 'write-runner-json') {
         const source = sources.get(e.before.fileId);
         if (source) source.text = e.text;
@@ -102,10 +112,10 @@ export const hotTarget: DeclaredTarget = {
       }).filter((date): date is string => date !== null).sort();
       hubs.push({ path: note.path, lastSettledChange: dates.at(-1) ?? null });
     }
+    // Only captured lines whose archive move settled belong to this run; no archive is read.
     const journal: JournalRecord[] = [...sources.values()].flatMap((source) => {
-      if (!source.path.startsWith(SYSTEM.changes + '/')) return [];
-      // An unarchived line contributes only after its own archive effect settled.
-      if (!source.path.startsWith(SYSTEM.archive + '/') && !archived.has(source.file.fileId)) return [];
+      if (!archived.has(source.file.fileId) || !source.path.startsWith(SYSTEM.changes + '/')
+        || source.path.startsWith(SYSTEM.archive + '/')) return [];
       const value = parsed(source.text);
       return isJournalRecord(value) ? [value] : [];
     });
@@ -127,7 +137,8 @@ export const hotTarget: DeclaredTarget = {
         ?? manifest.operations.flatMap((op) => op.effect.kind === 'maintain' ? op.effect.inputs.listing ?? [] : []).find((f) => f.fileId === subject.id) : undefined;
       return { id: question.id, text: named ? `Inbox: ${named.name} — ${question.text}` : question.text };
     }) : [];
-    return renderHot({ today, openQuestions, hubs, changes }).text;
+    return renderHot({ today, openQuestions, hubs, changes,
+      previousHot: declaration.sources.find((source) => source.path === SYSTEM.hot)?.text }).text;
   },
 };
 
@@ -397,8 +408,14 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
 
 export function maintenanceEffects(drive: RunnerDrive, declared: readonly DeclaredTarget[] = [hotTarget]): Effects {
   // The ordinary edit guard still reads live metadata; unchanged bytes share B1a's versioned read cache.
+  let cachedCheck: StoredEvidence | undefined;
   const ordinary = driveEffects(new Proxy(drive, {
     get(target, key) {
+      if (key === 'evidence') return async (id: string) => {
+        const cached = cachedCheck;
+        cachedCheck = undefined;
+        return cached?.file.id === id ? cached : target.evidence(id);
+      };
       if (key === 'readBytes') return async (id: string) => new TextEncoder().encode(await target.readListedText(await target.get(id)));
       const value: unknown = Reflect.get(target, key);
       return typeof value === 'function' ? value.bind(target) : value;
@@ -453,7 +470,7 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
           if (previous === index.trim() || (previous === legacy && projectIndex(snapshot) === index)) continue;
         }
         if (before && kind?.unchanged && kind.unchanged(await drive.readListedText(file(before)), text)) continue;
-        const ev = before || replaying.has(op.operationId) ? await drive.evidence(target.fileId) : null;
+        const ev = (before && !kind?.cachedCheck) || replaying.has(op.operationId) ? await drive.evidence(target.fileId) : null;
         const content = { encoding: 'utf8' as const, size: new TextEncoder().encode(text).length, sha256: await rawHash(text) };
         const beforeText = state.files[target.fileId]?.moc?.text;
         const beforeContent: VerifiedContent | undefined = owned && before && beforeText !== undefined ? { encoding: 'utf8' as const,
@@ -478,7 +495,14 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
           continue;
         }
         await sending();
-        last = await ordinary.apply(sub, subHead, w, manifest, async () => target.fileId);
+        // Reconciliation always reads live evidence; only this fresh precheck reuses exact declared bytes.
+        if (kind?.cachedCheck && before && beforeContent) cachedCheck = { file: file(before), trashed: false,
+          content: { size: beforeContent.size, sha256: beforeContent.sha256 } };
+        try {
+          last = await ordinary.apply(sub, subHead, w, manifest, async () => target.fileId);
+        } finally {
+          cachedCheck = undefined;
+        }
         if (last.state !== 'applied') throw unavailable();
         if (owned && state.files[target.fileId]) {
           state.files[target.fileId] = { ...state.files[target.fileId] as MaintenanceNote,
