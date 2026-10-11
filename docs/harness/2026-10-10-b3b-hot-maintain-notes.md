@@ -122,3 +122,171 @@ Preserved: harness/corpus/b23-hot-question-answer/expected.json:79 q-ask-p-1 con
 - Only the two changed fixtures were additionally exercised with a temporary Vitest probe/config in tmp-logs, through the existing runScripted driver, fake time and `--maxWorkers=2`. Both remain assertion-red; exact scorer failures: tmp-logs/b3b-repairs-fixtures.json, readable summary: tmp-logs/b3b-repairs-summary.txt. The question-answer fixture still reports its preserved q-ask-p-1 identity conflict; evidence-only still retains unsupported evidence and lacks a report. No unrelated corpus cases ran. Initial temporary probe setup had a config import failure, then a missing localStorage stub; both were corrected. The final probe uses the existing B3b storage stub pattern and has only assertion failures.
 - App, node and runner `tsc --noEmit` pass (exit 0): tmp-logs/b3b-repairs-tsc-app.log, tmp-logs/b3b-repairs-tsc-node.log, tmp-logs/b3b-repairs-tsc-runner.log. ESLint for test/b1a-contract.test.ts passes (exit 0): tmp-logs/b3b-repairs-eslint.log.
 - Read-only HEAD comparisons confirm both expected.json files differ solely in the eight hot paths, and the TypeScript file solely in the ruled bounded-set allowance and its citation. No fixture content bytes, other assertions, numbers, goldens or thresholds changed. No full gates, e2e, network or writing git command ran. Coordinator owns commits.
+
+## Implementation
+
+Status: blocked before production edits. This session read the worker card, packet contracts 1–5,
+TL-P4-42, the B3b prep row and the prior notes. No network, test edits, node_modules replacement,
+or writing git commands were issued directly. The requested src suite includes harness tests
+that change throwaway git repositories in OS temp; this worktree's git state was not mutated. No implementation or commit is claimed.
+
+### Offline research
+
+[Anthropic prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)
+is the stable-prefix reference already cited in the prep: keep instructions/types, Rules, About me
+and index before hot at fixed position 6, and volatile neighbourhood/items after it. This is an
+offline citation, not newly fetched documentation. Hot remains derived context, never authority.
+
+[Kubernetes controllers](https://kubernetes.io/docs/concepts/architecture/controller/) is the
+offline reference for idempotent reconciliation of derived state from primary evidence. The local
+proven mechanism is maintain's persisted declaration plus the engine's checkpoints and write-once
+stamps: runner/src/index.ts:278, src/data/spine/engine.ts and src/data/spine/write-once.ts.
+Rebuilding hot must extend that mechanism, compare with sameExceptDate and commit retrieval last.
+No hot archive, independent checkpoint protocol or alternate writer is warranted.
+
+### Blocking interface and exact scope rule
+
+The packet names docs/harness/2026-10-10-b23-prep.md. Its line 94 says:
+“No change to `runner/src/index.ts` ... is assigned here. If B3 needs an interface those B1 homes
+lack, the lead returns that interface to its B1 owner; do not silently add those paths.”
+The worker skill (.agents/skills/bower-implement/SKILL.md) likewise requires the smallest fix in
+packet-owned files, and WORKER.md requires returning a missing mechanism to its owner.
+
+That missing interface is present on the supplied branch:
+
+- runner/src/index.ts:249 fixes the target list to index and retrieval; it reserves ids and freezes
+  target versions in the maintain declaration at lines 250–275. There is no extra-target argument.
+- runner/src/index.ts:324 renders only MOCs, index and retrieval. An added hot target reaches
+  undefined text and throws at line 325. maintenanceEffects accepts only the Drive adapter.
+- runner/src/main.ts:416 calls withMaintenance, and line 420 uses maintenanceEffects. Wrapping
+  these with a separate hot writer would bypass the existing per-target fence/reconciliation loop.
+
+The required owner handoff is a scoped extension of this same maintain home for hot's declared
+primary inputs, reserved target, rendering and sameExceptDate guard, or an explicit allocation of
+runner/src/index.ts to this entry. The current prep explicitly returns this gap to B1's owner.
+No production or baseline change was made while this allocation is unresolved. The P4-88 date
+validation/day-then-path ordering minors are still pending, along with lifecycle and prompt wiring.
+
+### Contract contradictions and full targeted inventory (TL-P4-51)
+
+The complete runner suite was executed, not just its first failure: 638 passed, 9 failed, 647 total.
+The nine failures are the expected unimplemented B3b assertions, not contradictory requirements:
+
+| Test entry point | Exact name |
+| --- | --- |
+| runner/test/b23-hot-context.test.ts:29 | B3b hot: filing writes hot once and the next prompt puts it at position 6 |
+| runner/test/b23-hot-context.test.ts:85 | B3b hot: date-only refresh keeps the old bytes without another write |
+| runner/test/b23-hot-context.test.ts:115 | B3b hot: hidden-only feed drains its cursor and leaves hot untouched |
+| runner/test/b23-hot-context.test.ts:139 | B3b hot: a Home answer removes only its settled Open thread |
+| runner/test/b23-hot-context.test.ts:162 | B3b hot: unused-baseline.json no longer exempts hot.ts |
+| runner/test/b23-hot-context.test.ts:162 | B3b hot: unused-production-baseline.json no longer exempts hot.ts |
+| runner/test/b23-hot-recovery.test.ts:16 | B3b hot: pre-plan failure and done redispatch send no hot writes |
+| runner/test/b23-hot-recovery.test.ts:56 | B3b hot: a lost maintain reply resumes the same manifest and writes hot once |
+| runner/test/second-brain-method.test.ts:175 | B3b hot: evidence-only method verdict covers hidden unarchived refresh |
+
+Both supplied hot fixtures were additionally exercised unchanged through runScripted/main from a
+probe in /tmp, using fake time and pretend Drive. Every scorer failure is captured in
+/tmp/b3b-hot-maintain-fixtures.log. The evidence-only fixture has only its three unsupported hot
+claims left; both runs deliver reports successfully on this branch.
+
+The sole observed fixture incompatibility beyond unimplemented hot is:
+
+- harness/corpus/b23-hot-question-answer/expected.json:79 requires q-ask-p-1. Its committed
+  file-subject reply produces q-ask-f18; the existing authoritative-identity control at
+  runner/test/b23-hot-context.test.ts:150 requires askId(letterId). Changing the authoritative
+  question id to satisfy the old fixture would violate contract 3/Q6's existing-question source.
+  The prior repair notes preserved this conflict; it remains unchanged here. The other six scorer
+  failures in that fixture are missing hot files/sections, which are ordinary implementation reds.
+
+The repaired root-hot paths and bounded write-set assertion no longer conflict. All B1a tests,
+B3a tests, corpus tests and existing method tests pass. No assertion was weakened or repaired.
+
+### Drive-call goldens
+
+No golden moved: production is unchanged. These are measured baseline results, not estimated
+post-implementation hot costs. The full runner run includes the production-main modelled fixtures.
+
+| Golden assertion | Measured baseline | Measured delta |
+| --- | --- | --- |
+| runner/test/drive-calls-golden.test.ts:26 | Cold C04 92 Drive calls | 0 |
+| runner/test/drive-calls-golden.test.ts:28 | Timing ledger 92 Drive calls | 0 |
+| runner/test/drive-calls-golden.test.ts:32 | reads 24, apply 52, checkpoints 4, report 10, runner 2 | 0 per phase |
+| runner/test/drive-calls-golden.test.ts:82 | Retention test's cold C04 control 92 | 0 |
+| runner/test/drive-calls-golden.test.ts:84 | With 25 earlier runs 103 | 0 |
+| runner/test/drive-calls-golden.test.ts:86 | reads 27, apply 51, checkpoints 4, report 10, runner 11 | 0 per phase |
+
+Exact pre-hot goldens are retained. Their authorized fixture-specific hot deltas cannot be measured
+until the maintain interface is available; no test number or bound was changed.
+
+### Validation and artifact handling
+
+All command logs are in the OS temporary folder. The runner command overrode the configured JSON
+report path with --outputFile.json=/tmp/b3b-hot-maintain-runner.json. The shared timer setup also
+emits CPU reports into test-results/cpu. That side effect was discovered after the first invocation;
+this session's newly generated reports were moved to /tmp/b3b-hot-maintain-artifacts, preserving
+older reports. Subsequent diagnostics use a /tmp Node preload redirecting artifact writes, and a
+/tmp Vitest config directing the cache into /tmp. No test or repository config was edited.
+
+| Check | Result | Log |
+| --- | --- | --- |
+| runner vitest run --maxWorkers=2 | 638 pass; 9 expected B3b reds | /tmp/b3b-hot-maintain-runner.log |
+| src vitest run --maxWorkers=2, with /tmp output/cache routing | 5614 pass; 3 environment/setup failures; 1 listen error | /tmp/b3b-hot-maintain-src.log |
+| Both unchanged hot corpus fixtures via main | 2 assertion reds; full scorer failures retained | /tmp/b3b-hot-maintain-fixtures.log |
+| tsc --noEmit -p tsconfig.app.json | Pass | /tmp/b3b-hot-maintain-tsc-app.log |
+| tsc --noEmit -p tsconfig.node.json | Pass | /tmp/b3b-hot-maintain-tsc-node.log |
+| runner tsc --noEmit -p . | Pass | /tmp/b3b-hot-maintain-tsc-runner.log |
+| eslint on the four inspected runner integration files | Pass; no touched TypeScript files | /tmp/b3b-hot-maintain-eslint.log |
+| node scripts/check-unused-gate.mjs | Fail: boundHot/sameExceptDate unused; regular hot file baseline stale | /tmp/b3b-hot-maintain-unused.log |
+
+The unused-production pass has 28 known findings and passes with the unmodified baseline. Its hot
+exemption still must be removed when hot is wired. Removing it while hot is unconnected would
+create a new unused-production failure rather than complete this entry.
+
+pnpm check and e2e were not run: this is a blocked pre-implementation delivery with no UI change.
+The standard pnpm check scripts also write test/build artifacts and a checkout mark into the repo;
+the session's explicit temporary-output constraint takes precedence over the skill's default gate.
+The direct requested checks above preserve their exit results rather than claiming a green mark.
+
+removed: none; no production code or baseline exemption removed before the required B1 interface handoff.
+removed: current-run generated CPU reports and scratch directories relocated to /tmp/b3b-hot-maintain-artifacts; older reports preserved.
+tests changed: none
+
+### Compatibility row drafts
+
+| Existing contract | Draft disposition |
+| --- | --- |
+| B1a single maintain effect and retrieval-last reconciliation | Preserved; hot extension blocked on its owner-held interface. |
+| B1c cold in-memory index and warm one-Range prefixes | Preserved; no edits to index, MOC, retrieval, feed or read cache. |
+| Q1c authoritative live questions | Preserved; no new question store or changed asking identity. |
+| Old maintain declarations/checkpoints | Unchanged; no persisted-schema change or second recovery protocol. |
+| TL-P4-45 runner writes at .bower/hot.md | Existing allowlist already includes hot; target integration pending. |
+| Q5 no archive and semantic-only replacement | Pending in the existing maintain home; no alternate writer added. |
+| Prompt position 6 and boundHot | Pending; B1d's builder remains the required home. |
+| P4-88 validated dates and focus day/path order | Pending; no unsupported modifiedTime inference introduced. |
+| Golden counts and threshold numbers | Preserved; all observed deltas zero before implementation. |
+| Test ownership and node_modules | Preserved; no committed test/config edits or node_modules replacement. |
+
+### App-suite failures and final verification
+
+The complete src run finished: 165 files passed, 2 failed; 5614 tests passed, 3 failed.
+These failures are outside B3b's production contract:
+
+- src/e2e-port.test.ts:37, “a server from another worktree is never reused”: localhost listen
+  is denied with EPERM in this sandbox, followed by its 5000 ms timeout and one unhandled error.
+- src/harness.test.ts:627, “a test that passes only on retry fails a batch run”, and
+  src/harness.test.ts:641, “a quarantined test that passes on retry is reported, not failed”:
+  their shared setup at lines 599–603 creates test fixtures under repository test-results/fx-.
+  This conflicts with the session's temporary-only test-output instruction. The initial /tmp
+  routing covered writes but missed mkdtempSync, so those two setups first failed with ENOENT.
+  The newly created empty fixture directories were relocated to OS temp as well.
+
+Only those two tests were re-exercised after correcting mkdtempSync and asynchronous artifact
+routing in the /tmp preload. Both still fail before their fixture runs: moving the fixture outside
+its original package ancestry makes Playwright load its .ts config as CommonJS, and the imported
+batch module then rejects import.meta. Log: /tmp/b3b-hot-maintain-src-recheck.log. This is a
+relocation/setup limitation, not an application regression. No committed test was changed,
+skipped or relaxed; the targeted rerun used -t and the full suite above ran every test.
+
+Final read-only git diff --check passes. Only this notes file is modified. A modification-time
+inventory confirms no current-session report files remain under either repository test-results
+folder. TypeScript, runner ESLint and the production baseline checks were not needlessly rerun.
