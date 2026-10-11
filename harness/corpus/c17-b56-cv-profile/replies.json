@@ -1,0 +1,21 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Alex CV.txt",
+        "to": "Areas/Career/Originals",
+        "name": "Alex CV.txt",
+        "basis": "Areas/Career/Career.md",
+        "note": {
+          "name": "Alex CV.md",
+          "summary": "Alex uses TypeScript and SQL, built map tools at Ferrowick in 2026, and shipped an offline map editor.",
+          "body": "Alex uses TypeScript and SQL, built map tools at Ferrowick in 2026, and shipped an offline map editor. [[Areas/Career/Career profile]] [[Areas/Career/Career]]",
+          "typeRow": "cv"
+        },
+        "profile": "Alex uses TypeScript and SQL, built map tools at Ferrowick in 2026, and shipped an offline map editor."
+      }
+    ]
+  }
+]

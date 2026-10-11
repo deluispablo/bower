@@ -28,16 +28,13 @@
     {
       "path": "Areas/Career/Career profile.md",
       "contains": [
-        "## Current state",
-        "TypeScript and SQL",
-        "built map tools at Ferrowick in 2026",
-        "shipped an offline map editor"
-      ],
-      "timeline": [
-        "2026-10-02 \u00b7 Started the career profile.",
+        "begin profile",
         "Alex uses TypeScript and SQL, built map tools at Ferrowick in 2026, and shipped an offline map editor."
       ],
-      "timelineCount": 2
+      "timeline": [
+        "2026-10-02 \u00b7 Started the career profile."
+      ],
+      "timelineCount": 1
     },
     {
       "path": "Areas/Career/Originals/Alex CV.md",

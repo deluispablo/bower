@@ -1,0 +1,27 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Ferrowick offer.txt",
+        "to": "Projects/Job hunt/Offers",
+        "name": "Ferrowick offer.txt",
+        "basis": "Projects/Job hunt/Job hunt.md",
+        "note": {
+          "name": "Ferrowick offer.md",
+          "summary": "Ferrowick offers a TypeScript software developer role.",
+          "body": "Ferrowick offers a TypeScript software developer role at 48000; reply by 2026-10-12, start 2026-11-02. Currency is not stated. The role asks for TypeScript, which Alex uses. [[Projects/Job hunt/Job hunt]] [[Areas/Career/Career profile]]",
+          "typeRow": "offer"
+        }
+      }
+    ],
+    "lines": [
+      {
+        "note": "Projects/Job hunt/Job hunt.md",
+        "text": "Ferrowick offers a software developer role at 48000; reply by 2026-10-12, start 2026-11-02.",
+        "cites": "$file:Ferrowick offer.txt"
+      }
+    ]
+  }
+]

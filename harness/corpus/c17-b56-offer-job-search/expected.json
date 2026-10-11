@@ -36,7 +36,11 @@
       ],
       "excludes": [
         "[[Projects/Greenhouse repair/Greenhouse repair]]",
-        "7 out of 10"
+        "7 out of 10",
+        "EUR",
+        "USD",
+        "should accept",
+        "scores"
       ]
     }
   ],
