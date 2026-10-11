@@ -290,14 +290,15 @@ describe('B4b fix round 2, addendum 14', () => {
   });
 
   it('b4b-fr2-A-forget-tombstone-retry', async () => {
-    const f = await fixture({ history: true, words: 'Forget my remote preference.' });
-    const run = await failWrite(f, ABOUT, forget);
+    const f = await fixture({ history: true, words: `Forget that ${REMOTE}` });
+    const quotedForget = { ...forget, forget: [{ factId: 'fact-remote', quote: REMOTE }] };
+    const run = await failWrite(f, ABOUT, quotedForget);
     expect(ledger(run).tombstones.map((t) => t.factId), 'the Forget tombstone settled').toEqual(['fact-remote']);
     expect(run.after[ABOUT], 'the failed projection still shows the old line').toContain(REMOTE);
     // A fresh person retry uses the original fact id, even when the first words have already settled.
     const pile = await f.drive.createFolder(await f.id('Inbox'), 'Forget my remote preference again.', { pile: 'forget-retry' });
-    await f.drive.createText(pile.id, PILE_NOTE, 'Forget my remote preference again.\n');
-    const retry = await execute(f, forget);
+    await f.drive.createText(pile.id, PILE_NOTE, `Forget again that ${REMOTE}\n`);
+    const retry = await execute(f, quotedForget);
     expect({ settledRows: memoryRows(run).length, settledWords: inboxWords(run), retryCode: retry.code,
       retryRefusals: retry.refusals, retryVisible: retry.after[ABOUT]?.includes(REMOTE), retryWords: inboxWords(retry),
       sameLedger: retry.after[LEDGER] === run.after[LEDGER],
