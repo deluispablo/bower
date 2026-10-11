@@ -1134,3 +1134,165 @@ Calls/timing: no call budget or timing acceptance measured or changed in this re
 Left out: addendum 10 (4)'s live-proposal red remains the ruled second step; implementation,
 full suites, pnpm check, e2e and designer verification remain for later authorized sessions.
 Risk: the three production data-safety defects remain intentionally unfixed here.
+
+
+## Round 1 (addendum 10)
+
+Implementer: codex; ponytail full. Implements only TL-P4-47 addendum 10 (1)–(3),
+from the adversarial note and the three existing Round 1 reds. The live proposal
+path in (4) remains the authorized second step. No test, dependency, fixture,
+shared harness record or app screen was changed. No network, git write, commit,
+node_modules replacement or symlink was used. The runner commits the two groups
+in `.codex-commits.json` and owns pnpm check and capabilities/folder-table e2e.
+
+### Scope, reuse and safety
+
+- `note-format.ts` is still the one declaration reader and format home.
+  `bowerNoteRole` reads the declared `bower_template` role with the existing
+  ownership/frontmatter parser. Creation already stores a classified row's
+  template there, so an offer Source retains the Source role independently of
+  its classification id. Only legacy notes fall back to their template type;
+  `by: bower` remains required. The helper is the one role decision used by
+  `applyAtVersion`, hence applyChanges, planner, effect recheck and stored
+  satisfaction callers. No note model, public field or stored shape changes.
+- Stored rows with more than four columns pass the existing stored validator;
+  `readTypeTable` projects their first four. Strict new writes still reject
+  more than four. Empty/all-invalid readable tables retain their in-memory
+  fallback seeds for context but their stored bytes are never automatically
+  replaced. Unreadable files retain seed context and prohibit writes that run.
+- `rewriteTypeTable` replaces whole-table JSON serialization inside the existing
+  planner write. JSON.parse/readTypeTable remain the schema validators; a
+  private lexical span scan locates only direct JSON values to splice. Existing
+  rows change only the requested table value. Other text, envelope extensions,
+  changed-row extension keys, skipped rows and duplicate skipped ids retain
+  their exact bytes, including `9007199254740993`. Explicit accepted rows are
+  inserted before the original first generic fallback, or appended otherwise;
+  no seed rows are implicitly installed. A conflicting skipped id is refused
+  rather than overwritten. The existing read-version fence and write effect
+  are unchanged; no parser for schema admission, loader, writer or store added.
+- The existing manifest guard retains strict new-table validation. Stored
+  rewrites may carry skipped rows alongside a valid declaration being changed
+  or added; entirely invalid rewritten tables still fail the guard. New rows
+  still pass strict validation in insertTypeRow and the splicer. The existing
+  id/version/content checks stay intact.
+
+Research: reused the packet's local tolerant-read precedent
+https://www.rfc-editor.org/rfc/rfc9413.html and closed-write schema precedent
+https://json-schema.org/understanding-json-schema/reference/object#additionalproperties,
+and the existing note-edit practice of preserving bytes outside a changed span.
+No external source was fetched or independently reverified under the no-network rule.
+
+removed: applyAtVersion's per-site type-property lookup for template immutability; bowerNoteRole decides declared/legacy role once.
+removed: the four-column stored-read rejection; only strict new writes enforce that cap.
+removed: the planner's parsed-table comparison that automatically rewrote readable empty/all-invalid/projected tables as seeds.
+removed: whole-table JSON serialization on existing-table writes; unchanged rows and extension keys retain original text.
+tests changed: none; all existing reds, assertions, fixtures, bounds and 99/97 pins are unchanged.
+
+### Compatibility draft
+
+Coordinator-owned final compatibility rows remain for the runner's production commit.
+Each changed contract mechanism is listed separately; no src/features file changed.
+
+| Changed home | Contract change | Existing callers/stored data | Evidence |
+| --- | --- | --- | --- |
+| src/data/contracts/note-format.ts: bowerNoteRole | Read declared role independently of classification; legacy template type is the fallback | No public/stored shape change; personal typed Source/MOC remains editable | b5b-r2 1; note-format and note-edit suites; OS-temp role assertions |
+| src/data/contracts/note-edit.ts: applyAtVersion | Template immutability and Timeline support use the single role helper | Applies to planner, adapter recheck and current satisfaction callers; stored version-1 satisfaction unchanged | b5b-r2 1; full app and runner suites |
+| src/data/contracts/note-format.ts: typeRowOk/readTypeTable | Stored columns project first four instead of rejecting the row | Strict new writes retain four-column limit; existing callers get the same reader result shape | b5b-r2 2; type-table contracts and 99/97 controls |
+| src/data/contracts/note-format.ts: rewriteTypeTable | Splice requested table values and explicitly added rows while retaining all other bytes | Skipped stored rows, extensions and unsafe-size unknown integers survive; no implicit reseed | b5b-r2 3; OS-temp splicer assertions and production-main skipped-row assertion |
+| src/data/contracts/run-manifest.ts: planningArtifactsOk | Stored rewrites can retain skipped rows alongside valid declarations | Strict new-table and entirely-invalid-write refusals remain; id/version/content fences unchanged | 1779 affected contract tests; production-main skipped-row assertion |
+| src/data/spine/scripted.ts: tableWrite | Only missing tables or explicit table actions plan a write; use the shared splicer | Readable empty/all-invalid tables keep stored bytes; unreadable tables still prohibit writes | full runner; two contradictory old reseed cases listed below |
+
+### Verification and exact contradictions
+
+Red before editing: `/tmp/b5b-round1-red.log` and `.json`, all three existing
+`b5b-r2` tests fail on their named safety assertions; no import/collection failures.
+The unchanged positive controls pass. First green: `/tmp/b5b-round1-targeted.log`
+and `.json`, all three pass. Final full-suite results and commands follow below.
+
+Supplemental assertions stayed outside the repository, in OS temp:
+
+- `/tmp/b5b-round1-selfcheck.mjs`, bundled shared contracts: row/table splices,
+  nested strings/arrays, escaped rows key, unchanged unknown integers, skipped
+  null/invalid rows, explicit insertion before generic fallbacks, insertion into
+  empty/all-invalid tables without seeds, unreadable refusal, strict first
+  creation and declared/legacy/personal Source-role controls all pass.
+  Output: `/tmp/b5b-round1-selfcheck.log`.
+- `/tmp/b5b-round1-skipped-main.ts`, using the existing corpus loader, in-memory
+  Drive transport and real production main with the scripted provider: an
+  explicit column request preserves null/invalid rows and the exact unknown
+  integer through planning, manifest parsing and application. Exact after-text
+  differs only in the requested table value. Output: `/tmp/b5b-round1-main.log`.
+- An initial self-check fixture lacked v:1; it was corrected in OS temp. Initial
+  main probe omitted the helper's required press argument and could not obtain
+  its fake token; adding press=1 made the real path pass. No source or assertion
+  was relaxed for those fixture mistakes.
+
+All old runner contradictions, complete list after the full suite:
+
+- `runner/test/b5-incorporation.test.ts:170`, parameter
+  `{"v":1,"rows":[]}`: :173 expects eight stored seeds, and :174 expects a
+  table rewrite during unrelated filing. Addendum 10 (2) prohibits this rewrite
+  of a readable stored table. Actual bytes remain exactly the empty table.
+- Same test/file/lines, parameter `{"v":1,"rows":[{"id":"bad"}]}`:
+  :173 expects eight seeds replacing the skipped row and :174 a rewrite.
+  Addendum 10 (2) requires the stored skipped row to survive. Actual bytes
+  remain exactly the original all-invalid table. Both cases are left unchanged.
+
+The null/missing-table first-create control still passes. Neither contradiction
+is an invitation to restore reseeding or edit the old tests. They prevent claiming
+an all-green runner gate; coordinator/lead resolution is needed outside this diff.
+
+The first broad app run exposed the existing manifest's all-invalid-write refusal
+when its guard was made too permissive. The final guard retains that refusal and
+accepts mixed retained skipped rows only beside valid declarations. All 1779
+affected note-edit/note-format/run-manifest tests pass after the correction
+(`/tmp/b5b-round1-contracts-final.log` and `.json`); no test changed.
+
+Tests use the existing OS-temp configs recorded in Round 1 reds and attempt 6.
+They import the repository's configurations, keep its setup and exact timer gate,
+move Vite cache/JSON output to OS temp and disable test cache. Only the optional
+CPU reporter that writes repository artifacts is omitted. Tests and self-checks
+write no generated artifacts into the checkout. No tracked config/setup changes.
+
+```sh
+# From runner/:
+pnpm exec vitest run --config /var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b5b-r2-runner.config.mts --configLoader runner --maxWorkers=2 --outputFile.json=/tmp/b5b-round1-runner-final.json > /tmp/b5b-round1-runner-final.log 2>&1
+# From the worktree root:
+pnpm exec vitest run src --config /tmp/b5b-a6-app.config.mts --configLoader runner --maxWorkers=2 --outputFile.json=/tmp/b5b-round1-src-final.json > /tmp/b5b-round1-src-final.log 2>&1
+pnpm exec tsc -p tsconfig.app.json --noEmit --incremental false > /tmp/b5b-round1-tsc-app-final.log 2>&1
+pnpm exec tsc -p tsconfig.node.json --noEmit --incremental false > /tmp/b5b-round1-tsc-node-final.log 2>&1
+pnpm exec tsc -p runner/tsconfig.json --noEmit > /tmp/b5b-round1-tsc-runner-final.log 2>&1
+pnpm exec eslint src/data/contracts/note-format.ts src/data/contracts/note-edit.ts src/data/contracts/run-manifest.ts src/data/spine/scripted.ts > /tmp/b5b-round1-eslint-final.log 2>&1
+node scripts/check-unused-gate.mjs > /tmp/b5b-round1-unused-final.log 2>&1
+```
+
+### Final results on the production diff
+
+| Check | Result | OS-temp log |
+| --- | --- | --- |
+| Full runner, --maxWorkers=2 | 756 pass / 2 contradictory old reseed cases; 60 files | /tmp/b5b-round1-runner-final.log |
+| All three b5b-r2 reds, in full runner | 3/3 pass | /tmp/b5b-round1-runner-final.log |
+| Full vitest run src, --maxWorkers=2 | 5830 pass / 1 expected sandbox failure; 180 files | /tmp/b5b-round1-src-final.log |
+| App TypeScript, no emit/incremental | pass | /tmp/b5b-round1-tsc-app-final.log |
+| Node TypeScript, no emit/incremental | pass | /tmp/b5b-round1-tsc-node-final.log |
+| Runner TypeScript, no emit | pass | /tmp/b5b-round1-tsc-runner-final.log |
+| ESLint, all four touched production files | pass | /tmp/b5b-round1-eslint-final.log |
+| node scripts/check-unused-gate.mjs | pass; 2 known general / 29 known production findings; no new ones | /tmp/b5b-round1-unused-final.log |
+| git diff --check, read-only | pass | empty command output |
+
+The complete final src failure list has one entry: `src/e2e-port.test.ts:37`,
+"a server from another worktree is never reused": sandbox listen EPERM causes
+its 5000 ms timeout and one unhandled listen error, as expected in the assignment.
+The manifest's invalid-write refusal passes in the final full src run. The old
+compatibility ledger test also passes; no shared ledger was edited here.
+The 99-call first-create and 97-call existing-table golden/timing controls pass
+in the final runner suite. No call/timing pin or tolerance changed.
+
+All production edits preceded the final full app and runner runs. Only this
+notes append and the commit manifest were written afterward. Two commit groups
+are supplied, production and notes alone. Delivery remains blocked on the two
+unchanged older runner assertions, with the safety fixes complete and all three
+new reds green. No further implementation or test edit is implied by that status.
+
+left out: live proposal path (addendum 10 (4)), runner-owned commits/pnpm check/e2e and coordinator compatibility records.
+Risk: unchanged older reseed tests block the runner suite; deferred browser gates remain unverified here.
