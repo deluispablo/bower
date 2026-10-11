@@ -90,7 +90,7 @@ export type EditText = {
   kind: 'edit-text'; before: SeenFile; path: string; beforeContent: VerifiedContent;
   changes: Change[]; text: string; content: Content; beforeText?: string;
 };
-export type MaintenanceNote = { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number }; owner?: 'bower' | 'person'; type?: string | null; moc?: MocSnapshot; members?: string[] };
+export type MaintenanceNote = { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number }; owner?: 'bower' | 'person'; type?: string | null; incomplete?: boolean; moc?: MocSnapshot; members?: string[] };
 export type MaintenanceDeclaration = { at: string; sources: { path: string; file: SeenFile; text: string; content: VerifiedContent }[] };
 export type Maintain = { kind: 'maintain'; inputs: { folderId: string; account: string; cursor: string; changes: string[]; operationIds: string[]; targets?: { path: string; fileId: string; parentId: string; beforeContent?: VerifiedContent; kind?: string; declaration?: MaintenanceDeclaration }[]; snapshot?: Record<string, MaintenanceNote>; listing?: SeenFile[]; log?: string } };
 export type EffectV2 = Effect | EditText | Maintain;
@@ -412,7 +412,7 @@ function maintain(value: unknown): value is Maintain {
     && driveId(value.inputs.folderId) && driveId(value.inputs.account) && driveId(value.inputs.cursor)
     && list(value.inputs.changes, driveId) && unique(value.inputs.changes)
     && list(value.inputs.operationIds, hash) && unique(value.inputs.operationIds)
-    && (value.inputs.snapshot === undefined || (record(value.inputs.snapshot) && Object.entries(value.inputs.snapshot).every(([key, f]) => driveId(key) && closed(f, ['path', 'version', 'summary', 'coverage'], ['moc', 'mocChecked', 'members', 'owner', 'type']) && path(f.path) && rfc3339(f.version) && text(f.summary) && closed(f.coverage, ['kind', 'bytes']) && f.coverage.kind === 'prefix' && integer(f.coverage.bytes) && (f.mocChecked === undefined || f.mocChecked === true) && (f.owner === undefined || f.owner === 'bower' || f.owner === 'person') && (f.type === undefined || f.type === null || text(f.type)) && (f.moc === undefined || mocInput(f.moc)) && (f.members === undefined || (f.moc !== undefined && list(f.members, driveId) && unique(f.members))))))
+    && (value.inputs.snapshot === undefined || (record(value.inputs.snapshot) && Object.entries(value.inputs.snapshot).every(([key, f]) => driveId(key) && closed(f, ['path', 'version', 'summary', 'coverage'], ['moc', 'mocChecked', 'members', 'owner', 'type', 'incomplete']) && path(f.path) && rfc3339(f.version) && text(f.summary) && closed(f.coverage, ['kind', 'bytes']) && f.coverage.kind === 'prefix' && integer(f.coverage.bytes) && (f.incomplete === undefined || f.incomplete === true) && (f.mocChecked === undefined || f.mocChecked === true) && (f.owner === undefined || f.owner === 'bower' || f.owner === 'person') && (f.type === undefined || f.type === null || text(f.type)) && (f.moc === undefined || mocInput(f.moc)) && (f.members === undefined || (f.moc !== undefined && list(f.members, driveId) && unique(f.members))))))
     && (value.inputs.listing === undefined || list(value.inputs.listing, seenFile))
     && (value.inputs.log === undefined || text(value.inputs.log))
     && (value.inputs.targets === undefined || list(value.inputs.targets, (t) => closed(t, ['path', 'fileId', 'parentId'], ['beforeContent', 'kind', 'declaration'])

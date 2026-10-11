@@ -23,11 +23,27 @@ it("a case's between step runs between two runs", async () => {
   const person = `${c.folder[path]}\nAlex wants an amber kitchen.\n`;
   const run = await runWithClaude({ ...c, between: [{ kind: 'edit', path, text: person }] }, async (call) => {
     calls.push(call.input);
-    return { code: 0, stderr: '', cut: null, stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: JSON.stringify({ kind: 'tidy-intent', v: 1, things: [] }) }) };
+    const context = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as {
+      selection?: unknown; sources: Array<{ itemId: string; candidates: Array<{ id: string; path: string }> }>;
+      foldersById: Record<string, string>;
+    };
+    const destination = Object.entries(context.foldersById).find(([, path]) => path === 'Projects/Flat hunt')?.[0];
+    if (context.selection === undefined && calls.length > 1) {
+      expect(context.sources.some((source) => source.candidates.some((candidate) => candidate.path === path)),
+        'the between-step note is a listed candidate').toBe(true);
+    }
+    const intent = context.selection === undefined ? { items: calls.length === 1 ? [] : context.sources.map((source) => {
+      const note = source.candidates.find((candidate) => candidate.path === path);
+      expect(destination).toBeDefined();
+      return { itemId: source.itemId, kind: 'unknown', destination, wants: note ? [note.id] : [] };
+    }), asks: [] } : { kind: 'tidy-intent', v: 1, things: [] };
+    return { code: 0, stderr: '', cut: null, stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: JSON.stringify(intent) }) };
   });
-  expect(calls).toHaveLength(2);
+  expect(calls).toHaveLength(4);
   expect(calls[0]).not.toContain('Alex wants an amber kitchen.');
-  expect(calls[1]).toContain('Alex wants an amber kitchen.');
+  expect(calls[1]).not.toContain('Alex wants an amber kitchen.');
+  expect(calls[2]).not.toContain('Alex wants an amber kitchen.'); // Selection carries metadata only.
+  expect(calls[3]).toContain('Alex wants an amber kitchen.'); // Execution reads the edited note.
   expect(run.after[path]).toBe(person);
   expect(run.runs?.[0]?.code).toBe(0);
   expect(run.code).toBe(0);
@@ -226,7 +242,7 @@ describe.each(['final', 'per-run'] as const)('empty expectations in the %s score
   });
 });
 
-it('reports a settled replay without writing another request', async () => {
+it('reports an unselected replay without consuming or writing another request', async () => {
   const { replySequence } = await import('./corpus-run');
   const text = 'Update Alex’s garden notes.';
   const seed = await smallCase();
@@ -238,11 +254,12 @@ it('reports a settled replay without writing another request', async () => {
   expect(run.code).toBe(0);
   const path = '.bower/changes/change-2.json';
   const archived = '.bower/changes/archive/change-2.json';
-  // Addendum 6 settles the named target without a model line in the first run.
-  expect(first?.after[path]).toBeUndefined();
-  expect(first?.after[archived]).toBeDefined();
-  expect(run.after[path]).toBeUndefined();
-  expect(run.after[archived]).toBe(first?.after[archived]);
+  // Addendum 24 leaves the omitted request unconsumed across its same-run replay.
+  expect(first?.after[path]).toBeDefined();
+  expect(JSON.parse(first?.after[path] ?? '{}')).toEqual(expect.objectContaining({ id: 'change-2', text }));
+  expect(first?.after[archived]).toBeUndefined();
+  expect(run.after[path]).toBe(first?.after[path]);
+  expect(run.after[archived]).toBeUndefined();
   expect(first?.after[PERSONAL]).toBe(PERSON_TEXT);
   expect(run.after[PERSONAL]).toBe(PERSON_TEXT);
   const requests = Object.entries(run.after).filter(([p, text]) => p.startsWith('.bower/changes/')

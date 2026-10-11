@@ -218,17 +218,37 @@ function legacyNote(bytes: Uint8Array, raw: string): OwnershipResult {
   return { status: 'legacy', personal, layout, tasks: tasks(bytes, personal, false) };
 }
 
-export function parseOwnership(bytes: Uint8Array): OwnershipResult {
+/** Advisory spans contain only complete regions; they never grant write authority. */
+export interface PrefixOwnership { readonly status: 'prefix'; readonly incomplete: boolean; readonly spans: readonly ByteSpan[] }
+export function parseOwnership(bytes: Uint8Array): OwnershipResult;
+export function parseOwnership(bytes: Uint8Array, mode: 'prefix'): PrefixOwnership;
+export function parseOwnership(bytes: Uint8Array, mode?: 'prefix'): OwnershipResult | PrefixOwnership {
+  const complete: ByteSpan[] = [];
+  const finish = (result: OwnershipResult): OwnershipResult | PrefixOwnership => {
+    if (mode !== 'prefix') return result;
+    if (result.status === 'invalid') return { status: 'prefix', incomplete: true, spans: complete };
+    return { status: 'prefix', incomplete: false, spans: result.status === 'v2'
+      ? [...(result.layout.front ? [result.layout.front] : []), ...Object.values(result.payloads)]
+      : [{ start: 0, end: bytes.length }] };
+  };
+  const refuse = (): OwnershipResult | PrefixOwnership => finish(damaged());
   let raw: string;
   try { raw = decoder.decode(bytes); }
   catch {
     // expected: fatal UTF-8 validation exposes a typed refusal, without I/O or replacement decoding.
-    return { status: 'invalid', reason: 'invalid-encoding' };
+    return finish({ status: 'invalid', reason: 'invalid-encoding' });
   }
   const prefix = raw.startsWith('\ufeff') ? 3 : 0;
   const sourceLines = lines(bytes, { start: prefix, end: bytes.length });
   const first = sourceLines[0];
+  // An unterminated front matter keeps the old interpretation. A note with no front matter at all may still carry About me regions.
+  if (first?.text === '---' && first.after === bytes.length) {
+    if (mode === 'prefix') return refuse();
+    return finish(legacyNote(bytes, raw));
+  }
   const close = first?.text === '---' ? sourceLines.findIndex((line, i) => i > 0 && line.text.startsWith('---')) : -1;
+  if (first?.text === '---' && close < 0) return mode === 'prefix' ? refuse() : legacyNote(bytes, raw);
+  if (mode === 'prefix' && close >= 0) complete.push({ start: first?.after ?? 0, end: sourceLines[close]?.start ?? 0 });
   const declarations = close < 0 ? [] : sourceLines.slice(1, close).filter((line) => /^\s*bower_format\s*:/.test(line.text));
   // The additive composite grammar shares the same marker state machine below. A personal prefix stays opaque.
   let prefixNote: Exclude<OwnershipResult, { status: 'invalid' | 'v2' }> | undefined;
@@ -246,24 +266,24 @@ export function parseOwnership(bytes: Uint8Array): OwnershipResult {
         line.text === `<!-- bower:ownership/2 begin ${region} -->`
         || line.text === `<!-- bower:ownership/2 end ${region} -->`);
     });
-    if (marker < 0) return legacyNote(bytes, raw);
+    if (marker < 0) return finish(legacyNote(bytes, raw));
     const heading = sourceLines[marker - 1];
-    if (!heading || heading.text !== '## What Bower has learned') return damaged();
+    if (!heading || heading.text !== '## What Bower has learned') return refuse();
     const prefixBytes = bytes.subarray(0, heading.start);
     const parsed = legacyNote(prefixBytes, decoder.decode(prefixBytes));
-    if (parsed.status !== 'plain' && parsed.status !== 'legacy') return damaged();
+    if (parsed.status !== 'plain' && parsed.status !== 'legacy') return refuse();
     prefixNote = parsed;
     body = sourceLines.slice(marker);
     owners = [...ABOUT_REGIONS];
   } else {
-    if (declarations.length !== 1) return damaged();
+    if (declarations.length !== 1) return refuse();
     const declaration = declarations[0]?.text ?? '';
     if (declaration !== 'bower_format: ownership/2') {
       return declaration.slice(declaration.indexOf(':') + 1).trim() === 'ownership/2'
-        ? damaged() : { status: 'invalid', reason: 'unsupported-version' };
+        ? refuse() : finish({ status: 'invalid', reason: 'unsupported-version' });
     }
-    if (sourceLines[close]?.text !== '---') return damaged();
-    for (let i = 0; i < bytes.length; i++) if (bytes[i] === 13 && bytes[i + 1] !== 10) return damaged();
+    if (sourceLines[close]?.text !== '---') return refuse();
+    for (let i = 0; i < bytes.length; i++) if (bytes[i] === 13 && bytes[i + 1] !== 10) return refuse();
     let fence: Fence | null = null;
     const firstRegion = body.find((line) => {
       const previous = fence;
@@ -285,8 +305,9 @@ export function parseOwnership(bytes: Uint8Array): OwnershipResult {
     if (active) {
       if (line.text === `<!-- bower:ownership/2 end ${active} -->`) {
         spans[active] = { start, end: line.start };
+        complete.push({ start, end: line.start });
         active = null; next++;
-      } else if (line.text.startsWith('<!-- bower:ownership')) return damaged();
+      } else if (line.text.startsWith('<!-- bower:ownership')) return refuse();
     } else {
       // Extend only at a real boundary, never for marker-shaped text inside a fenced payload.
       if (!prefixNote && next === owners.length && next >= OWNERS.length) {
@@ -298,22 +319,22 @@ export function parseOwnership(bytes: Uint8Array): OwnershipResult {
       const owner = owners[next];
       if (owner && line.text === `<!-- bower:ownership/2 begin ${owner} -->`) {
         active = owner; start = line.after;
-      } else if (line.text.trimStart().startsWith('<!-- bower:ownership') || prefixNote && line.text.trim() !== '') return damaged();
+      } else if (line.text.trimStart().startsWith('<!-- bower:ownership') || prefixNote && line.text.trim() !== '') return refuse();
       // Outside bytes are opaque and grant no payload or task authority. Never interpret their Markdown.
     }
   }
   if (prefixNote) {
-    if (active || fence || next !== owners.length) return damaged();
-    return { ...prefixNote, payloads: spans };
+    if (active || fence || next !== owners.length) return refuse();
+    return finish({ ...prefixNote, payloads: spans });
   }
   const { current, personal, timeline, 'bower-note': bowerNote } = spans;
-  if (active || fence || next !== owners.length || !current || !personal || !timeline || !bowerNote) return damaged();
+  if (active || fence || next !== owners.length || !current || !personal || !timeline || !bowerNote) return refuse();
   const closing = sourceLines[close];
   const layout: Layout = {
     front: { start: first?.after ?? 0, end: closing?.start ?? 0 }, frontEnd: closing?.after ?? 0,
     current, timeline, bowerNote,
   };
-  return { status: 'v2', personal, layout, payloads: { ...spans, current, personal, timeline, 'bower-note': bowerNote }, tasks: tasks(bytes, personal, true) };
+  return finish({ status: 'v2', personal, layout, payloads: { ...spans, current, personal, timeline, 'bower-note': bowerNote }, tasks: tasks(bytes, personal, true) });
 }
 
 /** Reparse the supplied source each time; derived/previous spans are no authority. */

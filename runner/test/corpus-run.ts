@@ -17,7 +17,8 @@ import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
 import { SYSTEM } from '../../src/data/vault/layout';
 import { main } from '../src/main';
-import type { ClaudeSpawn } from '../src/claude';
+import { phaseAwareClaude, type PlanningFixture } from './b1-planning-support';
+import type { ClaudeCall, ClaudeSpawn } from '../src/claude';
 import { score, type CorpusBetween, type CorpusPress, type Expected, type LoadedCase, type QuestionSubjectExpectation, type Score } from '../src/corpus';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 
@@ -262,7 +263,8 @@ export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, 
   const file = join(dir, 'event.json');
   await writeFile(file, JSON.stringify({ action: 'bower-tidy', client_payload: { run_id: runId, attempt: 1, ticket: TICKET, scope, allow_web: c.allowWeb } }));
   const env = claude ? { BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' } : {};
-  const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env, ...more }, { fetch: around ? around(wire.fetch) : wire.fetch, ...(claude ? { claude } : {}), ...(pacing ? { pacing } : {}) });
+  const model = claude ? phaseAwareClaude(claude, () => ({ drive, root, admission: admitted.manifest })) : undefined;
+  const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env, ...more }, { fetch: around ? around(wire.fetch) : wire.fetch, ...(model ? { claude: (call: ClaudeCall) => model(Object.assign(call, { fixture: { drive, root, admission: admitted.manifest } })) } : {}), ...(pacing ? { pacing } : {}) });
   const { after, props: kept, pathsById } = await snapshot(drive, root);
   const lastRun: unknown = after[SYSTEM.lastRun] ? JSON.parse(after[SYSTEM.lastRun] ?? 'null') : null;
   return { after, props: kept, pathsById, lastRun, code, drive, root, requests, requestAction, wire,
@@ -279,10 +281,12 @@ export async function redispatchCase(c: LoadedCase, previous: CaseRun, attempt: 
   const dir = await mkdtemp(join(tmpdir(), 'bower-corpus-'));
   const file = join(dir, 'event.json');
   await writeFile(file, JSON.stringify({ action: 'bower-tidy', client_payload: { run_id: dispatch.runId, attempt, ticket: TICKET, scope: dispatch.scope, allow_web: c.allowWeb } }));
-  const env = options.claude ? { BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' } : {};
+  const claude = options.claude;
+  const env = claude ? { BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' } : {};
+  const model = claude ? phaseAwareClaude(claude, () => ({ drive: previous.drive, root: previous.root, admission: dispatch.admission })) : undefined;
   const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env }, {
     fetch: options.around ? options.around(wire.fetch) : wire.fetch,
-    ...(options.claude ? { claude: options.claude } : {}), ...(options.pacing ? { pacing: options.pacing } : {}),
+    ...(model ? { claude: (call: ClaudeCall) => model(Object.assign(call, { fixture: { drive: previous.drive, root: previous.root, admission: dispatch.admission } })) } : {}), ...(options.pacing ? { pacing: options.pacing } : {}),
   });
   const observed = await snapshot(previous.drive, previous.root);
   return { ...observed, code, lastRun: JSON.parse(observed.after[SYSTEM.lastRun] ?? 'null') as unknown,
@@ -311,11 +315,7 @@ async function snapshot(drive: FakeDrive, root: string): Promise<{ after: Record
 
 /** Bind only exact admitted names to ids; the intent still passes the existing Claude provider's validation. */
 export function replySequence(replies: unknown[]): ClaudeSpawn {
-  let turn = -1;
-  let cwd: string | undefined;
-  return async (call) => {
-    // A provider retry belongs to the same press and must receive the same case reply.
-    if (cwd !== call.cwd) { cwd = call.cwd; turn++; }
+  const execution = async (call: ClaudeCall, turn: number) => {
     const ctx = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { piles: Array<{ things: Array<{ name: string; fileId: string }> }> };
     const ids = new Map(ctx.piles.flatMap((p) => p.things).map((t) => [t.name, t.fileId]));
     const bind = (value: unknown): unknown => {
@@ -330,6 +330,20 @@ export function replySequence(replies: unknown[]): ClaudeSpawn {
     };
     const intent = bind(replies[Math.min(turn, replies.length - 1)]);
     return { code: 0, stderr: '', cut: null, stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: JSON.stringify(intent), usage: { input_tokens: 10, output_tokens: 10 } }) };
+  };
+  const phased = phaseAwareClaude(execution, (call) => {
+    const fixture = (call as ClaudeCall & { fixture?: PlanningFixture }).fixture;
+    if (!fixture) throw new Error('A scripted reply needs its seeded fixture.');
+    return fixture;
+  });
+  const started = new Set<string>();
+  return (call) => {
+    const context = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { admission?: string; selection?: unknown };
+    const key = `${call.cwd}/${context.admission ?? ''}`;
+    // A redispatch test can supply selection itself; an execution-only sequence then begins at execution.
+    if (context.selection !== undefined && !started.has(key)) return execution(call, 0);
+    started.add(key);
+    return phased(call);
   };
 }
 

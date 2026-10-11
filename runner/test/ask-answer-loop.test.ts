@@ -215,7 +215,7 @@ async function shownWorld(): Promise<RealWorld> {
   const c = await corpusCase('c05-hub-lines');
   const hub = (c.folder[HUB] ?? '').replace('by: bower\n', `by: bower\nbower_state: ${stateMark(BOWER_LAST)}\n`).replace('- One application open.', PERSON.map((l) => `- ${l}`).join('\n'));
   proposed = [];
-  return await realWorld({ seed: (drive) => seedCase(drive, { ...c, scope: 'all', folder: { ...c.folder, [HUB]: hub }, inbox: [{ line: 'The offer came in.', files: ['Offer_letter_final(2).pdf'] }], journal: [], questions: [] }), claude: proposeUpdate });
+  return await realWorld({ seed: (drive) => seedCase(drive, { ...c, scope: 'all', folder: { ...c.folder, [HUB]: hub }, inbox: [{ line: 'The Job hunt offer came in.', files: ['Offer_letter_final(2).pdf'] }], journal: [], questions: [] }), claude: proposeUpdate });
 }
 type StoredQuestion = { id: string; text: string; state?: string; shown?: { lines: string[]; md5: string; stamp?: string } };
 const questionsNow = (text: string | null): StoredQuestion[] => (JSON.parse(text ?? '{"questions":[]}') as { questions: StoredQuestion[] }).questions;
@@ -320,7 +320,8 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     await answerQuestion(vault, runsOf(w), KEEP_Q, true, { allowWeb: false });
     expect(await w.runJob(0)).toBe(0);
     // The model was shown the person's yes...
-    expect(shown.flatMap((s) => s.answers ?? [])).toEqual([expect.objectContaining({ answer: 'Yes, keep one' })]);
+    expect(shown).toHaveLength(2);
+    for (const call of shown) expect(call.answers).toEqual([expect.objectContaining({ answer: 'Yes, keep one' })]);
     // ...the plan took that answer's record and archived it with the merge it asked for.
     const path = (await w.drive.listAll(w.rootId)).map((f) => w.drive.pathOf(f.id, w.rootId)).find((p) => /^\.bower\/runs\/[^/]+\/manifest-[0-9a-f]{64}\.json$/.test(p));
     const m = JSON.parse((path ? await textAt(w, path) : null) ?? '{}') as ManifestV2;
@@ -885,7 +886,7 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     await vault.settled();
     expect(await press(w)).toBe(true);
     expect(await w.runJob(1)).toBe(0);
-    expect(proposed.length).toBe(calls + 1);
+    expect(proposed.length).toBe(calls + 2); // Selection and execution both count.
     expect(parseNote(HUB, await textAt(w, HUB) ?? '').currentState).toEqual(UPDATE);
     expect(await answersWaiting(w, `q-state-${id}`)).toEqual([]);
   });

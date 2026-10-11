@@ -225,3 +225,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `e42e5e7e` | b4a-contract | none: tests only (run-manifest variants target their declared file; red 9 builds bytes with the production encoder). |
 | `0aaaa69d` | b4a-contract | none: tests only (B4a fix round 2 reds). |
 | `5b74e710` | b4a-contract | A Forget tombstone also matches the normalised fact text; initialization passes the same evidence check as any write; Forget and Undo rebuilds skip the budget and frontier gate and may leave a bare heading; Bower regions no longer depend on front matter; tsc app lib fixes. Older notes and ledgers parse as before. |
+| `685451f9` | b1d-selection | Prefix reads are advisory for every note type: the lenient prefix parse marks a cut region incomplete and never throws; strict ownership only on a full read of a note the run edits or a candidate MOC (TL-P4-41 addendum 23). Stored bytes unchanged. |

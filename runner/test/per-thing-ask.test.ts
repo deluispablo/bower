@@ -4,6 +4,7 @@
  * is filed. Every validation refusal of the model's reply is asked again once with its reason, then ends as C12 does.
  * No live call: `claude` is answered by scripted proposals in the intent shape over the c04-offer-and-flat case.
  */
+import { phaseAwareClaude } from './b1-planning-support';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as noteEdit from '../../src/data/contracts/note-edit';
@@ -43,15 +44,16 @@ function filed(id: Id): Intent {
   };
 }
 
-/** `claude` answering each call with the next of `replies` (the last one again after that), keeping the calls. */
+/** Execution observations keep validation retry counts; selection uses the final execution ids.
+ * `claude` answering each call with the next of `replies` (the last one again after that), keeping the calls. */
 function answering(replies: Array<(ctx: Context, id: Id) => string>, calls: ClaudeCall[] = []): ClaudeSpawn {
-  return async (call) => {
-    calls.push(call);
+  return phaseAwareClaude(async (call, _step, attempt, phase) => {
+    if (phase === 'execution') calls.push(call);
     const ctx = contextOf(call.input);
     const ids = new Map(ctx.piles.flatMap((p) => p.things).map((t) => [t.name, t.fileId]));
-    const reply = replies[Math.min(calls.length, replies.length) - 1] ?? (() => '');
+    const reply = replies[phase === 'selection' ? replies.length - 1 : Math.min(attempt, replies.length - 1)] ?? (() => '');
     return { code: 0, stderr: '', cut: null, stdout: reply(ctx, (name) => ids.get(name) ?? `no ${name}`) };
-  };
+  });
 }
 const intentReply = (make: (ctx: Context, id: Id) => unknown) => (ctx: Context, id: Id): string => envelope(JSON.stringify(make(ctx, id)));
 

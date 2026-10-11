@@ -326,6 +326,8 @@ it('B3b hot: hidden-only feed drains its cursor and leaves hot untouched', async
 
 it('B3b hot: a Home answer removes only its settled Open thread', async () => {
   const { c } = await setup('b23-hot-question-answer');
+  const visits = 'Resources/Housing/Home visits.md';
+  c.folder[visits] = (c.folder[visits] ?? '').replace('appointments', 'an appointment');
   c.questions.push({ id: 'q-folder', text: 'Keep the garden notes together?', yes: 'Yes', no: 'No', askedAt: AT - 1 });
   const run = await runScripted(c);
   const first = run.runs?.[0];

@@ -1,7 +1,6 @@
 /** Versioned declaration reads only; execution keeps its existing manifest writer. */
 import { typeRowOk, typeTableOk, TECHNICAL_PROPERTIES } from '../../src/data/contracts/note-format';
 import { BowerError, type TypeRow, type TypeTable } from '../../src/data/contracts/types';
-export { typeTableOk, propertyValuesOk } from '../../src/data/contracts/note-format';
 
 /** TL-P4-38's eight ordered seed classifications; later planning supplies the grounded destinations. */
 function seedTable(): TypeTable {

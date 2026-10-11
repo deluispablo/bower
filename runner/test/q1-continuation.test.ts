@@ -4,6 +4,7 @@
  * Tagged answers: https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions
  * Request identity: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
  */
+import { phaseAwareClaude } from './b1-planning-support';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
@@ -141,7 +142,7 @@ function stored(w: World, subject = w.ids.unclear, options = false, askedAt = AT
     { id: 'job-choice', label: 'Keep here', action: { kind: 'file-to', folderId: w.ids.job } },
   ] } : {}) };
 }
-async function world(model: (w: World, call: ClaudeCall) => unknown = () => emptyIntent): Promise<World> {
+async function world(model: (w: World, call: ClaudeCall, step: number, attempt: number, phase: 'selection' | 'execution') => unknown = () => emptyIntent): Promise<World> {
   let ids: Ids | undefined;
   const holder: { world?: World } = {};
   const calls: ClaudeCall[] = [];
@@ -166,7 +167,13 @@ async function world(model: (w: World, call: ClaudeCall) => unknown = () => empt
     ids = { root, inbox, sys, changes, pile, anchor, unclear, clear, home, job };
     return root;
   };
-  const claude: ClaudeSpawn = async (call) => { calls.push(call); expect(holder.world).toBeDefined(); return reply(model(holder.world as World, call)); };
+  const claude = phaseAwareClaude(async (call, step, attempt, phase) => {
+    calls.push(call); expect(holder.world).toBeDefined();
+    return reply(model(holder.world as World, call, step, attempt, phase));
+  }, () => {
+    if (!holder.world) throw new Error('The question fixture must be seeded before its model calls.');
+    return { drive: holder.world.drive, root: holder.world.rootId };
+  });
   const real = await realWorld({ seed, claude });
   expect(ids, 'seed created made-up folder ids').toBeDefined();
   const w = Object.assign(real, { ids: ids as Ids, calls });
@@ -301,7 +308,7 @@ describe('Q1a stored answers through production entry points', () => {
     expect.soft(rec?.askedAt, 'the saved answer names this asking').toBe(q.askedAt);
     expect(await run(w, 0)).toBe(0);
     expect.soft((await w.drive.get(w.ids.unclear)).parents).toEqual([w.ids.job]);
-    expect(w.calls.length, 'no extra answer-wrapping call').toBeLessThanOrEqual(1);
+    expect([0, 2], 'no extra answer-wrapping call beyond selection and execution').toContain(w.calls.length);
     expect(await w.drive.readText(w.ids.unclear)).toBe('# A room\n\nAn unclear made-up room paper.\n');
   });
 
@@ -363,7 +370,7 @@ describe('Q1a stored answers through production entry points', () => {
       const before = await w.drive.evidence(w.ids.unclear);
       await w.drive.update(w.ids.clear, { addParent: w.ids.home, removeParent: w.ids.pile });
       await press(w);
-      expect(await run(w, 0)).toBe(0);
+      expect(await run(w, 0)).toBe(1);
       expect((await statusOf(w)).run?.phase, `${kind} is refused by validated main`).toBe('failed');
       expect(await questions(w)).toEqual([]);
       expect(await w.drive.evidence(w.ids.unclear)).toEqual(before);
@@ -397,7 +404,8 @@ describe('Q1a stored answers through production entry points', () => {
     await addAnswer(w, second, { text: PERSON }, AT);
     await press(w, w.ids.unclear);
     expect(await run(w, 0)).toBe(0);
-    expect.soft(w.calls.flatMap((c) => shownOf(c).answers ?? []).map((a) => a.answer)).toEqual([PERSON]);
+    expect(w.calls).toHaveLength(2);
+    for (const call of w.calls.slice(-2)) expect.soft((shownOf(call).answers ?? []).map((a) => a.answer)).toEqual([PERSON]);
   });
 
   it('Q1a q1-text-person-provenance: addendum 1 trims accepts 1000 and newlines refuses overflow and controls', async () => {
@@ -448,7 +456,8 @@ describe('Q1a stored answers through production entry points', () => {
     expect(await run(w, 0)).toBe(0);
     const inputs = w.calls.map(shownOf);
     expect(inputs.every((s) => !(s.rules ?? '').includes(PERSON))).toBe(true);
-    expect.soft(inputs.flatMap((s) => s.answers ?? [])).toEqual([
+    expect(inputs).toHaveLength(2);
+    for (const input of inputs) expect.soft(input.answers).toEqual([
       expect.objectContaining({ answer: PERSON, fileId: w.ids.unclear }),
     ]);
     expect(await w.drive.readText((await fileAt(w, 'Projects/Job hunt/Job hunt.md'))?.id ?? '')).toBe(jobBefore);
@@ -530,7 +539,10 @@ describe('Q1a stored answers through production entry points', () => {
     }
     expect(await runs.start('all', { requestId: 'batch-quota-over' }).then(() => 'accepted', () => 'refused')).toBe('refused');
     expect(w.dispatched).toHaveLength(100);
-    expect.soft(w.calls.flatMap((c) => shownOf(c).answers ?? []).map((a) => a.answer).sort()).toEqual([PERSON, 'This is also for the room.'].sort());
+    expect(w.calls).toHaveLength(4);
+    for (const call of w.calls.slice(0, 2)) expect(shownOf(call).answers ?? []).toEqual([]);
+    for (const call of w.calls.slice(2)) expect.soft((shownOf(call).answers ?? []).map((a) => a.answer).sort())
+      .toEqual([PERSON, 'This is also for the room.'].sort());
   });
 
   it.each(['thing', 'pile'] as const)('Q1a q1-two-rounds-no-third: %s exhausts after two saved askings and words reset', async (kind) => {
@@ -614,11 +626,11 @@ describe('Q1a stored answers through production entry points', () => {
     await starts.start('all', { subject: q.subject, answer: true, requestId: String(bodies[0]?.requestId) });
     expect(w.drive.calls).toBe(beforeReplay);
     expect(await run(w, 1)).toBe(0);
-    expect(w.calls).toHaveLength(2); // One normal planning call in each run, no answer-wrapping call.
+    expect(w.calls).toHaveLength(4); // Selection and execution in each run, no answer-wrapping call.
     const timings = vi.mocked(console.log).mock.calls.slice(loggedBefore).flatMap((args) => args.map(String)).filter((s) => s.startsWith('timing:'));
     expect(timings).toHaveLength(2);
-    for (const timing of timings) expect(timing).toMatch(/turns=1 in=10 out=10.* drive=\S+/);
-    expect.soft(w.calls.flatMap((c) => shownOf(c).answers ?? []).map((a) => a.answer)).toEqual([PERSON]);
+    for (const timing of timings) expect(timing).toMatch(/turns=2 in=20 out=20.* drive=\S+/);
+    for (const call of w.calls.slice(-2)) expect.soft((shownOf(call).answers ?? []).map((a) => a.answer)).toEqual([PERSON]);
     expect.soft(answerValue((await allAnswerLines(w))[0])).toEqual({ text: PERSON });
   });
 
@@ -805,7 +817,8 @@ describe('Q1a stored answers through production entry points', () => {
 
   it('Q1a q1-two-rounds-no-third: retries failed saves and dispatch replay count only durable askings', async () => {
     await control();
-    const w = await world((w) => w.calls.length === 1 ? { ...emptyIntent, unexpected: true }
+    const w = await world((w, _call, step, attempt, phase) => phase === 'execution' && step === 0 && attempt === 0
+      ? { ...emptyIntent, unexpected: true }
       : { ...emptyIntent, asks: [{ fileId: w.ids.unclear, ...yesNo }] });
     await w.drive.update(w.ids.clear, { addParent: w.ids.home, removeParent: w.ids.pile });
     const qFile = await fileAt(w, SYSTEM.questions);
@@ -829,7 +842,7 @@ describe('Q1a stored answers through production entry points', () => {
     expect(w.calls).toHaveLength(calls);
     const firstTiming = vi.mocked(console.log).mock.calls.flatMap((args) => args.map(String))
       .filter((s) => s.startsWith('timing:')).at(-2) ?? '';
-    expect.soft(firstTiming, 'both validation calls count their model usage').toMatch(/in=20 out=20/);
+    expect.soft(firstTiming, 'selection and both execution validation calls count their model usage').toMatch(/in=30 out=30/);
     tick();
     await press(w);
     expect(await run(w, 1)).toBe(0);
@@ -1027,8 +1040,8 @@ describe('Q1a fix round 1 through production entry points', () => {
     expect(await run(unchanged, 3)).toBe(0);
     expect(await questions(unchanged), 'positive control: a repeated member subject stays exhausted').toEqual([]);
     for (const firstKind of ['pile', 'thing'] as const) {
-      const w = await world((w) => {
-        const pile = w.calls.length === 1 ? firstKind === 'pile' : firstKind !== 'pile';
+      const w = await world((w, _call, step) => {
+        const pile = step === 0 ? firstKind === 'pile' : firstKind !== 'pile';
         return { ...emptyIntent, asks: [{ ...(pile ? { pileId: 'pile-mixed' } : { fileId: w.ids.unclear }), ...yesNo }] };
       });
       const second = await secondAsking(w);
@@ -1109,16 +1122,16 @@ describe('Q1a fix round 1 through production entry points', () => {
       const before = await w.drive.evidence(w.ids.unclear);
       const bytes = await w.drive.readText(w.ids.unclear);
       expect(await run(w, 0)).toBe(0);
-      expect(w.calls.length).toBeLessThanOrEqual(1);
+      expect([0, 2]).toContain(w.calls.length);
       if (destination === 'renamed' || destination === 'moved') {
-        expect.soft(w.calls, 'TL-P4-44 addendum 4: changed folder name or place still permits continuation').toHaveLength(1);
+        expect.soft(w.calls, 'TL-P4-44 addendum 4: changed folder name or place still permits continuation').toHaveLength(2);
         expect.soft((await w.drive.get(w.ids.unclear)).parents,
           `TL-P4-44 addendum 4: ${destination} folder receives the item by its stored id`).toEqual([w.ids.home]);
         expect.soft(await w.drive.readText(w.ids.unclear),
           'TL-P4-44 addendum 4: filing by the same folder id preserves the item bytes').toBe(bytes);
       } else if (destination === 'ordinary' || destination === 'valid') {
         // Positive controls: ordinary model filing works, and a valid stored id overrides it.
-        expect(w.calls).toHaveLength(1);
+        expect(w.calls).toHaveLength(2);
         expect((await w.drive.get(w.ids.unclear)).parents).toEqual([destination === 'valid' ? w.ids.home : w.ids.job]);
         expect(await w.drive.readText(w.ids.unclear)).toBe(bytes);
       } else {
@@ -1250,7 +1263,7 @@ describe('Q1a fix round 1 through production entry points', () => {
     expect(admitted?.journal.map((l) => l.name)).toContain(`${saved?.id}.json`);
     const before = await w.drive.evidence(other.id);
     expect(await run(w, 100)).toBe(0);
-    expect(w.calls).toHaveLength(1);
+    expect(w.calls).toHaveLength(2);
     const shown = shownOf(w.calls[0] as ClaudeCall);
     expect(shown.answers).toContainEqual(expect.objectContaining({ answer: PERSON, pileId: a.subject }));
     expect.soft(shown.answers, 'other-pile text is not an anonymous answer in A\'s run')
@@ -1310,8 +1323,8 @@ describe('Q1a fix round 3 through production entry points', () => {
 
   it('Q1a fix 3.2: mixed member histories cap pile askings and count only the waiting member', async () => {
     // Positive control: a pile-level asking supplies round two to its sole waiting member.
-    const single = await world((w) => ({ ...emptyIntent, asks: [{
-      ...(w.calls.length === 1 ? { fileId: w.ids.unclear } : { pileId: 'pile-mixed' }), ...yesNo,
+    const single = await world((w, _call, step) => ({ ...emptyIntent, asks: [{
+      ...(step === 0 ? { fileId: w.ids.unclear } : { pileId: 'pile-mixed' }), ...yesNo,
     }] }));
     const second = await secondAsking(single);
     expect(second.subject).toBe('pile-mixed');
@@ -1512,7 +1525,7 @@ async function runWithSpawn(w: World, index: number, spawn: ClaudeSpawn): Promis
     return url.origin === ORIGIN ? w.api.fetch(input, init) : w.driveFetch(input, init);
   };
   return main({ BOWER_API_URL: ORIGIN, GITHUB_EVENT_PATH: file, BOWER_PROVIDER: 'claude',
-    CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' }, { fetch: fetcher, claude: spawn, pacing: { baseMs: 0, sleep: async () => {} } });
+    CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' }, { fetch: fetcher, claude: phaseAwareClaude(spawn, () => ({ drive: w.drive, root: w.rootId })), pacing: { baseMs: 0, sleep: async () => {} } });
 }
 async function allAnswerLines(w: World): Promise<RecordLine[]> {
   const files = (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && /^\.bower\/changes\//.test(w.drive.pathOf(f.id, w.rootId)));

@@ -221,15 +221,23 @@ function frontOf(block: string): Map<string, string> {
   return front;
 }
 
-export type IndexedFront = { summary: string; owner: 'bower' | 'person'; type: string | null };
+export type IndexedFront = { summary: string; owner: 'bower' | 'person'; type: string | null; links?: string[]; incomplete?: boolean };
 
 /** Retrieval only: the closed front matter in the ordinary 4096-byte prefix, not edit authority. */
-export function indexedFront(raw: string): IndexedFront {
-  const prefix = new TextDecoder().decode(encoder.encode(raw).subarray(0, 4096)).replace(/\r\n/g, '\n');
+export function indexedFront(raw: string, withLinks = false): IndexedFront {
+  const bounded = encoder.encode(raw).subarray(0, 4096);
+  const cut = bounded.length === 4096;
+  const decoded = new TextDecoder().decode(bounded);
+  // A bounded last line may be a cut property, link or marker; only complete lines are advisory evidence.
+  const prefix = (cut ? decoded.slice(0, decoded.lastIndexOf('\n') + 1) : decoded).replace(/\r\n/g, '\n');
   const close = prefix.startsWith('---\n') ? prefix.indexOf('\n---', 3) : -1;
   const front = close < 0 ? new Map<string, string>() : frontOf(prefix.slice(4, close));
+  const bytes = encoder.encode(prefix);
+  const ownership = parseOwnership(bytes, 'prefix');
   return { summary: front.get('summary') || '(no summary)',
-    owner: front.get('by') === 'bower' ? 'bower' : 'person', type: front.get('type') ?? null };
+    owner: front.get('by') === 'bower' ? 'bower' : 'person', type: front.get('type') ?? null,
+    ...(withLinks ? { links: [...new Set(ownership.spans.flatMap((span) => linksIn(payloadDisplay(bytes, span))))] } : {}),
+    ...(cut || ownership.incomplete ? { incomplete: true } : {}) };
 }
 
 /** The bullets of a Timeline block, each read by the one Timeline-line pattern. */

@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import { FakeDrive } from '../../src/data/drive/fake-drive';
 import type { ClaudeSpawn } from '../src/claude';
 import { main } from '../src/main';
+import { phaseAwareClaude } from './b1-planning-support';
 import { realDrive } from './drive-v3-real';
 import type { ApiHost, ApiOptions, Dispatched, Fetch, Hop, RealWorld } from './real-world-types';
 
@@ -93,6 +94,7 @@ export async function realWorld(opts: WorldOptions = {}): Promise<RealWorld> {
   const api = await startApi({ origin: ORIGIN, outside });
   await api.signIn(rootId);
 
+  const model = opts.claude ? phaseAwareClaude(opts.claude, () => ({ drive, root: rootId })) : undefined;
   const dir = await mkdtemp(join(tmpdir(), 'bower-real-'));
   const runJob = async (i: number, hop?: Hop): Promise<number> => {
     const job = jobs[i];
@@ -108,7 +110,7 @@ export async function realWorld(opts: WorldOptions = {}): Promise<RealWorld> {
     };
     try {
       const claude = opts.claude ? { BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' } : {};
-      return await main({ BOWER_API_URL: ORIGIN, GITHUB_EVENT_PATH: event, ...claude }, { fetch: runner as typeof fetch, pacing: { baseMs: 0 }, ...(opts.claude ? { claude: opts.claude } : {}) });
+      return await main({ BOWER_API_URL: ORIGIN, GITHUB_EVENT_PATH: event, ...claude }, { fetch: runner as typeof fetch, pacing: { baseMs: 0 }, ...(model ? { claude: (call: Parameters<ClaudeSpawn>[0]) => model(Object.assign(call, { fixture: { drive, root: rootId } })) } : {}) });
     } finally {
       job.status = 'completed';
       job.completedAt = new Date().toISOString();

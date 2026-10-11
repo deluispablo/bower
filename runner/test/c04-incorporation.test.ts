@@ -4,6 +4,7 @@
  * every operation and the spine validates it. No live call: scripted proposals first, then a recorded Claude reply,
  * each scored by the corpus scorer.
  */
+import { phaseAwareClaude } from './b1-planning-support';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -37,6 +38,7 @@ interface ShownThing { fileId: string; name: string; kind: string; text: string 
 interface Context {
   piles: Array<{ pileId: string; words: string; things: ShownThing[] }>;
   notes: Array<{ path: string; text: string; cut: number }>;
+  indexed?: Record<string, { path: string; summary: string; version: string; coverage: unknown }>;
 }
 
 /** The prepared context: the JSON line at the end of the input. */
@@ -64,7 +66,7 @@ describe('what the model is shown (P4-3)', () => {
     // One of Bower's hub notes, long enough to be cut; a note of Alex's own, never offered for an update.
     const garden = (await drive.createFolder(folders.Areas ?? root, 'Garden')).id;
     const hub = serializeNote({ summary: 'Alex\'s plot.', properties: [], tags: [], currentState: [], body: 'Plot 14. '.repeat(800), timeline: [{ date: '2026-09-12', text: 'Planted garlic.', source: '' }], byBower: true });
-    await drive.createText(garden, 'Garden.md', hub, { by: 'bower' });
+    const hubFile = await drive.createText(garden, 'Garden.md', hub, { by: 'bower' });
     await drive.createText(garden, 'Seeds.md', 'My own list.\n');
     const loose = async (name: string, body: string | Uint8Array, pile: string): Promise<void> => {
       if (typeof body === 'string') await drive.createText(inbox, name, body, { pile });
@@ -80,7 +82,14 @@ describe('what the model is shown (P4-3)', () => {
     if (admitted.kind !== 'manifest') throw new Error('nothing admitted');
 
     const calls: ClaudeCall[] = [];
-    const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit);
+    const source = admitted.manifest.piles.flatMap((p) => p.items).find((t) => t.name === 'Community garden newsletter, autumn.pdf');
+    expect(source).toBeDefined();
+    const selection = { items: [{ itemId: source?.fileId, kind: 'unknown', destination: garden, wants: [hubFile.id] }], asks: [] };
+    const spawn: ClaudeSpawn = async (call) => {
+      calls.push(call);
+      const phase = (JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { selection?: unknown }).selection;
+      return { code: 0, stderr: '', cut: null, stdout: envelope(phase === undefined ? selection : 'not intent') } satisfies ClaudeExit;
+    };
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn }, { rootId: root, runId: RUN_ID, allowWeb: false }, fakeScripted(drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
     const input = calls[0]?.input ?? '';
@@ -119,13 +128,19 @@ describe('what the model is shown (P4-3)', () => {
     // The prompt tells the model what it was not shown.
     expect(input).toMatch(/OCR/);
 
-    // The notes it may update: Bower's own, with their current text, bounded and marked; never Alex's own note.
-    expect(ctx.notes.map((n) => n.path)).toEqual(['Areas/Garden/Garden.md']);
-    const note = ctx.notes[0];
+    // Selection has metadata; picked full-note evidence is bounded in execution, never Alex's unpicked note.
+    expect(ctx.notes).toEqual([]);
+    expect(ctx.indexed?.[hubFile.id]).toMatchObject({ path: 'Areas/Garden/Garden.md', summary: '(no summary)', version: hubFile.modifiedTime, coverage: { kind: 'prefix', bytes: 4096 } });
+    expect(input).not.toContain('Plot 14. '.repeat(20));
+    const execution = contextOf(calls[1]?.input ?? '');
+    expect(execution.notes.map((n) => n.path)).toEqual(['Areas/Garden/Garden.md']);
+    const note = execution.notes[0];
     expect(note?.text.startsWith(hub.slice(0, 200))).toBe(true);
-    expect(note?.cut).toBe(hub.length - PER_NOTE);
+    expect(note?.text.length).toBeLessThanOrEqual(PER_NOTE);
+    expect(note?.cut).toBe(hub.length - (note?.text.replace(CUT, '').length ?? 0));
+    expect(Number(CUT.exec(note?.text ?? '')?.[1])).toBe(note?.cut);
     expect(note?.text).toMatch(CUT);
-    expect(ctx.notes.reduce((n, x) => n + x.text.replace(CUT, '').length, 0)).toBeLessThanOrEqual(NOTES_PER_RUN);
+    expect(execution.notes.reduce((n, x) => n + x.text.replace(CUT, '').length, 0)).toBeLessThanOrEqual(NOTES_PER_RUN);
   });
 });
 
@@ -163,7 +178,7 @@ const PROPOSALS: Record<string, Proposal> = {
       { thing: 'Offer_letter_final(2).pdf', to: 'Projects/Job hunt/Applications', basis: 'Projects/Job hunt/Job hunt.md', name: 'Offer, Industrial Designer, Ferrowick.pdf', note: { name: 'Industrial Designer, Ferrowick.md', summary: 'An offer from Ferrowick for Industrial Designer.', body: 'Fully remote. Salary 42,000 a year. Start 2 November.' } },
       { thing: 'listing-88213.example.url', to: 'Projects/Flat hunt', name: 'Flat 9, Wrenfield Road.md' },
       { thing: 'IMG_2301.jpg', to: 'Projects/Flat hunt/Viewing photos', basis: 'Projects/Flat hunt/Flat hunt.md', name: 'Wrenfield Road, kitchen.jpg' },
-      { thing: 'Payslip_Aug.pdf', to: 'Areas/Money/Payslips', responsibility: 'pay and tax records', name: 'Payslip August.pdf', note: { name: 'Payslip, August.md', summary: 'A payslip for August.', body: 'Payslip for August.' } },
+      { thing: 'Payslip_Aug.pdf', to: 'Areas/Money', responsibility: 'pay and tax records', name: 'Payslip August.pdf', note: { name: 'Payslip, August.md', summary: 'A payslip for August.', body: 'Payslip for August.' } },
     ],
     lines: [
       { note: 'Projects/Flat hunt/Flat hunt.md', text: 'A fourth flat added; the shortlist compared by commute.', cites: 'listing-88213.example.url' },
@@ -181,9 +196,9 @@ const PROPOSALS: Record<string, Proposal> = {
 
 /** Scripted proposals: `claude` answered by a script in the same intent shape, its file ids from the context. */
 function proposing(p: Proposal, seen: Context[]): ClaudeSpawn {
-  return async (call) => {
+  return phaseAwareClaude(async (call, _step, _attempt, phase) => {
     const ctx = contextOf(call.input);
-    seen.push(ctx);
+    if (phase === 'execution') seen.push(ctx);
     const ids = new Map(ctx.piles.flatMap((x) => x.things).map((t) => [t.name, t.fileId]));
     const id = (name: string): string => ids.get(name) ?? `no ${name}`;
     const intent = {
@@ -193,7 +208,7 @@ function proposing(p: Proposal, seen: Context[]): ClaudeSpawn {
       ...(p.lines ? { lines: p.lines.map(({ cites, ...rest }) => ({ ...rest, ...(cites ? { cites: id(cites) } : {}) })) } : {}),
     };
     return { code: 0, stderr: '', cut: null, stdout: envelope(intent) };
-  };
+  });
 }
 
 const scored = (c: LoadedCase, run: { after: Record<string, string>; lastRun: unknown }) => score({ expected: c.expected, before: c.folder, after: run.after, lastRun: run.lastRun });
@@ -272,7 +287,7 @@ async function gardenFolder(extra: Record<string, string> = {}, inbox: Record<st
 async function planned(g: Awaited<ReturnType<typeof gardenFolder>>, intent: (news: string) => unknown, calls: ClaudeCall[] = []): Promise<RunManifest> {
   const news = g.took.taken.piles.flatMap((p) => p.items).find((i) => i.name === 'Community garden newsletter, autumn.pdf')?.fileId ?? '';
   const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope(intent(news)) });
-  return claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, fakeScripted(g.drive))(g.took);
+  return claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn: phaseAwareClaude(spawn, () => ({ drive: g.drive, root: g.root })) }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, fakeScripted(g.drive))(g.took);
 }
 
 const newsletter = (news: string, body: string, line: Record<string, unknown> | null = null): unknown => ({
@@ -330,7 +345,7 @@ describe('the C04 slice, review round (P4-3)', () => {
     const calls: ClaudeCall[] = [];
     const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') });
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, counted)(g.took)).rejects.toThrow();
+    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn: phaseAwareClaude(spawn, () => ({ drive: g.drive, root: g.root })) }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, counted)(g.took)).rejects.toThrow();
     const things = new Map(contextOf(calls[0]?.input ?? '').piles.flatMap((p) => p.things).map((t) => [t.name, t as ShownThing & { pagesNotRead?: number }]));
     // Past the read limit by its listed size: never downloaded.
     expect(bytesRead).not.toContain(ids.get('Huge notes.txt'));
