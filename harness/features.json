@@ -7244,5 +7244,18 @@
     ],
     "verify": "",
     "note": "TL-P4-48. Escalated. After B4b. Packet 2026-10-11-b4c-consolidation-packet.md (draft). implementer: codex."
+  },
+  {
+    "id": "b6b-fit-create-ask",
+    "task": "p4-b6",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "A source is filed into an existing fit, creates a new note when it is clearly new, or asks one question, through the existing note effects.",
+    "steps": [
+      "The packet reds pass through runner main."
+    ],
+    "verify": "",
+    "note": "TL-P4-47. After B1d integrates (implementation); red-first now. Packet 2026-10-11-b6b-fit-create-ask-packet.md. implementer: codex."
   }
 ]
