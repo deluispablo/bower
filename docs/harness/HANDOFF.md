@@ -36,7 +36,7 @@ This block is the whole current state; ACTIVE.md is the history log. A Codex suc
 
 | Entry | Branch / worktree | Last SHA | Attempt | Next step | Ruling |
 | --- | --- | --- | --- | --- | --- |
-| b1d-selection (escalated) | b1d-selection, /private/tmp/bower-b1d-selection | a187863c | round 6 done (codex-run attempt 17 = adversarial pass 4) | Pass 4 (docs/harness/2026-10-11-b1d-adversarial-final-4.md) found 1 "Blocking: data safety": request pins grant write authority without selection (claude.ts:1582). It also found 2 v1 limits (a personal type: moc gives moc undefined; cut-context MOC member ids are not normalised). Under addendum 23, the data-safety finding goes to the lead. The v1 limits go into the notes, and then B1d closes. Round 6 is green: runner 711, check, and app/capabilities e2e on demo and fake. | TL-P4-41 addenda 13–23 |
+| b1d-selection (escalated) | b1d-selection, /private/tmp/bower-b1d-selection | a187863c | round 6 done; adversarial pass 4 ruled (TL-P4-41 addendum 24, main 1034ad40) | Round 7 (no work done yet): one red for (1) and (2), then the fix, gates, Astra xhigh, Astra high review. (1) execution writes only ids the selection names; a request pin only makes its note a candidate, and if left out the request stays unconsumed in the inbox. (2) a person's note with type: moc and no by: bower is never snapshotted as a Bower MOC. (3) cut-context fingerprints are a v1 limit; write it in the notes. | TL-P4-41 addenda 13–24 |
 | b4a-contract (escalated) | b4a-contract, /private/tmp/bower-b4a-contract | dac89b29 | fix round 1 plus red repair (attempts 6–8) | src is green apart from the EPERM, and compatibility rows are added. Next: gates; then the Astra xhigh adversarial pass 2 (prompt from the B4a packet and addenda 1–3); then the Astra high review. After B1d integrates: merge claude/p3, update the RUNNER_WRITES pin at runner/test/claude-provider.test.ts:600 (observations.jsonl), then integrate. Watch for merge conflicts: B1d round 6 also changed ownership-format.ts, run-manifest.ts and note-format.ts. | TL-P4-48 addenda 1–3 |
 
 **Queue, in order.**
@@ -48,7 +48,7 @@ This block is the whole current state; ACTIVE.md is the history log. A Codex suc
 6. B7, B8 and B9 per P4_PLAN.
 7. The retest.
 
-**Open questions to the lead.** B1d pass 4's data-safety finding (above). No other.
+**Open questions to the lead.** None (B1d pass 4 ruled in addendum 24).
 
 **Notes.**
 - B6a's integrate rule: a verify pattern needs at least 4 non-meta characters (scripts/harness-rules.mjs).
