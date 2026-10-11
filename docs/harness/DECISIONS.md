@@ -655,3 +655,9 @@ One line per ruling, newest last. Read only the decision a task needs. Later rul
   - the model supplies only the region's words, as an optional field in the existing per-item reply, with no separate intent;
   - profile writes are ordinary note create and edit effects (Q7), with no new Filing op.
   Order: the B5c reds run now (tests only). B4b's implementation goes first, since it does not need B5c, and B5c's implementation follows, because they share `scripted.ts` and `claude.ts`. The signed-in staging smoke at 9bca6989 is skipped: the unsigned smoke and the four suites passed. The owner's signed-in check comes with the retest deploy
+- TL-P4-48 addendum 11 (B4b blocked: the manifest is validated before maintenance, and withMaintenance changes captureId without resealing): (a) `runner/src/index.ts`, `main.ts` and `run-manifest.ts` are allocated to B4b, since B1d is integrated. (b) The coordinator's design, stated as one finalizer:
+  - **Before maintenance** (`scripted.ts:2658`, `claude.ts:1373`), validation checks a **plan**: every rule except "a memory effect needs a final maintain".
+  - **`withMaintenance` is the one finalizer.** It appends maintain, depending on the last memory effect. If captureId changes, it reseals every observation origin to the final captureId; nothing else seals or reseals.
+  - **B4a's final validator runs exactly once**, on the finalized manifest, before anything is applied.
+  - A run with no memory effect is finalized the same way.
+  Red: an accepted observation candidate passes end to end, and an origin left on the old captureId is refused by the final validator
