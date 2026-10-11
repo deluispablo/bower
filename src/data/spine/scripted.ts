@@ -720,6 +720,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (!l || typeof answer !== 'object' || !('option' in answer)) continue;
     const option = q.options?.find((o) => o.id === answer.option);
     const action = isQuestionOption(option) ? option.action : undefined;
+    if (action?.kind !== 'file-to') continue;
     const folder = action && ix.byId(action.folderId);
     const path = folder && ix.pathOf(folder.id);
     const subject = subjectKey(q);
