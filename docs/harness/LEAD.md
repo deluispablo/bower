@@ -12,7 +12,7 @@ The lead keeps this file current under [TL-P2-43](2026-10-06-tl-p2-43-session-st
   - **After the retest:** B7, B8, B9, B11, B12, B10 with C15, C02 and the rules UI, then C06 onward per P4_PLAN.
   - **Open with others:** p4-docs-md-roundtrip needs an owner edit in Google Docs. The P3 Codex review is due 2026-10-12.
 - **Desktop → CLI move (owner, 2026-10-11, about 09:40).** The owner closes Claude Desktop and resumes the three sessions with `claude --resume <id>` in tmux. On resume:
-  - re-create the watchdog cron: minutes 7, 27 and 47, with the prompt in the lead brief (TL-P4-46 addendum 1). It is session-only, so it does not survive the move;
+  - re-create the watchdog cron: minutes 7, 27 and 47, with the prompt in the lead brief (TL-P4-46 addendum 1) plus the weekly-usage stop (TL-P4-61). It is session-only, so it does not survive the move;
   - check ListAgents for Orquestador and Designer, and their permission mode, which must match;
   - check `git -C /Users/deluisp/Projects/bower-app branch --show-current` is `claude/p3`.
 
