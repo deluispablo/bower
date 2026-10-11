@@ -6,11 +6,15 @@
     "exports api/src/env.ts OPTIONAL_SECRETS",
     "exports api/src/github.ts dispatchTidy",
     "exports runner/src/claude.ts selectionOf",
+    "exports runner/src/spine/admitted.ts observationOrigin",
     "exports src/data/contracts/hashes.ts EMPTY_SHA256",
     "exports src/data/contracts/note-edit.ts undoChanges",
     "exports src/data/contracts/note-edit.ts undoEdit",
     "exports src/data/contracts/note-format.ts propertyValuesOk",
     "exports src/data/contracts/note-format.ts tableProperties",
+    "exports src/data/contracts/observations.ts aboutContext",
+    "exports src/data/contracts/observations.ts observationOf",
+    "exports src/data/contracts/observations.ts rebuildObservations",
     "exports src/data/contracts/run-checkpoint.ts parseRunReport",
     "exports src/data/fake/fake-runner.ts NOTE_NOT_WRITTEN",
     "exports src/data/fake/fake-runner.ts OWN_FILES",
@@ -34,6 +38,10 @@
   ],
   "reasons": {
     "exports src/data/contracts/note-format.ts validSummary": "B2b wires it (TL-P4-42 addendum 1); B2b removes this line",
-    "exports runner/src/claude.ts selectionOf": "B1d wires the selection reply (TL-P4-42 addendum 1 pattern); B1d removes this line"
+    "exports runner/src/claude.ts selectionOf": "B1d wires the selection reply (TL-P4-42 addendum 1 pattern); B1d removes this line",
+    "exports runner/src/spine/admitted.ts observationOrigin": "B4b wires admitted memory intake; B4b removes this row.",
+    "exports src/data/contracts/observations.ts observationOf": "B4b authors observations from admitted evidence; B4b removes this row.",
+    "exports src/data/contracts/observations.ts aboutContext": "B4c supplies bounded learned context to B1d assembly; B4c removes this row.",
+    "exports src/data/contracts/observations.ts rebuildObservations": "B4c rebuilds learned sections after Undo; B4c removes this row."
   }
 }

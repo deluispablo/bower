@@ -21,7 +21,7 @@ import { displayName, nameOf, thingName } from './tree';
 
 /** Additive journal values; legacy text yes/no remains readable. */
 export type QuestionAnswer = boolean | { option: string } | { text: string };
-export interface QuestionOption { id: string; label: string; action: { kind: 'file-to'; folderId: string } }
+export interface QuestionOption { id: string; label: string; action: { kind: 'file-to'; folderId: string } | { kind: 'forget-fact'; factId: string } }
 /** The status/card projection. Stored option actions remain in questions.json and the durable plan. */
 export type PublicQuestion = Question;
 
@@ -110,7 +110,8 @@ export function isQuestionOption(value: unknown): value is QuestionOption {
   const a = o.action as Record<string, unknown> | undefined;
   return Object.keys(o).every((k) => ['id', 'label', 'action'].includes(k)) && typeof o.id === 'string'
     && /^[A-Za-z0-9_-]{1,128}$/.test(o.id) && typeof o.label === 'string' && o.label.trim().length > 0 && o.label.length <= 40
-    && !!a && Object.keys(a).length === 2 && a.kind === 'file-to' && typeof a.folderId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(a.folderId);
+    && !!a && Object.keys(a).length === 2 && (a.kind === 'file-to' && typeof a.folderId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(a.folderId)
+      || a.kind === 'forget-fact' && typeof a.factId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(a.factId));
 }
 /** A pile and its member are related; two different members remain different subjects. */
 export function relatedSubjects(x: string | undefined, y: string | undefined, piles: readonly Pile[]): boolean {

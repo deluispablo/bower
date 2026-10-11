@@ -3,9 +3,11 @@
   "note": "Known unused code (knip). The list may only shrink: remove a line when the code is used or deleted. See docs/harness/2026-10-09-c3-unused-code-notes.md.",
   "findings": [
     "duplicates src/data/contracts/run-phases.ts RUN_STEPS=ACTIVE_PHASES",
-    "exports runner/src/claude.ts selectionOf"
+    "exports runner/src/claude.ts selectionOf",
+    "exports runner/src/spine/admitted.ts observationOrigin"
   ],
   "reasons": {
-    "exports runner/src/claude.ts selectionOf": "B1d wires the selection reply (TL-P4-42 addendum 1 pattern); B1d removes this line"
+    "exports runner/src/claude.ts selectionOf": "B1d wires the selection reply (TL-P4-42 addendum 1 pattern); B1d removes this line",
+    "exports runner/src/spine/admitted.ts observationOrigin": "B4b wires admitted memory intake; B4b removes this row."
   }
 }

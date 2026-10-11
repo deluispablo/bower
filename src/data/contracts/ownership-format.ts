@@ -4,7 +4,9 @@ import { sha256Sync } from './hashes';
 import { TEMPLATE_REGIONS, type TemplateRegion } from './note-templates';
 export interface ByteSpan { readonly start: number; readonly end: number }
 export type MocRegion = 'moc-overview' | 'moc-figures' | 'moc-members';
-export type BowerRegion = MocRegion | 'profile' | TemplateRegion;
+export const ABOUT_REGIONS = ['about-you', 'about-working-on', 'about-preferences'] as const;
+export type AboutRegion = typeof ABOUT_REGIONS[number];
+export type BowerRegion = MocRegion | 'profile' | TemplateRegion | AboutRegion;
 export type Owner = 'current' | 'personal' | 'timeline' | 'bower-note';
 export type OwnershipFailure = 'unsupported-version' | 'damaged-boundary' | 'invalid-encoding';
 export interface PersonalTask {
@@ -33,7 +35,7 @@ export interface Layout {
 }
 export type OwnershipResult =
   | { readonly status: 'invalid'; readonly reason: OwnershipFailure }
-  | { readonly status: 'plain' | 'legacy'; readonly personal: ByteSpan; readonly layout: Layout; readonly tasks: readonly PersonalTask[] }
+  | { readonly status: 'plain' | 'legacy'; readonly payloads?: Readonly<Partial<Record<BowerRegion, ByteSpan>>>; readonly personal: ByteSpan; readonly layout: Layout; readonly tasks: readonly PersonalTask[] }
   | { readonly status: 'v2'; readonly personal: ByteSpan; readonly layout: Layout; readonly payloads: Readonly<Record<Owner, ByteSpan> & Partial<Record<BowerRegion, ByteSpan>>>; readonly tasks: readonly PersonalTask[] };
 /** A fetched version's ownership table, retained only by its execution attempt. */
 export interface OwnershipContext {
@@ -226,32 +228,47 @@ export function parseOwnership(bytes: Uint8Array): OwnershipResult {
   const prefix = raw.startsWith('\ufeff') ? 3 : 0;
   const sourceLines = lines(bytes, { start: prefix, end: bytes.length });
   const first = sourceLines[0];
-  if (first?.text !== '---' || first.after === bytes.length) return legacyNote(bytes, raw);
-  // Preserve the old unterminated-frontmatter interpretation. An explicit closed
-  // declaration never falls back to legacy merely because its v2 framing is bad.
-  const close = sourceLines.findIndex((line, i) => i > 0 && line.text.startsWith('---'));
-  if (close < 0) return legacyNote(bytes, raw);
-  const declarations = sourceLines.slice(1, close).filter((line) => /^\s*bower_format\s*:/.test(line.text));
-  if (!declarations.length) return legacyNote(bytes, raw);
-  if (declarations.length !== 1) return damaged();
-  const declaration = declarations[0]?.text ?? '';
-  if (declaration !== 'bower_format: ownership/2') {
-    return declaration.slice(declaration.indexOf(':') + 1).trim() === 'ownership/2'
-      ? damaged() : { status: 'invalid', reason: 'unsupported-version' };
+  const close = first?.text === '---' ? sourceLines.findIndex((line, i) => i > 0 && line.text.startsWith('---')) : -1;
+  const declarations = close < 0 ? [] : sourceLines.slice(1, close).filter((line) => /^\s*bower_format\s*:/.test(line.text));
+  // The additive composite grammar shares the same marker state machine below. A personal prefix stays opaque.
+  let prefixNote: Exclude<OwnershipResult, { status: 'invalid' | 'v2' }> | undefined;
+  let body = sourceLines.slice(close + 1);
+  let owners: (Owner | BowerRegion)[];
+  if (!declarations.length) {
+    let fence: Fence | null = null;
+    const marker = sourceLines.findIndex((line) => {
+      const previous = fence;
+      fence = fenceAfter(line.text, fence);
+      return !previous && !fence && line.text.trimStart().startsWith('<!-- bower:ownership') && line.text.includes('about-');
+    });
+    if (marker < 0) return legacyNote(bytes, raw);
+    const heading = sourceLines[marker - 1];
+    if (!heading || heading.text !== '## What Bower has learned') return damaged();
+    const prefixBytes = bytes.subarray(0, heading.start);
+    const parsed = legacyNote(prefixBytes, decoder.decode(prefixBytes));
+    if (parsed.status !== 'plain' && parsed.status !== 'legacy') return damaged();
+    prefixNote = parsed;
+    body = sourceLines.slice(marker);
+    owners = [...ABOUT_REGIONS];
+  } else {
+    if (declarations.length !== 1) return damaged();
+    const declaration = declarations[0]?.text ?? '';
+    if (declaration !== 'bower_format: ownership/2') {
+      return declaration.slice(declaration.indexOf(':') + 1).trim() === 'ownership/2'
+        ? damaged() : { status: 'invalid', reason: 'unsupported-version' };
+    }
+    if (sourceLines[close]?.text !== '---') return damaged();
+    for (let i = 0; i < bytes.length; i++) if (bytes[i] === 13 && bytes[i + 1] !== 10) return damaged();
+    const firstRegion = body.find((line) => line.text.startsWith('<!-- bower:ownership/2 begin'));
+    owners = firstRegion?.text === '<!-- bower:ownership/2 begin goal -->'
+      ? [...TEMPLATE_REGIONS, ...OWNERS] : [...OWNERS];
   }
-  if (sourceLines[close]?.text !== '---') return damaged();
-  for (let i = 0; i < bytes.length; i++) if (bytes[i] === 13 && bytes[i + 1] !== 10) return damaged();
-
-  // Creation orders Goal/Next steps before Current state; stored appended regions remain readable.
-  const firstRegion = sourceLines.slice(close + 1).find((line) => line.text.startsWith('<!-- bower:ownership/2 begin'));
-  const owners: (Owner | BowerRegion)[] = firstRegion?.text === '<!-- bower:ownership/2 begin goal -->'
-    ? [...TEMPLATE_REGIONS, ...OWNERS] : [...OWNERS];
   const spans: Partial<Record<Owner | BowerRegion, ByteSpan>> = {};
   let next = 0;
   let active: Owner | BowerRegion | null = null;
   let start = 0;
   let fence: Fence | null = null;
-  for (const line of sourceLines.slice(close + 1)) {
+  for (const line of body) {
     if (active) {
       const previous = fence;
       fence = fenceAfter(line.text, fence);
@@ -262,23 +279,28 @@ export function parseOwnership(bytes: Uint8Array): OwnershipResult {
       } else if (line.text.startsWith('<!-- bower:ownership')) return damaged();
     } else {
       // Extend only at a real boundary, never for marker-shaped text inside a fenced payload.
-      if (next === owners.length && next >= OWNERS.length) {
+      if (!prefixNote && next === owners.length && next >= OWNERS.length) {
         if (!spans['moc-overview'] && line.text === '<!-- bower:ownership/2 begin moc-overview -->') owners.push(...MOC_REGIONS);
         if (!spans.profile && line.text === '<!-- bower:ownership/2 begin profile -->') owners.push('profile');
+        if (!spans['about-you'] && line.text === '<!-- bower:ownership/2 begin about-you -->') owners.push(...ABOUT_REGIONS);
         if (!spans.goal && line.text === '<!-- bower:ownership/2 begin goal -->') owners.push(...TEMPLATE_REGIONS);
       }
       const owner = owners[next];
       if (owner && line.text === `<!-- bower:ownership/2 begin ${owner} -->`) {
         active = owner; start = line.after;
-      } else if (line.text.trimStart().startsWith('<!-- bower:ownership')) return damaged();
+      } else if (line.text.trimStart().startsWith('<!-- bower:ownership') || prefixNote && line.text.trim() !== '') return damaged();
       // Outside bytes are opaque and grant no payload or task authority. Never interpret their Markdown.
     }
+  }
+  if (prefixNote) {
+    if (active || fence || next !== owners.length) return damaged();
+    return { ...prefixNote, payloads: spans };
   }
   const { current, personal, timeline, 'bower-note': bowerNote } = spans;
   if (active || fence || next !== owners.length || !current || !personal || !timeline || !bowerNote) return damaged();
   const closing = sourceLines[close];
   const layout: Layout = {
-    front: { start: first.after, end: closing?.start ?? first.after }, frontEnd: closing?.after ?? first.after,
+    front: { start: first?.after ?? 0, end: closing?.start ?? 0 }, frontEnd: closing?.after ?? 0,
     current, timeline, bowerNote,
   };
   return { status: 'v2', personal, layout, payloads: { ...spans, current, personal, timeline, 'bower-note': bowerNote }, tasks: tasks(bytes, personal, true) };

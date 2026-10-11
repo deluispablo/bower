@@ -16,6 +16,9 @@ import { READ_AHEAD, limiter } from '../../../src/data/spine/read';
 import type { Admitted, Deferred } from '../../../src/data/spine/provider';
 import type { RunManifest } from '../../../src/data/spine/records';
 import type { RunnerToken } from '../token';
+import { ABOUT_REGIONS } from '../../../src/data/contracts/ownership-format';
+import { aboutArchivePath, type ObservationOrigin } from '../../../src/data/contracts/observations';
+import { PILE_NOTE } from '../../../src/data/piles';
 import { RUNNER_WRITES, SYSTEM } from '../../../src/data/vault/layout';
 
 export type { Admitted };
@@ -132,12 +135,27 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
         break;
       case 'edit-text': {
         const kinds = new Set(e.changes.map((c) => c.kind));
+        if (kinds.has('about-append') || kinds.has('about-rewrite')) {
+          const targets = m.capture.places.filter((p) => p.path === 'About me.md');
+          if (e.path !== 'About me.md' || targets.length !== 1 || targets[0]?.file.fileId !== e.before.fileId
+            || e.changes.some((c) => c.kind !== 'about-append' && c.kind !== 'about-rewrite'
+              || c.kind === 'about-rewrite' && !ABOUT_REGIONS.includes(c.region))) return 'an About me edit outside its marked sections';
+        }
         const rules = e.path === RULES_PATH;
         if (rules ? kinds.has('timeline-append') || kinds.has('state-rewrite') : kinds.has('rules-wording')) return 'a note edit outside what the runner authors';
         break;
       }
+      case 'create-text': {
+        const parentId = 'fileId' in e.parent ? e.parent.fileId : undefined;
+        const parent = m.capture.places.find((p) => p.file.fileId === parentId)?.path;
+        if (e.name === 'observations.jsonl' && (e.purpose !== 'runner-json' || parent !== SYSTEM.dir
+          || own === undefined || parentId !== own)) return 'a ledger outside the admitted system folder';
+        const archive = parent?.startsWith('.bower/archive/about-me');
+        if ((e.purpose === 'about-archive' || archive) && (e.purpose !== 'about-archive'
+          || !parent || !aboutArchivePath(`${parent}/${e.name}`))) return 'an archive outside its section';
+        break;
+      }
       case 'create-folder':
-      case 'create-text':
         break;
     }
   }
@@ -165,4 +183,26 @@ export function admittedPlan(token: Pick<RunnerToken, 'grant'>, drive: AdmittedR
     ]);
     return plan(taken);
   };
+}
+
+/** Resolve only references into the taken admission. Captured bytes/hashes are script inputs, never model fields. */
+export function observationOrigin(reference: unknown, took: Admitted, evidence: {
+  captureId: string; runId: string; files: readonly { fileId: string; sha256: string; text: string; subject?: string }[];
+}): { ok: true; origin: ObservationOrigin; source: { fileId: string; sha256: string } } | { ok: false } {
+  if (!reference || typeof reference !== 'object' || Array.isArray(reference)
+    || Object.keys(reference).length !== 1) return { ok: false };
+  const ref = reference as Record<string, unknown>;
+  const pile = took.taken.piles.find((p) => p.pileId === ref.pileId);
+  const words = pile?.anchor ? pile.items.filter((i) => i.name === PILE_NOTE) : [];
+  const file = words.length === 1 ? words[0] : typeof ref.fileId === 'string'
+    ? took.taken.piles.flatMap((p) => p.items.filter((i) => !(p.anchor && i.name === PILE_NOTE)))
+      .find((i) => i.fileId === ref.fileId) : undefined;
+  const captured = evidence.files.filter((f) => f.fileId === file?.fileId);
+  const got = captured.length === 1 ? captured[0] : undefined;
+  if (!file || !got || !/^[a-f0-9]{64}$/.test(got.sha256) || !/^[a-f0-9]{64}$/.test(evidence.captureId)
+    || !/^[A-Za-z0-9_-]{1,128}$/.test(evidence.runId)) return { ok: false };
+  const origin: ObservationOrigin = pile ? { kind: 'words', pileId: pile.pileId, runId: evidence.runId, captureId: evidence.captureId }
+    : { kind: 'document', subject: got.subject ?? '', runId: evidence.runId, captureId: evidence.captureId };
+  // A document with no script-validated subject may be described, but cannot author an observation until one is bound.
+  return { ok: true, origin, source: { fileId: file.fileId, sha256: got.sha256 } };
 }

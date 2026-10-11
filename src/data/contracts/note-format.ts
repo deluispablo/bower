@@ -21,7 +21,7 @@
  */
 import { BowerError, type Note, type Property, type SourceKind, type TimelineEntry, type TypeRow, type TypeTable } from './types';
 import { timelineLine, parseTimelineLine } from './timeline-line';
-import { fenceAfter, parseOwnership, togglePersonalTask, type ByteSpan, type Fence, type FetchedOwnership } from './ownership-format';
+import { ABOUT_REGIONS, fenceAfter, parseOwnership, togglePersonalTask, type ByteSpan, type Fence, type FetchedOwnership } from './ownership-format';
 import { NOTE_TEMPLATES, type NoteTemplate } from './note-templates';
 import { TASK_LINE } from './tasks';
 
@@ -287,6 +287,11 @@ export function parseNote(path: string, raw: string, fetched?: FetchedOwnership)
   // A v2 note with nothing in Bower's note has none; a legacy heading with nothing under it keeps an empty one.
   const note = sectionOf(layout.bowerNote, BOWER_NOTE);
   let bowerNote = ownership.status === 'v2' ? note || null : note;
+  const learned = ABOUT_REGIONS.flatMap((region) => {
+    const span = ownership.payloads?.[region];
+    return span ? [payloadDisplay(bytes, span)] : [];
+  });
+  if (learned.length) bowerNote = [bowerNote, '## What Bower has learned', ...learned].filter(Boolean).join('\n\n');
   const projection = templateProjection(bytes, ownership, front);
   if (projection) {
     body = projection.body;

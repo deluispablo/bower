@@ -1,10 +1,11 @@
 /** Immutable run manifest validation only; no claim, dispatch, readiness or permission authority. */
-import { MOC_REGIONS, createOwnershipContext, type MocRegion } from './ownership-format';
+import { ABOUT_REGIONS, type AboutRegion, MOC_REGIONS, createOwnershipContext, type MocRegion } from './ownership-format';
 import { sha256 } from './hashes';
 import { proposalOk, isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
 import { typeTableOk } from './note-format';
-import type { UpdatedRow } from './types';
-import { mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, profileTextOk, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
+import { BowerError, type UpdatedRow } from './types';
+import { parseObservations, canRebuildAboutSection, aboutArchivePath } from './observations';
+import { applyChanges, mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, profileTextOk, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 import { TEMPLATE_REGIONS, type TemplateRegion } from './note-templates';
 
@@ -36,7 +37,7 @@ export type Effect =
   | { kind: 'move'; before: SeenFile; parent: Target; name: string; properties: Properties }
   | { kind: 'create-folder'; parent: Target; name: string; createKey: string }
   | { kind: 'create-text'; parent: Target; name: string; createKey: string; text: string; content: Content;
-    purpose: 'generated' | 'runner-json' }
+    purpose: 'generated' | 'runner-json' | 'about-archive' }
   | { kind: 'write-runner-json'; before: SeenFile; beforeContent: VerifiedContent;
     /** One of the runner-writable files the reader is given (`RUNNER_WRITES` in `vault/layout.ts`). */
     path: RunnerWrite; text: string; content: Content }
@@ -45,7 +46,7 @@ export type Effect =
  * The type of a runner-writable file (TL-P4-14 addendum 20): `RUNNER_WRITES` in `vault/layout.ts` is the one list and
  * is typed by it; the contracts cannot import the layout (architecture.test.ts), so the path's type lives here.
  */
-export type RunnerWrite = '.bower/questions.json' | '.bower/requests.json' | '.bower/hashes.json' | '.bower/retrieval.json' | '.bower/index.md' | '.bower/hot.md' | '.bower/log.md' | '.bower/type-table.json';
+export type RunnerWrite = '.bower/questions.json' | '.bower/requests.json' | '.bower/hashes.json' | '.bower/retrieval.json' | '.bower/index.md' | '.bower/hot.md' | '.bower/log.md' | '.bower/type-table.json' | '.bower/observations.jsonl';
 export type Operation = { operationId: string; ordinal: number; dependsOn: string[]; effect: Effect };
 /** One Timeline line: `- <date> · <text>` plus ` · [[<source>]]` when there is a source (TL-P2-20). */
 export type EditEntry = { date: string; text: string; source: string | null };
@@ -71,6 +72,8 @@ export type AppendCompletion = { requestId: string; targetFileId: string };
 export type TimelineConsent = { requestId: string; targetFileId: string; sourceFileId: string };
 export type LeftAsWritten = { name: string; why: string; fileId?: string };
 export type Change =
+  | { kind: 'about-append'; recordIds: string[]; text: string }
+  | { kind: 'about-rewrite'; region: AboutRegion; recordIds: string[]; previous: string; text: string; factIds?: string[]; archive?: string }
   | { kind: 'template-rewrite'; region: TemplateRegion; recordIds: string[]; previous: string; text: string }
   | { kind: 'profile-rewrite'; recordIds: string[]; previous: string; text: string }
   | { kind: 'moc-rewrite'; region: MocRegion; recordIds: string[]; previous: string; text: string }
@@ -313,7 +316,7 @@ function effect(value: unknown): value is Effect {
       && target(value.parent) && name(value.name) && id(value.createKey);
     case 'create-text': return closed(value, ['kind', 'parent', 'name', 'createKey', 'text', 'content', 'purpose'])
       && target(value.parent) && name(value.name) && id(value.createKey) && text(value.text) && content(value.content)
-      && oneOf(value.purpose, ['generated', 'runner-json']);
+      && oneOf(value.purpose, ['generated', 'runner-json', 'about-archive']);
     case 'write-runner-json': return closed(value, ['kind', 'before', 'beforeContent', 'path', 'text', 'content'])
       && seenFile(value.before) && verifiedContent(value.beforeContent) && text(value.path)
       && text(value.text) && content(value.content);
@@ -328,7 +331,7 @@ function operation(value: unknown): value is Operation {
 }
 
 // Manifest v2 (TL-P2-20): v1 plus edit-text. Field rules shared with the author live in note-edit.ts.
-const CHANGE_ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'timeline-append', 'rules-wording', 'profile-rewrite', 'moc-rewrite', 'template-rewrite'];
+const CHANGE_ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'timeline-append', 'rules-wording', 'profile-rewrite', 'moc-rewrite', 'template-rewrite', 'about-append', 'about-rewrite'];
 const recordIds = (value: unknown): value is string[] => list(value, recordId) && unique(value);
 function editEntry(value: unknown): value is EditEntry {
   return closed(value, ['date', 'text', 'source']) && text(value.date) && text(value.text)
@@ -353,6 +356,12 @@ function stateGrant(value: unknown, ids: readonly string[]): value is StateGrant
 function change(value: unknown): value is Change {
   if (!record(value)) return false;
   switch (value.kind) {
+    case 'about-append': return closed(value, ['kind', 'recordIds', 'text']) && recordIds(value.recordIds) && text(value.text);
+    case 'about-rewrite': return closed(value, ['kind', 'region', 'recordIds', 'previous', 'text'], ['factIds', 'archive'])
+      && oneOf(value.region, ABOUT_REGIONS) && recordIds(value.recordIds) && text(value.previous) && text(value.text)
+      && !value.text.includes('<!-- bower:ownership')
+      && (value.factIds === undefined || list(value.factIds, id) && unique(value.factIds))
+      && (value.archive === undefined || path(value.archive));
     case 'template-rewrite': return closed(value, ['kind', 'region', 'recordIds', 'previous', 'text']) && oneOf(value.region, TEMPLATE_REGIONS)
       && recordIds(value.recordIds) && text(value.previous) && text(value.text) && !value.text.includes('<!-- bower:ownership');
     case 'profile-rewrite': return closed(value, ['kind', 'recordIds', 'previous', 'text'])
@@ -378,7 +387,8 @@ function change(value: unknown): value is Change {
   }
 }
 /** 1+ changes, at most one of each kind, in the order state-rewrite, link-rewrite, timeline-append, rules-wording (R3-7 m4). */
-const changeOrder = (c: Change): number => c.kind === 'template-rewrite' ? CHANGE_ORDER.length + MOC_REGIONS.length + TEMPLATE_REGIONS.indexOf(c.region)
+const changeOrder = (c: Change): number => c.kind === 'about-rewrite' ? CHANGE_ORDER.length + MOC_REGIONS.length + TEMPLATE_REGIONS.length + ABOUT_REGIONS.indexOf(c.region)
+  : c.kind === 'template-rewrite' ? CHANGE_ORDER.length + MOC_REGIONS.length + TEMPLATE_REGIONS.indexOf(c.region)
   : c.kind === 'moc-rewrite' ? CHANGE_ORDER.length + MOC_REGIONS.indexOf(c.region) : CHANGE_ORDER.indexOf(c.kind);
 const canonical = (changes: Change[]): boolean => changes.length > 0
   && changes.every((item, i) => i === 0 || changeOrder(changes[i - 1] ?? item) < changeOrder(item));
@@ -546,7 +556,7 @@ async function admit<M extends Manifest | ManifestV2>(
   if (!guard(parsed)) return { ok: false, reason: 'shape' };
   if (parsed.operations.some(({ effect: e }) => e.kind === 'write-runner-json' && !writes.includes(e.path))) return { ok: false, reason: 'shape' };
   const value = parsed;
-  if (!await planningArtifactsOk(value)) return { ok: false, reason: 'shape' };
+  if (!await aboutArtifactsOk(value) || !await planningArtifactsOk(value)) return { ok: false, reason: 'shape' };
   if (!driveId(expectedRootId) || expectedRootId !== value.scope.rootId) return { ok: false, reason: 'scope' };
   if (!await satisfiedProven(value)) return { ok: false, reason: 'shape' };
   for (const item of texts(value)) {
@@ -708,6 +718,126 @@ export async function parseRunManifestV2(bytes: Uint8Array, expectedRootId: stri
   return broken === null ? admitted : { ok: false, reason: 'edit', rule: broken };
 }
 
+
+/** B4 uses the same effects and confirmed dependency edges; these checks add no dispatch lifecycle. */
+async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> {
+  const operations: readonly OperationV2[] = value.operations;
+  const ledgerPath = '.bower/observations.jsonl';
+  const enc = new TextEncoder();
+  const ledgers = new Map<string, ReturnType<typeof parseObservations>>();
+  const archives = new Map<string, OperationV2 & { effect: Extract<Effect, { kind: 'create-text' }> }>();
+  let lastLedger: OperationV2 | undefined;
+  let lastMemory: OperationV2 | undefined;
+  const about = value.capture.places.filter((p) => p.path === 'About me.md');
+  if (about.length > 1 && operations.some(({ effect: e }) => e.kind === 'write-runner-json' && e.path === ledgerPath
+    || e.kind === 'create-text' && (e.purpose === 'about-archive' || `${targetPath(value, e.parent)}/${e.name}` === ledgerPath)
+    || e.kind === 'edit-text' && e.changes.some((c) => c.kind === 'about-append' || c.kind === 'about-rewrite'))) return false;
+  try {
+    for (const op of operations) {
+      const e = op.effect;
+      if (e.kind === 'maintain') {
+        if (e.inputs.targets?.some((t) => t.path === ledgerPath || t.path === 'About me.md' || t.path.startsWith('.bower/archive/about-me/'))) return false;
+        if (lastMemory && !op.dependsOn.includes(lastMemory.operationId)) return false;
+      }
+      if (e.kind === 'create-text') {
+        const path = `${targetPath(value, e.parent)}/${e.name}`;
+        if (path === ledgerPath) {
+          if (e.purpose !== 'runner-json') return false;
+        } else {
+          if (e.purpose !== 'about-archive' && !path.startsWith('.bower/archive/about-me/')) continue;
+          if (e.purpose !== 'about-archive' || !aboutArchivePath(path) || archives.has(path)
+            || value.capture.places.some((p) => p.path === path)
+            || !e.name.endsWith(`-${e.createKey}.md`) || !e.name.startsWith(`${timelineDate(value.requestedAt)}-`)
+            || !lastLedger || !op.dependsOn.includes(lastLedger.operationId)) return false;
+          archives.set(path, { ...op, effect: e });
+          lastMemory = op;
+        }
+      }
+      if (e.kind === 'write-runner-json' && e.path === ledgerPath
+        || e.kind === 'create-text' && `${targetPath(value, e.parent)}/${e.name}` === ledgerPath) {
+        const bytes = enc.encode(e.text);
+        let priorBytes = new Uint8Array();
+        if (e.kind === 'write-runner-json') {
+          const place = value.capture.places.find((p) => p.file.fileId === e.before.fileId);
+          if (e.before.folder || e.before.name !== 'observations.jsonl' || place?.path !== ledgerPath
+            || !sameSeen(place.file, e.before) || e.beforeContent.observedModifiedTime !== e.before.modifiedTime
+            || e.beforeContent.encoding !== 'utf8') return false;
+          priorBytes = bytes.slice(0, e.beforeContent.size);
+        } else if (lastLedger || value.capture.places.some((p) => p.path === ledgerPath)) return false;
+        const prior = parseObservations(priorBytes);
+        const priorText = new TextDecoder('utf-8', { fatal: true }).decode(priorBytes);
+        if (e.kind === 'write-runner-json' && !await describes(e.beforeContent, priorText)) return false;
+        const ledger = parseObservations(bytes);
+        if (lastLedger) {
+          const prev = lastLedger.effect;
+          if (e.kind !== 'write-runner-json' || prev.kind !== 'write-runner-json' && prev.kind !== 'create-text'
+            || prev.kind === 'write-runner-json' && prev.before.fileId !== e.before.fileId
+            || prev.text !== priorText || !op.dependsOn.some((dep) => dep === lastMemory?.operationId)) return false;
+        }
+        const oldIds = new Set(prior.events.map((event) => event.eventId));
+        for (const event of ledger.events.filter((event) => !oldIds.has(event.eventId))) {
+          if (event.date !== timelineDate(value.requestedAt)) return false;
+          if (event.kind === 'observation') {
+            const origin = event.origin;
+            if (origin.runId !== value.runId || origin.captureId !== value.captureId) return false;
+            if (origin.kind === 'words') {
+              const pile = value.capture.piles.find((p) => p.pileId === origin.pileId);
+              if (pile?.context.kind !== 'text' || pile.context.file.fileId !== event.source.fileId
+                || pile.context.content.sha256 !== event.source.sha256) return false;
+            } else if (origin.kind === 'document') {
+              if (!value.capture.members.some((m) => m.file.fileId === event.source.fileId && m.content.sha256 === event.source.sha256)) return false;
+            } else if (!value.capture.journal.some((j) => j.recordId === origin.recordId && j.fileIds.includes(event.source.fileId)
+              && j.sha256 === event.source.sha256)) return false;
+          } else if (event.kind === 'tombstone') {
+            if (event.runId !== value.runId || !prior.events.some((old) => old.kind === 'observation'
+              && old.factId === event.factId && old.source.fileId === event.sourceId)) return false;
+          } else if (event.successful) {
+            const edit = operations.find((o) => o.operationId === event.operationId);
+            if (event.runId !== value.runId || !edit || edit.ordinal >= op.ordinal || !op.dependsOn.includes(edit.operationId)
+              || edit.effect.kind !== 'edit-text' || !edit.effect.changes.some((c) => c.kind === 'about-rewrite'
+                && c.region === event.section && c.archive && c.factIds?.join() === event.factIds.join())) return false;
+          }
+        }
+        ledgers.set(op.operationId, ledger);
+        lastLedger = op; lastMemory = op;
+      }
+      if (e.kind !== 'edit-text' || !e.changes.some((c) => c.kind === 'about-append' || c.kind === 'about-rewrite')) continue;
+      if (about.length !== 1 || about[0]?.file.fileId !== e.before.fileId || e.path !== 'About me.md'
+        || e.beforeText === undefined || e.beforeContent.observedModifiedTime !== e.before.modifiedTime
+        || !lastLedger || !op.dependsOn.includes(lastLedger.operationId)
+        || e.changes.some((c) => c.kind !== 'about-append' && c.kind !== 'about-rewrite')) return false;
+      const authored = applyChanges(enc.encode(e.beforeText), e.changes);
+      if (!authored.ok || authored.text !== e.text) return false;
+      const ledger = ledgers.get(lastLedger.operationId);
+      if (!ledger) return false;
+      for (const c of e.changes) {
+        if (c.kind !== 'about-rewrite') continue;
+        if (c.factIds?.some((id) => !ledger.live.some((fact) => fact.factId === id && fact.section === c.region))) return false;
+        if (!c.archive) continue;
+        const archive = archives.get(c.archive);
+        if (!archive || !op.dependsOn.includes(archive.operationId) || archive.effect.text !== c.previous
+          || c.archive.split('/')[3] !== c.region || !c.factIds
+          || !canRebuildAboutSection({ ledger, section: c.region, text: c.previous, reason: 'consolidate' })
+          || ledger.live.filter((fact) => fact.section === c.region).some((fact) => !c.factIds?.includes(fact.factId))) return false;
+        // A frontier is a separate, dependent ledger effect, frozen along with this edit.
+        if (!operations.some((next) => next.ordinal > op.ordinal && next.effect.kind === 'write-runner-json'
+          && next.effect.path === ledgerPath && next.dependsOn.includes(op.operationId)
+          && parseObservations(enc.encode(next.effect.text)).events.some((event) => event.kind === 'consolidation'
+            && event.successful && event.operationId === op.operationId && event.section === c.region))) return false;
+      }
+      lastMemory = op;
+    }
+  } catch (error) {
+    if (!(error instanceof BowerError)) throw error;
+    // The ledger parser has already logged the frozen-memory refusal.
+    return false;
+  }
+  for (const [path, archive] of archives) {
+    if (!operations.some((o) => o.effect.kind === 'edit-text' && o.dependsOn.includes(archive.operationId)
+      && o.effect.changes.some((c) => c.kind === 'about-rewrite' && c.archive === path))) return false;
+  }
+  return !lastMemory || operations.at(-1)?.effect.kind === 'maintain';
+}
 
 /** Type tables use the existing write effect; proposals are immutable creates bound to their stored question. */
 async function planningArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> {
