@@ -1008,21 +1008,49 @@ for (const source of ['declared', 'observed'] as const) {
 
   for (const missing of ['words', 'member', 'both', 'no-words-bin'] as const) {
     it(`b4b-fr4-parent-bin-validator-${source}-${missing}`, async () => {
+      const { withMaintenance } = await import('../../../runner/src/index');
+      const { RunnerDrive } = await import('../../../runner/src/drive');
+      const { RunnerToken } = await import('../../../runner/src/token');
+      const { fixedDrive, driveV3, API, RUN_ID, TICKET } = await import('../../../runner/test/drive-v3');
+      const drive = fixedDrive();
+      const root = (await drive.createFolder('root', 'Bower')).id;
+      await drive.createFolder(root, '.bower');
+      const wire = driveV3(drive);
+      wire.folderId = root;
+      const token = new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: wire.fetch, now: () => wire.now });
+      const port = new RunnerDrive({ token, attempt: 1, fetch: wire.fetch });
       const value = b4bFr4Bins(source);
-      expect((await parseRunManifestV2(bytes(value), 'fake-root', RUNNER_WRITES)).ok,
-        'the same manifest with all item-Bin dependencies is accepted').toBe(true);
+      value.scope.rootId = root;
+      // The finalizer also seals questions, so use their production shape in this synthetic graph.
+      const questions = op(value, 3).effect;
+      if (questions.kind !== 'write-runner-json') throw new Error('Synthetic graph needs its questions.');
+      questions.text = '{"v":1,"questions":[]}\n';
+      questions.content = raw(questions.text);
+      seal(value);
+      expect((await parseRunManifestV2(bytes(value), root, RUNNER_WRITES)).ok,
+        'the complete frozen graph parses').toBe(true);
+      await expect(withMaintenance(port, value), 'the complete new graph seals')
+        .resolves.toMatchObject({ v: 2, operations: expect.arrayContaining([expect.objectContaining({ effect: { kind: 'maintain', inputs: expect.any(Object) } })]) });
       op(value, 6).dependsOn = missing === 'both' ? []
         : [op(value, missing === 'member' ? 5 : 4).operationId];
       if (missing === 'no-words-bin') {
         const removed = op(value, 5).operationId;
         value.operations.splice(5, 1);
+        // Keep the consumed words effect explicit when its item Bin is absent.
+        op(value, 5).dependsOn.push(op(value, 2).operationId);
         for (const row of value.reportPlan) row.requires = row.requires.filter((id) => id !== removed);
         value.operations.forEach((operation, ordinal) => { operation.ordinal = ordinal; });
         seal(value);
       }
-      // Reseal removed operations; dependency-only mutations keep their valid operation/content identities.
-      expect(await parseRunManifestV2(bytes(value), 'fake-root', RUNNER_WRITES),
-        'a parent cannot bypass even one consumed item Bin').toMatchObject({ ok: false });
+      // Frozen graphs retain their original dependencies, including older incomplete plans.
+      expect(await parseRunManifestV2(bytes(value), root, RUNNER_WRITES)).toMatchObject({ ok: true, value });
+      if (missing === 'member') {
+        await expect(withMaintenance(port, value), 'an attachment needs no item-Bin dependency')
+          .resolves.toMatchObject({ v: 2, operations: expect.arrayContaining([expect.objectContaining({ effect: { kind: 'maintain', inputs: expect.any(Object) } })]) });
+      } else {
+        await expect(withMaintenance(port, value), 'a parent cannot bypass a consumed words item Bin')
+          .rejects.toThrow('Bower could not update its notes.');
+      }
     });
   }
 }
