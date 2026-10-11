@@ -8,6 +8,7 @@ import { PILE_NOTE } from '../../src/data/piles';
 import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
+import { canonical } from '../../src/data/spine/records';
 import { scriptedProvider } from '../../src/data/demo/script';
 import { listedPiles } from '../../src/data/spine/scripted';
 import { SYSTEM, isRunnerFile } from '../../src/data/vault/layout';
@@ -151,8 +152,23 @@ describe('the runner process', () => {
       twinWire.manifest = twin.admission;
       const token = new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: twinWire.fetch, now: () => twinWire.now });
       const expected = await withMaintenance(new RunnerDrive({ token, attempt: 1, fetch: twinWire.fetch }), scripted);
-      expect(expected.operations.slice(0, -1)).toEqual(scripted.operations);
-      expect(expected.operations.at(-1)?.effect).toMatchObject({ kind: 'maintain', inputs: { operationIds: scripted.operations.map((o) => o.operationId) } });
+      expect(expected.captureId).toBe((await canonical({ scope: scripted.scope, runScope: scripted.runScope, capture: expected.capture })).hash);
+      // Maintenance adds captured places; keep every scripted field, resealing IDs and their references only.
+      const ids = new Map<string, string>();
+      const resealed: typeof scripted.operations = [];
+      for (const op of scripted.operations) {
+        const effect = 'parent' in op.effect && 'createdBy' in op.effect.parent
+          ? { ...op.effect, parent: { createdBy: ids.get(op.effect.parent.createdBy) ?? '' } }
+          : op.effect;
+        const operationId = (await canonical({ runId: scripted.runId, captureId: expected.captureId, ordinal: op.ordinal, effect })).hash;
+        ids.set(op.operationId, operationId);
+        resealed.push({ ...op, operationId, effect, dependsOn: op.dependsOn.map((id) => ids.get(id) ?? '') });
+      }
+      expect(expected.operations.slice(0, -1)).toEqual(resealed);
+      expect(expected.operations.at(-1)?.effect).toMatchObject({ kind: 'maintain', inputs: { operationIds: resealed.map((o) => o.operationId) } });
+      for (const op of expected.operations) {
+        expect(op.operationId).toBe((await canonical({ runId: expected.runId, captureId: expected.captureId, ordinal: op.ordinal, effect: op.effect })).hash);
+      }
       expect(expected.operations.map((o) => o.effect.kind).sort()).toEqual(expect.arrayContaining(['bin', 'create-folder', 'create-text', 'move']));
       expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...env }, { fetch: wire.fetch })).toBe(0);
       const files = await wire.drive.listAll(root);

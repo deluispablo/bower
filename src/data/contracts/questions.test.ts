@@ -106,3 +106,29 @@ describe('a Write it with no effect (TL-P4-19 addendum 12)', () => {
     expect(isAnsweredRow({ ...gone, outcome: 'clash' })).toBe(false);
   });
 });
+
+
+it('b4a-forget-fact-question-action', async () => {
+  const { isQuestionOption, publicQuestion, checkedAnswer } = await import('./questions');
+  const { isRunnerFile } = await import('../vault/layout');
+  const fileTo = { id: 'file-choice', label: 'Garden', action: { kind: 'file-to', folderId: 'folder-garden' } };
+  expect(isQuestionOption(fileTo), 'file-to remains unchanged').toBe(true);
+  const forget = { id: 'fact-choice', label: 'Remote roles', action: { kind: 'forget-fact', factId: 'fact-remote' } };
+  expect.soft(isQuestionOption(forget), 'additive action binds a shown fact id').toBe(true);
+  for (const action of [
+    { kind: 'forget-fact', factId: '' }, { kind: 'forget-fact', factId: '../fact-remote' },
+    { kind: 'forget-fact', factId: 'fact-remote', sourceId: 'source-1' },
+    { kind: 'forget-fact', folderId: 'folder-garden' }, { kind: 'file-to', factId: 'fact-remote' },
+    { kind: 'file-to', folderId: 'folder-garden', factId: 'fact-remote' },
+  ]) expect(isQuestionOption({ ...forget, action }), JSON.stringify(action)).toBe(false);
+  const q = { id: 'q-ask-p-words', subject: 'p-words', text: 'Which fact should Bower forget?',
+    yes: 'Choose', no: 'Keep', askedAt: 1, options: [forget,
+      { id: 'garden-choice', label: 'Garden', action: { kind: 'forget-fact', factId: 'fact-garden' } }] };
+  expect.soft(isRunnerFile('.bower/questions.json', { v: 1, questions: [q] }), 'stored actions round-trip').toBe(true);
+  const card = publicQuestion(q);
+  expect(card.options).toEqual([{ id: 'fact-choice', label: 'Remote roles' }, { id: 'garden-choice', label: 'Garden' }]);
+  expect(checkedAnswer(card, { option: 'fact-choice' })).toEqual({ option: 'fact-choice' });
+  expect(() => checkedAnswer(card, { option: 'fact-unshown' })).toThrow();
+  const old = { ...q, options: [fileTo, { ...fileTo, id: 'second', action: { kind: 'file-to', folderId: 'folder-2' } }] };
+  expect(isRunnerFile('.bower/questions.json', { v: 1, questions: [old] })).toBe(true);
+});

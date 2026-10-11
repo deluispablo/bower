@@ -7211,14 +7211,15 @@
     "id": "b4a-contract",
     "task": "p4-b4",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "About me has byte-preserving regions and typed memory contracts (observations, facts) in their contract homes.",
     "steps": [
       "The packet contract reds pass; stored bytes of existing notes are unchanged."
     ],
-    "verify": "",
-    "note": "TL-P4-48. Escalated. Packet 2026-10-11-b4a-contract-packet.md (draft; open items to the lead). implementer: codex."
+    "verify": "pnpm exec vitest run src/data/contracts/b4a-r4.test.ts src/data/contracts/b4a-r5.test.ts src/data/contracts/b4a-r6.test.ts src/architecture-bracket.test.ts -t \"b4a-r|bracket-global\"",
+    "note": "TL-P4-48. Escalated. Packet 2026-10-11-b4a-contract-packet.md (draft; open items to the lead). implementer: codex.",
+    "review": "P4-122 contract checks PASS; scanner finding fixed in round 7 (TL-P4-48 addendum 10)"
   },
   {
     "id": "b4b-observations",
@@ -7284,5 +7285,18 @@
     ],
     "verify": "",
     "note": "TL-P4-50 (B8 Q1-Q8). Packet 2026-10-11-b8-log-packet.md. implementer: codex."
+  },
+  {
+    "id": "b9-markers",
+    "task": "p4-b9",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Bower marks its own changes in notes in a way the person can see and Bower can find again, through the existing note effects.",
+    "steps": [
+      "The packet reds pass through runner main and the corpus driver."
+    ],
+    "verify": "",
+    "note": "TL-P4-50 (B9 markers, 6 questions). Packet 2026-10-11-b9-markers-packet.md. implementer: codex."
   }
 ]

@@ -36,6 +36,7 @@ export const SYSTEM = {
   hot: '.bower/hot.md',
   log: '.bower/log.md',
   typeTable: '.bower/type-table.json',
+  observations: '.bower/observations.jsonl',
   proposals: '.bower/proposals',
   /** Immutable pile declarations: `declaration-<declarationId>-<sha256>.json`. */
   piles: '.bower/piles',
@@ -46,7 +47,7 @@ export const SYSTEM = {
  * the manifest contract (`parseRunManifestV2`, given it by every caller) and the runner's admitted check both judge by
  * it. `suggestions.json` and `last-run.json` are written by the barrier after the run, never through the manifest.
  */
-export const RUNNER_WRITES = [SYSTEM.questions, SYSTEM.requests, SYSTEM.hashes, SYSTEM.retrieval, SYSTEM.index, SYSTEM.hot, SYSTEM.log, SYSTEM.typeTable] as const satisfies readonly RunnerWrite[];
+export const RUNNER_WRITES = [SYSTEM.questions, SYSTEM.requests, SYSTEM.hashes, SYSTEM.retrieval, SYSTEM.index, SYSTEM.hot, SYSTEM.log, SYSTEM.typeTable, SYSTEM.observations] as const satisfies readonly RunnerWrite[];
 
 /** Bower's bookkeeping and any dot file stay out of the explorer. */
 export function isHidden(path: string): boolean {
