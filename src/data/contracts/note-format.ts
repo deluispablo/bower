@@ -301,7 +301,9 @@ export function parseNote(path: string, raw: string, fetched?: FetchedOwnership)
     }
   }
   front?.delete('bower_format');
-  if (!front) return retainPersonalSource({ path, title, summary: '', properties: [], tags: [], currentState: [], body, timeline: [], links: linksIn(text), byBower: false }, raw);
+  if (!front) return retainPersonalSource({ path, title, summary: '', properties: [], tags: [], currentState: [], body, timeline: [],
+    ...(bowerNote !== null ? { bowerNote: { text: bowerNote, source: 'notes' as const } } : {}),
+    links: linksIn(text), byBower: false }, raw);
   const f = front;
   const properties: Property[] = [];
   for (const [key, value] of f) {

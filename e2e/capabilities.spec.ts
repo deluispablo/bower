@@ -232,7 +232,9 @@ test('write it shows the state written, re-asks on a clash and settles as an ans
   // The card shows Bower's update, every line, under its own label, and passes axe (TL-P4-19 addendum 17).
   const update = money.getByRole('list', { name: "Bower's update" });
   await expect(update.getByRole('listitem')).toHaveText([MONEY_UPDATE, 'Receipts are filed by month, as your rule says.']);
-  await expectAxeClean(page, { include: 'section[aria-labelledby="qs"]', wcag22: true });
+  const questionsHeading = await questions.getAttribute('aria-labelledby');
+  expect(questionsHeading).toBeTruthy();
+  await expectAxeClean(page, { include: `section[aria-labelledby="${questionsHeading}"]`, wcag22: true });
   await money.getByRole('button', { name: 'Write it' }).click();
   await expect(money).toHaveCount(0);
   await page.getByRole('region', { name: 'Recent' }).getByRole('link', { name: /^Money/ }).click();

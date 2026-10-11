@@ -1,10 +1,10 @@
 /** Immutable run manifest validation only; no claim, dispatch, readiness or permission authority. */
-import { ABOUT_REGIONS, type AboutRegion, MOC_REGIONS, createOwnershipContext, type MocRegion } from './ownership-format';
+import { ABOUT_REGIONS, type AboutRegion, MOC_REGIONS, parseOwnership, createOwnershipContext, type MocRegion } from './ownership-format';
 import { sha256 } from './hashes';
 import { proposalOk, isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
 import { typeTableOk } from './note-format';
 import { BowerError, type UpdatedRow } from './types';
-import { parseObservations, canRebuildAboutSection, aboutArchivePath } from './observations';
+import { parseObservations, canRebuildAboutSection, aboutArchivePath, aboutEvidenceOk } from './observations';
 import { applyChanges, mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, profileTextOk, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 import { TEMPLATE_REGIONS, type TemplateRegion } from './note-templates';
@@ -73,7 +73,7 @@ export type TimelineConsent = { requestId: string; targetFileId: string; sourceF
 export type LeftAsWritten = { name: string; why: string; fileId?: string };
 export type Change =
   | { kind: 'about-append'; recordIds: string[]; text: string }
-  | { kind: 'about-rewrite'; region: AboutRegion; recordIds: string[]; previous: string; text: string; factIds?: string[]; archive?: string }
+  | { kind: 'about-rewrite'; region: AboutRegion; recordIds: string[]; previous: string; text: string; factIds?: string[]; archive?: string; undoneRunIds?: string[] }
   | { kind: 'template-rewrite'; region: TemplateRegion; recordIds: string[]; previous: string; text: string }
   | { kind: 'profile-rewrite'; recordIds: string[]; previous: string; text: string }
   | { kind: 'moc-rewrite'; region: MocRegion; recordIds: string[]; previous: string; text: string }
@@ -357,11 +357,12 @@ function change(value: unknown): value is Change {
   if (!record(value)) return false;
   switch (value.kind) {
     case 'about-append': return closed(value, ['kind', 'recordIds', 'text']) && recordIds(value.recordIds) && text(value.text);
-    case 'about-rewrite': return closed(value, ['kind', 'region', 'recordIds', 'previous', 'text'], ['factIds', 'archive'])
+    case 'about-rewrite': return closed(value, ['kind', 'region', 'recordIds', 'previous', 'text'], ['factIds', 'archive', 'undoneRunIds'])
       && oneOf(value.region, ABOUT_REGIONS) && recordIds(value.recordIds) && text(value.previous) && text(value.text)
       && !value.text.includes('<!-- bower:ownership')
       && (value.factIds === undefined || list(value.factIds, id) && unique(value.factIds))
-      && (value.archive === undefined || path(value.archive));
+      && (value.archive === undefined || path(value.archive))
+      && (value.undoneRunIds === undefined || list(value.undoneRunIds, id) && unique(value.undoneRunIds));
     case 'template-rewrite': return closed(value, ['kind', 'region', 'recordIds', 'previous', 'text']) && oneOf(value.region, TEMPLATE_REGIONS)
       && recordIds(value.recordIds) && text(value.previous) && text(value.text) && !value.text.includes('<!-- bower:ownership');
     case 'profile-rewrite': return closed(value, ['kind', 'recordIds', 'previous', 'text'])
@@ -768,7 +769,7 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> 
           priorBytes = bytes.slice(0, e.beforeContent.size);
         } else if (lastLedger || value.capture.places.some((p) => p.path === ledgerPath)) return false;
         const prior = parseObservations(priorBytes);
-        const priorText = new TextDecoder('utf-8', { fatal: true }).decode(priorBytes);
+        const priorText = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(priorBytes);
         if (e.kind === 'write-runner-json' && !await describes(e.beforeContent, priorText)) return false;
         const ledger = parseObservations(bytes);
         if (lastLedger) {
@@ -814,16 +815,32 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> 
       const ledger = ledgers.get(lastLedger.operationId);
       if (!ledger) return false;
       for (const c of e.changes) {
+        if (c.kind === 'about-append') {
+          const own = parseOwnership(authored.bytes);
+          if (own.status === 'invalid' || ABOUT_REGIONS.some((section) => {
+            const span = own.payloads?.[section];
+            return !span || !aboutEvidenceOk(new TextDecoder().decode(authored.bytes.subarray(span.start, span.end)), section, ledger);
+          })) return false;
+          continue;
+        }
         if (c.kind !== 'about-rewrite') continue;
-        if (!c.factIds || c.factIds.some((id) => !ledger.live.some((fact) => fact.factId === id && fact.section === c.region))
+        if (c.undoneRunIds?.some((runId) => !ledger.events.some((event) =>
+          (event.kind === 'observation' ? event.origin.runId : event.runId) === runId))) return false;
+        const rebuilt = c.undoneRunIds?.length && (lastLedger.effect.kind === 'write-runner-json' || lastLedger.effect.kind === 'create-text')
+          ? parseObservations(enc.encode(lastLedger.effect.text), c.undoneRunIds) : ledger;
+        const reason = c.undoneRunIds?.length ? 'undo' : ledger.tombstones.some((t) => t.runId === value.runId
+          && ledger.events.some((fact) => fact.kind === 'observation' && fact.factId === t.factId && fact.section === c.region))
+          ? 'forget' : 'consolidate';
+        if (!aboutEvidenceOk(c.text, c.region, rebuilt, c.factIds)) return false;
+        if (!c.factIds || c.factIds.some((id) => !rebuilt.live.some((fact) => fact.factId === id && fact.section === c.region))
           || !c.archive) return false;
         const archive = archives.get(c.archive);
         if (!archive || !op.dependsOn.includes(archive.operationId) || archive.effect.text !== c.previous
           || c.archive.split('/')[3] !== c.region || !c.factIds
-          || !canRebuildAboutSection({ ledger, section: c.region, text: c.previous, reason: 'consolidate' })
-          || ledger.live.filter((fact) => fact.section === c.region).some((fact) => !c.factIds?.includes(fact.factId))) return false;
+          || !canRebuildAboutSection({ ledger: rebuilt, section: c.region, text: c.previous, reason })
+          || rebuilt.live.filter((fact) => fact.section === c.region).some((fact) => !c.factIds?.includes(fact.factId))) return false;
         // A frontier is a separate, dependent ledger effect, frozen along with this edit.
-        if (!operations.some((next) => next.ordinal > op.ordinal && next.effect.kind === 'write-runner-json'
+        if (reason === 'consolidate' && !operations.some((next) => next.ordinal > op.ordinal && next.effect.kind === 'write-runner-json'
           && next.effect.path === ledgerPath && next.dependsOn.includes(op.operationId)
           && parseObservations(enc.encode(next.effect.text)).events.some((event) => event.kind === 'consolidation'
             && event.successful && event.operationId === op.operationId && event.section === c.region))) return false;

@@ -62,9 +62,9 @@ function corrupt(detail: unknown): never {
 }
 
 /** Strict JSON per line, never whole-JSON parsing; unreadable evidence never becomes an empty ledger. */
-export function parseObservations(bytes: Uint8Array): Ledger {
+export function parseObservations(bytes: Uint8Array, undoneRunIds: readonly string[] = []): Ledger {
   let text: string;
-  try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+  try { text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(bytes); }
   catch (error) {
     // expected: corrupt logs the encoding details and throws the frozen-memory BowerError.
     return corrupt(error);
@@ -92,25 +92,32 @@ export function parseObservations(bytes: Uint8Array): Ledger {
     seen.set(event.eventId, new TextDecoder().decode(canonical.value));
     events.push(event);
   }
-  return resolve(events);
+  return resolve(events, undoneRunIds);
 }
+const normalizedText = (text: string): string => text.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+
 function resolve(events: Event[], undone: readonly string[] = []): Ledger {
   const tombstones = events.filter((e): e is Tombstone => e.kind === 'tombstone');
   const blockedFacts = new Set(tombstones.map((e) => e.factId));
   const blockedSources = new Set(tombstones.filter((e) => e.reason === 'bin').map((e) => e.sourceId));
+  const forgotten = events.filter((e): e is Observation => e.kind === 'observation'
+    && tombstones.some((t) => t.reason === 'forget' && t.factId === e.factId));
   const evidence = new Set<string>();
   const live: Observation[] = [];
   for (const event of events) {
     if (event.kind !== 'observation') continue;
     // Claim evidence before invalidating its origin: a replay never becomes new evidence on Undo or Forget.
     // A source version alone is not a new fact; new words from another source have their own identity.
-    const key = JSON.stringify([event.source.fileId, event.section, event.category, event.text]);
+    const key = JSON.stringify([event.source.fileId, event.section, normalizedText(event.text)]);
     if (evidence.has(key)) continue;
     evidence.add(key);
     if (undone.includes(event.origin.runId) || blockedFacts.has(event.factId)
       || blockedSources.has(event.source.fileId)) continue;
     if (event.remembers && !events.slice(0, events.indexOf(event)).some((e) => e.kind === 'tombstone' && e.factId === event.remembers
       && e.runId !== event.origin.runId)) continue;
+    if (forgotten.some((fact) => fact.section === event.section && normalizedText(fact.text) === normalizedText(event.text)
+      && (!event.remembers || event.remembers !== fact.factId || event.source.fileId === fact.source.fileId
+        || tombstones.some((t) => t.factId === fact.factId && events.indexOf(t) >= events.indexOf(event))))) continue;
     live.push(event);
   }
   return { events, live, tombstones };
@@ -146,7 +153,10 @@ export function canRebuildAboutSection(input: { ledger: Ledger; section: AboutRe
   const budget = input.section === 'about-preferences' ? 200 : 400;
   const words = input.text.split(/\r?\n/).filter((line) => !/^\s*(?:#{1,6}\s|<!-- bower:ownership)/.test(line))
     .flatMap((line) => (parseTimelineLine(line)?.text ?? line).trim().split(/\s+/).filter(Boolean)).length;
-  const frontier = input.ledger.events.findLastIndex((e) => e.kind === 'consolidation' && e.section === input.section && e.successful);
+  let frontier = -1;
+  input.ledger.events.forEach((e, index) => {
+    if (e.kind === 'consolidation' && e.section === input.section && e.successful) frontier = index;
+  });
   const newer = new Set(input.ledger.events.slice(frontier + 1).flatMap((e) => e.kind === 'observation' ? [e.factId] : []));
   return words > budget && input.ledger.live.filter((e) => e.section === input.section && newer.has(e.factId)).length >= 5;
 }
@@ -173,7 +183,7 @@ export function isAboutContext(v: unknown): v is AboutContext {
 export function rebuildObservations(input: unknown): Ledger {
   if (!closed(input, ['source', 'bytes', 'undoneRunIds']) || input.source !== 'observations'
     || !(input.bytes instanceof Uint8Array) || !ids(input.undoneRunIds)) return corrupt('Invalid observation rebuild');
-  return resolve(parseObservations(input.bytes).events, input.undoneRunIds);
+  return parseObservations(input.bytes, input.undoneRunIds);
 }
 
 /** Exact artifact grammar shared by manifest validation and admission; no file-id directory or traversal. */
@@ -182,4 +192,13 @@ export function aboutArchivePath(path: string): boolean {
   if (parts.length !== 5 || parts.slice(0, 3).join('/') !== '.bower/archive/about-me' || !section(parts[3])) return false;
   const match = /^(\d{4}-\d{2}-\d{2})-([A-Za-z0-9_-]{1,128})\.md$/.exec(parts[4] ?? '');
   return !!match && date(match[1]) && id(match[2]);
+}
+
+/** Each authored line binds to live evidence; headings are framing, never learned claims. */
+export function aboutEvidenceOk(text: string, section: AboutRegion, ledger: Ledger, factIds?: readonly string[]): boolean {
+  const heading = { 'about-you': '### About you', 'about-working-on': "### What you're working on",
+    'about-preferences': '### How you like things' }[section];
+  return text.split(/\r?\n/).every((line) => !line.trim() || line.trim() === heading
+    || ledger.live.some((fact) => fact.section === section && (!factIds || factIds.includes(fact.factId))
+      && normalizedText(parseTimelineLine(line)?.text ?? line.replace(/^[-*] /, '')) === normalizedText(fact.text)));
 }
