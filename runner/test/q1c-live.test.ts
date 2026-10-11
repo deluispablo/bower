@@ -115,7 +115,7 @@ async function legacyRecords() {
 
 describe('Q1c durable publication through main and createApp().request', () => {
   it('Q1c fix 1: eleven askings keep clear work and publish the first ten by askedAt', async () => {
-    const { w, clearId, waitingIds, status } = await mixed(11);
+    const { w, clearId, status } = await mixed(11);
     expect(await w.runJob(0)).toBe(0);
     const manifests = (await w.drive.listAll(w.rootId)).filter((f) => /^manifest-.*\.json$/.test(f.name));
     expect(manifests).toHaveLength(1);
@@ -133,9 +133,16 @@ describe('Q1c durable publication through main and createApp().request', () => {
     expect(stored).toBeDefined();
     const { questions } = JSON.parse(await w.drive.readText(stored?.id ?? '')) as { questions: StoredQuestion[] };
     expect(questions).toHaveLength(11);
-    expect(new Set(questions.map((q) => q.id))).toEqual(new Set(waitingIds.map((id) => `q-ask-${id}`)));
-    expect((await status()).run?.questions).toEqual([...questions].sort((a, b) => a.askedAt - b.askedAt)
-      .slice(0, 10).map(({ id, text, askedAt }) => expect.objectContaining({ id, text, askedAt })));
+    expect(new Set(questions.map((q) => q.id))).toEqual(new Set(planned.questions.map((q) => q.id)));
+    const ordered = [...questions].sort((a, b) => a.askedAt - b.askedAt);
+    const snapshot = (await status()).run?.questions;
+    expect(snapshot).toHaveLength(10);
+    expect(snapshot).toEqual(ordered.slice(0, 10)
+      .map(({ id, text, askedAt }) => expect.objectContaining({ id, text, askedAt })));
+    const eleventh = ordered[10];
+    expect(eleventh).toBeDefined();
+    expect(questions).toContainEqual(eleventh);
+    expect(snapshot?.map((q) => q.id)).not.toContain(eleventh?.id);
   });
 
   it('Q1c fix 1: a crash after manifest persistence recovers questions with stored option actions intact', async () => {
