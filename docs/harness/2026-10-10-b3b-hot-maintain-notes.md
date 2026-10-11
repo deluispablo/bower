@@ -806,3 +806,8 @@ removed: runner/src/index.ts: fixed .bower parent and MOC-only renderer admissio
 removed: runner/src/index.ts: duplicate fallback MOC target when that path has a declared renderer.
 removed: no test, assertion, fixture, golden, threshold, live fence, checkpoint or dependency.
 tests changed: none
+
+## Coordinator: tests changed lines for the early reds
+
+tests changed: runner/test/b1a-contract.test.ts: TL-P4-42 Q5 / TL-P4-41 addendum 4: .bower/hot.md joins maintain's bounded write set; the one-send-per-file cap still applies (red repair 0b816ced).
+tests changed: runner/test/second-brain-method.test.ts: new B3b red for the b23-hot-evidence-only method verdict at .bower/hot.md with no archive (TL-P4-42 Q5, TL-P4-45; red 511968f2); no existing assertion changed.
