@@ -1350,7 +1350,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     expect((await w.worker.status()).run).toMatchObject({ id: first.id, phase: 'done' });
     const [manifest] = await manifestsOf(w);
     const head = (await checkpointsOf(w, first.id)).at(-1);
-    const write = manifest?.operations.find((o) => o.effect.kind === 'write-runner-json');
+    const write = manifest?.operations.find((o) => o.effect.kind === 'write-runner-json' && o.effect.path === SYSTEM.hashes);
     expect(head?.outcomes.find((o) => o.operationId === write?.operationId)?.state).toBe('rejected');
     expect(hashesOf()).not.toEqual(await stored());
 
@@ -1727,7 +1727,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest] = await manifestsOf(w);
       expect(manifest?.capture.journal.map((j) => j.recordId)).toEqual([asked.rec.id]);
-      for (const f of kept) expect(manifest?.operations.some((o) => 'before' in o.effect && o.effect.before.fileId === f.id), `an operation on ${f.name}`).toBe(false);
+      for (const f of kept) expect(manifest?.operations.some((o) => 'before' in o.effect && o.effect.before?.fileId === f.id), `an operation on ${f.name}`).toBe(false);
       expect(w.calls.filter((c) => 'id' in c && kept.some((f) => f.id === c.id))).toEqual([]);
       const after = await Promise.all(kept.map(async (f) => ({ id: f.id, text: await w.drive.readText(f.id), file: (await w.drive.evidence(f.id))?.file })));
       expect(after).toEqual(before);
@@ -1756,7 +1756,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest] = await manifestsOf(w);
       const write = manifest?.operations.find((o) => o.effect.kind === 'write-runner-json' && o.effect.path === SYSTEM.questions);
-      expect(write?.effect.kind === 'write-runner-json' ? write.effect.beforeContent.sha256 : null).toBe(unreadable?.sha256);
+      expect(write?.effect.kind === 'write-runner-json' ? write.effect.beforeContent?.sha256 : null).toBe(unreadable?.sha256);
       for (const op of archiveMoves(manifest, answered.file.id)) expect(op.dependsOn).toContain(write?.operationId);
       expect(JSON.parse(w.drive.dump(w.rootId).get(SYSTEM.questions) ?? '')).toEqual({ v: 1, questions: [] });
       expect(w.drive.pathOf(answered.file.id, w.rootId)).toBe(`${SYSTEM.archive}/${answered.file.name}`);
@@ -1960,7 +1960,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const [manifest, ...others] = await manifestsOf(w);
       expect(others).toEqual([]);
       // Each write records the hash of the bytes it could not parse; Drive keeps that revision.
-      for (const path of Object.keys(broken)) expect(writeOf(manifest, path)?.beforeContent.sha256, path).toBe(digests.get(path));
+      for (const path of Object.keys(broken)) expect(writeOf(manifest, path)?.beforeContent?.sha256, path).toBe(digests.get(path));
       const dump = w.drive.dump(w.rootId);
       // The fresh files hold only what this run knows: the old entries are never claimed.
       expect((JSON.parse(dump.get(SYSTEM.requests) ?? '') as RequestsFile).done.map((r) => r.text)).toEqual([LEASE]);
@@ -3965,7 +3965,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       (await recordsOf(w)).filter((r) => r.name.startsWith('manifest-')).map((r) => JSON.parse(r.text) as ManifestV2);
     type Ops = { operations: readonly OperationV2[] } | undefined;
     const editsOf = (m: Ops): Edit[] => (m?.operations ?? []).filter((o): o is Edit => o.effect.kind === 'edit-text');
-    const touching = (m: Ops, id: string): OperationV2[] => (m?.operations ?? []).filter((o) => 'before' in o.effect && o.effect.before.fileId === id);
+    const touching = (m: Ops, id: string): OperationV2[] => (m?.operations ?? []).filter((o) => 'before' in o.effect && o.effect.before?.fileId === id);
     const writesTo = (calls: FencedCall[], id: string): FencedCall[] => calls.filter((c) => c.op === 'write-text' && c.id === id);
     const textAt = (w: Where, path: string): string | undefined => w.drive.dump(w.rootId).get(path);
     const runPlan = (w: Where) => planRun(w.drive, w.rootId, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
@@ -4758,9 +4758,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       for (const edit of edits) {
         expect(manifest?.capture.places).toContainEqual({ file: edit.effect.before, path: edit.effect.path });
         // A link fix never marks a note new (m3): the edit is the only operation on it.
-        expect((manifest?.operations ?? []).filter((o) => 'before' in o.effect && o.effect.before.fileId === edit.effect.before.fileId)).toEqual([edit]);
+        expect((manifest?.operations ?? []).filter((o) => 'before' in o.effect && o.effect.before?.fileId === edit.effect.before.fileId)).toEqual([edit]);
       }
-      expect((manifest?.operations ?? []).some((o) => 'before' in o.effect && o.effect.before.fileId === files.plain.id)).toBe(false);
+      expect((manifest?.operations ?? []).some((o) => 'before' in o.effect && o.effect.before?.fileId === files.plain.id)).toBe(false);
       const archives = archivesOf(manifest, line);
       expect(archives).toHaveLength(1);
       for (const archive of archives) expect(archive.dependsOn).toEqual(expect.arrayContaining(edits.map((e) => e.operationId)));
@@ -4829,7 +4829,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(editsOf(manifest).map((o) => o.effect.path)).toEqual([WEEKEND, PLAN]);
       expect(editsOf(manifest).flatMap((o) => o.effect.changes.flatMap((c) => (c.kind === 'link-rewrite' ? c.recordIds : [])))).toEqual([]);
       expect(manifest?.capture.journal.map((j) => j.recordId)).not.toContain(line.id);
-      expect((manifest?.operations ?? []).some((o) => 'before' in o.effect && o.effect.before.fileId === odd.id)).toBe(false);
+      expect((manifest?.operations ?? []).some((o) => 'before' in o.effect && o.effect.before?.fileId === odd.id)).toBe(false);
       expect(textAt(w, 'Projects/Garden/Odd.md')).toBe(damaged);
       expect(textAt(w, WEEKEND)).toContain('Sow [[Seed list]]');
       expect((await pending(w)).map((l) => l.id)).toEqual([line.id]);
@@ -5531,6 +5531,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         'bin', 'create-folder', 'create-text generated', 'create-text runner-json',
         'edit-text link-rewrite', 'edit-text rules-wording', 'edit-text timeline-append', 'move',
         'write-runner-json .bower/questions.json', 'write-runner-json .bower/requests.json',
+        'write-runner-json .bower/type-table.json',
       ]);
       const edits = (all.manifest.operations as OperationV2[]).flatMap((o) => (o.effect.kind === 'edit-text' ? o.effect.changes : []));
       expect(edits.some((c) => c.kind === 'timeline-append' && c.entries.some((e) => e.text === MERGES[0]?.line))).toBe(true);

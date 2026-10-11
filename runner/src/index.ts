@@ -97,7 +97,7 @@ export const hotTarget: DeclaredTarget = {
         }
       }
       if (e.kind === 'edit-text' || e.kind === 'write-runner-json') {
-        const source = sources.get(e.before.fileId);
+        const source = e.before && sources.get(e.before.fileId);
         if (source) source.text = e.text;
         if ('path' in e && e.path === SYSTEM.questions) questions = e.text;
       }

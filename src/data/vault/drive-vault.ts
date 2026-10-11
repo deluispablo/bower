@@ -41,6 +41,7 @@ import { pairsOf } from '../contracts/journal-record';
 import { RUNNER_WRITES, PROP, SYSTEM, isRunnerFile, recordStamp, type RunnerFiles, type QuestionsFile, type LastRunFile } from './layout';
 import { md5Hex, sha256 } from './hashes';
 import { placeOf, plainSnippet, plainText, savedLinkAddress, savedLinkUrl, searchLines } from '../search-text';
+import { readTypeTable } from '../contracts/note-format';
 import { noteRefusal, parseNote, toggleTaskInText, type ParsedNote } from './note-format';
 import { parseRules } from './rules-format';
 import { isSeen, markSeen } from './seen';
@@ -1605,6 +1606,10 @@ export class DriveVault implements VaultSource {
     });
   }
 
+  async typeTable() {
+    return (await this.json(SYSTEM.typeTable))?.rows ?? [];
+  }
+
   async questions(): Promise<Question[]> {
     const [stored, lines, inbox] = await Promise.all([this.json(SYSTEM.questions), this.journal.list(), this.pilesListed()]);
     const snapshot = await this.questionSnapshot(inbox, stored, lines);
@@ -1708,7 +1713,13 @@ export class DriveVault implements VaultSource {
     if (!id) return null;
     let value: unknown;
     try {
-      value = JSON.parse(await this.readTextOnce(id));
+      const text = await this.readTextOnce(id);
+      if (path === SYSTEM.typeTable) {
+        const read = readTypeTable(text);
+        if (!read.writeAllowed) console.error(new BowerError('unknown', 'Bower could not read its latest update. Try again.'));
+        return { ...read.table, rows: read.writeAllowed ? read.table.rows : [] } as RunnerFiles[K];
+      }
+      value = JSON.parse(text);
     } catch (e) {
       if (!(e instanceof SyntaxError)) throw e;
       console.error(`${path} is not valid JSON`);

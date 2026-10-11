@@ -2,7 +2,7 @@
 import { ABOUT_REGIONS, type AboutRegion, MOC_REGIONS, createOwnershipContext, type MocRegion } from './ownership-format';
 import { sha256 } from './hashes';
 import { proposalOk, isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
-import { typeTableOk } from './note-format';
+import { readTypeTable, typeRowOk, typeTableOk } from './note-format';
 import { BowerError, type UpdatedRow } from './types';
 import { parseObservations, canRebuildAboutSection, aboutArchivePath, validLearnedBlock } from './observations';
 import { applyChanges, mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, profileTextOk, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
@@ -41,6 +41,8 @@ export type Effect =
   | { kind: 'write-runner-json'; before: SeenFile; beforeContent: VerifiedContent;
     /** One of the runner-writable files the reader is given (`RUNNER_WRITES` in `vault/layout.ts`). */
     path: RunnerWrite; text: string; content: Content }
+  | { kind: 'write-runner-json'; before: null; beforeContent: null; path: '.bower/type-table.json';
+    parent: Target; createKey: string; text: string; content: Content }
   | { kind: 'bin'; before: SeenFile; capturedChildIds: string[] };
 /**
  * The type of a runner-writable file (TL-P4-14 addendum 20): `RUNNER_WRITES` in `vault/layout.ts` is the one list and
@@ -317,9 +319,11 @@ function effect(value: unknown): value is Effect {
     case 'create-text': return closed(value, ['kind', 'parent', 'name', 'createKey', 'text', 'content', 'purpose'])
       && target(value.parent) && name(value.name) && id(value.createKey) && text(value.text) && content(value.content)
       && oneOf(value.purpose, ['generated', 'runner-json', 'about-archive']);
-    case 'write-runner-json': return closed(value, ['kind', 'before', 'beforeContent', 'path', 'text', 'content'])
-      && seenFile(value.before) && verifiedContent(value.beforeContent) && text(value.path)
-      && text(value.text) && content(value.content);
+    case 'write-runner-json': return text(value.text) && content(value.content) && (value.before === null
+      ? closed(value, ['kind', 'before', 'beforeContent', 'path', 'parent', 'createKey', 'text', 'content'])
+        && value.beforeContent === null && value.path === '.bower/type-table.json' && target(value.parent) && id(value.createKey)
+      : closed(value, ['kind', 'before', 'beforeContent', 'path', 'text', 'content'])
+        && seenFile(value.before) && verifiedContent(value.beforeContent) && text(value.path));
     case 'bin': return closed(value, ['kind', 'before', 'capturedChildIds'])
       && seenFile(value.before) && list(value.capturedChildIds, driveId) && unique(value.capturedChildIds);
     default: return false;
@@ -556,9 +560,11 @@ async function admit<M extends Manifest | ManifestV2>(
 ): Promise<{ ok: true; value: M; sha256: string } | { ok: false; reason: ManifestRefusal }> {
   if (!guard(parsed)) return { ok: false, reason: 'shape' };
   if (parsed.operations.some(({ effect: e }) => e.kind === 'write-runner-json' && (!writes.includes(e.path)
-    || e.path !== `.bower/${e.before.name}` || e.before.folder
+    || (e.before === null ? targetPath(parsed, e.parent) !== '.bower'
+      || parsed.capture.places.some((p) => p.path === e.path)
+      : e.path !== `.bower/${e.before.name}` || e.before.folder
     || parsed.capture.places.some((p) => p.file.fileId === e.before.fileId
-      && (p.path !== e.path || !sameSeen(p.file, e.before)))))) return { ok: false, reason: 'shape' };
+      && (p.path !== e.path || !sameSeen(p.file, e.before))))))) return { ok: false, reason: 'shape' };
   const value = parsed;
   if (!await aboutArtifactsOk(value) || !await planningArtifactsOk(value)) return { ok: false, reason: 'shape' };
   if (!driveId(expectedRootId) || expectedRootId !== value.scope.rootId) return { ok: false, reason: 'scope' };
@@ -786,7 +792,7 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> 
         if (lastLedger) {
           const prev = lastLedger.effect;
           if (e.kind !== 'write-runner-json' || prev.kind !== 'write-runner-json' && prev.kind !== 'create-text'
-            || prev.kind === 'write-runner-json' && prev.before.fileId !== e.before.fileId
+            || prev.kind === 'write-runner-json' && prev.before?.fileId !== e.before.fileId
             || prev.text !== priorText || !op.dependsOn.some((dep) => dep === lastMemory?.operationId)) return false;
         }
         const oldIds = new Set(prior.events.map((event) => event.eventId));
@@ -884,7 +890,11 @@ async function planningArtifactsOk(value: Manifest | ManifestV2): Promise<boolea
         // expected: a new declaration write must contain readable JSON.
         return false;
       }
-      if (!typeTableOk(table) || effect.before.folder || effect.before.name !== 'type-table.json') return false;
+      // A stored rewrite can carry skipped rows beside the valid declaration it changes or adds.
+      const valid = typeTableOk(table, effect.before !== null) || effect.before !== null && readTypeTable(effect.text).writeAllowed
+        && !!table && typeof table === 'object' && 'rows' in table && Array.isArray(table.rows)
+        && table.rows.some((row) => typeRowOk(row, true));
+      if (!valid || effect.before !== null && (effect.before.folder || effect.before.name !== 'type-table.json')) return false;
     }
     if (effect.kind !== 'create-text') continue;
     const parentPath = targetPath(value, effect.parent);

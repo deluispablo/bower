@@ -190,7 +190,7 @@ export function itemDispositions(admission: AdmissionManifest, manifest: RunMani
   const applied = new Set(outcomes.filter((o) => o.state === 'applied').map((o) => o.operationId));
   const members = new Map(manifest.capture.members.map((m) => [m.file.fileId, m.pileId]));
   // Filed: moved to its place, or (a thing already saved) gone to the Bin, so it left the inbox too.
-  const filed = new Set(manifest.operations.flatMap((o) => (applied.has(o.operationId) && (filingMove(manifest, o) || savedBin(manifest, o)) && 'before' in o.effect ? [o.effect.before.fileId] : [])));
+  const filed = new Set(manifest.operations.flatMap((o) => (applied.has(o.operationId) && (filingMove(manifest, o) || savedBin(manifest, o)) && 'before' in o.effect && o.effect.before ? [o.effect.before.fileId] : [])));
   const captured = new Map(manifest.capture.piles.map((p) => [p.pileId, new Set(p.childFileIds)]));
   const whole = (pileId: string): boolean => {
     const things = manifest.capture.members.filter((m) => m.pileId === pileId);

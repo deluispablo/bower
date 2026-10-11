@@ -340,3 +340,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-11: q1b-questions-ui passes — questions show with options, Something else and own words on Home and in the run sheet; pile rows show waiting or couldn't-place (P4-118 PASS, designer verified)
 - 2026-10-11: b1d-selection passes — B1d: two-step selection and execution within one shared ledger (P4-119 PASS)
 - 2026-10-11: b4a-contract passes — B4a: About me learned memory contract, one learned-block validator, identity-bound maintenance targets (P4-122)
+- 2026-10-11: spine-operations-checkpoints passes — spine-operations-checkpoints passes: re-proved after the B5b named pin rise (TL-P4-47 addenda 8 and 9)

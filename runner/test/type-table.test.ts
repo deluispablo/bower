@@ -6,7 +6,7 @@ import { isHidden } from '../../src/data/vault/layout';
 // Keep the import variable: Vite must not resolve a not-yet-created module at collection.
 const moduleUrl = new URL('../src/type-table.ts', import.meta.url);
 async function contract<T>(name: string): Promise<T> {
-  const contractUrl = ['typeTableOk', 'propertyValuesOk'].includes(name)
+  const contractUrl = ['typeTableOk', 'propertyValuesOk', 'insertTypeRow', 'requestTableColumn'].includes(name)
     ? new URL('../../src/data/contracts/note-format.ts', import.meta.url) : moduleUrl;
   const path = contractUrl.href;
   const module: Record<string, unknown> = existsSync(contractUrl) ? await import(/* @vite-ignore */ path) : {};
@@ -40,17 +40,29 @@ const control = (): void => {
   expect(isHidden('.bower/type-table.json')).toBe(true);
   expect(isHidden('Resources/Type table.md')).toBe(false);
 };
-type TableOk = (value: unknown) => boolean;
+type TableOk = (value: unknown, stored?: boolean) => boolean;
 type ValuesOk = (row: Row, value: unknown) => boolean;
 type Read = (text: string | null) => { table: Table; writeAllowed: boolean };
 
 describe('type-row contracts through the declaration parser', () => {
+  it('b5-table-first-create-and-lenient-read: strict new tables and bounded stored rewrites', async () => {
+    const valid = await contract<TableOk>('typeTableOk');
+    const stored = { ...table(), future: -1.5, rows: [{ ...offer(), extra: { ratio: 0.25 },
+      properties: { ...offer().properties, hours: { type: 'number', label: 'Hours' } },
+      group_by: { property: 'stage', label: 'Stage' } }] };
+    expect(valid(stored)).toBe(false);
+    expect(valid(stored, true)).toBe(true);
+    expect(valid(table())).toBe(true);
+    for (const rows of [[...stored.rows, ...stored.rows], [{ ...stored.rows[0], table: ['missing'] }],
+      [{ ...stored.rows[0], properties: { hours: { type: 'not-a-type' } } }]]) {
+      expect(valid({ ...stored, rows }, true)).toBe(false);
+    }
+  });
   it('B5a contracts: b5-row-schema-and-order', async () => {
     control();
     const read = await contract<Read>('readTypeTable');
     const valid = await contract<TableOk>('typeTableOk');
     const insert = await contract<(table: Table, row: Row) => Table>('insertTypeRow');
-    const first = await contract<(rows: Row[], matchingIds: string[]) => Row | null>('firstMatchingRow');
     expect(valid(table())).toBe(true);
     const seed = read(null).table;
     expect(seed.rows.map((row) => row.id)).toEqual([
@@ -63,9 +75,9 @@ describe('type-row contracts through the declaration parser', () => {
     expect(ordered.rows.map((row) => row.id)).toEqual([
       ...seed.rows.slice(0, 6).map((row) => row.id), 'lease', 'other-project-material', 'other-area-material',
     ]);
-    expect(first(ordered.rows, ['other-area-material', 'lease', 'other-project-material'])?.id).toBe('lease');
-    expect(first(seed.rows, ['other-project-material', 'cv'])?.id).toBe('cv');
-    expect(first(seed.rows, ['absent'])).toBeNull();
+    expect(read(JSON.stringify(ordered)).table.rows.find((row) => ['other-area-material', 'lease', 'other-project-material'].includes(row.id))?.id).toBe('lease');
+    expect(read(JSON.stringify(seed)).table.rows.find((row) => ['other-project-material', 'cv'].includes(row.id))?.id).toBe('cv');
+    expect(read(JSON.stringify(seed)).table.rows.find((row) => row.id === 'absent') ?? null).toBeNull();
     expect(seed.rows).toHaveLength(8); // Insertion never mutates the seed.
     expect(valid({ ...table(), v: 2 })).toBe(false);
     expect(valid({ ...table(), extra: true })).toBe(false);
@@ -163,4 +175,39 @@ describe('type-row contracts through the declaration parser', () => {
       row: { ...row, table: ['role', 'hours'] }, replaced: null,
     });
   });
+});
+
+
+describe('b5-table-first-create-and-lenient-read', () => {
+  it.each(['empty', 'all invalid'])('uses seeds when stored rows are %s', async (state) => {
+    const read = await contract<Read>('readTypeTable');
+    expect(read(JSON.stringify(table()))).toEqual({ table: table(), writeAllowed: true });
+    const stored = { v: 1, rows: state === 'empty' ? [] : [{ id: 'bad' }] };
+    expect(read(JSON.stringify(stored))).toEqual(read(null));
+  });
+  it('retains unknown stored envelope row and property keys when inserting a new accepted row', async () => {
+    const read = await contract<Read>('readTypeTable');
+    const insert = await contract<(table: Table, row: Row) => Table>('insertTypeRow');
+    const valid = await contract<TableOk>('typeTableOk');
+    const stored = { v: 1, future_envelope: { keep: 'Alex' }, rows: [{ ...offer(), future_row: 'kept',
+      properties: { ...offer().properties, role: { type: 'text', future_property: 'kept' } } }] };
+    expect(valid(table()), 'control strict writes accept a current declaration').toBe(true);
+    expect(valid(stored), 'new writes stay closed').toBe(false);
+    const readBack = read(JSON.stringify(stored));
+    expect(readBack.writeAllowed).toBe(true);
+    expect.soft(readBack.table).toMatchObject(stored);
+    let rewritten: Table | undefined;
+    expect(() => { rewritten = insert(readBack.table, { ...offer(), id: 'lease' }); }).not.toThrow();
+    expect.soft(rewritten).toMatchObject({ future_envelope: { keep: 'Alex' }, rows: [stored.rows[0], { ...offer(), id: 'lease' }] });
+  });
+});
+
+
+it('b5-explicit-column-replaces-fourth: control trusted words use the existing replacement helper', async () => {
+  const replace = await contract<(row: Row, key: string, origin: unknown) => { row: Row; replaced: string | null } | null>('requestTableColumn');
+  const original = offer();
+  expect(replace(original, 'hours', { kind: 'words', recordId: 'alex-column-request' }))
+    .toEqual({ row: { ...original, table: ['role', 'salary', 'posted', 'hours'] }, replaced: 'stage' });
+  expect(replace(original, 'hours', { kind: 'document', fileId: 'SOURCE_ID' })).toBeNull();
+  expect(original.table).toEqual(['role', 'salary', 'posted', 'stage']);
 });
