@@ -14,6 +14,8 @@ A Codex session reads `AGENTS.md` on its own. Then:
 
 The branch names keep their `claude/` prefix. They are names, not owners, and renaming them would break every record that cites them.
 
+**Opening a Codex Desktop thread on the main checkout** keeps `claude/p3` checked out. On 2026-10-11 at 09:21, a new Codex Desktop thread in `/Users/deluisp/Projects/bower-app` switched the checkout to `main` about 40 seconds after it started. The coordinator moved it back, and nothing was lost. When the app offers a branch, pick the current one (`claude/p3`), never `main`, or open the thread in a worktree. Claude's guard hook does not run in Codex.
+
 **A missing worktree.** macOS clears `/private/tmp` at boot. The branches live in the main repository, so nothing is lost. Run `git -C /Users/deluisp/Projects/bower-app worktree prune`, then `git -C /Users/deluisp/Projects/bower-app worktree add /private/tmp/bower-tl-planning claude/tl-planning` (or `bower-design claude/design`), then `pnpm -C <path> install --frozen-lockfile`.
 
 ## Claude mechanism → Codex mechanism
