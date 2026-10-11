@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { RunManifest } from '../../src/data/spine/records';
 import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { askId } from '../../src/data/contracts/questions';
+import { opKey } from '../../src/data/contracts/op-key';
 import { RUNNER_WRITES } from '../../src/data/vault/layout';
 import * as hotModule from '../src/hot';
 import { AT, caseReplies, replySequence, runScripted } from './corpus-run';
@@ -179,7 +180,8 @@ it('B3b hot: recent rows carry their op key and dedupe by it', async () => {
   for (const row of rows) expect.soft(row, 'every actual recent row carries an operation key').toMatch(/ · op:[a-f0-9]{12}$/);
   const sourceId = Object.entries(first.pathsById).find(([, path]) => path === 'Resources/Gardening/Mulch notice.txt')?.[0] ?? '';
   const manifest = JSON.parse(manifests(first)[0]?.[1] ?? '{}') as RunManifest;
-  const filingKey = manifest.operations.find((entry) => entry.effect.kind === 'move' && entry.effect.before.fileId === sourceId)?.operationId.slice(0, 12) ?? '';
+  const filingOperation = manifest.operations.find((entry) => entry.effect.kind === 'move' && entry.effect.before.fileId === sourceId);
+  const filingKey = filingOperation ? opKey(manifest.scope.rootId, manifest.runId, filingOperation.operationId) : '';
   expect(filingKey).toMatch(/^[a-f0-9]{12}$/);
   expect.soft(rows.find((row) => row.includes('Filed Mulch notice.'))).toBe(`- 2026-10-07 Filed Mulch notice. · op:${filingKey}`);
   const hotId = Object.entries(first.pathsById).find(([, path]) => path === HOT)?.[0] ?? '';

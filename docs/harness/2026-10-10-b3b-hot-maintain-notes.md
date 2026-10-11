@@ -905,3 +905,194 @@ failure or contradiction outside the addendum 6 format/lifecycle reds remains.
 Runner tsc passes (`/tmp/b3b-a6-tsc.log`), touched-test ESLint passes
 (`/tmp/b3b-a6-eslint.log`), and read-only git diff --check passes.
 No commits were created; coordinator owns the three changed files.
+
+## Addendum 6
+
+2026-10-11, implementation session at HEAD `30ae6d41`. No network or writing git
+command was issued. Tests, fixtures and goldens are unchanged; node_modules was
+neither replaced nor symlinked. Logs, caches and test artifacts use OS temp via
+those already prepared configs and the output preload.
+
+### Missing shared mechanism
+
+The required TL-P4-50 log op-key function is absent from this checkout.
+`runner/src/log.ts` does not exist; searches of runner/src and src/data/contracts
+find no op-key export. `SYSTEM.log` has no production use outside layout.ts.
+The current main checkout at `/Users/deluisp/Projects/bower-app` also has no log
+module or op-key export. The only production `slice(0, 12)` in runner/src is the
+Claude input fingerprint, which is not the log operation key.
+
+The user requires reuse of that function and forbids a second one. WORKER.md
+also requires stopping when the named mechanism cannot serve the change.
+A clarification identifying its module is pending. No replacement op-key
+formatter, new log writer, checkpoint protocol or archive read was added.
+The suffix, inverse removal and keyed deduplication implementation remains
+blocked on that shared mechanism; no completion claim is made.
+
+### Independent minors
+
+- hot.ts delegates calendar/timestamp validity to note-edit's timelineDate;
+  its local spelling check still rejects malformed date/time strings and
+  the shared date round trip rejects normalized impossible days.
+- index.ts imports RunnerWrite with the other run-manifest types at the top,
+  and uses that type in the maintain effect rather than an inline import.
+
+### Verification
+
+The committed reds were reproduced before editing: 51 assertion failures and
+93 passing tests in the two targeted hot files, including both named production
+main tests. Log: `/tmp/b3b-a6-impl-red.log`.
+
+The full runner sweep completed: **599 pass / 51 assertion reds; 650 tests,
+49 files**. Every failure belongs to the existing addendum 6 format/lifecycle
+reds. All five drive-calls-golden tests and the fingerprint goldens pass.
+No test contradicts the requested rule. Log: `/tmp/b3b-a6-impl-runner.log`;
+JSON: `/tmp/b3b-a6-runner.json`; complete failure names:
+`/tmp/b3b-a6-impl-failures.json`.
+
+Remaining assertion locations:
+- runner/test/b23-hot-context.test.ts:115: primary rows lack keyed suffixes.
+- runner/test/b23-hot-context.test.ts:166: undone filing row remains.
+- runner/test/b23-hot-context.test.ts:167: the Undo row is absent; :168 needs its key.
+- runner/test/b23-hot-context.test.ts:179: generated rows lack keys; :184 needs the move's key.
+- runner/test/b23-hot-context.test.ts:197: same-key prior rows remain duplicated.
+- runner/test/b23-hot.test.ts:57, :89, :105, :144, :176, :192, :285, :299:
+  the 48 previously documented suffix format assertions remain red.
+
+App, node and runner tsc --noEmit pass, and ESLint on src/hot.ts and src/index.ts
+passes. Logs: `/tmp/b3b-a6-impl-tsc-app.log`, `/tmp/b3b-a6-impl-tsc-node.log`,
+`/tmp/b3b-a6-impl-tsc-runner.log`, `/tmp/b3b-a6-impl-eslint.log`.
+Read-only git diff --check passes.
+
+The requested src sweep was attempted using the temporary cache config.
+It failed src/e2e-port.test.ts:37, “a server from another worktree is never reused”,
+at the unchanged 5,000 ms timeout, then made no further progress. The existing
+notes document this sandbox's server-listen restriction. That attempt was
+interrupted after the stall. Log: `/tmp/b3b-a6-impl-src.log`. A second attempt
+excludes only that test file to assess the remaining app suite; its result is
+recorded below. This does not change any test or assert a full src pass.
+
+No pnpm check or screen e2e was run: the user requests the component gates,
+forbids repository test outputs, and this entry has ui:false.
+Offline reference reused from the entry:
+[Kubernetes controllers](https://kubernetes.io/docs/concepts/architecture/controller/),
+for rebuilding derived views from settled evidence; no page was fetched.
+
+removed: runner/src/hot.ts: duplicate Date construction and finite checks; timelineDate validates parsed dates.
+removed: runner/src/index.ts: inline RunnerWrite type import inside the maintain effect.
+removed: no test, assertion, fixture, golden, threshold, dependency or live fence.
+tests changed: none
+
+The remaining-src attempt also stalled, with only Vitest's start header and no
+completed tests or new diagnostic. It was interrupted rather than left running.
+Log: `/tmp/b3b-a6-impl-src-rest.log`. Both interrupted commands exit 130; the
+full-src attempt did report the server-identity timeout first. The src suite
+is unverified, not green. No dependency repair was attempted because the user
+forbids node_modules replacement/symlinking and there is no import failure
+establishing a dependency diagnosis.
+
+Delivery: blocked on the absent shared log op-key function. Only the two
+independent minors and these notes are changed. No contradiction was found in
+the complete targeted runner sweep; its 51 reds match the requested rule.
+
+## Addendum 6 (op key)
+
+2026-10-11, continuation at HEAD `30ae6d41`. The coordinator corrected the
+missing-mechanism assumption: B8 is queued, so B3b creates the shared contract
+now. This supersedes the missing-module blocker above. The user's current
+instruction defines the key as the first 12 lowercase hex digits of a hash
+over root id, run id and op id joined unambiguously.
+
+Added `src/data/contracts/op-key.ts`, exporting the pure synchronous `opKey`.
+It hashes `JSON.stringify([rootId, runId, opId])` through the existing
+contracts/hashes.ts `sha256Sync`; no dependency or second digest mechanism.
+The one-line input comment cites TL-P4-50. A new short unit test checks the
+tuple digest, lowercase 12-hex format, all three identity components and an
+ambiguous-delimiter control. Its initial missing-module assertion failed;
+the delivered test uses a static import after the function was added.
+
+### Contradiction inventory and stop
+
+The complete targeted runner suite was run before stopping. One test
+contradicts the newly specified algorithm:
+
+- `runner/test/b23-hot-context.test.ts:184`, `B3b hot: recent rows carry their
+  op key and dedupe by it`: exact filing row expects the key constructed at
+  `:182` using `operationId.slice(0, 12)`. This truncates the operation id;
+  it does not hash the root/run/op tuple as the current instruction requires.
+
+No other contradictory assertion was identified in the full sweep. Its
+remaining suffix, inverse-removal and deduplication failures are unimplemented
+addendum 6 reds. No existing test was changed. Per the user's stop rule and
+WORKER.md's contradiction rule, hot renderer/maintain wiring is left pending
+resolution of that exact pin; no alternative key algorithm was introduced.
+The shared contract is independently complete, but this entry is blocked.
+
+### Compatibility row draft
+
+| New contract | Writer / consumer | Input and output | Compatibility |
+| --- | --- | --- | --- |
+| `src/data/contracts/op-key.ts:opKey` (TL-P4-50) | B3b creates its one home; B3b hot and queued B8 log reuse it | SHA-256 of the UTF-8 JSON tuple `[rootId, runId, opId]`, first 12 lowercase hex; intended suffix ` · op:<key>` for idempotence only | Additive pure API; no stored schema or operation identity changes. Hot/log consumers are pending; the incompatible test pin at `b23-hot-context.test.ts:184` requires a ruling. |
+
+### Verification
+
+All output, caches and fixture artifacts stayed in OS temp, using the existing
+temporary Vitest configs and `/tmp/b3b-hot-maintain-output.mjs` preload. No
+network, install, node_modules replacement/symlink, or writing git command was
+issued. Existing uncommitted hot.ts/index.ts minors and notes were preserved.
+No fixture or golden changed; all five drive-calls-golden tests passed.
+
+| Check | Result | Log |
+| --- | --- | --- |
+| New op-key test before implementation | Missing-contract AssertionError, exit 1 | `/tmp/b3b-op-key-red.log` |
+| New op-key test plus src/architecture.test.ts | 8 passed, 2 files, exit 0; pure-contract closure passes | `/tmp/b3b-op-key-green.log` |
+| Full runner tests, --maxWorkers=2 | 599 pass / 51 assertion reds, 650 tests, 49 files, exit 1; only the two hot files fail | `/tmp/b3b-op-key-runner.log` |
+| `pnpm exec vitest run src --maxWorkers=2` with temporary cache config | src/e2e-port.test.ts:37 times out at unchanged 5,000 ms in this sandbox's expected server-listen restriction; no further progress, interrupted, exit 130 | `/tmp/b3b-op-key-src.log` |
+| App tsc --noEmit | Pass, exit 0 | `/tmp/b3b-op-key-tsc-app.log` |
+| Node tsc --noEmit | Pass, exit 0 | `/tmp/b3b-op-key-tsc-node.log` |
+| Runner tsc --noEmit | Pass, exit 0 | `/tmp/b3b-op-key-tsc-runner.log` |
+| ESLint new contracts files, root config | Pass, exit 0 | `/tmp/b3b-op-key-eslint-contract.log` |
+| ESLint preserved runner minors, runner config | Pass, exit 0 | `/tmp/b3b-op-key-eslint-runner.log` |
+| Read-only git diff --check | Pass | No output |
+
+Full failure names/messages: `/tmp/b3b-op-key-runner-failures.json`.
+The initial mixed root/runner ESLint invocation rejected multiple inferred
+tsconfig roots; separate invocations with each existing config passed without
+changing configuration. The full src suite remains unverified, not green.
+No pnpm check or screen e2e: requested component gates only, repository test
+outputs forbidden, ui:false. No commits were made.
+
+Offline references reused: the existing digest helper's
+[@noble/hashes](https://github.com/paulmillr/noble-hashes) reference and the
+entry's [controller reconciliation](https://kubernetes.io/docs/concepts/architecture/controller/)
+reference. Neither page was fetched.
+
+removed: none in this continuation; the existing hot.ts and index.ts minor removals remain intact.
+removed: no existing test, assertion, fixture, golden, threshold, dependency, fence or checkpoint mechanism.
+tests changed: src/data/contracts/op-key.test.ts (new op-key test only)
+
+
+## Op-key red repair
+
+TL-P4-50 key / TL-P4-42 addendum 6: reuse the existing `opKey` contract,
+which hashes the canonical JSON tuple [rootId, runId, operationId]. No network research.
+
+- Contradiction repaired: runner/test/b23-hot-context.test.ts:182 before repair
+  (now :184) truncated operationId. Expected filing key now uses
+  `opKey(manifest.scope.rootId, manifest.runId, filingOperation.operationId)`.
+- Swept runner/test/b23-hot.test.ts and runner/test/b23-hot-recovery.test.ts once,
+  plus the shared b23-hot-observe helper: no other operation-id truncation found.
+  Existing date, list and text slices are unrelated and unchanged.
+
+tests changed: runner/test/b23-hot-context.test.ts: use the ruled shared opKey with the manifest root and run ids.
+
+Targeted hot suite before and after: 95 passed / 51 failed, 146 tests, three files.
+All hot files ran with --maxWorkers=2; remaining assertion reds are implementation work,
+not repaired by weakening expectations. Recovery file passes; context and renderer files remain red.
+Before log: /tmp/b3b-op-key-before.log; report: /tmp/b3b-op-key-before.json.
+After log: /tmp/b3b-op-key-repair.log; report: /tmp/b3b-op-key-repair.json.
+All remaining failure names and assertion details: /tmp/b3b-op-key-repair-failures.json.
+Final run reused the existing temporary runner config and output preload, with cache and report in /tmp.
+No production or contract edits, git writes, network, installs, or node_modules replacement/symlink.
+No pnpm check or screen e2e: this assignment requests only the hot suite; standard check writes repository outputs.
+Coordinator owns commits. Existing dirty notes and production/contract files preserved.
