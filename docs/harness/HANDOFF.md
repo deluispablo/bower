@@ -7,7 +7,7 @@ Coordinator: the Claude Code session named "Orquestador". It integrates in `/Use
 This block is the whole current state; ACTIVE.md is the history log. If Claude's quota ends, a Codex session takes this role ([CODEX_TAKEOVER.md](CODEX_TAKEOVER.md), TL-P4-56).
 
 **State.**
-- claude/p3 is at 8ce0213a, 520/532. main (lead) is at b716e2d3 and must be merged into claude/p3 (`git -C /Users/deluisp/Projects/bower-app merge -q --no-edit main`).
+- claude/p3 holds main b716e2d3 (merged), 520/532. After each lead ruling, merge main again (`git -C /Users/deluisp/Projects/bower-app merge -q --no-edit main`).
 - backup/main and staging are at 5bab1288 (staging bfa0c812, bundle index-DOzbpzq4.js).
 - Since 5bab1288, claude/p3 holds B1c, Q1c, B3b, B5a, B6a and the c02/E-entries. The next batch boundary needs the four suites (jobs/suites.sh), main moved (`git -C repo fetch -q . claude/p3:main`), backup after jobs/backup-scan.sh, the SHA to the lead, and a staging smoke.
 
