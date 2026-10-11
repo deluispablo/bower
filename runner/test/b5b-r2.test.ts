@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { scriptedDecisions } from '../../src/data/demo/script';
-import { parseNote } from '../../src/data/contracts/note-format';
+import { parseNote, tableProperties } from '../../src/data/contracts/note-format';
 import type { TypeRow } from '../../src/data/contracts/types';
 import { planScripted, runKeys, type Decisions } from '../../src/data/spine/scripted';
 import { loadCase } from '../src/corpus';
@@ -106,8 +106,13 @@ it('b5b-r2 2 more than four columns', async () => {
       expect(read.table.rows).toEqual([row('lease', columns)]);
       expect(result.after[TABLE], 'four-column control is byte-identical').toBe(stored);
     } else {
-      expect.soft(read.table.rows.find((item) => item.id === 'lease')?.table, `${columns.length} stored columns project their first four`)
-        .toEqual(columns.slice(0, 4));
+      const storedRow = read.table.rows.find((item) => item.id === 'lease');
+      expect.soft(storedRow?.table, `${columns.length} stored columns retain every declared key`).toEqual(columns);
+      expect(storedRow).toBeDefined();
+      if (!storedRow) throw new Error('Missing lease row');
+      const note = parseNote('Lease.md', ['---', ...columns.map((key) => `${key}: Alex`), '---'].join('\n'));
+      expect.soft(tableProperties(note, storedRow).map((property) => property.key),
+        `${columns.length} stored columns project their first four shown keys`).toEqual(columns.slice(0, 4));
       expect.soft(result.after[TABLE], 'an unrelated run never reseeds or drops the stored row').toBe(stored);
     }
   }
