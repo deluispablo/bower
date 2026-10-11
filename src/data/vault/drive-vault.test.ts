@@ -38,6 +38,14 @@ beforeEach(async () => {
 
 afterEach(() => vi.useRealTimers());
 
+/** A fixture where the context was never created, with no Bin entry. */
+async function contextNeverCreated(ids: string[]): Promise<void> {
+  const missing = new Set(ids);
+  const kept = JSON.parse(await drive.snapshot()) as { files: Array<{ meta: { id: string } }> };
+  drive = FakeDrive.restore(JSON.stringify({ ...kept, files: kept.files.filter((f) => !missing.has(f.meta.id)) }));
+  vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+}
+
 const idOf = async (path: string): Promise<string> => {
   const all = await drive.listAll(root);
   const f = all.find((x) => drive.pathOf(x.id, root) === path);
@@ -908,8 +916,8 @@ describe('things that arrive late', () => {
   });
 
   /**
-   * The pile goes to the Bin while its only file is still being kept by the queue (not yet sent), so the Bin finds
-   * nothing to hold back; the file then lands and the Bin of the pile itself is still being written.
+   * The staged file lands, but its final answer is an error. Its read-back is already on the wire when trash
+   * halts the queue; that late answer follows the pile to the Bin while the folder's Bin is still being written.
    */
   async function landsAfterTheBin(failFirstBin: boolean, binPileLast: boolean): Promise<{ lateId: string; pile: { id: string; path?: string }; failed: () => boolean; v: DriveVault }> {
     const base = memoryUploadStore();
@@ -917,7 +925,7 @@ describe('things that arrive late', () => {
     const keeping = new Promise<void>((r) => (kept = r));
     let letKeep: () => void = () => undefined;
     const keepGate = new Promise<void>((r) => (letKeep = r));
-    const store = { ...base, add: async (rec: Parameters<typeof base.add>[0], body: Blob) => { kept(); await keepGate; return base.add(rec, body); } };
+    const store = { ...base, add: async (...args: Parameters<typeof base.add>) => { kept(); await keepGate; return base.add(...args); } };
     const queue = createUploadQueue({ drive, store });
     const v = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set(), uploads: { queue, account: async () => 'ACCOUNT_A' } });
     const realTrash = drive.trash.bind(drive);
@@ -925,7 +933,36 @@ describe('things that arrive late', () => {
     let failOnce = failFirstBin;
     let lateBinned: () => void = () => undefined;
     const binned = new Promise<void>((r) => (lateBinned = r));
-    holdChunks(drive, Promise.resolve(), true, (file) => { lateId = file.id; });
+    let reading: () => void = () => undefined;
+    const readStarted = new Promise<void>((r) => (reading = r));
+    let answer: () => void = () => undefined;
+    const answerGate = new Promise<void>((r) => (answer = r));
+    const put = drive.putChunk.bind(drive);
+    drive.putChunk = async (...args) => {
+      const status = await put(...args);
+      if (status.kind === 'done') {
+        lateId = status.file.id;
+        // Drive has the reserved file, but the client receives an error and must read it back.
+        throw driveError('conflict');
+      }
+      return status;
+    };
+    const uploaded = drive.getUploaded.bind(drive);
+    drive.getUploaded = async (id) => {
+      const file = await uploaded(id);
+      if (id === lateId) {
+        reading();
+        await answerGate;
+      }
+      return file;
+    };
+    const halt = queue.halt.bind(queue);
+    vi.spyOn(queue, 'halt').mockImplementation((id) => {
+      const halted = halt(id);
+      // The read was sent before halt; its answer can still arrive after the abort.
+      answer();
+      return halted;
+    });
     let folder = '';
     drive.trash = async (id) => {
       if (id === folder && binPileLast) await binned;
@@ -937,11 +974,13 @@ describe('things that arrive late', () => {
       if (id === lateId) lateBinned();
       return r;
     };
-    const pile = await v.addPile({ text: 'Late papers', items: [{ name: 'late.pdf', kind: 'pdf', origin: 'x', body: new Blob(['x']) }] });
+    const saving = v.addPile({ text: 'Late papers', items: [{ name: 'late.pdf', kind: 'pdf', origin: 'x', body: new Blob(['x']) }] });
     await keeping;
+    letKeep();
+    const pile = await saving;
+    await readStarted;
     folder = (await drive.listAll(root)).find((f) => drive.pathOf(f.id, root) === pile.path)?.id ?? '';
     const trashing = v.trash(pile.path ?? '');
-    letKeep();
     await trashing;
     await v.settled();
     return { lateId, pile, failed: () => failOnce, v };
@@ -1307,7 +1346,7 @@ describe('pile declarations', () => {
     await uploader.settled();
     const { folder, note, declaration } = await declaredParts(pile.id);
     if (!note || declaration.context.kind !== 'text') throw new Error('no context');
-    await drive.trash(note.id);
+    await contextNeverCreated([note.id]);
     const upload = vi.spyOn(drive, 'openResumable');
     await expect(declaring().retryPile(pile.id)).rejects.toMatchObject({ code: 'conflict', message: 'Choose b.pdf again on this device to send it.' });
     const again = (await drive.listAll(folder.id)).filter((f) => f.name === 'Pile note.md');
@@ -1365,7 +1404,7 @@ describe('pile declarations', () => {
     await uploader.settled();
     const { folder, note, declaration } = await declaredParts(pile.id);
     if (!note || declaration.context.kind !== 'text') throw new Error('no context');
-    await drive.trash(note.id);
+    await contextNeverCreated([note.id]);
     const createText = vi.spyOn(drive, 'createText');
     const busy = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set([pile.id]), declarePiles: true });
     await expect(busy.retryPile(pile.id)).rejects.toMatchObject({ code: 'conflict', message: 'Wait for the tidy-up to end.' });
@@ -1457,31 +1496,48 @@ describe('uploads survive a reload, through the vault', () => {
     expect([...(await again.readBytes(reserved ?? ''))]).toEqual([...BYTES]);
   });
 
-  it('sign-out keeps the bytes for that account and folder; another account never sees or sends them', async () => {
+  it('sign-out forgets the bytes for that account and folder; another account never sees or sends them', async () => {
     const { d, idb } = await fresh();
     const hold = holdAt(d, 4);
     const first = page(d, idb);
-    const pile = await first.vault.addPile({ text: 'Receipts', items: [scan()] });
-    await reached(d, 4);
-    // Signing out stops the queue; what it kept stays on the device.
-    first.queue.stop();
-    first.vault.dispose();
-    hold.open();
-    d.beforeChunk = null;
-    expect(await indexedDbUploadStore(idb).list(ACCOUNT_A, root)).toHaveLength(1);
+    const live = makeLiveSources({ drive: d, worker: new FakeWorker({ drive: d, runs: new FakeRunService({ drive: d, scale: 'instant' }), rootId: root, scenario: 'default' }), declarePiles: true, uploadQueue: first.queue });
+    try {
+      const account = await uploadAccount((await live.session.current())?.email ?? '');
+      const pile = await live.vault.addPile({ text: 'Receipts', items: [scan()] });
+      await reached(d, 4);
+      const store = indexedDbUploadStore(idb);
+      const kept = (await store.list(account, root))[0];
+      expect(kept).toBeDefined();
+      expect(kept && await store.body(kept)).toBeInstanceOf(Blob);
+      await live.session.signOut();
+      hold.open();
+      await first.queue.idle();
+      d.beforeChunk = null;
+      expect(await store.list(account, root)).toEqual([]);
+      expect(kept && await store.body(kept)).toBeNull();
 
-    const calls = d.resumableCalls.length;
-    const other = page(d, idb, ACCOUNT_B);
-    const rows = await rowsOf(other.vault, pile.id);
-    await other.queue.idle();
-    expect(rows.filter(([, upload]) => upload !== undefined && upload >= 0)).toEqual([]);
-    expect(other.queue.items()).toEqual([]);
-    expect(d.resumableCalls).toHaveLength(calls);
-    other.queue.stop();
+      const calls = d.resumableCalls.length;
+      const other = page(d, idb, ACCOUNT_B);
+      const rows = await rowsOf(other.vault, pile.id);
+      await other.queue.idle();
+      expect(rows.filter(([, upload]) => upload !== undefined && upload >= 0)).toEqual([]);
+      expect(other.queue.items()).toEqual([]);
+      expect(d.resumableCalls).toHaveLength(calls);
+      other.queue.stop();
 
-    const back = page(d, idb, ACCOUNT_A);
-    await back.vault.piles();
-    await vi.waitFor(async () => expect(await scans(d)).toHaveLength(1));
+      const back = page(d, idb, account);
+      await back.vault.piles();
+      await back.queue.idle();
+      expect(await scans(d)).toHaveLength(0);
+      expect(back.queue.items()).toEqual([]);
+      expect(d.resumableCalls).toHaveLength(calls);
+      back.queue.stop();
+    } finally {
+      hold.open();
+      first.vault.dispose();
+      live.dispose();
+      sessionStorage.clear();
+    }
   });
 
   it('leaving Bower removes the bytes this device kept', async () => {
@@ -1980,18 +2036,99 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect((await pileOn(other, pile.id))?.setAside).toBeUndefined();
   });
 
-  /** A declared pile with words, whose things all left it and whose note went to the Bin in Drive, never through Bower. */
+  /** A declared pile with words, whose things all left it and whose context write never landed. */
   async function noteToWriteAgain(text: string) {
     const uploader = declaring();
     const pile = await uploader.addPile({ text, items: [pdf(`${text}.pdf`)] });
     await uploader.settled();
     const thing = await fileIn(pile.id, `${text}.pdf`);
     await drive.update(thing.id, { addParent: await idOf('Areas'), removeParent: thing.parents[0] ?? '' });
-    await drive.trash((await fileIn(pile.id, 'Pile note.md')).id);
+    await contextNeverCreated([(await fileIn(pile.id, 'Pile note.md')).id]);
     return pile;
   }
 
   // TL-P2-32: a note to write again has not arrived; the tidy-up holds the pile until Try again writes it.
+  it('pile-binned-context-hold: a Drive-binned note leaves ready things filed with no silent hold', async () => {
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await uploader.settled();
+    const note = await fileIn(pile.id, 'Pile note.md');
+    await drive.trash(note.id);
+    const other = declaring();
+    expect(await other.changes()).toEqual([]);
+    const seen = await pileOn(other, pile.id);
+    expect(seen?.items.map((i) => [i.name, i.upload])).toEqual([['a.pdf', undefined], ['b.pdf', undefined]]);
+    expect(seen?.setAside).toBeUndefined();
+    const folder = await folderOf(pile.id);
+    const out = await tidyUp(drive, root, 'all');
+    if (out.phase !== 'done') throw new Error('the tidy-up failed');
+    expect.soft(out.manifest.capture.piles.map((p) => p.pileId)).toContain(pile.id);
+    expect.soft(out.report.filed.map((f) => f.name)).toEqual(expect.arrayContaining(['a.pdf', 'b.pdf']));
+    expect.soft((await drive.listAll(root)).filter((f) => f.parents.includes(folder.id) && ['a.pdf', 'b.pdf'].includes(f.name))).toEqual([]);
+  });
+
+  it('pile-binned-context-hold: journal trash still removes context for the app and the run', async () => {
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await uploader.settled();
+    if (!pile.path) throw new Error('no pile path');
+    // A stored journal line is the control; the app's Inbox trash command removes the whole pile.
+    const note = await fileIn(pile.id, 'Pile note.md');
+    await drive.trash(note.id);
+    const listing = await drive.listAll(root);
+    const bower = listing.find((f) => f.folder && f.parents.includes(root) && f.name === '.bower') ?? await drive.createFolder(root, '.bower');
+    const changes = listing.find((f) => f.folder && f.parents.includes(bower.id) && f.name === 'changes') ?? await drive.createFolder(bower.id, 'changes');
+    await drive.createText(changes.id, 'context-trash.json', JSON.stringify({ v: 1, id: 'context-trash', device: 'DEVICE', at: Date.now(), kind: 'trash', what: 'Put the pile note in the Bin', path: `${pile.path}/Pile note.md`, fileId: note.id }));
+    const other = declaring();
+    expect((await other.changes()).filter((c) => c.kind === 'trash')).toHaveLength(1);
+    expect((await pileOn(other, pile.id))?.setAside).toBeUndefined();
+    const out = await tidyUp(drive, root, 'all');
+    if (out.phase !== 'done') throw new Error('the tidy-up failed');
+    expect(out.manifest.capture.piles.map((p) => p.pileId)).toContain(pile.id);
+    expect(out.report.filed.map((f) => f.name)).toEqual(expect.arrayContaining(['a.pdf', 'b.pdf']));
+  });
+
+  it.each(['ready things', 'one missing thing', 'things filed elsewhere', 'context only'] as const)(
+    'pile-binned-context-hold: a never-landed context stays not-arrived with %s', async (shape) => {
+      if (shape === 'one missing thing') failing('b.pdf');
+      const uploader = declaring();
+      const pile = await uploader.addPile({ text: 'Papers from Alex', items: shape === 'context only' ? [] : [pdf('a.pdf'), pdf('b.pdf')] });
+      await uploader.settled();
+      if (shape === 'things filed elsewhere') {
+        for (const name of ['a.pdf', 'b.pdf']) {
+          const thing = await fileIn(pile.id, name);
+          await drive.update(thing.id, { addParent: await idOf('Areas'), removeParent: thing.parents[0] ?? '' });
+        }
+      }
+      const note = await fileIn(pile.id, 'Pile note.md');
+      const contextKey = note.appProperties?.bowerItem;
+      if (!contextKey) throw new Error('no context key');
+      await contextNeverCreated([note.id]);
+      expect(await drive.binnedByItem(root, [contextKey])).toEqual([]);
+      expect((await pileOn(declaring(), pile.id))?.setAside).toBe('not-arrived');
+      expect(await runnerSays(pile.id)).toBe(SAID['not-arrived']);
+    },
+  );
+
+  it('pile-binned-context-hold: missing context and member share one Bin listing and cached app readiness', async () => {
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await uploader.settled();
+    const note = await fileIn(pile.id, 'Pile note.md');
+    const member = await fileIn(pile.id, 'b.pdf');
+    await drive.update(member.id, { addParent: await idOf('Areas'), removeParent: member.parents[0] ?? '' });
+    await drive.trash(member.id);
+    await drive.trash(note.id);
+    const other = declaring();
+    const lists = vi.spyOn(drive, 'listAll');
+    const bins = vi.spyOn(drive, 'binnedByItem');
+    expect((await pileOn(other, pile.id))?.setAside).toBeUndefined();
+    expect((await pileOn(other, pile.id))?.setAside).toBeUndefined();
+    expect(lists).toHaveBeenCalledTimes(1);
+    expect(bins).toHaveBeenCalledTimes(1);
+    expect(bins.mock.calls[0]?.[1].slice().sort()).toEqual([note.appProperties?.bowerItem, member.appProperties?.bowerItem].sort());
+  });
+
   it('a note to write again is not an empty pile, for the inbox and the tidy-up alike', async () => {
     const pile = await noteToWriteAgain('Papers from Alex');
     const seen = await pileOn(declaring(), pile.id);
@@ -3034,7 +3171,7 @@ describe('c2-create-by-id: an app write whose answer was lost is found again by 
     const pile = (await vault.piles()).find((p) => p.path && p.text.startsWith('Job offer'));
     if (!pile?.path) throw new Error('no pile');
     const folder = await idOf(pile.path);
-    for (const n of (await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md')) await drive.trash(n.id);
+    await contextNeverCreated((await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md').map((f) => f.id));
     await vault.refresh();
     lose('createText', (a) => a[1] === 'Pile note.md' && blind());
     await expect(vault.updatePile(pile.id, 'Job offer papers')).rejects.toMatchObject({ code: 'offline' });
@@ -3056,7 +3193,7 @@ describe('c2-create-by-id: an app write whose answer was lost is found again by 
     const pile = (await vault.piles()).find((p) => p.path && p.text.startsWith('Job offer'));
     if (!pile?.path) throw new Error('no pile');
     const folder = await idOf(pile.path);
-    for (const n of (await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md')) await drive.trash(n.id);
+    await contextNeverCreated((await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md').map((f) => f.id));
     await vault.refresh();
     // The note lands with the first words; its answer and the read-back are both lost.
     lose('createText', (a) => a[1] === 'Pile note.md' && blind());
@@ -3082,7 +3219,7 @@ describe('c2-create-by-id: an app write whose answer was lost is found again by 
     const pile = (await vault.piles()).find((p) => p.path && p.text.startsWith('Job offer'));
     if (!pile?.path) throw new Error('no pile');
     const folder = await idOf(pile.path);
-    for (const n of (await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md')) await drive.trash(n.id);
+    await contextNeverCreated((await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md').map((f) => f.id));
     await vault.refresh();
     lose('createText', (a) => a[1] === 'Pile note.md' && blind());
     await expect(vault.updatePile(pile.id, words)).rejects.toMatchObject({ code: 'offline' });
@@ -3239,7 +3376,7 @@ describe('c2-create-by-id: an app write whose answer was lost is found again by 
     await uploader.settled();
     const folder = (await drive.listAll(root)).find((f) => f.folder && f.name.endsWith('Papers from Alex'));
     const note = (await drive.listAll(folder?.id ?? '')).find((f) => f.name === 'Pile note.md');
-    await drive.trash(note?.id ?? '');
+    await contextNeverCreated([note?.id ?? '']);
     const lost = lose('createText', (a) => a[1] === 'Pile note.md');
     await expect(declaring().retryPile(pile.id)).resolves.toBeUndefined();
     expect(lost()).toBe(1);
@@ -3868,7 +4005,7 @@ describe('c4-create-landed: an app create found by its reserved id counts only a
     const pile = (await vault.piles()).find((p) => p.path && p.text.startsWith('Job offer'));
     if (!pile?.path) throw new Error('no pile');
     const folder = await idOf(pile.path);
-    for (const n of (await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md')) await drive.trash(n.id);
+    await contextNeverCreated((await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md').map((f) => f.id));
     await vault.refresh();
     const lost = loseCreate('createText', (a) => a[1] === 'Pile note.md');
     await expect(vault.updatePile(pile.id, 'Job offer papers')).rejects.toMatchObject({ code: 'offline' });
@@ -4223,7 +4360,7 @@ describe('c4-create-landed: an app create found by its reserved id counts only a
       const pile = (await vault.piles()).find((p) => p.path && p.text.startsWith('Job offer'));
       if (!pile?.path) throw new Error('no pile');
       const folder = await idOf(pile.path);
-      for (const n of (await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md')) await drive.trash(n.id);
+      await contextNeverCreated((await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md').map((f) => f.id));
       await vault.refresh();
       const words = kind === 'pile note' ? 'Job offer papers' : 'Job offer, signed papers';
       return {

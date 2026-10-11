@@ -1,0 +1,40 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Rain barrel guide.txt",
+        "to": "Resources/Gardening",
+        "name": "Rain barrel guide.txt",
+        "note": {
+          "name": "Rain barrel guide.md",
+          "summary": "Alex keeps rainwater for gardening.",
+          "body": "Alex keeps rainwater for gardening in Saltmere.\n\nRelated: [[Gardening]] and [[Seed packet]].",
+          "tags": [
+            "gardening"
+          ]
+        }
+      }
+    ],
+    "tagProposals": [
+      {
+        "pileId": "p-1",
+        "tag": "rainwater",
+        "text": "Add the tag rainwater for future notes?",
+        "yes": "Add tag",
+        "no": "Keep current tags"
+      }
+    ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": []
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": []
+  }
+]

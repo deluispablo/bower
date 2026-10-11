@@ -4,7 +4,7 @@
  * `report.ts`, and the pure record guards in `contracts/`.
  */
 import type { DriveFile } from '../drive/drive-api';
-import type { EffectV2, OperationV2, ReportContribution, SeenFile, Target } from '../contracts/run-manifest';
+import { requestMoveKind, type EffectV2, type OperationV2, type ReportContribution, type SeenFile, type Target } from '../contracts/run-manifest';
 import { savedLinkKey } from '../contracts/note-edit';
 import { savedWordsPile } from './duplicates';
 import { md5Hex } from '../contracts/hashes';
@@ -97,7 +97,15 @@ export function grounded(manifest: RunManifest): boolean {
       && !c.value.setAside.length && !c.value.questions.length && !c.value.answered?.length
       && !c.value.alreadySaved?.length && !c.value.requests?.length && c.value.rulesWorded === undefined
       && c.value.updated[0]?.line === undefined;
-    if (!journalRow && [...c.value.created, ...c.value.updated].some((r) => r.path !== at)) return false;
+    const maintained = first?.kind === 'maintain' ? first.inputs.targets?.filter((t) => {
+      const note = first.inputs.snapshot?.[t.fileId];
+      return note?.moc && note.path === t.path && t.beforeContent !== undefined;
+    }).map((t) => t.path) ?? [] : [];
+    if (first?.kind === 'maintain') {
+      if (c.when !== 'applied' || c.value.created.length || c.value.filed.length || c.value.setAside.length
+        || c.value.updated.some((r) => !maintained.includes(r.path) || r.line !== undefined)
+        || new Set(c.value.updated.map((r) => r.path)).size !== c.value.updated.length) return false;
+    } else if (!journalRow && [...c.value.created, ...c.value.updated].some((r) => r.path !== at)) return false;
   }
   const rows = (o: OperationV2): ReportContribution[] => applied.get(o.operationId) ?? [];
   /** How many set-aside rows each operation must have: none but the ones counted below. */
@@ -120,7 +128,12 @@ export function grounded(manifest: RunManifest): boolean {
       // A pile of words already saved: its Bin is told as a copy's is, once for each outcome.
       asides.set(o.operationId, 1);
     } else if (e.kind === 'move' && lines.has(e.before.fileId)) {
-      if (pathOf(e.parent) !== SYSTEM.archive || e.name !== e.before.name || Object.keys(e.properties).length || mine.length !== 1) return false;
+      const relocating = requestMoveKind(manifest, o);
+      if (relocating) {
+        if (mine.length || aside || e.name !== e.before.name) return false;
+      } else if (pathOf(e.parent) !== SYSTEM.archive || e.name !== e.before.name
+        || Object.keys(e.properties).some((key) => key !== 'bowerRun')
+        || (Object.hasOwn(e.properties, 'bowerRun') && e.properties.bowerRun !== null) || mine.length !== 1) return false;
     } else if (e.kind === 'bin' && places.has(e.before.fileId)) {
       asides.set(o.operationId, 1);
     } else if (e.kind === 'edit-text') {
@@ -156,7 +169,7 @@ export function grounded(manifest: RunManifest): boolean {
   // every file is moved once.
   return manifest.operations.every((o) => (rejected.get(o.operationId) ?? 0) === (asides.get(o.operationId) ?? 0))
     && [...members].every((id) => told.applied.has(id) && told.rejected.has(id))
-    && [...lines].every((id) => manifest.operations.filter((o) => 'before' in o.effect && o.effect.before.fileId === id).length === 1);
+    && [...lines].every((id) => manifest.operations.filter((o) => 'before' in o.effect && o.effect.before.fileId === id && !requestMoveKind(manifest, o)).length === 1);
 }
 
 /** Whether a runner file made again holds what its path holds (a list of questions holds questions, TL-P2-37 Q1). */

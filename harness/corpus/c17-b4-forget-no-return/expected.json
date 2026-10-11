@@ -1,0 +1,154 @@
+{
+  "files": {
+    "present": [
+      "About me.md",
+      ".bower/observations.jsonl"
+    ],
+    "absent": [
+      "About me - archive.md"
+    ]
+  },
+  "notes": [
+    {
+      "path": "About me.md",
+      "contains": [
+        "## My words",
+        "## What Bower has learned",
+        "### How you like things"
+      ],
+      "excludes": [
+        "Prefers remote roles"
+      ]
+    },
+    {
+      "path": ".bower/observations.jsonl",
+      "contains": [
+        "\"kind\":\"tombstone\"",
+        "\"factId\":\"fact-remote\""
+      ]
+    }
+  ],
+  "unchanged": [
+    "Resources/Career/Remote preference.md",
+    ".bower/archive/about-me/about-fixture/how-you-like-things/2026-10-07-old.md"
+  ],
+  "protectedRanges": [
+    {
+      "path": "About me.md",
+      "range": {
+        "heading": "My words"
+      }
+    },
+    {
+      "path": "About me.md",
+      "range": {
+        "frontMatter": true
+      }
+    }
+  ],
+  "runs": [
+    {
+      "files": {
+        "present": [
+          "About me.md",
+          ".bower/observations.jsonl"
+        ],
+        "absent": [
+          "About me - archive.md"
+        ]
+      },
+      "notes": [
+        {
+          "path": "About me.md",
+          "contains": [
+            "## My words",
+            "## What Bower has learned",
+            "### How you like things"
+          ],
+          "excludes": [
+            "Prefers remote roles"
+          ]
+        },
+        {
+          "path": ".bower/observations.jsonl",
+          "contains": [
+            "\"kind\":\"tombstone\"",
+            "\"factId\":\"fact-remote\""
+          ]
+        }
+      ],
+      "unchanged": [
+        "Resources/Career/Remote preference.md",
+        ".bower/archive/about-me/about-fixture/how-you-like-things/2026-10-07-old.md"
+      ],
+      "protectedRanges": [
+        {
+          "path": "About me.md",
+          "range": {
+            "heading": "My words"
+          }
+        },
+        {
+          "path": "About me.md",
+          "range": {
+            "frontMatter": true
+          }
+        }
+      ],
+      "report": {
+        "filed": 0,
+        "created": [],
+        "updated": [
+          "About me.md"
+        ],
+        "questionsExactly": 0
+      }
+    },
+    {
+      "notes": [
+        {
+          "path": "About me.md",
+          "contains": [
+            "## My words",
+            "## What Bower has learned",
+            "### How you like things"
+          ],
+          "excludes": [
+            "Prefers remote roles"
+          ]
+        },
+        {
+          "path": ".bower/observations.jsonl",
+          "contains": [
+            "\"kind\":\"tombstone\"",
+            "\"factId\":\"fact-remote\""
+          ]
+        }
+      ],
+      "unchanged": [
+        "Resources/Career/Remote preference.md",
+        ".bower/archive/about-me/about-fixture/how-you-like-things/2026-10-07-old.md"
+      ],
+      "protectedRanges": [
+        {
+          "path": "About me.md",
+          "range": {
+            "heading": "My words"
+          }
+        },
+        {
+          "path": "About me.md",
+          "range": {
+            "frontMatter": true
+          }
+        }
+      ],
+      "report": {
+        "filed": 0,
+        "created": [],
+        "updated": [],
+        "questionsExactly": 0
+      }
+    }
+  ]
+}

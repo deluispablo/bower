@@ -1,0 +1,39 @@
+{
+  "files": {
+    "present": [
+      "Resources/Gardening/Garden handbook.pdf",
+      "Resources/Gardening/Garden handbook introduction.md"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "unchanged": [
+    "Resources/Gardening/Gardening.md"
+  ],
+  "notes": [
+    {
+      "path": "Resources/Gardening/Garden handbook introduction.md",
+      "contains": [
+        "labels and tape",
+        "Only part of the handbook was read",
+        "remaining pages were not read",
+        "[[Resources/Gardening/Gardening]]"
+      ],
+      "excludes": [
+        "29 November",
+        "Wren Hall",
+        "complete handbook"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "created": [
+      "Resources/Gardening/Garden handbook introduction.md"
+    ],
+    "updated": [],
+    "questionsExactly": 0
+  }
+}

@@ -15,10 +15,29 @@ test('the built app has a manifest and registers a service worker', async ({ pag
   await expect.poll(() => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state)).toBe('activated');
 });
 
-test('the service worker keeps the app shell only, never Google Drive or the Worker', async ({ request }) => {
+test('the service worker keeps the app shell only, never Google Drive or the Worker', async ({ page, request }) => {
   const sw = await (await request.get('/sw.js')).text();
   expect(sw).not.toMatch(/googleapis/);
-  expect(sw).not.toMatch(/runtimeCaching|NetworkFirst|StaleWhileRevalidate/);
+  expect(sw).not.toMatch(/runtimeCaching|StaleWhileRevalidate/);
+  await page.goto('/?source=demo&scenario=default&time=instant');
+  await page.evaluate(async () => navigator.serviceWorker.ready);
+  await page.reload();
+  // A navigation may use NetworkFirst; ordinary requests and excluded routes
+  // must still reach the network, never an app-shell response.
+  expect((await page.goto('/files'))?.fromServiceWorker()).toBe(true);
+  for (const path of ['/landing/', '/auth/login', '/me', '/drive/token', '/vault', '/process', '/status', '/session', '/health', '/runs', '/push/subscribe']) {
+    expect((await page.goto(path))?.fromServiceWorker(), path).toBe(false);
+  }
+  await page.goto('/?source=demo&scenario=default&time=instant');
+  // Record the response source rather than its bytes: preview also serves HTML
+  // for unknown paths, which would hide an overbroad runtime route.
+  const ordinary = page.waitForResponse((result) =>
+    result.url().endsWith('/files?pwa-non-navigation=1') && result.request().resourceType() === 'fetch');
+  await page.evaluate(async () => {
+    const result = await fetch('/files?pwa-non-navigation=1');
+    await result.text();
+  });
+  expect((await ordinary).fromServiceWorker()).toBe(false);
 });
 
 test('with no network the app still opens', async ({ page, context }) => {
@@ -187,5 +206,173 @@ test.describe('a deployment on the same origin', () => {
     // Leave time for a second startup/import failure to reveal a reload loop.
     await page.waitForTimeout(1000);
     expect(navigations).toBe(2);
+  });
+
+  const appControls = async (page: Page): Promise<void> => {
+    await expect(page.locator('#root')).not.toBeEmpty();
+    await expect(page.getByRole('link', { name: /^Home/ }).first()).toBeVisible();
+  };
+
+  const openControlledA = async (page: Page, path: string): Promise<void> => {
+    // Seed the demo choice, including for the literal / and /index.html aliases.
+    await page.goto('/?source=demo&scenario=default&time=instant');
+    await page.evaluate(async () => navigator.serviceWorker.ready);
+    await page.goto(path);
+    await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller?.state)).toBe('activated');
+    await appControls(page);
+    expect(await executed(page)).toContain(mainA);
+  };
+
+  const withholdWorkerB = async (page: Page): Promise<void> => {
+    const withheld = join(directory, 'b-with-a-worker');
+    await rm(withheld, { recursive: true, force: true });
+    await cp(buildB, withheld, { recursive: true });
+    // generateSW imports root workbox-*.js; injectManifest bundles its worker.
+    // Retain both forms of A's worker, while every HTML/asset is from B.
+    const scripts = (await readdir(buildA)).filter((name) => name === 'sw.js' || /^workbox-.*\.js$/.test(name));
+    for (const script of scripts) await cp(join(buildA, script), join(withheld, script));
+    // Prepare the whole hybrid before exposing it: B's worker is never briefly
+    // available for an automatic update during the preview-directory swap.
+    await serve(withheld);
+    expect(await readFile(join('dist', 'sw.js'), 'utf8')).toBe(await readFile(join(buildA, 'sw.js'), 'utf8'));
+    expect(await readFile(join('dist', 'index.html'), 'utf8')).toContain(mainB);
+    await page.evaluate(async () => {
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (!registration) throw new Error('No service worker registration');
+      await registration.update();
+    });
+    await expect.poll(() => page.evaluate(async () => {
+      const registration = await navigator.serviceWorker.getRegistration();
+      return !!registration && !registration.installing && !registration.waiting &&
+        registration.active === navigator.serviceWorker.controller;
+    })).toBe(true);
+  };
+
+  const countNavigations = (page: Page): (() => number) => {
+    let count = 0;
+    page.on('request', (request) => {
+      if (request.isNavigationRequest() && request.frame() === page.mainFrame()) count++;
+    });
+    return () => count;
+  };
+
+  for (const { label, path } of [
+    { label: '/', path: '/' },
+    { label: 'an app route with a query', path: '/files?source=demo&scenario=default&time=instant&pwa-deploy=b' },
+    { label: '/index.html', path: '/index.html' },
+  ]) {
+    test(`pwa-update-one-reload: ${label} executes B before its worker installs`, async ({ page, context }) => {
+      await openControlledA(page, path);
+      const workerA = context.serviceWorkers()[0];
+      expect(workerA).toBeDefined();
+      await withholdWorkerB(page);
+      const navigations = countNavigations(page);
+      // Only the reloaded document can satisfy the bundle assertions.
+      await page.coverage.startJSCoverage({ resetOnNavigation: true });
+      await page.reload();
+      await appControls(page);
+      const bundles = await executed(page);
+      expect(bundles).toContain(mainB);
+      expect(bundles).not.toContain(mainA);
+      expect(context.serviceWorkers()).toEqual([workerA]);
+      expect(navigations()).toBe(1);
+    });
+  }
+
+  test('pwa-update-one-reload: offline opens precached A while B worker is withheld', async ({ page, context }) => {
+    await openControlledA(page, '/files?source=demo&scenario=default&time=instant');
+    await withholdWorkerB(page);
+    const navigations = countNavigations(page);
+    try {
+      await context.setOffline(true);
+      await page.coverage.startJSCoverage({ resetOnNavigation: true });
+      expect((await page.reload())?.fromServiceWorker()).toBe(true);
+      await appControls(page);
+      await expect(page.getByRole('tree', { name: 'Your Bower folder' })).toBeVisible();
+      const bundles = await executed(page);
+      expect(bundles).toContain(mainA);
+      expect(bundles).not.toContain(mainB);
+      expect(navigations()).toBe(1);
+    } finally {
+      await context.setOffline(false);
+    }
+  });
+
+  test('pwa-update-one-reload: offline opens precached B after its worker claims the tab', async ({ page, context }) => {
+    await openControlledA(page, '/files?source=demo&scenario=default&time=instant');
+    await withholdWorkerB(page);
+    const controllerA = await page.evaluateHandle(() => navigator.serviceWorker.controller);
+    const navigations = countNavigations(page);
+    await deploy(page);
+    await expect.poll(() => page.evaluate((worker) => {
+      const controller = navigator.serviceWorker.controller;
+      return controller !== null && controller !== worker && controller.state === 'activated';
+    }, controllerA)).toBe(true);
+    await controllerA.dispose();
+    expect(navigations()).toBe(0);
+    try {
+      await context.setOffline(true);
+      await page.coverage.startJSCoverage({ resetOnNavigation: true });
+      expect((await page.reload())?.fromServiceWorker()).toBe(true);
+      await appControls(page);
+      await expect(page.getByRole('tree', { name: 'Your Bower folder' })).toBeVisible();
+      const bundles = await executed(page);
+      expect(bundles).toContain(mainB);
+      expect(bundles).not.toContain(mainA);
+      expect(navigations()).toBe(1);
+    } finally {
+      await context.setOffline(false);
+    }
+  });
+
+  test('pwa-update-one-reload: a three-second timeout opens precached A with no navigation cache entry', async ({ page, context }) => {
+    await openControlledA(page, '/?source=demo&scenario=default&time=instant');
+    await withholdWorkerB(page);
+    const target = new URL('/files?source=demo&scenario=default&time=instant&pwa-timeout=uncached', page.url()).href;
+    // Check every cache, including precache: this exact navigation has never
+    // happened. A fallback cannot rely on a prior runtime navigation response.
+    expect(await page.evaluate(async (url) => {
+      const names = await caches.keys();
+      for (const name of names) {
+        if (await (await caches.open(name)).match(url)) return true;
+      }
+      return false;
+    }, target)).toBe(false);
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let networkRequests = 0;
+    await context.route(target, async (route) => {
+      // Only the worker's outgoing fetch is held. The browser's document request
+      // must still reach A's real fetch handler, rather than a test response.
+      if (!route.request().serviceWorker()) return route.continue();
+      networkRequests++;
+      await held;
+      await route.continue();
+    });
+    // Change the address without fetching it, then exercise the ordinary reload
+    // path with a fresh query and no runtime entry to answer the timeout.
+    await page.evaluate((url) => history.replaceState(null, '', url), target);
+    const navigations = countNavigations(page);
+    await page.coverage.startJSCoverage({ resetOnNavigation: true });
+    const started = performance.now();
+    try {
+      // Five seconds allows scheduling overhead around the ruled three-second
+      // timeout, but cannot finish if an empty runtime cache waits for network.
+      const response = await page.reload({ waitUntil: 'domcontentloaded', timeout: 5000 });
+      const elapsed = performance.now() - started;
+      expect(networkRequests).toBe(1);
+      expect(response?.fromServiceWorker()).toBe(true);
+      expect(elapsed).toBeGreaterThanOrEqual(3000);
+      expect(elapsed).toBeLessThan(5000);
+      await appControls(page);
+      await expect(page.getByRole('tree', { name: 'Your Bower folder' })).toBeVisible();
+      const bundles = await executed(page);
+      expect(bundles).toContain(mainA);
+      expect(bundles).not.toContain(mainB);
+      expect(navigations()).toBe(1);
+    } finally {
+      release();
+      await context.unrouteAll({ behavior: 'wait' });
+    }
   });
 });

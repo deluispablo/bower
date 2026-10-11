@@ -1,0 +1,23 @@
+{
+  "role": "review-only acceptance specification; not model input",
+  "sources": [
+    "Garden guide A.txt",
+    "Garden guide B.txt",
+    "Garden guide C.txt",
+    "Garden guide D.txt",
+    "Garden guide E.txt"
+  ],
+  "trace": [
+    "Five current C15 partial preparations; shared initial payload <=48000 characters, each <=12000; record cut-marker overhead too.",
+    "All tails stay unshown; extraction completeness is partial, not a short complete document.",
+    "Aggregate reservation made before summary/expansion dispatch; one rejected reply retry uses remaining ledger, never a fresh timeout or quota.",
+    "Spend includes every planner and synopsis input/output, cache validation/persistence, reads, operations, retries and concurrent elapsed time.",
+    "No cache hit refunds source-validation or execution cost; no five-times multiplication of the run budget.",
+    "Compare each moved source byte-for-byte by id; exactly five created notes and no redundant copy."
+  ],
+  "negativeControls": [
+    "27 November 2026",
+    "Lark Hall"
+  ],
+  "limits": "Use accepted B1/C15/B12 ledger limits; Q4 supplies missing ceilings, never new case metadata."
+}

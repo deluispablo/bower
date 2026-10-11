@@ -1,0 +1,45 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [],
+    "maps": [
+      {
+        "requestId": "$request:change-1",
+        "setId": "$set:change-1",
+        "results": [
+          {
+            "memberId": "$note:Projects/Job hunt/Ferrowick offer.md",
+            "ops": [
+              {
+                "kind": "property",
+                "targetId": "$note:Areas/Career/Career profile.md",
+                "key": "skills",
+                "mode": "union",
+                "value": [
+                  "SQL",
+                  "TypeScript"
+                ]
+              }
+            ]
+          },
+          {
+            "memberId": "$note:Projects/Job hunt/Mallowick offer.md",
+            "ops": [
+              {
+                "kind": "property",
+                "targetId": "$note:Areas/Career/Career profile.md",
+                "key": "skills",
+                "mode": "union",
+                "value": [
+                  "dbt",
+                  "SQL"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

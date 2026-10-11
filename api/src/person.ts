@@ -12,6 +12,7 @@ import { TABLES_AT_DELETE, migrate, readSchemaVersion } from './person-schema.js
 import { ACTIVE_PHASES, PHASE_RANK } from '../../src/data/contracts/run-phases.js';
 import type { RunPhase } from '../../src/data/contracts/run-phases.js';
 import type { RunScope, RunWire } from '../../src/data/contracts/run-wire.js';
+import { isQuestionSnapshot, publicQuestion, type PublicQuestion } from '../../src/data/contracts/questions.js';
 import { QUEUED_STALE_MS, admission, utcDay } from './process.js';
 import type { AdmitInput, AdmitResult, RunReply } from './process.js';
 import type { FetchLike } from './google.js';
@@ -1215,12 +1216,14 @@ export class Person extends DurableObject<Env> {
       const ended = !ACTIVE_PHASES.includes(report.phase);
       const total = report.total ?? run.total;
       const failure = report.failure ?? null;
-      const shows = report.phase !== run.phase || total !== run.total || failure !== run.failure;
+      const questions = report.questions === undefined ? run.open_questions_snapshot : JSON.stringify(report.questions.map(publicQuestion));
+      const shows = report.phase !== run.phase || total !== run.total || failure !== run.failure
+        || questions !== run.open_questions_snapshot;
       const row = shows
         ? sql
             .exec<RunRow>(
               `UPDATE runs SET phase = ?1, phase_at = CASE WHEN phase = ?1 THEN phase_at ELSE ?2 END,
-                 total = ?3, failure = ?4, finished_at = ?5
+                 total = ?3, failure = ?4, finished_at = ?5, open_questions_snapshot = ?7
                WHERE id = ?6
                RETURNING ${RUN_COLUMNS}`,
               report.phase,
@@ -1229,6 +1232,7 @@ export class Person extends DurableObject<Env> {
               failure,
               ended ? now : null,
               runId,
+              questions,
             )
             .one()
         : run;
@@ -1357,7 +1361,7 @@ export class Person extends DurableObject<Env> {
 /** How many runs a person keeps (the current one and the history before it). */
 const RUNS_KEPT = 20;
 
-const RUN_COLUMNS = 'id, seq, scope, phase, requested_at, phase_at, finished_at, total, failure';
+const RUN_COLUMNS = 'id, seq, scope, phase, requested_at, phase_at, finished_at, total, failure, open_questions_snapshot';
 
 interface RunRow extends Record<string, SqlStorageValue> {
   id: string;
@@ -1369,6 +1373,7 @@ interface RunRow extends Record<string, SqlStorageValue> {
   finished_at: number | null;
   total: number | null;
   failure: string | null;
+  open_questions_snapshot: string | null;
 }
 
 interface TicketRow extends Record<string, SqlStorageValue> {
@@ -1383,6 +1388,12 @@ interface TicketRow extends Record<string, SqlStorageValue> {
 }
 
 function toWire(row: RunRow): RunWire {
+  let questions: PublicQuestion[] | undefined;
+  if (row.open_questions_snapshot !== null) {
+    const value: unknown = JSON.parse(row.open_questions_snapshot);
+    if (!isQuestionSnapshot(value)) throw new HttpError(500, 'internal');
+    questions = value;
+  }
   return {
     id: row.id,
     scope: row.scope,
@@ -1392,5 +1403,6 @@ function toWire(row: RunRow): RunWire {
     ...(row.finished_at === null ? {} : { finishedAt: row.finished_at }),
     ...(row.total === null ? {} : { total: row.total }),
     ...(row.failure === null ? {} : { failure: row.failure }),
+    ...(questions === undefined ? {} : { questions }),
   };
 }

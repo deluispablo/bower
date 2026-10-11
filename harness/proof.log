@@ -562,3 +562,18 @@ smoke-request-report-hidden	b09f658f85a5f4b8	2026-10-10	known-green: e2e red 16 
 spine-operations-checkpoints	874f3e999125f10f	2026-10-10	known-green: goldens re-pinned to measured values by b1a-contract's red owner per addendum 4; note committed
 drive-calls-cut	db69fc3015b39fbd	2026-10-10	known-green: goldens re-pinned to measured values by b1a-contract's red owner per addendum 4; note committed
 b1a-contract	9ba5aa6787b96ac4	2026-10-10	known-green: reds proven before each fix round (notes); later rounds touched the fix lines
+c05-timeline-list	57030bcbc7af8879	2026-10-10	red (fixed in 34cb7238)
+smoke-request-slow	f8540e107261cc75	2026-10-10	known-green: fix rounds touched the fix's lines; reds proved at their commits, see notes
+pwa-update-one-reload	3db8100d69a69ad6	2026-10-10	known-green: the reverted build has no sw.ts input; red proved at fb3c534c, see notes
+undo-fifo-seed	9b7f8c1128ea4f25	2026-10-10	known-green: test-only fix; the pinned replay failed before the model change, see notes
+upload-resume-after-reload	27ecd4eef28b687d	2026-10-10	known-green: fix rounds touched the fix's lines; reds proved at their commits, see notes
+q1a-stored-answers	8438a497eb5f3da8	2026-10-10	known-green: fix rounds touched the fix's lines; reds proved at their commits, see notes
+c2-pile-records	df60fdadbeb5982f	2026-10-11	known-green: verify renamed per addendum 5; the golden passes on claude/p3 after E3
+orphan-pile-count-data	56cba471a01a7463	2026-10-11	known-green: rounds touched the first implementation's lines; reds proved at their commits, see notes
+c2-pile-records	a564e46e757d84fa	2026-10-11	known-green: verify renamed per addendum 5; the golden passes on claude/p3 after E3
+upload-sign-out-forget	87fda9aad7e334f0	2026-10-11	known-green: reds proved at their tests-only commits; later rounds touched the same lines; see notes Close
+delete-account-purge	99c1289d92b9aa0e	2026-10-11	red (fixed in b5ae5ec1)
+pile-binned-context-hold	9c382d25050b3025	2026-10-11	red (fixed in 7a13d1eb)
+c02-upload-count-ui	82cb33bbb325ca66	2026-10-11	known-green: reds proved at their tests-only commits; fix 1 touched the same lines; see notes Close
+b1c-index	74007499742a3b5f	2026-10-11	known-green: reds proved at their tests-only commits; later rounds touched the same lines; see notes Close
+q1c-live-questions	478b98ba160cf485	2026-10-11	known-green: reds proved at their tests-only commits; later rounds touched the same lines; see notes Close

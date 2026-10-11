@@ -1,0 +1,39 @@
+{
+  "files": {
+    "present": [
+      "Resources/Gardening/Garden workshop.txt",
+      "Resources/Gardening/Garden workshop.md"
+    ],
+    "absent": [
+      "Inbox/*",
+      ".bower/proposals/*.json",
+      ".bower/taxonomy.json"
+    ]
+  },
+  "unchanged": [
+    "Rules.md",
+    "Resources/Gardening/Gardening.md",
+    "Resources/Gardening/Seed packet.md",
+    ".bower/tags.json"
+  ],
+  "notes": [
+    {
+      "path": "Resources/Gardening/Garden workshop.md",
+      "contains": [
+        "tags: [gardening, remote-work, learning]",
+        "Alex learns gardening",
+        "[[Gardening]]",
+        "[[Seed packet]]"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "created": [
+      "Resources/Gardening/Garden workshop.md"
+    ],
+    "updated": [],
+    "questionsExactly": 0
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "v": 1,
+  "rows": [
+    {
+      "id": "concept",
+      "properties": {
+        "review_state": {
+          "type": "enum",
+          "values": [
+            "new",
+            "reviewed"
+          ]
+        }
+      },
+      "table": [
+        "review_state"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "id": "c17-b7-proposal-yes",
+  "capability": "C17",
+  "title": "A tag proposal survives filing and yes installs only its frozen payload",
+  "covers": "model",
+  "source": "new; TL-P4-39 B7/F5/F7/U2; TL-P4-41/42/44/45/47/48; proposed tag contract",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "File this guide and suggest rainwater as a tag, but ask before adding it.",
+      "files": [
+        "Rain barrel guide.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Rules.md",
+    "Resources/Gardening/Gardening.md",
+    "Resources/Gardening/Seed packet.md"
+  ],
+  "presses": [
+    {
+      "between": [
+        {
+          "kind": "answer",
+          "question": {
+            "id": "$proposal:rainwater"
+          },
+          "yes": true
+        }
+      ]
+    },
+    {
+      "request": {
+        "kind": "tidy",
+        "text": "Refresh the folder without changing its tags."
+      }
+    }
+  ]
+}

@@ -5308,8 +5308,8 @@
       "questions() independent of piles().",
       "live-shape.ts gains leftover declarations."
     ],
-    "verify": "pnpm vitest run -t \"Home makes the same Drive calls after 10 and after 500 earlier runs|an empty inbox reads no old pile records|a file binned inside a binned folder counts as removed|an unstamped pile record is not read\"",
-    "note": "TL-P4-16 (b), defect home-empty-48s; replaces home-reads-bounded (TL-P4-13 addendum 2). Stage 2, after c2-read-cache. Lead ruling (main 7c9c8e8, after c2-fake-parity): named test \"a file binned inside a binned folder counts as removed\" (Drive marks a trashed folder's children trashed; the lookup must not depend on finding the parent). Lead ruling (main 787f0cd): no backfill and no legacy read branch (unstamped records exist only in staging test folders); fix round drops the unstamped branch; questions() change accepted. Live smokes use a fresh synthetic folder."
+    "verify": "pnpm vitest run -t \"Home makes the same Drive calls after 10 and after 500 earlier runs|an empty inbox reads no stamped pile record, only the current unstamped one|a file binned inside a binned folder counts as removed|an unstamped pile record is not read\"",
+    "note": "TL-P4-16 (b), defect home-empty-48s; replaces home-reads-bounded (TL-P4-13 addendum 2). Stage 2, after c2-read-cache. Lead ruling (main 7c9c8e8, after c2-fake-parity): named test \"a file binned inside a binned folder counts as removed\" (Drive marks a trashed folder's children trashed; the lookup must not depend on finding the parent). Lead ruling (main 787f0cd): no backfill and no legacy read branch (unstamped records exist only in staging test folders); fix round drops the unstamped branch; questions() change accepted. Live smokes use a fresh synthetic folder. Reopened 2026-10-10: orphan-pile-count-data renamed the empty-inbox golden per TL-P4-53 addendum 5 (no stamped record is read; the current unstamped declaration is); re-close known-green after it integrates."
   },
   {
     "id": "c1-digest",
@@ -6835,26 +6835,27 @@
     "id": "q1a-stored-answers",
     "task": "p4-q1",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "Questions carry stored file-to options and text answers; two rounds per inbox subject; the continuation keeps today's subject scope (TL-P4-44).",
     "steps": [
       "The prep's Q1a reds pass through runner main, answerQuestion, the Worker and the vault."
     ],
-    "verify": "",
-    "note": "TL-P4-44 and addenda 1-2. Escalated; implementation after B1a integrates. Packet 2026-10-10-q1a-stored-answers-packet.md. implementer: codex."
+    "verify": "pnpm -C runner exec vitest run test/q1-continuation.test.ts -t \"Q1a q1-\"",
+    "note": "TL-P4-44 and addenda 1-2. Escalated; implementation after B1a integrates. Packet 2026-10-10-q1a-stored-answers-packet.md. implementer: codex.",
+    "review": "P4-100 PASS"
   },
   {
     "id": "smoke-request-slow",
     "task": "p4-c05",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "A request run reads only its own evidence: no archive scan, waiting requests in .bower/changes/pending/<run id>/, horizon from listing metadata (lead ruling, DECISIONS after bd2671ba).",
     "steps": [
       "A main golden with 50 archived requests and 25 kept runs reads the pile-run baseline plus at most 1 per waiting request."
     ],
-    "verify": "",
+    "verify": "pnpm -C runner exec vitest run test/c05-bounded-reads.test.ts -t \"C05 bounded reads\"",
     "note": "Smoke 2ab7b490: 268 s, 757 reads. Escalated; implementation after B1a integrates. Packet 2026-10-10-smoke-request-slow-packet.md. implementer: codex."
   },
   {
@@ -6890,27 +6891,28 @@
     "id": "c05-timeline-list",
     "task": "p4-c05",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "A person note whose Timeline is a bullet list is appendable; only non-list sections say they cannot be read (lead ruling after 5019e2f4).",
     "steps": [
       "Through runner main: a dated-colon list gives the nothing-found row, a plain list appends once, a prose section keeps can't read."
     ],
-    "verify": "",
+    "verify": "pnpm -C runner exec vitest run test/c05-person-notes.test.ts -t \"C05 timeline list:\"",
     "note": "c05-person-timeline-format (staging 645710a4). Codex red, Codex implementation after B1a integrates, Claude review. Packet 2026-10-10-c05-timeline-list-packet.md. implementer: codex."
   },
   {
     "id": "b1c-index",
     "task": "p4-b1",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "The runner keeps .bower/index.md as an exact projection of retrieval.json and folds existing Bower MOCs by id (TL-P4-41 Q1, Q6-Q8).",
     "steps": [
       "Through runner main: exact index bytes, hidden paths excluded, no-change runs write nothing, existing MOCs fold with complete membership."
     ],
-    "verify": "",
-    "note": "TL-P4-41. Escalated; red now, implementation after the scripted.ts/index.ts handoffs. Packet 2026-10-10-b1c-packet.md. implementer: codex."
+    "verify": "pnpm -C runner exec vitest run test/b1-index.test.ts -t \"B1c \"",
+    "note": "TL-P4-41. Escalated; red now, implementation after the scripted.ts/index.ts handoffs. Packet 2026-10-10-b1c-packet.md. implementer: codex.",
+    "review": "P4-107 PASS"
   },
   {
     "id": "b5a-contracts",
@@ -6935,7 +6937,187 @@
     "steps": [
       "Through runner main: hot written after a filing run and read on the next; unchanged hot not rewritten; failure or done redispatch writes nothing."
     ],
+    "verify": "pnpm -C runner exec vitest run test/b23-hot-context.test.ts test/b23-hot-recovery.test.ts -t \"B3b hot\"",
+    "note": "TL-P4-42. Escalated (hot target); red now, implementation after B1c and the scripted.ts handoff. Packet 2026-10-10-b3b-packet.md. implementer: codex.",
+    "review": "P4-110 BLOCK fixed; P4-111 PASS"
+  },
+  {
+    "id": "q1c-live-questions",
+    "task": "p4-q1",
+    "category": "feature",
+    "passes": true,
+    "ui": false,
+    "what": "A question is answerable on Home while its run is still going: published in the run status at the plan-persisted point and merged by vault.questions() (TL-P4-44 Q2).",
+    "steps": [
+      "The prep's Q1c reds pass through the runner status route, the Worker run state and the vault."
+    ],
+    "verify": "pnpm -C runner exec vitest run test/q1c-live.test.ts -t \"q1-live|Q1c \"",
+    "note": "TL-P4-44 Q2. Escalated; implementation after Q1a integrates. Packet 2026-10-10-q1c-live-questions-packet.md. implementer: codex.",
+    "review": "P4-108 BLOCK fixed; P4-109 PASS"
+  },
+  {
+    "id": "b6a-templates",
+    "task": "p4-b6",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Bower notes follow five declared templates (Source, Concept, Project, Area, MOC) from one declaration home; person notes never gain Bower metadata (TL-P4-47 Q5).",
+    "steps": [
+      "The prep's B6a reds pass through note-format, ownership-format, note-edit and scripted planning."
+    ],
     "verify": "",
-    "note": "TL-P4-42. Escalated (hot target); red now, implementation after B1c and the scripted.ts handoff. Packet 2026-10-10-b3b-packet.md. implementer: codex."
+    "note": "TL-P4-47 Q5. Escalated; implementation after B5a integrates. Packet 2026-10-10-b6a-packet.md. implementer: codex."
+  },
+  {
+    "id": "upload-resume-after-reload",
+    "task": "p4-c02",
+    "category": "feature",
+    "passes": true,
+    "ui": true,
+    "what": "Files added to a pile are kept on the device before Bower says saved, and resume after a reload with no picker and no second file (TL-P4-53).",
+    "steps": [
+      "The prep's E1 reds pass through the real queue, fake Drive and fake IndexedDB."
+    ],
+    "verify": "pnpm exec vitest run src/data/upload-resume.test.ts -t \"upload-resume-after-reload\"",
+    "note": "C02 E1. Escalated. Designer verifies the reload behaviour (U3) before close. Packet 2026-10-10-upload-resume-after-reload-packet.md. implementer: codex.",
+    "design": "verified",
+    "review": "P4-99 PASS"
+  },
+  {
+    "id": "upload-sign-out-forget",
+    "task": "p4-c02",
+    "category": "feature",
+    "passes": true,
+    "ui": true,
+    "what": "Signing out forgets that account's pending uploads on the device, even if the remote sign-out fails; the queue exposes the still-sending count (TL-P4-53 Q1, addendum 1).",
+    "steps": [
+      "The prep's E2 reds pass through the live sources' sign-out and the real queue."
+    ],
+    "verify": "pnpm exec vitest run src/data/upload-sign-out.test.ts -t \"upload-sign-out-forget\"",
+    "note": "C02 E2. Escalated; after upload-resume-after-reload. Packet 2026-10-10-upload-sign-out-forget-packet.md. implementer: codex.",
+    "review": "P4-102 PASS, P4-103 PASS",
+    "design": "verified"
+  },
+  {
+    "id": "orphan-pile-count-data",
+    "task": "p4-c02",
+    "category": "feature",
+    "passes": true,
+    "ui": false,
+    "what": "The vault gives a known count and completeness of piles that didn't finish arriving; unknown is never zero (TL-P4-53 Q3, Q4, Q7).",
+    "steps": [
+      "The prep's E3 reds pass through the vault source with fake Drive."
+    ],
+    "verify": "pnpm exec vitest run src/data/orphan-pile-count.test.ts -t \"orphan-pile-count-data\"",
+    "note": "C02 E3. Escalated; after upload-resume-after-reload. Packet 2026-10-10-orphan-pile-count-data-packet.md. implementer: codex.",
+    "review": "P4-101 PASS"
+  },
+  {
+    "id": "c02-upload-count-ui",
+    "task": "p4-c02",
+    "category": "feature",
+    "passes": true,
+    "ui": true,
+    "what": "Home's Inbox card says how many piles didn't finish arriving, and Sign out asks first while things are still sending (spec 2026-10-10-c02-upload-count.md).",
+    "steps": [
+      "The spec's test table passes on demo and fake at 375 and 1440."
+    ],
+    "verify": "pnpm exec vitest run src/features/home/Home.test.tsx src/features/settings/Settings.test.tsx -t \"c02-upload-count-ui\"",
+    "note": "C02 E4. After E1-E3. Designer verifies. Packet 2026-10-10-c02-upload-count-ui-packet.md. implementer: codex.",
+    "review": "P4-106 PASS",
+    "design": "verified"
+  },
+  {
+    "id": "rules-added-region",
+    "task": "p4-e",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "The first rule added in the app appends a marked 'Rules added in Bower' region to the person's Rules.md; their own prose is never converted (TL-P4-53).",
+    "steps": [
+      "The reds pass through the vault API, runner main and note-edit."
+    ],
+    "verify": "",
+    "note": "rules-original-conversion, simplified. Escalated (contracts, note-edit); after b5a/b6a hand off note-edit. Packet 2026-10-10-rules-added-region-packet.md. implementer: codex."
+  },
+  {
+    "id": "rules-original-ui",
+    "task": "p4-e",
+    "category": "feature",
+    "passes": false,
+    "ui": true,
+    "what": "The Bower screen shows the person's own rules prose beside the rules added in Bower (spec 2026-10-10-rules-original.md).",
+    "steps": [
+      "The spec's test table passes on demo and fake at 375 and 1440."
+    ],
+    "verify": "",
+    "note": "After rules-added-region. Designer verifies. Packet 2026-10-10-rules-original-ui-packet.md. implementer: codex."
+  },
+  {
+    "id": "rules-added-region-model",
+    "task": "p4-e",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "The model sees the person's rules prose first, then the rules added in Bower, within today's 4,000 units with a marked cut; an empty region leaves the input byte-identical (TL-P4-53 Q7).",
+    "steps": [
+      "Runner claude.ts reds and corpus cases: original first, region second, one bounded projection, byte-identical input with no region."
+    ],
+    "verify": "",
+    "note": "Follow-up of rules-added-region; touches runner claude.ts, so after B1c and B3b (lead 2026-10-10). Packet to cut when it starts. implementer: codex."
+  },
+  {
+    "id": "pwa-update-one-reload",
+    "task": "p4-e",
+    "category": "fix",
+    "passes": true,
+    "ui": false,
+    "what": "One reload after a deploy runs the new build even before the new service worker installs; offline still opens (navigations network-first, 3 s timeout).",
+    "steps": [
+      "e2e:pwa: A open, B deployed and not installed, one reload runs B; offline opens; the old 6 stay green."
+    ],
+    "verify": "pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts -g \"pwa-update-one-reload\"",
+    "note": "DEFECT_LOG pwa-update-one-reload; ruling (a) after 32b43f82. Codex red and implementation, Claude review, live staging check. Packet 2026-10-10-pwa-update-one-reload-packet.md. implementer: codex."
+  },
+  {
+    "id": "undo-fifo-seed",
+    "task": "p4-e",
+    "category": "fix",
+    "passes": true,
+    "ui": false,
+    "what": "The Undo property model knows an inverse the drain retires without sending after its original is refused; seed -1937975690 path 40 is pinned and passes.",
+    "steps": [
+      "The named replay and the class table pass; unresolved heads still block."
+    ],
+    "verify": "pnpm exec vitest run src/data/vault/undo-compensate.property.test.ts -t \"undo-fifo-seed\"",
+    "note": "DEFECT_LOG undo-fifo-seed; ruling (b) after f885992c. Tests only. Packet 2026-10-10-undo-fifo-seed-packet.md. implementer: codex."
+  },
+  {
+    "id": "pile-binned-context-hold",
+    "task": "p4-c02",
+    "category": "fix",
+    "passes": true,
+    "ui": false,
+    "what": "A pile whose note the person binned, with ready things left, gets the same answer from the app and the runner: filed, or held with its reason shown.",
+    "steps": [
+      "One binned-counts-as-removed predicate in pile-readiness serves plan.ts and drive-vault; missing-only contexts stay not-arrived."
+    ],
+    "verify": "pnpm exec vitest run src/data/pile-readiness.test.ts src/data/spine/plan.test.ts src/data/vault/drive-vault.test.ts -t \"pile-binned-context-hold\"",
+    "note": "DEFECT_LOG pile-binned-context-hold; TL-P4-53 addendum 7. Packet 2026-10-11-pile-binned-context-hold-packet.md. Starts after upload-sign-out-forget (drive-vault.ts). implementer: codex.",
+    "review": "P4-105 PASS"
+  },
+  {
+    "id": "delete-account-purge",
+    "task": "p4-c02",
+    "category": "fix",
+    "passes": true,
+    "ui": false,
+    "what": "Delete my account and a sign-out before the account is known use the one forget path: this device keeps nothing of the person.",
+    "steps": [
+      "Delete my account offline still purges; a new sign-in resets the known identity, so an early sign-out purges everything."
+    ],
+    "verify": "pnpm exec vitest run src/data/upload-sign-out.test.ts src/data/live/live.test.ts -t \"delete-account-purge\"",
+    "note": "DEFECT_LOG delete-account-purge-skipped; TL-P4-53 addendum 12. Escalated (privacy). Packet 2026-10-11-delete-account-purge-packet.md. implementer: codex.",
+    "review": "P4-104 PASS"
   }
 ]

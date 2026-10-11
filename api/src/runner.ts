@@ -33,6 +33,7 @@ import type { Person, RunnerGrant } from './person.js';
 import { isAttemptEnded } from '../../src/data/contracts/attempt-ended.js';
 import type { AttemptEnded } from '../../src/data/contracts/attempt-ended.js';
 import { isRunPhase } from '../../src/data/contracts/run-phases.js';
+import { isQuestionSnapshot } from '../../src/data/contracts/questions.js';
 import type { RunReply } from './process.js';
 import { hashTicket, personIdOf } from './run-ticket.js';
 import type { RunnerRefusal, RunnerReport, RunnerReportResult } from './run-ticket.js';
@@ -99,7 +100,7 @@ const wholeFrom = (value: unknown, min: number): value is number =>
 
 function parseReport(value: unknown): RunnerReport {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) throw unreadable();
-  const { attempt, seq, phase, total, failure, answersStayed } = value as Record<string, unknown>;
+  const { attempt, seq, phase, total, failure, answersStayed, questions } = value as Record<string, unknown>;
   if (!wholeFrom(attempt, 1) || !wholeFrom(seq, 1)) throw unreadable();
   if (!isRunPhase(phase)) throw unreadable();
   if (total !== undefined && !wholeFrom(total, 0)) throw unreadable();
@@ -109,6 +110,7 @@ function parseReport(value: unknown): RunnerReport {
   }
   // An answer that stayed is said only at done, and only as true (TL-P4-19 addendum 15).
   if (answersStayed !== undefined && (answersStayed !== true || phase !== 'done')) throw unreadable();
+  if (questions !== undefined && !isQuestionSnapshot(questions)) throw unreadable();
   return {
     attempt,
     seq,
@@ -116,6 +118,7 @@ function parseReport(value: unknown): RunnerReport {
     ...(total === undefined ? {} : { total }),
     ...(failure === undefined ? {} : { failure }),
     ...(answersStayed === true ? { answersStayed } : {}),
+    ...(questions === undefined ? {} : { questions }),
   };
 }
 

@@ -9,11 +9,151 @@
  * it has, and every reader narrows on it. It is derived from the question as `.bower/questions.json` holds it, so the
  * wire stays as the accepted app wrote it (P2's `q1` with no subject still reads, as the folder's own question).
  */
-import type { Question } from './types';
-import { keepAlreadyBinned } from './note-edit';
+import type { Pile, Question } from './types';
+import type { JournalRecord } from './journal-record';
+import { BowerError } from './types';
+import { EMPTY_MD5 } from './hashes';
+import { keepAlreadyBinned, STATE_READ } from './note-edit';
 import { displayName, nameOf, thingName } from './tree';
 
 /** The id prefixes Bower's questions carry, spelled here alone. */
+
+/** Additive journal values; legacy text yes/no remains readable. */
+export type QuestionAnswer = boolean | { option: string } | { text: string };
+export interface QuestionOption { id: string; label: string; action: { kind: 'file-to'; folderId: string } }
+/** The status/card projection. Stored option actions remain in questions.json and the durable plan. */
+export type PublicQuestion = Question;
+
+export function publicQuestion(q: Question): PublicQuestion {
+  const { id, text, yes, no, askedAt, about, subject, hash, state, shown, words, options } = q;
+  return { id, text, yes, no, askedAt,
+    ...(about === undefined ? {} : { about }), ...(subject === undefined ? {} : { subject }),
+    ...(hash === undefined ? {} : { hash }), ...(state === undefined ? {} : { state }),
+    ...(shown === undefined ? {} : { shown: { lines: [...shown.lines], md5: shown.md5,
+      ...(shown.stamp === undefined ? {} : { stamp: shown.stamp }) } }),
+    ...(words === undefined ? {} : { words }),
+    ...(options === undefined ? {} : { options: options.map(({ id, label }) => ({ id, label })) }),
+  };
+}
+
+/** Strict public snapshot writes; omission is the additive, legacy status wire. */
+export function isQuestionSnapshot(value: unknown): value is PublicQuestion[] {
+  const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+  const text = (v: unknown, max = Infinity): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
+  const option = (v: unknown): v is Pick<QuestionOption, 'id' | 'label'> => object(v)
+    && Object.keys(v).every((k) => ['id', 'label'].includes(k))
+    && typeof v.id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(v.id) && text(v.label, 40);
+  const card = (v: unknown): v is PublicQuestion => object(v)
+    && Object.keys(v).every((k) => ['id', 'text', 'yes', 'no', 'askedAt', 'about', 'subject', 'hash', 'state', 'shown', 'words', 'options'].includes(k))
+    && text(v.id) && text(v.text, 200) && text(v.yes, 40) && text(v.no, 40)
+    && typeof v.askedAt === 'number' && Number.isSafeInteger(v.askedAt) && v.askedAt >= 0
+    && ['about', 'subject', 'hash', 'state'].every((k) => v[k] === undefined || text(v[k]))
+    && (v.words === undefined || typeof v.words === 'string')
+    && (v.shown === undefined || (object(v.shown)
+      && Object.keys(v.shown).every((k) => ['lines', 'md5', 'stamp'].includes(k))
+      && Array.isArray(v.shown.lines) && v.shown.lines.length <= STATE_READ.lines
+      && v.shown.lines.every((line) => text(line, STATE_READ.line))
+      && typeof v.shown.md5 === 'string' && /^[a-f0-9]{32}$/.test(v.shown.md5)
+      && (v.shown.stamp === undefined || text(v.shown.stamp))))
+    && (v.options === undefined || (Array.isArray(v.options) && v.options.length >= 2 && v.options.length <= 4
+      && v.options.every(option) && new Set(v.options.map((o) => o.id)).size === v.options.length));
+  return Array.isArray(value) && value.length <= 10 && value.every(card)
+    && new Set(value.map(askingKey)).size === value.length;
+}
+export interface QuestionRound {
+  subject: string; hash?: string; pileId: string; words: string; count: number; exhausted?: true;
+  /** Words alone are a member of their own, never the things added later. Absent on legacy pile histories. */
+  wordsOnly?: true;
+  /** The settled asking's wording, retained only until an unavailable-folder answer is asked again. */
+  reask?: Question;
+}
+
+export function isQuestionAnswer(value: unknown): value is QuestionAnswer {
+  if (typeof value === 'boolean') return true;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (Object.keys(v).length !== 1) return false;
+  if (typeof v.option === 'string') return /^[A-Za-z0-9_-]{1,128}$/.test(v.option);
+  return typeof v.text === 'string' && v.text.trim() === v.text && v.text.length > 0 && v.text.length <= 1000
+    && ![...v.text].some((char) => { const code = char.charCodeAt(0);
+      return (code <= 0x1f && code !== 0x0a && code !== 0x0d) || (code >= 0x7f && code <= 0x9f); });
+}
+
+/** Validate at the shared answer boundary, before any journal line or run. */
+export function checkedAnswer(q: Question, value: QuestionAnswer): QuestionAnswer {
+  const answer = value && typeof value === 'object' && 'text' in value && typeof value.text === 'string'
+    ? { ...value, text: value.text.trim() } : value;
+  if (!isQuestionAnswer(answer) || (typeof answer !== 'boolean' && (subjectOf(q).kind !== 'inbox'
+    || ('option' in answer && !q.options?.some((o) => o.id === answer.option)))))
+    throw new BowerError('conflict', 'Choose an answer or write your words.');
+  return answer;
+}
+
+export function journalAnswer(r: Pick<JournalRecord, 'answer' | 'text'>): QuestionAnswer | undefined {
+  return r.answer ?? (r.text === 'yes' ? true : r.text === 'no' ? false : undefined);
+}
+export const askingKey = (q: Pick<Question, 'id' | 'askedAt'>): string => `${q.id}\n${q.askedAt}`;
+export const answersAsking = (r: Pick<JournalRecord, 'questionId' | 'askedAt'>, q: Pick<Question, 'id' | 'askedAt'>): boolean =>
+  r.questionId === q.id && (r.askedAt === undefined || r.askedAt === q.askedAt);
+export function answeredAskings(lines: readonly JournalRecord[]): Set<string> {
+  return new Set(lines.filter((r) => r.kind === 'answer' && journalAnswer(r) !== undefined)
+    .map((r) => r.askedAt === undefined ? r.questionId ?? '' : askingKey({ id: r.questionId ?? '', askedAt: r.askedAt })));
+}
+export function isQuestionOption(value: unknown): value is QuestionOption {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const o = value as Record<string, unknown>;
+  const a = o.action as Record<string, unknown> | undefined;
+  return Object.keys(o).every((k) => ['id', 'label', 'action'].includes(k)) && typeof o.id === 'string'
+    && /^[A-Za-z0-9_-]{1,128}$/.test(o.id) && typeof o.label === 'string' && o.label.trim().length > 0 && o.label.length <= 40
+    && !!a && Object.keys(a).length === 2 && a.kind === 'file-to' && typeof a.folderId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(a.folderId);
+}
+/** A pile and its member are related; two different members remain different subjects. */
+export function relatedSubjects(x: string | undefined, y: string | undefined, piles: readonly Pile[]): boolean {
+  return x !== undefined && y !== undefined && (x === y || piles.some((p) =>
+    (p.id === x && p.items.some((i) => i.id === y)) || (p.id === y && p.items.some((i) => i.id === x))));
+}
+
+/** Equal nonempty content identifies a reupload only after the original thing has left. */
+export function sameSubjectContent(a: Asked, b: Pick<Question, 'hash'>, inbox: InboxSeen): boolean {
+  return !!a.hash && a.hash !== EMPTY_MD5 && a.hash === b.hash && !inbox.ids.has(subjectKey(a) ?? '');
+}
+
+/** Locate today's subject by id first, then by a gone thing's nonempty content hash. */
+export function subjectPile(q: Asked, piles: readonly Pile[], hashes: ReadonlyMap<string, string> = new Map()): Pile | undefined {
+  const s = subjectOf(q);
+  if (s.kind !== 'inbox') return undefined;
+  return piles.find((p) => relatedSubjects(s.id, p.id, [p]))
+    ?? (s.hash && s.hash !== EMPTY_MD5 ? piles.find((p) => p.items.some((i) => hashes.get(i.id) === s.hash)) : undefined);
+}
+
+/** Today's members covered by an asking; words alone use the pile identity. No frozen membership. */
+export function subjectMembers(q: Asked, piles: readonly Pile[], contextName: string, hashes: ReadonlyMap<string, string> = new Map()): string[] {
+  const pile = subjectPile(q, piles, hashes);
+  if (!pile) return [];
+  const subject = subjectKey(q);
+  const members = pile.items.filter((i) => i.name !== contextName).map((i) => i.id);
+  if (subject === pile.id) return members.length ? members : [pile.id];
+  if (subject !== undefined && members.includes(subject)) return [subject];
+  return members.filter((id) => q.hash !== undefined && q.hash !== EMPTY_MD5 && hashes.get(id) === q.hash);
+}
+
+/** Member history including legacy pile askings and reuploads; a pile's count is its members' maximum. */
+export function roundFor(rounds: readonly QuestionRound[], q: Asked, piles: readonly Pile[], hashes: ReadonlyMap<string, string> = new Map()): QuestionRound | undefined {
+  const pile = subjectPile(q, piles, hashes);
+  if (!pile) return undefined;
+  const inbox = { ids: new Set(piles.flatMap((p) => [p.id, ...p.items.map((i) => i.id)])) };
+  return rounds.filter((r) => r.words === pile.text && (!r.wordsOnly || r.subject === subjectKey(q)) && (relatedSubjects(r.subject, subjectKey(q), piles)
+    || sameSubjectContent({ id: askId(r.subject), subject: r.subject, hash: r.hash }, q, inbox)
+    || sameSubjectContent(q, r, inbox))).reduce<QuestionRound | undefined>((max, r) =>
+      !max || r.count > max.count || (r.count === max.count && r.exhausted) ? r : max, undefined);
+}
+export function pileQuestion(pile: Pile, open: readonly Question[], rounds: readonly QuestionRound[], hashes: ReadonlyMap<string, string> = new Map()): Pile['question'] {
+  const belongs = (q: Asked): boolean => subjectPile(q, [pile], hashes) !== undefined;
+  if (open.some(belongs)) return 'waiting';
+  if (rounds.some((r) => r.reask && r.words === pile.text && belongs({ id: askId(r.subject), subject: r.subject, hash: r.hash }))) return 'waiting';
+  return rounds.some((r) => r.exhausted && r.words === pile.text && belongs({ id: askId(r.subject), subject: r.subject, ...(r.hash ? { hash: r.hash } : {}) })) ? 'exhausted' : undefined;
+}
+
 const ASK = 'q-ask-';
 const STATE = 'q-state-';
 const PAIR = 'q-pair-';
@@ -40,7 +180,7 @@ export type Subject =
   | { kind: 'folder' };
 
 /** A question as far as its subject goes: its id, and what the wire may carry about it. */
-export type Asked = Pick<Question, 'id'> & Partial<Pick<Question, 'subject' | 'hash' | 'state' | 'text'>>;
+export type Asked = Pick<Question, 'id'> & Partial<Pick<Question, 'subject' | 'hash' | 'state' | 'text' | 'askedAt'>>;
 
 /** The id of the question asked about a pile, or about one thing by its file id: one each. */
 export const askId = (pileOrFileId: string): string => `${ASK}${pileOrFileId}`;
@@ -134,7 +274,7 @@ export function subjectLeft(q: Asked, inbox: InboxSeen | null, notes: NotesSeen 
 
 /** The questions still open: not answered, and not about a subject that is gone. */
 export function openQuestions<Q extends Asked>(all: readonly Q[], answered: ReadonlySet<string | undefined>, inbox: InboxSeen | null, notes: NotesSeen | null = null): Q[] {
-  return all.filter((q) => !answered.has(q.id) && !subjectLeft(q, inbox, notes));
+  return all.filter((q) => !answered.has(q.id) && !(q.askedAt !== undefined && answered.has(askingKey({ id: q.id, askedAt: q.askedAt }))) && !subjectLeft(q, inbox, notes));
 }
 
 /**
@@ -240,6 +380,6 @@ export type ReportQuestion = Pick<Question, 'id' | 'text' | 'yes' | 'no' | 'aske
 
 /** Its fields in the order the question has them, so a report reads as before. */
 export function reportRowOf(q: Question): ReportQuestion {
-  const { subject: _subject, hash: _hash, state: _state, shown: _shown, ...row } = q;
-  return row;
+  const { id, text, yes, no, askedAt, about } = q;
+  return { id, text, yes, no, askedAt, ...(about === undefined ? {} : { about }) };
 }

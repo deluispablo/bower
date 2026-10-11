@@ -1,3 +1,4 @@
+import { checkedAnswer, type QuestionAnswer } from '../contracts/questions';
 /**
  * The demo: Alex's Bower folder in memory, behind the same doors the real
  * Drive and Worker will use. Moves and renames change the tree for real; a
@@ -69,6 +70,10 @@ import { formerNames, rewriteLinks } from '../links';
 import { shortDay } from '../dates';
 import { PILE_NOTE, pileFolderName, pileHasFolder, pileName, safeInboxName, thingsIn } from '../piles';
 import { SET_ASIDE_TEXT } from '../pile-readiness';
+import { createUploadQueue, broadcastBus, type UploadQueue } from '../upload-queue';
+import { indexedDbUploadStore, memoryUploadStore } from '../upload-store';
+import { FakeDrive } from '../drive/fake-drive';
+import { sha256, sha256Sync } from '../vault/hashes';
 
 type Listener = () => void;
 
@@ -97,7 +102,7 @@ export class DemoWorld {
   private pilePath = new Map<string, string>();
   private journal: ChangeEntry[] = [];
   /** Your answers to Bower's questions, read by the next tidy-up. */
-  private answers = new Map<string, boolean>();
+  private answers = new Map<string, QuestionAnswer>();
   /** Where each inbox thing goes in the next tidy-up (the demo's stand-in for Claude). */
   private plans = new Map<string, { title: string; to: string; note?: string }>(Object.entries(FILING));
   private run: RunState | null = null;
@@ -108,6 +113,61 @@ export class DemoWorld {
   private sessionListeners = new Set<Listener>();
   private timers: ReturnType<typeof setTimeout>[] = [];
   private seq = 0;
+  private uploads: Promise<{ queue: UploadQueue; inbox: string }> | null = null;
+  private disposed = false;
+
+  /** Demo file fixtures use the same device queue as production, including its reload and purge paths. */
+  private uploadFixture(): Promise<{ queue: UploadQueue; inbox: string }> {
+    if (!this.uploads) this.uploads = (async () => {
+      const drive = new FakeDrive();
+      const root = await drive.createFolder('root', 'Bower');
+      const inbox = await drive.createFolder(root.id, 'Inbox');
+      const bus = broadcastBus();
+      const queue = createUploadQueue({ drive,
+        store: typeof indexedDB === 'undefined' ? memoryUploadStore() : indexedDbUploadStore(),
+        ...(navigator.locks ? { locks: navigator.locks } : {}),
+        ...(navigator.storage ? { storage: navigator.storage } : {}),
+        ...(bus ? { bus } : {}),
+      });
+      queue.subscribe(() => this.emitVault());
+      await queue.start(sha256Sync(ALEX.email), `demo:${this.scenario}`);
+      if (this.disposed) queue.stop();
+      return { queue, inbox: inbox.id };
+    })();
+    return this.uploads;
+  }
+
+  private async fixturePiles(): Promise<Pile[]> {
+    // Tests without browser storage keep today's purely in-memory demo until a file is added.
+    if (!this.uploads && typeof indexedDB === 'undefined') return this.piles;
+    const { queue } = await this.uploadFixture();
+    const piles = this.piles.map((pile) => ({ ...pile, items: [...pile.items] }));
+    for (const item of queue.items()) {
+      let pile = piles.find((p) => p.id === item.pileId);
+      if (!pile) {
+        // Completed demo files follow today's in-memory folder: filing or removing one must not restore it.
+        if (item.state === 'done') continue;
+        pile = { id: item.pileId, text: item.appProperties.demoText ?? '', createdAt: Date.parse(item.addedAt), items: [] };
+        piles.push(pile);
+      }
+      const old = pile.items.find((it) => it.id === item.memberKey);
+      const row = { id: item.memberKey, name: item.name, kind: old?.kind ?? kindOf(item.name),
+        origin: old?.origin ?? item.appProperties.origin ?? 'From this computer',
+        ...(item.state === 'done' ? {} : { upload: item.state === 'failed' ? -1 : item.size ? Math.min(item.sent / item.size, 0.99) : 0 }),
+      };
+      pile.items = [...pile.items.filter((it) => it.id !== item.memberKey), row];
+    }
+    return piles;
+  }
+
+  private async forgetUploads(): Promise<void> {
+    if (!this.uploads && typeof indexedDB === 'undefined') return;
+    try { await (await this.uploadFixture()).queue.forgetAccount(sha256Sync(ALEX.email)); }
+    catch (e) {
+      console.error(e);
+      throw new BowerError('unknown', 'Signing out did not finish. Try again.');
+    }
+  }
   /** The fail-run scenario fails one tidy-up; trying again works. */
   private failedOnce = false;
   /** The piles a run took when it started; piles added later wait for the next one. */
@@ -249,6 +309,8 @@ export class DemoWorld {
   }
 
   dispose(): void {
+    this.disposed = true;
+    void this.uploads?.then(({ queue }) => queue.stop(), (e: unknown) => console.error(e));
     this.timers.forEach(clearTimeout);
   }
 
@@ -578,8 +640,9 @@ export class DemoWorld {
           this.sessionListeners.forEach((l) => l());
           return ALEX;
         }),
-      deleteAccount: () =>
-        this.wait(() => {
+      deleteAccount: async () => {
+        await this.forgetUploads();
+        return this.wait(() => {
           // The demo forgets Alex as the Worker would, and which folder was theirs; the made-up folder stays, as a Drive folder would.
           this.user = null;
           this.folder = 'missing';
@@ -587,14 +650,17 @@ export class DemoWorld {
           forgetThisPerson();
           sayGoodbye();
           this.sessionListeners.forEach((l) => l());
-        }),
-      signOut: () =>
-        this.wait(() => {
+        });
+      },
+      signOut: async () => {
+        await this.forgetUploads();
+        return this.wait(() => {
           this.user = null;
           keepSignedIn(false);
           forgetThisPerson();
           this.sessionListeners.forEach((l) => l());
-        }),
+        });
+      },
       folderState: () => this.wait(() => this.folder),
       createFolder: async (onStep) => {
         // After a deleted account the made-up folder is still there: it is found, not made.
@@ -627,6 +693,7 @@ export class DemoWorld {
       });
     return {
       driveLinks: false,
+      pendingUploadCount: async () => (await this.uploadFixture()).queue.pendingCount?.() ?? 0,
       driveLink: async () => null,
       tree: () => this.wait(() => buildTree(this.entries)),
       note: (path) => this.wait(() => ({ ...this.noteFor(path), backlinks: this.backlinksOf(path) })),
@@ -733,28 +800,46 @@ export class DemoWorld {
           const e = this.entries.get(path);
           if (e?.isNew) this.entries.set(path, { ...e, isNew: false });
         }),
-      piles: () =>
-        this.wait(() =>
-          this.piles
+      uploadNotice: async () => this.uploads ? (await this.uploads).queue.notice() : null,
+      piles: async () => {
+        const piles = await this.fixturePiles();
+        return this.wait(() =>
+          piles
             .map((p) => {
               const path = this.pilePath.get(p.id);
               return { ...p, items: [...p.items], ...(path ? { path } : {}) };
             })
             .sort((a, b) => b.createdAt - a.createdAt),
-        ),
-      addPile: (input) =>
-        change(() => {
+        );
+      },
+      addPile: async (input) => {
+        const pile = await change(() => {
           if (!input.items.length && !input.text.trim()) throw new BowerError('conflict', 'Add a file, a link or a line first.');
           const pile: Pile = {
             id: `p${Date.now()}`,
             text: input.text.trim(),
             createdAt: Date.now(),
-            items: input.items.map((it, i) => ({ ...it, id: `n${Date.now()}-${i}` })),
+            items: input.items.map((it, i) => ({ name: it.name, kind: it.kind, origin: it.origin, id: `n${Date.now()}-${i}` })),
           };
           this.piles = [pile, ...this.piles];
           this.syncInbox();
           return pile;
-        }),
+        });
+        if (input.items.some((it) => it.body)) {
+          const { queue, inbox } = await this.uploadFixture();
+          for (const [i, it] of input.items.entries()) {
+            if (!it.body) continue;
+            const member = pile.items[i];
+            if (!member) continue;
+            await queue.add({ declarationId: pile.id, pileId: pile.id, memberKey: member.id,
+              parentId: inbox, name: it.name, body: it.body, sha256: await sha256(it.body),
+              appProperties: { demoText: pile.text, origin: it.origin },
+            });
+          }
+          this.emitVault();
+        }
+        return pile;
+      },
       updatePile: (id, text) =>
         change(() => {
           if (this.run && !['done', 'failed'].includes(this.run.phase)) throw new BowerError('conflict', 'Wait for the tidy-up to end.');
@@ -766,14 +851,22 @@ export class DemoWorld {
           this.syncInbox();
           return { ...next, items: [...next.items] };
         }),
-      removePile: (id) =>
-        change(() => {
+      removePile: async (id) => {
+        if (this.run && !['done', 'failed'].includes(this.run.phase)) throw new BowerError('conflict', 'Wait for the tidy-up to end.');
+        if (this.uploads) {
+          const { queue } = await this.uploads;
+          for (const item of queue.items().filter((it) => it.pileId === id)) await queue.discard(item.id);
+        }
+        return change(() => {
           if (this.run && !['done', 'failed'].includes(this.run.phase)) throw new BowerError('conflict', 'Wait for the tidy-up to end.');
           this.piles = this.piles.filter((p) => p.id !== id);
           this.syncInbox();
-        }),
-      // The demo sends nothing anywhere, so nothing fails to arrive.
-      retryPile: () => this.wait(() => undefined),
+        });
+      },
+      retryPile: async () => {
+        if (this.uploads) (await this.uploads).queue.retry();
+        return this.wait(() => undefined);
+      },
       // The demo knows files by name only: the same name outside the inbox is "already there".
       duplicates: (files) =>
         this.wait(() =>
@@ -789,7 +882,7 @@ export class DemoWorld {
           const q = this.questions.find((x) => x.id === id);
           this.questions = this.questions.filter((x) => x.id !== id);
           if (q) {
-            this.answers.set(id, yes);
+            this.answers.set(id, checkedAnswer(q, yes));
             this.record('answer', `Answered "${yes ? q.yes : q.no}" to a question`);
           }
         }),

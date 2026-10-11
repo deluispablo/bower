@@ -854,6 +854,12 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
     for (const id of copies) expect(read.mock.calls.filter(([x]) => x === id).length, id).toBeLessThanOrEqual(2);
   });
 
+  /** A fixture where the context write never landed, with no Bin entry. */
+  async function contextNeverLanded(id: string): Promise<void> {
+    const kept = JSON.parse(await drive.snapshot()) as { files: Array<{ meta: { id: string } }> };
+    drive = FakeDrive.restore(JSON.stringify({ ...kept, files: kept.files.filter((f) => f.meta.id !== id) }));
+  }
+
   /** A declared pile whose things all arrived. */
   async function readyPile(text = 'Papers from Alex', items = [pdf('arrived.pdf'), pdf('missing.pdf')]) {
     const uploader = declaring();
@@ -1032,7 +1038,7 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
     const { pile, folder } = await readyPile();
     const note = (await drive.listAll(folder.id)).find((f) => f.name === 'Pile note.md');
     if (!note) throw new Error('no note');
-    await drive.trash(note.id);
+    await contextNeverLanded(note.id);
     const before = await stateOf(folder.id);
     const createText = vi.spyOn(drive, 'createText');
     const writes = appliedWrites();
@@ -1098,7 +1104,7 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
     const note = (await drive.listAll(folder.id)).find((f) => f.name === 'Pile note.md');
     if (!note) throw new Error('no note');
     const key = note.appProperties?.[PROP.item] ?? '';
-    await drive.trash(note.id);
+    await contextNeverLanded(note.id);
     let other = '';
     const out = await tidyUp(drive, root, 'all', { hooks: atFirstDispatch(async () => { other = (await drive.createText(folder.id, 'Pile note.md', 'Papers from Alex', { [PROP.item]: key })).id; }) });
     if (out.phase !== 'done') throw new Error('failed');

@@ -1,0 +1,23 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Garden workshop.txt",
+        "to": "Resources/Gardening",
+        "name": "Garden workshop.txt",
+        "note": {
+          "name": "Garden workshop.md",
+          "summary": "Alex learns gardening during a remote workshop.",
+          "body": "Alex learns gardening during a remote workshop in Saltmere on 14 October 2026.\n\nRelated: [[Gardening]] and [[Seed packet]].",
+          "tags": [
+            "gardening",
+            "remote-work",
+            "learning"
+          ]
+        }
+      }
+    ]
+  }
+]

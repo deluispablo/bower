@@ -1,0 +1,20 @@
+{
+  "id": "c17-b8-report-only-grammar",
+  "capability": "C17",
+  "title": "Lint reports real links and tag overflow without rewriting personal notes",
+  "covers": "model",
+  "source": "new (TL-P4-39 B8, F3/F14/U3; TL-P4-41 to TL-P4-48; scripted proof pending)",
+  "scope": "instructions",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Check the health of my notes without changing them."
+    }
+  ],
+  "questions": [],
+  "bowerOwned": [
+    "Resources/Gardening/Gardening.md"
+  ]
+}

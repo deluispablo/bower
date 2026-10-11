@@ -1,0 +1,28 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Ferrowick offer.txt",
+        "to": "Projects/Job hunt",
+        "name": "Ferrowick offer.txt",
+        "note": {
+          "name": "Ferrowick offer.md",
+          "summary": "Ferrowick offers Alex a developer role.",
+          "body": "Ferrowick offers Alex a developer role on 2 November 2026. Its office is in Briarhaven.\n\nRelated: [[Job hunt]]."
+        }
+      }
+    ],
+    "observations": [
+      {
+        "source": {
+          "pileId": "p-1"
+        },
+        "section": "how-you-like-things",
+        "category": "preference",
+        "text": "Prefers remote roles except when regular mentoring is offered in Saltmere."
+      }
+    ]
+  }
+]

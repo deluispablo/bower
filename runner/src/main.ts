@@ -44,7 +44,9 @@ import { admittedThings } from '../../src/data/spine/admission';
 import type { RunProvider } from '../../src/data/spine/provider';
 import { B_FAILURE } from '../../src/data/spine/scripted';
 import { BowerError } from '../../src/data/types';
-import { RunRecords } from '../../src/data/spine/records';
+import { RunRecords, type RunManifest } from '../../src/data/spine/records';
+import { askingKey, type PublicQuestion } from '../../src/data/contracts/questions';
+import { isRunnerFile, SYSTEM } from '../../src/data/vault/layout';
 import type { ItemDisposition } from '../../src/data/spine/report';
 import { finishRun, shownDone } from '../../src/data/spine/barrier';
 import { RunnerDrive } from './drive';
@@ -59,7 +61,9 @@ import { runnerReads } from './spine/records';
 import { keepFinishedAtEnd } from './spine/retention';
 import { repairRules } from './rules-repair';
 import { RunTiming } from './timing';
-import { withMaintenance, maintenanceEffects } from './index';
+import { boundHot } from './hot';
+import { VaultIndex } from '../../src/data/vault/vault-index';
+import { planningIndex, withMaintenance, maintenanceEffects } from './index';
 
 export { RunnerDrive, type RunnerDriveOptions } from './drive';
 export { RunnerToken, isStaleAttempt, type RunnerTokenOptions, type TokenGrant } from './token';
@@ -214,6 +218,20 @@ interface Seen {
 
 const totalOf = (total: number | undefined): { total?: number } => (total === undefined ? {} : { total });
 
+/** Read cards from the durable questions effect; report rows identify only this run's askings. */
+function plannedQuestions(manifest: RunManifest): PublicQuestion[] {
+  const rows = manifest.reportPlan.flatMap((r) => r.value.questions);
+  const questions = new Map(rows.map((q) => [askingKey(q), q]));
+  for (const { effect } of manifest.operations) {
+    if (!(effect.kind === 'write-runner-json' && effect.path === SYSTEM.questions)
+      && !(effect.kind === 'create-text' && effect.purpose === 'runner-json' && effect.name === 'questions.json')) continue;
+    const value: unknown = JSON.parse(effect.text);
+    if (!isRunnerFile(SYSTEM.questions, value)) throw new BowerError('unknown', 'Bower could not read its questions.');
+    for (const q of value.questions) if (questions.has(askingKey(q))) questions.set(askingKey(q), q);
+  }
+  return [...questions.values()];
+}
+
 type Ended = Exclude<TidyEnd, { phase: 'saving' }> | { phase: 'stopped'; why: string; error: unknown };
 
 /** Steps 1 to 4; a run that stops in them throws, and `runTidy` says how it ended. */
@@ -235,12 +253,22 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   const listed = new RunRecords(reads.asListed(), rootId);
   seen.retain = (at) => keepFinishedAtEnd(drive, listed, opts.runId, at);
   const barrier = { rootId, runId: opts.runId, attempt: opts.attempt, records, reads, batch: () => drive.batch(), fenced: () => drive.fencedWrites(), admission: grant.manifest, clock, newId };
+  const publishQuestions = async (manifest: RunManifest): Promise<void> => {
+    try {
+      await status.publishQuestions(plannedQuestions(manifest), totalOf(seen.total));
+    } catch (error) {
+      // The retained snapshot rides the next ordinary report; publication never stops durable effects.
+      const detail = error instanceof Error ? error.stack ?? error.message : String(error);
+      console.error(`Live question publication failed; the next status report will carry the snapshot again. ${detail.replace(/\s+/g, ' ')}`);
+    }
+  };
 
   // 2. This run's report already in the folder: nothing is repeated. Its chain says done before the Worker hears it.
   if (await timing.time('reads', () => shownDone(reads, rootId, opts.runId))) {
     const found = await records.found(opts.runId);
     if (found.kind === 'run') seen.chain = found.chain;
     if (found.kind === 'run') seen.total ??= found.manifest.capture.members.length;
+    if (found.kind === 'run') await publishQuestions(found.manifest);
     if (found.kind === 'run' && found.chain.length) {
       const finished = await finishRun(barrier, found.manifest, found.manifestHash, found.chain);
       seen.chain = finished.chain;
@@ -277,6 +305,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
     onChain: (chain) => {
       seen.chain = chain;
     },
+    onPlan: publishQuestions,
   }));
   if (end.state === 'failed') {
     console.error(end.why);
@@ -382,8 +411,16 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
       ...(opts.fetch ? { fetch: opts.fetch } : {}),
       ...(opts.pacing ? { pacing: opts.pacing } : {}),
       provider: (drive, rootId, context) => {
-        const provider = providerFor(name, drive, { rootId, runId, allowWeb, context }, { env, timing, ...(opts.claude ? { spawn: opts.claude } : {}) });
-        return async (admitted) => withMaintenance(drive, await provider(admitted));
+        return async (admitted) => {
+          drive.planReads().scope = admitted.taken.scope;
+          // Control recovery has completed; defer semantic read-ahead until hot is in the shared cache.
+          const listed = await drive.planReads().listAll(rootId, { readAhead: false });
+          const persistedHot = VaultIndex.build(rootId, listed).file(SYSTEM.hot);
+          const hot = persistedHot ? boundHot(await drive.planReads().readText(persistedHot.id)) : '';
+          const index = await planningIndex(drive, rootId);
+          const provider = providerFor(name, drive, { rootId, runId, allowWeb, context, index, ...(hot ? { hot } : {}) }, { env, timing, ...(opts.claude ? { spawn: opts.claude } : {}) });
+          return withMaintenance(drive, await provider(admitted));
+        };
       },
       timing,
       effects: (drive, context) => driveEffects(drive, context, maintenanceEffects(drive)),

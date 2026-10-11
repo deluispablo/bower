@@ -49,6 +49,7 @@
     ]
   },
   "unchanged": [
+    "index.md",
     "Resources/Gardening/Clippings/Garden clipping 01.md",
     "Resources/Gardening/Clippings/Garden clipping 02.md",
     "Resources/Gardening/Clippings/Garden clipping 03.md",
@@ -93,10 +94,10 @@
   ],
   "notes": [
     {
-      "path": "index.md",
+      "path": ".bower/index.md",
       "contains": [
         "# Index",
-        "- [[Gardening]] — Soil and water clippings for the Saltmere garden."
+        "→ [[Gardening]] (41)"
       ],
       "excludes": [
         "- [[Garden clipping",

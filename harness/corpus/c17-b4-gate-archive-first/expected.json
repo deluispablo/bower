@@ -1,0 +1,77 @@
+{
+  "files": {
+    "present": [
+      "About me.md",
+      ".bower/observations.jsonl",
+      ".bower/archive/about-me/*/how-you-like-things/2026-10-07-*.md"
+    ],
+    "absent": [
+      "About me - archive.md"
+    ]
+  },
+  "notes": [
+    {
+      "path": "About me.md",
+      "contains": [
+        "Prefers remote roles except when regular mentoring is offered in Saltmere.",
+        "Prefers keeping the amber gate clear when planning garden work in Saltmere."
+      ]
+    },
+    {
+      "path": ".bower/observations.jsonl",
+      "contains": [
+        "\"kind\":\"consolidated\""
+      ]
+    }
+  ],
+  "unchanged": [
+    "Resources/Personal/Preference statements.md",
+    ".bower/archive/about-me/about-fixture/how-you-like-things/2026-10-06-old.md"
+  ],
+  "protectedRanges": [
+    {
+      "path": "About me.md",
+      "range": {
+        "heading": "My words"
+      }
+    },
+    {
+      "path": "About me.md",
+      "range": {
+        "frontMatter": true
+      }
+    }
+  ],
+  "linksResolve": true,
+  "runs": [
+    {
+      "unchanged": [
+        "About me.md",
+        ".bower/observations.jsonl",
+        "Resources/Personal/Preference statements.md",
+        ".bower/archive/about-me/about-fixture/how-you-like-things/2026-10-06-old.md"
+      ],
+      "files": {
+        "absent": [
+          ".bower/archive/about-me/*/how-you-like-things/2026-10-07-*.md"
+        ]
+      },
+      "report": {
+        "filed": 0,
+        "created": [],
+        "updated": [],
+        "questionsExactly": 0
+      }
+    },
+    {
+      "report": {
+        "filed": 0,
+        "created": [],
+        "updated": [
+          "About me.md"
+        ],
+        "questionsExactly": 0
+      }
+    }
+  ]
+}

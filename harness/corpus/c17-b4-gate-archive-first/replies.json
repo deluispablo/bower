@@ -1,0 +1,22 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": []
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [],
+    "observations": [
+      {
+        "source": {
+          "recordId": "press-2"
+        },
+        "section": "how-you-like-things",
+        "category": "preference",
+        "text": "Prefers keeping the amber gate clear when planning garden work in Saltmere."
+      }
+    ]
+  }
+]

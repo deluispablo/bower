@@ -2,20 +2,14 @@
 
 Coordinator: the Claude Code session named "Orquestador". It integrates in `/Users/deluisp/Projects/bower-app` on branch `claude/p3`; P4 continues on it. Lead: the Planificador session ([DECISIONS.md](DECISIONS.md)). Output rule: [TL-P3-29](2026-10-07-tl-p3-29-output-rule-survives-compaction.md), in AGENTS.md. Minors: [P2_POLISH.md](P2_POLISH.md). Earlier handoffs: git history of this file.
 
-## Resume (2026-10-10 evening, TL-P4-31 Codex throughput)
+## Resume (2026-10-11 early, TL-P4-31 Codex throughput)
 
-Read this first. Cap 1 Claude + 4 Codex (load < ~12). Wait on Codex only with tracked background Bash jobs (run_in_background), never `&`-detached ones: a lost waiter idled the coordinator 2.5 h on 2026-10-10. Codex can't bind ports (no e2e, no api vitest): the coordinator runs those; api fix rounds go to a Claude implementer. Never commit in the main checkout while integrate.sh or done.sh runs.
-- **main = backup = 2ab7b490** (C05 on staging). Since then on claude/p3: preps c08-c15 integrated; packets for B2a, Q1a, rate limits, smoke-request-slow, smoke-request-report-hidden, pwa-update.
+Read this first. Cap 1 Claude + 4 Codex. Wait only on tracked run_in_background jobs. Codex can't bind ports (no e2e), so the coordinator runs e2e. Never commit in the main checkout while integrate.sh or done.sh runs. Job scripts live in the session scratchpad (`jobs/`): red-then-impl.sh, codex-impl.sh, gates.sh, gates-and-pass.sh, integrate-done.sh, integrate-known-green.sh and disjoint.sh. Workers must never replace or symlink node_modules (B1c's did; fixed with `pnpm install --offline --frozen-lockfile` in the worktree).
+- **claude/p3 at 7195bb84, 514/528.** Closed since main 539fe3a3: E3 orphan-pile-count-data (a1566814), c2-pile-records re-closed, E2 upload-sign-out-forget (5d4262ca; TL-P4-53 addenda 8–11), delete-account-purge (47448edf; addendum 12), pile-binned-context-hold (7195bb84; addendum 7). main and backup are still at 539fe3a3, and the next batch needs suites, main, backup and a staging smoke.
 - **In flight (worktrees /private/tmp/bower-<branch>):**
-  - pwa-update (blocks the owner's retest): fix round 1 committed; e2e:pwa + check running; then Claude review.
-  - smoke-request-report-hidden (ui): designer findings fixed (14f1392b); gates running; then Codex pass, Claude review, designer verify.
-  - p4-rate-limits: fix round 1 committed (check green); Codex pass 2 running; then Claude review.
-  - b2a-summary-format (escalated): fix round 1 committed; Codex pass 2 running; then Claude review.
-  - b1a-contract (escalated): reds + 3 red repairs committed; implementation draft UNCOMMITTED; round 3 removes the .bower/log.md write (addendum 4); then the red owner re-pins goldens to measured (≤91/102), commit fix, check, e2e, Codex pass, Claude review.
-  - q1a-stored-answers: reds committed; implementation after B1a integrates.
-  - smoke-request-slow (escalated): reds committed; implementation after B1a integrates.
-  - p4-b56-prep: Codex refresh running; then to the lead.
-- **Defects logged today:** request-run-slow-reads, request-outcome-not-shown, pwa-update-stuck (all ruled); tree-new-note-button (old cached bundle).
+  - b1c-index (escalated), round 3 under TL-P4-41 addendum 10: ownership comes from the index's 4,096-byte prefix, with zero extra reads. Then gates, a Codex pass, a Claude review and integrate. Uncommitted fix-round-2 production diff, then the round-3 job.
+  - c02-upload-count-ui (E4, ui): fix round 1. On fake, Sign out from the sheet while sending never reaches "Continue with Google". Then gates, a Claude review and the designer's verified.
+- **Queued:** Q1c impl after B1c hands off; B3b; B5a and B6a impl after B1c hands off note-edit and run-manifest; rules-added-region, then rules-original-ui; rules-added-region-model after B1c/B3b; B7/B8/B9 reds per order.
 
 ## Where things stand
 

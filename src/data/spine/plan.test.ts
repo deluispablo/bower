@@ -5,11 +5,11 @@ import { FakeDrive } from '../drive/fake-drive';
 import { seedFakeDrive } from '../fake/seed';
 import { DriveVault } from '../vault/drive-vault';
 import { parsePileDeclaration } from '../contracts/pile-declaration';
-import { declarationCopies, declarationRecord } from '../pile-readiness';
+import { SET_ASIDE_TEXT, declarationCopies, declarationRecord } from '../pile-readiness';
 import { sha256 } from '../vault/hashes';
 import { PILE_NOTE } from '../piles';
 import { PROP } from '../vault/layout';
-import { SET_ASIDE, capturePiles, planAdmission, type PileShape } from './plan';
+import { SET_ASIDE, capturePiles, pileShape, planAdmission, type PileShape } from './plan';
 import { admissionRead, driveRead, fakeRead } from './read';
 
 const FOLDER = 'application/vnd.google-apps.folder';
@@ -18,6 +18,74 @@ const SESSIONS = 'https://www.googleapis.com/upload/session/';
 
 const json = (status: number, body: unknown): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=UTF-8' } });
+
+describe('pile context agreement', () => {
+  it('pile-binned-context-hold: runner shares one Bin listing for a missing member and context', async () => {
+    localStorage.clear();
+    const drive = new FakeDrive();
+    const root = (await seedFakeDrive(drive, 'default', AT)) ?? '';
+    const uploader = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set(), declarePiles: true });
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: ['a.pdf', 'b.pdf'].map((name) => ({ name, kind: 'pdf' as const, origin: 'From this computer', body: new Blob([`%PDF ${name}`]) })) });
+    await uploader.settled();
+    const listing = await drive.listAll(root);
+    const folder = listing.find((f) => f.folder && f.appProperties?.[PROP.pile] === pile.id);
+    const note = listing.find((f) => f.parents[0] === folder?.id && f.name === PILE_NOTE);
+    const member = listing.find((f) => f.parents[0] === folder?.id && f.name === 'b.pdf');
+    const areas = listing.find((f) => f.folder && f.parents.includes(root) && f.name === 'Areas');
+    if (!note || !member || !folder || !areas || !pile.path) throw new Error('incomplete fixture');
+    await drive.update(member.id, { addParent: areas.id, removeParent: folder.id });
+    await drive.trash(member.id);
+    await drive.trash(note.id);
+    const bins = vi.spyOn(drive, 'binnedByItem');
+    const captured = await capturePiles(fakeRead(drive), root, [{ id: pile.id, path: pile.path, itemIds: listing.filter((f) => f.parents[0] === folder.id && f.name === 'a.pdf').map((f) => f.id), hasWords: false }], { notes: true });
+    expect.soft(captured.get(pile.id)?.blocked).toBeNull();
+    expect(bins).toHaveBeenCalledTimes(1);
+    expect(bins.mock.calls[0]?.[1].slice().sort()).toEqual([note.appProperties?.[PROP.item], member.appProperties?.[PROP.item]].sort());
+  });
+
+  it.each(['Drive Bin', 'journal trash', 'never arrived'] as const)(
+    'pile-binned-context-hold: app and plan agree after %s', async (state) => {
+      localStorage.clear();
+      let drive = new FakeDrive();
+      const root = (await seedFakeDrive(drive, 'default', AT)) ?? '';
+      const client = (): DriveVault => new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set(), declarePiles: true });
+      const uploader = client();
+      const pile = await uploader.addPile({ text: 'Papers from Alex', items: ['a.pdf', 'b.pdf'].map((name) => ({ name, kind: 'pdf' as const, origin: 'From this computer', body: new Blob([`%PDF ${name}`]) })) });
+      await uploader.settled();
+      const listing = await drive.listAll(root);
+      const folder = listing.find((f) => f.folder && f.appProperties?.[PROP.pile] === pile.id);
+      const note = listing.find((f) => f.parents[0] === folder?.id && f.name === PILE_NOTE);
+      if (!note || !pile.path) throw new Error('no declared context');
+      if (state === 'journal trash') {
+        await drive.trash(note.id);
+        const bower = listing.find((f) => f.folder && f.parents.includes(root) && f.name === '.bower') ?? await drive.createFolder(root, '.bower');
+        const changes = listing.find((f) => f.folder && f.parents.includes(bower.id) && f.name === 'changes') ?? await drive.createFolder(bower.id, 'changes');
+        await drive.createText(changes.id, 'context-trash.json', JSON.stringify({ v: 1, id: 'context-trash', device: 'DEVICE', at: AT, kind: 'trash', what: 'Put the pile note in the Bin', path: `${pile.path}/${PILE_NOTE}`, fileId: note.id }));
+      } else if (state === 'Drive Bin') await drive.trash(note.id);
+      else {
+        // E3 shape: no context file ever landed; there is no Bin evidence.
+        const snapshot = JSON.parse(await drive.snapshot()) as { files: Array<{ meta: { id: string } }> };
+        drive = FakeDrive.restore(JSON.stringify({ ...snapshot, files: snapshot.files.filter((f) => f.meta.id !== note.id) }));
+      }
+      const app = client();
+      expect((await app.changes()).filter((c) => c.kind === 'trash')).toHaveLength(state === 'journal trash' ? 1 : 0);
+      const seen = (await app.piles()).find((p) => p.id === pile.id);
+      if (!seen) throw new Error('pile disappeared');
+      expect(seen.setAside).toBe(state === 'never arrived' ? 'not-arrived' : undefined);
+      const http = new DriveHttp({ token: async () => 'drive-token', fetch: driveV3(drive, root) });
+      for (const [name, read] of [['fakeRead', fakeRead(drive)], ['driveRead', driveRead(http)], ['admissionRead', admissionRead(http, 'all')]] as const) {
+        const capture = (await capturePiles(read, root, [pileShape(seen)], { notes: true })).get(pile.id);
+        expect.soft(capture?.blocked, name).toBe(seen.setAside ? SET_ASIDE_TEXT[seen.setAside] : null);
+        const plan = await planAdmission(read, root, { scope: 'all', clock: () => AT, newId: () => 'context-admission' });
+        expect(plan.kind, name).toBe('manifest');
+        if (plan.kind !== 'manifest') throw new Error('sample piles were not admitted');
+        const admitted = plan.manifest.piles.find((p) => p.pileId === pile.id);
+        expect.soft(!!admitted, name).toBe(state !== 'never arrived');
+        if (state !== 'never arrived') expect.soft(admitted?.items.map((i) => i.name).sort(), name).toEqual(['a.pdf', 'b.pdf']);
+      }
+    },
+  );
+});
 
 /** Drive v3 as Google answers it (files.list paged, files.get with the fields asked, alt=media), over a pretend Drive. */
 function driveV3(drive: FakeDrive, root = ''): typeof fetch {

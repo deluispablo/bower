@@ -1,0 +1,27 @@
+{
+  "viewId": "monthly-garden-spend",
+  "selected": 5,
+  "missing": 1,
+  "invalid": 1,
+  "rows": [
+    {
+      "month": "2026-10",
+      "category": "garden",
+      "currency": "EUR",
+      "sum": 42.5,
+      "valid": 2
+    },
+    {
+      "month": "2026-10",
+      "category": "garden",
+      "currency": "USD",
+      "sum": 15,
+      "valid": 1
+    }
+  ],
+  "forbiddenCombinedTotal": 57.5,
+  "writes": [
+    "Areas/Money/Money.md"
+  ],
+  "modelCallsForEvaluation": 0
+}

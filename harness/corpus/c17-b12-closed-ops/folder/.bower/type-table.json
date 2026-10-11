@@ -1,0 +1,32 @@
+{
+  "v": 1,
+  "rows": [
+    {
+      "id": "offer",
+      "properties": {
+        "company": {
+          "type": "text"
+        },
+        "country": {
+          "type": "enum",
+          "values": [
+            "Saltmere",
+            "Lindenwick"
+          ]
+        },
+        "review_state": {
+          "type": "enum",
+          "values": [
+            "new",
+            "reviewed"
+          ]
+        }
+      },
+      "table": [
+        "company",
+        "country",
+        "review_state"
+      ]
+    }
+  ]
+}

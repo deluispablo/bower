@@ -18,6 +18,7 @@ import { sha256Hex } from '../../src/data/contracts/hashes.js';
 import { base64UrlEncode } from './crypto.js';
 import type { RunPhase } from '../../src/data/contracts/run-phases.js';
 import type { RunReply } from './process.js';
+import type { PublicQuestion } from '../../src/data/contracts/questions.js';
 
 /** Random bytes in a ticket. */
 const TICKET_BYTES = 32;
@@ -61,6 +62,7 @@ export interface RunnerReport {
   phase: RunPhase;
   total?: number;
   failure?: string;
+  questions?: PublicQuestion[];
   /**
    * Only with `done`: a "Write it" the person granted was not written (a clash at the write itself), so its answer
    * stayed in your changes; the Worker starts the run that asks again, as for answers that waited (TL-P4-19 addendum 15).
@@ -83,4 +85,3 @@ export type RunnerReportResult =
   | { accepted: false; refused: 'signed-out' | 'stale-attempt' }
   /** A late report: with the Worker's current `seq` of this attempt (0 before any) and phase, so a runner can go on. */
   | { accepted: false; refused: 'stale-report'; current: { seq: number; phase: RunPhase } };
-

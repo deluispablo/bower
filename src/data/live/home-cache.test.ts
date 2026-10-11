@@ -226,13 +226,18 @@ describe('Home reads only the records of the piles in the inbox (TL-P4-16 b)', (
     expect(out.done.questions ?? 0, `questions after ${out.done.questions} ms, piles after ${out.done.piles} ms`).toBeLessThan(out.done.piles ?? 0);
   }, 60_000);
 
-  it('an empty inbox reads no old pile records', async () => {
+  it('an empty inbox reads no stamped pile record, only the current unstamped one', async () => {
     const { drive, s } = await slowReport({ cold: true, earlier: 30, empty: true, latency: 0 });
     const calls = countReads(drive);
     const out = await homeLoad(s, drive);
     expect(out.piles).toEqual([]);
     const records = Object.keys(calls).filter((k) => !k.startsWith('listAll') && k.includes('.bower/piles/'));
-    expect(records, `${out.calls} Drive calls, ${records.length} pile records read`).toEqual([]);
+    const stamped = records.filter((k) => /\/(declaration-old-|disposition-)/.test(k));
+    expect(stamped, 'stamped pile records read').toEqual([]);
+    const unstamped = records.filter((k) => !stamped.includes(k));
+    expect(unstamped, `${out.calls} Drive calls, ${records.length} pile records read`).toHaveLength(1);
+    expect(unstamped[0]).toMatch(/^readBytes Bower\/\.bower\/piles\/declaration-/);
+    expect(calls[unstamped[0] ?? ''], 'current unstamped declaration reads').toBe(1);
   }, 60_000);
 
   it('an unstamped pile record is not read', async () => {

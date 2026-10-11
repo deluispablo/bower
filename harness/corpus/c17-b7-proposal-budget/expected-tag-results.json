@@ -1,0 +1,24 @@
+{
+  "v": 1,
+  "vocabulary": [
+    "gardening"
+  ],
+  "newProposals": [
+    "rainwater",
+    "compost"
+  ],
+  "openProposals": [
+    "rainwater",
+    "compost"
+  ],
+  "deferredCandidates": [
+    "seed-saving"
+  ],
+  "retainedRequest": "change-1",
+  "proposalOrder": "admitted-item-order",
+  "sharedBudget": {
+    "newPerRun": 2,
+    "open": 5
+  },
+  "deduplicateBeforeBudget": true
+}

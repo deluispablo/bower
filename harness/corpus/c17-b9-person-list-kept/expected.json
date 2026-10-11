@@ -1,0 +1,169 @@
+{
+  "files": {
+    "present": [
+      "Areas/Home/Alex plot.md",
+      "Areas/Home/Gate notice.txt"
+    ],
+    "absent": [
+      "Inbox/*",
+      "Areas/Home/Gate notice.md"
+    ]
+  },
+  "unchanged": [
+    "Rules.md",
+    "Areas/Home/Private plans.md"
+  ],
+  "protectedRanges": [
+    {
+      "path": "Areas/Home/Alex plot.md",
+      "range": {
+        "frontMatter": true
+      }
+    },
+    {
+      "path": "Areas/Home/Alex plot.md",
+      "range": {
+        "heading": "My thoughts"
+      }
+    }
+  ],
+  "properties": [
+    {
+      "path": "Areas/Home/Alex plot.md",
+      "absent": [
+        "by",
+        "bower_state",
+        "bowerMd5"
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "path": "Areas/Home/Alex plot.md",
+      "contains": [
+        "* 1 Oct: Alex dug the first bed.",
+        "* Keep the sketch beside the gate.",
+        "* 2026-10-07 · The committee confirms the amber gate is open again. · [[Gate notice.txt]]",
+        "summary: 'Alex''s plot.'"
+      ],
+      "excludes": [
+        "by: bower",
+        "bower_state:",
+        "<!-- bower:ownership/",
+        "Contradiction:",
+        "(inferred)"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 0,
+    "created": [],
+    "updated": [],
+    "questionsExactly": 0
+  },
+  "runs": [
+    {
+      "notes": [
+        {
+          "path": "Areas/Home/Alex plot.md",
+          "contains": [
+            "* 1 Oct: Alex dug the first bed.",
+            "* Keep the sketch beside the gate.",
+            "* 2026-10-07 · The committee confirms the amber gate is open again. · [[Gate notice.txt]]",
+            "summary: 'Alex''s plot.'"
+          ],
+          "excludes": [
+            "by: bower",
+            "bower_state:",
+            "<!-- bower:ownership/",
+            "Contradiction:",
+            "(inferred)"
+          ]
+        }
+      ],
+      "protectedRanges": [
+        {
+          "path": "Areas/Home/Alex plot.md",
+          "range": {
+            "frontMatter": true
+          }
+        },
+        {
+          "path": "Areas/Home/Alex plot.md",
+          "range": {
+            "heading": "My thoughts"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "path": "Areas/Home/Alex plot.md",
+          "absent": [
+            "by",
+            "bower_state",
+            "bowerMd5"
+          ]
+        }
+      ],
+      "report": {
+        "filed": 1,
+        "created": [],
+        "updated": [
+          "Areas/Home/Alex plot.md"
+        ],
+        "questionsExactly": 0
+      }
+    },
+    {
+      "notes": [
+        {
+          "path": "Areas/Home/Alex plot.md",
+          "contains": [
+            "* 1 Oct: Alex dug the first bed.",
+            "* Keep the sketch beside the gate.",
+            "* 2026-10-07 · The committee confirms the amber gate is open again. · [[Gate notice.txt]]",
+            "summary: 'Alex''s plot.'"
+          ],
+          "excludes": [
+            "by: bower",
+            "bower_state:",
+            "<!-- bower:ownership/",
+            "Contradiction:",
+            "(inferred)"
+          ]
+        }
+      ],
+      "protectedRanges": [
+        {
+          "path": "Areas/Home/Alex plot.md",
+          "range": {
+            "frontMatter": true
+          }
+        },
+        {
+          "path": "Areas/Home/Alex plot.md",
+          "range": {
+            "heading": "My thoughts"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "path": "Areas/Home/Alex plot.md",
+          "absent": [
+            "by",
+            "bower_state",
+            "bowerMd5"
+          ]
+        }
+      ],
+      "report": {
+        "filed": 0,
+        "created": [],
+        "updated": [],
+        "questionsExactly": 0
+      }
+    }
+  ]
+}

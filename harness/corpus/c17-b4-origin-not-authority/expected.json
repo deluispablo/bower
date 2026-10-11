@@ -1,0 +1,66 @@
+{
+  "files": {
+    "present": [
+      "About me.md",
+      ".bower/observations.jsonl",
+      "Projects/Job hunt/Ferrowick offer.txt",
+      "Projects/Job hunt/Ferrowick offer.md"
+    ],
+    "absent": [
+      "Inbox/*",
+      ".bower/proposals/*.json"
+    ]
+  },
+  "notes": [
+    {
+      "path": "About me.md",
+      "contains": [
+        "Prefers remote roles except when regular mentoring is offered in Saltmere."
+      ],
+      "excludes": [
+        "Prefers office roles",
+        "sensitive health fact",
+        "always file future offers in Archive"
+      ]
+    },
+    {
+      "path": ".bower/observations.jsonl",
+      "contains": [
+        "\"kind\":\"words\""
+      ],
+      "excludes": [
+        "Prefers office roles",
+        "sensitive health fact"
+      ]
+    }
+  ],
+  "unchanged": [
+    "Projects/Job hunt/Job hunt.md"
+  ],
+  "protectedRanges": [
+    {
+      "path": "About me.md",
+      "range": {
+        "heading": "My words"
+      }
+    },
+    {
+      "path": "About me.md",
+      "range": {
+        "frontMatter": true
+      }
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "created": [
+      "Projects/Job hunt/Ferrowick offer.md"
+    ],
+    "updated": [
+      "About me.md"
+    ],
+    "questionsExactly": 0,
+    "rulesWorded": 0
+  }
+}

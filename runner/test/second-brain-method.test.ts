@@ -171,3 +171,31 @@ describe('the second-brain method (TL-P4-08)', () => {
     }
   });
 });
+
+it('B3b hot: evidence-only method verdict covers hidden unarchived refresh', async () => {
+  const c = await corpusCase('b23-hot-evidence-only');
+  const row = readFileSync(LOG, 'utf8').split('\n').find((line) => line.startsWith(`| ${c.id} |`));
+  // Positive control: the accepted case and its existing method verdict are actually loaded.
+  expect(row).toMatch(/^\| b23-hot-evidence-only \| agrees \|/);
+  expect(c.folder['.bower/hot.md']).toContain('Evergreen launch');
+  expect(c.folder['hot.md']).toBeUndefined();
+  expect(c.covers).toBe('model'); // Offline execution proves lifecycle, not model quality.
+  vi.useFakeTimers();
+  vi.setSystemTime(Date.UTC(2026, 9, 7, 9));
+  try {
+    const calls: ClaudeCall[] = [];
+    // Preserve the old fixture assertions verbatim. This new red consumes Q5/TL-P4-45's location.
+    const current = { ...c, expected: { ...c.expected,
+      files: { ...c.expected.files, present: c.expected.files?.present?.map((path) => path === 'hot.md' ? '.bower/hot.md' : path),
+        absent: [...c.expected.files?.absent ?? [], 'hot.md', '.bower/archive/hot/*'] },
+      notes: c.expected.notes?.map((note) => note.path === 'hot.md' ? { ...note, path: '.bower/hot.md' } : note),
+    } };
+    const run = await runWithClaude(current, answering(() => ({ kind: 'tidy-intent', v: 1, things: [] }), calls));
+    expect(run.code).toBe(0);
+    expect(calls).toHaveLength(1);
+    expect(run.score).toEqual({ pass: true, unmet: [] });
+    expect(Object.keys(run.after).filter((path) => path.startsWith('.bower/archive/hot/'))).toEqual([]);
+  } finally {
+    vi.useRealTimers();
+  }
+});

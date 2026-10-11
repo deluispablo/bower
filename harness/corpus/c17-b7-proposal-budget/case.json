@@ -1,0 +1,41 @@
+{
+  "id": "c17-b7-proposal-budget",
+  "capability": "C17",
+  "title": "Deduplicate tag suggestions before the shared two-proposal budget",
+  "covers": "model",
+  "source": "new; TL-P4-39 B7/F5/F7/U2; TL-P4-41/42/44/45/47/48; proposed tag contract",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "File this gardening reference; suggest rainwater only with my approval.",
+      "files": [
+        "Rain barrel guide.txt"
+      ]
+    },
+    {
+      "line": "File this gardening reference; suggest compost only with my approval.",
+      "files": [
+        "Compost guide.txt"
+      ]
+    },
+    {
+      "line": "File this gardening reference; suggest seed-saving only with my approval.",
+      "files": [
+        "Seed saving guide.txt"
+      ]
+    }
+  ],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Suggest rainwater, compost and seed-saving for future notes, asking before each addition. File the clear references normally."
+    }
+  ],
+  "questions": [],
+  "bowerOwned": [
+    "Rules.md",
+    "Resources/Gardening/Gardening.md",
+    "Resources/Gardening/Seed packet.md"
+  ]
+}
