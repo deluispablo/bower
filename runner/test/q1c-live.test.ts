@@ -1,5 +1,6 @@
-import { writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import p2Manifest from '../../src/data/contracts/fixtures/p2/run-manifest.json';
 import p2Checkpoints from '../../src/data/contracts/fixtures/p2/run-checkpoint.json';
 import p2Report from '../../src/data/contracts/fixtures/p2/run-report.json';
@@ -160,7 +161,9 @@ describe('Q1c durable publication through main and createApp().request', () => {
     // Persistence and ticket takeover are separately pinned through the actual API routes in q1-questions.test.ts.
     const wire = driveV3(w.drive, 2, w.dispatched[0]?.run_id);
     wire.folderId = w.rootId;
-    const event = resolve(import.meta.dirname, '../../tmp-logs/q1c-recovery-event.json');
+    const dir = join(tmpdir(), 'bower-q1c-tests');
+    await mkdir(dir, { recursive: true });
+    const event = join(dir, `q1c-recovery-event-${crypto.randomUUID()}.json`);
     await writeFile(event, JSON.stringify({ action: 'bower-tidy', client_payload: { run_id: wire.runId,
       attempt: 2, ticket: TICKET, scope: 'all', allow_web: false } }));
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: event }, { fetch: wire.fetch,

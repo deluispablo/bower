@@ -146,3 +146,36 @@ must remain on the red side with a specific ruling. The coordinator runs the API
 ## API reds run by the coordinator
 
 `pnpm -C api exec vitest run test/q1-questions.test.ts --maxWorkers=2` at 4dc7f762: 23 of 23 fail as assertions (no load errors), each on the missing snapshot, revision or refusal it pins.
+
+## Red repair after Q1a
+
+Repair HEAD: 81058f62. Mechanical red repair only; no network, git writes or dependency changes.
+
+tests changed: runner/test/q1c-live.test.ts: moved from q1-continuation.test.ts at the Q1a merge; temp path per TL-P4-54; no Q1a import, type or helper repair needed.
+
+Each change:
+- Import mkdir alongside writeFile, tmpdir from node:os, and join instead of resolve from node:path.
+- Create join(tmpdir(), 'bower-q1c-tests') recursively before writing the recovery event.
+- Give the event a unique UUID filename under that directory; GITHUB_EVENT_PATH receives the same event path.
+- All test names, assertions, fixture shapes and production helpers remain unchanged.
+  Runner tsc already passed before the repair; both reds reach the intended Q1c snapshot assertions after it.
+
+Offline standard: Node's tmpdir/join/mkdir pattern already used in runner/test/q1-continuation.test.ts
+and runner/test/real-world.ts; Node API reference https://nodejs.org/api/os.html#ostmpdir (not fetched).
+
+Validation:
+- `pnpm -C runner exec vitest run test/q1c-live.test.ts --maxWorkers=2 --outputFile.json='/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T//bower-q1c-red-repair.8bYH4q/runner-results.json'`
+  exits 1: exactly two AssertionErrors, no import/type/helper failures.
+- Durable publication fails at runner/test/q1c-live.test.ts:141: captured.run.questions is undefined.
+  Its preceding controls and released-job completion controls pass.
+- Same-run recovery fails at runner/test/q1c-live.test.ts:173: reported.questions is undefined.
+  Its preceding legacy-reader, first-run, stored-question, recovery and single-model-call controls pass.
+- `pnpm -C runner exec tsc --noEmit -p .` exits 0; tsc has no --maxWorkers option.
+- Logs and final JSON report: /var/folders/zg/53gb21k95_534c957t93xksw0000gn/T//bower-q1c-red-repair.8bYH4q/
+  runner-red.log, runner-tsc.log and runner-results.json. Initial tsc output: baseline-tsc.log.
+- The first repaired run used Vitest's default reporter, which wrote ignored runner/test-results/unit.json.
+  The final run explicitly redirects JSON output to OS temp; no shared config was edited.
+- pnpm check and e2e not run: this assignment authorizes only the red file and runner tsc.
+
+removed: none.
+commits: none; coordinator owns commits.
