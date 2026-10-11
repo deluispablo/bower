@@ -10,6 +10,7 @@ import { isHub } from '../contracts/hub';
 import { displayName, extOf, kindOf, nameOf, type Entries, type Entry } from '../tree';
 import { isHidden, PROP } from './layout';
 import { seenNow } from './seen';
+import { linkTarget } from '../contracts/links';
 
 export class VaultIndex {
   private files = new Map<string, DriveFile>();
@@ -137,8 +138,8 @@ export class VaultIndex {
     const hubs = [...maps].filter((id) => matches.some((match) => this.byId(match)?.parents[0] === this.byId(id)?.parents[0])
       || tokens(`${this.byId(id)?.name ?? ''} ${notes[id]?.summary ?? ''}`).some((word) => own.has(word))).sort(order);
     const resolve = (link: string): string | undefined => {
-      const path = link.replace(/\.md$/i, '');
-      const exact = this.idOf(`${path}.md`);
+      const path = linkTarget(link).replace(/\.md$/i, '');
+      const exact = ids.find((id) => this.pathOf(id)?.toLowerCase() === `${path}.md`);
       if (exact) return exact;
       const found = ids.filter((id) => (this.byId(id)?.name ?? '').replace(/\.md$/i, '').toLowerCase() === path.toLowerCase());
       return found.length === 1 ? found[0] : undefined;

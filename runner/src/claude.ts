@@ -63,6 +63,7 @@ import type { MaintenanceNote } from '../../src/data/contracts/run-manifest';
 import { parseNote } from '../../src/data/contracts/note-format';
 import { checkCreationName } from '../../src/data/contracts/tree';
 import { readTypeTable } from './type-table';
+import { mocMembership, mocSnapshot } from './moc';
 
 export const DEFAULT_MODEL = 'claude-sonnet-5-5';
 export const DEFAULT_MAX_TURNS = 60;
@@ -571,6 +572,7 @@ async function notesShown(read: ScriptedRead, listing: readonly DriveFile[], ix:
 interface TakenAnswer {
   /** The answer's journal record id. */
   id: string;
+  sourceId: string;
   yes: boolean;
   value: QuestionAnswer;
   question: Pick<Question, 'id' | 'text' | 'yes' | 'no' | 'subject' | 'options'>;
@@ -637,7 +639,7 @@ async function answersTaken(read: ScriptedRead, run: ScriptedRun, took: Admitted
     const pairPaths = pairIds?.map((id) => ix.pathOf(id));
     const [pathA, pathB] = pairPaths ?? [];
     const answer: TakenAnswer = {
-      id: rec.id, yes: answerValue === true, value: answerValue, question: { id: q.id, text: q.text, yes: text(q.yes), no: text(q.no), ...(Array.isArray(q.options) ? { options: q.options as Question['options'] } : {}), ...(typeof q.subject === 'string' ? { subject: q.subject } : {}) },
+      id: rec.id, sourceId: line.fileId, yes: answerValue === true, value: answerValue, question: { id: q.id, text: q.text, yes: text(q.yes), no: text(q.no), ...(Array.isArray(q.options) ? { options: q.options as Question['options'] } : {}), ...(typeof q.subject === 'string' ? { subject: q.subject } : {}) },
       ...(noteId !== undefined && notePath !== undefined ? { note: { fileId: noteId, path: notePath } } : {}),
       ...(pairIds && pathA !== undefined && pathB !== undefined ? { pair: { fileIds: pairIds, paths: [pathA, pathB] } } : {}),
       ...(shown ? { shown: true as const } : {}),
@@ -1346,7 +1348,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const exhausted = (): never => { throw new LedgerExhausted(count); };
     const listing = await read.listAll(run.rootId);
     const ix = VaultIndex.build(run.rootId, listing);
-    const pinned = new Set(answers.flatMap((a) => !a.yes ? [] : [...(a.note ? [a.note.fileId] : []), ...(a.pair?.fileIds ?? [])]));
+    const answerPins = (a: TakenAnswer): string[] => !a.yes ? [] : [...(a.note ? [a.note.fileId] : []), ...(a.pair?.fileIds ?? [])];
+    const pinned = new Set(answers.flatMap(answerPins));
     const shown = await shownOf(read, run, shownTook, pinned, new Set());
     if (answers.length) shown.answers = answersShown(answers, shown.piles);
     const indexed: Record<string, MaintenanceNote> = { ...setup.retrieval };
@@ -1359,7 +1362,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       if (!indexed[file.id]) indexed[file.id] = { path, version: file.modifiedTime, summary: front?.summary ?? '(no summary)',
         coverage: { kind: 'prefix', bytes: 4096 }, ...(front ? { owner: front.owner, type: front.type } : {}) };
       metadata[file.id] = { summary: indexed[file.id]?.summary ?? '', type: front?.type ?? indexed[file.id]?.type,
-        ...(prefix ? { links: parseNote(path, prefix).links } : {}) };
+        ...(prefix && (front?.type ?? indexed[file.id]?.type) !== 'moc' ? { links: parseNote(path, prefix).links } : {}) };
     }
     const sources = shownTook.taken.piles.flatMap((pile) => {
       const p = shown.piles.find((p) => p.pileId === pile.pileId);
@@ -1369,26 +1372,51 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           ids: ix.neighbourhood(source.words, metadata) }));
     });
     for (const line of shownTook.taken.journal) sources.push({ itemId: line.fileId, words: await read.readText(line.fileId), ids: Object.keys(indexed) });
-    // Resolve one-link neighbours from bounded prefixes through the same read cache, never from full L3 reads.
+    const pinsFor = (itemId: string): string[] => [...new Set([
+      ...answers.filter((a) => a.sourceId === itemId || subjectKey(a.question) === itemId).flatMap(answerPins),
+      ...Object.values(shown.requestNotes ?? {}).flat(),
+    ])];
+    const captureMaps = async (ids: readonly string[]): Promise<void> => {
+      for (const id of new Set(ids)) {
+        const note = indexed[id];
+        if (note?.type === 'moc' && !note.moc && !shown.suppressed?.has(note.path)) {
+          note.moc = mocSnapshot(await read.readText(id)) ?? undefined;
+        }
+      }
+    };
+    // Ordinary links use bounded prefixes; candidate maps need complete ownership regions from the same cache.
     for (const source of sources) {
       const waiting = ix.waitingRun(source.itemId) !== null;
-      const matched = waiting ? [...shown.requestNotes?.[source.itemId] ?? []] : ix.neighbourhood(source.words, metadata);
+      const matched = [...new Set([...pinsFor(source.itemId), ...(waiting ? [] : ix.neighbourhood(source.words, metadata))])];
       for (const id of matched) {
         const file = ix.byId(id); const path = ix.pathOf(id);
         if (!file || !path || metadata[id]?.links || shown.suppressed?.has(path)) continue;
-        const prefix = await setup.prefixes?.(file, true);
-        if (prefix) metadata[id] = { ...metadata[id], summary: metadata[id]?.summary ?? '', links: parseNote(path, prefix).links };
+        const note = indexed[id];
+        const text = note?.type === 'moc' ? note.moc?.text ?? await read.readText(id) : await setup.prefixes?.(file, true);
+        if (text) {
+          metadata[id] = { ...metadata[id], summary: metadata[id]?.summary ?? '', links: parseNote(path, text).links };
+          if (note?.type === 'moc') note.moc = mocSnapshot(text) ?? undefined;
+        }
       }
-      const notes = waiting ? matched : ix.neighbourhood(source.words, metadata);
+      const neighbourhood = waiting ? matched : ix.neighbourhood(source.words, metadata);
+      await captureMaps(neighbourhood);
+      const membership = mocMembership(indexed);
+      const notes = [...new Set(neighbourhood.flatMap((id) => {
+        const note = indexed[id];
+        const members = membership.get(id);
+        if (note?.moc && members) note.members = members;
+        return [id, ...members ?? []];
+      }))];
       const parents = listing.filter((f) => f.folder && (MAIN_FOLDERS.includes(ix.pathOf(f.id) ?? '')
         || notes.some((id) => ix.byId(id)?.parents.includes(f.id)))).map((f) => f.id);
-      source.ids = [...new Set([...pinned, ...Object.values(shown.requestNotes ?? {}).flat(), ...notes, ...parents])].slice(0, 30);
+      source.ids = [...new Set([...pinned, ...pinsFor(source.itemId), ...notes, ...parents])].slice(0, 30);
     }
+    await captureMaps(sources.flatMap((source) => source.ids));
     shown.sources = sources.map((source) => ({ itemId: source.itemId, candidates: source.ids.flatMap((id) => {
       const note = indexed[id]; const folder = ix.byId(id); return note ? [{ id, path: note.path, version: note.version, summary: note.summary, coverage: note.coverage }] : folder?.folder ? [{ id, path: ix.pathOf(id) ?? '', version: folder.modifiedTime, summary: folder.name, coverage: { kind: 'prefix' as const, bytes: 0 } }] : [];
     }) }));
     // Id/version coverage accompanies the cut projection; it is metadata, never complete L3 evidence.
-    shown.indexed = Object.fromEntries(Object.entries(indexed).map(([id, note]) => { const { moc: _moc, members: _members, ...metadata } = note; return [id, metadata]; }));
+    shown.indexed = Object.fromEntries(Object.entries(indexed).map(([id, note]) => { const { moc: _moc, ...metadata } = note; return [id, metadata]; }));
     boundIndexContext(shown);
     const folders = listing.filter((f) => f.folder && MAIN_FOLDERS.includes((ix.pathOf(f.id) ?? '').split('/')[0] ?? ''));
     shown.folderCandidates = folders.map((folder) => ({ folderId: folder.id, path: ix.pathOf(folder.id) ?? '' }));
@@ -1399,12 +1427,11 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     };
     const typeFile = ix.file(SYSTEM.typeTable);
     shown.types = readTypeTable(typeFile ? await read.readText(typeFile.id) : null).table.rows;
-    // A typed request can use any filed source; its script pins count in each source's five-note allowance.
-    const scriptNotes = [...new Set(Object.values(shown.requestNotes ?? {}).flat())];
+    // Answer pins count only for their source; script request pins retain their existing accounting.
     const context: SelectionContext = { itemIds: [...sources.map((s) => s.itemId), ...shownTook.taken.journal.map((j) => j.fileId)],
       kinds: shown.types.map((row) => row.id),
       candidates: Object.keys(shown.indexed), folders: folders.map((f) => ({ id: f.id, hubId: hubId(f.id) })),
-      pinned: Object.fromEntries(sources.map((s) => [s.itemId, [...new Set([...pinned, ...scriptNotes])]])) };
+      pinned: Object.fromEntries(sources.map((s) => [s.itemId, pinsFor(s.itemId)])) };
     const selectionCheck = (value: unknown): ReturnType<typeof selectionOf> => {
       const result = selectionOf(value, context);
       if (!result.ok) { console.error('Selection shape or ids refused.'); return result; }
@@ -1464,6 +1491,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       timing.setSectionHashes(calculateSectionHashes(shown));
       const selection = await twice(inputSelection,
         (value) => { const checked = selectionCheck(value); return checked.ok ? checked : null; });
+      await captureMaps(Object.values(selection.allowedTargets).flat());
       const wanted = new Set(selection.value.items.flatMap((item) => selection.allowedTargets[item.itemId] ?? [])
         .filter((id) => indexed[id] && (indexed[id]?.type !== 'moc' || selection.value.items.some((item) => item.wants.includes(id)))));
       const readable = new Set([...wanted].filter((id) => !shown.suppressed?.has(ix.pathOf(id) ?? '')));

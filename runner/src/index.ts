@@ -21,7 +21,8 @@ import { isJournalRecord, pairsOf, type JournalRecord } from '../../src/data/con
 import { subjectOf } from '../../src/data/contracts/questions';
 import { parseTimelineLine } from '../../src/data/contracts/timeline-line';
 import { renderHot, sameExceptDate, type HotInputs } from './hot';
-import type { RunTiming } from './timing';
+import { LedgerExhausted, type RunTiming } from './timing';
+import { parseOwnership } from '../../src/data/contracts/ownership-format';
 
 /** Every derived kind joins this slot; declarations persist inside maintain, never in a separate store. */
 export interface DeclaredTarget {
@@ -292,6 +293,8 @@ const notesIn = (index: VaultIndex) => [...index.entries()].flatMap(([path]) => 
 /** The index's ordinary prefix supplies summary and per-version owner/type, without a discovery read. */
 async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: RetrievalState | undefined, drop: (id: string) => void, prefix = false): Promise<Notes> {
   const limit = limiter(prefix ? READ_AHEAD : 1);
+  // A projection left by partial maintenance already has a listed snapshot; catch-up needs only Range reads.
+  const cold = prefix && !ix.file(SYSTEM.index);
   const entries = await Promise.all(notesIn(ix).map(({ path, file: f }) => limit(async (): Promise<Array<readonly [string, MaintenanceNote]>> => {
     const cached = state?.files[f.id];
     const same = cached?.version === f.modifiedTime;
@@ -299,7 +302,7 @@ async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: Retrieva
     try {
       // Old state is readable without probing unchanged files. A missing projection already needs each prefix.
       const map = VaultIndex.isHub(path, f.name) && cached?.type === undefined;
-      text = same && !prefix && !map ? await drive.keptPrefix(f) ?? null : await drive.readPrefix(f, prefix);
+      text = same && !prefix && !map ? await drive.keptPrefix(f) ?? null : await drive.readPrefix(f, cold);
     } catch (error) {
       // Drive also reports a trashed media read as not-found; other failures still stop the run.
       if (!(error instanceof BowerError) || error.code !== 'not-found') throw error;
@@ -398,6 +401,11 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   for (const [id, note] of Object.entries(snapshot)) {
     const before = files.get(id);
     if (note.owner !== 'bower' || note.type !== 'moc' || note.moc || !before) continue;
+    const prefix = await drive.keptPrefix(before);
+    if (prefix && parseOwnership(new TextEncoder().encode(prefix)).status === 'invalid') {
+      console.log(`Skipped MOC ${note.path}: its ownership regions cross the prefix and it is not a candidate or target.`);
+      continue;
+    }
     try {
       const moc = mocSnapshot(await drive.readListedText(before));
       if (moc) note.moc = moc;
@@ -457,7 +465,15 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
     const effects = maintenanceEffects(drive, declared);
     return { ...effects,
       readBack: (...args) => timing.maintenance(() => effects.readBack(...args)),
-      apply: (...args) => timing.maintenance(() => effects.apply(...args)),
+      apply: async (...args) => {
+        try { return await timing.maintenance(() => effects.apply(...args)); }
+        catch (error) {
+          if (!(error instanceof LedgerExhausted)) throw error;
+          console.error(error);
+          // Primary effects and already sent projections stand. No later target or cursor is sent.
+          return { state: 'rejected', failure: { code: 'unknown', message: 'Bower will finish updating its notes next time.' } };
+        }
+      },
     };
   }
   // The ordinary edit guard still reads live metadata; unchanged bytes share B1a's versioned read cache.
