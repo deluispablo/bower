@@ -41,7 +41,7 @@ This block is the whole current state; ACTIVE.md is the history log. A Codex suc
 | Entry | Branch / worktree | Last SHA | Attempt | Next step | Ruling |
 | --- | --- | --- | --- | --- | --- |
 | b1d-selection (escalated) | b1d-selection, /private/tmp/bower-b1d-selection | c14616cd+ea9eed90 | pass 5 ruled in TL-P4-41 addendum 25: the merge stays whole, backlink rewrites are the script's consequence, pin saturation is a v1 limit; tests-only attempt 22 running (Sol high, scratchpad jobs/b1d-r8.sh, result /tmp/codex-run/b1d-selection-22.result) | Next: the tests pass (production unchanged) → Astra high review (new prompt, read-only, P4-119 numbering by review files) → integrate B1d (check the branch first; known-green if the revert is unclean). | TL-P4-41 addenda 13–24 |
-| b4a-contract (escalated) | b4a-contract, /private/tmp/bower-b4a-contract | 28316d36 | gates b4a-g3 green (check, capabilities e2e demo and fake) at the newest b4a-contract commit | Next: Astra xhigh pass 3 (prompt from codex-b4a-adv-prompt.md with addenda 1–4 and adversarial-2), then the Astra high review; the loop end applies. | TL-P4-48 addenda 1–4 |
+| b4a-contract (escalated) | b4a-contract, /private/tmp/bower-b4a-contract | b4a-contract worktree HEAD | pass 3 BLOCK (attempt 12), report b4a-adversarial-3.md; sent to the lead for a ruling: (1) data safety, a forgotten fact replayed in another section; (2) hard rule, an extra marked region passes without evidence; also two normal-use findings, (3) an ordinary add is treated as consolidation and returns 'shape', (4) repeated remember-forget-remember gives no live fact | Next: the lead's ruling, then fix round 3 (red first), gates, pass 4, the high review. | TL-P4-48 addenda 1–4 |
 
 **Queue, in order.**
 1. B1d close, then B4a.
