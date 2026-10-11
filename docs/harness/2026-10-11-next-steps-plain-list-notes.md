@@ -208,3 +208,118 @@ pnpm exec vitest run src --maxWorkers=2 \
 ```
 
 `git diff --check` passes. The notes file is the only changed file.
+
+## Red repair (addendum 1)
+
+Scope: the owner's red-repair session, under the packet's
+"Ruled (TL-P4-55 addendum 1)". Only the three authorized NSPL test files and
+these notes changed. No app code, B6a test, dependency link or harness record
+changed. No network, git write, install, server or e2e run occurred.
+
+The ruling supersedes the personal-index assumptions and the blocked/contradiction
+conclusions in the historical sections above. Toggles keep global body indexes.
+In this fixture, Buy a pot is body index 3 and Water mint is body index 4;
+their personal ownership identities remain 0 and 1 inside B6a. Bower tasks
+still occupy body indexes 0, 1 and 2 even when they render without controls.
+Both existing B6a tests remain unchanged and pass. No remaining note-suite
+assertion contradicts the addendum.
+
+tests changed: src/features/note/markdown.test.tsx: added supplied-region coverage with interleaved Bower/personal tasks and callback indexes 0, 2, 4; existing tests unchanged.
+tests changed: src/features/note/next-steps-plain-list.test.tsx: repaired NSPL personal tasks from personal index 1 to body index 4; repaired the first-checkbox comment and added body indexes 3, 3, 3 without relaxing its byte-isolation assertions.
+tests changed: src/features/note/next-steps-plain-list.test.tsx: extracted the unchanged strict project fixture for parser/source reds and added the optional-field compatibility row; NSPL Bower plain list assertions unchanged.
+tests changed: e2e/next-steps-plain-list.spec.ts: added an observer of real mutation calls and body-index assertions 4, 1 and 3, 3, 3 to the existing demo/fake and phone/desktop rows; all previous assertions retained.
+
+The additive optional field is called `taskRegions` in the new tests: an array
+of `bower` / `personal`, one entry per body task in body order. No mutation
+offset or personal-index mapping is exposed or recreated. The Markdown red
+passes this projection directly, with Bower items under Notes, so headings
+cannot stand in for ownership and the normal bullet cannot consume a task index.
+
+The parser red rearranges the serializer's complete Goal/Next steps blocks into
+B6a's supported stored-file order (appended after the personal section). The
+production ownership parser accepts it, while the existing display projection
+puts Goal/Next steps before Notes. Thus the region array must follow the
+projected body, rather than file order or the personal task list. These are
+fixture slices of real serialized blocks, not a second region parser.
+
+The DriveVault red checks the actual returned Note and preserves fetched bytes.
+The demo and fake reds place the same strict mixed-region project fixture in
+the existing seeded project entry in memory, restoring it in `finally`.
+DemoWorld's real note source and seedFakeDrive plus DriveVault's real fake
+source are used without replacing their reads. This adds native source coverage
+beyond the browser fixture's DriveVault overlay. The models currently omit the
+new field in all three sources.
+
+The compatibility row supplies a typed old-shape Note with no `taskRegions`,
+`byBower: true`, and the same project headings. NoteScreen renders all five
+tasks as enabled personal checkboxes and emits body indexes 0 through 4.
+Only that row's note response and mutation sink are mocked: it verifies the
+display/callback boundary for an old consumer, not write authority. Real
+write protections remain covered by the unchanged B6a tests and the existing
+NSPL full-byte mutation checks. This row is green on the baseline, as required;
+inventing a red would contradict the absence-field fallback.
+
+### Exact assertion-level reds
+
+| Exact test name | Remaining baseline assertion failure |
+| --- | --- |
+| `NSPL supplied task regions keep each personal checkbox body index` | Five controls instead of three; Bower rows retain checkboxes and `md-task`. Callback indexes 0, 2, 4 pass. |
+| `NSPL Bower plain list` | Bower list items still contain inputs and `md-task`. |
+| `NSPL personal tasks` | Five controls instead of Buy a pot and Water mint only. The repaired body index 4 and full-byte mutation assertions pass. |
+| `NSPL first personal tick` | First visible checkbox is still Bower's: indexes 3, 3, 0 instead of 3, 3, 3, unchanged personal task and one refusal. |
+| `NSPL Note task regions follow B6a projection in body order` | Missing `taskRegions`; production framing and display-order controls pass. |
+| `NSPL drive-vault fills Note task regions from B6a projection` | Missing `taskRegions`; body, checksum and unchanged fetched bytes pass. |
+| `NSPL demo fills Note task regions from B6a projection` | Missing `taskRegions`; Bower identity and all five task labels pass. |
+| `NSPL fake fills Note task regions from B6a projection` | Missing `taskRegions`; Bower identity and all five task labels pass. |
+
+Green regressions: `NSPL no Bower region`,
+`NSPL Note without task regions renders every task as personal`, and all
+18 existing note tests, including both unchanged B6a tests. No unrelated reds,
+skips, import failures or unhandled errors in the final note-suite run.
+
+### Verification
+
+The existing OS-temp config retains the app config and timer gate, redirects
+Vite/module caches to temp, and uses explicit default/JSON reporters. Tests
+write no repository artifacts.
+
+```sh
+nspl_run_dir=$(cat /tmp/next-steps-plain-list-run-dir)
+pnpm exec vitest run src/features/note/markdown.test.tsx \
+  src/features/note/next-steps-plain-list.test.tsx \
+  src/features/note/b6a-task-regions.test.tsx --maxWorkers=2 \
+  --config "$nspl_run_dir/vitest.config.mjs" --configLoader runner \
+  --fsModuleCachePath "$nspl_run_dir/module-cache" \
+  --reporter=default --reporter=json --outputFile /tmp/nspl-addendum1-red.json \
+  > /tmp/nspl-addendum1-red.log 2>&1
+pnpm exec vitest run src/features/note --maxWorkers=2 \
+  --config "$nspl_run_dir/vitest.config.mjs" --configLoader runner \
+  --fsModuleCachePath "$nspl_run_dir/module-cache" \
+  --reporter=default --reporter=json --outputFile /tmp/nspl-addendum1-note.json \
+  > /tmp/nspl-addendum1-note.log 2>&1
+```
+
+Targeted run: 15 tests, seven pass and eight intended NSPL reds (exit 1).
+Full note suite: 28 tests, 20 pass and the same eight intended NSPL reds
+(exit 1). The compatibility fixture initially spread a proxy source and lost
+its methods; it was corrected to use the real DriveVault before accepting
+the final assertion-level results.
+
+ESLint passes on all three test files (`/tmp/nspl-addendum1-eslint.log`).
+App TypeScript passes with build-info redirected to the OS-temp run directory
+(`/tmp/nspl-addendum1-tsc.log`). The e2e spec passes a separate strict TypeScript
+check with its config in `/tmp/nspl-addendum1-e2e-tsconfig.json`
+(`/tmp/nspl-addendum1-e2e-tsc.log`). Its first temp config incorrectly resolved
+package type entries from temp; explicit local declarations corrected that
+config without touching dependencies. `git diff --check` passes.
+
+`pnpm check` and e2e were not run: this session repairs reds only, and the
+repository-writing gates are outside the owner's authorized scope. Green
+implementation, runner commits, browser execution and designer verification
+remain for their assigned sessions.
+
+Offline standard/reuse precedent is unchanged: CommonMark list items
+(https://spec.commonmark.org/0.31.2/#list-items) and GFM task lists
+(https://github.github.com/gfm/#task-list-items-extension-), cited by the local
+note-template contract. All ownership/projection checks use B6a's existing
+parser and serializer; no new production mechanism is introduced.

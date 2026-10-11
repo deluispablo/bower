@@ -49,10 +49,15 @@ async function openFixture(page: Page, source: 'demo' | 'fake', width: number, p
         const fixture = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
         const base = result.sources;
         window.__nsplRead = (path) => drive.readText(ids.get(path));
+        window.__nsplToggleIndexes = [];
         const methods = {
           tree: async () => [...await base.vault.tree(), ...await fixture.tree()],
           note: (path) => ids.has(path) ? fixture.note(path) : base.vault.note(path),
-          toggleTask: (path, index) => ids.has(path) ? fixture.toggleTask(path, index) : base.vault.toggleTask(path, index),
+          toggleTask: (path, index) => {
+            if (!ids.has(path)) return base.vault.toggleTask(path, index);
+            window.__nsplToggleIndexes.push(index);
+            return fixture.toggleTask(path, index);
+          },
           markSeen: (path) => ids.has(path) ? fixture.markSeen(path) : base.vault.markSeen(path),
           subscribe: (callback) => {
             const stopBase = base.vault.subscribe(callback);
@@ -78,6 +83,10 @@ function read(page: Page, path = PROJECT): Promise<string> {
   return page.evaluate((path) => (window as unknown as {
     __nsplRead: (path: string) => Promise<string>;
   }).__nsplRead(path), path);
+}
+
+function toggleIndexes(page: Page): Promise<number[]> {
+  return page.evaluate(() => (window as unknown as { __nsplToggleIndexes: number[] }).__nsplToggleIndexes);
 }
 
 function article(page: Page): Locator {
@@ -127,6 +136,7 @@ for (const source of ['demo', 'fake'] as const) {
       await own.uncheck();
       await expect.poll(() => read(page)).toBe(RAW.replace('- [x] Water mint.', '- [ ] Water mint.'));
       await expect(article(page).getByRole('checkbox', { name: 'Buy a pot.', exact: true })).not.toBeChecked();
+      expect(await toggleIndexes(page)).toEqual([4]);
       await expect(article(page).getByRole('checkbox')).toHaveCount(2);
       await expect(item(page, 'Plant mint.').getByRole('checkbox')).toHaveCount(0);
     });
@@ -141,6 +151,7 @@ for (const source of ['demo', 'fake'] as const) {
       await expect(own).toBeEnabled();
       await own.check();
       await expect.poll(() => read(page, PERSONAL)).toBe(BODY.replace('- [ ] Plant mint.', '- [x] Plant mint.'));
+      expect(await toggleIndexes(page)).toEqual([1]);
     });
 
     test(`NSPL ticking the first person task changes only its line beside Bower Next steps (${cell})`, async ({ page }) => {
@@ -154,6 +165,8 @@ for (const source of ['demo', 'fake'] as const) {
       await article(page).getByRole('checkbox').first().check();
       await expect.poll(() => read(page)).toBe(RAW.replace('- [ ] Buy a pot.', '- [x] Buy a pot.'));
       await expect(named).toBeChecked();
+      // Bower tasks occupy indexes 0–2; the first visible checkbox owns index 3.
+      expect(await toggleIndexes(page)).toEqual([3, 3, 3]);
     });
 
     test(`NSPL project note passes axe WCAG 2.2 with plain list semantics (${cell})`, async ({ page }) => {

@@ -60,3 +60,33 @@ it('NSPL no Bower region', () => {
   expect(onToggle.mock.calls).toEqual([[0], [1], [2]]);
   cleanup();
 });
+
+it('NSPL supplied task regions keep each personal checkbox body index', () => {
+  const onToggle = vi.fn();
+  const props = {
+    text: [
+      '## Notes', '- A normal bullet.', '- [ ] Buy a pot.', '- [ ] Plant mint.',
+      '- [x] Water mint.', '- [x] Choose seeds.', '- [ ] Label the pot.',
+    ].join('\n'),
+    link: (target: string) => target,
+    onToggle,
+    taskRegions: ['personal', 'bower', 'personal', 'bower', 'personal'] as Array<'personal' | 'bower'>,
+  };
+  render(<Markdown {...props} />);
+  // Ownership comes only from the supplied projection, even under Notes.
+  for (const label of ['Buy a pot.', 'Water mint.', 'Label the pot.']) {
+    const checkbox = screen.getByRole('checkbox', { name: label });
+    expect(checkbox).toBeEnabled();
+    fireEvent.click(checkbox);
+  }
+  expect(onToggle.mock.calls).toEqual([[0], [2], [4]]);
+  expect.soft(screen.getAllByRole('checkbox')).toHaveLength(3);
+  for (const label of ['Plant mint.', 'Choose seeds.']) {
+    const row = screen.getByText(label, { exact: true }).closest('li');
+    expect(row).not.toBeNull();
+    if (!row) throw new Error('Expected a task list item');
+    expect.soft(within(row).queryByRole('checkbox')).not.toBeInTheDocument();
+    expect.soft(row).not.toHaveClass('md-task');
+  }
+  cleanup();
+});
