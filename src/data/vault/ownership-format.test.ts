@@ -283,3 +283,35 @@ describe('ownership/2 raw byte authority', () => {
     }
   });
 });
+
+
+it('b4a-composite-byte-append: parser exposes only the trailing marked regions', () => {
+  const prefix = '\ufeff---\r\nsummary: "Alex: notes"\r\n---\r\nAlex keeps café and e\u0301.\r\n- [ ] Personal task\r\n';
+  const regions = [['about-you', 'About you'], ['about-working-on', "What you're working on"],
+    ['about-preferences', 'How you like things']] as const;
+  const learned = '## What Bower has learned\r\n' + regions.map(([key, label]) =>
+    `<!-- bower:ownership/2 begin ${key} -->\r\n### ${label}\r\n- [ ] Learned task\r\n<!-- bower:ownership/2 end ${key} -->\r\n`).join('');
+  expect(parseOwnership(encode(prefix.slice(1))).status).toBe('legacy');
+  expect(parseOwnership(encode(framed('Alex keeps these words.\n'))).status).toBe('v2');
+  const bytes = encode(prefix + learned);
+  const own = parseOwnership(bytes);
+  expect.soft(own.status).not.toBe('invalid');
+  // This is the existing parser's payload map, never a second marker scanner.
+  const payloads = 'payloads' in own ? own.payloads as Readonly<Record<string, { start: number; end: number }>> : {};
+  for (const [key, label] of regions) {
+    const span = payloads[key];
+    expect.soft(span, `${key} is a production ownership span`).toBeDefined();
+    if (span) {
+      expect(span.start).toBeGreaterThanOrEqual(encode(prefix).length);
+      expect(decode(bytes.subarray(span.start, span.end))).toBe(`### ${label}\r\n- [ ] Learned task\r\n`);
+    }
+  }
+  if (own.status !== 'invalid') expect.soft(own.tasks.map((task) => task.label)).toEqual(['Personal task']);
+  for (const bad of [learned.replace('end about-you', 'end about-preferences'), learned + learned,
+    learned.replace('<!-- bower:ownership/2 end about-preferences -->', '')]) {
+    expect.soft(parseOwnership(encode(prefix + bad))).toEqual({ status: 'invalid', reason: 'damaged-boundary' });
+  }
+  const headingOnly = parseOwnership(encode(prefix + '## What Bower has learned\n### About you\nAlex writes this.\n'));
+  expect(headingOnly).not.toHaveProperty('payloads.about-you');
+  expect(bytes.subarray(0, encode(prefix).length)).toEqual(encode(prefix));
+});

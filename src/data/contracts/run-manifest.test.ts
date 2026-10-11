@@ -844,3 +844,123 @@ describe('runner-writable files (runner-paths-disagree, TL-P4-14 addendum 20)', 
     expect(await parseRunManifest(bytes(questions), 'fake-root', ['.bower/hashes.json'])).toEqual({ ok: false, reason: 'shape' });
   });
 });
+
+// Reuse the manifest lifecycle; JSONL is not fed through a whole-document JSON parser.
+const b4Frame = (region: string, text: string): string => `<!-- bower:ownership/2 begin ${region} -->\n${text}<!-- bower:ownership/2 end ${region} -->\n`;
+const b4Previous = '### How you like things\n- 2026-10-11 · ' + Array.from({ length: 201 }, () => 'remote').join(' ') + ' · [[Alex words]]\n';
+const b4Before = '---\nsummary: Alex keeps personal notes.\n---\nAlex keeps this exact prefix.\n## What Bower has learned\n'
+  + b4Frame('about-you', '### About you\n') + b4Frame('about-working-on', "### What you're working on\n")
+  + b4Frame('about-preferences', b4Previous);
+const b4Observation = { v: 1, kind: 'observation', eventId: 'event-remote', factId: 'fact-remote',
+  section: 'about-preferences', date: '2026-10-11', text: 'Alex prefers remote roles except when local mentoring is offered.', category: 'preference',
+  source: { fileId: 'words-id', sha256: 'a'.repeat(64) },
+  origin: { kind: 'words', runId: 'run-memory', captureId: 'b'.repeat(64), pileId: 'pile-words' } };
+
+// The ledger stores full frozen bytes, and the existing dependsOn edges order confirmation.
+// Cast at the production parser only: new wire members cannot mask runtime schema failures.
+function b4Manifest() {
+  const file = seen('about-id', 'About me.md', 'fake-root');
+  const ledger = seen('ledger-id', 'observations.jsonl', 'bower-system');
+  const previousLedger = '';
+  const ledgerText = Array.from({ length: 5 }, (_, i) => JSON.stringify({ ...b4Observation, eventId: `event-${i}`,
+    factId: `fact-${i}`, source: { ...b4Observation.source, fileId: `words-${i}` },
+    origin: { ...b4Observation.origin, pileId: `pile-${i}` } })).join('\n') + '\n';
+  const next = '### How you like things\nAlex prefers remote roles except when local mentoring is offered.\n';
+  const after = b4Before.replace(b4Previous, next);
+  const archiveName = '2026-10-11-consolidate-one.md';
+  const operations: Array<{ operationId: string; ordinal: number; dependsOn: string[]; effect: Record<string, unknown> }> = [
+    { operationId: 'ledger', ordinal: 0, dependsOn: [], effect: { kind: 'write-runner-json', path: '.bower/observations.jsonl',
+      before: ledger, beforeContent: verifiedText(previousLedger), text: ledgerText, content: raw(ledgerText) } },
+    { operationId: 'archive', ordinal: 1, dependsOn: ['ledger'], effect: { kind: 'create-text',
+      parent: { fileId: 'section-dir' }, name: archiveName, createKey: 'consolidate-one',
+      purpose: 'about-archive', text: b4Previous, content: raw(b4Previous) } },
+    { operationId: 'edit', ordinal: 2, dependsOn: ['ledger', 'archive'], effect: { kind: 'edit-text',
+      before: file, path: 'About me.md', beforeText: b4Before, beforeContent: verifiedText(b4Before),
+      changes: [{ kind: 'about-rewrite', region: 'about-preferences', recordIds: [], previous: b4Previous, text: next,
+        factIds: ['fact-0', 'fact-1', 'fact-2', 'fact-3', 'fact-4'], archive: '.bower/archive/about-me/about-preferences/' + archiveName }],
+      text: after, content: raw(after) } },
+    { operationId: 'frontier', ordinal: 3, dependsOn: ['edit'], effect: { kind: 'write-runner-json',
+      before: ledger, beforeContent: verifiedText(ledgerText), path: '.bower/observations.jsonl',
+      text: '', content: raw('') } },
+    { operationId: 'maintain', ordinal: 4, dependsOn: ['frontier'], effect: { kind: 'maintain', inputs: {
+      folderId: 'fake-root', account: 'ACCOUNT_ID', cursor: 'cursor-one', changes: [], operationIds: [] } } },
+  ];
+  const value = { ...manifest01(), v: 2, runId: 'run-memory', requestedAt: Date.UTC(2026, 9, 11),
+    capture: { piles: Array.from({ length: 5 }, (_, i) => ({ pileId: `pile-${i}`, source: { kind: 'observed' },
+      anchor: seen(`pile-anchor-${i}`, `Alex words ${i}`, 'inbox-id', true), memberKeys: [], childFileIds: [`words-${i}`],
+      context: { kind: 'text', memberKey: null, file: seen(`words-${i}`, 'Pile note.md', `pile-anchor-${i}`),
+        text: b4Observation.text, content: verifiedText(b4Observation.text) } })), members: [], journal: [], places: [
+      { file, path: 'About me.md' }, { file: ledger, path: '.bower/observations.jsonl' },
+      { file: seen('bower-system', '.bower', 'fake-root', true), path: '.bower' },
+      { file: seen('section-dir', 'about-preferences', 'about-archive-dir', true), path: '.bower/archive/about-me/about-preferences' },
+    ] }, operations, reportPlan: [] };
+  return b4Seal(value);
+}
+type B4Manifest = ReturnType<typeof b4Manifest>;
+function b4Seal<T extends { runId: string; scope: unknown; runScope: unknown; capture: unknown; captureId: string;
+  operations: Array<{ operationId: string; ordinal: number; dependsOn: string[]; effect: Record<string, unknown> }> }>(value: T): T {
+  value.captureId = H({ scope: value.scope, runScope: value.runScope, capture: value.capture });
+  const renamed = new Map<string, string>();
+  for (const [ordinal, operation] of value.operations.entries()) {
+    operation.ordinal = ordinal;
+    operation.dependsOn = operation.dependsOn.map((id) => renamed.get(id) ?? id);
+    if (ordinal === 0 && operation.effect.path === '.bower/observations.jsonl') {
+      const entries = String(operation.effect.text).trimEnd().split('\n').map((line) => JSON.parse(line) as typeof b4Observation);
+      operation.effect.text = entries.map((event) => JSON.stringify({ ...event,
+        source: { ...event.source, sha256: raw(b4Observation.text).sha256 },
+        origin: { ...event.origin, captureId: value.captureId } })).join('\n') + '\n';
+      operation.effect.content = raw(String(operation.effect.text));
+    }
+    if (ordinal === 3 && operation.effect.path === '.bower/observations.jsonl') {
+      const ledgerText = String(value.operations[0]?.effect.text);
+      operation.effect.beforeContent = verifiedText(ledgerText);
+      const frontier = { v: 1, kind: 'consolidation', eventId: 'frontier-one', section: 'about-preferences',
+        date: '2026-10-11', factIds: ['fact-0', 'fact-1', 'fact-2', 'fact-3', 'fact-4'], runId: 'run-memory',
+        operationId: value.operations[2]?.operationId, successful: true };
+      operation.effect.text = ledgerText + JSON.stringify(frontier) + '\n';
+      operation.effect.content = raw(String(operation.effect.text));
+    }
+    if (operation.effect.kind === 'maintain') (operation.effect.inputs as { operationIds: string[] }).operationIds = value.operations.slice(0, ordinal).map((o) => o.operationId);
+    const id = H({ runId: value.runId, captureId: value.captureId, ordinal, effect: operation.effect });
+    renamed.set(operation.operationId, id);
+    operation.operationId = id;
+  }
+  return value;
+}
+
+it('b4a-artifact-scope-and-order', async () => {
+  const parse = (value: B4Manifest) => parseRunManifestV2(bytes(value), 'fake-root', RUNNER_WRITES);
+  expect((await parseRunManifestV2(bytes(rich()), 'fake-root', RUNNER_WRITES)).ok, 'legacy manifest control').toBe(true);
+  const good = b4Manifest();
+  expect.soft(await parse(good), 'frozen ledger → archive → edit → frontier → maintain').toMatchObject({ ok: true, value: good });
+  expect.soft(RUNNER_WRITES as readonly string[], 'explicit JSONL permission').toContain('.bower/observations.jsonl');
+  expect(() => JSON.parse(String(good.operations[3]?.effect.text)), 'frontier is multiple JSONL records').toThrow();
+  for (const path of ['.bower/arbitrary.jsonl', '.bower/changes/observations.jsonl', 'observations.jsonl']) {
+    const bad = clone(good); set(bad, ['operations', 0, 'effect', 'path'], path);
+    expect((await parse(b4Seal(bad))).ok, path).toBe(false);
+  }
+  for (const path of ['.bower/archive/about-me/about-id/about-preferences', '.bower/archive/about-me/personal',
+    '.bower/archive/elsewhere', '.bower/archive/about-me/../about-preferences']) {
+    const bad = clone(good); set(bad, ['capture', 'places', 3, 'path'], path);
+    expect((await parse(b4Seal(bad))).ok, path).toBe(false);
+  }
+  for (const [at, dependencies] of [[1, []], [2, [good.operations[0]?.operationId]], [3, [good.operations[0]?.operationId]], [4, []]] as const) {
+    const bad = clone(good); set(bad, ['operations', at, 'dependsOn'], dependencies);
+    expect((await parse(b4Seal(bad))).ok, `missing confirmation edge at ${at}`).toBe(false);
+  }
+  const overwritten = clone(good);
+  set(overwritten, ['operations', 1, 'effect'], { kind: 'write-runner-json',
+    before: seen('archive-id', '2026-10-11-consolidate-one.md', 'section-dir'), beforeContent: verifiedText(b4Previous),
+    path: '.bower/archive/about-me/about-preferences/2026-10-11-consolidate-one.md', text: 'Changed archive.', content: raw('Changed archive.') });
+  expect((await parse(b4Seal(overwritten))).ok, 'archive is write-once').toBe(false);
+  const wrongBytes = clone(good);
+  set(wrongBytes, ['operations', 1, 'effect', 'text'], 'Paraphrased archive.');
+  set(wrongBytes, ['operations', 1, 'effect', 'content'], raw('Paraphrased archive.'));
+  expect((await parse(b4Seal(wrongBytes))).ok, 'archive must be the exact pre-consolidation section').toBe(false);
+  const duplicate = clone(good);
+  duplicate.capture.places.push({ file: seen('second-about', 'About me.md', 'fake-root'), path: 'About me.md' });
+  expect((await parse(b4Seal(duplicate))).ok, 'two About me targets refuse memory writes').toBe(false);
+  const mismatchedVersion = clone(good);
+  set(mismatchedVersion, ['operations', 2, 'effect', 'beforeContent', 'observedModifiedTime'], '2026-10-11T10:00:01.000Z');
+  expect((await parse(b4Seal(mismatchedVersion))).ok, 'content version must match the read file').toBe(false);
+});
