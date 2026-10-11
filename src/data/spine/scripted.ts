@@ -1720,9 +1720,12 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   if (waits.size) journal = journal.filter((l) => !waits.has(l.rec.id));
   const unwritten = [...waits].filter((id) => !needs.get(id)?.held).length;
   if (unwritten) console.error(`${unwritten} of your changes wait for the next tidy-up: what they add could not be written now`);
-  // An instructions run with no line it can take, once every held line is left out, has nothing to read: the
-  // existing refusal, before admission.
-  if (!all && !journal.length) throw new BowerError('conflict', NOTHING_TO_READ);
+  // Admission still refuses an empty instruction press. An already admitted runner must reach maintenance,
+  // including when all its instruction lines remain held for the next run.
+  if (!all && !journal.length) {
+    if (opts.taken) return { kind: 'plan' as const, plan: await nothingReadyPlan(rootId, opts) };
+    throw new BowerError('conflict', NOTHING_TO_READ);
+  }
   for (const id of settlement.admitted) for (const row of settlement.rowsOf(id)) {
     const f = row.fileId === undefined ? undefined : listing.find((x) => x.id === row.fileId);
     if (f) places.set(f.id, f);
@@ -2875,6 +2878,8 @@ export async function runKeys(runId: string): Promise<(kind: string) => string> 
 
 /** Who a scripted run is: its folder, its id, and whether it may look things up on the web. */
 export interface ScriptedRun {
+  /** The canonical index rebuilt in memory for a bootstrap or missing-index plan. */
+  index?: string;
   context?: OwnershipContext;
   rootId: string;
   runId: string;

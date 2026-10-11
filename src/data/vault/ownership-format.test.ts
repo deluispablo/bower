@@ -51,13 +51,26 @@ describe('ownership/2 raw byte authority', () => {
     const bytes = bytesOf(fixture.input_file); const original = bytes.slice();
     expect(hash(bytes)).toBe(fixture.input_sha256); expect(bytes.length).toBe(fixture.input_utf8_bytes);
     const parsed = parseOwnership(bytes);
-    expect(parsed.status).toBe(fixture.expected_status);
+    // TL-P4-41 addendum 8 overrides only this pinned fixture's outside-prose expectation, not its evidence bytes.
+    const outsideFixture = fixture.id === 'invalid-outside-content';
+    expect(parsed.status).toBe(outsideFixture ? 'v2' : fixture.expected_status);
     if (parsed.status === 'invalid') {
       expect(parsed.reason).toBe(fixture.recovery_kind);
       expect(parsed).not.toHaveProperty('personal'); expect(parsed).not.toHaveProperty('payloads'); expect(parsed).not.toHaveProperty('tasks');
       expect(togglePersonalTask(bytes, request)).toEqual({ kind: 'refused', reason: fixture.recovery_kind });
     } else {
-      if (fixture.expected_personal_task_labels) expect(parsed.tasks.map((t) => t.label)).toEqual(fixture.expected_personal_task_labels);
+      if (fixture.expected_personal_task_labels) expect(parsed.tasks.map((t) => t.label)).toEqual(outsideFixture ? ['Personal task'] : fixture.expected_personal_task_labels);
+      if (outsideFixture && parsed.status === 'v2') {
+        const outside = { start: bytes.length - encode('- [ ] Unclaimed task\n').length, end: bytes.length };
+        expect(decode(bytes.slice(outside.start, outside.end))).toBe('- [ ] Unclaimed task\n');
+        expect(Object.values(parsed.payloads).every((span) => span.end <= outside.start)).toBe(true);
+        expect(parsed.tasks.every((task) => task.checkboxByte < outside.start)).toBe(true);
+        expect(togglePersonalTask(bytes, { ...request, index: 1, label: 'Unclaimed task' }))
+          .toEqual({ kind: 'refused', reason: 'task-not-found' });
+        const changed = togglePersonalTask(bytes, request);
+        expect(changed.kind).toBe('changed');
+        if (changed.kind === 'changed') expect(changed.bytes.slice(outside.start, outside.end)).toEqual(bytes.slice(outside.start, outside.end));
+      }
       if (fixture.personal_utf8_span) expect([parsed.personal.start, parsed.personal.end]).toEqual(fixture.personal_utf8_span);
       if (fixture.personal_raw !== undefined) expect(decode(bytes.slice(parsed.personal.start, parsed.personal.end))).toBe(fixture.personal_raw);
       if (parsed.status === 'v2' && fixture.expected_payload_utf8_spans) {
@@ -120,11 +133,30 @@ describe('ownership/2 raw byte authority', () => {
     ['lone CR', rich().replace('Protected prose.', 'Protected\rprose.')],
     ['duplicate declared version', rich().replace('summary:', 'bower_format: ownership/3\nsummary:')],
     ['wrong opt-in spacing', rich().replace('bower_format: ownership/2', 'bower_format:  ownership/2')],
-    ['unclaimed trailing text', rich() + 'Unclaimed\n'],
   ])('refuses damaged framing without publishing any writable range: %s', (_name, text) => {
     const input = encode(text); const original = input.slice();
     expect(parseOwnership(input)).toEqual({ status: 'invalid', reason: 'damaged-boundary' });
     expect(togglePersonalTask(input, request)).toEqual({ kind: 'refused', reason: 'damaged-boundary' });
+    expect(input).toEqual(original);
+  });
+
+  // TL-P4-41 addendum 8: complete frames leave trailing prose as an untouchable byte span, not task authority.
+  it('keeps unclaimed trailing text byte for byte without publishing a writable range or task authority', () => {
+    const outsideText = 'Unclaimed\n';
+    const input = encode(rich() + outsideText); const original = input.slice();
+    const outside = { start: encode(rich()).length, end: input.length };
+    const parsed = parseOwnership(input);
+    expect(parsed.status).toBe('v2');
+    if (parsed.status !== 'v2') return;
+    expect(input.slice(outside.start, outside.end)).toEqual(encode(outsideText));
+    expect(Object.values(parsed.payloads).every((span) => span.end <= outside.start)).toBe(true);
+    expect(parsed.tasks.map((task) => task.label)).toEqual(['Personal task']);
+    expect(parsed.tasks.every((task) => task.checkboxByte < outside.start)).toBe(true);
+    expect(togglePersonalTask(input, { ...request, index: 1, label: 'Unclaimed' }))
+      .toEqual({ kind: 'refused', reason: 'task-not-found' });
+    const changed = togglePersonalTask(input, request);
+    expect(changed.kind).toBe('changed');
+    if (changed.kind === 'changed') expect(changed.bytes).toEqual(encode(rich().replace('[ ] Personal task', '[x] Personal task') + outsideText));
     expect(input).toEqual(original);
   });
 

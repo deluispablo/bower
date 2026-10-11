@@ -97,7 +97,15 @@ export function grounded(manifest: RunManifest): boolean {
       && !c.value.setAside.length && !c.value.questions.length && !c.value.answered?.length
       && !c.value.alreadySaved?.length && !c.value.requests?.length && c.value.rulesWorded === undefined
       && c.value.updated[0]?.line === undefined;
-    if (!journalRow && [...c.value.created, ...c.value.updated].some((r) => r.path !== at)) return false;
+    const maintained = first?.kind === 'maintain' ? first.inputs.targets?.filter((t) => {
+      const note = first.inputs.snapshot?.[t.fileId];
+      return note?.moc && note.path === t.path && t.beforeContent !== undefined;
+    }).map((t) => t.path) ?? [] : [];
+    if (first?.kind === 'maintain') {
+      if (c.when !== 'applied' || c.value.created.length || c.value.filed.length || c.value.setAside.length
+        || c.value.updated.some((r) => !maintained.includes(r.path) || r.line !== undefined)
+        || new Set(c.value.updated.map((r) => r.path)).size !== c.value.updated.length) return false;
+    } else if (!journalRow && [...c.value.created, ...c.value.updated].some((r) => r.path !== at)) return false;
   }
   const rows = (o: OperationV2): ReportContribution[] => applied.get(o.operationId) ?? [];
   /** How many set-aside rows each operation must have: none but the ones counted below. */

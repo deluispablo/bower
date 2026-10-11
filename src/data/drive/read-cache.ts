@@ -53,6 +53,11 @@ export class ReadCache {
     return this.keptRead<string>('text', v);
   }
 
+  /** Observe an already requested prefix; this never starts a media read. */
+  keptPrefix(v: Version): Promise<string | null> | undefined {
+    return this.keptRead<string | null>('prefix', v);
+  }
+
   /** Notify a view once when it has projected this completed text version; no separate publication store. */
   publishText(v: Version, notify: () => void): void {
     const entry = this.kept.get(v.id);

@@ -163,6 +163,17 @@ function frontOf(block: string): Map<string, string> {
   return front;
 }
 
+export type IndexedFront = { summary: string; owner: 'bower' | 'person'; type: string | null };
+
+/** Retrieval only: the closed front matter in the ordinary 4096-byte prefix, not edit authority. */
+export function indexedFront(raw: string): IndexedFront {
+  const prefix = new TextDecoder().decode(encoder.encode(raw).subarray(0, 4096)).replace(/\r\n/g, '\n');
+  const close = prefix.startsWith('---\n') ? prefix.indexOf('\n---', 3) : -1;
+  const front = close < 0 ? new Map<string, string>() : frontOf(prefix.slice(4, close));
+  return { summary: front.get('summary') || '(no summary)',
+    owner: front.get('by') === 'bower' ? 'bower' : 'person', type: front.get('type') ?? null };
+}
+
 /** The bullets of a Timeline block, each read by the one Timeline-line pattern. */
 function timelineOf(block: string): TimelineEntry[] {
   return block

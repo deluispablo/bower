@@ -6910,8 +6910,9 @@
     "steps": [
       "Through runner main: exact index bytes, hidden paths excluded, no-change runs write nothing, existing MOCs fold with complete membership."
     ],
-    "verify": "",
-    "note": "TL-P4-41. Escalated; red now, implementation after the scripted.ts/index.ts handoffs. Packet 2026-10-10-b1c-packet.md. implementer: codex."
+    "verify": "pnpm -C runner exec vitest run test/b1-index.test.ts -t \"B1c \"",
+    "note": "TL-P4-41. Escalated; red now, implementation after the scripted.ts/index.ts handoffs. Packet 2026-10-10-b1c-packet.md. implementer: codex.",
+    "review": "P4-107 PASS"
   },
   {
     "id": "b5a-contracts",

@@ -3,7 +3,7 @@ import { MOC_REGIONS, createOwnershipContext, type MocRegion } from './ownership
 import { sha256 } from './hashes';
 import { isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
 import type { UpdatedRow } from './types';
-import { satisfiedAppendUnchanged, EDIT_FILE_LIMIT, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
+import { mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 
 export type Scope = { rootId: string };
@@ -83,7 +83,8 @@ export type EditText = {
   kind: 'edit-text'; before: SeenFile; path: string; beforeContent: VerifiedContent;
   changes: Change[]; text: string; content: Content; beforeText?: string;
 };
-export type Maintain = { kind: 'maintain'; inputs: { folderId: string; account: string; cursor: string; changes: string[]; operationIds: string[]; targets?: { path: RunnerWrite; fileId: string; parentId: string; beforeContent?: VerifiedContent }[]; snapshot?: Record<string, { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number } }>; listing?: SeenFile[]; log?: string } };
+export type MaintenanceNote = { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number }; owner?: 'bower' | 'person'; type?: string | null; moc?: MocSnapshot; members?: string[] };
+export type Maintain = { kind: 'maintain'; inputs: { folderId: string; account: string; cursor: string; changes: string[]; operationIds: string[]; targets?: { path: string; fileId: string; parentId: string; beforeContent?: VerifiedContent }[]; snapshot?: Record<string, MaintenanceNote>; listing?: SeenFile[]; log?: string } };
 export type EffectV2 = Effect | EditText | Maintain;
 export type OperationV2 = { operationId: string; ordinal: number; dependsOn: string[]; effect: EffectV2 };
 export type ReportFiled = { name: string; title: string; kind: FileKind; to: string; note?: string; area?: string };
@@ -377,13 +378,20 @@ function editText(value: unknown): value is EditText {
     && list(value.changes, change) && canonical(value.changes as Change[]) && text(value.text) && content(value.content)
     && (!Object.hasOwn(value, 'beforeText') || text(value.beforeText));
 }
+function mocInput(value: unknown): value is MocSnapshot {
+  if (!closed(value, ['text', 'regions']) || !text(value.text) || !closed(value.regions, [...MOC_REGIONS])) return false;
+  const regions = value.regions;
+  if (!MOC_REGIONS.every((r) => text(regions[r]))) return false;
+  const parsed = mocSnapshot(value.text);
+  return parsed !== null && MOC_REGIONS.every((r) => parsed.regions[r] === regions[r]);
+}
 function maintain(value: unknown): value is Maintain {
   return closed(value, ['kind', 'inputs']) && value.kind === 'maintain'
     && closed(value.inputs, ['folderId', 'account', 'cursor', 'changes', 'operationIds'], ['targets', 'snapshot', 'listing', 'log'])
     && driveId(value.inputs.folderId) && driveId(value.inputs.account) && driveId(value.inputs.cursor)
     && list(value.inputs.changes, driveId) && unique(value.inputs.changes)
     && list(value.inputs.operationIds, hash) && unique(value.inputs.operationIds)
-    && (value.inputs.snapshot === undefined || (record(value.inputs.snapshot) && Object.entries(value.inputs.snapshot).every(([key, f]) => driveId(key) && closed(f, ['path', 'version', 'summary', 'coverage']) && path(f.path) && rfc3339(f.version) && text(f.summary) && closed(f.coverage, ['kind', 'bytes']) && f.coverage.kind === 'prefix' && integer(f.coverage.bytes))))
+    && (value.inputs.snapshot === undefined || (record(value.inputs.snapshot) && Object.entries(value.inputs.snapshot).every(([key, f]) => driveId(key) && closed(f, ['path', 'version', 'summary', 'coverage'], ['moc', 'mocChecked', 'members', 'owner', 'type']) && path(f.path) && rfc3339(f.version) && text(f.summary) && closed(f.coverage, ['kind', 'bytes']) && f.coverage.kind === 'prefix' && integer(f.coverage.bytes) && (f.mocChecked === undefined || f.mocChecked === true) && (f.owner === undefined || f.owner === 'bower' || f.owner === 'person') && (f.type === undefined || f.type === null || text(f.type)) && (f.moc === undefined || mocInput(f.moc)) && (f.members === undefined || (f.moc !== undefined && list(f.members, driveId) && unique(f.members))))))
     && (value.inputs.listing === undefined || list(value.inputs.listing, seenFile))
     && (value.inputs.log === undefined || text(value.inputs.log))
     && (value.inputs.targets === undefined || list(value.inputs.targets, (t) => closed(t, ['path', 'fileId', 'parentId'], ['beforeContent'])
@@ -552,7 +560,18 @@ async function admit<M extends Manifest | ManifestV2>(
     const e = op.effect as Maintain;
     if (e.inputs.folderId !== expectedRootId) return { ok: false, reason: 'scope' };
     if (op.ordinal !== value.operations.length - 1 || e.inputs.operationIds.join() !== value.operations.slice(0, op.ordinal).map((o) => o.operationId).join()) return { ok: false, reason: 'order' };
-    if (e.inputs.targets?.some((t) => !writes.includes(t.path)) || new Set(e.inputs.targets?.map((t) => t.path)).size !== (e.inputs.targets?.length ?? 0)) return { ok: false, reason: 'shape' };
+    if (new Set(e.inputs.targets?.map((t) => t.path)).size !== (e.inputs.targets?.length ?? 0)
+      || new Set(e.inputs.targets?.map((t) => t.fileId)).size !== (e.inputs.targets?.length ?? 0)) return { ok: false, reason: 'shape' };
+    for (const target of e.inputs.targets ?? []) {
+      if ((writes as readonly string[]).includes(target.path)) continue;
+      const input = e.inputs.snapshot?.[target.fileId];
+      const before = e.inputs.listing?.find((f) => f.fileId === target.fileId);
+      if (!input?.moc || !before || before.folder || input.path !== target.path || input.version !== before.modifiedTime
+        || before.parents.length !== 1 || before.parents[0] !== target.parentId || !target.beforeContent
+        || before.name !== target.path.split('/').at(-1)
+        || target.beforeContent.observedModifiedTime !== before.modifiedTime || target.beforeContent.encoding !== 'utf8'
+        || !await describes(target.beforeContent, input.moc.text)) return { ok: false, reason: 'shape' };
+    }
   }
   const questions = new Set<string>();
   for (const item of value.reportPlan) {
