@@ -3164,3 +3164,83 @@ Research reused offline from the packet, without independent network verificatio
 [stable prompt prefixes](https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
 The implementation reuses the existing read cache, ownership parser, mocMembership,
 RunTiming ledger, maintenance settlement and linkTarget homes.
+
+## Round 6 reds (addendum 23)
+
+Tests-only delivery against `2026-10-11-b1d-adversarial-final-3.md` and
+TL-P4-41 addendum 23. No production code or existing test changed.
+
+tests changed: runner/test/b1d-r6.test.ts: new six-item main-path red suite with positive controls.
+tests changed: existing tests: none; e2e/capabilities.spec.ts:210 remains the supplied e2e:fake red unchanged.
+
+The six exact test names and final observations follow. Every positive-control
+assertion passes; all six tests fail on assertions for their own assigned item.
+The whole new file ran together with `--maxWorkers=2`.
+
+| Test | Positive control | Red observation |
+| --- | --- | --- |
+| `b1d-r6 A1 crossing prefixes are advisory for every note type` | A 918-byte valid ownership/2 note of each of Source, Concept, Project, Area and MOC permits the unrelated offer to file. | At 4,918 bytes, Source/Concept/Project/Area end failed and file nothing. All five lack an incomplete-region marker in the indexed context; the MOC-only exemption already lets the MOC run complete. |
+| `b1d-r6 A2 damaged full reads refuse only the needed note` | A short, valid candidate MOC is read in full once, permits its maintenance edit and the independent filing; unrelated Garden plans is never read in full. | Removing its personal-region closing marker causes the candidate's full read to fail the whole run, instead of refusing only that note. Its bytes remain unchanged and the existing ownership error is reported. |
+| `b1d-r6 B1 maintenance charges every send within 300` | Ten archive notes finish below 300 sends, without a ledger refusal. | With 180 archive notes, 369 maintenance-context sends are observed, including 358 archive requests and 69 sends after exhaustion. Exactly 300 sends precede the first refusal. The source remains in Inbox with its original bytes. |
+| `b1d-r6 B2 exhaustion stops read-ahead and handles pending rejections` | Ten archive notes finish, all observed reads fulfill and no rejection is unhandled. | With 180 archive notes, 31 additional prefix reads start after exhaustion and 69 sends escape. Budget rejections settle and no unhandled rejection is reported; those already-passing safety assertions stay in the red. |
+| `b1d-r6 C1 request pins count per source` | One admitted request selecting Alpha/Beta/Gamma reaches execution and finishes. | Two admitted requests selecting their own three distinct notes (the second selects Delta/Epsilon/Zeta) exhaust selection retries and end failed, without reaching execution. |
+| `b1d-r6 C2 MOC member ids have one stable fingerprint` | Two identical full runs with the same physical ids produce the same fingerprint. All three runs expose the member and complete. | Ten allocations outside the selected folder shift member id f18 to f28; the fingerprint changes from bed65302ba5d to 7ee55d1ddea5. The normalized input difference is the member reference. |
+
+A1 checks the incomplete indication semantically in the affected indexed row,
+without prescribing its nesting or field spelling. A2 deliberately uses a short
+MOC so its failure is on a damaged full read, independent of A1's cut-prefix bug.
+C1 uses a valid empty execution intent: its contract is that both independent
+request selections reach execution, without introducing timeline-citation or
+state-update requirements from other entries.
+
+The B probes wrap the real `RunTiming.maintenance`, `RunTiming.meter` and
+`RunnerDrive.readPrefix` methods, preserving their implementations. An independent
+AsyncLocalStorage tag follows maintenance descendants after the wrapper returns.
+Only actual Google Drive sends in that context count; seed/inspection traffic and
+ordinary runner calls do not. The probes do not implement a replacement ledger,
+queue, parser or read cache. Promise inspection happens only after yielding an
+event-loop turn, so the observer does not hide an unhandled rejection. Read-ahead
+is drained to a stable observed set before restoring spies or starting another
+fixture. No test waits for elapsed real time.
+
+The diagnostic's 357 archive sends / 61 uncharged sends are evidence, not an
+allowed ceiling. This fixture keeps its 180 archive notes and enforces the ruled
+300-send maximum and zero post-exhaustion sends/starts. Its fully drained observed
+totals differ because it includes this fixture's complete maintenance descendants.
+
+During authoring, C1's execution fixture was corrected to avoid invalid journal-id
+citations and unrelated state-update semantics. Preliminary full-read assertions
+on edit/request fixtures counted legitimate fence reads; they are not part of the
+delivered C1 contract. A proposed A2 transport-corruption fixture hit the checksum
+fence before ownership parsing and was discarded in favor of real damaged stored
+MOC bytes. No existing assertion, accepted numeric bound or reference fixture was
+changed. The final suite has no setup, import, timeout or unhandled-error failure.
+
+Verification (all stdout/stderr and generated reports stay in OS temp):
+
+```sh
+NODE_OPTIONS='--require=/tmp/b1d-r6-test-output.cjs' pnpm -C runner exec vitest run test/b1d-r6.test.ts --maxWorkers=2 --reporter=default --cache=false --configLoader=native > /tmp/b1d-r6-reds.log 2>&1
+pnpm -C runner exec tsc --noEmit -p . > /tmp/b1d-r6-types.log 2>&1
+pnpm -C runner exec eslint test/b1d-r6.test.ts > /tmp/b1d-r6-lint.log 2>&1
+```
+
+Results: six intended assertion reds; runner TypeScript and new-file ESLint pass.
+The preload redirects only the existing CPU reporter's `mkdirSync`/`writeFileSync`
+paths from `test-results/cpu` to `os.tmpdir()/b1d-r6-cpu`, synchronizing Node's ESM
+builtin exports. Vitest's JSON reporter and result cache are disabled; its native
+config loader avoids generating a config bundle in the checkout. The existing
+main driver writes scratch artifacts and observations to OS temp.
+
+`pnpm check` is not run in this reds-only session: it necessarily fails on these
+intended reds and its ordinary scripts write reports/builds/check marks into the
+repository, prohibited for this session. No screen changed and no e2e was run.
+The provided `e2e:fake` failure at `e2e/capabilities.spec.ts:210`
+("write it shows the state written…") remains an existing red for implementation.
+
+Research reused offline, without network verification: Node's standard
+[AsyncLocalStorage](https://nodejs.org/api/async_context.html), named by addendum 23,
+and the packet's [context engineering reference](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents).
+The existing corpus/main driver, FakeDrive, ownership parser and phase-aware model
+fixture are reused. No network call, writing git command, dependency replacement
+or node_modules symlink was used. `.codex-commits.json` requests one tests commit
+and a separate notes-only commit; the runner owns committing.
