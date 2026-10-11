@@ -26,6 +26,25 @@ const summaryValidator = (): ((value: string) => unknown) => {
   return typeof candidate === 'function' ? candidate as (value: string) => unknown : () => false;
 };
 
+it('B5a contracts: declared projection keeps four ordered columns and retains other note properties', () => {
+  summaryControl();
+  const raw = '---\nby: bower\ntype: offer\nstatus: active\nsummary: An offer.\ntags: [career]\n'
+    + 'created: 2026-10-10\nupdated: 2026-10-10\nsource: [[Alex CV]]\nrelated: [[Career]]\n'
+    + 'hours: 32\nrole: Developer\nsalary: 48000 EUR\nposted: 2026-10-10\nstage: new\n---\nAlex keeps these words.\n';
+  const note = parseNote('Resources/Offer.md', raw);
+  expect(note.properties.find((property) => property.key === 'hours')?.value).toBe('32');
+  const candidate: unknown = Reflect.get(summaryFormat, 'tableProperties');
+  expect(candidate, 'note-format must export tableProperties').toBeTypeOf('function');
+  const project = candidate as (value: typeof note, row: { table: string[] }) => typeof note.properties;
+  const before = structuredClone(note);
+  expect(project(note, { table: ['role', 'salary', 'posted', 'stage'] })).toEqual(
+    ['role', 'salary', 'posted', 'stage'].map((key) => note.properties.find((property) => property.key === key)),
+  );
+  expect(project(note, { table: ['hours', 'role'] }).map((property) => property.key)).toEqual(['hours', 'role']);
+  expect(note).toEqual(before);
+  expect(note.body).toBe('Alex keeps these words.');
+});
+
 // Quote every casing, including mixed case, for consumers using either YAML schema.
 const yaml11SummaryValues = [
   ...['yes', 'no', 'on', 'off', 'y', 'n'].flatMap((value) =>

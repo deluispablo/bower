@@ -13,7 +13,7 @@ import { ruleLike } from './rules';
 import { displayName, nameOf } from './tree';
 import type { ChangeEntry, Rule } from './types';
 import { sha256 } from './hashes';
-import { parseNote, timelineEntries } from './note-format';
+import { dateOk, parseNote, timelineEntries } from './note-format';
 import { MOC_REGIONS, createOwnershipContext, fenceAfter, parseOwnership, type MocRegion, type ByteSpan, type Fence, type Layout, type OwnershipFailure, type FetchedOwnership } from './ownership-format';
 import { parseTimelineLine, timelineLine, type TimelineMarker } from './timeline-line';
 import { parseRules } from './rules-format';
@@ -43,7 +43,7 @@ export type Authors = { splice: (text: string, at: number, insert: string) => st
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
-const ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'timeline-append', 'rules-wording', 'moc-rewrite'];
+const ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'timeline-append', 'rules-wording', 'profile-rewrite', 'moc-rewrite'];
 const RULE_LINE = /^- (.*?)(?:\s*<!-- since (\d{4}-\d{2}-\d{2}) -->)?\s*$/;
 const WORDS_LINE = /^\s+\*You wrote: "(.*)"\*\s*$/;
 const SUMMARY_LINE = /^summary: \d+ rules? Bower follows in every tidy-up\.$/;
@@ -54,15 +54,7 @@ const HEADING = /^#{1,6}\s/;
 // ---------------------------------------------------------------------------------------------
 
 const controls = (value: string): boolean => [...value].some((char) => char.charCodeAt(0) <= 0x1f || char.charCodeAt(0) === 0x7f);
-/** `YYYY-MM-DD`, a real calendar date. */
-function dateOk(date: string): boolean {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
-  if (!match) return false;
-  const [year, month, day] = match.slice(1, 4).map(Number) as [number, number, number];
-  const at = new Date(0);
-  at.setUTCFullYear(year, month - 1, day);
-  return at.getUTCFullYear() === year && at.getUTCMonth() === month - 1 && at.getUTCDate() === day;
-}
+
 const lineFieldOk = (value: string): boolean => !controls(value) && !value.includes(' · ') && !value.includes('[[') && !value.includes(']]');
 /** A display name as a Timeline source: no `]`, `|`, `#`, `^` or line break. */
 const displayNameOk = (value: string): boolean => value.length > 0 && !/[\]|#^\r\n]/.test(value);
@@ -137,8 +129,14 @@ export function stateLinesOk(previous: readonly string[], lines: readonly string
   return lines.length <= STATE_READ.lines && previous.length <= STATE_READ.lines
     && lines.every((line) => one(line) && line.trim() === line && line.length > 0) && previous.every(one);
 }
+/** Profile prose has its own framed region; source extraction and grounding remain the planner's job. */
+export function profileTextOk(text: string): boolean {
+  return text.trim().length > 0 && text.trim().split(/\s+/).length <= 400 && /\[\[[^\]\r\n]+\]\]/.test(text)
+    && !text.includes('<!-- bower:ownership');
+}
 function fieldsOk(change: Change): boolean {
   switch (change.kind) {
+    case 'profile-rewrite': return typeof change.previous === 'string' && typeof change.text === 'string' && profileTextOk(change.text);
     case 'moc-rewrite': return ['moc-overview', 'moc-figures', 'moc-members'].includes(change.region) && typeof change.previous === 'string' && typeof change.text === 'string';
     case 'state-rewrite': return stateLinesOk(change.previous, change.lines);
     case 'link-rewrite': return change.renames.length > 0 && change.renames.every(renameOk)
@@ -921,25 +919,27 @@ function framedMoc(text: string): string | null {
   return parseOwnership(encoder.encode(out)).status === 'v2' ? out : null;
 }
 
-function rewriteMoc(text: string, change: Extract<Change, { kind: 'moc-rewrite' }>, fetched?: FetchedOwnership): Step {
-  const framed = framedMoc(text);
+type RegionChange = Extract<Change, { kind: 'moc-rewrite' | 'profile-rewrite' }>;
+const regionOf = (change: RegionChange): MocRegion | 'profile' => change.kind === 'profile-rewrite' ? 'profile' : change.region;
+function rewriteRegion(text: string, change: RegionChange, fetched?: FetchedOwnership): Step {
+  const framed = change.kind === 'profile-rewrite' ? text : framedMoc(text);
   if (framed === null) return { refused: 'not-bower' };
   const bytes = encoder.encode(framed);
   const own = framed === text && fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
   const note = parseNote('note.md', framed);
-  const span = own.status === 'v2' ? own.payloads[change.region] : undefined;
-  if (!note.byBower || !note.properties.some((p) => p.key === 'type' && p.value === 'moc') || !span) return { refused: 'not-bower' };
+  const span = own.status === 'v2' ? own.payloads[regionOf(change)] : undefined;
+  if ((change.kind === 'moc-rewrite' && (!note.byBower || !note.properties.some((p) => p.key === 'type' && p.value === 'moc'))) || !span) return { refused: 'not-bower' };
   const at = spanOf(bytes, span);
   if (framed.slice(at.start, at.end) !== change.previous) return { refused: 'person-edited' };
   return { text: framed.slice(0, at.start) + change.text + framed.slice(at.end), added: [], rules: null };
 }
-function mocHolds(before: string, after: string, change: Extract<Change, { kind: 'moc-rewrite' }>): boolean {
-  const framed = framedMoc(before);
+function regionHolds(before: string, after: string, change: RegionChange): boolean {
+  const framed = change.kind === 'profile-rewrite' ? before : framedMoc(before);
   if (framed === null) return false;
   const aBytes = encoder.encode(framed), bBytes = encoder.encode(after);
   const a = parseOwnership(aBytes), b = parseOwnership(bBytes);
-  const aSpan = a.status === 'v2' ? a.payloads[change.region] : undefined;
-  const bSpan = b.status === 'v2' ? b.payloads[change.region] : undefined;
+  const aSpan = a.status === 'v2' ? a.payloads[regionOf(change)] : undefined;
+  const bSpan = b.status === 'v2' ? b.payloads[regionOf(change)] : undefined;
   if (!aSpan || !bSpan) return false;
   const x = spanOf(aBytes, aSpan), y = spanOf(bBytes, bSpan);
   return framed.slice(0, x.start) === after.slice(0, y.start) && framed.slice(x.end) === after.slice(y.end)
@@ -975,10 +975,10 @@ function applyAtVersion(before: Uint8Array, changes: readonly Change[], authors:
     // Intermediate text is generated, even when it carries the source file id.
     const step = change.kind === 'state-rewrite' ? rewriteState(current, change, source)
       : change.kind === 'link-rewrite' ? relink(current, change, source)
-        : change.kind === 'timeline-append' ? appendLines(current, change, authors, source) : change.kind === 'moc-rewrite' ? rewriteMoc(current, change, source) : wordRules(current, change, authors, source);
+        : change.kind === 'timeline-append' ? appendLines(current, change, authors, source) : change.kind === 'moc-rewrite' || change.kind === 'profile-rewrite' ? rewriteRegion(current, change, source) : wordRules(current, change, authors, source);
     source = fetched;
     if ('refused' in step) return refuse(step.refused);
-    const kept = change.kind === 'moc-rewrite' ? mocHolds(current, step.text, change) : change.kind === 'state-rewrite' ? stateHolds(current, step.text, change) : holds(current, step.text, change, step);
+    const kept = change.kind === 'moc-rewrite' || change.kind === 'profile-rewrite' ? regionHolds(current, step.text, change) : change.kind === 'state-rewrite' ? stateHolds(current, step.text, change) : holds(current, step.text, change, step);
     if (step.text !== current && !kept) return refuse('invariant');
     current = step.text;
   }

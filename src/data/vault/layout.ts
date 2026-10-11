@@ -13,9 +13,11 @@
  * the runner moves them to `changes/archive/` after reading them; `piles/`,
  * one immutable declaration per pile, written before any of its things.
  */
+import { typeTableOk } from '../contracts/note-format';
+import type { TypeTable } from '../contracts/types';
 import type { RunnerWrite } from '../contracts/run-manifest';
 import { isRunWire } from '../contracts/run-wire';
-import { isQuestionOption, type QuestionRound, isAnsweredRow } from '../contracts/questions';
+import { isQuestionOption, proposalOk, type QuestionRound, isAnsweredRow } from '../contracts/questions';
 import type { Question, Request, RunState, Suggestion } from '../types';
 
 export const BOWER_FOLDER = 'Bower';
@@ -33,6 +35,8 @@ export const SYSTEM = {
   index: '.bower/index.md',
   hot: '.bower/hot.md',
   log: '.bower/log.md',
+  typeTable: '.bower/type-table.json',
+  proposals: '.bower/proposals',
   /** Immutable pile declarations: `declaration-<declarationId>-<sha256>.json`. */
   piles: '.bower/piles',
 } as const;
@@ -42,7 +46,7 @@ export const SYSTEM = {
  * the manifest contract (`parseRunManifestV2`, given it by every caller) and the runner's admitted check both judge by
  * it. `suggestions.json` and `last-run.json` are written by the barrier after the run, never through the manifest.
  */
-export const RUNNER_WRITES = [SYSTEM.questions, SYSTEM.requests, SYSTEM.hashes, SYSTEM.retrieval, SYSTEM.index, SYSTEM.hot, SYSTEM.log] as const satisfies readonly RunnerWrite[];
+export const RUNNER_WRITES = [SYSTEM.questions, SYSTEM.requests, SYSTEM.hashes, SYSTEM.retrieval, SYSTEM.index, SYSTEM.hot, SYSTEM.log, SYSTEM.typeTable] as const satisfies readonly RunnerWrite[];
 
 /** Bower's bookkeeping and any dot file stay out of the explorer. */
 export function isHidden(path: string): boolean {
@@ -110,7 +114,7 @@ const optional = (v: unknown, check: (x: unknown) => boolean): boolean => v === 
 const list = (v: unknown, check: (x: unknown) => boolean): boolean => Array.isArray(v) && v.every(check);
 /** A question's shown update (`Question.shown`): its lines, and the note's checksum and stamp as left. */
 const shown = (v: unknown): boolean => object(v) && Array.isArray(v.lines) && v.lines.every(text) && text(v.md5) && optional(v.stamp, text);
-const question = (v: unknown): boolean => object(v) && text(v.id) && text(v.text) && text(v.yes) && text(v.no) && number(v.askedAt) && optional(v.about, text) && optional(v.subject, text) && optional(v.hash, text) && optional(v.state, text) && optional(v.shown, shown) && optional(v.words, text) && optional(v.options, (o) => Array.isArray(o) && o.length >= 2 && o.length <= 4 && o.every(isQuestionOption) && new Set(o.map((x) => x.id)).size === o.length);
+const question = (v: unknown): boolean => object(v) && text(v.id) && text(v.text) && text(v.yes) && text(v.no) && number(v.askedAt) && optional(v.about, text) && optional(v.subject, text) && optional(v.hash, text) && optional(v.state, text) && optional(v.shown, shown) && optional(v.words, text) && optional(v.proposal, (p) => proposalOk(p) && v.id === `q-proposal-${p.id}` && [v.subject, v.hash, v.state, v.shown, v.words, v.options].every((x) => x === undefined)) && optional(v.options, (o) => Array.isArray(o) && o.length >= 2 && o.length <= 4 && o.every(isQuestionOption) && new Set(o.map((x) => x.id)).size === o.length);
 const suggestion = (v: unknown): boolean => object(v) && text(v.id) && text(v.title) && text(v.why);
 const request = (v: unknown): boolean => object(v) && text(v.id) && text(v.text) && number(v.at) && optional(v.done, text);
 const pathChange = (v: unknown): boolean => object(v) && text(v.path) && text(v.what);
@@ -127,6 +131,7 @@ export interface RetrievalFile {
   files: Record<string, { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number } }>;
 }
 export interface RunnerFiles {
+  '.bower/type-table.json': TypeTable;
   '.bower/retrieval.json': RetrievalFile;
   '.bower/questions.json': QuestionsFile;
   '.bower/suggestions.json': SuggestionsFile;
@@ -138,6 +143,7 @@ export interface RunnerFiles {
 export function isRunnerFile<K extends keyof RunnerFiles>(path: K, v: unknown): v is RunnerFiles[K] {
   if (!object(v) || v.v !== 1) return false;
   switch (path) {
+    case SYSTEM.typeTable: return typeTableOk(v);
     case SYSTEM.retrieval: return text(v.folderId) && v.folderId.length > 0 && text(v.account) && v.account.length > 0 && text(v.cursor) && v.cursor.length > 0
       && object(v.files) && Object.values(v.files).every((f) => object(f) && text(f.path) && text(f.version) && text(f.summary)
         && object(f.coverage) && f.coverage.kind === 'prefix' && count(f.coverage.bytes));

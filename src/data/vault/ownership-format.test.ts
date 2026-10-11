@@ -23,6 +23,30 @@ const encode = (text: string) => new TextEncoder().encode(text);
 const decode = (bytes: Uint8Array) => new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes);
 const request = { index: 0, label: 'Personal task', previousDone: false, done: true };
 const rich = () => decode(bytesOf('v2-rich.md'));
+
+it('B5a contracts: profile has its own ownership mark beside the four old payloads', () => {
+  const old = rich();
+  expect(parseOwnership(encode(old)).status).toBe('v2');
+  const profile = '## Profile\nAlex uses TypeScript, according to [[Alex CV]].\n';
+  const text = old + '<!-- bower:ownership/2 begin profile -->\n' + profile
+    + '<!-- bower:ownership/2 end profile -->\n';
+  const own = parseOwnership(encode(text));
+  expect(own.status).toBe('v2');
+  if (own.status !== 'v2') return;
+  const payloads: Readonly<Record<string, { start: number; end: number } | undefined>> = own.payloads;
+  const region = payloads.profile;
+  expect(region).toBeDefined();
+  if (region) expect(decode(encode(text).subarray(region.start, region.end))).toBe(profile);
+  const previous = parseOwnership(encode(old));
+  if (previous.status === 'v2') {
+    for (const owner of ['current', 'personal', 'timeline', 'bower-note'] as const) {
+      expect(own.payloads[owner]).toEqual(previous.payloads[owner]);
+    }
+  }
+  expect(parseOwnership(encode(text.replace('end profile', 'end current')))).toEqual({
+    status: 'invalid', reason: 'damaged-boundary',
+  });
+});
 function framed(personal: string): string {
   return '---\nbower_format: ownership/2\n---\n'
     + '<!-- bower:ownership/2 begin current -->\n- [ ] Protected task\n<!-- bower:ownership/2 end current -->\n'

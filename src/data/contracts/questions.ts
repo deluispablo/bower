@@ -9,9 +9,10 @@
  * it has, and every reader narrows on it. It is derived from the question as `.bower/questions.json` holds it, so the
  * wire stays as the accepted app wrote it (P2's `q1` with no subject still reads, as the folder's own question).
  */
-import type { Pile, Question } from './types';
+import type { Pile, Question, Proposal } from './types';
 import type { JournalRecord } from './journal-record';
 import { BowerError } from './types';
+import { typeRowOk } from './note-format';
 import { EMPTY_MD5 } from './hashes';
 import { keepAlreadyBinned, STATE_READ } from './note-edit';
 import { displayName, nameOf, thingName } from './tree';
@@ -25,13 +26,14 @@ export interface QuestionOption { id: string; label: string; action: { kind: 'fi
 export type PublicQuestion = Question;
 
 export function publicQuestion(q: Question): PublicQuestion {
-  const { id, text, yes, no, askedAt, about, subject, hash, state, shown, words, options } = q;
+  const { id, text, yes, no, askedAt, about, subject, hash, state, shown, words, options, proposal } = q;
   return { id, text, yes, no, askedAt,
     ...(about === undefined ? {} : { about }), ...(subject === undefined ? {} : { subject }),
     ...(hash === undefined ? {} : { hash }), ...(state === undefined ? {} : { state }),
     ...(shown === undefined ? {} : { shown: { lines: [...shown.lines], md5: shown.md5,
       ...(shown.stamp === undefined ? {} : { stamp: shown.stamp }) } }),
     ...(words === undefined ? {} : { words }),
+    ...(proposal === undefined ? {} : { proposal: structuredClone(proposal) }),
     ...(options === undefined ? {} : { options: options.map(({ id, label }) => ({ id, label })) }),
   };
 }
@@ -44,7 +46,7 @@ export function isQuestionSnapshot(value: unknown): value is PublicQuestion[] {
     && Object.keys(v).every((k) => ['id', 'label'].includes(k))
     && typeof v.id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(v.id) && text(v.label, 40);
   const card = (v: unknown): v is PublicQuestion => object(v)
-    && Object.keys(v).every((k) => ['id', 'text', 'yes', 'no', 'askedAt', 'about', 'subject', 'hash', 'state', 'shown', 'words', 'options'].includes(k))
+    && Object.keys(v).every((k) => ['id', 'text', 'yes', 'no', 'askedAt', 'about', 'subject', 'hash', 'state', 'shown', 'words', 'options', 'proposal'].includes(k))
     && text(v.id) && text(v.text, 200) && text(v.yes, 40) && text(v.no, 40)
     && typeof v.askedAt === 'number' && Number.isSafeInteger(v.askedAt) && v.askedAt >= 0
     && ['about', 'subject', 'hash', 'state'].every((k) => v[k] === undefined || text(v[k]))
@@ -55,9 +57,12 @@ export function isQuestionSnapshot(value: unknown): value is PublicQuestion[] {
       && v.shown.lines.every((line) => text(line, STATE_READ.line))
       && typeof v.shown.md5 === 'string' && /^[a-f0-9]{32}$/.test(v.shown.md5)
       && (v.shown.stamp === undefined || text(v.shown.stamp))))
+    && (v.proposal === undefined || (proposalOk(v.proposal) && v.id === `q-proposal-${v.proposal.id}`
+      && ['subject', 'hash', 'state', 'shown', 'words', 'options'].every((k) => v[k] === undefined)))
     && (v.options === undefined || (Array.isArray(v.options) && v.options.length >= 2 && v.options.length <= 4
       && v.options.every(option) && new Set(v.options.map((o) => o.id)).size === v.options.length));
   return Array.isArray(value) && value.length <= 10 && value.every(card)
+    && value.filter((q) => q.proposal !== undefined).length <= 5
     && new Set(value.map(askingKey)).size === value.length;
 }
 export interface QuestionRound {
@@ -177,10 +182,11 @@ export type Subject =
   | { kind: 'inbox'; id: string; hash?: string }
   | { kind: 'state'; id: string; mark?: string }
   | { kind: 'pair'; by: 'id' | 'name'; notes: readonly [string, string] }
+  | { kind: 'proposal'; id: string }
   | { kind: 'folder' };
 
 /** A question as far as its subject goes: its id, and what the wire may carry about it. */
-export type Asked = Pick<Question, 'id'> & Partial<Pick<Question, 'subject' | 'hash' | 'state' | 'text' | 'askedAt'>>;
+export type Asked = Pick<Question, 'id'> & Partial<Pick<Question, 'subject' | 'hash' | 'state' | 'text' | 'askedAt' | 'proposal'>>;
 
 /** The id of the question asked about a pile, or about one thing by its file id: one each. */
 export const askId = (pileOrFileId: string): string => `${ASK}${pileOrFileId}`;
@@ -219,6 +225,7 @@ function namedPairOf(text: string | undefined): readonly [string, string] | null
 
 /** What a question is about. An older ask with no `subject` carries its pile's or thing's id in its own id. */
 export function subjectOf(q: Asked): Subject {
+  if (q.proposal !== undefined) return { kind: 'proposal', id: q.proposal.id };
   if (q.id.startsWith(STATE)) return { kind: 'state', id: q.id.slice(STATE.length), ...(q.state !== undefined ? { mark: q.state } : {}) };
   const pair = pairOf(q.id);
   if (pair) return { kind: 'pair', by: 'id', notes: pair };
@@ -376,10 +383,21 @@ export function isAnsweredRow(row: unknown): row is AnsweredRow {
 }
 
 /** A question as a run's report row has it: what the person reads, never its subject, hash, mark or shown update. */
-export type ReportQuestion = Pick<Question, 'id' | 'text' | 'yes' | 'no' | 'askedAt' | 'about'>;
+export type ReportQuestion = Pick<Question, 'id' | 'text' | 'yes' | 'no' | 'askedAt' | 'about' | 'proposal'>;
 
 /** Its fields in the order the question has them, so a report reads as before. */
 export function reportRowOf(q: Question): ReportQuestion {
-  const { id, text, yes, no, askedAt, about } = q;
-  return { id, text, yes, no, askedAt, ...(about === undefined ? {} : { about }) };
+  const { id, text, yes, no, askedAt, about, proposal } = q;
+  return { id, text, yes, no, askedAt, ...(about === undefined ? {} : { about }),
+    ...(proposal === undefined ? {} : { proposal: structuredClone(proposal) }) };
+}
+
+/** One frozen payload validator shared by questions, snapshots and immutable manifest artifacts. */
+export function proposalOk(value: unknown): value is Proposal {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (Object.keys(v).length !== 2 || typeof v.id !== 'string' || v.id.length > 128 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(v.id)
+    || !v.payload || typeof v.payload !== 'object' || Array.isArray(v.payload)) return false;
+  const payload = v.payload as Record<string, unknown>;
+  return Object.keys(payload).length === 2 && payload.kind === 'type-row' && typeRowOk(payload.row);
 }

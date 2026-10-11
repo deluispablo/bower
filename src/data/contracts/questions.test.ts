@@ -4,14 +4,68 @@
  * still reads as a pair, by those names (a tolerant reader); the accepted app's merge question names no note and stays
  * the folder's own.
  */
-import { describe, expect, it } from 'vitest';
-import { answerRun } from '../answer-loop';
-import { STATE_ASK_AGAIN, answeredState, isAnsweredRow, subjectOf } from './questions';
+import { describe, expect, it, vi } from 'vitest';
+import { answerQuestion, answerRun } from '../answer-loop';
+import { STATE_ASK_AGAIN, answeredState, isAnsweredRow, openQuestions, subjectOf } from './questions';
 import type { Question } from './types';
 
 const PAIR: Question = { id: 'q-pair-note-a.note-b', text: 'Flat 3, 12 Larkspur Lane and Flat 3 (second) look like one flat. Keep one note?', yes: 'Yes, keep one', no: 'No, keep both', askedAt: 1 };
 const OLD: Question = { id: 'q-merge-flat-3', text: '[[Flat 3 (second)]] looks like [[Flat 3, 12 Larkspur Lane]]. Keep one note?', yes: 'Yes, keep one', no: 'No, keep both', askedAt: 1 };
 const ACCEPTED: Question = { id: 'q1', text: 'Flat 3, 12 Larkspur Lane and the new Wrenfield Road listing look like the same building. Keep one note for both?', yes: 'Yes, merge', no: 'No, keep both', about: 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md', askedAt: 1 };
+
+it('B5a contracts: b5-proposal-exact-payload', () => {
+  expect(subjectOf(PAIR)).toEqual({ kind: 'pair', by: 'id', notes: ['note-a', 'note-b'] });
+  expect(answerRun(PAIR, true)).toEqual({ scope: 'instructions' });
+  const payload = { kind: 'type-row', row: { id: 'lease', match: ['lease'], template: 'source',
+    properties: { rent: { type: 'money' } }, table: ['rent'] } };
+  // A question points to the immutable artifact, rather than a title, an inbox item or a rewritten payload.
+  const question = { id: 'q-proposal-lease-1', text: 'Add a lease type?', yes: 'Add', no: 'Keep as is',
+    askedAt: 1, proposal: { id: 'lease-1', payload } };
+  expect(subjectOf(question)).toEqual({ kind: 'proposal', id: 'lease-1' });
+  expect(answerRun(question, true)).toEqual({ scope: 'instructions' });
+  expect(answerRun(question, false)).toBeNull();
+  expect(openQuestions([question], new Set(), { ids: new Set() }, { ids: new Set(), names: new Set() })).toEqual([question]);
+  expect(openQuestions([question], new Set([question.id]), { ids: new Set() })).toEqual([]);
+  expect(question.proposal).toEqual({ id: 'lease-1', payload });
+});
+
+it('B5a contracts: old question fixtures retain folder inbox state and pair meanings', () => {
+  expect(subjectOf(ACCEPTED)).toEqual({ kind: 'folder' });
+  expect(subjectOf(OLD)).toEqual({ kind: 'pair', by: 'name', notes: ['Flat 3 (second)', 'Flat 3, 12 Larkspur Lane'] });
+  expect(subjectOf({ id: 'q-ask-alex', hash: 'content-1' })).toEqual({ kind: 'inbox', id: 'alex', hash: 'content-1' });
+  expect(subjectOf({ id: 'q-state-career', state: 'mark-1' })).toEqual({ kind: 'state', id: 'career', mark: 'mark-1' });
+  expect(openQuestions([ACCEPTED, PAIR], new Set(), { ids: new Set() },
+    { ids: new Set(['note-a', 'note-b']), names: new Set() })).toEqual([ACCEPTED, PAIR]);
+});
+
+it('B5a contracts: proposal answer records only its id and uses the existing continuation once', async () => {
+  const start = vi.fn(async () => ({ id: 'run-alex', scope: 'instructions' as const, phase: 'queued' as const,
+    requestedAt: 1, phaseAt: 1, seen: false }));
+  const answer = vi.fn(async () => undefined);
+  const state = { id: 'q-state-career', text: 'Write it?', yes: 'Write', no: 'Keep mine', askedAt: 1 };
+  const question = { id: 'q-proposal-lease-1', text: 'Add a lease type?', yes: 'Add', no: 'Keep as is', askedAt: 1,
+    proposal: { id: 'lease-1', payload: { kind: 'type-row', row: { id: 'lease', match: ['lease'],
+      template: 'source', properties: { rent: { type: 'money' } }, table: ['rent'] } } } };
+  let open = [state];
+  const vault = { questions: async () => open, answer };
+  expect((await answerQuestion(vault, { start }, state.id, true, { allowWeb: false }))?.outcome.kind).toBe('now');
+  expect(start).toHaveBeenCalledTimes(1);
+  start.mockClear(); answer.mockClear();
+  open = [question];
+  const result = await answerQuestion(vault, { start }, question.id, true, { allowWeb: false });
+  expect(answer).toHaveBeenCalledExactlyOnceWith(question.id, true);
+  expect(start).toHaveBeenCalledExactlyOnceWith('instructions', {
+    allowWeb: false, requestId: expect.stringMatching(/^answer-[0-9a-f]{40}$/), answer: true,
+  });
+  expect(result?.outcome.kind).toBe('now');
+  start.mockClear(); answer.mockClear();
+  expect((await answerQuestion(vault, { start }, question.id, false, { allowWeb: false }))?.outcome).toEqual({ kind: 'next' });
+  expect(answer).toHaveBeenCalledExactlyOnceWith(question.id, false);
+  expect(start).not.toHaveBeenCalled();
+  open = [];
+  expect(await answerQuestion(vault, { start }, question.id, true, { allowWeb: false })).toBeNull();
+  expect(answer).toHaveBeenCalledTimes(1);
+});
 
 describe('question subjects', () => {
   it('a pair question has a typed two-note subject', () => {
