@@ -1600,3 +1600,96 @@ The app TypeScript gate failed at observations.ts:208 (`TextDecoderConstructorOp
 
 removed: none
 tests changed: none
+
+
+## Round 5 reds (addendum 7)
+
+implementer: codex
+
+Scope: only the new src/data/contracts/b4a-r5.test.ts and these notes, plus the
+runner's commit plan. P4-120's three findings and TL-P4-48 addendum 7
+are the contract. No existing test, production caller, fixture, configuration,
+export, dependency or runtime wiring changed. No second parser or writer was added.
+The fixtures reuse the round-4 manifest sealing pattern and the production author,
+parseRunManifestV2, outsideAdmitted, parseObservations and validLearnedBlock.
+All data is made up. No network or git-writing command was used; node_modules
+was neither replaced nor symlinked.
+
+Offline research reused from the packet, not newly verified:
+https://zod.dev/api
+https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+https://arxiv.org/pdf/2605.12978
+
+### Exact reds and positive controls
+
+1. `b4a-r5 1 final block against final ledger`:
+   an existing live observation supplies the learned sentence, an About me edit
+   occurs, its Forget tombstone is appended afterward, then maintain. Four cases
+   cover initialization's about-append, plain write-through's about-rewrite,
+   link-rewrite and an archived Undo rebuild's about-rewrite. For the generic link
+   case the learned sentence was already appended and the edit rewrites a personal
+   link outside the learned section. Each control removes the forgotten sentence
+   from the final block and is accepted by author, manifest and runner admission.
+   The rebuild also invalidates an obsolete origin and retains an independent live
+   sentence, so its archive/Undo gate is genuine. validLearnedBlock confirms the
+   final-block/final-ledger contrast for every case. The dependency edges include
+   the late ledger write before maintain. All eight refusal assertions fail:
+   manifest returns ok: true and outsideAdmitted returns null for each bad case.
+2. `b4a-r5 2 link rewrites never edit the learned section`:
+   live `Alex visits [[Garden]].` and a tombstoned `Alex grows beans.` are stored.
+   Garden rewritten to that sentence changes learned text and is accepted by the
+   author, manifest and runner admission, although validLearnedBlock rejects it.
+   A benign Garden-to-Meadow rewrite also changes learned bytes, proving the ban
+   is about editing the learned section rather than only detecting tombstones.
+   Controls: a link rewrite in the personal region works without changing learned
+   bytes; an archived ledger rebuild invalidates the old origin and refreshes the
+   learned link from live Meadow evidence. Both controls pass all three paths.
+   Four finding assertions fail: two author preservation checks and the manifest
+   and runner-admission refusal checks for the tombstoned target.
+3. `b4a-r5 3 creation is exactly the template plus empty regions`:
+   About me is absent, the ledger is empty, and a generated root note puts
+   `Alex prefers invented work.` before the three empty regions. Both an invented
+   prefix alone and the exact template followed by that extra sentence are refused
+   by the test contract; both are currently accepted by manifest and admission.
+   The positive control is the exact FOLDER_TEMPLATE bytes plus the three empty
+   regions, accepted by both paths. Four finding refusal assertions fail.
+
+Every control uses hard assertions before its finding checks. Soft assertions
+collect both production-boundary failures without an author refusal hiding them.
+The three tests complete with exactly 16 finding-specific assertion failures;
+there are no control, fixture, setup, timer, import or runtime failures.
+
+### Verification
+
+OS-temp logs/configs/reports: `/private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-r5-ra4l3pjr`.
+The temp config imports the existing Vite config and retains jsdom, app setup and
+real-timer enforcement. Only its cache directory and the timer setup's CPU report
+output are relocated to OS temp. No test output writes into the repository.
+
+Final command from this worktree:
+`./node_modules/.bin/vitest run --config /private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-r5-ra4l3pjr/vitest.config.mjs --configLoader runner --maxWorkers=2 --reporter=default --reporter=json --outputFile.json=/private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-r5-ra4l3pjr/reds.json`
+Exit 1: one file, exactly three requested tests fail only on their own findings.
+Logs/reports: reds.log, reds.json. The JSON report was checked for all three exact
+names, assertion-only failures and their expected labels/counts (8, 4, 4).
+
+Non-emitting TypeScript and touched-file ESLint pass:
+`./node_modules/.bin/tsc --noEmit --incremental false -p tsconfig.app.json`
+`./node_modules/.bin/eslint src/data/contracts/b4a-r5.test.ts`
+Logs: types.log, lint.log.
+
+The initial run already reproduced all three findings with passing controls.
+Before the final run, the write-through control was simplified to share the bad
+case's ledger while omitting only the forgotten sentence; creation also gained
+an exact-template-plus-invented-sentence guard. No existing test or contract bound
+was changed, and no red was weakened.
+
+tests changed: src/data/contracts/b4a-r5.test.ts: new three finding reds with positive controls; final ledger checked across link rewrite, initialization, append and rebuild; learned links and exact missing-note creation guarded through manifest validation and runner admission.
+tests changed: none of the existing tests; all remain unchanged.
+removed: none.
+
+.codex-commits.json declares one tests-only commit and one notes-only commit.
+The runner owns actual commits. Read-only git diff/status and diff --check verify
+the scope; the commit metadata is separately validated as a JSON array.
+
+Skipped: implementation, pnpm check, full suites and e2e; this session writes reds only.
+Risk: the three reviewed data-safety gaps remain intentionally unfixed for the next implementer.
