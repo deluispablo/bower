@@ -128,7 +128,7 @@ describe('codex delivery entry point', () => {
     expect(r.result).toContain('status: green');
     expect(r.result).toContain('card:\nstatus: done\nfiles: a.txt');
     expect(JSON.parse(readFileSync(f.call, 'utf8')) as unknown).toEqual({
-      args: ['exec', '--json', '--sandbox', 'workspace-write', '-C', f.wt, '-c', 'model_reasoning_effort=medium', '-'],
+      args: ['exec', '--json', '--sandbox', 'workspace-write', '-C', f.wt, '-m', 'gpt-6.1-sol', '-c', 'model_reasoning_effort=medium', '-c', 'service_tier="priority"', '-'],
       prompt: 'Synthetic task\n',
     });
   });
@@ -175,6 +175,19 @@ describe('codex delivery entry point', () => {
     expect(r.result).toContain('tokens: 127');
     expect(r.result).toContain(`json-log: ${join(f.dir, 'results/slice-2.jsonl')}`);
     expect(readFileSync(join(f.dir, 'results/slice-2.jsonl'), 'utf8')).toContain('turn.completed');
+  });
+
+  it('passes the chosen model, effort and standard speed to Codex (TL-P4-57)', () => {
+    const f = fixture();
+    const r = f.run({}, ['--sandbox', 'read-only', '--role', 'reviewer', '--model', 'gpt-6-astra', '--effort', 'xhigh', '--tier', 'standard']);
+    expect(r.status, r.out).toBe(0);
+    expect((JSON.parse(readFileSync(f.call, 'utf8')) as { args: string[] }).args).toEqual(
+      ['exec', '--json', '--sandbox', 'read-only', '-C', f.wt, '-m', 'gpt-6-astra', '-c', 'model_reasoning_effort=xhigh', '-']);
+  });
+
+  it.each([['--tier', 'turbo'], ['--model', 'Bad Model'], ['--effort', 'ultra']])('refuses %s %s', (flag, value) => {
+    const f = fixture();
+    expect(f.run({}, ['--sandbox', 'read-only', flag, value]).status).toBe(2);
   });
 
   it('read-only writes the card without committing or running gates', () => {
