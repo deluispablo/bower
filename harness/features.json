@@ -6931,7 +6931,7 @@
     "id": "b3b-hot-maintain",
     "task": "p4-b3",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "Hot is read into the prompt at position 6 and written by maintain at .bower/hot.md only when more than its date changed (TL-P4-42 Q4, Q5, Q8).",
     "steps": [
