@@ -598,6 +598,8 @@ the coordinator owns commits and the shared change-list record.
 
 ### Addendum 5 re-pins
 
+tests changed: runner/test/drive-calls-golden.test.ts: C04 time base +4 named cold hot calls (addendum 5)
+
 2026-10-11, red-owning session, TL-P4-51 sweep on production HEAD `9cad8b47`.
 Only the authorized runner assertions, raw golden and these notes are changed.
 Offline source: Addendum 5's Frozen measurements table and the existing Vitest exact
@@ -646,3 +648,48 @@ not zero total baseline requests. The warm 42/43 counts pass in all four cells.
 Status: blocked on the unchanged whole-run timing contract; lead ruling required
 before any further assertion edit. `git diff --check` passes. No changes beyond the
 seven listed runner test/fixture files and this notes file.
+
+### Last Addendum 5 C04 time re-pin (2026-10-11)
+
+Owner authorized raising only the C04 base by the four named cold hot calls' modelled
+latency, preserving the 20% factor. The local modelled driver (`runner/test/modelled.ts`,
+DRIVE_MS = 150) is the offline source; no network research was performed.
+Measured production-main traffic on this branch:
+
+| Named cold call | Modelled start (ms) | Modelled latency (ms) |
+| --- | ---: | ---: |
+| questions media, GET /drive/v3/files/f9?alt=media in planning | 2500 | 150 |
+| hot name-check listing, GET children of .bower (f7) | 9280 | 150 |
+| hot live .bower parent fence, GET metadata of f7 | 9430 | 150 |
+| hot multipart create, POST upload, name hot.md | 9580 | 150 |
+
+Only those four Drive calls contribute to this re-pin: 600 ms total. C04 base is
+now 11,120 ms (10,520 + 600), with the unchanged 1.2 factor: strict bound 13,344 ms.
+The measured C04 whole run is 12,770 ms and passes. No second mechanism was added.
+The retained base and factor remain unchanged.
+
+Red: `with 25 earlier runs a run makes 99 Drive calls` in
+`runner/test/drive-calls-golden.test.ts:94` failed 12,770 < 12,624 before the edit;
+4 other tests passed. Log: `/tmp/b3b-final-red.log`.
+Measurement probe/config, cache, log and report are all in OS temp:
+`/tmp/b3b-final-measure.test.ts`, `/tmp/b3b-final-measure.config.mjs`,
+`/tmp/b3b-final-measure-cache`, `/tmp/b3b-final-measure.log`, `/tmp/b3b-final-measure.json`.
+The probe independently exposed the retained assertion failure too.
+
+Whole runner command:
+`pnpm -C runner exec vitest run --config /tmp/b3b-final-runner.config.mjs --maxWorkers=2`.
+The OS-temp config imports the existing runner config and redirects cache and JSON
+output to OS temp. Result: **646 pass / 1 fail, 647 total, 49 files**, exit 1.
+Log: `/tmp/b3b-final-runner.log`; JSON: `/tmp/b3b-final-runner.json`.
+
+TL-P4-51 complete sweep: the only remaining contradiction is
+`runner/test/drive-calls-golden.test.ts:97` (former :95), test
+`with 25 earlier runs a run makes 99 Drive calls`: retained whole-run actual
+**14,340 ms**, strict expected **<14,328 ms** (`11940 * 1.2`). The previously
+masking C04 assertion now passes. No retained threshold was changed: this task
+explicitly authorizes raising only the C04 base. Status: blocked pending a ruling
+on the retained bound; the full suite is not green.
+
+This last round edited only runner/test/drive-calls-golden.test.ts and these notes.
+`git diff --check` passes. No git writes, commits, network, node_modules changes,
+pnpm check, screen e2e or repository test outputs. Coordinator owns commits.

@@ -91,7 +91,9 @@ describe('the C04 run past 20 earlier runs (retention-never-wired, round 2)', ()
     expect(Object.fromEntries(Object.entries(countsOf(past.timing).phases).map(([k, v]) => [k, v.calls])))
       .toEqual({ token: 0, reads: 28, model: 0, apply: 54, checkpoints: 4, report: 10, status: 0, runner: 11 });
     // Addendum 4 bounds the whole run under 20%, even when individual phases exceed 20%.
-    expect(c04.ms).toBeLessThan(10520 * 1.2);
+    // TL-P4-42 addendum 5: +600 ms (4 x 150 ms) for questions media, hot name-check listing,
+    // live .bower parent fence and multipart create, measured on this branch.
+    expect(c04.ms).toBeLessThan(11120 * 1.2);
     expect(past.ms).toBeLessThan(11940 * 1.2);
   });
 });
