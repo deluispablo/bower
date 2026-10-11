@@ -5,7 +5,7 @@ import { opKey } from '../../src/data/contracts/op-key';
 import type { EditText, EffectV2, Maintain, MaintenanceDeclaration, MaintenanceNote, OperationV2, RunnerWrite, SeenFile, VerifiedContent } from '../../src/data/contracts/run-manifest';
 import type { DriveFile, StoredEvidence } from '../../src/data/drive/drive-api';
 import { driveEffects, type Effects, type Settled } from '../../src/data/spine/engine';
-import { filingMove, materialize, refreshed } from '../../src/data/spine/report';
+import { filingMove, materialize, refreshed, wordsNotes } from '../../src/data/spine/report';
 import { limiter, READ_AHEAD } from '../../src/data/spine/read';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { happened, reserveFor, stampOf, type Holder } from '../../src/data/spine/write-once';
@@ -450,6 +450,18 @@ export async function planningIndex(drive: RunnerDrive, rootId: string,
 /** Freeze declared inputs and reserved ids in the existing immutable manifest. */
 export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest, declared: readonly DeclaredTarget[] = [hotTarget],
   prepared?: Awaited<ReturnType<typeof refreshPlanning>>): Promise<RunManifest> {
+  // New words plans need their item Bin; stored manifests and recovery retain their frozen graph.
+  for (const pile of manifest.capture.piles) {
+    if (pile.context.kind !== 'text' || !pile.anchor
+      || pile.memberKeys.length && !wordsNotes(manifest, pile.pileId).length) continue;
+    const context = pile.context.file;
+    const parentId = pile.anchor.fileId;
+    for (const parent of manifest.operations.filter((op) => op.effect.kind === 'bin' && op.effect.before.fileId === parentId)) {
+      if (!manifest.operations.some((child) => parent.dependsOn.includes(child.operationId)
+        && child.effect.kind === 'bin' && child.effect.before.fileId === context.fileId
+        && child.effect.before.parents.includes(parentId))) throw unavailable();
+    }
+  }
   const rootId = manifest.scope.rootId;
   const refreshed = prepared ?? await refreshPlanning(drive, rootId);
   let { listing, snapshot } = refreshed;

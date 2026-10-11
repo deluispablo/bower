@@ -2604,6 +2604,7 @@ export async function build(decided: Decided): Promise<Ended> {
     const pileId = pile.pileId;
     const w = citedWords.get(pileId);
     const generated = notesOf.get(pileId);
+    if (!w && !generated) continue;
     const lines = w ? [...w.notes].flatMap((id) => editOf.get(id) ?? []) : generated ? [generated] : [];
     lines.push(...movesOf.get(pileId) ?? []);
     if (memoryWords.has(pileId)) lines.push(...memoryOps);
