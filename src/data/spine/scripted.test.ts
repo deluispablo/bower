@@ -10,9 +10,41 @@ import { scriptedDecisions, scriptedProvider } from '../demo/script';
 import * as planner from './scripted';
 import { runKeys, type Decisions, type PlanOptions, type RunPlan } from './scripted';
 import { parseNote } from '../contracts/note-format';
+import { BowerError } from '../types';
 
 const AT = Date.UTC(2026, 9, 7, 9);
 const RUN = 'run-scripted';
+
+it('B6a fix 1: refuses an ungrounded authored link before effects even with a grounded Gardening hub', async () => {
+  const { drive, root, admitted } = await seeded();
+  const resources = (await drive.listAll(root)).find((file) => file.folder && file.name === 'Resources');
+  expect(resources).toBeDefined();
+  const gardening = await drive.createFolder(resources?.id ?? '', 'Gardening');
+  await drive.createText(gardening.id, 'Gardening.md', '# Gardening\n');
+  const item = admitted.piles.flatMap((pile) => pile.items).find((candidate) => candidate.name !== 'Pile note.md');
+  expect(item).toBeDefined();
+  if (!item) return;
+  const before = await drive.listAll(root);
+  expect(before.some((file) => file.name === 'Imaginary note.md')).toBe(false);
+  const decisions: Decisions = { ...scriptedDecisions([], []), ownNote: () => null,
+    thing: (seen) => ({ to: 'Resources/Gardening', name: seen.fileName }),
+    pileAsk: () => null, thingAsk: () => null, merge: () => null,
+    note: (fileId) => fileId === item.fileId ? {
+      name: 'Garden source.md', summary: 'Alex records a stated gardening fact.', template: 'source',
+      body: '## Summary\nAlex grows mint.\n\n## Key points\n- Alex grows mint.\n\n## Related\n[[Gardening]] and [[Imaginary note]]\n\n## Transcript\nAlex grows mint.',
+    } : null,
+  };
+  let plan: RunPlan | undefined;
+  let failure: unknown;
+  try {
+    plan = await planner.planScripted(fakeScripted(drive), root, { scope: 'all', allowWeb: false, runId: RUN,
+      requestId: admitted.id, requestedAt: admitted.at, taken: admitted, mintKey: await runKeys(RUN), decisions });
+  } catch (error) { failure = error; }
+  expect.soft(failure, 'The production planner must refuse the ungrounded body').toBeInstanceOf(BowerError);
+  expect.soft(failure).toMatchObject({ message: planner.B_FAILURE });
+  expect.soft(plan, 'Refusal must return no executable manifest').toBeUndefined();
+  expect(await drive.listAll(root), 'Planning refusal must create and change nothing').toEqual(before);
+});
 
 /** The demo's folder with its inbox, journal and Bower's files, the same every time (fixed clock, fixed ids). */
 async function seeded(): Promise<{ drive: FakeDrive; root: string; admitted: AdmissionManifest }> {

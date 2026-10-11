@@ -410,3 +410,76 @@ This repair resolves the missing Gardening fixture contradiction recorded above.
 tests changed: src/data/contracts/note-edit.test.ts: B6a reds (TL-P4-47 Q5 Goal/Next steps regions, legacy Timelines); additions only.
 tests changed: src/data/vault/note-format.test.ts: B6a reds (TL-P4-47 Q5 template shapes and front matter); additions only.
 tests changed: src/data/vault/ownership-format.test.ts: B6a reds (TL-P4-47 Q5 template region marks); additions only.
+
+## Fix round 1 reds
+
+Red-owning session, 2026-10-11. Packet: adversarial pass 1, BLOCK with three
+Blocking findings. Added exactly one test per finding; all names start with
+`B6a fix 1: `. Existing assertions remain unchanged. Only the two test files and
+this notes file were edited. No runtime edits, network, git writes, commits,
+node_modules replacement or symlink. The coordinator owns commits.
+
+tests changed: src/data/spine/scripted.test.ts: added ungrounded authored-link refusal red through planScripted; existing assertions unchanged.
+tests changed: src/data/vault/note-format.test.ts: added display-model and quoted-metadata reds through serializeNote/parseNote and the screen resolver; existing assertions unchanged.
+
+### Exact reds and observed failures
+
+1. `B6a fix 1: refuses an ungrounded authored link before effects even with a grounded Gardening hub`
+   Seeds Resources/Gardening/Gardening.md using FakeDrive, then authors a Source
+   with both `[[Gardening]]` and `[[Imaginary note]]`. Calls production
+   planScripted with the admitted pile and real decisions. Requires BowerError
+   refusal, no returned plan/manifest and an unchanged Drive listing.
+   Observed: no refusal, returned executable manifest. The unchanged-listing
+   assertion passes; planning itself has not applied effects.
+
+2. `B6a fix 1: populated Project Area and MOC sections survive into the app display model`
+   Serializes populated Project, Area and MOC fixtures and parses them through
+   parseNote. Checks every declared section is populated on disk, then checks its
+   text in the body/currentState/timeline model rendered by NoteScreen. Unique
+   text per section prevents one section from accidentally satisfying another.
+   Observed missing display text: Project Goal and Next steps; Area Standard to
+   maintain; MOC Overview, Notes and Sources. Current state, Timeline and the
+   Project/Area Notes controls pass. No assertion over raw serialized text alone
+   is treated as proof of display.
+
+3. `B6a fix 1: quoted tags and Original filenames round-trip and resolve for template and legacy notes`
+   Serializes/parses Source tags `2026` and `on`, and original filename
+   `Garden "mint".txt`. Repeats with no template intent to cover the legacy writer.
+   Uses NoteScreen's resolverFor against a real tree entry and first verifies
+   that the actual filename resolves. Requires exact parsed strings and the
+   parsed Original link resolving to Resources/Gardening/Garden "mint".txt.
+   Observed: template tags retain literal outer quotes; both writers' parsed
+   original filenames retain backslash escapes; both Original links resolve to
+   null. Legacy unquoted tags and the direct filename resolver control pass.
+
+Soft assertions collect all defects inside each finding's single test. The full
+two-file suite completed; no existing-test contradictions or load errors arose.
+
+### Offline standards and reuse
+
+Reused the existing shared serializer/parser, production scripted planner,
+FakeDrive seeded fixture, and NoteScreen resolver. The installed Vitest README
+identifies its [official documentation](https://vitest.dev/). The existing
+note-format scalar code and tests cite
+[YAML 1.2.2 flow scalar styles](https://yaml.org/spec/1.2.2/#73-flow-scalar-styles)
+for quoted string/escape semantics. These are offline references; no network
+request was made. No new serialization or resolution mechanism was introduced.
+
+### Verification
+
+```sh
+NODE_OPTIONS='--require=/tmp/b6a-test-output.cjs' pnpm exec vitest run src/data/vault/note-format.test.ts src/data/spine/scripted.test.ts --maxWorkers=2 --configLoader runner > /tmp/b6a-fix1-reds.log 2>&1
+```
+
+Final result: 265 tests, exactly 3 new expected assertion failures, 262 passes.
+All existing tests pass. Log: `/tmp/b6a-fix1-reds.log`.
+The existing OS-temp preload redirects test/cache output outside the repository;
+configLoader runner avoids a checkout-local Vite config bundle. Tests use only
+in-memory data; no test output was directed into the repository.
+
+Touched-file ESLint passes: `/tmp/b6a-fix1-eslint.log`.
+App TypeScript (`--noEmit --incremental false -p tsconfig.app.json`) passes:
+`/tmp/b6a-fix1-tsc.log`. Read-only test diff confirms additions only.
+No pnpm check, e2e, implementation or broader suite was run under this test-only
+red scope. No screen code changed. Production fixes and commits remain with their
+owning sessions. Red delivery is done; acceptance remains blocked by these reds.

@@ -5,6 +5,7 @@ import type { NoteFile } from '../contracts/note-format';
 import { NOTES } from '../demo/notes';
 import { BowerError } from '../types';
 import { noteRefusal, parseNote, serializeNote, toggleTaskInText } from './note-format';
+import { resolverFor } from '../../features/note/resolve';
 
 // Explicit creation intent keeps the legacy serializer readable without templating stored notes on a read.
 type B6Template = 'source' | 'concept' | 'project' | 'area' | 'moc';
@@ -25,6 +26,52 @@ const b6FormatControl = (): void => {
   expect(parseNote('Legacy.md', raw).body).toBe('Alex keeps these words.');
   expect(parseNote('Legacy.md', raw).byBower).toBe(true);
 };
+
+it('B6a fix 1: populated Project Area and MOC sections survive into the app display model', () => {
+  const cases: { template: B6Template; sections: [string, string][] }[] = [
+    { template: 'project', sections: [
+      ['Goal', 'Alex grows enough mint for tea.'], ['Next steps', '- [ ] Alex plants mint.'],
+      ['Current state', '- Alex has a pot.'], ['Notes', 'Alex keeps the pot indoors.'],
+      ['Timeline', '- 10 Oct · Alex started the project.'],
+    ] },
+    { template: 'area', sections: [
+      ['Standard to maintain', 'Alex keeps the mint watered.'], ['Current state', '- Alex checks the soil.'],
+      ['Notes', 'Alex waters in the morning.'], ['Timeline', '- 10 Oct · Alex checked the mint.'],
+    ] },
+    { template: 'moc', sections: [
+      ['Overview', 'Alex collects gardening ideas here.'], ['Notes', 'Read [[Gardening]] for mint care.'],
+      ['Sources', 'Alex saved the garden bulletin.'],
+    ] },
+  ];
+  for (const { template, sections } of cases) {
+    const raw = serializeNote({ ...b6Note(template), body: sections.map(([heading, text]) => `## ${heading}\n${text}`).join('\n\n') });
+    const note = parseNote('Gardening.md', raw);
+    // NoteScreen renders body, currentState and timeline; raw ownership payloads alone are not display evidence.
+    const display = [note.body, ...note.currentState, ...note.timeline.map((entry) => entry.text)].join('\n');
+    for (const [heading, text] of sections) {
+      expect(raw, `${template}: ${heading} is populated on disk`).toContain(text);
+      const visible = heading === 'Current state' ? text.replace(/^- /, '')
+        : heading === 'Timeline' ? text.split(' · ')[1] ?? text : text;
+      expect.soft(display, `${template}: ${heading} must be visible in NoteScreen's model`).toContain(visible);
+    }
+  }
+});
+
+it('B6a fix 1: quoted tags and Original filenames round-trip and resolve for template and legacy notes', () => {
+  const filename = 'Garden "mint".txt';
+  const path = `Resources/Gardening/${filename}`;
+  const resolve = resolverFor([{ type: 'file', name: filename, path, created: 0, modified: 0 }], []);
+  expect(resolve(filename), 'The real Original resolver accepts the actual filename').toBe(path);
+  const source = { ...b6Note('source'), tags: ['2026', 'on'], original: filename };
+  const legacy: NoteFile = { ...source, template: undefined };
+  for (const [kind, input] of [['template', source], ['legacy', legacy]] as const) {
+    const note = parseNote('Garden source.md', serializeNote(input));
+    expect.soft(note.tags, `${kind}: tags preserve their exact string values`).toEqual(['2026', 'on']);
+    expect.soft(note.original, `${kind}: the filename decodes escaped quotes`).toBe(filename);
+    // NoteScreen passes note.original directly to this resolver for its Original property link.
+    expect.soft(resolve(note.original ?? ''), `${kind}: Original still opens the filed file`).toBe(path);
+  }
+});
 const b6Shapes: { template: B6Template; sections: string[] }[] = [
   { template: 'source', sections: ['Summary', 'Key points', 'Related', 'Transcript'] },
   { template: 'concept', sections: ['Current state', 'Notes', 'Related', 'Timeline'] },
