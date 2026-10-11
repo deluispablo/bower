@@ -743,7 +743,7 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> 
     for (const op of operations) {
       const e = op.effect;
       if (e.kind === 'maintain') {
-        if (e.inputs.targets?.some((t) => t.path === ledgerPath || t.path === 'About me.md' || t.path.startsWith('.bower/archive/about-me/'))) return false;
+        if (e.inputs.targets?.some((t) => !maintenanceTargetOk(value, t))) return false;
         if (lastMemory && !op.dependsOn.includes(lastMemory.operationId)) return false;
       }
       if (e.kind === 'create-text') {
@@ -912,6 +912,13 @@ async function planningArtifactsOk(value: Manifest | ManifestV2): Promise<boolea
     if (!actual.ok || actual.value !== expected.value) return false;
   }
   return true;
+}
+
+/** Maintenance names must agree with captured identity and cannot alias protected memory. */
+export function maintenanceTargetOk(value: { capture: Capture; operations: readonly OperationV2[] }, target: NonNullable<Maintain['inputs']['targets']>[number]): boolean {
+  const resolved = targetPath(value, { fileId: target.fileId });
+  return resolved === target.path && ![resolved, target.path].some((path) => path === 'About me.md'
+    || path === '.bower/observations.jsonl' || path?.startsWith('.bower/archive/about-me/'));
 }
 
 export function targetPath(value: { capture: Capture; operations: readonly OperationV2[] }, target: Target, seen = new Set<string>()): string | null {

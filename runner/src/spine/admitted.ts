@@ -18,7 +18,7 @@ import type { RunManifest } from '../../../src/data/spine/records';
 import type { RunnerToken } from '../token';
 import { applyChanges } from '../../../src/data/contracts/note-edit';
 import { aboutArchivePath, parseObservations, validLearnedBlock, type ObservationOrigin } from '../../../src/data/contracts/observations';
-import { targetPath } from '../../../src/data/contracts/run-manifest';
+import { maintenanceTargetOk, targetPath } from '../../../src/data/contracts/run-manifest';
 import { PILE_NOTE } from '../../../src/data/piles';
 import { RUNNER_WRITES, SYSTEM } from '../../../src/data/vault/layout';
 
@@ -179,8 +179,7 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
       case 'create-folder':
         break;
       case 'maintain':
-        if (e.inputs.targets?.some((p) => p.path === '.bower/observations.jsonl' || p.path === 'About me.md'
-          || p.path.startsWith('.bower/archive/about-me/'))) return 'a memory write outside its marked edit';
+        if (e.inputs.targets?.some((p) => !maintenanceTargetOk(m, p))) return 'a maintenance target outside its captured path or marked edit';
         break;
     }
   }
