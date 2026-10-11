@@ -546,7 +546,7 @@ describe('B4b through production entry points', () => {
   it('b4b-memory-fences-and-report', async () => {
     const results = [];
     for (const damaged of ['changed-about', 'changed-ledger', 'torn-log', 'unreadable-log']) {
-      const f = await fixture({ offer: true });
+      const f = await fixture({ offer: true, words: `Remember: ${REMOTE}` });
       if (damaged === 'torn-log') await f.write(LEDGER, '{"v":1,"kind":');
       const ledgerId = await f.id(LEDGER);
       const errorStart = vi.mocked(console.error).mock.calls.length;
@@ -559,12 +559,26 @@ describe('B4b through production entry points', () => {
           return new Response(JSON.stringify({ error: { code: 403, message: 'Made-up unreadable memory.' } }), { status: 403 });
         return fetch(input, init);
       });
-      expect(memoryRows(run)).toEqual([]); expect(internalRows(run)).toEqual([]);
-      if (damaged === 'changed-about') expect(run.after[ABOUT]).toBe(learned([], PERSONAL + 'Alex edited this meanwhile.\n'));
-      if (damaged === 'changed-ledger') expect(run.after[LEDGER]).toBe('\n');
+      expect(internalRows(run)).toEqual([]);
+      if (damaged === 'changed-about') {
+        expect(memoryRows(run)).toHaveLength(1);
+        expect(ledger(run).events).toHaveLength(1);
+        expect(ledger(run).live).toEqual([expect.objectContaining({ text: REMOTE, origin: expect.objectContaining({ kind: 'words' }) })]);
+        expect(run.after[ABOUT]).toBe(learned([], PERSONAL + 'Alex edited this meanwhile.\n'));
+      } else {
+        expect(memoryRows(run)).toEqual([]);
+      }
+      if (damaged === 'changed-ledger') {
+        expect(run.after[LEDGER]).toBe('\n');
+        expect(ledger(run).events).toEqual([]);
+        expect(run.after[ABOUT]).toBe(learned([]));
+      }
       if (damaged === 'torn-log') expect(run.after[LEDGER]).toBe('{"v":1,"kind":');
       if (damaged === 'unreadable-log') expect(run.after[LEDGER]).toBe('');
       const errors = vi.mocked(console.error).mock.calls.slice(errorStart).flat();
+      if (damaged === 'changed-about' || damaged === 'changed-ledger')
+        expect(run.errors, `${damaged}: reached the write fence`).toContain(damaged === 'changed-about'
+          ? 'The note changed before Bower could add to it.' : "Bower's list of your files changed meanwhile.");
       results.push({ damaged, frozen: errors.some((e) => e instanceof BowerError),
         generic: run.refusals.some((line) => line.includes('not a tidy-up intent')) });
     }
