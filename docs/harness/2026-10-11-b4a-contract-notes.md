@@ -765,3 +765,77 @@ The plan has exactly two commits: tests first, notes alone second. No local comm
 was made. Production files and the deferred runner provider test remain untouched.
 Repair status: done; pnpm check stays with the coordinator, and no touched-screen
 e2e is applicable to this tests-only entry.
+
+## Round 2 reds (addendum 4)
+
+implementer: codex
+
+Reds-only session for TL-P4-48 addendum 4 and
+`docs/harness/2026-10-11-b4a-adversarial-2.md`. Scope: one new adjacent contract
+suite, these appended notes, and the runner's two-commit plan. No production,
+existing test, fixture, configuration, caller or export was changed.
+
+Prior packet research reused offline, without fresh verification or dependencies:
+https://arxiv.org/pdf/2605.12978
+https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+https://zod.dev/api
+The tests reuse the existing author, ownership parser, canonical record serializer,
+manifest validator and admission boundary. No parallel production mechanism is added.
+
+Named reds and passing controls, all through public contract functions:
+
+- `b4a-r2 1 forgotten fact stays forgotten on replay`: parseObservations retains
+  fact-replay after Forget when the same source sentence receives new event/fact
+  ids, a new hash and biography-to-activity classification in about-working-on.
+  Expected only fact-independent; received fact-independent and fact-replay.
+  Controls: the original is initially live; Forget removes it; a different fact
+  stays live; the tombstone is retained before and after replay.
+- `b4a-r2 2 init passes the evidence check`: parseRunManifestV2 accepts an
+  about-append containing Alex's invented preference with an empty ledger and no
+  admitted words. Expected ok:false; received ok:true. Control: initialization
+  with all three empty learned regions passes the author, validator and
+  outsideAdmitted. Both plans use the same captured targets and identity sealing.
+- `b4a-r2 3 forget to the bare heading succeeds`: one short preference plus its
+  Forget tombstone, an exact dependent archive, a heading-only rewrite with no live
+  fact ids, and maintain without a successful consolidation frontier. Expected
+  ok:true; received ok:false, reason:shape. Controls: five live facts and 201
+  authored words with archive and frontier validate; the Forget helper permits the
+  short rebuild while the consolidation helper refuses it; applyChanges preserves
+  the personal prefix and leaves exactly the heading in that region; archive bytes
+  equal the previous section; outsideAdmitted accepts the Forget plan. This red
+  chooses Forget, as permitted by the requested Forget-or-Undo scenario.
+- `b4a-r2 4 regions without front matter`: initialization succeeds and the
+  ownership parser exposes the learned region, but parseNote omits bowerNote.
+  Control: identical regions with front matter display all three learned headings
+  and the preference; personal bodies agree. Expected the same bowerNote object;
+  received undefined for the plain note.
+
+tests changed: src/data/contracts/b4a-r2.test.ts: new suite with four addendum-4 reproductions and passing controls; no existing test modified or deleted.
+removed: none.
+
+Verification on the final test file: four tests, four expected AssertionErrors,
+one at each finding's final assertion. All earlier control assertions pass; no
+import, loader, timer, hashing, admission or unrelated assertion failure occurs.
+Every Vitest invocation used --maxWorkers=2. ESLint and the app's non-emitting,
+non-incremental TypeScript check pass. The initial TypeScript check caught missing
+narrowing of the ownership result in the new test; narrowing was added and all
+three focused checks were rerun. No contract assertion or threshold was weakened.
+
+Commands (stdout/stderr redirected to OS-temp logs):
+
+```sh
+pnpm exec vitest run src/data/contracts/b4a-r2.test.ts --config /private/tmp/b4a-contract-validation/app-full.mjs --configLoader runner --maxWorkers=2 --outputFile.json=/private/tmp/b4a-r2-results.json > /private/tmp/b4a-r2-reds.log 2>&1
+pnpm exec eslint src/data/contracts/b4a-r2.test.ts > /private/tmp/b4a-r2-eslint.log 2>&1
+pnpm exec tsc -p tsconfig.app.json --noEmit --incremental false > /private/tmp/b4a-r2-types.log 2>&1
+```
+
+The existing OS-temp config preserves production jsdom, plugins, setup and timer
+checks, and redirects Vite/module caches and CPU reports to
+`/private/tmp/b4a-contract-validation/`. The JSON result and logs above also stay
+in OS temp. The tests themselves perform no filesystem writes. No network,
+repository-writing git command, dependency install or node_modules change was used.
+
+The runner owns commits: `.codex-commits.json` lists the new test file first and
+these notes alone second. No local commit was made. Final git diff --check passes.
+Implementation, full suites, pnpm check, e2e and B4b/B4c runtime wiring were not
+run or changed in this reds-only assignment. The four defects remain unfixed.
