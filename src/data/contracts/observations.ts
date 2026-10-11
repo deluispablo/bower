@@ -205,7 +205,7 @@ export function validLearnedBlock(text: string, ledger?: Ledger,
   if (own.status === 'invalid') return false;
   const first = own.payloads?.['about-you'];
   if (!first) return false;
-  const decode = (start: number, end: number): string => new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes.subarray(start, end)).replace(/\r\n/g, '\n');
+  const decode = (start: number, end: number): string => new TextDecoder('utf-8', { fatal: false, ignoreBOM: true }).decode(bytes.subarray(start, end)).replace(/\r\n/g, '\n');
   const heading = '## What Bower has learned\n';
   const begin = (region: AboutRegion): string => `<!-- bower:ownership/2 begin ${region} -->\n`;
   const prefix = decode(0, first.start);

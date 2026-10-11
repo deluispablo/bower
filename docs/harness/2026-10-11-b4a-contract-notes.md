@@ -1593,3 +1593,10 @@ commit metadata changed; git diff --check passes. No production code changed.
 
 Skipped: runner-owned commits, pnpm check and capabilities e2e; no runtime changes needed.
 Risk: the app suite remains nonzero solely for expected sandbox EPERM; runner gates remain pending.
+
+### Coordinator gate fix (round 4)
+
+The app TypeScript gate failed at observations.ts:208 (`TextDecoderConstructorOptions` needs `fatal` beside `ignoreBOM` in the app lib). The coordinator added `fatal: false`, which is the decoder's default, so behaviour is unchanged.
+
+removed: none
+tests changed: none
