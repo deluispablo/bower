@@ -1,3 +1,5 @@
+import { BowerError } from '../../src/data/types';
+
 /**
  * One timing line per run (TL-P4-01 addendum, `docs/harness/p4-speed-baseline.md`), as the original's `agent stats`
  * line and `agent_seconds`: where a tidy-up's time went, phase by phase, with the model's own numbers. Numbers and
@@ -42,6 +44,10 @@ export interface SectionHashes {
   rules?: string;
 }
 
+export class LedgerExhausted extends BowerError {
+  constructor(readonly count: number) { super('unknown', 'These items will be handled on the next run.'); }
+}
+
 export class RunTiming {
   private readonly spent = new Map<Phase, number>();
   private readonly stack: Array<{ phase: Phase; since: number }> = [];
@@ -60,6 +66,18 @@ export class RunTiming {
   ) {
     this.began = clock();
   }
+
+  /** Both semantic steps and retries spend the same 80% allowance. */
+  remainingModelMs(): number { return Math.max(0, 900_000 * 0.8 - (this.clock() - this.began)); }
+  addModel(stats: ModelStats): void {
+    const previous = this.model;
+    this.model = previous ? {
+      wallMs: previous.wallMs + stats.wallMs, apiMs: previous.apiMs + stats.apiMs,
+      turns: previous.turns + stats.turns, inputTokens: previous.inputTokens + stats.inputTokens,
+      outputTokens: previous.outputTokens + stats.outputTokens,
+    } : stats;
+  }
+  requireOperations(count: number, items: number): void { if (count > 200) throw new LedgerExhausted(items); }
 
   /** Set the input fingerprint (first 12 hex of sha256 of the model input). */
   setInputFingerprint(fingerprint: string): void {

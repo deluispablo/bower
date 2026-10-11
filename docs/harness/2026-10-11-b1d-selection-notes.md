@@ -862,3 +862,439 @@ Complete targeted failure inventory (all targeted tests ran before stopping):
 | runner/test/claude-provider.test.ts:812 | a Claude run writes no hub line or demo extra it did not propose |
 
 Delivery: done for the authorized red sweep; production remains red. No implementation attempted.
+
+
+## Implementation
+
+implementer: codex
+
+Status: blocked after the complete authorized sweeps, under the owner's TL-P4-51 golden-stop instruction.
+
+Changed paths: runner/src/claude.ts, runner/src/index.ts, runner/src/main.ts, runner/src/timing.ts,
+src/data/vault/vault-index.ts, runner/test/corpus-run.ts (allocated driver only), and this notes appendix.
+The five production files and the allocated corpus driver contain an uncommitted implementation draft;
+it is **not merge-ready**. No git-writing command, network call, dependency replacement, test assertion edit,
+fixture edit or golden edit was made. The coordinator owns commits. Do not mistake this draft for acceptance.
+
+Research first: reused only the packet's offline citations, without independent reverification:
+- https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+- https://arxiv.org/html/2506.08837v1
+- https://platform.claude.com/docs/en/build-with-claude/prompt-caching
+
+The draft moves the existing index home's read-only refresh ahead of semantic planning. Its returned
+listing, cursor and snapshot are handed to the same maintain effect for persistence at the end.
+No preparation checkpoint or pre-manifest index write was added. Warm prefixes, chosen note bodies,
+source extraction and maintenance use the existing Drive read cache. VaultIndex builds the whole-word,
+recency/path, hub and one-link neighbourhood, capped at 30 displayed candidates. The provider validates
+selection, freezes its destinations and allowed ids, retrieves chosen evidence, then validates execution
+through the existing closed intent and scripted planner. RunTiming aggregates both calls and retries,
+keeps the 20% time reserve and checks the 200-operation cap. Exhaustion ends done, logs one count,
+and leaves Drive untouched so a fresh admission can take the same inbox/declarations/requests again.
+Q1a's option actions, Q1c's publication callback, B3b's hot slot and the manifest/checkpoint/barrier
+remain in their existing homes. The allocated corpus driver also handles execution-only reply sequences
+when a redispatch fixture supplies its selection independently; no assertion was changed.
+
+removed: the provider's one-step call/retry block and its reset 15-minute allowance.
+removed: eager retrieval of the old twelve hub bodies from production Claude planning.
+removed: discovery and changed-prefix refresh after semantic planning when main supplies refreshed observations.
+removed: failure/report/manifest persistence on semantic validation or operation-ledger exhaustion.
+tests changed: none
+
+### Verification and stop evidence
+
+Initial red: all 19 committed B1d tests failed on assertions, /tmp/b1d-implementation-red.log.
+Final complete runner sweep: 50 files; 396 passed, 274 failed of 670 tests.
+Final B1d results within that sweep: 6 passed, 13 failed of 19; full assertion inventory follows.
+Final src sweep: 167 files passed, one failed; 5617 passed, one failed of 5618 tests.
+The sole src failure is src/e2e-port.test.ts:37, with the expected EPERM listen error and its timeout.
+All requested app/node/runner TypeScript checks and touched-file ESLint checks pass.
+The initial mixed-root lint invocation hit automatic tsconfigRootDir ambiguity; temporary configs
+import the unchanged repository configs and set their respective roots. No lint rule was disabled.
+
+Commands (all output and TypeScript build-info files outside the repository):
+- `pnpm -C runner exec vitest run --maxWorkers=2 --reporter=default --reporter=json --outputFile=/tmp/b1d-runner-results.json --cache=false`
+- `pnpm exec vitest run src --maxWorkers=2 --reporter=default --reporter=json --outputFile=/tmp/b1d-src-results.json --cache=false`
+- `pnpm exec tsc --noEmit -p tsconfig.app.json --tsBuildInfoFile /tmp/b1d-app.tsbuildinfo`
+- `pnpm exec tsc --noEmit -p tsconfig.node.json --tsBuildInfoFile /tmp/b1d-node.tsbuildinfo`
+- `pnpm -C runner exec tsc --noEmit -p .`
+- `pnpm exec eslint --config /tmp/b1d-eslint-app.mjs src/data/vault/vault-index.ts`
+- `pnpm exec eslint --config /tmp/b1d-eslint-runner.mjs runner/src/claude.ts runner/src/index.ts runner/src/main.ts runner/src/timing.ts runner/test/corpus-run.ts`
+
+Logs: /tmp/b1d-runner.log, /tmp/b1d-src.log, /tmp/b1d-{app,node,runner}-types.log,
+/tmp/b1d-{app,runner}-eslint.log. JSON results preserve every assertion and stack.
+No pnpm check or e2e was run: their normal commands write builds/check marks/results into this repository,
+which this session explicitly prohibits. No fixture or app screen was changed.
+
+Passed exact B1d tests:
+- `b1-index-job-offer`
+- `b1-changes-person-edit`
+- `b1-folded-moc-expansion`
+- `b1-read-to-act-fence`
+- `b1-pre-manifest-retry`
+- `b1-neighbourhood-order-and-30-cap`
+
+### Measured golden table — unchanged files
+
+The pinned C04 selection input moves by the named selection call's instruction and id/version/candidate
+metadata, while L3 bodies move to execution. Measurements below reconstruct the complete received
+prompt from vitest's failure diff and the unchanged golden; reconstructed copies are in /tmp only.
+No golden is accepted or changed. The owner-required stop applies to these pins.
+
+| Pinned assertion | Golden file | Old chars | Measured chars | Delta | Measured SHA-256 |
+| --- | --- | ---: | ---: | ---: | --- |
+| runner/test/model-input-fingerprint.test.ts:81 | runner/test/fixtures/model-input-c04.golden.txt | 9431 | 10832 | +1401 | da7b69240701098f3f24c4418eecb22db6b08b8122d27800a11d94bd26e8f26b |
+| runner/test/model-input-fingerprint.test.ts:93 | runner/test/fixtures/model-input-c04.raw.golden.txt | 9427 | 10830 | +1403 | c0973cdc4163fc5a625fe000a2fe9e197bd5492268349d89e472f61f9151beb0 |
+
+The accepted traffic pins did not move: timing-counts.test.ts and drive-calls-golden.test.ts pass in full.
+The C05 archive golden's report observation is absent, not a measured accepted traffic rise:
+runner/test/c05-bounded-reads.test.ts:278 observes undefined report.updated because that legacy
+transport returns execution JSON during selection. It is included in the failure inventory below.
+Fingerprint checks at runner/test/model-input-fingerprint.test.ts:113/152/174/268/290 also fail;
+these include real draft gaps (fingerprinting only successful selection, and incomplete normalization of
+new metadata ids), not just permission to update a golden. There is no elapsed-time golden acceptance
+or >20% time-delta claim; injected/modelled timings are not real deployment latency.
+
+### Cold/warm production traffic observations
+
+Seeding, admission, inspection and between-run edits are excluded. These are measured production HTTP
+calls, not newly accepted goldens. Each complete row below uses selection then execution.
+
+| Fixture / condition | Drive calls | Bytes | Range prefixes | Full media | Operations | Filed |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| b1-index-job-offer cold | 109 | 109966 | 16 | 21 | 7 | 1 |
+| b1-index-job-offer warm | 91 | 97184 | 14 | 23 | 7 | 1 |
+| b1-changes-person-edit cold | 49 | 37947 | 3 | 3 | 1 | 0 |
+| b1-changes-person-edit warm | 43 | 48482 | 1 | 12 | 1 | 0 |
+| b1-refresh-cache-hot-order warm | 65 | 55710 | 4 | 11 | 5 | 1 |
+
+Named semantic calls: selection, selection validation retry, execution, execution validation retry.
+The shared-ledger positive control completes in exactly four calls: injected aggregate
+model=100, api=70, turns=10, input=160, output=50; the declining timeout checks pass.
+The clear within-bound controls and character-envelope assertions run before the exhaustion assertion.
+The 201-item case is rejected before source extraction or any manifest; its inbox is unchanged.
+
+Named Drive reads: the existing cold bootstrap start token and canonical listing; the one warm
+changes-feed drain; changed note Range prefixes; legacy hub ownership/type Range probes;
+matched-note Range prefixes for one-link discovery; selected full note reads; maintain's complete
+MOC reads and hot's declared evidence reads. No second drain or physical selected-note cache is added.
+For offer warm-minus-cold: -18 calls, -12782 bytes, -2 prefixes, +2 full media; operations/filing unchanged.
+For personal edit warm-minus-cold: -6 calls, +10535 bytes, -2 prefixes, +9 full media; operations unchanged.
+The previous notes' red-run numbers are not a settled-plan baseline, so they cannot justify raising a
+traffic golden. Relative to those observations: offer cold +55 calls/0 prefixes/+7 full media;
+offer warm +67 calls/+14 prefixes/+7 full media; personal edit cold and warm each +0 calls;
+refresh/cache/hot +4 calls/+3 prefixes/+1 full media. These are descriptive deltas, not approved pins.
+The large offer rise remains a performance gap: all current snapshot owners are enriched, so hot reads
+more eligible hubs. It needs diagnosis and measurement before acceptance; no golden was loosened.
+Exact observations: /tmp/b1d-implementation-observations.ndjson.
+
+### Compatibility drafts and remaining implementation gaps
+
+These are proposals for lead review only; no contract or test has been altered.
+
+| Home / evidence | Draft or unresolved issue |
+| --- | --- |
+| b1-planning-support.ts:220–221; claude-provider.test.ts exhaustion helper | Addendum 15 says inbox only, nothing written. Assertions still require a new on-disk dispositions.json waiting row. Derive waiting from the untouched inbox/status instead, or allocate a durable exception explicitly; this draft writes nothing. |
+| b1-planning.test.ts:498 | The unpicked map is fully read once by existing maintain, to freeze owned MOC regions and persist membership after filing. Expansion itself reads only metadata. Clarify whether the assertion excludes maintain; do not add a prefix-only MOC writer. |
+| b1-planning.test.ts:409–410; runner/src/hot.ts (not owned) | The seeded undated HTML-comment op row is rejected by existing renderHot, which preserves dated rows ending in op:<12 hex>. Reconcile the recorded legacy form in B3b's own home; B1d must not add a second hot renderer. |
+| b1a-contract.test.ts; b1-index.test.ts | Pre-planning refresh intentionally moves feed/Range traffic out of maintain. Cold Claude now has two calls. Preserve total physical-read invariants while updating phase-specific observations only after the lead rules. |
+| Execution-only fixture transports across runner tests | They must emit the closed selection reply before their recorded execution reply. Do not add production fallback from tidy-intent to inferred selection. Complete inventory follows; the allocated corpus sequence fix alone does not migrate every transport. |
+| model-input-fingerprint.test.ts | Selection's new indexed/folder dictionary keys and item ids are incompletely normalized. Set selection/retry fingerprints consistently in the existing timing mechanism, then measure both golden prompts again. |
+| ClaudeSetup/read handoff | Refreshed snapshot metadata is passed, but planReads still retains its original listing. A feed change racing that listing can pair the refreshed index with stale source/target read versions; this draft needs the existing cache's versioned listing handoff, not another cache. |
+| Q7 index context | The index string is <=32000, but the separate indexed metadata and repeated candidate rows are not included in that character ledger. The draft needs one combined index-context accounting bound. |
+| Selection kind rows | The draft uses a finite built-in kind list. It does not yet discover real configured type-row ids; unknown passes the committed controls. Reuse the existing configured row home when allocated. |
+| Maintenance 300-call bound | No new cap is enforced in the maintenance home by this draft. RunTiming must account and grant those calls with the same ledger; no second budget object is permitted. |
+| Q1 answers / standalone provider fixtures | Full compatibility sweep remains red; no stored-answer/recovery acceptance is claimed beyond the passing B1d recovery and unchanged scripted controls. |
+
+The draft has no new stored format and no scripted.ts, run-manifest.ts or report.ts edits.
+The new optional read-only setup and maintain arguments preserve existing callers; they are not
+acceptance of the unresolved stale-listing handoff. No golden, test or bound is loosened to hide a gap.
+
+### Complete runner failure inventory
+
+Every failed test in the full sweep is listed with the actual assertion location (or its declaration
+for a transport failure). These include contradictions and real implementation/fixture failures;
+they are not all classified as contract contradictions. Distinct repeated soft assertions are retained
+in /tmp/b1d-runner-results.json. The rows below are a decision index into that full evidence.
+
+| File:line | Failed test | First observed failure |
+| --- | --- | --- |
+| runner/test/ask-answer-loop.test.ts:304 | an answer applies at once (TL-P4-08 addendum 8) a yes to keep one note starts a scoped run that merges | AssertionError: expected [ …(6) ] to not include 'Projects/Flat hunt/Flat 3 (second).md' |
+| runner/test/ask-answer-loop.test.ts:323 | an answer applies at once (TL-P4-08 addendum 8) answers reach the model path | AssertionError: expected [ { …(2) }, { …(2) } ] to deeply equal [ ObjectContaining{…} ] |
+| runner/test/ask-answer-loop.test.ts:357 | an answer applies at once (TL-P4-08 addendum 8) a yes to a pair ask merges through keep-one-note-merge | AssertionError: expected undefined to be defined |
+| runner/test/ask-answer-loop.test.ts:384 | an answer applies at once (TL-P4-08 addendum 8) a yes to a pair whose other note is in the Bin settles and says nothing was merged | AssertionError: expected [ 'q-pair-f12.f13' ] to deeply equal [] |
+| runner/test/ask-answer-loop.test.ts:402 | an answer applies at once (TL-P4-08 addendum 8) with no new input a second run leaves nothing held or waiting for the same reason | AssertionError: expected [ …(2) ] to deeply equal [] |
+| runner/test/ask-answer-loop.test.ts:442 | an answer applies at once (TL-P4-08 addendum 8) an answer during a run is applied by the next | AssertionError: expected [ …(6) ] to not include 'Projects/Flat hunt/Flat 3 (second).md' |
+| runner/test/ask-answer-loop.test.ts:459 | an answer applies at once (TL-P4-08 addendum 8) a no closes the question with no run | AssertionError: expected [ 'q-merge-flat-3' ] to deeply equal [] |
+| runner/test/ask-answer-loop.test.ts:500 | an answer applies at once (TL-P4-08 addendum 8) a yes to a thing asked about starts a run that takes only its pile, with the answer shown | AssertionError: expected [ …(7) ] to include 'Projects/Flat hunt/Kitchen, Wrenfield…' |
+| runner/test/ask-answer-loop.test.ts:520 | an answer applies at once (TL-P4-08 addendum 8) a yes to Write it writes the update in a scoped run | AssertionError: expected [ Array(1) ] to deeply equal [ 'Two applications open.', …(1) ] |
+| runner/test/ask-answer-loop.test.ts:548 | an answer applies at once (TL-P4-08 addendum 8) a person edit after the question stops Write it | AssertionError: expected [ { id: 'q-state-f13', …(6) } ] to deeply equal [ ObjectContaining{…} ] |
+| runner/test/ask-answer-loop.test.ts:566 | an answer applies at once (TL-P4-08 addendum 8) undo of Write it restores the person's section | AssertionError: expected undefined to be defined |
+| runner/test/ask-answer-loop.test.ts:590 | an answer applies at once (TL-P4-08 addendum 8) a yes to write it applies the shown text with no model call | AssertionError: expected undefined to deeply equal [ 'Two applications open.', …(1) ] |
+| runner/test/ask-answer-loop.test.ts:623 | an answer applies at once (TL-P4-08 addendum 8) write it re-asks when the section changed since it was shown | AssertionError: expected undefined to be 'now' // Object.is equality |
+| runner/test/ask-answer-loop.test.ts:643 | an answer applies at once (TL-P4-08 addendum 8) a write it yes whose note is gone writes one answered row | AssertionError: expected undefined to be 'now' // Object.is equality |
+| runner/test/ask-answer-loop.test.ts:672 | an answer applies at once (TL-P4-08 addendum 8) write it re-asks when the note changed elsewhere since it was shown | AssertionError: expected undefined to be 'now' // Object.is equality |
+| runner/test/ask-answer-loop.test.ts:697 | an answer applies at once (TL-P4-08 addendum 8) a clash at write time leads to the re-ask with the new sentence and no extra press | AssertionError: expected undefined to be 'now' // Object.is equality |
+| runner/test/ask-answer-loop.test.ts:743 | an answer applies at once (TL-P4-08 addendum 8) only a clash keeps an answer for a re-ask | AssertionError: expected undefined to be 'now' // Object.is equality |
+| runner/test/ask-answer-loop.test.ts:772 | an answer applies at once (TL-P4-08 addendum 8) the same non-clash refusal never starts more runs than the cap, then shows the not-written row | AssertionError: expected undefined to be 'now' // Object.is equality |
+| runner/test/ask-answer-loop.test.ts:822 | an answer applies at once (TL-P4-08 addendum 8) a write it refused for good writes one answered row on Home and on the note | AssertionError: expected [ 'q-state-f13' ] to deeply equal [] |
+| runner/test/ask-answer-loop.test.ts:843 | an answer applies at once (TL-P4-08 addendum 8) a write it with nothing to write writes one answered row | AssertionError: expected undefined to be 'now' // Object.is equality |
+| runner/test/ask-answer-loop.test.ts:96 | an answer applies at once (TL-P4-08 addendum 8) a lone no to write it closes the question with no model call | AssertionError: expected 409 to be 200 // Object.is equality |
+| runner/test/ask-answer-loop.test.ts:888 | an answer applies at once (TL-P4-08 addendum 8) a yes to write it beside a pile asks the model | AssertionError: expected 4 to be 3 // Object.is equality |
+| runner/test/ask-answer-loop.test.ts:899 | an answer applies at once (TL-P4-08 addendum 8) of two answers to one question, the later one counts | AssertionError: expected [ 'q-merge-flat-3' ] to deeply equal [] |
+| runner/test/ask-one-per-thing.test.ts:46 | one open question per thing (TL-P4-11 addendum) two differently worded asks about one thing give one question | AssertionError: expected [] to have a length of 1 but got +0 |
+| runner/test/ask-one-per-thing.test.ts:56 | one open question per thing (TL-P4-11 addendum) a thing that leaves the inbox closes its question | AssertionError: expected [] to have a length of 1 but got +0 |
+| runner/test/ask-one-per-thing.test.ts:67 | one open question per thing (TL-P4-11 addendum) an answer whose subject left is settled | AssertionError: expected [] to have a length of 1 but got +0 |
+| runner/test/ask-one-per-thing.test.ts:82 | one open question per thing (TL-P4-11 addendum) a re-upload of the same thing adds no question | AssertionError: expected [] to have a length of 1 but got +0 |
+| runner/test/ask-one-per-thing.test.ts:96 | one open question per thing (TL-P4-11 addendum) an instructions run keeps an open thing question | AssertionError: expected [] to have a length of 1 but got +0 |
+| runner/test/ask-one-per-thing.test.ts:111 | one open question per thing (TL-P4-11 addendum) a pile ask then a thing ask leave one question | AssertionError: expected [] to have a length of 1 but got +0 |
+| runner/test/ask-only-lines.test.ts:36 | a run that only asks keeps the Timeline lines the model added with no cites | AssertionError: expected '---\nsummary: Looking for a flat near…' to contain 'Viewing moved to Saturday.' |
+| runner/test/b1-index.test.ts:751 | B1c fix 1: 4 bootstrap plans with the in-memory index | AssertionError: positive control: real main called the planning provider: expected [ [ …(16) ], [ …(16) ] ] to have a length of 1 but got 2 |
+| runner/test/b1-index.test.ts:751 | B1c fix 1: 4 missing-index plans with the in-memory index | AssertionError: positive control: real main called the planning provider: expected [ [ …(17) ], [ …(17) ] ] to have a length of 1 but got 2 |
+| runner/test/b1-index.test.ts:952 | B1c fix 2: warm instructions planning preserves calls without Inbox or declaration reads for the index | AssertionError: expected "planningIndex" to be called once, but got 0 times |
+| runner/test/b1-index.test.ts:952 | B1c fix 2: warm all planning preserves calls without Inbox or declaration reads for the index | AssertionError: expected "planningIndex" to be called once, but got 0 times |
+| runner/test/b1-index.test.ts:1029 | B1c fix 4: a warm run with changed notes counted through maintain equals the pre-addendum-9 count | AssertionError: instructions/1: provider skips this note; maintain reads its one Range without metadata: expected [ { method: 'GET', …(4) } ] to deeply equal [ { method: 'GET', …(4) } ] |
+| runner/test/b1-planning.test.ts:107 | b1-cut-index-no-new-destination | AssertionError: exhausted sources stay visible as waiting: expected undefined to be 'waiting' // Object.is equality |
+| runner/test/b1-planning.test.ts:138 | b1-five-per-source | AssertionError: exhausted sources stay visible as waiting: expected undefined to be 'waiting' // Object.is equality |
+| runner/test/b1-planning.test.ts:167 | b1-pinned-and-script-notes-count-within-five | AssertionError: exhausted sources stay visible as waiting: expected undefined to be 'waiting' // Object.is equality |
+| runner/test/b1-planning.test.ts:183 | b1-selection-closed-ids | AssertionError: exhausted sources stay visible as waiting: expected undefined to be 'waiting' // Object.is equality |
+| runner/test/b1-planning.test.ts:260 | b1-target-injection | AssertionError: exhausted sources stay visible as waiting: expected undefined to be 'waiting' // Object.is equality |
+| runner/test/b1-planning.test.ts:327 | b1-question-candidate-binding | AssertionError: exhausted sources stay visible as waiting: expected undefined to be 'waiting' // Object.is equality |
+| runner/test/b1-planning.test.ts:382 | b1-shared-ledger | AssertionError: exhausted sources stay visible as waiting: expected undefined to be 'waiting' // Object.is equality |
+| runner/test/b1-planning.test.ts:409 | b1-refresh-cache-hot-order | AssertionError: expected '# Hot\n_Updated: 2026-10-07_\n## Open…' to contain 'made-up-op' |
+| runner/test/b1-planning.test.ts:498 | b1-expansion-is-not-a-read-picked-members-count-within-five | AssertionError: showing a member list does not read the unpicked map body: expected [ { …(5) } ] to deeply equal [] |
+| runner/test/b1-planning.test.ts:523 | b1-new-subfolder-visible-parent-name-and-near-duplicate | AssertionError: exhausted sources stay visible as waiting: expected undefined to be 'waiting' // Object.is equality |
+| runner/test/b1-planning.test.ts:537 | b1-one-new-subfolder-per-item | AssertionError: exhausted sources stay visible as waiting: expected undefined to be 'waiting' // Object.is equality |
+| runner/test/b1-planning.test.ts:552 | b1-one-retry-per-step-four-calls-exhaustion-leaves-items-for-next-run | AssertionError: exhausted sources stay visible as waiting: expected undefined to be 'waiting' // Object.is equality |
+| runner/test/b1-planning.test.ts:599 | b1-200-operations-exhaustion-leaves-items-for-next-run | AssertionError: exhausted sources stay visible as waiting: expected undefined to be 'waiting' // Object.is equality |
+| runner/test/b1a-contract.test.ts:634 | B1a contract: round 3 1: vanished indexed notes drop without failing and ordinary edits refresh | AssertionError: not-found read: state commits the drained feed cursor: expected '19' to be '18' // Object.is equality |
+| runner/test/b1a-contract.test.ts:703 | B1a contract: round 3 2: unrelated account changes drain once and the next run has two discovery reads | AssertionError: the next no-change run makes exactly the two discovery reads: expected [ Array(1) ] to deeply equal [ [ 'GET', …(2) ], [ 'GET', …(2) ] ] |
+| runner/test/b1a-contract.test.ts:808 | B1a contract: round 4 1: a folder binned before planning drops every indexed descendant | AssertionError: live control: main drains the real feed once: expected 2 to be 1 // Object.is equality |
+| runner/test/b1a-contract.test.ts:808 | B1a contract: round 4 2: a folder moved outside drops its indexed subtree and commits the cursor | AssertionError: live control: main drains the real feed once: expected 2 to be 1 // Object.is equality |
+| runner/test/b1a-contract.test.ts:808 | B1a contract: round 4 3: a renamed folder updates descendant paths and index order without media reads | AssertionError: live control: main drains the real feed once: expected 2 to be 1 // Object.is equality |
+| runner/test/b1a-contract.test.ts:808 | B1a contract: round 4 4: an inside folder move updates recursive paths and regroups without media reads | AssertionError: live control: main drains the real feed once: expected 2 to be 1 // Object.is equality |
+| runner/test/b23-hot-context.test.ts:330 | B3b hot: a Home answer removes only its settled Open thread | Error: between: expected one question from the previous press, found 0 |
+| runner/test/c04-incorporation.test.ts:123 | what the model is shown (P4-3) the model context carries bounded extracted text for each admitted thing | AssertionError: expected [] to deeply equal [ 'Areas/Garden/Garden.md' ] |
+| runner/test/c04-incorporation.test.ts:209 | the C04 slice through the Claude provider (P4-3) the C04 corpus cases score green with scripted proposals | AssertionError: expected { id: 'bench-2-text-pdf', …(2) } to deeply equal { id: 'bench-2-text-pdf', …(2) } |
+| runner/test/c04-incorporation.test.ts:231 | the C04 slice through the Claude provider (P4-3) a recorded Claude reply on a C04 case writes a note with its content | AssertionError: expected { pass: false, unmet: [ …(4) ] } to deeply equal { pass: true, unmet: [] } |
+| runner/test/c04-incorporation.test.ts:314 | the C04 slice, review round (P4-3) a model cite links the note the run actually made | BowerError: These items will be handled on the next run. |
+| runner/test/c04-incorporation.test.ts:359 | the C04 slice, review round (P4-3) a note body or line that links outside what the model was shown is refused | BowerError: These items will be handled on the next run. |
+| runner/test/c04-prompt-fixes.test.ts:62 | c04 prompt fixes (TL-P4-08 addendum 5) a number not found in its sources is refused and retried once | AssertionError: expected 'Select context first. Return only {"i…' to match /Your reply was refused: .*"30".*Reply…/ |
+| runner/test/c04-prompt-fixes.test.ts:98 | c04 prompt fixes (TL-P4-08 addendum 5) a raw file name is replaced by a plain name | AssertionError: expected 'Select context first. Return only {"i…' to match /Your reply was refused: .*name.*Reply…/ |
+| runner/test/c05-bounded-reads.test.ts:278 | C05 bounded reads: golden: 50 archived requests and 25 kept runs cost no historical media | AssertionError: expected undefined to deeply equal [ ObjectContaining{…} ] |
+| runner/test/c05-bounded-reads.test.ts:148 | C05 bounded reads: pending: a clash moves by run id and retries only its bound evidence | AssertionError: production records must form a verified run: expected 'new' to be 'run' // Object.is equality |
+| runner/test/c05-bounded-reads.test.ts:498 | C05 bounded reads: fix 2 control: a waiting retry whose pending relocation lands completes once | AssertionError: expected +0 to be 1 // Object.is equality |
+| runner/test/c05-bounded-reads.test.ts:498 | C05 bounded reads: fix 2: a waiting retry whose pending relocation failed completes once | AssertionError: expected +0 to be 1 // Object.is equality |
+| runner/test/c05-bounded-reads.test.ts:498 | C05 bounded reads: fix 2: a waiting retry interrupted after its pointer and before its append appends once | AssertionError: expected +0 to be 1 // Object.is equality |
+| runner/test/c05-bounded-reads.test.ts:401 | C05 bounded reads: fix 1 control: a waiting retry whose archive lands completes once | AssertionError: expected +0 to be 1 // Object.is equality |
+| runner/test/c05-bounded-reads.test.ts:401 | C05 bounded reads: fix 1: a waiting retry whose archive move failed completes once | AssertionError: expected +0 to be 1 // Object.is equality |
+| runner/test/c05-bounded-reads.test.ts:148 | C05 bounded reads: horizon: past 20 runs uses listing age and TOO_OLD_WHY without a chain walk | AssertionError: production records must form a verified run: expected 'new' to be 'run' // Object.is equality |
+| runner/test/c05-incorporation.test.ts:74 | the C05 slice through the Claude provider the C05 corpus cases score green with scripted proposals | AssertionError: expected { …(11) } to deeply equal { …(11) } |
+| runner/test/c05-incorporation.test.ts:90 | the C05 slice through the Claude provider every Timeline line a run writes has its own report row | AssertionError: expected '---\nsummary: Looking for a flat near…' to contain 'The Ferrowick offer is fully remote, …' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: title grammar case and punctuation shows the named note before hubs | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: title grammar the article shows the named note before hubs | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: title grammar my article shows the named note before hubs | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: title grammar Unicode NFC shows the named note before hubs | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: longest whole title wins and source-only or partial mentions grant nothing | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: row 6 files the source and lists 2 same-title notes by id and folder without asking | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: row 6 files the source and lists 3 same-title notes by id and folder without asking | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: row 7 files the source but four named notes produce one unlinked row and zero updates | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: consent refuses unrelated request id through main beside a legitimate append | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: consent refuses unrelated target id through main beside a legitimate append | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: consent refuses citation not filed in this run through main beside a legitimate append | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: row 5 missing Timeline is byte-identical, linked in leftAsWritten and never counted updated | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: row 8 unparseable Timeline is byte-identical, linked in leftAsWritten and never counted updated | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: corpus first append, protected ranges, state question and later non-adoption score per run | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: state answer true changes only the shown bullet or writes nothing and is never re-asked | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: state answer false changes only the shown bullet or writes nothing and is never re-asked | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: state changed before Write it re-asks and preserves the new personal bullet | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: append clash retries on the next main call with the fresh personal text and original citation | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: landed append with lost answer and failed read-back resumes exactly once | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: fix 1 finding 1: overflow blocks owned and personal note writes | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: fix 1 finding 2: a conflicted append retries its filed source within twenty retained runs | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: fix 1 finding 3: article-equivalent titles stay ambiguous in context and writes | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: fix 1 finding 4: a completed replay cannot consume the new request for the same note | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: fix 1 finding 5: an already-present bound append completes the request before replay | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: fix 1 finding 8: an unrelated filing failure preserves the filed source refusal row | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: round 3 2: only the oldest unfinished request settles for one note | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: round 3 1: ambiguity settles and reports without a model line | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: round 3 1: overflow settles and reports without a model line | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: round 3 1: missing Timeline settles and reports without a model line | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: round 3 1: unreadable Timeline settles and reports without a model line | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: round 3 3: overflow refuses its source on an unnamed owned hub | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: round 3 3: ambiguity refuses its source on an unnamed owned hub | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: round 3 5: invalid bullet count state proposal leaves the valid append independent | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: round 3 5: plain note state proposal leaves the valid append independent | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: round 3 6: retry cites the bound source id after its rename | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: round 3 6: satisfaction follows final citation naming on a filing collision | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: round 4 1: settlement survives recovery and retention | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: round 4 2: pending retries keep target and source ids | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: round 4 3: only settlement archives scripted requests | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: round 5 1: archived completion uses the record id inside differently named bytes | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: round 5 2: a retained completion never resolves a renamed target by title again | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: round 5 3: a request past retention is left as written and archived without an append | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: round 5 4: one line and one nothing-found row settle two named targets | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 person notes: round 5 5: only a clashed target retries on bound ids before archive | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 timeline list C05 timeline list: 1: dated-colon list with no offered line settles as nothing found | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 timeline list C05 timeline list: 2: plain list with front matter appends once, updates, archives and completes | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 timeline list C05 timeline list: 2: plain list without front matter appends once, updates, archives and completes | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 timeline list C05 timeline list: 3: prose stays unreadable even with a sourced line offered | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 timeline list C05 timeline list: 4: appendable person and Bower-owned notes remain positive controls | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 timeline list C05 timeline list: 5: exact bytes preserve CRLF and Unicode byte offsets through main and note-edit | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 timeline list C05 timeline list: 5: exact bytes preserve star marker through main and note-edit | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 timeline list C05 timeline list: 5: exact bytes preserve whole nested subtree at top level through main and note-edit | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 timeline list C05 timeline list: 5: exact bytes preserve last top-level star in mixed markers through main and note-edit | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 timeline list C05 timeline list: 5: exact bytes preserve last top-level dash in mixed markers through main and note-edit | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 timeline list C05 timeline list: 5: exact bytes preserve trailing blanks with final newline through main and note-edit | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 timeline list C05 timeline list: 5: exact bytes preserve no final newline through main and note-edit | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 timeline list C05 timeline list: 5: exact bytes preserve trailing blanks without final newline through main and note-edit | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 timeline list C05 timeline list: 5: exact bytes preserve following heading stays outside the list through main and note-edit | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 timeline list C05 timeline list: 5: exact bytes preserve plain CRLF star subtree before a following heading through main and note-edit | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/c05-person-notes.test.ts:67 | C05 person notes through runner main C05 timeline list C05 timeline list: 5: preseeded Bower star line completes once and replay keeps exact bytes | AssertionError: expected '---\nby: bower\nsummary: Alex\'s plot…' to contain ' · The replacement water butt has arr…' |
+| runner/test/claude-provider.test.ts:222 | the Claude provider a new Area with no cited rule or note is refused and retried once | AssertionError: expected 'You plan one Bower tidy-up. You have …' to contain 'Areas/Community garden' |
+| runner/test/claude-provider.test.ts:156 | the Claude provider a responsibility does not open a new Project | AssertionError: expected undefined to be defined |
+| runner/test/claude-provider.test.ts:297 | the Claude provider the retry runs the model in a folder that still exists | AssertionError: expected [ true, true, true ] to deeply equal [ true, true ] |
+| runner/test/claude-provider.test.ts:328 | the Claude provider a new subfolder of an existing Area is not reported as a new area | BowerError: That isn't in your Bower folder any more. |
+| runner/test/claude-provider.test.ts:348 | the Claude provider a thing with text and no note or citing line is refused and retried once | AssertionError: expected 'You plan one Bower tidy-up. You have …' to match /no note/ |
+| runner/test/claude-provider.test.ts:405 | the Claude provider a second refusal ends the run honestly | AssertionError: expected [ 'reading', 'writing', 'done' ] to deeply equal [ Array(4) ] |
+| runner/test/claude-provider.test.ts:463 | the Claude provider a malformed or out-of-schema Claude reply fails truthfully and writes nothing | AssertionError: prose instead of JSON: expected [ 'reading', 'writing', 'done' ] to deeply equal [ 'reading', 'writing', 'failed' ] |
+| runner/test/claude-provider.test.ts:585 | the Claude provider contract (TL-P4-01 P4-2) a Claude reply that targets a thing not admitted is refused and writes nothing | AssertionError: a manifest that bins Resources: expected [ 'reading', 'writing', 'done' ] to deeply equal [ 'reading', 'writing', 'failed' ] |
+| runner/test/claude-provider.test.ts:585 | the Claude provider contract (TL-P4-01 P4-2) the runner computes ids and digests, never the model | AssertionError: a reply with an operation id: expected [ 'reading', 'writing', 'done' ] to deeply equal [ 'reading', 'writing', 'failed' ] |
+| runner/test/corpus-driver.test.ts:30 | a case's between step runs between two runs | AssertionError: expected 'Select context first. Return only {"i…' to contain 'Alex wants an amber kitchen.' |
+| runner/test/corpus-driver.test.ts:92 | multi-press corpus answers a pair question through the answer path between presses | Error: between: expected one question from the previous press, found 0 |
+| runner/test/corpus-driver.test.ts:121 | multi-press corpus keeps both notes and closes the question after Keep mine | Error: between: expected one question from the previous press, found 0 |
+| runner/test/corpus-driver.test.ts:140 | multi-press corpus checks the first press independently of the final report | Error: between: expected one question from the previous press, found 0 |
+| runner/test/corpus.test.ts:15 | the capability corpus the corpus scorer passes on the scripted provider outputs | AssertionError: expected { Object (id, pass, ...) } to deeply equal { Object (id, pass, ...) } |
+| runner/test/duplicate-by-hash.test.ts:115 | a thing already saved (duplicate-by-hash) a thing whose content is already filed goes to the Bin as already saved | AssertionError: expected [ Array(2) ] to deeply equal [ 'Payslip_Aug.pdf' ] |
+| runner/test/duplicate-by-hash.test.ts:84 | a thing already saved (duplicate-by-hash) undo brings an already-saved thing back to the inbox | TypeError: Cannot read properties of null (reading 'run') |
+| runner/test/duplicate-by-hash.test.ts:159 | a thing already saved (duplicate-by-hash) a copy inside the same pile keeps one and bins the other as already saved | AssertionError: expected [ 'Offer_letter_final(2).pdf', …(1) ] to have a length of 1 but got 2 |
+| runner/test/duplicate-by-hash.test.ts:174 | a thing already saved (duplicate-by-hash) an empty file is never taken for one already saved | AssertionError: expected [ 'empty.txt', 'empty.txt' ] to deeply equal [ 'empty.txt' ] |
+| runner/test/duplicate-by-hash.test.ts:186 | a thing already saved (duplicate-by-hash) a saved link with the same address as a filed one is filed as usual | AssertionError: expected [ 'listing-88213.example.url', …(1) ] to deeply equal [ 'listing-88213.example.url' ] |
+| runner/test/duplicate-by-hash.test.ts:201 | a thing already saved (duplicate-by-hash) a filed copy the person already binned does not count | AssertionError: expected [ 'Offer_letter_final(2).pdf', …(1) ] to deeply equal [ 'Offer_letter_final(2).pdf' ] |
+| runner/test/duplicate-by-hash.test.ts:84 | a thing already saved (duplicate-by-hash) a binned duplicate's open question closes | TypeError: Cannot read properties of null (reading 'run') |
+| runner/test/duplicate-by-hash.test.ts:84 | a thing already saved (duplicate-by-hash) a refused Bin keeps its question open | TypeError: Cannot read properties of null (reading 'run') |
+| runner/test/duplicate-by-hash.test.ts:84 | a thing already saved (duplicate-by-hash) a copy whose twin left during the run is not binned | TypeError: Cannot read properties of null (reading 'run') |
+| runner/test/duplicate-by-hash.test.ts:84 | a thing already saved (duplicate-by-hash) a copy changed during the run is not binned | TypeError: Cannot read properties of null (reading 'run') |
+| runner/test/duplicate-by-hash.test.ts:84 | a thing already saved (duplicate-by-hash) pile words with only a saved copy are kept | TypeError: Cannot read properties of null (reading 'run') |
+| runner/test/keep-one-note.test.ts:53 | keep one note keep one note carries the facts and bins the other | AssertionError: expected [ …(9) ] to not include 'Projects/Flat hunt/Flat 3 (second).md' |
+| runner/test/keep-one-note.test.ts:82 | keep one note undo of keep one note restores both notes and links | AssertionError: expected undefined to be true // Object.is equality |
+| runner/test/keep-one-note.test.ts:127 | keep one note the other note changed after the read is not binned | AssertionError: expected '---\nsummary: The same flat from a se…' to contain '- 2026-10-07 · Alex: the landlord acc…' |
+| runner/test/keep-one-note.test.ts:159 | keep one note keep-one says what happened when the other note moved or was binned | AssertionError: expected undefined to be '---\nsummary: The same flat from a se…' // Object.is equality |
+| runner/test/keep-one-note.test.ts:178 | keep one note a line that only starts like a kept line is carried | AssertionError: expected true to be false // Object.is equality |
+| runner/test/model-input-fingerprint.test.ts:81 | model input fingerprint the model input on the C04 fixture equals its golden copy | AssertionError: expected 'Select context first. Return only {"i…' to be 'You plan one Bower tidy-up. You have …' // Object.is equality |
+| runner/test/model-input-fingerprint.test.ts:93 | model input fingerprint the raw model input on the C04 fixture equals its golden copy | AssertionError: expected 'Select context first. Return only {"i…' to be 'You plan one Bower tidy-up. You have …' // Object.is equality |
+| runner/test/model-input-fingerprint.test.ts:113 | model input fingerprint the timing line carries the model input fingerprint | AssertionError: expected 'timing: end=done total=4 start=0 toke…' to contain 'input=e9cb58a5faf6' |
+| runner/test/model-input-fingerprint.test.ts:152 | model input fingerprint two runs of the same case on fresh ids give the same input fingerprint | AssertionError: expected '' to match /^[0-9a-f]{12}$/ |
+| runner/test/model-input-fingerprint.test.ts:174 | model input fingerprint the same case with other ids has the same fingerprint | AssertionError: expected '' to match /^[0-9a-f]{12}$/ |
+| runner/test/model-input-fingerprint.test.ts:268 | model input fingerprint two fresh fake folders on the same case give the same input fingerprint through main | AssertionError: expected 'Select context first. Return only {"i…' to be 'Select context first. Return only {"i…' // Object.is equality |
+| runner/test/model-input-fingerprint.test.ts:290 | model input fingerprint a change in one input section moves only that section hash | AssertionError: expected 'timing: end=done total=3 start=0 toke…' to match /sections=prompt:[0-9a-f]{6},tree:[0-9…/ |
+| runner/test/pair-ask.test.ts:54 | two notes for one thing (keep-one-not-asked) two notes for one thing are asked as a pair | AssertionError: expected [] to deeply equal [ ObjectContaining{…} ] |
+| runner/test/pair-ask.test.ts:71 | two notes for one thing (keep-one-not-asked) a words-only pile can become a Timeline line | AssertionError: expected [ Array(1) ] to include '- 2026-10-07 · Second viewing booked …' |
+| runner/test/pair-ask.test.ts:95 | two notes for one thing (keep-one-not-asked) a words-only pile whose lines are all in its note already is already saved | AssertionError: expected [ Array(1) ] to deeply equal [] |
+| runner/test/pair-ask.test.ts:113 | two notes for one thing (keep-one-not-asked) a yes to an older pair question whose note is in the Bin settles and names it | AssertionError: expected [ { id: 'q-merge-flat-3', …(4) } ] to deeply equal [] |
+| runner/test/per-thing-ask.test.ts:70 | per-thing asks (TL-P4-08 addendum 4) an ask about one thing leaves it in the inbox and files the rest of its pile | AssertionError: expected [ { command: 'claude', …(7) }, …(1) ] to have a length of 1 but got 2 |
+| runner/test/per-thing-ask.test.ts:115 | per-thing asks (TL-P4-08 addendum 4) the reply schema takes its state limits from note-edit | AssertionError: expected { code: +0, calls: 2 } to deeply equal { code: +0, calls: 1 } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a notJson refusal is retried once with its reason | AssertionError: expected { kind: 'notJson', retried: false } to deeply equal { kind: 'notJson', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noText refusal is retried once with its reason | AssertionError: expected { kind: 'noText', retried: false } to deeply equal { kind: 'noText', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a notIntent refusal is retried once with its reason | AssertionError: expected { kind: 'notIntent', retried: false } to deeply equal { kind: 'notIntent', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a thingKeys refusal is retried once with its reason | AssertionError: expected { kind: 'thingKeys', retried: false } to deeply equal { kind: 'thingKeys', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a thingNotAdmitted refusal is retried once with its reason | AssertionError: expected { kind: 'thingNotAdmitted', …(1) } to deeply equal { kind: 'thingNotAdmitted', …(1) } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a thingTwice refusal is retried once with its reason | AssertionError: expected { kind: 'thingTwice', retried: false } to deeply equal { kind: 'thingTwice', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a placeOutside refusal is retried once with its reason | AssertionError: expected { Object (kind, retried) } to deeply equal { kind: 'placeOutside', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a nameChangesKind refusal is retried once with its reason | AssertionError: expected { kind: 'nameChangesKind', …(1) } to deeply equal { kind: 'nameChangesKind', …(1) } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a rawName refusal is retried once with its reason | AssertionError: expected { kind: 'rawName', retried: false } to deeply equal { kind: 'rawName', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a numbers refusal is retried once with its reason | AssertionError: expected { kind: 'numbers', retried: false } to deeply equal { kind: 'numbers', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a newFolder refusal is retried once with its reason | AssertionError: expected { kind: 'newFolder', retried: false } to deeply equal { kind: 'newFolder', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noteForNote refusal is retried once with its reason | AssertionError: expected { kind: 'noteForNote', retried: false } to deeply equal { kind: 'noteForNote', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noteKeys refusal is retried once with its reason | AssertionError: expected { kind: 'noteKeys', retried: false } to deeply equal { kind: 'noteKeys', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noteName refusal is retried once with its reason | AssertionError: expected { kind: 'noteName', retried: false } to deeply equal { kind: 'noteName', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noteSummary refusal is retried once with its reason | AssertionError: expected { kind: 'noteSummary', retried: false } to deeply equal { kind: 'noteSummary', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noteBody refusal is retried once with its reason | AssertionError: expected { kind: 'noteBody', retried: false } to deeply equal { kind: 'noteBody', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noteSections refusal is retried once with its reason | AssertionError: expected { Object (kind, retried) } to deeply equal { kind: 'noteSections', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noteLink refusal is retried once with its reason | AssertionError: expected { kind: 'noteLink', retried: false } to deeply equal { kind: 'noteLink', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noteMdLink refusal is retried once with its reason | AssertionError: expected { kind: 'noteMdLink', retried: false } to deeply equal { kind: 'noteMdLink', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noteWeb refusal is retried once with its reason | AssertionError: expected { kind: 'noteWeb', retried: false } to deeply equal { kind: 'noteWeb', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a pileNotAdmitted refusal is retried once with its reason | AssertionError: expected { kind: 'pileNotAdmitted', …(1) } to deeply equal { kind: 'pileNotAdmitted', …(1) } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a pileTwice refusal is retried once with its reason | AssertionError: expected { kind: 'pileTwice', retried: false } to deeply equal { kind: 'pileTwice', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a tooManyLines refusal is retried once with its reason | AssertionError: expected { Object (kind, retried) } to deeply equal { kind: 'tooManyLines', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a lineKeys refusal is retried once with its reason | AssertionError: expected { kind: 'lineKeys', retried: false } to deeply equal { kind: 'lineKeys', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a lineNote refusal is retried once with its reason | AssertionError: expected { kind: 'lineNote', retried: false } to deeply equal { kind: 'lineNote', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a lineText refusal is retried once with its reason | AssertionError: expected { kind: 'lineText', retried: false } to deeply equal { kind: 'lineText', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a lineCites refusal is retried once with its reason | AssertionError: expected { kind: 'lineCites', retried: false } to deeply equal { kind: 'lineCites', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a lineUncited refusal is retried once with its reason | AssertionError: expected { kind: 'lineUncited', retried: false } to deeply equal { kind: 'lineUncited', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a noNote refusal is retried once with its reason | AssertionError: expected { kind: 'noNote', retried: false } to deeply equal { kind: 'noNote', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a stateKeys refusal is retried once with its reason | AssertionError: expected { kind: 'stateKeys', retried: false } to deeply equal { kind: 'stateKeys', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a stateNote refusal is retried once with its reason | AssertionError: expected { kind: 'stateNote', retried: false } to deeply equal { kind: 'stateNote', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a stateTwice refusal is retried once with its reason | AssertionError: expected { kind: 'stateTwice', retried: false } to deeply equal { kind: 'stateTwice', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a stateText refusal is retried once with its reason | AssertionError: expected { kind: 'stateText', retried: false } to deeply equal { kind: 'stateText', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a stateCites refusal is retried once with its reason | AssertionError: expected { kind: 'stateCites', retried: false } to deeply equal { kind: 'stateCites', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a askKeys refusal is retried once with its reason | AssertionError: expected { kind: 'askKeys', retried: false } to deeply equal { kind: 'askKeys', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a askNotAdmitted refusal is retried once with its reason | AssertionError: expected { kind: 'askNotAdmitted', …(1) } to deeply equal { kind: 'askNotAdmitted', …(1) } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a askNotes refusal is retried once with its reason | AssertionError: expected { kind: 'askNotes', retried: false } to deeply equal { kind: 'askNotes', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a askTwice refusal is retried once with its reason | AssertionError: expected { kind: 'askTwice', retried: false } to deeply equal { kind: 'askTwice', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a askAlsoFiles refusal is retried once with its reason | AssertionError: expected { Object (kind, retried) } to deeply equal { kind: 'askAlsoFiles', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a askText refusal is retried once with its reason | AssertionError: expected { kind: 'askText', retried: false } to deeply equal { kind: 'askText', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a keepKeys refusal is retried once with its reason | AssertionError: expected { kind: 'keepKeys', retried: false } to deeply equal { kind: 'keepKeys', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a keepNote refusal is retried once with its reason | AssertionError: expected { kind: 'keepNote', retried: false } to deeply equal { kind: 'keepNote', retried: true } |
+| runner/test/per-thing-ask.test.ts:201 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a keepNotAsked refusal is retried once with its reason | AssertionError: expected { Object (kind, retried) } to deeply equal { kind: 'keepNotAsked', retried: true } |
+| runner/test/per-thing-ask.test.ts:217 | per-thing asks (TL-P4-08 addendum 4) every validation refusal is retried once with its reason a structured output beside a bad result is refused and asked again | AssertionError: expected 'Select context first. Return only {"i…' to contain 'Your reply was refused: a result that…' |
+| runner/test/q1-continuation.test.ts:267 | Q1a stored answers through production entry points Q1a q1-clear-work-with-waiting-item: an option asking leaves its item and files clear work | AssertionError: expected 'Inbox/Room papers/Clear.md' to be 'Areas/Home/Clear.md' // Object.is equality |
+| runner/test/q1-continuation.test.ts:303 | Q1a stored answers through production entry points Q1a q1-options-exact-action: consent resolves stored folder id despite duplicate labels and rename | AssertionError: expected [ 'f14' ] to deeply equal [ 'f8' ] |
+| runner/test/q1-continuation.test.ts:345 | Q1a stored answers through production entry points Q1a q1-options-exact-action: two to four script candidates accepted and fabricated or fifth refused | AssertionError: question stores script-bound options: expected [] to have a length of 2 but got +0 |
+| runner/test/q1-continuation.test.ts:400 | Q1a stored answers through production entry points Q1a q1-text-person-provenance: later answer wins within one asking and older asking cannot answer a new one | AssertionError: expected [ …(2) ] to deeply equal [ Array(1) ] |
+| runner/test/q1-continuation.test.ts:451 | Q1a stored answers through production entry points Q1a q1-text-person-provenance: person words stay subject data and document instructions grant no consent | AssertionError: expected [ { …(3) }, { …(3) } ] to deeply equal [ ObjectContaining{…} ] |
+| runner/test/q1-continuation.test.ts:484 | Q1a stored answers through production entry points Q1a q1-continuation-members-and-journal: today takes new same-pile items and all journal but no new pile | AssertionError: expected [] to deeply equal [ 'f16', 'f18' ] |
+| runner/test/q1-continuation.test.ts:517 | Q1a stored answers through production entry points Q1a q1-waits-one-run-and-replay: two typed answers wait batch once and replay does not dispatch | AssertionError: expected undefined to deeply equal [] |
+| runner/test/q1-continuation.test.ts:544 | Q1a stored answers through production entry points Q1a q1-two-rounds-no-third: thing exhausts after two saved askings and words reset | AssertionError: expected undefined to be defined |
+| runner/test/q1-continuation.test.ts:544 | Q1a stored answers through production entry points Q1a q1-two-rounds-no-third: pile exhausts after two saved askings and words reset | AssertionError: expected undefined to be defined |
+| runner/test/q1-continuation.test.ts:621 | Q1a stored answers through production entry points Q1a q1-continuation-budget-meter: typed waiting and replay do zero admission reads with ordinary model usage | AssertionError: expected [ …(2) ] to deeply equal [ Array(1) ] |
+| runner/test/q1-continuation.test.ts:655 | Q1a stored answers through production entry points Q1a q1-legacy-question-answer-status: old stored records read and reports never leak option actions | AssertionError: options produce a durable readable manifest: expected null not to be null |
+| runner/test/q1-continuation.test.ts:1557 | Q1a stored answers through production entry points Q1a q1-pile-projection: exhausted persists on reload waiting wins and word edit clears both | AssertionError: expected undefined to be defined |
+| runner/test/q1-continuation.test.ts:822 | Q1a stored answers through production entry points Q1a q1-two-rounds-no-third: retries failed saves and dispatch replay count only durable askings | AssertionError: expected +0 to be 1 // Object.is equality |
+| runner/test/q1-continuation.test.ts:1557 | Q1a stored answers through production entry points Q1a q1-two-rounds-no-third: exhausted identity follows reuploaded content and leaving ends it | AssertionError: expected undefined to be defined |
+| runner/test/q1-continuation.test.ts:875 | Q1a stored answers through production entry points Q1a q1-legacy-question-answer-status: stored choices keep content and name-place fences | AssertionError: expected undefined to match object { name: 'Clear.md', …(2) } |
+| runner/test/q1-continuation.test.ts:932 | Q1a fix round 1 through production entry points Q1a fix 1.1: second-answer placement precedes exhaustion after an unresolved second answer | AssertionError: the production runner writes asking one: expected undefined to be defined |
+| runner/test/q1-continuation.test.ts:932 | Q1a fix round 1 through production entry points Q1a fix 1.2: instructions scope preserves inbox counters and exhausted subjects without a third asking | AssertionError: the production runner writes asking one: expected undefined to be defined |
+| runner/test/q1-continuation.test.ts:1557 | Q1a fix round 1 through production entry points Q1a fix 1.3: pile and member share two rounds and only changed words permit another asking | AssertionError: expected undefined to be defined |
+| runner/test/q1-continuation.test.ts:1557 | Q1a fix round 1 through production entry points Q1a fix 1.4: a same-bytes reupload retains hash history through the planner and writes no asking | AssertionError: expected undefined to be defined |
+| runner/test/q1-continuation.test.ts:1122 | Q1a fix round 1 through production entry points Q1a fix 1.5: missing or outside-root stored option folders cannot authorize alternative filing | AssertionError: expected [ 'f14' ] to deeply equal [ 'f8' ] |
+| runner/test/q1-continuation.test.ts:932 | Q1a fix round 1 through production entry points Q1a fix 1.5b: a gone option folder leaves the item waiting and the next run asks again as the next round | AssertionError: the production runner writes asking one: expected undefined to be defined |
+| runner/test/q1-continuation.test.ts:1205 | Q1a fix round 1 through production entry points Q1a fix 1.6: words-only pile consent places its generated note in the chosen stored folder | AssertionError: positive control: a words-only pile generates one note: expected [] to have a length of 1 but got +0 |
+| runner/test/q1-continuation.test.ts:932 | Q1a fix round 3 through production entry points Q1a fix 3.1: unavailable chosen folders force a new asking before next-tidy model placement | AssertionError: the production runner writes asking one: expected undefined to be defined |
+| runner/test/q1-continuation.test.ts:932 | Q1a fix round 3 through production entry points Q1a fix 3.2: mixed member histories cap pile askings and count only the waiting member | AssertionError: the production runner writes asking one: expected undefined to be defined |
+| runner/test/q1-continuation.test.ts:1383 | Q1a fix round 3 through production entry points Q1a fix 3.3: exhausted members stay untouched while existing and later clear siblings file | AssertionError: expected [ 'f14' ] to deeply equal [ 'f7' ] |
+| runner/test/q1-continuation.test.ts:1452 | Q1a fix round 4 through production entry points Q1a fix 4.1: a loose Inbox file whose chosen folder is gone is asked again as the next round | AssertionError: expected undefined to deeply equal ObjectContaining {"subject": "f16"} |
+| runner/test/q1-continuation.test.ts:1452 | Q1a fix round 4 through production entry points Q1a fix 4.2: every member-subject path re-asks once after an unavailable folder: folder member | AssertionError: expected undefined to deeply equal ObjectContaining {"subject": "f16"} |
+| runner/test/q1-continuation.test.ts:1452 | Q1a fix round 4 through production entry points Q1a fix 4.2: every member-subject path re-asks once after an unavailable folder: loose Inbox file | AssertionError: expected undefined to deeply equal ObjectContaining {"subject": "f16"} |
+| runner/test/q1-continuation.test.ts:1452 | Q1a fix round 4 through production entry points Q1a fix 4.2: every member-subject path re-asks once after an unavailable folder: words-only pile | AssertionError: expected undefined to deeply equal ObjectContaining{…} |
+| runner/test/q1c-live.test.ts:147 | Q1c durable publication through main and createApp().request q1-live-snapshot-over-64kib-trims | AssertionError: expected undefined to be defined |
+| runner/test/q1c-live.test.ts:210 | Q1c durable publication through main and createApp().request q1-live-publication-transport-failure-keeps-the-run | AssertionError: expected undefined to be defined |
+| runner/test/q1c-live.test.ts:284 | Q1c durable publication through main and createApp().request q1-live-question-long-note-name-publish… | AssertionError: expected [] to have a length of 1 but got +0 |
+| runner/test/q1c-live.test.ts:284 | Q1c durable publication through main and createApp().request q1-live-question-invalid-shape-publishes | AssertionError: expected [] to have a length of 1 but got +0 |
+| runner/test/q1c-live.test.ts:318 | Q1c durable publication through main and createApp().request Q1c fix 1: eleven askings keep clear work and publish the first ten by askedAt | AssertionError: expected [] to have a length of 1 but got +0 |
+| runner/test/q1c-live.test.ts:358 | Q1c durable publication through main and createApp().request Q1c fix 1: a crash after manifest persistence recovers questions with stored option actions intact | AssertionError: expected +0 to be 1 // Object.is equality |
+| runner/test/q1c-live.test.ts:450 | Q1c durable publication through main and createApp().request Q1c q1-live-question-before-clear-effects-end: durable publication | AssertionError: expected [ Array(2) ] to include 'Resources/Clear.md' |
+| runner/test/q1c-live.test.ts:462 | Q1c durable publication through main and createApp().request Q1c q1-live-question-before-clear-effects-end: same-run recovery republishes without a second model reply | AssertionError: expected [] to have a length of 1 but got +0 |
+| runner/test/second-brain-method.test.ts:85 | the second-brain method (TL-P4-08) an ambiguous thing stays in the inbox with a question and the run goes on | AssertionError: expected { pass: false, unmet: [ …(2) ] } to deeply equal { pass: true, unmet: [] } |
+| runner/test/second-brain-method.test.ts:127 | the second-brain method (TL-P4-08) a later run does not repeat an open question | AssertionError: expected [] to have a length of 1 but got +0 |
+| runner/test/second-brain-method.test.ts:146 | the second-brain method (TL-P4-08) a document that only confirms a known fact updates the note and makes none | AssertionError: expected { pass: false, unmet: [ …(4) ] } to deeply equal { pass: true, unmet: [] } |
+| runner/test/second-brain-method.test.ts:196 | B3b hot: evidence-only method verdict covers hidden unarchived refresh | AssertionError: expected { pass: false, unmet: [ …(4) ] } to deeply equal { pass: true, unmet: [] } |
+| runner/test/state-rewrite.test.ts:85 | a change kind of its own for Current state (C05) a Bower-owned Current state is rewritten and undo restores it | AssertionError: expected [ 'One application open.' ] to deeply equal [ 'One application open.', …(1) ] |
+| runner/test/state-rewrite.test.ts:123 | a change kind of its own for Current state (C05) a Current state the person edited gets a line and a question, never a rewrite | AssertionError: expected undefined to be 'Industrial Designer, Ferrowick' // Object.is equality |
+| runner/test/state-rewrite.test.ts:141 | a change kind of its own for Current state (C05) no fallback line when the run already cites the same thing on that note | AssertionError: expected [] to deeply equal [ Array(1) ] |
+| runner/test/state-rewrite.test.ts:162 | a change kind of its own for Current state (C05) the fallback line names only what the section lacks | AssertionError: expected [] to deeply equal [ Array(1) ] |
+| runner/test/state-rewrite.test.ts:173 | a change kind of its own for Current state (C05) a person-edited section's fallback names none of Bower's last-written lines | AssertionError: expected [] to deeply equal [ Array(1) ] |
+| runner/test/state-rewrite.test.ts:187 | a change kind of its own for Current state (C05) Bower's last state is read from the previous state change, not searched | AssertionError: expected [] to deeply equal [ Array(1) ] |
+| runner/test/state-rewrite.test.ts:200 | a change kind of its own for Current state (C05) with no previous state change to read, every line the section lacks is news | AssertionError: expected [] to deeply equal [ Array(1) ] |
+| runner/test/state-rewrite.test.ts:221 | a change kind of its own for Current state (C05) a run manifest that cannot be read is passed over, and every line the section lacks is news | AssertionError: expected [] to deeply equal [ Array(1) ] |
+| runner/test/state-rewrite.test.ts:67 | a change kind of its own for Current state (C05) after a Bower append the next run only adds a line | TypeError: Cannot read properties of null (reading 'operations') |
+| runner/test/state-rewrite.test.ts:67 | a change kind of its own for Current state (C05) an unmarked Current state is never adopted without a rule | TypeError: Cannot read properties of null (reading 'operations') |
+| runner/test/state-rewrite.test.ts:280 | a change kind of its own for Current state (C05) a yes rule lets Bower adopt the section | AssertionError: expected [ 'One application open.' ] to deeply equal [ 'One application open.', …(1) ] |
+| runner/test/state-rewrite.test.ts:296 | a change kind of its own for Current state (C05) undo restores an empty section empty | AssertionError: expected [] to deeply equal [ 'One application open.', …(1) ] |
+| runner/test/things-normalised.test.ts:85 | things section normalisation two fresh runs of the same case give the same things section hash | Error: No things hash captured from timing |
+| runner/test/things-normalised.test.ts:159 | things section normalisation a multi-thing pile with a link gives the same things section hash on fresh runs | Error: No things hash captured from timing |
+
+### Final boundary
+
+Stopped production changes after both full sweeps finished and the pinned prompt movements were listed.
+The preserved diff is a draft only. No commits: the user forbids git-writing commands.
+No UI, e2e, golden/fixture updates, configured type-row contract extension, or unrelated-home repairs.

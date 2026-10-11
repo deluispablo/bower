@@ -313,7 +313,7 @@ async function snapshot(drive: FakeDrive, root: string): Promise<{ after: Record
 
 /** Bind only exact admitted names to ids; the intent still passes the existing Claude provider's validation. */
 export function replySequence(replies: unknown[]): ClaudeSpawn {
-  return phaseAwareClaude(async (call, turn) => {
+  const execution = async (call: ClaudeCall, turn: number) => {
     const ctx = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { piles: Array<{ things: Array<{ name: string; fileId: string }> }> };
     const ids = new Map(ctx.piles.flatMap((p) => p.things).map((t) => [t.name, t.fileId]));
     const bind = (value: unknown): unknown => {
@@ -328,11 +328,21 @@ export function replySequence(replies: unknown[]): ClaudeSpawn {
     };
     const intent = bind(replies[Math.min(turn, replies.length - 1)]);
     return { code: 0, stderr: '', cut: null, stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: JSON.stringify(intent), usage: { input_tokens: 10, output_tokens: 10 } }) };
-  }, (call) => {
+  };
+  const phased = phaseAwareClaude(execution, (call) => {
     const fixture = (call as ClaudeCall & { fixture?: PlanningFixture }).fixture;
     if (!fixture) throw new Error('A scripted reply needs its seeded fixture.');
     return fixture;
   });
+  const started = new Set<string>();
+  return (call) => {
+    const context = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { admission?: string; selection?: unknown };
+    const key = `${call.cwd}/${context.admission ?? ''}`;
+    // A redispatch test can supply selection itself; an execution-only sequence then begins at execution.
+    if (context.selection !== undefined && !started.has(key)) return execution(call, 0);
+    started.add(key);
+    return phased(call);
+  };
 }
 
 export function caseReplies(id: string): ClaudeSpawn {

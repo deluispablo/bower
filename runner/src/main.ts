@@ -60,10 +60,10 @@ import { providerFor, providerNamed, type ProviderName } from './provider';
 import { runnerReads } from './spine/records';
 import { keepFinishedAtEnd } from './spine/retention';
 import { repairRules } from './rules-repair';
-import { RunTiming } from './timing';
+import { LedgerExhausted, RunTiming } from './timing';
 import { boundHot } from './hot';
 import { VaultIndex } from '../../src/data/vault/vault-index';
-import { planningIndex, withMaintenance, maintenanceEffects } from './index';
+import { refreshPlanning, withMaintenance, maintenanceEffects } from './index';
 
 export { RunnerDrive, type RunnerDriveOptions } from './drive';
 export { RunnerToken, isStaleAttempt, type RunnerTokenOptions, type TokenGrant } from './token';
@@ -173,7 +173,11 @@ async function tidyRun(opts: TidyOptions, timing: RunTiming, status: RunnerStatu
       if (!status.finished) await status.post('failed', { failure: NO_LONGER_ALLOWED }).catch((err: unknown) => console.error(err));
       return { phase: 'failed', why: NO_LONGER_ALLOWED };
     }
-    if (mayNotReport(e) || status.finished) throw e;
+    if (e instanceof LedgerExhausted) {
+      console.log(`${e.count} items left in the inbox for the next run.`);
+      end = { phase: 'done', dispositions: [] };
+    } else if (mayNotReport(e) || status.finished) throw e;
+    else
     end = { phase: 'stopped', why: e instanceof Error ? e.message : String(e), error: e };
   }
   if (end.phase === 'done') {
@@ -417,9 +421,10 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
           const listed = await drive.planReads().listAll(rootId, { readAhead: false });
           const persistedHot = VaultIndex.build(rootId, listed).file(SYSTEM.hot);
           const hot = persistedHot ? boundHot(await drive.planReads().readText(persistedHot.id)) : '';
-          const index = await planningIndex(drive, rootId);
-          const provider = providerFor(name, drive, { rootId, runId, allowWeb, context, index, ...(hot ? { hot } : {}) }, { env, timing, ...(opts.claude ? { spawn: opts.claude } : {}) });
-          return withMaintenance(drive, await provider(admitted));
+          const refreshed = await refreshPlanning(drive, rootId);
+          const index = refreshed.index;
+          const provider = providerFor(name, drive, { rootId, runId, allowWeb, context, index, ...(hot ? { hot } : {}) }, { env, timing, retrieval: refreshed.snapshot, prefixes: async (file, discover) => discover ? drive.readPrefix(file) : drive.keptPrefix(file), ...(opts.claude ? { spawn: opts.claude } : {}) });
+          return withMaintenance(drive, await provider(admitted), undefined, refreshed);
         };
       },
       timing,

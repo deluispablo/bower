@@ -297,7 +297,8 @@ async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: Retrieva
     let text: string | null;
     try {
       // Old state is readable without probing unchanged files. A missing projection already needs each prefix.
-      text = same && !prefix ? await drive.keptPrefix(f) ?? null : await drive.readPrefix(f, prefix);
+      const map = VaultIndex.isHub(path, f.name) && cached?.type === undefined;
+      text = same && !prefix && !map ? await drive.keptPrefix(f) ?? null : await drive.readPrefix(f, prefix);
     } catch (error) {
       // Drive also reports a trashed media read as not-found; other failures still stop the run.
       if (!(error instanceof BowerError) || error.code !== 'not-found') throw error;
@@ -325,26 +326,12 @@ async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: Retrieva
   return snapshot;
 }
 
-/** A cold plan receives the canonical projection in memory, without reserves or effects. */
-export async function planningIndex(drive: RunnerDrive, rootId: string): Promise<string | undefined> {
-  const ix = VaultIndex.build(rootId, await drive.planReads().listAll(rootId, { readAhead: false }));
-  // A warm run keeps B1a's two discovery reads inside maintain, where they have always lived.
-  if (ix.file(SYSTEM.retrieval) && ix.file(SYSTEM.index)) return undefined;
-  // Cold projection work overlaps the provider's existing read-ahead, using the same metadata listing.
-  await drive.planReads().listAll(rootId);
-  const state = await readState(drive, rootId, ix.file(SYSTEM.retrieval));
-  return projectIndex(await snapshotNotes(drive, ix, state, (id) => ix.drop(id), true));
-}
-
-/** Freeze declared inputs and reserved ids in the existing immutable manifest. */
-export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest, declared: readonly DeclaredTarget[] = [hotTarget]): Promise<RunManifest> {
-  const rootId = manifest.scope.rootId;
+/** The index refresh is read-only; maintain declares and persists these same observations later. */
+export async function refreshPlanning(drive: RunnerDrive, rootId: string) {
   let listing = await drive.planReads().listAll(rootId);
   let ix = VaultIndex.build(rootId, listing);
   const old = ix.file(SYSTEM.retrieval);
   const state = await readState(drive, rootId, old);
-  // An empty first run has neither indexed changes nor effects to settle.
-  if (!state && !notesIn(ix).length && !manifest.operations.length && !ix.file(SYSTEM.hot) && !manifest.capture.journal.length) return manifest;
   const feed = state ? await drive.listChanges(state.cursor) : undefined;
   const cursor = feed?.newStartPageToken ?? await drive.getStartPageToken();
   if (!state) {
@@ -383,10 +370,26 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
     const path = pathOfChange(c);
     return path !== undefined && !isHidden(path);
   }).map((c) => c.fileId);
+  const snapshot = await snapshotNotes(drive, ix, state, drop, !state || !ix.file(SYSTEM.index));
+  return { index: projectIndex(snapshot), listing: [...files.values()], ix, old, state, cursor, changes, snapshot, drop };
+}
+
+export async function planningIndex(drive: RunnerDrive, rootId: string): Promise<string | undefined> {
+  return (await refreshPlanning(drive, rootId)).index;
+}
+
+/** Freeze declared inputs and reserved ids in the existing immutable manifest. */
+export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest, declared: readonly DeclaredTarget[] = [hotTarget],
+  prepared?: Awaited<ReturnType<typeof refreshPlanning>>): Promise<RunManifest> {
+  const rootId = manifest.scope.rootId;
+  const refreshed = prepared ?? await refreshPlanning(drive, rootId);
+  let { listing, snapshot } = refreshed;
+  const { ix, old, state, cursor, changes, drop } = refreshed;
+  const files = new Map(listing.map((f) => [f.id, f]));
+  if (!state && !notesIn(ix).length && !manifest.operations.length && !ix.file(SYSTEM.hot) && !manifest.capture.journal.length) return manifest;
   if (state && ix.file(SYSTEM.index) && !changes.length && !manifest.operations.length) {
     return old ? cursorOnly(drive, manifest, old, state, cursor) : manifest;
   }
-  let snapshot = await snapshotNotes(drive, ix, state, drop, !state || !ix.file(SYSTEM.index));
   // Only maintain fetches complete candidate MOCs; prefix ownership alone never grants a write.
   for (const [id, note] of Object.entries(snapshot)) {
     const before = files.get(id);
