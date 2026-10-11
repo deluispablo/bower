@@ -1,9 +1,11 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation, useParams } from 'react-router';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DataProvider } from '@/data/provider';
 import type { Sources } from '@/data/sources';
-import { BowerError, type Pile, type RunState } from '@/data/types';
+import { BowerError, type Pile, type Question, type RunState } from '@/data/types';
+import type { QuestionAnswer } from '@/data/contracts/questions';
+import { answeredNow } from './answer-words';
 import { useUi } from '@/app/ui-store';
 import { TidySheet } from '@/features/tidy/TidySheet';
 import { loadingSources } from '@/testing/loading-sources';
@@ -441,5 +443,217 @@ describe('c02-upload-count-ui Inbox contract', () => {
     expect(screen.getByRole('list', { name: 'In this pile' })).toHaveTextContent(/sending|waiting/i);
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.querySelector('input[type="file"]')).toBeNull();
+  });
+});
+
+// Q1b: source-port fixtures exercise Home's production card and answer loop.
+// Native buttons/labelled fields follow the existing Button/Field and WAI-ARIA APG patterns.
+describe('Q1b Home questions', () => {
+  const at = 1_800_000_000_000;
+  const question = (extra: Partial<Question> = {}): Question => ({
+    id: 'q-ask-paper', subject: 'paper', text: 'Where should these papers go?',
+    yes: 'File them', no: 'Leave them', askedAt: at, ...extra,
+  });
+  const options: [NonNullable<Question['options']>[number], NonNullable<Question['options']>[number]] = [
+    { id: 'folder-home', label: 'Areas / Home' },
+    { id: 'folder-garden', label: 'Projects / Garden' },
+  ];
+  const paper: Pile = { id: 'paper', path: 'Inbox/Papers', text: 'Papers from Alex', createdAt: at,
+    items: [{ id: 'letter', name: 'letter.pdf', kind: 'pdf', origin: 'From this computer' }] };
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(at); useUi.setState({ tidyOpen: false }); });
+  afterEach(() => {
+    cleanup();
+    for (const t of useToasts.getState().list) useToasts.getState().dismiss(t.id);
+    vi.useRealTimers(); vi.restoreAllMocks();
+  });
+  async function settle(): Promise<void> {
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  }
+  async function home(qs: Question[], piles: Pile[] = [], fails = false) {
+    const base = loadingSources();
+    let open = [...qs];
+    const listeners = new Set<() => void>();
+    const answer = vi.fn(async (id: string, _value: QuestionAnswer) => {
+      if (fails) throw new BowerError('offline', 'That answer did not save. Try again.');
+      open = open.filter((q) => q.id !== id);
+      listeners.forEach((cb) => cb());
+    });
+    const start = vi.fn(async () => ({ id: 'answer-run', scope: 'all' as const, phase: 'queued' as const,
+      requestedAt: at, phaseAt: at, seen: false }));
+    const methods: Record<string, unknown> = {
+      questions: async () => open, piles: async () => piles, pilesListed: async () => null,
+      tree: async () => [], changes: async () => [], suggestions: async () => [], uploadNotice: async () => null,
+      answer, subscribe: (cb: () => void) => { listeners.add(cb); return () => listeners.delete(cb); },
+    };
+    const vault = new Proxy(base.vault, { get: (target, key) => typeof key === 'string' && key in methods ? methods[key] : Reflect.get(target, key) });
+    render(<MemoryRouter><DataProvider sources={{ ...base, vault,
+      session: { ...base.session, current: async () => ({ name: 'Alex', email: 'you@example.com' }) },
+      runs: { ...base.runs, current: async () => null, start } }}>
+      <main id="main" tabIndex={-1}><Home /></main>
+    </DataProvider></MemoryRouter>);
+    await settle();
+    // Every red's positive control: Home loaded through the real data hooks.
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent("G'day, Alex");
+    for (const q of qs) expect(screen.getByText(q.text, { exact: true })).toBeVisible();
+    return { answer, start };
+  }
+  function card(text = 'Where should these papers go?'): HTMLElement {
+    const li = screen.getByText(text, { exact: true }).closest('li');
+    if (!li) throw new Error('Question card missing');
+    return li;
+  }
+  async function textMode(): Promise<HTMLElement> {
+    fireEvent.click(within(card()).getByRole('button', { name: 'Something else…' }));
+    await settle();
+    return within(card()).getByRole('textbox', { name: 'In your own words' });
+  }
+
+  it('Q1b A question with options on Home', async () => {
+    await home([question({ options }), question({ id: 'q-state-note', subject: undefined, text: 'Write the update?', yes: 'Write it', no: 'Keep mine', shown: { lines: ['The papers arrived.'], md5: '0'.repeat(32) } }),
+      question({ id: 'q-pair-note.other', subject: undefined, text: 'Keep one note for both?' })]);
+    const state = card('Write the update?');
+    expect(within(state).getByRole('list', { name: "Bower's update" })).toHaveTextContent('The papers arrived.');
+    expect(within(state).getByRole('button', { name: 'Write it' })).toHaveClass('primary');
+    for (const label of [...options.map((o) => o.label), 'Something else…']) {
+      expect(within(card()).getByRole('button', { name: label })).toHaveClass('ghost', 'small');
+    }
+    expect(within(card()).getAllByRole('button').map((b) => b.textContent)).toEqual([...options.map((o) => o.label), 'Something else…']);
+    expect(within(state).queryByRole('button', { name: 'Something else…' })).toBeNull();
+    expect(within(card('Keep one note for both?')).queryByRole('button', { name: 'Something else…' })).toBeNull();
+  });
+
+  it('Q1b A yes/no question about an inbox thing or pile', async () => {
+    await home([question(), question({ id: 'q-ask-letter', subject: 'letter', text: 'Is this a letter?' })]);
+    for (const text of ['Where should these papers go?', 'Is this a letter?']) {
+      const row = card(text);
+      expect(within(row).getByRole('button', { name: 'File them' })).toHaveClass('primary', 'small');
+      expect(within(row).getByRole('button', { name: 'Leave them' })).toHaveClass('ghost', 'small');
+      const other = within(row).getByRole('button', { name: 'Something else…' });
+      expect(other).toHaveClass('ghost', 'small');
+      expect(within(row).getAllByRole('button').at(-1)).toBe(other);
+    }
+  });
+
+  it('Q1b "Something else…" pressed', async () => {
+    await home([question({ options })]);
+    const field = await textMode();
+    expect(field.tagName).toBe('TEXTAREA');
+    expect(field).toHaveFocus();
+    expect(within(card()).getByRole('button', { name: 'Tell Bower' })).toBeDisabled();
+    expect(within(card()).getByRole('button', { name: 'Cancel' })).toHaveClass('ghost', 'small');
+    expect(within(card()).queryByRole('button', { name: options[0].label })).toBeNull();
+    fireEvent.change(field, { target: { value: '   \n ' } });
+    expect(within(card()).getByRole('button', { name: 'Tell Bower' })).toBeDisabled();
+    fireEvent.change(field, { target: { value: 'Garden papers' } });
+    expect(within(card()).getByRole('button', { name: 'Tell Bower' })).toBeEnabled();
+  });
+
+  it('Q1b Cancel', async () => {
+    await home([question({ options })]);
+    await textMode();
+    fireEvent.click(within(card()).getByRole('button', { name: 'Cancel' }));
+    await settle();
+    expect(within(card()).queryByRole('textbox')).toBeNull();
+    expect(within(card()).getByRole('button', { name: options[0].label })).toBeVisible();
+    expect(within(card()).getByRole('button', { name: 'Something else…' })).toHaveFocus();
+  });
+
+  it('Q1b An answer on Home, no run live', async () => {
+    const f = await home([question({ options })]);
+    const choice = within(card()).getByRole('button', { name: options[1].label });
+    choice.focus(); fireEvent.click(choice); await settle();
+    expect(f.answer).toHaveBeenCalledExactlyOnceWith('q-ask-paper', { option: options[1].id });
+    expect(f.start).toHaveBeenCalledOnce();
+    expect(screen.queryByText('Where should these papers go?')).toBeNull();
+    expect(useToasts.getState().list.map((t) => t.text)).toContain(answeredNow(options[1].label));
+  });
+
+  it('Q1b Over 1,000 characters typed', async () => {
+    await home([question({ options })]);
+    const field = await textMode();
+    fireEvent.change(field, { target: { value: `  ${'x'.repeat(1000)}  ` } });
+    expect(within(card()).getByRole('button', { name: 'Tell Bower' })).toBeEnabled();
+    expect(field).not.toHaveAttribute('maxlength');
+    expect(field).not.toHaveAttribute('aria-invalid', 'true');
+    fireEvent.change(field, { target: { value: 'x'.repeat(1001) } });
+    expect(field).toHaveValue('x'.repeat(1001));
+    expect(within(card()).getByRole('button', { name: 'Tell Bower' })).toBeDisabled();
+    const error = within(card()).getByText('Use 1,000 characters at most.', { exact: true });
+    expect(error.id).not.toBe('');
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field.getAttribute('aria-describedby')?.split(' ')).toContain(error.id);
+    fireEvent.change(field, { target: { value: 'Short enough' } });
+    expect(within(card()).queryByText('Use 1,000 characters at most.')).toBeNull();
+    expect(field).not.toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('Q1b Home text answer is trimmed and focus moves to the next question then the heading', async () => {
+    const second = question({ id: 'q-ask-second', subject: 'second', text: 'Is this for the garden?', yes: 'Yes, garden' });
+    const f = await home([question({ options }), second]);
+    const field = await textMode();
+    fireEvent.change(field, { target: { value: '  Papers for the garden\nKeep together.  ' } });
+    const send = within(card()).getByRole('button', { name: 'Tell Bower' });
+    send.focus(); fireEvent.click(send); await settle();
+    expect(f.answer).toHaveBeenCalledExactlyOnceWith('q-ask-paper', { text: 'Papers for the garden\nKeep together.' });
+    expect(useToasts.getState().list.map((t) => t.text)).toContain(answeredNow('your words'));
+    const next = screen.getByRole('button', { name: 'Yes, garden' });
+    expect(next).toHaveFocus(); fireEvent.click(next); await settle();
+    expect(screen.queryByText(second.text)).toBeNull();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveFocus();
+  });
+
+  it('Q1b Home save failure retains the card and draft', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const f = await home([question({ options })], [], true);
+    const field = await textMode();
+    fireEvent.change(field, { target: { value: 'My garden draft' } });
+    fireEvent.click(within(card()).getByRole('button', { name: 'Tell Bower' })); await settle();
+    expect(f.answer).toHaveBeenCalledExactlyOnceWith('q-ask-paper', { text: 'My garden draft' });
+    expect(f.start).not.toHaveBeenCalled();
+    expect(screen.getByText('Where should these papers go?')).toBeVisible();
+    expect(field).toHaveValue('My garden draft');
+    expect(screen.getByRole('button', { name: 'Tell Bower' })).toBeEnabled();
+    expect(useToasts.getState().list.map((t) => t.text)).toContain('That answer did not save. Try again.');
+  });
+
+  it('Q1b The pile row while a question waits', async () => {
+    await home([], [{ ...paper, question: 'waiting' }, { ...paper, id: 'ready-control', text: 'Ready papers' }]);
+    const ready = screen.getByRole('link', { name: /Ready papers/ });
+    expect(ready).toHaveTextContent('1 thing');
+    const row = screen.getByRole('link', { name: /Papers from Alex/ });
+    expect(within(row).getByText('Waiting for your answer', { exact: true })).toBeVisible();
+    expect(row).not.toHaveTextContent('1 thing');
+    expect(within(ready).queryByText('Waiting for your answer')).toBeNull();
+  });
+
+  it('Q1b After 2 rounds', async () => {
+    await home([], [{ ...paper, question: 'exhausted' }, { ...paper, id: 'ready-control', text: 'Ready papers' }]);
+    const ready = screen.getByRole('link', { name: /Ready papers/ });
+    expect(ready).toHaveTextContent('1 thing');
+    const row = screen.getByRole('link', { name: /Papers from Alex/ });
+    expect(within(row).getByText("Bower couldn't place this", { exact: true })).toBeVisible();
+    expect(row).not.toHaveTextContent('1 thing');
+    expect(within(ready).queryByText("Bower couldn't place this")).toBeNull();
+  });
+
+  it('Q1b Upload error and readiness lines take priority over question projections', async () => {
+    await home([], [{ ...paper, question: 'waiting', setAside: 'not-arrived', items: [{ ...paper.items[0], id: 'letter', name: 'letter.pdf', kind: 'pdf', origin: 'From this computer', upload: -1 }] },
+      { ...paper, id: 'damaged', text: 'Unread papers', question: 'exhausted', setAside: 'note-damaged', noteLocked: true }]);
+    expect(screen.getByText('Some of its things have not arrived yet.')).toBeVisible();
+    expect(screen.getByText("Bower can't read this pile's note.")).toBeVisible();
+    expect(screen.queryByText('Waiting for your answer')).toBeNull();
+    expect(screen.queryByText("Bower couldn't place this")).toBeNull();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeVisible();
+  });
+
+  it('Q1b Duplicate option labels answer by id', async () => {
+    const choices = options.map((o) => ({ ...o, label: 'Garden' }));
+    const f = await home([question({ options: choices })]);
+    const buttons = within(card()).getAllByRole('button', { name: 'Garden' });
+    expect(buttons).toHaveLength(2);
+    const chosen = buttons[1];
+    if (!chosen) throw new Error('Second option missing');
+    fireEvent.click(chosen); await settle();
+    expect(f.answer).toHaveBeenCalledExactlyOnceWith('q-ask-paper', { option: 'folder-garden' });
   });
 });
