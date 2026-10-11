@@ -451,6 +451,8 @@ export interface Filing {
   keep?: readonly KeepOne[];
   /** Two notes it was shown that may be one thing, each pair with its question: a yes keeps one (c3-pair-ask). */
   pairAsks?: readonly PairAsk[];
+  /** A question asked once this pile is filed. */
+  askAfter?(pile: Pile, at: number): Question | null;
 }
 
 /**
@@ -567,6 +569,7 @@ export function modelDecisions(filing: Filing): Decisions {
     areas: filing.areas ?? new Map(),
     keep: filing.keep ?? [],
     pairAsks: filing.pairAsks ?? [],
+    askAfter: filing.askAfter,
   };
 }
 
