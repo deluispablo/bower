@@ -2915,3 +2915,86 @@ Raw runner failure locations are also in `/tmp/b1d-fr4-failure-locations.log`.
 
 Offline sources reused without network verification: the packet's curated-context, plan/execute
 and stable-prefix citations, plus https://www.rfc-editor.org/rfc/rfc8785 for the existing JCS home.
+
+## Sweep 6
+
+Tests-only TL-P4-51 repair for TL-P4-41 addendum 21 (1) and (2). The baseline full runner
+suite reproduced the inventory: **14 assertion reds, 686 passing tests in 53 files**
+(`/tmp/b1d-sweep6-before.log`). Production, assertions, goldens and the shared planning helper
+are unchanged. The runner owns the commits; no git-writing command, dependency replacement,
+symlink or network request was used. Test output and observations stayed in OS temp.
+
+tests changed: runner/test/b1-planning.test.ts: bind cut/cap controls to shown evidence; count the hub within five; retain 41 folded members with five matching members and use a hubless destination for the five-member controls.
+tests changed: runner/test/b23-hot-context.test.ts: make the Home visits summary match the letter's singular appointment token, preserving the actual Home answer and Open-thread checks.
+tests changed: runner/test/c05-bounded-reads.test.ts: give the ordinary pile garden-plot evidence and make both third-run transports phase-aware, so the original bound-source line is proposed in execution before the correction retry.
+tests changed: runner/test/claude-provider.test.ts: seed an existing soup note among the soup source's shown candidates and cite it, retaining the Timeline-without-new-note subject.
+tests changed: runner/test/duplicate-by-hash.test.ts: make the local job-hunt summary match the source's singular offer token, retaining all content-hash and Bin assertions.
+tests changed: docs/harness/2026-10-11-b1d-selection-notes.md: append Sweep 6 repairs, assertion audit and complete remaining-red inventory.
+removed: none.
+
+### Repaired inventory (pre-sweep file:line references)
+
+| Original file:line | Subject retained and fixture repair |
+| --- | --- |
+| runner/test/b1-planning.test.ts:127, :145 | Cut-index/no-new-destination: keep all 155 matching notes and the cut notice. Clear and sibling controls select shown Group 154 evidence instead of the capped-out hub; the refused new-parent proposal and asking remain. |
+| runner/test/b1-planning.test.ts:158 | Five per source: the shared five-note selection is four evidence notes plus the destination hub. Both sources, the words-only source, shared physical reads and the six-wants refusal remain. |
+| runner/test/b1-planning.test.ts:189 | Pinned and script notes: retain two actual answer pins and three/four extra wants. The answer's made-up description supplies remote-offer words so those extra wants are shown. The valid total stays five and the invalid total stays six. |
+| runner/test/b1-planning.test.ts:250 | Folded MOC expansion: keep 41 members and all body/read assertions. Five members match the source; the other 36 remain folded members with nonmatching titles/summaries, leaving the map shown. The control selects the map plus four members. |
+| runner/test/b1-planning.test.ts:276, :285 | Injection: reuse that shown folded map. Keep the poisoned source, map and personal text, the permitted hub line, and each attempted Rules/unrelated-note write unchanged. |
+| runner/test/b1-planning.test.ts:395 | Shared ledger: each long-source selection uses four long notes plus the hub. Keep all source/note/index/time/token/operation bounds and the expired-budget control. |
+| runner/test/b1-planning.test.ts:493 | Neighbourhood order and cap: keep 32 matching notes, recency/path ordering and every exact 30-cap assertion. Select shown Match 31 instead of explicitly requesting the omitted hub; the implicit destination hub occupies a second slot. |
+| runner/test/b1-planning.test.ts:523, :535 | Expansion is not a read: retain five selected members and all unpicked-map, changed-map and six-wants assertions. File into existing Resources/Careers, which has no hub, so the five-member control needs no sixth note and does not alter folded-folder membership. |
+| runner/test/b23-hot-context.test.ts:334 | Home answer/Open threads: change only local Home visits summary wording from appointments to an appointment, making its existing link selectable from the letter evidence. |
+| runner/test/c05-bounded-reads.test.ts:588, :611 | Settled pending relocation: the new ordinary letter names the garden plot, showing the target. The same original filed source and both exact wordings reach the first execution attempt; the retry keeps ordinary filing. Completion/archive assertions remain. |
+| runner/test/c05-bounded-reads.test.ts:466, :629 | Settled archive: use the same shown-target and phase-aware correction fixture. The original request bytes, source id, exact wordings and no-second-append/update assertions remain. Failed-relocation and interrupted-append variants also retain their subjects. |
+| runner/test/claude-provider.test.ts:377 | Timeline citation/no new note: seed Resources/Recipes/Leek soup.md as an existing Bower note and direct the soup's citing line there. The thing still has no note proposal. |
+| runner/test/duplicate-by-hash.test.ts:157 | Same-pile duplicate: the local hub summary says offer letters so the kept offer can select it. Uploaded/filed bytes, one-kept/one-binned checks and confirmation transport remain. |
+| runner/test/duplicate-by-hash.test.ts:199 | Binned filed copy: reuse the matching local hub summary; the person's real Bin action and all duplicate/no-duplicate assertions remain. |
+
+The C05 transports reuse the existing phaseAwareClaude helper. Their proposal counter now counts
+execution calls, and attempt zero offers the original line in both semantic phases; the first
+execution does not silently drop the consent subject just because selection was another call.
+No new selection, cache, write or consent mechanism was added.
+
+### Assertion and scope audit
+
+All **671 existing expect lines** across the five touched test files compare byte-for-byte with
+HEAD (166, 116, 162, 171 and 56 respectively). The complete diff contains no assertion edits,
+production edits, skipped tests, fixture-file exports or changed goldens. Read-only diff whitespace
+verification passes. Audit: `/tmp/b1d-sweep6-diff-audit.log`.
+
+The initial repaired full runner run passed **53/53 files and 700/700 tests**
+(`/tmp/b1d-sweep6-runner.log`). After making the C05 execution proposals explicitly phase-aware,
+its complete file passes **8/8 tests** (`/tmp/b1d-sweep6-c05-transport.log`); the final full run
+and final static checks are recorded below.
+
+No pnpm check or e2e ran: their configured build, JSON-report, cache and check-mark outputs write
+into the repository, which this session explicitly forbids. This fixture-only repair changes no
+screen. Vitest uses the default reporter alone and disables its repository cache. Runner TypeScript
+and touched-file ESLint are checked directly with output redirected to OS temp.
+
+Offline sources reused from the packet, without network verification:
+https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents,
+https://arxiv.org/html/2506.08837v1,
+https://platform.claude.com/docs/en/build-with-claude/prompt-caching.
+
+### Final verification and remaining reds
+
+| Check | Result | OS-temp log |
+| --- | --- | --- |
+| Full runner, final transport fixtures | pass, exit 0; 53 files, 700 tests | /tmp/b1d-sweep6-runner-final.log |
+| Runner TypeScript | pass, exit 0 | /tmp/b1d-sweep6-types.log |
+| Touched runner test ESLint | pass, exit 0 | /tmp/b1d-sweep6-lint.log |
+| Assertion/scope/whitespace audit | pass | /tmp/b1d-sweep6-diff-audit.log |
+
+```sh
+pnpm -C runner exec vitest run --maxWorkers=2 --reporter=default --cache=false
+pnpm -C runner exec tsc --noEmit -p .
+pnpm -C runner exec eslint test/b1-planning.test.ts test/b23-hot-context.test.ts test/c05-bounded-reads.test.ts test/claude-provider.test.ts test/duplicate-by-hash.test.ts
+```
+
+Every command redirected stdout/stderr to the OS-temp log in the table. Both static logs are
+empty on success. The final full run includes all seven fix-round-4 regression tests and all
+previously red controls; no assertion change was needed.
+
+**Remaining runner reds: none.** All 14 tests from the remaining-runner inventory pass.

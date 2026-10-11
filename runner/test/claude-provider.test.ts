@@ -366,10 +366,14 @@ describe('the Claude provider', () => {
 
   it('a thing cited by a Timeline line on an existing note needs no note', async () => {
     const { wire } = await wired(true, true);
+    const resources = (await wire.drive.listAll(wire.folderId)).find((f) => f.folder && f.name === 'Resources');
+    const recipes = await wire.drive.createFolder(resources?.id ?? '', 'Recipes');
+    await wire.drive.createText(recipes.id, 'Leek soup.md', serializeNote({ summary: 'A leek soup recipe.',
+      properties: [], tags: [], currentState: [], body: '', timeline: [], byBower: true }));
     const id = (await wire.drive.listAll(wire.folderId)).find((f) => f.name === 'Leek soup.txt')?.id ?? '';
     const cited = edited((m) => {
       (m.things as unknown[]).push({ fileId: id, to: 'Resources', name: 'Leek soup.txt' });
-      m.lines = [{ note: 'Projects/Flat hunt/Flat hunt.md', text: 'Matches what this note already says.', cites: id }];
+      m.lines = [{ note: 'Resources/Recipes/Leek soup.md', text: 'Matches what this note already says.', cites: id }];
     });
     const claude = recordedClaude({ stdout: cited }, { drive: wire.drive, root: wire.folderId, admission: wire.manifest });
     vi.spyOn(console, 'error').mockImplementation(() => {});

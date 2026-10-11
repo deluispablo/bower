@@ -32,7 +32,7 @@ const payload = (r: Awaited<ReturnType<typeof run>>, turn: number) => JSON.strin
 const sixNotes = Object.fromEntries(Array.from({ length: 6 }, (_, i) => [
   `Projects/Remote search/Offer evidence ${i + 1}.md`, note(`Remote developer offer evidence ${i + 1}.`, `L3_BODY_${i + 1}\n`),
 ]));
-const five = (b: Base) => Object.keys(sixNotes).slice(0, 5).map(b.id);
+const five = (b: Base) => [b.id(HUB), ...Object.keys(sixNotes).slice(0, 4).map(b.id)];
 const twoSteps = (r: Awaited<ReturnType<typeof run>>) => {
   expect.soft(r.frames, 'two semantic calls, no retry for valid selection').toHaveLength(2);
   expect.soft(r.errors, 'valid selection is not refused as a tidy intent')
@@ -123,7 +123,7 @@ it('b1-cut-index-no-new-destination', async () => {
     `Resources/Group ${String(i).padStart(3, '0')}/Evidence.md`, note(`Remote offer ${i} ${'x'.repeat(180)}.`),
   ])) };
   const b = await setup({ folder: large }); await seedState(b);
-  const clear = await run(b, [select(b, [b.id(HUB)]), fileIntent(b)]);
+  const clear = await run(b, [select(b, [b.id('Resources/Group 154/Evidence.md')]), fileIntent(b)]);
   completed(clear); twoSteps(clear);
   expect.soft(payload(clear, 0), 'positive existing-id control preserves honest cut notice').toContain('index cut:');
   const refused = await setup({ folder: large }); await seedState(refused);
@@ -139,7 +139,7 @@ it('b1-cut-index-no-new-destination', async () => {
     { line: 'Alex has a remote offer with no clear place.', files: ['Second.txt'] },
   ] }); await seedState(mixed);
   const ask = { fileId: mixed.sources[1]?.itemId, text: 'Should this stay with the remote search?', yes: 'Yes', no: 'No' };
-  const selected = select(mixed, [mixed.id(HUB)]); selected.items = selected.items.slice(0, 1); selected.asks = [ask];
+  const selected = select(mixed, [mixed.id('Resources/Group 154/Evidence.md')]); selected.items = selected.items.slice(0, 1); selected.asks = [ask];
   const intent = fileIntent(mixed); intent.things = intent.things.slice(0, 1);
   const sibling = await run(mixed, [selected, { ...intent, asks: [ask] }]);
   expect.soft(report(sibling).filed).toHaveLength(1); expect.soft(report(sibling).questions).toHaveLength(1);
@@ -176,7 +176,7 @@ it('b1-pinned-and-script-notes-count-within-five', async () => {
     await b.drive.writeText(q.id, JSON.stringify({ v: 1, questions: [{ id: questionId,
       text: 'Keep these remote offer notes together?', yes: 'Write it', no: 'Keep mine', askedAt: AT - 2 }] }), q.modifiedTime);
     const answer = await b.drive.createText(b.id(SYSTEM.changes), 'answer-1.json', JSON.stringify({ v: 1, id: 'answer-1',
-      device: 'device-1', kind: 'answer', questionId, askedAt: AT - 2, at: AT - 1, what: 'Answered a question', text: 'yes' }));
+      device: 'device-1', kind: 'answer', questionId, askedAt: AT - 2, at: AT - 1, what: 'Answered a question about remote developer offers', text: 'yes' }));
     const admitted = await planAdmission(fakeRead(b.drive), b.root, { scope: 'all', clock: () => AT, newId: () => 'pinned-admission' });
     expect(admitted.kind).toBe('manifest');
     if (admitted.kind !== 'manifest') return;
@@ -217,12 +217,14 @@ function foldedFolder(): { map: string; members: Record<string, string>; folder:
   const map = 'Resources/Remote offers/Remote offers.md';
   const spans: Record<string, string> = { current: '', personal: 'Alex keeps this personal map line.\n', timeline: '', 'bower-note': '',
     'moc-overview': '## Overview\nRemote developer offers.\n', 'moc-figures': '## Figures\n41 notes.\n',
-    'moc-members': '## Notes\n' + Array.from({ length: 41 }, (_, i) => `- [[Offer ${String(i + 1).padStart(2, '0')}]] — Remote offer ${i + 1}.\n`).join('') };
+    'moc-members': '## Notes\n' + Array.from({ length: 41 }, (_, i) => `- [[${i < 5 ? 'Offer' : 'Record'} ${String(i + 1).padStart(2, '0')}]] — ${i < 5 ? 'Remote offer' : 'Archived evidence'} ${i + 1}.\n`).join('') };
   const text = '---\nsummary: Remote developer offers.\ntype: moc\nby: bower\nbower_format: ownership/2\n---\n\n'
     + Object.entries(spans).map(([owner, body]) => `<!-- bower:ownership/2 begin ${owner} -->\n${body}<!-- bower:ownership/2 end ${owner} -->\n`).join('\n');
   expect(parseOwnership(new TextEncoder().encode(text)).status).toBe('v2');
+  // Keep 41 folded members, with five matching notes so the shown candidates also retain the map.
   const members = Object.fromEntries(Array.from({ length: 41 }, (_, i) => [
-    `Resources/Remote offers/Offer ${String(i + 1).padStart(2, '0')}.md`, note(`Remote offer ${i + 1}.`, `FOLDED_L3_${i + 1}\n`),
+    `Resources/Remote offers/${i < 5 ? 'Offer' : 'Record'} ${String(i + 1).padStart(2, '0')}.md`,
+      note(`${i < 5 ? 'Remote offer' : 'Archived evidence'} ${i + 1}.`, `FOLDED_L3_${i + 1}\n`),
   ]));
   return { map, members, folder: { ...folder, [map]: text, ...members } };
 }
@@ -388,9 +390,9 @@ it('b1-shared-ledger', async () => {
   const long = await setup({ folder: { ...folder, ...longNotes }, inbox: [{ line: 'Remote developer offer words. '.repeat(2000), files }],
     inboxFiles: Object.fromEntries(files.map((name, i) => [name, `Offer number ${i}.\n${'Alex received a remote developer offer. '.repeat(800)}`])) });
   await seedState(long);
-  const longSelection = select(long, Object.keys(longNotes).slice(0, 5).map(long.id));
+  const longSelection = select(long, [long.id(HUB), ...Object.keys(longNotes).slice(0, 4).map(long.id)]);
   const second = longSelection.items[1];
-  if (second) second.wants = Object.keys(longNotes).slice(5).map(long.id);
+  if (second) second.wants = [long.id(HUB), ...Object.keys(longNotes).slice(5, 9).map(long.id)];
   const bounded = await run(long, [longSelection, fileIntent(long)]);
   expect.soft(bounded.code).toBe(0); twoSteps(bounded);
   for (const frame of bounded.frames) {
@@ -490,7 +492,7 @@ it('b1-neighbourhood-order-and-30-cap', async () => {
   await seedState(b);
   // Equal recency must use path, despite insertion order; a later touched match wins the tie group.
   b.drive.touch(b.id('Projects/Remote search/Match 31.md'));
-  const r = await run(b, [select(b, [b.id(HUB)]), fileIntent(b)]); completed(r); twoSteps(r);
+  const r = await run(b, [select(b, [b.id('Projects/Remote search/Match 31.md')]), fileIntent(b)]); completed(r); twoSteps(r);
   const ids = candidates(r.frames[0], b.sources[0]?.itemId ?? '');
   expect.soft(ids, 'script exposes at most 30 candidates for this item').toHaveLength(30);
   const matches = ids.filter((id) => Object.keys(matching).map(b.id).includes(id));
@@ -519,7 +521,8 @@ it('b1-expansion-is-not-a-read-picked-members-count-within-five', async () => {
   const f = foldedFolder(); const b = await setup({ folder: f.folder }); const state = await seedState(b, true);
   const mapBefore = await b.drive.readText(b.id(f.map));
   const picked = Object.keys(f.members).slice(0, 5).map(b.id);
-  const r = await run(b, [select(b, picked), fileIntent(b)]);
+  // This existing destination has no hub, so all five slots remain available to the members.
+  const r = await run(b, [select(b, picked, 'Resources/Careers'), fileIntent(b, 'Resources/Careers')]);
   completed(r); twoSteps(r);
   for (const id of picked) expect.soft(media(r, id), 'five selected members are five real cached reads').toHaveLength(1);
   expect.soft(r.after[f.map], 'the unpicked map and its folder membership stay unchanged').toBe(mapBefore);
@@ -531,7 +534,8 @@ it('b1-expansion-is-not-a-read-picked-members-count-within-five', async () => {
   const map = await changed.drive.get(changed.id(f.map));
   const changedText = (await changed.drive.readText(map.id)) + '\nAlex adds a personal map comment.\n';
   await changed.drive.writeText(map.id, changedText, map.modifiedTime);
-  const refreshed = await run(changed, [select(changed, Object.keys(f.members).slice(0, 5).map(changed.id)), fileIntent(changed)]);
+  const refreshed = await run(changed, [select(changed, Object.keys(f.members).slice(0, 5).map(changed.id), 'Resources/Careers'),
+    fileIntent(changed, 'Resources/Careers')]);
   completed(refreshed); twoSteps(refreshed);
   expect.soft(media(refreshed, map.id), 'a changed map gets the one full ownership read').toHaveLength(1);
   expect.soft(refreshed.after[f.map], 'the changed map keeps the personal comment').toBe(changedText);

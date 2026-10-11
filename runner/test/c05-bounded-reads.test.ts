@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { phaseAwareClaude } from './b1-planning-support';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ASK_GONE } from '../../src/data/contracts/questions';
 import { applyChanges } from '../../src/data/contracts/note-edit';
@@ -450,18 +451,18 @@ async function waitingRetryArchive(interrupt: boolean, words: string) {
 
   // A real pile invokes the model; it proposes the same bound source with either wording.
   const sourceId = idOf(first.result, `Areas/Home/${SOURCE}`);
-  const another = await drive.createText(idOf(first.result, 'Inbox'), 'Another letter.txt', 'A made-up committee letter.', { pile: 'next-pile' });
+  const another = await drive.createText(idOf(first.result, 'Inbox'), 'Another letter.txt', 'A made-up committee letter about the garden plot.', { pile: 'next-pile' });
   let proposals = 0;
-  const claude: ClaudeSpawn = async () => {
-    proposals++;
+  const claude: ClaudeSpawn = phaseAwareClaude(async (_call, _step, attempt, phase) => {
+    if (phase === 'execution') proposals++;
     return { code: 0, stderr: '', cut: null, stdout: JSON.stringify({ type: 'result', subtype: 'success',
       is_error: false, result: JSON.stringify({ kind: 'tidy-intent', v: 1,
         things: [{ fileId: another.id, to: 'Areas/Home', name: 'Another letter.txt',
           note: { name: 'Another letter.md', summary: 'A made-up committee letter.', body: 'A made-up committee letter.' } }],
         // With settled consent the planner asks for a correction; keep the ordinary pile work.
-        ...(proposals === 1 ? { lines: [{ note: PATH, text: words, cites: sourceId }] } : {}),
+        ...(attempt === 0 ? { lines: [{ note: PATH, text: words, cites: sourceId }] } : {}),
       }), usage: { input_tokens: 10, output_tokens: 10 } }) };
-  };
+  }, () => ({ drive, root }));
   const next = await traced(c, drive, root, 3, { claude, answerStart: { scope: 'all', requestId: `${RUN_ID}-3` } });
   expect(next.result.code).toBe(0);
   expect(proposals, 'the next tidy-up really proposes the selected wording').toBeGreaterThan(0);
@@ -572,18 +573,18 @@ async function waitingRetryPending(mode: 'lands' | 'pending-fails' | 'before-app
 
   // A real pile invokes the model; it proposes the same bound source with either wording.
   const sourceId = idOf(first.result, `Areas/Home/${SOURCE}`);
-  const another = await drive.createText(idOf(first.result, 'Inbox'), 'Another letter.txt', 'A made-up committee letter.', { pile: 'next-pile' });
+  const another = await drive.createText(idOf(first.result, 'Inbox'), 'Another letter.txt', 'A made-up committee letter about the garden plot.', { pile: 'next-pile' });
   let proposals = 0;
-  const claude: ClaudeSpawn = async () => {
-    proposals++;
+  const claude: ClaudeSpawn = phaseAwareClaude(async (_call, _step, attempt, phase) => {
+    if (phase === 'execution') proposals++;
     return { code: 0, stderr: '', cut: null, stdout: JSON.stringify({ type: 'result', subtype: 'success',
       is_error: false, result: JSON.stringify({ kind: 'tidy-intent', v: 1,
         things: [{ fileId: another.id, to: 'Areas/Home', name: 'Another letter.txt',
           note: { name: 'Another letter.md', summary: 'A made-up committee letter.', body: 'A made-up committee letter.' } }],
         // With settled consent the planner asks for a correction; keep the ordinary pile work.
-        ...(proposals === 1 ? { lines: [{ note: PATH, text: words, cites: sourceId }] } : {}),
+        ...(attempt === 0 ? { lines: [{ note: PATH, text: words, cites: sourceId }] } : {}),
       }), usage: { input_tokens: 10, output_tokens: 10 } }) };
-  };
+  }, () => ({ drive, root }));
   const next = await traced(c, drive, root, 3, { claude, answerStart: { scope: 'all', requestId: `${RUN_ID}-3` } });
   expect(next.result.code).toBe(0);
   expect(proposals, 'the next tidy-up really proposes the selected wording').toBeGreaterThan(0);

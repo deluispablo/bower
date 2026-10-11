@@ -67,6 +67,7 @@ const during = (act: () => Promise<void>): ClaudeSpawn => modelFiling([], act);
 async function offerCase(): Promise<LoadedCase> {
   const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-offer-and-flat');
   if (!c) throw new Error('no corpus case c04-offer-and-flat');
+  c.folder[HUB] = (c.folder[HUB] ?? '').replace('Applications and offers.', 'Applications and offer letters.');
   return c;
 }
 
