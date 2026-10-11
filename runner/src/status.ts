@@ -75,22 +75,28 @@ export class RunnerStatus {
       const card = publicQuestion(q);
       if (isQuestionSnapshot([...snapshot, card])) snapshot.push(card);
     }
+    // The body bound is another display bound: retain the earliest cards, never shorten stored words.
+    this.trimQuestions(snapshot, { attempt: this.opts.attempt, seq: this.seq + 1, phase: 'writing', ...extra });
     if (snapshot.length !== questions.length) console.error('Questions omitted from the live snapshot to fit its display bounds.');
     questions = snapshot;
     const changed = JSON.stringify(this.questions) !== JSON.stringify(questions);
     const hadSnapshot = this.questions !== undefined;
     this.questions = questions;
     // An empty first snapshot needs no extra phase report; the next ordinary report carries it.
-    if (changed && (questions.length || hadSnapshot)) await this.post('writing', extra);
+    if (changed && (questions.length || hadSnapshot)) await this.report('writing', extra, true);
   }
 
   async post(phase: RunPhase, extra: StatusExtra = {}): Promise<void> {
+    await this.report(phase, extra);
+  }
+
+  private async report(phase: RunPhase, extra: StatusExtra, publication = false): Promise<void> {
     if (this.endedAs) {
       console.error(`The Worker already holds this run ${this.endedAs}; ${phase} is not sent`);
       return;
     }
     extra = { ...(this.questions === undefined ? {} : { questions: this.questions }), ...extra };
-    const first = await this.send(phase, extra, ++this.seq);
+    const first = await this.send(phase, extra, ++this.seq, publication);
     if (first.kind === 'taken') return;
     const current = first.current;
     // This very report, taken by a send whose answer was lost: nothing more to tell.
@@ -108,7 +114,7 @@ export class RunnerStatus {
     if (current) {
       // A restarted runner: it goes on from the Worker's seq, once.
       this.seq = Math.max(this.seq, current.seq) + 1;
-      const again = await this.send(phase, extra, this.seq);
+      const again = await this.send(phase, extra, this.seq, publication);
       if (again.kind === 'taken') return;
       if (again.current && ended(again.current.phase)) {
         console.error(`The Worker already holds this run ${again.current.phase}; ${phase} is not sent`);
@@ -137,7 +143,7 @@ export class RunnerStatus {
    * One report sent, with retries: idempotent, since the Worker answers a repeat of the last seq with the current
    * state and changes nothing, even once the run ended, and an ended report only sets when it looks (TL-P3-28; `transport.ts`).
    */
-  private async request(body: object): Promise<Response> {
+  private async request(body: object, publication = false): Promise<Response> {
     const text = JSON.stringify(body);
     if (new TextEncoder().encode(text).byteLength > 64 * 1024)
       throw new BowerError('unknown', 'Bower could not share its latest update.');
@@ -145,26 +151,36 @@ export class RunnerStatus {
       const init = { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${this.opts.ticket}` }, body: text };
       return await send(this.fetchFn, this.url, init, { idempotent: true, again: serverBusy, pacing: this.opts.pacing });
     } catch (e) {
-      console.error(e);
+      if (!publication) console.error(e);
       throw unreached();
     }
   }
 
-  private async send(phase: RunPhase, extra: StatusExtra, seq: number): Promise<Answer> {
-    const res = await this.request({ attempt: this.opts.attempt, seq, phase, ...extra });
+  private async send(phase: RunPhase, extra: StatusExtra, seq: number, publication = false): Promise<Answer> {
+    // Later phases and sequence recovery can grow the envelope beside the retained snapshot.
+    if (extra.questions && this.trimQuestions(extra.questions, { attempt: this.opts.attempt, seq, phase, ...extra }))
+      console.error('Questions omitted from the live snapshot to fit its display bounds.');
+    const res = await this.request({ attempt: this.opts.attempt, seq, phase, ...extra }, publication);
     if (res.ok) return { kind: 'taken' };
     const reply = (await res.json().catch((e: unknown) => {
-      console.error(e);
+      if (!publication) console.error(e);
       return null;
     })) as { error?: { code?: unknown } } | null;
     const code = reply?.error?.code;
     if (res.status === 409 && code === 'stale-attempt') throw staleAttempt();
     if (res.status === 409 && code === 'stale-report') return { kind: 'late', current: currentOf(reply) };
     if (res.status === 401) {
-      console.error('The status route refused the run ticket');
+      if (!publication) console.error('The status route refused the run ticket');
       throw new BowerError('auth', 'This tidy-up is no longer allowed to change your folder.');
     }
-    console.error(`The status route answered ${res.status} for ${phase}`);
+    if (!publication) console.error(`The status route answered ${res.status} for ${phase}`);
     throw new BowerError('unknown', "Bower's server didn't answer. It will try again.");
+  }
+
+  private trimQuestions(questions: PublicQuestion[], report: object): boolean {
+    const before = questions.length;
+    while (questions.length && new TextEncoder().encode(JSON.stringify({ ...report, questions })).byteLength > 64 * 1024)
+      questions.pop();
+    return questions.length !== before;
   }
 }

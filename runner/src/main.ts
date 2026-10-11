@@ -251,13 +251,22 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   const listed = new RunRecords(reads.asListed(), rootId);
   seen.retain = (at) => keepFinishedAtEnd(drive, listed, opts.runId, at);
   const barrier = { rootId, runId: opts.runId, attempt: opts.attempt, records, reads, batch: () => drive.batch(), fenced: () => drive.fencedWrites(), admission: grant.manifest, clock, newId };
+  const publishQuestions = async (manifest: RunManifest): Promise<void> => {
+    try {
+      await status.publishQuestions(plannedQuestions(manifest), totalOf(seen.total));
+    } catch (error) {
+      // The retained snapshot rides the next ordinary report; publication never stops durable effects.
+      const detail = error instanceof Error ? error.stack ?? error.message : String(error);
+      console.error(`Live question publication failed; the next status report will carry the snapshot again. ${detail.replace(/\s+/g, ' ')}`);
+    }
+  };
 
   // 2. This run's report already in the folder: nothing is repeated. Its chain says done before the Worker hears it.
   if (await timing.time('reads', () => shownDone(reads, rootId, opts.runId))) {
     const found = await records.found(opts.runId);
     if (found.kind === 'run') seen.chain = found.chain;
     if (found.kind === 'run') seen.total ??= found.manifest.capture.members.length;
-    if (found.kind === 'run') await status.publishQuestions(plannedQuestions(found.manifest), totalOf(seen.total));
+    if (found.kind === 'run') await publishQuestions(found.manifest);
     if (found.kind === 'run' && found.chain.length) {
       const finished = await finishRun(barrier, found.manifest, found.manifestHash, found.chain);
       seen.chain = finished.chain;
@@ -294,7 +303,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
     onChain: (chain) => {
       seen.chain = chain;
     },
-    onPlan: (manifest) => status.publishQuestions(plannedQuestions(manifest), totalOf(seen.total)),
+    onPlan: publishQuestions,
   }));
   if (end.state === 'failed') {
     console.error(end.why);

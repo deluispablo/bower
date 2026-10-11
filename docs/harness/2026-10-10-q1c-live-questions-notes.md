@@ -828,3 +828,93 @@ https://vitest.dev/api/vi.html#vi-usefaketimers. No network research was permitt
 
 pnpm check and e2e not run: this is a runner-red-only assignment, with no screen or production change.
 commits: none; coordinator commits tests and notes separately.
+
+## Addendum 8 (2)
+
+Partial implementation; blocked on the two-file scope's logging limitation. No test contradicts
+“Live publication never fails a run.” Both committed pass-3 reds reproduce the stated defects.
+Baseline: two assertion reds and six passing controls, /tmp/q1c-a8-2-red.log.
+
+runner/src/status.ts now trims the projected snapshot from the end of stable askedAt order until
+its complete writing report fits 64 KiB. Shape/count/byte omissions share the existing console line.
+The retained snapshot is carried on subsequent reports. Later report envelopes and sequence recovery
+are checked against the same byte bound. Stored words, durable questions and Worker validation stay intact.
+runner/src/main.ts now catches publication errors at both publication callers, logs one single-line
+failure with error details, and continues effects. Ordinary status reports still throw as before.
+The status layer defers its publication error diagnostics to that caller.
+
+removed: the oversized snapshot's exception before durable effects; latest live cards are omitted instead.
+removed: publication failure propagation from onPlan and the already-done recovery caller.
+removed: duplicate publication error diagnostics from the status layer (transport diagnostics remain).
+tests changed: none
+
+Remaining blocker: runner/test/q1c-live.test.ts:240 requires exactly one failure console call.
+The run now completes, files the clear sibling, stores both full askings and publishes the retained
+snapshot on its immediately next successful report. All those assertions pass. Five console calls
+remain: four unconditional retry diagnostics at src/data/drive/transport.ts:131 and the caller's
+one failure diagnostic. Network errors also log unconditionally at transport.ts:126.
+The existing transport has no logger/quiet option. Its four sends are pinned by q1c-live.test.ts:222.
+No change confined to the two assigned files can configure that transport's logger. Replacing its
+retry loop adds a second retry policy; mutating global console hides concurrent unrelated errors.
+Neither workaround was introduced. Requested scope clarification: an optional transport logger,
+with unchanged ordinary logging, would allow publication to emit just its final single line.
+No authorization to expand scope has been received; transport.ts remains unchanged.
+
+The stop follows .agents/skills/bower-implement/SKILL.md and docs/harness/WORKER.md:
+“Never write a second way of doing what it does; if it cannot do what you need, stop and report blocked.”
+This applies to the existing retry mechanism, not to a contradiction in the committed red.
+Offline standard reused: src/data/drive/transport.ts's existing idempotent retry policy and its
+RFC 9110 §9.2.2 reference, https://www.rfc-editor.org/rfc/rfc9110.html#section-9.2.2.
+No source was fetched; no network was used.
+
+Validation:
+- Full final runner suite: 47 files, 637 tests pass, one assertion failure at q1c-live.test.ts:240.
+  Log: /tmp/q1c-a8-2-runner-final.log. Targeted intermediate log: /tmp/q1c-a8-2-partial.log.
+- tsc --noEmit app/node/runner/api: pass. Logs /tmp/q1c-a8-2-tsc-{app,node,api}.log and
+  /tmp/q1c-a8-2-tsc-runner-final.log.
+- ESLint runner/src/status.ts and runner/src/main.ts: pass, /tmp/q1c-a8-2-eslint-final.log.
+- Tests use temporary config files, native loading, disabled cache and the default reporter.
+  The unchanged timer gate is installed through /tmp/q1c-reds2-config/setup.ts without its CPU report hook.
+  Root config retains the original Vite plugins and app test setup, allowing temporary setup paths.
+- The first app config lacked permission to serve the temporary setup path; its import failures were
+  environmental, not regressions. Corrected in the temporary config only; no dependency link changed.
+- App invocation excludes two repository-writing fixture tests at src/harness.test.ts:627 and :641.
+  Their flakyRun helper writes test-results/fx-* under process.cwd() at :600–603, contrary to this
+  assignment's no-repository-test-writes constraint. No test was modified to work around them.
+- pnpm check/API runtime/e2e not run: they require repository output and/or ports. No screen changed.
+- No direct writing git command, node_modules replacement/symlink, API edit or test edit.
+  All logs and configuration artifacts live in OS temp. Commits: none; coordinator owns commits.
+
+Final app suite: 166 files pass, one file fails; 5,612 tests pass, one fails, four skipped.
+Two skips are the explicit CLI exclusion above; the other two are pre-existing skips.
+The remaining environment failure is src/e2e-port.test.ts:37, “a server from another worktree
+is never reused”: its fixture calls listen at :21, receiving EPERM for 127.0.0.1, followed by
+its 5,000 ms timeout and one unhandled error. No port was successfully bound. This does not
+contradict the publication ruling. Log: /tmp/q1c-a8-2-app-final.log.
+
+Final commands (output redirected to the OS-temp logs above):
+- pnpm -C runner exec vitest run --maxWorkers=2 --reporter=default --no-cache --configLoader=native --config=/tmp/q1c-reds2-config/vitest.config.mjs
+- pnpm exec vitest run src --maxWorkers=2 --reporter=default --no-cache --configLoader=native --config=/tmp/q1c-a8-2-config/vitest.config.mjs --testNamePattern='^(?!.*(?:a test that passes only on retry fails a batch run|a quarantined test that passes on retry is reported, not failed)).*$'
+- pnpm exec tsc --noEmit -p tsconfig.app.json
+- pnpm exec tsc --noEmit -p tsconfig.node.json
+- pnpm -C runner exec tsc --noEmit -p .
+- pnpm -C api exec tsc --noEmit -p .
+- pnpm -C runner exec eslint src/status.ts src/main.ts
+
+Final git diff --check passed. Only runner/src/status.ts, runner/src/main.ts and this notes file
+are modified. The single-line publication requirement remains unresolved pending transport scope.
+
+## Addendum 8 red repair
+
+tests changed: runner/test/q1c-live.test.ts: count the publication's own line, not the transport's existing retries
+
+The publication failure line is matched by its fixed text and must appear exactly once.
+All other assertions are retained; the existing transport retry diagnostics are allowed.
+Before repair: seven tests pass; only the diagnostic count fails (five instead of one).
+Log: /tmp/q1c-a8-red-repair-before.log.
+Green: all eight tests pass with --maxWorkers=2; retained production fix unchanged.
+Log: /tmp/q1c-a8-red-repair-green.log.
+Command: pnpm -C runner exec vitest run test/q1c-live.test.ts --maxWorkers=2 --reporter=default --no-cache --configLoader=native --config=/tmp/q1c-reds2-config/vitest.config.mjs
+Temporary config retains the timer gate without repository output; no network or writing git command used.
+pnpm check and e2e not run: mechanical test-only repair; repository-output constraint remains.
+Commits: none; coordinator owns commits.
