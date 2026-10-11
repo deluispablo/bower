@@ -18,6 +18,7 @@ This block is the whole current state; ACTIVE.md is the history log. A Codex suc
   - the SHA sent to the lead;
   - a staging smoke.
 - **Codex intensity (TL-P4-57 addendum 1, main d380d1a4; owner reset the usage on 2026-10-11).** Every run passes `--tier standard` (no Fast). Sol medium for normal work and repairs, Sol high for escalated work and closing reviews, Sol low for mechanical work; Astra high only for adversarial passes, never xhigh. Max 3 workers. A third failed attempt on the same red goes to the lead (no 4th run).
+- **STOP rule (TL-P4-61, main cafff851):** at 99% of Claude's weekly usage the lead sends STOP: start nothing new, commit partial diffs on their branches, make HANDOFF and ACTIVE exact for Codex, reply "READY <sha>". Keep both current at every step anyway.
 - Jobs running (3 of 3): B8 red (attempt 2), B5b implementation (attempt 4, jobs/b5b-impl4.sh), B4a test repair (attempt 19, jobs/b4a-r4-repair.sh). Scripts are in the coordinator scratchpad's `jobs/`; results in /tmp/codex-run/<entry>-<n>.result.
 - Finished and waiting for slots: B6b reds (done), B7 packet (b7-tags 06e89b5c) and B8 packet (b8-log 6ae4813c): review each, merge into claude/p3, add the features.json entry, then their reds.
 - When a job ends, read the result's card. A check-failed status on a red is expected; on a fix, read the notes' newest round and the check log.
