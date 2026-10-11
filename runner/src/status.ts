@@ -13,6 +13,7 @@
  */
 import { attemptEnded } from '../../src/data/contracts/attempt-ended';
 import { PHASE_RANK as RANK } from '../../src/data/contracts/run-phases';
+import { isQuestionSnapshot, type PublicQuestion } from '../../src/data/contracts/questions';
 import { BowerError, type RunPhase } from '../../src/data/types';
 import { send, type Fetch, type Pacing } from '../../src/data/drive/transport';
 import { serverBusy, staleAttempt, unreached } from './token';
@@ -44,6 +45,7 @@ export interface StatusExtra {
   total?: number;
   failure?: string;
   answersStayed?: true;
+  questions?: PublicQuestion[];
 }
 
 type Answer = { kind: 'taken' } | { kind: 'late'; current: { seq: number; phase: RunPhase } | null };
@@ -52,6 +54,7 @@ export class RunnerStatus {
   private readonly url: string;
   private readonly fetchFn: Fetch;
   private seq = 0;
+  private questions: PublicQuestion[] | undefined;
   /** The phase the Worker holds this run ended in, once a report found it ended; nothing more is sent. */
   private endedAs: RunPhase | null = null;
 
@@ -65,11 +68,22 @@ export class RunnerStatus {
     return this.endedAs !== null;
   }
 
+  /** A full durable snapshot, carried by every later report of this attempt as well. */
+  async publishQuestions(questions: PublicQuestion[], extra: StatusExtra = {}): Promise<void> {
+    if (!isQuestionSnapshot(questions)) throw new BowerError('unknown', 'Bower could not share its questions.');
+    const changed = JSON.stringify(this.questions) !== JSON.stringify(questions);
+    const hadSnapshot = this.questions !== undefined;
+    this.questions = questions;
+    // An empty first snapshot needs no extra phase report; the next ordinary report carries it.
+    if (changed && (questions.length || hadSnapshot)) await this.post('writing', extra);
+  }
+
   async post(phase: RunPhase, extra: StatusExtra = {}): Promise<void> {
     if (this.endedAs) {
       console.error(`The Worker already holds this run ${this.endedAs}; ${phase} is not sent`);
       return;
     }
+    extra = { ...(this.questions === undefined ? {} : { questions: this.questions }), ...extra };
     const first = await this.send(phase, extra, ++this.seq);
     if (first.kind === 'taken') return;
     const current = first.current;
@@ -118,8 +132,11 @@ export class RunnerStatus {
    * state and changes nothing, even once the run ended, and an ended report only sets when it looks (TL-P3-28; `transport.ts`).
    */
   private async request(body: object): Promise<Response> {
+    const text = JSON.stringify(body);
+    if (new TextEncoder().encode(text).byteLength > 64 * 1024)
+      throw new BowerError('unknown', 'Bower could not share its latest update.');
     try {
-      const init = { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${this.opts.ticket}` }, body: JSON.stringify(body) };
+      const init = { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${this.opts.ticket}` }, body: text };
       return await send(this.fetchFn, this.url, init, { idempotent: true, again: serverBusy, pacing: this.opts.pacing });
     } catch (e) {
       console.error(e);

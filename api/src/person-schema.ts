@@ -13,7 +13,7 @@ import { RUN_PHASES } from '../../src/data/contracts/run-phases.js';
 const PHASES_SQL = RUN_PHASES.map((p) => `'${p}'`).join(', ');
 
 
-export const SCHEMA_VERSION = 14;
+export const SCHEMA_VERSION = 15;
 
 /** Every table the schema owns, for tests and checks. */
 export const PERSON_TABLES = [
@@ -207,6 +207,7 @@ const STEPS: readonly (readonly string[])[] = [
     'ALTER TABLE runs ADD COLUMN deadline_at INTEGER',
     'ALTER TABLE runs ADD COLUMN version INTEGER NOT NULL DEFAULT 0 CHECK (version >= 0)',
   ],
+  ['ALTER TABLE runs ADD COLUMN open_questions_snapshot TEXT'],
 ];
 
 /** The version recorded in this database, 0 when it is new. */

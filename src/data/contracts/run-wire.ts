@@ -1,5 +1,6 @@
 /** A run as the Worker sends it (worker contract, `RunWire`), and its shape check: pure, shared by every runtime. */
 import { isRunPhase, type RunPhase } from './run-phases';
+import { isQuestionSnapshot, type PublicQuestion } from './questions';
 
 export type RunScope = 'all' | 'instructions';
 
@@ -12,6 +13,7 @@ export interface RunWire {
   finishedAt?: number;
   total?: number;
   failure?: string;
+  questions?: PublicQuestion[];
 }
 
 export function isRunWire(value: unknown): value is RunWire {
@@ -24,5 +26,6 @@ export function isRunWire(value: unknown): value is RunWire {
     && number(r.requestedAt) && number(r.phaseAt)
     && (r.finishedAt === undefined || number(r.finishedAt))
     && (r.total === undefined || (number(r.total) && Number.isSafeInteger(r.total)))
-    && (r.failure === undefined || (typeof r.failure === 'string' && r.failure.trim().length > 0));
+    && (r.failure === undefined || (typeof r.failure === 'string' && r.failure.trim().length > 0))
+    && (r.questions === undefined || isQuestionSnapshot(r.questions));
 }

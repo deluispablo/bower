@@ -105,6 +105,8 @@ export interface SpineRun {
    * keeps it, to say truthfully how a run that stops ended. Not called when the folder cannot be read.
    */
   onChain?(chain: Checkpoint[]): void;
+  /** The validated durable plan, new or recovered, before any effect is attempted. */
+  onPlan?(manifest: RunManifest): Promise<void>;
 }
 
 /** Settled: every operation applied or rejected (or the run already ended), with its verified manifest. */
@@ -143,6 +145,8 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
     chain = [];
     headHash = null;
   }
+
+  await run.onPlan?.(manifest);
 
   let head = chain.at(-1);
   if (!head || headHash === null) {

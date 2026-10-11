@@ -343,7 +343,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
         return theirs?.size ? theirs : mine;
       },
     }, active, originalOwner, opts.drive);
-    r = new LiveRuns(boundWorker, vaultDoor ?? v, opts.pollMs, epoch > 0);
+    r = new LiveRuns(boundWorker, vaultDoor ?? v, opts.pollMs, epoch > 0, v);
   }
   const invalidate = (): void => {
     epoch++;
@@ -408,7 +408,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
   Object.assign(vault, { pendingUploadCount: () => queue.pendingCount?.() ?? 0 });
   // Completion/admission use the stable vault door, including its concrete capabilities.
   r.dispose();
-  r = new LiveRuns(guardWorker(epoch, root, ready), vault, opts.pollMs);
+  r = new LiveRuns(guardWorker(epoch, root, ready), vault, opts.pollMs, false, v);
   function guardWorker(at: number, owner: () => Promise<string>, resolved: () => boolean): WorkerApi {
     return new Proxy(worker, {
       get(target, key, receiver) {
@@ -483,7 +483,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
   async function activeHere(how: ActiveHow): Promise<void> {
     if (paused) {
       paused = false;
-      r = new LiveRuns(guardWorker(epoch, root, ready), vault, opts.pollMs, true);
+      r = new LiveRuns(guardWorker(epoch, root, ready), vault, opts.pollMs, true, v);
       connectRuns();
     }
     const step = async (work: () => Promise<unknown>): Promise<void> => {

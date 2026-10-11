@@ -24,7 +24,7 @@ import { PROP, RUNNER_WRITES, SYSTEM, isRunnerFile, type HashesFile, type Questi
 import { ruleLike } from '../rules';
 import { savedLinkAddress } from '../search-text';
 import { md5Hex } from '../contracts/hashes';
-import { answeredAskings, answersAsking, journalAnswer, roundFor, relatedSubjects, sameSubjectContent, subjectMembers, subjectPile, type QuestionRound, ASK_GONE, STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
+import { isQuestionOption, answeredAskings, answersAsking, journalAnswer, roundFor, relatedSubjects, sameSubjectContent, subjectMembers, subjectPile, type QuestionRound, ASK_GONE, STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
 import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
 import { parseTimelineLine } from '../contracts/timeline-line';
@@ -715,7 +715,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const l = latest.get(q.id);
     const answer = l && journalAnswer(l.rec);
     if (!l || typeof answer !== 'object' || !('option' in answer)) continue;
-    const action = q.options?.find((o) => o.id === answer.option)?.action;
+    const option = q.options?.find((o) => o.id === answer.option);
+    const action = isQuestionOption(option) ? option.action : undefined;
     const folder = action && ix.byId(action.folderId);
     const path = folder && ix.pathOf(folder.id);
     const subject = subjectKey(q);

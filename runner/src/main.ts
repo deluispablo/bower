@@ -44,7 +44,9 @@ import { admittedThings } from '../../src/data/spine/admission';
 import type { RunProvider } from '../../src/data/spine/provider';
 import { B_FAILURE } from '../../src/data/spine/scripted';
 import { BowerError } from '../../src/data/types';
-import { RunRecords } from '../../src/data/spine/records';
+import { RunRecords, type RunManifest } from '../../src/data/spine/records';
+import { askingKey, publicQuestion, type PublicQuestion } from '../../src/data/contracts/questions';
+import { isRunnerFile, SYSTEM } from '../../src/data/vault/layout';
 import type { ItemDisposition } from '../../src/data/spine/report';
 import { finishRun, shownDone } from '../../src/data/spine/barrier';
 import { RunnerDrive } from './drive';
@@ -214,6 +216,20 @@ interface Seen {
 
 const totalOf = (total: number | undefined): { total?: number } => (total === undefined ? {} : { total });
 
+/** Read cards from the durable questions effect; report rows identify only this run's askings. */
+function plannedQuestions(manifest: RunManifest): PublicQuestion[] {
+  const rows = manifest.reportPlan.flatMap((r) => r.value.questions);
+  const questions = new Map(rows.map((q) => [askingKey(q), publicQuestion(q)]));
+  for (const { effect } of manifest.operations) {
+    if (!(effect.kind === 'write-runner-json' && effect.path === SYSTEM.questions)
+      && !(effect.kind === 'create-text' && effect.purpose === 'runner-json' && effect.name === 'questions.json')) continue;
+    const value: unknown = JSON.parse(effect.text);
+    if (!isRunnerFile(SYSTEM.questions, value)) throw new BowerError('unknown', 'Bower could not read its questions.');
+    for (const q of value.questions) if (questions.has(askingKey(q))) questions.set(askingKey(q), publicQuestion(q));
+  }
+  return [...questions.values()].sort((a, b) => a.askedAt - b.askedAt);
+}
+
 type Ended = Exclude<TidyEnd, { phase: 'saving' }> | { phase: 'stopped'; why: string; error: unknown };
 
 /** Steps 1 to 4; a run that stops in them throws, and `runTidy` says how it ended. */
@@ -241,6 +257,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
     const found = await records.found(opts.runId);
     if (found.kind === 'run') seen.chain = found.chain;
     if (found.kind === 'run') seen.total ??= found.manifest.capture.members.length;
+    if (found.kind === 'run') await status.publishQuestions(plannedQuestions(found.manifest), totalOf(seen.total));
     if (found.kind === 'run' && found.chain.length) {
       const finished = await finishRun(barrier, found.manifest, found.manifestHash, found.chain);
       seen.chain = finished.chain;
@@ -277,6 +294,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
     onChain: (chain) => {
       seen.chain = chain;
     },
+    onPlan: (manifest) => status.publishQuestions(plannedQuestions(manifest), totalOf(seen.total)),
   }));
   if (end.state === 'failed') {
     console.error(end.why);

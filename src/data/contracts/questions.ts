@@ -14,6 +14,7 @@ import type { JournalRecord } from './journal-record';
 import { BowerError } from './types';
 import { EMPTY_MD5 } from './hashes';
 import { keepAlreadyBinned } from './note-edit';
+import { STATE_READ } from './note-edit';
 import { displayName, nameOf, thingName } from './tree';
 
 /** The id prefixes Bower's questions carry, spelled here alone. */
@@ -21,6 +22,45 @@ import { displayName, nameOf, thingName } from './tree';
 /** Additive journal values; legacy text yes/no remains readable. */
 export type QuestionAnswer = boolean | { option: string } | { text: string };
 export interface QuestionOption { id: string; label: string; action: { kind: 'file-to'; folderId: string } }
+/** The status/card projection. Stored option actions remain in questions.json and the durable plan. */
+export type PublicQuestion = Question;
+
+export function publicQuestion(q: Question): PublicQuestion {
+  const { id, text, yes, no, askedAt, about, subject, hash, state, shown, words, options } = q;
+  return { id, text, yes, no, askedAt,
+    ...(about === undefined ? {} : { about }), ...(subject === undefined ? {} : { subject }),
+    ...(hash === undefined ? {} : { hash }), ...(state === undefined ? {} : { state }),
+    ...(shown === undefined ? {} : { shown: { lines: [...shown.lines], md5: shown.md5,
+      ...(shown.stamp === undefined ? {} : { stamp: shown.stamp }) } }),
+    ...(words === undefined ? {} : { words }),
+    ...(options === undefined ? {} : { options: options.map(({ id, label }) => ({ id, label })) }),
+  };
+}
+
+/** Strict public snapshot writes; omission is the additive, legacy status wire. */
+export function isQuestionSnapshot(value: unknown): value is PublicQuestion[] {
+  const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+  const text = (v: unknown, max = Infinity): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
+  const option = (v: unknown): v is Pick<QuestionOption, 'id' | 'label'> => object(v)
+    && Object.keys(v).every((k) => ['id', 'label'].includes(k))
+    && typeof v.id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(v.id) && text(v.label, 40);
+  const card = (v: unknown): v is PublicQuestion => object(v)
+    && Object.keys(v).every((k) => ['id', 'text', 'yes', 'no', 'askedAt', 'about', 'subject', 'hash', 'state', 'shown', 'words', 'options'].includes(k))
+    && text(v.id) && text(v.text, 200) && text(v.yes, 40) && text(v.no, 40)
+    && typeof v.askedAt === 'number' && Number.isSafeInteger(v.askedAt) && v.askedAt >= 0
+    && ['about', 'subject', 'hash', 'state'].every((k) => v[k] === undefined || text(v[k]))
+    && (v.words === undefined || typeof v.words === 'string')
+    && (v.shown === undefined || (object(v.shown)
+      && Object.keys(v.shown).every((k) => ['lines', 'md5', 'stamp'].includes(k))
+      && Array.isArray(v.shown.lines) && v.shown.lines.length <= STATE_READ.lines
+      && v.shown.lines.every((line) => text(line, STATE_READ.line))
+      && typeof v.shown.md5 === 'string' && /^[a-f0-9]{32}$/.test(v.shown.md5)
+      && (v.shown.stamp === undefined || text(v.shown.stamp))))
+    && (v.options === undefined || (Array.isArray(v.options) && v.options.length >= 2 && v.options.length <= 4
+      && v.options.every(option) && new Set(v.options.map((o) => o.id)).size === v.options.length));
+  return Array.isArray(value) && value.length <= 10 && value.every(card)
+    && new Set(value.map(askingKey)).size === value.length;
+}
 export interface QuestionRound {
   subject: string; hash?: string; pileId: string; words: string; count: number; exhausted?: true;
   /** Words alone are a member of their own, never the things added later. Absent on legacy pile histories. */

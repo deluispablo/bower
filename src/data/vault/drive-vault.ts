@@ -48,7 +48,7 @@ import { VaultIndex } from './vault-index';
 import { NOT_SENT_TEXT, PERSIST_REFUSED_TEXT, UNREADABLE_TEXT, createUploadQueue, stoppedText, type QueueItem, type UploadQueue } from '../upload-queue';
 import { memoryUploadStore } from '../upload-store';
 import { CHANGED_ELSEWHERE, checkStillAsSeen, notAsSeen, notAsSeenError, notAsSeenReason, notRead, type Landing, type SeenExpectation } from '../contracts/still-as-seen';
-import { answeredAskings, checkedAnswer, pileQuestion, subjectPile, type QuestionAnswer, type QuestionRound, openQuestions } from '../contracts/questions';
+import { askingKey, publicQuestion, answeredAskings, checkedAnswer, pileQuestion, subjectPile, type PublicQuestion, type QuestionAnswer, type QuestionRound, openQuestions } from '../contracts/questions';
 
 export interface DriveVaultOptions {
   driveLinks?: boolean;
@@ -1519,11 +1519,25 @@ export class DriveVault implements VaultSource {
     return { id: r.id, text, at: r.at };
   }
 
-  /** Shared subject policy over one questions file and the existing versioned reads. */
+  private runQuestions: () => readonly PublicQuestion[] = () => [];
+
+  /** A view of the existing run stream, with no copied snapshot or additional polling. */
+  bindRunQuestions(read: () => readonly PublicQuestion[]): () => void {
+    this.runQuestions = read;
+    return () => this.emit();
+  }
+
+  /** Shared subject policy over stored and live askings and the existing versioned reads. */
   private async questionSnapshot(inbox: Pile[], stored: QuestionsFile | null, lines: JournalRecord[], cachedOnly = false): Promise<{ open: Question[]; rounds: QuestionRound[]; piles: Pile[] }> {
     const ix = await this.index();
+    const live = this.runQuestions();
+    const merged = new Map((stored?.questions ?? []).map((q) => [askingKey(q), publicQuestion(q)]));
+    for (const q of live) if (!merged.has(askingKey(q))) merged.set(askingKey(q), q);
+    const questions = [...merged.values()];
+    // Stored-only legacy reads keep their order; the additive live view presents askings chronologically.
+    if (live.length) questions.sort((a, b) => a.askedAt - b.askedAt);
     inbox = await Promise.all(inbox.map(async (p) => {
-      if (!(stored?.rounds?.length || stored?.questions.some((q) => q.words !== undefined))) return p;
+      if (!(stored?.rounds?.length || questions.some((q) => q.words !== undefined))) return p;
       const note = p.path ? ix.file(join(p.path, PILE_NOTE)) : undefined;
       if (!note) return p;
       if (cachedOnly) {
@@ -1539,7 +1553,7 @@ export class DriveVault implements VaultSource {
     for (const [id, u] of this.uploads) for (const e of u.entries) here.add(id).add(e.item.id);
     for (const item of this.queuedItems()) here.add(item.pileId).add(item.memberKey);
     const inboxHashes = new Map(ix.filesIn('Inbox').flatMap((f) => f.md5Checksum ? [[f.id, f.md5Checksum] as const] : []));
-    const all = (stored?.questions ?? []).filter((q) => {
+    const all = questions.filter((q) => {
       const pile = subjectPile(q, inbox, inboxHashes);
       if (!pile) return true;
       if (q.words !== undefined) return q.words === pile.text;
@@ -1553,25 +1567,28 @@ export class DriveVault implements VaultSource {
 
   private async projectQuestions(piles: Pile[], ix: VaultIndex, cachedOnly = false): Promise<Pile[]> {
     const file = ix.file(SYSTEM.questions);
-    if (!file) return piles;
-    const cached = this.reads.keptText(file, cachedOnly);
+    const live = this.runQuestions().length > 0;
+    if (!file && !live) return piles;
+    const cached = file ? this.reads.keptText(file, cachedOnly) : null;
     // The listing initiates no media or checksum read. Full piles may read a nonempty questions file.
-    if (!cached && (cachedOnly || (file.size !== undefined && file.size <= 40))) return piles;
-    let stored: QuestionsFile;
+    if (!live && !cached && (cachedOnly || (file?.size !== undefined && file.size <= 40))) return piles;
+    let stored: QuestionsFile = { v: 1, questions: [] };
     try {
-      const value: unknown = JSON.parse(await (cached ?? this.readTextOnce(file.id)));
-      if (!isRunnerFile(SYSTEM.questions, value)) {
-        if (!cached) console.error(new BowerError('unknown', 'Bower could not read its latest update. Try again.'), `${SYSTEM.questions} has an unsupported shape`);
-        return piles;
+      if (file && (cached || !cachedOnly)) {
+        const value: unknown = JSON.parse(await (cached ?? this.readTextOnce(file.id)));
+        if (isRunnerFile(SYSTEM.questions, value)) stored = value;
+        else {
+          if (!cached) console.error(new BowerError('unknown', 'Bower could not read its latest update. Try again.'), `${SYSTEM.questions} has an unsupported shape`);
+          if (!live) return piles;
+        }
       }
-      stored = value;
     } catch (e) {
       // The explicit questions reader owns its error; a marker cannot refuse the inbox or admission.
       if (e instanceof BowerError && (e.code === 'auth' || !this.current())) throw e;
       if (!cached) console.error(e);
-      return piles;
+      if (!live) return piles;
     }
-    if (!stored.questions.length && !stored.rounds?.length) return piles;
+    if (!live && !stored.questions.length && !stored.rounds?.length) return piles;
     const snapshot = await this.questionSnapshot(piles, stored, await this.journal.list(true), true);
     const hashes = new Map(piles.flatMap((p) => p.items.flatMap((i) => {
       const hash = ix.byId(i.id)?.md5Checksum;
