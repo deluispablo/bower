@@ -128,3 +128,281 @@ Runner-main fit/create/replay corpus evidence belongs to the later B6b/B6c ledge
 Per the user's narrower instruction, only touched test files ran; pnpm check, untouched corpus/method suites,
 e2e, implementation, runtime validators/manifest additions and commits are left to their owning sessions.
 No maintain target was added, and no Bower/person file outside these synthetic fixtures was written.
+
+## Implementation
+
+Implementation session: current B5a/B1c/B3b/B2a worktree, no network and no git writes.
+The committed reds reproduce 18 assertion failures and two legacy controls pass
+(`/tmp/b6a-reds.log`). No tests were edited.
+
+Offline research: read the installed Zod README's schema/parse example and reused
+this repository's note-format, ownership-format, note-edit and task grammar.
+[Zod's declarative schemas](https://zod.dev/api) are the precedent for one declaration
+consumed by writers and validators; no Zod dependency or second serializer is added.
+[CommonMark list items](https://spec.commonmark.org/0.31.2/#list-items) define the lists;
+checkboxes are specifically the [GFM task-list extension](https://github.github.com/gfm/#task-list-items-extension-).
+The existing CommonMark fence transition is reused when reading authored sections.
+These are offline citations, not claims of newly fetched documentation.
+
+`src/data/contracts/note-templates.ts` declares the five ordered shapes, their body
+section, Timeline policy and Source immutability, plus the Project region names.
+The existing note-format serializer consumes those declarations on explicit Bower
+creation. Legacy writes retain their existing path. Explicit writes use B2a's
+summary validator and the three-tag bound; template property scalars use the same
+YAML quoting function. Missing URLs are omitted, and no due date is inferred.
+New template notes carry `bower_template` as their creation-format discriminator;
+an untouched parsed template retains its original bytes without opting legacy
+reads into template creation. Person template intents add neither metadata nor sections.
+
+Project creation frames Goal and Next steps before the ordinary four ownership
+payloads; the parser also accepts the committed appended-region fixtures. The
+existing region author handles `template-rewrite`, checks exact previous content,
+checks Bower Project ownership and preserves all bytes outside the selected span.
+The manifest's closed change union and ordering admit the same ordinary edit intent.
+Source content is in the protected existing Bower-note payload, with no personal
+task authority. Source edits are refused. MOC history appends are refused and other
+edits may not change a legacy Timeline. A legacy MOC with a Timeline is not migrated
+to empty Timeline framing: the lossless refusal leaves its old meaning intact.
+New MOCs reuse moc-overview, moc-figures and moc-members; Sources stays outside their
+rewrite spans. Area's Standard to maintain precedes Current state as declared.
+
+Scripted explicit template planning consumes the same declaration and serializer.
+It records the actual filed original name for a Source, creation/update dates,
+type/status, source and up to five unique links from the authored evidence.
+It adds no unrelated links, maintain targets, operation kinds or serialization path.
+
+removed: generic Current state/Timeline construction from explicit Source and MOC creation.
+removed: current-edit authority over stored Source content and legacy MOC Timelines.
+removed: no files, tests, legacy serializer or maintain mechanism.
+tests changed: none
+
+### Scope blocker
+
+Implementation edits stopped when the required unused-code gate reported a stale
+production baseline entry. The new production use of `validSummary` means this
+existing line must be removed from `harness/unused-production-baseline.json`:
+
+`exports src/data/contracts/note-format.ts validSummary`
+
+That file is outside the B6a ledger. It was not changed. The ordinary unused gate
+passes (2 known findings); the production gate has 29 findings versus baseline 30.
+No baseline bypass, indirect access or duplicate summary validator was introduced.
+The entry is blocked pending lead-owned baseline removal or an expanded file scope.
+
+### Compatibility row drafts (coordinator-owned contracts commit pending)
+
+| Contracts delivery | Stored fixture | Entry point | Evidence |
+| --- | --- | --- | --- |
+| Pending B6a implementation commit | Old Source with a Timeline | parseNote/serializeNote/applyChanges | Stored bytes retained; append and link rewrites refused |
+| Pending B6a implementation commit | Old MOC with a Timeline | parseNote/serializeNote/applyChanges | Readable; ordinary history refused; Timeline cannot be rewritten |
+| Pending B6a implementation commit | Existing v2 ownership fixtures and B5a profile region | parseOwnership/note-edit | Existing payload spans/tasks and profile edits stay green |
+| Pending B6a implementation commit | Old serializer output without template intent | parseNote/serializeNote | Existing serialization behavior stays green; no template backfill |
+| Pending B6a implementation commit | LF/CRLF Project payloads and stale previous content | applyChanges/manifest validation | Exact region rewrite passes; stale payload refuses; personal bytes unchanged |
+
+### Verification environment
+
+The initial red command inadvertently triggered the existing CPU reporter under
+ignored `test-results/cpu`; no tracked file changed. Its direct log was in OS temp.
+Subsequent runs use `/tmp/b6a-test-output.cjs` to route report/cache writes and
+scratch fixture directories to `/tmp/b6a-test-artifacts`, without editing tests,
+configuration or node_modules. No node_modules link or replacement was made.
+`--configLoader runner` avoids Vite's checkout-local bundled-config temporary file.
+The temp fixture package declares ESM; the preload resolves the installed
+Playwright ESM entry for those temp fixtures. The nested quiet-gate config's module
+resolution follows the redirected temporary output as well.
+
+The first full src run reported harness/quiet-gate setup failures caused by that
+temp relocation, plus the expected e2e-port EPERM. After fixing only the OS-temp
+preload, harness passes 47/47 and quiet-gates passes 4/4. A full final src run and
+runner run are underway against the final implementation. These are environment
+setup failures, not test/packet contradictions. No assertions were weakened.
+
+Final targeted suites pass 1,807/1,807 (`/tmp/b6a-targeted-final.log`), including all
+B6a reds, old compatibility fixtures and run-manifest tests. App/node/runner tsc
+and touched-file ESLint pass (`/tmp/b6a-tsc-{app,node,runner}.log`, `/tmp/b6a-eslint.log`).
+Unused-code gate failure is above (`/tmp/b6a-unused.log`).
+
+No screen changed (`ui: false`). `pnpm check` was not run: its test/build/check-mark
+scripts write into the repository, contrary to the owner's instruction; the
+requested separate checks were run with OS-temp output. No e2e server or deployment
+was started. The harness's retry fixtures execute only their own Node tests.
+
+### Contradictions (TL-P4-51)
+
+No B6a or existing contract test contradicts the packet. The entire targeted suite
+was run, not only the new assertions. All red-test assertions are unchanged.
+The required gate's baseline file is the scope blocker, not a contract contradiction.
+
+### Owned implementation files
+
+- `src/data/contracts/note-templates.ts` (new declaration)
+- `src/data/contracts/note-format.ts`
+- `src/data/contracts/ownership-format.ts`
+- `src/data/contracts/note-edit.ts`
+- `src/data/contracts/run-manifest.ts`
+- `src/data/spine/scripted.ts`
+- `docs/harness/2026-10-10-b6a-templates-notes.md`
+
+### Remaining contract work at the scope stop
+
+The planner currently retains up to five unique authored related links, but does
+not yet enforce that at least one is present or resolve/include the destination
+hub when the authored body omitted it. The creation serializer likewise accepts
+missing date/source/related properties from callers other than the grounded
+planner. The current reds all pass, but this is not a claim that contracts 1–4
+are fully delivered. Required-link/metadata admission remains within B6a's owned
+files and must be finished when implementation resumes. Nothing was padded with
+unrelated notes to make those requirements appear satisfied.
+
+The initial incomplete temp-output preload also let the first full src run create
+empty ignored `test-results/fx-*` directories via mkdtempSync before redirecting
+its file contents. The corrected preload redirects mkdtempSync itself. These
+ignored artifacts were not removed after the scope stop. The final runs leave
+fixture/report files under OS temp. Required harness tests use their existing
+scratch Git fixtures there; the session issued no git write command and made no
+worktree Git-state change.
+
+### Final verification results
+
+- Final full src: 169 files, 5,650 tests pass; only the expected e2e-port listen
+  EPERM fails (one test timeout and its one unhandled EPERM), `/tmp/b6a-src-final.log`.
+  Failing test: `src/e2e-port.test.ts:37`, `a server from another worktree is never reused`.
+- Final runner: 50 files, 667 tests pass, `/tmp/b6a-runner-final.log`.
+- Final targeted contracts/format/ownership/edit/planning/manifest: 1,807 pass,
+  `/tmp/b6a-targeted-final.log`. All five B6a red identifiers pass.
+- App/node/runner tsc and touched-file ESLint pass. `git diff --check` passes.
+- Ordinary unused gate passes. Production unused gate fails only the stale
+  `validSummary` baseline row, `/tmp/b6a-unused-final.log`.
+- Log index: `/tmp/b6a-gates.txt`. No test/packet contradictions were found.
+
+Status: blocked, with no commits under the owner's no-git-writes instruction.
+Resume required: authorize or lead-remove the out-of-ledger unused production
+baseline row; finish required hub/link and metadata admission in the owned files;
+rerun affected checks. The current passing reds are not full acceptance evidence.
+
+## Implementation (finished)
+
+Resumed 2026-10-11 under the owner's no-network, no-git-writes and no-test-changes
+instructions. The earlier uncommitted implementation is retained. The coordinator's
+baseline removal is retained, and both unused gates now pass. This section supersedes
+the previous scope blocker and verification results. Implementation work has stopped
+under TL-P4-51; acceptance is **blocked**, not done, by the contradiction below.
+
+### Contract 3 changes
+
+The existing scripted planner resolves authored links against listed note identities,
+deduplicates by file id and includes the nearest destination hub/MOC even when the
+authored body omitted it. Hub recognition uses the existing VaultIndex.isHub home,
+including typed MOCs; indexed front matter is reused when available. Sources
+subfolders may use their parent hub. Ambiguous or absent destination hubs refuse
+before any effect. Related metadata contains the hub plus at most four resolved
+authored notes. It adds no other folder notes for padding. Selected note identities
+are included in the manifest's captured places.
+
+The existing note-format serializer checks explicit template creation for every
+caller: B2a summary admission, at most three tags, actual created/updated calendar
+dates, nonempty source, one to five unique related wikilinks, matching type and the
+Source original. It rejects duplicate/reserved property keys and personal template
+creation. It emits type/status, an explicit empty tags list where needed, dates,
+source, related and the template discriminator through its existing front matter
+writer. Type and status retain the template's existing defaults. Legacy inputs
+without template intent retain their compatibility path; stored personal notes
+retain their bytes. No second serializer, validator for B2a summary, operation kind
+or maintain write was added.
+
+Offline standards remain the citations in Implementation: Zod declarative schemas,
+CommonMark lists and the GFM checkbox extension. No network request was made.
+
+removed: incomplete metadata admission from explicit Bower template creation.
+removed: planner admission of explicit template notes without a grounded destination hub.
+removed: authored-link-only selection that could omit the hub from the five related links.
+removed: no files, tests, legacy serializer or maintain mechanism.
+tests changed: none
+
+### Every contract contradiction (TL-P4-51)
+
+There is exactly one contradicting test after the complete targeted and src suites:
+
+- `src/data/spine/scripted.test.ts:26` —
+  `B6a templates: b6-source-absent-url plans a Source with its original and no invented address`.
+  Its destination is `Resources/Gardening` (:32), its authored body supplies
+  `[[Gardening]]` (:36), and it requires successful note creation (:39–47). The
+  default seeded folder has no Gardening hub/MOC or Gardening note. An authored
+  unresolved name is not a grounded link. The real planner now refuses this case
+  before any effect, as required by contract 3 and the owner's explicit instruction.
+  Making this fixture pass would require inventing grounding or changing a test;
+  neither was done. The full five-file target was run before this stop, followed
+  by every requested gate. Lead/coordinator resolution of this fixture is required.
+
+`src/e2e-port.test.ts:37`, `a server from another worktree is never reused`, is the
+owner-expected listen EPERM and resulting timeout/unhandled error. It is an
+environment failure, not a packet contradiction. There are no other src failures.
+
+### Final verification
+
+All test/report/cache output used OS temp via the existing
+`/tmp/b6a-test-output.cjs` preload and `--configLoader runner`. No test,
+configuration or node_modules was changed, replaced or symlinked. No session git
+write command was issued. Harness tests ran their existing scratch Git fixtures
+under OS temp. Read-only `git diff --check` passes and the test-file diff is empty.
+
+| Check | Result | OS-temp log |
+| --- | --- | --- |
+| Complete B6a five-file reds/compatibility target | 387 pass; only the contradiction above fails | `/tmp/b6a-finished-reds.log` |
+| `pnpm exec vitest run src --maxWorkers=2` | 5,649 pass; contradiction and expected e2e-port fail; one expected unhandled EPERM | `/tmp/b6a-finished-src.log` |
+| Runner tests, maxWorkers=2 | 50 files / 667 tests pass | `/tmp/b6a-finished-runner.log` |
+| App TypeScript, noEmit | Pass | `/tmp/b6a-finished-tsc-app.log` |
+| Node TypeScript, noEmit | Pass | `/tmp/b6a-finished-tsc-node.log` |
+| Runner TypeScript, noEmit | Pass | `/tmp/b6a-finished-tsc-runner.log` |
+| ESLint, all six owned runtime files | Pass | `/tmp/b6a-finished-eslint.log` |
+| `node scripts/check-unused-gate.mjs` | Pass: 2 ordinary / 29 production known findings; no new or stale findings | `/tmp/b6a-finished-unused.log` |
+
+The src and targeted commands also used `--configLoader runner` to avoid a
+checkout-local config bundle. Runner JSON is `/tmp/b6a-finished-runner.json`.
+`pnpm check` was not run because its build, report and check-mark steps write into
+the repository; the owner requested the separate checks above. No screen changed
+(`ui: false`), so no e2e server was started.
+
+Additional OS-temp diagnostic probes call the unchanged production entry points:
+
+- `/tmp/b6a-contract3-probe.ts` bundled to `.mjs`: 72 checks pass for required
+  metadata across all five templates, summary/tag bounds, missing related links,
+  personal creation refusal, exact personal round-trip and the absent Gardening
+  seed fixture. Log: `/tmp/b6a-contract3-probe.log`.
+- `/tmp/b6a-planner-probe.ts` bundled to `.mjs`: real planScripted creation with
+  an omitted hub resolves it; six authored notes yield five related links including
+  the hub; an unrelated neighbour is excluded; a missing hub refuses. All pass.
+  Log: `/tmp/b6a-planner-probe.log`. These synthetic probes add no repo test/fixture.
+
+### Final compatibility row drafts (coordinator-owned contracts commit pending)
+
+| Contracts delivery | Stored fixture | Entry point | Evidence |
+| --- | --- | --- | --- |
+| Pending B6a implementation commit | Old Source with a Timeline | parseNote/serializeNote/applyChanges | Exact bytes retained; history and prose-link rewrites refused; compatibility cases pass |
+| Pending B6a implementation commit | Old MOC with a Timeline | parseNote/serializeNote/applyChanges | Readable without backfill; ordinary history and Timeline rewrites refused; compatibility cases pass |
+| Pending B6a implementation commit | Existing v2 ownership and B5a profile fixtures | parseOwnership/note-edit | Existing spans, personal tasks and profile edits pass in the complete src suite |
+| Pending B6a implementation commit | Old serializer output without template intent | parseNote/serializeNote | Legacy serialization assertions pass; creation metadata is not backfilled onto stored notes |
+| Pending B6a implementation commit | LF/CRLF Project payloads and stale previous content | applyChanges/manifest validation | Goal/Next steps region rewrites pass; stale payload refuses; personal bytes retained |
+| Pending B6a implementation commit | Plain personal note without front matter | parseNote/serializeNote; explicit template refusal | Personal round-trip is exact; personal creation intent cannot acquire template metadata |
+
+Owned files remain the six runtime paths and this notes file listed in Implementation.
+Only note-format, scripted planning and these notes changed in this resumed session.
+Status: blocked under TL-P4-51; no commits, no acceptance claim, no test modification.
+
+## Red repair 2
+
+tests changed: src/data/spine/scripted.test.ts: seed the Gardening hub so the link is grounded (packet contract 3)
+
+Seeded Resources/Gardening/Gardening.md through FakeDrive createFolder/createText,
+following the existing scripted planner fixture in fake-worker.test.ts:1445–1450.
+Every Source assertion remains unchanged. No production file, node_modules or git state was written.
+No network used; the coordinator owns commits.
+
+Before repair: the exact b6-source-absent-url scripted test was refused by templateLinks;
+the file had 1 failure and 5 passes. Log: /tmp/b6a-repair2-red.log.
+After repair: all 6 tests pass, including original retention, absent invented URL and successful creation.
+Log: /tmp/b6a-repair2-green.log.
+Command: NODE_OPTIONS='--require=/tmp/b6a-test-output.cjs' pnpm exec vitest run src/data/spine/scripted.test.ts --maxWorkers=2 --configLoader runner
+The existing preload directs test/cache artifacts to OS temp. No broader gate was run
+under this mechanical repair scope; pnpm check writes into the repository.
+This repair resolves the missing Gardening fixture contradiction recorded above.

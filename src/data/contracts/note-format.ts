@@ -21,10 +21,11 @@
  */
 import { BowerError, type Note, type Property, type SourceKind, type TimelineEntry, type TypeRow, type TypeTable } from './types';
 import { timelineLine, parseTimelineLine } from './timeline-line';
-import { parseOwnership, togglePersonalTask, type ByteSpan, type FetchedOwnership } from './ownership-format';
+import { fenceAfter, parseOwnership, togglePersonalTask, type ByteSpan, type Fence, type FetchedOwnership } from './ownership-format';
+import { NOTE_TEMPLATES, type NoteTemplate } from './note-templates';
 
 /** Frontmatter keys that are not properties. */
-export const BOWER_KEYS = ['summary', 'status', 'tags', 'by', 'original', 'bower_source', 'bower_state'] as const;
+export const BOWER_KEYS = ['summary', 'status', 'tags', 'by', 'original', 'bower_source', 'bower_state', 'bower_template'] as const;
 
 const LABELS: Record<string, string> = { next: 'Next due' };
 const CURRENT = '## Current state';
@@ -32,7 +33,7 @@ const TIMELINE = '## Timeline';
 const BOWER_NOTE = "## Bower's note";
 
 export type ParsedNote = Omit<Note, 'backlinks'>;
-export type NoteFile = Omit<Note, 'backlinks' | 'path' | 'title' | 'links'>;
+export type NoteFile = Omit<Note, 'backlinks' | 'path' | 'title' | 'links'> & { template?: NoteTemplate };
 
 // Retain source bytes for an untouched parsed personal note, outside its display model.
 const personalSources = new WeakMap<NoteFile, { raw: string; serialized: string }>();
@@ -221,14 +222,19 @@ export function parseNote(path: string, raw: string, fetched?: FetchedOwnership)
   const text = raw.replace(/\r\n/g, '\n');
   const title = nameOf(path);
   const { layout } = ownership;
-  const body = payloadDisplay(bytes, ownership.personal);
+  let body = payloadDisplay(bytes, ownership.personal);
   const front = layout.front ? frontOf(payloadDisplay(bytes, layout.front)) : null;
   const sectionOf = (span: ByteSpan | null, heading: string): string | null => (span ? payloadDisplay(bytes, span, heading) : null);
-  const current = (sectionOf(layout.current, CURRENT) ?? '').split('\n').filter(Boolean).map((line) => line.startsWith('- ') ? line.slice(2) : line);
+  let current = (sectionOf(layout.current, CURRENT) ?? '').split('\n').filter(Boolean).map((line) => line.startsWith('- ') ? line.slice(2) : line);
   const timeline = sectionOf(layout.timeline, TIMELINE) ?? '';
   // A v2 note with nothing in Bower's note has none; a legacy heading with nothing under it keeps an empty one.
   const note = sectionOf(layout.bowerNote, BOWER_NOTE);
-  const bowerNote = ownership.status === 'v2' ? note || null : note;
+  let bowerNote = ownership.status === 'v2' ? note || null : note;
+  if (ownership.status === 'v2' && front?.get('by') === 'bower' && front.get('bower_template') === 'source') {
+    body = note ?? body;
+    current = [];
+    bowerNote = null;
+  }
   front?.delete('bower_format');
   if (!front) return retainPersonalSource({ path, title, summary: '', properties: [], tags: [], currentState: [], body, timeline: [], links: linksIn(text), byBower: false }, raw);
   const f = front;
@@ -265,19 +271,46 @@ export function parseNote(path: string, raw: string, fetched?: FetchedOwnership)
 }
 
 function retainPersonalSource(note: ParsedNote, raw: string): ParsedNote {
-  if (!note.byBower) personalSources.set(note, { raw, serialized: serializeNote(note) });
+  if (!note.byBower || /^bower_template: (source|concept|project|area|moc)$/m.test(raw)) personalSources.set(note, { raw, serialized: serializeNote(note) });
   return note;
 }
 
 export function serializeNote(n: NoteFile): string {
+  if (n.template) {
+    const property = (key: string): Property | undefined => n.properties.find((p) => p.key === key);
+    const related = property('related');
+    const relatedText = related?.link ? `[[${related.link}]]` : related?.value ?? '';
+    const links = linksIn(relatedText);
+    // Creation is strict for every caller; stored notes without template intent retain their legacy path.
+    if (!n.byBower || !Object.hasOwn(NOTE_TEMPLATES, n.template) || !validSummary(n.summary)
+      || n.tags.length > 3 || n.tags.some((tag) => !validSummary(tag))
+      || new Set(n.properties.map((p) => p.key)).size !== n.properties.length
+      || n.properties.some((p) => !/^[a-z][a-z0-9_]*$/.test(p.key) || p.key === 'bower_format'
+        || (BOWER_KEYS as readonly string[]).includes(p.key))
+      || (property('type') !== undefined && property('type')?.value !== n.template)
+      || !dateOk(property('created')?.value ?? '') || !dateOk(property('updated')?.value ?? '')
+      || !validSummary(property('source')?.link ?? property('source')?.value ?? '')
+      || !links.length || links.length > 5 || links.length !== [...relatedText.matchAll(/\[\[([^\]|]+)\]\]/g)].length
+      || !/^\[\[[^\]|\r\n]+\]\](?:,\s*\[\[[^\]|\r\n]+\]\])*$/.test(relatedText)
+      || (n.status !== undefined && !validSummary(n.status))
+      || (n.template === 'source' && !validSummary(n.original ?? ''))) {
+      throw new BowerError('unknown', 'Bower could not write this note safely.');
+    }
+  }
   const front: string[] = [];
   if (n.summary) front.push(`summary: ${summaryScalar(n.summary)}`);
-  if (n.status) front.push(`status: ${oneLine(n.status)}`);
-  if (n.tags.length) front.push(`tags: [${n.tags.map(oneLine).join(', ')}]`);
+  if (n.status || n.template && n.byBower) front.push(`status: ${summaryScalar(n.status ?? (n.template === 'moc' ? 'evergreen' : 'active'))}`);
+  if (n.tags.length || n.template) front.push(`tags: [${n.tags.map((tag) => n.template ? summaryScalar(tag) : oneLine(tag)).join(', ')}]`);
   if (n.byBower) front.push('by: bower');
-  if (n.original) front.push(`original: ${oneLine(n.original)}`);
+  if (n.original) front.push(`original: ${summaryScalar(oneLine(n.original))}`);
   if (n.bowerNote) front.push(`bower_source: ${n.bowerNote.source}`);
-  for (const p of n.properties) front.push(`${p.key}: ${p.link ? `[[${p.link}]]` : oneLine(p.value)}`);
+  for (const p of n.properties) front.push(`${p.key}: ${n.template && n.byBower ? summaryScalar(p.link ? `[[${p.link}]]` : oneLine(p.value)) : p.link ? `[[${p.link}]]` : oneLine(p.value)}`);
+  if (n.template && n.byBower) {
+    const type = n.properties.find((p) => p.key === 'type');
+    if (!type) front.push(`type: ${n.template}`);
+    front.push('bower_format: ownership/2', `bower_template: ${n.template}`);
+    return ['---', ...front, '---', '', ...templateBody(n, n.template)].join('\n');
+  }
   const out = ['---', ...front, '---', ''];
   if (n.currentState.length) out.push(CURRENT, ...n.currentState.map((l) => `- ${oneLine(l)}`), '');
   if (n.body) out.push(n.body, '');
@@ -286,6 +319,44 @@ export function serializeNote(n: NoteFile): string {
   const serialized = out.join('\n');
   const source = personalSources.get(n);
   return source?.serialized === serialized ? source.raw : serialized;
+}
+
+/** Section contents use the shared fence grammar; only this serializer writes headings/framing. */
+function templateBody(n: NoteFile, template: NoteTemplate): string[] {
+  const shape = NOTE_TEMPLATES[template];
+  const contents = new Map<string, string>();
+  let section = '';
+  let fence: Fence | null = null;
+  for (const line of n.body.split('\n')) {
+    const previous = fence;
+    fence = fenceAfter(line, fence);
+    const heading = !previous && !fence ? /^## (.+)$/.exec(line)?.[1] : undefined;
+    if (heading && (shape.sections as readonly string[]).includes(heading)) section = heading;
+    else contents.set(section, `${contents.get(section) ?? ''}${line}\n`);
+  }
+  const loose = trimLines(contents.get('') ?? '');
+  if (loose) contents.set(shape.body, [loose, contents.get(shape.body) ?? ''].filter(Boolean).join('\n'));
+  const related = n.properties.find((p) => p.key === 'related');
+  const source = n.properties.find((p) => p.key === 'source');
+  const linkText = (p: Property | undefined): string => p ? p.link ? `[[${p.link}]]` : p.value : '';
+  const fallback: Record<string, string> = {
+    Summary: n.summary, Related: linkText(related), Sources: linkText(source),
+    'Current state': n.currentState.map((line) => `- ${oneLine(line)}`).join('\n'),
+    Timeline: n.timeline.map((entry) => timelineLine({ ...entry, text: oneLine(entry.text) })).join('\n'),
+  };
+  const render = (heading: string): string => `## ${heading}\n${trimLines(contents.get(heading) ?? fallback[heading] ?? '')}\n`;
+  const frame = (owner: string, text: string): string => `<!-- bower:ownership/2 begin ${owner} -->\n${text}<!-- bower:ownership/2 end ${owner} -->\n`;
+  const personal = shape.sections.filter((heading) => !['Current state', 'Timeline', 'Goal', 'Next steps', 'Standard to maintain'].includes(heading)).map(render).join('\n');
+  const out: string[] = [];
+  if (template === 'area') out.push(render('Standard to maintain'));
+  if (template === 'project') out.push(frame('goal', render('Goal')), frame('next-steps', render('Next steps')));
+  out.push(frame('current', template !== 'source' && template !== 'moc' ? render('Current state') : ''),
+    frame('personal', template !== 'source' && template !== 'moc' ? personal : ''),
+    frame('timeline', shape.timeline ? render('Timeline') : ''),
+    frame('bower-note', template === 'source' ? personal : n.bowerNote ? n.bowerNote.text + '\n' : ''));
+  if (template === 'moc') out.push(frame('moc-overview', render('Overview')), frame('moc-figures', ''),
+    frame('moc-members', render('Notes')), render('Sources'));
+  return out;
 }
 
 /** Ticks or unticks the n-th task of the body; Bower's sections are never touched. */
