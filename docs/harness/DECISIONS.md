@@ -607,3 +607,15 @@ One line per ruling, newest last. Read only the decision a task needs. Later rul
   - **(C) Small bugs, fixed in the same round:** request pins count per source, like answer pins; MOC `members` ids go through the same fresh-id normalisation, so identical runs give one fingerprint; and the e2e:fake regression `capabilities.spec.ts:210` (write it settles as an answered row) is a B1d regression to fix, with that spec as its red.
 
   One red covers (A), (B) and (C), then the fix, gates, Astra xhigh and the high review. **Loop end after this round:** only data-safety or hard-rule findings come back. Everything else is recorded as a v1 limit, and B1d closes
+- TL-P4-48 addendum 3 (B4a Astra xhigh pass 1, 9 findings, `2026-10-11-b4a-adversarial-1.md`): **fix round 1 approved on all 9, with one red covering all 9.** Each fix goes in its existing home:
+  1. a declared runner-write target must equal the file written;
+  2. Bower markers inside a code fence are text, a rule in the one ownership parser, so it holds for every note;
+  3. Forget tombstones the named facts only, and only a settled Bin tombstones by source (Q3);
+  4. events dedupe by id on replay and on Undo;
+  5. a consolidation without its confirmed archive is refused (Q6 order);
+  6. damaged boundaries mean no write that run (Q1);
+  7. a reread of the same source hash is not a new observation at the gate;
+  8. a parent created earlier in the same run is accepted through its createdBy;
+  9. a file without a final newline gets the byte append with the newline added.
+
+  Then gates, Astra xhigh and the high review. The loop-end rule (TL-P4-41 addendum 21) applies after this round
