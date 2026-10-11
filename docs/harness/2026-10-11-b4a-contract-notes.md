@@ -2662,3 +2662,7 @@ Final git diff --check passed (read-only); commits are delegated to the runner
 through .codex-commits.json, with scanner/fixture and notes in separate commits.
 Risk/left out: restricted sandbox prevents the e2e-port server check; runner
 will run pnpm check and capabilities e2e on demo/fake after committing.
+
+## Close (coordinator, 2026-10-11)
+
+Closed known-green. Reds were proved at their tests-only commits (round 4 98abf5a3, round 5 9054e66d, round 6 19f9ae9b, round 7 5936f107); the fix commits no longer come off cleanly, because the notes lines they carried were extended later and later rounds build on them. Gates: pnpm check and the app and capabilities e2e on demo and fake green (b4a-g10, plus the round 7 gates). Reviews: P4-120 and P4-121 BLOCK, answered by rounds 5 and 6; P4-122 passed all nine contract checks and its one scanner finding was fixed in round 7 (addendum 10, no new review). Hand-offs: B4b and B4c wire the runtime; B5b takes the run-manifest.ts create-when-absent and strict-new split next.
