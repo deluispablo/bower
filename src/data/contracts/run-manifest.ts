@@ -591,6 +591,16 @@ async function admit<M extends Manifest | ManifestV2>(
     if (!item.dependsOn.every((dependency) => earlier.has(dependency))
       || (createdBy !== null && !earlier.has(createdBy))) return { ok: false, reason: 'order' };
     if (createdBy !== null && earlier.get(createdBy) !== 'create-folder') return { ok: false, reason: 'shape' };
+    if (item.effect.kind === 'bin' && item.effect.before.folder) {
+      const parentId = item.effect.before.fileId;
+      const pile = value.capture.piles.find((p) => p.anchor?.fileId === parentId);
+      // A moved member has left the pile; consumed words need their own version-fenced Bin.
+      if (pile && !pile.childFileIds.every((fileId) => value.operations.some((child) =>
+        item.dependsOn.includes(child.operationId) && (child.effect.kind === 'bin'
+          || child.effect.kind === 'move' && !(pile.context.kind === 'text' && pile.context.file.fileId === fileId))
+        && child.effect.before.fileId === fileId && child.effect.before.parents.includes(parentId))))
+        return { ok: false, reason: 'order' };
+    }
     earlier.set(item.operationId, item.effect.kind);
   }
   const maintenance = value.operations.filter((o) => o.effect.kind === 'maintain');

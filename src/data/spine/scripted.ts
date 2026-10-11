@@ -1063,12 +1063,12 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const asking = new Map<string, Question>();
   /** Questions about piles that stay in the inbox untouched, since their place is unclear (TL-P4-08 point 1). */
   const askedPiles: Question[] = [];
-  const fromWords: Array<{ pileId: string; folder: DriveFile; words: string; context: DriveFile | null }> = [];
+  const fromWords: Array<{ pileId: string; folder: DriveFile; words: string }> = [];
   /**
    * Piles of words only whose news a Timeline line on a note carries instead of a note of their own (c3-pair-ask, the
    * value gate for words): each goes to the Bin only once every line citing it is written, and waits whole otherwise.
    */
-  const citedWords = new Map<string, { folder: DriveFile; context: DriveFile | null; lines: WantedLine[]; notes: Set<string> }>();
+  const citedWords = new Map<string, { folder: DriveFile; lines: WantedLine[]; notes: Set<string> }>();
   const citedByLine = (pileId: string): boolean => all && keepDay && !chosen.has(pileId) && d.lines.some((l) => l.cites === pileId);
   /** Piles with things asked about (TL-P4-08 addendum 4): the rest is filed, the folder and its words stay. */
   const partly = new Set<string>();
@@ -1255,8 +1255,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       context,
     });
     if (partial) partly.add(pile.id);
-    if (asLine || memoryWords.has(pile.id)) citedWords.set(pile.id, { folder, context: !declared && note ? note : null, lines: [], notes: new Set() });
-    else if (wordsOnly) fromWords.push({ pileId: pile.id, folder, words, context: !declared && note ? note : null });
+    if (asLine || memoryWords.has(pile.id)) citedWords.set(pile.id, { folder, lines: [], notes: new Set() });
+    else if (wordsOnly) fromWords.push({ pileId: pile.id, folder, words });
     // The question the reply asks about this pile, asked once it is filed.
     const after = d.askAfter?.(pile, opts.requestedAt);
     if (after) asking.set(pile.id, after);
@@ -1931,7 +1931,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // Inbox, `.md`, unique against the folder as it will be. A filed thing's own note is written only where none is
   // yet, as the legacy runner did; it follows its thing's move. The words of a pile become its note.
   const noteDate = timelineDate(opts.requestedAt) ?? 'Today';
-  const generated: Array<{ to: string; name: string; text: string; what: string; after: string | null; pileId: string | null; aside: string; context: DriveFile | null }> = [];
+  const generated: Array<{ to: string; name: string; text: string; what: string; after: string | null; pileId: string | null; aside: string }> = [];
   for (const { thing, name } of filing) {
     const own = d.ownNote?.(thing.item.name) ?? undefined;
     if (!own || !generatedPlace(parentOf(own))) continue;
@@ -1940,7 +1940,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     plannedFile(own);
     const what = `A note for ${displayName(name)}.`;
     const text = serializeNote({ summary: what, properties: [], tags: [], currentState: [], body: '', timeline: [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
-    generated.push({ to: parentOf(own), name: nameOf(own), text, what, after: thing.file.id, pileId: null, aside: thing.file.name, context: null });
+    generated.push({ to: parentOf(own), name: nameOf(own), text, what, after: thing.file.id, pileId: null, aside: thing.file.name });
   }
   /** The name each filed thing is cited by, as the run makes it: its note's, else its own. */
   const madeAs = new Map(filing.map(({ thing, name, note }) => [thing.file.id, note?.name ?? name]));
@@ -2013,7 +2013,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const text = serializeNote({ template, typeRow, summary: authored.summary, properties, tags: [], currentState: [], body: authored.body,
       ...(template === 'source' ? { original: name } : {}),
       timeline: template && !NOTE_TEMPLATES[template].timeline ? [] : [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
-    generated.push({ to, name: noteName, text, what: authored.summary, after: thing.file.id, pileId: null, aside: thing.file.name, context: null });
+    generated.push({ to, name: noteName, text, what: authored.summary, after: thing.file.id, pileId: null, aside: thing.file.name });
   }
   // A request's line already there is satisfied only under the name its source is filed as (TL-P4-32 addendum 2 (6)):
   // under another, it is appended now, after that move.
@@ -2035,14 +2035,14 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     edits.push({ file: p.file, path: p.path, rows: [{ what: LINE_ADDED, line: 0 }], before: p.before, bytes: p.bytes, changes: [change], text: result.text, after: [p.consent.sourceFileId], keeps: [] });
   }
   for (const p of satisfied) places.set(p.file.id, p.file);
-  for (const { pileId, folder, words, context } of fromWords) {
+  for (const { pileId, folder, words } of fromWords) {
     const { to, name: title } = wordsPlace(pileId, words);
     destination(to);
     const name = freeName(planned, to, title);
     plannedFile(join(to, name));
     const what = 'Written from a note you added.';
     const text = serializeNote({ summary: words, properties: [{ key: 'kind', label: 'Kind', value: 'Note' }], tags: [], currentState: [], body: words, timeline: [{ date: noteDate, text: what }], byBower: true });
-    generated.push({ to, name, text, what, after: null, pileId, aside: folder.name, context });
+    generated.push({ to, name, text, what, after: null, pileId, aside: folder.name });
   }
   // Words you added that disagree with a stored note (C07): the question linking both, asked once the note written
   // from those words is there. The stored note is read now; one that cannot be read asks nothing.
@@ -2469,6 +2469,7 @@ export async function build(decided: Decided): Promise<Ended> {
   for (const f of filing.filter((x) => !x.merge)) await fileOne(f);
   // Each generated note, keyed by its own createKey; a pile of words goes to the Bin only after its note is written.
   const notesOf = new Map<string, string>();
+  const wordsFiled = new Map<string, ReportContribution>();
   for (const note of generated) {
     const after = note.after === null ? undefined : moveOf.get(note.after);
     const op = await add({ kind: 'create-text', parent: targetOf(note.to), name: note.name, createKey: newKey('note'), text: note.text, content: await utf8(note.text), purpose: 'generated' }, after ? [after] : []);
@@ -2479,13 +2480,13 @@ export async function build(decided: Decided): Promise<Ended> {
       const choice = chosen.get(note.pileId);
       if (choice) derive(choice.record, op);
     }
-    // An observed pile's context note goes to the Bin once its words are written, so a folder kept by another
-    // child (a second pile note, a late thing) never has the same words written again on the next run.
-    const context = note.context ? await add({ kind: 'bin', before: seen(note.context), capturedChildIds: [] }, [op]) : null;
     reportPlan.push({ requires: [op, ...chainOf(note.to)], when: 'applied', value: { ...empty(), created: [{ path, what: note.what }] } });
-    if (filed.length) reportPlan.push({ requires: [op, ...(context ? [context] : []), ...chainOf(note.to)], when: 'applied', value: { ...empty(), filed } });
+    if (filed.length) {
+      const row: ReportContribution = { requires: [op, ...chainOf(note.to)], when: 'applied', value: { ...empty(), filed } };
+      reportPlan.push(row);
+      if (note.pileId !== null) wordsFiled.set(note.pileId, row);
+    }
     reportPlan.push({ requires: [op], when: 'rejected', value: { ...empty(), setAside: [{ name: note.aside, why: note.pileId === null ? NOTE_NOT_WRITTEN : WORDS_NOT_WRITTEN }] } });
-    if (context) reportPlan.push({ requires: [context], when: 'rejected', value: { ...empty(), setAside: [{ name: note.aside, why: WORDS_NOT_WRITTEN }] } });
   }
   // A model's line cites the name its thing or note was given (a free name when the one asked for was taken): its
   // note's text is authored again with it, by `applyChanges` as before; one that cannot be cites nothing.
@@ -2595,24 +2596,29 @@ export async function build(decided: Decided): Promise<Ended> {
   for (const op of memoryOps) reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(),
     updated: [{ path: 'About me.md', what: 'Brought up to date.', op }] } });
   for (const record of memoryRecords) derive(record, ...memoryOps);
-  // A pile of words whose news went onto notes as Timeline lines: its context note and folder go to the Bin once those
-  // notes' edits are written; a refused edit or Bin leaves the words with their existing not-done row.
+  // Every captured words item waits for its filing or memory effects and carries its read version to the Bin.
   /** The Bin a pile of words already saved is reported by: its pile note's, or (none bound) its folder's. */
   const savedWordsBin = new Map<string, string>();
-  for (const [pileId, w] of citedWords) {
-    const lines = [...w.notes].flatMap((id) => editOf.get(id) ?? []);
+  for (const pile of capturedPiles) {
+    if (pile.context.kind !== 'text') continue;
+    const pileId = pile.pileId;
+    const w = citedWords.get(pileId);
+    const generated = notesOf.get(pileId);
+    const lines = w ? [...w.notes].flatMap((id) => editOf.get(id) ?? []) : generated ? [generated] : [];
+    lines.push(...movesOf.get(pileId) ?? []);
     if (memoryWords.has(pileId)) lines.push(...memoryOps);
-    const context = w.context ? await add({ kind: 'bin', before: seen(w.context), capturedChildIds: [] }, lines) : null;
-    if (context !== null && !savedWords.has(pileId)) {
+    const context = await add({ kind: 'bin', before: pile.context.file, capturedChildIds: [] }, [...new Set(lines)]);
+    wordsFiled.get(pileId)?.requires.push(context);
+    if ((w || generated) && !savedWords.has(pileId)) {
       reportPlan.push({ requires: [context], when: 'rejected', value: { ...empty(),
-        setAside: [{ name: w.folder.name, why: WORDS_NOT_WRITTEN }] } });
+        setAside: [{ name: pile.anchor?.name ?? pile.context.file.name, why: WORDS_NOT_WRITTEN }] } });
     }
-    if (context !== null && savedWords.has(pileId)) {
+    if (savedWords.has(pileId)) {
       savedWordsBin.set(pileId, context);
     }
     // Filed as the note its news went into (the first, when it went into more than one), once every such edit applied.
     const into = edits.find((e) => editOf.get(e.file.id) === lines[0]);
-    if (into) reportPlan.push({ requires: [...lines, ...(context ? [context] : [])], when: 'applied', value: { ...empty(), filed: [{ name: 'Your note', title: displayName(nameOf(into.path)), kind: 'note', to: parentOf(into.path), note: into.path }] } });
+    if (w && into) reportPlan.push({ requires: [...new Set(lines), context], when: 'applied', value: { ...empty(), filed: [{ name: 'Your note', title: displayName(nameOf(into.path)), kind: 'note', to: parentOf(into.path), note: into.path }] } });
   }
   for (const pile of capturedPiles) {
     // A pile partly asked about keeps its folder, with what is asked about and its words.
