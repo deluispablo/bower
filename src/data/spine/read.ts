@@ -73,14 +73,19 @@ export type AdmissionRead = Omit<SpineRead, 'listAll'> & {
 };
 
 /** Runs each task with at most `limit` running at once, in the order given. */
-export function limiter(limit: number): <T>(task: () => Promise<T>) => Promise<T> {
+export function limiter(limit: number, stopOnError?: (error: unknown) => boolean): <T>(task: () => Promise<T>) => Promise<T> {
   let running = 0;
+  let stopped: { error: unknown } | undefined;
   const waiting: Array<() => void> = [];
   return async <T>(task: () => Promise<T>): Promise<T> => {
     if (running >= limit) await new Promise<void>((resolve) => waiting.push(resolve));
     running += 1;
     try {
+      if (stopped) throw stopped.error;
       return await task();
+    } catch (error) {
+      if (stopOnError?.(error)) stopped = { error };
+      throw error;
     } finally {
       running -= 1;
       waiting.shift()?.();
@@ -147,8 +152,9 @@ function readsOf(rootId: string, listing: readonly DriveFile[], scope: Admission
  * - A read ahead that fails is kept as it failed, so the plan meets the very error a read of its own would have
  *   met; it is logged (no file text is ever in an error).
  */
-export function admissionRead(drive: AdmissionDrive, scope: AdmissionScope, budget?: SubrequestBudget): AdmissionRead {
-  const limit = limiter(READ_AHEAD);
+export function admissionRead(drive: AdmissionDrive, scope: AdmissionScope, budget?: SubrequestBudget,
+  stopOnError?: (error: unknown) => boolean): AdmissionRead {
+  const limit = limiter(READ_AHEAD, stopOnError);
   const texts = new Map<string, Promise<string>>();
   const bytes = new Map<string, Promise<Uint8Array>>();
   const once = <T>(kept: Map<string, Promise<T>>, id: string, read: () => Promise<T>): Promise<T> => {

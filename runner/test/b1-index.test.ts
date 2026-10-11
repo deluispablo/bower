@@ -741,6 +741,7 @@ it.each(['bootstrap', 'missing-index'] as const)(
       }),
       claude: async (call) => {
         const context: unknown = JSON.parse(call.input.split('\n').at(-1) ?? '{}');
+        if ('selection' in (context as Record<string, unknown>)) return answer(call);
         shown.push(snapshotStrings(context));
         writesAtPlan.push(mutations);
         readsAtPlan.push(reads.length);
@@ -902,7 +903,7 @@ it.each(['instructions', 'all'] as const)(
     const requests: Array<[string, string, string | null]> = [];
     const indexCalls: typeof requests = [];
     const callsAtPlan: Array<typeof requests> = [];
-    const original = maintenance.planningIndex;
+    const original = maintenance.refreshPlanning;
     const maintain = maintenance.withMaintenance;
     vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (...args) => {
       callsAtPlan.push([...requests]);
@@ -919,11 +920,11 @@ it.each(['instructions', 'all'] as const)(
     // Everything else, including scope aiming and the real provider, still runs.
     const baseline = await warmFixture();
     const listingCalls: typeof requests = [];
-    const planning = vi.spyOn(maintenance, 'planningIndex').mockImplementation(async (drive, root) => {
+    const planning = vi.spyOn(maintenance, 'refreshPlanning').mockImplementation(async (...args) => {
       const from = requests.length;
-      await drive.planReads().listAll(root, { readAhead: false });
+      const refreshed = await original(...args);
       listingCalls.push(...requests.slice(from));
-      return undefined;
+      return refreshed;
     });
     const before = await runOnDrive(baseline.base.c, baseline.base.drive, baseline.base.root, {
       admission: { ...baseline.base.admission, scope }, pacing, around,
@@ -942,7 +943,7 @@ it.each(['instructions', 'all'] as const)(
       const from = requests.length;
       const index = await original(...args);
       indexCalls.push(...requests.slice(from));
-      expect(index, 'warm planning uses the stored projection').toBeUndefined();
+      expect(index.index, 'warm planning uses the refreshed in-memory projection').toBeTypeOf('string');
       return index;
     });
     const result = await runOnDrive(base.c, base.drive, base.root, {
@@ -952,8 +953,17 @@ it.each(['instructions', 'all'] as const)(
     expect(planning).toHaveBeenCalledOnce();
     expect.soft(indexCalls, 'index discovery reuses the positive control listing traversal with zero media reads')
       .toEqual(listingCalls);
-    expect.soft(indexCalls.every(([method, path, alt]) => method === 'GET' && path === '/drive/v3/files' && alt === null),
-      'the planning index never reads an Inbox pile note or declaration').toBe(true);
+    const movedAdmissionIds = [baseline.pileNote.id, baseline.declaration.id];
+    for (const id of movedAdmissionIds) {
+      expect.soft(requests.filter(([, path, alt]) => path === `/drive/v3/files/${id}` && alt === 'media'),
+        'source/declaration media moves into listing read-ahead but is physically read only once')
+        .toHaveLength(scope === 'all' ? 1 : 0);
+    }
+    const retrievalId = (await base.drive.listAll(base.root)).find((f) => base.drive.pathOf(f.id, base.root) === SYSTEM.retrieval)?.id;
+    expect.soft(indexCalls.every(([method, path, alt]) => method === 'GET' && (path === '/drive/v3/files' && alt === null
+      || path === '/drive/v3/changes' && alt === null || path.endsWith('/' + retrievalId) && alt === 'media'
+      || scope === 'all' && movedAdmissionIds.some((id) => path === `/drive/v3/files/${id}`) && alt === 'media')),
+      'planning adds only discovery to the same single admission media reads').toBe(true);
     expect.soft(callsAtPlan, 'exact pre-addendum warm calls; all reads its Inbox only through the provider')
       .toEqual([expected]);
     expect(result.after[`Inbox/Waiting evidence/${PILE_NOTE}`]).toBe('Alex keeps this for a later press.\n');
@@ -1025,9 +1035,9 @@ it('B1c fix 4: a warm run with changed notes counted through maintain equals the
         ]);
       for (const file of changed) {
         const reads = requests.filter((r) => r.method === 'GET' && r.path === `/drive/v3/files/${file.id}`);
-        expect.soft(reads, `${scope}/${count}: provider skips this note; maintain reads its one Range without metadata`)
+        expect.soft(reads, `${scope}/${count}: planning refresh reads this note's one Range without metadata`)
           .toEqual([{ method: 'GET', path: `/drive/v3/files/${file.id}`, alt: 'media',
-            range: 'bytes=0-4095', maintaining: true }]);
+            range: 'bytes=0-4095', maintaining: false }]);
         expect(stateOf(result).files[file.id]).toMatchObject({
           version: (await base.drive.get(file.id)).modifiedTime, summary: `Changed evidence ${file.name}.`,
         });

@@ -1,6 +1,6 @@
 /** Derived maintenance uses the manifest, its settled outcomes and the ordinary fenced effects. */
 import { sha256Hex } from '../../src/data/contracts/hashes';
-import { indexedFront, timelineBullets } from '../../src/data/contracts/note-format';
+import { indexedFront, noteRefusal, timelineBullets } from '../../src/data/contracts/note-format';
 import { opKey } from '../../src/data/contracts/op-key';
 import type { EditText, EffectV2, Maintain, MaintenanceDeclaration, MaintenanceNote, RunnerWrite, SeenFile, VerifiedContent } from '../../src/data/contracts/run-manifest';
 import type { DriveFile, StoredEvidence } from '../../src/data/drive/drive-api';
@@ -21,6 +21,7 @@ import { isJournalRecord, pairsOf, type JournalRecord } from '../../src/data/con
 import { subjectOf } from '../../src/data/contracts/questions';
 import { parseTimelineLine } from '../../src/data/contracts/timeline-line';
 import { renderHot, sameExceptDate, type HotInputs } from './hot';
+import { LedgerExhausted, type RunTiming } from './timing';
 
 /** Every derived kind joins this slot; declarations persist inside maintain, never in a separate store. */
 export interface DeclaredTarget {
@@ -290,14 +291,17 @@ const notesIn = (index: VaultIndex) => [...index.entries()].flatMap(([path]) => 
 
 /** The index's ordinary prefix supplies summary and per-version owner/type, without a discovery read. */
 async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: RetrievalState | undefined, drop: (id: string) => void, prefix = false): Promise<Notes> {
-  const limit = limiter(prefix ? READ_AHEAD : 1);
+  const limit = limiter(prefix ? READ_AHEAD : 1, (error) => error instanceof LedgerExhausted);
+  // A projection left by partial maintenance already has a listed snapshot; catch-up needs only Range reads.
+  const cold = prefix && !ix.file(SYSTEM.index);
   const entries = await Promise.all(notesIn(ix).map(({ path, file: f }) => limit(async (): Promise<Array<readonly [string, MaintenanceNote]>> => {
     const cached = state?.files[f.id];
     const same = cached?.version === f.modifiedTime;
     let text: string | null;
     try {
       // Old state is readable without probing unchanged files. A missing projection already needs each prefix.
-      text = same && !prefix ? await drive.keptPrefix(f) ?? null : await drive.readPrefix(f, prefix);
+      const map = VaultIndex.isHub(path, f.name) && cached?.type === undefined;
+      text = same && !prefix && !map ? await drive.keptPrefix(f) ?? null : await drive.readPrefix(f, cold);
     } catch (error) {
       // Drive also reports a trashed media read as not-found; other failures still stop the run.
       if (!(error instanceof BowerError) || error.code !== 'not-found') throw error;
@@ -305,7 +309,8 @@ async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: Retrieva
       drop(f.id);
       return [];
     }
-    let entry: MaintenanceNote = same ? { path, version: cached.version, summary: cached.summary, coverage: cached.coverage }
+    let entry: MaintenanceNote = same ? { path, version: cached.version, summary: cached.summary, coverage: cached.coverage,
+      ...(cached.incomplete === true ? { incomplete: true } : {}) }
       : { path, version: f.modifiedTime, summary: '(no summary)', coverage: { kind: 'prefix', bytes: 4096 } };
     if (text !== null) entry = { ...entry, ...indexedFront(text) };
     else if (cached?.owner === 'bower' || cached?.owner === 'person') entry = { ...entry, owner: cached.owner,
@@ -325,26 +330,12 @@ async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: Retrieva
   return snapshot;
 }
 
-/** A cold plan receives the canonical projection in memory, without reserves or effects. */
-export async function planningIndex(drive: RunnerDrive, rootId: string): Promise<string | undefined> {
-  const ix = VaultIndex.build(rootId, await drive.planReads().listAll(rootId, { readAhead: false }));
-  // A warm run keeps B1a's two discovery reads inside maintain, where they have always lived.
-  if (ix.file(SYSTEM.retrieval) && ix.file(SYSTEM.index)) return undefined;
-  // Cold projection work overlaps the provider's existing read-ahead, using the same metadata listing.
-  await drive.planReads().listAll(rootId);
-  const state = await readState(drive, rootId, ix.file(SYSTEM.retrieval));
-  return projectIndex(await snapshotNotes(drive, ix, state, (id) => ix.drop(id), true));
-}
-
-/** Freeze declared inputs and reserved ids in the existing immutable manifest. */
-export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest, declared: readonly DeclaredTarget[] = [hotTarget]): Promise<RunManifest> {
-  const rootId = manifest.scope.rootId;
+/** The index refresh is read-only; maintain declares and persists these same observations later. */
+export async function refreshPlanning(drive: RunnerDrive, rootId: string) {
   let listing = await drive.planReads().listAll(rootId);
   let ix = VaultIndex.build(rootId, listing);
   const old = ix.file(SYSTEM.retrieval);
   const state = await readState(drive, rootId, old);
-  // An empty first run has neither indexed changes nor effects to settle.
-  if (!state && !notesIn(ix).length && !manifest.operations.length && !ix.file(SYSTEM.hot) && !manifest.capture.journal.length) return manifest;
   const feed = state ? await drive.listChanges(state.cursor) : undefined;
   const cursor = feed?.newStartPageToken ?? await drive.getStartPageToken();
   if (!state) {
@@ -368,8 +359,10 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
       else if (change.file) {
         const listed = files.get(change.fileId);
         if (!listed || listed.modifiedTime <= change.file.modifiedTime) {
-          files.set(change.fileId, change.file);
-          ix.put(change.file);
+          // Partial feed metadata keeps listed checksums only for the exact same content version.
+          const updated = listed?.modifiedTime === change.file.modifiedTime ? { ...listed, ...change.file } : change.file;
+          files.set(change.fileId, updated);
+          ix.put(updated);
           if (previous.pathOf(change.fileId) !== undefined && ix.pathOf(change.fileId) === undefined) drop(change.fileId);
         }
       }
@@ -383,19 +376,42 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
     const path = pathOfChange(c);
     return path !== undefined && !isHidden(path);
   }).map((c) => c.fileId);
+  const snapshot = await snapshotNotes(drive, ix, state, drop, !state || !ix.file(SYSTEM.index));
+  return { index: projectIndex(snapshot), listing: [...files.values()], ix, old, state, cursor, changes, snapshot, drop };
+}
+
+export async function planningIndex(drive: RunnerDrive, rootId: string,
+  prepared?: Awaited<ReturnType<typeof refreshPlanning>>): Promise<string | undefined> {
+  return (prepared ?? await refreshPlanning(drive, rootId)).index;
+}
+
+/** Freeze declared inputs and reserved ids in the existing immutable manifest. */
+export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest, declared: readonly DeclaredTarget[] = [hotTarget],
+  prepared?: Awaited<ReturnType<typeof refreshPlanning>>): Promise<RunManifest> {
+  const rootId = manifest.scope.rootId;
+  const refreshed = prepared ?? await refreshPlanning(drive, rootId);
+  let { listing, snapshot } = refreshed;
+  const { ix, old, state, cursor, changes, drop } = refreshed;
+  const files = new Map(listing.map((f) => [f.id, f]));
+  if (!state && !notesIn(ix).length && !manifest.operations.length && !ix.file(SYSTEM.hot) && !manifest.capture.journal.length) return manifest;
   if (state && ix.file(SYSTEM.index) && !changes.length && !manifest.operations.length) {
     return old ? cursorOnly(drive, manifest, old, state, cursor) : manifest;
   }
-  let snapshot = await snapshotNotes(drive, ix, state, drop, !state || !ix.file(SYSTEM.index));
-  // Only maintain fetches complete candidate MOCs; prefix ownership alone never grants a write.
+  // A write or migration needs complete owned regions; unchanged maps reuse retrieval state's snapshot and members.
   for (const [id, note] of Object.entries(snapshot)) {
     const before = files.get(id);
     if (note.owner !== 'bower' || note.type !== 'moc' || note.moc || !before) continue;
+    // Advisory incomplete regions cannot authorize an unrelated map edit.
+    if (note.incomplete) {
+      console.log(`Skipped ${note.path}: its prefix has incomplete regions and this run does not need its full text.`);
+      continue;
+    }
     try {
       const moc = mocSnapshot(await drive.readListedText(before));
       if (moc) note.moc = moc;
       else delete note.members;
     } catch (error) {
+      if (noteRefusal(error)) { console.error(error); continue; }
       if (!(error instanceof BowerError) || error.code !== 'not-found') throw error;
       console.error(error);
       drop(id);
@@ -445,7 +461,22 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   return { ...manifest, v: 2, operations: [...manifest.operations, { ordinal, operationId, dependsOn: [], effect }] };
 }
 
-export function maintenanceEffects(drive: RunnerDrive, declared: readonly DeclaredTarget[] = [hotTarget]): Effects {
+export function maintenanceEffects(drive: RunnerDrive, declared: readonly DeclaredTarget[] = [hotTarget], timing?: RunTiming): Effects {
+  if (timing) {
+    const effects = maintenanceEffects(drive, declared);
+    return { ...effects,
+      readBack: (...args) => timing.maintenance(() => effects.readBack(...args)),
+      apply: async (...args) => {
+        try { return await timing.maintenance(() => effects.apply(...args)); }
+        catch (error) {
+          if (!(error instanceof LedgerExhausted)) throw error;
+          console.error(error);
+          // Primary effects and already sent projections stand. No later target or cursor is sent.
+          return { state: 'rejected', failure: { code: 'unknown', message: 'Bower will finish updating its notes next time.' } };
+        }
+      },
+    };
+  }
   // The ordinary edit guard still reads live metadata; unchanged bytes share B1a's versioned read cache.
   let cachedCheck: StoredEvidence | undefined;
   const ordinary = driveEffects(new Proxy(drive, {

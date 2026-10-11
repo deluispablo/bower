@@ -1,3 +1,4 @@
+import { phaseAwareClaude } from './b1-planning-support';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -388,8 +389,8 @@ describe('Q1c durable publication through main and createApp().request', () => {
       attempt: 2, ticket: TICKET, scope: 'all', allow_web: false } }));
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: event,
       BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' }, { fetch: wire.fetch,
-      claude: model, pacing: { baseMs: 0, sleep: async () => {} } })).toBe(0);
-    expect(calls()).toBe(1);
+      claude: phaseAwareClaude(model, () => ({ drive: w.drive, root: w.rootId })), pacing: { baseMs: 0, sleep: async () => {} } })).toBe(0);
+    expect(calls()).toBe(2);
     expect(wire.statuses.at(-1)?.phase).toBe('done');
     expect(w.drive.pathOf(clearId, w.rootId)).toBe('Resources/Clear.md');
     expect(JSON.parse(await w.drive.readText(stored?.id ?? ''))).toEqual(planned);
@@ -435,7 +436,7 @@ describe('Q1c durable publication through main and createApp().request', () => {
       expect(boundary).toBe('effect');
       // Positive control: a valid production plan exists and the waiting subject has no effects.
       expect(plans).toBe(1);
-      expect(calls()).toBe(1);
+      expect(calls()).toBe(2);
       expect(plannedQuestions).toHaveLength(1);
       expect(plannedQuestions[0]).toMatchObject({ text: 'Where should Alex keep this?', askedAt: AT });
       expect(await w.drive.get(waitingId)).toEqual(before);
@@ -471,7 +472,7 @@ describe('Q1c durable publication through main and createApp().request', () => {
       attempt: 2, ticket: TICKET, scope: 'all', allow_web: false } }));
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: event }, { fetch: wire.fetch,
       pacing: { baseMs: 0, sleep: async () => {} } })).toBe(0);
-    expect(calls()).toBe(1);
+    expect(calls()).toBe(2);
     const reported = wire.statuses.at(-1) as { questions?: PublicQuestion[] } | undefined;
     expect(reported?.questions).toEqual(questions.questions.map(({ id, text, askedAt }) =>
       expect.objectContaining({ id, text, askedAt })));

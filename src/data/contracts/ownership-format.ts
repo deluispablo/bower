@@ -216,31 +216,48 @@ function legacyNote(bytes: Uint8Array, raw: string): OwnershipResult {
   return { status: 'legacy', personal, layout, tasks: tasks(bytes, personal, false) };
 }
 
-export function parseOwnership(bytes: Uint8Array): OwnershipResult {
+/** Advisory spans contain only complete regions; they never grant write authority. */
+export interface PrefixOwnership { readonly status: 'prefix'; readonly incomplete: boolean; readonly spans: readonly ByteSpan[] }
+export function parseOwnership(bytes: Uint8Array): OwnershipResult;
+export function parseOwnership(bytes: Uint8Array, mode: 'prefix'): PrefixOwnership;
+export function parseOwnership(bytes: Uint8Array, mode?: 'prefix'): OwnershipResult | PrefixOwnership {
+  const complete: ByteSpan[] = [];
+  const finish = (result: OwnershipResult): OwnershipResult | PrefixOwnership => {
+    if (mode !== 'prefix') return result;
+    if (result.status === 'invalid') return { status: 'prefix', incomplete: true, spans: complete };
+    return { status: 'prefix', incomplete: false, spans: result.status === 'v2'
+      ? [...(result.layout.front ? [result.layout.front] : []), ...Object.values(result.payloads)]
+      : [{ start: 0, end: bytes.length }] };
+  };
+  const refuse = (): OwnershipResult | PrefixOwnership => finish(damaged());
   let raw: string;
   try { raw = decoder.decode(bytes); }
   catch {
     // expected: fatal UTF-8 validation exposes a typed refusal, without I/O or replacement decoding.
-    return { status: 'invalid', reason: 'invalid-encoding' };
+    return finish({ status: 'invalid', reason: 'invalid-encoding' });
   }
   const prefix = raw.startsWith('\ufeff') ? 3 : 0;
   const sourceLines = lines(bytes, { start: prefix, end: bytes.length });
   const first = sourceLines[0];
-  if (first?.text !== '---' || first.after === bytes.length) return legacyNote(bytes, raw);
+  if (first?.text !== '---' || first.after === bytes.length) {
+    if (mode === 'prefix' && first?.text === '---') return refuse();
+    return finish(legacyNote(bytes, raw));
+  }
   // Preserve the old unterminated-frontmatter interpretation. An explicit closed
   // declaration never falls back to legacy merely because its v2 framing is bad.
   const close = sourceLines.findIndex((line, i) => i > 0 && line.text.startsWith('---'));
-  if (close < 0) return legacyNote(bytes, raw);
+  if (close < 0) return mode === 'prefix' ? refuse() : legacyNote(bytes, raw);
+  if (mode === 'prefix') complete.push({ start: first.after, end: sourceLines[close]?.start ?? first.after });
   const declarations = sourceLines.slice(1, close).filter((line) => /^\s*bower_format\s*:/.test(line.text));
-  if (!declarations.length) return legacyNote(bytes, raw);
-  if (declarations.length !== 1) return damaged();
+  if (!declarations.length) return finish(legacyNote(bytes, raw));
+  if (declarations.length !== 1) return refuse();
   const declaration = declarations[0]?.text ?? '';
   if (declaration !== 'bower_format: ownership/2') {
     return declaration.slice(declaration.indexOf(':') + 1).trim() === 'ownership/2'
-      ? damaged() : { status: 'invalid', reason: 'unsupported-version' };
+      ? refuse() : finish({ status: 'invalid', reason: 'unsupported-version' });
   }
-  if (sourceLines[close]?.text !== '---') return damaged();
-  for (let i = 0; i < bytes.length; i++) if (bytes[i] === 13 && bytes[i + 1] !== 10) return damaged();
+  if (sourceLines[close]?.text !== '---') return refuse();
+  for (let i = 0; i < bytes.length; i++) if (bytes[i] === 13 && bytes[i + 1] !== 10) return refuse();
 
   // Creation orders Goal/Next steps before Current state; stored appended regions remain readable.
   const firstRegion = sourceLines.slice(close + 1).find((line) => line.text.startsWith('<!-- bower:ownership/2 begin'));
@@ -258,8 +275,9 @@ export function parseOwnership(bytes: Uint8Array): OwnershipResult {
       if (previous || fence) continue;
       if (line.text === `<!-- bower:ownership/2 end ${active} -->`) {
         spans[active] = { start, end: line.start };
+        complete.push({ start, end: line.start });
         active = null; next++;
-      } else if (line.text.startsWith('<!-- bower:ownership')) return damaged();
+      } else if (line.text.startsWith('<!-- bower:ownership')) return refuse();
     } else {
       // Extend only at a real boundary, never for marker-shaped text inside a fenced payload.
       if (next === owners.length && next >= OWNERS.length) {
@@ -270,18 +288,18 @@ export function parseOwnership(bytes: Uint8Array): OwnershipResult {
       const owner = owners[next];
       if (owner && line.text === `<!-- bower:ownership/2 begin ${owner} -->`) {
         active = owner; start = line.after;
-      } else if (line.text.trimStart().startsWith('<!-- bower:ownership')) return damaged();
+      } else if (line.text.trimStart().startsWith('<!-- bower:ownership')) return refuse();
       // Outside bytes are opaque and grant no payload or task authority. Never interpret their Markdown.
     }
   }
   const { current, personal, timeline, 'bower-note': bowerNote } = spans;
-  if (active || fence || next !== owners.length || !current || !personal || !timeline || !bowerNote) return damaged();
+  if (active || fence || next !== owners.length || !current || !personal || !timeline || !bowerNote) return refuse();
   const closing = sourceLines[close];
   const layout: Layout = {
     front: { start: first.after, end: closing?.start ?? first.after }, frontEnd: closing?.after ?? first.after,
     current, timeline, bowerNote,
   };
-  return { status: 'v2', personal, layout, payloads: { ...spans, current, personal, timeline, 'bower-note': bowerNote }, tasks: tasks(bytes, personal, true) };
+  return finish({ status: 'v2', personal, layout, payloads: { ...spans, current, personal, timeline, 'bower-note': bowerNote }, tasks: tasks(bytes, personal, true) });
 }
 
 /** Reparse the supplied source each time; derived/previous spans are no authority. */

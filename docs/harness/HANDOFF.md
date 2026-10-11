@@ -17,10 +17,9 @@ This block is the whole current state; ACTIVE.md is the history log. A Codex suc
   - a backup after harness/jobs/backup-scan.sh 5bab1288;
   - the SHA sent to the lead;
   - a staging smoke.
-- Jobs running: B1d's adversarial pass (Codex 1 of 4) and B4a's gates. Their prompts and job scripts are in the coordinator scratchpad `/private/tmp/claude-501/-Users-deluisp-Projects-bower-app/19ca090d-5e3d-4a2f-899c-8f2af3d7d836/scratchpad` (`codex-*-prompt.md`, `jobs/*.sh`).
-  - B1d adversarial pass: `jobs/b1d-adv7.sh`, result `/tmp/codex-run/b1d-selection-21.result`.
-  - B4a gates: `/tmp/gates-b4a-g2/` (check.log, e2e.log, e2e-fake.log).
-  - When a job ends: read the result's card. If the status is check-failed, read the notes' newest round and the check log.
+- Jobs running (Codex 4 of 4): B4a red repair, B5b red, B7 packet drafting, B8 packet drafting. Each row of the table below names its script (in the coordinator scratchpad, `jobs/*.sh`, prompts in `codex-*-prompt.md`) and its result file.
+- When a job ends, read the result's card. A check-failed status on a red is expected; on a fix, read the notes' newest round and the check log.
+- Pending designer checks: none yet (B5b needs one when built).
 - Pending designer checks: none (B1d and B4a are ui: false).
 
 **Loop per entry (TL-P4-29/31/51/54, TL-P4-56 addendum 1, TL-P4-57).** Workers are Codex only, through `harness/codex-run.sh <worktree> <prompt> --entry <id> --attempt <n> --model … --effort …`. The result is `/tmp/codex-run/<entry>-<n>.result`, and codex-run commits per `.codex-commits.json`: a JSON array of {message, files}, with notes in their own commit so done.sh can revert the fix.
@@ -40,10 +39,12 @@ This block is the whole current state; ACTIVE.md is the history log. A Codex suc
 
 | Entry | Branch / worktree | Last SHA | Attempt | Next step | Ruling |
 | --- | --- | --- | --- | --- | --- |
-| b1d-selection (escalated) | b1d-selection, /private/tmp/bower-b1d-selection | c14616cd+ea9eed90 | pass 5 ruled in TL-P4-41 addendum 25: the merge stays whole, backlink rewrites are the script's consequence, pin saturation is a v1 limit; tests-only attempt 22 running (Sol high, scratchpad jobs/b1d-r8.sh, result /tmp/codex-run/b1d-selection-22.result) | Next: the tests pass (production unchanged) → Astra high review (new prompt, read-only, P4-119 numbering by review files) → integrate B1d (check the branch first; known-green if the revert is unclean). | TL-P4-41 addenda 13–24 |
-| b4a-contract (escalated) | b4a-contract, /private/tmp/bower-b4a-contract | b4a-contract worktree HEAD | fix round 3 running (TL-P4-48 addendum 5): red attempt 13, fix attempt 14 (scratchpad jobs/b4a-r3.sh; results /tmp/codex-run/b4a-contract-13.result and -14.result) | Covers adversarial-3 findings 1–4 (tombstone across all sections, last word wins; exactly the 3 ruled regions; below budget a plain append). Next: compatibility rows (non-merge commits in src/data/contracts) and the RUNNER_WRITES pin note if touched, gates, Astra xhigh pass 4, Astra high review; the loop end applies after this round. After B1d integrates: merge claude/p3, then integrate. | TL-P4-48 addenda 1–4 |
+| b4a-contract (escalated) | b4a-contract, /private/tmp/bower-b4a-contract | a464a533 (+ rows) | round 3 done (attempts 13, 14); claude/p3 (with B1d) merged in, ownership-format conflict resolved by the coordinator; TL-P4-51 red repair running for 2 frozen tests (attempt 15, Sol high, /private/tmp/claude-501/-Users-deluisp-Projects-bower-app/19ca090d-5e3d-4a2f-899c-8f2af3d7d836/scratchpad/jobs/b4a-r3-repair.sh, result /tmp/codex-run/b4a-contract-15.result) | Next: gates (harness/jobs/gates.sh <wt> b4a-g4 e2e/app.spec.ts e2e/capabilities.spec.ts), Astra xhigh pass 4 (codex-b4a-adv3-prompt.md updated for addendum 5 and adversarial-3), Astra high review, integrate. The loop end applies; only data-safety or hard-rule findings go back to the lead. | TL-P4-48 addenda 1–4 |
+| b5b-tables (escalated, ui) | b5b-tables, /private/tmp/bower-b5b-tables | claude/p3 | red attempt 1 running (Astra high, /private/tmp/claude-501/-Users-deluisp-Projects-bower-app/19ca090d-5e3d-4a2f-899c-8f2af3d7d836/scratchpad/jobs/b5b-red.sh, result /tmp/codex-run/b5b-tables-1.result) | Reds only; the implementation can start now that B1d is integrated (claude.ts is free), after the reds are reviewed for scope. Next: compatibility rows, implementation (attempt 2, Astra high), gates incl. e2e/folder-table.spec.ts, Astra xhigh, Astra high review, designer verified. | TL-P4-47 addendum 5 |
+| b6b-fit-create-ask | b6b-fit-create-ask, /private/tmp/bower-b6b-fit-create-ask | 5d0313a3 | red done (attempt 1, six reds fail on findings, controls pass; worktree commits 8da71c0f, 5d0313a3) | Next: the implementation after B5b/B5c release scripted.ts and claude.ts (B1d is integrated); compatibility rows; gates; review. | TL-P4-47; lead GO for red-first |
+| b7-tags, b8-log | b7-tags, b8-log (/private/tmp/bower-b7-tags, -b8-log) | claude/p3 | packet drafting by Codex (Sol high, attempt 1 each; /private/tmp/claude-501/-Users-deluisp-Projects-bower-app/19ca090d-5e3d-4a2f-899c-8f2af3d7d836/scratchpad/jobs/b7-tags-packet.sh and b8-log-packet.sh; results /tmp/codex-run/b7-tags-1.result and b8-log-1.result) | Next: review each packet, merge its commit into claude/p3, add the features.json entry, then the red session. B9 (markers) follows the same way. | TL-P4-49, TL-P4-50 |
 
-**Queue, in order.**
+**Queue, in order.** (The lead's order for free slots: B6b red, then B7, B8 and B9 reds; B5c's red once B5b's red is committed; B4b and B4c after B4a settles.)
 1. B1d close, then B4a.
 2. B5b and B5c (packets ruled by TL-P4-47 addendum 5; they wait for B1d's claude.ts handoff; the designer confirmed B5b's table).
 3. B4b, then B4c (after B4a and B1d).

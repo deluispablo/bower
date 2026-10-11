@@ -7126,14 +7126,15 @@
     "id": "b1d-selection",
     "task": "p4-b1",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "Planning runs in two steps: the model selects from a script-built candidate list of ids, then executes only against what it chose, within one shared ledger.",
     "steps": [
       "The B1d reds pass through runner main and the corpus driver; goldens rise only by named calls."
     ],
-    "verify": "",
-    "note": "TL-P4-41 (B1 contract) and addendum 13. Escalated. Packet 2026-10-11-b1d-selection-packet.md. implementer: codex."
+    "verify": "pnpm -C runner exec vitest run test/b1d-r7.test.ts test/b1d-r8.test.ts -t \"b1d-r\"",
+    "note": "TL-P4-41 (B1 contract) and addendum 13. Escalated. Packet 2026-10-11-b1d-selection-packet.md. implementer: codex.",
+    "review": "P4-119 PASS"
   },
   {
     "id": "messages-wait-for-sheets",
@@ -7244,5 +7245,18 @@
     ],
     "verify": "",
     "note": "TL-P4-48. Escalated. After B4b. Packet 2026-10-11-b4c-consolidation-packet.md (draft). implementer: codex."
+  },
+  {
+    "id": "b6b-fit-create-ask",
+    "task": "p4-b6",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "A source is filed into an existing fit, creates a new note when it is clearly new, or asks one question, through the existing note effects.",
+    "steps": [
+      "The packet reds pass through runner main."
+    ],
+    "verify": "",
+    "note": "TL-P4-47. After B1d integrates (implementation); red-first now. Packet 2026-10-11-b6b-fit-create-ask-packet.md. implementer: codex."
   }
 ]
