@@ -604,9 +604,10 @@ describe('person storage migration', () => {
         sql.exec('ALTER TABLE runs DROP COLUMN open_questions_snapshot');
       }
       const at = farAhead();
+      let seq = 0;
       for (const [id, phase] of [['Q1C_OLD_DONE', 'done'], ['Q1C_OLD_FAILED', 'failed'], ['Q1C_OLD_QUEUED', 'queued']] as const) {
-        sql.exec(`INSERT INTO runs (id, request_id, scope, allow_web, phase, requested_at, phase_at, manifest, version)
-          VALUES (?, ?, 'all', 0, ?, ?, ?, ?, 0)`, id, `${id}_PRESS`, phase, at, at, JSON.stringify(MANIFEST));
+        sql.exec(`INSERT INTO runs (id, seq, request_id, scope, allow_web, phase, requested_at, phase_at, manifest, version)
+          VALUES (?, ?, ?, 'all', 0, ?, ?, ?, ?, 0)`, id, ++seq, `${id}_PRESS`, phase, at, at, JSON.stringify(MANIFEST));
       }
       sql.exec('UPDATE schema_version SET version = 14 WHERE id = 1');
       return sql.exec('SELECT * FROM runs ORDER BY id').toArray();

@@ -508,3 +508,34 @@ After repair, all 116 tests in src/data/live/live.test.ts pass with the retained
 Log: /tmp/q1c-repair3-live.log. Native config loading and disabled caching avoid repository test artifacts.
 Production diff preserved byte-for-byte against /tmp/q1c-repair3-production-before.diff.
 No git writes, node_modules changes, pnpm check, e2e or API run; broader gates remain coordinator work.
+
+
+## Red repair 4
+
+tests changed: api/test/person.test.ts: seed unique seq values for all three pre-v15 runs; preserve every-row migration assertions.
+tests changed: api/test/q1-questions.test.ts: keep SQL NULL, restart and GET /status assertions; move browser setup and vault assertions out of the Workers pool.
+tests changed: src/data/live/live.test.ts: move the null-snapshot vault half beside Q1c merge cases, retaining stored-only and stale-live removal assertions.
+
+Coordinator evidence: /tmp/q1c-api-targeted.log reports the two v15 setup failures: missing runs.seq
+and an unavailable app-module import in the Workers pool. No API test run was attempted here.
+The migration fixture now supplies every required v14 runs column, including unique seq and version;
+nullable columns keep their original NULL values. The three done/failed/queued rows and exact preservation
+assertion are unchanged. Offline reference: existing migration fixtures in api/test/person.test.ts:440–543
+and the shipped runs schema in api/src/person-schema.ts. No network research was performed.
+
+The API test still accepts a live snapshot before setting SQL NULL, increments status_revision,
+restarts Person and checks that both restarted status and GET /status omit questions.
+The moved test is named `Q1c v15: a null snapshot means no live questions (vault)` and uses the existing
+makeLiveSources / WorkerHttp Q1c fixture. It first displays stored plus live questions, then accepts
+an omitted snapshot at a newer revision and verifies that only the stored question remains.
+No other test body, name, expectation or contract number changed.
+
+Validation:
+- `pnpm -C api exec tsc --noEmit -p .`: pass; /tmp/q1c-repair4-api-tsc.log.
+- `pnpm exec vitest run src/data/live/live.test.ts --maxWorkers=2 --reporter=default --no-cache --configLoader=native`:
+  all 117 tests pass; /tmp/q1c-repair4-live.log. Disabled caching and native config loading keep test artifacts out of the repository.
+- Production diff preserved byte-for-byte against /tmp/q1c-red4-production-before.diff.
+- No git writes, ports, network, node_modules replacement, pnpm check or e2e; coordinator owns commits and API execution.
+
+removed: only Worker-pool browser imports, ad hoc browser interfaces and their localStorage shim; vault coverage moved intact.
+commits: none; coordinator commits tests and notes separately.

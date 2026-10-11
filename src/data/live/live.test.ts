@@ -1803,6 +1803,18 @@ describe('Q1c live questions through makeLiveSources and WorkerHttp', () => {
   afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
   function clock() { vi.useFakeTimers(); vi.setSystemTime(Q1C_AT); }
 
+  it('Q1c v15: a null snapshot means no live questions (vault)', async () => {
+    clock();
+    const { s, legacy, publish } = await q1cLive();
+    const asking = q1cQuestion('Q1C_LIVE');
+    await publish([asking], 2);
+    expect(await s.vault.questions()).toEqual([legacy, asking]);
+    // SQL NULL is omitted by GET /status; a newer omitted snapshot clears the live asking.
+    const current = await publish(undefined, 3);
+    expect(current).not.toHaveProperty('questions');
+    expect(await s.vault.questions()).toEqual([legacy]);
+  });
+
   it('Q1c q1-stored-and-live-question-merge: Drive wins by asking identity and handoff never drops a card', async () => {
     clock();
     const { s, legacy, publish, write } = await q1cLive();

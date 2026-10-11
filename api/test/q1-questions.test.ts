@@ -1,5 +1,5 @@
 import { env as testEnv, runInDurableObject } from 'cloudflare:test';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { Env } from '../src/env.js';
 import { createApp } from '../src/index.js';
 import { Person } from '../src/person.js';
@@ -188,65 +188,15 @@ describe('Q1c snapshots through createApp().request', () => {
 
   it('Q1c v15: a null snapshot means no live questions', async () => {
     const { p, runId, post, get, read } = await aRun();
-    const stored = card('Q1C_STORED');
-    const asking = card('Q1C_LIVE');
-    // Browser modules run in the Worker test's memory, but keep their DOM types out of api tsc's Worker globals.
-    // Variable imports use Vitest's module loader; these interfaces cover only the public methods exercised here.
-    interface MemoryDrive {
-      createFolder(parent: string, name: string): Promise<{ id: string }>;
-      createText(parent: string, name: string, text: string): Promise<{ id: string }>;
-    }
-    interface ClientVault { questions(): Promise<Card[]>; dispose(): void }
-    interface ClientRuns { current(): Promise<unknown>; dispose(): void }
-    const clientPath = '../../src/data/';
-    const { FakeDrive } = await import(`${clientPath}drive/fake-drive.ts`) as {
-      FakeDrive: new () => MemoryDrive;
-    };
-    const { DriveVault } = await import(`${clientPath}vault/drive-vault.ts`) as {
-      DriveVault: new (opts: { drive: MemoryDrive; rootId: () => Promise<string>;
-        runningPiles: () => ReadonlySet<string>; device: string }) => ClientVault;
-    };
-    const { WorkerHttp } = await import(`${clientPath}worker/worker-http.ts`) as {
-      WorkerHttp: new (base: string, fetch: () => Promise<Response>) => object;
-    };
-    const { LiveRuns } = await import(`${clientPath}live/runs.ts`) as {
-      LiveRuns: new (worker: object, vault: ClientVault) => ClientRuns;
-    };
-    const drive = new FakeDrive();
-    const root = (await drive.createFolder('root', 'Bower')).id;
-    for (const name of ['Inbox', 'Projects', 'Areas', 'Resources', 'Archive']) await drive.createFolder(root, name);
-    const system = (await drive.createFolder(root, '.bower')).id;
-    await drive.createFolder(system, 'changes');
-    await drive.createText(system, 'questions.json', JSON.stringify({ v: 1, questions: [stored] }));
-    const memory = new Map<string, string>();
-    vi.stubGlobal('localStorage', {
-      getItem: (key: string) => memory.get(key) ?? null,
-      setItem: (key: string, value: string) => { memory.set(key, value); },
-      removeItem: (key: string) => { memory.delete(key); },
+    // First admit a nonnull snapshot: null must remove a previously published asking.
+    expect((await read(await post(2, [card('Q1C_LIVE')]))).run.questions).toEqual([card('Q1C_LIVE')]);
+    await runInDurableObject(p, (_instance, state) => {
+      state.storage.sql.exec('UPDATE runs SET open_questions_snapshot = NULL WHERE id = ?', runId);
+      state.storage.sql.exec('UPDATE control SET status_revision = status_revision + 1 WHERE id = 1');
     });
-    const vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set(), device: 'Q1C_DEVICE' });
-    const worker = new WorkerHttp(API, async () => Response.json(await get()));
-    const runs = new LiveRuns(worker, vault);
-    try {
-      expect(await vault.questions()).toEqual([stored]);
-      // First admit and display a nonnull snapshot: null must remove a previously live asking, not keep stale memory.
-      expect((await read(await post(2, [asking]))).run.questions).toEqual([asking]);
-      await runs.current();
-      expect(await vault.questions()).toEqual([stored, asking]);
-      await runInDurableObject(p, (_instance, state) => {
-        state.storage.sql.exec('UPDATE runs SET open_questions_snapshot = NULL WHERE id = ?', runId);
-        state.storage.sql.exec('UPDATE control SET status_revision = status_revision + 1 WHERE id = 1');
-      });
-      const restarted = await runInDurableObject(p, (_instance, state) => new Person(state, env).runStatus(Date.now()));
-      expect(restarted.run).not.toHaveProperty('questions');
-      expect((await get()).run).not.toHaveProperty('questions');
-      await runs.current();
-      expect(await vault.questions()).toEqual([stored]);
-    } finally {
-      runs.dispose();
-      vault.dispose();
-      vi.unstubAllGlobals();
-    }
+    const restarted = await runInDurableObject(p, (_instance, state) => new Person(state, env).runStatus(Date.now()));
+    expect(restarted.run).not.toHaveProperty('questions');
+    expect((await get()).run).not.toHaveProperty('questions');
   });
 
 });
