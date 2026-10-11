@@ -41,3 +41,5 @@
 .chipStopped { background: var(--raised); color: var(--danger); box-shadow: var(--shadow-pop), inset 0 0 0 1.5px var(--danger); }
 
 .chipError { padding: 12px 16px; background: var(--raised); color: var(--heading); white-space: normal; cursor: default; }
+
+.moreQuestions { display: inline-block; margin-top: 8px; color: var(--brand-line); text-decoration: underline; text-underline-offset: 3px; }

@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DataProvider } from '@/data/provider';
 import { loadingSources } from '@/testing/loading-sources';
 import { FakeDrive } from '@/data/drive/fake-drive';
@@ -511,5 +511,74 @@ describe('a reselected file must match its declared member', () => {
     } finally {
       w.dispose();
     }
+  });
+});
+
+describe('Q1b pile question projection', () => {
+  const at = 1_800_000_000_000;
+  const sentence = "Bower couldn't place this. Tell it more in the pile's words, or move it yourself.";
+  const paper: Pile = { id: 'paper', path: 'Inbox/Papers', text: 'Papers from Alex', createdAt: at,
+    items: [{ id: 'letter', name: 'letter.pdf', kind: 'pdf', origin: 'From this computer' }] };
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(at); });
+  afterEach(() => {
+    cleanup();
+    for (const t of useToasts.getState().list) useToasts.getState().dismiss(t.id);
+    vi.useRealTimers();
+  });
+  async function settle(): Promise<void> { await act(async () => { await vi.advanceTimersByTimeAsync(0); }); }
+  async function projection(extra: Partial<Pile>) {
+    const base = loadingSources();
+    let current: Pile = { ...paper, ...extra };
+    const listeners = new Set<() => void>();
+    const updatePile = vi.fn(async (id: string, text: string, _seen: string) => {
+      expect(id).toBe('paper');
+      // Q1a owns the reset; the screen must respond to its newly published projection.
+      current = { ...current, text: text.trim(), question: undefined };
+      listeners.forEach((cb) => cb());
+    });
+    const methods: Record<string, unknown> = { piles: async () => [current], tree: async () => [],
+      questions: async () => [], updatePile,
+      subscribe: (cb: () => void) => { listeners.add(cb); return () => listeners.delete(cb); } };
+    const source = new Proxy(base.vault, { get: (target, key) => typeof key === 'string' && key in methods ? methods[key] : Reflect.get(target, key) });
+    render(<MemoryRouter initialEntries={['/pile/paper']}><DataProvider sources={{ ...base, vault: source,
+      runs: { ...base.runs, current: async () => null } }}><Routes><Route path="/pile/:id" element={<PileScreen />} /></Routes></DataProvider></MemoryRouter>);
+    await settle();
+    // Positive control: the original words and tidy-up action remain usable through PileScreen.
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Papers from Alex');
+    expect(screen.getByRole('textbox', { name: 'What is this?' })).toHaveValue('Papers from Alex');
+    expect(screen.getByRole('button', { name: 'Tidy up the inbox' })).toBeVisible();
+    return { updatePile };
+  }
+
+  it('Q1b After 2 rounds the pile page gives the words and Move sentence', async () => {
+    await projection({ question: 'exhausted' });
+    const line = screen.getByText(sentence, { exact: true });
+    expect(line.tagName).toBe('P');
+    expect(line).toBeVisible();
+    const heading = screen.getByRole('heading', { level: 1 });
+    const words = screen.getByRole('textbox', { name: 'What is this?' });
+    expect(heading.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(line.compareDocumentPosition(words) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Tell it more/ })).toBeNull();
+  });
+
+  it('Q1b Changed pile words clear the exhausted sentence from the published projection', async () => {
+    const { updatePile } = await projection({ question: 'exhausted' });
+    expect(screen.getByText(sentence, { exact: true })).toBeVisible();
+    const field = screen.getByRole('textbox', { name: 'What is this?' });
+    fireEvent.change(field, { target: { value: 'Papers about the garden lease' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save the note' })); await settle();
+    expect(updatePile).toHaveBeenCalledExactlyOnceWith('paper', 'Papers about the garden lease', 'Papers from Alex');
+    expect(screen.queryByText(sentence)).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'What is this?' })).toHaveValue('Papers about the garden lease');
+  });
+
+  it('Q1b A waiting pile and a damaged pile do not show exhaustion', async () => {
+    await projection({ question: 'waiting' });
+    expect(screen.queryByText(sentence)).toBeNull();
+    cleanup();
+    await projection({ question: 'exhausted', setAside: 'not-checked' });
+    expect(screen.getByText('Bower could not check some of its things. Try again.')).toBeVisible();
+    expect(screen.queryByText(sentence)).toBeNull();
   });
 });
