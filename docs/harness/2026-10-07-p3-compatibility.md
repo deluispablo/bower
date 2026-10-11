@@ -258,3 +258,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `d38d602d` | b4b-observations | A consumed words item is binned by its own Bin, which the parent Bin waits for; a new plan is refused at sealing if it lacks one. Stored manifests and recovery read as before. |
 | `054d677d` | b4b-observations | The words-item Bin check runs only when a new plan is sealed, never when a stored manifest is read. Stored manifests parse as before. |
 | `8a6ab10b` | b4b-observations | none: tests only (B4b fix round 5: the words-item Bin tests go through the sealing path). |
+| `7ffafb5f` | b4b-observations | A Forget now carries a verbatim quote of the person's words, and acts directly only when the quote is in exactly one live fact's text and that fact is the one named; otherwise it asks. The shared quote check is the same one remember uses. Stored observations, tombstones and manifests parse as before. |
