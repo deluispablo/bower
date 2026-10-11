@@ -62,3 +62,7 @@ You are the one explicitly assigned integration coordinator for this batch. Foll
 Read the adopted planning revision, PRODUCT, WORK_PLAN and current phase acceptance before acting. Record plan revision and capability IDs with the code SHA. At a safe checkpoint adopt the main planning revision, map C01–C16 to current tests/entries and register gaps before new assignments or closure. The technical lead owns planning/method; you retain live implementation records. No feature-count-only closure.
 
 Boundary assignments follow `docs/ARCHITECTURE.md`: preserve consumer compatibility, test versioned fixtures and recovery, and keep shared schema changes serialized. Read only the affected contract sections. The coordinator uses `docs/harness/ORCHESTRATOR_START.md` for dependency order; bounded P2 probes do not authorize P3 implementation.
+
+## Running in Codex (TL-P4-56)
+
+If this role runs in Codex, follow [CODEX_TAKEOVER](../../docs/harness/CODEX_TAKEOVER.md). Claude subagents become fresh `harness/codex-run.sh` sessions that follow `.claude/agents/<name>.md`, and the closing review is a fresh Codex reviewer at high effort. Tracked jobs become `/tmp/codex-run/*.result` files, which your heartbeat automation reads. Job scripts live in the repository (`harness/`), never in a session scratchpad. The rules above are unchanged.

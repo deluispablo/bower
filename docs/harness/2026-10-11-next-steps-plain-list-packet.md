@@ -22,5 +22,12 @@ Accessibility: axe at WCAG 2.2 on a project note, on demo and fake, at 375 and 1
 ## Verify
 The reds by exact name (prefix `NSPL `), `pnpm check`, the note component tests and e2e for the note screen plus the new spec, on demo and fake. Test output to the OS temp folder; read failures only. The designer verifies before closure.
 
+## Ruled (TL-P4-55 addendum 1)
+
+- Option 1: one entry, with the packet expanded. The owned files add `src/data/contracts/note-format.ts`, `src/data/contracts/types.ts` and `src/data/vault/drive-vault.ts`, plus the demo and fake sources where a Note is built (`src/data/demo/*`, `src/data/fake/*`). A contract compatibility row is required.
+- `Note` gains an additive optional field, built from B6a's projection (note-format.ts:169-197): each body task's region, in body order. When the field is absent, every task is the person's. drive-vault.ts:315, demo and fake fill it from that same projection. The UI never parses regions.
+- Toggles stay on global body indexes. Each of the person's checkboxes carries its own body index, and Bower tasks render as plain items, so no index mapping is needed.
+- b6a-task-regions.test.tsx:87 and :99 stand unchanged. Any NSPL red that assumes person-only indexes is repaired to body indexes.
+
 ## Commits
 Red, fix, notes (`docs/harness/2026-10-11-next-steps-plain-list-notes.md`, line 3 `implementer: codex`). The coordinator commits.

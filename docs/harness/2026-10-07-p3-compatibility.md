@@ -214,3 +214,6 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `d9f74804` | b6a-templates | note-edit: the Source/MOC-only refusals apply only to Bower-written notes (byBower plus type); a person's note with type: source or type: moc keeps the mechanical link rewrite and C05's append. Template names come from NOTE_TEMPLATES. Stored bytes unchanged. |
 | `27280ef2` | q1b-questions-ui | none: tests only (Q1b reds for the signed table). |
 | `0949a37a` | q1b-questions-ui | Home exports its Questions card and RunView reuses it: options, Something else… and own words through answerQuestion; this run's questions by askedAt ≥ the run start; pile rows show waiting or couldn't-place. Stored bytes unchanged. |
+| `9c8e61b0` | next-steps-plain-list | none: tests only (NSPL reds for the spec rows). |
+| `4de03d64` | next-steps-plain-list | none: tests only (NSPL reds repaired to body indexes; task-region source reds, TL-P4-55 addendum 1). |
+| `1465a126` | next-steps-plain-list | Note gains optional `taskRegions` (personal or bower per body task, in body order) from B6a's projection, filled by parseNote, DriveVault, demo and fake; absent means every task is the person's. The note view renders Bower-region tasks as plain items; toggles keep global body indexes. Stored bytes unchanged. |

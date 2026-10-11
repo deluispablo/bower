@@ -60,6 +60,8 @@ export interface Note {
   currentState: string[];
   /** Markdown, with [[wikilinks]]. */
   body: string;
+  /** Each body task's region, in display order. Absent means every task is personal. */
+  taskRegions?: Array<'personal' | 'bower'>;
   timeline: TimelineEntry[];
   /** Bower's note: what it added, and where that came from. */
   bowerNote?: { text: string; source: SourceKind };

@@ -335,3 +335,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-11: b3b-hot-maintain passes — hot is a declared maintain target at prompt position 6; recent changes roll by op key; Undo drops what it undid (P4-111 PASS)
 - 2026-10-11: b5a-contracts passes — type table, bounded properties, exact-payload proposals and the profile region as contracts (P4-112 PASS)
 - 2026-10-11: b6a-templates passes — one template declaration home; Bower notes carry template sections, front matter and grounded links; person notes untouched (P4-114 PASS)
+- 2026-10-11: messages-wait-for-sheets passes — while a modal overlay is open the Dock hides its messages and pauses their timers; the status region stays mounted (P4-116 PASS, designer verified)

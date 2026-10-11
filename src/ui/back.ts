@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
 
 /**
  * The phone's back button (and the browser's) closes an open overlay instead
@@ -15,6 +15,19 @@ let selfBacks = 0;
 let lastPopWasSelf = false;
 let landed: Promise<void> = Promise.resolve();
 let settle: (() => void) | null = null;
+// Open overlays live here, independently of the history entries still waiting to land.
+let openOverlays = 0;
+const listeners = new Set<() => void>();
+const subscribe = (listener: () => void): (() => void) => {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+};
+const isOpen = (): boolean => openOverlays > 0;
+const serverOpen = (): boolean => false;
+
+export function useOverlaysOpen(): boolean {
+  return useSyncExternalStore(subscribe, isOpen, serverOpen);
+}
 
 if (typeof window !== 'undefined') {
   // Registered first, so it runs before any overlay's listener.
@@ -41,6 +54,15 @@ function goBackOver(): void {
 
 export function useBackCloses(open: boolean, close: () => void): void {
   const closeRef = useRef(close);
+  useLayoutEffect(() => {
+    if (!open) return;
+    openOverlays++;
+    for (const listener of listeners) listener();
+    return () => {
+      openOverlays--;
+      for (const listener of listeners) listener();
+    };
+  }, [open]);
   useLayoutEffect(() => {
     closeRef.current = close;
   });

@@ -7,6 +7,39 @@ afterEach(() => {
 });
 
 describe('toasts', () => {
+  it('MWS no sheet open keeps the usual four and eight second message lifetimes', () => {
+    vi.useFakeTimers();
+    const { show } = useToasts.getState();
+    const plain = show('Alex added a note');
+    const action = show('Pile moved', { label: 'Undo', run: () => undefined });
+    // Positive control: both kinds are in the stack before time advances.
+    expect(useToasts.getState().list.map((t) => t.id)).toEqual([plain, action]);
+    vi.advanceTimersByTime(3999);
+    expect(useToasts.getState().list.map((t) => t.id)).toEqual([plain, action]);
+    vi.advanceTimersByTime(1);
+    expect(useToasts.getState().list.map((t) => t.id)).toEqual([action]);
+    vi.advanceTimersByTime(3999);
+    expect(useToasts.getState().list.map((t) => t.id)).toEqual([action]);
+    vi.advanceTimersByTime(1);
+    expect(useToasts.getState().list).toHaveLength(0);
+  });
+
+  it.each(['pointer', 'keyboard'] as const)('MWS no sheet open keeps the existing %s hold', (by) => {
+    vi.useFakeTimers();
+    const { show, hold } = useToasts.getState();
+    const id = show('Pile moved', { label: 'Undo', run: () => undefined });
+    expect(useToasts.getState().list.map((t) => t.id)).toEqual([id]);
+    vi.advanceTimersByTime(1000);
+    hold(id, true, by);
+    vi.advanceTimersByTime(30_000);
+    expect(useToasts.getState().list.map((t) => t.id)).toEqual([id]);
+    hold(id, false, by);
+    vi.advanceTimersByTime(7999);
+    expect(useToasts.getState().list.map((t) => t.id)).toEqual([id]);
+    vi.advanceTimersByTime(1);
+    expect(useToasts.getState().list).toHaveLength(0);
+  });
+
   it('an Undo toast stays long enough: 8 seconds, and while the pointer or keyboard is on it', () => {
     vi.useFakeTimers();
     const t = useToasts.getState();

@@ -7139,14 +7139,16 @@
     "id": "messages-wait-for-sheets",
     "task": "p4-consolidation",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "While a sheet is open, messages wait: the Dock shows nothing and timers pause, then the stack returns with its remaining time (spec 2026-10-11-messages-wait-for-sheets.md).",
     "steps": [
       "The spec's test table passes on demo and fake at 375 and 1440."
     ],
-    "verify": "",
-    "note": "DEFECT_LOG toast-over-sheet; TL-P4-55 (2). Not escalated. Designer verifies. Packet 2026-10-11-messages-wait-for-sheets-packet.md. implementer: codex."
+    "verify": "pnpm exec vitest run src/ui/dock.test.tsx src/ui/toast.test.ts -t \"MWS \"",
+    "note": "DEFECT_LOG toast-over-sheet; TL-P4-55 (2). Not escalated. Designer verifies. Packet 2026-10-11-messages-wait-for-sheets-packet.md. implementer: codex.",
+    "review": "P4-116 PASS",
+    "design": "verified"
   },
   {
     "id": "q1b-questions-ui",
@@ -7171,7 +7173,9 @@
     "steps": [
       "The spec's test table passes on demo and fake at 375 and 1440."
     ],
-    "verify": "",
-    "note": "TL-P4-47 addendum 3, TL-P4-55 (1). Not escalated. Designer verifies. Packet 2026-10-11-next-steps-plain-list-packet.md. implementer: codex."
+    "verify": "pnpm exec vitest run src/features/note/markdown.test.tsx src/features/note/next-steps-plain-list.test.tsx -t \"NSPL \"",
+    "note": "TL-P4-47 addendum 3, TL-P4-55 (1). Not escalated. Designer verifies. Packet 2026-10-11-next-steps-plain-list-packet.md. implementer: codex.",
+    "design": "verified",
+    "review": "P4-117 PASS"
   }
 ]

@@ -8,3 +8,4 @@ After a compaction (TL-P4-06), before anything else:
 - UI (TL-P4-18 addenda 2 and 3): the lead consults the designer before ruling on UI. The coordinator may consult the designer directly, and a ui: true entry closes only after the designer's verified.
 - Integration (TL-P4-17, TL-P4-19): merge only through harness/integrate.sh, which removes merged branches and worktrees. Close escalated entries only after a review PASS. Nobody but the coordinator switches the main checkout's branch.
 - Messages between sessions: at most 10 lines, combined. After 10 sends with no owner message, sends pause; the lead warns the owner at about 8.
+- In Codex (TL-P4-56): the same re-reads after a compaction or restart; docs/harness/CODEX_TAKEOVER.md maps the mechanisms.
