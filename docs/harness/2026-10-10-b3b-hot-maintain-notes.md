@@ -811,3 +811,97 @@ tests changed: none
 
 tests changed: runner/test/b1a-contract.test.ts: TL-P4-42 Q5 / TL-P4-41 addendum 4: .bower/hot.md joins maintain's bounded write set; the one-send-per-file cap still applies (red repair 0b816ced).
 tests changed: runner/test/second-brain-method.test.ts: new B3b red for the b23-hot-evidence-only method verdict at .bower/hot.md with no archive (TL-P4-42 Q5, TL-P4-45; red 511968f2); no existing assertion changed.
+
+## Addendum 6 reds
+
+2026-10-11, red owner only. Read WORKER.md and the P4-110 review. Production,
+node_modules and git state were not written; the coordinator owns commits.
+Only the following runner tests and these notes changed. Tests, caches and reports
+write only to OS temp. No network, install, symlink, screen e2e or pnpm check.
+
+Exact new production-main tests:
+- `B3b hot: an Undo run refreshes hot from restored evidence`
+- `B3b hot: recent rows carry their op key and dedupe by it`
+
+The Undo test first files the actual Mulch notice through main and records the
+filing move's immutable operation id. Forward compensation returns that same file
+to Inbox and bins its companion, then queues a move inverse with `undoes` naming
+that filing operation and an explicit `Undo the last tidy-up` request. This models
+the existing client compensation mechanism, not a test-authored hot result. Like
+c13-undo-whole-run, it is instruction admission with an Undo request. Its legacy
+`undo` scope is normalized to the production `instructions` dispatch: main's event
+parser supports all/instructions. No driver or production scope was changed.
+Controls assert settled inverse archival, restored source bytes, absent filed source
+and companion, one maintain hot send and zero archive media through main. Reds
+assert disappearance of the prior filing row and an Undo row with its key.
+
+The key/dedupe test checks every actual filing-run row's 12-hex suffix and pins the
+filing row to its manifest move operation's first 12 hex characters. It then seeds
+prior rows with the same key and different wording, plus equal wording under a
+second key. A visible source touch runs ordinary production maintain. Exactly one
+row survives for the duplicated key, while the second equal-text key survives.
+No fixture or helper substitutes for production main or writes its result.
+
+Offline references: the existing main/corpus-driver, operation identities and
+journal-record inverse contract; the entry's prior
+[Kubernetes controller reference](https://kubernetes.io/docs/concepts/architecture/controller/).
+The literal-row sweep keeps the existing
+[CommonMark 0.31.2 reference](https://spec.commonmark.org/0.31.2/#html-blocks).
+Neither source was fetched. No second production mechanism was introduced.
+
+tests changed: runner/test/b23-hot-context.test.ts: add both named addendum 6 reds; update the existing primary-journal exact rows at :114 to require the suffix. Dates, wording, primary archival, two records and zero archive media remain pinned.
+tests changed: runner/test/b23-hot.test.ts: update every dated Recent changes format pin to require the terminal ` · op:<12-hex>`; all section order, caps, sorting, text, provenance, literal block escaping and omission marks remain asserted.
+
+One sweep of existing hot tests and all three hot corpus seeds found these format pins:
+- runner/test/b23-hot-context.test.ts:114: settled primary journal rows.
+- runner/test/b23-hot.test.ts:70: exact section order.
+- runner/test/b23-hot.test.ts:102: ten retained change rows.
+- runner/test/b23-hot.test.ts:109: exact-300-word inline payload; 243 -> 223 content words reserves the suffix's two words on each of ten rows. The 300-word contract, ten-row/five-hub caps and all numeric bounds are unchanged.
+- runner/test/b23-hot.test.ts:114: exact-300-word expected rows.
+- runner/test/b23-hot.test.ts:118: exact-300-word control rows; :119 still asserts exactly 300 words.
+- runner/test/b23-hot.test.ts:122: capped rows at the word limit; :123 keeps the complete line-array assertion.
+- runner/test/b23-hot.test.ts:163: chronological change ordering.
+- runner/test/b23-hot.test.ts:171: same-day tie ordering (also :172).
+- runner/test/b23-hot.test.ts:185: equal wording under distinct identities.
+- runner/test/b23-hot.test.ts:203: multiline change sanitization.
+- runner/test/b23-hot.test.ts:287: ordinary control in every block-syntax cell.
+- runner/test/b23-hot.test.ts:291: suffix on each adversarial literal row.
+- runner/test/b23-hot.test.ts:293: full literal content including suffix; existing CommonMark escaping check remains.
+- runner/test/b23-hot.test.ts:316: two retained long rows before the unchanged omission mark.
+
+No hot corpus seed pins a generated dated operation row: all three seed legacy,
+undated prose intentionally excluded by the renderer. They remain unchanged:
+harness/corpus/b1-index-job-offer/folder/hot.md:11,
+harness/corpus/b23-hot-question-answer/folder/hot.md:11,
+harness/corpus/b23-hot-evidence-only/folder/.bower/hot.md:11.
+Recovery's bare headings and date-only/hidden-only byte comparisons, the method
+verdict's content exclusions, and substring-only corpus expectations require no
+format re-pin. No unrelated test, fixture or threshold was changed.
+
+Initial probes exposed an incorrect last-run wrapper assumption in the new test
+and the legacy undo dispatch rejection; corrected by reading the immutable manifest
+and normalizing instruction dispatch before final verification. These were test
+construction errors, not delivered reds. Final verification follows below.
+
+Final command: `pnpm -C runner exec vitest run --config /tmp/b3b-a6-runner.config.mjs --maxWorkers=2`.
+The temporary config imports the unchanged runner config and relocates cache and
+JSON output to OS temp. Log `/tmp/b3b-a6-runner.log`; report `/tmp/b3b-a6-runner.json`.
+
+Final full runner result: **599 pass / 51 assertion reds, 650 total, 49 files**;
+47 files pass and the two touched hot files fail. Complete failure inventory:
+- runner/test/b23-hot-context.test.ts:115: existing two primary rows lack suffixes.
+- runner/test/b23-hot-context.test.ts:166: new Undo red retains the undone filing row.
+  At :167 Undo is absent (zero rows); :168 requires its keyed row. Restoration,
+  inverse settlement, one hot send and zero archive media controls all pass.
+- runner/test/b23-hot-context.test.ts:179: new key/dedupe red lacks suffixes on both
+  actual rows; :184 filing key is missing; :197 retains both same-key prior rows.
+  Equal wording under the second key survives and zero archive media passes.
+- runner/test/b23-hot.test.ts:57, :89, :105, :144, :176, :192, :285, :299:
+  48 existing format cells now require the suffix, including all 40 change
+  block-syntax cells. Exact new format pins are listed above; no unrelated failure.
+
+Every final failure message is AssertionError. No TypeError, import error, timer
+failure or contradiction outside the addendum 6 format/lifecycle reds remains.
+Runner tsc passes (`/tmp/b3b-a6-tsc.log`), touched-test ESLint passes
+(`/tmp/b3b-a6-eslint.log`), and read-only git diff --check passes.
+No commits were created; coordinator owns the three changed files.

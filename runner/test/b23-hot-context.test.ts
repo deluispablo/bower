@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { RunManifest } from '../../src/data/spine/records';
 import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { askId } from '../../src/data/contracts/questions';
 import { RUNNER_WRITES } from '../../src/data/vault/layout';
@@ -110,8 +111,92 @@ it('B3b fix 1: settled journal changes enter Recent changes on their own', async
   const recent = section(run.after[HOT], 'Recent changes');
   // A "Rules updated." report row cannot satisfy either primary journal row.
   for (const record of primary) {
-    expect.soft(recent).toContain(`- ${new Date(record.at).toISOString().slice(0, 10)} ${record.what}`);
+    const prefix = `- ${new Date(record.at).toISOString().slice(0, 10)} ${record.what} · op:`;
+    expect.soft(recent.some((row) => row.startsWith(prefix) && /^[a-f0-9]{12}$/.test(row.slice(prefix.length)))).toBe(true);
   }
+});
+
+it('B3b hot: an Undo run refreshes hot from restored evidence', async () => {
+  const { c, drive, root } = await setup('b23-summary-person-lint');
+  const events: Observation[] = [];
+  const first = await runOnDrive(c, drive, root, { pacing, claude: caseReplies(c.id),
+    around: observe(drive, root, events) }, 1);
+  expect(first.code).toBe(0);
+  const filed = 'Resources/Gardening/Mulch notice.txt';
+  expect(first.after[filed]).toBe(c.inboxFiles['Mulch notice.txt']);
+  const before = section(first.after[HOT], 'Recent changes');
+  expect(before.some((row) => row.includes('Filed Mulch notice.'))).toBe(true);
+  const sourceId = Object.entries(first.pathsById).find(([, path]) => path === filed)?.[0] ?? '';
+  const manifest = JSON.parse(manifests(first)[0]?.[1] ?? '{}') as RunManifest;
+  const op = manifest.operations.find((entry) => entry.effect.kind === 'move' && entry.effect.before.fileId === sourceId)?.operationId ?? '';
+  expect(op).toMatch(/^[a-f0-9]{64}$/);
+  const files = await drive.listAll(root);
+  const inbox = files.find((f) => f.folder && f.name === 'Inbox' && f.parents[0] === root);
+  const changes = files.find((f) => drive.pathOf(f.id, root) === '.bower/changes');
+  const source = await drive.get(sourceId);
+  expect(inbox).toBeDefined();
+  expect(changes).toBeDefined();
+  // Undo restores the source first, then queues its inverse, like the client's forward compensation.
+  await drive.update(sourceId, { name: 'Mulch notice.txt', addParent: inbox?.id ?? '', removeParent: source.parents[0] });
+  const companion = Object.entries(first.pathsById).find(([, path]) => path === 'Resources/Gardening/Mulch notice.md')?.[0];
+  expect(companion).toBeDefined();
+  await drive.trash(companion ?? '');
+  await drive.createText(changes?.id ?? '', 'undo-file.json', JSON.stringify({
+    v: 1, id: 'undo-file', device: 'device-1', at: AT + 1, kind: 'move',
+    what: 'Put back Mulch notice.', undoes: op, fileId: sourceId, path: 'Inbox/Mulch notice.txt', from: filed,
+  }));
+  await drive.createText(changes?.id ?? '', 'undo-request.json', JSON.stringify({
+    v: 1, id: 'undo-request', device: 'device-1', at: AT + 1, kind: 'request',
+    what: 'Undo the last tidy-up', text: 'Undo the last tidy-up',
+  }));
+  c.scope = 'undo'; // c13 legacy scope maps to the production instruction dispatch.
+  vi.setSystemTime(AT + 1);
+  events.length = 0;
+  const undone = await runOnDrive(c, drive, root, { pacing, claude: replySequence([empty]),
+    answerStart: { scope: 'instructions', requestId: 'undo-run' }, around: observe(drive, root, events) }, 2);
+  expect(undone.code).toBe(0);
+  expect(undone.after['Inbox/Mulch notice.txt']).toBe(c.inboxFiles['Mulch notice.txt']);
+  expect(undone.after[filed]).toBeUndefined();
+  expect(undone.after['Resources/Gardening/Mulch notice.md']).toBeUndefined();
+  expect(undone.after['.bower/changes/undo-file.json']).toBeUndefined();
+  expect(JSON.parse(undone.after['.bower/changes/archive/undo-file.json'] ?? 'null')).toMatchObject({ undoes: op });
+  expect(events.filter((e) => e.method === 'GET' && e.media && e.path.startsWith('.bower/changes/archive/'))).toEqual([]);
+  expect(writes(events, HOT)).toHaveLength(1);
+  const recent = section(undone.after[HOT], 'Recent changes');
+  expect.soft(recent.some((row) => row.includes('Filed Mulch notice.')), 'inverse drops the prior filing row').toBe(false);
+  expect.soft(recent.filter((row) => row.includes('Undo the last tidy-up')), 'Undo has exactly one row').toHaveLength(1);
+  expect.soft(recent.filter((row) => row.includes('Undo the last tidy-up'))[0] ?? '').toMatch(/ · op:[a-f0-9]{12}$/);
+});
+
+it('B3b hot: recent rows carry their op key and dedupe by it', async () => {
+  const { c, drive, root } = await setup('b23-summary-person-lint');
+  const events: Observation[] = [];
+  const first = await runOnDrive(c, drive, root, { pacing, claude: caseReplies(c.id),
+    around: observe(drive, root, events) }, 1);
+  expect(first.code).toBe(0);
+  const rows = section(first.after[HOT], 'Recent changes');
+  expect(rows.length).toBeGreaterThan(0);
+  for (const row of rows) expect.soft(row, 'every actual recent row carries an operation key').toMatch(/ · op:[a-f0-9]{12}$/);
+  const sourceId = Object.entries(first.pathsById).find(([, path]) => path === 'Resources/Gardening/Mulch notice.txt')?.[0] ?? '';
+  const manifest = JSON.parse(manifests(first)[0]?.[1] ?? '{}') as RunManifest;
+  const filingKey = manifest.operations.find((entry) => entry.effect.kind === 'move' && entry.effect.before.fileId === sourceId)?.operationId.slice(0, 12) ?? '';
+  expect(filingKey).toMatch(/^[a-f0-9]{12}$/);
+  expect.soft(rows.find((row) => row.includes('Filed Mulch notice.'))).toBe(`- 2026-10-07 Filed Mulch notice. · op:${filingKey}`);
+  const hotId = Object.entries(first.pathsById).find(([, path]) => path === HOT)?.[0] ?? '';
+  const prior = first.after[HOT] ?? '';
+  const seeded = `${prior}\n- 2026-10-07 Same wording · op:111111111111\n- 2026-10-07 Changed wording · op:111111111111\n- 2026-10-07 Same wording · op:222222222222`;
+  await drive.writeText(hotId, seeded, (await drive.get(hotId)).modifiedTime);
+  const source = Object.entries(first.pathsById).find(([, path]) => path === 'Resources/Gardening/Mulch notice.txt')?.[0] ?? '';
+  drive.touch(source); // Visible evidence refresh; no report-authored change required.
+  vi.setSystemTime(AT + 1);
+  events.length = 0;
+  const next = await runOnDrive(c, drive, root, { pacing, admission: noItems(root, 'dedupe'),
+    answerStart: { scope: 'all', requestId: 'dedupe' }, around: observe(drive, root, events) }, 2);
+  expect(next.code).toBe(0);
+  const recent = section(next.after[HOT], 'Recent changes');
+  expect.soft(recent.filter((row) => row.endsWith(' · op:111111111111'))).toEqual(['- 2026-10-07 Same wording · op:111111111111']);
+  expect.soft(recent.filter((row) => row.endsWith(' · op:222222222222'))).toEqual(['- 2026-10-07 Same wording · op:222222222222']);
+  expect(events.filter((e) => e.method === 'GET' && e.media && e.path.startsWith('.bower/changes/archive/'))).toEqual([]);
 });
 
 it('B3b hot: date-only refresh keeps the old bytes without another write', async () => {
