@@ -1852,7 +1852,6 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     madeAs.set(thing.file.id, noteName);
     plannedFile(join(to, noteName));
     const template = authored.template;
-    if (template && !Object.hasOwn(NOTE_TEMPLATES, template)) refused('a note with an unknown template');
     // Only declared, relevant links in the authored evidence; never pad with the folder's other notes.
     const related = await groundedAuthoredLinks(to, authored, { file: thing.file, name });
     const properties = template ? [

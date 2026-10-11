@@ -975,7 +975,7 @@ function applyAtVersion(before: Uint8Array, changes: readonly Change[], authors:
   if (!changes.every(fieldsOk)) return refuse('field');
   const note = parseNote(fetched?.path ?? 'note.md', text, fetched);
   const template = note.properties.find((p) => p.key === 'type')?.value;
-  const shape = template && Object.hasOwn(NOTE_TEMPLATES, template) ? NOTE_TEMPLATES[template as NoteTemplate] : undefined;
+  const shape = note.byBower && template && Object.hasOwn(NOTE_TEMPLATES, template) ? NOTE_TEMPLATES[template as NoteTemplate] : undefined;
   if (version === 2 && shape && (shape.immutable || !shape.timeline && changes.some((c) => c.kind === 'timeline-append'))) return refuse('unsupported');
   const map = isHub(note.path, fetched?.name, note.properties.find((p) => p.key === 'type')?.value);
   if (version === 2 && map && own.status !== 'v2' && !note.byBower && changes.some((c) => c.kind !== 'link-rewrite')) return refuse('not-bower');

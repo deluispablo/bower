@@ -323,11 +323,11 @@ export function parseNote(path: string, raw: string, fetched?: FetchedOwnership)
     links: linksIn(text),
     ...(original ? { original } : {}),
     byBower: f.get('by') === 'bower',
-  }, raw);
+  }, raw, f.get('bower_template'));
 }
 
-function retainPersonalSource(note: ParsedNote, raw: string): ParsedNote {
-  if (!note.byBower || /^bower_template: (source|concept|project|area|moc)$/m.test(raw)) personalSources.set(note, { raw, serialized: serializeNote(note) });
+function retainPersonalSource(note: ParsedNote, raw: string, template?: string): ParsedNote {
+  if (!note.byBower || template && Object.hasOwn(NOTE_TEMPLATES, template)) personalSources.set(note, { raw, serialized: serializeNote(note) });
   return note;
 }
 

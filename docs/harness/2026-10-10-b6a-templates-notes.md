@@ -804,3 +804,93 @@ writes outside the repository. No network, node_modules changes, runtime edits, 
 writing git commands. Read-only `git diff --check` passes. Green gates are left to
 implementation; this session owns only reds. Reference: the supplied
 `docs/harness/2026-10-11-p4-113-review.md`, TL-P4-32 addendum 1, and C05.
+
+## Fix round 4
+
+P4-113's Important finding is fixed in the existing note-edit admission path.
+Template restrictions now require both `note.byBower` and a declared type. This
+also scopes the legacy Timeline invariant to Bower notes. Person-owned Source
+and MOC notes retain mechanical relinking and C05 Timeline insertion, separately
+and in canonical combined order. Bower-made Sources remain immutable and legacy
+Bower-made MOC Timelines remain protected. No second edit mechanism was added.
+
+Template byte retention now receives the already-parsed `bower_template` scalar
+and checks `Object.hasOwn(NOTE_TEMPLATES, template)`. The declaration keys are the
+single name list, and quoted markers use the existing front-matter scalar reader.
+The dead unknown-template planner check is removed; AuthoredNote's closed template
+union already constrains that input, and serializeNote retains strict admission.
+
+Grounding choice: keep refusal for unresolved authored links in plain non-template
+Bower notes. Packet contract 3 says "Front matter on Bower notes" and "Each new
+note links its hub/MOC and 1–5 relevant notes"; it does not limit that grounding
+rule to explicit templates. The named B56 prep's front-matter paragraph repeats
+"Each new note". The existing resolver therefore still checks every authored
+string before effects. Template-only hub selection and related metadata remain
+scoped to template creation. A production planScripted probe confirms plain notes
+with missing links refuse before effects, while a grounded plain note still plans.
+
+Offline standard: reused the installed TypeScript `lib.es2022.object.d.ts`
+Object.hasOwn declaration and the existing parsed-scalar/schema mechanisms.
+[ECMAScript Object.hasOwn](https://tc39.es/ecma262/multipage/fundamental-objects.html#sec-object.hasown)
+is the standard own-key membership operation;
+[Zod schemas](https://zod.dev/api) remain the existing precedent for one declaration
+consumed by writer and validator. These are offline references; no network used.
+
+removed: type-only template restrictions on person-owned Source/MOC notes.
+removed: the duplicated five-template regex in retainPersonalSource.
+removed: the dead unknown-template check in scripted planning.
+removed: no tests, files, serializers, or ownership mechanisms.
+tests changed: none
+
+### Compatibility and verification
+
+The committed round 4 reds were reproduced before the fix: 3 tests fail with
+6 assertion failures, 76 pass (`/tmp/b6a-fix4-red.log`). After the fix the complete
+six-file B6a target passes 427/427, including person Source/MOC edits, Bower legacy
+controls, all five shapes, stored compatibility and Project task identity
+(`/tmp/b6a-fix4-targeted.log`). No existing assertion was edited.
+
+| Stored fixture | Entry point | Result |
+| --- | --- | --- |
+| Person Source/MOC, ownership/2 and plain Source rename | applyChanges | Exact link/append bytes retained; input unchanged |
+| Legacy Bower Source/MOC with Timeline | applyChanges | Source immutable; MOC append refused |
+| All existing template and legacy format fixtures | Full B6a target | 427 pass |
+| Quoted/unquoted stored template marker | parseNote/serializeNote | Original bytes retained |
+
+Runner: 50 files, 667 tests pass (`/tmp/b6a-fix4-runner.log`); JSON report is
+`/tmp/b6a-fix4-runner.json`. App/node/runner tsc pass with `--noEmit --incremental
+false` (`/tmp/b6a-fix4-tsc-{app,node,runner}.log`). ESLint on all three touched
+runtime files passes (`/tmp/b6a-fix4-eslint.log`). The unused-code gate passes
+both baselines: 2 ordinary and 29 production findings (`/tmp/b6a-fix4-unused.log`).
+The OS-temp supplemental probe passes 7 checks (`/tmp/b6a-fix4-probe.log`); its
+initial scratch setup lacked root esbuild and localStorage, corrected only in OS
+temp by using runner's installed esbuild and an in-memory storage implementation.
+
+All tests use the existing OS-temp output preload and `--configLoader runner`;
+reports, caches, scratch fixtures and logs stay outside the repository.
+No network, writing Git command, node_modules replacement or symlink, test edit,
+or shared harness record edit. Tests may execute their existing scratch Git
+fixtures in OS temp; this session issued only read-only Git checks.
+No screen changed (`ui: false`). The requested separate gates replace pnpm check,
+whose scripts write build/test outputs and a check mark into the repository.
+No pnpm check pass, check mark, e2e server, commit or deployment is claimed.
+
+Owned files: src/data/contracts/note-edit.ts, src/data/contracts/note-format.ts,
+src/data/spine/scripted.ts, and this notes file. Read-only git diff --check passes;
+the test diff is empty. Full src result follows below.
+
+Full src suite: 168 files / 5,688 tests pass, two tests fail, one unhandled
+listen EPERM (`/tmp/b6a-fix4-src.log`). Complete failure list:
+
+- `src/docs.test.ts:134`, `what the repository promises > every change since the
+  P2 freeze is listed`: committed round 4 reds SHA `c30f7adc` is absent from
+  `docs/harness/2026-10-07-p3-compatibility.md`. Read-only git show confirms this
+  is the pre-existing test-only commit. The coordinator owns this shared change
+  list, outside the packet's owned files. No test or history row was changed.
+- `src/e2e-port.test.ts:37`, `the e2e port and server identity > a server from
+  another worktree is never reused`: expected sandbox listen EPERM on 127.0.0.1,
+  surfaced as a 5,000 ms timeout plus one unhandled listen error.
+
+All runtime assertions and B6a reds pass. No contract/test contradiction found.
+The implementation and requested checks are complete; entirely green non-exempt
+src verification remains blocked by the coordinator-owned compatibility row.
