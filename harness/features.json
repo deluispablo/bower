@@ -7162,7 +7162,8 @@
     ],
     "verify": "pnpm exec vitest run src/features/home/Home.test.tsx src/features/tidy/TidySheet.test.tsx src/features/piles/PileScreen.test.tsx -t \"Q1b \"",
     "note": "TL-P4-43/44 (addendum 9), TL-P4-55 (3): integrates after messages-wait-for-sheets. Not escalated. Designer verifies. Packet 2026-10-11-q1b-questions-ui-packet.md. implementer: codex.",
-    "review": "P4-118 PASS"
+    "review": "P4-118 PASS",
+    "design": "verified"
   },
   {
     "id": "next-steps-plain-list",

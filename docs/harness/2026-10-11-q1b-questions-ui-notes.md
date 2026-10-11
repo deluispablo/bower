@@ -306,3 +306,8 @@ removed: no test, assertion, positive control, focus mechanism, source port or b
 Changed files: src/features/home/Home.tsx; src/features/home/home.module.css;
 src/features/tidy/TidySheet.test.tsx; e2e/messages-wait-for-sheets.spec.ts; this notes file.
 Left out: runner-owned e2e verification/commits, full pnpm check rerun, designer verification.
+
+## Close (coordinator)
+
+The fix commits 0949a37a and 034336a1 carry notes lines that later commits extended, so done.sh cannot take them off cleanly. The reds were proved at the tests-only commit 27280ef2: 23 Q1b assertion failures before 0949a37a (notes, "Implementation"). The waits-toast row stayed red until messages-wait-for-sheets merged, then passed.
+After the fix, all were green on 7e89552e: check, plus e2e q1-questions, app and messages-wait-for-sheets on demo and fake. P4-118 PASS, and the designer verified against the signed table. Closed with --known-green.
