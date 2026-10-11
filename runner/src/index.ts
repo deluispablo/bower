@@ -1,10 +1,11 @@
 /** Derived maintenance uses the manifest, its settled outcomes and the ordinary fenced effects. */
 import { sha256Hex } from '../../src/data/contracts/hashes';
 import { indexedFront, timelineBullets } from '../../src/data/contracts/note-format';
-import type { EditText, EffectV2, Maintain, MaintenanceDeclaration, MaintenanceNote, SeenFile, VerifiedContent } from '../../src/data/contracts/run-manifest';
+import { opKey } from '../../src/data/contracts/op-key';
+import type { EditText, EffectV2, Maintain, MaintenanceDeclaration, MaintenanceNote, RunnerWrite, SeenFile, VerifiedContent } from '../../src/data/contracts/run-manifest';
 import type { DriveFile, StoredEvidence } from '../../src/data/drive/drive-api';
 import { driveEffects, type Effects, type Settled } from '../../src/data/spine/engine';
-import { materialize, refreshed } from '../../src/data/spine/report';
+import { filingMove, materialize, refreshed } from '../../src/data/spine/report';
 import { limiter, READ_AHEAD } from '../../src/data/spine/read';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { happened, reserveFor, stampOf, type Holder } from '../../src/data/spine/write-once';
@@ -129,16 +130,33 @@ export const hotTarget: DeclaredTarget = {
       return isJournalRecord(value) ? [value] : [];
     });
     const undone = pairsOf(journal);
+    // Run folder names in the persisted listing supply key namespaces, without record or archive reads.
+    const listing = manifest.operations.flatMap((op) => op.effect.kind === 'maintain' ? op.effect.inputs.listing ?? [] : []);
+    const index = VaultIndex.build(manifest.scope.rootId, listing.map(file));
+    const runIds = new Set([manifest.runId, ...index.filesIn('.bower/runs').filter((f) => f.folder).map((f) => f.name)]);
+    const removedKeys = journal.flatMap((line) => line.undoes === undefined ? []
+      : [...runIds].map((runId) => opKey(manifest.scope.rootId, runId, line.undoes ?? '')));
     const changes: HotInputs['changes'][number][] = journal.flatMap((line) => {
       const day = timelineDate(line.at);
       return day && !undone.has(line.id) ? [{ id: line.id, at: new Date(line.at).toISOString(), text: line.what }] : [];
     });
+    // Undo's inverse evidence is authoritative even when its request was not admitted as a journal line.
+    const inverse = journal.find((line) => line.undoes !== undefined && !undone.has(line.id));
+    if (inverse) changes.unshift({ id: inverse.id, at: declaration.at, text: 'Undo the last tidy-up' });
     // The settled run's report is its journal of Bower changes; proposed rows never enter hot.
-    const report = materialize({ ...manifest, operations: manifest.operations.filter((op) => op.effect.kind !== 'maintain') }, '', outcomes)?.report;
-    if (report) {
-      for (const [i, row] of report.filed.entries()) changes.push({ id: `${manifest.runId}-filed-${i}`, at: declaration.at, text: `Filed ${row.title}.` });
-      for (const [i, row] of report.updated.entries()) changes.push({ id: `${manifest.runId}-updated-${i}`, at: declaration.at, text: row.what });
-      for (const [i, row] of report.created.entries()) changes.push({ id: `${manifest.runId}-created-${i}`, at: declaration.at, text: row.what });
+    const operations = manifest.operations.filter((op) => op.effect.kind !== 'maintain');
+    for (const contribution of manifest.reportPlan) {
+      const report = materialize({ ...manifest, operations, reportPlan: [contribution] }, '', outcomes)?.report;
+      if (!report) continue;
+      const required = contribution.requires.flatMap((id) => operations.filter((op) => op.operationId === id && applied.has(id)));
+      const filing = required.find((op) => filingMove(manifest, op))
+        ?? required.find((op) => op.effect.kind === 'create-text' || op.effect.kind === 'edit-text');
+      const created = required.find((op) => op.effect.kind === 'create-text');
+      if (filing) for (const row of report.filed) changes.push({ id: filing.operationId, at: declaration.at, text: `Filed ${row.title}.` });
+      for (const row of report.updated) {
+        if (row.op && applied.has(row.op)) changes.push({ id: row.op, at: declaration.at, text: row.what });
+      }
+      if (created) for (const row of report.created) changes.push({ id: created.operationId, at: declaration.at, text: row.what });
     }
     const openQuestions = isRunnerFile(SYSTEM.questions, questionValue) ? questionValue.questions.map((question) => {
       const subject = subjectOf(question);
@@ -146,7 +164,7 @@ export const hotTarget: DeclaredTarget = {
         ?? manifest.operations.flatMap((op) => op.effect.kind === 'maintain' ? op.effect.inputs.listing ?? [] : []).find((f) => f.fileId === subject.id) : undefined;
       return { id: question.id, text: named ? `Inbox: ${named.name} — ${question.text}` : question.text };
     }) : [];
-    return renderHot({ today, openQuestions, hubs, changes,
+    return renderHot({ today, rootId: manifest.scope.rootId, runId: manifest.runId, removedKeys, openQuestions, hubs, changes,
       previousHot: declaration.sources.find((source) => source.path === SYSTEM.hot)?.text }).text;
   },
 };
@@ -494,7 +512,7 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
           provenance: drive.provenance, observedModifiedTime: before.modifiedTime } : target.beforeContent;
         const effect: EffectV2 = owned && before && beforeContent && edit ? { kind: 'edit-text', before,
           path: target.path, beforeContent, changes: edit.changes, beforeText, text, content }
-          : before && target.beforeContent ? { kind: 'write-runner-json' as const, before, path: target.path as import('../../src/data/contracts/run-manifest').RunnerWrite,
+          : before && target.beforeContent ? { kind: 'write-runner-json' as const, before, path: target.path as RunnerWrite,
           beforeContent: target.beforeContent, text, content }
           : { kind: 'create-text' as const, parent: { fileId: target.parentId }, name: target.path.split('/').at(-1) ?? '', createKey: op.operationId, purpose: owned ? 'generated' as const : 'runner-json' as const, text, content };
         const sub = { ...op, effect };

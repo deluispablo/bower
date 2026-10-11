@@ -1096,3 +1096,97 @@ Final run reused the existing temporary runner config and output preload, with c
 No production or contract edits, git writes, network, installs, or node_modules replacement/symlink.
 No pnpm check or screen e2e: this assignment requests only the hot suite; standard check writes repository outputs.
 Coordinator owns commits. Existing dirty notes and production/contract files preserved.
+
+## Addendum 6 (wiring)
+
+2026-10-11, implementation at HEAD `dde8870d`. Read Addendum 6,
+Addendum 6 (op key), and Op-key red repair. The repaired assertion uses the
+approved shared contract; no contradictory test remains in the full runner sweep.
+No network or writing git command was issued. The approved date-validation and
+RunnerWrite-import minors remain intact. `src/data/contracts/op-key.ts` and its
+test are byte-for-byte unchanged (SHA-256 verification in OS temp).
+
+### Wiring and existing homes
+
+- `runner/src/hot.ts` calls the shared `opKey(rootId, runId, operationId)`.
+  Maintain supplies the actual root/run identities and immutable operation ids.
+  Every dated Recent changes row ends in ` · op:<12 lowercase hex digits>`.
+  Content escaping, sorting, caps, the 300-word bound and omission marks remain.
+- Rows merge by their terminal key, with new evidence before prior generated
+  rows and the first occurrence retained. Equal wording under distinct keys
+  survives. Historical dated rows without keys receive a stable migration key
+  from their exact bytes; unsupported prose still contributes no evidence.
+  The helper's optional root/run inputs preserve its earlier caller shape.
+- Maintain traces report contributions through their required operations:
+  filing rows use the captured member's move; creation rows use the create;
+  updated rows use their recorded operation id. Positional report ids are gone.
+  Shared materialize still decides which contributions settled.
+- Settled primary inverse lines name the operations/records they undo. The
+  existing persisted maintain listing supplies prior run-folder names; keys
+  computed in those namespaces remove the corresponding retained rows. No
+  archive or old run record is read, and no checkpoint/schema/store is added.
+  This resolution uses retained run namespaces; it cannot recover a namespace
+  whose run folder has already been removed.
+- A later inverse produces one `Undo the last tidy-up` row using the first
+  inverse's identity. This works even when the request itself was not admitted
+  as a journal line (the production-main red has that shape). Shared pairsOf
+  still folds original/inverse pairs captured together. Provenance lists only
+  identities whose keyed rows are displayed.
+
+Compatibility: the op-key contract and all stored schemas are unchanged. Hot's
+keyed suffix is additive; existing dated rows remain readable. Rendering and
+inverse matching are pure computations over persisted maintain evidence, so
+there are no additional Drive calls. No dependency or live write fence changed.
+
+Offline references reused from the notes and existing contract:
+[@noble/hashes](https://github.com/paulmillr/noble-hashes), the existing synchronous
+SHA-256 implementation; [controller reconciliation](https://kubernetes.io/docs/concepts/architecture/controller/),
+rebuilding a derived view from settled evidence; and
+[CommonMark](https://spec.commonmark.org/0.31.2/#html-blocks), the preserved literal-row escaping.
+No page was fetched and no second digest/identity formatter was introduced.
+
+### Verification
+
+All test output, caches and artifacts went to OS temp with the existing temporary
+configs and `/tmp/b3b-hot-maintain-output.mjs` preload. No node_modules replacement,
+symlink, install, fixture repair or test edit occurred.
+
+- Red before wiring: 51 assertion failures / 95 passes, all three hot files,
+  `/tmp/b3b-wiring-red.log`. Named reds:
+  `B3b hot: an Undo run refreshes hot from restored evidence` and
+  `B3b hot: recent rows carry their op key and dedupe by it`.
+- First full runner sweep: 649 pass / 1 fail. Only Undo's own row was missing;
+  inverse removal, keyed filing and deduplication already passed.
+  `/tmp/b3b-wiring-runner.log`. An OS-temp transform probe showed that maintain
+  had captured the settled inverse but not the request; no test was changed.
+- Final full runner sweep: **650 tests pass, 49 files**, exit 0.
+  `NODE_OPTIONS='--import=/tmp/b3b-hot-maintain-output.mjs' pnpm -C runner exec vitest run --config /tmp/b3b-a6-runner.config.mjs --maxWorkers=2`.
+  Log `/tmp/b3b-wiring-runner-final.log`; saved JSON
+  `/tmp/b3b-wiring-runner-final.json`. Both named production-main tests pass,
+  including zero archive-media reads. All five drive-calls-golden tests and all
+  nine model-input-fingerprint tests pass unchanged. No contradictory assertion.
+- Requested `pnpm exec vitest run src --maxWorkers=2`, with only the existing
+  temporary config and output preload added: src/e2e-port.test.ts:37,
+  `a server from another worktree is never reused`, timed out at the unchanged
+  5,000 ms after this sandbox's expected server-listen restriction. No further
+  progress; interrupted, exit 130. `/tmp/b3b-wiring-src.log`.
+  A remaining-src attempt excluding only that file also stalled before a test
+  completed; interrupted, exit 130. `/tmp/b3b-wiring-src-rest.log`.
+  A separate unchanged op-key-test probe passed, exit 0:
+  `/tmp/b3b-wiring-src-probe.log`. The full src suite is unverified, not green.
+- App/node/runner `tsc --noEmit` all pass, exit 0:
+  `/tmp/b3b-wiring-tsc-app.log`, `/tmp/b3b-wiring-tsc-node.log`,
+  `/tmp/b3b-wiring-tsc-runner.log`.
+- Runner ESLint on `src/hot.ts` and `src/index.ts` passes, exit 0:
+  `/tmp/b3b-wiring-eslint.log`. Read-only `git diff --check` passes.
+- SHA-256 checks confirm the op-key contract/test and all three hot tests are
+  unchanged. Read-only diff/status shows only the two runner production files,
+  these notes, and the pre-existing untracked op-key contract.
+- No pnpm check or screen e2e: this assignment requests component gates only,
+  forbids repository test outputs, and has ui:false. No commits were made.
+
+removed: runner/src/hot.ts: id-only row merging and positional prior-row identities; rows now merge by op key.
+removed: runner/src/index.ts: run-id/category/report-position identities; report rows use their required operation ids.
+removed: runner/src/hot.ts: positional displayed-change provenance; displayed keys determine provenance.
+removed: no test, assertion, fixture, golden, threshold, dependency, write fence or checkpoint mechanism.
+tests changed: none

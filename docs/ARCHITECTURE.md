@@ -109,3 +109,4 @@ Each mechanism has one home in the code ([TL-P4-15](harness/2026-10-08-tl-p4-15-
 | Run status words | `src/features/tidy/run-words.ts` | Six surfaces decide alone (`c4-run-view`) |
 | Heavy-run lock and timer gate | `harness/with-lock.sh` (re-entrant through `HARNESS_LOCK_HELD`; around `pnpm check`, every e2e script and done.sh; the unlocked bodies are `check:run` and `e2e:pwa:run`, called only through the lock), `harness/timer-gate*.ts` with `real-timers.json` (empty) | Done (`c4-test-timers`); CPU report in check-harness, report only |
 | App copy | one copy file keyed by id | Target (`c4-copy`) |
+| Operation key (` · op:<12-hex>`) for the log and hot | `src/data/contracts/op-key.ts` `opKey` | Done: the first 12 hex of sha256 over the canonical [rootId, runId, operationId], on `hashes.ts`; hot's Recent changes use it (`b3b-hot-maintain`, TL-P4-42 addendum 6); B8's log reuses it (TL-P4-50) |
