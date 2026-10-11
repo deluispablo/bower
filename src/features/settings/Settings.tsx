@@ -57,6 +57,7 @@ async function setNotify(on: boolean, save: (on: boolean) => void): Promise<void
 
 export function Settings() {
   const [askDelete, setAskDelete] = useState(false);
+  const [sending, setSending] = useState(0);
   // Read each time Settings shows: the person may have allowed them in the browser meanwhile.
   const blocked = typeof Notification !== 'undefined' && Notification.permission === 'denied';
   const { data: user } = useUser();
@@ -64,6 +65,24 @@ export function Settings() {
   const { data: rules } = useRules();
   const { session, vault } = useSources();
   const nav = useNavigate();
+  const signOut = (): void => {
+    void session.signOut().then(
+      () => useUi.getState().forgetPerson(),
+      (e: unknown) => report(e, 'Signing out did not finish. Try again.'),
+    );
+  };
+  const askSignOut = (): void => {
+    const show = (count: number): void => {
+      if (count) setSending(count);
+      else signOut();
+    };
+    const count = vault.pendingUploadCount?.() ?? 0;
+    if (typeof count === 'number') show(count);
+    else void count.then(show, (e: unknown) => report(e, 'Signing out did not finish. Try again.'));
+  };
+  const sendingWords = sending === 1
+    ? "1 thing you added is still sending from this device. If you sign out now, it stops and you'll need to add it again."
+    : `${sending} things you added are still sending from this device. If you sign out now, they stop and you'll need to add them again.`;
   return (
     <div className={s.page}>
       <h1 className={s.title}>Settings</h1>
@@ -152,13 +171,7 @@ export function Settings() {
         <Button
           size="sm"
           variant="ghost"
-          onClick={() =>
-            void session.signOut().then(
-              // What this screen holds in memory goes too, not only what the device kept.
-              () => useUi.getState().forgetPerson(),
-              (e: unknown) => report(e, 'Signing out did not finish. Try again.'),
-            )
-          }
+          onClick={askSignOut}
         >
           Sign out
         </Button>
@@ -168,6 +181,19 @@ export function Settings() {
           Delete
         </Button>
       </Row>
+      <Sheet open={sending > 0} onOpenChange={(open) => { if (!open) setSending(0); }} title="Sign out now?">
+        <p className="muted">{sendingWords}</p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+          <Button variant="ghost" onClick={() => setSending(0)}>Keep sending</Button>
+          <Button variant="danger" onClick={() => {
+            // Let the sheet's history entry close before sign-out changes the route.
+            setSending(0);
+            void new Promise<void>((resolve) => setTimeout(resolve, 0))
+              .then(() => afterOverlaysClosed())
+              .then(signOut);
+          }}>Sign out</Button>
+        </div>
+      </Sheet>
       <Sheet open={askDelete} onOpenChange={setAskDelete} title="Delete your Bower account?">
         <p className="muted">
           Bower forgets you: your sign-in, settings and tidy-ups. Your Bower folder and everything

@@ -193,3 +193,22 @@ Staging 03b5d0d2 (version b5de87dc), bundle `index-DmEj6T_E.js`, Claude Sonnet 5
 **Home after the runs** (empty Inbox, 1 open question): 20 Drive calls (5 media); the last ends at 5.0 s (stage 3: 21 calls, 6.2 s).
 
 **Runner region check:** the timing line carries `region=` on every run. Four of five show a region (eastus, centralus, centralus, westcentralus). One shows `region=unknown` (38019565934): the metadata call failed or timed out within its 2 s (`curl -m 2`). Compared like-for-like with stage 3 (55ea8194, US west and Mexico): garden 1:06 → 0:56, offer-and-flat 1:36 → 1:18, c05 1:19 → 1:12–1:14.
+
+
+## smoke-request-slow smoke on `539fe3a3` (2026-10-10)
+
+Staging 539fe3a3 (version 7fdf8136), bundle `index-BUZNGxSW.js`, account A, Claude off (scripted). Times are the runner's `timing:` line; Drive reads are the `reads:` call count.
+
+| Case | Run | total | reads (s / calls) | apply | checkpoints | report | region | Result |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| C05 request ("Add to Allotment diary: …") | 38081473688 | 51.0 | 25.3 / 51 | 10.4 | 6.6 | 6.1 | westus2 | Pass. Was 341 s and 763 reads on 645710a4. Home shows the request done and "Left as you wrote them: … found nothing about this note" (scripted); no "can't read" (c05-timeline-list live). |
+| One pile ("Speed run six …") | 38081615898 | 29.7 | 7.1 / 24 | 9.0 | 5.6 | 4.8 | centralus | Pass. Filed to Resources/Ideas with a new note. Was 31 s and 21 reads. |
+
+## Batch smoke on `5bab1288` (2026-10-11)
+
+Staging 5bab1288 (version bfa0c812), bundle `index-DOzbpzq4.js`, account A, Claude off (scripted). PWA: the first reload still ran the 539fe3a3 bundle; the second loaded `index-DOzbpzq4.js` (the old worker predates the one-reload fix; the next deploy must take one).
+
+| Case | Run | total | reads (s / calls) | apply | checkpoints | report | region | Result |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| One pile ("Add to Allotment diary smoke eleven …" as a note) | 38097183298 | 35.7 | 8.1 / 24 | 11.9 | 6.2 | 5.7 | westcentralus | Pass. Filed to Resources/Ideas with a new note; press to done 52 s. |
+| C05 request ("Add to Allotment diary: Alex staked the runner beans …", Let Bower do it now) | 38097367975 | 27.6 | 6.7 / 21 | 8.5 | 5.3 | 4.5 | eastus2 | Pass. "Done. See what changed in your folders."; press to done 43 s (was 51.0 s runner total, 51 reads on 539fe3a3). |

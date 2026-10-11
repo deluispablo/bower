@@ -1,0 +1,51 @@
+{
+  "files": {
+    "present": [
+      "Areas/Career/Career profile.md",
+      "Projects/Job hunt/Request - Gather offer skills.md"
+    ]
+  },
+  "unchanged": [
+    "Projects/Job hunt/Ferrowick offer.md",
+    "Projects/Job hunt/Mallowick offer.md",
+    "Rules.md",
+    ".bower/type-table.json",
+    "Areas/Career/Alex diary.md"
+  ],
+  "protectedRanges": [
+    {
+      "path": "Areas/Career/Career profile.md",
+      "range": {
+        "heading": "Notes"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "path": "Areas/Career/Career profile.md",
+      "contains": [
+        "skills: [Python, SQL, TypeScript, dbt]"
+      ]
+    },
+    {
+      "path": "Projects/Job hunt/Request - Gather offer skills.md",
+      "contains": [
+        "Done: 2",
+        "Pending: 0",
+        "Unavailable: 0",
+        "[[Career profile]]"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 0,
+    "created": [
+      "Projects/Job hunt/Request - Gather offer skills.md"
+    ],
+    "updated": [
+      "Areas/Career/Career profile.md"
+    ],
+    "questionsExactly": 0
+  }
+}

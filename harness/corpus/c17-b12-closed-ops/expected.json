@@ -1,0 +1,66 @@
+{
+  "files": {
+    "present": [
+      "Projects/Job hunt/Saltmere/Ferrowick offer.md",
+      "Projects/Job hunt/Lindenwick/Mallowick offer.md",
+      "Projects/Job hunt/Request - Organise offers.md"
+    ],
+    "absent": [
+      "Projects/Job hunt/Offer amber.md",
+      "Projects/Job hunt/Offer birch.md"
+    ]
+  },
+  "unchanged": [
+    "Rules.md",
+    ".bower/type-table.json",
+    ".bower/tags.json",
+    "Projects/Job hunt/Original offer.txt",
+    "Projects/Job hunt/Saltmere/Saltmere.md",
+    "Projects/Job hunt/Lindenwick/Lindenwick.md"
+  ],
+  "notes": [
+    {
+      "path": "Projects/Job hunt/Saltmere/Ferrowick offer.md",
+      "contains": [
+        "review_state: reviewed",
+        "tags: [career, shortlist]"
+      ]
+    },
+    {
+      "path": "Projects/Job hunt/Lindenwick/Mallowick offer.md",
+      "contains": [
+        "review_state: reviewed",
+        "tags: [career, shortlist]"
+      ]
+    },
+    {
+      "path": "Projects/Job hunt/Alex shortlist.md",
+      "contains": [
+        "[[Ferrowick offer]]",
+        "[[Mallowick offer]]",
+        "Keep this sentence.  "
+      ],
+      "excludes": [
+        "[[Offer amber]]",
+        "[[Offer birch]]"
+      ]
+    },
+    {
+      "path": "Projects/Job hunt/Request - Organise offers.md",
+      "contains": [
+        "Done: 2",
+        "Pending: 0",
+        "Unavailable: 0"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 0,
+    "created": [
+      "Projects/Job hunt/Request - Organise offers.md"
+    ],
+    "updatedAtLeast": 2,
+    "questionsExactly": 0
+  }
+}

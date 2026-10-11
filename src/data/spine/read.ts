@@ -4,6 +4,7 @@
  * reading a file's content.
  */
 import type { OwnershipContext } from '../contracts/ownership-format';
+import type { IndexedFront } from '../contracts/note-format';
 import { BIN_KEYS, SEARCH_MAX_PAGES, type DriveApi, type DriveFile, type ResumableDrive } from '../drive/drive-api';
 import { declarationCopies, pileRecords } from '../pile-readiness';
 import { PILE_NOTE } from '../piles';
@@ -22,6 +23,8 @@ import type { SpineRead } from './plan';
 export interface ScriptedRead extends SpineRead {
   piles(rootId: string, context?: OwnershipContext): Promise<Pile[]>;
   provenance: 'fake-stored' | 'adapter-read';
+  /** Metadata from a prefix already read for the canonical index, without fetching media. */
+  indexedFront?(file: DriveFile): Promise<IndexedFront | undefined>;
 }
 
 type DriveReads = Pick<DriveApi, 'listAll' | 'readBytes' | 'readText' | 'binnedByItem' | 'get'> & Pick<ResumableDrive, 'getUploaded'>;
@@ -62,6 +65,12 @@ export const READ_AHEAD = 8;
 /** The Drive admission reads: `DriveHttp`, whose listing can carry each file's checksum. */
 type AdmissionDrive = Pick<DriveApi, 'readBytes' | 'readText' | 'binnedByItem' | 'get'> &
   Pick<ResumableDrive, 'getUploaded'> & { listAll(rootId: string, opts: { checksums: boolean }): Promise<DriveFile[]> };
+
+/** A shared metadata listing may defer read-ahead until the provider has selected its scope. */
+export type AdmissionRead = Omit<SpineRead, 'listAll'> & {
+  listAll(rootId: string, opts?: { readAhead: boolean }): Promise<DriveFile[]>;
+  warmListing(rootId: string, listing: readonly DriveFile[]): void;
+};
 
 /** Runs each task with at most `limit` running at once, in the order given. */
 export function limiter(limit: number): <T>(task: () => Promise<T>) => Promise<T> {
@@ -138,7 +147,7 @@ function readsOf(rootId: string, listing: readonly DriveFile[], scope: Admission
  * - A read ahead that fails is kept as it failed, so the plan meets the very error a read of its own would have
  *   met; it is logged (no file text is ever in an error).
  */
-export function admissionRead(drive: AdmissionDrive, scope: AdmissionScope, budget?: SubrequestBudget): SpineRead {
+export function admissionRead(drive: AdmissionDrive, scope: AdmissionScope, budget?: SubrequestBudget): AdmissionRead {
   const limit = limiter(READ_AHEAD);
   const texts = new Map<string, Promise<string>>();
   const bytes = new Map<string, Promise<Uint8Array>>();
@@ -173,20 +182,24 @@ export function admissionRead(drive: AdmissionDrive, scope: AdmissionScope, budg
       if (!(e instanceof NotReadHere)) console.error('An admission read ahead failed', e);
     });
   };
+  const warmListing = (rootId: string, listing: readonly DriveFile[]): void => {
+    const reads = readsOf(rootId, listing, scope);
+    base = budget?.used() ?? 0;
+    // Granted in this order while the budget has room; the rest are left to the runner.
+    const order = [...reads.notes.map((id) => `t:${id}`), ...reads.bytes.map((id) => `b:${id}`), ...reads.texts.map((id) => `t:${id}`)];
+    for (const key of order) afford(key);
+    if (refused.size) console.info(`Admission leaves ${refused.size} reads to the runner: out of subrequests`);
+    // Started in the order the plan reads them; a read not granted is left as it is (`NotReadHere`).
+    for (const id of [...reads.texts, ...reads.notes]) ahead(text(id));
+    for (const id of reads.bytes) ahead(raw(id));
+  };
   return {
-    listAll: async (rootId) => {
+    listAll: async (rootId, opts) => {
       const listing = await drive.listAll(rootId, { checksums: true });
-      const reads = readsOf(rootId, listing, scope);
-      base = budget?.used() ?? 0;
-      // Granted in this order while the budget has room; the rest are left to the runner.
-      const order = [...reads.notes.map((id) => `t:${id}`), ...reads.bytes.map((id) => `b:${id}`), ...reads.texts.map((id) => `t:${id}`)];
-      for (const key of order) afford(key);
-      if (refused.size) console.info(`Admission leaves ${refused.size} reads to the runner: out of subrequests`);
-      // Started in the order the plan reads them; a read not granted is left as it is (`NotReadHere`).
-      for (const id of [...reads.texts, ...reads.notes]) ahead(text(id));
-      for (const id of reads.bytes) ahead(raw(id));
+      if (opts?.readAhead !== false) warmListing(rootId, listing);
       return listing;
     },
+    warmListing,
     readText: text,
     // Each caller gets its own copy, as `DriveHttp.readBytes` gives.
     readBytes: async (id) => new Uint8Array(await raw(id)),

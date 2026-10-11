@@ -59,6 +59,8 @@ export interface Readiness {
   members: MemberState[];
   /** The declared context file, whatever its text now; null when absent or ambiguous. */
   context: DriveFile | null;
+  /** The missing context was found by the same Bin lookup as missing members. */
+  contextBinned: boolean;
 }
 
 const HASH = /^[0-9a-f]{64}$/;
@@ -200,7 +202,27 @@ export async function findLooseDeclarations(files: readonly DriveFile[], rootId:
     if (skip.has(copy.name.slice('declaration-'.length, -'-.json'.length - 64))) return false;
     return copy.appProperties?.[PROP.recordAnchor] !== 'folder' && !retired.has(copy.appProperties?.[PROP.recordPile] ?? '');
   });
-  // The copies are read together (a score of them is one wait on a slow Drive, not a score); the merge keeps their order.
+  return (await readDeclarations(wanted, rootId, inboxId, read, cache)).declarations
+    .filter((d) => d.declaration.anchor.kind === 'loose' && (onlyPile === undefined || d.declaration.pileId === onlyPile));
+}
+
+/** The full-read record query, shared by loose discovery and the recovery summary. */
+export function findPileDeclarations(files: readonly DriveFile[], rootId: string, inboxId: string, read: ReadBytes, cache?: Map<string, DeclarationResult>): Promise<{ declarations: LooseDeclaration[]; complete: boolean }> {
+  // TL-P4-53 addendum 5: a listing disposition stamp retires its declaration, even when damaged or foreign.
+  const retired = new Set(pileRecords(files, rootId, 'disposition').flatMap((f) => f.appProperties?.[PROP.recordPile] ?? []));
+  const anchored = new Set(files.filter((f) => f.appProperties?.[PROP.pile] && f.appProperties?.[PROP.declaration])
+    .map((f) => `${f.appProperties?.[PROP.pile]}:${f.appProperties?.[PROP.declaration]}:${f.folder ? 'folder' : 'loose'}`));
+  const wanted = pileRecords(files, rootId, 'declaration').filter((copy) => {
+    const pile = copy.appProperties?.[PROP.recordPile];
+    const id = copy.name.slice('declaration-'.length, -'-.json'.length - 64);
+    // Live anchors have their own read path; they cannot be unanchored work.
+    return !retired.has(pile ?? '') && !anchored.has(`${pile}:${id}:${copy.appProperties?.[PROP.recordAnchor]}`);
+  });
+  return readDeclarations(wanted, rootId, inboxId, read, cache);
+}
+
+/** One parser and copy merge for every declaration form; failed evidence stays unknown. */
+async function readDeclarations(wanted: readonly DriveFile[], rootId: string, inboxId: string, read: ReadBytes, cache?: Map<string, DeclarationResult>): Promise<{ declarations: LooseDeclaration[]; complete: boolean }> {
   const parsedCopies = await Promise.all(wanted.map(async (copy) => {
     const key = `${copy.id}@${copy.modifiedTime}`;
     let parsed = cache?.get(key);
@@ -209,8 +231,6 @@ export async function findLooseDeclarations(files: readonly DriveFile[], rootId:
       try {
         bytes = await read(copy.id);
       } catch (e) {
-        // One copy that cannot be read affects only its own pile (TL-P2-08 a): it is skipped this time and read
-        // again next listing. Signed out stops the listing.
         if ((e instanceof BowerError && e.code === 'auth') || e instanceof NotReadHere) throw e;
         console.error(e);
         return null;
@@ -220,26 +240,79 @@ export async function findLooseDeclarations(files: readonly DriveFile[], rootId:
     }
     return parsed;
   }));
-  const byId = new Map<string, LooseDeclaration | 'conflict'>();
+  let complete = true;
+  const byPile = new Map<string, LooseDeclaration | 'conflict'>();
+  const pileById = new Map<string, string>();
   for (const [i, copy] of wanted.entries()) {
     const parsed = parsedCopies[i];
-    if (!parsed) continue;
+    // A parser-validated declaration in another root is outside this summary.
+    if (parsed && !parsed.ok && parsed.reason === 'scope') continue;
+    const stamp = copy.appProperties?.[PROP.recordPile] ?? '';
+    const refuse = (): void => {
+      complete = false;
+      byPile.set(stamp, 'conflict');
+    };
+    if (!parsed) { refuse(); continue; }
     if (!parsed.ok || copy.name !== declarationName(parsed.value.declarationId, parsed.sha256)) {
       console.error(`A pile declaration copy was refused (${parsed.ok ? 'name' : parsed.reason}).`);
+      refuse();
       continue;
     }
-    const { declarationId, anchor } = parsed.value;
-    if (anchor.kind !== 'loose' || anchor.inboxId !== inboxId) continue;
-    if (onlyPile !== undefined && parsed.value.pileId !== onlyPile) continue;
-    const had = byId.get(declarationId);
-    if (had === undefined) byId.set(declarationId, { declaration: parsed.value, sha256: parsed.sha256, copies: [copy] });
+    const { declarationId, pileId, anchor } = parsed.value;
+    if (anchor.inboxId !== inboxId || pileId !== stamp) {
+      console.error('A pile declaration copy was refused (pile or inbox).');
+      refuse();
+      continue;
+    }
+    const otherPile = pileById.get(declarationId);
+    pileById.set(declarationId, pileId);
+    const had = byPile.get(pileId);
+    if (otherPile !== undefined && otherPile !== pileId) {
+      byPile.set(otherPile, 'conflict');
+      byPile.set(pileId, 'conflict');
+      complete = false;
+      console.error('Two piles carry the same declaration identity.');
+    } else if (had === undefined) byPile.set(pileId, { declaration: parsed.value, sha256: parsed.sha256, copies: [copy] });
     else if (had !== 'conflict' && had.sha256 === parsed.sha256) had.copies.push(copy);
-    else if (had !== 'conflict') {
-      console.error('Two different copies of a loose pile declaration were found; neither is used.');
-      byId.set(declarationId, 'conflict');
+    else {
+      byPile.set(pileId, 'conflict');
+      complete = false;
+      console.error('Two different copies of a pile declaration were found; neither is used.');
     }
   }
-  return [...byId.values()].filter((d): d is LooseDeclaration => d !== 'conflict');
+  return { declarations: [...byPile.values()].filter((d): d is LooseDeclaration => d !== 'conflict'), complete };
+}
+
+/** One accounting result supplies both the recovery count and the missing loose row. */
+export type OrphanState = { state: 'orphan' | 'retired' | 'unknown'; missingLoose: boolean };
+
+/** Unstamped unanchored work uses the existing member accounting and context-removal facts. */
+export async function orphanState(found: LooseDeclaration, inbox: DriveFile, files: readonly DriveFile[], read: ReadBytes, digest: DigestOf, binned: BinnedOf, cache: Map<string, DispositionResult>, removedContext: (path: string, binned: boolean) => Promise<boolean>): Promise<OrphanState> {
+  const { declaration, sha256: hash } = found;
+  const { anchor, context } = declaration;
+  const anchors = files.filter((f) => f.appProperties?.[PROP.pile] === declaration.pileId
+    && f.appProperties?.[PROP.declaration] === declaration.declarationId && f.folder === (anchor.kind === 'folder'));
+  const result = (state: OrphanState['state'], missingLoose = false): OrphanState => ({ state, missingLoose });
+  if (anchors.length) return result('retired');
+  // With no real folder, verified members anywhere in this root are outside its intended anchor.
+  const place = anchor.kind === 'loose' ? inbox : { ...inbox, id: anchor.createKey };
+  let inBin = false;
+  const accounting = await accountPile(declaration, hash, place, files, read, digest, async (keys) => {
+    const hits = await binned(keys);
+    inBin = hits.length > 0;
+    return hits;
+  }, cache);
+  // A loose file Binned from the inbox was deliberately removed, just as the row accounting treats it.
+  const missingLoose = anchor.kind === 'loose' && accounting.members[0]?.state === 'missing' && !inBin;
+  if (anchor.kind === 'loose' && inBin && accounting.members[0]?.state === 'missing') return result('retired');
+  if (accounting.members.some((m) => m.state === 'unchecked')) return result('unknown');
+  if (accounting.members.some((m) => m.state === 'missing' || m.state === 'changed' || m.state === 'verified')) return result('orphan', missingLoose);
+  if (context.kind === 'absent') return result('retired');
+  const contexts = keyed(files, context.memberKey);
+  if (contexts.length === 1) return result('retired');
+  if (contexts.length > 1) return result('unknown');
+  if (anchor.kind === 'folder' && await removedContext(`Inbox/${anchor.name}`, accounting.contextBinned)) return result('retired');
+  return result('unknown');
 }
 
 const keyed = (files: readonly DriveFile[], key: string): DriveFile[] => files.filter((f) => !f.folder && f.appProperties?.[PROP.item] === key);
@@ -269,10 +342,8 @@ async function observe(member: Member, folder: DriveFile, files: readonly DriveF
  * arrived and left (it counts whether or not it is in the Bin); other bytes
  * are a change. One binned inside the folder is the person removing it.
  */
-async function resolveBinned(declaration: Declaration, folder: DriveFile, states: MemberState[], binned?: BinnedOf): Promise<MemberState[]> {
-  const missing = states.filter((s) => s.state === 'missing').map((s) => s.memberKey);
-  if (!binned || !missing.length) return states;
-  const found = (await binned(missing)).filter((b) => b.file.parents[0] !== folder.id);
+function resolveBinned(declaration: Declaration, folder: DriveFile, states: MemberState[], hits: Awaited<ReturnType<BinnedOf>>): MemberState[] {
+  const found = hits.filter((b) => b.file.parents[0] !== folder.id);
   return states.map((s) => {
     if (s.state !== 'missing') return s;
     const member = declaration.members.find((m) => m.memberKey === s.memberKey);
@@ -288,20 +359,21 @@ async function resolveBinned(declaration: Declaration, folder: DriveFile, states
   });
 }
 
-async function observeAll(declaration: Declaration, folder: DriveFile, files: readonly DriveFile[], digest: DigestOf, binned?: BinnedOf): Promise<MemberState[]> {
-  // Every member is looked up together (a pile of four is one wait on a slow Drive, not four); the order is kept.
-  const states = await Promise.all(declaration.members.map((m) => observe(m, folder, files, digest)));
-  return resolveBinned(declaration, folder, states, binned);
-}
-
 /** Each member's state; the pile waits while any member is missing, changed or unchecked. The context only has to be there. */
 export async function observePile(declaration: Declaration, folder: DriveFile, files: readonly DriveFile[], digest: DigestOf, binned?: BinnedOf): Promise<Readiness> {
-  const members = await observeAll(declaration, folder, files, digest, binned);
-  const contextFiles = declaration.context.kind === 'text' ? keyed(files, declaration.context.memberKey).filter((f) => f.parents[0] === folder.id) : [];
+  // Missing members and context share the one identity-based Bin lookup.
+  const states = await Promise.all(declaration.members.map((m) => observe(m, folder, files, digest)));
+  const contextKey = declaration.context.kind === 'text' ? declaration.context.memberKey : null;
+  const contextFiles = contextKey ? keyed(files, contextKey).filter((f) => f.parents[0] === folder.id) : [];
+  const missingContext = contextKey && !keyed(files, contextKey).length ? contextKey : null;
+  const keys = [...new Set([...states.filter((s) => s.state === 'missing').map((s) => s.memberKey), ...(missingContext ? [missingContext] : [])])];
+  const hits = binned && keys.length ? await binned(keys) : [];
+  const members = resolveBinned(declaration, folder, states, hits);
   const context = contextFiles.length === 1 ? (contextFiles[0] ?? null) : null;
+  const contextBinned = missingContext !== null && hits.some((b) => b.file.appProperties?.[PROP.item] === missingContext);
   const has = (state: MemberState['state']): boolean => members.some((m) => m.state === state);
   const blocked: Blocked = has('changed') ? 'changed' : has('missing') ? 'not-arrived' : has('unchecked') ? 'not-checked' : null;
-  return { blocked, members, context };
+  return { blocked, members, context, contextBinned };
 }
 
 /** What a declared pile's members come to, by the one accounting rule (`accountPile`). */
@@ -480,9 +552,9 @@ export function recordedNote(children: readonly DriveFile[], contextKey: string 
   return bound ?? children.find((f) => !f.folder && f.name === PILE_NOTE);
 }
 
-/** Whether the person put the pile's note in the Bin through Bower: a `trash` change for it in your changes. */
-export function contextRemoved(records: readonly unknown[], folderPath: string): boolean {
-  return records.some((r) => isJournalRecord(r) && r.kind === 'trash' && r.path === `${folderPath}/${PILE_NOTE}`);
+/** A context counts as removed by its trash line or evidence from the one shared Bin lookup. */
+export function contextRemoved(records: readonly unknown[], folderPath: string, contextBinned = false): boolean {
+  return contextBinned || records.some((r) => isJournalRecord(r) && r.kind === 'trash' && r.path === `${folderPath}/${PILE_NOTE}`);
 }
 
 /** Your changes, read for `contextRemoved`; a line that is not JSON says nothing and is logged. */

@@ -1,0 +1,23 @@
+{
+  "id": "c17-b12-shared-target",
+  "capability": "C17",
+  "title": "2 active offers contribute to one shared skills list with 0 unresolved members",
+  "covers": "model",
+  "source": "new; TL-P4-39 B12/class F, F6/F7/F8/F11/U4; TL-P4-41 through TL-P4-50; pending scripted proof",
+  "scope": "instructions",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Add the skills from the two active offers in Job hunt to the skills list on Career profile. Keep its existing skills; this is one request."
+    }
+  ],
+  "questions": [],
+  "bowerOwned": [
+    "Projects/Job hunt/Ferrowick offer.md",
+    "Projects/Job hunt/Mallowick offer.md",
+    "Areas/Career/Career profile.md",
+    "Rules.md"
+  ]
+}

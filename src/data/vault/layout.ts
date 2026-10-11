@@ -15,7 +15,7 @@
  */
 import type { RunnerWrite } from '../contracts/run-manifest';
 import { isRunWire } from '../contracts/run-wire';
-import { isAnsweredRow } from '../contracts/questions';
+import { isQuestionOption, type QuestionRound, isAnsweredRow } from '../contracts/questions';
 import type { Question, Request, RunState, Suggestion } from '../types';
 
 export const BOWER_FOLDER = 'Bower';
@@ -52,6 +52,7 @@ export function isHidden(path: string): boolean {
 export interface QuestionsFile {
   v: 1;
   questions: Question[];
+  rounds?: QuestionRound[];
 }
 export interface SuggestionsFile {
   v: 1;
@@ -109,7 +110,7 @@ const optional = (v: unknown, check: (x: unknown) => boolean): boolean => v === 
 const list = (v: unknown, check: (x: unknown) => boolean): boolean => Array.isArray(v) && v.every(check);
 /** A question's shown update (`Question.shown`): its lines, and the note's checksum and stamp as left. */
 const shown = (v: unknown): boolean => object(v) && Array.isArray(v.lines) && v.lines.every(text) && text(v.md5) && optional(v.stamp, text);
-const question = (v: unknown): boolean => object(v) && text(v.id) && text(v.text) && text(v.yes) && text(v.no) && number(v.askedAt) && optional(v.about, text) && optional(v.subject, text) && optional(v.hash, text) && optional(v.state, text) && optional(v.shown, shown);
+const question = (v: unknown): boolean => object(v) && text(v.id) && text(v.text) && text(v.yes) && text(v.no) && number(v.askedAt) && optional(v.about, text) && optional(v.subject, text) && optional(v.hash, text) && optional(v.state, text) && optional(v.shown, shown) && optional(v.words, text) && optional(v.options, (o) => Array.isArray(o) && o.length >= 2 && o.length <= 4 && o.every(isQuestionOption) && new Set(o.map((x) => x.id)).size === o.length);
 const suggestion = (v: unknown): boolean => object(v) && text(v.id) && text(v.title) && text(v.why);
 const request = (v: unknown): boolean => object(v) && text(v.id) && text(v.text) && number(v.at) && optional(v.done, text);
 const pathChange = (v: unknown): boolean => object(v) && text(v.path) && text(v.what);
@@ -140,7 +141,7 @@ export function isRunnerFile<K extends keyof RunnerFiles>(path: K, v: unknown): 
     case SYSTEM.retrieval: return text(v.folderId) && v.folderId.length > 0 && text(v.account) && v.account.length > 0 && text(v.cursor) && v.cursor.length > 0
       && object(v.files) && Object.values(v.files).every((f) => object(f) && text(f.path) && text(f.version) && text(f.summary)
         && object(f.coverage) && f.coverage.kind === 'prefix' && count(f.coverage.bytes));
-    case SYSTEM.questions: return list(v.questions, question);
+    case SYSTEM.questions: return list(v.questions, question) && optional(v.rounds, (rs) => list(rs, (r) => object(r) && text(r.subject) && text(r.pileId) && text(r.words) && number(r.count) && Number.isInteger(r.count) && r.count >= 1 && r.count <= 2 && optional(r.hash, text) && optional(r.exhausted, (v) => v === true) && optional(r.wordsOnly, (v) => v === true) && optional(r.reask, question)));
     case SYSTEM.suggestions: return list(v.suggestions, suggestion);
     case SYSTEM.requests: return list(v.done, request);
     case SYSTEM.lastRun: return run(v.run);
