@@ -203,3 +203,12 @@ Staging 539fe3a3 (version 7fdf8136), bundle `index-BUZNGxSW.js`, account A, Clau
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
 | C05 request ("Add to Allotment diary: …") | 38081473688 | 51.0 | 25.3 / 51 | 10.4 | 6.6 | 6.1 | westus2 | Pass. Was 341 s and 763 reads on 645710a4. Home shows the request done and "Left as you wrote them: … found nothing about this note" (scripted); no "can't read" (c05-timeline-list live). |
 | One pile ("Speed run six …") | 38081615898 | 29.7 | 7.1 / 24 | 9.0 | 5.6 | 4.8 | centralus | Pass. Filed to Resources/Ideas with a new note. Was 31 s and 21 reads. |
+
+## Batch smoke on `5bab1288` (2026-10-11)
+
+Staging 5bab1288 (version bfa0c812), bundle `index-DOzbpzq4.js`, account A, Claude off (scripted). PWA: the first reload still ran the 539fe3a3 bundle; the second loaded `index-DOzbpzq4.js` (the old worker predates the one-reload fix; the next deploy must take one).
+
+| Case | Run | total | reads (s / calls) | apply | checkpoints | report | region | Result |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| One pile ("Add to Allotment diary smoke eleven …" as a note) | 38097183298 | 35.7 | 8.1 / 24 | 11.9 | 6.2 | 5.7 | westcentralus | Pass. Filed to Resources/Ideas with a new note; press to done 52 s. |
+| C05 request ("Add to Allotment diary: Alex staked the runner beans …", Let Bower do it now) | 38097367975 | 27.6 | 6.7 / 21 | 8.5 | 5.3 | 4.5 | eastus2 | Pass. "Done. See what changed in your folders."; press to done 43 s (was 51.0 s runner total, 51 reads on 539fe3a3). |
