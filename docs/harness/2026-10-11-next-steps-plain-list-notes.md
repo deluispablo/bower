@@ -516,3 +516,10 @@ E2e was not run, as instructed; browser green remains for the runner on demo
 and fake. `pnpm check` was not rerun because it writes reports and marks into
 the repository, contrary to this session's instruction. The owner reports
 `pnpm check` and the four existing browser specs passed on the supplied HEAD.
+
+## Close (coordinator)
+
+done.sh could not take 1465a126 off cleanly: the same commit carries notes lines that later commits touched. The reds were proved at their tests-only commits.
+- The NSPL reds failed on 9c8e61b0 and 4de03d64 before the fix 1465a126 (red cards: 3 reds, then 8 intended reds).
+- After the fix, all were green on de8ffea7: check, plus e2e NSPL on demo and fake. Coordinator gates also passed on 2b0ca0f9 (app, capabilities, c05-person-notes, empty-note-help).
+P4-117 PASS, and the designer verified. Closed with --known-green.
