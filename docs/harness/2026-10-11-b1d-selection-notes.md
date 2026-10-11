@@ -2027,3 +2027,275 @@ Scope audit: only the seven named runner test files, c04-hardware-receipt fixtur
 and this notes appendix changed. No corpus driver production file required an edit; no other fixture,
 shared harness record, production file or golden changed. Remaining implementation work belongs to
 round 3 and the coordinator, not this red-owning session.
+
+## Implementation round 3
+
+implementer: codex
+status: blocked; uncommitted implementation, not accepted or merge-ready. No fourth round without a ruling.
+
+Authority: owner instruction and TL-P4-41 addendum 16. No network, git-writing command, test edit,
+node_modules replacement or symlink. Test output, caches, build information and diagnostics are in
+OS temporary files. The coordinator owns commits. Only allocated production files and this appendix changed.
+
+### Implemented in the existing homes
+
+- Applied /tmp/b1d-round2-listing-handoff.patch as the base. main hands refreshPlanning's prepared
+  listing to planReads before constructing the provider. handoff replaces the listing and version map,
+  resets admission's id-only read-ahead and its warm marker, and retains the one versioned ReadCache.
+  The base alone exposed duplicate read-ahead traffic: admission warmListing bypassed that cache.
+  Its existing reader now sends text/bytes through that same cache; the public reads delegate to the
+  reader without recursive cache calls. Full bytes still supply the prefix, and live fences remain fresh.
+- Partial changes-feed metadata preserves listed checksums only when modifiedTime is exactly equal.
+  Changed versions never inherit an old checksum. This belongs in refreshPlanning's existing merge,
+  not a second discovery request or another metadata/cache mechanism. Q1's same-bytes reupload control
+  now retains its hash-backed exhaustion history; no additional physical read is needed.
+- Invalid selection or execution after its one retry throws the existing BowerError and fails the run.
+  main returns code 1 for failed runs. Only RunTiming's LedgerExhausted uses the untouched-inbox done
+  outcome. The new invalid-reply and valid-101-source/202-operation controls retain their distinct kinds.
+- C05's existing requestTargets verdict and personalAppendHistory supply read pins keyed by the admitted
+  request file. Those pins count in each filed source's five-note allowance and are frozen in allowedTargets.
+  Execution retains the bounded pins instead of dropping them when it replaces selection's empty notes.
+  Pending requests suppress title matches and reuse verified target/source ids; renamed replacements
+  gain no consent. A gone bound target is omitted from read pins and settles through the scripted planner.
+  Refused/old targets remain suppressed: the existing planner records their row without an edit.
+  Waiting sources use those script-bound ids for neighbourhood discovery, rather than fetching unrelated
+  prefixes from stale request wording. No new pending store, writer, settlement rule or planner was added.
+- Existing cited-line repetition evidence is recalculated after selected full notes reach execution.
+  The same Timeline parser supplies it; repeating a line is accepted only on an already frozen target
+  and grants no fresh source evidence or consent. This repairs the final C05 retained-source replay.
+- Selection reads the ordered B5a type table through readTypeTable and uses its row ids, including the
+  existing tolerant-reader seed, plus unknown. Both model phases receive that same table as context.
+  No built-in classification list remains in selection validation. An OS-temp production-provider probe
+  accepts configured committee-update and plans its move, and refuses absent payslip after one retry:
+  /tmp/b1d-round3-type-probe.log. Each case observes two actual calls; the test tree is unchanged.
+- model-input normalization covers itemId, folderId, parentId and indexed/folder dictionary keys.
+  Dictionary rows retain their contents and multiplicity in stable canonical-content order; versions
+  are run-dependent timestamps. Type-row ids remain stable configuration. Text values are not edited.
+  The fresh-id controls and text-looking-like-an-id controls pass. Only the normalized fingerprint form
+  changes; actual versions remain in both model inputs and the manifest fences.
+
+removed: stale planner listing and versions after the prepared refresh.
+removed: admission read-ahead's bypass of the versioned ReadCache and the resulting duplicate physical reads.
+removed: same-version feed metadata discarding the listed checksum used by Q1 hash history.
+removed: validation retry exhaustion masquerading as ledger exhaustion and ending done.
+removed: successful process exit for a newly failed run.
+removed: selection validation's built-in seven-kind list.
+removed: execution dropping script-bound C05 note pins, and title-based discovery for pending requests.
+removed: gone bound targets consuming selection read pins.
+removed: execution retaining the empty selection stage's cited-line repetition evidence.
+removed: physical item/dictionary ids and version timestamps leaking into the fresh-id fingerprint.
+tests changed: none
+
+### Write it and remaining compatibility drafts
+
+The Write it implementation is still in its existing scripted/answer homes. The ten failing setup
+paths in ask-answer-loop's shownWorld never reach execution: source words are "The offer came in."
+and the extracted Industrial Designer/Ferrowick offer; the Job hunt hub's summary is "Applications
+and offers." There is no whole-word match for that hub, so its parent is absent from the source's
+visible neighbourhood. The transport selects a new Applications subfolder under that absent parent
+and repeats it on retry. Changing singular offer into plural offers, allowing every indexed hub's
+parent, or inventing an execution fallback would weaken addendum 13's neighbourhood/visible-parent
+contract. No such workaround was made. The stored-answer controls with an actually stored question
+continue to use the existing no-model path. The complete final inventory below includes these cases.
+
+Drafts for the lead; no test, fixture, assertion, public format or golden was changed:
+
+| Evidence / home | Compatibility draft or boundary |
+| --- | --- |
+| b1-planning's invalid-reply paths | Keep inbox/no-write/one-retry controls; assert failed/code 1 instead of the ledger's done helper. |
+| claude-provider and q1-options negatives | Retain failed/status and authority checks; reconcile their older code-0 terminal-report assertion with the new explicit code-1 red. |
+| b23-hot-recovery pre-plan failure | Preserve no-write/recovery assertions; reconcile code 0 after a failed model with main's failed outcome. |
+| b1a-contract mocked pre-maintain listing | Assert the refreshed version/new hidden child; mocks currently demand the superseded pre-feed listing and throw before maintain. |
+| ask-answer-loop shownWorld | Seed a genuinely matching hub word in the source or hub metadata; retain every shown-text, no-model, archive and re-ask assertion. |
+| c04-offer-and-flat / c05 corpus | Give each newly proposed subfolder an actually visible parent; preserve all original filing/scoring controls. |
+| ask-only-lines | Select its Flat hunt target by id; the current selection gives only Resources, then execution writes an unselected hub. |
+| c05-person-notes final replay | Repaired by recalculating existing-line evidence after execution reads; all 60 tests now pass, including 19 conflict retries and the retained-source replay. |
+| model-input goldens | Review the measured selection type-table addition and derived normalization separately; leave all byte/fresh-id assertions intact. |
+| B5a unused-production gate | Reconcile type-table's formerly whole-file baseline with its now-live reader and five other unused exports; no new baseline entries added here. |
+
+### Golden measurements and every named call
+
+No golden or test fixture changed in this round. Actual C04 selection input was captured by an
+OS-temp Vitest transform that adds only an OS-temp observation write, with no production fetch or
+semantic change. The capture ran the unchanged raw-golden test; its expected failure is recorded in
+/tmp/b1d-round3-capture.{json,log}. Bytes: /tmp/b1d-round3-measured-input.txt and
+/tmp/b1d-round3-measured-normalized.txt; lengths/hashes: /tmp/b1d-round3-golden-measurements.log.
+The raw prompt prefix is byte-identical. Its only changed context key is types.
+
+| Golden file | Old chars / bytes | Measured chars / bytes | Char delta | Named call / reason |
+| --- | ---: | ---: | ---: | --- |
+| runner/test/fixtures/model-input-c04.raw.golden.txt | 10830 / 10832 | 11605 / 11607 | +775 | selection receives the ordered B5a type table; execution receives the same table. |
+| runner/test/fixtures/model-input-c04.golden.txt | 10832 / 10834 | 11502 / 11504 | +670 | that selection table adds 775; derived fresh-id/version normalization removes 105. |
+
+Measured raw SHA256: 724f6170ed0e4cf1c8affb2d1ec8fb125c0ab8043460e9cf4cdd58d566576fdc.
+Measured normalized SHA256: 2b74fe14c6e58978e1cb0855be9155f8dd18a013ce19d14655dfe8f5034bbb9e.
+These are review measurements, not silently raised golden pins. Fresh-id normalization has no model
+call or byte-growth claim of its own. No traffic, token, operation, retry, character or time bound rose.
+
+Named semantic calls remain: selection; selection validation retry; execution; execution validation
+retry. Each step has one retry, four physical model calls at most; actual usage stays on RunTiming.
+The type table adds one existing versioned media read only when type-table.json is present; the
+missing-table path uses readTypeTable's existing seed with zero Drive calls. The custom-table probe
+records that path. Existing selected-note reads and script-bound pending-run record reads reuse the
+same cache. The listing handoff, same-version checksum merge and repetition evidence add zero
+physical discovery/feed/media calls. No second changes-feed drain was introduced.
+
+### Verification commands and output boundary
+
+Baseline full runner after applying the handoff base: 646 passed, 45 failed, 691 total:
+/tmp/b1d-round3-before.{json,log}. The unchanged committed sweep 3's prior result was 657/691.
+All tests remain unchanged; changing invalid-reply outcomes deliberately exposes the already-audited
+contradictory done assertions instead of preserving their accidental greens.
+
+Completed src suite: 170 physical files, 5689 passed, one failed. src/e2e-port.test.ts:37 is the
+expected sandbox socket-listen failure; its observed assertion is the 5000 ms timeout. No app source
+changed. App, node and runner TypeScript pass; touched-file ESLint passes. The unused gate's ordinary
+pass is green; production fails on the B5a reader's now-visible unused exports and stale whole-file
+baseline, listed separately below. No pnpm check or screen e2e ran: their normal commands write
+repository build/result/check-mark files, contrary to the owner's OS-temp-only instruction. ui:false,
+no screen, test, fixture, shared harness baseline or generated landing file changed.
+
+Final required commands (all output outside the repository, Vitest cache disabled):
+- pnpm -C runner exec vitest run --maxWorkers=2 --reporter=json --outputFile=/tmp/b1d-round3-final.json --cache=false
+  /tmp/b1d-round3-final.log
+- pnpm exec vitest run src --maxWorkers=2 --reporter=json --outputFile=/tmp/b1d-round3-src.json --cache=false
+  /tmp/b1d-round3-src.log
+- pnpm exec tsc --noEmit -p tsconfig.app.json --tsBuildInfoFile /tmp/b1d-round3-app.tsbuildinfo
+  /tmp/b1d-round3-app-types.log
+- pnpm exec tsc --noEmit -p tsconfig.node.json --tsBuildInfoFile /tmp/b1d-round3-node.tsbuildinfo
+  /tmp/b1d-round3-node-types.log
+- pnpm -C runner exec tsc --noEmit -p .
+  /tmp/b1d-round3-runner-types.log
+- pnpm -C runner exec eslint src/claude.ts src/drive.ts src/main.ts src/model-input.ts src/index.ts
+  /tmp/b1d-round3-eslint.log
+- node scripts/check-unused-gate.mjs
+  /tmp/b1d-round3-unused.log
+
+OS-temp diagnostic artifacts: /tmp/b1d-round3-targeted.{json,log},
+/tmp/b1d-round3-revised.{json,log}, /tmp/b1d-round3-gone.{json,log},
+/tmp/b1d-round3-checksums.{json,log}, /tmp/b1d-round3-present-lines.{json,log},
+/tmp/b1d-round3-corpus-diagnosis.log. Temporary diagnostic logging was removed from production.
+The capture transform/config, bundles and probes are /tmp/b1d-round3-* only; no dependency changes.
+
+Unused-production gate inventory (mechanical B5a boundary; outside this packet's production allocation):
+- runner/src/type-table.ts:40, firstMatchingRow: unused production export.
+- runner/src/type-table.ts:32, insertTypeRow: unused production export.
+- runner/src/type-table.ts:4, propertyValuesOk: unused production re-export.
+- runner/src/type-table.ts:44, requestTableColumn: unused production export.
+- runner/src/type-table.ts:4, typeTableOk: unused production re-export.
+- harness/unused-production-baseline.json:24: whole-file runner/src/type-table.ts row is stale now the reader is live.
+The gate reports 28 baseline versus 32 current findings: five export findings replace one file finding.
+The earlier two selectionOf baseline rows are already absent on this branch. None was reintroduced.
+
+### Offline sources and stop boundary
+
+Reused the packet's offline research without a network lookup:
+- [Curated context and just-in-time retrieval](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents).
+- [Plan then execute](https://arxiv.org/html/2506.08837v1).
+- [Stable prompt prefixes](https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
+The existing ReadCache documents [HTTP version validators](https://www.rfc-editor.org/rfc/rfc9110.html#section-8.8.3);
+its existing implementation remains the one cache. No second planner, cache, ledger, writer or pending state added.
+
+Round 3 cannot be marked green with the remaining contracts, goldens and B5a gate findings unchanged.
+The owner's instruction and addendum 16 require return to the lead; no fourth implementation round,
+new golden acceptance, unallocated shared-file pruning or weaker authority was inferred.
+
+### Final complete runner inventory and compatibility results
+
+Final runner: 654 passed, 37 failed, 691 total; 52 physical test files. Exit 1.
+Changed production: runner/src/claude.ts, runner/src/drive.ts, runner/src/index.ts,
+runner/src/main.ts, runner/src/model-input.ts. No other production file changed.
+Full messages and every soft assertion are in /tmp/b1d-round3-final.json.
+
+| File:line | Kind | Remaining red / first observation |
+| --- | --- | --- |
+| runner/test/ask-answer-loop.test.ts:588 | invalid-reply exhaustion; visible-parent fixture contradiction | a yes to write it applies the shown text with no model call |
+| runner/test/ask-answer-loop.test.ts:613 | invalid-reply exhaustion; visible-parent fixture contradiction | write it re-asks when the section changed since it was shown |
+| runner/test/ask-answer-loop.test.ts:639 | invalid-reply exhaustion; visible-parent fixture contradiction | a write it yes whose note is gone writes one answered row |
+| runner/test/ask-answer-loop.test.ts:661 | invalid-reply exhaustion; visible-parent fixture contradiction | write it re-asks when the note changed elsewhere since it was shown |
+| runner/test/ask-answer-loop.test.ts:694 | invalid-reply exhaustion; visible-parent fixture contradiction | a clash at write time leads to the re-ask with the new sentence and no extra press |
+| runner/test/ask-answer-loop.test.ts:739 | invalid-reply exhaustion; visible-parent fixture contradiction | only a clash keeps an answer for a re-ask |
+| runner/test/ask-answer-loop.test.ts:768 | invalid-reply exhaustion; visible-parent fixture contradiction | the same non-clash refusal never starts more runs than the cap, then shows the not-written row |
+| runner/test/ask-answer-loop.test.ts:833 | invalid-reply exhaustion; visible-parent fixture contradiction | a write it with nothing to write writes one answered row |
+| runner/test/ask-answer-loop.test.ts:860 | invalid-reply exhaustion; visible-parent fixture contradiction | a lone no to write it closes the question with no model call |
+| runner/test/ask-answer-loop.test.ts:879 | invalid-reply exhaustion; visible-parent fixture contradiction | a yes to write it beside a pile asks the model |
+| runner/test/ask-only-lines.test.ts:35 | invalid-reply exhaustion; unselected-target fixture contradiction | keeps the Timeline lines the model added with no cites |
+| runner/test/b1-planning.test.ts:108 (helper :257) | invalid-reply exhaustion; done contradiction | b1-cut-index-no-new-destination |
+| runner/test/b1-planning.test.ts:139 (helper :257) | invalid-reply exhaustion; done contradiction | b1-five-per-source |
+| runner/test/b1-planning.test.ts:168 (helper :257) | invalid-reply exhaustion; done contradiction | b1-pinned-and-script-notes-count-within-five |
+| runner/test/b1-planning.test.ts:184 (helper :257) | invalid-reply exhaustion; done contradiction | b1-selection-closed-ids |
+| runner/test/b1-planning.test.ts:261 (helper :257) | invalid-reply exhaustion; done contradiction | b1-target-injection |
+| runner/test/b1-planning.test.ts:328 (helper :257) | invalid-reply exhaustion; done contradiction | b1-question-candidate-binding |
+| runner/test/b1-planning.test.ts:515 (helper :257) | invalid-reply exhaustion; done contradiction | b1-expansion-is-not-a-read-picked-members-count-within-five |
+| runner/test/b1-planning.test.ts:536 (helper :257) | invalid-reply exhaustion; done contradiction | b1-new-subfolder-visible-parent-name-and-near-duplicate |
+| runner/test/b1-planning.test.ts:550 (helper :257) | invalid-reply exhaustion; done contradiction | b1-one-new-subfolder-per-item |
+| runner/test/b1-planning.test.ts:565 (helper :257) | invalid-reply exhaustion; done contradiction | b1-one-retry-per-step-four-calls-exhaustion-leaves-items-for-next-run |
+| runner/test/b1a-contract.test.ts:488 | stale-listing mock contradiction; assertion causes failed run | B1a contract: pass 1 1: the committed cursor never passes an unreflected concurrent edit |
+| runner/test/b1a-contract.test.ts:573 | stale-listing mock contradiction; assertion causes failed run | B1a contract: pass 1 5: newly discovered hidden descendants advance only the cursor |
+| runner/test/b1a-contract.test.ts:643 | stale-listing mock contradiction; assertion causes failed run | B1a contract: round 3 1: vanished indexed notes drop without failing and ordinary edits refresh |
+| runner/test/b23-hot-recovery.test.ts:47 | provider error; code-0/code-1 contradiction | B3b hot: pre-plan failure and done redispatch send no hot writes |
+| runner/test/c04-incorporation.test.ts:223 | invalid-reply exhaustion; c04-offer-and-flat visible-parent contradiction | the C04 corpus cases score green with scripted proposals |
+| runner/test/c05-incorporation.test.ts:74 | invalid-reply exhaustion; c05-line-not-repeated visible-parent contradiction | the C05 corpus cases score green with scripted proposals |
+| runner/test/claude-provider.test.ts:262 | invalid-reply exhaustion; code-0/done contradiction | a responsibility does not open a new Project |
+| runner/test/claude-provider.test.ts:365 | invalid-reply exhaustion; code-0/done contradiction | a thing with text and no note or citing line is refused and retried once |
+| runner/test/claude-provider.test.ts:409 | invalid-reply exhaustion; code-0/done contradiction | a second refusal ends the run honestly |
+| runner/test/claude-provider.test.ts:468 | invalid-reply exhaustion; code-0/done contradiction | a malformed or out-of-schema Claude reply fails truthfully and writes nothing |
+| runner/test/claude-provider.test.ts:529 | model process error; code-0/code-1 contradiction | the Claude provider runs under the original permission policy and never logs the token |
+| runner/test/claude-provider.test.ts:592 | invalid-reply exhaustion; code-0/done contradiction | a Claude reply that targets a thing not admitted is refused and writes nothing |
+| runner/test/claude-provider.test.ts:592 | invalid-reply exhaustion; code-0/done contradiction | the runner computes ids and digests, never the model |
+| runner/test/model-input-fingerprint.test.ts:82 | compatibility golden; table context/normalization | the model input on the C04 fixture equals its golden copy |
+| runner/test/model-input-fingerprint.test.ts:94 | compatibility golden; table context/normalization | the raw model input on the C04 fixture equals its golden copy |
+| runner/test/q1-continuation.test.ts:373 | invalid-reply exhaustion; code-0/code-1 contradiction | Q1a q1-options-exact-action: two to four script candidates accepted and fabricated or fifth refused |
+
+The B1 helper at runner/test/b1-planning-support.ts:257–258 still asserts done/code 0 for those
+invalid replies. Both phases' retry bounds and all source/no-write controls remain unchanged.
+The protected failed-status reds now fail their older code-0 assertion before reaching the phase
+assertion; no failed reply is relabelled as ledger exhaustion to hide this incompatibility.
+
+Ledger exhaustion controls (valid replies but insufficient operations/items) both pass:
+b1-200-operations-exhaustion-leaves-items-for-next-run and
+b1-ledger-exhaustion-valid-replies-done-with-items-left-in-inbox. Invalid-reply control
+b1-invalid-reply-exhaustion-fails-after-one-retry passes for selection and execution, with its
+four-call valid-retry positive control. Every remaining exhaustion red is classified above;
+there is no failing valid-ledger exhaustion red. The golden and stale-listing mock reds are not
+ledger exhaustion.
+
+| Compatibility suite | Passed / total |
+| --- | ---: |
+| runner/test/ask-answer-loop.test.ts | 14 / 24 |
+| runner/test/b1-index.test.ts | 31 / 31 |
+| runner/test/b1a-contract.test.ts | 15 / 18 |
+| runner/test/b1-planning-support.test.ts | 3 / 3 |
+| runner/test/b1-planning.test.ts | 11 / 21 |
+| runner/test/b23-hot-context.test.ts | 10 / 10 |
+| runner/test/b23-hot-recovery.test.ts | 1 / 2 |
+| runner/test/b23-hot.test.ts | 135 / 135 |
+| runner/test/c05-bounded-reads.test.ts | 8 / 8 |
+| runner/test/c05-person-notes.test.ts | 60 / 60 |
+| runner/test/claude-provider.test.ts | 16 / 23 |
+| runner/test/corpus-driver.test.ts | 18 / 18 |
+| runner/test/drive-calls-golden.test.ts | 5 / 5 |
+| runner/test/main.test.ts | 7 / 7 |
+| runner/test/model-input-fingerprint.test.ts | 7 / 9 |
+| runner/test/q1-continuation.test.ts | 42 / 43 |
+| runner/test/q1c-live.test.ts | 8 / 8 |
+| runner/test/second-brain-method.test.ts | 6 / 6 |
+| runner/test/state-rewrite.test.ts | 13 / 13 |
+| runner/test/timing-counts.test.ts | 2 / 2 |
+
+Measured production calls (seeding/admission/inspection excluded; no golden pins changed):
+
+| Case | Cold/warm | Drive calls | Bytes | Range prefixes | Full media | Operations | Filed |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| b1-index-job-offer | cold | 109 | 109984 | 16 | 21 | 7 | 1 |
+| b1-index-job-offer | warm | 79 | 95938 | 2 | 23 | 7 | 1 |
+| b1-changes-person-edit | cold | 49 | 37953 | 3 | 3 | 1 | 0 |
+| b1-changes-person-edit | warm | 43 | 48476 | 1 | 12 | 1 | 0 |
+| b1-refresh-cache-hot-order | warm | 65 | 55923 | 4 | 11 | 5 | 1 |
+
+Offer warm-minus-cold: -30 calls, -14046 bytes, -14 prefixes, +2 full media.
+Person-edit warm-minus-cold: -6 calls, +10523 bytes, -2 prefixes, +9 full media.
+All rows have exactly selection then execution. No measured deployment-latency or >20% time-delta
+acceptance is claimed. Source observations: /var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b1d-selection-observations.ndjson.
+
+Final boundary: blocked pending the lead's new ruling; no fourth round, test edit or commit performed.

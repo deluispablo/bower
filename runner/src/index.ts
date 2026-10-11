@@ -356,8 +356,10 @@ export async function refreshPlanning(drive: RunnerDrive, rootId: string) {
       else if (change.file) {
         const listed = files.get(change.fileId);
         if (!listed || listed.modifiedTime <= change.file.modifiedTime) {
-          files.set(change.fileId, change.file);
-          ix.put(change.file);
+          // Partial feed metadata keeps listed checksums only for the exact same content version.
+          const updated = listed?.modifiedTime === change.file.modifiedTime ? { ...listed, ...change.file } : change.file;
+          files.set(change.fileId, updated);
+          ix.put(updated);
           if (previous.pathOf(change.fileId) !== undefined && ix.pathOf(change.fileId) === undefined) drop(change.fileId);
         }
       }

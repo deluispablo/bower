@@ -12,6 +12,10 @@ const FIXED: Readonly<Record<string, string | number>> = {
   admission: 'ADMISSION_ID',
   pileId: 'PILE_ID',
   fileId: 'FILE_ID',
+  itemId: 'ITEM_ID',
+  folderId: 'FOLDER_ID',
+  parentId: 'FOLDER_ID',
+  version: 'VERSION',
   id: 'ID',
   at: 0,
 };
@@ -21,7 +25,14 @@ function fixKeys(value: unknown): unknown {
   if (value === null || typeof value !== 'object') return value;
   const out: Record<string, unknown> = {};
   for (const [key, inner] of Object.entries(value)) {
-    out[key] = Object.prototype.hasOwnProperty.call(FIXED, key) ? FIXED[key] : fixKeys(inner);
+    // Type-row ids are stable configuration, rather than physical ids assigned to this run.
+    if (key === 'types') out[key] = inner;
+    else if (['indexed', 'foldersById', 'allowedTargets'].includes(key) && inner !== null && typeof inner === 'object' && !Array.isArray(inner)) {
+      // Dictionary keys are physical ids too. Keep every row, ordered by its stable content.
+      out[key] = Object.fromEntries(Object.values(inner).map(fixKeys)
+        .sort((a, b) => canonical(a) < canonical(b) ? -1 : canonical(a) > canonical(b) ? 1 : 0)
+        .map((row, index) => [`ID_${index}`, row]));
+    } else out[key] = Object.prototype.hasOwnProperty.call(FIXED, key) ? FIXED[key] : fixKeys(inner);
   }
   return out;
 }

@@ -48,7 +48,7 @@ import type { ScriptedRead } from '../../src/data/spine/read';
 import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { answersAsking, checkedAnswer, journalAnswer, type QuestionAnswer, subjectKey, subjectOf } from '../../src/data/contracts/questions';
-import type { Question } from '../../src/data/contracts/types';
+import type { Question, TypeRow } from '../../src/data/contracts/types';
 import { modelDecisions, namedNotes, personalAppendHistory, planScripted, requestTargets, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
 import { MAX_NAME } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
@@ -62,6 +62,7 @@ import { LedgerExhausted, RunTiming, type ModelStats } from './timing';
 import type { MaintenanceNote } from '../../src/data/contracts/run-manifest';
 import { parseNote } from '../../src/data/contracts/note-format';
 import { checkCreationName } from '../../src/data/contracts/tree';
+import { readTypeTable } from './type-table';
 
 export const DEFAULT_MODEL = 'claude-sonnet-5-5';
 export const DEFAULT_MAX_TURNS = 60;
@@ -183,6 +184,8 @@ interface Shown {
   suppressed?: ReadonlySet<string>;
   personalNotes?: ReadonlySet<string>;
   retrySources?: ReadonlySet<string>;
+  /** Script-resolved read pins, keyed by the admitted request file; the scripted planner owns consent. */
+  requestNotes?: Readonly<Record<string, readonly string[]>>;
   presentLines?: ReadonlySet<string>;
   /** The person's `Rules.md`, bounded, when the folder has one. */
   rules?: string;
@@ -196,6 +199,7 @@ interface Shown {
   folderCandidates?: Array<{ folderId: string; path: string }>;
   sources?: Array<{ itemId: string; candidates: Array<{ id: string; path?: string; version?: string; summary?: string; coverage?: MaintenanceNote['coverage'] }> }>;
   indexed?: Readonly<Record<string, MaintenanceNote>>;
+  types?: readonly TypeRow[];
   selection?: z.output<typeof SelectionShape>;
   allowedTargets?: Record<string, string[]>;
 }
@@ -390,7 +394,7 @@ function boundIndexContext(shown: Shown): void {
 function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
   return [
     promptInstructions(!!shown.folderCandidates),
-    JSON.stringify({ ...(shown.rules ? { rules: shown.rules } : {}), ...(shown.aboutMe ? { aboutMe: shown.aboutMe } : {}), ...(shown.index !== undefined ? { index: shown.index } : {}), ...(run.hot ? { hot: run.hot } : {}), runId: run.runId, admission: took.taken.id, piles: inStableOrder(shown.piles), notes: shown.notes, folders: shown.folders, ...(shown.folderCandidates ? { foldersById: Object.fromEntries(shown.folderCandidates.map((f) => [f.folderId, f.path])) } : {}), ...(shown.sources ? { sources: shown.sources } : {}), ...(shown.indexed ? { indexed: shown.indexed } : {}), ...(shown.selection ? { selection: shown.selection, allowedTargets: shown.allowedTargets } : {}), ...(shown.answers?.length ? { answers: shown.answers } : {}) }),
+    JSON.stringify({ ...(shown.rules ? { rules: shown.rules } : {}), ...(shown.aboutMe ? { aboutMe: shown.aboutMe } : {}), ...(shown.index !== undefined ? { index: shown.index } : {}), ...(run.hot ? { hot: run.hot } : {}), runId: run.runId, admission: took.taken.id, piles: inStableOrder(shown.piles), notes: shown.notes, folders: shown.folders, ...(shown.folderCandidates ? { foldersById: Object.fromEntries(shown.folderCandidates.map((f) => [f.folderId, f.path])) } : {}), ...(shown.sources ? { sources: shown.sources } : {}), ...(shown.indexed ? { indexed: shown.indexed } : {}), ...(shown.types ? { types: shown.types } : {}), ...(shown.selection ? { selection: shown.selection, allowedTargets: shown.allowedTargets } : {}), ...(shown.answers?.length ? { answers: shown.answers } : {}) }),
   ].join('\n');
 }
 
@@ -471,28 +475,50 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
   const named = new Set<string>();
   const suppressed = new Set<string>();
   const waiting: Array<{ rec: JournalRecord; files: DriveFile[] }> = [];
+  const requestNotes: Record<string, string[]> = {};
   for (const line of took.taken.journal) {
     const rec: unknown = JSON.parse(await read.readText(line.fileId));
     if (!isJournalRecord(rec) || rec.kind !== 'request') continue;
     const file = listing.find((f) => f.id === line.fileId);
     if (file && ix.waitingRun(file.id)) {
       waiting.push({ rec, files: [file] });
+      for (const n of namedNotes(listing, ix, rec.text ?? rec.what)) suppressed.add(n.path);
       continue;
     }
     // The plan's one verdict on what a request names: a request refused whole shows none of its notes.
     const { notes, refused } = requestTargets(listing, ix, rec.text ?? rec.what);
     for (const n of notes) {
       if (refused) suppressed.add(n.path);
-      else named.add(n.file.id);
+      else { named.add(n.file.id); requestNotes[line.fileId] = [...requestNotes[line.fileId] ?? [], n.file.id]; }
     }
   }
   const history = waiting.length ? (await personalAppendHistory(read, run.rootId, listing, ix, waiting)).lines : [];
-  for (const h of history) named.add(h.consent.targetFileId);
+  for (const h of history) {
+    const path = ix.pathOf(h.consent.targetFileId);
+    // A gone bound target settles through the planner; it cannot be a selected read.
+    if (!path || !ix.byId(h.consent.targetFileId) || ix.byId(h.consent.targetFileId)?.folder) continue;
+    named.add(h.consent.targetFileId);
+    suppressed.delete(path);
+    for (const request of waiting) if (request.rec.id === h.consent.requestId) for (const file of request.files) {
+      requestNotes[file.id] = [...new Set([...requestNotes[file.id] ?? [], h.consent.targetFileId])];
+    }
+  }
   const retrySources = new Set(history.map((h) => h.consent.sourceFileId));
-  const notes = await notesShown(read, listing, ix, first, named, selected);
+  const notes = await notesShown(read, listing, ix, first, named, selected && new Set([...selected].filter((id) => !suppressed.has(ix.pathOf(id) ?? ''))));
   // Repeating a line already shown is valid input, but grants no fresh consent or source evidence.
   // The planner's existing Timeline check still decides whether anything may be written.
-  const presentLines = new Set(notes.flatMap((note) => {
+  const presentLines = presentLinesOf(notes, listing, ix, run);
+  const folderCandidates = listing.flatMap((f) => { const path = f.folder ? ix.pathOf(f.id) : undefined;
+    return inMain(path) && path.includes('/') ? [{ folderId: f.id, path }] : []; });
+  return { ...(aboutMe ? { aboutMe } : {}), ...(index !== undefined ? { index } : {}), own: ix.file(SYSTEM.dir)?.id, piles, notes, folders, ...(folderCandidates.length >= 2 && folderCandidates.length <= 4 ? { folderCandidates } : {}), names, suppressed, retrySources, requestNotes, presentLines, personalNotes: new Set(listing.flatMap((f) => {
+    const path = ix.pathOf(f.id);
+    return !f.folder && f.appProperties?.by !== 'bower' && path?.endsWith('.md') && MAIN_FOLDERS.includes(path.split('/')[0] ?? '') ? [path] : [];
+  })), ...(rules ? { rules } : {}) };
+}
+
+/** Existing cited lines are evidence of repetition, never fresh consent or a new target. */
+function presentLinesOf(notes: Shown['notes'], listing: readonly DriveFile[], ix: VaultIndex, run: ScriptedRun): ReadonlySet<string> {
+  return new Set(notes.flatMap((note) => {
     const file = ix.file(note.path);
     if (note.cut || !file) return [];
     const fetched = run.context ? { context: run.context, fileId: file.id } : undefined;
@@ -503,12 +529,6 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
         .map((file) => JSON.stringify([note.path, line.text, file.id]));
     });
   }));
-  const folderCandidates = listing.flatMap((f) => { const path = f.folder ? ix.pathOf(f.id) : undefined;
-    return inMain(path) && path.includes('/') ? [{ folderId: f.id, path }] : []; });
-  return { ...(aboutMe ? { aboutMe } : {}), ...(index !== undefined ? { index } : {}), own: ix.file(SYSTEM.dir)?.id, piles, notes, folders, ...(folderCandidates.length >= 2 && folderCandidates.length <= 4 ? { folderCandidates } : {}), names, suppressed, retrySources, presentLines, personalNotes: new Set(listing.flatMap((f) => {
-    const path = ix.pathOf(f.id);
-    return !f.folder && f.appProperties?.by !== 'bower' && path?.endsWith('.md') && MAIN_FOLDERS.includes(path.split('/')[0] ?? '') ? [path] : [];
-  })), ...(rules ? { rules } : {}) };
 }
 
 /**
@@ -1344,14 +1364,15 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     for (const line of shownTook.taken.journal) sources.push({ itemId: line.fileId, words: await read.readText(line.fileId), ids: Object.keys(indexed) });
     // Resolve one-link neighbours from bounded prefixes through the same read cache, never from full L3 reads.
     for (const source of sources) {
-      const matched = ix.neighbourhood(source.words, metadata);
+      const waiting = ix.waitingRun(source.itemId) !== null;
+      const matched = waiting ? [...shown.requestNotes?.[source.itemId] ?? []] : ix.neighbourhood(source.words, metadata);
       for (const id of matched) {
         const file = ix.byId(id); const path = ix.pathOf(id);
-        if (!file || !path || metadata[id]?.links) continue;
+        if (!file || !path || metadata[id]?.links || shown.suppressed?.has(path)) continue;
         const prefix = await setup.prefixes?.(file, true);
         if (prefix) metadata[id] = { summary: metadata[id]?.summary ?? '', links: parseNote(path, prefix).links };
       }
-      const notes = ix.neighbourhood(source.words, metadata);
+      const notes = waiting ? matched : ix.neighbourhood(source.words, metadata);
       const parents = listing.filter((f) => f.folder && (MAIN_FOLDERS.includes(ix.pathOf(f.id) ?? '')
         || notes.some((id) => ix.byId(id)?.parents.includes(f.id)))).map((f) => f.id);
       source.ids = [...new Set([...notes, ...parents])].slice(0, 30);
@@ -1369,10 +1390,14 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       return Object.entries(indexed).find(([, note]) => ix.file(note.path)?.parents.includes(folderId)
         && (note.type === 'moc' || note.path === `${path}/${path?.split('/').at(-1)}.md`))?.[0] ?? null;
     };
+    const typeFile = ix.file(SYSTEM.typeTable);
+    shown.types = readTypeTable(typeFile ? await read.readText(typeFile.id) : null).table.rows;
+    // A typed request can use any filed source; its script pins count in each source's five-note allowance.
+    const scriptNotes = [...new Set(Object.values(shown.requestNotes ?? {}).flat())];
     const context: SelectionContext = { itemIds: [...sources.map((s) => s.itemId), ...shownTook.taken.journal.map((j) => j.fileId)],
-      kinds: ['payslip', 'invoice', 'job-offer', 'rental-listing', 'contract', 'booking', 'recipe'],
+      kinds: shown.types.map((row) => row.id),
       candidates: Object.keys(shown.indexed), folders: folders.map((f) => ({ id: f.id, hubId: hubId(f.id) })),
-      pinned: Object.fromEntries(sources.map((s) => [s.itemId, [...pinned]])) };
+      pinned: Object.fromEntries(sources.map((s) => [s.itemId, [...new Set([...pinned, ...scriptNotes])]])) };
     const selectionCheck = (value: unknown): ReturnType<typeof selectionOf> => {
       const result = selectionOf(value, context);
       if (!result.ok) { console.error('Selection shape or ids refused.'); return result; }
@@ -1380,7 +1405,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         const source = sources.find((s) => s.itemId === item.itemId);
         const destinationId = typeof item.destination === 'string' ? item.destination : item.destination.parentId;
         const hub = hubId(destinationId);
-        const required = [...new Set([...item.wants, ...pinned, ...(hub && indexed[hub]?.type !== 'moc' && new Set([...item.wants, ...pinned]).size < 5 ? [hub] : [])])];
+        const required = [...new Set([...item.wants, ...context.pinned[item.itemId] ?? [], ...(hub && indexed[hub]?.type !== 'moc' && new Set([...item.wants, ...context.pinned[item.itemId] ?? []]).size < 5 ? [hub] : [])])];
         if (required.length > 5) return { ok: false };
         if (typeof item.destination !== 'string') {
           const destination = item.destination;
@@ -1421,7 +1446,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           if (!attempt) console.error(hidden(`The Claude provider's plan for run ${run.runId} was refused (${value.kind}): ${why}; asking once more.`, token));
         }
       }
-      return exhausted();
+      return refuse(why);
     };
     try {
       const selectionInput = prepared(run, shownTook, shown);
@@ -1433,15 +1458,9 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       const wanted = new Set(selection.value.items.flatMap((item) => selection.allowedTargets[item.itemId] ?? [])
         .filter((id) => indexed[id] && (indexed[id]?.type !== 'moc' || selection.value.items.some((item) => item.wants.includes(id)))));
       for (const id of pinned) wanted.add(id);
-      // Typed requests keep their existing script-resolved targets, without creating a second planner.
-      for (const line of shownTook.taken.journal) {
-        const record: unknown = JSON.parse(await read.readText(line.fileId));
-        if (isJournalRecord(record) && record.kind === 'request') {
-          const targets = requestTargets(listing, ix, record.text ?? record.what);
-          if (!targets.refused) for (const target of targets.notes) wanted.add(target.file.id);
-        }
-      }
-      shown.notes = await notesShown(read, listing, ix, pinned, wanted, wanted);
+      const readable = new Set([...wanted].filter((id) => !shown.suppressed?.has(ix.pathOf(id) ?? '')));
+      shown.notes = await notesShown(read, listing, ix, pinned, readable, readable);
+      shown.presentLines = presentLinesOf(shown.notes, listing, ix, run);
       shown.selection = selection.value; shown.allowedTargets = selection.allowedTargets;
       const input = prepared(run, shownTook, shown);
       const texts = new Map(shown.piles.flatMap((p) => p.things.flatMap((t) => t.text === null ? [] : [[t.fileId, t.text] as const])));
@@ -1466,8 +1485,12 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         }
         const canEdit = (row: Record<string, unknown>): boolean => {
           const id = typeof row.note === 'string' ? ix.idOf(row.note) : undefined;
+          // The scripted request verdict keeps these notes untouched and records why; no edit is granted.
+          if (typeof row.note === 'string' && shown.suppressed?.has(row.note)) return true;
+          if (id && Object.values(selection.allowedTargets).some((targets) => targets.includes(id))
+            && typeof row.text === 'string' && seen.presentLines?.has(JSON.stringify([row.note, row.text.trim(), row.cites]))) return true;
           return !!id && (chosen(row.cites) ? selection.allowedTargets[String(row.cites)]?.includes(id) === true
-            : wanted.has(id) && shownTook.taken.journal.length > 0
+            : wanted.has(id) && (row.cites === undefined || shown.retrySources?.has(String(row.cites))) && shownTook.taken.journal.length > 0
               || row.cites === undefined && !shown.personalNotes?.has(String(row.note))
                 && Object.values(selection.allowedTargets).some((targets) => targets.includes(id)));
         };

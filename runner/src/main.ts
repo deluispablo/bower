@@ -372,8 +372,8 @@ export interface MainOptions {
  * `BOWER_API_URL`, and the dispatch from the event file at `GITHUB_EVENT_PATH`, which is where the ticket stays: it
  * is never put in the environment or printed, and on Actions it is masked in the log first
  * (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#masking-a-value-in-a-log).
- * Gives the exit code: 0 once the Worker took a terminal report (`done` or `failed`, or it already held the run
- * ended); 1 when it could not start, stopped on an error, or was left in `saving` for a redispatch to finish, said in
+ * Gives the exit code: 0 once the Worker took `done` (or already held the run ended); 1 when the run failed,
+ * could not start, stopped on an error, or was left in `saving` for a redispatch to finish, said in
  * the log. Past the dispatch, `runTidy`'s one exit (`leave`) has already told the Worker the attempt ended. Nothing runs after `done` is taken (the report is saved and read back before it), so a run already done
  * never ends non-zero by a later step.
  */
@@ -424,6 +424,7 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
           const items = admitted.taken.piles.reduce((count, pile) => count + Math.max(1, pile.items.length), 0)
             + admitted.taken.journal.length;
           const refreshed = await timing.maintenance(() => refreshPlanning(drive, rootId), items);
+          drive.planReads().handoff(rootId, refreshed.listing);
           const index = await planningIndex(drive, rootId, refreshed);
           const provider = providerFor(name, drive, { rootId, runId, allowWeb, context, index, ...(hot ? { hot } : {}) }, { env, timing, retrieval: refreshed.snapshot, prefixes: async (file, discover) => discover ? drive.readPrefix(file) : drive.keptPrefix(file), ...(opts.claude ? { spawn: opts.claude } : {}) });
           const manifest = await provider(admitted);
@@ -437,7 +438,7 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
     if (end.phase !== 'done') console.error(end.why);
     // Left in saving with no terminal report: the job fails, so it never shows success for an unfinished run; the
     // Worker's recovery, told the attempt ended, redispatches it (TL-P3-28; TL-P4-16 addendum 4).
-    return end.phase === 'saving' ? 1 : 0;
+    return end.phase === 'done' ? 0 : 1;
   } catch (e) {
     console.error(e);
     return 1;

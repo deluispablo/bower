@@ -58,7 +58,7 @@ const API = 'https://www.googleapis.com/drive/v3';
 const ID_POOL = 50;
 /** What one of this run's own writes did to a folder listing: the file as Drive answered, or the file put in the Bin. */
 export type Change = { file: DriveFile } | { gone: string };
-type PlanningRead = Omit<SpineRead, 'listAll'> & { scope: AdmissionScope; listAll(rootId: string, opts?: { readAhead: boolean }): Promise<DriveFile[]>; indexedFront(file: DriveFile): Promise<IndexedFront | undefined> };
+type PlanningRead = Omit<SpineRead, 'listAll'> & { scope: AdmissionScope; listAll(rootId: string, opts?: { readAhead: boolean }): Promise<DriveFile[]>; indexedFront(file: DriveFile): Promise<IndexedFront | undefined>; handoff(rootId: string, files: readonly DriveFile[]): void };
 
 export class RunnerDrive implements RunDrive {
   readonly provenance = 'adapter-read';
@@ -256,13 +256,36 @@ export class RunnerDrive implements RunDrive {
     let listed: { generation: number; scope: AdmissionScope; reads: AdmissionRead; listings: Map<string, Promise<DriveFile[]>>; warmed: Set<string> } | null = null;
     /** The modifiedTime each file had in the latest listing: the version its reads are kept under. */
     const versions = new Map<string, string>();
+    const at = (id: string): { id: string; modifiedTime: string | undefined } => ({ id, modifiedTime: versions.get(id) });
+    const reader = (): AdmissionRead => admissionRead({
+      listAll: (rootId, opts) => this.http.listAll(rootId, opts),
+      readText: (id) => this.reads.text(at(id), () => this.http.readText(id)),
+      readBytes: async (id) => {
+        const version = at(id);
+        const bytes = await this.reads.bytes(version, () => this.http.readBytes(id));
+        void this.reads.prefix(version, () => Promise.resolve(decodePrefix(bytes)));
+        return bytes;
+      },
+      get: (id, opts) => this.http.get(id, opts),
+      getUploaded: (id) => this.http.getUploaded(id),
+      binnedByItem: (rootId, keys, budget) => this.http.binnedByItem(rootId, keys, budget),
+    }, out.scope);
     const current = (): NonNullable<typeof listed> => {
-      if (!listed || listed.generation !== this.generation) listed = { generation: this.generation, scope: out.scope, reads: admissionRead(this.http, out.scope), listings: new Map(), warmed: new Set() };
+      if (!listed || listed.generation !== this.generation) listed = { generation: this.generation, scope: out.scope, reads: reader(), listings: new Map(), warmed: new Set() };
       return listed;
     };
-    const at = (id: string): { id: string; modifiedTime: string | undefined } => ({ id, modifiedTime: versions.get(id) });
     const out: PlanningRead = {
       scope: 'all',
+      handoff: (rootId, files) => {
+        const now = current();
+        // Reset admission's id-only read-ahead; full bodies still reuse the one versioned ReadCache.
+        now.reads = reader();
+        now.scope = out.scope;
+        now.listings.set(rootId, Promise.resolve([...files]));
+        now.warmed.delete(rootId);
+        versions.clear();
+        for (const file of files) versions.set(file.id, file.modifiedTime);
+      },
       indexedFront: async (file) => {
         const text = await this.keptPrefix(file);
         return text === undefined || text === null ? undefined : indexedFront(text);
@@ -279,7 +302,7 @@ export class RunnerDrive implements RunDrive {
         if (opts?.readAhead !== false && !now.warmed.has(rootId)) {
           // The metadata probe ran before scope aiming; warm the same listing under the provider's scope.
           if (now.scope !== out.scope) {
-            now.reads = admissionRead(this.http, out.scope);
+            now.reads = reader();
             now.scope = out.scope;
           }
           now.reads.warmListing(rootId, files);
@@ -287,14 +310,8 @@ export class RunnerDrive implements RunDrive {
         }
         return [...files];
       },
-      readBytes: async (id) => {
-        const version = at(id);
-        const bytes = await this.reads.bytes(version, () => current().reads.readBytes(id));
-        // A full-media read also supplies its prefix, without becoming prefix-only evidence.
-        void this.reads.prefix(version, () => Promise.resolve(decodePrefix(bytes)));
-        return bytes;
-      },
-      readText: (id) => this.reads.text(at(id), () => current().reads.readText(id)),
+      readBytes: (id) => current().reads.readBytes(id),
+      readText: (id) => current().reads.readText(id),
       // By version: a file changed since (a newer modifiedTime in the listing) is never paired with an older digest.
       digest: (file) => this.reads.digest(file, () => current().reads.digest(file)),
       // The Bin is asked fresh each time, only for a declared member missing from the listing.
