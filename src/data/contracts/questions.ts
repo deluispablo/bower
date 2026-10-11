@@ -88,7 +88,8 @@ export function isQuestionAnswer(value: unknown): value is QuestionAnswer {
 export function checkedAnswer(q: Question, value: QuestionAnswer): QuestionAnswer {
   const answer = value && typeof value === 'object' && 'text' in value && typeof value.text === 'string'
     ? { ...value, text: value.text.trim() } : value;
-  if (!isQuestionAnswer(answer) || (typeof answer !== 'boolean' && (subjectOf(q).kind !== 'inbox'
+  const kind = subjectOf(q).kind;
+  if (!isQuestionAnswer(answer) || (typeof answer !== 'boolean' && (kind !== 'inbox' && !(kind === 'proposal' && 'text' in answer)
     || ('option' in answer && !q.options?.some((o) => o.id === answer.option)))))
     throw new BowerError('conflict', 'Choose an answer or write your words.');
   return answer;

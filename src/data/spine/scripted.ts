@@ -765,7 +765,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (!q.proposal) continue;
     const line = latest.get(q.id);
     const answer = line && journalAnswer(line.rec);
-    if (!line || typeof answer !== 'boolean') continue;
+    if (!line) continue;
+    if (typeof answer === 'object' && 'text' in answer) { proposalSettled.add(line.rec.id); continue; }
+    if (typeof answer !== 'boolean') continue;
     if (!answer) { proposalSettled.add(line.rec.id); continue; }
     const frozen = proposals.get(q.proposal.id);
     if (!types.writeAllowed || !sys?.folder || !frozen
@@ -922,7 +924,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (l.rec.kind === 'request') return columnRequests.has(l.rec.id)
       || (settlement.owned.has(l.rec.id) ? settlement.admitted.has(l.rec.id) : !!d.request);
     if (l.rec.kind !== 'answer') return true;
-    if (subjectOf({ id: l.rec.questionId ?? '' }).kind === 'proposal') return proposalSettled.has(l.rec.id);
+    const question = questionState.questions.find((q) => answersAsking(l.rec, q));
+    if (question && subjectOf(question).kind === 'proposal') return proposalSettled.has(l.rec.id);
     return d.settles?.(l.rec.questionId ?? '') ?? settled.has(l.rec.questionId ?? '');
   });
   // Your rules (TL-P2-20 rules-wording): one change for every rule line, worded below in one edit of Rules.md, or

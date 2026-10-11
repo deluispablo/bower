@@ -574,7 +574,7 @@ interface TakenAnswer {
   sourceId: string;
   yes: boolean;
   value: QuestionAnswer;
-  question: Pick<Question, 'id' | 'text' | 'yes' | 'no' | 'subject' | 'options'>;
+  question: Pick<Question, 'id' | 'text' | 'yes' | 'no' | 'subject' | 'options' | 'proposal'>;
   /** For "Write it" (a question about a note's Current state): the note it is about, by that id: its file id and its path now. */
   note?: { fileId: string; path: string };
   /** For keeping one note (a pair question by file ids, c3-pair-ask): the two notes, by those ids, and their paths now. */
@@ -638,7 +638,7 @@ async function answersTaken(read: ScriptedRead, run: ScriptedRun, took: Admitted
     const pairPaths = pairIds?.map((id) => ix.pathOf(id));
     const [pathA, pathB] = pairPaths ?? [];
     const answer: TakenAnswer = {
-      id: rec.id, sourceId: line.fileId, yes: answerValue === true, value: answerValue, question: { id: q.id, text: q.text, yes: text(q.yes), no: text(q.no), ...(Array.isArray(q.options) ? { options: q.options as Question['options'] } : {}), ...(typeof q.subject === 'string' ? { subject: q.subject } : {}) },
+      id: rec.id, sourceId: line.fileId, yes: answerValue === true, value: answerValue, question: { id: q.id, text: q.text, yes: text(q.yes), no: text(q.no), ...(Array.isArray(q.options) ? { options: q.options as Question['options'] } : {}), ...(typeof q.subject === 'string' ? { subject: q.subject } : {}), ...(q.proposal === undefined ? {} : { proposal: q.proposal as Question['proposal'] }) },
       ...(noteId !== undefined && notePath !== undefined ? { note: { fileId: noteId, path: notePath } } : {}),
       ...(pairIds && pathA !== undefined && pathB !== undefined ? { pair: { fileIds: pairIds, paths: [pathA, pathB] } } : {}),
       ...(shown ? { shown: true as const } : {}),
@@ -684,8 +684,9 @@ function answersShown(answers: readonly TakenAnswer[], piles: Shown['piles']): N
   return answers.flatMap((a) => {
     const subject = subjectKey(a.question);
     const about = subject === undefined ? {} : things.has(subject) ? { fileId: subject } : pileIds.has(subject) ? { pileId: subject } : {};
-    // Typed person text is admitted only with its own thing or pile; unrelated journal remains pending.
-    if (typeof a.value !== 'boolean' && 'text' in a.value && !('fileId' in about) && !('pileId' in about)) return [];
+    // Proposal text follows its instructions continuation; inbox text still needs its own thing or pile.
+    if (typeof a.value !== 'boolean' && 'text' in a.value && subjectOf(a.question).kind !== 'proposal'
+      && !('fileId' in about) && !('pileId' in about)) return [];
     return [{ question: a.question.text.slice(0, ASK.text), answer: typeof a.value === 'boolean' ? (a.yes ? a.question.yes : a.question.no).slice(0, ASK.answer) || (a.yes ? 'Yes' : 'No') : 'text' in a.value ? a.value.text : a.question.options?.find((o) => typeof a.value !== 'boolean' && 'option' in a.value && o.id === a.value.option)?.label ?? '', ...about, ...(a.note ? { note: a.note.path } : {}), ...(a.pair ? { notes: [...a.pair.paths] } : {}) }];
   }).slice(0, AUTHORED.lines);
 }

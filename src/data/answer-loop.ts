@@ -8,6 +8,7 @@
  * - writing Bower's update over a Current state you edited ("Write it", by the note's file id): a run of your
  *   changes only, in which the model computes the update and the yes grants that one write, while the section still
  *   reads as asked about (`state-yes-writes`); "Keep mine" starts none and closes the question.
+ * - a type proposal: a run of your changes only; boolean yes grants its frozen payload, text supplies person words.
  * Every other answer starts none and waits for the next tidy-up: a no, or a choice that changes nothing, closes its
  * question; a yes to Bower keeping the summaries it did not write (`q-adopt-states`) records that as a rule.
  * While a run is going, an answer starts none now: the Worker keeps it, and when that run ends its person object starts
@@ -30,11 +31,11 @@ export type AnswerRun = { scope: 'all'; subject: string } | { scope: 'instructio
 /** A subject the Worker takes: a Drive file id or a pile id. */
 const SUBJECT = /^[A-Za-z0-9_-]{1,128}$/;
 
-/** The run a yes starts at once, or null: a no, and a choice no run acts on, start none. */
+/** The run an answer starts at once: proposal text continues without granting consent; a no starts none. */
 export function answerRun(q: Question, yes: QuestionAnswer): AnswerRun | null {
   if (!yes) return null;
   const about = subjectOf(q);
-  if (about.kind === 'proposal') return yes === true ? { scope: 'instructions' } : null;
+  if (about.kind === 'proposal') return yes === true || typeof yes === 'object' && 'text' in yes ? { scope: 'instructions' } : null;
   if (about.kind === 'state' || about.kind === 'pair') return { scope: 'instructions' };
   if (about.kind === 'inbox') return SUBJECT.test(about.id) ? { scope: 'all', subject: about.id } : null;
   return null;
