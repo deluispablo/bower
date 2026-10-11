@@ -7258,5 +7258,31 @@
     ],
     "verify": "",
     "note": "TL-P4-47. After B1d integrates (implementation); red-first now. Packet 2026-10-11-b6b-fit-create-ask-packet.md. implementer: codex."
+  },
+  {
+    "id": "b7-tags",
+    "task": "p4-b7",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Notes Bower creates get at most three tags from a small list that grows by itself, at most two new tags per run, each logged.",
+    "steps": [
+      "The packet reds pass through runner main and the corpus driver."
+    ],
+    "verify": "",
+    "note": "TL-P4-49. Escalated. Packet 2026-10-11-b7-tags-packet.md. Shared files wait for B4a, B5b and B5c. implementer: codex."
+  },
+  {
+    "id": "b8-log",
+    "task": "p4-b8",
+    "category": "feature",
+    "passes": false,
+    "ui": false,
+    "what": "Bower keeps a readable monthly log of what it did and checks its notes for broken links and duplicate names, with a health note.",
+    "steps": [
+      "The packet reds pass through runner main and the corpus driver."
+    ],
+    "verify": "",
+    "note": "TL-P4-50 (B8 Q1-Q8). Packet 2026-10-11-b8-log-packet.md. implementer: codex."
   }
 ]
