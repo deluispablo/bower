@@ -1231,3 +1231,62 @@ Offline references: existing ordinary Undo implementation
 `src/data/vault/drive-vault.ts:1462–1502`, the shared rule serializer and op-key
 contract. Reused the notes' derived-view reconciliation reference
 https://kubernetes.io/docs/concepts/architecture/controller/ (not fetched).
+
+## Fix round 3
+
+2026-10-11 — repaired adversarial pass 3's blocking wording finding.
+Only runner/src/index.ts and these notes changed. No network, writing git
+command, install, node_modules replacement/symlink, test or golden edit.
+
+Unpaired inverse records now retain their existing primary `what`, timestamp
+and record identity; neither their kind nor their target is relabeled as a
+whole-run Undo. Removal still uses the existing `removedKeys`/`opKey` path,
+including the persisted older run namespaces, unchanged.
+
+The whole-run fixture's request is not admitted by its empty planner reply.
+The existing maintain declaration therefore retains pending primary journal
+sources as well as captured ones, using RunnerDrive.readListedText's existing
+versioned planner cache. VaultIndex.journalFiles() excludes archived records.
+Rendering still admits ordinary change rows only after their archive move
+settles. A settled unpaired inverse can additionally expose a primary request
+whose kind is request and whose text is the existing whole-run Undo request.
+That row uses the request's own `what`, timestamp and id, never the inverse's.
+No replacement copy, archive reads, alternate writer or identity mechanism.
+
+Offline sources: the existing journal-record `pairsOf` contract, ordinary rule
+Undo in drive-vault.ts:1500, and RunnerDrive.readListedText in drive.ts:231.
+Reused https://kubernetes.io/docs/concepts/architecture/controller/ from these
+notes for derived-view reconciliation; no page was fetched.
+
+### Verification
+
+All test output, cache and artifacts stayed in OS temp using the unchanged
+/tmp/b3b-a6-runner.config.mjs and /tmp/b3b-hot-maintain-output.mjs.
+
+- Before repair, full runner suite: 650 pass / 1 fail, 651 tests, 49 files.
+  `B3b hot: an ordinary rule Undo keeps its own wording` failed on both its
+  missing primary keyed wording and its false whole-run label.
+  Log: /tmp/b3b-fix3-before.log.
+- After repair, full runner suite: 651 pass, 49 files, exit 0. Both ordinary
+  rule Undo and whole-run Undo production-main tests pass, including removal
+  by op key and zero archive-media GETs. All five drive-calls-golden tests and
+  all nine model-input-fingerprint tests pass unchanged. No test contradiction.
+  Log: /tmp/b3b-fix3-runner.log; report: /tmp/b3b-fix3-runner.json.
+  Command: NODE_OPTIONS='--import=/tmp/b3b-hot-maintain-output.mjs' pnpm -C runner exec vitest run --config /tmp/b3b-a6-runner.config.mjs --maxWorkers=2
+- Requested runner tsc: `pnpm -C runner exec tsc --noEmit -p .`, exit 2.
+  The committed ordinary-rule red imports DriveVault, pulling browser modules
+  into the runner's ES2023-only configuration: missing DOM types in session.ts,
+  upload-queue.ts and upload-store.ts. No error names the touched production
+  file. Log: /tmp/b3b-fix3-tsc.log. Configuration and tests remain unchanged.
+- Supplemental runner tsc with browser types: `pnpm -C runner exec tsc --noEmit -p . --lib ES2023,DOM`, exit 0.
+  Log: /tmp/b3b-fix3-tsc-dom.log. This does not make the default runner gate green.
+- Touched-file ESLint: `pnpm -C runner exec eslint src/index.ts`, exit 0.
+  Log: /tmp/b3b-fix3-eslint.log. Read-only git diff --check passes.
+
+No pnpm check or screen e2e: this assignment requests runner component gates
+and forbids repository test output. No commits; coordinator owns git writes.
+
+removed: runner/src/index.ts: unconditional synthetic whole-run Undo row under an inverse's identity.
+removed: runner/src/index.ts: captured-only declaration filter that omitted the whole-run request's primary wording.
+removed: no test, assertion, fixture, golden, threshold, dependency, write fence or checkpoint mechanism.
+tests changed: none

@@ -51,8 +51,9 @@ export const hotTarget: DeclaredTarget = {
     const previous = index.file(SYSTEM.hot);
     // The existing question reader uses the same listing-size shortcut for an empty list.
     const readQuestions = questions && (!previous || questions.size === undefined || questions.size > 40);
-    const captured = new Set(manifest.capture.journal.flatMap((line) => line.fileIds));
-    const journal = index.journalFiles().filter((f) => captured.has(f.id));
+    // Keep primary request wording too: a whole-run Undo request may not be admitted.
+    // These versioned reads reuse the planner's cache and never include the archive.
+    const journal = index.journalFiles();
     const candidates = [...(previous ? [previous] : []), ...(readQuestions ? [questions] : []), ...journal,
       ...Object.entries(notes).flatMap(([id, note]) => {
         const f = index.byId(id);
@@ -140,9 +141,17 @@ export const hotTarget: DeclaredTarget = {
       const day = timelineDate(line.at);
       return day && !undone.has(line.id) ? [{ id: line.id, at: new Date(line.at).toISOString(), text: line.what }] : [];
     });
-    // Undo's inverse evidence is authoritative even when its request was not admitted as a journal line.
-    const inverse = journal.find((line) => line.undoes !== undefined && !undone.has(line.id));
-    if (inverse) changes.unshift({ id: inverse.id, at: declaration.at, text: 'Undo the last tidy-up' });
+    // Inverses keep their own wording. Only a primary whole-run request supplies Undo's label.
+    if (journal.some((line) => line.undoes !== undefined && !undone.has(line.id))) {
+      for (const source of sources.values()) {
+        if (!source.path.startsWith(SYSTEM.changes + '/') || source.path.startsWith(SYSTEM.archive + '/')) continue;
+        const request = parsed(source.text);
+        if (isJournalRecord(request) && request.kind === 'request' && request.text === 'Undo the last tidy-up'
+          && !journal.some((line) => line.id === request.id)) {
+          changes.push({ id: request.id, at: new Date(request.at).toISOString(), text: request.what });
+        }
+      }
+    }
     // The settled run's report is its journal of Bower changes; proposed rows never enter hot.
     const operations = manifest.operations.filter((op) => op.effect.kind !== 'maintain');
     for (const contribution of manifest.reportPlan) {
