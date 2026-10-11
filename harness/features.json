@@ -6924,8 +6924,9 @@
     "steps": [
       "Strict-write/lenient-read type-table.json with 8 seed rows; bounded values; proposals by id; a 400-word profile region."
     ],
-    "verify": "",
-    "note": "TL-P4-47. Escalated; red now, implementation after the note-edit/questions handoffs. Packet 2026-10-10-b5a-packet.md. implementer: codex."
+    "verify": "pnpm -C runner exec vitest run test/type-table.test.ts -t \"B5a contracts\"",
+    "note": "TL-P4-47. Escalated; red now, implementation after the note-edit/questions handoffs. Packet 2026-10-10-b5a-packet.md. implementer: codex.",
+    "review": "P4-112 PASS"
   },
   {
     "id": "b3b-hot-maintain",

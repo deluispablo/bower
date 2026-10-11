@@ -324,3 +324,11 @@ tests changed: src/data/contracts/questions.test.ts: B5a reds (TL-P4-47 Q3 propo
 tests changed: src/data/contracts/run-manifest.test.ts: B5a reds (TL-P4-47 Q1/Q3 type table and proposals in the manifest); additions only.
 tests changed: src/data/vault/note-format.test.ts: B5a reds (TL-P4-47 Q1/Q7 declared property projection); additions only.
 tests changed: src/data/vault/ownership-format.test.ts: B5a reds (TL-P4-47 Q4 profile mark); additions only.
+
+## Handoff to B5b (from P4-112)
+
+B5b must carry: the decline-memory test; the 5-open cap against questions already open; same-payload dedup across questions and runs; a first-creation path for .bower/type-table.json (write-runner-json needs an existing file); seeds when rows are empty or all invalid, and keeping unknown row keys on rewrite; a byBower check on profile-rewrite like moc-rewrite; bounds on property and row counts; one currency list shared by app and runner; and removing the three unused-production baseline lines.
+
+## Close (coordinator, 2026-10-11)
+
+known-green: the reds were proved failing at their tests-only commit 2af99057 (25 reproduced before 9beeead0, notes "Implementation") and pass at HEAD; 9beeead0 adds the new runner/src/type-table.ts, so its revert cannot load. Codex pass 1 PASS, P4-112 PASS; check green; e2e app/capabilities demo 35 / fake 59.
