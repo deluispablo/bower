@@ -1,7 +1,7 @@
 /** Derived maintenance uses the manifest, its settled outcomes and the ordinary fenced effects. */
 import { sha256Hex } from '../../src/data/contracts/hashes';
 import { indexedFront, timelineBullets } from '../../src/data/contracts/note-format';
-import type { EffectV2, Maintain, MaintenanceDeclaration, MaintenanceNote, SeenFile, VerifiedContent } from '../../src/data/contracts/run-manifest';
+import type { EditText, EffectV2, Maintain, MaintenanceDeclaration, MaintenanceNote, SeenFile, VerifiedContent } from '../../src/data/contracts/run-manifest';
 import type { DriveFile, StoredEvidence } from '../../src/data/drive/drive-api';
 import { driveEffects, type Effects, type Settled } from '../../src/data/spine/engine';
 import { materialize, refreshed } from '../../src/data/spine/report';
@@ -26,7 +26,8 @@ export interface DeclaredTarget {
   kind: string;
   path: string;
   declare?(drive: RunnerDrive, manifest: RunManifest, index: VaultIndex, notes: Notes): Promise<MaintenanceDeclaration>;
-  render(declaration: MaintenanceDeclaration | undefined, state: ReturnType<typeof refreshed>, outcomes: readonly Outcome[], manifest: RunManifest): string;
+  /** Visible notes supply their guarded changes along with the rendered bytes. */
+  render(declaration: MaintenanceDeclaration | undefined, state: ReturnType<typeof refreshed>, outcomes: readonly Outcome[], manifest: RunManifest): string | Pick<EditText, 'text' | 'changes'>;
   unchanged?(before: string, after: string): boolean;
   /** Use declared bytes for the first content check; the live version/place fence still runs before sending. */
   cachedCheck?: boolean;
@@ -73,14 +74,22 @@ export const hotTarget: DeclaredTarget = {
     let questions = declaration.sources.find((source) => source.path === SYSTEM.questions)?.text;
     const applied = new Set(outcomes.filter((outcome) => outcome.state === 'applied').map((outcome) => outcome.operationId));
     const archived = new Set<string>();
-    const settledIndex = VaultIndex.build(manifest.scope.rootId, state.listing ?? []);
+    // Explorer ancestry omits hidden folders. Use the planner's captured archive place,
+    // or the settled creation of that place, without discovering or reading its contents.
+    const archiveParents = new Set(manifest.capture.places.filter((place) => place.path === SYSTEM.archive).map((place) => place.file.fileId));
+    for (const op of manifest.operations) {
+      if (op.effect.kind !== 'create-folder' || op.effect.name !== SYSTEM.archive.split('/').at(-1)) continue;
+      const outcome = outcomes.find((outcome) => outcome.operationId === op.operationId);
+      if (outcome?.state === 'applied' && outcome.evidence.file.parents.some((id) =>
+        manifest.capture.places.some((place) => place.file.fileId === id && place.path === SYSTEM.changes))) archiveParents.add(outcome.evidence.file.fileId);
+    }
     for (const op of manifest.operations) {
       if (!applied.has(op.operationId)) continue;
       const e = op.effect;
       if (e.kind === 'bin') sources.delete(e.before.fileId);
       if (e.kind === 'move' && manifest.capture.journal.some((line) => line.fileIds.includes(e.before.fileId))) {
         const outcome = outcomes.find((outcome) => outcome.operationId === op.operationId);
-        if (outcome?.state === 'applied' && outcome.evidence.file.parents.some((id) => settledIndex.pathOf(id) === SYSTEM.archive)) {
+        if (outcome?.state === 'applied' && outcome.evidence.file.parents.some((id) => archiveParents.has(id))) {
           archived.add(e.before.fileId);
         }
       }
@@ -386,13 +395,16 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
     const bytes = text === undefined ? undefined : new TextEncoder().encode(text);
     const kind = kinds.find((kind) => kind.path === path);
     const declaration = await kind?.declare?.(drive, manifest, ix, snapshot);
-    targets.push({ path, ...(kind ? { kind: kind.kind } : {}), ...(declaration ? { declaration } : {}), fileId: before?.id ?? holders[missing.indexOf(path)]?.reserved ?? '', parentId: own.id,
+    const parentPath = path.split('/').slice(0, -1).join('/');
+    const parentId = ix.idOf(parentPath);
+    if (!parentId || (parentPath && !ix.byId(parentId)?.folder)) throw unavailable();
+    targets.push({ path, ...(kind ? { kind: kind.kind } : {}), ...(declaration ? { declaration } : {}), fileId: before?.id ?? holders[missing.indexOf(path)]?.reserved ?? '', parentId,
       ...(before && bytes ? { beforeContent: { encoding: 'utf8', size: bytes.length, sha256: await sha256Hex(bytes), provenance: drive.provenance, observedModifiedTime: before.modifiedTime } } : {}) });
   }
   // MOC inputs contain the exact original bytes and every owned region; no whole-note permission is inferred.
   for (const [id, note] of Object.entries(snapshot)) {
     const before = files.get(id);
-    if (!note.moc || !before || before.parents.length !== 1) continue;
+    if (!note.moc || !before || before.parents.length !== 1 || paths.includes(note.path)) continue;
     const bytes = new TextEncoder().encode(note.moc.text);
     targets.splice(targets.length - 1, 0, { path: note.path, fileId: id, parentId: before.parents[0] ?? '',
       beforeContent: { encoding: 'utf8', size: bytes.length, sha256: await sha256Hex(bytes), provenance: drive.provenance, observedModifiedTime: before.modifiedTime } });
@@ -455,12 +467,16 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
         const frozen = op.effect.inputs.listing?.find((f) => f.fileId === target.fileId);
         const settled = state.listing?.find((f) => f.id === target.fileId);
         const before = settled ? seen(settled) : frozen;
-        const owned = !(RUNNER_WRITES as readonly string[]).includes(target.path);
-        const edit = owned ? mocEdit(target.fileId, state.files, members) : null;
-        if (owned && !edit) continue;
         const kind = [indexTarget, ...declared].find((kind) => target.kind ? kind.kind === target.kind && kind.path === target.path : kind.path === target.path);
-        const text = owned ? edit?.text : kind ? kind.render(target.declaration, state, head.outcomes, manifest) : target.path === SYSTEM.retrieval ? JSON.stringify(state) : undefined;
+        const owned = !(RUNNER_WRITES as readonly string[]).includes(target.path);
+        const rendered = kind ? kind.render(target.declaration, state, head.outcomes, manifest)
+          : owned ? mocEdit(target.fileId, state.files, members)
+          : target.path === SYSTEM.retrieval ? JSON.stringify(state) : undefined;
+        if (!kind && owned && !rendered) continue;
+        const edit = typeof rendered === 'object' && rendered !== null ? rendered : null;
+        const text = typeof rendered === 'string' ? rendered : edit?.text;
         if (text === undefined) throw unavailable();
+        if (owned && before && !edit) throw unavailable();
         // Versions and the feed cursor belong to state, not to the derived projection's date.
         if (target.path === SYSTEM.index && before) {
           const previous = (await drive.readListedText(file(before))).replace(/^> Generated by Bower[^\n]*\n/gm, '').trim();
@@ -480,7 +496,7 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
           path: target.path, beforeContent, changes: edit.changes, beforeText, text, content }
           : before && target.beforeContent ? { kind: 'write-runner-json' as const, before, path: target.path as import('../../src/data/contracts/run-manifest').RunnerWrite,
           beforeContent: target.beforeContent, text, content }
-          : { kind: 'create-text' as const, parent: { fileId: target.parentId }, name: target.path.split('/').at(-1) ?? '', createKey: op.operationId, purpose: 'runner-json' as const, text, content };
+          : { kind: 'create-text' as const, parent: { fileId: target.parentId }, name: target.path.split('/').at(-1) ?? '', createKey: op.operationId, purpose: owned ? 'generated' as const : 'runner-json' as const, text, content };
         const sub = { ...op, effect };
         const subHead = { ...head, outcomes: head.outcomes.map((o) => o.operationId === op.operationId ? { operationId: o.operationId, state: 'possible-effect' as const, dispatchId: op.operationId, fileId: target.fileId } : o) };
         if (ev && happened({ stamp: stampOf(head.runId, op.operationId) }, ev.file)) {

@@ -743,3 +743,66 @@ JSON: `/tmp/b3b-fix1-runner.json`. Config, cache and output are in OS temp.
 `git diff --check` passes. No pnpm check or screen e2e was run: this assignment is
 runner reds and the one authorized re-pin only. Production correction remains with
 its assigned implementer; no commit was created.
+
+## Fix round 1
+
+Implementation at unchanged HEAD `b6a6adf0`, in the assigned worktree. The committed red
+was reproduced before editing: `B3b fix 1: settled journal changes enter Recent changes
+on their own` failed at `runner/test/b23-hot-context.test.ts:113` for both primary rows,
+with six controls passing. Log: `/tmp/b3b-fix1-impl-red.log`.
+
+### Changes in the existing home
+
+- `runner/src/index.ts`: hot recognizes archive parents by the planner's captured places,
+  including an archive folder created by an applied operation in this run. It admits only
+  captured journal files whose move has an applied outcome into one of those parents.
+  Their primary bytes remain the existing versioned declaration sources, shared with the
+  planner's read cache. No archive listing or content read was added. Explorer ancestry is
+  no longer used to decide whether a hidden journal move settled.
+- Each target resolves its parent from its declared path, including the root for a root
+  target. The declared renderer takes precedence over ordinary MOC admission and rendering.
+  A visible-note renderer may return text and guarded `EditText` changes; existing visible
+  notes require those changes and use the ordinary edit validator and version/place fence.
+  Visible creations use the existing generated-note effect. A declared MOC is not also
+  appended as a fallback MOC target. No new kind, writer, store or checkpoint protocol was
+  added; retrieval still commits last.
+
+Offline research reuses the entry's
+[Kubernetes controller reconciliation reference](https://kubernetes.io/docs/concepts/architecture/controller/)
+and the local captured-place/settled-outcome and ordinary-effects mechanisms. No page was fetched.
+
+### Validation and complete failure inventory
+
+All test output, cache and fixture scratch stayed in OS temp, using the existing temporary
+configs and `/tmp/b3b-hot-maintain-output.mjs` preload. The preload relocates test artifacts
+and preserves package resolution for the relocated Playwright fixtures; it does not change
+tests, assertions, providers or node_modules.
+
+| Command | Final result | Log |
+| --- | --- | --- |
+| `pnpm -C runner exec vitest run --config /tmp/b3b-fix1-runner.config.mjs --maxWorkers=2` | 648/648 pass; 49 files; every frozen golden passes | `/tmp/b3b-fix1-impl-runner.log` |
+| `pnpm exec vitest run src --config /tmp/b3b-hot-maintain-vitest.config.mjs --maxWorkers=2` | 5,616 pass / 1 fail; 167 files; one unhandled sandbox error | `/tmp/b3b-fix1-impl-src.log` |
+| `pnpm exec tsc --noEmit -p tsconfig.app.json` | Pass | `/tmp/b3b-fix1-impl-tsc-app.log` |
+| `pnpm exec tsc --noEmit -p tsconfig.node.json` | Pass | `/tmp/b3b-fix1-impl-tsc-node.log` |
+| Runner `pnpm exec tsc --noEmit -p .` | Pass | `/tmp/b3b-fix1-impl-tsc-runner.log` |
+| Runner `pnpm exec eslint src/index.ts` | Pass | `/tmp/b3b-fix1-impl-eslint.log` |
+| `git diff --check` | Pass; read-only | No output |
+
+Runner JSON: `/tmp/b3b-fix1-runner.json`. The complete src failure inventory is
+`src/e2e-port.test.ts:37`, “a server from another worktree is never reused”: its server
+cannot listen on 127.0.0.1 (`EPERM`) in this sandbox and the test times out at its unchanged
+5,000 ms limit. This is the previously documented environment limitation, not a contradiction
+of the hot or declared-target contract. No other test failed. No test contradicts this fix.
+
+No `pnpm check` or screen e2e was run: this round requests the component gates above,
+forbids repository test outputs, and changes no screen (`ui:false`). Tests, fixture bytes,
+re-pinned goldens, strict bounds and factors remain unchanged. The harness tests perform
+their existing git operations only in throwaway OS-temp repositories. This session issued
+no writing git command, network request, commit, node_modules replacement or symlink.
+Only `runner/src/index.ts` and these notes were changed; the coordinator owns commits.
+
+removed: runner/src/index.ts: explorer-ancestry lookup for settled journal archive parents.
+removed: runner/src/index.ts: fixed .bower parent and MOC-only renderer admission for declared targets.
+removed: runner/src/index.ts: duplicate fallback MOC target when that path has a declared renderer.
+removed: no test, assertion, fixture, golden, threshold, live fence, checkpoint or dependency.
+tests changed: none
