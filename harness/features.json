@@ -6904,7 +6904,7 @@
     "id": "b1c-index",
     "task": "p4-b1",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "The runner keeps .bower/index.md as an exact projection of retrieval.json and folds existing Bower MOCs by id (TL-P4-41 Q1, Q6-Q8).",
     "steps": [
