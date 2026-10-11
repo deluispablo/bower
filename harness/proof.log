@@ -578,3 +578,4 @@ c02-upload-count-ui	82cb33bbb325ca66	2026-10-11	known-green: reds proved at thei
 b1c-index	74007499742a3b5f	2026-10-11	known-green: reds proved at their tests-only commits; later rounds touched the same lines; see notes Close
 q1c-live-questions	478b98ba160cf485	2026-10-11	known-green: reds proved at their tests-only commits; later rounds touched the same lines; see notes Close
 b3b-hot-maintain	464088010e193685	2026-10-11	known-green: reds proved at their tests-only commits; later rounds touched the same lines; see notes Close
+b5a-contracts	9730d46ab0972dbb	2026-10-11	known-green: reds proved at 2af99057; the fix adds a new file so its revert cannot load; see notes Close

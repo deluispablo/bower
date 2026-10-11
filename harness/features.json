@@ -6918,7 +6918,7 @@
     "id": "b5a-contracts",
     "task": "p4-b5",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "Contracts for the type table, bounded property values, immutable proposals and profile regions (TL-P4-47 Q1, Q3, Q4).",
     "steps": [

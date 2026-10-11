@@ -333,3 +333,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-11: b1c-index passes — the derived index at .bower/index.md folds folders into owned MOCs; legacy MOCs migrate; cold runs plan with the in-memory index (P4-107 PASS)
 - 2026-10-11: q1c-live-questions passes — questions publish live at the persisted plan; the vault merges live and stored; publication never fails a run (P4-109 PASS)
 - 2026-10-11: b3b-hot-maintain passes — hot is a declared maintain target at prompt position 6; recent changes roll by op key; Undo drops what it undid (P4-111 PASS)
+- 2026-10-11: b5a-contracts passes — type table, bounded properties, exact-payload proposals and the profile region as contracts (P4-112 PASS)
