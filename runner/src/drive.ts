@@ -211,10 +211,11 @@ export class RunnerDrive implements RunDrive {
   getStartPageToken(): Promise<string> { return this.http.getStartPageToken(); }
   listChanges(token: string) { return this.http.listChanges(token); }
   listAll(rootId: string): Promise<DriveFile[]> { return this.http.listAll(rootId, { checksums: true }); }
-  readPrefix(file: DriveFile): Promise<string | null> {
+  /** Warm listed versions need only Range media; cold discovery retains the metadata precheck. */
+  readPrefix(file: DriveFile, cold = false): Promise<string | null> {
     return this.reads.prefix(file, async () => {
       const text = this.reads.keptText(file);
-      return text ? decodePrefix(new TextEncoder().encode(await text)) : this.http.readPrefix(file.id);
+      return text ? decodePrefix(new TextEncoder().encode(await text)) : this.http.readPrefix(file.id, { precheck: cold });
     });
   }
 

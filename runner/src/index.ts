@@ -134,7 +134,7 @@ async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: Retrieva
     let text: string | null;
     try {
       // Old state is readable without probing unchanged files. A missing projection already needs each prefix.
-      text = same && !prefix ? await drive.keptPrefix(f) ?? null : await drive.readPrefix(f);
+      text = same && !prefix ? await drive.keptPrefix(f) ?? null : await drive.readPrefix(f, prefix);
     } catch (error) {
       // Drive also reports a trashed media read as not-found; other failures still stop the run.
       if (!(error instanceof BowerError) || error.code !== 'not-found') throw error;

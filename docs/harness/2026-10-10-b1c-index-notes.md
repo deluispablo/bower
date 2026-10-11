@@ -1904,3 +1904,113 @@ node ../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json > /tmp/b1c-add
 ```
 
 Read-only git diff --check passes. Existing test assertions remain byte-identical.
+
+
+## Addendum 12
+
+Implementation session, 2026-10-11. Scope: TL-P4-41 addendum 12, pass 3 warm-call blocker,
+and the owner-requested unused export removal. No test or shared harness record changed.
+No writing git command, commit, dependency replacement or symlink was issued in this worktree.
+The coordinator owns commits.
+
+Changed production files:
+- `runner/src/drive.ts`
+- `runner/src/index.ts`
+- `src/data/drive/drive-http.ts`
+- `src/data/spine/report.ts`
+
+tests changed: none
+removed: the per-note metadata precheck on warm versioned index-prefix reads.
+removed: the unused `retrievalSummary` export in `src/data/spine/report.ts`.
+
+### Mechanism and compatibility
+
+`RunnerDrive.readPrefix` still uses the existing version-keyed `ReadCache.prefix`, reuses full
+text already kept for that version, and calls the existing `DriveHttp.readPrefix` for media.
+The existing cold-projection flag in `snapshotNotes` selects the metadata precheck; warm
+maintenance passes false and uses exactly one `Range: bytes=0-4095` request for each changed
+note. The transport retains its ordinary precheck by default for id-only callers. No second
+reader, cache, ownership parser or lifecycle was added. `ReadCache` itself is unchanged:
+completion of an older response cannot replace the newer version's retained response.
+
+| Control | Result |
+| --- | --- |
+| Warm instructions, one/two changed notes, through terminal done | 39/40 calls; one Range each; zero metadata prechecks |
+| Warm all, one/two changed notes, through terminal done | 39/40 calls; one Range each; zero metadata prechecks |
+| Concurrent version change during prefix read | Newer prefix remains cached after the older response finishes |
+| Addendum 11 cold calls and timing | All existing assertions pass unchanged |
+| Shared id-only prefix, Workspace and Bin controls | Included in the full source suite |
+
+Offline research reused `src/data/drive/read-cache.ts` and `DriveHttp.readPrefix`, whose existing
+references are RFC 9110's validators and byte ranges:
+https://www.rfc-editor.org/rfc/rfc9110.html#section-8.8.3
+https://www.rfc-editor.org/rfc/rfc9110.html#section-14.2
+These reference URLs were not fetched.
+
+### Red and green evidence
+
+The full committed `runner/test/b1-index.test.ts` ran before the fix: 30 passed, 1 failed.
+The sole failure was `B1c fix 4: a warm run with changed notes counted through maintain equals
+the pre-addendum-9 count` (`runner/test/b1-index.test.ts:965`): actual 40/42 versus 39/40,
+with a metadata precheck before each Range. All four scope/count combinations reproduced it.
+Log: `/tmp/b1c-add12-red-verified.log`.
+
+Both exact addendum 12 tests pass in the full runner suite:
+- `B1c fix 4: a warm run with changed notes counted through maintain equals the pre-addendum-9 count`.
+- `B1c fix 4: a version change during a prefix read keeps the newer read cache response`.
+
+| Requested verification | Result | OS-temp log |
+| --- | --- | --- |
+| Full runner tests, maxWorkers=2 | 630 passed, 46 files | /tmp/b1c-add12-runner.log |
+| `pnpm exec vitest run src --maxWorkers=2` | 5,591 passed; 1 sandbox failure; 166/167 files passed | /tmp/b1c-add12-src-final.log |
+| tsc app, --noEmit | Pass | /tmp/b1c-add12-tsconfig.app.json.log |
+| tsc node, --noEmit | Pass | /tmp/b1c-add12-tsconfig.node.json.log |
+| tsc runner, --noEmit | Pass | /tmp/b1c-add12-runner-tsconfig.json.log |
+| ESLint touched app files | Pass | /tmp/b1c-add12-eslint-app.log |
+| ESLint touched runner files | Pass | /tmp/b1c-add12-eslint-runner.log |
+| `node scripts/check-unused-gate.mjs` | Pass: 3 regular / 28 production baseline findings | /tmp/b1c-add12-unused.log |
+
+Runner command: `pnpm exec vitest run --maxWorkers=2 --config=../runner-config.mjs --configLoader=runner`.
+Source command: `pnpm exec vitest run src --maxWorkers=2 --config=app-config.mjs --configLoader=runner`.
+Temporary configs import the unchanged configs and move Vite/module caches into OS temp.
+Tests, their CPU reports, fixtures, caches and output stay in disposable OS-temp copies;
+installed dependency directories were cloned with `cp -cR` to fresh destinations.
+ESLint runs separately from the app and runner directories, because mixing both configurations
+in one ESLint process produces an ambiguous tsconfigRootDir error; separate runs pass.
+
+The first unconfigured temporary `pnpm exec` attempted an automatic install and registry access;
+DNS failed and the command was interrupted. An initial source run was also interrupted when
+nested pnpm commands required the same protection. Disposable dependency copies affected by
+those attempts were abandoned, rather than repaired or replaced. Original worktree dependencies
+were not touched. Final source verification uses a fresh OS-temp copy and a PATH wrapper that
+passes `--config.verify-deps-before-run=false --config.offline=true` to every pnpm invocation,
+including nested fixture commands. No network request succeeded.
+
+The initial source run's two quarantine failures were verification-environment failures:
+`check-harness.mjs` runs read-only `git grep`, which requires the worktree's Git reference.
+A copy of the `.git` pointer and `GIT_OPTIONAL_LOCKS=0` supply that reference in the temporary
+copy. Both quarantine tests then pass; the full source run uses this corrected environment.
+No test contradicts the warm-prefix ruling.
+
+Verification paths are recorded in `/tmp/b1c-add12-verify-path` (runner/static checks) and
+`/tmp/b1c-add12-final-path` (final source suite). The four production files are byte-identical
+between this worktree and both verified copies. The addendum 12 test and addendum 11 cold-pin
+files are unchanged; read-only `git diff --check` passes.
+
+Full `pnpm check`, e2e and repository green marks were not run: this scoped request names the
+read-only constituent checks, forbids repository-writing tests, and touches no UI screen.
+
+
+### Remaining verification blocker
+
+The full source suite completed: **5,591 passed, 1 failed, 5,592 total**, with one unhandled
+socket error. The only failed test is `the e2e port and server identity > a server from another
+worktree is never reused`, `src/e2e-port.test.ts:37`. Its loopback server cannot start:
+`listen EPERM: operation not permitted 127.0.0.1`; the unresolved listen then hits the unchanged
+5,000 ms test timeout. This is a sandbox restriction, not a prefix-rule contradiction or a
+production regression. No test, timeout, assertion, server implementation or socket policy was
+changed. No rerun is warranted without an environment that permits this existing test's listener.
+All remaining source tests, including the shared prefix/Bin/Workspace controls, passed.
+
+Contradicting tests: none. Delivery status is blocked solely on the existing socket test's
+verification environment; implementation and all other requested checks are complete.

@@ -303,10 +303,6 @@ export function reportContradictions(admission: AdmissionManifest, manifest: Run
 export type MaintenanceState = Omit<RetrievalFile, 'files'> & { files: Notes; listing?: DriveFile[] };
 const file = (f: SeenFile): DriveFile => ({ id: f.fileId, name: f.name, parents: f.parents, folder: f.folder, modifiedTime: f.modifiedTime, createdTime: f.modifiedTime });
 
-export function retrievalSummary(_path: string, text: string): string {
-  return indexedFront(text).summary;
-}
-
 /** Whole projections from frozen input versions plus successful settled effects; refused effects add nothing. */
 export function refreshed(inputs: Maintain['inputs'], outcomes: readonly Outcome[], manifest: RunManifest): MaintenanceState {
   let files: Notes = structuredClone(inputs.snapshot ?? {});
