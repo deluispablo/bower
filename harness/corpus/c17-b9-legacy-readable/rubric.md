@@ -1,0 +1,5 @@
+Pending C17/B9 preparation, covers:model; the empty reply is supported today but no C17 display/compatibility oracle runs in the requested suite.
+
+Old [!contradiction], ^[inferred] and unknown [!future-marker] strings are displayed literally in their existing sections and remain byte identical. Ordinary unmarked Timeline entries and dates/single terminal source still parse; no text is dropped, converted to a new marker, or used as authority. The person's plain diary remains raw CRLF text with star bullets. This does not require parsing its dated-colon words as Bower lines.
+
+The app's body Markdown can render an ordinary blockquote, while Bower's note and a structured Timeline use Inline and keep a leading > literal. No semantic callout, footnote, badge, style change, sanitizer migration or ownership adoption is implied. The helper/readers need v2 framed variants, malformed/unknown syntax and long legacy entry fixtures in B9a; do not seed fake hashes or ownership marks here. This case scores retained bytes and literal strings, not DOM visibility. Designer checks the built existing reading; any new appearance requires owner OK.

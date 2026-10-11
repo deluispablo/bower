@@ -1,0 +1,18 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Garden handbook.pdf",
+        "to": "Resources/Gardening",
+        "name": "Garden handbook.pdf",
+        "note": {
+          "name": "Garden handbook introduction.md",
+          "summary": "The handbook introduction recommends labels and tape for seed trays.",
+          "body": "The introduction recommends labels and tape for seed trays.\n\nOnly part of the handbook was read; the remaining pages were not read. No collection date is shown in this part.\n\n[[Resources/Gardening/Gardening]]"
+        }
+      }
+    ]
+  }
+]

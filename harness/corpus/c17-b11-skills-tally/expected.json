@@ -1,0 +1,51 @@
+{
+  "files": {
+    "present": [
+      "Projects/Job hunt/Job hunt.md"
+    ],
+    "absent": [
+      "Inbox/*",
+      ".bower/views.json"
+    ]
+  },
+  "unchanged": [
+    "Rules.md",
+    ".bower/type-table.json",
+    "Projects/Job hunt/Ferrowick offer.md",
+    "Projects/Job hunt/Mallowick offer.md",
+    "Projects/Job hunt/Lindenwick offer.md",
+    "Projects/Job hunt/Past offer.md",
+    "Projects/Job hunt/Alex shortlist.md"
+  ],
+  "protectedRanges": [
+    {
+      "path": "Projects/Job hunt/Job hunt.md",
+      "range": {
+        "heading": "Notes"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "path": "Projects/Job hunt/Job hunt.md",
+      "contains": [
+        "## Figures",
+        "SQL",
+        "TypeScript",
+        "dbt"
+      ],
+      "excludes": [
+        "Rust |"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 0,
+    "created": [],
+    "updated": [
+      "Projects/Job hunt/Job hunt.md"
+    ],
+    "questionsExactly": 0
+  }
+}

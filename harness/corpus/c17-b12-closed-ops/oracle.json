@@ -1,0 +1,49 @@
+{
+  "pending": true,
+  "set": {
+    "folder": "Projects/Job hunt",
+    "type": "offer",
+    "where": {
+      "property": "status",
+      "equals": "active"
+    },
+    "members": [
+      "Projects/Job hunt/Offer amber.md",
+      "Projects/Job hunt/Offer birch.md"
+    ]
+  },
+  "expectedFinalPaths": {
+    "Projects/Job hunt/Offer amber.md": "Projects/Job hunt/Saltmere/Ferrowick offer.md",
+    "Projects/Job hunt/Offer birch.md": "Projects/Job hunt/Lindenwick/Mallowick offer.md"
+  },
+  "ordinaryEffects": {
+    "contentEditsPerMember": 1,
+    "moveWithRenamePerMember": 1,
+    "editBeforeMove": true,
+    "moveChecks": "original name and parent ids; no content-version comparison"
+  },
+  "sharedLinkTarget": "Projects/Job hunt/Alex shortlist.md",
+  "sharedLinkEditCount": 1,
+  "byteOracle": "Map original ids to final paths; preserve nonmetadata, nonlink bytes exactly, including trailing spaces.",
+  "memberOutcomes": {
+    "done": 2,
+    "pending": 0,
+    "unavailable": 0
+  },
+  "negativeCases": [
+    "unknown operation",
+    "outside target id",
+    "unsafe rename",
+    "undeclared property",
+    "person or Source metadata write",
+    "changed name or parent before move",
+    "property edit refusal blocks dependent move"
+  ],
+  "reportNotInboxFiling": true,
+  "unsupportedSelectors": [
+    "$request:",
+    "$set:",
+    "$note:",
+    "$folder:"
+  ]
+}

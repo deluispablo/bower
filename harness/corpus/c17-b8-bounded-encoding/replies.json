@@ -1,0 +1,18 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Options | alternatives.txt",
+        "to": "Resources/Gardening",
+        "name": "Options | alternatives.txt",
+        "note": {
+          "name": "Mulch options.md",
+          "summary": "Alex compared mulch options.",
+          "body": "Alex compared amber chips and dry leaves for the Saltmere garden.\n\nRelated: [[Gardening]]."
+        }
+      }
+    ]
+  }
+]

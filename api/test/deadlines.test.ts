@@ -104,6 +104,7 @@ describe('worker deadlines (TL-P4-14)', () => {
     // A person object as v11 left it: a run going, a gone row kept, and the alarm somewhere.
     const gone = { hash: 'a'.repeat(64), expiresAt: t0 + 30 * MINUTE, attempt: 1 };
     await runInDurableObject(p, (_i, state) => {
+      state.storage.sql.exec('ALTER TABLE runs DROP COLUMN open_questions_snapshot');
       undoV14(state.storage.sql);
       state.storage.sql.exec('DROP TABLE deadlines');
       state.storage.sql.exec('UPDATE schema_version SET version = 11 WHERE id = 1');
@@ -140,6 +141,7 @@ describe('worker deadlines (TL-P4-14)', () => {
     // A person object as v13 left it: the run going, dispatched by the press, and a gone ticket in the key-value entry.
     const gone = { hash: 'b'.repeat(64), expiresAt: t0 + 30 * MINUTE, attempt: 1 };
     await runInDurableObject(p, (_i, state) => {
+      state.storage.sql.exec('ALTER TABLE runs DROP COLUMN open_questions_snapshot');
       undoV14(state.storage.sql);
       state.storage.sql.exec('UPDATE schema_version SET version = 13 WHERE id = 1');
       state.storage.sql.exec(`INSERT INTO deadlines (kind, key, at) VALUES ('gone', ?, ?)`, gone.hash, gone.expiresAt);
@@ -242,6 +244,7 @@ describe('worker deadlines (TL-P4-14)', () => {
     const runId = await admitted(sub, 'press-1', farAhead());
     const before = await rowsOf(sub);
     await runInDurableObject(p, (_i, state) => {
+      state.storage.sql.exec('ALTER TABLE runs DROP COLUMN open_questions_snapshot');
       undoV14(state.storage.sql);
       state.storage.sql.exec('ALTER TABLE deadlines DROP COLUMN attempts');
       state.storage.sql.exec('UPDATE schema_version SET version = 12 WHERE id = 1');

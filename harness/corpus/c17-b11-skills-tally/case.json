@@ -1,0 +1,26 @@
+{
+  "id": "c17-b11-skills-tally",
+  "capability": "C17",
+  "title": "Active offer skills are counted by notes, with missing values visible",
+  "covers": "model",
+  "source": "new; TL-P4-39 B11, F13/R5/R7; TL-P4-41/42/44/45/47; pending contract specimen",
+  "scope": "instructions",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Show the three skills requested by most active offers in Job hunt. Save that view in its map and count each skill once per offer."
+    }
+  ],
+  "questions": [],
+  "bowerOwned": [
+    "Rules.md",
+    "Projects/Job hunt/Job hunt.md",
+    "Projects/Job hunt/Job hunt.md",
+    "Projects/Job hunt/Ferrowick offer.md",
+    "Projects/Job hunt/Mallowick offer.md",
+    "Projects/Job hunt/Lindenwick offer.md",
+    "Projects/Job hunt/Past offer.md"
+  ]
+}

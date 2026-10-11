@@ -1,0 +1,49 @@
+{
+  "pending": true,
+  "set": {
+    "folder": "Resources/Gardening",
+    "type": "concept",
+    "members": [
+      "Resources/Gardening/Garden methods.md",
+      "Resources/Gardening/Alex plot.md"
+    ]
+  },
+  "eligibleWrites": [
+    "Resources/Gardening/Garden methods.md"
+  ],
+  "unavailableMembers": [
+    "Resources/Gardening/Alex plot.md"
+  ],
+  "immutableSource": "Resources/Gardening/Workshop source.md",
+  "workerPolicy": {
+    "readsNotes": true,
+    "webTools": false,
+    "driveCredentials": false
+  },
+  "negativeWorkerResults": [
+    {
+      "kind": "rename",
+      "targetId": "$note:Rules.md",
+      "name": "Changed rules.md"
+    },
+    {
+      "kind": "tag",
+      "targetId": "$note:Resources/Gardening/Alex plot.md",
+      "mode": "add",
+      "value": "gardening"
+    },
+    {
+      "kind": "property",
+      "targetId": "$note:Resources/Gardening/Garden methods.md",
+      "key": "preference",
+      "mode": "set",
+      "value": "remote roles"
+    }
+  ],
+  "webPolicyOracle": "Use the same provider isolation/spawn home with a distinct web-only call; assert entity key only, no private context, no returned actions.",
+  "memberOutcomes": {
+    "done": 1,
+    "pending": 0,
+    "unavailable": 1
+  }
+}

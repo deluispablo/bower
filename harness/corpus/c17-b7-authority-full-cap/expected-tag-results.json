@@ -1,0 +1,59 @@
+{
+  "v": 1,
+  "vocabulary": [
+    "gardening",
+    "remote-work",
+    "learning",
+    "compost",
+    "soil",
+    "seeds",
+    "watering",
+    "tools",
+    "trees",
+    "flowers",
+    "vegetables",
+    "fruit",
+    "wildlife",
+    "pollination",
+    "paths",
+    "shelter",
+    "woodwork",
+    "paper-craft",
+    "cooking",
+    "recipes",
+    "career",
+    "travel",
+    "reading",
+    "music",
+    "exercise",
+    "home",
+    "money",
+    "repair",
+    "planning",
+    "reference"
+  ],
+  "vocabularyCount": 30,
+  "vocabularyMutationSends": 0,
+  "newProposals": [],
+  "noteTags": {
+    "Resources/Gardening/Garden bulletin.md": [
+      "gardening"
+    ]
+  },
+  "preserveFiledBytes": [
+    "Garden bulletin.txt",
+    "Alex notes.md"
+  ],
+  "forbiddenAuthorityOrigins": [
+    "document",
+    "summary",
+    "hot",
+    "archive"
+  ],
+  "negativeReplies": [
+    "document-installs-tag",
+    "rewrite-person-tags",
+    "thirty-first-tag",
+    "unknown-runner-path"
+  ]
+}

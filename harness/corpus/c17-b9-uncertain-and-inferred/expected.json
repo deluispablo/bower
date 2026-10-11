@@ -1,0 +1,60 @@
+{
+  "files": {
+    "present": [
+      "Projects/Garden visit/Saltmere visit.md",
+      "Projects/Garden visit/Garden notice.txt"
+    ],
+    "absent": [
+      "Inbox/*",
+      "Projects/Garden visit/Garden notice.md"
+    ]
+  },
+  "unchanged": [
+    "Rules.md",
+    "Projects/Garden visit/Visit booking.txt"
+  ],
+  "protectedRanges": [
+    {
+      "path": "Projects/Garden visit/Saltmere visit.md",
+      "range": {
+        "heading": "My thoughts"
+      }
+    },
+    {
+      "path": "Projects/Garden visit/Saltmere visit.md",
+      "range": {
+        "heading": "Current state"
+      }
+    },
+    {
+      "path": "Projects/Garden visit/Saltmere visit.md",
+      "range": {
+        "frontMatter": true
+      }
+    }
+  ],
+  "notes": [
+    {
+      "path": "Projects/Garden visit/Saltmere visit.md",
+      "timeline": [
+        "Uncertain: The garden may close if heavy rain is forecast; no decision has been made.",
+        "The confirmed visit may be affected; the booking has not been cancelled. (inferred) (also from [[Visit booking.txt]])"
+      ],
+      "timelineCount": 3,
+      "excludes": [
+        "Contradiction:",
+        "The visit is cancelled.",
+        "^[inferred]"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "created": [],
+    "updated": [
+      "Projects/Garden visit/Saltmere visit.md"
+    ],
+    "questionsExactly": 0
+  }
+}

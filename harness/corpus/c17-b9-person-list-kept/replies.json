@@ -1,0 +1,25 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Gate notice.txt",
+        "to": "Areas/Home",
+        "name": "Gate notice.txt"
+      }
+    ],
+    "lines": [
+      {
+        "note": "Areas/Home/Alex plot.md",
+        "text": "The committee confirms the amber gate is open again.",
+        "cites": "$file:Gate notice.txt"
+      }
+    ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": []
+  }
+]

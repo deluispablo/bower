@@ -1,0 +1,30 @@
+{
+  "v": 1,
+  "runs": [
+    {
+      "vocabulary": [
+        "gardening",
+        "remote-work",
+        "learning"
+      ],
+      "noteTags": {
+        "Resources/Gardening/Garden workshop.md": [
+          "gardening",
+          "remote-work",
+          "learning"
+        ]
+      },
+      "newProposals": [],
+      "vocabularyMutationSends": 0
+    }
+  ],
+  "preserveFiledBytes": [
+    "Garden workshop.txt"
+  ],
+  "negativeReplies": [
+    "four-tags",
+    "duplicate-tag",
+    "unknown-tag",
+    "near-duplicate-growth"
+  ]
+}

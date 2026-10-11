@@ -230,10 +230,10 @@ export async function capturePiles(read: SpineRead, rootId: string, piles: reado
         return;
       }
       // The context only has to have arrived: any note is the person's words. Missing though never removed
-      // through Bower, the pile waits, held (TL-P2-21): the runner never writes into the Inbox (TL-P2-32); Try
+      // through Bower or Drive, the pile waits, held (TL-P2-21): the runner never writes into the Inbox (TL-P2-32); Try
       // again in the app writes it again from its first words (TL-P2-08 b).
       const context = found.declaration.context;
-      if (context.kind === 'text' && !children.some((f) => f.appProperties?.[PROP.item] === context.memberKey) && !contextRemoved(await journal(), pile.path)) {
+      if (context.kind === 'text' && !children.some((f) => f.appProperties?.[PROP.item] === context.memberKey) && !contextRemoved(await journal(), pile.path, readiness.contextBinned)) {
         out.set(pile.id, { blocked: SET_ASIDE.notArrived });
         return;
       }

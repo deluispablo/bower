@@ -163,11 +163,22 @@ function frontOf(block: string): Map<string, string> {
   return front;
 }
 
+export type IndexedFront = { summary: string; owner: 'bower' | 'person'; type: string | null };
+
+/** Retrieval only: the closed front matter in the ordinary 4096-byte prefix, not edit authority. */
+export function indexedFront(raw: string): IndexedFront {
+  const prefix = new TextDecoder().decode(encoder.encode(raw).subarray(0, 4096)).replace(/\r\n/g, '\n');
+  const close = prefix.startsWith('---\n') ? prefix.indexOf('\n---', 3) : -1;
+  const front = close < 0 ? new Map<string, string>() : frontOf(prefix.slice(4, close));
+  return { summary: front.get('summary') || '(no summary)',
+    owner: front.get('by') === 'bower' ? 'bower' : 'person', type: front.get('type') ?? null };
+}
+
 /** The bullets of a Timeline block, each read by the one Timeline-line pattern. */
 function timelineOf(block: string): TimelineEntry[] {
   return block
     .split('\n')
-    .filter((l) => l.startsWith('- '))
+    .filter((l) => l.startsWith('- ') || l.startsWith('* '))
     .map((l) => {
       const m = parseTimelineLine(l);
       if (!m) return { date: '', text: l.slice(2) };
@@ -176,7 +187,7 @@ function timelineOf(block: string): TimelineEntry[] {
 }
 
 /**
- * The `- ` lines of a note's Timeline section as the one parser frames it (the last `## Timeline` of a legacy note,
+ * The `- ` and `* ` lines of a note's Timeline section as the one parser frames it (the last `## Timeline` of a legacy note,
  * the framed payload of a v2 one); none for a note without one or that cannot be read.
  */
 export function timelineBullets(raw: string, fetched?: FetchedOwnership): string[] {
@@ -184,7 +195,7 @@ export function timelineBullets(raw: string, fetched?: FetchedOwnership): string
   const own = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
   // This legacy extraction API reports framed/legacy Timelines, not sections in plain prose.
   if (own.status === 'invalid' || own.status === 'plain' || !own.layout.timeline) return [];
-  return payloadDisplay(bytes, own.layout.timeline, TIMELINE).split('\n').filter((l) => l.startsWith('- '));
+  return payloadDisplay(bytes, own.layout.timeline, TIMELINE).split('\n').filter((l) => l.startsWith('- ') || l.startsWith('* '));
 }
 
 /**

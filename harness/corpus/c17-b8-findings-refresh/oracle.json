@@ -1,0 +1,11 @@
+{
+  "status": "proposed freshness/no-change oracle, not scored today",
+  "assertions": [
+    "Run 1 emits exactly one broken-link finding bound to Checklist file id/version.",
+    "Run 2 refreshes only the changed personal note via B1 feed/cache and emits the empty complete finding set.",
+    "Run 2 and 3 Checklist bytes equal the full between-edit payload, not the initial seed.",
+    "Run 3 health bytes and modifiedTime equal run 2; zero health sends and no created/updated row.",
+    "No log event for the external personal edit or derived health writes; no forged Bower update event.",
+    "All lint evidence is frozen by ids/versions; a same-run replay uses its original input date and never rechecks changed source bytes."
+  ]
+}

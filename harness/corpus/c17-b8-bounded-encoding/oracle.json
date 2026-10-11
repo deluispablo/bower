@@ -1,0 +1,20 @@
+{
+  "status": "proposed log codec and rotation oracle, not scored today",
+  "seedEvents": 1024,
+  "seedBytes": 378578,
+  "seedSha256": "c9e1a764b2466e78f21dfe1dcb9ccf0e2296761fd354712ea24e14b28d1a688a",
+  "bounds": {
+    "activeEvents": 1024,
+    "activeBytes": 524288,
+    "singleEventBytes": 4096
+  },
+  "assertions": [
+    "The sealed .bower/log/2026.md bytes equal the exact seeded active log; no earlier event is removed or summarized.",
+    "Seal confirmed by reserved id and checksum before replacement of active .bower/log.md.",
+    "Active segment has exactly the two applied visible create/ingest events; both decode to actual runtime ids.",
+    "JSON field decoding recovers Options | alternatives.txt exactly, with no fifth pipe field.",
+    "Log, archive, health and retrieval writes never create recursive log events; no archive/log report rows.",
+    "Repeat with a lost seal response and with a lost active-log response via redispatchCase: one seal, one event each.",
+    "Round-trip unit matrix also covers quotes, backslash, LF, CR, percent and Unicode; a replay at the size boundary seals once."
+  ]
+}

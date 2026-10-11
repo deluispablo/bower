@@ -1,0 +1,7 @@
+Pending C17/B9 preparation; covers:model. The first proposed reply uses marker and alsoCites keys that today's strict schema rejects. No passing runtime outcome is claimed.
+
+The model fixture concerns the same flat, period and monthly unit; C07 decides whether that is a disagreement. B9 must carry both attributed claims, the older source link and the new source link in one canonical Timeline entry, using readable “Contradiction:” text. Never choose a winner, treat later as truer, merge notes or change the immutable source. Retain the original dated line and Alex's prose. No extra note is needed because the sourced line carries the news (value gate).
+
+The exact script omits states to isolate marker storage: the old state explicitly attributes the earlier source and is not a current winning rent. C05 state updates remain permitted when properly owned; this is not a general requirement to keep obsolete Current state. No resolution question is authorized by this case; any such question belongs to C07/Q1 with designer review.
+
+Second press proposes nothing because the same sourced marker is already present. The structural count checks retained output, not planner-level duplicate rejection; B9c must also re-submit an identical materialized EditEntry and redispatch the same manifest through main, observing no duplicate. Check exact parsed text/source, both linked ids and the app's literal reading separately: linksResolve checks existence, not correct attribution. New syntax is a proposal for lead sign-off, not a stored-format migration.

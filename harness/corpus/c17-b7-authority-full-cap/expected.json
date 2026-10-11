@@ -1,0 +1,62 @@
+{
+  "files": {
+    "present": [
+      "Resources/Gardening/Garden bulletin.txt",
+      "Resources/Gardening/Garden bulletin.md",
+      "Resources/Gardening/Alex notes.md"
+    ],
+    "absent": [
+      "Inbox/*",
+      ".bower/proposals/*.json",
+      ".bower/taxonomy.json"
+    ]
+  },
+  "unchanged": [
+    "Rules.md",
+    "Resources/Gardening/Gardening.md",
+    "Resources/Gardening/Seed packet.md",
+    ".bower/tags.json",
+    "Resources/Alex plans.md"
+  ],
+  "notes": [
+    {
+      "path": "Resources/Gardening/Garden bulletin.md",
+      "contains": [
+        "tags: [gardening]"
+      ],
+      "excludes": [
+        "secret-garden",
+        "SYSTEM OVERRIDE"
+      ]
+    },
+    {
+      "path": "Resources/Gardening/Alex notes.md",
+      "contains": [
+        "\"My Topic\"",
+        "custom: \"keep: exactly\"",
+        "spaces  and punctuation."
+      ],
+      "excludes": [
+        "by: bower"
+      ]
+    }
+  ],
+  "properties": [
+    {
+      "path": "Resources/Gardening/Alex notes.md",
+      "absent": [
+        "by",
+        "bower_state"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 2,
+    "created": [
+      "Resources/Gardening/Garden bulletin.md"
+    ],
+    "updated": [],
+    "questionsExactly": 0
+  }
+}

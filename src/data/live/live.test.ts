@@ -1,3 +1,4 @@
+import p2Questions from '../contracts/fixtures/p2/questions.json';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { keep as keepDraft, get as getDraft, forget as forgetDraft } from '../../features/piles/draft-files';
 import { FakeDrive } from '../drive/fake-drive';
@@ -1688,13 +1689,14 @@ describe('person cleanup forgets pending draft bytes and keeps the folder outbox
     forgotten();
     expect(sessionStorage.getItem('bower:bye')).toBeNull();
   });
-  it('failed remote logout retains bytes and metadata until the successful retry', async () => {
-    const { s, selected, orphan, retained, forgotten } = await draft();
+  it('failed remote logout forgets bytes and metadata before the successful retry', async () => {
+    const { s, retained, forgotten } = await draft();
     vi.spyOn(s.worker, 'signOut').mockRejectedValueOnce(new BowerError('offline', 'Signing out did not finish. Try again.'));
-    await expect(s.session.signOut()).rejects.toMatchObject({ code: 'offline' });
-    expect(getDraft('LIVE_DRAFT_A')).toBe(selected); expect(getDraft('LIVE_ORPHAN_A')).toBe(orphan);
-    for (const key of personLocal) expect(localStorage.getItem(key), key).toBe('[]');
-    for (const key of personSession) expect(sessionStorage.getItem(key), key).not.toBeNull();
+    await expect(s.session.signOut()).rejects.toMatchObject({ code: 'offline', message: 'Signing out did not finish. Try again.' });
+    expect((await s.session.current())?.name).toBe('Alex');
+    expect(getDraft('LIVE_DRAFT_A')).toBeUndefined(); expect(getDraft('LIVE_ORPHAN_A')).toBeUndefined();
+    for (const key of personLocal) expect(localStorage.getItem(key), key).toBeNull();
+    for (const key of personSession) expect(sessionStorage.getItem(key), key).toBeNull();
     expect(sessionStorage.getItem('bower:bye')).toBeNull(); retained();
     await s.session.signOut(); expect(await s.session.current()).toBeNull(); forgotten();
   });
@@ -1741,5 +1743,197 @@ describe('c2-create-by-id: a line Drive refuses while nobody waits on it', () =>
     expect((await s.vault.changes()).map((c) => c.kind)).toEqual(['create']);
     await s.vault.flushJournal();
     expect(await s.vault.failedChanges?.()).toHaveLength(1);
+  });
+});
+
+// Q1c: transport fixtures widen the wire without requiring Q1a's unlanded TypeScript exports.
+const Q1C_AT = Date.UTC(2026, 9, 10, 12);
+const q1cQuestion = (id: string, askedAt = Q1C_AT) => ({ id, text: 'Where should Alex keep this?',
+  yes: 'In projects', no: 'Keep here', askedAt });
+type Q1cQuestion = ReturnType<typeof q1cQuestion>;
+const q1cWire = (questions?: Q1cQuestion[], id = 'Q1C_RUN') => ({ id, phase: 'writing', scope: 'all',
+  requestedAt: Q1C_AT, phaseAt: Q1C_AT, ...(questions === undefined ? {} : { questions }) });
+
+async function q1cLive() {
+  localStorage.clear(); sessionStorage.clear();
+  const drive = new FakeDrive({ clock: () => Q1C_AT });
+  const root = (await drive.createFolder('root', 'Bower')).id;
+  for (const name of ['Inbox', 'Projects', 'Areas', 'Resources', 'Archive']) await drive.createFolder(root, name);
+  const inbox = (await drive.listAll(root)).find((f) => f.folder && f.name === 'Inbox');
+  expect(inbox).toBeDefined();
+  const thing = await drive.createText(inbox?.id ?? '', 'Waiting.md', 'Made-up waiting words.', { pile: 'Q1C_THING' });
+  const pile = await drive.createFolder(inbox?.id ?? '', 'Made-up pile', { pile: 'Q1C_PILE' });
+  await drive.createText(pile.id, 'Pile note.md', 'Made-up words for Alex.');
+  await drive.createText(pile.id, 'Member.md', 'Made-up member words.');
+  const sys = (await drive.createFolder(root, '.bower')).id;
+  const changes = (await drive.createFolder(sys, 'changes')).id;
+  const legacy = q1cQuestion('Q1C_STORED', Q1C_AT - 100);
+  const file = await drive.createText(sys, 'questions.json', JSON.stringify({ v: 1, questions: [legacy] }));
+  let reply: unknown = { revision: 1, run: q1cWire() };
+  let folder = root;
+  const requests: string[] = [];
+  const fetchFn: typeof fetch = async (input, init) => {
+    const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+    requests.push(`${init?.method ?? 'GET'} ${url.pathname}`);
+    if (url.pathname === '/me') return Response.json({ user: { name: 'Alex', email: 'you@example.com' }, folderId: folder });
+    if (url.pathname === '/status') return Response.json(reply);
+    if (url.pathname === '/auth/logout') return new Response(null, { status: 204 });
+    throw new Error(`Unexpected Q1c request: ${url.pathname}`);
+  };
+  live = makeLiveSources({ drive, worker: new WorkerHttp('https://worker.example.com', fetchFn) });
+  const s = live;
+  await s.vault.flushJournal();
+  // Positive control: this is the actual Drive reader, not a replacement vault.
+  expect(await s.vault.questions()).toEqual([legacy]);
+  const publish = async (questions: Q1cQuestion[] | undefined, revision: number, id = 'Q1C_RUN') => {
+    reply = { revision, run: q1cWire(questions, id) };
+    return s.runs.current();
+  };
+  const write = async (questions: Q1cQuestion[]) => {
+    const latest = await drive.get(file.id);
+    await drive.writeText(file.id, JSON.stringify({ v: 1, questions }), latest.modifiedTime);
+    await s.vault.refresh();
+  };
+  return { s, drive, root, changes, legacy, requests, publish, write,
+    subject: { thing: thing.id, pile: 'Q1C_PILE' },
+    setReply: (value: unknown) => { reply = value; }, setFolder: (id: string) => { folder = id; } };
+}
+
+describe('Q1c live questions through makeLiveSources and WorkerHttp', () => {
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+  function clock() { vi.useFakeTimers(); vi.setSystemTime(Q1C_AT); }
+
+  it('Q1c v15: a null snapshot means no live questions (vault)', async () => {
+    clock();
+    const { s, legacy, publish } = await q1cLive();
+    const asking = q1cQuestion('Q1C_LIVE');
+    await publish([asking], 2);
+    expect(await s.vault.questions()).toEqual([legacy, asking]);
+    // SQL NULL is omitted by GET /status; a newer omitted snapshot clears the live asking.
+    const current = await publish(undefined, 3);
+    expect(current).not.toHaveProperty('questions');
+    expect(await s.vault.questions()).toEqual([legacy]);
+  });
+
+  it('Q1c q1-stored-and-live-question-merge: Drive wins by asking identity and handoff never drops a card', async () => {
+    clock();
+    const { s, legacy, publish, write } = await q1cLive();
+    const asking = q1cQuestion('Q1C_LIVE');
+    await publish([asking], 2);
+    expect(await s.vault.questions()).toEqual([legacy, asking]);
+    const stored = { ...asking, text: 'Drive wording wins.' };
+    await write([legacy, stored]);
+    expect(await s.vault.questions()).toEqual([legacy, stored]);
+    await publish([], 3);
+    expect(await s.vault.questions()).toEqual([legacy, stored]);
+    // A later asking of the same id is distinct; a matching Drive asking alone takes precedence.
+    const later = { ...asking, askedAt: Q1C_AT + 10 };
+    await publish([later], 4);
+    expect((await s.vault.questions()).filter((q) => q.id === asking.id).map((q) => q.askedAt))
+      .toContain(later.askedAt);
+  });
+
+  it('Q1c q1-stored-and-live-question-merge: status changes emit the vault and use one polling stream', async () => {
+    clock();
+    const { s, drive, legacy, requests, publish } = await q1cLive();
+    const changed = vi.fn();
+    const stop = s.vault.subscribe(changed);
+    await publish([], 2);
+    changed.mockClear();
+    const list = vi.spyOn(drive, 'listAll');
+    await publish([q1cQuestion('Q1C_LIVE')], 3);
+    expect(changed).toHaveBeenCalled();
+    expect(await s.vault.questions()).toHaveLength(2);
+    const reads = list.mock.calls.length;
+    requests.length = 0;
+    const stopRuns = s.runs.subscribe(() => {});
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(requests.filter((p) => p.endsWith('/status'))).toHaveLength(1);
+    expect(list).toHaveBeenCalledTimes(reads);
+    await publish([], 4);
+    expect(await s.vault.questions()).toEqual([legacy]);
+    stopRuns(); stop();
+  });
+
+  it.each(['revision', 'run', 'folder', 'session'] as const)(
+    'Q1c q1-stored-and-live-question-merge: %s fence discards an old snapshot', async (fence) => {
+      clock();
+      const { s, drive, root, legacy, publish, setReply, setFolder } = await q1cLive();
+      const current = q1cQuestion('Q1C_CURRENT');
+      await publish([current], 10);
+      // Positive control: an accepted snapshot is visible before a fence is exercised.
+      expect(await s.vault.questions()).toEqual([legacy, current]);
+      if (fence === 'revision') {
+        await publish([q1cQuestion('Q1C_STALE')], 9);
+        expect(await s.vault.questions()).toEqual([legacy, current]);
+      } else if (fence === 'run') {
+        await publish([q1cQuestion('Q1C_NEW')], 11, 'Q1C_NEW_RUN');
+        await publish([q1cQuestion('Q1C_STALE')], 12, 'Q1C_RUN');
+        expect((await s.vault.questions()).map((q) => q.id)).toEqual([legacy.id, 'Q1C_NEW']);
+      } else {
+        let release!: (value: Response) => void;
+        const status = vi.spyOn(s.worker, 'status').mockImplementationOnce(async () => {
+          const response = await new Promise<Response>((yes) => { release = yes; });
+          return response.json();
+        });
+        const old = s.runs.current().then((value) => ({ value }), (error: unknown) => ({ error }));
+        await s.session.signOut();
+        if (fence === 'folder') {
+          const other = (await drive.createFolder('root', 'Other made-up folder')).id;
+          for (const name of ['Inbox', '.bower']) await drive.createFolder(other, name);
+          setFolder(other);
+        } else setFolder(root);
+        setReply({ revision: 1, run: q1cWire([], 'Q1C_NEW_SESSION') });
+        vi.spyOn(s.worker, 'signIn').mockResolvedValueOnce(undefined);
+        await s.session.signIn();
+        await s.runs.current();
+        release(Response.json({ revision: 99, run: q1cWire([q1cQuestion('Q1C_STALE')]) }));
+        expect(await old).toMatchObject({ error: { name: 'BowerError' } });
+        status.mockRestore();
+        expect((await s.vault.questions()).some((q) => q.id === 'Q1C_STALE' || q.id === current.id)).toBe(false);
+        if (fence === 'session') expect((await s.vault.questions()).map((q) => q.id)).toContain(legacy.id);
+      }
+    });
+
+  it('Q1c q1-stored-and-live-question-merge: addendum 1 keeps asking order and an answer closes the shared source', async () => {
+    clock();
+    const { s, legacy, publish } = await q1cLive();
+    const early = q1cQuestion('Q1C_EARLY', Q1C_AT + 1), late = q1cQuestion('Q1C_LATE', Q1C_AT + 2);
+    await publish([late, early], 2);
+    expect((await s.vault.questions()).map((q) => q.id)).toEqual([legacy.id, early.id, late.id]);
+    await s.vault.answer(early.id, false);
+    expect((await s.vault.questions()).map((q) => q.id)).toEqual([legacy.id, late.id]);
+    expect((await s.vault.changes()).filter((c) => c.kind === 'answer')).toHaveLength(1);
+    await publish([early, late], 3);
+    expect((await s.vault.questions()).map((q) => q.id)).toEqual([legacy.id, late.id]);
+  });
+
+  const answers = [true, { option: 'Q1C_OPTION' }, { text: 'Alex keeps this with project words.\nMade-up line.' }];
+  const cases = (['thing', 'pile'] as const).flatMap((subject) => answers.map((answer) => [subject, answer] as const));
+  it.each(cases)(
+    'Q1c q1-stored-and-live-question-merge: addenda 1-2 %s answer %j cannot revive round one or hide round two', async (kind, answer) => {
+      clock();
+      const { s, drive, changes, legacy, publish, subject } = await q1cLive();
+      const first = q1cQuestion(`q-ask-${subject[kind]}`, Q1C_AT + 1), second = q1cQuestion(first.id, Q1C_AT + 2);
+      // Q1a owns the value's admission; Q1c pins only the merge of a previously stored answer.
+      await drive.createText(changes, 'Q1C_ANSWER.json', JSON.stringify({ v: 1, id: 'Q1C_ANSWER', device: 'Q1C_DEVICE',
+        at: Q1C_AT + 3, kind: 'answer', what: 'Answered a made-up question', questionId: first.id,
+        askedAt: first.askedAt, answer }));
+      await s.vault.refresh();
+      await publish([first], 2);
+      expect(await s.vault.questions()).toEqual([legacy]);
+      await publish([second], 3);
+      expect(await s.vault.questions()).toEqual([legacy, second]);
+    });
+
+  it('Q1c q1-stored-and-live-question-merge: contract 5 legacy status stays readable beside the additive snapshot', async () => {
+    clock();
+    const { s, publish, write } = await q1cLive();
+    const legacy = p2Questions.files[0]?.content.questions ?? [];
+    await write(legacy);
+    expect(await publish(undefined, 2)).toMatchObject({ id: 'Q1C_RUN', phase: 'writing', phaseAt: Q1C_AT });
+    expect(await s.vault.questions()).toEqual(legacy);
+    await publish([q1cQuestion('Q1C_ADDITIVE')], 3);
+    expect((await s.vault.questions()).map((q) => q.id)).toEqual([...legacy.map((q) => q.id), 'Q1C_ADDITIVE']);
   });
 });

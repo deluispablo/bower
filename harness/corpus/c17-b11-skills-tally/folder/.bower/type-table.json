@@ -1,0 +1,17 @@
+{
+  "v": 1,
+  "rows": [
+    {
+      "id": "offer",
+      "properties": {
+        "skills": {
+          "type": "list",
+          "itemType": "text"
+        }
+      },
+      "table": [
+        "skills"
+      ]
+    }
+  ]
+}

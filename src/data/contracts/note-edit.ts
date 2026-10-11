@@ -14,11 +14,12 @@ import { displayName, nameOf } from './tree';
 import type { ChangeEntry, Rule } from './types';
 import { sha256 } from './hashes';
 import { parseNote, timelineEntries } from './note-format';
-import { createOwnershipContext, fenceAfter, parseOwnership, type ByteSpan, type Fence, type Layout, type OwnershipFailure, type FetchedOwnership } from './ownership-format';
-import { parseTimelineLine, timelineLine } from './timeline-line';
+import { MOC_REGIONS, createOwnershipContext, fenceAfter, parseOwnership, type MocRegion, type ByteSpan, type Fence, type Layout, type OwnershipFailure, type FetchedOwnership } from './ownership-format';
+import { parseTimelineLine, timelineLine, type TimelineMarker } from './timeline-line';
 import { parseRules } from './rules-format';
-import type { Change, EditEntry, EditText, Rename, RuleAdd, RuleRemove, TimelineConsent } from './run-manifest';
+import type { Change, EditEntry, EditText, Rename, RuleAdd, RuleRemove, TimelineConsent, MaintenanceNote } from './run-manifest';
 import { isHub } from './hub';
+import { BowerError } from './types';
 
 /** Files larger than 1 MiB are never edited (TL-P2-20 rule 6). */
 export const EDIT_FILE_LIMIT = 1024 * 1024;
@@ -213,11 +214,29 @@ function byBower(text: string, fetched?: FetchedOwnership): boolean {
 // timeline-append
 // ---------------------------------------------------------------------------------------------
 
-/** Why a person's note takes no sourced line (C05 rows 5 and 8): no Timeline, or one `timeline-line.ts` cannot read. */
-function timelineRefusal(text: string, sections: Sections): 'no-timeline' | 'unreadable-timeline' | null {
+/**
+ * A person's Timeline is a list, not a date grammar (CommonMark 0.31.2, list items).
+ * Keep original offsets: blanks belong to the list, indented lines to the preceding item's subtree,
+ * and the next heading to another section. An empty Timeline retains its existing dash append.
+ */
+function timelineAppendability(text: string, sections: Sections): 'no-timeline' | 'unreadable-timeline'
+  | { at: number; end: number; marker: TimelineMarker } {
   if (!sections.timeline) return 'no-timeline';
   const lines = linesOf(text, sections.timeline.start, sections.timeline.end);
-  return lines.slice(1).some((line) => line.text.trim() && !parseTimelineLine(line.text)) ? 'unreadable-timeline' : null;
+  let at = lines[0]?.end ?? sections.timeline.start;
+  let end = sections.timeline.end;
+  let marker: TimelineMarker = '- ';
+  let item = false;
+  for (const line of lines.slice(1)) {
+    if (HEADING.test(line.text)) { end = line.start; break; }
+    if (!line.text.trim()) continue;
+    if (line.text.startsWith('- ') || line.text.startsWith('* ')) {
+      marker = line.text.startsWith('* ') ? '* ' : '- ';
+      item = true;
+    } else if (!item || !/^[ \t]+\S/.test(line.text)) return 'unreadable-timeline';
+    at = line.end;
+  }
+  return { at, end, marker };
 }
 
 /**
@@ -235,7 +254,9 @@ export function personalTimelineRefusal(bytes: Uint8Array, fetched?: FetchedOwne
   if (own.status === 'invalid') return 'unreadable-timeline';
   if (own.status === 'v2' || byBower(text, fetched)) return null;
   const sections = sectionsOf(text, fetched);
-  return sections ? timelineRefusal(text, sections) : 'unreadable-timeline';
+  if (!sections) return 'unreadable-timeline';
+  const appendable = timelineAppendability(text, sections);
+  return typeof appendable === 'string' ? appendable : null;
 }
 
 type Step = { text: string; added: EditEntry[]; rules: Pick<Rule, 'text' | 'yourWords' | 'since'>[] | null } | { refused: EditRefusal };
@@ -252,6 +273,7 @@ function appendLines(text: string, change: Extract<Change, { kind: 'timeline-app
       || (fetched.consents && !fetched.consents.some((x) => x.requestId === c.requestId && x.targetFileId === c.targetFileId && x.sourceFileId === c.sourceFileId))) return { refused: 'not-bower' };
   }
   const eol = eolOf(text);
+  let marker: TimelineMarker = '- ';
   let region = '';
   let at: number;
   let insert: (lines: string[]) => string;
@@ -263,9 +285,14 @@ function appendLines(text: string, change: Extract<Change, { kind: 'timeline-app
   } else {
     const legacy = sectionsOf(text, fetched);
     if (!legacy) return { refused: 'not-bower' };
-    const unwritable = personal ? timelineRefusal(text, legacy) : null;
-    if (unwritable) return { refused: unwritable };
-    if (legacy.timeline) {
+    if (personal) {
+      const appendable = timelineAppendability(text, legacy);
+      if (typeof appendable === 'string') return { refused: appendable };
+      at = appendable.at;
+      marker = appendable.marker;
+      region = text.slice(legacy.timeline?.start, appendable.end);
+      insert = (lines) => lines.map((line) => eol + line).join('');
+    } else if (legacy.timeline) {
       const sectionEnd = legacy.timeline.end;
       const lines = linesOf(text, legacy.timeline.start, sectionEnd);
       region = text.slice(lines[0]?.start ?? sectionEnd, sectionEnd);
@@ -294,7 +321,7 @@ function appendLines(text: string, change: Extract<Change, { kind: 'timeline-app
     return true;
   });
   if (!added.length) return { text, added, rules: null };
-  return { text: authors.splice(text, at, insert(added.map(timelineLine))), added, rules: null };
+  return { text: authors.splice(text, at, insert(added.map((entry) => timelineLine({ ...entry, marker })))), added, rules: null };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -852,24 +879,70 @@ function holds(before: string, after: string, change: Change, step: Exclude<Step
 // The author
 // ---------------------------------------------------------------------------------------------
 
-function rewriteMoc(text: string, change: Extract<Change, { kind: 'moc-rewrite' }>, fetched?: FetchedOwnership): Step {
+export type MocSnapshot = { text: string; regions: Record<MocRegion, string> };
+
+/** Freeze only regions the existing ownership author can rewrite. Personal maps grant no authority. */
+export function mocSnapshot(text: string): MocSnapshot | null {
   const bytes = encoder.encode(text);
-  const own = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
-  const note = parseNote('note.md', text, fetched);
+  const own = parseOwnership(bytes);
+  const note = parseNote('note.md', text);
+  if (!note.byBower || !note.properties.some((p) => p.key === 'type' && p.value === 'moc') || (own.status !== 'v2' && own.status !== 'legacy')) return null;
+  const regions = {} as Record<MocRegion, string>;
+  for (const region of MOC_REGIONS) {
+    const span = own.status === 'v2' ? own.payloads[region] : own.layout.moc?.[region];
+    if (!span) return null;
+    regions[region] = decoder.decode(bytes.subarray(span.start, span.end));
+  }
+  return { text, regions };
+}
+
+/** Add only framing and the format declaration; every legacy byte remains at its original relative position. */
+function framedMoc(text: string): string | null {
+  const bytes = encoder.encode(text);
+  const own = parseOwnership(bytes);
+  if (own.status === 'v2') return text;
+  if (own.status !== 'legacy' || !mocSnapshot(text)) return null;
+  const eol = eolOf(text);
+  const marker = (kind: 'begin' | 'end', region: string): string => `<!-- bower:ownership/2 ${kind} ${region} -->${eol}`;
+  const inserts = new Map<number, string>();
+  const add = (at: number, value: string): void => { inserts.set(at, (inserts.get(at) ?? '') + value); };
+  add(own.layout.frontEnd, ['current', 'personal', 'timeline', 'bower-note'].map((owner) => marker('begin', owner) + marker('end', owner)).join(''));
+  for (const region of MOC_REGIONS) {
+    const span = own.layout.moc?.[region];
+    if (!span) return null;
+    add(charAt(bytes, span.start), marker('begin', region));
+    add(charAt(bytes, span.end), marker('end', region));
+  }
+  const front = own.layout.front;
+  if (!front) return null;
+  add(charAt(bytes, front.start), `bower_format: ownership/2${eol}`);
+  let out = text;
+  for (const [at, insert] of [...inserts].sort(([a], [b]) => b - a)) out = out.slice(0, at) + insert + out.slice(at);
+  return parseOwnership(encoder.encode(out)).status === 'v2' ? out : null;
+}
+
+function rewriteMoc(text: string, change: Extract<Change, { kind: 'moc-rewrite' }>, fetched?: FetchedOwnership): Step {
+  const framed = framedMoc(text);
+  if (framed === null) return { refused: 'not-bower' };
+  const bytes = encoder.encode(framed);
+  const own = framed === text && fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
+  const note = parseNote('note.md', framed);
   const span = own.status === 'v2' ? own.payloads[change.region] : undefined;
   if (!note.byBower || !note.properties.some((p) => p.key === 'type' && p.value === 'moc') || !span) return { refused: 'not-bower' };
   const at = spanOf(bytes, span);
-  if (text.slice(at.start, at.end) !== change.previous) return { refused: 'person-edited' };
-  return { text: text.slice(0, at.start) + change.text + text.slice(at.end), added: [], rules: null };
+  if (framed.slice(at.start, at.end) !== change.previous) return { refused: 'person-edited' };
+  return { text: framed.slice(0, at.start) + change.text + framed.slice(at.end), added: [], rules: null };
 }
 function mocHolds(before: string, after: string, change: Extract<Change, { kind: 'moc-rewrite' }>): boolean {
-  const aBytes = encoder.encode(before), bBytes = encoder.encode(after);
+  const framed = framedMoc(before);
+  if (framed === null) return false;
+  const aBytes = encoder.encode(framed), bBytes = encoder.encode(after);
   const a = parseOwnership(aBytes), b = parseOwnership(bBytes);
   const aSpan = a.status === 'v2' ? a.payloads[change.region] : undefined;
   const bSpan = b.status === 'v2' ? b.payloads[change.region] : undefined;
   if (!aSpan || !bSpan) return false;
   const x = spanOf(aBytes, aSpan), y = spanOf(bBytes, bSpan);
-  return before.slice(0, x.start) === after.slice(0, y.start) && before.slice(x.end) === after.slice(y.end)
+  return framed.slice(0, x.start) === after.slice(0, y.start) && framed.slice(x.end) === after.slice(y.end)
     && after.slice(y.start, y.end) === change.text;
 }
 
@@ -956,4 +1029,102 @@ export async function undoEdit(effect: EditText, now: Uint8Array): Promise<EditR
 /** R3-6 / R4-3 m-f: a saved link's note key, SHA-256 in lowercase hex of the UTF-8 bytes of `<fileId>:saved-link-note`. */
 export function savedLinkKey(fileId: string): Promise<string> {
   return digest(encoder.encode(`${fileId}:saved-link-note`));
+}
+
+// Shared MOC projection: the runner and settled report use the same exact author inputs.
+export type Notes = Record<string, MaintenanceNote>;
+/** Prefix metadata selects a map; only its fully parsed snapshot grants edit authority. */
+export const isBowerMoc = (note: MaintenanceNote): boolean => note.owner === 'bower' && note.type === 'moc' || note.moc !== undefined;
+const folderOf = (path: string): string => path.slice(0, Math.max(0, path.lastIndexOf('/')));
+const stem = (path: string): string => path.replace(/\.md$/, '');
+
+/** The same shortest-unambiguous suffix for ordinary index rows and MOC member rows. */
+export function noteLinks(files: Notes): Map<string, string> {
+  const suffixes = new Map<string, number>();
+  for (const f of Object.values(files)) {
+    const parts = stem(f.path).split('/');
+    for (let i = 0; i < parts.length; i++) {
+      const suffix = parts.slice(i).join('/');
+      suffixes.set(suffix, (suffixes.get(suffix) ?? 0) + 1);
+    }
+  }
+  return new Map(Object.entries(files).map(([id, f]) => {
+    const parts = stem(f.path).split('/');
+    for (let n = 1; n <= parts.length; n++) {
+      const suffix = parts.slice(-n).join('/');
+      if (suffixes.get(suffix) === 1) return [id, suffix];
+    }
+    return [id, stem(f.path)];
+  }));
+}
+
+export function mocMembership(files: Notes): Map<string, string[]> {
+  const maps = Object.entries(files).filter(([, f]) => isBowerMoc(f));
+  const roots = new Map<string, string>();
+  const members = new Map<string, string[]>();
+  const claimed = new Set<string>();
+  for (const [id, f] of maps) {
+    const folder = folderOf(f.path);
+    if (stem(f.path).split('/').at(-1) === folder.split('/').at(-1)) {
+      roots.set(folder, id);
+      continue;
+    }
+    // Existing peer maps encode the ruled split. Resolve each old link once to one stable id.
+    const ids = f.members ? f.members.filter((member) => member !== id && files[member] && !isBowerMoc(files[member]))
+      : [...(f.moc?.regions['moc-members'] ?? '').matchAll(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g)]
+      .flatMap((match) => {
+        const link = match[1] ?? '';
+        const matches = Object.entries(files).filter(([other, note]) => other !== id && !isBowerMoc(note)
+          && (stem(note.path) === link || stem(note.path).endsWith(`/${link}`)));
+        return matches.length === 1 ? [matches[0]?.[0] ?? ''] : [];
+      });
+    const unique = [...new Set(ids)];
+    members.set(id, unique);
+    for (const member of unique) claimed.add(member);
+  }
+  for (const [folder, id] of roots) {
+    const ids = Object.entries(files).filter(([other, f]) => {
+      if (other === id || claimed.has(other) || !f.path.startsWith(`${folder}/`)) return false;
+      // A descendant folder's existing map represents its entire subtree at this level.
+      return ![...roots].some(([child]) => child !== folder && child.startsWith(`${folder}/`)
+        && f.path.startsWith(`${child}/`) && roots.get(child) !== other);
+    }).map(([other]) => other);
+    members.set(id, ids);
+  }
+  for (const [id, ids] of members) members.set(id, ids.sort((a, b) => (files[a]?.path ?? '').localeCompare(files[b]?.path ?? '')));
+  return members;
+}
+
+export function leafCount(id: string, members: ReadonlyMap<string, string[]>): number {
+  const leaves = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (member: string): void => {
+    if (visited.has(member)) return;
+    visited.add(member);
+    const children = members.get(member);
+    if (children) children.forEach(visit);
+    else leaves.add(member);
+  };
+  visit(id);
+  return leaves.size;
+}
+
+/** All changes go back through note-edit's one author and the ordinary edit-text fence. */
+export function mocEdit(id: string, files: Notes, members: ReadonlyMap<string, string[]>): { changes: Change[]; text: string } | null {
+  const note = files[id];
+  if (!note?.moc) return null;
+  const ids = members.get(id) ?? [];
+  const links = noteLinks(files);
+  const direct = ids.filter((member) => !members.has(member) && folderOf(files[member]?.path ?? '') === folderOf(note.path)).length;
+  const regions = {
+    'moc-figures': `## Figures\n\n${direct} direct ${direct === 1 ? 'note' : 'notes'}; ${leafCount(id, members)} notes in all.\n`,
+    'moc-members': `## Notes\n\n${ids.map((member) => `- [[${links.get(member)}]] — ${files[member]?.summary}\n`).join('')}`,
+  };
+  const changes: Change[] = (['moc-figures', 'moc-members'] as const).map((region) => ({
+    kind: 'moc-rewrite', region, recordIds: [], previous: note.moc?.regions[region] ?? '', text: regions[region],
+  }));
+  const result = applyChanges(new TextEncoder().encode(note.moc.text), changes);
+  if (result.ok) return { changes, text: result.text };
+  if (result.reason === 'unchanged') return null;
+  throw new BowerError('unknown', 'Bower could not update its map.', undefined, { cause: result.reason });
 }

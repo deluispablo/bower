@@ -539,3 +539,22 @@ b1a-contract,implementer (P4-94 fix),codex,gpt-5-codex,medium,1,674886,668542,,6
 c05-person-timeline-format,diagnoser,codex,gpt-5-codex,high,1,,,,,,,,,diagnosed,2026-10-10
 b1a-contract,reviewer (P4-94b),claude,opus,,1,33920,,,,,,8,1,PASS,2026-10-10
 c05-timeline-list,red-owner,codex,gpt-5-codex,high,1,1451255,1438254,,1362816,13001,,,,14 reds,2026-10-10
+p4-b11-prep,preparer,codex,gpt-5-codex,high,1,4774528,4746541,,4554624,27987,,,,draft; 8 questions,2026-10-10
+p4-b4-prep,preparer,codex,gpt-5-codex,high,1,3835483,3805037,,3607680,30446,,,,draft; 9 questions,2026-10-10
+b1c-index,red-owner,codex,gpt-5-codex,high,1,2392008,2368908,,2245504,23100,,,,12 reds,2026-10-10
+b3b-hot-maintain,red-owner,codex,gpt-5-codex,high,1,3515528,3489053,,3338880,26475,,,,9 reds,2026-10-10
+b5a-contracts,red-owner,codex,gpt-5-codex,high,1,2424035,2403912,,2289408,20123,,,,25 reds,2026-10-10
+c05-timeline-list,red-owner,codex,gpt-5-codex,low,2,201173,200251,,184064,922,,,,red repair,2026-10-10
+smoke-request-slow,red-owner,codex,gpt-5-codex,medium,2,293230,291705,,266880,1525,,,,red repair,2026-10-10
+b1c-index,red-owner,codex,gpt-5-codex,medium,2,293520,290066,,262400,3454,,,,red repair,2026-10-10
+b3b-hot-maintain,red-owner,codex,gpt-5-codex,medium,2,639763,634991,,590592,4772,,,,red repair,2026-10-10
+smoke-request-slow,implementer,codex,gpt-5-codex,high,2,350541,347215,,295552,3326,,,,blocked: tests contradict ruling,2026-10-10
+smoke-request-slow,red-owner,codex,gpt-5-codex,medium,3,569437,565736,,519552,3701,,,,red repair,2026-10-10
+smoke-request-slow,implementer,codex,gpt-5-codex,high,3,2007591,1995388,,1871872,12203,,,,blocked: tests contradict ruling,2026-10-10
+smoke-request-slow,red-owner,codex,gpt-5-codex,medium,4,1042006,1032536,,961664,9470,,,,red repair,2026-10-10
+c05-timeline-list,reviewer (P4-95),claude,opus,,1,39904,,,,,,8,1,PASS,2026-10-10
+undo-fifo-seed,implementer,codex,unknown,medium,1,1969848,1959292,,1897728,10556,,,,green,2026-10-10
+orphan-pile-count-data,implementer,codex,unknown,high,1,3122384,3108779,,2986496,13605,,,,check-failed,2026-10-10
+upload-sign-out-forget,implementer,codex,unknown,high,1,5616541,5589597,,5462016,26944,,,,check-failed,2026-10-10
+orphan-pile-count-data,implementer,codex,unknown,high,2,1811588,1799054,,1707136,12534,,,,check-failed,2026-10-10
+b1c-index,implementer,codex,unknown,high,1,8857958,8822245,,8636928,35713,,,,check-failed,2026-10-10

@@ -174,11 +174,13 @@ export class DriveHttp implements DriveApi {
     return this.readBody(async () => new Uint8Array(new Uint8Array(await response.arrayBuffer())));
   }
 
-  async readPrefix(id: string): Promise<string | null> {
+  async readPrefix(id: string, opts: { precheck?: boolean } = {}): Promise<string | null> {
     return this.readBody(async () => {
-      const meta = (await (await this.call(`${API}/files/${id}?fields=mimeType,trashed`)).json()) as Pick<WireFile, 'mimeType' | 'trashed'>;
-      if (meta.trashed) throw driveError('not-found');
-      if (meta.mimeType?.startsWith('application/vnd.google-apps.')) return null;
+      if (opts.precheck !== false) {
+        const meta = (await (await this.call(`${API}/files/${id}?fields=mimeType,trashed`)).json()) as Pick<WireFile, 'mimeType' | 'trashed'>;
+        if (meta.trashed) throw driveError('not-found');
+        if (meta.mimeType?.startsWith('application/vnd.google-apps.')) return null;
+      }
       const response = await this.call(`${API}/files/${id}?alt=media`, { headers: { Range: `bytes=0-${PREFIX_BYTES - 1}` } }, [416]);
       if (response.status === 416) return '';
       return decodePrefix(new Uint8Array(await response.arrayBuffer()));

@@ -1,0 +1,23 @@
+{
+  "id": "c17-b9-uncertain-and-inferred",
+  "capability": "C17",
+  "title": "Uncertainty and inference remain visibly qualified",
+  "covers": "model",
+  "source": "new (TL-P4-39 B9/U6; preparation only, scripted production proof pending)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "File the notice with the visit. Keep any uncertainty and inference explicit.",
+      "files": [
+        "Garden notice.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Rules.md",
+    "Projects/Garden visit/Saltmere visit.md"
+  ]
+}

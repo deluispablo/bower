@@ -1,0 +1,26 @@
+{
+  "id": "c17-b4-forget-no-return",
+  "capability": "C17",
+  "title": "Forget a remote preference without restoring it from the same source or archive",
+  "covers": "model",
+  "source": "new: TL-P4-39 B4/F4/F7; proposed contracts and scripted proof pending",
+  "scope": "instructions",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Forget my preference for remote roles, including the mentoring exception."
+    }
+  ],
+  "questions": [],
+  "bowerOwned": [],
+  "presses": [
+    {
+      "request": {
+        "kind": "tidy",
+        "text": "Refresh About me from existing observations; do not remember anything new from old sources."
+      }
+    }
+  ]
+}

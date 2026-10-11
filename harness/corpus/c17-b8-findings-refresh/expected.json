@@ -1,0 +1,173 @@
+{
+  "notes": [
+    {
+      "path": "Resources/Gardening/Checklist.md",
+      "contains": [
+        "Alex removed the old checklist link in their editor."
+      ],
+      "excludes": [
+        "[[Missing checklist]]"
+      ]
+    },
+    {
+      "path": "Bower health.md",
+      "contains": [
+        "No findings in the checked notes."
+      ],
+      "excludes": [
+        "Missing checklist",
+        "Broken link"
+      ]
+    }
+  ],
+  "protectedRanges": [
+    {
+      "path": "Resources/Gardening/Checklist.md",
+      "range": {
+        "frontMatter": true
+      }
+    }
+  ],
+  "properties": [
+    {
+      "path": "Resources/Gardening/Checklist.md",
+      "absent": [
+        "by",
+        "bower_state"
+      ]
+    }
+  ],
+  "report": {
+    "filed": 0,
+    "created": [],
+    "updated": [],
+    "questionsExactly": 0
+  },
+  "files": {
+    "present": [
+      "Bower health.md"
+    ],
+    "absent": [
+      "log.md",
+      ".bower/log.md"
+    ]
+  },
+  "runs": [
+    {
+      "unchanged": [
+        "Resources/Gardening/Checklist.md"
+      ],
+      "notes": [
+        {
+          "path": "Bower health.md",
+          "contains": [
+            "Broken link",
+            "Missing checklist"
+          ]
+        }
+      ],
+      "report": {
+        "filed": 0,
+        "created": [
+          "Bower health.md"
+        ],
+        "updated": [],
+        "questionsExactly": 0
+      }
+    },
+    {
+      "notes": [
+        {
+          "path": "Resources/Gardening/Checklist.md",
+          "contains": [
+            "Alex removed the old checklist link in their editor."
+          ],
+          "excludes": [
+            "[[Missing checklist]]"
+          ]
+        },
+        {
+          "path": "Bower health.md",
+          "contains": [
+            "No findings in the checked notes."
+          ],
+          "excludes": [
+            "Missing checklist",
+            "Broken link"
+          ]
+        }
+      ],
+      "protectedRanges": [
+        {
+          "path": "Resources/Gardening/Checklist.md",
+          "range": {
+            "frontMatter": true
+          }
+        }
+      ],
+      "properties": [
+        {
+          "path": "Resources/Gardening/Checklist.md",
+          "absent": [
+            "by",
+            "bower_state"
+          ]
+        }
+      ],
+      "report": {
+        "filed": 0,
+        "created": [],
+        "updated": [
+          "Bower health.md"
+        ],
+        "questionsExactly": 0
+      }
+    },
+    {
+      "notes": [
+        {
+          "path": "Resources/Gardening/Checklist.md",
+          "contains": [
+            "Alex removed the old checklist link in their editor."
+          ],
+          "excludes": [
+            "[[Missing checklist]]"
+          ]
+        },
+        {
+          "path": "Bower health.md",
+          "contains": [
+            "No findings in the checked notes."
+          ],
+          "excludes": [
+            "Missing checklist",
+            "Broken link"
+          ]
+        }
+      ],
+      "protectedRanges": [
+        {
+          "path": "Resources/Gardening/Checklist.md",
+          "range": {
+            "frontMatter": true
+          }
+        }
+      ],
+      "properties": [
+        {
+          "path": "Resources/Gardening/Checklist.md",
+          "absent": [
+            "by",
+            "bower_state"
+          ]
+        }
+      ],
+      "report": {
+        "filed": 0,
+        "created": [],
+        "updated": [],
+        "questionsExactly": 0
+      }
+    }
+  ]
+}

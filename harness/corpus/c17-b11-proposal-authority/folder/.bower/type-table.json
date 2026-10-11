@@ -1,0 +1,16 @@
+{
+  "v": 1,
+  "rows": [
+    {
+      "id": "offer",
+      "properties": {
+        "deadline": {
+          "type": "date"
+        }
+      },
+      "table": [
+        "deadline"
+      ]
+    }
+  ]
+}

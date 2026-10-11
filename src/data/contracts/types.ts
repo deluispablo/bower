@@ -1,3 +1,4 @@
+import type { QuestionOption } from './questions';
 /**
  * The shapes every screen works with. They follow the current Bower's real
  * contract (the runner's report, the vault's layout) so that phase 2 only
@@ -117,6 +118,7 @@ export interface Pile {
    * a lost update), until a listing reads it again.
    */
   noteLocked?: true;
+  question?: 'waiting' | 'exhausted';
 }
 
 export interface NewPile {
@@ -126,6 +128,9 @@ export interface NewPile {
 }
 
 export interface Question {
+  options?: Pick<QuestionOption, 'id' | 'label'>[];
+  /** Pile words at asking, so an edit resets the asking. */
+  words?: string;
   id: string;
   text: string;
   yes: string;

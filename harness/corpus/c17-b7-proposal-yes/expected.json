@@ -1,0 +1,72 @@
+{
+  "files": {
+    "present": [
+      "Resources/Gardening/Rain barrel guide.txt",
+      "Resources/Gardening/Rain barrel guide.md",
+      ".bower/proposals/*.json"
+    ],
+    "absent": [
+      "Inbox/*",
+      ".bower/taxonomy.json"
+    ]
+  },
+  "unchanged": [
+    "Rules.md",
+    "Resources/Gardening/Gardening.md",
+    "Resources/Gardening/Seed packet.md"
+  ],
+  "notes": [
+    {
+      "path": "Resources/Gardening/Rain barrel guide.md",
+      "contains": [
+        "tags: [gardening]"
+      ],
+      "excludes": [
+        "tags: [gardening, rainwater]"
+      ]
+    },
+    {
+      "path": ".bower/tags.json",
+      "contains": [
+        "\"rainwater\""
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 0,
+    "created": [],
+    "updated": [],
+    "questionsExactly": 0
+  },
+  "runs": [
+    {
+      "unchanged": [
+        ".bower/tags.json"
+      ],
+      "report": {
+        "filed": 1,
+        "created": [
+          "Resources/Gardening/Rain barrel guide.md"
+        ],
+        "questionsExactly": 1
+      }
+    },
+    {
+      "report": {
+        "filed": 0,
+        "created": [],
+        "updated": [],
+        "questionsExactly": 0
+      }
+    },
+    {
+      "report": {
+        "filed": 0,
+        "created": [],
+        "updated": [],
+        "questionsExactly": 0
+      }
+    }
+  ]
+}

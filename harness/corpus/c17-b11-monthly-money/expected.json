@@ -1,0 +1,51 @@
+{
+  "files": {
+    "present": [
+      "Areas/Money/Money.md"
+    ],
+    "absent": [
+      "Inbox/*",
+      ".bower/views.json"
+    ]
+  },
+  "unchanged": [
+    "Rules.md",
+    ".bower/type-table.json",
+    "Areas/Money/Mulch.md",
+    "Areas/Money/Seeds.md",
+    "Areas/Money/Tool.md",
+    "Areas/Money/Missing total.md",
+    "Areas/Money/Unknown currency.md"
+  ],
+  "protectedRanges": [
+    {
+      "path": "Areas/Money/Money.md",
+      "range": {
+        "heading": "Notes"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "path": "Areas/Money/Money.md",
+      "contains": [
+        "## Figures",
+        "EUR",
+        "USD",
+        "garden"
+      ],
+      "excludes": [
+        "XYZ |"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 0,
+    "created": [],
+    "updated": [
+      "Areas/Money/Money.md"
+    ],
+    "questionsExactly": 0
+  }
+}

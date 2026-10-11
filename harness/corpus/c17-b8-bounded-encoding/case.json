@@ -1,0 +1,23 @@
+{
+  "id": "c17-b8-bounded-encoding",
+  "capability": "C17",
+  "title": "A 1024-event 2026 log seals losslessly before a delimiter-rich filing",
+  "covers": "model",
+  "source": "new (TL-P4-39 B8, F3/F14/U3; TL-P4-41 to TL-P4-48; scripted proof pending)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "Keep these mulch options with Gardening.",
+      "files": [
+        "Options | alternatives.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Resources/Gardening/Gardening.md",
+    "Bower health.md"
+  ]
+}

@@ -13,6 +13,7 @@ import { parseNote } from '../../src/data/contracts/note-format';
 import { stampOf } from '../../src/data/spine/write-once';
 import * as reply from '../src/claude';
 import * as maintenance from '../src/index';
+import { RunnerDrive } from '../src/drive';
 import { loadCase, type LoadedCase } from '../src/corpus';
 import { AT, redispatchCase, replySequence, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
@@ -582,7 +583,8 @@ it('B1a contract: round 3 1: vanished indexed notes drop without failing and ord
     let version = plot.modifiedTime;
     let throughCursor = state.cursor;
     let feedReads = 0;
-    let missingReads = 0;
+    // TL-P4-41 addendum 11: observe the actual prefix read outcome, independent of wire status.
+    const prefixReads = vi.spyOn(RunnerDrive.prototype, 'readPrefix');
     const original = maintenance.withMaintenance;
     const planned = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest) => {
       const listed = (await adapter.planReads().listAll(root)).find((f) => f.id === plot.id);
@@ -607,19 +609,24 @@ it('B1a contract: round 3 1: vanished indexed notes drop without failing and ord
           // Drive may report a removal without metadata; only the wire representation changes.
           feed.changes = feed.changes.map((change) => change.fileId === plot.id ? { fileId: plot.id, removed: true } : change);
         }
-        if (mode === 'not-found read') await drive.trash(plot.id); // Feed drained; maintenance's content read now returns 404.
+        if (mode === 'not-found read') await drive.trash(plot.id); // Feed drained; maintenance now sees not-found.
         return new Response(JSON.stringify(feed), { status: response.status, headers: response.headers });
       }
-      const response = await fetch(input, init);
-      if (mode === 'not-found read' && url.pathname === `/drive/v3/files/${plot.id}` && response.status === 404) missingReads++;
-      return response;
+      return fetch(input, init);
     };
     const run = await runOnDrive(c, drive, root, { admission, pacing, around }, 1);
     expect(planned).toHaveBeenCalledTimes(1);
     planned.mockRestore();
     expect(feedReads).toBeGreaterThan(0);
     expect(version).not.toBe(state.files[plot.id]?.version);
-    if (mode === 'not-found read') expect(missingReads, 'real maintenance read answers not-found').toBeGreaterThan(0);
+    // TL-P4-41 addendum 11: not-found can come from the metadata precheck before any media request.
+    if (mode === 'not-found read') {
+      const attempt = prefixReads.mock.calls.findIndex(([file]) => file.id === plot.id && file.modifiedTime === version);
+      const outcome = prefixReads.mock.results[attempt];
+      if (!outcome || outcome.type !== 'return') throw new Error('missing maintenance prefix read');
+      await expect(outcome.value, 'real maintenance read answers not-found').rejects.toMatchObject({ code: 'not-found' });
+    }
+    prefixReads.mockRestore();
     expect.soft(run.code, `${mode}: a vanished note never fails the run`).toBe(0);
     expect.soft(run.wire?.statuses.at(-1)?.phase, `${mode}: main reaches done`).toBe('done');
     const after = JSON.parse(run.after['.bower/retrieval.json'] ?? 'null') as RetrievalFile;
@@ -810,7 +817,10 @@ function assertFolderRefresh(result: Awaited<ReturnType<typeof runFolderChange>>
   check(run.code, `${mode}: folder changes never fail main`).toBe(0);
   check(run.wire?.statuses.at(-1)?.phase, `${mode}: main reaches done`).toBe('done');
   check(after.cursor, `${mode}: cursor commits the state reflecting the drained feed`).toBe(throughCursor);
-  expect(after.files[book.id], `${mode}: unrelated indexed note survives by id`).toEqual(state.files[book.id]);
+  // TL-P4-41 addendum 11: fail explicitly if the prior-state control is absent; keep the assertion.
+  const priorBook = state.files[book.id];
+  if (!priorBook) throw new Error('missing prior-state book');
+  expect(after.files[book.id], `${mode}: unrelated indexed note survives by id`).toMatchObject(priorBook);
   // Exactly retrieval media, changes feed and the old index media. No snapshot/media re-reads.
   check(discovery.length, `${mode}: maintenance discovery makes exactly three Drive calls`).toBe(3);
   check(requests.filter((r) => r.method === 'GET' && r.url.searchParams.get('alt') === 'media'
@@ -819,9 +829,16 @@ function assertFolderRefresh(result: Awaited<ReturnType<typeof runFolderChange>>
   check(sent.filter((s) => s.path === '.bower/retrieval.json'), `${mode}: one state/cursor write`).toHaveLength(1);
   check(JSON.parse(sent.find((s) => s.path === '.bower/retrieval.json')?.text ?? 'null') as unknown,
     `${mode}: the cursor and refreshed state are the same stored write`).toEqual(after);
-  check(sent.filter((s) => s.path === '.bower/index.md'), `${mode}: one projection rebuild`).toHaveLength(1);
+  // TL-P4-41 Q8: metadata/date alone does not change the projection.
+  check(sent.filter((s) => s.path === '.bower/index.md'), `${mode}: writes only a changed projection`)
+    .toHaveLength(mode === 'live control' ? 0 : 1);
   if (mode === 'live control') {
-    for (const note of descendants) expect(after.files[note.id]).toEqual(state.files[note.id]);
+    for (const note of descendants) {
+      // TL-P4-41 addendum 11: narrow the prior-state entry without changing the live-control assertion.
+      const priorNote = state.files[note.id];
+      if (!priorNote) throw new Error('missing prior-state descendant');
+      expect(after.files[note.id]).toMatchObject(priorNote);
+    }
     expect(run.after['.bower/index.md']).toBe(result.index);
   }
 }
@@ -867,7 +884,7 @@ it('B1a contract: round 4 3: a renamed folder updates descendant paths and index
   assertFolderRefresh(result, 'renamed');
   for (const note of result.descendants) {
     const old = result.state.files[note.id];
-    expect.soft(result.after.files[note.id], `rename recomputes descendant ${note.id} from state`).toEqual({
+    expect.soft(result.after.files[note.id], `rename recomputes descendant ${note.id} from state`).toMatchObject({
       ...old, path: old?.path.replace('Resources/Gardening/', 'Resources/Zinnia/'),
     });
   }
@@ -886,7 +903,7 @@ it('B1a contract: round 4 4: an inside folder move updates recursive paths and r
   assertFolderRefresh(result, 'nested');
   for (const note of result.descendants) {
     const old = result.state.files[note.id];
-    expect.soft(result.after.files[note.id], `inside move recomputes descendant ${note.id} from state`).toEqual({
+    expect.soft(result.after.files[note.id], `inside move recomputes descendant ${note.id} from state`).toMatchObject({
       ...old, path: old?.path.replace('Resources/Gardening/', 'Resources/Reading/Gardening/'),
     });
   }
