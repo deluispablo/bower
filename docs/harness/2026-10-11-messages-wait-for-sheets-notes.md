@@ -241,3 +241,33 @@ Log: `/private/tmp/mws-fix1-unused.log`.
 No git-writing commands or node_modules changes. Runner owns commits.
 pnpm check and e2e were not run under this fix-round assignment; pnpm check writes
 repository outputs, contrary to the assignment. All generated output is in OS temp.
+
+## Fix round 1 red repair
+
+tests changed: src/ui/dock.test.tsx: replaced the status-absent assertion at line 133 with a mounted, empty status-region assertion, per P4-115 minor 1 and TL-P4-51.
+`getByRole('status', { hidden: true })` requires the region to exist even while the
+modal makes the background inaccessible; `toBeEmptyDOMElement()` requires no message
+text or children. Every other assertion remains unchanged, including message hiding,
+stack retention, polite announcement after close, visibility and exact expiry.
+
+Contradicting assertions searched in all of src/ui and
+ e2e/messages-wait-for-sheets.spec.ts:
+- src/ui/dock.test.tsx:133, MWS a message raised while a sheet is open waits to show and be announced.
+  Repaired as above. No other status-absent assertion while a sheet is open was found.
+  The browser helper checks visible message children, not absence of their status parent.
+
+Before repair: full src/ui suite, 48 passed and one failed at dock.test.tsx:133.
+Log: /private/tmp/mws-fix1-red-repair-before.log.
+After repair: full src/ui suite, 49 passed across 10 files.
+Log: /private/tmp/mws-fix1-red-repair-green.log.
+Both runs: `pnpm exec vitest run src/ui --maxWorkers=2
+--config /private/tmp/mws-red-2bbfek65/vitest.config.mts --configLoader runner --reporter=default`.
+Reused the existing OS-temp configuration to retain both setups and the active timer
+gate, with cache, CPU reports and logs outside the repository.
+
+Offline standard basis: the supplied MDN live-region reference explains that a region
+exists before its content changes:
+https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Guides/Live_regions.
+Only this assertion and these notes changed. No network, git writes or node_modules
+changes. Runner owns commits. pnpm check and e2e were not run in this assertion-only
+repair; repository-writing gates remain outside this assignment.

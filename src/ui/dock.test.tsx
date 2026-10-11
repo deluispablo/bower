@@ -130,7 +130,7 @@ describe('messages wait for sheets', () => {
     // Positive control: it entered the production stack while the modal was open.
     expect(useToasts.getState().list.map((t) => t.id)).toEqual([id]);
     expectMessageHidden('You chose "Keep one". Bower is doing it now.');
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('status', { hidden: true })).toBeEmptyDOMElement();
     act(() => vi.advanceTimersByTime(30_000));
     expect(useToasts.getState().list.map((t) => t.id)).toEqual([id]);
     view.rerender(<ModalDock />);
