@@ -2442,3 +2442,115 @@ Stop boundary: fixture repairs are reviewable, assertions remain intact, all req
 The remaining assertion contracts need the lead's ruling. No fourth production implementation round,
 mock that hides stale/fresh listing semantics, test implementation of deleted production functions,
 new performance pin or integration is performed. No merge-readiness or acceptance is claimed.
+
+## Sweep 5
+
+implementer: codex
+status: blocked; the assigned invalid-reply/ledger split and B1a spy repairs are complete.
+The two type-table contracts cannot be retargeted to a public caller in this checkout.
+The full runner suite enumerates all four remaining reds below; no production repair is included.
+
+Authority: the owner's sweep-5 instruction and TL-P4-41 addenda 16–18; addendum 14 supplies
+B1a's refreshed-listing expectation. This session changes only test files and this required note.
+No network, git-writing command, node_modules replacement/symlink, export restoration, or app-code edit.
+The runner commits the diff. Reports, test diagnostics and compiler/linter output are in OS temp.
+
+### Changed tests and assertion boundary
+
+tests changed: runner/test/b1-planning-support.ts: add failedReply for invalid replies after their retry (failed/code 1); extract byte-identical inbox/report/no-write assertions into untouchedInbox, shared with leavesForNextRun. leavesForNextRun retains done/code 0, its exact console count, and every prior assertion for ledger exhaustion.
+tests changed: runner/test/b1-planning.test.ts: nine repeated-invalid subjects use failedReply, retaining their negative fixtures and positive controls. The leftover-items test keeps done/code 0 and every existing assertion, but ends with valid selection/execution replies for 101 separate one-file piles whose moves and notes exceed 200 operations. One branch succeeds on its first execution reply; the other retries one refused execution reply and receives the valid oversized intent. The four-call retry control stays. Re-admission retains all piles/requests; its next run selects one whole pile, files it, and leaves the others outside selection. b1-shared-ledger and both existing operation-ledger tests stay unchanged.
+tests changed: runner/test/b1a-contract.test.ts: change only the three maintenance observation spy expectations to the refreshed handoff: latest edit version, newly discovered hidden child's path, and refreshed version or absence of vanished notes. Every read-count, prefix outcome, no-extra-listing, cursor, and no-extra-write assertion stays.
+tests changed: runner/test/claude-provider.test.ts: six invalid-reply subjects now require code 1/failed after the retry; successful retry controls stay done/code 0. The three callers of the former ledger-only helper retain all no-row, no-manifest, evidence, inbox and re-admission checks under expectFailedReply. Their ledger-only deferred-count console assertions are removed from the invalid-reply path; the ledger count contract remains unchanged in leavesForNextRun. refusedWhole changes only code 0 to 1 for the two admitted-authority/id-digest subjects. The permission-policy regression test (old :529/current :525) is byte-identical.
+tests changed: runner/test/q1-continuation.test.ts: only the code assertion at :373 changes from 0 to 1 for fabricated/fifth/payload/outside/non-folder options. Its existing failed status, no-question and unchanged-evidence assertions, and all accepted option controls stay.
+
+Assertion audit: /tmp/b1d-sweep5-assertion-audit.log. Existing expect expressions in
+b1-planning.test.ts are byte-identical. B1a changes exactly the three handed-over listing
+observations, with no count change. The AST-isolated permission-policy test is byte-identical,
+as is the entire b23-hot-recovery.test.ts file. No .only/.skip, bound/tolerance increase,
+traffic/golden edit, new dependency or production workaround.
+
+### Per-test kinds (all 17 sweep-4 invalid-reply reds)
+
+The locations in the first column are the sweep-4 references supplied by the owner.
+The B1 planning entries refer to the common helper call, not a new failure location.
+
+| Original file:line | Test | Kind and disposition |
+| --- | --- | --- |
+| runner/test/b1-planning.test.ts:133 | b1-cut-index-no-new-destination | invalid reply: repeated new destination justified by a cut index; failed/code 1. |
+| runner/test/b1-planning.test.ts:164 | b1-five-per-source | invalid reply: repeated six wants; failed/code 1. |
+| runner/test/b1-planning.test.ts:193 | b1-pinned-and-script-notes-count-within-five | invalid reply: pins plus wants exceed five; failed/code 1. |
+| runner/test/b1-planning.test.ts:209 | b1-selection-closed-ids | invalid reply: invented ids/kinds, paths and extra keys; failed/code 1. |
+| runner/test/b1-planning.test.ts:286 | b1-target-injection | invalid reply: poisoned targets or changed frozen destination; failed/code 1. |
+| runner/test/b1-planning.test.ts:353 | b1-question-candidate-binding | invalid reply: fabricated/fifth candidates; failed/code 1. |
+| runner/test/b1-planning.test.ts:540 | b1-expansion-is-not-a-read-picked-members-count-within-five | invalid reply: repeated six picked members; failed/code 1. |
+| runner/test/b1-planning.test.ts:561 | b1-new-subfolder-visible-parent-name-and-near-duplicate | invalid reply: invalid/invisible parents or invalid/duplicate names; failed/code 1. |
+| runner/test/b1-planning.test.ts:575 | b1-one-new-subfolder-per-item | invalid reply: execution adds a second nested folder; failed/code 1. |
+| runner/test/b1-planning.test.ts:590 | b1-one-retry-per-step-four-calls-exhaustion-leaves-items-for-next-run | ledger exhaustion: valid final replies exceed 200 operations; done/code 0, untouched inbox, fresh admission and next-run filing. |
+| runner/test/claude-provider.test.ts:262 | a responsibility does not open a new Project | invalid reply: responsibility alone cannot authorize the proposed Project; failed/code 1. |
+| runner/test/claude-provider.test.ts:365 | a thing with text and no note or citing line is refused and retried once | invalid reply: repeated execution without a note/citing line; failed/code 1. Valid retry control stays done/code 0. |
+| runner/test/claude-provider.test.ts:409 | a second refusal ends the run honestly | invalid reply: repeated unauthorized new Project; failed/code 1. |
+| runner/test/claude-provider.test.ts:468 | a malformed or out-of-schema Claude reply fails truthfully and writes nothing | invalid reply: malformed/schema/name/extension/envelope refusals; failed/code 1, no writes. |
+| runner/test/claude-provider.test.ts:723 | a Claude reply that targets a thing not admitted is refused and writes nothing | invalid reply: admitted-authority violations through refusedWhole; failed/code 1. |
+| runner/test/claude-provider.test.ts:763 | the runner computes ids and digests, never the model | invalid reply: model-supplied ids/hashes/operations through refusedWhole; failed/code 1. Valid runner-generated ids/digests control stays. |
+| runner/test/q1-continuation.test.ts:373 | Q1a q1-options-exact-action: two to four script candidates accepted and fabricated or fifth refused | invalid reply: invalid option id/action/folder/count; failed/code 1. Accepted 2–4 option controls stay done/code 0. |
+
+Additional ledger controls are unchanged: b1-shared-ledger's injected model-time expiration,
+b1-200-operations-exhaustion-leaves-items-for-next-run, and
+b1-ledger-exhaustion-valid-replies-done-with-items-left-in-inbox. All pass, keeping done/code 0.
+The invalid-reply control b1-invalid-reply-exhaustion-fails-after-one-retry also passes unchanged.
+
+### Type-table retargeting gap
+
+runner/test/type-table.test.ts is unchanged rather than weakening either contract.
+The only public function in runner/src/type-table.ts is readTypeTable (:14), which calls
+seedTable and typeRowOk. insertTypeRow, firstMatchingRow and requestTableColumn were deleted
+entirely in sweep 4; a scoped production search finds no caller or implementation of them.
+claudeProvider uses readTypeTable to show rows and validate selected kind ids, but does not
+insert type rows, choose the first matching classification, or replace a requested column.
+
+Consequently there is no public function using the named deleted helpers to retarget :52/:152
+to. Testing a manually inserted row or manually replaced fourth column through readTypeTable
+would only test reading a precomputed fixture and would remove the original behavior coverage.
+No test-side replacement implementation, restored export, invented production API or new
+production mechanism was added. These two contracts need the lead to name a real public
+consumer or explicitly rule their replacement behavior. This is the unresolved part of item 3.
+
+### Gates and every remaining red
+
+Before edits, the six targeted files reproduce 24 failed / 100 passed / 124 total tests:
+/tmp/b1d-sweep5-before.{json,log}. The repaired B1 planning file is 22/22 green:
+/tmp/b1d-sweep5-ledger.{json,log}.
+
+Final full runner: **689 passed, 4 failed, 693 total**, exit 1. No extra remaining red.
+Runner TypeScript and ESLint on all five changed TypeScript files pass, exit 0.
+The two authorized code regressions keep their original assertions and remain for the next session.
+
+| Current file:line | Test | Remaining cause |
+| --- | --- | --- |
+| runner/test/b23-hot-recovery.test.ts:47 | B3b hot: pre-plan failure and done redispatch send no hot writes | Unchanged code regression: pre-plan provider exception returns 1; assertion requires 0 under addendum 18 (2). |
+| runner/test/claude-provider.test.ts:525 | the Claude provider runs under the original permission policy and never logs the token | Unchanged code regression (old :529): provider/process error returns 1; assertion requires 0 under addendum 18 (2). |
+| runner/test/type-table.test.ts:52 | B5a contracts: b5-row-schema-and-order | Retargeting gap: no public insertion/first-match consumer; absent insertTypeRow export fails at helper :14. |
+| runner/test/type-table.test.ts:152 | B5a contracts: b5-explicit-column-replaces-fourth | Retargeting gap: no public requested-column consumer; absent requestTableColumn export fails at helper :14. |
+
+Commands (all output redirected to OS-temp files):
+- pnpm -C runner exec vitest run --maxWorkers=2 --reporter=json --outputFile=/tmp/b1d-sweep5-runner.json --cache=false
+  log: /tmp/b1d-sweep5-runner.log
+- pnpm -C runner exec tsc --noEmit -p .
+  log: /tmp/b1d-sweep5-tsc.log
+- pnpm exec eslint runner/test/b1-planning-support.ts runner/test/b1-planning.test.ts runner/test/b1a-contract.test.ts runner/test/claude-provider.test.ts runner/test/q1-continuation.test.ts
+  log: /tmp/b1d-sweep5-eslint.log
+- git diff --check: pass (read-only).
+
+No pnpm check or e2e run: the owner's test-output rule forbids their repository output/check
+marks, as recorded in Sweep 4; ui:false and no app or corpus fixture changed. The explicitly
+requested full runner suite ran with --maxWorkers=2, an OS-temp JSON report and cache disabled.
+No rerun after note-only edits is needed.
+
+Offline sources reused from the assigned packet, without network verification:
+- https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+- https://arxiv.org/html/2506.08837v1
+- https://platform.claude.com/docs/en/build-with-claude/prompt-caching
+
+Stop boundary: five test-file changes plus this note are reviewable for the runner to commit.
+Items 1/2/4 are complete; item 3 remains blocked by the missing public consumer. No acceptance,
+merge-readiness, integration, commit or production fix is claimed.

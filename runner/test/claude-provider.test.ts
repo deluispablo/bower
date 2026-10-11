@@ -145,10 +145,10 @@ async function rehashed(edit: (text: string) => string): Promise<string> {
 
 const claudeEnv = (extra: Record<string, string> = {}): Record<string, string> => ({ BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: TOKEN, ...extra });
 
-/** Ledger exhaustion leaves admitted work untouched for a later run. */
+/** Invalid replies preserve admitted work for a later run. */
 const claudeInput = (call: ClaudeCall | undefined): string => call?.input.split('\n').at(-1) ?? '{}';
 
-async function expectLeavesForNextRun(wire: DriveV3): Promise<void> {
+async function expectFailedReply(wire: DriveV3): Promise<void> {
   const before = exhaustionBefore.get(wire);
   if (!before) throw new Error('Missing exhaustion baseline.');
   const files = await wire.drive.listAll(wire.folderId);
@@ -172,16 +172,11 @@ async function expectLeavesForNextRun(wire: DriveV3): Promise<void> {
   }
   expect.soft(files.filter((f) => !wire.drive.pathOf(f.id, wire.folderId).startsWith('.bower/')))
     .toEqual(before.files.filter((f) => !wire.drive.pathOf(f.id, wire.folderId).startsWith('.bower/')));
-  expect.soft(wire.statuses.at(-1)?.phase, 'waiting is a completed run with untouched inbox work').toBe('done');
+  expect.soft(wire.statuses.at(-1)?.phase, 'invalid reply after the retry fails with untouched inbox work').toBe('failed');
   for (const source of wire.manifest?.piles.flatMap((pile) => pile.items) ?? []) {
     expect.soft(wire.drive.pathOf(source.fileId, wire.folderId), 'waiting source stays in the inbox').toMatch(/^Inbox\//);
     expect.soft(await wire.drive.evidence(source.fileId)).toEqual(before.evidence[source.fileId]);
   }
-  const lines = vi.mocked(console.log).mock.calls.slice(before.logs).map((args) => args.map(String).join(' '))
-    .filter((line) => /exhaust|next run|left.*inbox|wait/i.test(line) && !line.startsWith('timing:'));
-  expect.soft(lines, 'one console line counts deferred items').toHaveLength(1);
-  const count = wire.manifest?.piles.reduce((n, p) => n + Math.max(1, p.items.filter((i) => i.name !== PILE_NOTE).length), 0) ?? 0;
-  expect.soft(lines[0] ?? '').toMatch(new RegExp(`\\b${count}\\b`));
   const admitted = await planAdmission(fakeRead(wire.drive), wire.folderId,
     { scope: 'all', clock: () => AT + 1, newId: () => 'exhaustion-next-run' });
   expect.soft(admitted.kind, 'next run takes the untouched items').toBe('manifest');
@@ -257,10 +252,11 @@ describe('the Claude provider', () => {
       () => ({ drive: wire.drive, root: wire.folderId, admission: wire.manifest }));
     const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => { calls.push(call); return respond(call); };
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn });
+    const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn });
+    expect(code).toBe(1);
     expect(calls).toHaveLength(3);
-    expect(wire.statuses.at(-1)?.phase).toBe('done');
-    await expectLeavesForNextRun(wire);
+    expect(wire.statuses.at(-1)?.phase).toBe('failed');
+    await expectFailedReply(wire);
   });
 
   it('a cut Rules.md is marked as cut in the model input', async () => {
@@ -356,16 +352,16 @@ describe('the Claude provider', () => {
     expect(calls[2]?.input).toMatch(/no note/);
     expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
 
-    // Selection plus two execution attempts: exhausted items stay untouched for the next run.
+    // Selection plus two execution attempts: repeated invalid replies fail with untouched sources.
     const again = await wired(false, true);
     const stuck: ClaudeCall[] = [];
     const respondStuck = phaseAwareClaude(() => ({ code: 0, stderr: '', cut: null, stdout: plain }),
       () => ({ drive: again.wire.drive, root: again.wire.folderId, admission: again.wire.manifest }));
     const never = async (call: ClaudeCall): Promise<ClaudeExit> => { stuck.push(call); return respondStuck(call); };
-    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: again.wire.fetch, claude: never })).toBe(0);
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: again.wire.fetch, claude: never })).toBe(1);
     expect(stuck).toHaveLength(3);
-    expect(again.wire.statuses.at(-1)?.phase).toBe('done');
-    await expectLeavesForNextRun(again.wire);
+    expect(again.wire.statuses.at(-1)?.phase).toBe('failed');
+    await expectFailedReply(again.wire);
   });
 
   it('a thing cited by a Timeline line on an existing note needs no note', async () => {
@@ -406,12 +402,12 @@ describe('the Claude provider', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const before = await wire.drive.listAll(wire.folderId);
 
-    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn })).toBe(0);
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn })).toBe(1);
 
     // Selection plus two execution attempts; untouched sources stay in the inbox.
     expect(calls).toHaveLength(3);
-    expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
-    await expectLeavesForNextRun(wire);
+    expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'failed']);
+    await expectFailedReply(wire);
     expect(wire.requests.filter((r) => r.method === 'DELETE')).toEqual([]);
     const after = await wire.drive.listAll(wire.folderId);
     expect(after.filter((f) => !wire.drive.pathOf(f.id, wire.folderId).startsWith('.bower/')))
@@ -465,7 +461,7 @@ describe('the Claude provider', () => {
       const before = await wire.drive.listAll(wire.folderId);
       const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: recordedClaude(reply, { drive: wire.drive, root: wire.folderId, admission: wire.manifest }).spawn }), what).toBe(0);
+      expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: recordedClaude(reply, { drive: wire.drive, root: wire.folderId, admission: wire.manifest }).spawn }), what).toBe(1);
 
       // Truthful: the run ends failed, saying nothing changed, and nothing did.
       expect(wire.statuses.map((s) => s.phase), what).toEqual(['reading', 'writing', 'failed']);
@@ -589,7 +585,7 @@ async function refusedWhole(what: string, stdout: string, before?: (wire: DriveV
   await before?.(wire, root);
   const listed = await wire.drive.listAll(wire.folderId);
   const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
-  expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: recordedClaude({ stdout }, { drive: wire.drive, root, admission: wire.manifest }).spawn }), what).toBe(0);
+  expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: recordedClaude({ stdout }, { drive: wire.drive, root, admission: wire.manifest }).spawn }), what).toBe(1);
   expect(wire.statuses.map((s) => s.phase), what).toEqual(['reading', 'writing', 'failed']);
   expect(wire.statuses.at(-1)?.failure, what).toBe(B_FAILURE);
   expect(wire.requests.filter((r) => r.method !== 'GET'), what).toEqual([]);

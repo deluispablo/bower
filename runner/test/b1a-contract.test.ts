@@ -476,7 +476,7 @@ it('B1a contract: pass 1 1: the committed cursor never passes an unreflected con
     const original = maintenance.withMaintenance;
     const planned = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest, ...prepared) => {
       const listed = (await adapter.planReads().listAll(root)).find((f) => f.id === plot.id);
-      expect(listed?.modifiedTime).toBe(racing ? state.files[plot.id]?.version : version);
+      expect(listed?.modifiedTime).toBe(version);
       return original(adapter, manifest, ...prepared);
     });
     const around = (fetch: typeof globalThis.fetch): typeof globalThis.fetch => async (input, init) => {
@@ -555,7 +555,7 @@ it('B1a contract: pass 1 5: newly discovered hidden descendants advance only the
       const ix = VaultIndex.build(root, await adapter.planReads().listAll(root));
       expect(ix.pathOf(hidden.id)).toBe('.obsidian');
       expect([...ix.entries().keys()].some((path) => isHidden(path))).toBe(false);
-      expect(childId ? ix.pathOf(childId) : undefined).toBe(racing ? undefined : '.obsidian/workspace.json');
+      expect(childId ? ix.pathOf(childId) : undefined).toBe('.obsidian/workspace.json');
       return original(adapter, manifest, ...prepared);
     });
     const sent: Sent[] = [];
@@ -601,7 +601,7 @@ it('B1a contract: round 3 1: vanished indexed notes drop without failing and ord
     const original = maintenance.withMaintenance;
     const planned = vi.spyOn(maintenance, 'withMaintenance').mockImplementation(async (adapter, manifest, ...prepared) => {
       const listed = (await adapter.planReads().listAll(root)).find((f) => f.id === plot.id);
-      expect(listed?.modifiedTime, `${mode}: planner cached the indexed version`).toBe(state.files[plot.id]?.version);
+      expect(listed?.modifiedTime, `${mode}: planner receives the refreshed listing`).toBe(mode === 'ordinary edit' ? version : undefined);
       return original(adapter, manifest, ...prepared);
     });
     const around = (fetch: typeof globalThis.fetch): typeof globalThis.fetch => async (input, init) => {

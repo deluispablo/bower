@@ -370,7 +370,7 @@ describe('Q1a stored answers through production entry points', () => {
       const before = await w.drive.evidence(w.ids.unclear);
       await w.drive.update(w.ids.clear, { addParent: w.ids.home, removeParent: w.ids.pile });
       await press(w);
-      expect(await run(w, 0)).toBe(0);
+      expect(await run(w, 0)).toBe(1);
       expect((await statusOf(w)).run?.phase, `${kind} is refused by validated main`).toBe('failed');
       expect(await questions(w)).toEqual([]);
       expect(await w.drive.evidence(w.ids.unclear)).toEqual(before);
