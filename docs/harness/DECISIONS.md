@@ -671,3 +671,4 @@ One line per ruling, newest last. Read only the decision a task needs. Later rul
   - (5) A clarification counts only the facts its question offers (at most 4), and a planner error never fails the run.
   - (6) A remember request with About me binned creates About me from the template (addendum 7), then writes.
   This is B4b's re-plan guard: another finding of class A or B comes to the lead
+- TL-P4-57 addendum 2 (owner, 2026-10-11: 85% of the Codex quota is used since the reset): **at most 2 Codex workers at once, on modest models.** Only `gpt-6.1-sol` is used, on `--tier standard`: `low` for mechanical work, `medium` for normal implementation, reds and fix rounds, and `high` for escalated work, adversarial passes and closing reviews. `gpt-6-astra` and `xhigh` are not used. This replaces addendum 1's Astra and its 3 workers, and it is updated in coordinator.md and CODEX_TAKEOVER
