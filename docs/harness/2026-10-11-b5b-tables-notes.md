@@ -1794,3 +1794,116 @@ Two commit groups in .codex-commits.json: both goldens, then notes alone.
 
 left out: commits, pnpm check and capabilities/folder-table e2e are runner-owned; no browser/designer verification.
 Risk: broader app gates and the previously noted compatibility ledger remain outside this golden-only repair.
+
+
+## Round 2 reds (addendum 11)
+
+Implementer: codex; ponytail full; tests only for P4-123 and TL-P4-47 addendum 11.
+The owner relayed the designer's confirmation of ruling 2 before this session:
+declared name and modified are omitted because Name and Changed already show them.
+Scope: two new unit-test files, one appended e2e test, this notes append and the
+runner commit manifest. No production file, existing test, fixture, config,
+export, dependency, call pin or timing bound changed. No git write command,
+network request, node_modules replacement or symlink was used.
+
+Research/reuse: the packet's locally cited bounded tolerant reads
+(https://www.rfc-editor.org/rfc/rfc9413.html), the existing planner/engine tests,
+runner provider's listedPiles adapter, FakeDrive/FakeRunDrive and FolderScreen's
+Testing Library pattern. The e2e reuses this file's in-memory DriveVault route
+fixture and b5Offer data. No second parser, proposal store or production mechanism.
+The OS-temp Vitest configs reuse the existing setup-files approach
+(https://vitest.dev/config/#setupfiles); citations were not reverified offline.
+
+### Red 1
+
+`b5b-r3 1 an unpublished proposal returns` runs the real planScripted and
+runOperations over FakeDrive. It offers a lease, refuses the id-bound source
+move, confirms that both the move and question publication settle rejected,
+checks the source remains in Inbox and questions stay empty, and then plans and
+applies a fresh run. A second case refuses the question write directly after
+filing succeeds and retries with new made-up material. Both require no orphan
+artifact and a returning, published proposal with the original payload.
+A successful run also observes fenced writes: lease.json must not be written
+before the question publication lands.
+
+Result: one expected failed test, seven assertions, all on P4-123 finding 1.
+Both refusals leave lease.json, suppress the next offer and leave the retry's
+questions empty. The successful run writes lease.json before the question.
+Three separate positive controls pass: presented, declined and settled proposals
+remain suppressed on new material; frozen artifact bytes stay identical.
+The controls use real publication and answer settlement; only settled consent
+installs the lease row. No unrelated exception or import failure remains.
+
+### Red 2
+
+`b5b-r3 2 declared properties have their own ids` renders the real FolderScreen
+with a row whose table is exactly ["name", "modified"], name: Alex and
+modified: Person-entered fact. It requires just Name and Changed, one header
+each, filename links and formatted timestamps, and no declared-fact cells for
+those keys. Ascending/descending Name and Changed sorting use filenames and
+file timestamps; deliberately opposing names and times distinguish their order.
+The company-only positive control renders its own header/facts and sorts both
+ways before the collision case runs.
+
+Result: one expected failed test, four assertions, all on P4-123 finding 2:
+headers are Name, Name, Modified, Changed and both rows include duplicate
+filename/raw-timestamp cells. Company rendering/sorting, built-in sorting,
+Changed's aria-sort, unique Changed header and hidden note-fact checks pass.
+React also reports the same duplicate name/modified keys; no unrelated failure.
+
+### New e2e (not run)
+
+`b5b-r3 3 e2e: more than four columns shows the first four` is a separate new
+test, preserving every existing case. Its stored row declares six keys in this
+order: hours, company, salary, location, posted, skills. It requires Hours,
+Company, Salary, Location between the existing Name/Status/Changed controls and
+no Posted/Skills headers. Positive controls load the real Offer link, Company
+and Hours facts and the Hours sorting control. It covers demo and fake at 375
+and 1440 and retains WCAG 2.2 axe checking.
+
+Exact runner command, from this worktree (not executed here):
+
+```sh
+bash harness/with-lock.sh pnpm exec playwright test e2e/folder-table.spec.ts --grep 'b5b-r3 3 e2e: more than four columns shows the first four' --output=/tmp/b5b-r3-e2e-results > /tmp/b5b-r3-e2e.log 2>&1
+```
+
+### Verification
+
+Executed from /private/tmp/bower-b5b-tables:
+
+```sh
+pnpm exec vitest run --config /tmp/b5b-r3-runner.config.mts test/b5b-r3.test.ts --maxWorkers=2 > /tmp/b5b-r3-runner.log 2>&1
+pnpm exec vitest run --config /tmp/b5b-r3-app.config.mts src/features/files/folder-table-r3.test.tsx --maxWorkers=2 > /tmp/b5b-r3-app.log 2>&1
+pnpm exec tsc --project runner/tsconfig.json --noEmit > /tmp/b5b-r3-runner-tsc.log 2>&1
+pnpm exec tsc --project tsconfig.app.json --noEmit > /tmp/b5b-r3-app-tsc.log 2>&1
+pnpm exec tsc --project tsconfig.node.json --noEmit > /tmp/b5b-r3-e2e-tsc.log 2>&1
+pnpm exec eslint src/features/files/folder-table-r3.test.tsx e2e/folder-table.spec.ts > /tmp/b5b-r3-app-eslint.log 2>&1
+```
+
+Executed from /private/tmp/bower-b5b-tables/runner:
+
+```sh
+pnpm exec eslint test/b5b-r3.test.ts > /tmp/b5b-r3-runner-eslint.log 2>&1
+```
+
+Both reds exit 1 solely on the findings above; all three runner controls pass.
+All three TypeScript checks and both ESLint checks exit 0. Read-only diff check
+passes. Vitest JSON reports: /tmp/b5b-r3-runner-results.json and
+/tmp/b5b-r3-app-results.json. Output was inspected only for failures/summaries.
+The temp configs redirect Vite caches and JSON reports to /tmp, disable the test
+cache and keep the original timer gate/allowlist with only its repository-writing
+CPU report omitted. Tests and logs write only to OS temp or in-memory FakeDrive.
+
+During fixture preparation, inherited demo questions and the browser-only
+fakeScripted adapter caused unrelated runner failures. The final fixture instead
+uses a small made-up folder and the production listedPiles/fakeRead adapter;
+those setup failures are absent from the final logs. No production workaround.
+
+tests changed: runner/test/b5b-r3.test.ts: new publication-recovery/order red and presented/declined/settled controls; no existing test changed.
+tests changed: src/features/files/folder-table-r3.test.tsx: new declared-control collision red with ordinary company and built-in sorting controls; no existing test changed.
+tests changed: e2e/folder-table.spec.ts: append a new six-declared-column screen case; every existing test stays byte-identical.
+
+The runner's .codex-commits.json has two groups: all three test files, then this
+notes file alone. Calls/timing: no pins changed, no performance measurements.
+left out: production fixes, pnpm check, e2e execution, designer verification and commits are runner-owned.
+Risk: these intentional reds keep the targeted suites failing until the next implementation session fixes both findings.
