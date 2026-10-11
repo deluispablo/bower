@@ -1,8 +1,10 @@
 /** Pure internal raw-byte ownership boundary. No provider or public Sources API. */
 import { TASK_LINE } from './tasks';
 import { sha256Sync } from './hashes';
+import { TEMPLATE_REGIONS, type TemplateRegion } from './note-templates';
 export interface ByteSpan { readonly start: number; readonly end: number }
 export type MocRegion = 'moc-overview' | 'moc-figures' | 'moc-members';
+export type BowerRegion = MocRegion | 'profile' | TemplateRegion;
 export type Owner = 'current' | 'personal' | 'timeline' | 'bower-note';
 export type OwnershipFailure = 'unsupported-version' | 'damaged-boundary' | 'invalid-encoding';
 export interface PersonalTask {
@@ -32,7 +34,7 @@ export interface Layout {
 export type OwnershipResult =
   | { readonly status: 'invalid'; readonly reason: OwnershipFailure }
   | { readonly status: 'plain' | 'legacy'; readonly personal: ByteSpan; readonly layout: Layout; readonly tasks: readonly PersonalTask[] }
-  | { readonly status: 'v2'; readonly personal: ByteSpan; readonly layout: Layout; readonly payloads: Readonly<Record<Owner, ByteSpan> & Partial<Record<MocRegion, ByteSpan>>>; readonly tasks: readonly PersonalTask[] };
+  | { readonly status: 'v2'; readonly personal: ByteSpan; readonly layout: Layout; readonly payloads: Readonly<Record<Owner, ByteSpan> & Partial<Record<BowerRegion, ByteSpan>>>; readonly tasks: readonly PersonalTask[] };
 /** A fetched version's ownership table, retained only by its execution attempt. */
 export interface OwnershipContext {
   read(fileId: string, bytes: Uint8Array): OwnershipResult;
@@ -240,10 +242,13 @@ export function parseOwnership(bytes: Uint8Array): OwnershipResult {
   if (sourceLines[close]?.text !== '---') return damaged();
   for (let i = 0; i < bytes.length; i++) if (bytes[i] === 13 && bytes[i + 1] !== 10) return damaged();
 
-  const owners: (Owner | MocRegion)[] = [...OWNERS];
-  const spans: Partial<Record<Owner | MocRegion, ByteSpan>> = {};
+  // Creation orders Goal/Next steps before Current state; stored appended regions remain readable.
+  const firstRegion = sourceLines.slice(close + 1).find((line) => line.text.startsWith('<!-- bower:ownership/2 begin'));
+  const owners: (Owner | BowerRegion)[] = firstRegion?.text === '<!-- bower:ownership/2 begin goal -->'
+    ? [...TEMPLATE_REGIONS, ...OWNERS] : [...OWNERS];
+  const spans: Partial<Record<Owner | BowerRegion, ByteSpan>> = {};
   let next = 0;
-  let active: Owner | MocRegion | null = null;
+  let active: Owner | BowerRegion | null = null;
   let start = 0;
   let fence: Fence | null = null;
   for (const line of sourceLines.slice(close + 1)) {
@@ -257,7 +262,11 @@ export function parseOwnership(bytes: Uint8Array): OwnershipResult {
       } else if (line.text.startsWith('<!-- bower:ownership')) return damaged();
     } else {
       // Extend only at a real boundary, never for marker-shaped text inside a fenced payload.
-      if (next === OWNERS.length && line.text === '<!-- bower:ownership/2 begin moc-overview -->') owners.push(...MOC_REGIONS);
+      if (next === owners.length && next >= OWNERS.length) {
+        if (!spans['moc-overview'] && line.text === '<!-- bower:ownership/2 begin moc-overview -->') owners.push(...MOC_REGIONS);
+        if (!spans.profile && line.text === '<!-- bower:ownership/2 begin profile -->') owners.push('profile');
+        if (!spans.goal && line.text === '<!-- bower:ownership/2 begin goal -->') owners.push(...TEMPLATE_REGIONS);
+      }
       const owner = owners[next];
       if (owner && line.text === `<!-- bower:ownership/2 begin ${owner} -->`) {
         active = owner; start = line.after;

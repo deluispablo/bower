@@ -9,9 +9,110 @@ import { fakeRead } from './read';
 import { scriptedDecisions, scriptedProvider } from '../demo/script';
 import * as planner from './scripted';
 import { runKeys, type Decisions, type PlanOptions, type RunPlan } from './scripted';
+import { parseNote } from '../contracts/note-format';
+import { BowerError } from '../types';
+import { NOTE_TEMPLATES, type NoteTemplate } from '../contracts/note-templates';
 
 const AT = Date.UTC(2026, 9, 7, 9);
 const RUN = 'run-scripted';
+
+// Every authored prose field enters the same production planner, including each template section.
+const fix3Fields = (Object.keys(NOTE_TEMPLATES) as NoteTemplate[]).flatMap((template) =>
+  ['summary', ...NOTE_TEMPLATES[template].sections].map((field) => ({ template, field })),
+);
+
+async function fix3Plan(template: NoteTemplate, field: string, target: 'missing' | 'note' | 'source') {
+  const { drive, root, admitted } = await seeded();
+  const resources = (await drive.listAll(root)).find((file) => file.folder && file.name === 'Resources');
+  if (!resources) throw new Error('Expected Resources in the seeded folder');
+  const gardening = await drive.createFolder(resources.id, 'Gardening');
+  await drive.createText(gardening.id, 'Gardening.md', '# Gardening\n');
+  const item = admitted.piles.flatMap((pile) => pile.items).find((candidate) => candidate.name !== 'Pile note.md');
+  if (!item) throw new Error('Expected an admitted source');
+  const name = target === 'missing' ? 'Imaginary note' : target === 'note' ? 'Gardening' : item.name;
+  const summary = field === 'summary' ? `Alex follows [[${name}]].` : 'Alex follows [[Gardening]].';
+  const body = NOTE_TEMPLATES[template].sections.map((heading) => {
+    const words = heading === field ? `Alex follows [[${name}]].` : 'Alex grows mint.';
+    return `## ${heading}\n${heading === 'Timeline' ? '- 10 Oct · ' : heading === 'Key points' ? '- ' : ''}${words}`;
+  }).join('\n\n');
+  const decisions: Decisions = { ...scriptedDecisions([], []), ownNote: () => null,
+    thing: (seen) => ({ to: 'Resources/Gardening', name: seen.fileName }),
+    pileAsk: () => null, thingAsk: () => null, merge: () => null,
+    note: (fileId) => fileId === item.fileId ? { name: 'Garden source.md', summary, template, body } : null,
+  };
+  const before = await drive.snapshot();
+  let plan: RunPlan | undefined;
+  let failure: unknown;
+  try {
+    plan = await planner.planScripted(fakeScripted(drive), root, { scope: 'all', allowWeb: false, runId: RUN,
+      requestId: admitted.id, requestedAt: admitted.at, taken: admitted, mintKey: await runKeys(RUN), decisions });
+  } catch (error) { failure = error; }
+  return { drive, before, plan, failure, name, item };
+}
+
+it.each(fix3Fields)('B6a fix 3: refuses a missing link in $template $field before effects with no manifest', async ({ template, field }) => {
+  const { drive, before, plan, failure } = await fix3Plan(template, field, 'missing');
+  expect.soft(failure, 'All authored fields must refuse unresolved links').toBeInstanceOf(BowerError);
+  expect.soft(failure).toMatchObject({ message: planner.B_FAILURE });
+  expect.soft(plan, 'Refusal returns no executable manifest').toBeUndefined();
+  expect.soft(await drive.snapshot(), 'Refusal preserves every stored byte and file identity').toBe(before);
+});
+
+it('B6a fix 3: a grounded summary link still plans a Source', async () => {
+  const { plan, failure, drive, before } = await fix3Plan('source', 'summary', 'note');
+  expect(failure).toBeUndefined();
+  const source = plan?.manifest.operations.map((operation) => operation.effect)
+    .find((effect) => effect.kind === 'create-text' && effect.name === 'Garden source.md');
+  expect(source).toBeDefined();
+  if (source?.kind !== 'create-text') throw new Error('Expected the planned Source');
+  expect(parseNote('Garden source.md', source.text).summary).toBe('Alex follows [[Gardening]].');
+  expect(await drive.snapshot(), 'Planning alone has no effects').toBe(before);
+});
+
+it.each(['summary', 'Key points', 'Transcript'])('B6a fix 3: a link to the bound source in %s still plans', async (field) => {
+  const { plan, failure, drive, before, name, item } = await fix3Plan('source', field, 'source');
+  expect.soft(failure, 'The bound original is evidence even when it is not a note').toBeUndefined();
+  const source = plan?.manifest.operations.map((operation) => operation.effect)
+    .find((effect) => effect.kind === 'create-text' && effect.name === 'Garden source.md');
+  expect.soft(source, 'A bound-source link must remain executable').toBeDefined();
+  if (source?.kind === 'create-text') {
+    expect(source.text).toContain(`[[${name}]]`);
+    expect(plan?.manifest.operations.some((operation) => operation.effect.kind === 'move'
+      && operation.effect.before.fileId === item.fileId)).toBe(true);
+  }
+  expect(await drive.snapshot(), 'Planning alone has no effects').toBe(before);
+});
+
+it('B6a fix 1: refuses an ungrounded authored link before effects even with a grounded Gardening hub', async () => {
+  const { drive, root, admitted } = await seeded();
+  const resources = (await drive.listAll(root)).find((file) => file.folder && file.name === 'Resources');
+  expect(resources).toBeDefined();
+  const gardening = await drive.createFolder(resources?.id ?? '', 'Gardening');
+  await drive.createText(gardening.id, 'Gardening.md', '# Gardening\n');
+  const item = admitted.piles.flatMap((pile) => pile.items).find((candidate) => candidate.name !== 'Pile note.md');
+  expect(item).toBeDefined();
+  if (!item) return;
+  const before = await drive.listAll(root);
+  expect(before.some((file) => file.name === 'Imaginary note.md')).toBe(false);
+  const decisions: Decisions = { ...scriptedDecisions([], []), ownNote: () => null,
+    thing: (seen) => ({ to: 'Resources/Gardening', name: seen.fileName }),
+    pileAsk: () => null, thingAsk: () => null, merge: () => null,
+    note: (fileId) => fileId === item.fileId ? {
+      name: 'Garden source.md', summary: 'Alex records a stated gardening fact.', template: 'source',
+      body: '## Summary\nAlex grows mint.\n\n## Key points\n- Alex grows mint.\n\n## Related\n[[Gardening]] and [[Imaginary note]]\n\n## Transcript\nAlex grows mint.',
+    } : null,
+  };
+  let plan: RunPlan | undefined;
+  let failure: unknown;
+  try {
+    plan = await planner.planScripted(fakeScripted(drive), root, { scope: 'all', allowWeb: false, runId: RUN,
+      requestId: admitted.id, requestedAt: admitted.at, taken: admitted, mintKey: await runKeys(RUN), decisions });
+  } catch (error) { failure = error; }
+  expect.soft(failure, 'The production planner must refuse the ungrounded body').toBeInstanceOf(BowerError);
+  expect.soft(failure).toMatchObject({ message: planner.B_FAILURE });
+  expect.soft(plan, 'Refusal must return no executable manifest').toBeUndefined();
+  expect(await drive.listAll(root), 'Planning refusal must create and change nothing').toEqual(before);
+});
 
 /** The demo's folder with its inbox, journal and Bower's files, the same every time (fixed clock, fixed ids). */
 async function seeded(): Promise<{ drive: FakeDrive; root: string; admitted: AdmissionManifest }> {
@@ -21,6 +122,43 @@ async function seeded(): Promise<{ drive: FakeDrive; root: string; admitted: Adm
   if (admission.kind !== 'manifest') throw new Error(`nothing admitted: ${admission.cause}`);
   return { drive, root, admitted: admission.manifest };
 }
+
+it('B6a templates: b6-source-absent-url plans a Source with its original and no invented address', async () => {
+  const { drive, root, admitted } = await seeded();
+  const resources = (await drive.listAll(root)).find((file) => file.folder && file.name === 'Resources');
+  const gardening = await drive.createFolder(resources?.id ?? '', 'Gardening');
+  await drive.createText(gardening.id, 'Gardening.md', '# Gardening\n');
+  const item = admitted.piles.flatMap((pile) => pile.items).find((candidate) => candidate.name !== 'Pile note.md');
+  expect(item).toBeDefined();
+  if (!item) return;
+  const decisions: Decisions = { ...scriptedDecisions([], []), ownNote: () => null,
+    thing: (seen) => ({ to: 'Resources/Gardening', name: seen.fileName }),
+    pileAsk: () => null, thingAsk: () => null, merge: () => null,
+    note: (fileId) => fileId === item.fileId ? {
+      name: 'Garden source.md', summary: 'Alex records a stated gardening fact.', template: 'source',
+      body: '## Summary\nAlex grows mint.\n\n## Key points\n- Alex grows mint.\n\n## Related\n[[Gardening]]\n\n## Transcript\nAlex grows mint.',
+    } : null,
+  };
+  const plan = await planner.planScripted(fakeScripted(drive), root, { scope: 'all', allowWeb: false, runId: RUN,
+    requestId: admitted.id, requestedAt: admitted.at, taken: admitted, mintKey: await runKeys(RUN), decisions });
+  // Positive control: ordinary filing and the authored body have crossed the real planner.
+  expect(plan.manifest.operations.some((op) => op.effect.kind === 'move' && op.effect.before.fileId === item.fileId)).toBe(true);
+  const source = plan.manifest.operations.map((op) => op.effect)
+    .find((effect) => effect.kind === 'create-text' && effect.name === 'Garden source.md');
+  expect(source).toBeDefined();
+  if (source?.kind !== 'create-text') return;
+  expect(source.text).toContain('## Transcript\nAlex grows mint.');
+  expect(source.text).not.toMatch(/^url:/m);
+  expect(source.text).not.toMatch(/https?:\/\//);
+  const original = plan.manifest.operations.map((op) => op.effect)
+    .find((effect) => effect.kind === 'move' && effect.before.fileId === item.fileId);
+  expect(original?.kind).toBe('move');
+  if (original?.kind !== 'move') return;
+  const note = parseNote('Garden source.md', source.text);
+  expect(note.original, 'A generated Source must identify the filed original without inventing a url').toBe(original.name);
+  expect(note.properties.find((p) => p.key === 'type')?.value).toBe('source');
+  expect(note.timeline).toEqual([]);
+});
 
 describe('the scripted provider', () => {
   it('the scripted provider plans the same run as the fake runner', async () => {

@@ -5,6 +5,139 @@ import type { NoteFile } from '../contracts/note-format';
 import { NOTES } from '../demo/notes';
 import { BowerError } from '../types';
 import { noteRefusal, parseNote, serializeNote, toggleTaskInText } from './note-format';
+import { resolverFor } from '../../features/note/resolve';
+
+// Explicit creation intent keeps the legacy serializer readable without templating stored notes on a read.
+type B6Template = 'source' | 'concept' | 'project' | 'area' | 'moc';
+const b6Note = (template: B6Template): NoteFile & { template: B6Template } => ({
+  template, byBower: true, summary: 'Alex records grounded gardening facts.', status: template === 'moc' ? 'evergreen' : 'active',
+  tags: ['gardening'], properties: [
+    { key: 'type', label: 'Type', value: template },
+    { key: 'created', label: 'Created', value: '2026-10-10' },
+    { key: 'updated', label: 'Updated', value: '2026-10-10' },
+    { key: 'source', label: 'Source', value: 'Garden bulletin' },
+    { key: 'related', label: 'Related', value: 'Gardening', link: 'Gardening' },
+  ], original: template === 'source' ? 'Garden bulletin.txt' : undefined,
+  currentState: ['Alex grows mint.'], body: 'Alex grows mint. See [[Gardening]].',
+  timeline: [{ date: '2026-10-10', text: 'Alex saved the bulletin.', source: 'Garden bulletin' }],
+});
+const b6FormatControl = (): void => {
+  const raw = serializeNote(summaryNote('Alex grows mint.'));
+  expect(parseNote('Legacy.md', raw).body).toBe('Alex keeps these words.');
+  expect(parseNote('Legacy.md', raw).byBower).toBe(true);
+};
+
+it('B6a fix 1: populated Project Area and MOC sections survive into the app display model', () => {
+  const cases: { template: B6Template; sections: [string, string][] }[] = [
+    { template: 'project', sections: [
+      ['Goal', 'Alex grows enough mint for tea.'], ['Next steps', '- [ ] Alex plants mint.'],
+      ['Current state', '- Alex has a pot.'], ['Notes', 'Alex keeps the pot indoors.'],
+      ['Timeline', '- 10 Oct · Alex started the project.'],
+    ] },
+    { template: 'area', sections: [
+      ['Standard to maintain', 'Alex keeps the mint watered.'], ['Current state', '- Alex checks the soil.'],
+      ['Notes', 'Alex waters in the morning.'], ['Timeline', '- 10 Oct · Alex checked the mint.'],
+    ] },
+    { template: 'moc', sections: [
+      ['Overview', 'Alex collects gardening ideas here.'], ['Notes', 'Read [[Gardening]] for mint care.'],
+      ['Sources', 'Alex saved the garden bulletin.'],
+    ] },
+  ];
+  for (const { template, sections } of cases) {
+    const raw = serializeNote({ ...b6Note(template), body: sections.map(([heading, text]) => `## ${heading}\n${text}`).join('\n\n') });
+    const note = parseNote('Gardening.md', raw);
+    // NoteScreen renders body, currentState and timeline; raw ownership payloads alone are not display evidence.
+    const display = [note.body, ...note.currentState, ...note.timeline.map((entry) => entry.text)].join('\n');
+    for (const [heading, text] of sections) {
+      expect(raw, `${template}: ${heading} is populated on disk`).toContain(text);
+      const visible = heading === 'Current state' ? text.replace(/^- /, '')
+        : heading === 'Timeline' ? text.split(' · ')[1] ?? text : text;
+      expect.soft(display, `${template}: ${heading} must be visible in NoteScreen's model`).toContain(visible);
+    }
+  }
+});
+
+it('B6a fix 1: quoted tags and Original filenames round-trip and resolve for template and legacy notes', () => {
+  const filename = 'Garden "mint".txt';
+  const path = `Resources/Gardening/${filename}`;
+  const resolve = resolverFor([{ type: 'file', name: filename, path, created: 0, modified: 0 }], []);
+  expect(resolve(filename), 'The real Original resolver accepts the actual filename').toBe(path);
+  const source = { ...b6Note('source'), tags: ['2026', 'on'], original: filename };
+  const legacy: NoteFile = { ...source, template: undefined };
+  for (const [kind, input] of [['template', source], ['legacy', legacy]] as const) {
+    const note = parseNote('Garden source.md', serializeNote(input));
+    expect.soft(note.tags, `${kind}: tags preserve their exact string values`).toEqual(['2026', 'on']);
+    expect.soft(note.original, `${kind}: the filename decodes escaped quotes`).toBe(filename);
+    // NoteScreen passes note.original directly to this resolver for its Original property link.
+    expect.soft(resolve(note.original ?? ''), `${kind}: Original still opens the filed file`).toBe(path);
+  }
+});
+const b6Shapes: { template: B6Template; sections: string[] }[] = [
+  { template: 'source', sections: ['Summary', 'Key points', 'Related', 'Transcript'] },
+  { template: 'concept', sections: ['Current state', 'Notes', 'Related', 'Timeline'] },
+  { template: 'project', sections: ['Goal', 'Next steps', 'Current state', 'Notes', 'Timeline'] },
+  { template: 'area', sections: ['Standard to maintain', 'Current state', 'Notes', 'Timeline'] },
+  { template: 'moc', sections: ['Overview', 'Notes', 'Sources'] },
+];
+it.each(b6Shapes)('B6a templates: b6-five-template-shapes serializes $template through note-format', ({ template, sections }) => {
+  b6FormatControl();
+  const raw = serializeNote(b6Note(template));
+  const parsed = parseNote('Gardening.md', raw);
+  expect(parsed).toMatchObject({ byBower: true, summary: 'Alex records grounded gardening facts.', tags: ['gardening'] });
+  for (const key of ['type', 'created', 'updated', 'source', 'related']) {
+    expect(parsed.properties.some((p) => p.key === key), key).toBe(true);
+  }
+  expect(parsed.summary.length).toBeLessThanOrEqual(200);
+  expect(parsed.tags.length).toBeLessThanOrEqual(3);
+  expect(raw.match(/^## .+$/gm)).toEqual(sections.map((section) => `## ${section}`));
+  if (template === 'moc') {
+    expect(parsed.status).toBe('evergreen');
+    for (const region of ['moc-overview', 'moc-figures', 'moc-members']) {
+      expect(raw).toContain(`<!-- bower:ownership/2 begin ${region} -->`);
+      expect(raw).toContain(`<!-- bower:ownership/2 end ${region} -->`);
+    }
+  }
+  if (template === 'project') expect(raw).not.toMatch(/^due:/m);
+});
+
+it('B6a templates: b6-source-absent-url omits missing url and creates Source without a generic Timeline', () => {
+  b6FormatControl();
+  const absent = serializeNote(b6Note('source'));
+  expect(absent).toContain('original: Garden bulletin.txt');
+  expect(absent).not.toMatch(/^url:/m);
+  expect(absent).not.toMatch(/https?:\/\//);
+  const supplied = b6Note('source');
+  supplied.properties.push({ key: 'url', label: 'Url', value: 'https://example.com/garden' });
+  const present = serializeNote(supplied);
+  expect(parseNote('Source.md', present).properties.find((p) => p.key === 'url')?.value).toBe('https://example.com/garden');
+  expect(absent).not.toContain('## Timeline');
+  expect(absent).not.toContain('## Current state');
+});
+
+it.each(['source', 'moc'])('B6a templates: legacy %s note with a Timeline stays readable and unrewritten', (type) => {
+  b6FormatControl();
+  const raw = `---\nsummary: Alex keeps old gardening history.\nby: bower\ntype: ${type}\n---\n\nOld words with [[Gardening]].\n\n## Timeline\n- 2 Oct · Saved the old bulletin. · [[Garden bulletin]]\n`;
+  const parsed = parseNote('Legacy.md', raw);
+  expect(parsed.timeline).toEqual([{ date: '2 Oct', text: 'Saved the old bulletin.', source: 'Garden bulletin' }]);
+  expect(parsed.body).toBe('Old words with [[Gardening]].');
+  expect(serializeNote(parsed)).toBe(raw);
+});
+
+it.each([
+  { point: 'a 201-character summary', summary: 'x'.repeat(201), tags: ['gardening'] },
+  { point: 'a multiline summary', summary: 'Alex grows mint.\nAlex grows thyme.', tags: ['gardening'] },
+  { point: 'four tags', summary: 'Alex grows mint.', tags: ['gardening', 'mint', 'herbs', 'reference'] },
+])('B6a templates: b6-five-template-shapes refuses $point on an explicit template write', ({ summary, tags }) => {
+  b6FormatControl();
+  const control = b6Note('concept');
+  control.summary = 'x'.repeat(200);
+  control.tags = ['gardening', 'mint', 'herbs'];
+  expect(() => serializeNote(control)).not.toThrow();
+  const note = b6Note('concept');
+  note.summary = summary;
+  note.tags = tags;
+  expect(() => serializeNote(note), 'Explicit template creation uses the shared strict metadata bounds').toThrow(BowerError);
+});
 
 // B2a: YAML 1.2.2 §§5.7, 7.3.1–7.3.3. Exact scalar fixtures are independent of the reader/writer.
 // https://yaml.org/spec/1.2.2/#73-flow-scalar-styles
@@ -25,6 +158,25 @@ const summaryValidator = (): ((value: string) => unknown) => {
   expect(candidate, 'note-format must export validSummary').toBeTypeOf('function');
   return typeof candidate === 'function' ? candidate as (value: string) => unknown : () => false;
 };
+
+it('B5a contracts: declared projection keeps four ordered columns and retains other note properties', () => {
+  summaryControl();
+  const raw = '---\nby: bower\ntype: offer\nstatus: active\nsummary: An offer.\ntags: [career]\n'
+    + 'created: 2026-10-10\nupdated: 2026-10-10\nsource: [[Alex CV]]\nrelated: [[Career]]\n'
+    + 'hours: 32\nrole: Developer\nsalary: 48000 EUR\nposted: 2026-10-10\nstage: new\n---\nAlex keeps these words.\n';
+  const note = parseNote('Resources/Offer.md', raw);
+  expect(note.properties.find((property) => property.key === 'hours')?.value).toBe('32');
+  const candidate: unknown = Reflect.get(summaryFormat, 'tableProperties');
+  expect(candidate, 'note-format must export tableProperties').toBeTypeOf('function');
+  const project = candidate as (value: typeof note, row: { table: string[] }) => typeof note.properties;
+  const before = structuredClone(note);
+  expect(project(note, { table: ['role', 'salary', 'posted', 'stage'] })).toEqual(
+    ['role', 'salary', 'posted', 'stage'].map((key) => note.properties.find((property) => property.key === key)),
+  );
+  expect(project(note, { table: ['hours', 'role'] }).map((property) => property.key)).toEqual(['hours', 'role']);
+  expect(note).toEqual(before);
+  expect(note.body).toBe('Alex keeps these words.');
+});
 
 // Quote every casing, including mixed case, for consumers using either YAML schema.
 const yaml11SummaryValues = [

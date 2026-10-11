@@ -34,6 +34,7 @@ const SUBJECT = /^[A-Za-z0-9_-]{1,128}$/;
 export function answerRun(q: Question, yes: QuestionAnswer): AnswerRun | null {
   if (!yes) return null;
   const about = subjectOf(q);
+  if (about.kind === 'proposal') return yes === true ? { scope: 'instructions' } : null;
   if (about.kind === 'state' || about.kind === 'pair') return { scope: 'instructions' };
   if (about.kind === 'inbox') return SUBJECT.test(about.id) ? { scope: 'all', subject: about.id } : null;
   return null;

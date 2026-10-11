@@ -1,10 +1,12 @@
 /** Immutable run manifest validation only; no claim, dispatch, readiness or permission authority. */
 import { MOC_REGIONS, createOwnershipContext, type MocRegion } from './ownership-format';
 import { sha256 } from './hashes';
-import { isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
+import { proposalOk, isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
+import { typeTableOk } from './note-format';
 import type { UpdatedRow } from './types';
-import { mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
+import { mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, profileTextOk, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
+import { TEMPLATE_REGIONS, type TemplateRegion } from './note-templates';
 
 export type Scope = { rootId: string };
 export type FileKind = 'note' | 'pdf' | 'image' | 'link' | 'doc' | 'sheet' | 'audio' | 'other';
@@ -43,7 +45,7 @@ export type Effect =
  * The type of a runner-writable file (TL-P4-14 addendum 20): `RUNNER_WRITES` in `vault/layout.ts` is the one list and
  * is typed by it; the contracts cannot import the layout (architecture.test.ts), so the path's type lives here.
  */
-export type RunnerWrite = '.bower/questions.json' | '.bower/requests.json' | '.bower/hashes.json' | '.bower/retrieval.json' | '.bower/index.md' | '.bower/hot.md' | '.bower/log.md';
+export type RunnerWrite = '.bower/questions.json' | '.bower/requests.json' | '.bower/hashes.json' | '.bower/retrieval.json' | '.bower/index.md' | '.bower/hot.md' | '.bower/log.md' | '.bower/type-table.json';
 export type Operation = { operationId: string; ordinal: number; dependsOn: string[]; effect: Effect };
 /** One Timeline line: `- <date> · <text>` plus ` · [[<source>]]` when there is a source (TL-P2-20). */
 export type EditEntry = { date: string; text: string; source: string | null };
@@ -69,6 +71,8 @@ export type AppendCompletion = { requestId: string; targetFileId: string };
 export type TimelineConsent = { requestId: string; targetFileId: string; sourceFileId: string };
 export type LeftAsWritten = { name: string; why: string; fileId?: string };
 export type Change =
+  | { kind: 'template-rewrite'; region: TemplateRegion; recordIds: string[]; previous: string; text: string }
+  | { kind: 'profile-rewrite'; recordIds: string[]; previous: string; text: string }
   | { kind: 'moc-rewrite'; region: MocRegion; recordIds: string[]; previous: string; text: string }
   | { kind: 'state-rewrite'; recordIds: string[]; previous: string[]; lines: string[]; adopted?: true; release?: true; granted?: StateGrant; mark?: string }
   | { kind: 'link-rewrite'; recordIds: string[]; renames: Rename[] }
@@ -324,7 +328,7 @@ function operation(value: unknown): value is Operation {
 }
 
 // Manifest v2 (TL-P2-20): v1 plus edit-text. Field rules shared with the author live in note-edit.ts.
-const CHANGE_ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'timeline-append', 'rules-wording', 'moc-rewrite'];
+const CHANGE_ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'timeline-append', 'rules-wording', 'profile-rewrite', 'moc-rewrite', 'template-rewrite'];
 const recordIds = (value: unknown): value is string[] => list(value, recordId) && unique(value);
 function editEntry(value: unknown): value is EditEntry {
   return closed(value, ['date', 'text', 'source']) && text(value.date) && text(value.text)
@@ -349,6 +353,10 @@ function stateGrant(value: unknown, ids: readonly string[]): value is StateGrant
 function change(value: unknown): value is Change {
   if (!record(value)) return false;
   switch (value.kind) {
+    case 'template-rewrite': return closed(value, ['kind', 'region', 'recordIds', 'previous', 'text']) && oneOf(value.region, TEMPLATE_REGIONS)
+      && recordIds(value.recordIds) && text(value.previous) && text(value.text) && !value.text.includes('<!-- bower:ownership');
+    case 'profile-rewrite': return closed(value, ['kind', 'recordIds', 'previous', 'text'])
+      && recordIds(value.recordIds) && text(value.previous) && text(value.text) && profileTextOk(value.text);
     case 'moc-rewrite': return closed(value, ['kind', 'region', 'recordIds', 'previous', 'text']) && oneOf(value.region, MOC_REGIONS)
       && recordIds(value.recordIds) && text(value.previous) && text(value.text);
     case 'state-rewrite': return closed(value, ['kind', 'recordIds', 'previous', 'lines'], ['adopted', 'release', 'granted', 'mark']) && recordIds(value.recordIds)
@@ -370,7 +378,8 @@ function change(value: unknown): value is Change {
   }
 }
 /** 1+ changes, at most one of each kind, in the order state-rewrite, link-rewrite, timeline-append, rules-wording (R3-7 m4). */
-const changeOrder = (c: Change): number => c.kind === 'moc-rewrite' ? CHANGE_ORDER.length + ['moc-overview', 'moc-figures', 'moc-members'].indexOf(c.region) : CHANGE_ORDER.indexOf(c.kind);
+const changeOrder = (c: Change): number => c.kind === 'template-rewrite' ? CHANGE_ORDER.length + MOC_REGIONS.length + TEMPLATE_REGIONS.indexOf(c.region)
+  : c.kind === 'moc-rewrite' ? CHANGE_ORDER.length + MOC_REGIONS.indexOf(c.region) : CHANGE_ORDER.indexOf(c.kind);
 const canonical = (changes: Change[]): boolean => changes.length > 0
   && changes.every((item, i) => i === 0 || changeOrder(changes[i - 1] ?? item) < changeOrder(item));
 function editText(value: unknown): value is EditText {
@@ -436,7 +445,8 @@ function runReport(value: unknown): value is ManifestRunReport {
   return list(value.filed, (row) => closed(row, ['name', 'title', 'kind', 'to'], ['note', 'area']) && text(row.name) && text(row.title)
       && oneOf(row.kind, fileKinds) && text(row.to) && (!Object.hasOwn(row, 'note') || text(row.note)) && (!Object.hasOwn(row, 'area') || text(row.area)))
     && rows(value.created, ['path', 'what']) && list(value.updated, isUpdatedRow) && rows(value.setAside, ['name', 'why'])
-    && list(value.questions, (row) => closed(row, ['id', 'text', 'yes', 'no', 'askedAt'], ['about'])
+    && list(value.questions, (row) => closed(row, ['id', 'text', 'yes', 'no', 'askedAt'], ['about', 'proposal'])
+      && (row.proposal === undefined || (proposalOk(row.proposal) && row.id === `q-proposal-${row.proposal.id}`))
       && text(row.id) && text(row.text) && text(row.yes) && text(row.no) && integer(row.askedAt)
       && (!Object.hasOwn(row, 'about') || text(row.about)))
     && (!Object.hasOwn(value, 'leftAsWritten') || list(value.leftAsWritten, isLeftAsWrittenRow))
@@ -536,6 +546,7 @@ async function admit<M extends Manifest | ManifestV2>(
   if (!guard(parsed)) return { ok: false, reason: 'shape' };
   if (parsed.operations.some(({ effect: e }) => e.kind === 'write-runner-json' && !writes.includes(e.path))) return { ok: false, reason: 'shape' };
   const value = parsed;
+  if (!await planningArtifactsOk(value)) return { ok: false, reason: 'shape' };
   if (!driveId(expectedRootId) || expectedRootId !== value.scope.rootId) return { ok: false, reason: 'scope' };
   if (!await satisfiedProven(value)) return { ok: false, reason: 'shape' };
   for (const item of texts(value)) {
@@ -604,14 +615,7 @@ export function requestMoveKind(value: { runId: string; capture: Capture; operat
   if (e.kind !== 'move' || !value.capture.journal.some((j) => j.fileIds.includes(e.before.fileId))) return null;
   if ('fileId' in e.parent && e.parent.fileId === e.before.parents[0] && e.name === e.before.name
     && Object.keys(e.properties).length === 1 && e.properties.bowerRun === value.runId) return 'pointer';
-  const pathOf = (target: Target): string | null => {
-    if ('fileId' in target) return value.capture.places.find((p) => p.file.fileId === target.fileId)?.path ?? null;
-    const made = value.operations.find((o) => o.operationId === target.createdBy);
-    if (made?.effect.kind !== 'create-folder') return null;
-    const parent = pathOf(made.effect.parent);
-    return parent === null ? null : `${parent}/${made.effect.name}`;
-  };
-  return pathOf(e.parent) === `.bower/changes/pending/${value.runId}` && e.properties.bowerRun === null ? 'pending' : null;
+  return targetPath(value, e.parent) === `.bower/changes/pending/${value.runId}` && e.properties.bowerRun === null ? 'pending' : null;
 }
 
 /**
@@ -702,4 +706,58 @@ export async function parseRunManifestV2(bytes: Uint8Array, expectedRootId: stri
   if (!admitted.ok) return admitted;
   const broken = edits(admitted.value);
   return broken === null ? admitted : { ok: false, reason: 'edit', rule: broken };
+}
+
+
+/** Type tables use the existing write effect; proposals are immutable creates bound to their stored question. */
+async function planningArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> {
+  const questions = value.reportPlan.flatMap((row) => row.value.questions).filter((q) => q.proposal !== undefined);
+  const artifacts = new Map<string, unknown>();
+  for (const { effect } of value.operations) {
+    if (effect.kind === 'maintain' && effect.inputs.targets?.some((t) => t.path === '.bower/type-table.json' || t.path.startsWith('.bower/proposals/'))) return false;
+    if (effect.kind === 'write-runner-json' && effect.path === '.bower/type-table.json') {
+      let table: unknown;
+      try { table = JSON.parse(effect.text); }
+      catch {
+        // expected: a new declaration write must contain readable JSON.
+        return false;
+      }
+      if (!typeTableOk(table) || effect.before.folder || effect.before.name !== 'type-table.json') return false;
+    }
+    if (effect.kind !== 'create-text') continue;
+    const parentPath = targetPath(value, effect.parent);
+    if (parentPath === '.bower' && effect.name === 'type-table.json') return false;
+    if (parentPath !== '.bower/proposals') continue;
+    if (effect.purpose !== 'runner-json') return false;
+    let artifact: unknown;
+    try { artifact = JSON.parse(effect.text); }
+    catch {
+      // expected: immutable proposal creates require a readable, closed envelope.
+      return false;
+    }
+    if (!closed(artifact, ['v', 'id', 'payload']) || artifact.v !== 1 || !proposalOk({ id: artifact.id, payload: artifact.payload })
+      || effect.name !== `${artifact.id as string}.json` || artifacts.has(artifact.id as string)) return false;
+    artifacts.set(artifact.id as string, artifact.payload);
+  }
+  if (artifacts.size > 2 || new Set(questions.map((q) => q.proposal?.id)).size > 5) return false;
+  const payloads = new Set<string>();
+  for (const [id, payload] of artifacts) {
+    const expected = await hashRecordJson(payload);
+    const question = questions.find((q) => q.proposal?.id === id);
+    if (!expected.ok || !question || payloads.has(expected.value)) return false;
+    payloads.add(expected.value);
+    const actual = await hashRecordJson(question.proposal?.payload);
+    if (!actual.ok || actual.value !== expected.value) return false;
+  }
+  return true;
+}
+
+function targetPath(value: { capture: Capture; operations: readonly OperationV2[] }, target: Target, seen = new Set<string>()): string | null {
+  if ('fileId' in target) return value.capture.places.find((p) => p.file.fileId === target.fileId)?.path ?? null;
+  if (seen.has(target.createdBy)) return null;
+  seen.add(target.createdBy);
+  const made = value.operations.find((o) => o.operationId === target.createdBy);
+  if (made?.effect.kind !== 'create-folder') return null;
+  const parent = targetPath(value, made.effect.parent, seen);
+  return parent === null ? null : `${parent}/${made.effect.name}`;
 }

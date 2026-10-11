@@ -23,6 +23,30 @@ const encode = (text: string) => new TextEncoder().encode(text);
 const decode = (bytes: Uint8Array) => new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes);
 const request = { index: 0, label: 'Personal task', previousDone: false, done: true };
 const rich = () => decode(bytesOf('v2-rich.md'));
+
+it('B5a contracts: profile has its own ownership mark beside the four old payloads', () => {
+  const old = rich();
+  expect(parseOwnership(encode(old)).status).toBe('v2');
+  const profile = '## Profile\nAlex uses TypeScript, according to [[Alex CV]].\n';
+  const text = old + '<!-- bower:ownership/2 begin profile -->\n' + profile
+    + '<!-- bower:ownership/2 end profile -->\n';
+  const own = parseOwnership(encode(text));
+  expect(own.status).toBe('v2');
+  if (own.status !== 'v2') return;
+  const payloads: Readonly<Record<string, { start: number; end: number } | undefined>> = own.payloads;
+  const region = payloads.profile;
+  expect(region).toBeDefined();
+  if (region) expect(decode(encode(text).subarray(region.start, region.end))).toBe(profile);
+  const previous = parseOwnership(encode(old));
+  if (previous.status === 'v2') {
+    for (const owner of ['current', 'personal', 'timeline', 'bower-note'] as const) {
+      expect(own.payloads[owner]).toEqual(previous.payloads[owner]);
+    }
+  }
+  expect(parseOwnership(encode(text.replace('end profile', 'end current')))).toEqual({
+    status: 'invalid', reason: 'damaged-boundary',
+  });
+});
 function framed(personal: string): string {
   return '---\nbower_format: ownership/2\n---\n'
     + '<!-- bower:ownership/2 begin current -->\n- [ ] Protected task\n<!-- bower:ownership/2 end current -->\n'
@@ -30,6 +54,31 @@ function framed(personal: string): string {
     + '<!-- bower:ownership/2 begin timeline -->\n<!-- bower:ownership/2 end timeline -->\n'
     + '<!-- bower:ownership/2 begin bower-note -->\n<!-- bower:ownership/2 end bower-note -->\n';
 }
+
+it('B6a templates: b6-project-next-steps-owned frames Goal and Next steps outside personal tasks', () => {
+  const control = encode(framed('- [ ] Personal task\n'));
+  expect(parseOwnership(control).status).toBe('v2');
+  expect(togglePersonalTask(control, request).kind).toBe('changed');
+  const base = framed('- [ ] Personal task\n').replace('bower_format: ownership/2', 'bower_format: ownership/2\nby: bower\ntype: project');
+  const raw = base + '<!-- bower:ownership/2 begin goal -->\n## Goal\nRepair the greenhouse.\n<!-- bower:ownership/2 end goal -->\n'
+    + '<!-- bower:ownership/2 begin next-steps -->\n## Next steps\n- [ ] Fit the stated replacement pane.\n<!-- bower:ownership/2 end next-steps -->\n';
+  const source = encode(raw);
+  const parsed = parseOwnership(source);
+  expect(parsed.status, 'Goal and Next steps must be declared Bower payloads').toBe('v2');
+  if (parsed.status !== 'v2') return;
+  const payloads = parsed.payloads as Readonly<Record<string, { start: number; end: number }>>;
+  for (const [region, text] of [['goal', '## Goal\nRepair the greenhouse.\n'],
+    ['next-steps', '## Next steps\n- [ ] Fit the stated replacement pane.\n']]) {
+    const at = payloads[region ?? ''];
+    expect(at, region).toBeDefined();
+    if (at) expect(decode(source.subarray(at.start, at.end))).toBe(text);
+  }
+  expect(parsed.tasks.map((task) => task.label)).toEqual(['Personal task']);
+  const toggled = togglePersonalTask(source, request);
+  expect(toggled.kind).toBe('changed');
+  if (toggled.kind === 'changed') expect(decode(toggled.bytes)).toBe(raw.replace('[ ] Personal task', '[x] Personal task'));
+  expect(togglePersonalTask(source, { ...request, index: 1, label: 'Fit the stated replacement pane.' })).toEqual({ kind: 'refused', reason: 'task-not-found' });
+});
 
 describe('ownership/2 raw byte authority', () => {
   it('pins the adopted grammar and every independent canonical bundle byte', () => {

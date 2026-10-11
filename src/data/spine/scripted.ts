@@ -26,7 +26,8 @@ import { savedLinkAddress } from '../search-text';
 import { md5Hex } from '../contracts/hashes';
 import { isQuestionOption, answeredAskings, answersAsking, journalAnswer, roundFor, relatedSubjects, sameSubjectContent, subjectMembers, subjectPile, type QuestionRound, ASK_GONE, STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
 import { sha256 } from '../vault/hashes';
-import { parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
+import { indexedFront, parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
+import { linkTarget } from '../contracts/links';
 import { parseTimelineLine } from '../contracts/timeline-line';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
@@ -38,6 +39,7 @@ import { duplicatesOf, wordsSaved, type Duplicate } from './duplicates';
 import type { AdmissionManifest } from './admission';
 import type { ScriptedRead } from './read';
 import { STAMP, stampOf } from './write-once';
+import { NOTE_TEMPLATES, type NoteTemplate } from '../contracts/note-templates';
 
 export { SET_ASIDE, listedPiles };
 
@@ -400,6 +402,7 @@ export interface AuthoredNote {
   name: string;
   summary: string;
   body: string;
+  template?: NoteTemplate;
 }
 
 /** A Timeline line a model wrote for a note it was shown (P4-3), citing a thing this run files, or none. */
@@ -1800,6 +1803,47 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   }
   /** The name each filed thing is cited by, as the run makes it: its note's, else its own. */
   const madeAs = new Map(filing.map(({ thing, name, note }) => [thing.file.id, note?.name ?? name]));
+  const linkable = listing.flatMap((file) => {
+    const path = ix.pathOf(file.id);
+    return !file.folder && path?.endsWith('.md') && generatedPlace(parentOf(path)) ? [{ file, path }] : [];
+  });
+  const groundedAuthoredLinks = async (to: string, note: AuthoredNote, source: { file: DriveFile; name: string }): Promise<string[]> => {
+    // Resolve evidence against actual note identities; a name shared by notes is not grounding.
+    const authored = new Map<string, typeof linkable[number]>();
+    // All authored strings share this admission check, including every section in the body and the summary.
+    const words = Object.values(note).filter((value): value is string => typeof value === 'string').join('\n');
+    for (const match of words.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)) {
+      const target = linkTarget(match[1] ?? '').replace(/\.md$/, '');
+      const candidates = linkable.filter(({ path }) => target.includes('/')
+        ? path.slice(0, -3).toLowerCase() === target
+        : displayName(nameOf(path)).toLowerCase() === target);
+      const local = candidates.filter(({ path }) => parentOf(path) === to);
+      const resolved = local.length ? local : candidates;
+      const bound = [source.file.name, source.name, ix.pathOf(source.file.id), join(to, source.name)]
+        .some((name) => name !== undefined && linkTarget(name).replace(/\.md$/, '') === target);
+      if (bound && resolved.every(({ file }) => file.id === source.file.id)) continue;
+      if (resolved.length !== 1 || !resolved[0]) return refused('a template note with an ungrounded authored link');
+      authored.set(resolved[0].file.id, resolved[0]);
+    }
+    if (!note.template) return [];
+    // Sources subfolders use their nearest destination hub. Never choose an unrelated fallback note.
+    for (let folder = to; folder && generatedPlace(folder); folder = parentOf(folder)) {
+      const hubs: typeof linkable = [];
+      for (const candidate of linkable.filter(({ path }) => parentOf(path) === folder)) {
+        const front = await drive.indexedFront?.(candidate.file)
+          ?? indexedFront(await drive.readText(candidate.file.id));
+        if (VaultIndex.isHub(candidate.path, candidate.file.name, front.type ?? undefined)) hubs.push(candidate);
+      }
+      if (!hubs.length) continue;
+      const named = hubs.filter(({ file }) => authored.has(file.id));
+      const hub = hubs.length === 1 ? hubs[0] : named.length === 1 ? named[0] : undefined;
+      if (!hub) return refused('a template note with an ambiguous destination hub');
+      const related = [hub, ...[...authored.values()].filter(({ file }) => file.id !== hub.file.id)].slice(0, 5);
+      for (const { file } of related) places.set(file.id, file);
+      return related.map(({ path }) => path.slice(0, -3));
+    }
+    return refused('a template note without a grounded destination hub');
+  };
   // A note a model wrote for a thing (P4-3): beside it, its words as the body, Bower's summary and Timeline around them.
   for (const { thing, to, name, note, merge } of filing) {
     const authored = note || merge ? null : d.note(thing.file.id);
@@ -1807,7 +1851,19 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const noteName = freeName(planned, to, authored.name);
     madeAs.set(thing.file.id, noteName);
     plannedFile(join(to, noteName));
-    const text = serializeNote({ summary: authored.summary, properties: [], tags: [], currentState: [], body: authored.body, timeline: [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
+    const template = authored.template;
+    // Only declared, relevant links in the authored evidence; never pad with the folder's other notes.
+    const related = await groundedAuthoredLinks(to, authored, { file: thing.file, name });
+    const properties = template ? [
+      { key: 'type', label: 'Type', value: template },
+      { key: 'created', label: 'Created', value: noteDate },
+      { key: 'updated', label: 'Updated', value: noteDate },
+      { key: 'source', label: 'Source', value: name },
+      { key: 'related', label: 'Related', value: related.map((link) => `[[${link}]]`).join(', ') },
+    ] : [];
+    const text = serializeNote({ template, summary: authored.summary, properties, tags: [], currentState: [], body: authored.body,
+      ...(template === 'source' ? { original: name } : {}),
+      timeline: template && !NOTE_TEMPLATES[template].timeline ? [] : [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
     generated.push({ to, name: noteName, text, what: authored.summary, after: thing.file.id, pileId: null, aside: thing.file.name, context: null });
   }
   // A request's line already there is satisfied only under the name its source is filed as (TL-P4-32 addendum 2 (6)):

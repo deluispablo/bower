@@ -49,6 +49,119 @@ const unrule = (text: string): RuleRemove => ({ recordId: UNRULE, text });
 
 const B = (owner: Owner): string => `<!-- bower:ownership/2 begin ${owner} -->`;
 const E = (owner: Owner): string => `<!-- bower:ownership/2 end ${owner} -->`;
+
+// The additive template change goes through the existing author, not a test-only serializer.
+// Change's future union member is isolated here so HEAD still typechecks and fails on assertions.
+const b6Rewrite = (region: 'goal' | 'next-steps', previous: string, text: string): Change => ({
+  kind: 'template-rewrite', region, recordIds: [MERGE], previous, text,
+} as unknown as Change);
+const b6Legacy = (type: string): string => `---\nsummary: Alex keeps gardening facts.\nby: bower\ntype: ${type}\n---\n\nAlex keeps café notes.\n\n## Timeline\n- 2026-10-01 · Saved the bulletin. · [[Garden bulletin]]\n`;
+const b6EditControl = (): void => {
+  const raw = b6Legacy('concept');
+  const line = entry('Alex received a newer bulletin.', 'Garden bulletin');
+  const result = applyChanges(enc(raw), [append(line)]);
+  expect(result.ok).toBe(true);
+  if (result.ok) expect(result.text).toContain('- 2026-10-06 · Alex received a newer bulletin. · [[Garden bulletin]]');
+};
+it('B6a templates: b6-source-body-immutable refuses new history on a stored Source', () => {
+  b6EditControl();
+  const raw = b6Legacy('source');
+  const bytes = enc(raw);
+  expect(parseNote('Source.md', raw).timeline).toHaveLength(1);
+  const result = applyChanges(bytes, [append(entry('Alex received a newer bulletin.', 'Garden bulletin'))]);
+  expect(result.ok, 'Source body and its legacy Timeline are immutable after creation').toBe(false);
+  expect(bytes).toEqual(enc(raw));
+});
+it('B6a templates: b6-source-body-immutable refuses a rewrite of Source prose links', () => {
+  const control = applyChanges(enc(b6Legacy('concept')), [relink(['Garden bulletin', 'New bulletin'])]);
+  expect(control.ok).toBe(true);
+  if (control.ok) expect(control.text).toContain('[[New bulletin]]');
+  const raw = b6Legacy('source');
+  const bytes = enc(raw);
+  expect(applyChanges(bytes, [relink(['Garden bulletin', 'New bulletin'])]).ok,
+    'A Source is never rewritten after creation').toBe(false);
+  expect(bytes).toEqual(enc(raw));
+});
+it('B6a templates: legacy MOC Timeline stays unrewritten by ordinary history updates', () => {
+  b6EditControl();
+  const raw = b6Legacy('moc');
+  const bytes = enc(raw);
+  expect(parseNote('Gardening.md', raw).timeline).toHaveLength(1);
+  expect(applyChanges(bytes, [append(entry('Alex received a newer bulletin.', 'Garden bulletin'))]).ok,
+    'A legacy MOC Timeline stays unrewritten').toBe(false);
+  expect(bytes).toEqual(enc(raw));
+});
+it.each([
+  { type: 'source', name: 'b6-person-typed-source-still-relinks' },
+  { type: 'moc', name: 'b6-person-typed-moc-still-appends' },
+])('B6a templates: $name', ({ type }) => {
+  // C05 permits Timeline insertion into an ownership/2 person note; type grants no authorship.
+  const before = v2('\n', ['## Timeline']).replace('summary: Lease\n', `summary: Lease\ntype: ${type}\n`);
+  expect(parseNote('Alex.md', before).byBower).toBe(false);
+  const permits = (changes: Change[], after: string): void => {
+    const bytes = enc(before);
+    expect.soft(applyChanges(bytes, changes)).toEqual({ ok: true, text: after, bytes: enc(after) });
+    expect(bytes).toEqual(enc(before));
+  };
+  permits([relink(['Old', 'New'])], before.replaceAll('[[Old', '[[New'));
+  const line = '- 2026-10-06 · Merged Lease draft · [[Lease draft]]\n';
+  permits([append(entry('Merged Lease draft', 'Lease draft'))],
+    before.replace(E('timeline'), `${line}${E('timeline')}`));
+  permits([relink(['Old', 'New']), append(entry('Merged Lease draft', 'Lease draft'))],
+    before.replaceAll('[[Old', '[[New').replace(E('timeline'), `${line}${E('timeline')}`));
+});
+it('B6a templates: b6-person-typed-source-still-relinks plain review reproduction', () => {
+  expectEdit('---\ntype: source\n---\nSee [[Old]].\n', [relink(['Old', 'New'])],
+    '---\ntype: source\n---\nSee [[New]].\n');
+});
+it.each(['source', 'moc'])('B6a templates: Bower-written %s still refuses protected edits', (type) => {
+  const before = b6Legacy(type);
+  expect(parseNote('Alex.md', before).byBower).toBe(true);
+  expect(applyChanges(enc(before), [append(entry('Merged Lease draft', 'Lease draft'))]))
+    .toEqual({ ok: false, reason: 'unsupported' });
+  if (type === 'source') {
+    expect(applyChanges(enc(before), [relink(['Garden bulletin', 'New bulletin'])]))
+      .toEqual({ ok: false, reason: 'unsupported' });
+  }
+});
+const b6Project = (byBower = true): string => [
+  '---', 'bower_format: ownership/2', 'summary: Repair the greenhouse.', 'type: project',
+  ...(byBower ? ['by: bower'] : []), '---',
+  B('current'), '## Current state', '- The pane is cracked.', E('current'),
+  B('personal'), '## Notes', 'Alex keeps café notes.  ', '- [ ] Personal task', E('personal'),
+  B('timeline'), '## Timeline', '- 2026-10-01 · Alex recorded the cracked pane. · [[Inspection]]', E('timeline'),
+  B('bower-note'), E('bower-note'),
+  '<!-- bower:ownership/2 begin goal -->', '## Goal', 'Repair the greenhouse.', '<!-- bower:ownership/2 end goal -->',
+  '<!-- bower:ownership/2 begin next-steps -->', '## Next steps', '- [ ] Measure the cracked pane.', '<!-- bower:ownership/2 end next-steps -->', '',
+].join('\n');
+it.each([
+  { region: 'goal' as const, previous: '## Goal\nRepair the greenhouse.\n', text: '## Goal\nReplace the stated cracked pane.\n' },
+  { region: 'next-steps' as const, previous: '## Next steps\n- [ ] Measure the cracked pane.\n', text: '## Next steps\n- [ ] Fit the stated replacement pane.\n' },
+])('B6a templates: b6-project-next-steps-owned rewrites only the $region payload through note-edit', ({ region, previous, text }) => {
+  b6EditControl();
+  for (const eol of ['\n', '\r\n']) {
+    const raw = b6Project().replace(/\n/g, eol);
+    const was = previous.replace(/\n/g, eol), next = text.replace(/\n/g, eol);
+    const bytes = enc(raw);
+    const result = applyChanges(bytes, [b6Rewrite(region, was, next)]);
+    expect(result.ok, 'The ordinary note author must support grounded template region changes').toBe(true);
+    if (!result.ok) continue;
+    expect(result.text).toBe(raw.replace(was, next));
+    expect(bytes).toEqual(enc(raw));
+    expect(parseNote('Greenhouse.md', result.text).timeline).toEqual(parseNote('Greenhouse.md', raw).timeline);
+    expect(applyChanges(enc(raw), [b6Rewrite(region, 'Different previous content.\n', next)]).ok).toBe(false);
+  }
+});
+it('B6a templates: b6-person-note-no-metadata refuses template adoption and retains every personal byte', () => {
+  b6EditControl();
+  const raw = '---\r\nsummary: "Alex: personal notes"\r\n---\r\n\r\n## Goal\r\nAlex decides this.\r\n\r\n## Next steps\r\n- [ ] Alex chooses the next step.\r\n';
+  const bytes = enc(raw);
+  const result = applyChanges(bytes, [b6Rewrite('next-steps', '## Next steps\r\n- [ ] Alex chooses the next step.\r\n',
+    '## Next steps\r\n- [ ] Fit the stated replacement pane.\r\n')]);
+  expect(bytes).toEqual(enc(raw));
+  expect(parseNote('Alex.md', raw)).toMatchObject({ byBower: false, properties: [], summary: 'Alex: personal notes' });
+  expect(result, 'A person note cannot acquire template ownership or metadata').toEqual({ ok: false, reason: 'not-bower' });
+});
 /** An ownership/2 note; only the Timeline payload lines and the link name vary. */
 function v2(eol: string, timeline: string[], name = 'Old'): string {
   return [
@@ -61,6 +174,72 @@ function v2(eol: string, timeline: string[], name = 'Old'): string {
 }
 /** A legacy note of Bower's: frontmatter with `by: bower`, then the given lines. */
 const legacy = (eol: string, ...body: string[]): string => ['---', 'summary: Lease', 'by: bower', '---', ...body].join(eol);
+
+const profileWords = (count: number): string => ['Alex', ...Array.from({ length: count - 2 }, () => 'TypeScript'), '[[CV]]'].join(' ') + '\n';
+const profileChange = (previous: string, text: string): Change => ({
+  kind: 'profile-rewrite', recordIds: [], previous, text,
+} as unknown as Change);
+const profileNote = (): { old: string; before: string; previous: string } => {
+  const old = v2('\n', ['## Timeline', '- 6 Oct · Read the CV · [[CV]]']);
+  const previous = 'Alex uses TypeScript. [[CV]]\n';
+  return { old, previous, before: old + '<!-- bower:ownership/2 begin profile -->\n' + previous
+    + '<!-- bower:ownership/2 end profile -->\n' };
+};
+const profileControl = (): void => {
+  const old = profileNote().old;
+  const result = applyChanges(enc(old), [relink(['Old', 'New'])]);
+  expect(result.ok).toBe(true);
+  expect(parseOwnership(enc(old)).status).toBe('v2');
+};
+
+it('B5a contracts: b5-profile-region-bound', () => {
+  profileControl();
+  const { before, previous } = profileNote();
+  const bytes = enc(before); const copy = bytes.slice();
+  const text = profileWords(400);
+  expect(text.trim().split(/\s+/)).toHaveLength(400);
+  const result = applyChanges(bytes, [profileChange(previous, text)]);
+  expect(result.ok, 'a marked profile permits 400 sourced words through note-edit').toBe(true);
+  if (!result.ok) return;
+  expect(result.text).toBe(before.replace(previous, text));
+  expect(parseNote('Areas/Career/Career profile.md', result.text).currentState).toEqual(['Signed with [[Old]]']);
+  expect(parseNote('Areas/Career/Career profile.md', result.text).body).toContain('Notes on [[Old]].');
+  expect(bytes).toEqual(copy);
+  expect(applyChanges(bytes, [profileChange(previous, profileWords(401))])).toEqual({ ok: false, reason: 'field' });
+});
+
+it('B5a contracts: profile refuses 401 words while its 400-word positive control succeeds', () => {
+  profileControl();
+  const { before, previous } = profileNote();
+  expect(applyChanges(enc(before), [profileChange(previous, profileWords(400))]).ok).toBe(true);
+  expect(applyChanges(enc(before), [profileChange(previous, profileWords(401))])).toEqual({ ok: false, reason: 'field' });
+});
+
+it('B5a contracts: profile never adopts person prose and never enlarges Current state', () => {
+  profileControl();
+  const { before, previous } = profileNote();
+  expect(applyChanges(enc(before), [profileChange(previous, profileWords(4))]).ok).toBe(true);
+  const personal = '## Profile\nAlex keeps these personal words.\n';
+  const unchanged = enc(personal);
+  expect(applyChanges(unchanged, [profileChange(personal, profileWords(4))])).toEqual({ ok: false, reason: 'not-bower' });
+  expect(dec(unchanged)).toBe(personal);
+  // Current state stays on its independent existing write contract; a profile does not supply adoption authority.
+  expect(applyChanges(enc(before), [{ kind: 'state-rewrite', recordIds: [], previous: ['Signed with [[Old]]'],
+    lines: Array.from({ length: 21 }, () => 'TypeScript') }])).toEqual({ ok: false, reason: 'field' });
+});
+
+it('B5a contracts: old note fixtures keep legacy and ownership/2 meanings', () => {
+  profileControl();
+  const legacyText = legacy('\n', '## Current state', '- Alex uses TypeScript.', '', 'Alex keeps personal prose.', '',
+    '## Timeline', '- 6 Oct · Read the CV · [[CV]]', '');
+  expect(parseOwnership(enc(legacyText)).status).toBe('legacy');
+  expect(parseNote('Areas/Career/Career.md', legacyText).currentState).toEqual(['Alex uses TypeScript.']);
+  expect(parseNote('Areas/Career/Career.md', legacyText).body).toBe('Alex keeps personal prose.');
+  const old = profileNote().old;
+  expect(parseOwnership(enc(old)).status).toBe('v2');
+  expect(parseNote('Areas/Career/Career.md', old).currentState).toEqual(['Signed with [[Old]]']);
+  expect(parseNote('Areas/Career/Career.md', old).timeline).toHaveLength(1);
+});
 
 function expectEdit(before: string, changes: Change[], after: string): void {
   const source = enc(before);

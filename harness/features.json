@@ -6918,14 +6918,15 @@
     "id": "b5a-contracts",
     "task": "p4-b5",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "Contracts for the type table, bounded property values, immutable proposals and profile regions (TL-P4-47 Q1, Q3, Q4).",
     "steps": [
       "Strict-write/lenient-read type-table.json with 8 seed rows; bounded values; proposals by id; a 400-word profile region."
     ],
-    "verify": "",
-    "note": "TL-P4-47. Escalated; red now, implementation after the note-edit/questions handoffs. Packet 2026-10-10-b5a-packet.md. implementer: codex."
+    "verify": "pnpm -C runner exec vitest run test/type-table.test.ts -t \"B5a contracts\"",
+    "note": "TL-P4-47. Escalated; red now, implementation after the note-edit/questions handoffs. Packet 2026-10-10-b5a-packet.md. implementer: codex.",
+    "review": "P4-112 PASS"
   },
   {
     "id": "b3b-hot-maintain",
@@ -6959,14 +6960,15 @@
     "id": "b6a-templates",
     "task": "p4-b6",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "Bower notes follow five declared templates (Source, Concept, Project, Area, MOC) from one declaration home; person notes never gain Bower metadata (TL-P4-47 Q5).",
     "steps": [
       "The prep's B6a reds pass through note-format, ownership-format, note-edit and scripted planning."
     ],
-    "verify": "",
-    "note": "TL-P4-47 Q5. Escalated; implementation after B5a integrates. Packet 2026-10-10-b6a-packet.md. implementer: codex."
+    "verify": "pnpm exec vitest run src/data/spine/scripted.test.ts src/data/contracts/note-edit.test.ts src/data/vault/note-format.test.ts src/data/contracts/note-templates.test.ts src/data/vault/ownership-format.test.ts src/features/note/b6a-task-regions.test.tsx -t \"B6a templates|B6a fix\"",
+    "note": "TL-P4-47 Q5. Escalated; implementation after B5a integrates. Packet 2026-10-10-b6a-packet.md. implementer: codex.",
+    "review": "P4-113 BLOCK fixed; P4-114 PASS"
   },
   {
     "id": "upload-resume-after-reload",
