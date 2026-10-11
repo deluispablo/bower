@@ -476,29 +476,29 @@ const schemaClosed = (v: Record<string, unknown>, keys: readonly string[]): bool
 const schemaText = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= 200;
 const schemaTexts = (v: unknown): v is string[] => Array.isArray(v) && v.every(schemaText);
 const slug = (v: unknown): v is string => typeof v === 'string' && v.length <= 128 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(v);
-/** JSON Schema-style closed objects on write; tolerance belongs only to readTypeTable. */
-export function typeRowOk(v: unknown): v is TypeRow {
-  if (!schemaObject(v) || !schemaClosed(v, ['id', 'match', 'template', 'properties', 'table', 'group_by'])
+/** JSON Schema-style closed writes; stored reads and rewrites retain extension keys. */
+export function typeRowOk(v: unknown, stored = false): v is TypeRow {
+  if (!schemaObject(v) || (!stored && !schemaClosed(v, ['id', 'match', 'template', 'properties', 'table', 'group_by']))
     || !slug(v.id) || !schemaTexts(v.match) || !v.match.length || !schemaText(v.template)
     || !schemaObject(v.properties) || !schemaTexts(v.table) || v.table.length > 4
     || new Set(v.table).size !== v.table.length) return false;
   const properties = v.properties;
   if (!Object.entries(properties).every(([key, declaration]) => /^[a-z][a-z0-9_]*$/.test(key)
-    && schemaObject(declaration) && schemaClosed(declaration, ['type', 'values'])
+    && schemaObject(declaration) && (stored || schemaClosed(declaration, ['type', 'values']))
     && (declaration.type === 'enum' ? schemaTexts(declaration.values) && declaration.values.length > 0
       && declaration.values.length <= 20 && new Set(declaration.values).size === declaration.values.length
       : typeof declaration.type === 'string' && ['text', 'list', 'number', 'money', 'date'].includes(declaration.type) && !Object.hasOwn(declaration, 'values')))) return false;
   if (!v.table.every((key) => Object.hasOwn(properties, key) && !(TECHNICAL_PROPERTIES as readonly string[]).includes(key))) return false;
   if (v.group_by === undefined) return true;
   const group = v.group_by;
-  if (!schemaObject(group) || !schemaClosed(group, ['property', 'bucket']) || typeof group.property !== 'string'
+  if (!schemaObject(group) || (!stored && !schemaClosed(group, ['property', 'bucket'])) || typeof group.property !== 'string'
     || !Object.hasOwn(properties, group.property)) return false;
   const declaration = properties[group.property] as TypeRow['properties'][string];
   return declaration.type === 'enum' ? group.bucket === undefined : declaration.type === 'date' && group.bucket === 'year';
 }
 export function typeTableOk(v: unknown): v is TypeTable {
   return schemaObject(v) && schemaClosed(v, ['v', 'rows']) && v.v === 1 && Array.isArray(v.rows)
-    && v.rows.every(typeRowOk) && new Set(v.rows.map((row) => row.id)).size === v.rows.length;
+    && v.rows.every((row) => typeRowOk(row)) && new Set(v.rows.map((row) => row.id)).size === v.rows.length;
 }
 /** ISO 4217 codes supplied by ICU, plus the ISO fund, metal and testing units ICU omits. */
 const currencies = new Set([...Intl.supportedValuesOf('currency'),
@@ -512,9 +512,10 @@ export function propertyValuesOk(row: TypeRow, value: unknown): boolean {
       case 'text': return typeof item === 'string' && item.length <= 200;
       case 'list': return Array.isArray(item) && item.length <= 10 && item.every((v) => typeof v === 'string' && v.length <= 200);
       case 'enum': return typeof item === 'string' && !!declaration.values?.includes(item);
-      case 'number': return typeof item === 'number' && Number.isFinite(item);
+      case 'number': return typeof item === 'number' && Number.isFinite(item) && Math.abs(item) <= 1e15;
       case 'money': return schemaObject(item) && Object.keys(item).length === 2 && schemaClosed(item, ['amount', 'currency'])
-        && typeof item.amount === 'number' && Number.isFinite(item.amount) && typeof item.currency === 'string' && currencies.has(item.currency);
+        && typeof item.amount === 'number' && Number.isFinite(item.amount) && Number(item.amount.toFixed(4)) === item.amount
+        && typeof item.currency === 'string' && currencies.has(item.currency);
       case 'date': return typeof item === 'string' && dateOk(item);
       default: return false;
     }

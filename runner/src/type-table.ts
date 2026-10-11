@@ -1,5 +1,5 @@
 /** Versioned declaration reads only; execution keeps its existing manifest writer. */
-import { typeRowOk, typeTableOk, TECHNICAL_PROPERTIES } from '../../src/data/contracts/note-format';
+import { typeRowOk, TECHNICAL_PROPERTIES } from '../../src/data/contracts/note-format';
 import { BowerError, type TypeRow, type TypeTable } from '../../src/data/contracts/types';
 
 /** TL-P4-38's eight ordered seed classifications; later planning supplies the grounded destinations. */
@@ -23,21 +23,19 @@ export function readTypeTable(text: string | null): { table: TypeTable; writeAll
     || !('rows' in value) || !Array.isArray(value.rows)) return { table: seedTable(), writeAllowed: false };
   const seen = new Set<string>();
   const rows = value.rows.filter((row): row is TypeRow => {
-    if (!typeRowOk(row) || seen.has(row.id)) return false;
+    if (!typeRowOk(row, true) || seen.has(row.id)) return false;
     seen.add(row.id); return true;
   });
-  return { table: { v: 1, rows }, writeAllowed: true };
+  return { table: { ...value, v: 1, rows: rows.length ? rows : seedTable().rows }, writeAllowed: true };
 }
 export function insertTypeRow(table: TypeTable, row: TypeRow): TypeTable {
-  if (!typeTableOk(table) || !typeRowOk(row) || table.rows.some((old) => old.id === row.id)) throw new BowerError('conflict', 'Bower could not add that type.');
+  if (!table || table.v !== 1 || !Array.isArray(table.rows) || !table.rows.every((old) => typeRowOk(old, true))
+    || new Set(table.rows.map((old) => old.id)).size !== table.rows.length
+    || !typeRowOk(row) || table.rows.some((old) => old.id === row.id)) throw new BowerError('conflict', 'Bower could not add that type.');
   const index = table.rows.findIndex((old) => ['other-project-material', 'other-area-material'].includes(old.id));
   const rows = structuredClone(table.rows);
   rows.splice(index < 0 ? rows.length : index, 0, structuredClone(row));
-  return { v: 1, rows };
-}
-/** Semantic matching supplies ids; stored row order alone breaks ties. */
-export function firstMatchingRow(rows: readonly TypeRow[], matchingIds: readonly string[]): TypeRow | null {
-  return rows.find((row) => matchingIds.includes(row.id)) ?? null;
+  return { ...structuredClone(table), rows };
 }
 /** Documents supply facts, never authority to choose columns. */
 export function requestTableColumn(row: TypeRow, key: string, origin: unknown): { row: TypeRow; replaced: string | null } | null {

@@ -210,3 +210,106 @@ bash harness/with-lock.sh pnpm exec playwright test e2e/folder-table.spec.ts --p
 The command is recorded only. A later executor must keep the Vite development cache in OS temp
 as well if retaining this session's no-repository-test-output constraint. No e2e pass or designer
 approval is claimed.
+
+
+## Implementation
+
+implementer: codex
+
+Status: **blocked; partial production patch, not an accepted B5b implementation**.
+Base: `b7aeca4e6351179909ff6ade4a813b9a5dd1c43a`. B1d is integrated and was not
+used as an ownership blocker. No network, git writes, dependency replacement, e2e,
+server, or `pnpm check` execution. The runner owns committing and those final gates.
+
+### Changes within the owned files
+
+- `runner/src/type-table.ts`: empty/all-invalid readable tables use eight seeds; stored
+  envelope, row, property and grouping extension keys survive reads and insertion.
+  Newly inserted rows still pass the strict validator. Invalid known fields still fail.
+- `src/data/contracts/note-format.ts`: the existing row validator accepts an explicit
+  stored-read mode; normal table/proposal writes remain closed. Numbers are finite and
+  within ±1e15. Money remains ISO-currency validated and has at most four decimals.
+  Reads of personal notes, the scalar serializer and B6a ownership remain unchanged.
+- `runner/src/claude.ts`: render the already-read rows as Markdown between the fixed
+  instructions and JSON context, preserving stored order and escaping cell separators.
+  No additional Drive read, model call, writer, consent store or maintain effect.
+- Removed the helper without a production caller, as the handoff directs. Its older
+  test is preserved under the user's explicit no-test-edit instruction; conflict below.
+
+removed: runner/src/type-table.ts: firstMatchingRow, which had no production caller.
+removed: harness/unused-production-baseline.json: firstMatchingRow finding and reason.
+removed: harness/unused-baseline.json: none; it contains only the unrelated phase alias allowance.
+removed: remaining B5b production allowances: none; insertTypeRow, requestTableColumn,
+propertyValuesOk and tableProperties still lack production callers. Deleting their allowances
+would misrepresent the remaining work and fail the unused gate.
+
+tests changed: none; all existing assertions, fixtures and bounds are preserved.
+
+### Required scope resolution
+
+1. **Create-when-absent cannot be represented by the permitted contract.**
+   `src/data/contracts/run-manifest.ts:40` requires `before: SeenFile` and a verified
+   existing body. Its shape guard at line 317 requires both, and
+   `planningArtifactsOk` at lines 718–729 rejects a type-table `create-text` fallback.
+   The packet's addendum 5 requires create-when-absent in `write-runner-json`, but this
+   B4a contract file is absent from Owned files and the user explicitly forbids editing
+   B4a contracts beyond that list. `engine.ts` alone cannot fix this. Allocation must
+   cover the contract and its existing consumers, including scheduler claims
+   (`src/data/spine/schedule.ts:48`), engine recovery, runner admission checks
+   (`runner/src/spine/admitted.ts:130`) and their contract tests. No fake SeenFile,
+   bypass of validation, pre-manifest write or alternate creation mechanism was added.
+2. **The Table has no public path to the required runner-file read.**
+   `VaultSource` in `src/data/sources.ts` exposes `questions()` and `note()`, but no
+   declaration/runner-file read. `DriveVault.questions()` uses its private JSON reader
+   (`src/data/vault/drive-vault.ts:1608`). Neither this source interface nor DriveVault
+   appears in Owned files. They need allocation to expose the same read mechanism,
+   plus the required source implementations and fixtures. FolderScreen was not given
+   a Drive bypass, cast to private internals, or a second parser/transport.
+3. **Stored extensions still cannot pass the existing manifest write guard.**
+   The new tolerant reader/insertion preserves them, but
+   `src/data/contracts/run-manifest.ts:725` still calls strict `typeTableOk` on the
+   entire rewritten table. The strict/new versus stored/rewrite boundary needs the
+   same contract allocation; weakening `typeTableOk` globally would violate the
+   closed-write and proposal tests. The partial patch does not claim a persisted
+   unknown-key rewrite works.
+
+The worker rule is to use the named mechanism and report blocked if it cannot perform
+what is needed (`.agents/skills/bower-implement/SKILL.md` delegates to
+`docs/harness/WORKER.md`: "if it cannot do what you need, stop and report `blocked`").
+The direct user ownership restriction is the blocker, not a request for repeated approval.
+
+### Contradictions (TL-P4-51)
+
+- `runner/test/type-table.test.ts:57`, assertions at lines 69–71: requests and exercises
+  `firstMatchingRow`, while the packet's handoff explicitly directs its removal when
+  unused. The helper is removed; the test is not edited. This test remains red.
+- `runner/test/b5-incorporation.test.ts:94`: expects exactly one Claude callback, while
+  landed B1d executes selection then generation. Its callback reconstructs
+  `replySequence` per call. Before and after this patch the two-item fixture is refused
+  at the frozen selection, before the Markdown assertion. The run's earlier failure is
+  not claimed as evidence that the new rendering is wrong, nor was B1d loosened to
+  satisfy an older single-call assertion. This needs a test ruling/updated red session.
+
+Remaining proposal admission/deduplication, immutable artifacts, installation, decline
+lookup, trusted column execution, typed planner facts and Table UI are **not implemented**.
+Some are independently implementable, but work stops at the explicit contract/test
+contradictions rather than introducing another mechanism. Full-suite failures are listed
+below; the patch is not ready for integration.
+
+### Compatibility draft
+
+| Changed home | Contract change | Existing stored data / callers | Evidence |
+| --- | --- | --- | --- |
+| `src/data/contracts/note-format.ts` row validation | Explicit tolerant mode retains unknown stored keys; strict remains default | Existing strict callers keep closed objects; `typeTableOk` explicitly calls strict mode | type-table stored-extension and strict-write tests; app run-manifest/questions suites |
+| `src/data/contracts/note-format.ts` number validation | Reject outside ±1e15 and nonfinite values | Note parsing/serialization is unchanged; new typed facts must meet the ruled bounds | b5-typed-property-bounds positive and negative cases |
+| `src/data/contracts/note-format.ts` money validation | Reject amounts with more than four decimal places; retain one ISO currency validator | Stored scalar reads unchanged; applies at typed-value admission | b5-typed-property-bounds and B5a typed-value bounds |
+
+Research: reused the packet's locally cited JSON Schema closed objects, ISO 4217,
+ISO dates, RFC 9413 and Zod references listed above; none fetched or independently
+reverified. Scope reviewed: row validator callers, proposal guard, manifest guards,
+provider prompt, planner, engine, scheduler, source interface, DriveVault and Table.
+No new abstraction, dependency, schema-consent channel or fixture was added.
+
+Call/count delta by inspection: zero new I/O and zero new model calls in this patch;
+the Markdown adds prompt bytes only. End-to-end timing growth is not established by
+mock-clock unit runs; no measured performance acceptance or designer verification is claimed.

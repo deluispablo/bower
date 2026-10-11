@@ -398,8 +398,12 @@ function boundIndexContext(shown: Shown): void {
 }
 
 function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
+  const cell = (value: unknown): string => JSON.stringify(value).replace(/\|/g, '\\|');
   return [
     promptInstructions(!!shown.folderCandidates),
+    '| Type | Matches | Template | Properties | Table | Group by |',
+    '| --- | --- | --- | --- | --- | --- |',
+    ...(shown.types ?? []).map((row) => `| ${[row.id, row.match, row.template, row.properties, row.table, row.group_by ?? null].map(cell).join(' | ')} |`),
     JSON.stringify({ ...(shown.rules ? { rules: shown.rules } : {}), ...(shown.aboutMe ? { aboutMe: shown.aboutMe } : {}), ...(shown.index !== undefined ? { index: shown.index } : {}), ...(run.hot ? { hot: run.hot } : {}), runId: run.runId, admission: took.taken.id, piles: inStableOrder(shown.piles), notes: shown.notes, folders: shown.folders, ...(shown.folderCandidates ? { foldersById: Object.fromEntries(shown.folderCandidates.map((f) => [f.folderId, f.path])) } : {}), ...(shown.sources ? { sources: shown.sources } : {}), ...(shown.indexed ? { indexed: shown.indexed } : {}), ...(shown.types ? { types: shown.types } : {}), ...(shown.selection ? { selection: shown.selection, allowedTargets: shown.allowedTargets } : {}), ...(shown.answers?.length ? { answers: shown.answers } : {}) }),
   ].join('\n');
 }
