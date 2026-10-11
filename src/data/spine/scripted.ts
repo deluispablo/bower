@@ -42,7 +42,7 @@ import { STAMP, stampOf } from './write-once';
 import { NOTE_TEMPLATES, type NoteTemplate } from '../contracts/note-templates';
 import { typeRowOk, readTypeTable, propertyValuesOk, insertTypeRow, requestTableColumn, rewriteTypeTable } from '../contracts/note-format';
 
-import { aboutContext, observationOf, parseObservations } from '../contracts/observations';
+import { aboutContext, hasVerbatimQuote, normalizedText, observationOf, parseObservations } from '../contracts/observations';
 
 export { SET_ASIDE, listedPiles };
 
@@ -435,7 +435,7 @@ export interface AuthoredState {
  */
 export interface Filing {
   observations?: readonly unknown[];
-  forget?: readonly { factId: string }[];
+  forget?: readonly { factId: string; quote?: string }[];
   shownFactIds?: readonly string[];
   thing(fileId: string): Placement | null;
   words(pileId: string): Placement | null;
@@ -533,7 +533,7 @@ export interface Disagreement {
  */
 export interface Decisions {
   observations?: readonly unknown[];
-  forget?: readonly { factId: string }[];
+  forget?: readonly { factId: string; quote?: string }[];
   shownFactIds?: readonly string[];
   thing(t: ThingSeen): Placement | null;
   words(pileId: string, words: string): Placement | null;
@@ -766,15 +766,17 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     }
   }
   const forgetWords = piles.filter((p) => /\bforget\b/i.test(p.text));
+  const boundedLearned = aboutContext({ personal: '', learned: memoryLedger.live.map((f) =>
+    timelineLine({ date: f.date, text: f.text, source: f.origin.kind === 'document' ? 'Source' : 'Your words' })).join('\n'), factIds: [] }).learned.text;
+  const shownText = new Set(boundedLearned.split(/\r?\n/).flatMap((line) => parseTimelineLine(line)?.text ?? []));
+  const shownIds = new Set(memoryLedger.live.filter((f) => shownText.has(f.text)
+    && (!opts.decisions.shownFactIds || opts.decisions.shownFactIds.includes(f.factId))).map((f) => f.factId));
   const boundForget = new Map<string, string[]>();
-  for (const { factId } of opts.decisions.forget ?? []) {
-    const fact = memoryLedger.events.find((f) => f.kind === 'observation' && f.factId === factId);
-    // shortcut: legacy Forget replies lack a pile id; ambiguous word overlap asks through Q1 instead.
-    const words = (fact?.kind === 'observation' ? fact.text : '').toLowerCase().match(/[\p{L}\p{N}_-]+/gu) ?? [];
-    const matching = forgetWords.filter((p) => forgetWords.length === 1 || words.some((word) => word.length > 3
-      && !['that', 'when', 'with', 'this', 'alex', 'your', 'only', 'from', 'about'].includes(word)
-      && (p.text.toLowerCase().match(/[\p{L}\p{N}_-]+/gu) ?? []).some((token) => token === word)));
+  for (const { factId, quote } of opts.decisions.forget ?? []) {
+    const matching = forgetWords.filter((p) => hasVerbatimQuote(p.text, quote));
     if (matching.length !== 1) continue;
+    const facts = memoryLedger.live.filter((f) => normalizedText(f.text).includes(normalizedText(quote ?? '')));
+    if (facts.length !== 1 || facts[0]?.factId !== factId || !shownIds.has(factId)) continue;
     const pile = matching[0];
     if (pile) { boundForget.set(pile.id, [...(boundForget.get(pile.id) ?? []), factId]); memoryWords.add(pile.id); }
   }
@@ -859,7 +861,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     pileAsk: (p) => {
       if (chosen.has(p.id) || p.items.some((i) => chosen.has(i.id))) return null;
       const subjects = subjectMembers({ id: askId(p.id), subject: p.id }, [p], PILE_NOTE, inboxHashes);
-      return opts.decisions.pileAsk(p) ?? (/\bforget\b/i.test(p.text) && !memoryWords.has(p.id)
+      return opts.decisions.pileAsk(p) ?? (/\bforget\b/i.test(p.text) && !boundForget.has(p.id) && !forgetChoices.has(p.id)
         ? { text: 'Which fact should Bower forget?', yes: 'Use this', no: 'Keep it' } : null) ?? (subjects.length === 1 && subjects[0] === p.id ? reaskOf(p.id) ?? null : null);
     },
     ...(opts.decisions.merge ? { merge: (item, yes) => chosen.has(item.id) || reaskOf(item.id) ? null : opts.decisions.merge?.(item, yes) ?? null } : {}),
@@ -876,7 +878,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       return null;
     };
     if (pile && /\bforget\b/i.test(pile.text)) {
-      const facts = memoryLedger.live.filter((fact, i, all) => (!d.shownFactIds || d.shownFactIds.includes(fact.factId))
+      const facts = memoryLedger.live.filter((fact, i, all) => shownIds.has(fact.factId)
         && all.findIndex((f) => f.text === fact.text) === i).slice(0, 4);
       // shortcut: offer the first four shown facts; add narrowed retrieval when more choices are needed.
       if (facts.length < 2) return unavailable();
@@ -2246,16 +2248,12 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const forgetIds = new Set<string>();
   const selectedForget = [...forgetChoices.values()].map((c) => c.factId);
   for (const choice of forgetChoices.values()) { forgetIds.add(choice.factId); memoryRecords.add(choice.recordId); }
-  const boundedLearned = aboutContext({ personal: '', learned: memoryLedger.live.map((f) =>
-    timelineLine({ date: f.date, text: f.text, source: f.origin.kind === 'document' ? 'Source' : 'Your words' })).join('\n'), factIds: [] }).learned.text;
-  const shownText = new Set(boundedLearned.split(/\r?\n/).flatMap((line) => parseTimelineLine(line)?.text ?? []));
-  const shownIds = new Set(memoryLedger.live.filter((f) => shownText.has(f.text)
-    && (!d.shownFactIds || d.shownFactIds.includes(f.factId))).map((f) => f.factId));
   for (const f of d.forget ?? []) {
     const words = forgetWords.filter((p) => boundForget.get(p.id)?.includes(f.factId));
-    const questions = questionState.questions.filter((q) => words.some((p) => q.subject === p.id));
-    if ((!shownIds.has(f.factId) && !memoryLedger.tombstones.some((t) => t.reason === 'forget' && t.factId === f.factId)) || !words.length || (questions.length && !selectedForget.includes(f.factId)))
+    const questions = questionState.questions.filter((q) => (words.length ? words : forgetWords).some((p) => q.subject === p.id));
+    if (questions.length && !selectedForget.includes(f.factId))
       return refused('Forget must name the shown fact selected by the person');
+    if (!words.length) continue;
     forgetIds.add(f.factId);
   }
   const tombstones = memoryLedger.live.flatMap((fact) => {

@@ -4,7 +4,7 @@ import { sha256 } from './hashes';
 import { proposalOk, isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
 import { parseNote, readTypeTable, typeRowOk, typeTableOk } from './note-format';
 import { BowerError, type UpdatedRow } from './types';
-import { parseObservations, canRebuildAboutSection, aboutArchivePath, validLearnedBlock } from './observations';
+import { parseObservations, canRebuildAboutSection, aboutArchivePath, validLearnedBlock, hasVerbatimQuote } from './observations';
 import { applyChanges, mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, profileTextOk, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 import { TEMPLATE_REGIONS, type TemplateRegion } from './note-templates';
@@ -830,7 +830,7 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2, finalized: boolean
             if (origin.kind === 'words') {
               const pile = value.capture.piles.find((p) => p.pileId === origin.pileId);
               if (pile?.context.kind !== 'text' || pile.context.file.fileId !== event.source.fileId
-                || pile.context.content.sha256 !== event.source.sha256 || !parseNote(pile.context.file.name, pile.context.text).body.includes(event.text)) return false;
+                || pile.context.content.sha256 !== event.source.sha256 || !hasVerbatimQuote(parseNote(pile.context.file.name, pile.context.text).body, event.text)) return false;
             } else if (origin.kind === 'document') {
               return false;
             } else if (!value.capture.journal.some((j) => j.recordId === origin.recordId && j.fileIds.includes(event.source.fileId)

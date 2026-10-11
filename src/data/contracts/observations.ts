@@ -98,7 +98,11 @@ export function parseObservations(bytes: Uint8Array, undoneRunIds: readonly stri
   }
   return resolve(events, undoneRunIds);
 }
-const normalizedText = (text: string): string => text.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+export const normalizedText = (text: string): string => text.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+
+/** Remember and Forget require the same verbatim evidence in the person's own words. */
+export const hasVerbatimQuote = (words: string | undefined, quote: unknown): quote is string =>
+  typeof quote === 'string' && !!quote.trim() && words?.includes(quote) === true;
 
 function resolve(events: Event[], undone: readonly string[] = []): Ledger {
   const tombstones = events.filter((e): e is Tombstone => e.kind === 'tombstone');
@@ -141,8 +145,7 @@ export function observationOf(candidate: unknown, context: {
     : Object.keys(ref).join() === 'fileId' && ref.fileId === e.source.fileId);
   if (matches.length !== 1) return { ok: false };
   const evidence = matches[0];
-  if (!evidence || evidence.kind === 'document' || typeof candidate.text !== 'string'
-    || !candidate.text.trim() || !evidence.words?.includes(candidate.text)) return { ok: false };
+  if (!evidence || evidence.kind === 'document' || !hasVerbatimQuote(evidence.words, candidate.text)) return { ok: false };
   const { source, words: _words, ...rest } = evidence;
   // Validated lineage's bookkeeping is not part of the persisted origin.
   const origin = Object.fromEntries(Object.entries(rest).filter(([key]) => key !== 'validated'));
