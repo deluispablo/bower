@@ -1419,3 +1419,155 @@ Commit groups: new test alone, then notes alone; .codex-commits.json is supplied
 for the runner. No commits were created in this session.
 left out: implementation, full suites, pnpm check, e2e and designer verification.
 Risk: the live proposal path remains intentionally unwired until the separate fix.
+
+## Step 2 (addendum 10 (4))
+
+Implementer: codex; ponytail full. The live proposal red now passes through
+production main and the Claude provider. No test, fixture, dependency directory,
+shared harness record or compatibility ledger was changed. No network, git write,
+node_modules replacement/symlink, server or browser command was used.
+
+### Scope and mechanism
+
+- `runner/src/claude.ts`: the strict tidy-intent envelope and reply body accept
+  optional `askAfter` entries containing an admitted pile id, plain question
+  wording and a proposal. The existing shared `proposalOk` validator checks the
+  complete closed payload and strict type-row bounds; no parallel declaration
+  validator was added. Unknown keys, unadmitted piles, duplicate entries for a
+  pile and invalid question wording refuse the reply before executable effects.
+  The runner supplies `q-proposal-<proposal id>` and the run's requestedAt.
+- `src/data/spine/scripted.ts`: `Filing` gains the same optional askAfter callback
+  already used by Decisions, and `modelDecisions` forwards it. The planner's
+  existing after-filing callback, proposal admission, manifest persistence,
+  authoritative questions and immutable artifacts do all subsequent work.
+  Capacity, item order, payload deduplication, declined identities and consent
+  remain decided there. No second admission, loader, writer or consent store.
+- The existing prompt documents the optional wire shape and asks for a proposed
+  declaration for a new kind while still filing it immediately like the closest
+  kind. New proposal ids are the sole exception to the existing no-new-ids rule;
+  question ids and hashes remain runner-owned. To keep the existing 9,000-character
+  instruction bound, redundant placement, naming and number wording was shortened
+  with the same rules retained. Existing method, provider and raw-name checks pass,
+  including the copy-number and camera/scanner examples. The prompt still treats
+  document text as data and asks the person before remembering a declaration.
+
+Caller inventory before editing: modelDecisions is called by the Claude provider's
+plannedWith; Filing is used there and by replySchema. planScripted already consumes
+Decisions.askAfter and already owns the proposal lifecycle. The new production-main
+red uses the actual provider and planner, scripting only Claude's process reply.
+No caller, fixture, config, export or dependency outside these two homes needs a
+production change. Omitted askAfter keeps legacy replies working; invalid rows
+refuse without touching the original inbox bytes. Admission never installs a row
+without the person's answer. Existing writes retain their id/version fences.
+
+Research: reused the packet's locally supplied closed-object and Zod precedents,
+https://json-schema.org/understanding-json-schema/reference/object#additionalproperties
+and https://zod.dev/api, and the existing proposalOk / inOrder schema pattern.
+No external source was fetched or independently reverified under the no-network rule.
+
+removed: the reply envelope's blanket rejection of askAfter; shared proposal validation and admission remain.
+removed: redundant prompt wording to keep the existing instruction-length bound; placement/naming/number rules remain.
+tests changed: none; no test, golden, assertion, fixture, budget, tolerance or timing pin was edited.
+
+### Compatibility draft
+
+No file under `src/features` or `src/data/contracts` changed in this step, so no
+compatibility draft row is required for those directories. The shared planner's
+Filing callback is additive and optional; the legacy-reply control passes.
+The earlier production commit `25a0ea1b` (Source roles / stored table bytes) needs
+its coordinator-owned ledger entry separately; this step does not edit that ledger.
+
+### Red, green and exact remaining failures
+
+Before editing, the unchanged `b5b-r2 4 live proposal reaches admission` red failed
+with 19 soft assertion failures: valid Claude replies were refused as notIntent,
+novel files stayed in the inbox, and no proposal question or artifact reached
+admission. Legacy and invalid-payload controls passed. Logs:
+`/tmp/b5b-step2-fix-red.log` and `/tmp/b5b-step2-fix-red.json`.
+
+After wiring, that exact test passes. It proves the text-200 / enum-20 / four-column
+boundary, rejects text-201 / enum-21 / five columns / unknown row keys, admits the
+first two distinct proposals with no earlier open, one with four earlier open,
+and none with five earlier open. All three novel files still file at full capacity.
+Prior cards stay unchanged; frozen artifact payloads equal authoritative question
+payloads; the stored type table remains byte-identical. Initial green:
+`/tmp/b5b-step2-fix-target.log` and `.json`. Final targeted provider/method run:
+30/30 pass in `/tmp/b5b-step2-fix-target-final.log` and `.json`. After retaining
+the raw-name examples, the exact proposal, method and c04 prompt suites pass
+12/12 in `/tmp/b5b-step2-fix-prompt-final.log` and `.json`.
+
+The first full runner run exposed the existing prompt-length bound as well as
+the two old prompt goldens. Prompt wording was shortened without changing that
+bound. A subsequent full run caught the exact raw-name example assertion; its
+examples were retained in the shorter wording. Neither failure remains in the
+final full runner run. All existing tests and goldens remain unchanged.
+
+| Check | Result | OS-temp log |
+| --- | --- | --- |
+| Full runner, --maxWorkers=2, final production text | 757 pass / 2 stale prompt goldens; 61 files | /tmp/b5b-step2-fix-runner-complete.log |
+| Exact live proposal red, in full runner | pass | /tmp/b5b-step2-fix-runner-complete.log |
+| Full vitest run src, --maxWorkers=2 | 5829 pass / missing prior compatibility row / expected EPERM; 180 files | /tmp/b5b-step2-fix-src.log |
+| App TypeScript, no emit/incremental | pass | /tmp/b5b-step2-fix-tsc-app.log |
+| Node TypeScript, no emit/incremental | pass | /tmp/b5b-step2-fix-tsc-node.log |
+| Runner TypeScript, no emit | pass | /tmp/b5b-step2-fix-tsc-runner-final.log |
+| ESLint, runner/src/claude.ts from runner/ | pass | /tmp/b5b-step2-fix-eslint-runner-final.log |
+| ESLint, src/data/spine/scripted.ts from root | pass | /tmp/b5b-step2-fix-eslint-app.log |
+| node scripts/check-unused-gate.mjs | pass; 2 known general / 29 known production findings; no new ones | /tmp/b5b-step2-fix-unused.log |
+| git diff --check, read-only | pass | empty output |
+
+Complete final runner contradiction list, after running all targeted suites:
+
+- `runner/test/model-input-fingerprint.test.ts:100`, "the model input on the C04
+  fixture equals its golden copy": the normalized golden pins the prompt before
+  the live proposal instructions required for this path. The new optional wire
+  shape and shortened equivalent wording intentionally change those bytes.
+- `runner/test/model-input-fingerprint.test.ts:112`, "the raw model input on the
+  C04 fixture equals its golden copy": the raw golden pins the same prior prompt.
+  Both old goldens are left unchanged under the assignment's no-test-change rule.
+  The identical-runs fingerprint control still passes.
+
+Complete src failure list:
+
+- `src/docs.test.ts:134`, "every change since the P2 freeze is listed": the
+  compatibility ledger lacks earlier commit `25a0ea1b`. This is existing committed
+  history and a coordinator-owned record, not a consequence of this uncommitted
+  provider/planner diff. No src/features or src/data/contracts file is changed here.
+- `src/e2e-port.test.ts:37`, "a server from another worktree is never reused":
+  sandbox listen EPERM triggers its 5000 ms timeout and one unhandled listen error,
+  as expected in the assignment. No timer or port assertion was changed.
+
+Test invocations reused the existing OS-temp configs from the red / earlier
+round: original runner/app configs, original timer gate and allowlist, disabled
+Vitest cache and OS-temp Vite cache/JSON results. The setup omits only the optional
+CPU report that otherwise writes repository artifacts. No test output was written
+into the checkout. An initial combined ESLint invocation from the root failed
+because TypeScript ESLint found both runner and root config directories; invoking
+each touched file from its own package resolves this without a config change.
+
+```sh
+# From runner/:
+pnpm exec vitest run --config /private/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b5b-r2-runner.config.mts --configLoader runner --maxWorkers=2 --outputFile.json=/tmp/b5b-step2-fix-runner-complete.json > /tmp/b5b-step2-fix-runner-complete.log 2>&1
+pnpm exec eslint src/claude.ts > /tmp/b5b-step2-fix-eslint-runner-final.log 2>&1
+# From the worktree root:
+pnpm exec vitest run src --config /tmp/b5b-a6-app.config.mts --configLoader runner --maxWorkers=2 --outputFile.json=/tmp/b5b-step2-fix-src.json > /tmp/b5b-step2-fix-src.log 2>&1
+pnpm exec tsc -p tsconfig.app.json --noEmit --incremental false > /tmp/b5b-step2-fix-tsc-app.log 2>&1
+pnpm exec tsc -p tsconfig.node.json --noEmit --incremental false > /tmp/b5b-step2-fix-tsc-node.log 2>&1
+pnpm exec tsc -p runner/tsconfig.json --noEmit > /tmp/b5b-step2-fix-tsc-runner-final.log 2>&1
+pnpm exec eslint src/data/spine/scripted.ts > /tmp/b5b-step2-fix-eslint-app.log 2>&1
+node scripts/check-unused-gate.mjs > /tmp/b5b-step2-fix-unused.log 2>&1
+```
+
+Calls/timing: no budget, tolerance or timing pin changed. This is schema/decision
+wiring into existing planning effects, with no added model phase or reader/writer.
+The full suite keeps the existing corpus/timing controls; no real model latency
+was measured offline. Runtime payload/artifact calls remain owned by the existing
+proposal mechanism rather than a new transport.
+
+Two commit groups are supplied in `.codex-commits.json`: production files, then
+this notes file alone. The runner commits and runs pnpm check and the capabilities
+and folder-table e2e on demo/fake. No git write command was run. Delivery is blocked
+on the unchanged old prompt goldens and prior compatibility row, with the live
+proposal implementation complete and its exact red green.
+
+left out: runner-owned commits, pnpm check, capabilities/folder-table e2e and designer verification.
+Risk: old prompt goldens and the prior missing ledger row prevent claiming all-green suites; browser gates are deferred.
