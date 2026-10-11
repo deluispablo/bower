@@ -2,12 +2,12 @@
 
 Coordinator: the Claude Code session named "Orquestador". It integrates in `/Users/deluisp/Projects/bower-app` on branch `claude/p3`; P4 continues on it. Lead: the Planificador session ([DECISIONS.md](DECISIONS.md)). Output rule: [TL-P3-29](2026-10-07-tl-p3-29-output-rule-survives-compaction.md), in AGENTS.md. Minors: [P2_POLISH.md](P2_POLISH.md). Earlier handoffs: git history of this file.
 
-## Resume (2026-10-11 wind-down before the CLI/tmux restart; TL-P4-56, TL-P4-57)
+## Resume (2026-10-11, CLI/tmux; TL-P4-56, TL-P4-57, TL-P4-60 auto-compaction)
 
 This block is the whole current state; ACTIVE.md is the history log. A Codex successor follows [CODEX_TAKEOVER.md](CODEX_TAKEOVER.md).
 
 **State.**
-- claude/p3 holds main a22301d8 (merged): 523/537.
+- claude/p3 holds main up to TL-P4-48 addendum 4 (1ac0b793, merged): 523/537.
 - After each lead ruling, merge main again (`git -C /Users/deluisp/Projects/bower-app merge -q --no-edit main`).
 - Check `git -C /Users/deluisp/Projects/bower-app branch --show-current` before each integrate. An owner Codex Desktop thread once switched the checkout to main (DEFECT_LOG main-checkout-switched).
 - backup/main and staging are at 5bab1288.
@@ -17,7 +17,11 @@ This block is the whole current state; ACTIVE.md is the history log. A Codex suc
   - a backup after harness/jobs/backup-scan.sh 5bab1288;
   - the SHA sent to the lead;
   - a staging smoke.
-- No job is running. Nothing is dispatched.
+- Jobs running: B1d's adversarial pass (Codex 1 of 4) and B4a's gates. Their prompts and job scripts are in the coordinator scratchpad `/private/tmp/claude-501/-Users-deluisp-Projects-bower-app/19ca090d-5e3d-4a2f-899c-8f2af3d7d836/scratchpad` (`codex-*-prompt.md`, `jobs/*.sh`).
+  - B1d adversarial pass: `jobs/b1d-adv7.sh`, result `/tmp/codex-run/b1d-selection-21.result`.
+  - B4a gates: `/tmp/gates-b4a-g2/` (check.log, e2e.log, e2e-fake.log).
+  - When a job ends: read the result's card. If the status is check-failed, read the notes' newest round and the check log.
+- Pending designer checks: none (B1d and B4a are ui: false).
 
 **Loop per entry (TL-P4-29/31/51/54, TL-P4-56 addendum 1, TL-P4-57).** Workers are Codex only, through `harness/codex-run.sh <worktree> <prompt> --entry <id> --attempt <n> --model … --effort …`. The result is `/tmp/codex-run/<entry>-<n>.result`, and codex-run commits per `.codex-commits.json`: a JSON array of {message, files}, with notes in their own commit so done.sh can revert the fix.
 - **Models:** escalated reds, implementations and closing reviews use gpt-6-astra high. Adversarial passes use gpt-6-astra xhigh. Normal and fix rounds use gpt-6.1-sol high, and mechanical work uses Sol medium. Cap: 4.
@@ -36,8 +40,8 @@ This block is the whole current state; ACTIVE.md is the history log. A Codex suc
 
 | Entry | Branch / worktree | Last SHA | Attempt | Next step | Ruling |
 | --- | --- | --- | --- | --- | --- |
-| b1d-selection (escalated) | b1d-selection, /private/tmp/bower-b1d-selection | a187863c | round 6 done; adversarial pass 4 ruled (TL-P4-41 addendum 24, main 1034ad40) | Round 7 (no work done yet): one red for (1) and (2), then the fix, gates, Astra xhigh, Astra high review. (1) execution writes only ids the selection names; a request pin only makes its note a candidate, and if left out the request stays unconsumed in the inbox. (2) a person's note with type: moc and no by: bower is never snapshotted as a Bower MOC. (3) cut-context fingerprints are a v1 limit; write it in the notes. | TL-P4-41 addenda 13–24 |
-| b4a-contract (escalated) | b4a-contract, /private/tmp/bower-b4a-contract | e2430d25 | pass 2 BLOCK (attempt 9), report 2026-10-11-b4a-adversarial-2.md | Sent to the lead: (1) data safety, (2) hard rule; (3) and (4) are normal use, v1 limits unless the lead rules otherwise. Gates b4a-g1 red: tsc app (observations.ts:67,149, run-manifest.ts:771) and the capabilities.spec:210 axe check on fake; both go in the fix round. Next: the lead's ruling, then fix round 2 (red first), gates, pass 3, the high review. After B1d integrates: merge claude/p3, update the RUNNER_WRITES pin (claude-provider.test.ts:600), watch for conflicts in ownership-format, run-manifest and note-format, then integrate. | TL-P4-48 addenda 1–3 |
+| b1d-selection (escalated) | b1d-selection, /private/tmp/bower-b1d-selection | c14616cd+ea9eed90 | pass 5 ruled in TL-P4-41 addendum 25: the merge stays whole, backlink rewrites are the script's consequence, pin saturation is a v1 limit; tests-only attempt 22 running (Sol high, scratchpad jobs/b1d-r8.sh, result /tmp/codex-run/b1d-selection-22.result) | Next: the tests pass (production unchanged) → Astra high review (new prompt, read-only, P4-119 numbering by review files) → integrate B1d (check the branch first; known-green if the revert is unclean). | TL-P4-41 addenda 13–24 |
+| b4a-contract (escalated) | b4a-contract, /private/tmp/bower-b4a-contract | b4a-contract worktree HEAD | pass 3 BLOCK (attempt 12), report b4a-adversarial-3.md; sent to the lead for a ruling: (1) data safety, a forgotten fact replayed in another section; (2) hard rule, an extra marked region passes without evidence; also two normal-use findings, (3) an ordinary add is treated as consolidation and returns 'shape', (4) repeated remember-forget-remember gives no live fact | Next: the lead's ruling, then fix round 3 (red first), gates, pass 4, the high review. | TL-P4-48 addenda 1–4 |
 
 **Queue, in order.**
 1. B1d close, then B4a.
@@ -48,7 +52,14 @@ This block is the whole current state; ACTIVE.md is the history log. A Codex suc
 6. B7, B8 and B9 per P4_PLAN.
 7. The retest.
 
-**Open questions to the lead.** None (B1d pass 4 ruled in addendum 24).
+**Open questions to the lead.** None (B1d pass 4 ruled in addendum 24; B4a pass 2 ruled in TL-P4-48 addendum 4).
+
+**Entry files.**
+- Packets are on claude/p3 in docs/harness: 2026-10-11-b1d-selection-packet.md and 2026-10-11-b4a-contract-packet.md.
+- Notes and adversarial reports are in each worktree's docs/harness:
+  - B1d: 2026-10-11-b1d-selection-notes.md and b1d-adversarial-final{,-2,-3,-4}.md;
+  - B4a: 2026-10-11-b4a-contract-notes.md and b4a-adversarial-{1,2}.md.
+- The adversarial prompt for the next pass: the scratchpad's codex-b1d-adv-prompt.md and codex-b4a-adv-prompt.md. Update the round, the addenda and the previous pass's file first.
 
 **Notes.**
 - B6a's integrate rule: a verify pattern needs at least 4 non-meta characters (scripts/harness-rules.mjs).
