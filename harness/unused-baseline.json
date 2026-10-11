@@ -2,7 +2,10 @@
   "date": "2026-10-09",
   "note": "Known unused code (knip). The list may only shrink: remove a line when the code is used or deleted. See docs/harness/2026-10-09-c3-unused-code-notes.md.",
   "findings": [
-    "duplicates src/data/contracts/run-phases.ts RUN_STEPS=ACTIVE_PHASES"
+    "duplicates src/data/contracts/run-phases.ts RUN_STEPS=ACTIVE_PHASES",
+    "exports runner/src/spine/admitted.ts observationOrigin"
   ],
-  "reasons": {}
+  "reasons": {
+    "exports runner/src/spine/admitted.ts observationOrigin": "B4b wires admitted memory intake; B4b removes this row."
+  }
 }

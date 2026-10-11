@@ -14,12 +14,13 @@ import { displayName, nameOf } from './tree';
 import type { ChangeEntry, Rule } from './types';
 import { sha256 } from './hashes';
 import { dateOk, parseNote, timelineEntries } from './note-format';
-import { MOC_REGIONS, createOwnershipContext, fenceAfter, parseOwnership, type MocRegion, type ByteSpan, type Fence, type Layout, type OwnershipFailure, type FetchedOwnership } from './ownership-format';
+import { ABOUT_REGIONS, MOC_REGIONS, createOwnershipContext, fenceAfter, parseOwnership, type MocRegion, type ByteSpan, type Fence, type Layout, type OwnershipFailure, type FetchedOwnership } from './ownership-format';
 import { parseTimelineLine, timelineLine, type TimelineMarker } from './timeline-line';
 import { parseRules } from './rules-format';
 import type { Change, EditEntry, EditText, Rename, RuleAdd, RuleRemove, TimelineConsent, MaintenanceNote } from './run-manifest';
 import { isHub } from './hub';
 import { BowerError } from './types';
+import { validLearnedBlock } from './observations';
 import { NOTE_TEMPLATES, TEMPLATE_REGIONS, type NoteTemplate } from './note-templates';
 
 /** Files larger than 1 MiB are never edited (TL-P2-20 rule 6). */
@@ -44,7 +45,7 @@ export type Authors = { splice: (text: string, at: number, insert: string) => st
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
-const ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'timeline-append', 'rules-wording', 'profile-rewrite', 'moc-rewrite', 'template-rewrite'];
+const ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'timeline-append', 'rules-wording', 'profile-rewrite', 'moc-rewrite', 'template-rewrite', 'about-append', 'about-rewrite'];
 const RULE_LINE = /^- (.*?)(?:\s*<!-- since (\d{4}-\d{2}-\d{2}) -->)?\s*$/;
 const WORDS_LINE = /^\s+\*You wrote: "(.*)"\*\s*$/;
 const SUMMARY_LINE = /^summary: \d+ rules? Bower follows in every tidy-up\.$/;
@@ -137,6 +138,9 @@ export function profileTextOk(text: string): boolean {
 }
 function fieldsOk(change: Change): boolean {
   switch (change.kind) {
+    case 'about-append': return typeof change.text === 'string';
+    case 'about-rewrite': return ABOUT_REGIONS.includes(change.region) && typeof change.previous === 'string'
+      && typeof change.text === 'string' && !change.text.includes('<!-- bower:ownership');
     case 'template-rewrite': return TEMPLATE_REGIONS.includes(change.region) && typeof change.previous === 'string'
       && typeof change.text === 'string' && !change.text.includes('<!-- bower:ownership');
     case 'profile-rewrite': return typeof change.previous === 'string' && typeof change.text === 'string' && profileTextOk(change.text);
@@ -148,7 +152,8 @@ function fieldsOk(change: Change): boolean {
     case 'rules-wording': return change.add.length + change.remove.length > 0 && change.add.every(ruleAddOk) && change.remove.every(ruleRemoveOk);
   }
 }
-const changeOrder = (c: Change): number => c.kind === 'template-rewrite' ? ORDER.length + MOC_REGIONS.length + TEMPLATE_REGIONS.indexOf(c.region)
+const changeOrder = (c: Change): number => c.kind === 'about-rewrite' ? ORDER.length + MOC_REGIONS.length + TEMPLATE_REGIONS.length + ABOUT_REGIONS.indexOf(c.region)
+  : c.kind === 'template-rewrite' ? ORDER.length + MOC_REGIONS.length + TEMPLATE_REGIONS.indexOf(c.region)
   : c.kind === 'moc-rewrite' ? ORDER.length + MOC_REGIONS.indexOf(c.region) : ORDER.indexOf(c.kind);
 const ordered = (changes: readonly Change[]): boolean => changes.length > 0
   && changes.every((item, i) => i === 0 || changeOrder(changes[i - 1] ?? item) < changeOrder(item));
@@ -671,7 +676,16 @@ function relink(text: string, change: Extract<Change, { kind: 'link-rewrite' }>,
   }
   // One simultaneous pass: each target is replaced once, right to left so earlier offsets hold.
   let next = text;
-  for (const item of [...out].sort((a, b) => b.at - a.at)) next = next.slice(0, item.at) + item.to + next.slice(item.at + item.length);
+  for (const item of [...out].sort((a, b) => b.at - a.at)) {
+    // Learned links refresh from evidence at rebuild, never through generic renames.
+    if (ABOUT_REGIONS.some((region) => {
+      const payload = own.payloads?.[region];
+      if (!payload) return false;
+      const span = spanOf(bytes, payload);
+      return item.at >= span.start && item.at < span.end;
+    })) continue;
+    next = next.slice(0, item.at) + item.to + next.slice(item.at + item.length);
+  }
   return { text: next, added: [], rules: null };
 }
 
@@ -925,7 +939,17 @@ function framedMoc(text: string): string | null {
   return parseOwnership(encoder.encode(out)).status === 'v2' ? out : null;
 }
 
-type RegionChange = Extract<Change, { kind: 'moc-rewrite' | 'profile-rewrite' | 'template-rewrite' }>;
+/** Initialization appends once; the shared parser alone grants the new payload spans. */
+function appendAbout(text: string, addition: string): Step {
+  const before = parseOwnership(encoder.encode(text));
+  const appended = text + (text && !text.endsWith('\n') ? '\n' : '') + addition;
+  if (before.status === 'invalid' || ABOUT_REGIONS.some((region) => before.payloads?.[region])
+    || !addition.startsWith('## What Bower has learned\n') && !addition.startsWith('## What Bower has learned\r\n')
+    || !validLearnedBlock(addition)) return { refused: 'not-bower' };
+  return { text: appended, added: [], rules: null };
+}
+
+type RegionChange = Extract<Change, { kind: 'moc-rewrite' | 'profile-rewrite' | 'template-rewrite' | 'about-rewrite' }>;
 const regionOf = (change: RegionChange) => change.kind === 'profile-rewrite' ? 'profile' : change.region;
 function rewriteRegion(text: string, change: RegionChange, fetched?: FetchedOwnership): Step {
   const framed = change.kind === 'moc-rewrite' ? framedMoc(text) : text;
@@ -933,7 +957,8 @@ function rewriteRegion(text: string, change: RegionChange, fetched?: FetchedOwne
   const bytes = encoder.encode(framed);
   const own = framed === text && fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
   const note = parseNote('note.md', framed);
-  const span = own.status === 'v2' ? own.payloads[regionOf(change)] : undefined;
+  if (own.status === 'invalid') return { refused: 'not-bower' };
+  const span = own.payloads?.[regionOf(change)];
   if (change.kind === 'template-rewrite' && (!note.byBower || !note.properties.some((p) => p.key === 'type' && p.value === 'project'))) return { refused: 'not-bower' };
   if ((change.kind === 'moc-rewrite' && (!note.byBower || !note.properties.some((p) => p.key === 'type' && p.value === 'moc'))) || !span) return { refused: 'not-bower' };
   const at = spanOf(bytes, span);
@@ -945,8 +970,8 @@ function regionHolds(before: string, after: string, change: RegionChange): boole
   if (framed === null) return false;
   const aBytes = encoder.encode(framed), bBytes = encoder.encode(after);
   const a = parseOwnership(aBytes), b = parseOwnership(bBytes);
-  const aSpan = a.status === 'v2' ? a.payloads[regionOf(change)] : undefined;
-  const bSpan = b.status === 'v2' ? b.payloads[regionOf(change)] : undefined;
+  const aSpan = a.status !== 'invalid' ? a.payloads?.[regionOf(change)] : undefined;
+  const bSpan = b.status !== 'invalid' ? b.payloads?.[regionOf(change)] : undefined;
   if (!aSpan || !bSpan) return false;
   const x = spanOf(aBytes, aSpan), y = spanOf(bBytes, bSpan);
   return framed.slice(0, x.start) === after.slice(0, y.start) && framed.slice(x.end) === after.slice(y.end)
@@ -983,9 +1008,9 @@ function applyAtVersion(before: Uint8Array, changes: readonly Change[], authors:
   let source = fetched;
   for (const change of changes) {
     // Intermediate text is generated, even when it carries the source file id.
-    const step = change.kind === 'state-rewrite' ? rewriteState(current, change, source)
+    const step = change.kind === 'about-append' ? appendAbout(current, change.text) : change.kind === 'state-rewrite' ? rewriteState(current, change, source)
       : change.kind === 'link-rewrite' ? relink(current, change, source)
-        : change.kind === 'timeline-append' ? appendLines(current, change, authors, source) : change.kind === 'moc-rewrite' || change.kind === 'profile-rewrite' || change.kind === 'template-rewrite' ? rewriteRegion(current, change, source) : wordRules(current, change, authors, source);
+        : change.kind === 'timeline-append' ? appendLines(current, change, authors, source) : change.kind === 'moc-rewrite' || change.kind === 'profile-rewrite' || change.kind === 'template-rewrite' || change.kind === 'about-rewrite' ? rewriteRegion(current, change, source) : wordRules(current, change, authors, source);
     source = fetched;
     if ('refused' in step) return refuse(step.refused);
     if (shape && !shape.timeline && own.layout.timeline) {
@@ -995,10 +1020,12 @@ function applyAtVersion(before: Uint8Array, changes: readonly Change[], authors:
         || decoder.decode(before.subarray(own.layout.timeline.start, own.layout.timeline.end))
           !== decoder.decode(nextBytes.subarray(nextOwn.layout.timeline.start, nextOwn.layout.timeline.end))) return refuse('invariant');
     }
-    const kept = change.kind === 'moc-rewrite' || change.kind === 'profile-rewrite' || change.kind === 'template-rewrite' ? regionHolds(current, step.text, change) : change.kind === 'state-rewrite' ? stateHolds(current, step.text, change) : holds(current, step.text, change, step);
+    const kept = change.kind === 'about-append' ? step.text === current + (current && !current.endsWith('\n') ? '\n' : '') + change.text : change.kind === 'moc-rewrite' || change.kind === 'profile-rewrite' || change.kind === 'template-rewrite' || change.kind === 'about-rewrite' ? regionHolds(current, step.text, change) : change.kind === 'state-rewrite' ? stateHolds(current, step.text, change) : holds(current, step.text, change, step);
     if (step.text !== current && !kept) return refuse('invariant');
     current = step.text;
   }
+  if (changes.some((c) => c.kind === 'about-append' || c.kind === 'about-rewrite')
+    && !validLearnedBlock(current)) return refuse('not-bower');
   if (current === text) return refuse('unchanged');
   return { ok: true, text: current, bytes: encoder.encode(current) };
 }
@@ -1038,6 +1065,7 @@ export async function recheckEdit(effect: EditText, bytes: Uint8Array, fetched?:
  * of the person's refuses it as `person-edited`, and an edit with no before-image as `unsupported`.
  */
 export async function undoEdit(effect: EditText, now: Uint8Array): Promise<EditResult> {
+  if (effect.changes.some((c) => c.kind === 'about-append' || c.kind === 'about-rewrite')) return { ok: false, reason: 'unsupported' };
   if (effect.beforeText === undefined) return { ok: false, reason: 'unsupported' };
   if (now.byteLength !== effect.content.size || await digest(now) !== effect.content.sha256) return { ok: false, reason: 'person-edited' };
   return { ok: true, text: effect.beforeText, bytes: encoder.encode(effect.beforeText) };

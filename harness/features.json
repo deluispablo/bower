@@ -7217,8 +7217,9 @@
     "steps": [
       "The packet contract reds pass; stored bytes of existing notes are unchanged."
     ],
-    "verify": "",
-    "note": "TL-P4-48. Escalated. Packet 2026-10-11-b4a-contract-packet.md (draft; open items to the lead). implementer: codex."
+    "verify": "pnpm exec vitest run src/data/contracts/b4a-r4.test.ts src/data/contracts/b4a-r5.test.ts src/data/contracts/b4a-r6.test.ts src/architecture-bracket.test.ts -t \"b4a-r|bracket-global\"",
+    "note": "TL-P4-48. Escalated. Packet 2026-10-11-b4a-contract-packet.md (draft; open items to the lead). implementer: codex.",
+    "review": "P4-122 contract checks PASS; scanner finding fixed in round 7 (TL-P4-48 addendum 10)"
   },
   {
     "id": "b4b-observations",

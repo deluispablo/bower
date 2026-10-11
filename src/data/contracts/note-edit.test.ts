@@ -1062,3 +1062,96 @@ it.each([
     expect(out.ok ? out.bytes : bytes).toEqual(enc(expected.replace(/\n/g, eol)));
   }
 });
+
+
+// B4a wire additions are intentionally cast only at the existing production boundary.
+const b4Prefix = '\ufeff---\r\nsummary: "Alex: café notes"\r\ncustom: [one, two]\r\n---\r\n\r\nAlex keeps e\u0301 and 😀.  \r\n';
+const b4Regions = [
+  ['about-you', 'About you'], ['about-working-on', "What you're working on"],
+  ['about-preferences', 'How you like things'],
+] as const;
+const b4Learned = (eol = '\n'): string => '## What Bower has learned' + eol
+  + b4Regions.map(([region, label]) => `<!-- bower:ownership/2 begin ${region} -->${eol}### ${label}${eol}<!-- bower:ownership/2 end ${region} -->${eol}`).join('');
+const b4Append = (): Change => ({ kind: 'about-append', recordIds: [], text: b4Learned('\r\n') } as unknown as Change);
+const b4Rewrite = (previous: string, text: string, region = 'about-you'): Change => ({
+  kind: 'about-rewrite', region, recordIds: [], previous, text,
+} as unknown as Change);
+
+it('b4a-composite-byte-append', async () => {
+  const { FOLDER_TEMPLATE } = await import('./folder-template');
+  // Legacy prefix control: no front-matter adoption or line-ending normalization.
+  const source = enc(b4Prefix);
+  const appended = applyChanges(source, [b4Append()]);
+  expect.soft(appended.ok, 'valid legacy prefix accepts a byte append').toBe(true);
+  if (appended.ok) {
+    expect(appended.bytes.subarray(0, source.length)).toEqual(source);
+    expect(appended.text.slice(b4Prefix.length)).toBe(b4Learned('\r\n'));
+    expect(appended.text.match(/^## What Bower has learned$/gm)).toHaveLength(1);
+    expect(appended.text).not.toContain('by: bower');
+    expect(appended.text).not.toContain('bower_format:');
+    expect(applyChanges(appended.bytes, [b4Append()]).ok, 'never append twice').toBe(false);
+  }
+  expect(source).toEqual(enc(b4Prefix));
+  const template = FOLDER_TEMPLATE.find((file) => file.path === 'About me.md');
+  expect(template).toBeDefined();
+  const initial = template?.content ?? '';
+  const initialized = applyChanges(enc(initial), [{ kind: 'about-append', recordIds: [], text: b4Learned() } as unknown as Change]);
+  expect.soft(initialized.ok, 'missing note starts from the existing folder template').toBe(true);
+  if (initialized.ok) expect(initialized.text).toBe(initial + b4Learned());
+  for (const damaged of [
+    b4Prefix + b4Learned().replace('end about-you', 'end about-preferences'),
+    b4Prefix + b4Learned() + b4Learned(),
+    b4Prefix + '<!-- bower:ownership/2 begin about-you -->\n',
+  ]) expect.soft(applyChanges(enc(damaged), [b4Append()]).ok, 'damaged/duplicate marks refuse').toBe(false);
+});
+
+it('b4a-existing-regions-compatible', async () => {
+  const { stateMark } = await import('./note-edit');
+  // Positive controls use the pre-existing author for MOC, profile and project template regions.
+  const moc = legacy('\n', 'type: moc', '## Overview', 'Alex grows beans.', '', '## Notes', '- [[Plot]]', '')
+    .replace('---\ntype: moc', 'type: moc\n---');
+  expect(applyChanges(enc(moc), [{ kind: 'moc-rewrite', region: 'moc-overview', recordIds: [],
+    previous: '## Overview\nAlex grows beans.\n\n', text: '## Overview\nAlex grows peas.\n\n' }]).ok).toBe(true);
+  const profile = profileNote();
+  expect(applyChanges(enc(profile.before), [profileChange(profile.previous, profileWords(4))]).ok).toBe(true);
+  expect(applyChanges(enc(b6Project()), [b6Rewrite('goal', '## Goal\nRepair the greenhouse.\n',
+    '## Goal\nReplace the stated cracked pane.\n')]).ok).toBe(true);
+  const state = `---\nby: bower\nbower_state: ${stateMark(['Original'])}\n---\n## Current state\n- Alex changed this\n`;
+  expect(applyChanges(enc(state), [{ kind: 'state-rewrite', recordIds: [], previous: ['Alex changed this'],
+    lines: ['Replacement'] }])).toEqual({ ok: false, reason: 'person-edited' });
+  const previous = '### About you\n';
+  const text = previous + 'Alex grows beans.\n';
+  const before = b4Prefix + b4Learned();
+  const result = applyChanges(enc(before), [b4Rewrite(previous, text)]);
+  expect.soft(result.ok, 'only the new marked payload is writable').toBe(true);
+  if (result.ok) expect(result.text).toBe(before.replace(previous, text));
+  for (const raw of [b4Prefix + '### About you\n', '---\nby: bower\n---\n### About you\n']) {
+    expect(applyChanges(enc(raw), [b4Rewrite(previous, text)]).ok, 'headings and by:bower grant no region').toBe(false);
+  }
+  for (const region of ['personal', 'current', 'profile', '../about-you']) {
+    expect(applyChanges(enc(before), [b4Rewrite(previous, text, region)]).ok, region).toBe(false);
+  }
+  expect(applyChanges(enc(before), [b4Rewrite(previous, text + '<!-- bower:ownership/2 end about-you -->\nAlex erased.\n')]).ok).toBe(false);
+});
+
+it('b4a-read-version-fence', async () => {
+  const { notAsSeen } = await import('./still-as-seen');
+  const before = b4Prefix + b4Learned();
+  const previous = '### About you\n';
+  const text = previous + 'Alex grows beans.\n';
+  const after = before.replace(previous, text);
+  const version = '2026-10-11T09:00:00.000Z';
+  const file = { fileId: 'about-id', name: 'About me.md', parents: ['FOLDER_ID'], folder: false, modifiedTime: version };
+  const effect: EditText = { kind: 'edit-text', before: file, path: 'About me.md', beforeText: before,
+    beforeContent: { ...raw(before), provenance: 'adapter-read', observedModifiedTime: version },
+    changes: [b4Rewrite(previous, text)], text: after, content: raw(after) };
+  expect.soft(await recheckEdit(effect, enc(before)), 'unchanged read evidence permits the authored edit').toBe('ok');
+  for (const changed of [before.replace('Alex keeps', 'Alex now keeps'), before.replace(previous, previous + 'Later fact.\n')]) {
+    expect(await recheckEdit(effect, enc(changed)), 'both personal and learned changes conflict').toBe('conflict');
+  }
+  const expected = { id: file.fileId, name: file.name, parents: file.parents, modifiedTime: version };
+  const now = { ...expected, trashed: false };
+  expect(notAsSeen(expected, now)).toBeNull();
+  expect(notAsSeen(expected, { ...now, modifiedTime: '2026-10-11T09:00:01.000Z' })).not.toBeNull();
+  expect(await recheckEdit({ ...effect, text: after + 'Unfrozen extra words.' }, enc(before))).toBe('conflict');
+});
