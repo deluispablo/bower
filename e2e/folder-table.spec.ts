@@ -228,3 +228,53 @@ test('b5b-r3 3 e2e: more than four columns shows the first four', async ({ page 
     });
   }
 });
+
+test('b5b-r4 2 e2e: hidden keys spend no column place', async ({ page }) => {
+  const declared = ['name', 'company', 'modified', 'salary', 'location', 'hours'];
+  const stored = JSON.stringify({ v: 1, rows: [{ ...b5OfferRow, properties: { ...b5OfferRow.properties, name: { type: 'text' }, modified: { type: 'text' } }, table: declared }] });
+  for (const source of ['demo', 'fake'] as const) for (const width of [375, 1440]) {
+    await test.step(`${source}, ${width}`, async () => {
+      await resize(page, { width, height: 900 });
+      await page.route('**/src/data/choose.ts*', async (route) => {
+        const response = await route.fetch();
+        const original = await response.text();
+        const renamed = original.replace(/\bbuildSources\b/g, 'b5R4OriginalSources');
+        expect(renamed).not.toBe(original);
+        await route.fulfill({ response, contentType: 'text/javascript', body: `${renamed}
+          export async function buildSources(...args) {
+            const result = await b5R4OriginalSources(...args);
+            const [{ FakeDrive }, { DriveVault }, { seedFakeDrive }] = await Promise.all([
+              import('/src/data/drive/fake-drive.ts'), import('/src/data/vault/drive-vault.ts'), import('/src/data/fake/seed.ts')]);
+            const drive = new FakeDrive({ clock: () => Date.UTC(2026, 9, 11) });
+            const root = await seedFakeDrive(drive, 'empty', Date.UTC(2026, 9, 11));
+            const files = await drive.listAll(root);
+            const resources = files.find((f) => f.name === 'Resources' && f.parents[0] === root);
+            const own = files.find((f) => f.name === '.bower' && f.parents[0] === root);
+            const folder = await drive.createFolder(resources.id, 'Applications');
+            const note = ${JSON.stringify({ ...b5Offer('Offer'), text: b5Offer('Offer').text.replace('type: offer', 'type: offer\nname: Alex\nmodified: Person-entered fact') })};
+            await drive.createText(folder.id, note.name + '.md', note.text);
+            await drive.createText(own.id, 'type-table.json', ${JSON.stringify(stored)});
+            const vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+            return { ...result, sources: { ...result.sources, vault } };
+          }` });
+      });
+      await page.goto(`/files/Resources/Applications?source=${source}&scenario=empty&time=instant`);
+      await expect(page.locator('#boot')).toHaveCount(0);
+      await page.getByRole('radiogroup', { name: 'View' }).getByRole('radio', { name: 'Table', exact: true }).click();
+      const table = page.getByRole('main').getByRole('table');
+      // Positive controls: the real note, existing controls and declared facts all loaded.
+      await expect(table.getByRole('link', { name: 'Offer', exact: true })).toBeVisible();
+      await expect(table.getByRole('cell', { name: 'Acorn Studio', exact: true })).toBeVisible();
+      expect(declared.length).toBeGreaterThan(4);
+      await expect(table.getByRole('columnheader')).toHaveText(['Name', 'Status', 'Company', 'Salary', 'Location', 'Hours', 'Changed']);
+      await expect(table.getByRole('columnheader', { name: 'Modified', exact: true })).toHaveCount(0);
+      await expect(table.getByRole('cell', { name: 'Remote', exact: true })).toBeVisible();
+      await expect(table.getByRole('cell', { name: '32', exact: true })).toBeVisible();
+      await table.getByRole('button', { name: 'Hours', exact: true }).click();
+      await expect(table.getByRole('columnheader', { name: 'Hours', exact: true })).toHaveAttribute('aria-sort', 'ascending');
+      await animationsEnd(page);
+      await expectAxeClean(page, { include: 'main', wcag22: true });
+      await page.unroute('**/src/data/choose.ts*');
+    });
+  }
+});
