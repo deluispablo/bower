@@ -2576,3 +2576,48 @@ Skipped: runner-owned commits, pnpm check and capabilities e2e; no production ed
 Risk: pnpm check and capabilities e2e remain unverified here and are owned by the runner.
 
 tests changed: runner/test/main.test.ts: the maintenance operationId assertions (:154, :155) compare the ids by the canonical rule against the resealed capture id instead of the pre-maintenance values, because addendum 9 registers captured places for maintenance targets; kinds, targets, paths, content and order are still asserted.
+
+
+## Round 7 red (addendum 10)
+
+P4-122 / TL-P4-48 addendum 10: red only. Scope reaches the new test,
+these notes and the runner commit manifest; no callers, exports, config,
+production code or existing tests changed. No runtime or user-data changes.
+
+tests changed: src/architecture-bracket.test.ts: new bracket-global red for contract and runner fixtures.
+tests changed: existing tests: none.
+
+The production scanner is not exported. The test parses architecture.test.ts
+with the installed TypeScript API, extracts the actual FORBIDDEN and
+usesForbiddenGlobal declarations, transpiles those unchanged declarations,
+and executes them with TypeScript injected. It does not import the enclosing
+repository-wide tests or copy/reimplement the scanner. A missing declaration
+fails explicitly. Both fixtures are in-memory source strings, with contract
+and runner filenames passed into the production scanner.
+
+Each fixture checks computed fetch and document access together, so both
+missed accesses appear in each failing assertion. Before that assertion,
+dotted globalThis.fetch is confirmed impure and console.log('document') is
+confirmed pure. All four controls passed; only the computed-global finding
+failed (both names returned false instead of true).
+
+Offline source: the installed TypeScript createSourceFile, forEachChild and
+transpileModule APIs, already used by the production syntax scanner.
+Reference: https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API
+No network research, new dependency or second purity mechanism.
+
+Verification: pnpm exec vitest run src/architecture-bracket.test.ts
+--maxWorkers=2 --config /tmp/b4a-round7-red.TrnNAw/vitest.mjs --configLoader runner.
+Exit 1: two bracket-global cases failed solely on the expected computed-access
+assertion; no import, setup or unhandled errors.
+Log: /tmp/b4a-round7-red.TrnNAw/red.log.
+The temporary config runs these pure scanner fixtures in Node with its cache
+in OS temp, without the unrelated UI setup or repository-writing CPU reporter.
+No tests or test artifacts write into the repository.
+ESLint of the new file: exit 0; /tmp/b4a-round7-red.TrnNAw/eslint.log.
+Read-only git diff --check: pass.
+
+.codex-commits.json requests one test-only commit and one notes-only commit.
+No git-writing command ran; node_modules was neither replaced nor symlinked.
+Skipped: production repair, pnpm check, typecheck and e2e; this session writes the red only.
+Risk: the purity gate still misses computed globals until the authorized repair.
