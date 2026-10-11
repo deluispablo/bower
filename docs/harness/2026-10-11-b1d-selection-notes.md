@@ -3067,3 +3067,100 @@ driver; the fixes remain with the existing read cache, maintenance ledger, selec
 `linkTarget` homes named by the ruling.
 
 **Remaining runner reds: the five exact fix-round-5 tests above.** Implementation is outside this session.
+
+
+## Fix round 5
+
+Implemented TL-P4-41 addendum 22 and all five findings in
+`docs/harness/2026-10-11-b1d-adversarial-final-2.md`. Production changes are confined to
+`runner/src/claude.ts`, `runner/src/index.ts`, and `src/data/vault/vault-index.ts`.
+The existing RunTiming maintenance ledger and its 300-call bound remain unchanged.
+No second planner, cache, ledger, link parser, writer, or pending store was added.
+
+### Changes and evidence
+
+| Finding / exact red | Final behavior |
+| --- | --- |
+| `b1d-fr5 1 crossing MOC prefix` | MOC prefixes are not parsed as complete owned notes. Candidate and selected-target maps use the existing versioned read cache and ownership snapshot. Unchanged complete snapshots remain reusable. An unrelated map with an invalid truncated ownership prefix is omitted from maintenance with one console line; its bytes stay intact. The 5,287-byte candidate and target each have one full media read; the unrelated case has none. |
+| `b1d-fr5 2 maintenance exhaustion after effects` | Only LedgerExhausted from maintenance application settles as a rejected maintenance outcome. Already applied primary effects and projections stand; subsequent targets and the cursor are not sent. The report and done barrier complete. A catch-up snapshot with an existing derived index uses the existing Range read path without repeating cold metadata prechecks. The 139-note control completes; the 140-note run ends done with its filing retained and cursor absent, and its next admitted request completes index, hot, cursor and all 140 archive entries. |
+| `b1d-fr5 3 answer pins belong to each source` | Taken answers retain their admitted journal file id. Selection counts the answer's pins only for its source or bound subject. Existing script request pins and visible answer evidence remain available, preserving C05 and mixed answer/pile behavior. Three independent two-note answers all merge within their individual five-note limits. |
+| `b1d-fr5 4 refreshed MOC members are selectable` | The existing mocMembership result expands candidate ids once and remains in prompt metadata in both steps. Only complete owned snapshots receive persisted membership, so an unread peer map does not acquire an empty membership that hides its stored links. Full MOC text is still omitted from the metadata dictionary. An unpicked unchanged map reuses its snapshot without a media read; selected member evidence uses one cached full read. |
+| `b1d-fr5 5 heading links resolve candidates` | VaultIndex resolves the parser's link targets through the existing linkTarget helper, including headings and the parser's alias handling. Exact paths compare after the same lowercasing; ambiguous leaf names remain unresolved. The heading-link case selects and reads Garden once, then files successfully. |
+
+Named call changes: one cached full media read for a needed MOC without a complete
+snapshot; no full read for an unrelated crossing MOC; no extra model call or retry;
+catch-up uses the existing prefix Range request without the redundant cold metadata
+precheck when the derived index already exists. Physical selected-note reads remain
+shared across sources. The 32k/24k/48k bounds, per-source five-note limit, candidate cap,
+200-operation limit, semantic retry limits and timing reserve are unchanged.
+
+removed: parsing a MOC's bounded prefix as a complete ownership-framed note.
+removed: unconditional full reads of unrelated MOCs whose ownership crosses the prefix.
+removed: fatal propagation of maintenance ledger exhaustion after primary effects.
+removed: repeated cold metadata prechecks during catch-up with an existing derived index.
+removed: counting every admitted answer's pins against every unrelated source.
+removed: stripping refreshed MOC members out of both prompts.
+removed: treating a link heading as part of its filename in VaultIndex.
+tests changed: none
+
+### Verification
+
+The unchanged five reds first failed on their assertions (five failures, five passing
+positive controls): `/tmp/b1d-fr5-before.log`. After the production fixes all five pass.
+The first full runner run exposed compatibility regressions in script request visibility,
+peer-map membership and unpicked cached MOC reads. Those were corrected in production;
+the affected six suites then passed all 150 tests. No test assertion or fixture changed,
+and there are no remaining test/contract contradictions.
+
+| Check | Result | Log |
+| --- | --- | --- |
+| Five supplied reds | 5 passed | `/tmp/b1d-fr5-targeted.log` |
+| Affected compatibility suites, including the five reds | 6 files, 150 passed | `/tmp/b1d-fr5-compat.log` |
+| Full runner suite | 54 files, 705 passed | `/tmp/b1d-fr5-runner-final.log` |
+| Full `src` suite, two workers | 171 files passed; 5,741 tests passed; only the authorized e2e-port EPERM failure | `/tmp/b1d-fr5-src.log` |
+| TypeScript app | Pass | `/tmp/b1d-fr5-tsc-app.log` |
+| TypeScript node | Pass | `/tmp/b1d-fr5-tsc-node.log` |
+| TypeScript runner | Pass | `/tmp/b1d-fr5-tsc-runner.log` |
+| ESLint touched runner files | Pass | `/tmp/b1d-fr5-eslint-runner.log` |
+| ESLint touched app file | Pass | `/tmp/b1d-fr5-eslint-app.log` |
+| Unused code, both normal and production passes | Pass, baselines unchanged | `/tmp/b1d-fr5-unused.log` |
+| Diff whitespace and unchanged tests | Pass | `git diff --check`; no test path in the diff |
+
+The sole app-suite failure is `src/e2e-port.test.ts:37`,
+`a server from another worktree is never reused`: `listen EPERM` on 127.0.0.1 causes
+that test's existing 5,000 ms timeout and its associated unhandled socket error.
+No other test fails.
+
+Commands (stdout and stderr redirected to the log files above):
+
+```sh
+NODE_OPTIONS='--require=/tmp/b1d-fr5-test-output.cjs' pnpm -C runner exec vitest run --maxWorkers=2 --reporter=default --cache=false --configLoader=native
+NODE_OPTIONS='--require=/tmp/b1d-fr5-test-output.cjs' pnpm exec vitest run src --maxWorkers=2 --reporter=default --cache=false
+pnpm exec tsc --noEmit -p tsconfig.app.json
+pnpm exec tsc --noEmit -p tsconfig.node.json
+pnpm -C runner exec tsc --noEmit -p .
+pnpm -C runner exec eslint src/claude.ts src/index.ts
+pnpm exec eslint src/data/vault/vault-index.ts
+node scripts/check-unused-gate.mjs
+```
+
+The OS-temp preload only redirects the existing CPU reporter's filesystem output to
+`os.tmpdir()/b1d-fr5-cpu`; it changes no test logic. The first baseline red run emitted
+one ignored CPU report under `runner/test-results/cpu`; that report was removed before
+delivery. Subsequent runs redirected that reporter to OS temp. Vitest's JSON reporter
+and result cache were disabled, and the final runner run used the native config loader.
+The initial combined root/runner ESLint invocation hit tsconfigRootDir discovery;
+running each file under its existing package configuration passed without config edits.
+
+The explicitly requested gates above replace `pnpm check` for this constrained session:
+the standard aggregate writes repository reports, builds and a check mark. No screen or
+corpus fixture changed, so no e2e run was needed. No network, writing git command,
+node_modules replacement or symlink was used. The runner will commit the production diff
+and these notes separately, as specified by `.codex-commits.json`.
+
+Research reused offline from the packet, without independent network verification:
+[curated context and just-in-time retrieval](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents),
+[plan then execute](https://arxiv.org/html/2506.08837v1), and
+[stable prompt prefixes](https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
+The implementation reuses the existing read cache, ownership parser, mocMembership,
+RunTiming ledger, maintenance settlement and linkTarget homes.
