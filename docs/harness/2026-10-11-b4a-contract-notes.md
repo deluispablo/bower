@@ -1851,3 +1851,59 @@ folders; all outputs of the corrected final runs are in OS temp.
 
 Skipped: runner-owned commits, pnpm check, capabilities e2e and B4b/B4c runtime wiring.
 Risk: shared compatibility bookkeeping still lacks 9054e66d; the expected sandbox port EPERM remains.
+
+
+## Round 6 reds (addendum 8)
+
+Scope: P4-121 and TL-P4-48 addendum 8; reds only. No production file or existing
+test changed. One new file contains exactly three identity cases:
+- `b4a-r6 1 About me`
+- `b4a-r6 2 ledger`
+- `b4a-r6 3 archive`
+
+Each case seals an otherwise valid ledger write → marked About me append →
+maintenance manifest. Capture places resolve the memory file and questions file
+by their own IDs. Capture and operation identities are recomputed for every
+fixture, including the hostile target; rejection cannot be an outdated seal.
+The memory target keeps its real parent ID, changing only its declared path.
+
+Positive controls, through parseRunManifestV2 and outsideAdmitted: the real
+questions ID with `.bower/questions.json` is accepted at both boundaries; the
+memory ID with its actual protected path is refused at both boundaries.
+The production targetPath resolver independently confirms each captured ID.
+
+Each case fails only four soft assertions for the ruled identity gap:
+1. Memory ID aliased as `.bower/questions.json`: manifest accepts unexpectedly.
+2. That same alias: runner admission returns null unexpectedly.
+3. Questions ID declared as `.bower/requests.json`, while resolving to questions:
+   manifest accepts unexpectedly.
+4. That mismatched allowed target: runner admission returns null unexpectedly.
+The independent allowed-file mismatch also proves that path/ID agreement is
+required outside the memory ban. All positive and protected-path controls pass.
+
+Verification (exit 1 expected; exactly three failed tests, twelve finding
+assertions, no other failures):
+`pnpm exec vitest run src/data/contracts/b4a-r6.test.ts --maxWorkers=2 --config
+/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-r6-reds.UqDVSNfb76/vitest.mjs
+--configLoader runner`
+
+Logs/report/config: `/var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-r6-reds.UqDVSNfb76/`:
+`reds.log`, `reds.json`, `vitest.mjs`, `eslint.log`, and `cpu/`.
+The temporary config retains jsdom and both app setup files, relocates Vite cache
+and JSON output, and redirects only the timer gate's CPU report destination to
+OS temp. Tests produce no repository output. ESLint on the new test passes;
+read-only `git diff --check` passes. No git write, network call, dependency change
+or node_modules replacement was made.
+
+Prior research reused offline: packet's Zod declarations reference
+https://zod.dev/api (not newly verified). Existing Vitest soft-assertion and sealed
+manifest fixtures are reused from b4a-r5.test.ts; no new dependency or helper home.
+
+tests changed: src/data/contracts/b4a-r6.test.ts: added three identity reds, each with manifest/admission controls.
+tests changed: no existing test modified or deleted.
+
+Commit handoff: `.codex-commits.json` requests one test-only commit and one
+notes-only commit; the runner commits the diff.
+
+Skipped: production fix, full suites, pnpm check, e2e and commits; this session is reds only.
+Risk: both boundaries still admit memory aliases and mismatched allowed paths until the implementation round.
