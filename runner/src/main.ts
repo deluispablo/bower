@@ -61,6 +61,8 @@ import { runnerReads } from './spine/records';
 import { keepFinishedAtEnd } from './spine/retention';
 import { repairRules } from './rules-repair';
 import { RunTiming } from './timing';
+import { boundHot } from './hot';
+import { VaultIndex } from '../../src/data/vault/vault-index';
 import { planningIndex, withMaintenance, maintenanceEffects } from './index';
 
 export { RunnerDrive, type RunnerDriveOptions } from './drive';
@@ -411,8 +413,12 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
       provider: (drive, rootId, context) => {
         return async (admitted) => {
           drive.planReads().scope = admitted.taken.scope;
+          // Control recovery has completed; defer semantic read-ahead until hot is in the shared cache.
+          const listed = await drive.planReads().listAll(rootId, { readAhead: false });
+          const persistedHot = VaultIndex.build(rootId, listed).file(SYSTEM.hot);
+          const hot = persistedHot ? boundHot(await drive.readListedText(persistedHot)) : '';
           const index = await planningIndex(drive, rootId);
-          const provider = providerFor(name, drive, { rootId, runId, allowWeb, context, index }, { env, timing, ...(opts.claude ? { spawn: opts.claude } : {}) });
+          const provider = providerFor(name, drive, { rootId, runId, allowWeb, context, index, ...(hot ? { hot } : {}) }, { env, timing, ...(opts.claude ? { spawn: opts.claude } : {}) });
           return withMaintenance(drive, await provider(admitted));
         };
       },

@@ -1,3 +1,5 @@
+import { BowerError } from '../../src/data/types';
+
 export interface HotInputs {
   today: string;
   openQuestions: readonly { id: string; text: string }[];
@@ -55,19 +57,28 @@ function renderSection(value: Section): string[] {
   ];
 }
 
+/** Reject normalized impossible days as well as malformed date/time spellings. */
+function validDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))?$/.test(value)) return false;
+  const day = value.slice(0, 10);
+  const at = Date.parse(day);
+  return Number.isFinite(at) && new Date(at).toISOString().slice(0, 10) === day && Number.isFinite(Date.parse(value));
+}
+
 /** Project already-read primary evidence without I/O or a model. */
 export function renderHot(inputs: HotInputs): HotResult {
+  if (!validDate(inputs.today) || inputs.today.length !== 10) throw new BowerError('unknown', 'Bower could not date its notes.');
   const today = Date.parse(inputs.today);
   const questions = unique(inputs.openQuestions, (question) => question.id);
   const hubs = unique(inputs.hubs, (hub) => hub.path)
     .filter((hub) => {
-      if (hub.lastSettledChange === null) return false;
+      if (hub.lastSettledChange === null || !validDate(hub.lastSettledChange)) return false;
       const day = Date.parse(hub.lastSettledChange.slice(0, 10));
       return day <= today && day >= today - 30 * 86_400_000;
     })
-    .sort((a, b) => Date.parse(b.lastSettledChange ?? '') - Date.parse(a.lastSettledChange ?? '')
+    .sort((a, b) => Date.parse(b.lastSettledChange?.slice(0, 10) ?? '') - Date.parse(a.lastSettledChange?.slice(0, 10) ?? '')
       || compareText(a.path, b.path));
-  const changes = unique(inputs.changes, (change) => change.id)
+  const changes = unique(inputs.changes.filter((change) => validDate(change.at)), (change) => change.id)
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at) || compareText(a.id, b.id));
 
   const threads = section('Open threads', questions.map((question) => ({

@@ -305,3 +305,159 @@ Exit 1: only six missing .bower/hot.md file/note expectations remain (final and 
 No question-id failure remains. Log: /tmp/b3b-hot-maintain-fixture-repair.log.
 The unrelated evidence-only probe was filtered out. Reports, CPU artifacts and cache stayed in /tmp.
 No network, production edits, node_modules changes or writing git commands; coordinator commits.
+
+
+## Implementation
+
+2026-10-11, escalated implementation under TL-P4-42 addendum 4. This section supersedes the earlier
+allocation block: the owner explicitly assigned runner/src/index.ts and main.ts until handoff.
+Status: blocked at the frozen acceptance assertions listed below (TL-P4-51), with production changes
+left reviewable in this worktree. No network, writing git command, commit, test edit, installation,
+node_modules replacement or node_modules symlink was performed by this session.
+
+### Offline research applied
+
+[Anthropic prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)
+is the stable-prefix reference: reusable instructions/types, Rules, About me and index precede
+bounded hot at fixed position 6; per-run ids, answers, neighbourhood and items follow that prefix.
+This is an offline citation, not freshly retrieved documentation. The existing prepared builder
+serializes those fields in that order, and the production prompt/read-order red verifies it.
+
+[Kubernetes controllers](https://kubernetes.io/docs/concepts/architecture/controller/) is the
+standard reconciliation reference for rebuilding a derived view from primary evidence and making
+repeated reconciliation idempotent. The local implementation reuses maintain's immutable manifest,
+per-target fences, operation stamp, readback and existing checkpoint engine. Retrieval remains its
+last commit target; there is no second writer, checkpoint protocol or hot archive.
+
+### Changes and boundaries
+
+- Maintain has a generic DeclaredTarget slot: kind/path, declaration, renderer and an optional
+  unchanged guard. Index is its first kind and hot its second. Both declaration and renderer join
+  the existing target loop; future B8 health, B4 and B11 can supply the same slots.
+- Targets persist their kind and primary source bytes, paths, SeenFile versions and VerifiedContent
+  hashes inside maintain. The manifest reader validates source dates/versions and hashes. Existing
+  targets without kind/declaration still render by their original path. The ordinary checkpoints
+  continue to bind this one persisted declaration through the manifest hash.
+- Hot reads the authoritative questions, Bower project/area hubs through the existing hub and
+  Timeline parsers, and archived/captured journal evidence. Uncaptured pending journal files are
+  excluded. Applied outcomes update the frozen inputs; rejected writes add no proposed evidence.
+  The current run's settled report supplies its Bower filing/creation/update rows.
+- Main reads hot after recovery/done controls and before semantic read-ahead. It uses the run's
+  versioned read cache and boundHot. Claude's existing prepared builder receives the text, plus
+  cached Rules/About me/index context in the fixed prefix order.
+- Hot writes only when !sameExceptDate, with the original content version, the ordinary op stamp
+  and the existing lost-reply reconciliation. Instruction-only, answer-only, no-item evidence
+  refresh, date-only, hidden-only, pre-plan failure and done redispatch controls pass.
+- P4-88: renderHot rejects an invalid today, excludes malformed/impossible evidence dates, and
+  sorts Current focus by calendar day then path. No modifiedTime supplies an evidence date.
+- Thread labels use the authoritative subject identity and frozen file name. The unchanged repaired
+  q-ask-f18 fixture passes, including its exact Inbox label and removal after Home's answer.
+
+removed: harness/unused-baseline.json: files runner/src/hot.ts runner/src/hot.ts finding.
+removed: harness/unused-baseline.json: corresponding hot.ts reason.
+removed: harness/unused-production-baseline.json: files runner/src/hot.ts runner/src/hot.ts finding.
+removed: harness/unused-production-baseline.json: corresponding hot.ts reason.
+removed: no test, assertion, threshold, fixture content, archive or alternate production writer.
+tests changed: none
+
+### Every observed contract conflict before stopping (TL-P4-51)
+
+The complete runner suite ran: 632 passed, 15 failed, 647 total, across all 49 files. All 15 failing
+tests are listed here, including the four soft cells of the warm golden. Assertions remain frozen.
+The new B3b assertions, B3a reduction, corpus and method controls pass; both hot fixtures pass.
+
+| Exact test (runner/test/) | Entry/assertion | Measured conflict with the added hot target/prefix |
+| --- | --- | --- |
+| B1c fix 4: a warm run with changed notes counted through maintain equals the pre-addendum-9 count | b1-index.test.ts:965 / :1009 | instructions/1 and all/1: 39 → 45 (+6); instructions/2 and all/2: 40 → 46 (+6). |
+| B1a contract: round 4 1: a folder binned before planning drops every indexed descendant | b1a-contract.test.ts:846 / :825 | Declared-input discovery 3 → 4 (+1 questions media for hot). |
+| B1a contract: round 4 2: a folder moved outside drops its indexed subtree and commits the cursor | b1a-contract.test.ts:864 / :825 | Same +1 declared questions media. |
+| B1a contract: round 4 3: a renamed folder updates descendant paths and index order without media reads | b1a-contract.test.ts:881 / :825 | Same +1 declared questions media. |
+| B1a contract: round 4 4: an inside folder move updates recursive paths and regroups without media reads | b1a-contract.test.ts:900 / :825 | Same +1 declared questions media. |
+| C05 bounded reads: golden: 50 archived requests and 25 kept runs cost no historical media | c05-bounded-reads.test.ts:267 / :262 | Shared cold planning golden 24 → 25 (+1 questions media for hot). Historical assertions at :288 and :290 also prohibit hot's journal inputs; these are masked by the first failed baseline assertion. |
+| C05 bounded reads: pending: a clash moves by run id and retries only its bound evidence | c05-bounded-reads.test.ts:302 / :262 | Shared cold planning golden 24 → 25 (+1 questions media for hot); later assertions do not run after this failure. |
+| C05 bounded reads: horizon: past 20 runs uses listing age and TOO_OLD_WHY without a chain walk | c05-bounded-reads.test.ts:639 / :670 | Requires zero archive media; hot reads the 50 archived journal files as primary evidence. No historical run manifests/checkpoints are read by hot. |
+| the C04 run makes the golden number of Drive calls per step | drive-calls-golden.test.ts:7 / :26 | Total 92 → 96 (+4); identical timing golden at :28 and phase golden at :32 are masked by :26. |
+| the C04 cut keeps its budget plus the 13 authorized maintenance calls | drive-calls-golden.test.ts:45 / :50 | Measured 96 against frozen ceiling 95; total delta +4 from its 92-call control. |
+| with 25 earlier runs a run makes 99 Drive calls | drive-calls-golden.test.ts:71 / :82 | Cold control 92 → 96 (+4); retained fixture at :84 measures 103 → 107 (+4). |
+| the raw model input on the C04 fixture equals its golden copy | model-input-fingerprint.test.ts:84 / :92 | Frozen wire has runId/admission before index; stable-prefix contract places index before volatile ids. |
+| plan reads finish under the budget with modelled Drive latency | reads-report.test.ts:33 / :40 | 2,730 → 2,880 ms (+150); frozen strict bound is 2,825 ms. |
+| with 25 earlier runs plan reads stay within their measured maintenance delta | reads-report.test.ts:43 / :47 | 3,180 → 3,330 ms (+150); frozen bound is 3,180 ms. |
+| the timing line counts calls and bytes per phase and names the region | timing-counts.test.ts:6 / :14 | Total 92 → 96 (+4); per-phase assertion at :20 is masked by :14. |
+
+These assertions require the pre-hot traffic/wire while packet contracts 1–5 require hot's primary
+reads, single fenced write and stable prompt slot. WORKER.md's TL-P4-51 says to list every
+contradicting test before stopping; the owner also expressly forbids this session from changing
+any test. No golden, threshold or fingerprint was repaired. Lead/coordinator allocation is needed
+for the frozen assertions and the journal-history budget ruling. This is not the earlier q-id or
+index.ts ownership block; those are resolved.
+
+### Drive-call golden measurements, pinned per fixture
+
+| Frozen golden | Measured value/delta | Named hot calls |
+| --- | --- | --- |
+| runner/test/drive-calls-golden.test.ts:26, :28; runner/test/timing-counts.test.ts:14 | Cold C04 92 → 96 (+4) | questions.json media (+1 reads); hot create's name-check child listing, live .bower parent fence and create (+3 apply). |
+| runner/test/drive-calls-golden.test.ts:32; runner/test/timing-counts.test.ts:20 | reads 24 → 25 (+1), apply 52 → 55 (+3); other phases unchanged | The same four named calls; measured from timing's own meter. |
+| runner/test/drive-calls-golden.test.ts:84–85 | C04 with 25 earlier runs 103 → 107 (+4); reads 27 → 28, apply 51 → 54 | The same four named calls; no run-history media for hot. |
+| runner/test/b1-index.test.ts:1009 | instructions/1 = 45 (+6); all/1 = 45 (+6); instructions/2 = 46 (+6); all/2 = 46 (+6) | Existing hot media + questions media + hot reconciliation metadata + ordinary write precheck metadata + live target fence + hot PATCH. Ordinary note Range assertions still pass. |
+| runner/test/b1a-contract.test.ts:825, four fixtures at :846, :864, :881, :900 | discovery 3 → 4 (+1), each independently | Declared questions media for hot. |
+| runner/test/c05-bounded-reads.test.ts:262 (shared by :267, :302) | cold C05 planning reads 24 → 25 (+1) | Declared questions media for hot. |
+| runner/test/c05-bounded-reads.test.ts:670 | 0 → 50 archive media (+50), horizon fixture | Archived journal primary input media; no new checkpoint walk. |
+
+No golden moved on disk. The measurements above are drafts for an owner of the assertions, not
+permission to loosen their values. The full existing call dump is in
+/tmp/b3b-implementation-call-trace.log. Hot is written at the same maintain op stamp as retrieval;
+there is no hidden independent send and no hot archive call.
+
+### Compatibility row drafts
+
+| Contract/home | Draft disposition |
+| --- | --- |
+| B1a immutable manifest + checkpoints + fences | Same single maintain operation and engine; additive typed target declarations; opening/closing chain verifies in the lost-reply red. |
+| Legacy maintain declarations | Optional kind/declaration; index/path fallback retained; existing parser/contract fixtures pass. |
+| B1c cold in-memory index and warm Range | Existing projection and prefix home retained; source-note Range controls pass; only named hot traffic changes the frozen counts. |
+| B1d prompt builder | Existing prepared serializer receives bounded hot; position/read-order red passes; old raw fingerprint needs an assigned repair. |
+| Q1c authoritative live questions | No new question store or consent; settled questions JSON supplies hot; q-ask-f18 and Home answer fixture pass unchanged. |
+| TL-P4-45 runner ownership | Existing RUNNER_WRITES already names .bower/hot.md; app write permissions untouched. |
+| Q5 date guard/no archive/hidden reporting | One target, sameExceptDate, no archive and no created/updated report row for hot; production lifecycle controls pass. |
+| B8 health, B4, B11 | Join by kind/path + declaration + renderer + optional unchanged guard in the same maintain home; no new writer here. |
+| Current Bower recent changes | Current settled report rows plus archived/captured journal records are projected. Past Bower report rows are not scanned or retained in a second store. Historical log completeness remains for the journal-home ruling; no claim of a new historical-log mechanism. |
+| Frozen call/prompt/budget assertions | Not changed; all conflicts and each measured fixture delta are above. |
+
+### Validation and constraints
+
+- Initial red: exact B3b context/recovery/method command, 9 assertion failures and 5 existing passes,
+  /tmp/b3b-implementation-red.log. One initial invocation inherited runner's repository-output
+  defaults before they were noticed; later invocations redirect both JSON and CPU/fixture artifacts
+  to OS temp. Those initial artifacts were moved to /tmp/b3b-initial-red-artifacts; the reporting mistake is recorded rather than claimed absent.
+- Complete runner suite: 632 pass / 15 fail; /tmp/b3b-implementation-runner.log and .json.
+  The failures are the complete inventory above. No assertion was weakened.
+- Final hot/context/recovery/reduction/method targeted run: 149/149 pass;
+  /tmp/b3b-implementation-hot.log and .json. Includes every nine original B3b reds.
+- Both unchanged hot fixtures: 2/2 pass through the pre-existing OS-temp probe and production main;
+  /tmp/b3b-implementation-fixtures.log. q-ask-f18 requires no further fixture repair.
+- pnpm exec vitest run src --maxWorkers=2: 5,614 pass / 3 fail / one unhandled EPERM in 167 files;
+  /tmp/b3b-implementation-src.log. src/e2e-port.test.ts:37 cannot listen on 127.0.0.1 in this sandbox.
+  src/harness.test.ts:627/:641 (assertions :631/:643) depend on relocating their generated Playwright
+  fixture outside the repository; initial relocation broke module/package resolution. These are
+  environment constraints, not hot-contract contradictions. Recheck details are in the validation
+  artifact referenced below. Final harness recheck: 47/47 pass after an OS-temp loader preserved the existing
+  @playwright/test ESM resolution for relocated fixtures. No module was replaced, and no
+  node_modules replacement or symlink was used. The one port-listening failure remains sandbox-bound.
+- Final touched src contracts/scripted tests: 1,420/1,420 pass; /tmp/b3b-implementation-src-final.log.
+- App, node and runner tsc --noEmit: pass; separate /tmp/b3b-implementation-tsc-{app,node,runner}.log.
+- ESLint on every touched TypeScript file: pass, run separately from runner/root with their existing
+  configs; /tmp/b3b-implementation-eslint-{runner,app}.log. The first combined-root invocation could
+  not choose tsconfigRootDir; the separate invocations resolve that tool setup error.
+- node scripts/check-unused-gate.mjs: both passes green (2 ordinary and 27 production known findings),
+  /tmp/b3b-implementation-unused.log.
+- No pnpm check/green mark or e2e suite: stopped on TL-P4-51's frozen assertions; ui:false, no screen
+  changed. The requested component gates ran individually with artifacts in OS temp.
+- No git-writing command or commit. The src suite's harness tests operate on throwaway repositories
+  as designed; none of this session's git commands mutate this worktree. Read-only diff checks pass.
+
+Files: runner/src/index.ts, runner/src/main.ts, runner/src/hot.ts, runner/src/claude.ts,
+src/data/contracts/run-manifest.ts, src/data/spine/scripted.ts, harness/unused-baseline.json,
+harness/unused-production-baseline.json, and this notes file. No test/fixture source file differs.
+
+Validation index: /tmp/b3b-validation.md. Final read-only diff check passes; the changed-file inventory
+contains only the eight production/baseline files and these notes. All tests and corpus fixtures are unchanged.

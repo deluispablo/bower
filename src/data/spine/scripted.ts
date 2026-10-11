@@ -2881,6 +2881,8 @@ export async function runKeys(runId: string): Promise<(kind: string) => string> 
 export interface ScriptedRun {
   /** The canonical index rebuilt in memory for a bootstrap or missing-index plan. */
   index?: string;
+  /** Bounded persisted hot context, supplied by the runner before semantic reads. */
+  hot?: string;
   context?: OwnershipContext;
   rootId: string;
   runId: string;
