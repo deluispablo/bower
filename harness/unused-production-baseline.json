@@ -9,6 +9,8 @@
     "exports src/data/contracts/hashes.ts EMPTY_SHA256",
     "exports src/data/contracts/note-edit.ts undoChanges",
     "exports src/data/contracts/note-edit.ts undoEdit",
+    "exports src/data/contracts/note-format.ts propertyValuesOk",
+    "exports src/data/contracts/note-format.ts tableProperties",
     "exports src/data/contracts/note-format.ts validSummary",
     "exports src/data/contracts/run-checkpoint.ts parseRunReport",
     "exports src/data/fake/fake-runner.ts NOTE_NOT_WRITTEN",
@@ -21,7 +23,7 @@
     "exports src/data/spine/read.ts driveRead",
     "exports src/features/piles/add-words.ts leftOut",
     "files runner/src/corpus.ts runner/src/corpus.ts",
-    "files runner/src/hot.ts runner/src/hot.ts",
+    "files runner/src/type-table.ts runner/src/type-table.ts",
     "files src/copy-rules.ts src/copy-rules.ts",
     "files src/data/compat-p2-fixtures.ts src/data/compat-p2-fixtures.ts",
     "files src/data/contract/vault-contract.ts src/data/contract/vault-contract.ts",
@@ -32,7 +34,6 @@
     "types src/data/drive/fake-drive.ts FaultAction"
   ],
   "reasons": {
-    "files runner/src/hot.ts runner/src/hot.ts": "B3b wires it (TL-P4-42 addendum 1); B3b removes this line",
     "exports src/data/contracts/note-format.ts validSummary": "B2b wires it (TL-P4-42 addendum 1); B2b removes this line",
     "exports runner/src/claude.ts selectionOf": "B1d wires the selection reply (TL-P4-42 addendum 1 pattern); B1d removes this line"
   }

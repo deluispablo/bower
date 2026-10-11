@@ -1,3 +1,4 @@
+import type { QuestionOption } from './questions';
 /**
  * The shapes every screen works with. They follow the current Bower's real
  * contract (the runner's report, the vault's layout) so that phase 2 only
@@ -117,6 +118,7 @@ export interface Pile {
    * a lost update), until a listing reads it again.
    */
   noteLocked?: true;
+  question?: 'waiting' | 'exhausted';
 }
 
 export interface NewPile {
@@ -125,7 +127,24 @@ export interface NewPile {
   items: Array<Pick<PileItem, 'name' | 'kind' | 'origin'> & { body?: Blob; url?: string }>;
 }
 
+/** Version 1 type declarations; runtime guards close these shapes before a new write. */
+export interface TypeRow {
+  id: string;
+  match: string[];
+  template: string;
+  properties: Record<string, { type: string; values?: string[] }>;
+  table: string[];
+  group_by?: { property: string; bucket?: string };
+}
+export interface TypeTable { v: 1; rows: TypeRow[] }
+export interface Proposal { id: string; payload: { kind: string; row: TypeRow } }
+
 export interface Question {
+  /** Frozen proposal identity and payload, never supplied by an answer. */
+  proposal?: Proposal;
+  options?: Pick<QuestionOption, 'id' | 'label'>[];
+  /** Pile words at asking, so an edit resets the asking. */
+  words?: string;
   id: string;
   text: string;
   yes: string;

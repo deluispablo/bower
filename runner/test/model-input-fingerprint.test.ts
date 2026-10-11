@@ -88,6 +88,7 @@ describe('model input fingerprint', () => {
     const calls: ClaudeCall[] = [];
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await runWithClaude(c, async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit));
+    // TL-P4-42 addendum 5: stable-prefix key reorder only: index, runId, admission, piles, notes, folders.
     const rawGoldenPath = resolve(import.meta.dirname, 'fixtures/model-input-c04.raw.golden.txt');
     expect(calls[0]?.input ?? '').toBe(readFileSync(rawGoldenPath, 'utf8'));
   });

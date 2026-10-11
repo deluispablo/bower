@@ -94,7 +94,7 @@ export class FakeDrive implements DriveApi {
   /** Makes this Drive durable now; awaited before a reserved id or a partial upload is answered. */
   persist: (() => Promise<void>) | null = null;
 
-  /** Everything, as JSON: files, the Bin, contents (blobs as base64) and the counters. */
+  /** Everything, as JSON: files, the Bin, contents (blobs as base64), changes feed and counters. */
   async snapshot(): Promise<string> {
     const files = [];
     for (const f of this.files.values()) {
@@ -106,13 +106,13 @@ export class FakeDrive implements DriveApi {
       const hash = big ? (f.bytesUnavailable ? f.sha256 : await sha256(c)) : undefined;
       files.push({ meta: f.meta, trashed: f.trashed, content, ...(hash ? { sha256: hash } : {}) });
     }
-    return JSON.stringify({ v: 1, seq: this.seq, last: this.last, files, ...(await this.resumableSnapshot()) });
+    return JSON.stringify({ v: 1, seq: this.seq, last: this.last, files, changes: this.changes, ...(await this.resumableSnapshot()) });
   }
 
   /** A FakeDrive back from `snapshot()`. */
   static restore(json: string, opts: FakeDriveOptions = {}): FakeDrive {
     const d = new FakeDrive(opts);
-    const data = JSON.parse(json) as { seq: number; last: number; files: Array<{ meta: DriveFile; trashed: boolean; content: { text: string } | { b64: string; type: string } | { big: true; type: string } | null; sha256?: unknown }> };
+    const data = JSON.parse(json) as { seq: number; last: number; changes?: DriveChange[]; files: Array<{ meta: DriveFile; trashed: boolean; content: { text: string } | { b64: string; type: string } | { big: true; type: string } | null; sha256?: unknown }> };
     d.files.clear();
     for (const f of data.files) {
       const c = f.content;
@@ -124,6 +124,7 @@ export class FakeDrive implements DriveApi {
     }
     d.seq = data.seq;
     d.last = data.last;
+    d.changes.push(...data.changes ?? []);
     d.restoreResumable(JSON.parse(json) as unknown);
     return d;
   }
@@ -673,6 +674,7 @@ export class FakeDrive implements DriveApi {
     twin.files = new Map([...this.files].map(([id, f]) => [id, { ...f, meta: this.copy(f.meta) }]));
     twin.seq = this.seq;
     twin.last = this.last;
+    twin.changes.push(...this.changes.map((c) => ({ ...c, ...(c.file ? { file: this.copy(c.file) } : {}) })));
     // The resumable uploads too (reserved ids and open sessions), as `snapshot()` keeps them.
     twin.reserved = new Set(this.reserved);
     twin.reservedSeq = this.reservedSeq;

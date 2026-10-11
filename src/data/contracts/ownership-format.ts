@@ -3,6 +3,7 @@ import { TASK_LINE } from './tasks';
 import { sha256Sync } from './hashes';
 export interface ByteSpan { readonly start: number; readonly end: number }
 export type MocRegion = 'moc-overview' | 'moc-figures' | 'moc-members';
+export type BowerRegion = MocRegion | 'profile';
 export type Owner = 'current' | 'personal' | 'timeline' | 'bower-note';
 export type OwnershipFailure = 'unsupported-version' | 'damaged-boundary' | 'invalid-encoding';
 export interface PersonalTask {
@@ -26,11 +27,13 @@ export interface Layout {
   readonly current: ByteSpan | null;
   readonly timeline: ByteSpan | null;
   readonly bowerNote: ByteSpan | null;
+  /** Exact legacy MOC sections; admission remains the ownership author's responsibility. */
+  readonly moc?: Readonly<Partial<Record<MocRegion, ByteSpan>>>;
 }
 export type OwnershipResult =
   | { readonly status: 'invalid'; readonly reason: OwnershipFailure }
   | { readonly status: 'plain' | 'legacy'; readonly personal: ByteSpan; readonly layout: Layout; readonly tasks: readonly PersonalTask[] }
-  | { readonly status: 'v2'; readonly personal: ByteSpan; readonly layout: Layout; readonly payloads: Readonly<Record<Owner, ByteSpan> & Partial<Record<MocRegion, ByteSpan>>>; readonly tasks: readonly PersonalTask[] };
+  | { readonly status: 'v2'; readonly personal: ByteSpan; readonly layout: Layout; readonly payloads: Readonly<Record<Owner, ByteSpan> & Partial<Record<BowerRegion, ByteSpan>>>; readonly tasks: readonly PersonalTask[] };
 /** A fetched version's ownership table, retained only by its execution attempt. */
 export interface OwnershipContext {
   read(fileId: string, bytes: Uint8Array): OwnershipResult;
@@ -187,7 +190,21 @@ function legacyNote(bytes: Uint8Array, raw: string): OwnershipResult {
   const rawByteAt = (offset: number): number => byteAt[offset] ?? 0;
   const span = (from: number, to: number): ByteSpan => ({ start: rawByteAt(from), end: rawByteAt(to) });
   const personal = span(start, end);
+  const headings: Line[] = [];
+  let fence: Fence | null = null;
+  for (const line of lines(bytes, { start: rawByteAt(frontEnd), end: bytes.length })) {
+    const previous = fence;
+    fence = fenceAfter(line.text, fence);
+    if (!previous && !fence && /^#{1,6}\s/.test(line.text)) headings.push(line);
+  }
+  const overview = headings.filter((line) => line.text === '## Overview');
+  const members = headings.filter((line) => line.text === '## Notes');
+  const section = (line: Line): ByteSpan => ({ start: line.start, end: headings.find((next) => next.start > line.start)?.start ?? bytes.length });
+  const moc = overview.length === 1 && members.length === 1 && overview[0] && members[0]
+    && section(overview[0]).end === members[0].start
+    ? { 'moc-overview': section(overview[0]), 'moc-figures': { start: members[0].start, end: members[0].start }, 'moc-members': section(members[0]) } : undefined;
   const layout: Layout = {
+    ...(moc ? { moc } : {}),
     front: span(4, close + 1),
     frontEnd: rawByteAt(frontEnd),
     current: current && span(current.start, current.end),
@@ -224,10 +241,10 @@ export function parseOwnership(bytes: Uint8Array): OwnershipResult {
   if (sourceLines[close]?.text !== '---') return damaged();
   for (let i = 0; i < bytes.length; i++) if (bytes[i] === 13 && bytes[i + 1] !== 10) return damaged();
 
-  const owners: (Owner | MocRegion)[] = [...OWNERS];
-  const spans: Partial<Record<Owner | MocRegion, ByteSpan>> = {};
+  const owners: (Owner | BowerRegion)[] = [...OWNERS];
+  const spans: Partial<Record<Owner | BowerRegion, ByteSpan>> = {};
   let next = 0;
-  let active: Owner | MocRegion | null = null;
+  let active: Owner | BowerRegion | null = null;
   let start = 0;
   let fence: Fence | null = null;
   for (const line of sourceLines.slice(close + 1)) {
@@ -241,11 +258,15 @@ export function parseOwnership(bytes: Uint8Array): OwnershipResult {
       } else if (line.text.startsWith('<!-- bower:ownership')) return damaged();
     } else {
       // Extend only at a real boundary, never for marker-shaped text inside a fenced payload.
-      if (next === OWNERS.length && line.text === '<!-- bower:ownership/2 begin moc-overview -->') owners.push(...MOC_REGIONS);
+      if (next === owners.length && next >= OWNERS.length) {
+        if (!spans['moc-overview'] && line.text === '<!-- bower:ownership/2 begin moc-overview -->') owners.push(...MOC_REGIONS);
+        if (!spans.profile && line.text === '<!-- bower:ownership/2 begin profile -->') owners.push('profile');
+      }
       const owner = owners[next];
       if (owner && line.text === `<!-- bower:ownership/2 begin ${owner} -->`) {
         active = owner; start = line.after;
-      } else if (line.text.trim()) return damaged();
+      } else if (line.text.trimStart().startsWith('<!-- bower:ownership')) return damaged();
+      // Outside bytes are opaque and grant no payload or task authority. Never interpret their Markdown.
     }
   }
   const { current, personal, timeline, 'bower-note': bowerNote } = spans;
@@ -265,8 +286,10 @@ export function togglePersonalTask(bytes: Uint8Array, request: TaskRequest): Tas
   const task = Number.isInteger(request.index) && request.index >= 0 ? parsed.tasks.find((t) => t.index === request.index) : undefined;
   if (!task) return { kind: 'refused', reason: 'task-not-found' };
   if (task.label !== request.label || task.done !== request.previousDone) return { kind: 'refused', reason: 'task-changed' };
-  // A Uint8Array subclass may implement slice as a shared view (for example Buffer).
-  const out = new Uint8Array(bytes);
+  // Ordinary byte arrays keep their realm. Subclasses normalize to an independent byte array,
+  // even when their slice override returns a shared view (for example Buffer).
+  const out: Uint8Array = Object.hasOwn(Object.getPrototypeOf(bytes), 'BYTES_PER_ELEMENT')
+    ? Uint8Array.prototype.slice.call(bytes) : new Uint8Array(bytes);
   out[task.checkboxByte] = request.done ? 120 : 32;
   return { kind: 'changed', bytes: out, label: task.label, done: request.done };
 }

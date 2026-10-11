@@ -13,12 +13,13 @@ import { ruleLike } from './rules';
 import { displayName, nameOf } from './tree';
 import type { ChangeEntry, Rule } from './types';
 import { sha256 } from './hashes';
-import { parseNote, timelineEntries } from './note-format';
-import { createOwnershipContext, fenceAfter, parseOwnership, type ByteSpan, type Fence, type Layout, type OwnershipFailure, type FetchedOwnership } from './ownership-format';
+import { dateOk, parseNote, timelineEntries } from './note-format';
+import { MOC_REGIONS, createOwnershipContext, fenceAfter, parseOwnership, type MocRegion, type ByteSpan, type Fence, type Layout, type OwnershipFailure, type FetchedOwnership } from './ownership-format';
 import { parseTimelineLine, timelineLine, type TimelineMarker } from './timeline-line';
 import { parseRules } from './rules-format';
-import type { Change, EditEntry, EditText, Rename, RuleAdd, RuleRemove, TimelineConsent } from './run-manifest';
+import type { Change, EditEntry, EditText, Rename, RuleAdd, RuleRemove, TimelineConsent, MaintenanceNote } from './run-manifest';
 import { isHub } from './hub';
+import { BowerError } from './types';
 
 /** Files larger than 1 MiB are never edited (TL-P2-20 rule 6). */
 export const EDIT_FILE_LIMIT = 1024 * 1024;
@@ -42,7 +43,7 @@ export type Authors = { splice: (text: string, at: number, insert: string) => st
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
-const ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'timeline-append', 'rules-wording', 'moc-rewrite'];
+const ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'timeline-append', 'rules-wording', 'profile-rewrite', 'moc-rewrite'];
 const RULE_LINE = /^- (.*?)(?:\s*<!-- since (\d{4}-\d{2}-\d{2}) -->)?\s*$/;
 const WORDS_LINE = /^\s+\*You wrote: "(.*)"\*\s*$/;
 const SUMMARY_LINE = /^summary: \d+ rules? Bower follows in every tidy-up\.$/;
@@ -53,15 +54,7 @@ const HEADING = /^#{1,6}\s/;
 // ---------------------------------------------------------------------------------------------
 
 const controls = (value: string): boolean => [...value].some((char) => char.charCodeAt(0) <= 0x1f || char.charCodeAt(0) === 0x7f);
-/** `YYYY-MM-DD`, a real calendar date. */
-function dateOk(date: string): boolean {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
-  if (!match) return false;
-  const [year, month, day] = match.slice(1, 4).map(Number) as [number, number, number];
-  const at = new Date(0);
-  at.setUTCFullYear(year, month - 1, day);
-  return at.getUTCFullYear() === year && at.getUTCMonth() === month - 1 && at.getUTCDate() === day;
-}
+
 const lineFieldOk = (value: string): boolean => !controls(value) && !value.includes(' · ') && !value.includes('[[') && !value.includes(']]');
 /** A display name as a Timeline source: no `]`, `|`, `#`, `^` or line break. */
 const displayNameOk = (value: string): boolean => value.length > 0 && !/[\]|#^\r\n]/.test(value);
@@ -136,8 +129,14 @@ export function stateLinesOk(previous: readonly string[], lines: readonly string
   return lines.length <= STATE_READ.lines && previous.length <= STATE_READ.lines
     && lines.every((line) => one(line) && line.trim() === line && line.length > 0) && previous.every(one);
 }
+/** Profile prose has its own framed region; source extraction and grounding remain the planner's job. */
+export function profileTextOk(text: string): boolean {
+  return text.trim().length > 0 && text.trim().split(/\s+/).length <= 400 && /\[\[[^\]\r\n]+\]\]/.test(text)
+    && !text.includes('<!-- bower:ownership');
+}
 function fieldsOk(change: Change): boolean {
   switch (change.kind) {
+    case 'profile-rewrite': return typeof change.previous === 'string' && typeof change.text === 'string' && profileTextOk(change.text);
     case 'moc-rewrite': return ['moc-overview', 'moc-figures', 'moc-members'].includes(change.region) && typeof change.previous === 'string' && typeof change.text === 'string';
     case 'state-rewrite': return stateLinesOk(change.previous, change.lines);
     case 'link-rewrite': return change.renames.length > 0 && change.renames.every(renameOk)
@@ -878,24 +877,72 @@ function holds(before: string, after: string, change: Change, step: Exclude<Step
 // The author
 // ---------------------------------------------------------------------------------------------
 
-function rewriteMoc(text: string, change: Extract<Change, { kind: 'moc-rewrite' }>, fetched?: FetchedOwnership): Step {
+export type MocSnapshot = { text: string; regions: Record<MocRegion, string> };
+
+/** Freeze only regions the existing ownership author can rewrite. Personal maps grant no authority. */
+export function mocSnapshot(text: string): MocSnapshot | null {
   const bytes = encoder.encode(text);
-  const own = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
-  const note = parseNote('note.md', text, fetched);
-  const span = own.status === 'v2' ? own.payloads[change.region] : undefined;
-  if (!note.byBower || !note.properties.some((p) => p.key === 'type' && p.value === 'moc') || !span) return { refused: 'not-bower' };
-  const at = spanOf(bytes, span);
-  if (text.slice(at.start, at.end) !== change.previous) return { refused: 'person-edited' };
-  return { text: text.slice(0, at.start) + change.text + text.slice(at.end), added: [], rules: null };
+  const own = parseOwnership(bytes);
+  const note = parseNote('note.md', text);
+  if (!note.byBower || !note.properties.some((p) => p.key === 'type' && p.value === 'moc') || (own.status !== 'v2' && own.status !== 'legacy')) return null;
+  const regions = {} as Record<MocRegion, string>;
+  for (const region of MOC_REGIONS) {
+    const span = own.status === 'v2' ? own.payloads[region] : own.layout.moc?.[region];
+    if (!span) return null;
+    regions[region] = decoder.decode(bytes.subarray(span.start, span.end));
+  }
+  return { text, regions };
 }
-function mocHolds(before: string, after: string, change: Extract<Change, { kind: 'moc-rewrite' }>): boolean {
-  const aBytes = encoder.encode(before), bBytes = encoder.encode(after);
+
+/** Add only framing and the format declaration; every legacy byte remains at its original relative position. */
+function framedMoc(text: string): string | null {
+  const bytes = encoder.encode(text);
+  const own = parseOwnership(bytes);
+  if (own.status === 'v2') return text;
+  if (own.status !== 'legacy' || !mocSnapshot(text)) return null;
+  const eol = eolOf(text);
+  const marker = (kind: 'begin' | 'end', region: string): string => `<!-- bower:ownership/2 ${kind} ${region} -->${eol}`;
+  const inserts = new Map<number, string>();
+  const add = (at: number, value: string): void => { inserts.set(at, (inserts.get(at) ?? '') + value); };
+  add(own.layout.frontEnd, ['current', 'personal', 'timeline', 'bower-note'].map((owner) => marker('begin', owner) + marker('end', owner)).join(''));
+  for (const region of MOC_REGIONS) {
+    const span = own.layout.moc?.[region];
+    if (!span) return null;
+    add(charAt(bytes, span.start), marker('begin', region));
+    add(charAt(bytes, span.end), marker('end', region));
+  }
+  const front = own.layout.front;
+  if (!front) return null;
+  add(charAt(bytes, front.start), `bower_format: ownership/2${eol}`);
+  let out = text;
+  for (const [at, insert] of [...inserts].sort(([a], [b]) => b - a)) out = out.slice(0, at) + insert + out.slice(at);
+  return parseOwnership(encoder.encode(out)).status === 'v2' ? out : null;
+}
+
+type RegionChange = Extract<Change, { kind: 'moc-rewrite' | 'profile-rewrite' }>;
+const regionOf = (change: RegionChange): MocRegion | 'profile' => change.kind === 'profile-rewrite' ? 'profile' : change.region;
+function rewriteRegion(text: string, change: RegionChange, fetched?: FetchedOwnership): Step {
+  const framed = change.kind === 'profile-rewrite' ? text : framedMoc(text);
+  if (framed === null) return { refused: 'not-bower' };
+  const bytes = encoder.encode(framed);
+  const own = framed === text && fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
+  const note = parseNote('note.md', framed);
+  const span = own.status === 'v2' ? own.payloads[regionOf(change)] : undefined;
+  if ((change.kind === 'moc-rewrite' && (!note.byBower || !note.properties.some((p) => p.key === 'type' && p.value === 'moc'))) || !span) return { refused: 'not-bower' };
+  const at = spanOf(bytes, span);
+  if (framed.slice(at.start, at.end) !== change.previous) return { refused: 'person-edited' };
+  return { text: framed.slice(0, at.start) + change.text + framed.slice(at.end), added: [], rules: null };
+}
+function regionHolds(before: string, after: string, change: RegionChange): boolean {
+  const framed = change.kind === 'profile-rewrite' ? before : framedMoc(before);
+  if (framed === null) return false;
+  const aBytes = encoder.encode(framed), bBytes = encoder.encode(after);
   const a = parseOwnership(aBytes), b = parseOwnership(bBytes);
-  const aSpan = a.status === 'v2' ? a.payloads[change.region] : undefined;
-  const bSpan = b.status === 'v2' ? b.payloads[change.region] : undefined;
+  const aSpan = a.status === 'v2' ? a.payloads[regionOf(change)] : undefined;
+  const bSpan = b.status === 'v2' ? b.payloads[regionOf(change)] : undefined;
   if (!aSpan || !bSpan) return false;
   const x = spanOf(aBytes, aSpan), y = spanOf(bBytes, bSpan);
-  return before.slice(0, x.start) === after.slice(0, y.start) && before.slice(x.end) === after.slice(y.end)
+  return framed.slice(0, x.start) === after.slice(0, y.start) && framed.slice(x.end) === after.slice(y.end)
     && after.slice(y.start, y.end) === change.text;
 }
 
@@ -928,10 +975,10 @@ function applyAtVersion(before: Uint8Array, changes: readonly Change[], authors:
     // Intermediate text is generated, even when it carries the source file id.
     const step = change.kind === 'state-rewrite' ? rewriteState(current, change, source)
       : change.kind === 'link-rewrite' ? relink(current, change, source)
-        : change.kind === 'timeline-append' ? appendLines(current, change, authors, source) : change.kind === 'moc-rewrite' ? rewriteMoc(current, change, source) : wordRules(current, change, authors, source);
+        : change.kind === 'timeline-append' ? appendLines(current, change, authors, source) : change.kind === 'moc-rewrite' || change.kind === 'profile-rewrite' ? rewriteRegion(current, change, source) : wordRules(current, change, authors, source);
     source = fetched;
     if ('refused' in step) return refuse(step.refused);
-    const kept = change.kind === 'moc-rewrite' ? mocHolds(current, step.text, change) : change.kind === 'state-rewrite' ? stateHolds(current, step.text, change) : holds(current, step.text, change, step);
+    const kept = change.kind === 'moc-rewrite' || change.kind === 'profile-rewrite' ? regionHolds(current, step.text, change) : change.kind === 'state-rewrite' ? stateHolds(current, step.text, change) : holds(current, step.text, change, step);
     if (step.text !== current && !kept) return refuse('invariant');
     current = step.text;
   }
@@ -982,4 +1029,102 @@ export async function undoEdit(effect: EditText, now: Uint8Array): Promise<EditR
 /** R3-6 / R4-3 m-f: a saved link's note key, SHA-256 in lowercase hex of the UTF-8 bytes of `<fileId>:saved-link-note`. */
 export function savedLinkKey(fileId: string): Promise<string> {
   return digest(encoder.encode(`${fileId}:saved-link-note`));
+}
+
+// Shared MOC projection: the runner and settled report use the same exact author inputs.
+export type Notes = Record<string, MaintenanceNote>;
+/** Prefix metadata selects a map; only its fully parsed snapshot grants edit authority. */
+export const isBowerMoc = (note: MaintenanceNote): boolean => note.owner === 'bower' && note.type === 'moc' || note.moc !== undefined;
+const folderOf = (path: string): string => path.slice(0, Math.max(0, path.lastIndexOf('/')));
+const stem = (path: string): string => path.replace(/\.md$/, '');
+
+/** The same shortest-unambiguous suffix for ordinary index rows and MOC member rows. */
+export function noteLinks(files: Notes): Map<string, string> {
+  const suffixes = new Map<string, number>();
+  for (const f of Object.values(files)) {
+    const parts = stem(f.path).split('/');
+    for (let i = 0; i < parts.length; i++) {
+      const suffix = parts.slice(i).join('/');
+      suffixes.set(suffix, (suffixes.get(suffix) ?? 0) + 1);
+    }
+  }
+  return new Map(Object.entries(files).map(([id, f]) => {
+    const parts = stem(f.path).split('/');
+    for (let n = 1; n <= parts.length; n++) {
+      const suffix = parts.slice(-n).join('/');
+      if (suffixes.get(suffix) === 1) return [id, suffix];
+    }
+    return [id, stem(f.path)];
+  }));
+}
+
+export function mocMembership(files: Notes): Map<string, string[]> {
+  const maps = Object.entries(files).filter(([, f]) => isBowerMoc(f));
+  const roots = new Map<string, string>();
+  const members = new Map<string, string[]>();
+  const claimed = new Set<string>();
+  for (const [id, f] of maps) {
+    const folder = folderOf(f.path);
+    if (stem(f.path).split('/').at(-1) === folder.split('/').at(-1)) {
+      roots.set(folder, id);
+      continue;
+    }
+    // Existing peer maps encode the ruled split. Resolve each old link once to one stable id.
+    const ids = f.members ? f.members.filter((member) => member !== id && files[member] && !isBowerMoc(files[member]))
+      : [...(f.moc?.regions['moc-members'] ?? '').matchAll(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g)]
+      .flatMap((match) => {
+        const link = match[1] ?? '';
+        const matches = Object.entries(files).filter(([other, note]) => other !== id && !isBowerMoc(note)
+          && (stem(note.path) === link || stem(note.path).endsWith(`/${link}`)));
+        return matches.length === 1 ? [matches[0]?.[0] ?? ''] : [];
+      });
+    const unique = [...new Set(ids)];
+    members.set(id, unique);
+    for (const member of unique) claimed.add(member);
+  }
+  for (const [folder, id] of roots) {
+    const ids = Object.entries(files).filter(([other, f]) => {
+      if (other === id || claimed.has(other) || !f.path.startsWith(`${folder}/`)) return false;
+      // A descendant folder's existing map represents its entire subtree at this level.
+      return ![...roots].some(([child]) => child !== folder && child.startsWith(`${folder}/`)
+        && f.path.startsWith(`${child}/`) && roots.get(child) !== other);
+    }).map(([other]) => other);
+    members.set(id, ids);
+  }
+  for (const [id, ids] of members) members.set(id, ids.sort((a, b) => (files[a]?.path ?? '').localeCompare(files[b]?.path ?? '')));
+  return members;
+}
+
+export function leafCount(id: string, members: ReadonlyMap<string, string[]>): number {
+  const leaves = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (member: string): void => {
+    if (visited.has(member)) return;
+    visited.add(member);
+    const children = members.get(member);
+    if (children) children.forEach(visit);
+    else leaves.add(member);
+  };
+  visit(id);
+  return leaves.size;
+}
+
+/** All changes go back through note-edit's one author and the ordinary edit-text fence. */
+export function mocEdit(id: string, files: Notes, members: ReadonlyMap<string, string[]>): { changes: Change[]; text: string } | null {
+  const note = files[id];
+  if (!note?.moc) return null;
+  const ids = members.get(id) ?? [];
+  const links = noteLinks(files);
+  const direct = ids.filter((member) => !members.has(member) && folderOf(files[member]?.path ?? '') === folderOf(note.path)).length;
+  const regions = {
+    'moc-figures': `## Figures\n\n${direct} direct ${direct === 1 ? 'note' : 'notes'}; ${leafCount(id, members)} notes in all.\n`,
+    'moc-members': `## Notes\n\n${ids.map((member) => `- [[${links.get(member)}]] — ${files[member]?.summary}\n`).join('')}`,
+  };
+  const changes: Change[] = (['moc-figures', 'moc-members'] as const).map((region) => ({
+    kind: 'moc-rewrite', region, recordIds: [], previous: note.moc?.regions[region] ?? '', text: regions[region],
+  }));
+  const result = applyChanges(new TextEncoder().encode(note.moc.text), changes);
+  if (result.ok) return { changes, text: result.text };
+  if (result.reason === 'unchanged') return null;
+  throw new BowerError('unknown', 'Bower could not update its map.', undefined, { cause: result.reason });
 }

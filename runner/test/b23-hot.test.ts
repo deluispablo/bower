@@ -31,6 +31,8 @@ async function hot(reason: string): Promise<HotModule> {
   return loaded as HotModule;
 }
 
+// Addendum 6: pin the suffix without inventing a second operation-key formatter.
+const recentRow = (text: string) => expect.stringMatching(new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} · op:[a-f0-9]{12}$`));
 const TODAY = '2026-10-10';
 const inputs = (overrides: Partial<HotInputs> = {}): HotInputs => ({
   today: TODAY, openQuestions: [], hubs: [], changes: [], ...overrides,
@@ -65,7 +67,7 @@ it('B3a hot: exact section order and headings', async () => {
   expect(lines(rendered.text)).toEqual([
     '# Hot', `_Updated: ${TODAY}_`, '## Open threads', '- Choose a next step',
     '## Current focus', '- Projects/Practice (2026-10-08)',
-    '## Recent changes', '- 2026-10-09 Saved the outline',
+    '## Recent changes', recentRow('- 2026-10-09 Saved the outline'),
   ]);
   expect(renderHot(fixture)).toEqual(rendered);
   expect(fixture).toEqual(inputs({
@@ -97,27 +99,28 @@ it('B3a hot: row caps keep 10 threads 5 hubs and 10 changes with only a thread m
   const result = renderHot(inputs({ openQuestions: questions, hubs, changes })).text;
   expect(section(result, 'Open threads')).toEqual([...questions.slice(0, 10).map((q) => `- ${q.text}`), '- and 3 more waiting on Home']);
   expect.soft(section(result, 'Current focus')).toEqual(hubs.slice(0, 5).map((h) => `- ${h.path} (2026-10-09)`));
-  expect(section(result, 'Recent changes')).toEqual(changes.slice(0, 10).map((c) => `- 2026-10-01 ${c.text}`));
+  expect(section(result, 'Recent changes')).toEqual(changes.slice(0, 10).map((c) => recentRow(`- 2026-10-01 ${c.text}`)));
 });
 
 it('B3a hot: 6 hubs and 11 changes keep exactly 300 capped words without marks', async () => {
   const { renderHot } = await hot('6 hubs and 11 changes keep exactly 300 capped words without marks');
   const hubs = Array.from({ length: 6 }, (_, i) => ({ path: `H${i}`, lastSettledChange: '2026-10-09' }));
   const changes = Array.from({ length: 11 }, (_, i) => ({
-    id: `c${String(i).padStart(2, '0')}`, at: '2026-10-09', text: words(`change-${i}`, i === 0 ? 243 : 1),
+    id: `c${String(i).padStart(2, '0')}`, at: '2026-10-09', text: words(`change-${i}`, i === 0 ? 223 : 1),
   }));
   const expected = [
     '# Hot', `_Updated: ${TODAY}_`, '## Open threads', '## Current focus',
     ...hubs.slice(0, 5).map((h) => `- ${h.path} (2026-10-09)`), '## Recent changes',
-    ...changes.slice(0, 10).map((c) => `- 2026-10-09 ${c.text}`),
-  ].join('\n');
-  expect(wordCount(expected)).toBe(300);
+    ...changes.slice(0, 10).map((c) => recentRow(`- 2026-10-09 ${c.text}`)),
+  ];
   // Positive control: the same retained evidence without over-cap inputs needs no cut.
-  expect(renderHot(inputs({ hubs: hubs.slice(0, 5), changes: changes.slice(0, 10) })).text).toBe(expected);
+  const control = renderHot(inputs({ hubs: hubs.slice(0, 5), changes: changes.slice(0, 10) })).text;
+  expect(control.split('\n')).toEqual(expected);
+  expect(wordCount(control)).toBe(300);
   const result = renderHot(inputs({ hubs, changes }));
   expect.soft(section(result.text, 'Current focus')).toEqual(hubs.slice(0, 5).map((h) => `- ${h.path} (2026-10-09)`));
-  expect(section(result.text, 'Recent changes')).toEqual(changes.slice(0, 10).map((c) => `- 2026-10-09 ${c.text}`));
-  expect(result.text).toBe(expected);
+  expect(section(result.text, 'Recent changes')).toEqual(changes.slice(0, 10).map((c) => recentRow(`- 2026-10-09 ${c.text}`)));
+  expect(result.text.split('\n')).toEqual(expected);
   expect(wordCount(result.text)).toBe(300);
   expect(result.text).not.toContain('more');
   expect(lists(result.provenance)).toContainEqual(hubs.slice(0, 5).map((h) => h.path));
@@ -157,7 +160,7 @@ it('B3a hot: newest first breaks ties by path and id', async () => {
   });
   const text = renderHot(fixture).text;
   expect(section(renderHot(inputs({ changes: [change(2), change(1)] })).text, 'Recent changes')).toEqual([
-    '- 2026-10-02 Change 2', '- 2026-10-01 Change 1',
+    recentRow('- 2026-10-02 Change 2'), recentRow('- 2026-10-01 Change 1'),
   ]);
   expect(section(text, 'Open threads')).toEqual(['- Thread 3', '- Thread 1', '- Thread 2']);
   expect(section(text, 'Current focus')).toEqual([
@@ -165,8 +168,8 @@ it('B3a hot: newest first breaks ties by path and id', async () => {
     '- Projects/Zeta (2026-10-09)', '- Projects/Old (2026-10-08)',
   ]);
   expect(section(text, 'Recent changes')).toEqual([
-    '- 2026-10-09 Later same day', '- 2026-10-09 Alpha change',
-    '- 2026-10-09 Zeta change', '- 2026-10-08 Older change',
+    recentRow('- 2026-10-09 Later same day'), recentRow('- 2026-10-09 Alpha change'),
+    recentRow('- 2026-10-09 Zeta change'), recentRow('- 2026-10-08 Older change'),
   ]);
 });
 
@@ -179,7 +182,7 @@ it('B3a hot: de-duplicates identities without merging equal text', async () => {
   const expected = renderHot(control);
   expect(section(expected.text, 'Open threads')).toEqual(['- Same question', '- Same question']);
   expect(section(expected.text, 'Current focus')).toHaveLength(2);
-  expect(section(expected.text, 'Recent changes')).toEqual(['- 2026-10-09 Same change', '- 2026-10-09 Same change']);
+  expect(section(expected.text, 'Recent changes')).toEqual([recentRow('- 2026-10-09 Same change'), recentRow('- 2026-10-09 Same change')]);
   expect(renderHot(inputs({
     openQuestions: [q, q, { ...q, id: 'q-b' }],
     hubs: [h, h, hub(2)], changes: [c, c, { ...c, id: 'c-b' }],
@@ -197,7 +200,7 @@ it('B3a hot: multiline and heading text stays one row', async () => {
   })).text;
   expect(section(text, 'Open threads')).toEqual(['- First ## Injected - Extra row']);
   expect(section(text, 'Current focus')).toEqual(['- Projects/First ## Fake Hub (2026-10-09)']);
-  expect(section(text, 'Recent changes')).toEqual(['- 2026-10-09 Saved ## Injected - Other change']);
+  expect(section(text, 'Recent changes')).toEqual([recentRow('- 2026-10-09 Saved ## Injected - Other change')]);
   expect(lines(text).filter((line) => line.startsWith('## '))).toEqual([
     '## Open threads', '## Current focus', '## Recent changes',
   ]);
@@ -281,10 +284,13 @@ it.each(blockInputs)('B3a hot: hub $label starts literally in one top-level row'
 
 it.each(blockInputs)('B3a hot: change $label starts literally in one top-level row', async ({ text }) => {
   const { renderHot } = await hot('change block syntax starts literally in one top-level row');
-  expect(section(renderHot(inputs({ changes: [change(1)] })).text, 'Recent changes')).toEqual(['- 2026-10-01 Change 1']);
+  expect(section(renderHot(inputs({ changes: [change(1)] })).text, 'Recent changes')).toEqual([recentRow('- 2026-10-01 Change 1')]);
   const rendered = renderHot(inputs({ changes: [{ id: 'c-block', at: '2026-10-09', text }] })).text;
   const parsedLines = rendered.split('\n');
-  const row = literalRow(rendered, text.replace(/\s+/gu, ' ').trim(), '2026-10-09 ');
+  const dated = section(rendered, 'Recent changes')[0] ?? '';
+  expect(dated).toMatch(/ · op:[a-f0-9]{12}$/);
+  const suffix = / · op:[a-f0-9]{12}$/.exec(dated)?.[0] ?? '';
+  const row = literalRow(rendered, `${text.replace(/\s+/gu, ' ').trim()}${suffix}`, '2026-10-09 ');
   expect(parsedLines).toEqual([
     '# Hot', `_Updated: ${TODAY}_`, '## Open threads', '## Current focus', '## Recent changes', row,
   ]);
@@ -307,7 +313,7 @@ it('B3a hot: 300 words cuts changes then focus then threads with full counts', a
   expect(section(cutChanges, 'Open threads')).toEqual(['- Thread 1']);
   expect(section(cutChanges, 'Current focus')).toEqual(['- Projects/Focus-1 (2026-10-09)']);
   expect(section(cutChanges, 'Recent changes')).toEqual([
-    `- 2026-10-03 ${words('change-3', 100)}`, `- 2026-10-02 ${words('change-2', 100)}`, '- (1 more)',
+    recentRow(`- 2026-10-03 ${words('change-3', 100)}`), recentRow(`- 2026-10-02 ${words('change-2', 100)}`), '- (1 more)',
   ]);
   expect(wordCount(cutChanges)).toBeLessThanOrEqual(300);
 

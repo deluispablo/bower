@@ -1,5 +1,13 @@
+import { BowerError } from '../../src/data/types';
+import { timelineDate } from '../../src/data/contracts/note-edit';
+import { opKey } from '../../src/data/contracts/op-key';
+
 export interface HotInputs {
   today: string;
+  previousHot?: string;
+  rootId?: string;
+  runId?: string;
+  removedKeys?: readonly string[];
   openQuestions: readonly { id: string; text: string }[];
   hubs: readonly { path: string; lastSettledChange: string | null }[];
   changes: readonly { id: string; at: string; text: string }[];
@@ -55,19 +63,30 @@ function renderSection(value: Section): string[] {
   ];
 }
 
+/** Reject normalized impossible days as well as malformed date/time spellings. */
+function validDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))?$/.test(value)) return false;
+  const day = value.slice(0, 10);
+  return timelineDate(Date.parse(day)) === day && timelineDate(Date.parse(value)) !== null;
+}
+
 /** Project already-read primary evidence without I/O or a model. */
 export function renderHot(inputs: HotInputs): HotResult {
+  if (!validDate(inputs.today) || inputs.today.length !== 10) throw new BowerError('unknown', 'Bower could not date its notes.');
   const today = Date.parse(inputs.today);
   const questions = unique(inputs.openQuestions, (question) => question.id);
   const hubs = unique(inputs.hubs, (hub) => hub.path)
     .filter((hub) => {
-      if (hub.lastSettledChange === null) return false;
+      if (hub.lastSettledChange === null || !validDate(hub.lastSettledChange)) return false;
       const day = Date.parse(hub.lastSettledChange.slice(0, 10));
       return day <= today && day >= today - 30 * 86_400_000;
     })
-    .sort((a, b) => Date.parse(b.lastSettledChange ?? '') - Date.parse(a.lastSettledChange ?? '')
+    .sort((a, b) => Date.parse(b.lastSettledChange?.slice(0, 10) ?? '') - Date.parse(a.lastSettledChange?.slice(0, 10) ?? '')
       || compareText(a.path, b.path));
-  const changes = unique(inputs.changes, (change) => change.id)
+  const removed = new Set(inputs.removedKeys);
+  const changes = unique(inputs.changes.filter((change) => validDate(change.at)).map((change) => ({
+    ...change, key: opKey(inputs.rootId ?? '', inputs.runId ?? '', change.id),
+  })).filter((change) => !removed.has(change.key)), (change) => change.key)
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at) || compareText(a.id, b.id));
 
   const threads = section('Open threads', questions.map((question) => ({
@@ -77,9 +96,19 @@ export function renderHot(inputs: HotInputs): HotResult {
     identity: hub.path,
     text: `- ${oneLine(hub.path)} (${hub.lastSettledChange?.slice(0, 10)})`,
   })), 5);
-  const recent = section('Recent changes', changes.map((change) => ({
-    identity: change.id, text: `- ${change.at.slice(0, 10)} ${oneLine(change.text)}`,
-  })), 10);
+  // Only dated rows from the generated section survive; other prior prose is never evidence.
+  const previous = inputs.previousHot?.split(/^## Recent changes\s*$/m)[1]?.split(/^## /m)[0] ?? '';
+  const priorRows = previous.split('\n').flatMap((text) => {
+    const day = /^- (\d{4}-\d{2}-\d{2}) .+$/u.exec(text)?.[1];
+    if (!day || !validDate(day) || Date.parse(day) > today) return [];
+    const key = / · op:([a-f0-9]{12})$/u.exec(text)?.[1];
+    // Historical dated rows remain readable; their exact bytes supply a stable migration identity.
+    const identity = key ?? opKey(inputs.rootId ?? '', '', text);
+    return removed.has(identity) ? [] : [{ identity, text: key ? text : `${text} · op:${identity}` }];
+  });
+  const recent = section('Recent changes', unique([...changes.map((change) => ({
+    identity: change.key, text: `- ${change.at.slice(0, 10)} ${oneLine(change.text)} · op:${change.key}`,
+  })), ...priorRows], (row) => row.identity), 10);
   const render = (): string => [
     '# Hot', `_Updated: ${inputs.today}_`,
     ...renderSection(threads), ...renderSection(focus), ...renderSection(recent),
@@ -98,7 +127,7 @@ export function renderHot(inputs: HotInputs): HotResult {
     provenance: {
       questionIds: threads.rows.map((row) => row.identity),
       hubPaths: focus.rows.map((row) => row.identity),
-      changeIds: recent.rows.map((row) => row.identity),
+      changeIds: changes.filter((change) => recent.rows.some((row) => row.identity === change.key)).map((change) => change.id),
     },
   };
 }

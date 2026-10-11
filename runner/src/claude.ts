@@ -36,16 +36,18 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { normalizeModelInput } from './model-input';
-import { isJournalRecord } from '../../src/data/contracts/journal-record';
+import { type JournalRecord, isJournalRecord } from '../../src/data/contracts/journal-record';
 import { MANIFEST_V2_LIMIT, parseRunManifestV2, recordableName } from '../../src/data/contracts/run-manifest';
 import { z } from 'zod';
 import { AUTHORED_LINE_MAX, STATE_WRITE, newsLineCited } from '../../src/data/contracts/note-edit';
+import { timelineBullets } from '../../src/data/contracts/note-format';
+import { parseTimelineLine } from '../../src/data/contracts/timeline-line';
 import { PILE_NOTE } from '../../src/data/piles';
 import type { Admitted, RunProvider } from '../../src/data/spine/provider';
 import type { ScriptedRead } from '../../src/data/spine/read';
 import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
-import { subjectKey, subjectOf } from '../../src/data/contracts/questions';
+import { answersAsking, checkedAnswer, journalAnswer, type QuestionAnswer, subjectKey, subjectOf } from '../../src/data/contracts/questions';
 import type { Question } from '../../src/data/contracts/types';
 import { modelDecisions, namedNotes, personalAppendHistory, planScripted, requestTargets, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
 import { MAX_NAME } from '../../src/data/contracts/tree';
@@ -177,13 +179,17 @@ interface Shown {
   suppressed?: ReadonlySet<string>;
   personalNotes?: ReadonlySet<string>;
   retrySources?: ReadonlySet<string>;
+  presentLines?: ReadonlySet<string>;
   /** The person's `Rules.md`, bounded, when the folder has one. */
   rules?: string;
+  aboutMe?: string;
+  index?: string;
   /** Your answers this run took, each with its question and what it is about (TL-P4-08 addendum 8). */
   answers?: Array<{ question: string; answer: string; fileId?: string; pileId?: string; note?: string; notes?: string[] }>;
   /** The paths and names of the folder's files, for the check on a note's links; not shown to the model. */
   names?: Set<string>;
   folders: string[];
+  folderCandidates?: Array<{ folderId: string; path: string }>;
 }
 
 /** `text` within `room` characters: whole, cut and marked, or not shown when there is no room left. */
@@ -228,7 +234,7 @@ function calculateSectionHashes(
  * existing folder, or a new direct subfolder of" one, :255-328 its eight kinds of document).
  */
 /** The fixed prompt instructions for the model (TL-P4-08 addendum 3). */
-function promptInstructions(): string {
+function promptInstructions(options = false): string {
   return [
     'You plan one Bower tidy-up. You have no tools: never try to read, write or run anything.',
     'Reply with one JSON object and nothing else, of exactly this shape:',
@@ -257,6 +263,7 @@ function promptInstructions(): string {
     '3. Ask: when where a thing goes is genuinely unclear, never guess. Leave it out of "things" and add one plain yes-or-no',
     `   question about it to "asks" by its "fileId" (at most ${ASK.text} characters, no links, answers at most ${ASK.answer}). For a pile of`,
     '   words only, or a pile unclear as a whole, give its "pileId" instead and leave the whole pile out of "things" and "notes".',
+    ...(options ? ['   When 2 to 4 folderCandidates fit, options may select {folderId,label} from those candidates. Bower supplies option ids and actions.'] : []),
     '   What is asked about stays in the inbox untouched, with the pile\'s words, until the person answers. File everything',
     '   else, the rest of its pile too: the run never waits.',
     '',
@@ -326,8 +333,8 @@ function inStableOrder(piles: Shown['piles']): Shown['piles'] {
 
 function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
   return [
-    promptInstructions(),
-    JSON.stringify({ runId: run.runId, admission: took.taken.id, piles: inStableOrder(shown.piles), notes: shown.notes, folders: shown.folders, ...(shown.rules ? { rules: shown.rules } : {}), ...(shown.answers?.length ? { answers: shown.answers } : {}) }),
+    promptInstructions(!!shown.folderCandidates),
+    JSON.stringify({ ...(shown.rules ? { rules: shown.rules } : {}), ...(shown.aboutMe ? { aboutMe: shown.aboutMe } : {}), ...(shown.index !== undefined ? { index: shown.index } : {}), ...(run.hot ? { hot: run.hot } : {}), runId: run.runId, admission: took.taken.id, piles: inStableOrder(shown.piles), notes: shown.notes, folders: shown.folders, ...(shown.folderCandidates ? { folderCandidates: shown.folderCandidates } : {}), ...(shown.answers?.length ? { answers: shown.answers } : {}) }),
   ].join('\n');
 }
 
@@ -342,6 +349,10 @@ const MAIN_FOLDERS: readonly string[] = PARA_ROOTS.filter((root) => root !== 'In
 async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, first: ReadonlySet<string> = new Set()): Promise<Shown> {
   const listing = await read.listAll(run.rootId);
   const ix = VaultIndex.build(run.rootId, listing);
+  const aboutFile = ix.file('About me.md');
+  const aboutMe = aboutFile ? bounded(await read.readText(aboutFile.id), CONTEXT_BOUNDS.perNote).text : null;
+  const indexFile = ix.file(SYSTEM.index);
+  const index = run.index ?? (indexFile ? bounded(await read.readText(indexFile.id), 32_000).text ?? undefined : undefined);
   const inMain = (path: string | undefined): path is string => path !== undefined && MAIN_FOLDERS.includes(path.split('/')[0] ?? '');
   const folders = listing.flatMap((f) => {
     const path = f.folder ? ix.pathOf(f.id) : undefined;
@@ -399,9 +410,15 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
     : null;
   const named = new Set<string>();
   const suppressed = new Set<string>();
+  const waiting: Array<{ rec: JournalRecord; files: DriveFile[] }> = [];
   for (const line of took.taken.journal) {
     const rec: unknown = JSON.parse(await read.readText(line.fileId));
     if (!isJournalRecord(rec) || rec.kind !== 'request') continue;
+    const file = listing.find((f) => f.id === line.fileId);
+    if (file && ix.waitingRun(file.id)) {
+      waiting.push({ rec, files: [file] });
+      continue;
+    }
     // The plan's one verdict on what a request names: a request refused whole shows none of its notes.
     const { notes, refused } = requestTargets(listing, ix, rec.text ?? rec.what);
     for (const n of notes) {
@@ -409,10 +426,26 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
       else named.add(n.file.id);
     }
   }
-  const personalNamed = listing.some((f) => named.has(f.id) && f.appProperties?.by !== 'bower');
-  const history = personalNamed ? (await personalAppendHistory(read, run.rootId, listing, ix)).lines : [];
+  const history = waiting.length ? (await personalAppendHistory(read, run.rootId, listing, ix, waiting)).lines : [];
+  for (const h of history) named.add(h.consent.targetFileId);
   const retrySources = new Set(history.map((h) => h.consent.sourceFileId));
-  return { own: ix.file(SYSTEM.dir)?.id, piles, notes: await notesShown(read, listing, ix, first, named), folders, names, suppressed, retrySources, personalNotes: new Set(listing.flatMap((f) => {
+  const notes = await notesShown(read, listing, ix, first, named);
+  // Repeating a line already shown is valid input, but grants no fresh consent or source evidence.
+  // The planner's existing Timeline check still decides whether anything may be written.
+  const presentLines = new Set(notes.flatMap((note) => {
+    const file = ix.file(note.path);
+    if (note.cut || !file) return [];
+    const fetched = run.context ? { context: run.context, fileId: file.id } : undefined;
+    return timelineBullets(note.text, fetched).flatMap((bullet) => {
+      const line = parseTimelineLine(bullet);
+      if (!line?.source) return [];
+      return listing.filter((file) => !file.folder && file.name.replace(/\.md$/i, '') === line.source)
+        .map((file) => JSON.stringify([note.path, line.text, file.id]));
+    });
+  }));
+  const folderCandidates = listing.flatMap((f) => { const path = f.folder ? ix.pathOf(f.id) : undefined;
+    return inMain(path) && path.includes('/') ? [{ folderId: f.id, path }] : []; });
+  return { ...(aboutMe ? { aboutMe } : {}), ...(index !== undefined ? { index } : {}), own: ix.file(SYSTEM.dir)?.id, piles, notes, folders, ...(folderCandidates.length >= 2 && folderCandidates.length <= 4 ? { folderCandidates } : {}), names, suppressed, retrySources, presentLines, personalNotes: new Set(listing.flatMap((f) => {
     const path = ix.pathOf(f.id);
     return !f.folder && f.appProperties?.by !== 'bower' && path?.endsWith('.md') && MAIN_FOLDERS.includes(path.split('/')[0] ?? '') ? [path] : [];
   })), ...(rules ? { rules } : {}) };
@@ -438,6 +471,8 @@ async function notesShown(read: ScriptedRead, listing: readonly DriveFile[], ix:
   const notes: Shown['notes'] = [];
   for (const { f, path } of candidates) {
     if (room <= 0) break;
+    // The canonical projection already represents maps; only an explicit target needs their complete text.
+    if (!named.has(f.id) && !first.has(f.id) && (await read.indexedFront?.(f))?.type === 'moc') continue;
     const text = await read.readText(f.id);
     const shown = bounded(text, Math.min(CONTEXT_BOUNDS.perNote, room));
     if (shown.text === null) break;
@@ -452,7 +487,8 @@ interface TakenAnswer {
   /** The answer's journal record id. */
   id: string;
   yes: boolean;
-  question: Pick<Question, 'id' | 'text' | 'yes' | 'no' | 'subject'>;
+  value: QuestionAnswer;
+  question: Pick<Question, 'id' | 'text' | 'yes' | 'no' | 'subject' | 'options'>;
   /** For "Write it" (a question about a note's Current state): the note it is about, by that id: its file id and its path now. */
   note?: { fileId: string; path: string };
   /** For keeping one note (a pair question by file ids, c3-pair-ask): the two notes, by those ids, and their paths now. */
@@ -494,12 +530,15 @@ async function answersTaken(read: ScriptedRead, run: ScriptedRun, took: Admitted
   // A change of yours that is not an answer to a question that kept what it showed needs the model.
   let others = 0;
   for (const line of took.taken.journal) {
-    const rec = json(await read.readText(line.fileId)) as { id?: unknown; kind?: unknown; text?: unknown; questionId?: unknown; at?: unknown } | null;
+    const value = json(await read.readText(line.fileId));
+    const rec = isJournalRecord(value) ? value : null;
     const q = questions.find((x) => x.id === rec?.questionId);
     const shown = !!q && subjectOf({ id: typeof q.id === 'string' ? q.id : '' }).kind === 'state' && isRecord(q.shown) && Array.isArray(q.shown.lines);
     if (rec?.kind !== 'answer' || !shown) others++;
-    if (rec?.kind !== 'answer' || (rec.text !== 'yes' && rec.text !== 'no') || typeof rec.id !== 'string') continue;
-    if (!q || typeof q.id !== 'string' || typeof q.text !== 'string') continue;
+    if (rec?.kind !== 'answer' || journalAnswer(rec) === undefined || typeof rec.id !== 'string') continue;
+    if (!q || typeof q.id !== 'string' || typeof q.text !== 'string' || typeof q.askedAt !== 'number' || !answersAsking(rec, { id: q.id, askedAt: q.askedAt })) continue;
+    let answerValue: QuestionAnswer;
+    try { answerValue = checkedAnswer(q as unknown as Question, journalAnswer(rec) as QuestionAnswer); } catch (e) { console.error(e); continue; }
     const at = typeof rec.at === 'number' ? rec.at : 0;
     // One answer per question: of two (another device's), the later one is the person's answer (P4-20 M1).
     const before = out.findIndex((a) => a.answer.question.id === q.id);
@@ -513,7 +552,7 @@ async function answersTaken(read: ScriptedRead, run: ScriptedRun, took: Admitted
     const pairPaths = pairIds?.map((id) => ix.pathOf(id));
     const [pathA, pathB] = pairPaths ?? [];
     const answer: TakenAnswer = {
-      id: rec.id, yes: rec.text === 'yes', question: { id: q.id, text: q.text, yes: text(q.yes), no: text(q.no), ...(typeof q.subject === 'string' ? { subject: q.subject } : {}) },
+      id: rec.id, yes: answerValue === true, value: answerValue, question: { id: q.id, text: q.text, yes: text(q.yes), no: text(q.no), ...(Array.isArray(q.options) ? { options: q.options as Question['options'] } : {}), ...(typeof q.subject === 'string' ? { subject: q.subject } : {}) },
       ...(noteId !== undefined && notePath !== undefined ? { note: { fileId: noteId, path: notePath } } : {}),
       ...(pairIds && pathA !== undefined && pathB !== undefined ? { pair: { fileIds: pairIds, paths: [pathA, pathB] } } : {}),
       ...(shown ? { shown: true as const } : {}),
@@ -556,11 +595,13 @@ function mergesOf(answers: readonly TakenAnswer[], notes: readonly string[]): No
 function answersShown(answers: readonly TakenAnswer[], piles: Shown['piles']): NonNullable<Shown['answers']> {
   const things = new Set(piles.flatMap((p) => p.things.map((t) => t.fileId)));
   const pileIds = new Set(piles.map((p) => p.pileId));
-  return answers.slice(0, AUTHORED.lines).map((a) => {
+  return answers.flatMap((a) => {
     const subject = subjectKey(a.question);
     const about = subject === undefined ? {} : things.has(subject) ? { fileId: subject } : pileIds.has(subject) ? { pileId: subject } : {};
-    return { question: a.question.text.slice(0, ASK.text), answer: (a.yes ? a.question.yes : a.question.no).slice(0, ASK.answer) || (a.yes ? 'Yes' : 'No'), ...about, ...(a.note ? { note: a.note.path } : {}), ...(a.pair ? { notes: [...a.pair.paths] } : {}) };
-  });
+    // Typed person text is admitted only with its own thing or pile; unrelated journal remains pending.
+    if (typeof a.value !== 'boolean' && 'text' in a.value && !('fileId' in about) && !('pileId' in about)) return [];
+    return [{ question: a.question.text.slice(0, ASK.text), answer: typeof a.value === 'boolean' ? (a.yes ? a.question.yes : a.question.no).slice(0, ASK.answer) || (a.yes ? 'Yes' : 'No') : 'text' in a.value ? a.value.text : a.question.options?.find((o) => typeof a.value !== 'boolean' && 'option' in a.value && o.id === a.value.option)?.label ?? '', ...about, ...(a.note ? { note: a.note.path } : {}), ...(a.pair ? { notes: [...a.pair.paths] } : {}) }];
+  }).slice(0, AUTHORED.lines);
 }
 
 /**
@@ -677,9 +718,11 @@ const lineOk = (text: unknown, max: number): text is string =>
 /** What the model was shown that its reply is checked against: the notes it may update, and (for links) the folder's
  * file paths and names and each thing's text. */
 export interface Seen {
+  folderCandidates?: ReadonlySet<string>;
   suppressed?: ReadonlySet<string>;
   personalNotes?: ReadonlySet<string>;
   retrySources?: ReadonlySet<string>;
+  presentLines?: ReadonlySet<string>;
   notes: ReadonlySet<string>;
   names?: ReadonlySet<string>;
   texts?: ReadonlyMap<string, string>;
@@ -854,6 +897,7 @@ const AskShape = z.strictObject({
   text: z.string(named('askText', 'askKeys')), yes: z.string(named('askText', 'askKeys')), no: z.string(named('askText', 'askKeys')),
   pileId: z.string(named('askNotAdmitted')).optional(), fileId: z.string(named('askNotAdmitted')).optional(),
   notes: z.array(z.string(named('askNotes')), named('askNotes')).optional(),
+  options: z.array(z.strictObject({ folderId: z.string(), label: z.string() }), named('askKeys')).min(2, named('askKeys')).max(4, named('askKeys')).optional(),
 }, named('askKeys'));
 const KeepShape = z.strictObject({ kept: z.string(named('keepNote', 'keepKeys')), other: z.string(named('keepNote', 'keepKeys')) }, named('keepKeys'));
 type ThingIn = z.output<typeof ThingShape>;
@@ -942,7 +986,8 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   const Line = LineShape.superRefine(inOrder<z.output<typeof LineShape>>([
     rule('lineNote', (l) => notes.has(l.note) || !!seen.suppressed?.has(l.note)),
     rule('lineText', (l) => lineOk(l.text, AUTHORED.line) && unlinked(l.text)),
-    rule('lineCites', (l) => l.cites === undefined || placed.has(l.cites) || wordsPile(l.cites) || !!seen.retrySources?.has(l.cites)),
+    rule('lineCites', (l) => l.cites === undefined || placed.has(l.cites) || wordsPile(l.cites) || !!seen.retrySources?.has(l.cites)
+      || !!seen.presentLines?.has(JSON.stringify([l.note, l.text.trim(), l.cites]))),
     rule('lineUncited', (l) => newsLineCited({ text: l.text.trim(), source: l.cites ?? null })),
     rule('numbers', (l) => grounded(l.cites, [l.text], 'the Timeline line on')),
   ], (l) => {
@@ -990,9 +1035,10 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       if (!files) return true;
       return !thing && pile.anchor ? 'a question about a pile it also files: to ask about one thing of a pile, give that thing\'s "fileId" and file the rest' : false;
     }),
+    rule('askKeys', (a) => a.options === undefined || (a.notes === undefined && new Set(a.options.map((o) => o.folderId)).size === a.options.length && a.options.every((o) => seen.folderCandidates?.has(o.folderId) && plain(o.label, ASK.answer)))),
     rule('askText', (a) => plain(a.text, ASK.text) && plain(a.yes, ASK.answer) && plain(a.no, ASK.answer)),
   ], (a) => {
-    const said = { text: a.text.trim(), yes: a.yes.trim(), no: a.no.trim() };
+    const said = { text: a.text.trim(), yes: a.yes.trim(), no: a.no.trim(), ...(a.options ? { options: a.options.map((o) => ({ folderId: o.folderId, label: o.label.trim() })) } : {}) };
     const pair = pairIn(a);
     if (pair) return void askedPairs.push({ notes: pair, ...said });
     const { pile, whole } = about(a);
@@ -1255,9 +1301,11 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       ...(shown.personalNotes ? { personalNotes: shown.personalNotes } : {}),
       ...(shown.suppressed ? { suppressed: shown.suppressed } : {}),
       ...(shown.retrySources ? { retrySources: shown.retrySources } : {}),
+      ...(shown.presentLines ? { presentLines: shown.presentLines } : {}),
       names: shown.names ?? new Set(),
       texts,
       folders: new Set(shown.folders),
+      folderCandidates: new Set(shown.folderCandidates?.map((o) => o.folderId)),
       words: shown.piles.map((p) => p.words).join('\n'),
       shownNotes: shown.notes.map((n) => `${n.path}\n${n.text}`).join('\n'),
       ...(shown.rules ? { rules: shown.rules } : {}),
@@ -1267,7 +1315,11 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     // addendum 4); a second one ends the run. A run that went wrong (a cap, an error result) ends it at once.
     const check = (done: ClaudeExit): { ok: true; intent: Extract<Intent, { ok: true }> } | Refused => {
       const stats = statsOf(done.stdout);
-      if (setup.timing && stats) setup.timing.model = stats;
+      if (setup.timing && stats) {
+        const previous = setup.timing.model;
+        setup.timing.model = previous ? { wallMs: previous.wallMs + stats.wallMs, apiMs: previous.apiMs + stats.apiMs,
+          turns: previous.turns + stats.turns, inputTokens: previous.inputTokens + stats.inputTokens, outputTokens: previous.outputTokens + stats.outputTokens } : stats;
+      }
       const reply = replyOf(done, maxTurns);
       if (!reply.ok) return reply.kind === null ? refuse(reply.why, done.stderr) : reply;
       const got = intentOf(reply.value, shownTook, seen);

@@ -3,7 +3,7 @@
     "present": [
       "Projects/Flat hunt/Appointment letter.txt",
       "Projects/Flat hunt/Appointment letter.md",
-      "hot.md"
+      ".bower/hot.md"
     ],
     "absent": [
       "Inbox/*"
@@ -15,7 +15,7 @@
   ],
   "notes": [
     {
-      "path": "hot.md",
+      "path": ".bower/hot.md",
       "contains": [
         "# Hot",
         "_Updated:",
@@ -49,7 +49,7 @@
       "files": {
         "present": [
           "Inbox/*/Letter.txt",
-          "hot.md"
+          ".bower/hot.md"
         ],
         "absent": [
           "Projects/Flat hunt/Appointment letter.txt"
@@ -61,7 +61,7 @@
       ],
       "notes": [
         {
-          "path": "hot.md",
+          "path": ".bower/hot.md",
           "contains": [
             "# Hot",
             "_Updated:",
@@ -76,7 +76,7 @@
         "filed": 0,
         "questionsExactly": 1,
         "questions": [
-          "q-ask-p-1"
+          "q-ask-f18"
         ],
         "questionSubjects": [
           {
@@ -91,7 +91,7 @@
         "present": [
           "Projects/Flat hunt/Appointment letter.txt",
           "Projects/Flat hunt/Appointment letter.md",
-          "hot.md"
+          ".bower/hot.md"
         ],
         "absent": [
           "Inbox/*"
@@ -103,7 +103,7 @@
       ],
       "notes": [
         {
-          "path": "hot.md",
+          "path": ".bower/hot.md",
           "contains": [
             "# Hot",
             "_Updated:",

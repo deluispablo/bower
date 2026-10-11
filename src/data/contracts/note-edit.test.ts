@@ -142,6 +142,72 @@ function v2(eol: string, timeline: string[], name = 'Old'): string {
 /** A legacy note of Bower's: frontmatter with `by: bower`, then the given lines. */
 const legacy = (eol: string, ...body: string[]): string => ['---', 'summary: Lease', 'by: bower', '---', ...body].join(eol);
 
+const profileWords = (count: number): string => ['Alex', ...Array.from({ length: count - 2 }, () => 'TypeScript'), '[[CV]]'].join(' ') + '\n';
+const profileChange = (previous: string, text: string): Change => ({
+  kind: 'profile-rewrite', recordIds: [], previous, text,
+} as unknown as Change);
+const profileNote = (): { old: string; before: string; previous: string } => {
+  const old = v2('\n', ['## Timeline', '- 6 Oct · Read the CV · [[CV]]']);
+  const previous = 'Alex uses TypeScript. [[CV]]\n';
+  return { old, previous, before: old + '<!-- bower:ownership/2 begin profile -->\n' + previous
+    + '<!-- bower:ownership/2 end profile -->\n' };
+};
+const profileControl = (): void => {
+  const old = profileNote().old;
+  const result = applyChanges(enc(old), [relink(['Old', 'New'])]);
+  expect(result.ok).toBe(true);
+  expect(parseOwnership(enc(old)).status).toBe('v2');
+};
+
+it('B5a contracts: b5-profile-region-bound', () => {
+  profileControl();
+  const { before, previous } = profileNote();
+  const bytes = enc(before); const copy = bytes.slice();
+  const text = profileWords(400);
+  expect(text.trim().split(/\s+/)).toHaveLength(400);
+  const result = applyChanges(bytes, [profileChange(previous, text)]);
+  expect(result.ok, 'a marked profile permits 400 sourced words through note-edit').toBe(true);
+  if (!result.ok) return;
+  expect(result.text).toBe(before.replace(previous, text));
+  expect(parseNote('Areas/Career/Career profile.md', result.text).currentState).toEqual(['Signed with [[Old]]']);
+  expect(parseNote('Areas/Career/Career profile.md', result.text).body).toContain('Notes on [[Old]].');
+  expect(bytes).toEqual(copy);
+  expect(applyChanges(bytes, [profileChange(previous, profileWords(401))])).toEqual({ ok: false, reason: 'field' });
+});
+
+it('B5a contracts: profile refuses 401 words while its 400-word positive control succeeds', () => {
+  profileControl();
+  const { before, previous } = profileNote();
+  expect(applyChanges(enc(before), [profileChange(previous, profileWords(400))]).ok).toBe(true);
+  expect(applyChanges(enc(before), [profileChange(previous, profileWords(401))])).toEqual({ ok: false, reason: 'field' });
+});
+
+it('B5a contracts: profile never adopts person prose and never enlarges Current state', () => {
+  profileControl();
+  const { before, previous } = profileNote();
+  expect(applyChanges(enc(before), [profileChange(previous, profileWords(4))]).ok).toBe(true);
+  const personal = '## Profile\nAlex keeps these personal words.\n';
+  const unchanged = enc(personal);
+  expect(applyChanges(unchanged, [profileChange(personal, profileWords(4))])).toEqual({ ok: false, reason: 'not-bower' });
+  expect(dec(unchanged)).toBe(personal);
+  // Current state stays on its independent existing write contract; a profile does not supply adoption authority.
+  expect(applyChanges(enc(before), [{ kind: 'state-rewrite', recordIds: [], previous: ['Signed with [[Old]]'],
+    lines: Array.from({ length: 21 }, () => 'TypeScript') }])).toEqual({ ok: false, reason: 'field' });
+});
+
+it('B5a contracts: old note fixtures keep legacy and ownership/2 meanings', () => {
+  profileControl();
+  const legacyText = legacy('\n', '## Current state', '- Alex uses TypeScript.', '', 'Alex keeps personal prose.', '',
+    '## Timeline', '- 6 Oct · Read the CV · [[CV]]', '');
+  expect(parseOwnership(enc(legacyText)).status).toBe('legacy');
+  expect(parseNote('Areas/Career/Career.md', legacyText).currentState).toEqual(['Alex uses TypeScript.']);
+  expect(parseNote('Areas/Career/Career.md', legacyText).body).toBe('Alex keeps personal prose.');
+  const old = profileNote().old;
+  expect(parseOwnership(enc(old)).status).toBe('v2');
+  expect(parseNote('Areas/Career/Career.md', old).currentState).toEqual(['Signed with [[Old]]']);
+  expect(parseNote('Areas/Career/Career.md', old).timeline).toHaveLength(1);
+});
+
 function expectEdit(before: string, changes: Change[], after: string): void {
   const source = enc(before);
   const copy = source.slice();

@@ -112,6 +112,25 @@ const summaryValidator = (): ((value: string) => unknown) => {
   return typeof candidate === 'function' ? candidate as (value: string) => unknown : () => false;
 };
 
+it('B5a contracts: declared projection keeps four ordered columns and retains other note properties', () => {
+  summaryControl();
+  const raw = '---\nby: bower\ntype: offer\nstatus: active\nsummary: An offer.\ntags: [career]\n'
+    + 'created: 2026-10-10\nupdated: 2026-10-10\nsource: [[Alex CV]]\nrelated: [[Career]]\n'
+    + 'hours: 32\nrole: Developer\nsalary: 48000 EUR\nposted: 2026-10-10\nstage: new\n---\nAlex keeps these words.\n';
+  const note = parseNote('Resources/Offer.md', raw);
+  expect(note.properties.find((property) => property.key === 'hours')?.value).toBe('32');
+  const candidate: unknown = Reflect.get(summaryFormat, 'tableProperties');
+  expect(candidate, 'note-format must export tableProperties').toBeTypeOf('function');
+  const project = candidate as (value: typeof note, row: { table: string[] }) => typeof note.properties;
+  const before = structuredClone(note);
+  expect(project(note, { table: ['role', 'salary', 'posted', 'stage'] })).toEqual(
+    ['role', 'salary', 'posted', 'stage'].map((key) => note.properties.find((property) => property.key === key)),
+  );
+  expect(project(note, { table: ['hours', 'role'] }).map((property) => property.key)).toEqual(['hours', 'role']);
+  expect(note).toEqual(before);
+  expect(note.body).toBe('Alex keeps these words.');
+});
+
 // Quote every casing, including mixed case, for consumers using either YAML schema.
 const yaml11SummaryValues = [
   ...['yes', 'no', 'on', 'off', 'y', 'n'].flatMap((value) =>
@@ -552,7 +571,6 @@ describe('protected sections retain prose and tasks outside the personal body', 
     { name: 'missing end marker', source: raw.replace('<!-- bower:ownership/2 end current -->\n', '') },
     { name: 'unsupported version', source: raw.replace('bower_format: ownership/2', 'bower_format: ownership/3') },
     { name: 'duplicate declaration', source: raw.replace('summary:', 'bower_format: ownership/2\nsummary:') },
-    { name: 'unclaimed content', source: raw + 'Outside text\n- [ ] Unclaimed task' },
     { name: 'unclosed fence', source: raw.replace(personal, '```\n' + personal) },
     { name: 'lone CR', source: raw.replace(paragraph, paragraph + '\rX') },
   ];
@@ -560,6 +578,18 @@ describe('protected sections retain prose and tasks outside the personal body', 
     const before = new TextEncoder().encode(source);
     expect(() => parseNote('Synthetic.md', source)).toThrow(BowerError);
     expect(() => toggleTaskInText(source, 0)).toThrow(BowerError);
+    expect(new TextEncoder().encode(source)).toEqual(before);
+  });
+
+  // TL-P4-41 addendum 8: outside prose is readable but its task-shaped bytes have no task authority.
+  it('reads unclaimed content and refuses task edits in its untouchable span', () => {
+    const outside = 'Outside text\n- [ ] Unclaimed task';
+    const source = raw + outside;
+    const before = new TextEncoder().encode(source);
+    expect(parseNote('Synthetic.md', source)).toEqual(parseNote('Synthetic.md', raw));
+    // Index 0 is the framed personal task; index 1 would be the outside task if prose were wrongly indexed.
+    expect(() => toggleTaskInText(source, 1)).toThrow(BowerError);
+    expect(toggleTaskInText(source, 0).text).toBe(raw.replace('- [ ] Personal task', '- [x] Personal task') + outside);
     expect(new TextEncoder().encode(source)).toEqual(before);
   });
 

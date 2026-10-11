@@ -19,7 +19,7 @@
  *
  * A file without frontmatter is a plain note of yours: all of it is body.
  */
-import { BowerError, type Note, type Property, type SourceKind, type TimelineEntry } from './types';
+import { BowerError, type Note, type Property, type SourceKind, type TimelineEntry, type TypeRow, type TypeTable } from './types';
 import { timelineLine, parseTimelineLine } from './timeline-line';
 import { parseOwnership, togglePersonalTask, type ByteSpan, type FetchedOwnership } from './ownership-format';
 
@@ -163,6 +163,17 @@ function frontOf(block: string): Map<string, string> {
   return front;
 }
 
+export type IndexedFront = { summary: string; owner: 'bower' | 'person'; type: string | null };
+
+/** Retrieval only: the closed front matter in the ordinary 4096-byte prefix, not edit authority. */
+export function indexedFront(raw: string): IndexedFront {
+  const prefix = new TextDecoder().decode(encoder.encode(raw).subarray(0, 4096)).replace(/\r\n/g, '\n');
+  const close = prefix.startsWith('---\n') ? prefix.indexOf('\n---', 3) : -1;
+  const front = close < 0 ? new Map<string, string>() : frontOf(prefix.slice(4, close));
+  return { summary: front.get('summary') || '(no summary)',
+    owner: front.get('by') === 'bower' ? 'bower' : 'person', type: front.get('type') ?? null };
+}
+
 /** The bullets of a Timeline block, each read by the one Timeline-line pattern. */
 function timelineOf(block: string): TimelineEntry[] {
   return block
@@ -285,4 +296,70 @@ export function toggleTaskInText(raw: string, index: number): { text: string; la
   const result = togglePersonalTask(bytes, { index, label: task.label, previousDone: task.done, done: !task.done });
   if (result.kind === 'refused') throw ownershipError(result.reason);
   return { text: decoder.decode(result.bytes), label: result.label, done: result.done };
+}
+
+
+/** The declared projection never removes the note's other properties or grants schema authority. */
+export const TECHNICAL_PROPERTIES = ['type', 'status', 'summary', 'tags', 'created', 'updated', 'source', 'related'] as const;
+export function tableProperties(note: Pick<ParsedNote, 'properties'>, row: Pick<TypeRow, 'table'>): Property[] {
+  return [...new Set(row.table)].filter((key) => !(TECHNICAL_PROPERTIES as readonly string[]).includes(key)).slice(0, 4)
+    .flatMap((key) => note.properties.filter((property) => property.key === key));
+}
+/** `YYYY-MM-DD`, a real calendar date. */
+export function dateOk(date: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) return false;
+  const [year, month, day] = match.slice(1, 4).map(Number) as [number, number, number];
+  const at = new Date(0);
+  at.setUTCFullYear(year, month - 1, day);
+  return at.getUTCFullYear() === year && at.getUTCMonth() === month - 1 && at.getUTCDate() === day;
+}
+const schemaObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+const schemaClosed = (v: Record<string, unknown>, keys: readonly string[]): boolean => Object.keys(v).every((k) => keys.includes(k));
+const schemaText = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= 200;
+const schemaTexts = (v: unknown): v is string[] => Array.isArray(v) && v.every(schemaText);
+const slug = (v: unknown): v is string => typeof v === 'string' && v.length <= 128 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(v);
+/** JSON Schema-style closed objects on write; tolerance belongs only to readTypeTable. */
+export function typeRowOk(v: unknown): v is TypeRow {
+  if (!schemaObject(v) || !schemaClosed(v, ['id', 'match', 'template', 'properties', 'table', 'group_by'])
+    || !slug(v.id) || !schemaTexts(v.match) || !v.match.length || !schemaText(v.template)
+    || !schemaObject(v.properties) || !schemaTexts(v.table) || v.table.length > 4
+    || new Set(v.table).size !== v.table.length) return false;
+  const properties = v.properties;
+  if (!Object.entries(properties).every(([key, declaration]) => /^[a-z][a-z0-9_]*$/.test(key)
+    && schemaObject(declaration) && schemaClosed(declaration, ['type', 'values'])
+    && (declaration.type === 'enum' ? schemaTexts(declaration.values) && declaration.values.length > 0
+      && declaration.values.length <= 20 && new Set(declaration.values).size === declaration.values.length
+      : typeof declaration.type === 'string' && ['text', 'list', 'number', 'money', 'date'].includes(declaration.type) && !Object.hasOwn(declaration, 'values')))) return false;
+  if (!v.table.every((key) => Object.hasOwn(properties, key) && !(TECHNICAL_PROPERTIES as readonly string[]).includes(key))) return false;
+  if (v.group_by === undefined) return true;
+  const group = v.group_by;
+  if (!schemaObject(group) || !schemaClosed(group, ['property', 'bucket']) || typeof group.property !== 'string'
+    || !Object.hasOwn(properties, group.property)) return false;
+  const declaration = properties[group.property] as TypeRow['properties'][string];
+  return declaration.type === 'enum' ? group.bucket === undefined : declaration.type === 'date' && group.bucket === 'year';
+}
+export function typeTableOk(v: unknown): v is TypeTable {
+  return schemaObject(v) && schemaClosed(v, ['v', 'rows']) && v.v === 1 && Array.isArray(v.rows)
+    && v.rows.every(typeRowOk) && new Set(v.rows.map((row) => row.id)).size === v.rows.length;
+}
+/** ISO 4217 codes supplied by ICU, plus the ISO fund, metal and testing units ICU omits. */
+const currencies = new Set([...Intl.supportedValuesOf('currency'),
+  'BOV', 'CHE', 'CHW', 'CLF', 'COU', 'MXV', 'USN', 'UYI', 'UYW', 'XAG', 'XAU', 'XBA', 'XBB', 'XBC', 'XBD', 'XDR', 'XPD', 'XPT', 'XSU', 'XTS', 'XUA', 'XXX']);
+export function propertyValuesOk(row: TypeRow, value: unknown): boolean {
+  if (!typeRowOk(row) || !schemaObject(value)) return false;
+  return Object.entries(value).every(([key, item]) => {
+    if (!Object.hasOwn(row.properties, key)) return false;
+    const declaration = row.properties[key];
+    switch (declaration?.type) {
+      case 'text': return typeof item === 'string' && item.length <= 200;
+      case 'list': return Array.isArray(item) && item.length <= 10 && item.every((v) => typeof v === 'string' && v.length <= 200);
+      case 'enum': return typeof item === 'string' && !!declaration.values?.includes(item);
+      case 'number': return typeof item === 'number' && Number.isFinite(item);
+      case 'money': return schemaObject(item) && Object.keys(item).length === 2 && schemaClosed(item, ['amount', 'currency'])
+        && typeof item.amount === 'number' && Number.isFinite(item.amount) && typeof item.currency === 'string' && currencies.has(item.currency);
+      case 'date': return typeof item === 'string' && dateOk(item);
+      default: return false;
+    }
+  });
 }

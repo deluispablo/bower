@@ -44,7 +44,7 @@ import { sha256Hex } from '../contracts/hashes';
 import type { Checkpoint, EffectEvidence, Failure, Outcome } from '../contracts/run-checkpoint';
 import { keepRefused, recheckEdit, savedLinkKey } from '../contracts/note-edit';
 import { RUNNER_WRITES } from '../vault/layout';
-import { parseRunManifestV2, type Effect as ManifestEffect, type OperationV2, type SeenFile } from '../contracts/run-manifest';
+import { parseRunManifestV2, requestMoveKind, type Effect as ManifestEffect, type OperationV2, type SeenFile } from '../contracts/run-manifest';
 import { notAsSeen, notAsSeenReason, notRead } from '../contracts/still-as-seen';
 import { UNCONFIRMED_WRITE_MESSAGE, type DriveFile, type FencedDrive, type RunDrive, type StoredEvidence } from '../drive/drive-api';
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
@@ -105,6 +105,8 @@ export interface SpineRun {
    * keeps it, to say truthfully how a run that stops ended. Not called when the folder cannot be read.
    */
   onChain?(chain: Checkpoint[]): void;
+  /** The validated durable plan, new or recovered, before any effect is attempted. */
+  onPlan?(manifest: RunManifest): Promise<void>;
 }
 
 /** Settled: every operation applied or rejected (or the run already ended), with its verified manifest. */
@@ -143,6 +145,8 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
     chain = [];
     headHash = null;
   }
+
+  await run.onPlan?.(manifest);
 
   let head = chain.at(-1);
   if (!head || headHash === null) {
@@ -274,7 +278,17 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
         // What it depends on must have happened; otherwise it was never sent, and is refused.
         const needs = needsOf(op);
         if (needs.some((id) => !done(id) && manifest.operations.some((o) => o.operationId === id))) continue;
-        if (needs.some((id) => stateOf(id) !== 'applied')) {
+        const pending = requestMoveKind(manifest, op) === 'pending';
+        const clashedAppend = (id: string): boolean => {
+          const dependency = manifest.operations.find((o) => o.operationId === id);
+          const outcome = outcomes.find((o) => o.operationId === id);
+          return pending && op.effect.kind === 'move' && dependency?.effect.kind === 'edit-text'
+            && outcome?.state === 'rejected' && outcome.failure.code === 'conflict'
+            && dependency.effect.changes.some((c) => c.kind === 'timeline-append' && c.consent
+              && manifest.capture.journal.some((j) => j.recordId === c.consent?.requestId && op.effect.kind === 'move'
+                && j.fileIds.includes(op.effect.before.fileId)));
+        };
+        if (needs.some((id) => stateOf(id) !== 'applied' && !clashedAppend(id))) {
           settle({ operationId: op.operationId, state: 'rejected', failure: STAYED });
           moved = true;
           continue;
@@ -433,12 +447,22 @@ function stampSays(file: DriveFile, runId: string, op: OperationV2, manifest: Ru
 export function driveEffects(drive: RunDrive, context?: OwnershipContext, maintenance?: Effects): Effects {
   const toEvidence = (ev: StoredEvidence, encoding: 'utf8' | 'blob' = 'blob'): EffectEvidence => asEvidence(ev, encoding, drive.provenance);
 
+  /** A second request move checks the name and place returned by its preceding, applied move. */
+  const afterMove = (op: OperationV2, head: Checkpoint, manifest: RunManifest): OperationV2 => {
+    if (op.effect.kind !== 'move') return op;
+    const fileId = op.effect.before.fileId;
+    const previous = manifest.operations.filter((o) => o.ordinal < op.ordinal && o.effect.kind === 'move'
+      && o.effect.before.fileId === fileId && waitsOn(manifest, op.operationId, o.operationId)).reverse()
+      .map((o) => head.outcomes.find((r) => r.operationId === o.operationId)).find((r) => r?.state === 'applied');
+    return previous?.state === 'applied' ? { ...op, effect: { ...op.effect, before: previous.evidence.file } } : op;
+  };
+
   /**
    * Whether the operation may be sent: its parent there, its source as the plan saw it, and for a content write the
    * stored bytes it was planned on. Gives the modifiedTime a content write must carry, or why it is refused.
    */
   const check = async (op: OperationV2, head: Checkpoint, manifest: RunManifest): Promise<{ refused: Settled } | { parentId: string; modifiedTime: string | null }> => {
-    const e = op.effect;
+    const e = afterMove(op, head, manifest).effect;
     if (e.kind === 'maintain') throw new BowerError('unknown', UNRESOLVED);
     const parentId = parentOf(head, e) ?? '';
     if (e.kind === 'create-folder' || e.kind === 'create-text' || e.kind === 'move') {
@@ -615,7 +639,7 @@ export function driveEffects(drive: RunDrive, context?: OwnershipContext, mainte
       let sent: Sent;
       try {
         const kind = op.effect.kind;
-        const go = async (id: string): Promise<Sent> => ({ answer: await send(op.effect as Effect, w, ok.parentId, ok.modifiedTime, stamp, id) });
+        const go = async (id: string): Promise<Sent> => ({ answer: await send(afterMove(op, head, manifest).effect as Effect, w, ok.parentId, ok.modifiedTime, stamp, id) });
         sent = kind !== 'create-folder' && kind !== 'create-text' ? await go('') : await createById(reserved ?? (await reserveId(w)), go, async (id) => {
           back = await reconcile(op, head, manifest, id);
           return back.state === 'landed' ? { landed: back.evidence } : null;
