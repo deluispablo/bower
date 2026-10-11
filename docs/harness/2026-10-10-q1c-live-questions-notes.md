@@ -918,3 +918,7 @@ Command: pnpm -C runner exec vitest run test/q1c-live.test.ts --maxWorkers=2 --r
 Temporary config retains the timer gate without repository output; no network or writing git command used.
 pnpm check and e2e not run: mechanical test-only repair; repository-output constraint remains.
 Commits: none; coordinator owns commits.
+
+## Close (coordinator, 2026-10-11)
+
+known-green: every red was proved failing at its tests-only commit (4dc7f762 with 37a70697, 9befc207, c3d50b9d, 093e4474, 2442e8a3; api reds run by the coordinator: 2 failing before c3f2d663, 280/280 after) and passes at HEAD; later rounds touched the same lines. Codex pass 4 PASS, P4-109 PASS (after P4-108 BLOCK, fixed under TL-P4-44 addendum 8); check green; api 280/280; e2e app/capabilities demo 35 / fake 59.
