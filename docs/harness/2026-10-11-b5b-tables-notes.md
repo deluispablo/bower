@@ -1907,3 +1907,123 @@ The runner's .codex-commits.json has two groups: all three test files, then this
 notes file alone. Calls/timing: no pins changed, no performance measurements.
 left out: production fixes, pnpm check, e2e execution, designer verification and commits are runner-owned.
 Risk: these intentional reds keep the targeted suites failing until the next implementation session fixes both findings.
+
+## Round 2 (addendum 11)
+
+Implementer: codex; ponytail full. Implements P4-123 and TL-P4-47 addendum 11 in
+the three existing production homes. No test, fixture, call pin, dependency,
+shared harness record or other production home changed. No network request,
+git write command, node_modules replacement or symlink was used.
+
+### Scope, reuse and changes
+
+Read the implementer role, WORKER card, packet, P4-123 review, addendum 11 and
+the Round 2 reds above. Checked planner callers, proposal capture/admission,
+answer settlement, engine dependencies, tableProperties callers, Table value,
+formatting and sort controls, existing tests and configs before editing.
+
+Research/reuse stays local: the packet's bounded tolerant-read reference
+(https://www.rfc-editor.org/rfc/rfc9413.html), the engine's existing dependsOn
+ordering and immutable create effects, and the Table's existing property
+projection and sorting. Separate property keys follow React's unique-key rule
+(https://react.dev/learn/rendering-lists#keeping-list-items-in-order-with-key).
+Sources were not fetched or independently reverified offline. No second writer,
+proposal store, parser, loader, column-request path or test mechanism was added.
+
+- scripted.ts now plans the proposals folder and frozen artifacts after the
+  authoritative question write, depending on its successful publication. A
+  failed source move or refused question write rejects those dependent creates.
+  Nothing is left that suppresses the next offer. Presented, declined and
+  settled controls keep their frozen payload bytes and remain suppressed.
+- FolderScreen gives every property column a property: id, separate from the
+  Name/Status/Changed control ids. Values, typed formatting and sorting decode
+  that id only for property columns. Name and Changed still sort filenames and
+  file timestamps, even when a declaration includes those property names.
+- tableProperties and the existing untyped fallback omit name and modified,
+  alongside the previously excluded keys. Stored declarations and note facts
+  remain intact; the screen does not repeat the built-in facts.
+- The already committed six-column e2e red is unchanged. Its reader still
+  projects the first four columns; the runner executes the screen cases.
+
+removed: pre-publication proposalOps and the question's dependency on artifact creates; duplicate name/modified projection.
+tests changed: none; every existing test, assertion, fixture, bound and call/timing pin stays unchanged.
+
+### Compatibility draft
+
+Final compatibility-ledger rows are coordinator-owned after the runner commits.
+Each changed feature/contract behavior has a draft below; no stored shape changed.
+
+| Changed home | Contract change | Existing callers/stored data | Evidence |
+| --- | --- | --- | --- |
+| src/features/files/FolderScreen.tsx: property ids | Declared columns have property: ids for rendering, formatting and sorting | Existing control ids and screen structure stay; ids are component-local and never persisted | b5b-r3 2 company sorting and Name/Changed sorting controls; full src suite |
+| src/features/files/FolderScreen.tsx: untyped fallback | Omit name/modified because the controls already show those facts | Note facts remain intact; other properties keep the existing first-four fallback | b5b-r3 2; full src note/table tests |
+| src/data/contracts/note-format.ts: tableProperties | Omit name/modified from the declared projection | Same signature/result shape; strict declaration validation and lenient stored reads unchanged | b5b-r3 2 through FolderScreen; note-format 277 tests; full runner |
+
+### Red and green evidence
+
+Before editing, both exact reds failed on assertions, with all three runner
+presented/declined/settled controls passing:
+
+- `b5b-r3 1 an unpublished proposal returns`: seven failed assertions for
+  refused-filing/refused-publication orphan artifacts, retry suppression and
+  artifact-before-publication ordering; /tmp/b5b-r2-fix-red-runner.log.
+- `b5b-r3 2 declared properties have their own ids`: four failed assertions
+  for duplicate headers/cells; /tmp/b5b-r2-fix-red-app.log.
+
+After editing, the runner red plus its three controls pass (4/4), and the
+FolderScreen red passes (1/1). Logs: /tmp/b5b-r2-fix-green-runner.log and
+/tmp/b5b-r2-fix-green-app.log. Both also pass in their full suites.
+
+| Requested check | Result | OS-temp log |
+| --- | --- | --- |
+| Full runner, --maxWorkers=2 | 62 files, 763 tests pass | /tmp/b5b-r2-fix-full-runner.log |
+| Full src, --maxWorkers=2 | 179 files pass, 2 fail; 5830 tests pass, 2 fail; failures below | /tmp/b5b-r2-fix-full-src.log |
+| tsc app | pass | /tmp/b5b-r2-fix-tsc-app.log |
+| tsc node | pass | /tmp/b5b-r2-fix-tsc-node.log |
+| tsc runner | pass | /tmp/b5b-r2-fix-tsc-runner.log |
+| ESLint, all three touched production files | pass | /tmp/b5b-r2-fix-eslint.log |
+| node scripts/check-unused-gate.mjs | pass: 2 ordinary / 29 production baseline findings, no new/stale findings | /tmp/b5b-r2-fix-unused.log |
+| Read-only git diff --check | pass | no output |
+
+Exact full-suite failures, complete list after the entire src suite:
+
+- src/docs.test.ts:125 (`every change since the P2 freeze is listed`), assertion
+  at :134: existing commit 3d04fc96 is missing from the coordinator's
+  docs/harness/2026-10-07-p3-compatibility.md ledger. Not a behavioral
+  contradiction with addendum 11. The shared ledger and test remain unchanged;
+  this round's feature/contract changes have the draft rows above.
+- src/e2e-port.test.ts:37 (`a server from another worktree is never reused`):
+  expected sandbox listen EPERM on 127.0.0.1, with one unhandled error and a
+  consequent 5000 ms timeout. No timeout or assertion changed.
+
+No runner failure or older test contradicting the ruling remains. The complete
+runner suite includes the unchanged Drive-call golden and timing-count tests:
+creating run 99, existing-table run 97, and the retained 110-call control pass.
+No timing threshold or tolerance changed; no separate performance claim is made.
+
+Commands, from this worktree, all output redirected to the OS-temp logs above:
+
+```sh
+pnpm exec vitest run --config /tmp/b5b-r2-fix-runner.config.mts --maxWorkers=2 > /tmp/b5b-r2-fix-full-runner.log 2>&1
+pnpm exec vitest run src --maxWorkers=2 --config /tmp/b5b-r2-fix-app.config.mts > /tmp/b5b-r2-fix-full-src.log 2>&1
+pnpm exec tsc --project tsconfig.app.json --noEmit > /tmp/b5b-r2-fix-tsc-app.log 2>&1
+pnpm exec tsc --project tsconfig.node.json --noEmit > /tmp/b5b-r2-fix-tsc-node.log 2>&1
+pnpm exec tsc --project runner/tsconfig.json --noEmit > /tmp/b5b-r2-fix-tsc-runner.log 2>&1
+pnpm exec eslint src/data/spine/scripted.ts src/data/contracts/note-format.ts src/features/files/FolderScreen.tsx > /tmp/b5b-r2-fix-eslint.log 2>&1
+node scripts/check-unused-gate.mjs > /tmp/b5b-r2-fix-unused.log 2>&1
+```
+
+Targeted red and green commands use the same configs and --maxWorkers=2,
+selecting test/b5b-r3.test.ts for runner and
+src/features/files/folder-table-r3.test.tsx for app. The OS-temp configs import
+the worktree configs, disable test caches, move Vite caches and JSON reports to
+/tmp, and retain the original timer gate/allowlist. Only the optional CPU report
+that writes into the repository is omitted. No repository config/setup changed;
+test scratch files and logs stay in OS temp. Full JSON reports:
+/tmp/b5b-r2-fix-runner-results.json and /tmp/b5b-r2-fix-app-results.json.
+
+.codex-commits.json is a JSON array with the three production files in one
+commit and this notes file alone in the other. The runner owns both commits.
+
+left out: pnpm check, capabilities/folder-table e2e on demo/fake, designer verification and commits are runner-owned.
+Risk: the full src suite is not green until the ledger is reconciled and the port test runs where listening is permitted.
