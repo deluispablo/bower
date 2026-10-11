@@ -242,7 +242,7 @@ describe.each(['final', 'per-run'] as const)('empty expectations in the %s score
   });
 });
 
-it('reports a settled replay without writing another request', async () => {
+it('reports an unselected replay without consuming or writing another request', async () => {
   const { replySequence } = await import('./corpus-run');
   const text = 'Update Alex’s garden notes.';
   const seed = await smallCase();
@@ -254,11 +254,12 @@ it('reports a settled replay without writing another request', async () => {
   expect(run.code).toBe(0);
   const path = '.bower/changes/change-2.json';
   const archived = '.bower/changes/archive/change-2.json';
-  // Addendum 6 settles the named target without a model line in the first run.
-  expect(first?.after[path]).toBeUndefined();
-  expect(first?.after[archived]).toBeDefined();
-  expect(run.after[path]).toBeUndefined();
-  expect(run.after[archived]).toBe(first?.after[archived]);
+  // Addendum 24 leaves the omitted request unconsumed across its same-run replay.
+  expect(first?.after[path]).toBeDefined();
+  expect(JSON.parse(first?.after[path] ?? '{}')).toEqual(expect.objectContaining({ id: 'change-2', text }));
+  expect(first?.after[archived]).toBeUndefined();
+  expect(run.after[path]).toBe(first?.after[path]);
+  expect(run.after[archived]).toBeUndefined();
   expect(first?.after[PERSONAL]).toBe(PERSON_TEXT);
   expect(run.after[PERSONAL]).toBe(PERSON_TEXT);
   const requests = Object.entries(run.after).filter(([p, text]) => p.startsWith('.bower/changes/')

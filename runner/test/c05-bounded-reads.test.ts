@@ -78,15 +78,23 @@ async function appRequest(drive: FakeDrive, root: string, words = WORDS): Promis
   return request;
 }
 
-function reply(line = false): ClaudeSpawn {
+function reply(line = false, wants = [PATH]): ClaudeSpawn {
   return async (call) => {
     const context = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as {
       piles: Array<{ things: Array<{ name: string; fileId: string }> }>;
       notes: Array<{ path: string }>;
+      selection?: unknown;
+      sources: Array<{ itemId: string; candidates: Array<{ id: string; path: string }> }>;
+      foldersById: Record<string, string>;
     };
     const source = context.piles.flatMap((p) => p.things).find((t) => t.name === SOURCE)?.fileId;
     const offered = line && source && context.notes.some((note) => note.path === PATH);
-    const intent = { kind: 'tidy-intent', v: 1,
+    const intent = context.selection === undefined ? {
+      items: context.sources.map((source) => ({ itemId: source.itemId, kind: 'unknown',
+        destination: Object.entries(context.foldersById).find(([, path]) => path === 'Areas/Home')?.[0],
+        wants: source.candidates.filter((candidate) => wants.includes(candidate.path)).map((candidate) => candidate.id),
+      })), asks: [],
+    } : { kind: 'tidy-intent', v: 1,
       things: source ? [{ fileId: source, to: 'Areas/Home', name: SOURCE,
         ...(!offered ? { note: { name: 'Water butt update.md', summary: NEWS, body: NEWS } } : {}),
       }] : [],
@@ -243,7 +251,7 @@ async function completionRecovery() {
   await drive.update(idOf(first.result, PATH), { name: 'Completed beds.md' });
   const replacement = await drive.createText(idOf(first.result, 'Areas/Home'), 'Garden plot.md', c.folder[PATH] ?? '');
   await drive.createText(idOf(first.result, 'Inbox'), SOURCE, 'Alex received a different made-up letter.', { pile: 'recovery-source' });
-  const next = await traced(c, drive, root, 2, { claude: reply(true), answerStart: { scope: 'all', requestId: `${RUN_ID}-2` } });
+  const next = await traced(c, drive, root, 2, { claude: reply(true, ['Areas/Home/Completed beds.md', PATH]), answerStart: { scope: 'all', requestId: `${RUN_ID}-2` } });
   expect(next.result.code).toBe(0);
   expect(next.result.after['Areas/Home/Completed beds.md']).toBe(first.result.after[PATH]);
   expect(next.result.after[PATH]).toBe(c.folder[PATH]); expect(idOf(next.result, PATH)).toBe(replacement.id);
@@ -314,7 +322,7 @@ it('C05 bounded reads: pending: a clash moves by run id and retries only its bou
   const noteId = note?.id ?? '';
   let clashes = 0;
   const fresh = (c.folder[PATH] ?? '').replace('## My words\n', '## My words\nAlex added a reminder.\n');
-  const first = await traced(c, drive, root, 1, { claude: reply(true), around: (fetch) => async (input, init) => {
+  const first = await traced(c, drive, root, 1, { claude: reply(true, [PATH, OTHER]), around: (fetch) => async (input, init) => {
     const response = await fetch(input, init);
     const body = init?.body ? await new Response(init.body).text() : '';
     if (!clashes && init?.method === 'POST' && body.includes('run-manifest')) {
@@ -359,7 +367,7 @@ it('C05 bounded reads: pending: a clash moves by run id and retries only its bou
   await drive.update(sourceId, { name: 'Renamed letter.txt' });
   const replacement = await drive.createText(idOf(first.result, 'Areas/Home'), 'Garden plot.md', c.folder[PATH] ?? '');
   await historical(drive, root);
-  const next = await traced(c, drive, root, 2, { claude: reply(), answerStart: { scope: 'instructions', requestId: `${RUN_ID}-2` } });
+  const next = await traced(c, drive, root, 2, { claude: reply(false, ['Areas/Home/Beds.md']), answerStart: { scope: 'instructions', requestId: `${RUN_ID}-2` } });
   expect(next.result.code).toBe(0);
   expect(next.result.after['Areas/Home/Beds.md']).toBe(fresh.trimEnd() + `\n- 2026-10-07 · ${NEWS} · [[Renamed letter.txt]]\n`);
   expect(next.result.after[PATH]).toBe(c.folder[PATH]); expect(idOf(next.result, PATH)).toBe(replacement.id);

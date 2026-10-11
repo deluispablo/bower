@@ -45,13 +45,22 @@ async function fixture(): Promise<LoadedCase> {
   return c;
 }
 
-function reply(make: (ctx: Context, source: string) => unknown, shown: Context[] = []): ClaudeSpawn {
+function reply(make: (ctx: Context, source: string) => unknown, shown: Context[] = [], wants: string[] = []): ClaudeSpawn {
   return phaseAwareClaude(async (call, _step, _attempt, phase) => {
-    const ctx = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Context;
+    const ctx = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Context & {
+      sources: Array<{ itemId: string; candidates: Array<{ id: string; path: string }> }>;
+      foldersById: Record<string, string>;
+    };
     if (phase === 'execution') shown.push(ctx);
     const source = ctx.piles.flatMap((p) => p.things).find((t) => t.name === SOURCE)?.fileId ?? 'previously-filed-source';
+    const intent = phase === 'selection' && wants.length ? {
+      items: ctx.sources.map((item) => ({ itemId: item.itemId, kind: 'unknown',
+        destination: Object.entries(ctx.foldersById).find(([, path]) => path === 'Areas/Home')?.[0],
+        wants: item.candidates.filter((candidate) => wants.includes(candidate.path)).map((candidate) => candidate.id),
+      })), asks: [],
+    } : make(ctx, source);
     return { code: 0, stderr: '', cut: null, stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: false,
-      result: JSON.stringify(make(ctx, source)), usage: { input_tokens: 10, output_tokens: 10 } }) };
+      result: JSON.stringify(intent), usage: { input_tokens: 10, output_tokens: 10 } }) };
   });
 }
 const filing = (source: string) => ({ kind: 'tidy-intent', v: 1,
@@ -610,7 +619,8 @@ describe('C05 person notes through runner main', () => {
       }
       const r = await runWithClaude(c, reply((_ctx, source) => ({ kind: 'tidy-intent', v: 1,
         things: [{ fileId: source, to: 'Areas/Home', name: SOURCE, note: { name: 'Committee letter.md',
-          summary: 'Alex received a committee letter.', body: NEWS } }] })));
+          summary: 'Alex received a committee letter.', body: NEWS } }] }), [],
+        reason === 'missing Timeline' || reason === 'unreadable Timeline' ? paths : []));
       expect(r.code).toBe(0);
       expect(reportOf(r).filed).toHaveLength(1);
       expect.soft(reportOf(r).leftAsWritten).toEqual(rows);
@@ -706,7 +716,7 @@ describe('C05 person notes through runner main', () => {
     expect(sourceId).toBeTruthy();
     await drive.update(sourceId, { name: 'Renamed letter.txt' });
     // No model line: the persisted retry binding must resolve the citation from this exact id.
-    const next = await runOnDrive(c, drive, root, { claude: reply(() => ({ kind: 'tidy-intent', v: 1, things: [] })) }, 2);
+    const next = await runOnDrive(c, drive, root, { claude: reply(() => ({ kind: 'tidy-intent', v: 1, things: [] }), [], [PATH]) }, 2);
     expect(next.code).toBe(0);
     expect(next.after[PATH]).toContain('Alex added a reminder.');
     expect(next.after[PATH]?.split(` · ${NEWS}`).length).toBe(2);
@@ -818,7 +828,7 @@ describe('C05 person notes through runner main', () => {
     const recoverySource = await addNextSource(lost, false);
     const recovered = await runOnDrive(c, interruptedDrive, interruptedRoot, {
       claude: reply(() => ({ kind: 'tidy-intent', v: 1,
-        things: [round4File(recoverySource, 'Next water butt update.txt')] })),
+        things: [round4File(recoverySource, 'Next water butt update.txt')] }), [], [PATH]),
     }, 2);
     expect.soft(recovered.code).toBe(0);
     expect.soft(recovered.after[PATH]).toBe(lost.after[PATH]);
@@ -894,7 +904,7 @@ describe('C05 person notes through runner main', () => {
     await positiveControl();
     const control = await round4Pending();
     const retry = await runOnDrive(control.c, control.drive, control.root, {
-      claude: reply(() => ({ kind: 'tidy-intent', v: 1, things: [] })),
+      claude: reply(() => ({ kind: 'tidy-intent', v: 1, things: [] }), [], [PATH]),
     }, 2);
     expect(retry.code).toBe(0);
     expect(retry.after[PATH]).toContain(` · ${NEWS} · [[${SOURCE}]]`);
@@ -913,7 +923,7 @@ describe('C05 person notes through runner main', () => {
         things: [round4File(newSource, 'Next water butt update.txt')],
         lines: replacement && ctx.notes.some((n) => n.path === PATH)
           ? [{ note: PATH, text: 'Alex received the next committee letter.', cites: newSource }] : [],
-      })) }, 2);
+      }), [], ['Areas/Home/Beds.md', ...(replacement ? [PATH] : [])]) }, 2);
       const renamed = 'Areas/Home/Beds.md';
       expect(next.code).toBe(0);
       expect(idOf(next, renamed)).toBe(noteId);
@@ -1083,7 +1093,7 @@ describe('C05 person notes through runner main', () => {
     const control = await round5CompletedButActive();
     const controlSource = await addNextSource(control.first, false);
     const recovered = await runOnDrive(control.c, control.drive, control.root, { claude: reply(() => ({ kind: 'tidy-intent', v: 1,
-      things: [round4File(controlSource, 'Next water butt update.txt')] })) }, 2);
+      things: [round4File(controlSource, 'Next water butt update.txt')] }), [], [PATH]) }, 2);
     expect(recovered.code).toBe(0); expect(reportOf(recovered).filed).toHaveLength(1);
     expect(recovered.after[PATH]).toBe(control.first.after[PATH]);
     expect(recovered.after[`${SYSTEM.archive}/change-1.json`]).toBe(control.first.after[`${SYSTEM.changes}/change-1.json`]);
@@ -1097,7 +1107,7 @@ describe('C05 person notes through runner main', () => {
     const next = await runOnDrive(c, drive, root, { claude: reply((ctx) => ({ kind: 'tidy-intent', v: 1,
       things: [round4File(source, 'Next water butt update.txt')],
       lines: ctx.notes.some((n) => n.path === PATH)
-        ? [{ note: PATH, text: 'Alex received the next committee letter.', cites: source }] : [] })) }, 2);
+        ? [{ note: PATH, text: 'Alex received the next committee letter.', cites: source }] : [] }), [], ['Areas/Home/Beds.md', PATH]) }, 2);
     expect(next.code).toBe(0); expect(reportOf(next).filed).toHaveLength(1);
     expect(idOf(next, 'Areas/Home/Beds.md')).toBe(noteId); expect(idOf(next, PATH)).toBe(replacement.id);
     expect.soft(next.after['Areas/Home/Beds.md'], 'the completed target gets no second append').toBe(first.after[PATH]);
@@ -1122,7 +1132,7 @@ describe('C05 person notes through runner main', () => {
     const retry = await runOnDrive(control.c, control.drive, control.root, { claude: reply((ctx) => ({ kind: 'tidy-intent', v: 1,
       things: [round4File(controlSource, 'Next water butt update.txt')],
       lines: ctx.notes.some((n) => n.path === PATH)
-        ? [{ note: PATH, text: 'Alex received the next committee letter.', cites: controlSource }] : [] })) }, 2);
+        ? [{ note: PATH, text: 'Alex received the next committee letter.', cites: controlSource }] : [] }), [], ['Areas/Home/Beds.md', PATH]) }, 2);
     expect(retry.code).toBe(0); expect(reportOf(retry).filed).toHaveLength(1);
     expect(retry.after['Areas/Home/Beds.md']).toBe((control.first.after[PATH] ?? '').trimEnd() + `\n- 2026-10-07 · ${NEWS} · [[${SOURCE}]]\n`);
     expect(idOf(retry, PATH)).toBe(replacement.id); expect(retry.after[PATH]).toBe(replacementText);
@@ -1215,7 +1225,7 @@ describe('C05 person notes through runner main', () => {
     const { c, drive, root, noteId, otherId, requestId, requestBytes } = await round5TwoTargets();
     const shown: Context[] = [];
     const first = await runOnDrive(c, drive, root, { claude: reply((_ctx, source) => ({ ...filing(source),
-      lines: [{ note: PATH, text: NEWS, cites: source }] }), shown) }, 1);
+      lines: [{ note: PATH, text: NEWS, cites: source }] }), shown, [PATH, round5Other]) }, 1);
     expect(first.code).toBe(0);
     expect(shown[0]?.notes.map((n) => n.path)).toEqual(expect.arrayContaining([PATH, round5Other]));
     expect.soft(first.after[PATH], 'one offered line must append despite the other target getting no line').toBe(
@@ -1320,7 +1330,7 @@ describe('C05 person notes through runner main', () => {
     expect.soft(stored.chain.at(-1)?.outcomes.find((o) => o.operationId === archive?.operationId)?.state).not.toBe('applied');
 
     // The model supplies no new line: only the persisted target/source pair can finish this request.
-    const next = await runOnDrive(c, drive, root, { claude: reply(() => ({ kind: 'tidy-intent', v: 1, things: [] })) }, 2);
+    const next = await runOnDrive(c, drive, root, { claude: reply(() => ({ kind: 'tidy-intent', v: 1, things: [] }), [], [PATH, round5Other]) }, 2);
     expect(next.code).toBe(0);
     expect.soft(next.after[PATH]).toBe(fresh.trimEnd() + `\n- 2026-10-07 · ${NEWS} · [[${SOURCE}]]\n`);
     expect(next.after[round5Other]).toBe(first.after[round5Other]);
