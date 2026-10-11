@@ -1344,3 +1344,78 @@ Commit groups are supplied in .codex-commits.json: test repair, then notes alone
 The runner owns committing; no git write command was run.
 left out: production changes, pnpm check and browser/e2e gates; this assignment is tests only.
 Risk: broader app/browser gates remain unverified in this repair; all requested checks passed.
+
+
+## Step 2 red (addendum 10 (4))
+
+Implementer: codex; ponytail full. Tests-only second step of fix round 1,
+following TL-P4-47 addendum 10 (4) and the adversarial pass's last finding.
+No production code or existing test was changed. No network, git write,
+node_modules replacement/symlink, server or browser run was used.
+
+Scope: one new runner test, this notes append and .codex-commits.json. No caller,
+fixture, config, export or dependency changes are needed for this red.
+Reuse: production main and Claude provider, the existing phaseAwareClaude spawn
+seam, corpus seed/run helpers, in-memory Drive v3 transport, real modelDecisions,
+planner, proposal admission, manifests, questions and immutable artifact effects.
+There is no provider/planner/admission stub. Only Claude's process reply is scripted.
+All person, material and folder data is made up; the seed table is existing code.
+
+Research: the packet's local closed-object and Zod schema precedents,
+https://json-schema.org/understanding-json-schema/reference/object#additionalproperties
+and https://zod.dev/api. No external citation was fetched or independently reverified.
+
+tests changed: runner/test/b5b-r2-proposal.test.ts: add the exact red "b5b-r2 4 live proposal reaches admission" through production main and scripted Claude replies, with legacy, invalid-payload and capacity controls.
+tests changed: existing tests: none; no assertion, bound, fixture or timing pin changed.
+
+The scripted execution reply extends the ordinary tidy-intent with optional
+askAfter: [{pileId, text, yes, no, proposal: {id, payload: {kind: "type-row", row}}}].
+The admitted pile id binds the after-filing question. The test requires the runner
+to supply its question id and askedAt and forward it through the existing askAfter seam;
+the test expects the same authoritative question and frozen artifact that the
+stubbed lifecycle tests produce. This is the red's wire fixture for the new
+schema extension, not a second proposal admission or consent mechanism.
+
+Controls and bounds:
+- A reply omitting askAfter files Garden.txt as before, creates no proposal or
+  question, and leaves the stored type table byte-identical. This control passes.
+- Payloads with text 201, enum entries 21, table columns 5 or an unknown row key
+  create no question/artifact or table write. Refusal reports failed and retains
+  the original inbox bytes; ignoring would still file. These controls pass.
+- Valid text 200, enum entries 20 and four columns must be accepted. Three distinct
+  proposals are offered together in item order. With 0 earlier open, lease and
+  permit are admitted and receipt is ignored; with 4 earlier open, only lease is
+  admitted; with 5 earlier open, none is admitted. Prior cards stay unchanged.
+  All three material files must still file, even at full capacity. The fixture
+  asserts all three payloads actually appear in the scripted reply.
+- Authoritative questions and immutable artifacts must contain identical frozen
+  payloads; proposal admission never installs a row without consent.
+
+Verification from runner/ (stdout/stderr and JSON exclusively in OS temp):
+
+```sh
+pnpm exec vitest run test/b5b-r2-proposal.test.ts --config /var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b5b-r2-runner.config.mts --configLoader runner --maxWorkers=2 --outputFile.json=/tmp/b5b-step2-red.json > /tmp/b5b-step2-red.log 2>&1
+pnpm exec eslint test/b5b-r2-proposal.test.ts > /tmp/b5b-step2-eslint.log 2>&1
+# From the worktree root:
+pnpm exec tsc -p runner/tsconfig.json --noEmit > /tmp/b5b-step2-tsc.log 2>&1
+```
+
+Result: exactly one collected test, exactly one failed test, 19 soft assertion
+failures, all consequences of the named unwired live proposal path. Valid replies
+are refused as notIntent (code 1 instead of 0); no novel material files, no new
+proposal questions and no immutable payloads reach admission. Legacy/invalid
+controls and the unchanged table assertions pass. The capacity scenarios' positive
+admission/filing assertions remain intentionally red, not silently treated as
+passing because the whole valid reply was refused. No import, collection, timer
+or runtime exception caused the red. TypeScript and ESLint pass (empty logs).
+Read-only git diff --check passes. No new contradiction was found in this run.
+
+The existing OS-temp config disables Vitest cache, moves Vite/JSON artifacts to
+OS temp and keeps the original timer gate/allowlist. Its setup omits only the
+repository-writing optional CPU report. No test writes into the repository.
+
+removed: none. Calls/timing: no budget, tolerance or timing pin changed or measured.
+Commit groups: new test alone, then notes alone; .codex-commits.json is supplied
+for the runner. No commits were created in this session.
+left out: implementation, full suites, pnpm check, e2e and designer verification.
+Risk: the live proposal path remains intentionally unwired until the separate fix.
