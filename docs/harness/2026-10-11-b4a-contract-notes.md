@@ -1267,3 +1267,103 @@ The runner owns commits, pnpm check and capabilities e2e. Those gates were left
 for the runner as instructed; no green check mark or e2e result is claimed.
 The commit plan declares exactly one commit for both tests and one for these notes
 alone. Runtime B4b/B4c wiring and all other test repairs remain outside this change.
+
+## Round 4 reds (addendum 6)
+
+implementer: codex
+
+Red-owning session only, following TL-P4-48 addendum 6 and
+`docs/harness/2026-10-11-b4a-adversarial-4.md`. Scope reaches only the new
+`src/data/contracts/b4a-r4.test.ts`, these appended notes and the runner's
+`.codex-commits.json`. No callers, exports, fixtures, dependencies, configuration,
+existing tests or production code changed. Made-up data only. No network,
+git-writing command, node_modules replacement or symlink was used.
+
+### Exact reds and positive controls
+
+- `b4a-r4 1 replay dedupes and falls with Undo`: source/hash/normalized-text
+  replay under a different section with fresh event/fact ids must dedupe to the
+  first observation. Both parseObservations with undone run ids and
+  rebuildObservations must leave nothing live after Undo of that first run.
+  Controls: a standalone normalized observation, same-section deduplication,
+  Undo of the duplicate preserving the original, Undo of the original removing
+  its same-section replay, and independent evidence from another source pass.
+  A changed hash is separately required to be distinct evidence by addendum 6;
+  its refusal is part of the same identity finding.
+- `b4a-r4 2 Forget removes every copy`: the same sentence is stored in
+  about-you and about-preferences, backed by two source observations. A Forget
+  tombstone leaves zero live facts. Archiving/rebuilding only preferences leaves
+  the sentence in about-you and must refuse at manifest and admission boundaries.
+  Control: Forget of the sole stored copy archives it and rebuilds to the heading,
+  without a consolidation budget/frontier, and passes author/manifest/admission.
+- `b4a-r4 3 creation runs the same validator`: About me is absent, intake and
+  live evidence are empty, and create-text/purpose generated targets the root
+  About me note. Invented preference text must refuse at manifest and admission.
+  Control: the existing FOLDER_TEMPLATE plus three empty regions is accepted.
+- `b4a-r4 4 no unmarked prose after the regions`: an ownership/2 note initializes
+  three empty regions followed by unmarked invented prose. Author, manifest and
+  admission must all refuse. Control: the same personal prefix followed by the
+  learned heading and exactly those regions passes all three boundaries.
+
+`b4a-r4 rule validLearnedBlock validates every write path` adds seven separate
+cases named `<path> refuses an invalid whole block`: create, init, write-through,
+consolidation, Forget, Undo and rebuild. Each first accepts a valid whole block,
+then requires refusal of the same block with unmarked trailing prose. The edit
+cases use the adversarial ownership/2 shape, whose existing parser preserves
+outside bytes; the ruled learned-block validator must therefore do the refusal.
+Consolidation's control retains 201 authored words, five observations, an exact
+archive and its successful dependent frontier. Forget and Undo retain their
+archives and bypass the budget/frontier gate. Rebuild exercises the existing
+public rebuildObservations contract and then the existing undoneRunIds
+about-rewrite path; there is no separate rebuild effect kind to invent or mock.
+These are observable path contracts for the single validator, without supplying
+another parser/validator or assuming a new function signature in the tests.
+
+Frozen after-bytes, content hashes and operation/capture identities are sealed
+independently of applyChanges so every invalid fixture reaches manifest and
+admission assertions even when authoring is refused. Soft assertions expose all
+affected boundaries; positive controls use ordinary assertions and all pass.
+Public calls: applyChanges, parseOwnership, parseObservations,
+rebuildObservations, parseRunManifestV2, outsideAdmitted, canonicalRecordJson.
+
+### Verification
+
+All invocations used `--maxWorkers=2` and `--configLoader runner`. Logs, JSON
+reports, cache, attachments, temporary configs and CPU reports are under
+`/private/tmp/b4a-r4-ublyd18n/`. The final temp setup retains the existing test
+setup and timer gate, changing only the gate copy's imports and CPU destination.
+No tests wrote into the repository. No repository config or setup changed.
+
+- Final red-only run: 11/11 expected assertion failures. Every positive control
+  passed; no import, timer, fixture, corruption or other unrelated failure.
+  Log/report: `reds.log`, `reds.json` in the temp directory above.
+- Final targeted contract run: 1,601 tests, 1,590 passed, only the 11 new reds
+  failed. Includes all four b4a regression files, observations, note-edit,
+  run-manifest, ownership-format, questions, B1a, note-templates and note-format.
+  Log/report: `contracts.log`, `contracts.json`. No existing contradiction found.
+- Non-emitting app TypeScript check, with incremental output disabled, passed:
+  `types.log`. New-test ESLint passed: `lint.log`.
+
+Final red command from the worktree:
+`./node_modules/.bin/vitest run --config /private/tmp/b4a-r4-ublyd18n/vitest.config.mjs --configLoader runner --maxWorkers=2 --reporter=default --reporter=json --outputFile.json=/private/tmp/b4a-r4-ublyd18n/reds.json`
+The targeted run uses `contracts.config.mjs` and `contracts.json` in that directory.
+
+Initial fixture-only corrections: wrap encoded test bytes in the local
+Uint8Array realm for rebuildObservations; retain both ledger and create
+dependencies at the barrier; use ownership/2 for the per-path trailing-prose
+bypass. The first wider run relocated cwd and could not read relative stored
+fixtures; relocating only CPU output in the temp setup resolved every such
+failure. No existing test, bound, tolerance or contract number was weakened.
+
+tests changed: src/data/contracts/b4a-r4.test.ts: new four finding reds with positive controls and seven whole-block validation path cases; no existing test changed.
+removed: none.
+
+Offline sources reused from the packet, not newly verified:
+https://zod.dev/api
+https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+https://arxiv.org/pdf/2605.12978
+
+Commit plan: one tests-only commit and one notes-only commit in
+`.codex-commits.json`; the runner owns commits. Left out: implementation,
+pnpm check, e2e, full app/runner suites and B4b/B4c runtime wiring. The four
+contract gaps remain intentionally red for the implementation session.
