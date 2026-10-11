@@ -2027,3 +2027,74 @@ commit and this notes file alone in the other. The runner owns both commits.
 
 left out: pnpm check, capabilities/folder-table e2e on demo/fake, designer verification and commits are runner-owned.
 Risk: the full src suite is not green until the ledger is reconciled and the port test runs where listening is permitted.
+
+
+## Round 3 red (designer finding)
+
+Implementer: codex; ponytail full; red-only session for b5b-tables, fix round 3.
+The designer finding after TL-P4-47 addendum 11 is reproduced with the exact
+stored declaration [name, company, modified, salary, location, hours]. Hidden
+name/modified keys must spend none of the four type-column places.
+
+Scope: new src/data/contracts/b5b-r4.test.ts, one new test appended to
+e2e/folder-table.spec.ts, this notes append and .codex-commits.json.
+No production code or existing test changed; B4a/B5b-owned note-format tests
+were read for reuse and left unchanged. No fixture, export, dependency,
+shared harness record, call pin or timing bound changed.
+
+Research/reuse: the packet's locally cited bounded tolerant reads
+(https://www.rfc-editor.org/rfc/rfc9413.html); production parseNote,
+readTypeTable and tableProperties; the existing in-memory DriveVault browser
+route fixture and b5Offer. No second projection or parser was introduced.
+No network; citations were not independently reverified offline.
+
+### Unit red
+
+`b5b-r4 1 hidden keys spend no column place` parses a made-up offer and reads
+its stored row through readTypeTable before projecting through tableProperties.
+Positive controls run before the failing assertion: four ordinary keys remain
+company, salary, location, hours; six ordinary keys still yield the first four.
+Both controls pass. The exact designer row then returns only company, salary,
+where company, salary, location, hours is required. One test, one failed
+assertion; no unrelated exception, import failure or timer-gate failure.
+
+Executed from /private/tmp/bower-b5b-tables:
+
+```sh
+pnpm exec vitest run --config /tmp/b5b-r4-app.config.mts src/data/contracts/b5b-r4.test.ts --maxWorkers=2 > /tmp/b5b-r4-unit.log 2>&1
+pnpm exec eslint src/data/contracts/b5b-r4.test.ts e2e/folder-table.spec.ts > /tmp/b5b-r4-eslint.log 2>&1
+git diff --check > /tmp/b5b-r4-diff-check.log 2>&1
+```
+
+Unit exits 1 on only the finding. ESLint and read-only diff check exit 0.
+JSON report: /tmp/b5b-r4-app-results.json. The OS-temp config imports the
+worktree Vite config, disables test caches, redirects Vite cache/JSON output
+to /tmp and retains the original timer gate/allowlist via the existing
+OS-temp setup. Only the optional repository-writing CPU report is omitted.
+Tests write only to OS temp or memory; node_modules was never replaced or
+symlinked, and no git command that writes was run.
+
+### New e2e, not run
+
+`b5b-r4 2 e2e: hidden keys spend no column place` uses the same exact stored
+row, declares name/modified as text properties, and supplies both note facts.
+It requires Name, Status, Company, Salary, Location, Hours, Changed in order,
+no Modified header, the Remote/32 cells and the existing Hours sort control.
+It reuses the real FolderScreen/DriveVault route fixture on demo/fake at
+375/1440 and retains the existing WCAG 2.2 axe check.
+The existing test file prefix is unchanged; this case is appended only.
+
+Runner command (not executed here):
+
+```sh
+bash harness/with-lock.sh pnpm exec playwright test e2e/folder-table.spec.ts --grep 'b5b-r4 2 e2e: hidden keys spend no column place' --output=/tmp/b5b-r4-e2e-results > /tmp/b5b-r4-e2e.log 2>&1
+```
+
+tests changed: src/data/contracts/b5b-r4.test.ts: new stored-read/projection red with four-key and over-four ordinary-key controls; no existing test changed.
+tests changed: e2e/folder-table.spec.ts: append one new exact designer-row screen red; no existing test changed.
+
+removed: none. No compatibility change to production in this red-only session.
+.codex-commits.json contains two groups: the two test files, then notes alone.
+The runner commits the diff.
+left out: production fix, pnpm check, broader suites, e2e execution and designer verification.
+Risk: the intentional unit red remains failing until the stored-row projection is fixed; browser assertions are unverified.
