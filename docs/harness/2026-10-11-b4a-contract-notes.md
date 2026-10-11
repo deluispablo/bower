@@ -839,3 +839,138 @@ The runner owns commits: `.codex-commits.json` lists the new test file first and
 these notes alone second. No local commit was made. Final git diff --check passes.
 Implementation, full suites, pnpm check, e2e and B4b/B4c runtime wiring were not
 run or changed in this reds-only assignment. The four defects remain unfixed.
+
+## Round 2 (addendum 4)
+
+implementer: codex
+
+Implemented the four adversarial findings and the two gate diagnoses in the existing
+ledger resolver, manifest validator, note projection and capabilities spec. No network,
+git-writing command, dependency install, node_modules replacement, second parser, writer
+or region mechanism. Prior packet research is reused offline, not newly verified:
+https://arxiv.org/pdf/2605.12978,
+https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents,
+https://zod.dev/api.
+
+Scope/callers checked before editing: parseObservations, rebuildObservations,
+canRebuildAboutSection, parseRunManifestV2/aboutArtifactsOk, applyChanges, parseNote,
+runner outsideAdmitted, and Questions/expectAxeClean. The change reaches the three
+contract homes and the one authorized e2e selector. Existing fixtures, configuration,
+ownership parsing, authoring, admission and dispatch remain the consumers.
+
+- Forget matches the original fact's section and NFKC-normalized, whitespace-folded,
+  case-folded text. Event/fact ids, source versions and classification cannot revive it;
+  a different source alone cannot either. Different text remains live. Explicit later
+  remembering from new words retains the tombstone and its existing authority checks.
+  Evidence deduplication uses the same normalized text without classification.
+- aboutEvidenceOk validates initialized and rewritten learned lines against live
+  observations in their section; rewrites also restrict them to the cited factIds.
+  Only the section's exact heading and blank lines are exempt. Timeline syntax uses
+  parseTimelineLine; payload spans come from parseOwnership. An empty ledger therefore
+  allows only empty regions. This is an exact normalized evidence check, not semantic
+  validation of paraphrases; unsupported wording refuses losslessly.
+- A same-run section tombstone identifies a Forget/Bin rebuild. Optional undoneRunIds
+  on about-rewrite names known ledger origins for Undo and invokes parseObservations'
+  existing resolver with those origins invalidated. Both routes keep the confirmed,
+  exact archive and live-fact checks, bypass budget/frontier only, and allow the heading
+  alone. Ordinary consolidation still requires its budget, five new facts and frontier.
+  rebuildObservations delegates to that same parser/resolver; no alternate rebuild path.
+- parseNote includes the already parsed Bower content in its no-front-matter return.
+  Personal bytes and the existing serializer preservation mechanism are retained.
+- Both TextDecoder calls explicitly set ignoreBOM:false, preserving their old BOM
+  behavior and fatal invalid-UTF8 refusal while supplying the complete options shape.
+  The frontier scan uses ES2022-compatible forEach rather than findLastIndex.
+  No tsconfig was edited.
+
+Axe diagnosis: src/features/home/Home.tsx:293 obtains headingId with React useId;
+:351 assigns that id to the section's aria-labelledby. The spec had already located
+and asserted the visible question/update list, then scanned the obsolete literal
+section[aria-labelledby="qs"]. That selector matches no element on either viewport.
+The repaired spec reads aria-labelledby from its existing named questions locator,
+asserts it is present and passes that section selector to the same axe helper.
+The WCAG 2.2 scan and all behavior/violation assertions remain intact; no screen change
+is indicated by this failure. Browser confirmation belongs to the runner's gates.
+
+tests changed: e2e/capabilities.spec.ts: the authorized item-6 fix follows Questions' useId label instead of obsolete qs; same axe scope and assertions.
+tests changed: no unit/contract test, fixture, threshold or skip was changed.
+removed: category and unnormalized text as ways to evade forgotten-evidence matching.
+removed: initialization's evidence bypass and unconditional consolidation gate on Forget/Undo.
+removed: front matter as a prerequisite for displaying parsed Bower content.
+removed: findLastIndex and the obsolete fixed qs selector; no configuration or dependency added.
+
+### Compatibility draft rows
+
+| Contract home | Round-2 change | Compatibility evidence / remaining consumer |
+| --- | --- | --- |
+| src/data/contracts/observations.ts | Normalized section/text Forget matching; shared evidence validation; additive optional undoneRunIds parser input; ES2022 frontier scan and explicit decoder options | Stored v1 events/tombstones unchanged; existing corruption, remembering, section-gate and Undo tests pass. Supplementary assertions preserve BOM reading and new remembering. B4b/B4c supply runtime origins. |
+| src/data/contracts/run-manifest.ts | Validate initialization evidence; additive optional about-rewrite.undoneRunIds; Forget/Undo archive-preserving gate exemption | All 1,420 manifest tests and round-1/round-2 controls pass. Omitted Undo input preserves ordinary consolidation; unknown origins refuse. Legacy manifest shapes and confirmation edges retained; unfounded learned writes now refuse. |
+| src/data/contracts/note-format.ts | Expose already parsed Bower content without front matter | Round-2 no-front-matter control and all 258 note-format tests pass; person-prefix/body and front-matter controls remain unchanged. |
+
+### Round-2 verification
+
+Before editing, src/data/contracts/b4a-r2.test.ts reproduced all four expected
+AssertionErrors: forgotten replay, invented initialization, bare-heading Forget and
+missing plain-note projection. Log: /private/tmp/b4a-r2-fix-red.log.
+After the final code changes, all 1,694 tests in b4a-r2, b4a-fr1, observations,
+run-manifest and vault/note-format pass: /private/tmp/b4a-r2-focused.log.
+The two runner admission/B4 suites pass (5 tests): /private/tmp/b4a-r2-runner-focused.log.
+
+A standalone OS-temp assert script (no repository test changed) passes nine additional
+production checks: Undo without budget/frontier, refusing invalidated evidence and an
+unknown Undo origin, live-evidence initialization, forgotten initialization refusal,
+heading-shaped invented claim refusal, normalized replay from another source,
+explicit remembering, and stored BOM compatibility. It bundles the existing production
+imports and uses the round-2 manifest fixture's frozen identities, not a mock validator.
+Script/log: /private/tmp/b4a-r2-self-check.ts and /private/tmp/b4a-r2-self-check.log.
+
+App/node/runner non-emitting, non-incremental tsc, touched-file ESLint and the unused
+code/production gates pass. Logs: /private/tmp/b4a-r2-types-{app,node,runner}.log,
+/private/tmp/b4a-r2-eslint.log and /private/tmp/b4a-r2-unused.log.
+The unused baselines stay unchanged (3 ordinary and 33 production findings).
+
+Commands, each with stdout/stderr redirected to OS temp:
+
+```sh
+pnpm exec vitest run src --maxWorkers=2 --config /private/tmp/b4a-contract-validation/app-full.mjs --configLoader runner --outputFile.json=/private/tmp/b4a-r2-app.json
+pnpm exec vitest run --maxWorkers=2 --config /private/tmp/b4a-contract-validation/runner.mjs --configLoader runner --outputFile.json=/private/tmp/b4a-r2-runner.json
+pnpm exec tsc -p tsconfig.app.json --noEmit --incremental false
+pnpm exec tsc -p tsconfig.node.json --noEmit --incremental false
+pnpm exec tsc -p runner/tsconfig.json --noEmit --incremental false
+pnpm exec eslint src/data/contracts/observations.ts src/data/contracts/run-manifest.ts src/data/contracts/note-format.ts e2e/capabilities.spec.ts
+node scripts/check-unused-gate.mjs
+```
+
+The supplied temporary configs retain production environments, setup, plugins and
+timer checks, redirecting CPU reports, module caches and JSON reports to OS temp.
+No test output is directed into this repository. The runner suite completed before
+an API-only cleanup; its affected admission/B4 consumers and all focused app contracts
+were rerun after that cleanup, as were all static checks.
+
+Full-suite results and every remaining failure:
+
+- Full runner: 669/670 tests pass across 51 files. The only failure is
+  runner/test/claude-provider.test.ts:600, "a write the two runner lists judged
+  differently is judged once by RUNNER_WRITES": its expected array omits
+  .bower/observations.jsonl. This is the pin already called out in TL-P4-48
+  addendum 2. The current instruction forbids changing it, so it remains untouched.
+  Log/report: /private/tmp/b4a-r2-runner.log and /private/tmp/b4a-r2-runner.json.
+- Full src: 5,764/5,766 tests pass across 175 files. src/docs.test.ts:134,
+  "every change since the P2 freeze is listed", reports the existing commit
+  0aaaa69d missing from the shared compatibility ledger. This session records the
+  requested draft rows above and does not edit that shared ledger.
+- src/e2e-port.test.ts:37, "a server from another worktree is never reused", times
+  out after the expected listen EPERM on 127.0.0.1 (also reported as one unhandled
+  error). No timeout, assertion or test is changed for this sandbox restriction.
+  Log/report for both src failures: /private/tmp/b4a-r2-app.log and
+  /private/tmp/b4a-r2-app.json.
+
+No additional contract contradiction was found. All four round-2 reds and the nine
+round-1 regression tests pass unchanged. The implementation is ready for review;
+acceptance is blocked on the stale runner pin/shared compatibility record and the
+runner's unrestricted gates, not a claim of a fully green suite.
+
+The runner owns committing and pnpm check plus app/capabilities e2e on demo/fake.
+Those gates were not run here; no server or browser was started. B4b/B4c runtime
+wiring stays outside this entry. .codex-commits.json declares one code/spec commit
+and one notes-only commit. git diff --check passes; only those five owned files and
+the commit-plan file are dirty.
