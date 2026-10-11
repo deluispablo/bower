@@ -7167,7 +7167,7 @@
     "id": "next-steps-plain-list",
     "task": "p4-b6",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "Task lines in Bower's regions (Next steps) show as a plain list; the person's own tasks keep working boxes and ticks count only them (spec 2026-10-11-next-steps-plain-list.md).",
     "steps": [
