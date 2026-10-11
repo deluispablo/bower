@@ -7172,6 +7172,7 @@
       "The spec's test table passes on demo and fake at 375 and 1440."
     ],
     "verify": "pnpm exec vitest run src/features/note/markdown.test.tsx src/features/note/next-steps-plain-list.test.tsx -t \"NSPL \"",
-    "note": "TL-P4-47 addendum 3, TL-P4-55 (1). Not escalated. Designer verifies. Packet 2026-10-11-next-steps-plain-list-packet.md. implementer: codex."
+    "note": "TL-P4-47 addendum 3, TL-P4-55 (1). Not escalated. Designer verifies. Packet 2026-10-11-next-steps-plain-list-packet.md. implementer: codex.",
+    "design": "verified"
   }
 ]
