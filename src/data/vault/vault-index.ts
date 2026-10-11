@@ -125,14 +125,14 @@ export class VaultIndex {
   }
 
   /** Script neighbourhood: whole-word matches, folder maps, then one resolved link hop. */
-  neighbourhood(words: string, notes: Readonly<Record<string, { summary: string; links?: readonly string[] }>>): string[] {
+  neighbourhood(words: string, notes: Readonly<Record<string, { summary: string; type?: string | null; links?: readonly string[] }>>): string[] {
     const ignored = new Set(['a', 'an', 'the', 'is', 'has', 'for', 'and', 'of', 'to', 'alex', 'txt', 'md', 'pdf']);
     const tokens = (text: string): string[] => text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
     const own = new Set(tokens(words).filter((word) => !ignored.has(word)));
     const order = (a: string, b: string): number => (this.byId(b)?.modifiedTime ?? '').localeCompare(this.byId(a)?.modifiedTime ?? '')
       || (this.pathOf(a) ?? '').localeCompare(this.pathOf(b) ?? '');
     const ids = Object.keys(notes).filter((id) => this.pathOf(id) !== undefined);
-    const maps = new Set(ids.filter((id) => { const path = this.pathOf(id) ?? ''; return VaultIndex.isHub(path, this.byId(id)?.name ?? ''); }));
+    const maps = new Set(ids.filter((id) => { const path = this.pathOf(id) ?? ''; return notes[id]?.type === 'moc' || VaultIndex.isHub(path, this.byId(id)?.name ?? ''); }));
     const matches = ids.filter((id) => !maps.has(id) && tokens(`${this.byId(id)?.name ?? ''} ${notes[id]?.summary ?? ''}`).some((word) => own.has(word))).sort(order);
     const hubs = [...maps].filter((id) => matches.some((match) => this.byId(match)?.parents[0] === this.byId(id)?.parents[0])
       || tokens(`${this.byId(id)?.name ?? ''} ${notes[id]?.summary ?? ''}`).some((word) => own.has(word))).sort(order);

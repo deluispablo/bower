@@ -1322,6 +1322,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const shownTook = await forModel(read, run, took);
     const taken = await answersTaken(read, run, shownTook);
     const answers = taken.answers;
+    const timing = setup.timing ?? new RunTiming();
+    const count = itemCount + took.taken.journal.length;
     // The runner builds the manifest, every id, hash and digest its own, exactly as the scripted provider does.
     const plannedWith = async (filing: Filing, held: ReadonlySet<string> | undefined, own: string | undefined, by: string): Promise<RunManifest> => {
       const t = took.taken;
@@ -1331,6 +1333,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       if (!parsed.ok) return refuse(`outside the run manifest contract (${parsed.reason})`);
       const stray = outsideAdmitted(manifest, took, own, new Set((filing.keep ?? []).map((k) => k.other)));
       if (stray) return refuse(stray);
+      timing.requireOperations(manifest.operations.length + 1, count);
       console.log(`The Claude provider planned ${manifest.operations.length} operations ${by}.`);
       return manifest;
     };
@@ -1340,8 +1343,6 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       const listing = await read.listAll(run.rootId);
       return plannedWith({ thing: () => null, words: () => null }, undefined, VaultIndex.build(run.rootId, listing).file(SYSTEM.dir)?.id, 'with no model, from the updates shown');
     }
-    const timing = setup.timing ?? new RunTiming();
-    const count = took.taken.piles.reduce((n, p) => n + Math.max(1, thingsOf(p).length), 0);
     const exhausted = (): never => { throw new LedgerExhausted(count); };
     const listing = await read.listAll(run.rootId);
     const ix = VaultIndex.build(run.rootId, listing);
@@ -1349,7 +1350,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const shown = await shownOf(read, run, shownTook, pinned, new Set());
     if (answers.length) shown.answers = answersShown(answers, shown.piles);
     const indexed: Record<string, MaintenanceNote> = { ...setup.retrieval };
-    const metadata: Record<string, { summary: string; links?: string[] }> = {};
+    const metadata: Record<string, { summary: string; type?: string | null; links?: string[] }> = {};
     for (const file of listing) {
       const path = ix.pathOf(file.id);
       if (file.folder || !path?.endsWith('.md') || !MAIN_FOLDERS.includes(path.split('/')[0] ?? '')) continue;
@@ -1357,7 +1358,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       const front = await read.indexedFront?.(file);
       if (!indexed[file.id]) indexed[file.id] = { path, version: file.modifiedTime, summary: front?.summary ?? '(no summary)',
         coverage: { kind: 'prefix', bytes: 4096 }, ...(front ? { owner: front.owner, type: front.type } : {}) };
-      metadata[file.id] = { summary: indexed[file.id]?.summary ?? '', ...(prefix ? { links: parseNote(path, prefix).links } : {}) };
+      metadata[file.id] = { summary: indexed[file.id]?.summary ?? '', type: front?.type ?? indexed[file.id]?.type,
+        ...(prefix ? { links: parseNote(path, prefix).links } : {}) };
     }
     const sources = shownTook.taken.piles.flatMap((pile) => {
       const p = shown.piles.find((p) => p.pileId === pile.pileId);
@@ -1375,12 +1377,12 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         const file = ix.byId(id); const path = ix.pathOf(id);
         if (!file || !path || metadata[id]?.links || shown.suppressed?.has(path)) continue;
         const prefix = await setup.prefixes?.(file, true);
-        if (prefix) metadata[id] = { summary: metadata[id]?.summary ?? '', links: parseNote(path, prefix).links };
+        if (prefix) metadata[id] = { ...metadata[id], summary: metadata[id]?.summary ?? '', links: parseNote(path, prefix).links };
       }
       const notes = waiting ? matched : ix.neighbourhood(source.words, metadata);
       const parents = listing.filter((f) => f.folder && (MAIN_FOLDERS.includes(ix.pathOf(f.id) ?? '')
         || notes.some((id) => ix.byId(id)?.parents.includes(f.id)))).map((f) => f.id);
-      source.ids = [...new Set([...notes, ...parents])].slice(0, 30);
+      source.ids = [...new Set([...pinned, ...Object.values(shown.requestNotes ?? {}).flat(), ...notes, ...parents])].slice(0, 30);
     }
     shown.sources = sources.map((source) => ({ itemId: source.itemId, candidates: source.ids.flatMap((id) => {
       const note = indexed[id]; const folder = ix.byId(id); return note ? [{ id, path: note.path, version: note.version, summary: note.summary, coverage: note.coverage }] : folder?.folder ? [{ id, path: ix.pathOf(id) ?? '', version: folder.modifiedTime, summary: folder.name, coverage: { kind: 'prefix' as const, bytes: 0 } }] : [];
@@ -1407,17 +1409,19 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       const result = selectionOf(value, context);
       if (!result.ok) { console.error('Selection shape or ids refused.'); return result; }
       for (const item of result.value.items) {
-        const source = sources.find((s) => s.itemId === item.itemId);
+        const candidates = shown.sources?.find((s) => s.itemId === item.itemId)?.candidates.map((c) => c.id) ?? [];
+        if (item.wants.some((id) => !candidates.includes(id))) return { ok: false };
         const destinationId = typeof item.destination === 'string' ? item.destination : item.destination.parentId;
         const hub = hubId(destinationId);
-        const required = [...new Set([...item.wants, ...context.pinned[item.itemId] ?? [], ...(hub && indexed[hub]?.type !== 'moc' && new Set([...item.wants, ...context.pinned[item.itemId] ?? []]).size < 5 ? [hub] : [])])];
+        const required = [...new Set([...item.wants, ...context.pinned[item.itemId] ?? [], ...(hub ? [hub] : [])])];
         if (required.length > 5) return { ok: false };
         if (typeof item.destination !== 'string') {
           const destination = item.destination;
           const path = ix.pathOf(destination.parentId) ?? '';
-          const visible = MAIN_FOLDERS.includes(path) || source?.ids.some((id) => ix.byId(id)?.parents.includes(destination.parentId));
+          const visible = candidates.includes(destination.parentId);
+          const nearName = (name: string): string => name.trim().toLowerCase().replace(/\s+/gu, ' ');
           try { checkCreationName(item.destination.name, 'folder'); } catch (error) { console.error(error); return { ok: false }; }
-          if (!visible || /index cut:/.test(shown.index ?? '') || ix.filesIn(path).some((f) => f.name.trim().toLowerCase() === destination.name.trim().toLowerCase())) return { ok: false };
+          if (!visible || /index cut:/.test(shown.index ?? '') || ix.filesIn(path).some((f) => nearName(f.name) === nearName(destination.name))) return { ok: false };
         }
         result.allowedTargets[item.itemId] = [...new Set([...required, destinationId, ...(hub ? [hub] : [])])];
       }
@@ -1462,7 +1466,6 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         (value) => { const checked = selectionCheck(value); return checked.ok ? checked : null; });
       const wanted = new Set(selection.value.items.flatMap((item) => selection.allowedTargets[item.itemId] ?? [])
         .filter((id) => indexed[id] && (indexed[id]?.type !== 'moc' || selection.value.items.some((item) => item.wants.includes(id)))));
-      for (const id of pinned) wanted.add(id);
       const readable = new Set([...wanted].filter((id) => !shown.suppressed?.has(ix.pathOf(id) ?? '')));
       shown.notes = await notesShown(read, listing, ix, pinned, readable, readable);
       shown.presentLines = presentLinesOf(shown.notes, listing, ix, run);
@@ -1505,12 +1508,14 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           if (!frozen || JSON.stringify(ask.options ?? []) !== JSON.stringify(frozen.options ?? [])) return null;
         }
         if (Array.isArray(value.bin) && value.bin.some((id) => !chosen(id))) return null;
+        if (rows('keep').some((row) => !selection.value.items.some((item) => {
+          const targets = selection.allowedTargets[item.itemId] ?? [];
+          return [row.kept, row.other].every((path) => typeof path === 'string' && targets.includes(ix.idOf(path) ?? ''));
+        }))) return null;
         if ([...rows('lines'), ...rows('states')].some((row) => !canEdit(row))) return null;
         return got;
       });
-      const manifest = await plannedWith(intent.filing, intent.held, shown.own, `with ${model}`);
-      timing.requireOperations(manifest.operations.length + 1, count);
-      return manifest;
+      return await plannedWith(intent.filing, intent.held, shown.own, `with ${model}`);
     } finally { await rm(work, { recursive: true, force: true }); }
 
   };

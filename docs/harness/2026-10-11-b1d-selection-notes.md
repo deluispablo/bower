@@ -2798,3 +2798,120 @@ https://arxiv.org/html/2506.08837v1,
 https://platform.claude.com/docs/en/build-with-claude/prompt-caching.
 Fingerprint canonicalization follows the existing cited RFC 8785:
 https://www.rfc-editor.org/rfc/rfc8785.
+
+## Fix round 4
+
+Implemented TL-P4-41 addendum 21 in the three allocated production homes. The runner owns
+the commits. No test, fixture, golden, dependency, network or git-write change was made.
+
+tests changed: none
+removed: selection authority for indexed notes absent from that source's final shown candidates.
+removed: new-parent authority inferred from containment or a main-folder name after the candidate cap.
+removed: the conditional hub allowance that let five wants authorize a sixth destination note.
+removed: unconditional full reads of answer pins when no item was selected.
+removed: keep authority without one selected item's allowed targets covering both pair ids.
+removed: the answer-only bypass of requireOperations; plannedWith now checks the shared ledger once.
+removed: blanket normalization of arbitrary id fields, including id-only candidate references.
+removed: whitespace-sensitive sibling comparison and name-only MOC recognition in neighbourhood.
+
+### Changes in the existing homes
+
+- `runner/src/claude.ts`: validates wants and proposed parents against the per-source candidates
+  actually serialized after boundIndexContext. Existing answer/request pins are shown in the same
+  capped list. The destination hub always joins the deduplicated five-note accounting. Only selected
+  items supply readable targets; keep requires both pair ids in one selected item's allowed targets,
+  in addition to the existing admitted-yes check. Both model and stored-answer plans pass through
+  plannedWith's one requireOperations call, retaining the existing extra-operation reservation.
+- `runner/src/model-input.ts`: the same JSON/JCS normalizer resolves an id-only physical reference
+  to its stable indexed/folder path. A row with its own path keeps the existing redundant-id
+  normalization. Other stable ids remain intact. This preserves both fresh-id controls and the
+  existing raw/normalized C04 goldens, while the real Garden/Garden2 link change moves the fingerprint.
+- `runner/src/claude.ts` and `src/data/vault/vault-index.ts`: carry the prefix parser's type into
+  neighbourhood metadata and recognize `type: moc` alongside conventional folder-map naming.
+  Discovered links retain that type. The existing match/map/link order and 30-candidate cap remain.
+- The existing near-name comparison trims, lowercases and collapses whitespace before comparing
+  sibling names. checkCreationName still owns name validation.
+
+No second planner, cache, ledger, writer, pending store, normalizer or neighbourhood mechanism added.
+No screen or stored format changed. Prefix metadata reuses the existing read cache.
+
+### Compatibility draft for the lead
+
+| Home / contract | Behaviour change and draft |
+| --- | --- |
+| src/data/vault/vault-index.ts neighbourhood | A prefix-typed MOC such as Contents.md now occupies the folder-map stage, independent of its title. The optional type metadata preserves callers that supply only summary/links and conventional name recognition. Keep the 30-candidate cap; a transport control must select only rows shown after that cap, including folded-map controls. No persisted format migration or alternate map detector is needed. |
+
+### Red and green evidence
+
+Before implementation, the unchanged `runner/test/b1d-fr4.test.ts` produced **7 assertion reds**,
+with passing positive controls: `/tmp/b1d-fr4-before.log`. The same complete file then passed
+**7/7**, including the selected merge, one stored answer, fresh-id fingerprint and cold typed-MOC
+controls: `/tmp/b1d-fr4-focused.log`. All seven also pass in the complete runner run below.
+
+### Required checks and output boundary
+
+Every command redirected output to OS temp. Vitest's repository JSON reporter and cache were
+disabled. No node_modules replacement or symlink, repository test output or git write was used.
+
+| Check | Final result | OS-temp log |
+| --- | --- | --- |
+| Full runner suite | 48 files pass, 5 fail; 686 tests pass, 14 fail | /tmp/b1d-fr4-runner.log |
+| src suite | 170 files pass, 1 fails; 5710 tests pass, 1 fails; expected listen EPERM and timeout only | /tmp/b1d-fr4-src.log |
+| App TypeScript | pass, exit 0 | /tmp/b1d-fr4-app-tsc.log |
+| Node TypeScript | pass, exit 0 | /tmp/b1d-fr4-node-tsc.log |
+| Runner TypeScript | pass, exit 0 | /tmp/b1d-fr4-runner-tsc.log |
+| App touched-file ESLint | pass, exit 0 | /tmp/b1d-fr4-eslint-app.log |
+| Runner touched-file ESLint | pass, exit 0 | /tmp/b1d-fr4-eslint-runner.log |
+| Unused-code and production gate | pass, exit 0; unchanged 1/30 known findings | /tmp/b1d-fr4-unused.log |
+| Diff whitespace | pass | git diff --check, read-only |
+
+Commands:
+```sh
+pnpm -C runner exec vitest run test/b1d-fr4.test.ts --maxWorkers=2 --reporter=default --cache=false
+pnpm -C runner exec vitest run --maxWorkers=2 --reporter=default --cache=false
+pnpm exec vitest run src --maxWorkers=2 --reporter=default --cache=false
+pnpm exec tsc --noEmit -p tsconfig.app.json
+pnpm exec tsc --noEmit -p tsconfig.node.json
+pnpm -C runner exec tsc --noEmit -p .
+pnpm exec eslint src/data/vault/vault-index.ts
+pnpm -C runner exec eslint src/claude.ts src/model-input.ts
+node scripts/check-unused-gate.mjs
+```
+
+The initial combined root ESLint invocation hit the existing ambiguous tsconfigRootDir inference
+(`/tmp/b1d-fr4-eslint.log`). Separate app/runner invocations from their own directories pass
+without changing configuration. No pnpm check or e2e ran: their repository outputs conflict with
+the owner's explicit output restriction; the explicitly requested checks above all completed.
+
+### Complete remaining runner inventory and stop boundary
+
+The seven new reds pass, but the full runner gate is **not green**. The complete failed-test
+inventory follows; repeated soft assertions are counted once per test. No test or contract number
+was weakened. TL-P4-51 requires recording all contradictory tests after the whole targeted suite,
+then stopping. Delivery is blocked on reconciliation of these older controls with addendum 21.
+Several controls select a capped-out map or unrelated note; the five-wants controls also require
+a sixth destination hub. Restoring that authority would reintroduce the fix-round findings.
+
+| File:line | Exact failed test | Evidence / required reconciliation |
+| --- | --- | --- |
+| runner/test/b1-planning.test.ts:127, :145 | b1-cut-index-no-new-destination | Clear and sibling controls select HUB in a 155-matching-note context; that map is omitted from the capped source candidates. Select shown evidence while preserving cut-context/no-creation assertions. |
+| runner/test/b1-planning.test.ts:158 | b1-five-per-source | Control requests five evidence notes excluding the destination hub, requiring six. Include the hub within five. |
+| runner/test/b1-planning.test.ts:189 | b1-pinned-and-script-notes-count-within-five | Pair-answer control explicitly wants the destination hub and additional notes absent from the answer source's shown candidates. The inserted pins themselves are shown; the control must bind its remaining wants to shown rows. |
+| runner/test/b1-planning.test.ts:250 | b1-folded-moc-expansion | Control wants the folded map after 41 matching members have filled the 30-candidate cap. Its indexed metadata alone is no selection authority. |
+| runner/test/b1-planning.test.ts:276, :285 | b1-target-injection | Control and injected variants select the folded map omitted by the same cap. They now fail at selection, before the expected execution/retry. Preserve injection assertions with shown evidence. |
+| runner/test/b1-planning.test.ts:395 | b1-shared-ledger | Long-source control requests five evidence notes for each source, excluding the destination hub. Six cannot satisfy the five-note contract. |
+| runner/test/b1-planning.test.ts:493 | b1-neighbourhood-order-and-30-cap | 32 matching notes fill the cap, yet the filing control selects the omitted HUB. The ordering/cap assertions still hold; execution must select a shown note. |
+| runner/test/b1-planning.test.ts:523, :535 | b1-expansion-is-not-a-read-picked-members-count-within-five | Control requests five members plus a separate destination hub, exceeding five; folded members must also be among that source's shown candidates. |
+| runner/test/b23-hot-context.test.ts:334 | B3b hot: a Home answer removes only its settled Open thread | Second run fails selection before the answer filing/Open-thread assertions. Reconcile its phase-aware transport's wants with the answer source's shown rows. |
+| runner/test/c05-bounded-reads.test.ts:588, :611 | C05 bounded reads: fix 2 control: a waiting retry whose pending relocation lands completes once | Third-run transport proposes an already-settled source's line with a new ordinary pile; selection fails before execution. Keep the settled-consent assertion while binding transport wants to shown evidence. |
+| runner/test/c05-bounded-reads.test.ts:466, :629 | C05 bounded reads: fix 1 control: a waiting retry whose archive lands completes once | Same third-run selection failure for the settled archive control. No stale-source selection exception was added. |
+| runner/test/claude-provider.test.ts:377 | a thing cited by a Timeline line on an existing note needs no note | Leek soup source is given a Flat hunt line; its transport selects that unrelated note and selection now refuses it. Preserve citation/no-new-note behavior using shown evidence. |
+| runner/test/duplicate-by-hash.test.ts:157 | a copy inside the same pile keeps one and bins the other as already saved | Phase-aware filing transport selects the Job hunt hub for its offer confirmation; this control fails selection before duplicate assertions. Reconcile the transport's wants with shown candidates. |
+| runner/test/duplicate-by-hash.test.ts:199 | a filed copy the person already binned does not count | Same transport selection failure before the binned-copy assertions. No duplicate handling or Bin fence changed. |
+
+The only src failure is `src/e2e-port.test.ts:37`, “a server from another worktree is never reused”:
+listen EPERM in this sandbox and its existing timeout, as explicitly expected by the owner.
+Raw runner failure locations are also in `/tmp/b1d-fr4-failure-locations.log`.
+
+Offline sources reused without network verification: the packet's curated-context, plan/execute
+and stable-prefix citations, plus https://www.rfc-editor.org/rfc/rfc8785 for the existing JCS home.

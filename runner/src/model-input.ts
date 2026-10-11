@@ -5,6 +5,8 @@
  * regex-edited, so a text value that looks like an id is kept. Each JSON line is written in canonical form: object
  * keys sorted by UTF-16 code units, no insignificant whitespace (RFC 8785, JSON Canonicalization Scheme; JSON.stringify
  * already gives the ECMAScript number and string forms RFC 8785 requires). Lines that are not JSON are kept as written.
+ * An id-only reference retains its stable path from the context, rather than losing which note it names. Other
+ * stable ids are kept; only rows carrying their own path can discard the redundant fresh physical id.
  * The model input itself is not changed.
  */
 const FIXED: Readonly<Record<string, string | number>> = {
@@ -16,12 +18,11 @@ const FIXED: Readonly<Record<string, string | number>> = {
   folderId: 'FOLDER_ID',
   parentId: 'FOLDER_ID',
   version: 'VERSION',
-  id: 'ID',
   at: 0,
 };
 
-function fixKeys(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(fixKeys);
+function fixKeys(value: unknown, references: ReadonlyMap<string, string>): unknown {
+  if (Array.isArray(value)) return value.map((row) => fixKeys(row, references));
   if (value === null || typeof value !== 'object') return value;
   const out: Record<string, unknown> = {};
   for (const [key, inner] of Object.entries(value)) {
@@ -29,10 +30,12 @@ function fixKeys(value: unknown): unknown {
     if (key === 'types') out[key] = inner;
     else if (['indexed', 'foldersById', 'allowedTargets'].includes(key) && inner !== null && typeof inner === 'object' && !Array.isArray(inner)) {
       // Dictionary keys are physical ids too. Keep every row, ordered by its stable content.
-      out[key] = Object.fromEntries(Object.values(inner).map(fixKeys)
+      out[key] = Object.fromEntries(Object.values(inner).map((row) => fixKeys(row, references))
         .sort((a, b) => canonical(a) < canonical(b) ? -1 : canonical(a) > canonical(b) ? 1 : 0)
         .map((row, index) => [`ID_${index}`, row]));
-    } else out[key] = Object.prototype.hasOwnProperty.call(FIXED, key) ? FIXED[key] : fixKeys(inner);
+    } else if (key === 'id' && typeof inner === 'string') {
+      out[key] = 'path' in value ? 'ID' : references.get(inner) ?? inner;
+    } else out[key] = Object.prototype.hasOwnProperty.call(FIXED, key) ? FIXED[key] : fixKeys(inner, references);
   }
   return out;
 }
@@ -56,7 +59,19 @@ function normalizeLine(line: string): string {
   } catch {
     return line;
   }
-  return canonical(fixKeys(parsed));
+  const references = new Map<string, string>();
+  if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    const context = parsed as Record<string, unknown>;
+    for (const key of ['indexed', 'foldersById']) {
+      const rows = context[key];
+      if (rows === null || typeof rows !== 'object' || Array.isArray(rows)) continue;
+      for (const [id, row] of Object.entries(rows)) {
+        const path = typeof row === 'string' ? row : row !== null && typeof row === 'object' && 'path' in row ? row.path : undefined;
+        if (typeof path === 'string') references.set(id, path);
+      }
+    }
+  }
+  return canonical(fixKeys(parsed, references));
 }
 
 export function normalizeModelInput(input: string): string {
