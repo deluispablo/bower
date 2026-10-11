@@ -932,12 +932,13 @@ function framedMoc(text: string): string | null {
 /** Initialization appends once; the shared parser alone grants the new payload spans. */
 function appendAbout(text: string, addition: string): Step {
   const before = parseOwnership(encoder.encode(text));
-  const after = parseOwnership(encoder.encode(text + addition));
+  const appended = text + (text && !text.endsWith('\n') ? '\n' : '') + addition;
+  const after = parseOwnership(encoder.encode(appended));
   if (before.status === 'invalid' || after.status === 'invalid'
     || ABOUT_REGIONS.some((region) => before.payloads?.[region])
     || !addition.startsWith('## What Bower has learned\n') && !addition.startsWith('## What Bower has learned\r\n')
     || !ABOUT_REGIONS.every((region) => (after.payloads?.[region]?.start ?? -1) >= encoder.encode(text).length)) return { refused: 'not-bower' };
-  return { text: text + addition, added: [], rules: null };
+  return { text: appended, added: [], rules: null };
 }
 
 type RegionChange = Extract<Change, { kind: 'moc-rewrite' | 'profile-rewrite' | 'template-rewrite' | 'about-rewrite' }>;
@@ -1010,7 +1011,7 @@ function applyAtVersion(before: Uint8Array, changes: readonly Change[], authors:
         || decoder.decode(before.subarray(own.layout.timeline.start, own.layout.timeline.end))
           !== decoder.decode(nextBytes.subarray(nextOwn.layout.timeline.start, nextOwn.layout.timeline.end))) return refuse('invariant');
     }
-    const kept = change.kind === 'about-append' ? step.text === current + change.text : change.kind === 'moc-rewrite' || change.kind === 'profile-rewrite' || change.kind === 'template-rewrite' || change.kind === 'about-rewrite' ? regionHolds(current, step.text, change) : change.kind === 'state-rewrite' ? stateHolds(current, step.text, change) : holds(current, step.text, change, step);
+    const kept = change.kind === 'about-append' ? step.text === current + (current && !current.endsWith('\n') ? '\n' : '') + change.text : change.kind === 'moc-rewrite' || change.kind === 'profile-rewrite' || change.kind === 'template-rewrite' || change.kind === 'about-rewrite' ? regionHolds(current, step.text, change) : change.kind === 'state-rewrite' ? stateHolds(current, step.text, change) : holds(current, step.text, change, step);
     if (step.text !== current && !kept) return refuse('invariant');
     current = step.text;
   }

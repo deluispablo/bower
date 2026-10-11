@@ -18,6 +18,7 @@ import type { RunManifest } from '../../../src/data/spine/records';
 import type { RunnerToken } from '../token';
 import { ABOUT_REGIONS } from '../../../src/data/contracts/ownership-format';
 import { aboutArchivePath, type ObservationOrigin } from '../../../src/data/contracts/observations';
+import { targetPath } from '../../../src/data/contracts/run-manifest';
 import { PILE_NOTE } from '../../../src/data/piles';
 import { RUNNER_WRITES, SYSTEM } from '../../../src/data/vault/layout';
 
@@ -131,7 +132,11 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
         if (!taken.has(e.before.fileId) && !keptOther(e.before.fileId)) return 'a Bin of a thing it was not admitted to take';
         break;
       case 'write-runner-json':
-        if (own === undefined || !sameParents([own], e.before.parents) || !(RUNNER_WRITES as readonly string[]).includes(`${SYSTEM.dir}/${e.before.name}`)) return "a write to a file that is not Bower's own";
+        if (own === undefined || !sameParents([own], e.before.parents) || e.before.folder
+          || e.path !== `${SYSTEM.dir}/${e.before.name}` || !(RUNNER_WRITES as readonly string[]).includes(e.path)
+          || m.capture.places.some((p) => p.file.fileId === e.before.fileId
+            && (p.path !== e.path || p.file.name !== e.before.name || p.file.folder
+              || !sameParents(p.file.parents, e.before.parents)))) return "a write to a file that is not Bower's own";
         break;
       case 'edit-text': {
         const kinds = new Set(e.changes.map((c) => c.kind));
@@ -147,7 +152,7 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
       }
       case 'create-text': {
         const parentId = 'fileId' in e.parent ? e.parent.fileId : undefined;
-        const parent = m.capture.places.find((p) => p.file.fileId === parentId)?.path;
+        const parent = targetPath(m, e.parent);
         if (e.name === 'observations.jsonl' && (e.purpose !== 'runner-json' || parent !== SYSTEM.dir
           || own === undefined || parentId !== own)) return 'a ledger outside the admitted system folder';
         const archive = parent?.startsWith('.bower/archive/about-me');

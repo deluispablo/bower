@@ -554,7 +554,10 @@ async function admit<M extends Manifest | ManifestV2>(
   parsed: unknown, expectedRootId: string, guard: (value: unknown) => value is M, writes: readonly RunnerWrite[],
 ): Promise<{ ok: true; value: M; sha256: string } | { ok: false; reason: ManifestRefusal }> {
   if (!guard(parsed)) return { ok: false, reason: 'shape' };
-  if (parsed.operations.some(({ effect: e }) => e.kind === 'write-runner-json' && !writes.includes(e.path))) return { ok: false, reason: 'shape' };
+  if (parsed.operations.some(({ effect: e }) => e.kind === 'write-runner-json' && (!writes.includes(e.path)
+    || e.path !== `.bower/${e.before.name}` || e.before.folder
+    || parsed.capture.places.some((p) => p.file.fileId === e.before.fileId
+      && (p.path !== e.path || !sameSeen(p.file, e.before)))))) return { ok: false, reason: 'shape' };
   const value = parsed;
   if (!await aboutArtifactsOk(value) || !await planningArtifactsOk(value)) return { ok: false, reason: 'shape' };
   if (!driveId(expectedRootId) || expectedRootId !== value.scope.rootId) return { ok: false, reason: 'scope' };
@@ -812,8 +815,8 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> 
       if (!ledger) return false;
       for (const c of e.changes) {
         if (c.kind !== 'about-rewrite') continue;
-        if (c.factIds?.some((id) => !ledger.live.some((fact) => fact.factId === id && fact.section === c.region))) return false;
-        if (!c.archive) continue;
+        if (!c.factIds || c.factIds.some((id) => !ledger.live.some((fact) => fact.factId === id && fact.section === c.region))
+          || !c.archive) return false;
         const archive = archives.get(c.archive);
         if (!archive || !op.dependsOn.includes(archive.operationId) || archive.effect.text !== c.previous
           || c.archive.split('/')[3] !== c.region || !c.factIds
@@ -882,7 +885,7 @@ async function planningArtifactsOk(value: Manifest | ManifestV2): Promise<boolea
   return true;
 }
 
-function targetPath(value: { capture: Capture; operations: readonly OperationV2[] }, target: Target, seen = new Set<string>()): string | null {
+export function targetPath(value: { capture: Capture; operations: readonly OperationV2[] }, target: Target, seen = new Set<string>()): string | null {
   if ('fileId' in target) return value.capture.places.find((p) => p.file.fileId === target.fileId)?.path ?? null;
   if (seen.has(target.createdBy)) return null;
   seen.add(target.createdBy);

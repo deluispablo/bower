@@ -239,7 +239,12 @@ export function parseOwnership(bytes: Uint8Array): OwnershipResult {
     const marker = sourceLines.findIndex((line) => {
       const previous = fence;
       fence = fenceAfter(line.text, fence);
-      return !previous && !fence && line.text.trimStart().startsWith('<!-- bower:ownership') && line.text.includes('about-');
+      if (previous || fence || !line.text.trimStart().startsWith('<!-- bower:ownership')) return false;
+      // Complete older markers without a format declaration remain ordinary personal text.
+      // About me marks and damaged boundaries still enter the framing check and cannot grant a fresh append.
+      return ![...OWNERS, ...MOC_REGIONS, 'profile', ...TEMPLATE_REGIONS].some((region) =>
+        line.text === `<!-- bower:ownership/2 begin ${region} -->`
+        || line.text === `<!-- bower:ownership/2 end ${region} -->`);
     });
     if (marker < 0) return legacyNote(bytes, raw);
     const heading = sourceLines[marker - 1];
@@ -259,7 +264,12 @@ export function parseOwnership(bytes: Uint8Array): OwnershipResult {
     }
     if (sourceLines[close]?.text !== '---') return damaged();
     for (let i = 0; i < bytes.length; i++) if (bytes[i] === 13 && bytes[i + 1] !== 10) return damaged();
-    const firstRegion = body.find((line) => line.text.startsWith('<!-- bower:ownership/2 begin'));
+    let fence: Fence | null = null;
+    const firstRegion = body.find((line) => {
+      const previous = fence;
+      fence = fenceAfter(line.text, fence);
+      return !previous && !fence && line.text.startsWith('<!-- bower:ownership/2 begin');
+    });
     owners = firstRegion?.text === '<!-- bower:ownership/2 begin goal -->'
       ? [...TEMPLATE_REGIONS, ...OWNERS] : [...OWNERS];
   }
@@ -269,10 +279,10 @@ export function parseOwnership(bytes: Uint8Array): OwnershipResult {
   let start = 0;
   let fence: Fence | null = null;
   for (const line of body) {
+    const previous = fence;
+    fence = fenceAfter(line.text, fence);
+    if (previous || fence) continue;
     if (active) {
-      const previous = fence;
-      fence = fenceAfter(line.text, fence);
-      if (previous || fence) continue;
       if (line.text === `<!-- bower:ownership/2 end ${active} -->`) {
         spans[active] = { start, end: line.start };
         active = null; next++;

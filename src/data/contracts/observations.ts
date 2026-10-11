@@ -97,17 +97,21 @@ export function parseObservations(bytes: Uint8Array): Ledger {
 function resolve(events: Event[], undone: readonly string[] = []): Ledger {
   const tombstones = events.filter((e): e is Tombstone => e.kind === 'tombstone');
   const blockedFacts = new Set(tombstones.map((e) => e.factId));
-  const blockedSources = new Set(tombstones.map((e) => e.sourceId));
+  const blockedSources = new Set(tombstones.filter((e) => e.reason === 'bin').map((e) => e.sourceId));
   const evidence = new Set<string>();
   const live: Observation[] = [];
   for (const event of events) {
-    if (event.kind !== 'observation' || undone.includes(event.origin.runId)
-      || blockedFacts.has(event.factId) || blockedSources.has(event.source.fileId)) continue;
+    if (event.kind !== 'observation') continue;
+    // Claim evidence before invalidating its origin: a replay never becomes new evidence on Undo or Forget.
+    // A source version alone is not a new fact; new words from another source have their own identity.
+    const key = JSON.stringify([event.source.fileId, event.section, event.category, event.text]);
+    if (evidence.has(key)) continue;
+    evidence.add(key);
+    if (undone.includes(event.origin.runId) || blockedFacts.has(event.factId)
+      || blockedSources.has(event.source.fileId)) continue;
     if (event.remembers && !events.slice(0, events.indexOf(event)).some((e) => e.kind === 'tombstone' && e.factId === event.remembers
       && e.runId !== event.origin.runId)) continue;
-    const key = JSON.stringify([event.source.fileId, event.source.sha256, event.section, event.category, event.text]);
-    if (evidence.has(key)) continue;
-    evidence.add(key); live.push(event);
+    live.push(event);
   }
   return { events, live, tombstones };
 }
