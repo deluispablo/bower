@@ -880,3 +880,139 @@ Left out / risk: deferred manifest creation/rewrites and architecture merge, sha
 closing rule, and the unresolved Claude novel-type transport; existing public API rejects raw
 nonboolean consent, but malformed stored answers can hide cards. No check/e2e/designer or
 production timing acceptance is claimed. Closure needs the lead's rulings and the runner gates.
+
+
+## Rulings (addenda 7 and 8)
+
+Attempt 6 implements the addendum 7 report-layer repair and addendum 8 proposal-text
+continuation in the existing homes. The named first-create rise is applied. Delivery is
+**blocked by the new existing-table control**, not by the already-ruled creating-run pins.
+No network, git write, node_modules replacement or symlink was used. The runner owns
+commits, pnpm check and capabilities/folder-table e2e on demo and fake.
+
+### Scope and implementation
+
+- `checkedAnswer` is the shared backend boundary used by DriveVault, demo, answerQuestion
+  and the Claude answer reader. It accepts bounded proposal text using the existing
+  isQuestionAnswer validation; options remain refused because proposals have no options.
+- `answerRun` starts the existing instructions continuation for proposal text. Boolean
+  yes retains its exact frozen-payload consent; false still starts no run. No new run,
+  journal format, consent path, reader, writer or loop was added.
+- The Claude answer projection retains the question's proposal so `subjectOf` sees its
+  real subject. Its text reaches both selection and execution inputs under `answers`,
+  with the exact question and person's words; it cannot become a boolean yes.
+- The planner uses the full stored question with `subjectOf`, rather than an id-only
+  projection that loses proposal identity. Text settles through proposalSettled and the
+  existing answeredAskings/questions write/archive dependencies. The question closes,
+  neither table nor frozen payload changes, and the answer's archive retains exact bytes.
+- Proposal subjects have no inbox member (the stored contract prohibits subject/words).
+  Their continuation is instructions-scope, as for proposal yes. Inbox text retains its
+  member provenance check and the existing two-round bound, exercised by all 43
+  q1-continuation tests in the full runner suite; no fabricated proposal-to-item link or
+  second round counter was introduced.
+- The report continues storing raw requests. `runDetail` alone formats the done sentence.
+  The new UI words test asserts `"Show hours in the offer table." done.` exactly.
+
+Research: reused the packet's locally cited closed-object validation
+(https://json-schema.org/understanding-json-schema/reference/object#additionalproperties)
+and the existing answer loop's idempotency-key design
+(https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/).
+No source was independently reverified because network access was prohibited.
+
+removed: the assumption that all nonboolean proposal answers are invalid consent; text is person words, never installation consent.
+removed: the id-only proposal projection in answer transport and settlement; both reuse subjectOf with the stored question.
+removed: no production helper, dependency, byte/id/fence assertion or timing/round bound.
+
+tests changed: runner/test/drive-calls-golden.test.ts: exact C04 total 96 -> 99, named rise "first creation of the type table: listing, fence, create".
+tests changed: runner/test/drive-calls-golden.test.ts: timing's exact C04 total 96 -> 99 and apply 55 -> 58, named rise "first creation of the type table: listing, fence, create".
+tests changed: runner/test/drive-calls-golden.test.ts: cold ceiling 96 -> 99 via the named +3 constant, "first creation of the type table: listing, fence, create"; prior arithmetic/cut kept.
+tests changed: runner/test/drive-calls-golden.test.ts: retention control C04 96 -> 99, retained run 107 -> 110 and retained apply 54 -> 57, named rise "first creation of the type table: listing, fence, create" in both creating runs; timing bounds unchanged.
+tests changed: runner/test/drive-calls-golden.test.ts: add an existing-table control pinning raw calls and timing at 96, with the former phases; this control remains red at 97.
+tests changed: runner/test/timing-counts.test.ts: sum 96 -> 99 and apply 55 -> 58, named rise "first creation of the type table: listing, fence, create"; byte-consistency assertion unchanged.
+tests changed: runner/test/b5-incorporation.test.ts: addendum 7 replaces sentence matching in serialized last-run JSON with exact report.requests equality to the raw request; production formatting unchanged.
+tests changed: runner/test/b5-incorporation.test.ts: replace the nonboolean text/option parameterization with an answerQuestion-to-main text continuation test; assert closed question, no installation, exact table/payload bytes and both trusted answer inputs. The formerly pending invalid answer now settles, so its bytes are asserted exactly in the existing archive. Option refusal is covered at the shared backend boundary in answer-loop.test.ts.
+tests changed: src/data/answer-loop.test.ts: replace text rejection with one instructions continuation assertion; retain string/option rejection and add the original option "yes" refusal before any record/run.
+tests changed: src/features/tidy/run-words.test.ts: add exact runDetail rendering of the ruled table request; keep the general request rendering controls unchanged.
+
+### Waiting for the lead: new 96-call control contradiction
+
+Full runner suite: 753 pass / 1 fail, 59 files. Every contradiction is listed here:
+
+- `runner/test/drive-calls-golden.test.ts:49`, **an existing type table keeps the 96-call pin**:
+  actual raw Drive calls are 97, against the ruled 96. Timing also totals 97 (the assertion
+  at :50 is after the first failure); phases are reads 26, apply 55, checkpoints 4,
+  report 10, runner 2, with token/model/status 0. The phase pin at :51 expects reads 25.
+  The valid existing table necessarily has a media read in `capture`
+  (`src/data/spine/scripted.ts`, existing typeText/ownText path). In the creating run,
+  the table is absent and that read is absent: reads 25 plus apply 58 gives 99.
+  This is a +1 existing-table read, separate from the authorized three-call first create.
+  No pin was raised to 97, read/fence omitted or timing assertion loosened. A further
+  lead ruling or an allocated real call reduction is required; fixture manipulation or
+  prewarming outside the measured run would conceal the discrepancy.
+
+The creating-run exact totals, cold ceiling, retained 110-call control and all time bounds
+pass. All 30 b5-incorporation tests, including text continuation, pass. All 43 Q1 continuation
+controls pass, including subject provenance, unrelated-pile exclusion and exhaustion at two.
+
+### Compatibility draft
+
+| Changed home | Contract change | Existing callers/stored data | Evidence |
+| --- | --- | --- | --- |
+| src/data/contracts/questions.ts: checkedAnswer | Accept proposal text under existing answer bounds; options still refused | Legacy yes/no and inbox text/options unchanged; no stored shape changes | answer-loop tests; all Q1 continuation controls |
+| src/data/answer-loop.ts: answerRun | Proposal text starts instructions continuation with the existing asking idempotency key | Boolean yes/no behavior and inbox subject scope unchanged | answer-loop and main text continuation tests |
+| runner/src/claude.ts: answer projection | Retain proposal subject internally so its person text reaches existing answer inputs | No public/model wire field added; unrelated inbox text still excluded | main text continuation; Q1 provenance controls |
+| src/data/spine/scripted.ts: proposal settlement | Use stored question subject; text settles without installation | Frozen yes verification and question/archive fences unchanged; answer bytes preserved | full b5-incorporation and runner suites |
+
+### Verification
+
+Red: `/tmp/b5b-a6-red-assertion.log`, **person text starts the existing instructions
+continuation without granting consent**: `.resolves.toMatchObject` fails because the
+shared boundary rejects the answer. `/tmp/b5b-a6-red-runner.log` also reproduces the
+same refusal through the integration test. The later diagnostics exposed missing
+proposal identity and settlement; those paths are now green.
+
+| Check | Result | OS-temp log |
+| --- | --- | --- |
+| Full runner, --maxWorkers=2 | 753 pass / 1 fail; new ruled existing-table pin only | /tmp/b5b-a6-runner-final.log |
+| Full vitest run src, --maxWorkers=2 | 5829 pass / 2 fail; coordinator ledger and expected sandbox EPERM only | /tmp/b5b-a6-src-final.log |
+| App TypeScript, no emit/incremental | pass | /tmp/b5b-a6-tsc-app-final.log |
+| Node TypeScript, no emit/incremental | pass | /tmp/b5b-a6-tsc-node-final.log |
+| Runner TypeScript, no emit | pass | /tmp/b5b-a6-tsc-runner-final.log |
+| Touched app/contract/test ESLint | pass | /tmp/b5b-a6-eslint-app-final.log |
+| Touched runner/test ESLint | pass | /tmp/b5b-a6-eslint-runner.log |
+| node scripts/check-unused-gate.mjs | pass; 2 existing general / 29 existing production findings | /tmp/b5b-a6-unused.log |
+| git diff --check, read-only | pass | empty command output |
+
+An initial combined root/runner ESLint invocation could not infer one tsconfig root;
+separate invocations in each existing config's directory pass, without config edits.
+Temporary Vitest configs retain the existing app/runner settings and timer gate but put
+cache, JSON results and logs in OS temp. The timer setup omits only the optional CPU
+report that otherwise writes test-results inside the checkout. No tests wrote repo artifacts.
+The final verification commands are:
+
+```sh
+pnpm exec vitest run --config /tmp/b5b-a6-runner.config.mts --configLoader runner --maxWorkers=2 > /tmp/b5b-a6-runner-final.log 2>&1
+pnpm exec vitest run src --config /tmp/b5b-a6-app.config.mts --configLoader runner --maxWorkers=2 > /tmp/b5b-a6-src-final.log 2>&1
+pnpm exec tsc -p tsconfig.app.json --noEmit --incremental false > /tmp/b5b-a6-tsc-app-final.log 2>&1
+pnpm exec tsc -p tsconfig.node.json --noEmit --incremental false > /tmp/b5b-a6-tsc-node-final.log 2>&1
+pnpm exec tsc -p runner/tsconfig.json --noEmit > /tmp/b5b-a6-tsc-runner-final.log 2>&1
+pnpm exec eslint src/data/answer-loop.ts src/data/answer-loop.test.ts src/data/contracts/questions.ts src/data/spine/scripted.ts src/features/tidy/run-words.test.ts > /tmp/b5b-a6-eslint-app-final.log 2>&1
+# From runner/:
+pnpm exec eslint src/claude.ts test/b5-incorporation.test.ts test/drive-calls-golden.test.ts test/timing-counts.test.ts > /tmp/b5b-a6-eslint-runner.log 2>&1
+# From the worktree root:
+node scripts/check-unused-gate.mjs > /tmp/b5b-a6-unused.log 2>&1
+```
+
+left out: pnpm check, commits and capabilities/folder-table e2e remain runner-owned;
+compatibility rows remain coordinator-owned. No unrelated budget optimization was attempted.
+
+Final src failures (complete list; no test edits):
+
+- `src/docs.test.ts:134`: compatibility rows missing for 36b7058d, f45f2ca4,
+  c98c686a and aa54844f; coordinator-owned per the assignment.
+- `src/e2e-port.test.ts:37`: expected sandbox listen EPERM causes the 5000 ms
+  test timeout and one associated unhandled listen error. No workaround added.
+
+Final app/runner suites were followed only by explanatory comment changes and this
+notes append; no runtime or assertion changed after those suites. `.codex-commits.json`
+lists exactly three groups: production, tests and notes alone. No git commit was made.
