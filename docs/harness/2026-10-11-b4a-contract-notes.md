@@ -148,3 +148,171 @@ semantic model proof, full pnpm check/e2e, committing. Own-text deletion/case 4 
 The archive path has no About me file-id segment. No original-app/personal content was read.
 
 Requested commits are declared in .codex-commits.json: tests only, then this notes file alone.
+
+## Implementation
+
+implementer: codex
+
+Implemented the owned contract homes only, with no runtime intake, planner, dispatcher,
+consolidation call, prompt assembly, server, deployment, network access or git-writing command.
+The runner owns commits. Existing tests and node_modules were not changed.
+The research above is reused offline: episodic evidence as the durable source, bounded derived
+context, and closed typed declarations. No citation is claimed as newly verified.
+
+The implementation extends the ownership parser's existing marker state machine to a
+personal prefix followed by the three About me regions. The prefix is retained byte for byte;
+the original template remains the missing-note seed. The existing note author appends once,
+rewrites only parsed payload spans and rechecks the full read bytes. The note-format projection
+exposes those same spans through Bower's note field, without scanning for marks again.
+`undoEdit` refuses to restore an About me before-image: its rebuild contract uses live evidence.
+
+`observations.ts` declares JSONL observation, tombstone and consolidation events. Every line
+uses the existing strict record-JSON reader and canonical identity helper. Invalid encoding,
+unterminated or malformed events, and conflicting identities log and throw BowerError.
+An empty file or the empty-ledger newline parses as empty; interior blank records refuse.
+Event/evidence deduplication is separate from source/fact tombstones; the latter survive
+new source hashes, replay, explicit remembering and Undo of Forget. A successful section
+frontier counts only later, distinct live facts. Authored word counting uses timeline-line's
+parser, excluding headings, framing, dates and citations, with 400/400/200 and five unchanged.
+
+Observation candidates cannot assert ids, hashes or origins. The author resolves references
+from script-supplied admitted evidence or explicitly validated lineage. Documents require
+an explicit matching subject and cannot author preferences, sensitive facts, rules or schema.
+Personal About me text has no observation origin. Admission resolves actual taken pile words
+or document ids; a deferred pile cannot be re-admitted through stale evidence. Answer/rule
+lineage has typed record references; its runtime capture remains B4b's work.
+
+Manifest validation freezes the same effects and confirmed dependencies: ledger, exact
+write-once section archive, one authored About me edit, successful frontier, then maintain.
+JSONL uses its line reader rather than JSON.parse of the whole artifact. Read content/stamps,
+captured target identity, source evidence hashes and append-only prior ledger bytes are
+checked. Archive paths have no file-id directory. No new lifecycle, broad internal-path
+permission, ownership writer or marker parser was added. Creation of the exact ledger uses
+the existing create-text effect; subsequent writes retain the existing read-content fence.
+The second write's refreshed runtime read version and replay/barrier execution remain B4c.
+
+The context contract separates personal input from learned content. Its 4,000-character
+limit includes the visible cut mark. Undo filters invalidated observation origins while
+retaining all tombstones; an archive or mixed-trust input cannot become rebuilding authority.
+Stored questions add only the closed `forget-fact` action; the public projection strips
+both action kinds, and existing shown-option validation is reused.
+
+### Compatibility draft rows
+
+| Contract home | Additive change | Compatibility evidence / remaining consumer |
+| --- | --- | --- |
+| ownership-format | Three trailing About me payload spans on a personal prefix | `b4a-composite-byte-append`; old plain, legacy and ownership/2 tests retained; B4b consumes spans. |
+| note-edit | `about-append`, `about-rewrite`, exact prefix/span invariants; no before-image memory Undo | `b4a-composite-byte-append`, `b4a-existing-regions-compatible`, `b4a-read-version-fence`; MOC, profile, template and Current state controls retained; B4b/B4c author effects. |
+| note-format | Display learned spans through the existing Bower note projection | Existing note-format suite retained; no new parser or whole-file adoption; B4b produces this content. |
+| observations | Version-1 JSONL events, script ids/provenance, permanent tombstones and successful frontier | `b4a-ledger-identity-and-corruption`, `b4a-admitted-origin-only`, `b4a-section-gate`; new stored format with strict event reads; B4b intake and B4c consolidation. |
+| observations | Separately typed bounded context and evidence-only Undo rebuild | `b4a-context-and-undo-contract`; no earlier context wire replaced; B4c supplies B1d's position-4 input. |
+| run-manifest | Additive changes, exact ledger/create/archive artifacts, frozen order and read fences | `b4a-artifact-scope-and-order`; v1/v2 and B1a/B5a/B6a controls retained; B4c executes recovery and barriers. |
+| layout | Explicit observations.jsonl entry in RUNNER_WRITES | B4a manifest/admission controls pass; existing exact-list assertion at runner/test/claude-provider.test.ts:600 conflicts and is unchanged. |
+| admitted | Taken-source provenance and narrow About me/archive permissions | `b4a-admitted-origin-only`, `b4a-artifact-scope-and-order`; old admission/question artifact controls retained; B4b connects intake. |
+| questions | `file-to` or `forget-fact`, each with its own closed id payload | `b4a-forget-fact-question-action`; Q1a wire/public-answer controls retained; unowned scripted.ts:723 needs an action-kind guard before its folder lookup. |
+
+Named production calls exercised: parseOwnership, parseNote, applyChanges, recheckEdit,
+notAsSeen, parseRunManifestV2, planAdmission, takeAdmitted, outsideAdmitted,
+observationOrigin, parseObservations, observationOf, canRebuildAboutSection, aboutContext,
+isAboutContext, rebuildObservations, isQuestionOption, isRunnerFile, publicQuestion,
+checkedAnswer. FOLDER_TEMPLATE is reused unchanged.
+
+### Baseline handoff
+
+Both baselines are changed only for the contract exports the unused gate reports.
+`observationOrigin` is listed in both passes because its committed red accesses it with
+Reflect.get. Its production caller is B4b. `observationOf` is removed from the production
+baseline by B4b. `aboutContext` and `rebuildObservations` are removed by B4c. Each exact
+baseline finding has a reasons row naming its remover. Internal contract consumers already
+use the remaining exports; no throwaway production call hides an unused export.
+
+removed: none; existing parser, author, artifact lifecycle, folder template and Timeline grammar are reused.
+removed: no tests, fixtures, dependency packages or runtime callers.
+tests changed: none
+
+### Blockers and contradictory assertions
+
+- `src/data/spine/scripted.ts:723` reads `action.folderId` without checking the discriminant.
+  The additive stored action exposes this pre-existing assumption. App and runner tsc report
+  TS2339 at this line. It is outside the owned files. A sound union was kept; no cast, phantom
+  folder id or false type predicate was added to hide the missing consumer guard.
+- `runner/test/claude-provider.test.ts:600`, test `a write the two runner lists judged differently
+  is judged once by RUNNER_WRITES`, asserts an exact allowlist without observations.jsonl.
+  B4a requires this explicit addition and its committed red requires the new member.
+  This is a contract contradiction, not a reason to hide the artifact from the existing home.
+  The whole runner suite was run to enumerate contradictions, as WORKER.md requires.
+  Tests are owner-frozen and this test is outside the packet, so it is unchanged.
+
+Closing the entry requires lead allocation of the narrow scripted caller guard and a red-owner
+update of the contradicted exact-list expectation. Runtime B4b/B4c wiring, semantic entailment
+proof, full pnpm check and e2e remain outside this contract entry. No corpus/demo/fake fixture
+or screen changed; pnpm check remains the coordinator's gate per the packet.
+
+The full src run exposed the remaining gate conflicts, also left unchanged:
+
+- `src/architecture.test.ts:154`, `contracts import only themselves and allowlisted pure libraries`.
+- `src/architecture.test.ts:166`, `the spine runs in every runtime: its closure uses no browser or environment globals`.
+  Both apply the regex at line 117 to source text including string literals. The required
+  `'document'` origin discriminant in observations.ts and run-manifest.ts matches its browser
+  global pattern. Their reports contain no outside imports or external dependencies. No browser
+  global is accessed. The B4a document-origin red requires this spelling; obscuring that spelling
+  or changing the frozen gates would hide the contradiction. Both need a red-owner ruling.
+- `src/docs.test.ts:134`, `every change since the P2 freeze is listed`: existing commit
+  `0b047d16` is missing from the shared compatibility list. No commit was made by this session;
+  the draft rows above are supplied for the coordinator, who owns the shared record.
+- `src/e2e-port.test.ts:37`, `a server from another worktree is never reused`: listen EPERM on
+  127.0.0.1 plus the resulting 5,000 ms timeout. This is the expected sandbox limitation named
+  in the assignment. No app server or remote network connection was started.
+
+An initial architecture error-handler complaint was resolved in the owned observations.ts:
+the catch now explicitly documents that its helper logs and throws BowerError. The focused
+architecture rerun confirms `errors are never swallowed` passes. No exception was suppressed.
+These are all failures found by the completed full src and runner suites; no test was weakened.
+
+### Implementation verification
+
+All output, reports, Vite/module caches and timer CPU reports are in the OS temp directory
+`/private/tmp/b4a-contract-validation/`. The existing temporary timer setup keeps the same
+production timer gate and changes only its import resolution and report destination.
+The full-src temporary config imports the production Vite config, including React, aliases and
+CSS settings, then overrides only output/cache/setup paths. `--configLoader runner` avoids a
+config bundle written into node_modules. Every Vitest command uses `--maxWorkers=2`.
+
+| Check | Result | Temp log |
+| --- | --- | --- |
+| B4a app assertion reds before implementation | 9 failed, 1,556 skipped by name filter | implementation-red-app.log |
+| B4a runner assertion reds before implementation | 3 failed, 2 skipped by name filter | implementation-red-runner.log |
+| All owned app contract/ownership/note-format tests on final implementation | 1,823 passed in 6 files; every app B4a red green | implementation-contract-final.log |
+| Full runner, final implementation | 669 passed, 1 failed in 51 files; all 3 runner B4a reds green; only the exact-list contradiction at claude-provider.test.ts:600 | implementation-runner-final.log |
+| Full src | 5,746 passed, 5 failed in 173 files; one failure subsequently resolved as described above | implementation-src-full.log |
+| Focused architecture/docs after the exception comment | 23 passed, 3 failed: two literal-regex conflicts and the missing existing compatibility row | implementation-gate-detail.log |
+| App tsc | TS2339 only at unowned scripted.ts:723 | implementation-app-types.log |
+| Node tsc | Pass | implementation-node-types.log |
+| Runner tsc | TS2339 only at unowned scripted.ts:723 | implementation-runner-types.log |
+| ESLint on touched app and runner production files, using each package's config separately | Pass | implementation-eslint-app.log; implementation-eslint-runner.log |
+| Unused-code and unused-production gates | Pass with named B4b/B4c baseline removers | implementation-unused-final.log |
+| Diff whitespace / no test edits | Pass | git diff --check; git diff --name-only -- '*.test.ts' '*.test.tsx' |
+
+The first full-src attempt used the reduced config suitable for the earlier contract reds;
+it lacked the app aliases and was interrupted after import failures. It is not counted as
+verification. The full-config run above supersedes it. Likewise, a combined root/runner ESLint
+invocation had config-root ambiguity; the separate package invocations above pass.
+
+Commands (stdout/stderr redirected to the temp logs in the table):
+
+- `pnpm exec vitest run src --maxWorkers=2 --config /private/tmp/b4a-contract-validation/app-full.mjs --configLoader runner`
+- `pnpm -C runner exec vitest run --maxWorkers=2 --config /private/tmp/b4a-contract-validation/runner.mjs --configLoader runner`
+- `pnpm exec tsc -p tsconfig.app.json --noEmit`
+- `pnpm exec tsc -p tsconfig.node.json --noEmit`
+- `pnpm exec tsc -p runner/tsconfig.json --noEmit`
+- `pnpm exec eslint` with the seven touched src production paths, and `pnpm -C runner exec eslint src/spine/admitted.ts`
+- `node scripts/check-unused-gate.mjs`
+
+Full src includes the landed B1a/B5a/B6a/Q1a contract controls; the full runner includes
+B1a/B1c index, type-table and Q1 continuation compatibility. No pnpm check green mark or
+runtime B4b/B4c completion is claimed. The two requested commits are declared in
+.codex-commits.json (production/baselines first; these notes alone second), for the runner.
+
+Final delivery: **blocked**, pending the unowned caller and frozen gate/compatibility rulings above.
+All 12 B4a named red tests are green. No test changes, git writes or runtime wiring were made.
+A compact result index is `/private/tmp/b4a-implementation.txt`.
