@@ -58,16 +58,9 @@ What to write:
 - Numbers: write only a figure, date or amount that is in the thing's own text, the pile's words or a note below, as it
   is written there. Never work one out or round one, and never add a limit, a score or a count that no input has.
 
-Kinds of document (where each usually goes, and what its note says first):
-- receipt or bill: the person's money area (by month when a rule says so); shop or sender, date, total.
-- payslip: the person's money area; employer, month, net pay.
-- job offer: the person's project for finding a job; role, employer, salary, start, reply by.
-- rental listing: the person's project for finding a flat; address, rent, rooms, available.
-- contract or agreement: the project or area it binds; parties, start, end, notice.
-- booking or ticket: the trip's project; what, when, where, reference.
-- recipe: a Resources topic; dish, serves, time.
-A kind not listed is handled like the closest kind; a letter or newsletter goes with what it is about.
-Each line says what the place is for. Look at the folders below for the one that is: never copy the words of a line as a folder name.
+Kinds of document: the first matching row controls. For example, payslip: the person's money area; employer, month, net pay.
+A kind not listed files immediately like the closest kind.
+Each row describes what the material is, never a new folder name. Choose its place among the grounded folders below.
 
 Budget: decide each thing's kind and place from its name and the pile's words first, then read its text.
 Use at most 5 of the notes below for one thing. A long text is cut where marked "[cut here: ...]": work from what is shown. When
@@ -85,4 +78,15 @@ A note's [[link]] names a file or note in the folder or one you file; a web addr
 Name only the things, piles and notes below. Never add ids, hashes or other keys: Bower computes them, checks your
 reply, and refuses the whole reply if it names anything else; then nothing changes.
 
+Use the first matching row. A note may carry typeRow (the selection kind) and properties (declared facts only). Sources never change schemas.
+| Type | Matches | Template | Properties | Table | Group by |
+| --- | --- | --- | --- | --- | --- |
+| "article" | ["article","web clip"] | "source" | {} | [] | null |
+| "offer" | ["job offer"] | "source" | {} | [] | null |
+| "cv" | ["CV"] | "source" | {} | [] | null |
+| "cover-letter" | ["cover letter"] | "source" | {} | [] | null |
+| "certificate" | ["certificate"] | "source" | {} | [] | null |
+| "identity-document" | ["identity document"] | "source" | {} | [] | null |
+| "other-project-material" | ["other project material"] | "source" | {} | [] | null |
+| "other-area-material" | ["other area material"] | "source" | {} | [] | null |
 {"admission":"ADMISSION_ID","folders":["Archive","Areas","Areas/Home","Projects","Resources"],"foldersById":{"ID_0":"Archive","ID_1":"Areas","ID_2":"Areas/Home","ID_3":"Projects","ID_4":"Resources"},"index":"# Index\n\n## Areas\n\n### Home\n\n- [[Garden plot]] — Alex's plot at the Larkspur Lane community garden.\n","indexed":{"ID_0":{"coverage":{"bytes":4096,"kind":"prefix"},"owner":"bower","path":"Areas/Home/Garden plot.md","summary":"Alex's plot at the Larkspur Lane community garden.","type":null,"version":"VERSION"}},"notes":[],"piles":[{"pileId":"PILE_ID","things":[{"cut":0,"fileId":"FILE_ID","kind":"pdf","name":"Community garden newsletter, autumn.pdf","text":"Larkspur Lane Community Garden - Autumn Newsletter\nWelcome to the autumn issue. This season we planted forty bulbs,\nfixed the compost bays and welcomed six new members.\nDates for your diary\n- Saturday 18 October: bulb planting, 10:00 to 12:00.\n- Saturday 8 November: leaf collection and soup lunch.\n- Sunday 7 December: winter social at the Example Cafe.\nPlot fees for 2027 stay at 25 a year, due by 31 January.\nThe tool shed code changes on 1 November; ask a coordinator."}],"words":""}],"runId":"RUN_ID","sources":[{"candidates":[{"coverage":{"bytes":4096,"kind":"prefix"},"id":"ID","path":"Areas/Home/Garden plot.md","summary":"Alex's plot at the Larkspur Lane community garden.","version":"VERSION"},{"coverage":{"bytes":0,"kind":"prefix"},"id":"ID","path":"Projects","summary":"Projects","version":"VERSION"},{"coverage":{"bytes":0,"kind":"prefix"},"id":"ID","path":"Areas","summary":"Areas","version":"VERSION"},{"coverage":{"bytes":0,"kind":"prefix"},"id":"ID","path":"Resources","summary":"Resources","version":"VERSION"},{"coverage":{"bytes":0,"kind":"prefix"},"id":"ID","path":"Archive","summary":"Archive","version":"VERSION"},{"coverage":{"bytes":0,"kind":"prefix"},"id":"ID","path":"Areas/Home","summary":"Home","version":"VERSION"}],"itemId":"ITEM_ID"}],"types":[{"id":"article","match":["article","web clip"],"properties":{},"table":[],"template":"source"},{"id":"offer","match":["job offer"],"properties":{},"table":[],"template":"source"},{"id":"cv","match":["CV"],"properties":{},"table":[],"template":"source"},{"id":"cover-letter","match":["cover letter"],"properties":{},"table":[],"template":"source"},{"id":"certificate","match":["certificate"],"properties":{},"table":[],"template":"source"},{"id":"identity-document","match":["identity document"],"properties":{},"table":[],"template":"source"},{"id":"other-project-material","match":["other project material"],"properties":{},"table":[],"template":"source"},{"id":"other-area-material","match":["other area material"],"properties":{},"table":[],"template":"source"}]}

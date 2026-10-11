@@ -6,7 +6,7 @@ import { isHidden } from '../../src/data/vault/layout';
 // Keep the import variable: Vite must not resolve a not-yet-created module at collection.
 const moduleUrl = new URL('../src/type-table.ts', import.meta.url);
 async function contract<T>(name: string): Promise<T> {
-  const contractUrl = ['typeTableOk', 'propertyValuesOk'].includes(name)
+  const contractUrl = ['typeTableOk', 'propertyValuesOk', 'insertTypeRow', 'requestTableColumn'].includes(name)
     ? new URL('../../src/data/contracts/note-format.ts', import.meta.url) : moduleUrl;
   const path = contractUrl.href;
   const module: Record<string, unknown> = existsSync(contractUrl) ? await import(/* @vite-ignore */ path) : {};
@@ -50,7 +50,6 @@ describe('type-row contracts through the declaration parser', () => {
     const read = await contract<Read>('readTypeTable');
     const valid = await contract<TableOk>('typeTableOk');
     const insert = await contract<(table: Table, row: Row) => Table>('insertTypeRow');
-    const first = await contract<(rows: Row[], matchingIds: string[]) => Row | null>('firstMatchingRow');
     expect(valid(table())).toBe(true);
     const seed = read(null).table;
     expect(seed.rows.map((row) => row.id)).toEqual([
@@ -63,9 +62,9 @@ describe('type-row contracts through the declaration parser', () => {
     expect(ordered.rows.map((row) => row.id)).toEqual([
       ...seed.rows.slice(0, 6).map((row) => row.id), 'lease', 'other-project-material', 'other-area-material',
     ]);
-    expect(first(ordered.rows, ['other-area-material', 'lease', 'other-project-material'])?.id).toBe('lease');
-    expect(first(seed.rows, ['other-project-material', 'cv'])?.id).toBe('cv');
-    expect(first(seed.rows, ['absent'])).toBeNull();
+    expect(read(JSON.stringify(ordered)).table.rows.find((row) => ['other-area-material', 'lease', 'other-project-material'].includes(row.id))?.id).toBe('lease');
+    expect(read(JSON.stringify(seed)).table.rows.find((row) => ['other-project-material', 'cv'].includes(row.id))?.id).toBe('cv');
+    expect(read(JSON.stringify(seed)).table.rows.find((row) => row.id === 'absent') ?? null).toBeNull();
     expect(seed.rows).toHaveLength(8); // Insertion never mutates the seed.
     expect(valid({ ...table(), v: 2 })).toBe(false);
     expect(valid({ ...table(), extra: true })).toBe(false);

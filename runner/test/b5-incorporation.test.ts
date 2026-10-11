@@ -9,9 +9,11 @@ import { readTypeTable } from '../src/type-table';
 import * as providers from '../src/provider';
 import { scriptedDecisions } from '../../src/data/demo/script';
 import { planScripted, runKeys, type Decisions } from '../../src/data/spine/scripted';
+import type { LastRunFile } from '../../src/data/vault/layout';
 import type { Proposal, Question, TypeRow, TypeTable } from '../../src/data/contracts/types';
-import { AT, redispatchCase, runOnDrive, seedCase, replySequence, type CaseRun } from './corpus-run';
+import { AT, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive, paging } from './drive-v3';
+import { phaseAwareClaude } from './b1-planning-support';
 
 const TABLE = '.bower/type-table.json';
 const HUB = 'Resources/Garden/Garden.md';
@@ -31,7 +33,7 @@ async function setup(names = ['Garden.txt'], table: string | null = JSON.stringi
     ...(table === null ? {} : { [TABLE]: table }) };
   c.folderBinary = {}; c.inboxBinary = {}; c.journal = []; c.questions = questions;
   c.inbox = names.map((name) => ({ line: '', files: [name] }));
-  c.inboxFiles = Object.fromEntries(names.map((name) => [name, `Alex records ${name}.`]));
+  c.inboxFiles = Object.fromEntries(names.map((name) => [name, `Alex records garden facts in ${name}.`]));
   c.bowerOwned = []; c.scope = names.length ? 'all' : 'instructions'; c.expected = {};
   const drive = fixedDrive();
   const root = await seedCase(drive, c);
@@ -70,12 +72,13 @@ function filed(result: CaseRun, names: string[]): void {
 
 it('b5-first-row-controls-context: control ordinary generic material files through main', async () => {
   const base = await setup();
-  const result = await runOnDrive(base.c, base.drive, base.root, { claude: async (call) => {
+  const result = await runOnDrive(base.c, base.drive, base.root, { claude: phaseAwareClaude(async (call) => {
     const shown = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { piles: Array<{ things: Array<{ fileId: string; name: string }> }> };
-    return replySequence([{ kind: 'tidy-intent', v: 1, things: shown.piles.flatMap((pile) => pile.things.map((item) => ({
+    const intent = { kind: 'tidy-intent', v: 1, things: shown.piles.flatMap((pile) => pile.things.map((item) => ({
       fileId: item.fileId, to: 'Resources/Garden', name: item.name, basis: HUB, note: { name: `${item.name.slice(0, -4)} source.md`, summary: 'Alex records garden facts.', body: 'Alex records garden facts. [[Garden]]' },
-    }))) }])(call);
-  } }, 1);
+    }))) };
+    return { code: 0, stderr: '', cut: null, stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: JSON.stringify(intent) }) };
+  }, () => ({ drive: base.drive, root: base.root })) }, 1);
   filed(result, ['Garden.txt']);
 });
 it('b5-first-row-controls-context: offer and CV precede generic rows at prompt position 2', async () => {
@@ -83,15 +86,16 @@ it('b5-first-row-controls-context: offer and CV precede generic rows at prompt p
   table.rows[1] = { ...row('offer'), match: ['job offer'] };
   const base = await setup(['Offer.txt', 'CV.txt'], JSON.stringify(table));
   const prompts: string[] = [];
-  const result = await runOnDrive(base.c, base.drive, base.root, { claude: async (call) => {
+  const result = await runOnDrive(base.c, base.drive, base.root, { claude: phaseAwareClaude(async (call) => {
     prompts.push(call.input);
     const shown = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { piles: Array<{ things: Array<{ fileId: string; name: string }> }> };
-    return replySequence([{ kind: 'tidy-intent', v: 1, things: shown.piles.flatMap((pile) => pile.things.map((item) => ({
+    const intent = { kind: 'tidy-intent', v: 1, things: shown.piles.flatMap((pile) => pile.things.map((item) => ({
       fileId: item.fileId, to: 'Resources/Garden', name: item.name, basis: HUB, note: { name: `${item.name.slice(0, -4)} source.md`, summary: 'Alex records garden facts.', body: 'Alex records garden facts. [[Garden]]' },
-    }))) }])(call);
-  } }, 1);
+    }))) };
+    return { code: 0, stderr: '', cut: null, stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: JSON.stringify(intent) }) };
+  }, () => ({ drive: base.drive, root: base.root })) }, 1);
   filed(result, ['Offer.txt', 'CV.txt']);
-  expect(prompts).toHaveLength(1);
+  expect(prompts).toHaveLength(2);
   const prompt = prompts[0] ?? '';
   const rows = prompt.split('\n').filter((line) => /^\s*\|/.test(line));
   expect(rows.join('\n'), 'the second context block is the rendered type table').toContain('offer');
@@ -278,4 +282,91 @@ it('b5-document-cannot-teach-schema: control hot text is a projection and cannot
   decisions(); const result = await run(base); filed(result, ['Garden.txt']);
   expect(tableOf(result)?.rows.some((r) => r.id === 'lease')).toBe(false);
   expect(questionsOf(result)).toEqual([]);
+});
+
+it('b5-proposal-yes-no-ignore-replay: a declined frozen payload stays declined under another id', async () => {
+  const base = await setup(['Lease.txt']);
+  decisions([proposal('lease')]);
+  const first = await run(base);
+  filed(first, ['Lease.txt']);
+  const bytes = first.after['.bower/proposals/lease.json'];
+  expect(bytes).toBeDefined();
+  const files = await base.drive.listAll(base.root);
+  const changes = files.find((f) => base.drive.pathOf(f.id, base.root) === '.bower/changes');
+  const inbox = files.find((f) => base.drive.pathOf(f.id, base.root) === 'Inbox');
+  await base.drive.createText(changes?.id ?? '', 'no-lease.json', JSON.stringify({ v: 1, id: 'no-lease', device: 'device-1',
+    at: AT + 1, kind: 'answer', what: 'Answered a question', text: 'no', questionId: 'q-proposal-lease' }));
+  await base.drive.createText(inbox?.id ?? '', 'Lease copy.txt', 'Alex records another lease.');
+  const repeated = proposal('lease-copy'); repeated.proposal.payload = proposal('lease').proposal.payload;
+  decisions([repeated]);
+  const second = await run(base, 2);
+  filed(second, ['Lease copy.txt']);
+  expect(questionsOf(second).filter((q) => q.proposal)).toEqual([]);
+  expect(second.after['.bower/proposals/lease.json']).toBe(bytes);
+  expect(second.after['.bower/proposals/lease-copy.json']).toBeUndefined();
+});
+
+it.each([{ text: 'yes' }, { option: 'yes' }])('b5-proposal-yes-no-ignore-replay: the planner refuses nonboolean consent %j', async (answer) => {
+  const q = proposal('lease'); const base = await setup([], undefined, [q]);
+  const files = await base.drive.listAll(base.root);
+  const sys = files.find((f) => base.drive.pathOf(f.id, base.root) === '.bower');
+  const changes = files.find((f) => base.drive.pathOf(f.id, base.root) === '.bower/changes');
+  const folder = await base.drive.createFolder(sys?.id ?? '', 'proposals');
+  const bytes = JSON.stringify({ v: 1, ...q.proposal });
+  await base.drive.createText(folder.id, 'lease.json', bytes);
+  await base.drive.createText(changes?.id ?? '', 'not-consent.json', JSON.stringify({ v: 1, id: 'not-consent', device: 'device-1',
+    at: AT, kind: 'answer', what: 'Answered a question', questionId: q.id, answer }));
+  decisions(); const result = await run(base);
+  expect(result.code).toBe(0);
+  expect(tableOf(result)?.rows.some((r) => r.id === 'lease')).toBe(false);
+  expect(questionsOf(result)).toEqual([q]);
+  expect(result.after['.bower/proposals/lease.json']).toBe(bytes);
+  expect(result.after['.bower/changes/not-consent.json']).toBeDefined();
+});
+
+it('b5-read-to-act-fence: a changed table keeps its bytes and the column request pending', async () => {
+  const base = await setup([], JSON.stringify({ v: 1, rows: [row('offer')] }));
+  const files = await base.drive.listAll(base.root);
+  const table = files.find((f) => base.drive.pathOf(f.id, base.root) === TABLE);
+  const changes = files.find((f) => base.drive.pathOf(f.id, base.root) === '.bower/changes');
+  await base.drive.createText(changes?.id ?? '', 'column-request.json', JSON.stringify({ v: 1, id: 'column-request', device: 'device-1',
+    at: AT, kind: 'request', what: 'Asked Bower', text: 'Show hours in the offer table.' }));
+  const changed = JSON.stringify({ v: 1, rows: [{ ...row('offer'), table: ['salary'] }] });
+  let raced = false;
+  decisions();
+  const result = await runOnDrive(base.c, base.drive, base.root, { around: (fetch) => async (input, init) => {
+    const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+    if (!raced && (!init?.method || init.method === 'GET') && url.pathname.endsWith(`/files/${table?.id ?? ''}`)
+      && url.searchParams.get('alt') !== 'media' && (await base.drive.listAll(base.root))
+        .some((f) => /\/manifest-[^/]+\.json$/.test(base.drive.pathOf(f.id, base.root)))) {
+      raced = true;
+      await base.drive.writeText(table?.id ?? '', changed, table?.modifiedTime ?? '');
+    }
+    return fetch(input, init);
+  } }, 1);
+  expect(raced).toBe(true);
+  expect(result.code).toBe(0);
+  expect(result.after[TABLE]).toBe(changed);
+  expect(result.after['.bower/changes/column-request.json']).toBeDefined();
+  expect((result.lastRun as LastRunFile | null)?.run.report?.requests ?? []).toEqual([]);
+});
+
+it('b5-table-first-create-and-lenient-read: a lenient stored table remains byte-identical without a requested change', async () => {
+  const stored = JSON.stringify({ v: 1, future: -1.5, rows: [{ ...row('offer'), extra: { ratio: 0.25 } }] });
+  const base = await setup(['Garden.txt'], stored); decisions(); const result = await run(base);
+  filed(result, ['Garden.txt']);
+  expect(result.after[TABLE]).toBe(stored);
+});
+
+it('b5-table-first-create-and-lenient-read: a trusted rewrite retains stored extension keys', async () => {
+  const stored = { v: 1, future: 'kept', rows: [{ ...row('offer'), extra: 'kept', properties: {
+    ...row('offer').properties, hours: { type: 'number', label: 'Hours' },
+  } }] };
+  const base = await setup([], JSON.stringify(stored));
+  const changes = (await base.drive.listAll(base.root)).find((f) => base.drive.pathOf(f.id, base.root) === '.bower/changes');
+  await base.drive.createText(changes?.id ?? '', 'column-request.json', JSON.stringify({ v: 1, id: 'column-request', device: 'device-1',
+    at: AT, kind: 'request', what: 'Asked Bower', text: 'Show hours in the offer table.' }));
+  decisions(); const result = await run(base);
+  expect(result.code).toBe(0);
+  expect(tableOf(result)).toEqual({ ...stored, rows: [{ ...stored.rows[0], table: ['company', 'salary', 'location', 'hours'] }] });
 });

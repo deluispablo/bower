@@ -740,3 +740,12 @@ it.each(['source', 'moc'])('b5-landed-contract-compatibility: control personal t
   if (type === 'source') expect(applyChanges(new TextEncoder().encode(owned), [change]).ok).toBe(false);
   expect(parseNote('Legacy.md', raw).timeline).toEqual([{ date: '10 Oct', text: 'Kept by Alex.' }]);
 });
+
+it('b5-folder-table-approved-states: declared kind and folder stay excluded without changing stored properties', () => {
+  const note = parseNote('Resources/Offer.md', '---\nkind: Note\nfolder: Applications\ncompany: Acorn Studio\n---\nAlex keeps these words.');
+  const before = structuredClone(note.properties);
+  expect(summaryFormat.tableProperties(note, { table: ['kind', 'folder', 'company'] }).map((p) => p.key)).toEqual(['company']);
+  expect(note.properties).toEqual(before);
+  expect(summaryFormat.scalarList('["Writing, editing", "Design"]')).toEqual(['Writing, editing', 'Design']);
+  expect(summaryFormat.scalarList('[Writing, Design]')).toEqual(['Writing', 'Design']);
+});
