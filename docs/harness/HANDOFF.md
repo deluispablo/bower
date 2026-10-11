@@ -17,9 +17,9 @@ This block is the whole current state; ACTIVE.md is the history log. A Codex suc
   - a backup after harness/jobs/backup-scan.sh 5bab1288;
   - the SHA sent to the lead;
   - a staging smoke.
-- Two jobs are running (Codex count 2 of 4). Their prompts and job scripts are in the coordinator scratchpad `/private/tmp/claude-501/-Users-deluisp-Projects-bower-app/19ca090d-5e3d-4a2f-899c-8f2af3d7d836/scratchpad` (`codex-*-prompt.md`, `jobs/*.sh`).
-  - B1d red repair: `jobs/b1d-r7-repair.sh`, result `/tmp/codex-run/b1d-selection-20.result`.
-  - B4a fix round 2: `jobs/b4a-r2.sh`, results `/tmp/codex-run/b4a-contract-10.result` (red) and `-11.result` (fix).
+- Jobs running: B1d's adversarial pass (Codex 1 of 4) and B4a's gates. Their prompts and job scripts are in the coordinator scratchpad `/private/tmp/claude-501/-Users-deluisp-Projects-bower-app/19ca090d-5e3d-4a2f-899c-8f2af3d7d836/scratchpad` (`codex-*-prompt.md`, `jobs/*.sh`).
+  - B1d adversarial pass: `jobs/b1d-adv7.sh`, result `/tmp/codex-run/b1d-selection-21.result`.
+  - B4a gates: `/tmp/gates-b4a-g2/` (check.log, e2e.log, e2e-fake.log).
   - When a job ends: read the result's card. If the status is check-failed, read the notes' newest round and the check log.
 - Pending designer checks: none (B1d and B4a are ui: false).
 
@@ -40,8 +40,8 @@ This block is the whole current state; ACTIVE.md is the history log. A Codex suc
 
 | Entry | Branch / worktree | Last SHA | Attempt | Next step | Ruling |
 | --- | --- | --- | --- | --- | --- |
-| b1d-selection (escalated) | b1d-selection, /private/tmp/bower-b1d-selection | cd27467d | round 7: red and fix done (attempts 18 and 19); the fix left 18 older runner tests red; TL-P4-51 red repair running (attempt 20, Sol high, scratchpad jobs/b1d-r7-repair.sh) | The fix changes only runner/src/claude.ts (no contracts, so no compatibility row). Next: gates, Astra xhigh adversarial pass (codex-b1d-adv-prompt.md updated for round 7), Astra high review, integrate. | TL-P4-41 addenda 13–24 |
-| b4a-contract (escalated) | b4a-contract, /private/tmp/bower-b4a-contract | 6ea75a9c | fix round 2 running (TL-P4-48 addendum 4): red attempt 10, fix attempt 11 (scratchpad jobs/b4a-r2.sh) | The fix covers findings 1–4 of adversarial-2, the tsc app errors and capabilities.spec:210. Next: compatibility rows, gates, the Astra xhigh pass 3, then the high review; the loop end applies after this round. After B1d integrates: merge claude/p3, update the RUNNER_WRITES pin (claude-provider.test.ts:600), watch for conflicts in ownership-format, run-manifest and note-format, then integrate. | TL-P4-48 addenda 1–4 |
+| b1d-selection (escalated) | b1d-selection, /private/tmp/bower-b1d-selection | c14616cd+ea9eed90 | round 7 fix and red repair done (attempts 19, 20; check and capabilities e2e green in codex-run); Astra xhigh adversarial pass running (attempt 21, scratchpad jobs/b1d-adv7.sh, result /tmp/codex-run/b1d-selection-21.result) | Next: PASS or only v1 limits → Astra high review (new prompt, read-only) → integrate B1d (check the branch first); data-safety or hard-rule findings go to the lead. No compatibility row needed (only runner/src/claude.ts and runner tests changed). | TL-P4-41 addenda 13–24 |
+| b4a-contract (escalated) | b4a-contract, /private/tmp/bower-b4a-contract | 28316d36 | fix round 2 done (attempts 10, 11); runner pin and compatibility rows committed by the coordinator; gates b4a-g2 running (scratchpad: harness/jobs/gates.sh, results /tmp/gates-b4a-g2/) | Next: gates green → Astra xhigh pass 3 (new prompt from codex-b4a-adv-prompt.md with addenda 1–4 and adversarial-2); then the Astra high review; the loop end applies. After B1d integrates: merge claude/p3, then integrate. | TL-P4-48 addenda 1–4 |
 
 **Queue, in order.**
 1. B1d close, then B4a.
