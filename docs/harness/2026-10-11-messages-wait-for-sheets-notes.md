@@ -271,3 +271,10 @@ https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Guides/Live_regi
 Only this assertion and these notes changed. No network, git writes or node_modules
 changes. Runner owns commits. pnpm check and e2e were not run in this assertion-only
 repair; repository-writing gates remain outside this assignment.
+
+## Close (coordinator)
+
+done.sh could not take 683d6731 off cleanly: later commits touched the same notes lines. The reds were proved at their tests-only commits.
+- The MWS component reds failed on 714b9707 before the fix 372eef51 (notes, red card: 7 expected reds).
+- The status-region red failed on 865a221a before 683d6731 (codex-run result messages-wait-for-sheets-2: check failed on it).
+After the fix, everything was green on 3d2b1c00: check, plus e2e MWS, v2-dock and v2-name-sheet on demo and fake. Reviews were P4-115 PASS and P4-116 PASS, and the designer verified. Closed with --known-green.
