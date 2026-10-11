@@ -2,12 +2,12 @@
 
 Coordinator: the Claude Code session named "Orquestador". It integrates in `/Users/deluisp/Projects/bower-app` on branch `claude/p3`; P4 continues on it. Lead: the Planificador session ([DECISIONS.md](DECISIONS.md)). Output rule: [TL-P3-29](2026-10-07-tl-p3-29-output-rule-survives-compaction.md), in AGENTS.md. Minors: [P2_POLISH.md](P2_POLISH.md). Earlier handoffs: git history of this file.
 
-## Resume (2026-10-11 wind-down before the CLI/tmux restart; TL-P4-56, TL-P4-57)
+## Resume (2026-10-11, CLI/tmux; TL-P4-56, TL-P4-57, TL-P4-60 auto-compaction)
 
 This block is the whole current state; ACTIVE.md is the history log. A Codex successor follows [CODEX_TAKEOVER.md](CODEX_TAKEOVER.md).
 
 **State.**
-- claude/p3 holds main a22301d8 (merged): 523/537.
+- claude/p3 holds main up to TL-P4-48 addendum 4 (1ac0b793, merged): 523/537.
 - After each lead ruling, merge main again (`git -C /Users/deluisp/Projects/bower-app merge -q --no-edit main`).
 - Check `git -C /Users/deluisp/Projects/bower-app branch --show-current` before each integrate. An owner Codex Desktop thread once switched the checkout to main (DEFECT_LOG main-checkout-switched).
 - backup/main and staging are at 5bab1288.
@@ -17,7 +17,11 @@ This block is the whole current state; ACTIVE.md is the history log. A Codex suc
   - a backup after harness/jobs/backup-scan.sh 5bab1288;
   - the SHA sent to the lead;
   - a staging smoke.
-- No job is running. Nothing is dispatched.
+- Two jobs are running (Codex count 2 of 4). Their prompts and job scripts are in the coordinator scratchpad `/private/tmp/claude-501/-Users-deluisp-Projects-bower-app/19ca090d-5e3d-4a2f-899c-8f2af3d7d836/scratchpad` (`codex-*-prompt.md`, `jobs/*.sh`).
+  - B1d red repair: `jobs/b1d-r7-repair.sh`, result `/tmp/codex-run/b1d-selection-20.result`.
+  - B4a fix round 2: `jobs/b4a-r2.sh`, results `/tmp/codex-run/b4a-contract-10.result` (red) and `-11.result` (fix).
+  - When a job ends: read the result's card. If the status is check-failed, read the notes' newest round and the check log.
+- Pending designer checks: none (B1d and B4a are ui: false).
 
 **Loop per entry (TL-P4-29/31/51/54, TL-P4-56 addendum 1, TL-P4-57).** Workers are Codex only, through `harness/codex-run.sh <worktree> <prompt> --entry <id> --attempt <n> --model … --effort …`. The result is `/tmp/codex-run/<entry>-<n>.result`, and codex-run commits per `.codex-commits.json`: a JSON array of {message, files}, with notes in their own commit so done.sh can revert the fix.
 - **Models:** escalated reds, implementations and closing reviews use gpt-6-astra high. Adversarial passes use gpt-6-astra xhigh. Normal and fix rounds use gpt-6.1-sol high, and mechanical work uses Sol medium. Cap: 4.
@@ -48,7 +52,14 @@ This block is the whole current state; ACTIVE.md is the history log. A Codex suc
 6. B7, B8 and B9 per P4_PLAN.
 7. The retest.
 
-**Open questions to the lead.** None (B1d pass 4 ruled in addendum 24).
+**Open questions to the lead.** None (B1d pass 4 ruled in addendum 24; B4a pass 2 ruled in TL-P4-48 addendum 4).
+
+**Entry files.**
+- Packets are on claude/p3 in docs/harness: 2026-10-11-b1d-selection-packet.md and 2026-10-11-b4a-contract-packet.md.
+- Notes and adversarial reports are in each worktree's docs/harness:
+  - B1d: 2026-10-11-b1d-selection-notes.md and b1d-adversarial-final{,-2,-3,-4}.md;
+  - B4a: 2026-10-11-b4a-contract-notes.md and b4a-adversarial-{1,2}.md.
+- The adversarial prompt for the next pass: the scratchpad's codex-b1d-adv-prompt.md and codex-b4a-adv-prompt.md. Update the round, the addenda and the previous pass's file first.
 
 **Notes.**
 - B6a's integrate rule: a verify pattern needs at least 4 non-meta characters (scripts/harness-rules.mjs).
