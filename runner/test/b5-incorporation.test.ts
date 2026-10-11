@@ -135,8 +135,8 @@ it('b5-proposal-yes-no-ignore-replay: ignored proposals survive three runs witho
     expect.soft(questionsOf(next).filter((item) => item.proposal?.id === 'lease')).toEqual([q]);
   }
 });
-it('b5-proposal-yes-no-ignore-replay: exact yes installs frozen payload once and replay does not reopen', async () => {
-  const q = proposal('lease'); const base = await setup([], undefined, [q]);
+it.each([undefined, null])('b5-proposal-yes-no-ignore-replay: exact yes installs frozen payload once and replay does not reopen (table %s)', async (stored) => {
+  const q = proposal('lease'); const base = await setup([], stored, [q]);
   const all = await base.drive.listAll(base.root);
   const sys = all.find((f) => base.drive.pathOf(f.id, base.root) === '.bower');
   const changes = all.find((f) => base.drive.pathOf(f.id, base.root) === '.bower/changes');
@@ -177,6 +177,25 @@ it('b5-table-first-create-and-lenient-read: control valid table works and unread
     const base = await setup(['Garden.txt'], stored); decisions(); const result = await run(base);
     filed(result, ['Garden.txt']); expect(result.after[TABLE]).toBe(stored);
   }
+});
+
+it('b5-table-first-create-and-lenient-read: an arriving table is neither overwritten nor duplicated', async () => {
+  const base = await setup(['Garden.txt'], null);
+  const sys = (await base.drive.listAll(base.root)).find((f) => base.drive.pathOf(f.id, base.root) === '.bower');
+  const bytes = JSON.stringify({ v: 1, rows: [row('offer')], future: -1.5 });
+  let arrived: string | undefined;
+  decisions();
+  const result = await runOnDrive(base.c, base.drive, base.root, { around: (fetch) => async (input, init) => {
+    if (!arrived && (!init?.method || init.method === 'GET') && (await base.drive.listAll(base.root))
+      .some((f) => /\/manifest-[^/]+\.json$/.test(base.drive.pathOf(f.id, base.root)))) {
+      arrived = (await base.drive.createText(sys?.id ?? '', 'type-table.json', bytes)).id;
+    }
+    return fetch(input, init);
+  } }, 1);
+  expect(arrived).toBeDefined();
+  filed(result, ['Garden.txt']);
+  expect(result.after[TABLE]).toBe(bytes);
+  expect((await base.drive.listAll(base.root)).filter((f) => f.name === 'type-table.json').map((f) => f.id)).toEqual([arrived]);
 });
 
 it('b5-document-cannot-teach-schema / b5-explicit-column-replaces-fourth: trusted request reports its actual completed change', async () => {

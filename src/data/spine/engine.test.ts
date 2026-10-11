@@ -284,6 +284,25 @@ describe('write once by the bowerOp stamp', () => {
 });
 
 describe('c2-create-by-id: a run makes each thing by its reserved id', () => {
+  it('b5-table-first-create-and-lenient-read: a missing table uses its reserved id after a lost reply', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    let lost: (FencedCall & { op: 'create-text' }) | undefined;
+    const result = await applied((call) => {
+      if (lost || call.op !== 'create-text' || call.name !== 'type-table.json') return 'pass';
+      lost = call;
+      return 'lose-reply';
+    });
+    expect(lost?.reserved).toBeTruthy();
+    const op = result.manifest.operations.find((o) => o.effect.kind === 'write-runner-json'
+      && o.effect.path === SYSTEM.typeTable && o.effect.before === null);
+    expect(op).toBeDefined();
+    const outcome = result.chain.at(-1)?.outcomes.find((o) => o.operationId === op?.operationId);
+    expect(outcome).toMatchObject({ state: 'applied', evidence: { file: { fileId: lost?.reserved } } });
+    expect(result.calls.filter((call) => call.op === 'create-text' && call.name === 'type-table.json')).toEqual([lost]);
+    const tables = (await result.drive.listAll(result.root)).filter((f) => f.name === 'type-table.json');
+    expect(tables.map((f) => f.id)).toEqual([lost?.reserved]);
+    expect(await result.drive.readText(tables[0]?.id ?? '')).toBe(op?.effect.kind === 'write-runner-json' ? op.effect.text : null);
+  });
   it("a run's create whose answer was lost is read back by its reserved id, though a search misses it", async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     let lost: (FencedCall & { op: 'create-text' }) | null = null;
@@ -399,7 +418,7 @@ describe('b5-read-to-act-fence', () => {
       return 'pass';
     });
     expect(changed, 'fixture reaches a runner JSON content write').not.toBeNull();
-    const op = result.manifest.operations.find((operation) => operation.effect.kind === 'write-runner-json' && operation.effect.before.fileId === changed);
+    const op = result.manifest.operations.find((operation) => operation.effect.kind === 'write-runner-json' && operation.effect.before?.fileId === changed);
     expect(result.chain.at(-1)?.outcomes.find((outcome) => outcome.operationId === op?.operationId))
       .toMatchObject({ state: 'rejected', failure: { code: 'conflict' } });
   });

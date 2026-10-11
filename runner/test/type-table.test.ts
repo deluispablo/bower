@@ -40,11 +40,24 @@ const control = (): void => {
   expect(isHidden('.bower/type-table.json')).toBe(true);
   expect(isHidden('Resources/Type table.md')).toBe(false);
 };
-type TableOk = (value: unknown) => boolean;
+type TableOk = (value: unknown, stored?: boolean) => boolean;
 type ValuesOk = (row: Row, value: unknown) => boolean;
 type Read = (text: string | null) => { table: Table; writeAllowed: boolean };
 
 describe('type-row contracts through the declaration parser', () => {
+  it('b5-table-first-create-and-lenient-read: strict new tables and bounded stored rewrites', async () => {
+    const valid = await contract<TableOk>('typeTableOk');
+    const stored = { ...table(), future: -1.5, rows: [{ ...offer(), extra: { ratio: 0.25 },
+      properties: { ...offer().properties, hours: { type: 'number', label: 'Hours' } },
+      group_by: { property: 'stage', label: 'Stage' } }] };
+    expect(valid(stored)).toBe(false);
+    expect(valid(stored, true)).toBe(true);
+    expect(valid(table())).toBe(true);
+    for (const rows of [[...stored.rows, ...stored.rows], [{ ...stored.rows[0], table: ['missing'] }],
+      [{ ...stored.rows[0], properties: { hours: { type: 'not-a-type' } } }]]) {
+      expect(valid({ ...stored, rows }, true)).toBe(false);
+    }
+  });
   it('B5a contracts: b5-row-schema-and-order', async () => {
     control();
     const read = await contract<Read>('readTypeTable');
