@@ -7233,8 +7233,9 @@
     "steps": [
       "The packet reds pass through runner main."
     ],
-    "verify": "",
-    "note": "TL-P4-48. Escalated. After B4a and the B1d handoff. Packet 2026-10-11-b4b-observations-packet.md (draft). implementer: codex."
+    "verify": "pnpm -C runner exec vitest run test/b4-incorporation.test.ts test/b4b-fr1.test.ts test/b4b-fr2.test.ts test/b4b-fr3.test.ts test/b4b-fr4.test.ts test/b4b-fr6.test.ts -t \"b4b|c17-b4\"",
+    "note": "TL-P4-48. Escalated. After B4a and the B1d handoff. Packet 2026-10-11-b4b-observations-packet.md (draft). implementer: codex. Close note: known-green; done.sh cannot revert the fix (many rounds).",
+    "review": "P4-124 second pass PASS (first pass BLOCK: one test gap, repaired); adversarial 6 finding (re-remembered fact blocks a second Forget) accepted as a v1 limit"
   },
   {
     "id": "b4c-consolidation",
