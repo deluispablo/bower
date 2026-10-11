@@ -55,3 +55,8 @@ Tests-only red, then implementation, then notes alone: `docs/harness/2026-10-11-
 - If new region exposure needs `src/data/contracts/note-format.ts`, allocate it explicitly; reuse it unchanged otherwise.
 - No B1d overlap in this ledger. Runtime proof and position-4 assembly remain dependent on B4b/B4c and B1d handoffs.
 
+
+## Ruled (TL-P4-48 addendum 1)
+
+- B4a owns `src/data/contracts/questions.ts` and its tests, for an additive `forget-fact` action. It owns `note-format.ts` only if About me's regions need it, and then only through the existing ownership parser.
+- B4c fixtures use `.bower/archive/about-me/<section>/<date>-<op id>.md`, with no file id.

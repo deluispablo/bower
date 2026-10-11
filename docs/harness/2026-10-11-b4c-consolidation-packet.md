@@ -60,3 +60,7 @@ Tests-only red, then implementation, then notes alone: `docs/harness/2026-10-11-
 - Existing fixture archive paths contain the superseded file-id segment; allocate exact replacement fixture paths under the ruled scheme before fixture repair.
 - Confirm C13’s available Undo seam and allocate any missing files; unresolved Undo evidence cannot be counted as passed. Resolve the prep’s older B11-before-B4 dependency against TL-P4-48’s Order.
 
+
+## Ruled (TL-P4-48 addendum 1)
+
+- Archive fixtures use `.bower/archive/about-me/<section>/<date>-<op id>.md`, with no file id. Repair the fixture paths to this scheme.

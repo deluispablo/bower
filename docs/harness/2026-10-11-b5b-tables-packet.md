@@ -71,3 +71,12 @@ Tests-only red, then fix, then notes alone: `docs/harness/2026-10-11-b5b-tables-
 - P4-112 requires row/property-count bounds but gives no numbers; strict closed rows conflict with preserving unknown stored keys unless the read/rewrite boundary is specified. Its `profile-rewrite` `byBower` guard needs `note-edit.ts`/tests allocated or an explicit B5c handoff.
 - Allocate any corpus/driver/golden changes outside this ledger. B1d owns driver/scorer work; do not duplicate it. No contract gap above is delegated as an implementation ruling.
 
+
+## Ruled (TL-P4-47 addendum 5)
+
+- B5b waits for B1d's handoff of `runner/src/claude.ts`.
+- The Table reads `type-table.json` leniently, through the same runner-file read as `vault.questions()`. A missing file, or no matching row, means today's 4 keys.
+- `write-runner-json` gains create-when-absent inside its existing effect.
+- Bounds: numbers are finite and within ±1e15; money has at most 4 decimals and an ISO 4217 code; dates are ISO date-only.
+- B5c owns the `note-edit.ts` byBower guard for profiles.
+- The designer confirmed the "What the person sees" table matches cd85b5ce, all 9 rows.
