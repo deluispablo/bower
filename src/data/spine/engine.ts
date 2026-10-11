@@ -459,8 +459,17 @@ function stampSays(file: DriveFile, runId: string, op: OperationV2, manifest: Ru
 export function driveEffects(drive: RunDrive, context?: OwnershipContext, maintenance?: Effects): Effects {
   const toEvidence = (ev: StoredEvidence, encoding: 'utf8' | 'blob' = 'blob'): EffectEvidence => asEvidence(ev, encoding, drive.provenance);
 
-  /** A second request move checks the name and place returned by its preceding, applied move. */
+  /** A dependent write uses the identity and version confirmed by the earlier create or move. */
   const afterMove = (op: OperationV2, head: Checkpoint, manifest: RunManifest): OperationV2 => {
+    if (op.effect.kind === 'edit-text' && op.effect.createdBy) {
+      const createdBy = op.effect.createdBy;
+      const create = head.outcomes.find((outcome) => outcome.operationId === createdBy);
+      if (create?.state !== 'applied' || !create.evidence.content) throw new BowerError('unknown', UNRESOLVED);
+      // Recovery may find the created file moved or edited; only its id and version come from that evidence.
+      const before = { ...op.effect.before, fileId: create.evidence.file.fileId, modifiedTime: create.evidence.file.modifiedTime };
+      return { ...op, effect: { ...op.effect, before,
+        beforeContent: { ...op.effect.beforeContent, observedModifiedTime: before.modifiedTime } } };
+    }
     if (op.effect.kind !== 'move') return op;
     const fileId = op.effect.before.fileId;
     const previous = manifest.operations.filter((o) => o.ordinal < op.ordinal && o.effect.kind === 'move'
@@ -604,7 +613,7 @@ export function driveEffects(drive: RunDrive, context?: OwnershipContext, mainte
    * - a read fails, or a create the chain names no id for: unreadable, since making it again could make it twice.
    */
   const reconcile = async (op: OperationV2, head: Checkpoint, manifest: RunManifest, reserved = reservedIn(head, op.operationId)): Promise<ReadBack> => {
-    const e = executable(op.effect);
+    const e = executable(afterMove(op, head, manifest).effect);
     if (e.kind === 'maintain') {
       if (!maintenance) throw new BowerError('unknown', UNRESOLVED);
       return maintenance.readBack(op, head, manifest);
@@ -687,7 +696,7 @@ export function driveEffects(drive: RunDrive, context?: OwnershipContext, mainte
       }
       if ('landed' in sent) return { state: 'applied', evidence: sent.landed };
       // The answer to the write shows the effect: no read follows it.
-      const seen = await answered(op, ok.parentId, sent.answer, stamp);
+      const seen = await answered(afterMove(op, head, manifest), ok.parentId, sent.answer, stamp);
       if (!seen) {
         console.error(`Operation ${op.ordinal} was sent and shows no effect`);
         throw new BowerError('unknown', UNRESOLVED);

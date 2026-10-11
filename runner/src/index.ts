@@ -472,6 +472,11 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   const operations: OperationV2[] = [];
   for (const op of manifest.operations) {
     let effect = op.effect;
+    if (effect.kind === 'edit-text' && effect.createdBy) {
+      const createdBy = ids.get(effect.createdBy);
+      if (!createdBy) throw unavailable();
+      effect = { ...effect, createdBy };
+    }
     if ('parent' in effect && 'createdBy' in effect.parent) {
       const createdBy = ids.get(effect.parent.createdBy);
       if (!createdBy) throw unavailable();

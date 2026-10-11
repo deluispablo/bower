@@ -156,7 +156,8 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
         const targets = m.capture.places.filter((p) => p.path === 'About me.md');
         if (e.path === 'About me.md' || targets.some((p) => p.file.fileId === e.before.fileId)
           || kinds.has('about-append') || kinds.has('about-rewrite')) {
-          if (e.path !== 'About me.md' || targets.length !== 1 || targets[0]?.file.fileId !== e.before.fileId) return 'an About me edit outside its marked sections';
+          if (e.path !== 'About me.md' || (e.createdBy ? targets.length !== 0 || finalAbout !== e.beforeText
+            : targets.length !== 1 || targets[0]?.file.fileId !== e.before.fileId)) return 'an About me edit outside its marked sections';
           if (e.beforeText === undefined) return 'an About me edit without its read bytes';
           const authored = applyChanges(new TextEncoder().encode(e.beforeText), e.changes);
           if (!authored.ok || authored.text !== e.text) return 'an About me edit outside its marked sections';

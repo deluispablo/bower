@@ -23,9 +23,9 @@ export type ObservationOrigin = { runId: string; captureId: string } & (
 );
 type Evidence = ObservationOrigin & { source: Source };
 type Observation = { v: 1; kind: 'observation'; eventId: string; factId: string; section: AboutRegion;
-  date: string; text: string; category: 'biography' | 'activity' | 'preference' | 'sensitive' | 'rule' | 'schema';
+  date: string; at?: number; text: string; category: 'biography' | 'activity' | 'preference' | 'sensitive' | 'rule' | 'schema';
   source: Source; origin: ObservationOrigin; remembers?: string };
-type Tombstone = { v: 1; kind: 'tombstone'; eventId: string; date: string; factId: string;
+type Tombstone = { v: 1; kind: 'tombstone'; eventId: string; date: string; at?: number; factId: string;
   sourceId: string; reason: 'forget' | 'bin'; runId: string };
 type Consolidation = { v: 1; kind: 'consolidation'; eventId: string; section: AboutRegion; date: string;
   factIds: string[]; runId: string; operationId: string; successful: boolean };
@@ -47,12 +47,14 @@ const sourceOk = (v: unknown): v is Source => closed(v, ['fileId', 'sha256']) &&
 function eventOk(v: unknown): v is Event {
   if (!object(v) || v.v !== 1 || !id(v.eventId) || !date(v.date)) return false;
   const base = ['v', 'kind', 'eventId', 'date'];
-  if (v.kind === 'observation') return closed(v, [...base, 'factId', 'section', 'text', 'category', 'source', 'origin'], ['remembers'])
+  if (v.at !== undefined && (typeof v.at !== 'number' || !Number.isSafeInteger(v.at)
+    || !Number.isFinite(new Date(v.at).getTime()) || new Date(v.at).toISOString().slice(0, 10) !== v.date)) return false;
+  if (v.kind === 'observation') return closed(v, [...base, 'factId', 'section', 'text', 'category', 'source', 'origin'], ['remembers', 'at'])
     && id(v.factId) && section(v.section) && typeof v.text === 'string' && validSummary(v.text)
     && ['biography', 'activity', 'preference', 'sensitive', 'rule', 'schema'].includes(String(v.category))
     && sourceOk(v.source) && originOk(v.origin) && (v.remembers === undefined || id(v.remembers) && v.origin.kind === 'words')
     && (v.origin.kind !== 'document' || (v.category === 'biography' || v.category === 'activity') && v.section !== 'about-preferences');
-  if (v.kind === 'tombstone') return closed(v, [...base, 'factId', 'sourceId', 'reason', 'runId'])
+  if (v.kind === 'tombstone') return closed(v, [...base, 'factId', 'sourceId', 'reason', 'runId'], ['at'])
     && id(v.factId) && id(v.sourceId) && id(v.runId) && (v.reason === 'forget' || v.reason === 'bin');
   return v.kind === 'consolidation' && closed(v, [...base, 'section', 'factIds', 'runId', 'operationId', 'successful'])
     && section(v.section) && ids(v.factIds) && id(v.runId) && id(v.operationId) && typeof v.successful === 'boolean';
@@ -120,7 +122,7 @@ function resolve(events: Event[], undone: readonly string[] = []): Ledger {
     if (matching.length && (event.origin.kind !== 'words' || !matching.some((fact) => fact.factId === event.remembers)
       || matching.some((fact) => event.source.fileId === fact.source.fileId
         || tombstones.some((t) => t.factId === fact.factId
-          && (t.date >= event.date || events.indexOf(t) >= events.indexOf(event)))))) continue;
+          && ((t.at ?? Date.parse(t.date)) >= (event.at ?? Date.parse(event.date)) || events.indexOf(t) >= events.indexOf(event)))))) continue;
     live.push(event);
   }
   return { events, live, tombstones };
@@ -129,7 +131,7 @@ function resolve(events: Event[], undone: readonly string[] = []): Ledger {
 /** Candidate fields never supply an origin, hash or id. The two collections are trusted script inputs. */
 export function observationOf(candidate: unknown, context: {
   admitted: readonly Evidence[]; lineage: readonly (Evidence & { validated: boolean })[];
-  eventId: string; factId: string; date: string;
+  eventId: string; factId: string; date: string; at?: number;
 }): { ok: true; value: Observation } | { ok: false } {
   if (!closed(candidate, ['source', 'section', 'category', 'text'], ['subject', 'remembers'])
     || !object(candidate.source)) return { ok: false };
@@ -143,9 +145,9 @@ export function observationOf(candidate: unknown, context: {
   const { source, ...rest } = evidence;
   // Validated lineage's bookkeeping is not part of the persisted origin.
   const origin = Object.fromEntries(Object.entries(rest).filter(([key]) => key !== 'validated'));
-  if (evidence.kind === 'document' && candidate.subject !== evidence.subject) return { ok: false };
+  if (evidence.kind === 'document' && (candidate.subject !== evidence.subject || candidate.category !== 'biography')) return { ok: false };
   const value = { v: 1, kind: 'observation', eventId: context.eventId, factId: context.factId, date: context.date,
-    section: candidate.section, text: candidate.text, category: candidate.category, source, origin,
+    ...(context.at === undefined ? {} : { at: context.at }), section: candidate.section, text: candidate.text, category: candidate.category, source, origin,
     ...(candidate.remembers === undefined ? {} : { remembers: candidate.remembers }) };
   return eventOk(value) && value.kind === 'observation' ? { ok: true, value } : { ok: false };
 }

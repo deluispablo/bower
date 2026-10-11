@@ -87,9 +87,10 @@ export type Change =
  * Manifest v2's one new effect: `text` is the whole file after every change, authored by `applyChanges`. `beforeText`
  * (optional, `keep-one-note-merge`): the whole file as read, described by `beforeContent`, so an undo can put it back
  * (`undoEdit`) where the changes alone cannot be taken back (a link rewrite).
+ * `createdBy` binds a new About me edit to its template create; `before.fileId` is that create's key until dispatch.
  */
 export type EditText = {
-  kind: 'edit-text'; before: SeenFile; path: string; beforeContent: VerifiedContent;
+  kind: 'edit-text'; before: SeenFile; createdBy?: string; path: string; beforeContent: VerifiedContent;
   changes: Change[]; text: string; content: Content; beforeText?: string;
 };
 export type MaintenanceNote = { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number }; owner?: 'bower' | 'person'; type?: string | null; incomplete?: boolean; moc?: MocSnapshot; members?: string[] };
@@ -398,8 +399,9 @@ const changeOrder = (c: Change): number => c.kind === 'about-rewrite' ? CHANGE_O
 const canonical = (changes: Change[]): boolean => changes.length > 0
   && changes.every((item, i) => i === 0 || changeOrder(changes[i - 1] ?? item) < changeOrder(item));
 function editText(value: unknown): value is EditText {
-  return closed(value, ['kind', 'before', 'path', 'beforeContent', 'changes', 'text', 'content'], ['beforeText']) && value.kind === 'edit-text'
-    && seenFile(value.before) && path(value.path) && verifiedContent(value.beforeContent)
+  return closed(value, ['kind', 'before', 'path', 'beforeContent', 'changes', 'text', 'content'], ['beforeText', 'createdBy']) && value.kind === 'edit-text'
+    && seenFile(value.before) && (value.createdBy === undefined || hash(value.createdBy))
+    && path(value.path) && verifiedContent(value.beforeContent)
     && list(value.changes, change) && canonical(value.changes as Change[]) && text(value.text) && content(value.content)
     && (!Object.hasOwn(value, 'beforeText') || text(value.beforeText));
 }
@@ -663,7 +665,17 @@ function edits(value: ManifestV2): EditGuardRule | null {
     const place = places.get(e.before.fileId);
     const segments = e.path.split('/');
     if (edited.has(e.before.fileId) || paths.has(e.path)) return 'one-per-file';
-    const target = !e.before.folder && place !== undefined && sameSeen(place.file, e.before) && place.path === e.path
+    const create = e.createdBy ? operations.find((op) => op.operationId === e.createdBy) : undefined;
+    if (e.createdBy && (!create || create.ordinal >= item.ordinal || !item.dependsOn.includes(e.createdBy)
+      || create.effect.kind !== 'create-text' || create.effect.purpose !== 'generated'
+      || e.path !== 'About me.md' || create.effect.name !== e.before.name || create.effect.createKey !== e.before.fileId
+      || !('fileId' in create.effect.parent) || create.effect.parent.fileId !== value.scope.rootId
+      || e.before.parents.join() !== value.scope.rootId || e.before.folder
+      || e.before.modifiedTime !== new Date(value.requestedAt).toISOString()
+      || e.beforeContent.observedModifiedTime !== e.before.modifiedTime
+      || e.beforeText !== create.effect.text || e.beforeContent.sha256 !== create.effect.content.sha256
+      || e.beforeContent.size !== create.effect.content.size || places.has(e.before.fileId) || captured.has(e.before.fileId))) return 'target';
+    const target = !!create || !e.before.folder && place !== undefined && sameSeen(place.file, e.before) && place.path === e.path
       && segments[segments.length - 1] === e.before.name && e.path.endsWith('.md')
       && segments[0] !== '.bower' && segments[0] !== 'Inbox' && !captured.has(e.before.fileId);
     if (!target) return 'target';
@@ -800,7 +812,8 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2, finalized: boolean
         }
         const oldIds = new Set(prior.events.map((event) => event.eventId));
         for (const event of ledger.events.filter((event) => !oldIds.has(event.eventId))) {
-          if (event.date !== timelineDate(value.requestedAt)) return false;
+          if (event.date !== timelineDate(value.requestedAt)
+            || event.kind !== 'consolidation' && event.at !== undefined && event.at !== value.requestedAt) return false;
           if (event.kind === 'observation') {
             const origin = event.origin;
             if (origin.runId !== value.runId || origin.captureId !== value.captureId) return false;
@@ -827,7 +840,8 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2, finalized: boolean
       }
       if (e.kind !== 'edit-text' || !(e.path === 'About me.md' || about.some((p) => p.file.fileId === e.before.fileId)
         || e.changes.some((c) => c.kind === 'about-append' || c.kind === 'about-rewrite'))) continue;
-      if (about.length !== 1 || about[0]?.file.fileId !== e.before.fileId || e.path !== 'About me.md'
+      if ((e.createdBy ? about.length !== 0 || finalAbout !== e.beforeText
+        : about.length !== 1 || about[0]?.file.fileId !== e.before.fileId) || e.path !== 'About me.md'
         || e.beforeText === undefined || e.beforeContent.observedModifiedTime !== e.before.modifiedTime
         || lastLedger && !op.dependsOn.includes(lastLedger.operationId)) return false;
       const authored = applyChanges(enc.encode(e.beforeText), e.changes);
@@ -842,7 +856,7 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2, finalized: boolean
         ? parseObservations(enc.encode(lastLedger.effect.text), undoneRunIds) : ledger;
       for (const c of e.changes) {
         if (c.kind !== 'about-rewrite') continue;
-        const reason = c.undoneRunIds?.length ? 'undo' : ledger.tombstones.some((t) => t.runId === value.runId)
+        const reason = c.undoneRunIds?.length ? 'undo' : !c.text.startsWith(c.previous) && ledger.tombstones.length > 0
           ? 'forget' : 'consolidate';
         if (!c.factIds) return false;
         const rebuild = canRebuildAboutSection({ ledger: rebuilt, section: c.region, text: c.previous, reason });

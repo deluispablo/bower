@@ -52,8 +52,8 @@ export function grounded(manifest: RunManifest): boolean {
   const places = new Set(manifest.capture.places.map((p) => p.file.fileId));
   const pathOf = (t: Target): string | null => placePath(manifest, t);
   const madeAt = (e: EffectV2): string | null => {
-    // Rules is the one generated root note; its creation words the person's rules too.
-    if (e.kind === 'create-text' && e.name === RULES && 'fileId' in e.parent && e.parent.fileId === manifest.scope.rootId) return RULES;
+    // The fixed root notes use the same generated-note effects.
+    if (e.kind === 'create-text' && [RULES, 'About me.md'].includes(e.name) && 'fileId' in e.parent && e.parent.fileId === manifest.scope.rootId) return e.name;
     const parent = e.kind === 'create-text' ? pathOf(e.parent) : null;
     return e.kind === 'create-text' && parent !== null ? join(parent, e.name) : e.kind === 'edit-text' ? e.path : null;
   };
@@ -159,10 +159,11 @@ export function grounded(manifest: RunManifest): boolean {
     } else if (e.kind === 'create-text') {
       const parent = pathOf(e.parent);
       const rootRules = e.name === RULES && 'fileId' in e.parent && e.parent.fileId === manifest.scope.rootId;
+      const rootAbout = e.name === 'About me.md' && 'fileId' in e.parent && e.parent.fileId === manifest.scope.rootId;
       const made = parent === SYSTEM.dir ? RUNNER_MADE.find((x) => x === join(parent, e.name)) : undefined;
       if (e.purpose === 'runner-json' && (parent === SYSTEM.proposals ? !holdsProposal(e.name, e.text) : made === undefined || !holds(made, e.text))) return false;
       if (e.purpose !== 'generated' || rootRules) continue;
-      if (!MAIN_FOLDERS.includes(parent?.split('/')[0] ?? '') || mine.reduce((n, c) => n + c.value.created.length, 0) !== 1) return false;
+      if ((!rootAbout && !MAIN_FOLDERS.includes(parent?.split('/')[0] ?? '')) || mine.reduce((n, c) => n + c.value.created.length, 0) !== 1) return false;
       // A link's note is set aside with its link; a request's note with the answer that names it.
       const waited = manifest.operations.some((x) => x.dependsOn.includes(o.operationId)
         && (filingMove(manifest, x) || (x.effect.kind === 'write-runner-json' ? x.effect.path : madeAt(x.effect)) === SYSTEM.requests));
