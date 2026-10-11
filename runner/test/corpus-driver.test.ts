@@ -25,9 +25,9 @@ it("a case's between step runs between two runs", async () => {
     calls.push(call.input);
     return { code: 0, stderr: '', cut: null, stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: JSON.stringify({ kind: 'tidy-intent', v: 1, things: [] }) }) };
   });
-  expect(calls).toHaveLength(2);
+  expect(calls).toHaveLength(4);
   expect(calls[0]).not.toContain('Alex wants an amber kitchen.');
-  expect(calls[1]).toContain('Alex wants an amber kitchen.');
+  expect(calls[2]).toContain('Alex wants an amber kitchen.');
   expect(run.after[path]).toBe(person);
   expect(run.runs?.[0]?.code).toBe(0);
   expect(run.code).toBe(0);

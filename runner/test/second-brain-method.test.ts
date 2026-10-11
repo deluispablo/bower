@@ -192,7 +192,7 @@ it('B3b hot: evidence-only method verdict covers hidden unarchived refresh', asy
     } };
     const run = await runWithClaude(current, answering(() => ({ kind: 'tidy-intent', v: 1, things: [] }), calls));
     expect(run.code).toBe(0);
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
     expect(run.score).toEqual({ pass: true, unmet: [] });
     expect(Object.keys(run.after).filter((path) => path.startsWith('.bower/archive/hot/'))).toEqual([]);
   } finally {

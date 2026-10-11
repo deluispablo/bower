@@ -301,7 +301,7 @@ describe('Q1a stored answers through production entry points', () => {
     expect.soft(rec?.askedAt, 'the saved answer names this asking').toBe(q.askedAt);
     expect(await run(w, 0)).toBe(0);
     expect.soft((await w.drive.get(w.ids.unclear)).parents).toEqual([w.ids.job]);
-    expect(w.calls.length, 'no extra answer-wrapping call').toBeLessThanOrEqual(1);
+    expect([0, 2], 'no extra answer-wrapping call beyond selection and execution').toContain(w.calls.length);
     expect(await w.drive.readText(w.ids.unclear)).toBe('# A room\n\nAn unclear made-up room paper.\n');
   });
 
@@ -614,10 +614,10 @@ describe('Q1a stored answers through production entry points', () => {
     await starts.start('all', { subject: q.subject, answer: true, requestId: String(bodies[0]?.requestId) });
     expect(w.drive.calls).toBe(beforeReplay);
     expect(await run(w, 1)).toBe(0);
-    expect(w.calls).toHaveLength(2); // One normal planning call in each run, no answer-wrapping call.
+    expect(w.calls).toHaveLength(4); // Selection and execution in each run, no answer-wrapping call.
     const timings = vi.mocked(console.log).mock.calls.slice(loggedBefore).flatMap((args) => args.map(String)).filter((s) => s.startsWith('timing:'));
     expect(timings).toHaveLength(2);
-    for (const timing of timings) expect(timing).toMatch(/turns=1 in=10 out=10.* drive=\S+/);
+    for (const timing of timings) expect(timing).toMatch(/turns=2 in=20 out=20.* drive=\S+/);
     expect.soft(w.calls.flatMap((c) => shownOf(c).answers ?? []).map((a) => a.answer)).toEqual([PERSON]);
     expect.soft(answerValue((await allAnswerLines(w))[0])).toEqual({ text: PERSON });
   });
@@ -1109,16 +1109,16 @@ describe('Q1a fix round 1 through production entry points', () => {
       const before = await w.drive.evidence(w.ids.unclear);
       const bytes = await w.drive.readText(w.ids.unclear);
       expect(await run(w, 0)).toBe(0);
-      expect(w.calls.length).toBeLessThanOrEqual(1);
+      expect([0, 2]).toContain(w.calls.length);
       if (destination === 'renamed' || destination === 'moved') {
-        expect.soft(w.calls, 'TL-P4-44 addendum 4: changed folder name or place still permits continuation').toHaveLength(1);
+        expect.soft(w.calls, 'TL-P4-44 addendum 4: changed folder name or place still permits continuation').toHaveLength(2);
         expect.soft((await w.drive.get(w.ids.unclear)).parents,
           `TL-P4-44 addendum 4: ${destination} folder receives the item by its stored id`).toEqual([w.ids.home]);
         expect.soft(await w.drive.readText(w.ids.unclear),
           'TL-P4-44 addendum 4: filing by the same folder id preserves the item bytes').toBe(bytes);
       } else if (destination === 'ordinary' || destination === 'valid') {
         // Positive controls: ordinary model filing works, and a valid stored id overrides it.
-        expect(w.calls).toHaveLength(1);
+        expect(w.calls).toHaveLength(2);
         expect((await w.drive.get(w.ids.unclear)).parents).toEqual([destination === 'valid' ? w.ids.home : w.ids.job]);
         expect(await w.drive.readText(w.ids.unclear)).toBe(bytes);
       } else {
@@ -1250,7 +1250,7 @@ describe('Q1a fix round 1 through production entry points', () => {
     expect(admitted?.journal.map((l) => l.name)).toContain(`${saved?.id}.json`);
     const before = await w.drive.evidence(other.id);
     expect(await run(w, 100)).toBe(0);
-    expect(w.calls).toHaveLength(1);
+    expect(w.calls).toHaveLength(2);
     const shown = shownOf(w.calls[0] as ClaudeCall);
     expect(shown.answers).toContainEqual(expect.objectContaining({ answer: PERSON, pileId: a.subject }));
     expect.soft(shown.answers, 'other-pile text is not an anonymous answer in A\'s run')
