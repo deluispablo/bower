@@ -21,7 +21,7 @@ This block is the whole current state; ACTIVE.md is the history log. If Claude's
 7. `harness/integrate.sh`, then `harness/done.sh <id> "<msg>" --fixed-in <sha>`, or `--known-green` with a committed Close note.
 A third round needs the lead.
 
-**Job scripts.** The scripts live outside the repo, in the session scratchpad `/private/tmp/claude-501/-Users-deluisp-Projects-bower-app/19ca090d-5e3d-4a2f-899c-8f2af3d7d836/scratchpad/jobs/`: red-then-impl.sh, codex-impl.sh, codex-readonly.sh, gates.sh, gates-and-pass.sh, integrate-done.sh, integrate-known-green.sh, done-entry.sh, done-known-green.sh, new-worktrees.sh, disjoint.sh, suites.sh and backup-scan.sh. Prompts are in the same scratchpad (`codex-<tag>-*-prompt.md`).
+**Job scripts.** They are in `harness/jobs/`, with one line each in harness/README.md (TL-P4-56). The prompts for the jobs in flight are in the Orquestador's scratchpad (`codex-<tag>-*-prompt.md`). A successor writes new prompts from the packets.
 - **Codex results:** `/tmp/codex-<tag>-red.jsonl` and `/tmp/codex-<tag>-impl.jsonl`. The card is the last agent_message.
 - **Gate results:** `/tmp/gates-<tag>/`.
 - **Claude-only steps:** Claude subagents (bower-reviewer, bower-diagnoser, bower-impact, bower-design-checker), tracked `run_in_background` jobs, and the browser-pane smoke on staging.
