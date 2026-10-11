@@ -437,7 +437,7 @@ export interface Filing {
   observations?: readonly unknown[];
   forget?: readonly { factId: string; quote?: string }[];
   shownFactIds?: readonly string[];
-  profiles?: ReadonlyMap<string, string>;
+  profiles?: ReadonlyMap<string, readonly string[]>;
   kinds?: ReadonlyMap<string, string>;
   thing(fileId: string): Placement | null;
   words(pileId: string): Placement | null;
@@ -2000,6 +2000,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if ((authored.typeRow !== undefined && !typeRow) || (authored.properties !== undefined && !typeRow)
       || (typeRow && !propertyValuesOk(typeRow, authored.properties ?? {}))) return refused('invalid declared note properties');
     const template = authored.template ?? (typeRow && Object.hasOwn(NOTE_TEMPLATES, typeRow.template) ? typeRow.template as NoteTemplate : undefined);
+    if (template === 'profile' || typeRow?.template === 'profile') return refused('the profile template outside profile admission');
     if (typeRow && typeRow.template !== template) return refused('a note template outside its declared type');
     // Only declared, relevant links in the authored evidence; never pad with the folder's other notes.
     const related = await groundedAuthoredLinks(to, { ...authored, template }, { file: thing.file, name });
@@ -2030,22 +2031,25 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (!first) continue;
     const to = target ? parentOf(ix.pathOf(target.id) ?? '') : first.to;
     if (!generatedPlace(to)) continue;
-    const words = [...new Set(contributions.map(({ thing }) => d.profiles?.get(thing.file.id) ?? ''))].join('\n');
     const citations = contributions.map(({ to, name }) => `[[${join(to, name)}]]`);
+    const body = contributions.flatMap(({ thing }, i) => (d.profiles?.get(thing.file.id) ?? [])
+      .map((sentence) => `${sentence} ${citations[i]}\n`)).join('');
     if (!target) {
       const template = row.profile?.template;
-      const related = await groundedAuthoredLinks(to, { name: 'Profile.md', summary: 'Profile from documents.', body: words, template },
+      const related = await groundedAuthoredLinks(to, { name: 'Profile.md', summary: 'Profile from documents.', body: '', template },
         { file: first.thing.file, name: first.name });
-      const body = `${words} ${[...new Set(citations)].join(' ')}\n`;
       if (!profileTextOk(body)) return refused('a profile beyond its 400 word bound');
       const name = freeName(planned, to, 'Profile.md');
-      const text = serializeNote({ template, typeRow: { ...row, template: 'profile' }, summary: 'Profile from documents.',
+      const scaffold = serializeNote({ template, typeRow: { ...row, template: 'profile' }, summary: 'Profile from documents.',
         properties: [{ key: 'type', label: 'Type', value: row.id }, { key: 'created', label: 'Created', value: noteDate },
           { key: 'updated', label: 'Updated', value: noteDate }, { key: 'source', label: 'Source', value: first.name },
           { key: 'related', label: 'Related', value: related.map((path) => `[[${path}]]`).join(', ') }],
-        tags: [], currentState: [], body, timeline: [{ date: noteDate, text: 'Filed by Bower.', source: first.name }], byBower: true });
+        tags: [], currentState: [], body: '', timeline: [{ date: noteDate, text: 'Filed by Bower.', source: first.name }], byBower: true });
+      // The region writer copies source bytes without interpreting them as template sections.
+      const result = applyChanges(new TextEncoder().encode(scaffold), [{ kind: 'profile-rewrite', recordIds: [], previous: '\n', text: body }]);
+      if (!result.ok) return refused('a profile that could not be written');
       plannedFile(join(to, name));
-      generated.push({ to, name, text, what: 'Profile from documents.', after: contributions.map(({ thing }) => thing.file.id), pileId: null, aside: first.thing.file.name });
+      generated.push({ to, name, text: result.text, what: 'Profile from documents.', after: contributions.map(({ thing }) => thing.file.id), pileId: null, aside: first.thing.file.name });
       continue;
     }
     const path = ix.pathOf(target.id);
@@ -2058,7 +2062,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (!span || !parseNote(path, new TextDecoder().decode(bytes), fetched(target.id)).byBower) continue;
     const previous = new TextDecoder().decode(bytes.subarray(span.start, span.end));
     const history = [...previous.matchAll(/\[\[[^\]\r\n]+\]\]/gu)].map(([link]) => link);
-    const text = `${words} ${[...new Set([...history, ...citations])].join(' ')}\n`;
+    const retained = [...new Set(history)].filter((link) => !citations.includes(link));
+    const text = body + (retained.length ? `${retained.join(' ')}\n` : '');
     if (!profileTextOk(text)) return refused('a profile beyond its 400 word bound');
     if (text === previous) continue;
     const change: Change = { kind: 'profile-rewrite', recordIds: [], previous, text };

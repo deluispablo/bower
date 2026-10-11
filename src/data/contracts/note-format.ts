@@ -496,7 +496,7 @@ const slug = (v: unknown): v is string => typeof v === 'string' && v.length <= 1
 /** JSON Schema-style closed writes; stored reads and rewrites retain extension keys. */
 export function typeRowOk(v: unknown, stored = false): v is TypeRow {
   if (!schemaObject(v) || (!stored && !schemaClosed(v, ['id', 'match', 'template', 'properties', 'table', 'group_by', 'profile']))
-    || !slug(v.id) || !schemaTexts(v.match) || !v.match.length || !schemaText(v.template)
+    || !slug(v.id) || !schemaTexts(v.match) || !v.match.length || !schemaText(v.template) || (!stored && v.template === 'profile')
     || !schemaObject(v.properties) || !schemaTexts(v.table) || (!stored && v.table.length > 4)
     || new Set(v.table).size !== v.table.length) return false;
   const properties = v.properties;
