@@ -55,3 +55,7 @@ When a fix is on staging or `main`, tell the designer so it can verify against i
 
 - **Coordinator watchdog, always on (TL-P4-46 addendum 1).** The lead keeps a recurring session cron every 20 minutes (minutes 7, 27 and 47), whether or not the owner is present, and re-creates it after a restart, a compaction or its 7-day expiry. Each tick: if the coordinator is idle in ListAgents, no `codex exec`, vitest or playwright process is running, and claude/p3 has had no commit for 20 minutes, the lead messages the coordinator to resume and to say what it is waiting on. A stated wait on the lead, the owner or the designer is answered, not nudged again. The lead also reads LEAD_QUESTIONS.md each tick. The cron is deleted only when the owner pauses the work.
 - **UI needs the owner's OK first (TL-P4-40).** The lead never dispatches a change to what the person sees until the owner has approved it through the designer. That covers new UI, UI parts of a capability, and UI defect fixes that change appearance or behaviour. Fixes that restore an already approved spec, such as a broken token or a regression, may proceed, and the owner is told.
+
+## Running in Codex (TL-P4-56)
+
+If this role runs in Codex, follow [CODEX_TAKEOVER](../../docs/harness/CODEX_TAKEOVER.md). The watchdog becomes a heartbeat automation on this thread, messages go through `codex queue` or the mailbox, and every other duty here is unchanged.

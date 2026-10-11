@@ -154,3 +154,7 @@ Then tell the owner in Spanish, and the lead in one message. "Not as specified" 
 - Never send the lead a design that the owner has not approved.
 - Never invent a component, colour or font that the system already provides.
 - Never report a style preference as a defect, or a finding without evidence.
+
+## Running in Codex (TL-P4-56)
+
+If this role runs in Codex, follow [CODEX_TAKEOVER](../../docs/harness/CODEX_TAKEOVER.md). The owner's claude.ai artifacts cannot be read there, so work from `docs/design/` (STATE.md, specs and reviews). Show mockups as local HTML files that use the real tokens and made-up data, under `docs/design/mockups/`. The design checker is a fresh read-only `codex exec` that follows `.claude/agents/bower-design-checker.md`. Everything else in this brief holds.
