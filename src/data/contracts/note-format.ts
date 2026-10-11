@@ -448,9 +448,10 @@ function templateBody(n: NoteFile, template: NoteTemplate): string[] {
   if (template === 'area') out.push(render('Standard to maintain'));
   if (template === 'project') out.push(frame('goal', render('Goal')), frame('next-steps', render('Next steps')));
   out.push(frame('current', template !== 'source' && template !== 'moc' ? render('Current state') : ''),
-    frame('personal', template !== 'source' && template !== 'moc' ? personal : ''),
+    frame('personal', template === 'profile' ? render('My notes') : template !== 'source' && template !== 'moc' ? personal : ''),
     frame('timeline', shape.timeline ? render('Timeline') : ''),
     frame('bower-note', template === 'source' ? personal : n.bowerNote ? n.bowerNote.text + '\n' : ''));
+  if (template === 'profile') out.push(frame('profile', `${trimLines(contents.get('Profile') ?? '')}\n`));
   if (template === 'moc') out.push(frame('moc-overview', render('Overview')), frame('moc-figures', ''),
     frame('moc-members', render('Notes')), render('Sources'));
   return out;
@@ -494,11 +495,13 @@ const schemaTexts = (v: unknown): v is string[] => Array.isArray(v) && v.every(s
 const slug = (v: unknown): v is string => typeof v === 'string' && v.length <= 128 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(v);
 /** JSON Schema-style closed writes; stored reads and rewrites retain extension keys. */
 export function typeRowOk(v: unknown, stored = false): v is TypeRow {
-  if (!schemaObject(v) || (!stored && !schemaClosed(v, ['id', 'match', 'template', 'properties', 'table', 'group_by']))
+  if (!schemaObject(v) || (!stored && !schemaClosed(v, ['id', 'match', 'template', 'properties', 'table', 'group_by', 'profile']))
     || !slug(v.id) || !schemaTexts(v.match) || !v.match.length || !schemaText(v.template)
     || !schemaObject(v.properties) || !schemaTexts(v.table) || (!stored && v.table.length > 4)
     || new Set(v.table).size !== v.table.length) return false;
   const properties = v.properties;
+  if (v.profile !== undefined && (!schemaObject(v.profile) || (!stored && !schemaClosed(v.profile, ['template', 'id']))
+    || v.profile.template !== 'profile' || (v.profile.id !== undefined && !schemaText(v.profile.id)))) return false;
   if (!Object.entries(properties).every(([key, declaration]) => /^[a-z][a-z0-9_]*$/.test(key)
     && schemaObject(declaration) && (stored || schemaClosed(declaration, ['type', 'values']))
     && (declaration.type === 'enum' ? schemaTexts(declaration.values) && declaration.values.length > 0

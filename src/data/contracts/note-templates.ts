@@ -9,6 +9,7 @@ export const NOTE_TEMPLATES = {
   project: { sections: ['Goal', 'Next steps', 'Current state', 'Notes', 'Timeline'], body: 'Notes', timeline: true, immutable: false },
   area: { sections: ['Standard to maintain', 'Current state', 'Notes', 'Timeline'], body: 'Notes', timeline: true, immutable: false },
   moc: { sections: ['Overview', 'Notes', 'Sources'], body: 'Overview', timeline: false, immutable: false },
+  profile: { sections: ['Profile', 'My notes', 'Timeline'], body: 'Profile', timeline: true, immutable: false },
 } as const;
 
 export type NoteTemplate = keyof typeof NOTE_TEMPLATES;
