@@ -210,3 +210,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `59598d32` | b6a-templates | note-format: parseNote projects every template section (Project Goal/Next steps, Area Standard, MOC Overview/Notes/Sources) into the display model; the reader decodes exactly what the writer quotes (escapes, quoted list items), for new and legacy output; stored bytes unchanged. |
 | `291a9cf6` | b6a-templates | none: tests only (round 3 reds, including a note-screen task-region test). |
 | `aaecdea3` | b6a-templates | note-format: task identity is per region; a toggle never reaches another region's line, and a toggle on a Bower-region task (Next steps) is refused with no change and a logged BowerError. Stored bytes unchanged; the display stays as it was pending its own UI entry. |
+| `c30f7adc` | b6a-templates | none: tests only (person-typed source/moc reds). |
+| `d9f74804` | b6a-templates | note-edit: the Source/MOC-only refusals apply only to Bower-written notes (byBower plus type); a person's note with type: source or type: moc keeps the mechanical link rewrite and C05's append. Template names come from NOTE_TEMPLATES. Stored bytes unchanged. |
