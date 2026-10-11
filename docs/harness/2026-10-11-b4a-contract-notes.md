@@ -2402,3 +2402,124 @@ demo/fake. No check mark or e2e success is claimed by this worker.
 tests changed: none; every older failed runner/app test is preserved and listed above.
 Skipped: runner-owned commits, pnpm check, capabilities e2e and out-of-scope producer changes.
 Risk: existing maintenance targets absent from capture.places cause otherwise valid real-adapter runs to refuse.
+
+
+## Round 6 continued (addendum 9)
+
+Implemented the maintenance producer ruling in runner/src/index.ts. Every system,
+MOC and reserved future file ID added to maintenance targets now has one entry in
+capture.places. Existing files use the listing's SeenFile and VaultIndex.pathOf(id).
+Reserved IDs use the actual reserved parent folder, its indexed path and the name
+reserved by this producer. No place is copied from a target's declared path.
+A Map keyed by file ID keeps capture.places unique, without changing the input
+manifest. Missing reservation or indexed placement refuses with the existing
+BowerError. maintenanceTargetOk, targetPath and both admission callers are unchanged.
+
+Adding captured places changes the capture digest. The producer therefore uses the
+existing canonical hashing mechanism to reseal the capture and operations, updating
+createdBy parents, dependencies, maintenance operationIds, report references,
+satisfied-append operation IDs and write stamps. Newly written questions' shown
+stamps and their content hashes follow those operation IDs; historical read stamps
+remain unchanged. No resolver, dependency or permission exception was added.
+
+Scope and callers: withMaintenance is called by runner/src/main.ts after the provider
+plans and before runOperations parses and persists the manifest. Searches covered
+all withMaintenance callers and capture/operation consumers in the contracts,
+records, report, scripted author and runner tests. Only runner/src/index.ts and these
+notes changed; no fixture, config, export, UI or test file changed.
+
+removed: maintenance target IDs without captured identity (system files, MOCs and reserved creates).
+removed: preserving old capture/operation digests after extending the captured places.
+tests changed: none
+
+Prior offline research: the packet's https://zod.dev/api reference was reused, not
+newly verified. The standard implementation here is the existing canonical digest
+and VaultIndex/SeenFile machinery; no network or new dependency was needed.
+
+### Red and full runner evidence
+
+Before the edit, the entire runner suite reproduced exactly 361 failed tests and
+357 passed tests across 58 files (718 tests): ordinary runs refused their manifests
+with shape. All older failing tests listed under the preceding round-6 compatibility
+blocker were retained. Log: runner-before.log; report: runner-before.json.
+
+The first registration-only draft exposed the capture-id requirement: extending
+capture.places without resealing is refused. The temporary diagnostic run used only
+console output in a temp config, with no changed assertion or repository file.
+The final producer reseals all affected references using canonical.
+
+Final full runner suite: 57 files pass, one fails; 717 tests pass, one fails (718).
+Command: pnpm -C runner exec vitest run --maxWorkers=2 --config <logs>/runner.mjs --configLoader runner.
+Logs: runner-final.log and runner-final.json. The previous ordinary-run shape refusals are gone; every other runner
+test passes. The round-6 protected identities and
+positive controls also pass: src/data/contracts/b4a-r6.test.ts, all three tests;
+r6-final.log and r6-final.json.
+
+### Remaining contradiction (TL-P4-51)
+
+The entire runner suite was run before stopping. Its sole failed test is
+runner/test/main.test.ts:154, `the runner process main picks the scripted provider`.
+It requires the maintenance result's original operations to equal the input
+scripted.operations byte for byte, including their old operationId values.
+The next assertion at :155 likewise requires the old operationIds in maintenance.
+Both expectations conflict with registering new captured places while retaining
+canonical capture/operation validation: run-manifest.ts:569 hashes the complete
+capture and :574 hashes each operation against that captureId.
+
+Keeping those old IDs would make ordinary runs fail capture-id/operation-id again.
+Mutating the input manifest so this comparison sees new IDs would hide the
+contradiction and break immutable manifest production. Neither workaround was used.
+No test was weakened. This is the complete runner contradiction list; the lead
+must authorize a corrected compatibility assertion before the full suite can be
+green under the no-test-change instruction. Status: blocked on that assertion.
+
+### Output isolation and delivery
+
+Verification artifacts are in /var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b4a-r6-a9-v25tvcyn.
+Temporary configs import the real app/runner config and preserve all assertions,
+setup and timer gates. They relocate caches, reports, attachments, CPU output,
+harness-generated Playwright fixtures and the new-instance test's runner bundle
+and copied build script to OS temp. The existing round-6 output-only configs were
+copied into this new temp directory. No test wrote into the repository, no network
+call was made, no git-writing command was invoked by this worker, and node_modules
+was neither replaced nor symlinked. Suite-internal Git fixtures use temp repositories.
+
+.codex-commits.json requests one runner/src/index.ts production commit and one
+notes-only commit. The runner owns those commits, pnpm check and capabilities e2e
+on demo/fake. No check mark or e2e success is claimed by this worker.
+
+Skipped: runner-owned commits, pnpm check and capabilities e2e; all tests remained unchanged.
+Risk: the runner suite remains red only on main.test.ts:154's old-operation identity assertion.
+
+
+### Final requested app and static checks
+
+Full app command: pnpm exec vitest run src --maxWorkers=2 --config <logs>/app.mjs --configLoader runner.
+Despite the runner assertion contradiction, the full requested app suite was also
+completed to inventory all failures: 177 files pass, two fail; 5,785 tests pass,
+two fail (5,787), with one expected unhandled listen EPERM. app-final.log and app.json.
+All five real-adapter app failures from round 6 are green now. All three round-6
+identity tests and all 47 harness tests pass in the full run. Every app failure:
+
+- src/docs.test.ts:134, `what the repository promises every change since the P2 freeze is listed`:
+  existing commits b85000fe and 19f9ae9b are missing from compatibility bookkeeping.
+  This worker does not own that ledger and made no commits.
+- src/e2e-port.test.ts:37, `the e2e port and server identity a server from another worktree is never reused`:
+  expected sandbox listen EPERM on 127.0.0.1 causes the unchanged 5,000 ms timeout
+  and the one unhandled error. No timeout or test was changed.
+
+TypeScript app/node/runner: pass, with pnpm exec tsc --noEmit -p tsconfig.app.json,
+tsconfig.node.json and runner/tsconfig.json. Final logs: tsc-app-final.log,
+tsc-node-final.log and tsc-runner-final.log. ESLint: pass, pnpm -C runner exec eslint
+src/index.ts, eslint-final.log. node scripts/check-unused-gate.mjs: pass, baselines
+2 and 34, unused-final.log. Read-only git diff --check: pass.
+
+Compatibility draft: runner/src/index.ts now binds maintenance IDs to captured
+placements and seals the final capture with canonical IDs; no stored schema or
+wire shape changes. Existing stored manifests and the round-6 identity ban stay
+unchanged. 717 runner tests and all app real-adapter tests pass; main.test.ts:154–155
+still pins pre-maintenance operation IDs and requires a lead-approved red repair.
+
+Tests changed: none; no assertion, threshold, timeout, fixture or setup file was modified.
+Skipped: runner-owned commits, pnpm check and capabilities e2e; no network research.
+Risk: full runner green is blocked by the old-ID assertion; app bookkeeping and EPERM remain external failures.
