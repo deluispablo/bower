@@ -5,6 +5,8 @@
     "duplicates src/data/contracts/run-phases.ts RUN_STEPS=ACTIVE_PHASES",
     "exports api/src/env.ts OPTIONAL_SECRETS",
     "exports api/src/github.ts dispatchTidy",
+    "exports runner/src/type-table.ts insertTypeRow",
+    "exports runner/src/type-table.ts requestTableColumn",
     "exports src/data/contracts/hashes.ts EMPTY_SHA256",
     "exports src/data/contracts/note-edit.ts undoChanges",
     "exports src/data/contracts/note-edit.ts undoEdit",
@@ -31,6 +33,8 @@
     "types src/data/drive/fake-drive.ts FaultAction"
   ],
   "reasons": {
+    "exports runner/src/type-table.ts insertTypeRow": "B5b wires it (TL-P4-41 addendum 19); B5b removes this line",
+    "exports runner/src/type-table.ts requestTableColumn": "B5b wires it (TL-P4-41 addendum 19); B5b removes this line",
     "exports src/data/contracts/note-format.ts validSummary": "B2b wires it (TL-P4-42 addendum 1); B2b removes this line"
   }
 }

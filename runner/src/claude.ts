@@ -129,7 +129,7 @@ export interface ClaudeSetup {
 /** One sentence for the person; the details go to `console.error`. */
 const PLAN_REFUSED = "Bower couldn't plan this tidy-up. Try again.";
 
-/** A model reply that is still invalid after its one retry. */
+/** No valid model reply: a cap, no result, or a reply still invalid after its one retry. */
 export class InvalidModelReply extends BowerError {
   constructor() { super('unknown', PLAN_REFUSED); }
 }
@@ -1248,20 +1248,20 @@ export const spawnClaude: ClaudeSpawn = (call) =>
   });
 
 /** The reply's JSON, or why there is none: a refusal of the model's answer (asked once more), or a run that went wrong. */
-type Read = { ok: true; value: unknown } | Refused | { ok: false; kind: null; why: string };
+type Read = { ok: true; value: unknown } | Refused | { ok: false; kind: null; why: string; invalidReply?: true };
 
 /** The reply's JSON out of `claude -p --output-format json`'s result, or why there is none. */
 function replyOf(exit: ClaudeExit, maxTurns: number): Read {
-  if (exit.cut) return { ok: false, kind: null, why: `stopped at its ${exit.cut} cap` };
+  if (exit.cut) return { ok: false, kind: null, why: `stopped at its ${exit.cut} cap`, invalidReply: true };
   let envelope: unknown;
   try {
     envelope = JSON.parse(exit.stdout);
   } catch {
-    return { ok: false, kind: null, why: `exit ${exit.code}, no JSON result` };
+    return { ok: false, kind: null, why: `exit ${exit.code}, no JSON result`, invalidReply: true };
   }
-  if (!envelope || typeof envelope !== 'object' || (envelope as { type?: unknown }).type !== 'result') return { ok: false, kind: null, why: `exit ${exit.code}, not a result` };
+  if (!envelope || typeof envelope !== 'object' || (envelope as { type?: unknown }).type !== 'result') return { ok: false, kind: null, why: `exit ${exit.code}, not a result`, invalidReply: true };
   const { subtype, is_error: isError, num_turns: turns, result } = envelope as Record<string, unknown>;
-  if (subtype === 'error_max_turns' || (typeof turns === 'number' && turns > maxTurns)) return { ok: false, kind: null, why: `over its turn cap of ${maxTurns}` };
+  if (subtype === 'error_max_turns' || (typeof turns === 'number' && turns > maxTurns)) return { ok: false, kind: null, why: `over its turn cap of ${maxTurns}`, invalidReply: true };
   if (subtype !== 'success' || isError !== false || exit.code !== 0) return { ok: false, kind: null, why: `an error result (${String(subtype)}, exit ${exit.code})` };
   if (typeof result !== 'string') return no('noText');
   const text = result.trim().replace(/^```(?:json)?\n([\s\S]*)\n```$/, '$1');
@@ -1437,7 +1437,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         env: claudeEnv(setup.env, home), cwd, input, timeoutMs, maxBytes: REPLY_LIMIT }));
       const stats = statsOf(exit.stdout); if (stats) timing.addModel(stats);
       const reply = replyOf(exit, maxTurns);
-      if (!reply.ok && reply.kind === null) return refuse(reply.why, exit.stderr);
+      if (!reply.ok && reply.kind === null) return refuse(reply.why, exit.stderr, reply.invalidReply);
       return reply;
     };
     const twice = async <T extends { ok: true }>(input: string, check: (value: unknown) => T | Refused | null): Promise<T> => {

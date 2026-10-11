@@ -2637,3 +2637,104 @@ the explicitly requested checks above ran. No screen or corpus fixture changed.
 Offline research reuses the packet's citations and the existing validate-and-retry loop:
 https://python.useinstructor.com/concepts/retrying/ (already cited in runner/src/claude.ts).
 No source was fetched or independently reverified over the network.
+
+## Fix (addendum 19)
+
+implementer: codex
+status: blocked; authorized fixes are applied, but the unchanged test requires a forbidden third export.
+
+Authority: the owner's narrow instruction and TL-P4-41 addendum 19. Only
+runner/src/claude.ts, runner/src/main.ts, runner/src/type-table.ts,
+harness/unused-production-baseline.json and this note change. No network,
+git-writing command, test edit, dependency change or node_modules change.
+The runner commits the diff. Logs, JSON reports and temporary Claude work folders
+stay in OS temp; both Vitest commands disable the cache and override repository reports.
+
+### Narrow change
+
+The existing reply reader marks caps (including the turn cap), missing JSON results
+and non-result envelopes as no valid reply. The call passes that mark through the
+existing InvalidModelReply and terminal-failure path, so main returns code 1.
+Malformed or out-of-schema answers still receive exactly one validation retry.
+The permission/token error-result control and the hot pre-plan failure retain code 0;
+no retry, ledger, hot, recovery, checkpoint, report or write-authority mechanism changes.
+main's comments now include calls with no valid reply.
+
+insertTypeRow and requestTableColumn are restored exactly from the implementation
+removed by f4aebc8b, using the original declaration validators and structuredClone.
+Each has one production finding and one reason with the exact authorized wording:
+"B5b wires it (TL-P4-41 addendum 19); B5b removes this line".
+The other three removed exports, firstMatchingRow, typeTableOk and propertyValuesOk,
+remain absent from runner/src/type-table.ts.
+
+removed: code-0 treatment of caps and absent results returned by a model call.
+removed: no production function, existing test, assertion, bound or dependency.
+tests changed: none
+
+Offline research reuses the packet's citations and the existing retry implementation:
+https://python.useinstructor.com/concepts/retrying/ (already cited in runner/src/claude.ts).
+The type-table functions reuse their original app implementation (f4aebc8b parent).
+No cited source was fetched or independently reverified over the network.
+
+### Red evidence
+
+Before the fix, provider, type-table and hot-recovery suites reproduce
+**38 passed, 3 failed, 41 total**, exit 1. All existing tests remain unchanged.
+Log: /tmp/b1d-fix19-red.log; report: /tmp/b1d-fix19-red.json.
+- runner/test/claude-provider.test.ts:464, "a malformed or out-of-schema Claude reply
+  fails truthfully and writes nothing": the turn cap expects code 1, received 0.
+- runner/test/type-table.test.ts:52, "B5a contracts: b5-row-schema-and-order":
+  insertTypeRow must be a function, received undefined.
+- runner/test/type-table.test.ts:152, "B5a contracts: b5-explicit-column-replaces-fourth":
+  requestTableColumn must be a function, received undefined.
+
+### Contract conflict
+
+The unchanged "B5a contracts: b5-row-schema-and-order" also imports firstMatchingRow
+at runner/test/type-table.test.ts:53 and asserts that export is a function at :14.
+Addendum 19 restores only two exports and requires the other three to stay deleted.
+That leaves firstMatchingRow absent, so this assertion cannot pass within the authorized
+scope. Neither the forbidden export nor a test change is added. All requested suites
+and checks are run before reporting the complete remaining failure list below.
+
+### Final counts and every remaining red
+
+| Check | Final result | OS-temp evidence |
+| --- | --- | --- |
+| Full runner suite | 692 passed, 1 failed, 693 total; exit 1 | /tmp/b1d-fix19-runner.json and .log |
+| Full src suite | 5,689 passed, 1 failed, 5,690 total; exit 1 | /tmp/b1d-fix19-src.json and .log |
+| Runner TypeScript | pass; exit 0 | /tmp/b1d-fix19-tsc.log |
+| ESLint, all three touched TypeScript files | pass; exit 0 | /tmp/b1d-fix19-eslint-runner.log |
+| Unused-code gate | pass; 1 baseline finding, 1 current | /tmp/b1d-fix19-unused.log |
+| Unused-production-code gate | pass; 29 baseline findings, 29 current | /tmp/b1d-fix19-unused.log |
+| Read-only git diff --check | pass; exit 0 | Checked after the edits |
+
+All requested runner compatibility controls pass unchanged: the malformed/out-of-schema
+provider test traverses its turn-cap, no-result and size-cap fixtures; the permission/token
+control, hot pre-plan failure/done redispatch, b1-invalid-reply-exhaustion-fails-after-one-retry,
+b1-ledger-exhaustion-valid-replies-done-with-items-left-in-inbox and b1-shared-ledger pass.
+b5-explicit-column-replaces-fourth also passes. No test appears in the diff.
+
+| File:line | Remaining failure | Diagnosis |
+| --- | --- | --- |
+| runner/test/type-table.test.ts:53 (helper :14) | B5a contracts: b5-row-schema-and-order | Requires firstMatchingRow to be exported. Addendum 19 explicitly keeps that third export deleted; no restoration or test change is authorized. |
+| src/e2e-port.test.ts:37 | a server from another worktree is never reused | Expected sandbox listen EPERM, followed by the existing 5,000 ms timeout; focused evidence is /tmp/b1d-fix19-port.log. |
+
+The initial root-directory ESLint invocation encountered ambiguous tsconfigRootDir inference
+and ignored the JSON baseline because ESLint has no matching JSON configuration. The final
+invocation uses the runner's own config from its directory and passes for every touched
+TypeScript file; the JSON baseline is validated by both unused-code passes.
+
+Commands (all output redirected to the OS-temp logs above):
+- pnpm -C runner exec vitest run test/claude-provider.test.ts test/type-table.test.ts test/b23-hot-recovery.test.ts --maxWorkers=2 --reporter=json --outputFile=/tmp/b1d-fix19-red.json --cache=false
+- pnpm -C runner exec vitest run --maxWorkers=2 --reporter=json --outputFile=/tmp/b1d-fix19-runner.json --cache=false
+- pnpm exec vitest run src --maxWorkers=2 --reporter=json --outputFile=/tmp/b1d-fix19-src.json --cache=false
+- pnpm -C runner exec tsc --noEmit -p .
+- pnpm -C runner exec eslint src/claude.ts src/main.ts src/type-table.ts
+- node scripts/check-unused-gate.mjs
+- pnpm exec vitest run src/e2e-port.test.ts --maxWorkers=2 --reporter=default --cache=false
+
+No pnpm check or e2e: their repository outputs conflict with the owner's output restriction;
+the explicitly requested checks above ran. No screen, corpus fixture or golden changed.
+No acceptance, integration readiness or fully green runner suite is claimed. The lead must
+resolve the firstMatchingRow contract conflict; no unrelated repair is attempted.
