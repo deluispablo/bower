@@ -560,3 +560,8 @@ orphan-pile-count-data,implementer,codex,unknown,high,2,1811588,1799054,,1707136
 b1c-index,implementer,codex,unknown,high,1,8857958,8822245,,8636928,35713,,,,check-failed,2026-10-10
 next-steps-plain-list,implementer,codex,unknown,high,2,1054422,1041357,,967936,13065,,,,check-failed,2026-10-11
 b1d-selection,implementer,codex,unknown,high,4,3531331,3512791,,3387008,18540,,,,check-failed,2026-10-11
+messages-wait-for-sheets,implementer,codex,unknown,medium,2,283156,281325,,236800,1831,,,,check-failed,2026-10-11
+next-steps-plain-list,implementer,codex,unknown,high,3,1256999,1247895,,1182208,9104,,,,check-failed,2026-10-11
+messages-wait-for-sheets,implementer,codex,unknown,medium,3,312807,310684,,288000,2123,,,,check-failed,2026-10-11
+b1d-selection,implementer,codex,unknown,high,5,2348769,2333739,,2215168,15030,,,,check-failed,2026-10-11
+messages-wait-for-sheets,implementer,codex,unknown,medium,4,329386,327666,,302976,1720,,,,green,2026-10-11
