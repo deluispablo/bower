@@ -586,3 +586,4 @@ q1b-questions-ui	fe3344072de8824f	2026-10-11	known-green: reds proved at the tes
 b1d-selection	c28eeb1606fecf4f	2026-10-11	known-green: reds proved at the tests-only commit ef2df059; fix 5130e7ff no longer comes off cleanly; see notes Close
 b4a-contract	87e54e2543c77d61	2026-10-11	known-green: reds proved at their tests-only commits 98abf5a3, 9054e66d, 19f9ae9b and 5936f107; the fix commits no longer come off cleanly; see notes Close
 spine-operations-checkpoints	08709c5c1e786fb3	2026-10-11	known-green: goldens re-pinned to measured values by b5b-tables per TL-P4-47 addenda 8 and 9; the 25-earlier-runs test is renamed for the first creation of the type table (110 calls); see the b5b notes
+b5b-tables	f97e6d72e0dff527	2026-10-11	known-green: reds proved at their tests-only commits 406c6132, 5dfda276, b20c93cb, 3d04fc96 and 08e5433e; the fix commits no longer come off cleanly; see notes Close

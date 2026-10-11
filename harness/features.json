@@ -7185,7 +7185,7 @@
     "id": "b5b-tables",
     "task": "p4-b5",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "Planning reads the type table; type and column proposals keep their exact payload until answered; an approved folder shows its Table (spec claude/design cd85b5ce).",
     "steps": [
