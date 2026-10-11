@@ -406,3 +406,7 @@ Command: NODE_OPTIONS='--require=/tmp/b6a-test-output.cjs' pnpm exec vitest run 
 The existing preload directs test/cache artifacts to OS temp. No broader gate was run
 under this mechanical repair scope; pnpm check writes into the repository.
 This repair resolves the missing Gardening fixture contradiction recorded above.
+
+tests changed: src/data/contracts/note-edit.test.ts: B6a reds (TL-P4-47 Q5 Goal/Next steps regions, legacy Timelines); additions only.
+tests changed: src/data/vault/note-format.test.ts: B6a reds (TL-P4-47 Q5 template shapes and front matter); additions only.
+tests changed: src/data/vault/ownership-format.test.ts: B6a reds (TL-P4-47 Q5 template region marks); additions only.
