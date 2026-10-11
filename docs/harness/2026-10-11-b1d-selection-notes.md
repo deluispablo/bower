@@ -3691,3 +3691,7 @@ on its final optional-metadata assertion and must not be treated as green.
 ### Addendum 25 tests, coordinator repair
 
 tests changed: runner/test/b1d-r8.test.ts: the final restored-file check reads `trashed` not true instead of exactly false, because the fake Drive omits the field on a restored file; the test's own new assertion only, nothing existing.
+
+## Close (coordinator, 2026-10-11)
+
+Closed known-green. The round 7 reds were proved at their tests-only commit ef2df059 (two reds, seven finding-specific assertions failed). The fix commit 5130e7ff no longer comes off cleanly, because the notes lines it carried were extended later and the repaired tests build on it. Gates: pnpm check and the capabilities e2e on demo and fake green (b1d-g8); the full runner suite 713/713. Review: P4-119 PASS; the adversarial pass 5 block was ruled expected in TL-P4-41 addendum 25. Accepted v1 limits: candidate pin saturation, and cut-context fingerprint cache misses.
