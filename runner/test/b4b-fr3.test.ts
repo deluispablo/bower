@@ -62,7 +62,7 @@ function learned(facts: readonly Fact[]): string {
 
 async function fixture(kind: Kind) {
   const words = kind === 'memory' ? `Remember: ${REMOTE}` : kind === 'Forget'
-    ? 'Forget my remote preference.' : `Update Job hunt: ${NEWS}`;
+    ? `Forget that ${REMOTE}` : `Update Job hunt: ${NEWS}`;
   const c: LoadedCase = {
     id: 'b4b-fr3-runtime', capability: 'C05', title: 'Alex adds words during a run', covers: 'model', source: 'new',
     scope: 'all', allowWeb: false, dir: tmpdir(), folderBinary: {}, inboxBinary: {}, expected: {}, rubric: '',
@@ -116,7 +116,7 @@ async function execute(f: Fixture) {
     if (refusal) refusals.push(refusal);
     return reply(f.kind === 'memory' ? { ...EMPTY, observations: [{ source: { pileId: frame.piles[0]?.pileId },
       section: 'about-preferences', category: 'preference', text: REMOTE }] }
-      : f.kind === 'Forget' ? { ...EMPTY, forget: [{ factId: 'fact-remote' }] }
+      : f.kind === 'Forget' ? { ...EMPTY, forget: [{ factId: 'fact-remote', quote: REMOTE }] }
         : { ...EMPTY, lines: [{ note: HUB, text: NEWS, cites: frame.piles[0]?.pileId }] });
   }, () => ({ drive: f.drive, root: f.root, admission: admission.manifest }), true);
   const run = await runOnDrive(f.c, f.drive, f.root, { claude: spawn, admission: admission.manifest,

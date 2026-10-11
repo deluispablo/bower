@@ -140,7 +140,7 @@ const inboxWords = (run: CaseRun) => Object.entries(run.after)
   .filter(([path]) => path.startsWith('Inbox/') && path.endsWith(PILE_NOTE)).map(([, text]) => text.trim());
 const questions = (run: CaseRun): Array<Omit<Question, 'options'> & { options?: QuestionOption[] }> => (JSON.parse(run.after[SYSTEM.questions] ?? '{"questions":[]}') as
   { questions: Array<Omit<Question, 'options'> & { options?: QuestionOption[] }> }).questions;
-const forget = { ...EMPTY, forget: [{ factId: 'fact-remote' }] };
+const forget = { ...EMPTY, forget: [{ factId: 'fact-remote', quote: REMOTE }] };
 const ask = (frame: Frame) => ({ ...fileOffer(frame), asks: [{ pileId: frame.piles.find((p) => !p.things.length)?.pileId,
   text: 'Which fact should Bower forget?', yes: 'Use this', no: 'Keep it' }] });
 async function addWords(f: Fixture, text: string, pileId: string) {
@@ -161,7 +161,7 @@ async function failAbout(f: Fixture, intent: Parameters<typeof execute>[1]) {
   return run;
 }
 async function rememberAgain(delay: number) {
-  const f = await fixture({ history: true, words: 'Forget my remote preference.' });
+  const f = await fixture({ history: true, words: `Forget that ${REMOTE}` });
   vi.setSystemTime(DAY);
   const forgotten = await execute(f, forget, DAY);
   expect(forgotten.dispatch?.admission.at).toBe(DAY);
@@ -193,7 +193,7 @@ describe('B4b fix round 1, addendum 13', () => {
     expect(saved.after[ABOUT]).toContain(REMOTE);
     expect(ledger(saved).live).toHaveLength(1);
     expect(inboxWords(saved)).toEqual([]);
-    const g = await fixture({ history: true, words: 'Forget my remote preference.' });
+    const g = await fixture({ history: true, words: `Forget that ${REMOTE}` });
     const forgotten = await execute(g, forget);
     expect(forgotten.code, forgotten.errors).toBe(0);
     expect(forgotten.after[ABOUT]).not.toContain(REMOTE);
@@ -224,7 +224,7 @@ describe('B4b fix round 1, addendum 13', () => {
     expect(retry.refusals).toEqual([]);
     expect(retry.after[LEDGER]).toBe(failed.after[LEDGER]);
 
-    const g = await fixture({ history: true, words: 'Forget my remote preference.' });
+    const g = await fixture({ history: true, words: `Forget that ${REMOTE}` });
     const failedForget = await failAbout(g, forget);
     expect(ledger(failedForget).tombstones.map((t) => t.factId)).toEqual(['fact-remote']);
     expect(failedForget.after[ABOUT]).toContain(REMOTE);
@@ -311,7 +311,7 @@ describe('B4b fix round 1, addendum 13', () => {
   });
 
   it('control: b4b-fr1-3-forget-request-binding', async () => {
-    const f = await fixture({ history: true, words: 'Forget my remote preference.' });
+    const f = await fixture({ history: true, words: `Forget that ${REMOTE}` });
     const run = await execute(f, forget);
     expect(run.code, run.errors).toBe(0);
     expect(inboxWords(run)).toEqual([]);
@@ -320,17 +320,24 @@ describe('B4b fix round 1, addendum 13', () => {
   });
 
   it('b4b-fr1-3-forget-request-binding', async () => {
-    const f = await fixture({ history: true, words: 'Forget my remote preference.' });
-    const other = await addWords(f, 'Forget that Alex grows beans.', 'forget-garden');
-    const run = await execute(f, forget);
+    const f = await fixture({ history: true, words: `Forget that ${REMOTE}` });
+    const garden = 'Alex grows beans in pots.';
+    const facts = f.facts.map((fact) => fact.factId === 'fact-garden' ? { ...fact, text: garden } : fact);
+    await f.write(LEDGER, jsonl(facts)); await f.write(ABOUT, learned(facts));
+    const other = await addWords(f, `Forget that ${garden}`, 'forget-garden');
+    const run = await execute(f, { ...EMPTY, forget: [
+      { factId: 'fact-remote', quote: REMOTE }, { factId: 'fact-garden', quote: garden },
+    ] });
     expect(run.code, run.errors).toBe(0);
-    expect(ledger(run).tombstones.map((t) => t.factId)).toEqual(['fact-remote']);
-    expect(ledger(run).live.map((t) => t.factId)).toEqual(['fact-garden', 'fact-independent']);
+    expect(run.refusals).toEqual([]);
+    expect(ledger(run).tombstones.map((t) => t.factId)).toEqual(['fact-remote', 'fact-garden']);
+    expect(ledger(run).live.map((t) => t.factId)).toEqual(['fact-independent']);
     expect(run.after[ABOUT]).not.toContain(REMOTE);
+    expect(run.after[ABOUT]).not.toContain(garden);
     expect(run.after[ABOUT]).toContain(GARDEN);
     expect({ remaining: inboxWords(run), otherBinned: (await f.drive.evidence(other.id))?.trashed },
-      '3: only the request matching the supplied fact id is consumed').toEqual({
-      remaining: ['Forget that Alex grows beans.'], otherBinned: false,
+      '3: each quoted Forget binds to its own fact and consumes its own request').toEqual({
+      remaining: [], otherBinned: true,
     });
   });
 

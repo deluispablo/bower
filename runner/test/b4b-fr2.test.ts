@@ -278,8 +278,8 @@ describe('B4b fix round 2, addendum 14', () => {
   });
 
   it('control: b4b-fr2-A-forget-tombstone-retry', async () => {
-    const f = await fixture({ history: true, words: 'Forget my remote preference.' });
-    const run = await execute(f, forget);
+    const f = await fixture({ history: true, words: `Forget that ${REMOTE}` });
+    const run = await execute(f, { ...EMPTY, forget: [{ factId: 'fact-remote', quote: REMOTE }] });
     expect(run.code, run.errors).toBe(0);
     expect(run.refusals).toEqual([]);
     expect(ledger(run).tombstones.map((t) => t.factId)).toEqual(['fact-remote']);

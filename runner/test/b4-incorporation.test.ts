@@ -418,7 +418,7 @@ describe('B4b through production entry points', () => {
       if (args[0] === aboutId) writes.push(parseObservations(bytes(await f.drive.readText(ledgerId))).tombstones.some((t) => t.factId === 'fact-remote'));
       return write(...args);
     });
-    const forgotten = await execute(f, { ...EMPTY, forget: [{ factId: 'fact-remote' }] });
+    const forgotten = await execute(f, { ...EMPTY, forget: [{ factId: 'fact-remote', quote: REMOTE.toLowerCase() }] });
     const sys = await f.id('.bower');
     const archive = await f.drive.createFolder(sys, 'archive');
     const aboutArchive = await f.drive.createFolder(archive.id, 'about-me');
@@ -443,8 +443,8 @@ describe('B4b through production entry points', () => {
   });
 
   it('control: c17-b4-forget-no-return', async () => {
-    const f = await fixture({ history: true, words: 'Forget the remote preference.' });
-    const forgotten = await execute(f, { ...EMPTY, forget: [{ factId: 'fact-remote' }] });
+    const f = await fixture({ history: true, words: `Forget that ${REMOTE.toLowerCase()}` });
+    const forgotten = await execute(f, { ...EMPTY, forget: [{ factId: 'fact-remote', quote: REMOTE.toLowerCase() }] });
     expect(ledger(forgotten).live.filter((x) => x.text === GARDEN)).toHaveLength(2);
     const inbox = await f.id('Inbox'); const pile = await f.drive.createFolder(inbox, 'Remember again', { pile: 'remember-new' });
     await f.drive.createText(pile.id, PILE_NOTE, `Remember again: ${REMOTE}\n`);
