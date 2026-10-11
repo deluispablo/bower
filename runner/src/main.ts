@@ -55,7 +55,7 @@ import { NO_LONGER_ALLOWED, RunnerToken, isGone, isStaleAttempt } from './token'
 import { driveEffects, runOperations, type Effects } from '../../src/data/spine/engine';
 import { POOL } from '../../src/data/spine/schedule';
 import { admittedPlan } from './spine/admitted';
-import type { ClaudeSpawn } from './claude';
+import { InvalidModelReply, type ClaudeSpawn } from './claude';
 import { providerFor, providerNamed, type ProviderName } from './provider';
 import { runnerReads } from './spine/records';
 import { keepFinishedAtEnd } from './spine/retention';
@@ -96,7 +96,7 @@ export interface TidyOptions {
 export type TidyEnd =
   | { phase: 'done'; dispositions: ItemDisposition[] }
   | { phase: 'saving'; why: string }
-  | { phase: 'failed'; why: string };
+  | { phase: 'failed'; why: string; invalidReply?: true };
 
 /** What a run whose chain cannot be verified says: it is not touched again. */
 const UNREADABLE = 'Bower could not read what it did. Try again later.';
@@ -202,7 +202,7 @@ async function tidyRun(opts: TidyOptions, timing: RunTiming, status: RunnerStatu
   // Failed for good (the final stop): retention, as at done, before the report the Worker takes.
   await seen.retain?.((opts.clock ?? Date.now)());
   await status.post('failed', { failure: B_FAILURE });
-  return { phase: 'failed', why: end.why };
+  return { phase: 'failed', why: end.why, ...(end.error instanceof InvalidModelReply ? { invalidReply: true as const } : {}) };
 }
 
 /** What `tidy` saw: the run's chain as read and as it grew (null until it was read), and whether `saving` was reported. */
@@ -372,8 +372,8 @@ export interface MainOptions {
  * `BOWER_API_URL`, and the dispatch from the event file at `GITHUB_EVENT_PATH`, which is where the ticket stays: it
  * is never put in the environment or printed, and on Actions it is masked in the log first
  * (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#masking-a-value-in-a-log).
- * Gives the exit code: 0 once the Worker took `done` (or already held the run ended); 1 when the run failed,
- * could not start, stopped on an error, or was left in `saving` for a redispatch to finish, said in
+ * Gives the exit code: 0 once the Worker took a terminal report (or already held the run ended); 1 when a reply stays
+ * invalid after its retry, the run could not start, stopped on an error, or was left in `saving` for a redispatch, said in
  * the log. Past the dispatch, `runTidy`'s one exit (`leave`) has already told the Worker the attempt ended. Nothing runs after `done` is taken (the report is saved and read back before it), so a run already done
  * never ends non-zero by a later step.
  */
@@ -438,7 +438,7 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
     if (end.phase !== 'done') console.error(end.why);
     // Left in saving with no terminal report: the job fails, so it never shows success for an unfinished run; the
     // Worker's recovery, told the attempt ended, redispatches it (TL-P3-28; TL-P4-16 addendum 4).
-    return end.phase === 'done' ? 0 : 1;
+    return end.phase === 'saving' || (end.phase === 'failed' && end.invalidReply) ? 1 : 0;
   } catch (e) {
     console.error(e);
     return 1;

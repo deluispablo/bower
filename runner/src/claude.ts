@@ -129,6 +129,11 @@ export interface ClaudeSetup {
 /** One sentence for the person; the details go to `console.error`. */
 const PLAN_REFUSED = "Bower couldn't plan this tidy-up. Try again.";
 
+/** A model reply that is still invalid after its one retry. */
+export class InvalidModelReply extends BowerError {
+  constructor() { super('unknown', PLAN_REFUSED); }
+}
+
 /** The model and turn cap from the environment, each falling back to the original's with a warning. */
 export function claudeLimits(env: Readonly<Record<string, string | undefined>>): { model: string; maxTurns: number } {
   let model = env.BOWER_MODEL?.trim() || DEFAULT_MODEL;
@@ -1302,10 +1307,10 @@ const hidden = (text: string, token: string | undefined): string => (token ? tex
 
 export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: ScriptedRead): RunProvider {
   const token = setup.env.CLAUDE_CODE_OAUTH_TOKEN?.trim() || undefined;
-  const refuse = (why: string, stderr = ''): never => {
+  const refuse = (why: string, stderr = '', invalidReply = false): never => {
     const tail = stderr.trim() ? `; claude said: ${stderr.trim().slice(-2000)}` : '';
     console.error(hidden(`The Claude provider's plan for run ${run.runId} is refused: ${why}${tail}`, token));
-    throw new BowerError('unknown', PLAN_REFUSED);
+    throw invalidReply ? new InvalidModelReply() : new BowerError('unknown', PLAN_REFUSED);
   };
   return async (took) => {
     if (took.taken.rootId !== run.rootId) return refuse('the admitted set is for another folder');
@@ -1446,7 +1451,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           if (!attempt) console.error(hidden(`The Claude provider's plan for run ${run.runId} was refused (${value.kind}): ${why}; asking once more.`, token));
         }
       }
-      return refuse(why);
+      return refuse(why, '', true);
     };
     try {
       const selectionInput = prepared(run, shownTook, shown);

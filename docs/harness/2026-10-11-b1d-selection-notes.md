@@ -2554,3 +2554,86 @@ Offline sources reused from the assigned packet, without network verification:
 Stop boundary: five test-file changes plus this note are reviewable for the runner to commit.
 Items 1/2/4 are complete; item 3 remains blocked by the missing public consumer. No acceptance,
 merge-readiness, integration, commit or production fix is claimed.
+
+## Fix (addendum 18)
+
+implementer: codex
+status: the two authorized regressions are fixed; remaining contract reds prevent a green runner suite.
+
+Authority: the owner's narrow implementation instruction and TL-P4-41 addendum 18 (2),
+with addendum 16's invalid-reply/ledger split. Only runner/src/claude.ts and runner/src/main.ts
+change, plus this required note. No network, git-writing command, dependency change,
+node_modules replacement/symlink, test edit or unrelated production repair.
+The runner commits the diff. All check output and Vitest reports live in OS temp;
+Vitest's cache is disabled and the runner's configured repository report is overridden.
+
+### Narrow change
+
+The existing two-attempt validation loop now throws InvalidModelReply only after its retry
+also fails. It remains a BowerError with the existing sentence and credential-safe diagnostics.
+The existing terminal-failure path carries that distinction to main, which returns code 1
+for this invalid reply, and code 0 when the Worker accepts another terminal failure report.
+A provider exception or process error before planning therefore keeps its failed report,
+no manifest and no derived writes, with code 0. Saving and unreported errors keep code 1;
+ledger exhaustion keeps done/code 0. No hot, recovery, checkpoint or report mechanism changes.
+
+removed: the blanket code-1 mapping for every accepted terminal failure report.
+removed: no production function, existing export, test, assertion or dependency.
+tests changed: none
+
+### Red and green evidence
+
+Before the fix, the two assigned files reproduce **23 passed, 2 failed, 25 total**, exit 1:
+/tmp/b1d-fix18-red.{json,log}. Both fail with expected code 0, received code 1:
+- runner/test/claude-provider.test.ts:525 (owner's original :529),
+  "the Claude provider runs under the original permission policy and never logs the token".
+- runner/test/b23-hot-recovery.test.ts:47,
+  "B3b hot: pre-plan failure and done redispatch send no hot writes".
+
+Both pass in the final full runner suite. Its existing controls also pass:
+b1-invalid-reply-exhaustion-fails-after-one-retry (failed/code 1),
+b1-ledger-exhaustion-valid-replies-done-with-items-left-in-inbox (done/code 0),
+and b1-shared-ledger. The credential, permission, no-manifest and no-hot-write assertions
+are unchanged. No fixture, golden, call budget, bound or tolerance is changed.
+
+### Required checks and every remaining red
+
+Full runner: **690 passed, 3 failed, 693 total**, exit 1.
+Full src suite: **5,689 passed, 1 failed, 5,690 total**, exit 1.
+Runner TypeScript, ESLint on both touched files and both unused-code gate passes: exit 0.
+Read-only git diff --check: pass. No test file appears in the diff.
+
+| File:line | Remaining red | Cause and scope |
+| --- | --- | --- |
+| runner/test/claude-provider.test.ts:464 (fixture :437) | a malformed or out-of-schema Claude reply fails truthfully and writes nothing | "the turn cap reached" expects code 1, but this process/cap failure takes no validation retry and now keeps the accepted failed report's code 0. This expectation conflicts with the owner's only-invalid-reply-after-retry instruction; no test change or extra code repair is authorized. |
+| runner/test/type-table.test.ts:52 (helper :14) | B5a contracts: b5-row-schema-and-order | Existing Sweep 5 gap: insertTypeRow is absent, with no public production consumer named for retargeting. Outside this fix. |
+| runner/test/type-table.test.ts:152 (helper :14) | B5a contracts: b5-explicit-column-replaces-fourth | Existing Sweep 5 gap: requestTableColumn is absent, with no public production consumer named for retargeting. Outside this fix. |
+| src/e2e-port.test.ts:37 | a server from another worktree is never reused | Expected sandbox restriction: listen EPERM at 127.0.0.1, followed by the 5,000 ms test timeout. Confirmed by the focused default-reporter run. |
+
+The provider test's fixture loop stops at its turn-cap assertion. Its no-result/process-error
+and size-cap fixtures at :438–439 also take no validation retry; their code-1 expectations
+are potential instances of the same contract conflict, not separately observed failures.
+No assertions are weakened, no fourth implementation round or other mechanism is added,
+and no acceptance or merge-readiness is claimed.
+
+Commands (each redirected to its matching OS-temp log):
+- pnpm -C runner exec vitest run test/claude-provider.test.ts test/b23-hot-recovery.test.ts --maxWorkers=2 --reporter=json --outputFile=/tmp/b1d-fix18-red.json --cache=false
+  log: /tmp/b1d-fix18-red.log
+- pnpm -C runner exec vitest run --maxWorkers=2 --reporter=json --outputFile=/tmp/b1d-fix18-runner.json --cache=false
+  log: /tmp/b1d-fix18-runner.log
+- pnpm exec vitest run src --maxWorkers=2 --reporter=json --outputFile=/tmp/b1d-fix18-src.json --cache=false
+  log: /tmp/b1d-fix18-src.log
+- pnpm -C runner exec tsc --noEmit -p .
+  log: /tmp/b1d-fix18-tsc.log
+- pnpm exec eslint runner/src/claude.ts runner/src/main.ts
+  log: /tmp/b1d-fix18-eslint.log
+- node scripts/check-unused-gate.mjs
+  log: /tmp/b1d-fix18-unused.log
+- pnpm exec vitest run src/e2e-port.test.ts --maxWorkers=2 --reporter=default --cache=false
+  log: /tmp/b1d-fix18-port.log (EPERM diagnostic; 1 passed, 1 failed, exit 1)
+
+No pnpm check or e2e: their repository outputs conflict with the owner's output restriction;
+the explicitly requested checks above ran. No screen or corpus fixture changed.
+Offline research reuses the packet's citations and the existing validate-and-retry loop:
+https://python.useinstructor.com/concepts/retrying/ (already cited in runner/src/claude.ts).
+No source was fetched or independently reverified over the network.
