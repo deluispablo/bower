@@ -3244,3 +3244,128 @@ The existing corpus/main driver, FakeDrive, ownership parser and phase-aware mod
 fixture are reused. No network call, writing git command, dependency replacement
 or node_modules symlink was used. `.codex-commits.json` requests one tests commit
 and a separate notes-only commit; the runner owns committing.
+
+## Round 6 (addendum 23)
+
+Implemented the re-plan in TL-P4-41 addendum 23 and the four findings in
+`2026-10-11-b1d-adversarial-final-3.md`. No test or fixture changed. One ownership
+parser, versioned read cache, RunTiming ledger and read-ahead limiter remain.
+
+### Production changes
+
+- `parseOwnership` now has an advisory prefix mode that returns complete region
+  spans and an incomplete flag, including for malformed or unsupported framing.
+  Full parsing retains its existing strict result and refusals. `indexedFront`
+  uses that mode for every note type, retains closed front matter and extracts
+  links only from complete spans. At the byte bound it discards the unfinished
+  last line and marks coverage incomplete. The optional flag is accepted by the
+  existing manifest validator and retained across unchanged cached versions.
+- Candidate MOCs acquire complete text through the existing read cache before
+  their members or links are used. A typed ownership refusal logs the existing
+  error and suppresses that note alone. Maintenance likewise catches only that
+  typed per-note refusal; unrelated incomplete notes stay advisory. The old
+  strict-prefix MOC exception is gone. A needed map still shares one full read
+  with maintenance, and unrelated crossing notes of all five types get none.
+- `RunTiming.maintenance` runs inside Node's `AsyncLocalStorage`. Its existing
+  meter charges async descendants even after the initiating wrapper returns,
+  and refuses the 301st send before transport. The existing limiter can stop
+  on `LedgerExhausted`; both prefix discovery and the runner's admission
+  read-ahead use it. Queued tasks reject without starting their reads, and
+  their existing consumers handle those rejections. No replacement ledger or
+  cache was introduced; the 300-call bound and before/after-effect settlement
+  paths are unchanged.
+- Answer and request pins belong to their admitted source. Named request notes
+  remain visible candidates, but do not spend another source's five-note
+  allowance. Script-bound pins stay in that request's frozen allowed targets
+  even when it needs no model-selected destination. This preserves C05's
+  requested edits and nothing-found settlements when a selected pile supplies
+  the evidence. The request's explicit target binding supplies authority;
+  candidate visibility alone does not.
+- MOC `members` references use the existing physical-id-to-path normalization
+  used by other references. Identical member graphs now have one fingerprint
+  across fresh physical ids.
+- The supplied fake e2e log fails at `capabilities.spec.ts:235`, inside axe's
+  `section[aria-labelledby="qs"]` include, after the shown-update assertion
+  already passes. `Home.tsx` had replaced `qs` with `useId()` in Q1b commit
+  `0949a37a`, present through the branch's merged UI diff. Home now retains
+  its stable `qs` heading; the run sheet keeps its generated unique heading.
+  This repairs the concrete selector failure without altering any test,
+  question content, answer path or UI design.
+
+Named call changes: no new model call or normal discovery call. Needed candidate
+maps still use one full cached read; unrelated cut notes use only their ordinary
+prefix. Exhausted discovery now stops at 300 actual maintenance sends, including
+queued descendants. Character, selection, operation and timing bounds remain.
+
+removed: strict full-note parsing of ordinary note prefixes in selection discovery.
+removed: the MOC-only strict-prefix exemption and separate prefix ownership probe.
+removed: fatal propagation of a candidate or maintenance note's typed ownership refusal.
+removed: the global maintenanceDepth counter that lost queued async provenance.
+removed: starting queued read-ahead work after its ledger exhaustion.
+removed: charging every request's pins against every other source.
+removed: unnormalized physical ids in MOC member arrays.
+removed: replacing Home's stable questions heading id with a generated id.
+tests changed: none
+
+### Verification
+
+The unchanged six-item `test/b1d-r6.test.ts` suite first failed all six intended
+assertion reds: `/tmp/b1d-r6-before.log`. It then passed all six, including all
+positive controls: `/tmp/b1d-r6-targeted.log`. The existing fake e2e red is in
+`/tmp/gates-b1d-final3/e2e-fake.log`; browser verification is assigned to the runner.
+
+The first full runner run exposed C05 request visibility/settlement regressions
+and the existing skipped-map console assertion. Production fixes restored the
+request source's bound authority and kept that diagnostic. All 96 tests in the
+C05 person-note, C05 bounded-read, B1d planning and round 6 suites then passed:
+`/tmp/b1d-r6-compat2.log`. No assertion was changed or weakened.
+
+Research was reused offline, without network access or independent re-verification:
+[Node AsyncLocalStorage](https://nodejs.org/api/async_context.html), as named by
+addendum 23, and the packet's
+[context engineering reference](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents).
+The implementation uses those standard async-context semantics in the existing
+RunTiming meter and reuses the app's existing parser, read cache and limiter.
+
+| Final check | Result | Log |
+| --- | --- | --- |
+| Full runner suite, including all six round 6 reds | 55 files, 711 tests passed | `/tmp/b1d-r6-runner-final.log` |
+| Full src suite, two workers | 171 files passed, 5,741 tests passed; expected e2e-port failure only | `/tmp/b1d-r6-src.log` |
+| Final affected parser, ownership, manifest, author, read-ahead and Home suites | 7 files, 1,854 tests passed | `/tmp/b1d-r6-src-final-targeted.log` |
+| TypeScript app | Pass | `/tmp/b1d-r6-tsc-app.log` |
+| TypeScript node | Pass | `/tmp/b1d-r6-tsc-node.log` |
+| TypeScript runner | Pass | `/tmp/b1d-r6-tsc-runner.log` |
+| ESLint touched runner files | Pass | `/tmp/b1d-r6-eslint-runner.log` |
+| ESLint touched app files | Pass | `/tmp/b1d-r6-eslint-app.log` |
+| Unused code, normal and production passes | Pass; baselines unchanged | `/tmp/b1d-r6-unused.log` |
+| Diff whitespace and unchanged tests | Pass | `git diff --check`; no test path in the diff |
+
+The src failure is exactly `src/e2e-port.test.ts:37`, "a server from another
+worktree is never reused": `listen EPERM` on 127.0.0.1, its associated unhandled
+socket error and existing 5,000 ms timeout. No other app test failed. Final
+focused app verification ran after the last prefix/limiter changes; the final
+full runner suite also ran after all production edits. No remaining test/contract
+contradiction was found.
+
+Commands (all stdout/stderr redirected to the corresponding OS-temp logs):
+
+```sh
+NODE_OPTIONS='--require=/tmp/b1d-r6-test-output.cjs' pnpm -C runner exec vitest run --maxWorkers=2 --reporter=default --cache=false --configLoader=native
+NODE_OPTIONS='--require=/tmp/b1d-r6-test-output.cjs' pnpm exec vitest run src --maxWorkers=2 --reporter=default --cache=false --configLoader=native
+NODE_OPTIONS='--require=/tmp/b1d-r6-test-output.cjs' pnpm exec vitest run src/data/vault/note-format.test.ts src/data/vault/ownership-format.test.ts src/data/contracts/parse-once.test.ts src/data/contracts/run-manifest.test.ts src/data/contracts/note-edit.test.ts src/data/spine/plan.test.ts src/features/home/Home.test.tsx --maxWorkers=2 --reporter=default --cache=false --configLoader=native
+pnpm exec tsc --noEmit -p tsconfig.app.json
+pnpm exec tsc --noEmit -p tsconfig.node.json
+pnpm -C runner exec tsc --noEmit -p .
+pnpm -C runner exec eslint src/claude.ts src/drive.ts src/index.ts src/model-input.ts src/timing.ts
+pnpm exec eslint src/data/contracts/note-format.ts src/data/contracts/ownership-format.ts src/data/contracts/run-manifest.ts src/data/spine/read.ts src/features/home/Home.tsx
+node scripts/check-unused-gate.mjs
+```
+
+The existing OS-temp preload redirects only CPU reporter output to
+`os.tmpdir()/b1d-r6-cpu`; it changes no test logic. The JSON reporter and Vitest
+cache are disabled, and the native config loader avoids repository bundles.
+No network, writing git command, dependency replacement or node_modules symlink
+was used. As explicitly assigned, the runner owns committing, `pnpm check`, and
+capabilities e2e on demo and fake. Those aggregate/browser gates are not claimed
+as passed here. `.codex-commits.json` contains exactly two groups: production
+files together, then this notes file alone.
