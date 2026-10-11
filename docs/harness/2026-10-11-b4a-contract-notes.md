@@ -2621,3 +2621,44 @@ Read-only git diff --check: pass.
 No git-writing command ran; node_modules was neither replaced nor symlinked.
 Skipped: production repair, pnpm check, typecheck and e2e; this session writes the red only.
 Risk: the purity gate still misses computed globals until the authorized repair.
+
+## Round 7 (addendum 10)
+
+Scope: the existing usesForbiddenGlobal scanner, its bracket-global fixture loader,
+and these notes. All four scanner callers remain unchanged; no production code,
+exports, configuration, dependency, runtime or user-data changes.
+
+The existing TypeScript syntax walk now checks string-literal arguments of element
+access against FORBIDDEN. Ordinary literals and comments remain inert. The existing
+document.title and window.location controls still reject actual access.
+Offline reference: https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API
+Reused installed isElementAccessExpression and isStringLiteral; no network.
+
+removed: none; no second scanner or dependency introduced.
+tests changed: src/architecture.test.ts: restore element-access checking in the existing scanner; assertions unchanged.
+tests changed: src/architecture-bracket.test.ts: use dirname/fileURLToPath/join to avoid Vite's new-URL asset rewrite under jsdom; assertions unchanged.
+
+Red: both bracket-global fixtures failed on fetch/document false versus true;
+log /tmp/b4a-r7-red.log. Green: architecture and bracket-global, 11 tests passed;
+log /tmp/b4a-r7-target.log. The red alone also passed in Node, 2 tests;
+log /tmp/b4a-r7-bracket.log.
+App tsc (--noEmit --incremental false), touched-file eslint and unused gate pass;
+logs /tmp/b4a-r7-tsc.log, /tmp/b4a-r7-eslint.log, /tmp/b4a-r7-unused.log.
+
+Test execution uses an OS-temp config with the same jsdom setup and timer gate.
+Only the CPU reporter's destination is redirected to OS temp via a temporary
+transpiled setup plugin; the Vite cache also lives in OS temp. Initial temporary
+setup resolution attempts failed before tests ran; no repository files were
+changed for this configuration. pnpm check and capabilities demo/fake e2e are
+left to the runner as instructed; no git writes or node_modules replacement.
+
+Final full src verification: pnpm exec vitest run src --maxWorkers=2
+--config <OS-temp vitest.mjs> --configLoader runner. 179 files passed,
+5,788 tests passed; only src/e2e-port.test.ts failed (one test and its unhandled
+listen EPERM on 127.0.0.1, expected in this sandbox).
+Log: /tmp/b4a-r7-src-final.log. The earlier full run had the same totals;
+log /tmp/b4a-r7-src.log. No other failed test or contradiction.
+Final git diff --check passed (read-only); commits are delegated to the runner
+through .codex-commits.json, with scanner/fixture and notes in separate commits.
+Risk/left out: restricted sandbox prevents the e2e-port server check; runner
+will run pnpm check and capabilities e2e on demo/fake after committing.
