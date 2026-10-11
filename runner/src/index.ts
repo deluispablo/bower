@@ -48,9 +48,7 @@ const aboutTarget: DeclaredTarget = {
     for (const path of ['About me.md', '.bower/observations.jsonl']) {
       const f = index.file(path);
       if (!f) continue;
-      const text = await drive.readListedText(f);
-      sources.push({ path, file: seen(f), text, content: { encoding: 'utf8', size: new TextEncoder().encode(text).length,
-        sha256: await rawHash(text), provenance: drive.provenance, observedModifiedTime: f.modifiedTime } });
+      sources.push(await readSource(drive, path, f));
     }
     return { at: new Date(manifest.requestedAt).toISOString(), sources };
   },
@@ -123,9 +121,7 @@ export const hotTarget: DeclaredTarget = {
     for (const f of candidates) {
       const path = index.pathOf(f.id);
       if (!path) continue;
-      const text = await drive.readListedText(f);
-      sources.push({ path, file: seen(f), text, content: { encoding: 'utf8', size: new TextEncoder().encode(text).length,
-        sha256: await rawHash(text), provenance: drive.provenance, observedModifiedTime: f.modifiedTime } });
+      sources.push(await readSource(drive, path, f));
     }
     return { at: new Date(manifest.requestedAt).toISOString(), sources };
   },
@@ -238,6 +234,12 @@ export const hotTarget: DeclaredTarget = {
       previousHot: declaration.sources.find((source) => source.path === SYSTEM.hot)?.text }).text;
   },
 };
+
+async function readSource(drive: RunnerDrive, path: string, f: DriveFile): Promise<MaintenanceDeclaration['sources'][number]> {
+  const text = await drive.readListedText(f);
+  return { path, file: seen(f), text, content: { encoding: 'utf8', size: new TextEncoder().encode(text).length,
+    sha256: await rawHash(text), provenance: drive.provenance, observedModifiedTime: f.modifiedTime } };
+}
 
 const seen = (f: DriveFile): SeenFile => ({ fileId: f.id, name: f.name, parents: f.parents, folder: f.folder, modifiedTime: f.modifiedTime });
 const file = (f: SeenFile): DriveFile => ({ id: f.fileId, name: f.name, parents: f.parents, folder: f.folder, modifiedTime: f.modifiedTime, createdTime: f.modifiedTime });
