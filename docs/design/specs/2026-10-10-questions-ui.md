@@ -45,7 +45,7 @@ The owner OKed this on 2026-10-10: the "Refined: least change" page of the "Bowe
 | Cancel | The options come back; focus is on "Something else…". |
 | An answer on Home, no run live | The card goes; today's `answeredNow` toast. |
 | A question during the run, sheet open | The label "Bower has a question" and the card above the steps; "N more questions on Home" when there are more. |
-| An answer during the run | The card goes; today's `waits` toast. |
+| An answer during the run | The card goes; today's `waits` toast, shown once the sheet closes (messages wait while a sheet is open, 2026-10-11). |
 | The run ends with a question unanswered | Done sheet: today's "… and 1 question for you", and the card above RunLinks. |
 | The pile row while a question waits | "Waiting for your answer" in accent-line. |
 | After 2 rounds | Row: "Bower couldn't place this" (muted). Pile page: the full sentence as a plain line. |
