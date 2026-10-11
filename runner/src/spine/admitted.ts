@@ -17,7 +17,7 @@ import type { Admitted, Deferred } from '../../../src/data/spine/provider';
 import type { RunManifest } from '../../../src/data/spine/records';
 import type { RunnerToken } from '../token';
 import { applyChanges } from '../../../src/data/contracts/note-edit';
-import { aboutArchivePath, type ObservationOrigin } from '../../../src/data/contracts/observations';
+import { aboutArchivePath, parseObservations, validLearnedBlock, type ObservationOrigin } from '../../../src/data/contracts/observations';
 import { targetPath } from '../../../src/data/contracts/run-manifest';
 import { PILE_NOTE } from '../../../src/data/piles';
 import { RUNNER_WRITES, SYSTEM } from '../../../src/data/vault/layout';
@@ -119,7 +119,12 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
   const anchors = new Set(t.piles.flatMap((p) => (p.anchor ? [p.anchor.fileId] : [])));
   const taken = new Set([...anchors, ...t.piles.flatMap((p) => p.items.map((i) => i.fileId)), ...t.journal.map((j) => j.fileId)]);
   const edited = new Set(m.operations.flatMap((o) => (o.effect.kind === 'edit-text' ? [o.effect.before.fileId] : [])));
+  let ledgerBytes = new Uint8Array();
   for (const { effect: e } of m.operations) {
+    if (e.kind === 'write-runner-json' && e.path === '.bower/observations.jsonl'
+      || e.kind === 'create-text' && `${targetPath(m, e.parent)}/${e.name}` === '.bower/observations.jsonl') {
+      ledgerBytes = new TextEncoder().encode(e.text);
+    }
     switch (e.kind) {
       case 'move': {
         // Not a thing it took: only Bower's "new" mark, in place, cleared from last run's things or set on a note it edits.
@@ -147,6 +152,9 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
           if (e.beforeText === undefined) return 'an About me edit without its read bytes';
           const authored = applyChanges(new TextEncoder().encode(e.beforeText), e.changes);
           if (!authored.ok || authored.text !== e.text) return 'an About me edit outside its marked sections';
+          const undone = e.changes.flatMap((c) => c.kind === 'about-rewrite' ? c.undoneRunIds ?? [] : []);
+          const facts = Object.fromEntries(e.changes.flatMap((c) => c.kind === 'about-rewrite' ? [[c.region, c.factIds]] : []));
+          if (!validLearnedBlock(e.text, parseObservations(ledgerBytes, undone), facts)) return 'an invalid learned section';
         }
         const rules = e.path === RULES_PATH;
         if (rules ? kinds.has('timeline-append') || kinds.has('state-rewrite') : kinds.has('rules-wording')) return 'a note edit outside what the runner authors';
@@ -154,6 +162,9 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
       }
       case 'create-text': {
         const parentId = 'fileId' in e.parent ? e.parent.fileId : undefined;
+        if (e.name === 'About me.md' && parentId === m.scope.rootId
+          && (e.purpose !== 'generated' || m.capture.places.some((p) => p.path === 'About me.md')
+            || !validLearnedBlock(e.text, parseObservations(ledgerBytes)))) return 'an invalid learned section';
         const parent = targetPath(m, e.parent);
         if (e.name === 'observations.jsonl' && (e.purpose !== 'runner-json' || parent !== SYSTEM.dir
           || own === undefined || parentId !== own)) return 'a ledger outside the admitted system folder';

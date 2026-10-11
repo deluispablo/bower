@@ -20,6 +20,7 @@ import { parseRules } from './rules-format';
 import type { Change, EditEntry, EditText, Rename, RuleAdd, RuleRemove, TimelineConsent, MaintenanceNote } from './run-manifest';
 import { isHub } from './hub';
 import { BowerError } from './types';
+import { validLearnedBlock } from './observations';
 import { NOTE_TEMPLATES, TEMPLATE_REGIONS, type NoteTemplate } from './note-templates';
 
 /** Files larger than 1 MiB are never edited (TL-P2-20 rule 6). */
@@ -933,13 +934,9 @@ function framedMoc(text: string): string | null {
 function appendAbout(text: string, addition: string): Step {
   const before = parseOwnership(encoder.encode(text));
   const appended = text + (text && !text.endsWith('\n') ? '\n' : '') + addition;
-  const after = parseOwnership(encoder.encode(appended));
-  if (before.status === 'invalid' || after.status === 'invalid'
-    || ABOUT_REGIONS.some((region) => before.payloads?.[region])
-    || Object.entries(after.payloads ?? {}).some(([region, span]) => !(ABOUT_REGIONS as readonly string[]).includes(region)
-      && span.start >= encoder.encode(text).length)
+  if (before.status === 'invalid' || ABOUT_REGIONS.some((region) => before.payloads?.[region])
     || !addition.startsWith('## What Bower has learned\n') && !addition.startsWith('## What Bower has learned\r\n')
-    || !ABOUT_REGIONS.every((region) => (after.payloads?.[region]?.start ?? -1) >= encoder.encode(text).length)) return { refused: 'not-bower' };
+    || !validLearnedBlock(addition)) return { refused: 'not-bower' };
   return { text: appended, added: [], rules: null };
 }
 
@@ -955,9 +952,6 @@ function rewriteRegion(text: string, change: RegionChange, fetched?: FetchedOwne
   const span = own.payloads?.[regionOf(change)];
   if (change.kind === 'template-rewrite' && (!note.byBower || !note.properties.some((p) => p.key === 'type' && p.value === 'project'))) return { refused: 'not-bower' };
   if ((change.kind === 'moc-rewrite' && (!note.byBower || !note.properties.some((p) => p.key === 'type' && p.value === 'moc'))) || !span) return { refused: 'not-bower' };
-  if (change.kind === 'about-rewrite' && (ABOUT_REGIONS.some((region) => !own.payloads?.[region])
-    || Object.entries(own.payloads ?? {}).some(([region, payload]) => !(ABOUT_REGIONS as readonly string[]).includes(region)
-      && payload.start >= (own.payloads?.['about-you']?.start ?? 0)))) return { refused: 'not-bower' };
   const at = spanOf(bytes, span);
   if (framed.slice(at.start, at.end) !== change.previous) return { refused: 'person-edited' };
   return { text: framed.slice(0, at.start) + change.text + framed.slice(at.end), added: [], rules: null };
@@ -1021,6 +1015,8 @@ function applyAtVersion(before: Uint8Array, changes: readonly Change[], authors:
     if (step.text !== current && !kept) return refuse('invariant');
     current = step.text;
   }
+  if (changes.some((c) => c.kind === 'about-append' || c.kind === 'about-rewrite')
+    && !validLearnedBlock(current)) return refuse('not-bower');
   if (current === text) return refuse('unchanged');
   return { ok: true, text: current, bytes: encoder.encode(current) };
 }

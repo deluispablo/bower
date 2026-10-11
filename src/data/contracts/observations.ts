@@ -1,9 +1,10 @@
 /** B4's versioned evidence contract. No provider, prompt assembly or persistence lifecycle. */
 import { BowerError } from './types';
 import { dateOk, validSummary } from './note-format';
-import { ABOUT_REGIONS, type AboutRegion } from './ownership-format';
+import { ABOUT_REGIONS, parseOwnership, type AboutRegion } from './ownership-format';
 import { parseRecordJson, canonicalRecordJson } from './record-json';
 import { parseTimelineLine } from './timeline-line';
+import { FOLDER_TEMPLATE } from './folder-template';
 
 const encoder = new TextEncoder();
 const object = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -107,8 +108,7 @@ function resolve(events: Event[], undone: readonly string[] = []): Ledger {
   for (const event of events) {
     if (event.kind !== 'observation') continue;
     // Claim evidence before invalidating its origin: a replay never becomes new evidence on Undo or Forget.
-    // A source version alone is not a new fact; new words from another source have their own identity.
-    const key = JSON.stringify([event.source.fileId, event.section, normalizedText(event.text)]);
+    const key = JSON.stringify([event.source.fileId, event.source.sha256, normalizedText(event.text)]);
     if (evidence.has(key)) continue;
     evidence.add(key);
     if (undone.includes(event.origin.runId) || blockedFacts.has(event.factId)
@@ -196,11 +196,41 @@ export function aboutArchivePath(path: string): boolean {
   return !!match && date(match[1]) && id(match[2]);
 }
 
-/** Each authored line binds to live evidence; headings are framing, never learned claims. */
-export function aboutEvidenceOk(text: string, section: AboutRegion, ledger: Ledger, factIds?: readonly string[]): boolean {
-  const heading = { 'about-you': '### About you', 'about-working-on': "### What you're working on",
-    'about-preferences': '### How you like things' }[section];
-  return text.split(/\r?\n/).every((line) => !line.trim() || line.trim() === heading
-    || ledger.live.some((fact) => fact.section === section && (!factIds || factIds.includes(fact.factId))
-      && normalizedText(parseTimelineLine(line)?.text ?? line.replace(/^[-*] /, '')) === normalizedText(fact.text)));
+/** One whole-block check; the pure splice checks framing, and write boundaries supply live evidence. */
+export function validLearnedBlock(text: string, ledger?: Ledger,
+  factIds: Partial<Record<AboutRegion, readonly string[]>> = {}): boolean {
+  if (text === FOLDER_TEMPLATE.find((file) => file.path === 'About me.md')?.content) return true;
+  const bytes = encoder.encode(text);
+  const own = parseOwnership(bytes);
+  if (own.status === 'invalid') return false;
+  const first = own.payloads?.['about-you'];
+  if (!first) return false;
+  const decode = (start: number, end: number): string => new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes.subarray(start, end)).replace(/\r\n/g, '\n');
+  const heading = '## What Bower has learned\n';
+  const begin = (region: AboutRegion): string => `<!-- bower:ownership/2 begin ${region} -->\n`;
+  const prefix = decode(0, first.start);
+  if (!prefix.endsWith(heading + begin('about-you'))) return false;
+  let block = heading;
+  for (const region of ABOUT_REGIONS) {
+    const span = own.payloads?.[region];
+    if (!span) return false;
+    const payload = decode(span.start, span.end);
+    if (payload.includes('<!-- bower:ownership')) return false;
+    block += begin(region) + payload + `<!-- bower:ownership/2 end ${region} -->\n`;
+    if (!ledger) continue;
+    const allowed = factIds[region];
+    if (allowed?.some((id) => !ledger.live.some((fact) => fact.factId === id && fact.section === region))) return false;
+    const label = { 'about-you': '### About you', 'about-working-on': "### What you're working on",
+      'about-preferences': '### How you like things' }[region];
+    if (!payload.split('\n').every((line) => !line.trim() || line.trim() === label
+      || ledger.live.some((fact) => fact.section === region && (!allowed || allowed.includes(fact.factId))
+        && normalizedText(parseTimelineLine(line)?.text ?? line.replace(/^[-*] /, '')) === normalizedText(fact.text)))) return false;
+  }
+  const start = prefix.length - heading.length - begin('about-you').length;
+  if (text.replace(/\r\n/g, '\n').slice(start).trimEnd() !== block.trimEnd()) return false;
+  if (!ledger) return true;
+  return !ledger.events.some((event) => event.kind === 'observation'
+    && ledger.tombstones.some((t) => t.factId === event.factId || t.reason === 'bin' && t.sourceId === event.source.fileId)
+    && !ledger.live.some((fact) => normalizedText(fact.text) === normalizedText(event.text))
+    && normalizedText(block).includes(normalizedText(event.text)));
 }

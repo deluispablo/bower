@@ -1,10 +1,10 @@
 /** Immutable run manifest validation only; no claim, dispatch, readiness or permission authority. */
-import { ABOUT_REGIONS, type AboutRegion, MOC_REGIONS, parseOwnership, createOwnershipContext, type MocRegion } from './ownership-format';
+import { ABOUT_REGIONS, type AboutRegion, MOC_REGIONS, createOwnershipContext, type MocRegion } from './ownership-format';
 import { sha256 } from './hashes';
 import { proposalOk, isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
 import { typeTableOk } from './note-format';
 import { BowerError, type UpdatedRow } from './types';
-import { parseObservations, canRebuildAboutSection, aboutArchivePath, aboutEvidenceOk } from './observations';
+import { parseObservations, canRebuildAboutSection, aboutArchivePath, validLearnedBlock } from './observations';
 import { applyChanges, mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, profileTextOk, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 import { TEMPLATE_REGIONS, type TemplateRegion } from './note-templates';
@@ -744,6 +744,13 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> 
         if (lastMemory && !op.dependsOn.includes(lastMemory.operationId)) return false;
       }
       if (e.kind === 'create-text') {
+        if (e.name === 'About me.md' && 'fileId' in e.parent && e.parent.fileId === value.scope.rootId) {
+          if (about.length || e.purpose !== 'generated'
+            || lastLedger && !op.dependsOn.includes(lastLedger.operationId)
+            || !validLearnedBlock(e.text, lastLedger ? ledgers.get(lastLedger.operationId) : parseObservations(new Uint8Array()))) return false;
+          lastMemory = op;
+          continue;
+        }
         const path = `${targetPath(value, e.parent)}/${e.name}`;
         if (path === ledgerPath) {
           if (e.purpose !== 'runner-json') return false;
@@ -814,24 +821,18 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> 
       if (!authored.ok || authored.text !== e.text) return false;
       const ledger = ledgers.get(lastLedger.operationId);
       if (!ledger) return false;
+      const undoneRunIds = e.changes.flatMap((c) => c.kind === 'about-rewrite' ? c.undoneRunIds ?? [] : []);
+      if (undoneRunIds.some((runId) => !ledger.events.some((event) =>
+        (event.kind === 'observation' ? event.origin.runId : event.runId) === runId))) return false;
+      const rebuilt = undoneRunIds.length && (lastLedger.effect.kind === 'write-runner-json' || lastLedger.effect.kind === 'create-text')
+        ? parseObservations(enc.encode(lastLedger.effect.text), undoneRunIds) : ledger;
+      const factIds = Object.fromEntries(e.changes.flatMap((c) => c.kind === 'about-rewrite' ? [[c.region, c.factIds]] : []));
+      if (!validLearnedBlock(e.text, rebuilt, factIds)) return false;
       for (const c of e.changes) {
-        if (c.kind === 'about-append') {
-          const own = parseOwnership(authored.bytes);
-          if (own.status === 'invalid' || ABOUT_REGIONS.some((section) => {
-            const span = own.payloads?.[section];
-            return !span || !aboutEvidenceOk(new TextDecoder().decode(authored.bytes.subarray(span.start, span.end)), section, ledger);
-          })) return false;
-          continue;
-        }
         if (c.kind !== 'about-rewrite') continue;
-        if (c.undoneRunIds?.some((runId) => !ledger.events.some((event) =>
-          (event.kind === 'observation' ? event.origin.runId : event.runId) === runId))) return false;
-        const rebuilt = c.undoneRunIds?.length && (lastLedger.effect.kind === 'write-runner-json' || lastLedger.effect.kind === 'create-text')
-          ? parseObservations(enc.encode(lastLedger.effect.text), c.undoneRunIds) : ledger;
         const reason = c.undoneRunIds?.length ? 'undo' : ledger.tombstones.some((t) => t.runId === value.runId)
           ? 'forget' : 'consolidate';
-        if (!aboutEvidenceOk(c.text, c.region, rebuilt, c.factIds)) return false;
-        if (!c.factIds || c.factIds.some((id) => !rebuilt.live.some((fact) => fact.factId === id && fact.section === c.region))) return false;
+        if (!c.factIds) return false;
         const rebuild = canRebuildAboutSection({ ledger: rebuilt, section: c.region, text: c.previous, reason });
         if (!rebuild) {
           if (c.archive || !c.text.startsWith(c.previous)) return false;
