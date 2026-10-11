@@ -239,8 +239,8 @@ it('b4a-fr1 7 rereads do not supply five observations', () => {
   const replay = Array.from({ length: 5 }, (_, i) => ({ ...first, eventId: `event-replay-${i}`, factId: `fact-replay-${i}`,
     origin: { ...first.origin, runId: `run-replay-${i}` } }));
   expect(gate(replay), 'same source hash rereads are not new observations').toBe(false);
-  const versions = replay.map((event, i) => ({ ...event, source: { ...event.source, sha256: String(i + 1).repeat(64) } }));
-  expect(gate(versions), 'changing only source versions and issued ids adds no new fact').toBe(false);
+  const rereads = replay.map((event, i) => ({ ...event, origin: { ...event.origin, captureId: String(i + 1).repeat(64) } }));
+  expect(gate(rereads), 'rereading the same source, hash and text under new capture and issued ids adds no new fact').toBe(false);
 });
 
 it('b4a-fr1 8 first archive accepts created parent', async () => {

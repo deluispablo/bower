@@ -112,8 +112,16 @@ it('b4a-artifact-scope-and-order: runner admission scopes artifacts and note edi
     + '<!-- bower:ownership/2 begin about-preferences -->\n<!-- bower:ownership/2 end about-preferences -->\n';
   const edit = { kind: 'edit-text', before: file('about-id', 'About me.md', 'FOLDER_ID'), path: 'About me.md',
     beforeText, text: beforeText.replace('\nOld\n', '\nNew\n'),
-    changes: [{ kind: 'about-rewrite', region: 'about-you', previous: 'Old\n', text: 'New\n', recordIds: [] }] };
-  expect(outsideAdmitted(plan(edit), took, 'own-id')).toBeNull();
-  expect.soft(outsideAdmitted(plan({ ...edit, path: 'Resources/Other.md' }), took, 'own-id'), 'About me permission cannot escape its target').not.toBeNull();
-  expect.soft(outsideAdmitted(plan({ ...edit, changes: [{ ...edit.changes[0], region: 'personal' }] }), took, 'own-id')).not.toBeNull();
+    changes: [{ kind: 'about-rewrite', region: 'about-you', previous: 'Old\n', text: 'New\n', recordIds: [], factIds: ['fact-new'] }] };
+  const words = took.taken.piles.flatMap((pile) => pile.items).find((item) => item.name === 'Pile note.md');
+  if (!words) throw new Error('Missing admitted words fixture');
+  const memoryLedger = { ...ledger, text: JSON.stringify({ v: 1, kind: 'observation', eventId: 'event-new',
+    factId: 'fact-new', section: 'about-you', date: '2026-10-11', text: 'New', category: 'biography',
+    source: { fileId: words.fileId, sha256: 'a'.repeat(64) },
+    origin: { kind: 'words', runId: 'run-memory', captureId: 'b'.repeat(64), pileId: 'p-papers' } }) + '\n' };
+  const memoryPlan = (effect: unknown): Plan => ({ ...plan(effect),
+    operations: [{ effect: memoryLedger }, { effect }] } as unknown as Plan);
+  expect(outsideAdmitted(memoryPlan(edit), took, 'own-id')).toBeNull();
+  expect.soft(outsideAdmitted(memoryPlan({ ...edit, path: 'Resources/Other.md' }), took, 'own-id'), 'About me permission cannot escape its target').not.toBeNull();
+  expect.soft(outsideAdmitted(memoryPlan({ ...edit, changes: [{ ...edit.changes[0], region: 'personal' }] }), took, 'own-id')).not.toBeNull();
 });
