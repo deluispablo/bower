@@ -894,3 +894,7 @@ listen EPERM (`/tmp/b6a-fix4-src.log`). Complete failure list:
 All runtime assertions and B6a reds pass. No contract/test contradiction found.
 The implementation and requested checks are complete; entirely green non-exempt
 src verification remains blocked by the coordinator-owned compatibility row.
+
+## Close (coordinator, 2026-10-11)
+
+known-green: every red was proved failing at its tests-only commit (154816bb, a4c2e1ef, 4acb6d5d, 291a9cf6, c30f7adc; see each reds section) and passes at HEAD; the fix adds the new note-templates.ts and later rounds touched the same lines, so no single revert isolates it. Codex pass 3 PASS, P4-114 PASS (after P4-113 BLOCK, fixed per the lead); check green (519/529); e2e app/capabilities demo 35 / fake 59. The Next steps display is its own UI entry (designer and owner).

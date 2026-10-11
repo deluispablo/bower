@@ -6966,8 +6966,9 @@
     "steps": [
       "The prep's B6a reds pass through note-format, ownership-format, note-edit and scripted planning."
     ],
-    "verify": "",
-    "note": "TL-P4-47 Q5. Escalated; implementation after B5a integrates. Packet 2026-10-10-b6a-packet.md. implementer: codex."
+    "verify": "pnpm exec vitest run src/data/spine/scripted.test.ts src/data/contracts/note-edit.test.ts src/data/vault/note-format.test.ts -t \"b6-\"",
+    "note": "TL-P4-47 Q5. Escalated; implementation after B5a integrates. Packet 2026-10-10-b6a-packet.md. implementer: codex.",
+    "review": "P4-113 BLOCK fixed; P4-114 PASS"
   },
   {
     "id": "upload-resume-after-reload",
