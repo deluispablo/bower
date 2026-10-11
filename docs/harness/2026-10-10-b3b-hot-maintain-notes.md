@@ -1193,6 +1193,25 @@ tests changed: none
 
 ## Fix round 3 reds
 
+tests changed: runner/test/b23-hot-context.test.ts: seed the rule Undo inverse through contracts, no app vault import (runner tsc)
+
+Mechanical repair (2026-10-11): supersedes the DriveVault fixture description
+below. Seed the removal and restoration in the existing changes folder with
+JournalRecord and isJournalRecord; parseRules supplies the initial rule control.
+The restoration matches undoRuleLine's kind, what, path, text and undoes shape.
+Every assertion in the ordinary rule Undo case is unchanged (compared to HEAD).
+Offline sources: src/data/contracts/journal-record.ts and rules-format.ts;
+src/data/vault/drive-vault.ts:1500 supplies the inverse shape, without an import.
+Before: runner tsc reproduced all 17 browser-type errors, log
+/tmp/b3b-mechanical-tsc-before.log.
+After: b23-hot-context.test.ts passes all 10 tests with --maxWorkers=2,
+log /tmp/b3b-mechanical-test.log. Runner tsc passes with no diagnostics,
+log /tmp/b3b-mechanical-tsc.log. TypeScript has no maxWorkers option.
+Used the existing OS-temp config/preload; tests, cache and reports stay outside
+the repository. No network, git writes, installs or node_modules changes.
+No pnpm check or e2e: mechanical test-only repair, requested component gates.
+Coordinator owns commits. The pre-existing untracked adversarial notes remain.
+
 2026-10-11 — red-owning session; adversarial pass 3's blocking finding at
 `runner/src/index.ts:144–145`. No network or writing git command.
 

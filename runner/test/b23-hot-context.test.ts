@@ -6,9 +6,8 @@ import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { askId } from '../../src/data/contracts/questions';
 import { opKey } from '../../src/data/contracts/op-key';
 import { RUNNER_WRITES } from '../../src/data/vault/layout';
-import { DriveVault } from '../../src/data/vault/drive-vault';
-import type { JournalRecord } from '../../src/data/contracts/journal-record';
-import { serializeRules } from '../../src/data/contracts/rules-format';
+import { isJournalRecord, type JournalRecord } from '../../src/data/contracts/journal-record';
+import { parseRules, serializeRules } from '../../src/data/contracts/rules-format';
 import * as hotModule from '../src/hot';
 import { AT, caseReplies, replySequence, runScripted } from './corpus-run';
 import { HOT, empty, manifests, observe, pacing, requiredFunction, runOnDrive, section, setup, writes,
@@ -176,67 +175,67 @@ it('B3b hot: an ordinary rule Undo keeps its own wording', async () => {
   const { c, drive, root } = await setup('b23-summary-person-lint');
   const text = 'Keep gardening notes in Resources.';
   await drive.createText(root, 'Rules.md', serializeRules([{ id: 'rule-1', text, since: AT }]), { by: 'bower' });
-  const vault = new DriveVault({ drive, rootId: async () => root,
-    runningPiles: () => new Set(), device: 'device-1' });
-  try {
-    const rule = (await vault.rules()).find((entry) => entry.text === text);
-    expect(rule).toBeDefined();
-    const undo = await vault.removeRule(rule?.id ?? '');
-    await vault.flushJournal();
-    const pendingRules = async (): Promise<JournalRecord[]> => Promise.all(
-      (await drive.listAll(root)).filter((file) => !file.folder
-        && /^\.bower\/changes\/[^/]+\.json$/.test(drive.pathOf(file.id, root) ?? ''))
-        .map(async (file) => JSON.parse(await drive.readText(file.id)) as JournalRecord));
-    const removal = (await pendingRules()).find((line) => line.kind === 'rule' && line.removes === text);
-    expect(removal).toBeDefined();
-    const events: Observation[] = [];
-    const first = await runOnDrive(c, drive, root, { pacing, claude: replySequence([empty]),
-      answerStart: { scope: 'instructions', requestId: 'rule-removal' },
-      around: observe(drive, root, events) }, 1);
-    expect(first.code).toBe(0);
-    expect(first.after['Rules.md']).not.toContain(text);
-    expect(JSON.parse(first.after[`.bower/changes/archive/${removal?.id}.json`] ?? 'null'))
-      .toMatchObject({ id: removal?.id, removes: text });
-    const firstManifest = JSON.parse(manifests(first)[0]?.[1] ?? '{}') as RunManifest;
-    const removedKey = opKey(root, firstManifest.runId, removal?.id ?? '');
-    expect(section(first.after[HOT], 'Recent changes'))
-      .toContain(`- 2026-10-07 ${removal?.what} · op:${removedKey}`);
-    expect(events.filter((event) => event.method === 'GET' && event.media
-      && event.path.startsWith('.bower/changes/archive/'))).toEqual([]);
+  const rule = parseRules(serializeRules([{ id: 'rule-1', text, since: AT }]))
+    .find((entry) => entry.text === text);
+  expect(rule).toBeDefined();
+  const changes = (await drive.listAll(root)).find((file) => drive.pathOf(file.id, root) === '.bower/changes');
+  const seedRule = async (line: JournalRecord): Promise<void> => {
+    if (!isJournalRecord(line)) throw new Error('Invalid journal seed.');
+    await drive.createText(changes?.id ?? '', `${line.id}.json`, `${JSON.stringify(line)}\n`);
+  };
+  await seedRule({ v: 1, id: 'rule-removal', device: 'device-1', at: AT,
+    kind: 'rule', what: `Removed the rule "${text}"`, path: 'Rules.md', removes: text });
+  const pendingRules = async (): Promise<JournalRecord[]> => (
+    await Promise.all((await drive.listAll(root)).filter((file) => !file.folder
+      && /^\.bower\/changes\/[^/]+\.json$/.test(drive.pathOf(file.id, root) ?? ''))
+      .map(async (file): Promise<unknown> => JSON.parse(await drive.readText(file.id))))
+  ).filter(isJournalRecord);
+  const removal = (await pendingRules()).find((line) => line.kind === 'rule' && line.removes === text);
+  expect(removal).toBeDefined();
+  const events: Observation[] = [];
+  const first = await runOnDrive(c, drive, root, { pacing, claude: replySequence([empty]),
+    answerStart: { scope: 'instructions', requestId: 'rule-removal' },
+    around: observe(drive, root, events) }, 1);
+  expect(first.code).toBe(0);
+  expect(first.after['Rules.md']).not.toContain(text);
+  expect(JSON.parse(first.after[`.bower/changes/archive/${removal?.id}.json`] ?? 'null'))
+    .toMatchObject({ id: removal?.id, removes: text });
+  const firstManifest = JSON.parse(manifests(first)[0]?.[1] ?? '{}') as RunManifest;
+  const removedKey = opKey(root, firstManifest.runId, removal?.id ?? '');
+  expect(section(first.after[HOT], 'Recent changes'))
+    .toContain(`- 2026-10-07 ${removal?.what} · op:${removedKey}`);
+  expect(events.filter((event) => event.method === 'GET' && event.media
+    && event.path.startsWith('.bower/changes/archive/'))).toEqual([]);
 
-    // The ordinary rule Undo records its own inverse after the removal was consumed.
-    vi.setSystemTime(AT + 1);
-    await vault.refresh();
-    await undo();
-    await vault.flushJournal();
-    const inverse = (await pendingRules()).find((line) => line.undoes === removal?.id);
-    expect(inverse).toMatchObject({ kind: 'rule', what: `New rule: "${text}"`, text,
-      path: 'Rules.md', undoes: removal?.id });
-    events.length = 0;
-    const restored = await runOnDrive(c, drive, root, { pacing, claude: replySequence([empty]),
-      answerStart: { scope: 'instructions', requestId: 'rule-restoration' },
-      around: observe(drive, root, events) }, 2);
-    expect(restored.code).toBe(0);
-    expect(restored.after['Rules.md']).toContain(text);
-    expect(restored.after[`.bower/changes/${inverse?.id}.json`]).toBeUndefined();
-    const archived = JSON.parse(restored.after[`.bower/changes/archive/${inverse?.id}.json`] ?? 'null') as JournalRecord;
-    expect(archived).toMatchObject(inverse ?? {});
-    const secondManifest = manifests(restored).map(([, bytes]) => JSON.parse(bytes) as RunManifest)
-      .find((manifest) => manifest.runId === 'rule-restoration');
-    expect(secondManifest).toBeDefined();
-    const inverseKey = opKey(root, secondManifest?.runId ?? '', archived.id);
-    const recent = section(restored.after[HOT], 'Recent changes');
-    expect.soft(recent.some((row) => row.endsWith(` · op:${removedKey}`)), 'inverse drops run A’s row').toBe(false);
-    expect.soft(recent, 'ordinary rule Undo retains its primary wording and its own operation key')
-      .toContain(`- 2026-10-07 ${archived.what} · op:${inverseKey}`);
-    expect.soft(restored.after[HOT], 'whole-run Undo wording belongs only to a whole-run Undo')
-      .not.toContain('Undo the last tidy-up');
-    expect(writes(events, HOT)).toHaveLength(1);
-    expect(events.filter((event) => event.method === 'GET' && event.media
-      && event.path.startsWith('.bower/changes/archive/'))).toEqual([]);
-  } finally {
-    vault.dispose();
-  }
+  // The ordinary rule Undo records its own inverse after the removal was consumed.
+  vi.setSystemTime(AT + 1);
+  await seedRule({ v: 1, id: 'rule-restoration', device: 'device-1', at: AT + 1,
+    kind: 'rule', what: `New rule: "${text}"`, path: 'Rules.md', text, undoes: removal?.id });
+  const inverse = (await pendingRules()).find((line) => line.undoes === removal?.id);
+  expect(inverse).toMatchObject({ kind: 'rule', what: `New rule: "${text}"`, text,
+    path: 'Rules.md', undoes: removal?.id });
+  events.length = 0;
+  const restored = await runOnDrive(c, drive, root, { pacing, claude: replySequence([empty]),
+    answerStart: { scope: 'instructions', requestId: 'rule-restoration' },
+    around: observe(drive, root, events) }, 2);
+  expect(restored.code).toBe(0);
+  expect(restored.after['Rules.md']).toContain(text);
+  expect(restored.after[`.bower/changes/${inverse?.id}.json`]).toBeUndefined();
+  const archived = JSON.parse(restored.after[`.bower/changes/archive/${inverse?.id}.json`] ?? 'null') as JournalRecord;
+  expect(archived).toMatchObject(inverse ?? {});
+  const secondManifest = manifests(restored).map(([, bytes]) => JSON.parse(bytes) as RunManifest)
+    .find((manifest) => manifest.runId === 'rule-restoration');
+  expect(secondManifest).toBeDefined();
+  const inverseKey = opKey(root, secondManifest?.runId ?? '', archived.id);
+  const recent = section(restored.after[HOT], 'Recent changes');
+  expect.soft(recent.some((row) => row.endsWith(` · op:${removedKey}`)), 'inverse drops run A’s row').toBe(false);
+  expect.soft(recent, 'ordinary rule Undo retains its primary wording and its own operation key')
+    .toContain(`- 2026-10-07 ${archived.what} · op:${inverseKey}`);
+  expect.soft(restored.after[HOT], 'whole-run Undo wording belongs only to a whole-run Undo')
+    .not.toContain('Undo the last tidy-up');
+  expect(writes(events, HOT)).toHaveLength(1);
+  expect(events.filter((event) => event.method === 'GET' && event.media
+    && event.path.startsWith('.bower/changes/archive/'))).toEqual([]);
 });
 
 it('B3b hot: recent rows carry their op key and dedupe by it', async () => {
