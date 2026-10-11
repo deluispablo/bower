@@ -647,3 +647,11 @@ One line per ruling, newest last. Read only the decision a task needs. Later rul
   - (1) A proposal counts as offered only once its question is published. Its artifact is written with the publication, so a refused publication leaves nothing that suppresses it, and the next run may offer it again. Suppression comes only from presented, declined or settled proposals.
   - (2) Declared properties get ids distinct from the built-in controls. A declared key that is the same fact as a built-in column (name, modified) is not shown as a second column, like the technical keys. The designer confirms that before the red; if they want it shown instead, the label rule is theirs.
   - (3) The e2e adds a row declaring more than 4 columns: the screen shows the first 4
+- Batch boundary now (B5b closed, 2026-10-11): the boundary goes before B5c's close, because twelve integrated entries are not backed up and Claude's weekly usage is at 97%. Let the running B5c red worker finish, and start no new worker. Then run the four suites on an idle machine, move main, scan and push the backup, and tell the lead, who deploys staging; the coordinator then runs the smoke. Live Claude stays off. The queue resumes after the smoke in the stated order: B5c, B4b, B6b, B7, B8, B9
+- TL-P4-47 addendum 12 (B5c reds 2 blocked, b5c 1fa12caf): B5c's packet says it **builds** the profile mechanisms, as addendum 5 (4) assigns them. The reds target that contract:
+  - TypeRow gains the optional `profile` declaration, which `note-format.ts` accepts;
+  - B6a's `NOTE_TEMPLATES` gains the profile template;
+  - the script picks the profile target from the matching row's declaration;
+  - the model supplies only the region's words, as an optional field in the existing per-item reply, with no separate intent;
+  - profile writes are ordinary note create and edit effects (Q7), with no new Filing op.
+  Order: the B5c reds run now (tests only). B4b's implementation goes first, since it does not need B5c, and B5c's implementation follows, because they share `scripted.ts` and `claude.ts`. The signed-in staging smoke at 9bca6989 is skipped: the unsigned smoke and the four suites passed. The owner's signed-in check comes with the retest deploy
