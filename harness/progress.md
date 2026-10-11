@@ -329,3 +329,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-11: upload-sign-out-forget passes — sign-out forgets this device's pending uploads with no trace of the person; retries purge the last known account (P4-102, P4-103 PASS)
 - 2026-10-11: delete-account-purge passes — Delete my account and an early sign-out purge through the one forget path (P4-104 PASS)
 - 2026-10-11: pile-binned-context-hold passes — a pile note binned through Drive gets the same answer from the app and the runner (P4-105 PASS)
+- 2026-10-11: c02-upload-count-ui passes — the Inbox counts unfinished piles; Sign out now? while sending (P4-106 PASS, designer verified)

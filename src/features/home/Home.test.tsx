@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation, useParams } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DataProvider } from '@/data/provider';
@@ -9,6 +9,7 @@ import { TidySheet } from '@/features/tidy/TidySheet';
 import { loadingSources } from '@/testing/loading-sources';
 import { useToasts } from '@/ui/toast';
 import { Home } from './Home';
+import { PileScreen } from '@/features/piles/PileScreen';
 
 afterEach(cleanup);
 describe('Home identity', () => {
@@ -355,5 +356,90 @@ describe('the Tidy up count waits for the full read', () => {
     finish([listed[0] as Pile]);
     expect(await within(inbox).findByRole('button', { name: 'Tidy up 2 things' })).toBeVisible();
     expect(within(inbox).getByText(/2 things waiting/)).toBeVisible();
+  });
+});
+
+describe('c02-upload-count-ui Inbox contract', () => {
+  const settle = () => act(async () => { await Promise.resolve(); });
+  const singular = "1 pile didn't finish arriving. Add it again if you still need it.";
+  const plural = "3 piles didn't finish arriving. Add them again if you still need them.";
+  const unknown = "Bower couldn't check that everything you added arrived.";
+  const waiting = '1 thing waiting. Tidy up when you have added everything.';
+  const pile: Pile = { id: 'C02_PILE', text: 'Papers from Alex', createdAt: 1, items: [{ id: 'C02_MEMBER', name: 'scan.pdf', kind: 'pdf', origin: 'From this computer' }] };
+
+  function show(summary: Promise<{ count: number; complete: boolean }>, piles = [pile], running = false, fullRead = Promise.resolve(piles)) {
+    const base = loadingSources();
+    const orphanSummary = vi.fn(() => summary);
+    const doors: Record<string, unknown> = { orphanSummary, piles: () => fullRead, pilesListed: async () => piles, uploadNotice: async () => null, questions: async () => [], changes: async () => [], suggestions: async () => [] };
+    const vault = new Proxy({}, { get: (_t, k) => typeof k === 'string' && k in doors ? doors[k] : Reflect.get(base.vault, k) }) as Sources['vault'];
+    const sources: Sources = { ...base, vault, runs: { ...base.runs, current: async () => running ? { id: 'C02_RUN', scope: 'all', phase: 'reading', requestedAt: 1, phaseAt: 1 } as RunState : null } };
+    const view = render(<MemoryRouter><DataProvider sources={sources}><Routes><Route path="/" element={<Home />} /><Route path="/pile/:id" element={<PileScreen />} /></Routes></DataProvider></MemoryRouter>);
+    return { ...view, orphanSummary, sources };
+  }
+
+  function informational(line: HTMLElement) {
+    expect(line.tagName).toBe('P');
+    expect(line.closest('a, button, [role="alert"], [role="status"], [aria-live]')).toBeNull();
+    expect(line.querySelector('a, button')).toBeNull();
+    expect(line.textContent).not.toMatch(/orphan|upload|session|scan\.pdf/i);
+  }
+
+  it('c02-upload-count-ui: No pile left unfinished', async () => {
+    const { orphanSummary } = show(Promise.resolve({ count: 0, complete: true }));
+    await settle();
+    expect(screen.getByText(waiting)).toBeVisible();
+    expect(orphanSummary).toHaveBeenCalled();
+    const inbox = screen.getByRole('region', { name: 'Inbox' });
+    expect(within(inbox).queryByText(/finish arriving|couldn't check that/)).toBeNull();
+    expect(within(inbox).getByRole('button', { name: 'Add a pile' })).toBeVisible();
+    expect(within(inbox).getByRole('button', { name: 'Tidy up 1 thing' })).toBeVisible();
+  });
+
+  it.each([[1, singular], [3, plural]] as const)('c02-upload-count-ui: 1 / 3 unfinished, full read (%s)', async (count, sentence) => {
+    let finishSummary!: (value: { count: number; complete: boolean }) => void;
+    let finishPiles!: (value: Pile[]) => void;
+    const fullRead = new Promise<Pile[]>((resolve) => { finishPiles = resolve; });
+    show(new Promise((resolve) => { finishSummary = resolve; }), [pile], false, fullRead);
+    await settle();
+    expect(screen.getByText('Looking…')).toBeVisible();
+    expect(screen.queryByText(sentence)).toBeNull();
+    await act(async () => { finishSummary({ count, complete: true }); });
+    expect(screen.getByText('Looking…')).toBeVisible();
+    expect(screen.queryByText(sentence)).toBeNull();
+    await act(async () => { finishPiles([pile]); });
+    const line = screen.getByText(sentence, { exact: true });
+    informational(line);
+    expect(screen.getByText(waiting).compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it.each([[1, `At least ${singular}`], [3, `At least ${plural}`]] as const)('c02-upload-count-ui: A read that failed in part (%s)', async (count, sentence) => {
+      show(Promise.resolve({ count, complete: false }), [pile], true);
+      await settle();
+      const line = screen.getByText(sentence, { exact: true });
+      informational(line);
+  });
+
+  it('c02-upload-count-ui: Nothing could be checked', async () => {
+    show(Promise.resolve({ count: 0, complete: false }));
+    await settle();
+    const line = screen.getByText(unknown, { exact: true });
+    informational(line);
+    expect(line).toHaveClass('muted');
+    expect(line.textContent).not.toContain('0');
+  });
+
+  it('c02-upload-count-ui: Reload while files are sending', async () => {
+    const pending = { ...pile, items: pile.items.map((item) => ({ ...item, upload: 0.25 })) };
+    const first = show(Promise.resolve({ count: 0, complete: true }), [pending]);
+    await settle();
+    expect(screen.getByRole('link', { name: /Papers from Alex/ })).toBeVisible();
+    first.unmount();
+    show(Promise.resolve({ count: 0, complete: true }), [pending]);
+    await settle();
+    fireEvent.click(screen.getByRole('link', { name: /Papers from Alex/ }));
+    await settle();
+    expect(screen.getByRole('list', { name: 'In this pile' })).toHaveTextContent(/sending|waiting/i);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.querySelector('input[type="file"]')).toBeNull();
   });
 });

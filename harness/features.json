@@ -7013,14 +7013,16 @@
     "id": "c02-upload-count-ui",
     "task": "p4-c02",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "Home's Inbox card says how many piles didn't finish arriving, and Sign out asks first while things are still sending (spec 2026-10-10-c02-upload-count.md).",
     "steps": [
       "The spec's test table passes on demo and fake at 375 and 1440."
     ],
-    "verify": "",
-    "note": "C02 E4. After E1-E3. Designer verifies. Packet 2026-10-10-c02-upload-count-ui-packet.md. implementer: codex."
+    "verify": "pnpm exec vitest run src/features/home/Home.test.tsx src/features/settings/Settings.test.tsx -t \"c02-upload-count-ui\"",
+    "note": "C02 E4. After E1-E3. Designer verifies. Packet 2026-10-10-c02-upload-count-ui-packet.md. implementer: codex.",
+    "review": "P4-106 PASS",
+    "design": "verified"
   },
   {
     "id": "rules-added-region",
