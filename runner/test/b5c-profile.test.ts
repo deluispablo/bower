@@ -127,18 +127,18 @@ async function profileBase(options: { names?: string[]; text?: string; missing?:
   b.c.folder[TABLE] = table;
   return b;
 }
-function itemReply(b: Base, words?: string, to = 'Areas/Career', body = FACT) {
+function itemReply(b: Base, sentences?: number[], to = 'Areas/Career', body = FACT) {
   return { kind: 'tidy-intent', v: 1, things: b.sources.map((s) => ({ fileId: s.itemId, to, name: s.name,
     note: { name: s.name.replace(/\.[^.]+$/, '.md'), summary: FACT, body },
-    ...(words === undefined ? {} : { profile: words }),
+    ...(sentences === undefined ? {} : { profile: sentences.map((sentence) => ({ source: s.itemId, sentence })) }),
   })) };
 }
-async function mainProfile(b: Base, words: string, options: Parameters<typeof run>[2] = {}, wants?: string[]) {
+async function mainProfile(b: Base, sentences: number[], options: Parameters<typeof run>[2] = {}, wants?: string[]) {
   const selection = select(b, wants ?? (b.c.folder[PROFILE] ? [b.id(PROFILE)] : []), 'Areas/Career');
   const row = (JSON.parse(b.c.folder[TABLE] ?? '{}') as { rows: Array<{ id: string }> }).rows[0];
   for (const item of selection.items) item.kind = row?.id ?? 'unknown';
-  const result = await run(b, [selection, itemReply(b, words)], options);
-  expect(result.code, `main must admit the ruled per-item profile words: ${result.errors}`).toBe(0);
+  const result = await run(b, [selection, itemReply(b, sentences)], options);
+  expect(result.code, `main must admit the ruled per-item profile references: ${result.errors}`).toBe(0);
   expect(result.frames, 'selection and execution without schema retries').toHaveLength(2);
   return result;
 }
@@ -150,6 +150,14 @@ function edits(result: Awaited<ReturnType<typeof run>>, id: string) {
   expect(text, 'the current dispatch has a retained manifest').toBeDefined();
   const value = JSON.parse(text ?? '') as ManifestV2;
   return value.operations.flatMap((op) => op.effect.kind === 'edit-text' && op.effect.before.fileId === id ? [op.effect] : []);
+}
+
+function copied(result: Awaited<ReturnType<typeof run>>, text: string, path = PROFILE) {
+  const ownership = parseOwnership(bytes(result.after[path] ?? ''));
+  expect(ownership.status).toBe('v2');
+  const span = ownership.status !== 'invalid' ? ownership.payloads?.profile : undefined;
+  expect(span).toBeDefined();
+  expect(new TextDecoder().decode(bytes(result.after[path] ?? '').subarray(span?.start, span?.end))).toBe(text);
 }
 
 function preserved(b: Base, result: Awaited<ReturnType<typeof run>>) {
@@ -164,8 +172,8 @@ async function ordinaryControl(names = [SOURCE], body = FACT) {
   expect(result.after[PROFILE]).toBe(b.c.folder[PROFILE]); preserved(b, result);
   return { b, result };
 }
-async function rejectedProfile(b: Base, words: string, reason: RegExp) {
-  const result = await run(b, [select(b, [b.id(PROFILE)], 'Areas/Career'), itemReply(b, words), itemReply(b)]);
+async function rejectedProfile(b: Base, sentences: number[], reason: RegExp) {
+  const result = await run(b, [select(b, [b.id(PROFILE)], 'Areas/Career'), itemReply(b, sentences), itemReply(b)]);
   expect(result.code, 'valid retry files the source').toBe(0); expect(result.after[PROFILE]).toBe(b.c.folder[PROFILE]);
   expect(result.frames).toHaveLength(3);
   expect.soft(result.frames[2]?.call.input.split('\n').find((line) => line.startsWith('Your reply was refused:')), 'content refusal, not unknown item keys').toMatch(reason);
@@ -205,17 +213,18 @@ it('b5-cv-profile-through-main control: sourced note and bounded region author w
   expect(applyChanges(bytes(before), [{ ...change, text: `${Array(399).fill('TypeScript').join(' ')} [[Alex CV.txt]]\n` }]).ok).toBe(false);
 });
 it('b5-cv-profile-through-main', async () => {
-  for (const words of ['Alex earned 987654 credits. [[Alex CV.txt]]', Array(401).fill('TypeScript').join(' ')]) {
-    await rejectedProfile(await profileBase(), words, /ground|number|400|word|profile.*(?:bound|long)/i);
-  }
+  await rejectedProfile(await profileBase({ text: 'Alex earned 987654 credits.' }),
+    [1], /profile.*reference|offered/i);
+  await rejectedProfile(await profileBase({ text: `${Array(401).fill('TypeScript').join(' ')}.` }),
+    [1], /ungrounded or overlong profile plan/i);
   const cv = await setup({ fixture: 'c17-b56-cv-profile' });
   await cv.drive.update(cv.id(PROFILE), { appProperties: { profile: 'cv' } });
   await cv.drive.createText(cv.id('.bower'), 'type-table.json', JSON.stringify({ v: 1, rows: [declaration()] }));
   const replies = JSON.parse(readFileSync(new URL('../../harness/corpus/c17-b56-cv-profile/replies.json', import.meta.url), 'utf8')) as
-    Array<{ things: Array<{ profile: string }> }>;
+    Array<{ things: Array<{ profile: Array<{ source: string; sentence: number }> }> }>;
   const span = 'Achievement: shipped an offline map editor.';
   expect(cv.c.inboxFiles[SOURCE]).toContain(span);
-  for (const intent of replies) for (const thing of intent.things) thing.profile = span;
+  for (const intent of replies) for (const thing of intent.things) thing.profile = [{ source: `$file:${SOURCE}`, sentence: 1 }];
   let bound = JSON.stringify(replies[0]);
   for (const source of cv.sources) bound = bound.replaceAll(`$file:${source.name}`, source.itemId);
   const selection = { items: cv.sources.map((source) => ({ itemId: source.itemId, kind: 'cv',
@@ -223,11 +232,11 @@ it('b5-cv-profile-through-main', async () => {
     wants: [cv.id(PROFILE), cv.id('Areas/Career/Career.md')],
   })), asks: [] };
   const corpus = await run(cv, [selection, JSON.parse(bound) as unknown]);
-  expect.soft(corpus.code, 'CV corpus main admits the verbatim per-item profile span').toBe(0);
+  expect.soft(corpus.code, 'CV corpus main admits the whole referenced source sentence').toBe(0);
   expect(corpus.frames).toHaveLength(2);
-  expect.soft(corpus.after[PROFILE]).toContain(framed('profile', `${span} [[Career]] [[Areas/Career/Originals/Alex CV.txt]]\n`));
-  const b = await profileBase(); const result = await mainProfile(b, FACT);
-  expect(result.after[PROFILE]).toContain(FACT); expect(result.after[PROFILE]).toMatch(/\[\[[^\]]*Alex CV/);
+  expect.soft(corpus.after[PROFILE]).toContain(framed('profile', `${span} [[Areas/Career/Originals/Alex CV.txt]]\n[[Career]]\n`));
+  const b = await profileBase(); const result = await mainProfile(b, [1]);
+  copied(result, `${FACT} [[Areas/Career/${SOURCE}]]\n[[Earlier CV]]\n`); expect(result.after[PROFILE]).toMatch(/\[\[[^\]]*Alex CV/);
   expect(result.after[PROFILE]).not.toContain(PREVIOUS); preserved(b, result);
 });
 
@@ -241,7 +250,7 @@ it('b5-profile-five-note-budget', async () => {
   const b = await profileBase({ names: [SOURCE, 'Second CV.txt'] });
   const wants = [b.id(PROFILE), b.id('Areas/Career/Career.md'), ...Array.from({ length: 3 }, (_, i) => b.id(`Areas/Career/Neighbour ${i}.md`))];
   const planningReads: URL[] = [];
-  const result = await mainProfile(b, FACT, { around: (fetch) => async (input, init) => {
+  const result = await mainProfile(b, [1], { around: (fetch) => async (input, init) => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
     if ((!init?.method || init.method === 'GET') && url.pathname === `/drive/v3/files/${b.id(PROFILE)}`
       && url.searchParams.get('alt') === 'media' && !new Headers(init?.headers).has('Range')
@@ -254,6 +263,7 @@ it('b5-profile-five-note-budget', async () => {
   const allowed = result.frames[1]?.value.allowedTargets as Record<string, string[]>;
   for (const s of b.sources) { expect(allowed[s.itemId]).toContain(b.id(PROFILE)); expect((allowed[s.itemId] ?? []).filter((id) => id !== b.id('Areas/Career')).length).toBeLessThanOrEqual(5); }
   expect(planningReads).toHaveLength(1); expect(edits(result, b.id(PROFILE))).toHaveLength(1);
+  copied(result, `${FACT} [[Areas/Career/${SOURCE}]]\n${FACT} [[Areas/Career/Second CV.txt]]\n[[Earlier CV]]\n`);
   const saturated = await profileBase({ names: [SOURCE, 'Second CV.txt'] });
   const over = await run(saturated, [select(saturated, [...wants, saturated.id('Areas/Career/Neighbour 3.md')], 'Areas/Career')]);
   expect(over.code, 'six requested notes refused before execution').toBe(1);
@@ -266,7 +276,8 @@ it('b5-two-cvs-one-edit control: two CVs file and the existing author can restor
   if (changed.ok) expect(applyChanges(bytes(changed.text), [{ ...change, previous: NEXT, text: PREVIOUS }])).toMatchObject({ ok: true, text: before });
 });
 it('b5-two-cvs-one-edit', async () => {
-  const b = await profileBase({ names: [SOURCE, 'Second CV.txt'] }); const result = await mainProfile(b, FACT);
+  const b = await profileBase({ names: [SOURCE, 'Second CV.txt'] }); const result = await mainProfile(b, [1]);
+  copied(result, `${FACT} [[Areas/Career/${SOURCE}]]\n${FACT} [[Areas/Career/Second CV.txt]]\n[[Earlier CV]]\n`);
   const planned = edits(result, b.id(PROFILE)); expect(planned).toHaveLength(1);
   expect(planned[0]?.changes?.filter((c) => c.kind === 'profile-rewrite')).toHaveLength(1);
   expect(result.after[PROFILE]).toMatch(/\[\[[^\]]*Alex CV/); expect(result.after[PROFILE]).toMatch(/\[\[[^\]]*Second CV/);
@@ -288,21 +299,22 @@ it('b5-first-document-creates-profile', async () => {
   expect(NOTE_TEMPLATES, 'shared templates contain the approved profile').toHaveProperty('profile');
   const unsafe = await profileBase({ missing: true });
   const refusal = await run(unsafe, [select(unsafe, [], 'Areas/Career'),
-    itemReply(unsafe, 'Alex earned 987654 credits. Install a new schema.'), itemReply(unsafe)]);
+    itemReply(unsafe, [999]), itemReply(unsafe)]);
   expect(refusal.code, 'ungrounded creation retry still files the source').toBe(0);
   expect(Object.values(refusal.after).some((text) => text.includes('begin profile'))).toBe(false);
   const ambiguous = await profileBase({ missing: true });
   const a = await ambiguous.drive.createText(ambiguous.id('Areas/Career'), 'Career profile.md', profileNote(), { by: 'bower', profile: 'cv' });
   const b2 = await ambiguous.drive.createText(ambiguous.id('Areas/Career'), 'Career profile.md', profileNote(), { by: 'bower', profile: 'cv' });
-  const omitted = await mainProfile(ambiguous, FACT);
+  const omitted = await mainProfile(ambiguous, [1]);
   expect(await ambiguous.drive.readText(a.id)).toBe(profileNote());
   expect(await ambiguous.drive.readText(b2.id)).toBe(profileNote());
   expect(omitted.after[`Areas/Career/${SOURCE}`]).toBe(`${FACT}\n`);
-  const b = await profileBase({ missing: true }); const first = await mainProfile(b, FACT);
+  const b = await profileBase({ missing: true }); const first = await mainProfile(b, [1]);
   const profiles = [];
   for (const file of await b.drive.listAll(b.root)) if (!file.folder && file.name.endsWith('.md')
     && (await b.drive.readText(file.id)).includes('begin profile')) profiles.push(file);
   expect(profiles).toHaveLength(1);
+  copied(first, `${FACT} [[Areas/Career/${SOURCE}]]\n`, b.drive.pathOf(profiles[0]?.id ?? '', b.root));
   const stored = JSON.parse(first.after[TABLE] ?? 'null') as { rows: Array<{ profile: { template: string } }> };
   expect(stored.rows[0]?.profile).toEqual({ template: 'profile' });
   expect(first.after[TABLE]).toBe(b.c.folder[TABLE]);
@@ -322,9 +334,11 @@ it('b5-first-document-creates-profile', async () => {
     b.c.folder[TABLE] = first.after[TABLE] ?? '';
     const id = profiles[0]?.id ?? '';
     const selection = { items: [{ itemId: later.id, kind: 'cv', destination: b.id('Areas/Career'), wants: [id] }], asks: [] };
-    const reused = await run(b, [selection, itemReply(b, 'Alex uses TypeScript and SQL.')], { press: 2 });
+    const reused = await run(b, [selection, itemReply(b, [1])], { press: 2 });
     expect(reused.code).toBe(0);
     expect(edits(reused, id)).toHaveLength(1);
+    copied(reused, `Alex uses TypeScript and SQL. [[Areas/Career/Later CV.txt]]\n[[Areas/Career/${SOURCE}]]\n`,
+      b.drive.pathOf(id, b.root));
     expect(reused.after[TABLE]).toBe(first.after[TABLE]);
   }
 });
@@ -350,7 +364,7 @@ it('b5-offer-factual-comparison', async () => {
   const b = await profileBase({ names: ['Offer.txt'], kind: 'offer', text: 'Ferrowick offers a TypeScript role at 48000. Currency is not stated.\n' });
   const selection = select(b, [b.id(PROFILE), b.id(JOB)], 'Projects/Job hunt');
   const good = { kind: 'tidy-intent', v: 1, things: [{ fileId: b.sources[0]?.itemId, to: 'Projects/Job hunt', name: 'Offer.txt',
-    note: { name: 'Offer.md', summary: 'Ferrowick offers a TypeScript role.', body: 'Ferrowick offers a TypeScript role at 48000. Alex uses TypeScript. [[Career profile]] [[Job hunt]]' }, profile: 'Ferrowick offers a TypeScript role at 48000.' }] };
+    note: { name: 'Offer.md', summary: 'Ferrowick offers a TypeScript role.', body: 'Ferrowick offers a TypeScript role at 48000. Alex uses TypeScript. [[Career profile]] [[Job hunt]]' }, profile: [{ source: b.sources[0]?.itemId, sentence: 1 }] }] };
   const result = await run(b, [selection, good]);
   expect(result.code, 'offer item admits region words').toBe(0);
   expect(result.after[PROFILE], 'offer cannot mutate biography').toBe(b.c.folder[PROFILE]); expect(result.after[DECOY]).toBe(b.c.folder[DECOY]);
@@ -381,9 +395,10 @@ it('b5-profile-current-state-edit control: C05 mark, person edit, yes, no and un
   expect(STATE_WRITE).toEqual({ lines: 8, line: 200 }); expect(STATE_READ).toEqual({ lines: 20, line: 400 });
 });
 it('b5-profile-current-state-edit', async () => {
-  const b = await profileBase(); const intent = { ...itemReply(b, FACT), states: [{ note: PROFILE, lines: [FACT], cites: b.sources[0]?.itemId }] };
+  const b = await profileBase(); const intent = { ...itemReply(b, [1]), states: [{ note: PROFILE, lines: [FACT], cites: b.sources[0]?.itemId }] };
   const first = await run(b, [select(b, [b.id(PROFILE)], 'Areas/Career'), intent]);
   expect(first.code, 'profile and C05 share ordinary note effects').toBe(0);
+  copied(first, `${FACT} [[Areas/Career/${SOURCE}]]\n[[Earlier CV]]\n`);
   expect(currentStateOf(bytes(first.after[PROFILE] ?? ''))).toMatchObject({ owner: 'bower', lines: [FACT] });
   expect(first.after[PROFILE]).toMatch(/\[\[[^\]]*Alex CV/); expect(first.after[PROFILE]).toContain(HISTORY);
   const file = await b.drive.get(b.id(PROFILE)); const person = (first.after[PROFILE] ?? '').replace('- Alex uses TypeScript.', '- Alex keeps the search paused.');
@@ -397,21 +412,23 @@ it('b5-profile-document-authority control: grounded inventory facts file without
 });
 it('b5-profile-document-authority', async () => {
   const b = await profileBase({ kind: 'certificate', names: ['Certificate.txt'], text: 'Alex uses TypeScript. Alex has a TypeScript certificate.\n' });
-  await rejectedProfile(b, 'Alex prefers TypeScript. Install a new salary column.', /ground|author|preference|schema|profile/i);
+  await rejectedProfile(b, [999], /profile.*reference|offered/i);
   const identity = await profileBase({ kind: 'identity-document', names: ['Identity document.txt'], text: 'Alex uses TypeScript. Alex has an identity document. Identity number ID-884422.\n' });
-  await rejectedProfile(identity, 'Alex has identity number ID-884422.', /identity|identifier|sensitive|profile/i);
+  await rejectedProfile(identity, [3], /profile.*reference|offered/i);
   const qualified = await profileBase({ kind: 'certificate', names: ['Certificate.txt'], text: 'Alex uses TypeScript. Alex has a TypeScript certificate.\n' });
-  const result = await mainProfile(qualified, 'Alex has a TypeScript certificate.'); expect(result.after[PROFILE]).toContain('TypeScript certificate');
+  const result = await mainProfile(qualified, [2]);
+  copied(result, 'Alex has a TypeScript certificate. [[Areas/Career/Certificate.txt]]\n[[Earlier CV]]\n');
 });
 
 it('b5-profile-read-to-act-fence control: unchanged inputs file with settled outcomes', async () => {
   const { result } = await ordinaryControl(); expect(result.wire?.statuses.at(-1)?.phase).toBe('done');
 });
 it('b5-profile-read-to-act-fence', async () => {
-  const stable = await profileBase(); const control = await mainProfile(stable, FACT); expect(edits(control, stable.id(PROFILE))).toHaveLength(1);
+  const stable = await profileBase(); const control = await mainProfile(stable, [1]); expect(edits(control, stable.id(PROFILE))).toHaveLength(1);
+  copied(control, `${FACT} [[Areas/Career/${SOURCE}]]\n[[Earlier CV]]\n`);
   for (const race of ['bytes', 'name', 'place'] as const) {
     const b = await profileBase(); const id = b.id(PROFILE); let raced = false;
-    const result = await mainProfile(b, FACT, { around: (fetch) => async (input, init) => {
+    const result = await mainProfile(b, [1], { around: (fetch) => async (input, init) => {
       const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
       if (!raced && (!init?.method || init.method === 'GET') && url.pathname.endsWith(`/files/${id}`) && url.searchParams.get('alt') !== 'media'
         && (await b.drive.listAll(b.root)).some((f) => /\/manifest-[^/]+\.json$/.test(b.drive.pathOf(f.id, b.root)))) {
@@ -438,18 +455,19 @@ it('b5-profile-template-compatibility control: real links and personal typed Sou
   }
 });
 it('b5-profile-template-compatibility', async () => {
-  await rejectedProfile(await profileBase(), `${FACT} [[Imaginary note]]`, /link|ground|profile/i);
-  const b = await profileBase(); const result = await mainProfile(b, FACT); expect(result.after[PROFILE]).toContain('begin profile');
+  await rejectedProfile(await profileBase(), [999], /profile.*reference|offered/i);
+  const b = await profileBase(); const result = await mainProfile(b, [1]); expect(result.after[PROFILE]).toContain('begin profile');
+  copied(result, `${FACT} [[Areas/Career/${SOURCE}]]\n[[Earlier CV]]\n`);
   const sourcePath = 'Areas/Career/Alex CV.md'; expect(result.after[sourcePath]).toBeDefined();
   const replay = await redispatchCase(b.c, result, 2, { pacing: { sleep: async () => undefined } });
   expect(replay.after[sourcePath]).toBe(result.after[sourcePath]); preserved(b, result);
 });
 
 // Addendum 14: identity comes from the run listing's app property, never a stored Drive id.
-async function propertyRun(b: Base, words?: string, press = 1) {
+async function propertyRun(b: Base, sentences?: number[], press = 1) {
   const selection = select(b, [], 'Areas/Career');
   for (const item of selection.items) item.kind = 'cv';
-  const result = await run(b, [selection, itemReply(b, words), itemReply(b)], { press });
+  const result = await run(b, [selection, itemReply(b, sentences), itemReply(b)], { press });
   expect(result.code, result.errors).toBe(0);
   expect(result.wire?.statuses.at(-1)?.phase).toBe('done');
   for (const source of b.sources) expect(result.after[`Areas/Career/${source.name}`]).toBe(b.c.inboxFiles[source.name]);
@@ -465,11 +483,12 @@ it('b5-profile-property-first-create control: ordinary document filing creates n
 });
 it('b5-profile-property-first-create', async () => {
   const b = await profileBase({ missing: true });
-  const result = await propertyRun(b, FACT);
+  const result = await propertyRun(b, [1]);
   const profiles = (await b.drive.listAll(b.root)).filter((f) => f.appProperties?.profile === 'cv');
   expect(profiles, 'first document creates exactly one profile carrying the row id').toHaveLength(1);
   const profile = profiles[0]; expect(profile).toBeDefined(); if (!profile) return;
   const text = await b.drive.readText(profile.id);
+  copied(result, `${FACT} [[Areas/Career/${SOURCE}]]\n`, b.drive.pathOf(profile.id, b.root));
   expect(text).toContain('begin profile'); expect(text).toContain(FACT); expect(text).toMatch(/\[\[[^\]]*Alex CV/);
   expect(parseOwnership(bytes(text)).status).toBe('v2');
   expect(result.errors).toBe(''); expect(result.frames).toHaveLength(2);
@@ -500,20 +519,22 @@ it('b5-profile-property-second-document control: later filing preserves the prop
 });
 it('b5-profile-property-second-document', async () => {
   const b = await laterDocument(); const id = b.id(PROFILE);
-  const result = await propertyRun(b, 'Alex uses TypeScript and SQL.', 2);
+  const result = await propertyRun(b, [1], 2);
   expect(edits(result, id), 'one listing match updates the existing profile by id').toHaveLength(1);
   const text = await b.drive.readText(id);
+  copied(result, 'Alex uses TypeScript and SQL. [[Areas/Career/Later CV.txt]]\n'
+    + '[[Earlier CV]]\n', 'Projects/Job hunt/Earlier skills.md');
   expect(text).toContain('Alex uses TypeScript and SQL.'); expect(text).toMatch(/\[\[[^\]]*Later CV/);
   expect(text).not.toContain(PREVIOUS); expect(text).toContain(PERSONAL); expect(text).toContain(HISTORY);
   expect((await b.drive.listAll(b.root)).filter((f) => f.appProperties?.profile === 'cv')).toHaveLength(1);
   expect(result.errors).toBe(''); expect(result.frames).toHaveLength(2);
 });
 
-async function duplicateProfiles(words?: string) {
+async function duplicateProfiles(sentences?: number[]) {
   const b = await profileBase();
   const copy = await b.drive.createText(b.id('Projects/Job hunt'), 'Copied skills.md', profileNote(),
     { by: 'bower', profile: 'cv' });
-  const result = await propertyRun(b, words);
+  const result = await propertyRun(b, sentences);
   for (const id of [b.id(PROFILE), copy.id]) {
     expect(await b.drive.readText(id)).toBe(profileNote()); expect(edits(result, id)).toHaveLength(0);
   }
@@ -525,7 +546,7 @@ it('b5-profile-property-duplicate control: duplicate properties do not obstruct 
   expect(result.errors).toBe(''); expect(result.frames).toHaveLength(2);
 });
 it('b5-profile-property-duplicate', async () => {
-  const result = await duplicateProfiles(FACT);
+  const result = await duplicateProfiles([1]);
   expect(result.errors, 'duplicate identity is unresolved, not a planning error').toBe('');
   expect(result.frames, 'unresolved duplicate target omits the update without refusing valid words').toHaveLength(2);
 });

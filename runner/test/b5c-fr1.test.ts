@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { parseOwnership } from '../../src/data/contracts/ownership-format';
 import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
 import { note, run, select, setup, type Base } from './b1-planning-support';
@@ -46,37 +47,46 @@ function selection(b: Base, kind = 'cv') {
   for (const item of value.items) item.kind = kind;
   return value;
 }
-function intent(b: Base, words?: string | Record<string, string>, body?: string) {
+function intent(b: Base, sentences?: number[] | Record<string, number[]>, body?: string) {
   return { kind: 'tidy-intent', v: 1, things: b.sources.map((s) => ({
     fileId: s.itemId, to: CAREER, name: s.name,
     note: { name: s.name.replace(/\.[^.]+$/, '.md'), summary: b.c.inboxFiles[s.name]?.split('\n')[0],
       body: body ?? b.c.inboxFiles[s.name] },
-    ...(words === undefined ? {} : { profile: typeof words === 'string' ? words : words[s.name] }),
+    ...(sentences === undefined ? {} : { profile: (Array.isArray(sentences) ? sentences : sentences[s.name])
+      ?.map((sentence) => ({ source: s.itemId, sentence })) }),
   })) };
 }
 async function profileTexts(b: Base) {
   return Promise.all((await b.drive.listAll(b.root)).filter((f) => f.appProperties?.profile === 'cv')
     .map((f) => b.drive.readText(f.id)));
 }
-async function accepted(b: Base, words: string | Record<string, string>, kind = 'cv') {
-  const result = await run(b, [selection(b, kind), intent(b, words)]);
+async function accepted(b: Base, sentences: number[] | Record<string, number[]>, kind = 'cv') {
+  const result = await run(b, [selection(b, kind), intent(b, sentences)]);
   expect(result.code, result.errors).toBe(0);
   expect(result.frames).toHaveLength(2);
   for (const s of b.sources) expect(result.after[`${CAREER}/${s.name}`]).toBe(b.c.inboxFiles[s.name]);
   return result;
 }
+function payload(text: string) {
+  const bytes = new TextEncoder().encode(text);
+  const ownership = parseOwnership(bytes);
+  expect(ownership.status).toBe('v2');
+  const span = ownership.status !== 'invalid' ? ownership.payloads?.profile : undefined;
+  expect(span).toBeDefined();
+  return new TextDecoder().decode(bytes.subarray(span?.start, span?.end));
+}
 async function verbatimControl() {
-  const b = await fixture(); const result = await accepted(b, `${FACT} [[Alex CV.txt]]`);
-  expect(result.after[PROFILE]).toContain(`${FACT} [[Alex CV.txt]]`);
+  const b = await fixture(); const result = await accepted(b, [1]);
+  expect(payload(result.after[PROFILE] ?? '')).toBe(`${FACT} [[${CAREER}/${CV}]]\n[[Earlier CV]]\n`);
   expect(result.after[PROFILE]).toContain(`[[${CAREER}/${CV}]]`);
 }
-async function refused(b: Base, words: string, body?: string, kind = 'cv') {
+async function refused(b: Base, sentences: number[], body?: string, kind = 'cv', reason = /Your reply was refused:.*(?:profile.*reference|offered)/i) {
   const before = await b.drive.readText(b.id(PROFILE));
-  const result = await run(b, [selection(b, kind), intent(b, words, body), intent(b)]);
+  const result = await run(b, [selection(b, kind), intent(b, sentences, body), intent(b)]);
   expect(result.code, 'a valid retry still files the document').toBe(0);
   // Assert the content refusal first so this red cannot be a downstream missing-file failure.
-  expect(result.frames[2]?.call.input, 'non-span words must trigger the existing validation retry')
-    .toMatch(/Your reply was refused:.*(?:profile|ground|span|currency|verbatim)/i);
+  expect(result.frames[2]?.call.input, 'an unoffered reference must trigger the existing validation retry')
+    .toMatch(reason);
   expect(result.frames).toHaveLength(3);
   expect(await b.drive.readText(b.id(PROFILE))).toBe(before);
   for (const s of b.sources) expect(result.after[`${CAREER}/${s.name}`]).toBe(b.c.inboxFiles[s.name]);
@@ -86,42 +96,57 @@ async function refused(b: Base, words: string, body?: string, kind = 'cv') {
 it('b5c-fr1-A-negation control: verbatim cited profile span is accepted', verbatimControl);
 it('b5c-fr1-A-negation', async () => {
   await verbatimControl();
-  await refused(await fixture({ sources: { [CV]: 'Alex does not use TypeScript.' } }), 'Alex uses TypeScript.');
+  const denial = 'Alex does not use TypeScript.';
+  const b = await fixture({ sources: { [CV]: denial } });
+  const selected = await accepted(b, [1]);
+  expect(payload(selected.after[PROFILE] ?? '')).toBe(`${denial} [[${CAREER}/${CV}]]\n[[Earlier CV]]\n`);
+  const omitted = await fixture({ sources: { [CV]: denial } });
+  const result = await run(omitted, [selection(omitted), intent(omitted)]);
+  expect(result.code, result.errors).toBe(0); expect(result.frames).toHaveLength(2);
+  expect(result.after[`${CAREER}/${CV}`]).toBe(denial);
+  expect(result.after[PROFILE]).toBe(omitted.c.folder[PROFILE]);
+  await refused(await fixture({ sources: { [CV]: denial } }), [999]);
 });
 
 async function offerControl() {
   const b = await fixture({ kind: 'offer', sources: { 'Offer.txt': '48000. Currency is not stated.' } });
-  const result = await accepted(b, '48000. Currency is not stated.', 'offer');
+  const result = await accepted(b, [1], 'offer');
   expect(result.after[`${CAREER}/Offer.md`]).toContain('48000. Currency is not stated.');
   expect(result.after[PROFILE]).toBe(b.c.folder[PROFILE]);
+  const currency = await fixture({ sources: { [CV]: '480. Currency is not stated.' } });
+  const copied = await accepted(currency, [1, 2]);
+  expect(payload(copied.after[PROFILE] ?? '')).toBe(`480. [[${CAREER}/${CV}]]\n`
+    + `Currency is not stated. [[${CAREER}/${CV}]]\n[[Earlier CV]]\n`);
 }
 it('b5c-fr1-A-currency control: stated offer span adds no currency', offerControl);
 it('b5c-fr1-A-currency', async () => {
   await offerControl();
   await refused(await fixture({ kind: 'offer', sources: { 'Offer.txt': '48000. Currency is not stated.' } }),
-    '48000 CHF.', undefined, 'offer');
+    [2], undefined, 'offer');
   const b = await fixture({ kind: 'offer', sources: { 'Offer.txt': '48000. Currency is not stated.' } });
   // Offers author a comparison Source; they do not rewrite the biography profile (Q4).
-  const result = await refused(b, '48000.', '48000 CHF.', 'offer');
+  const result = await refused(b, [1], '48000 CHF.', 'offer', /Your reply was refused: an offer with ungrounded currency, advice, score or unrelated link\./);
   expect(result.after[`${CAREER}/Offer.md`]).not.toContain('CHF');
 });
 
 async function displayedSpanControl() {
-  const b = await fixture();
-  const words = '[[Areas/Career/Career|Alex uses TypeScript.]]';
-  const result = await accepted(b, words); expect(result.after[PROFILE]).toContain(words);
+  const words = 'Alex uses [[Areas/Career/Career|TypeScript]].';
+  const b = await fixture({ sources: { [CV]: words } });
+  const result = await accepted(b, [1]);
+  expect(payload(result.after[PROFILE] ?? '')).toBe(`${words} [[${CAREER}/${CV}]]\n[[Earlier CV]]\n`);
+  expect(result.after[PROFILE]).not.toContain('passport');
 }
 it('b5c-fr1-B-link-text control: real citation with verbatim displayed words is accepted', displayedSpanControl);
 it('b5c-fr1-B-link-text', async () => {
   await displayedSpanControl();
-  await refused(await fixture(), '[[Areas/Career/Career|Alex prefers SQL and has passport number ID-884422]]');
+  await refused(await fixture(), [999]);
 });
 
 async function twoSourceControl(missing: boolean) {
   const b = await fixture({ missing, sources: { [CV]: FACT, [SECOND]: 'Alex uses SQL.' } });
-  await accepted(b, { [CV]: FACT, [SECOND]: 'Alex uses SQL.' });
+  await accepted(b, { [CV]: [1], [SECOND]: [1] });
   const texts = await profileTexts(b); expect(texts).toHaveLength(1);
-  expect(texts[0]).toContain(FACT); expect(texts[0]).toContain('Alex uses SQL.');
+  expect(payload(texts[0] ?? '')).toBe(`${FACT} [[${CAREER}/${CV}]]\nAlex uses SQL. [[${CAREER}/${SECOND}]]\n${missing ? '' : '[[Earlier CV]]\n'}`);
   expect(texts[0]).toContain(`[[${CAREER}/${CV}]]`); expect(texts[0]).toContain(`[[${CAREER}/${SECOND}]]`);
 }
 it('b5c-fr1-C-all-source-moves control: both landed sources contribute to create and edit', async () => {
@@ -134,7 +159,7 @@ it('b5c-fr1-C-all-source-moves', async () => {
     const b = await fixture({ missing, sources: { [CV]: FACT, [SECOND]: 'Alex uses SQL.' } });
     const second = b.sources.find((s) => s.name === SECOND)?.itemId;
     expect(second).toBeDefined(); let raced = false;
-    const result = await run(b, [selection(b), intent(b, { [CV]: FACT, [SECOND]: 'Alex uses SQL.' })], {
+    const result = await run(b, [selection(b), intent(b, { [CV]: [1], [SECOND]: [1] })], {
       around: (fetch) => async (input, init) => {
         const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
         if (!raced && (!init?.method || init.method === 'GET') && url.pathname.endsWith(`/files/${second}`)
@@ -161,8 +186,9 @@ it('b5c-fr1-C-all-source-moves', async () => {
 
 async function laterRun(span: string) {
   const b = await fixture({ sources: { [CV]: span } });
-  await accepted(b, span);
+  await accepted(b, [1]);
   const stored = await b.drive.readText(b.id(PROFILE)); expect(stored).toContain(span);
+  expect(payload(stored)).toBe(`${span} [[${CAREER}/${CV}]]\n[[Earlier CV]]\n`);
   const sourceId = b.sources[0]?.itemId; expect(sourceId).toBeDefined();
   const laterText = 'Alex uses TypeScript and SQL.';
   const later = await b.drive.createText(b.id('Inbox'), 'Later CV.txt', laterText);
