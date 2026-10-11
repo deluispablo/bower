@@ -483,3 +483,228 @@ writer, consent store or maintain write was added.
 - `runner/test/model-input-fingerprint.test.ts` — `model input fingerprint the model input on the C04 fixture equals its golden copy`: AssertionError: expected 'Select context first. Return only {"i…' to be 'Select context first. Return only {"i…' // Object.is equality
 - `runner/test/model-input-fingerprint.test.ts` — `model input fingerprint the raw model input on the C04 fixture equals its golden copy`: AssertionError: expected 'Select context first. Return only {"i…' to be 'Select context first. Return only {"i…' // Object.is equality
 - `runner/test/type-table.test.ts` — `type-row contracts through the declaration parser B5a contracts: b5-row-schema-and-order`: AssertionError: type-table must export firstMatchingRow: expected undefined to be type of 'function'
+
+## Implementation 2 (addendum 6)
+
+implementer: codex
+
+Attempt 4 continues committed typed-fact work at `c98c686a`. Status: **blocked for closure**,
+with the newly allocated Table read/projection, runner-JSON grounding, proposal admission,
+installation/decline and trusted column execution implemented. The remaining B4a work and
+other failing assertions are below. No network, git write, dependency replacement, server,
+manual e2e or pnpm check was run. The runner owns commits and check/capabilities/folder-table
+on demo and fake. Designer verification remains outstanding.
+
+### Scope, reuse and behavior
+
+- `DriveVault.typeTable()` exposes declarations through its existing `json()` runner-file
+  reader and versioned `readTextOnce()` cache. That reader delegates the table to the shared
+  lenient parser. Missing/unreadable declarations fall back in Table. Other runner-file
+  reads keep their existing validation/errors. The optional source method preserves old
+  demo sources and source fixtures; fake/live DriveVault implementations inherit it.
+- FolderScreen keeps the existing table, links, Status pill, header controls and sideways
+  scroll. Only notes vote; the largest non-generic type wins, with stored row order breaking
+  ties. Other types leave declared cells empty. Missing/unmatched/generic declarations use
+  four nontechnical keys. Money/numbers format and align right; dates use `timelineDay`,
+  lists reuse the scalar-list parser, typed sorting uses amount/date, and empties stay last
+  both ways. Notes and their nonprojected properties are unchanged.
+- Moved `insertTypeRow` and `requestTableColumn` into the existing shared note-format home,
+  once, so the shared planner never imports runner code. New rows still use the strict
+  validator; an existing row's column change uses the stored-read validation mode and
+  retains extensions. The original runner reader export remains; helper tests target their
+  shared public home. Projection and column requests also retain the kind/folder exclusions.
+- Capture reads immutable proposals through the existing listing/index/read cache. Duplicate
+  artifact paths and invalid envelopes grant no installation. Canonical frozen payload
+  identity deduplicates across ids, current questions and earlier artifacts. New proposals
+  enter in the existing askAfter order, capped at two new payloads and five open cards.
+- New immutable `.bower/proposals/<id>.json` files are existing runner-JSON create effects;
+  their closed `v/id/payload` envelope agrees with the authoritative question. Grounding
+  permits proposals and type-table creates additively in its existing runner-file branch,
+  sharing `proposalOk`, with no second grounding mechanism or writer.
+- Question publication waits for artifact creates and source filing. Boolean yes must match
+  the authoritative question and its frozen artifact, installs the exact strict payload
+  before generic fallbacks, and the question/answer archive waits for the table write.
+  Boolean no installs nothing; its archived answer and immutable payload suppress returns.
+  Ignored proposals stay open, with no inbox-round history. Evidence and acceptance remain
+  in the existing admitted capture, durable manifest, authoritative question and archived
+  answer; no consent/decline store or maintain write was added.
+- Explicit journal words of the form `Show <declared property> in the <type> table.` bind
+  exactly one stored row id/match and property, then call `requestTableColumn`. This narrow
+  proven syntax is the implemented v1 limit; unrelated wording is not claimed as completed.
+  These requests bypass note-title settlement, so a type name cannot accidentally edit a
+  similarly named personal note. Documents cannot execute the request. Request completion,
+  publication and archival depend on the table effect. Today's report keeps raw request
+  words; today's `runDetail` formats the truthful `"<request>" done` line.
+- The existing engine supplies the content/version fence; no engine or manifest bypass was
+  added. A real-main race changes the table after manifest persistence: its bytes survive,
+  the column request remains pending, and the report contains no completed requests.
+
+Research: reused the packet's local JSON Schema closed-object, ISO 4217, ISO 8601, RFC 9413
+and Zod citations listed above; none fetched or independently reverified. No dependency,
+new loader, new effect kind, private-field access/cast or schema-consent channel was added.
+
+removed: runner/src/type-table.ts: insertTypeRow/requestTableColumn implementations moved once to shared note-format.
+removed: harness/unused-production-baseline.json: insertTypeRow and requestTableColumn findings and their reasons.
+removed: harness/unused-production-baseline.json: tableProperties finding after wiring FolderScreen.
+removed: firstMatchingRow, propertyValuesOk and whole-file allowances: already removed before this attempt; none restored.
+removed: harness/unused-baseline.json: none; the unrelated known finding is unchanged.
+
+tests changed: runner/test/type-table.test.ts: retarget retired firstMatchingRow assertions to ordered readTypeTable output; route relocated helpers to their shared public exports; preserve all ids, order, strict-write and boundary assertions.
+
+tests changed: runner/test/b5-incorporation.test.ts: use the existing two-step phaseAwareClaude helper with a raw execution envelope, assert exactly two context calls, and add garden evidence to the existing fixture so its named hub is a visible candidate; do not loosen selection ids or wants bounds.
+
+tests changed: runner/test/b5-incorporation.test.ts: add six real-main cases for declined payload under another id, text/option nonconsent, a concurrent table change, byte-preserved extension reads and a lenient rewrite; all original assertions are retained.
+
+tests changed: runner/test/fixtures/model-input-c04.golden.txt: regenerate only inherited table-related prompt bytes; JSON context and fingerprint controls are unchanged; byte diff below.
+
+tests changed: runner/test/fixtures/model-input-c04.raw.golden.txt: the same table-only regeneration; raw ids, fences, context and byte-equality assertions are unchanged; byte diff below.
+
+tests changed: src/data/vault/note-format.test.ts: add a projection control retaining stored kind/folder properties while excluding their columns, and quoted/unquoted scalar-list controls; no existing assertion changed.
+
+No other existing test changed. In particular, architecture.test.ts, questions.ts/tests,
+model-input-fingerprint.test.ts, answer-loop.ts/tests and folder-table.spec.ts are unchanged.
+No only/skip, assertion/bound weakening, corpus driver change or test-generated repo file.
+
+### C04 byte diff (TL-P4-47 addendum 6)
+
+Both captures came from the actual provider/main with the existing C04 fixture, in an OS-temp
+copy of the golden tests. Tests wrote only `/tmp/b5b-c04-normalized.txt` and
+`/tmp/b5b-c04-raw.txt`; the implementation session copied those bytes into the goldens after
+review. The exact equality assertions and identical-runs/fresh-ids controls are unchanged.
+
+- Normalized: **11,504 -> 11,720 UTF-8 bytes**, **+216**.
+- Raw: **11,607 -> 11,823 UTF-8 bytes**, **+216**.
+- Replaced the old ten-line fixed document-kind list with the already committed three-line
+  declaration-precedence/closest-kind instructions, retaining the payslip example.
+- Inserted eleven lines before the identical JSON context: the already committed
+  `Use the first matching row...` instruction, two Markdown header lines and all eight seed
+  rows in their original order. No JSON-context field/value/id/version changed.
+- Exact unified byte/text diffs: `/tmp/b5b-c04-normalized.diff` and `/tmp/b5b-c04-raw.diff`.
+  The full fingerprint suite now passes, including both golden checks and identical runs.
+
+### Waiting for B4a
+
+`src/data/contracts/run-manifest.ts` is untouched, as explicitly instructed. No fake SeenFile,
+alternate type-table create, weakened strict validator or direct pre-manifest write was added.
+
+1. `runner/test/b5-incorporation.test.ts:172-173`, missing-table parameter of
+   `b5-table-first-create-and-lenient-read`: both eight stored seeds and the ruled
+   write-runner-json create remain red. The current effect requires an existing before and
+   beforeContent. Missing-file installation/column writes remain pending until that contract
+   and its existing consumers acquire expected absence. Empty/all-invalid **existing** tables
+   now normalize to the eight seeds through the existing fenced effect and pass.
+2. `runner/test/b5-incorporation.test.ts`, `a trusted rewrite retains stored extension keys` (assertion at line 370):
+   remains red at `result.code === 0`. Shared helpers retain envelope/row/property extensions,
+   but the current manifest guard validates the entire rewritten table as a strict new table.
+   The strict-new/lenient-rewrite split must arrive after B4a. Unchanged stored extension bytes,
+   including negative/fractional unknown values, remain readable and byte-identical.
+3. `src/architecture.test.ts:154,166`: both literal-based impurity assertions remain red for
+   the already committed `identity-document` seed. The B4a literal-ignoring gate fix arrives
+   by later merge. No seed obfuscation or architecture-test change was made.
+
+### Contradictions and other gate failures
+
+The full runner and src sweeps were run, not stopped at the first failure.
+
+- `runner/test/b5-incorporation.test.ts:191`, trusted-column report assertion, expects the
+  formatted `"Show hours in the offer table." done` sentence inside last-run JSON. The
+  accepted report stores raw `report.requests` and `runDetail` produces that sentence in
+  the UI (`src/features/tidy/run-words.ts:133`). Actual main output has the changed fourth
+  column and exactly `requests: ["Show hours in the offer table."]`. Adding a UI sentence to
+  that wire would change the contract or duplicate the existing formatter. This assertion
+  stays red pending a lead red-repair ruling; its column assertion now passes.
+- Added text/option nonconsent cases in `runner/test/b5-incorporation.test.ts:323`: no row is
+  installed, no artifact is edited, and the planner leaves the answer pending, but the final
+  authoritative question list loses the card. `answeredAskings` in
+  `src/data/contracts/questions.ts:103-105` accepts any QuestionAnswer, and existing closing
+  consumers treat raw nonboolean proposal answers as settled. The shared questions contract
+  is not allocated to this attempt. No local alternate consent/closing rule was added.
+  The public `checkedAnswer` and answer-loop tests already reject these values; these reds
+  exercise malformed/directly stored journals through real main. The lead must allocate the
+  root closing rule; these newly exposed assertions are not weakened or removed.
+- `src/docs.test.ts:134`: existing accepted compatibility ledger still lacks `aa54844f` and
+  `c98c686a`. The shared ledger is unowned; draft rows for this attempt are below.
+- `src/e2e-port.test.ts:37`: expected sandbox EPERM on its local listen, a 5000 ms timeout, plus one unhandled
+  error. No test or port workaround was made.
+- The shared planner consumes the existing `Decisions.askAfter` seam. The handed-off Claude
+  Filing/modelDecisions transport still has no novel-type proposal payload field. Automatic
+  Claude proposal generation and multiple proposal candidates within one pile need a lead
+  transport ruling/allocation; this attempt does not invent a provider protocol. The real-main
+  lifecycle tests inject decisions at the existing provider seam, not a substitute writer.
+
+### Compatibility draft
+
+Each changed contract/feature home has a draft row for the coordinator's accepted ledger.
+
+| Changed home | Contract change | Existing stored data / callers | Evidence |
+| --- | --- | --- | --- |
+| src/data/contracts/note-format.ts: insertTypeRow/requestTableColumn | Move the existing implementations into the shared core; strict new rows, lenient existing row edits | Runner reader re-export retained; no production helper caller lost; existing extensions survive shared edits, pending manifest rewrite ruling | full type-table suite; exact-yes install and trusted-column main cases |
+| src/data/contracts/note-format.ts: tableProperties/scalarList | Exclude existing kind/folder keys from projection; export and reuse the one list parser | No stored property, scalar serialization or note ownership change; quoted and legacy unquoted lists retain the same parsing | added projection/list test; all note-format and B6a suites; OS-temp real screen checks |
+| src/features/files/FolderScreen.tsx: FolderTable | Consume optional declarations; majority/order projection, typed display/sort and empty-last | Old sources without declarations keep four-key fallback; Name/Status/Changed, links, sideways scroll and nonprojected note properties remain | OS-temp real DriveVault/FolderScreen 4/4; existing 52 browser states await runner/designer |
+
+### Verification and call counts
+
+All command output, configs, caches, JSON reports and self-checks are in OS temp. The temp
+configs keep the timer guard and original test includes, omit only repository CPU reports,
+and redirect Vite caches and Vitest JSON outside the repository. No repository test config,
+dependency directory, timer rule or runner driver was changed.
+
+Commands and final results are recorded below after completion. pnpm check and e2e remain
+runner-owned, not claimed green. The completed first full sweep had runner 740/742 passing
+and src 5776/5780 passing; later additive adversarial/extension tests and list projection
+changes justify the final full sweep rather than another narrow-only run.
+
+Named call/count observations (real-main mock-clock cases, final authoritative operations):
+- Two new proposals with no earlier cards: read stage **17 calls**, apply **36**; before this
+  attempt the missing-artifact implementation read **17**, applied **28**. The eight extra
+  apply calls are the proposal-folder/two immutable creates and their existing confirmations;
+  no new model or maintain write was added. Questions publish after these artifacts.
+- Exact yes installation: read **17**, apply **24**, against earlier **16/21** without the
+  frozen-artifact lookup/table effect. Redispatch keeps the same artifact bytes and one row.
+- Table declaration read: OS-temp real DriveVault control proves **one readText call** for
+  two typeTable reads at the same version. Per Table mount this is one additional runner-file
+  read alongside the existing note reads; the existing source cache owns invalidation.
+- Payload/legacy decline lookup reuses capture's listing and shared cache. It reads prior
+  immutable artifacts and, only with new proposal candidates, archived answers; no new list
+  call or duplicate loader. History growth is not a measured production timing acceptance.
+- All new main cases use the existing fake clock (timing total=0); no wall-clock timing-growth
+  claim is made. Designer verification, 375/1440 browser/axe and real-load timings are left to
+  the runner/evaluator and lead. No threshold was loosened or passed without measurement.
+
+Final commands/results:
+
+| Check | Result | OS-temp log |
+| --- | --- | --- |
+| Full runner, `--maxWorkers=2` | 743 pass / 5 fail, 58 files; failures all listed above | /tmp/b5b-attempt4-runner-final.log |
+| Full `vitest run src --maxWorkers=2` | 5777 pass / 4 fail, 172 files; EPERM also emits one error | /tmp/b5b-attempt4-src-final.log |
+| App TypeScript, no emit/incremental | pass | /tmp/b5b-attempt4-app-types.log |
+| Node TypeScript, no emit/incremental | pass | /tmp/b5b-attempt4-node-types.log |
+| Runner TypeScript, no emit | pass | /tmp/b5b-attempt4-runner-types.log |
+| Touched app/contract/test ESLint | pass | /tmp/b5b-attempt4-app-lint.log |
+| Touched runner/test ESLint | pass | /tmp/b5b-attempt4-runner-lint.log |
+| check-unused-gate.mjs | pass; 1 unchanged general finding, 25 unchanged production findings | /tmp/b5b-attempt4-unused.log |
+| OS-temp real source/screen self-checks | 4/4 pass: values/sort, tie/empty cells, one versioned declaration read, four-key fallback | /tmp/b5b-attempt4-screen.log |
+| git diff --check (read-only) | pass | command output empty |
+
+Exact suite commands:
+
+```sh
+pnpm exec vitest run --config /private/tmp/b5-runner.config.mts --configLoader runner --maxWorkers=2 > /tmp/b5b-attempt4-runner-final.log 2>&1
+pnpm exec vitest run src --maxWorkers=2 --config /private/tmp/b5-app.config.mts --configLoader runner > /tmp/b5b-attempt4-src-final.log 2>&1
+pnpm exec tsc -p tsconfig.app.json --noEmit --incremental false > /tmp/b5b-attempt4-app-types.log 2>&1
+pnpm exec tsc -p tsconfig.node.json --noEmit --incremental false > /tmp/b5b-attempt4-node-types.log 2>&1
+pnpm exec tsc -p runner/tsconfig.json --noEmit > /tmp/b5b-attempt4-runner-types.log 2>&1
+node scripts/check-unused-gate.mjs > /tmp/b5b-attempt4-unused.log 2>&1
+```
+
+ESLint commands used the installed parser with explicit tsconfigRootDir per package as in
+previous attempts; no config change. The only later runner test edit is a type-only
+LastRunFile assertion narrowing, confirmed by runner tsc and lint; all runtime assertions
+are identical to the final full sweep. `.codex-commits.json` contains exactly three groups:
+production, test sweep, notes alone. The runner commits those groups; this session wrote
+no commit or workspace git metadata. Full-suite method fixtures use only OS-temp repos.
+
+Left out / risk: deferred manifest creation/rewrites and architecture merge, shared raw-answer
+closing rule, and the unresolved Claude novel-type transport; existing public API rejects raw
+nonboolean consent, but malformed stored answers can hide cards. No check/e2e/designer or
+production timing acceptance is claimed. Closure needs the lead's rulings and the runner gates.
