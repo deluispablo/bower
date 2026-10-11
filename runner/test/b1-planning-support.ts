@@ -8,7 +8,6 @@ import type { FakeDrive } from '../../src/data/drive/fake-drive';
 import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
-import { SET_ASIDE_TEXT } from '../../src/data/pile-readiness';
 import { PILE_NOTE } from '../../src/data/piles';
 import { checkCreationName } from '../../src/data/contracts/tree';
 import { parseNote } from '../../src/data/contracts/note-format';
@@ -156,6 +155,9 @@ export async function run(base: Base, replies: unknown[], options: {
   admission?: AdmissionManifest; press?: number;
   around?: (fetch: typeof globalThis.fetch) => typeof globalThis.fetch;
 } = {}) {
+  const logStart = vi.mocked(console.log).mock.calls.length;
+  const before = Object.fromEntries(await Promise.all((await base.drive.listAll(base.root))
+    .map(async (file) => [file.id, await base.drive.evidence(file.id)] as const)));
   const errorStart = vi.mocked(console.error).mock.calls.length;
   const frames: Frame[] = []; const events: Observation[] = []; const traffic: Traffic[] = [];
   const claude: ClaudeSpawn = async (call) => {
@@ -188,7 +190,8 @@ export async function run(base: Base, replies: unknown[], options: {
     media: traffic.filter((t) => t.url.searchParams.get('alt') === 'media' && !t.range).length,
     operations: manifest(result).operations.length, filed: report(result).filed.length, errors,
   }) + '\n');
-  return { ...result, frames, events, traffic, claude, errors };
+  return { ...result, frames, events, traffic, claude, errors, before,
+    consoleLines: vi.mocked(console.log).mock.calls.slice(logStart).map((args) => args.map(String).join(' ')) };
 }
 
 export function manifest(result: CaseRun): { operations: Array<{ operationId: string; effect: { kind: string } }> } {
@@ -206,21 +209,25 @@ export function completed(result: Awaited<ReturnType<typeof run>>, files = 1) {
   expect.soft(result.frames, 'selection then execution, with no validation retry').toHaveLength(2);
   expect.soft(result.frames[1]?.call.input, 'step two receives the frozen source id').toContain(result.dispatch?.admission.piles[0]?.items.find((i) => i.name !== PILE_NOTE)?.fileId ?? '');
 }
-export function setAside(result: Awaited<ReturnType<typeof run>>) {
-  expect.soft(result.code, 'selection exhaustion is a done run with set-aside items').toBe(0);
-  expect.soft(result.wire?.statuses.at(-1)?.phase, 'exhaustion ends done, setting exhausted work aside').toBe('done');
-  expect.soft(report(result).filed).toEqual([]);
-  expect.soft(report(result).setAside.length, 'reuse the existing set-aside row').toBeGreaterThan(0);
+export function leavesForNextRun(result: Awaited<ReturnType<typeof run>>) {
+  expect.soft(result.code, 'ledger exhaustion is a done run').toBe(0);
+  expect.soft(result.wire?.statuses.at(-1)?.phase, 'exhaustion ends done').toBe('done');
+  expect.soft(report(result), 'exhausted items have no report row').toEqual({ filed: [], setAside: [], questions: [] });
   const text = Object.entries(result.after).find(([p]) => p.endsWith('/dispositions.json'))?.[1];
   const dispositions = JSON.parse(text ?? '{"items":[]}') as { items: Array<{ fileId: string; disposition: string }> };
-  expect.soft(dispositions.items.length).toBeGreaterThan(0);
-  expect.soft(dispositions.items.every((i) => i.disposition === 'set-aside')).toBe(true);
-  for (const item of dispositions.items) {
-    const name = result.dispatch?.admission.piles.flatMap((p) => p.items).find((i) => i.fileId === item.fileId)?.name;
-    expect.soft(report(result).setAside).toContainEqual({ name, why: SET_ASIDE_TEXT['not-tidied'] });
+  const sources = result.dispatch?.admission.piles.flatMap((p) => p.items.filter((i) => i.name !== PILE_NOTE)) ?? [];
+  for (const source of sources) {
+    expect.soft(dispositions.items.find((i) => i.fileId === source.fileId)?.disposition,
+      'exhausted sources stay visible as waiting').toBe('waiting');
   }
   expect.soft(result.events.filter((e) => ['PATCH', 'POST', 'DELETE'].includes(e.method) && !e.path.startsWith('.bower/')),
     'exhaustion never mutates source or personal evidence').toEqual([]);
+  expect.soft(result.events.filter((e) => ['PATCH', 'POST', 'DELETE'].includes(e.method)
+    && /(?:manifest-[^/]+\.json|\/changes\/)/.test(e.path)), 'no manifest change or request consumption').toEqual([]);
+  const lines = result.consoleLines.filter((line) => /exhaust|next run|left.*inbox|wait/i.test(line) && !line.startsWith('timing:'));
+  expect.soft(lines, 'one console line counts the items left for the next run').toHaveLength(1);
+  const count = result.dispatch?.admission.piles.reduce((n, p) => n + Math.max(1, p.items.filter((i) => i.name !== PILE_NOTE).length), 0) ?? 0;
+  expect.soft(lines[0] ?? '').toMatch(new RegExp(`\\b${count}\\b`));
 }
 
 /** Find the script's candidate rows without pinning a particular serialized prefix or per-item container. */

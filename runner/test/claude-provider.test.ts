@@ -9,7 +9,6 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SET_ASIDE_TEXT } from '../../src/data/pile-readiness';
 import { PILE_NOTE } from '../../src/data/piles';
 import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { planAdmission } from '../../src/data/spine/plan';
@@ -44,6 +43,8 @@ const recorded = (name: string): string => readFileSync(new URL(`./fixtures/clau
  * what the demo's folder has and the scripted plan does more for: two of Bower's hub notes it brings up to date, a
  * saved link filed as a note, an offer that gets its own note, and a pile of words only that becomes a note.
  */
+const exhaustionBefore = new WeakMap<DriveV3, { files: Awaited<ReturnType<DriveV3['drive']['listAll']>>; logs: number; evidence: Record<string, unknown> }>();
+
 async function wired(rich = false, withText = false): Promise<{ wire: DriveV3; root: string; admission: AdmissionManifest }> {
   const drive = fixedDrive();
   const root = (await drive.createFolder('root', 'Bower')).id;
@@ -86,6 +87,10 @@ async function wired(rich = false, withText = false): Promise<{ wire: DriveV3; r
   const wire = driveV3(drive);
   wire.folderId = root;
   wire.manifest = admitted.manifest;
+  if (!vi.isMockFunction(console.log)) vi.spyOn(console, 'log').mockImplementation(() => {});
+  const files = await drive.listAll(root);
+  exhaustionBefore.set(wire, { files, logs: vi.mocked(console.log).mock.calls.length,
+    evidence: Object.fromEntries(await Promise.all(files.map(async (file) => [file.id, await drive.evidence(file.id)] as const))) });
   return { wire, root, admission: admitted.manifest };
 }
 
@@ -140,32 +145,51 @@ async function rehashed(edit: (text: string) => string): Promise<string> {
 
 const claudeEnv = (extra: Record<string, string> = {}): Record<string, string> => ({ BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: TOKEN, ...extra });
 
-/** Exhaustion persists the existing report, manifest and set-aside dispositions without filing sources. */
+/** Ledger exhaustion leaves admitted work untouched for a later run. */
 const claudeInput = (call: ClaudeCall | undefined): string => call?.input.split('\n').at(-1) ?? '{}';
 
-async function expectSetAside(wire: DriveV3): Promise<void> {
+async function expectLeavesForNextRun(wire: DriveV3): Promise<void> {
+  const before = exhaustionBefore.get(wire);
+  if (!before) throw new Error('Missing exhaustion baseline.');
   const files = await wire.drive.listAll(wire.folderId);
   const last = files.find((f) => f.name === 'last-run.json');
-  expect(last).toBeDefined();
-  const report = JSON.parse(await wire.drive.readText(last?.id ?? '')) as {
+  expect.soft(last).toBeDefined();
+  const report = JSON.parse(last ? await wire.drive.readText(last.id) : '{"run":{"report":{"filed":[],"setAside":[]}}}') as {
     run: { report: { filed: unknown[]; setAside: unknown[] } };
   };
   const sourceIds = new Set(wire.manifest?.piles.flatMap((pile) => pile.items.map((item) => item.fileId)));
-  expect(wire.requests.filter((request) => request.method !== 'GET'
+  expect.soft(wire.requests.filter((request) => request.method !== 'GET'
     && sourceIds.has(request.url.pathname.split('/').at(-1) ?? ''))).toEqual([]);
-  expect(report.run.report.filed).toEqual([]);
-  expect(report.run.report.setAside.length).toBeGreaterThan(0);
-  expect(files.filter((f) => /^manifest-.*\.json$/.test(f.name))).toHaveLength(1);
+  expect.soft(report.run.report.filed).toEqual([]);
+  expect.soft(report.run.report.setAside).toEqual([]);
+  expect.soft(files.filter((f) => /^manifest-.*\.json$/.test(f.name)))
+    .toEqual(before.files.filter((f) => /^manifest-.*\.json$/.test(f.name)));
+  for (const file of before.files) {
+    const path = wire.drive.pathOf(file.id, wire.folderId);
+    if (!path.startsWith('.bower/') || path.startsWith('.bower/changes/')) {
+      expect.soft(await wire.drive.evidence(file.id), 'sources, declarations and requests remain').toEqual(before.evidence[file.id]);
+    }
+  }
+  expect.soft(files.filter((f) => !wire.drive.pathOf(f.id, wire.folderId).startsWith('.bower/')))
+    .toEqual(before.files.filter((f) => !wire.drive.pathOf(f.id, wire.folderId).startsWith('.bower/')));
   const dispositions = files.find((f) => f.name === 'dispositions.json');
-  expect(dispositions).toBeDefined();
-  const aside = JSON.parse(await wire.drive.readText(dispositions?.id ?? '')) as {
+  const waiting = JSON.parse(dispositions ? await wire.drive.readText(dispositions.id) : '{"items":[]}') as {
     items: Array<{ fileId: string; disposition: string }>;
   };
-  expect(aside.items.length).toBeGreaterThan(0);
-  expect(aside.items.every((item) => item.disposition === 'set-aside')).toBe(true);
-  for (const item of aside.items) {
-    const name = wire.manifest?.piles.flatMap((pile) => pile.items).find((source) => source.fileId === item.fileId)?.name;
-    expect(report.run.report.setAside).toContainEqual({ name, why: SET_ASIDE_TEXT['not-tidied'] });
+  for (const source of wire.manifest?.piles.flatMap((pile) => pile.items.filter((item) => item.name !== PILE_NOTE)) ?? []) {
+    expect.soft(waiting.items.find((item) => item.fileId === source.fileId)?.disposition).toBe('waiting');
+  }
+  const lines = vi.mocked(console.log).mock.calls.slice(before.logs).map((args) => args.map(String).join(' '))
+    .filter((line) => /exhaust|next run|left.*inbox|wait/i.test(line) && !line.startsWith('timing:'));
+  expect.soft(lines, 'one console line counts deferred items').toHaveLength(1);
+  const count = wire.manifest?.piles.reduce((n, p) => n + Math.max(1, p.items.filter((i) => i.name !== PILE_NOTE).length), 0) ?? 0;
+  expect.soft(lines[0] ?? '').toMatch(new RegExp(`\\b${count}\\b`));
+  const admitted = await planAdmission(fakeRead(wire.drive), wire.folderId,
+    { scope: 'all', clock: () => AT + 1, newId: () => 'exhaustion-next-run' });
+  expect.soft(admitted.kind, 'next run takes the untouched items').toBe('manifest');
+  if (admitted.kind === 'manifest') {
+    expect.soft(admitted.manifest.piles).toEqual(wire.manifest?.piles);
+    expect.soft(admitted.manifest.journal).toEqual(wire.manifest?.journal);
   }
 }
 
@@ -238,7 +262,7 @@ describe('the Claude provider', () => {
     await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn });
     expect(calls).toHaveLength(3);
     expect(wire.statuses.at(-1)?.phase).toBe('done');
-    await expectSetAside(wire);
+    await expectLeavesForNextRun(wire);
   });
 
   it('a cut Rules.md is marked as cut in the model input', async () => {
@@ -324,7 +348,7 @@ describe('the Claude provider', () => {
     expect(calls[2]?.input).toMatch(/no note/);
     expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
 
-    // Selection plus two execution attempts: exhausted items are set aside with a durable report.
+    // Selection plus two execution attempts: exhausted items stay untouched for the next run.
     const again = await wired(false, true);
     const stuck: ClaudeCall[] = [];
     const respondStuck = phaseAwareClaude(() => ({ code: 0, stderr: '', cut: null, stdout: plain }),
@@ -333,7 +357,7 @@ describe('the Claude provider', () => {
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: again.wire.fetch, claude: never })).toBe(0);
     expect(stuck).toHaveLength(3);
     expect(again.wire.statuses.at(-1)?.phase).toBe('done');
-    await expectSetAside(again.wire);
+    await expectLeavesForNextRun(again.wire);
   });
 
   it('a thing cited by a Timeline line on an existing note needs no note', async () => {
@@ -376,10 +400,10 @@ describe('the Claude provider', () => {
 
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn })).toBe(0);
 
-    // Selection plus two execution attempts; set-aside sources never fall back to Resources.
+    // Selection plus two execution attempts; untouched sources stay in the inbox.
     expect(calls).toHaveLength(3);
     expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
-    await expectSetAside(wire);
+    await expectLeavesForNextRun(wire);
     expect(wire.requests.filter((r) => r.method === 'DELETE')).toEqual([]);
     const after = await wire.drive.listAll(wire.folderId);
     expect(after.filter((f) => !wire.drive.pathOf(f.id, wire.folderId).startsWith('.bower/')))

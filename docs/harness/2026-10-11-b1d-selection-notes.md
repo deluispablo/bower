@@ -799,3 +799,66 @@ unhandled listen error; this is the expected sandbox limitation. No other src fa
 Logs: /tmp/b1d-final-src.log; /tmp/b1d-final-src-results.json.
 All three TypeScript logs and both successful ESLint logs are empty. git diff --check passes.
 Final diff: only this notes appendix; no production/test/golden change or partial implementation remains.
+
+## Addendum 15 sweep
+
+TL-P4-41 addendum 15 supersedes addendum 14 (2). Ledger-exhausted items stay in the inbox
+untouched and visible as waiting, with no report row, manifest change or copy. Declarations
+and requests remain for the next run; the run ends done and logs the count once.
+
+tests changed: runner/test/b1-planning-support.ts: replace the set-aside exhaustion helper with waiting/no-row assertions; observe console lines and original evidence; assert no source write, manifest change or request consumption and one counted console line.
+tests changed: runner/test/b1-planning.test.ts: rename both exhaustion reds and all shared-helper callers; preserve call/operation limits; assert original evidence and requests remain, no manifest is created, fresh admission retains declarations and requests, and the next run files the source.
+tests changed: runner/test/claude-provider.test.ts: adapt all three sweep exhaustion rows through the shared helper; retain done and call counts; assert waiting/no-row, no manifest change or copy, preserved evidence/declarations/requests, one counted console line and fresh admission.
+
+No production, fixture, golden, dependency, network or git-write changes. Coordinator owns commits.
+Research: reused the packet's offline citations; no network or independent reverification:
+https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+https://arxiv.org/html/2506.08837v1
+https://platform.claude.com/docs/en/build-with-claude/prompt-caching
+
+Verification of final test tree:
+- `pnpm -C runner exec vitest run test/b1-planning.test.ts test/claude-provider.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=/tmp/b1d-add15-results.json --cache=false`: 34 failed, 8 passed across both files.
+- Full assertion details: `/tmp/b1d-add15.log`; machine-readable results: `/tmp/b1d-add15-results.json`.
+- Runner TypeScript passes: `/tmp/b1d-add15-types.log`. Touched-test ESLint passes: `/tmp/b1d-add15-lint.log`.
+- Test reports and cache overrides use OS temp / disabled caching. No full check or e2e: this is the authorized tests-only red sweep.
+
+Complete targeted failure inventory (all targeted tests ran before stopping):
+
+| File:line | Failing test |
+| --- | --- |
+| runner/test/b1-planning.test.ts:41 | b1-index-job-offer |
+| runner/test/b1-planning.test.ts:68 | b1-changes-person-edit |
+| runner/test/b1-planning.test.ts:95 | b1-cut-index-no-new-destination |
+| runner/test/b1-planning.test.ts:123 | b1-five-per-source |
+| runner/test/b1-planning.test.ts:143 | b1-pinned-and-script-notes-count-within-five |
+| runner/test/b1-planning.test.ts:173 | b1-selection-closed-ids |
+| runner/test/b1-planning.test.ts:220 | b1-folded-moc-expansion |
+| runner/test/b1-planning.test.ts:239 | b1-target-injection |
+| runner/test/b1-planning.test.ts:269 | b1-read-to-act-fence |
+| runner/test/b1-planning.test.ts:298 | b1-question-candidate-binding |
+| runner/test/b1-planning.test.ts:331 | b1-shared-ledger |
+| runner/test/b1-planning.test.ts:386 | b1-refresh-cache-hot-order |
+| runner/test/b1-planning.test.ts:413 | b1-pre-manifest-retry |
+| runner/test/b1-planning.test.ts:451 | b1-neighbourhood-order-and-30-cap |
+| runner/test/b1-planning.test.ts:492 | b1-expansion-is-not-a-read-picked-members-count-within-five |
+| runner/test/b1-planning.test.ts:505 | b1-new-subfolder-visible-parent-name-and-near-duplicate |
+| runner/test/b1-planning.test.ts:528 | b1-one-new-subfolder-per-item |
+| runner/test/b1-planning.test.ts:542 | b1-one-retry-per-step-four-calls-exhaustion-leaves-items-for-next-run |
+| runner/test/b1-planning.test.ts:575 | b1-200-operations-exhaustion-leaves-items-for-next-run |
+| runner/test/claude-provider.test.ts:207 | a new Area with no cited rule or note is refused and retried once |
+| runner/test/claude-provider.test.ts:229 | a new Area with a responsibility is made and the report says why |
+| runner/test/claude-provider.test.ts:254 | a responsibility does not open a new Project |
+| runner/test/claude-provider.test.ts:301 | a rule basis is a whole rules line, never part of one or the cut marker |
+| runner/test/claude-provider.test.ts:318 | a new subfolder of an existing Area is not reported as a new area |
+| runner/test/claude-provider.test.ts:331 | a thing with text and no note or citing line is refused and retried once |
+| runner/test/claude-provider.test.ts:363 | a thing cited by a Timeline line on an existing note needs no note |
+| runner/test/claude-provider.test.ts:379 | a photo with no text needs no note |
+| runner/test/claude-provider.test.ts:391 | a second refusal ends the run honestly |
+| runner/test/claude-provider.test.ts:413 | a recorded Claude reply becomes operations the spine validates |
+| runner/test/claude-provider.test.ts:1 | the runner logs one timing line per run with the Claude reply's numbers |
+| runner/test/claude-provider.test.ts:598 | the Claude provider passes the scripted provider contract fixtures |
+| runner/test/claude-provider.test.ts:637 | a write the two runner lists judged differently is judged once by RUNNER_WRITES |
+| runner/test/claude-provider.test.ts:744 | the runner computes ids and digests, never the model |
+| runner/test/claude-provider.test.ts:812 | a Claude run writes no hub line or demo extra it did not propose |
+
+Delivery: done for the authorized red sweep; production remains red. No implementation attempted.
