@@ -1823,3 +1823,207 @@ Research reused from the packet without network or independent reverification:
 Final diff: /tmp/b1d-round2-implementation.diff. No commit, integration, backup, deployment,
 acceptance or full-green claim is made. Pending scope and the 44 baseline compatibility failures
 must be ruled or fixed in their existing homes; B5a kinds alone are intentionally deferred.
+
+
+## Sweep 3
+
+implementer: codex
+status: tests-only sweep complete; runner implementation remains red, coordinator owns commits.
+
+Authority: TL-P4-41 addendum 16 and the owner's sweep-3 instruction. No network, no git-writing
+commands, no production edits, no node_modules replacement or symlink. Tests use the OS temporary
+folder; Vitest's repository output path is overridden and its cache disabled. The earlier round-2
+statement that validation exhaustion should end done is superseded: invalid replies after their one
+retry fail; only the shared ledger can end done with untouched inbox items.
+
+Research reused offline, not independently reverified:
+- https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+- https://arxiv.org/html/2506.08837v1
+- https://platform.claude.com/docs/en/build-with-claude/prompt-caching
+
+### Authorized test repairs and preserved intent
+
+tests changed: runner/test/model-input-fingerprint.test.ts: count selection plus execution and its retry; preserve both byte goldens and fingerprint checks.
+tests changed: runner/test/claude-provider.test.ts: count every working-directory/HOME observation; seed a matching Money hub so the Statements parent is visible; still require a filed subfolder and no New area report.
+tests changed: runner/test/ask-answer-loop.test.ts: require the same answer in selection and execution; count both calls beside a pile, keeping all write-it state and archive assertions.
+tests changed: runner/test/q1-continuation.test.ts: check provenance in each semantic call, never flatten away repeated observations; aggregate selection plus both execution attempts' actual tokens; retain failed status assertions.
+tests changed: runner/test/c04-incorporation.test.ts: select the seeded Garden hub explicitly, keep source text bounds in selection, require metadata only there and full picked evidence only in execution; keep the 4000/24000 bounds and exact cut accounting including its notice.
+tests changed: runner/test/corpus-driver.test.ts: keep a four-call, two-run between-step control; pick the edited note by its listed id on run two and assert its full text in execution; first selection/first execution and second selection exclude the new words.
+tests changed: runner/test/b1-planning.test.ts: add one named invalid-reply exhaustion red and one ledger-exhaustion contract, each with a valid filing positive control; retain existing retry/operation bounds.
+tests changed: harness/corpus/c04-hardware-receipt/case.json: mark the added Receipts hub Bower-owned to expose the existing parent through its matching metadata.
+tests changed: harness/corpus/c04-hardware-receipt/expected.json: preserve the added existing hub byte-for-byte, alongside Rules, while keeping monthly filing and derived receipt-note expectations.
+tests changed: harness/corpus/c04-hardware-receipt/folder/Areas/Money/Receipts/Receipts.md: add a matching existing-parent hub; the monthly subfolder is still created by the runner.
+
+No assertion in the invalid-reply tests originally at claude-provider:403/461/583 or
+q1-continuation:374 was repaired or weakened. Their shifted current locations are in the final inventory.
+The c04 hardware case now passes its original scorer; this exposes c04-offer-and-flat next in the same
+loop. Its unseeded Money parent is the same visible-parent contradiction, but that corpus fixture is
+outside the owner's named sweep scope and remains unchanged.
+
+The C04 bounded-note test also exposed the previously unreachable cut assertion: cut characters equal
+original length minus actual content shown, with the cut notice fitting inside the same 4000-character
+bound. The test now checks conservation and the marker's exact count, instead of incorrectly treating
+all 4000 characters as source content. No character ceiling was raised.
+
+### Exhaustion kinds and controls
+
+- b1-invalid-reply-exhaustion-fails-after-one-retry: selection and execution each return an out-of-schema
+  extra key on both attempts. Each must end failed (code 1), never a third attempt, no manifest or
+  source/declaration write. Its positive control uses invalid then valid selection, invalid then valid
+  execution: four actual calls, done, one source filed. The current implementation instead returns done;
+  this is an implementation gap, not a contradiction in the red.
+- b1-ledger-exhaustion-valid-replies-done-with-items-left-in-inbox: 101 valid selected files and valid
+  execution intents need at least 202 operations (a file move plus a derived note per source), exceeding
+  the unchanged 200-operation ledger. Exactly two valid model calls must end done with all 101 inbox
+  sources and declarations untouched, no invalid-reply refusal and no oversized manifest. Its control
+  files one source within the same ledger. This contract is currently green.
+- Existing validation-exhaustion expectations of failed remain implementation gaps. Existing B1d
+  negative tests that still expect done after invalid replies are separate contradictions; their
+  already-green assertions were not part of the owner's enumerated compatibility repairs. The grep
+  audit records their locations below so round 3 cannot mistake those greens for validation authority.
+
+### Golden movements and named calls
+
+Moved golden files: none. Both model-input-c04.raw.golden.txt and model-input-c04.golden.txt remain
+byte-identical. No traffic golden, token ceiling, retry bound, character ceiling or operation cap moved.
+The only numeric compatibility pins moved by the named added selection call are:
+
+| File:line | Old value | New value | Named call |
+| --- | --- | --- | --- |
+| runner/test/model-input-fingerprint.test.ts:74 | 2 physical calls | 3 physical calls | selection before execution and execution validation retry |
+| runner/test/claude-provider.test.ts:296 | [true,true] | [true,true,true] | selection before execution and execution validation retry |
+| runner/test/claude-provider.test.ts:297 | [true,true] | [true,true,true] | selection before execution and execution validation retry |
+| runner/test/ask-answer-loop.test.ts:889 | prior calls + 1 | prior calls + 2 | selection before answered execution |
+| runner/test/q1-continuation.test.ts:845 | in=20 out=20 | in=30 out=30 | selection adds actual input=10/output=10 before two execution attempts |
+
+Selection and execution each retain answer provenance. Their repeated answer records do not represent
+another answer or another quota unit. The batched continuation's first two calls still have no answers;
+its next two each carry both bound answers. Unavailable/fabricated/fifth-option failed assertions stand.
+
+### Ruling grep audit
+
+One ruling-focused sweep: /tmp/b1d-sweep3-ruling-grep.txt covers call counts, tokens, full-context
+assertions, failed status and exhaustion across the seven named runner test files. No test is skipped.
+
+The existing done-after-invalid-reply assertions remain unchanged and are contradictions under
+addendum 16, even where they currently pass. They are explicitly outside the enumerated repair list:
+
+| File:line | Invalid-reply path still asserting a ledger outcome |
+| --- | --- |
+| runner/test/b1-planning.test.ts:108 | cut-index creation refusal returned twice |
+| runner/test/b1-planning.test.ts:139 | six wants returned twice |
+| runner/test/b1-planning.test.ts:168 | pinned plus requested wants exceed five on both replies |
+| runner/test/b1-planning.test.ts:184 | invented ids/paths/kinds/unclosed selection on both replies |
+| runner/test/b1-planning.test.ts:188 | unclosed selection on both replies |
+| runner/test/b1-planning.test.ts:261 | target injection refused on both execution replies |
+| runner/test/b1-planning.test.ts:266 | execution changes frozen destination on both replies |
+| runner/test/b1-planning.test.ts:328 | fabricated/fifth question options returned twice |
+| runner/test/b1-planning.test.ts:515 | six folded members requested twice |
+| runner/test/b1-planning.test.ts:536 | forbidden parent/name/duplicate returned twice |
+| runner/test/b1-planning.test.ts:550 | nested execution destination returned twice |
+| runner/test/b1-planning.test.ts:565 | invalid reply after its retry in either phase |
+| runner/test/claude-provider.test.ts:262 | responsibility cannot authorize a new Project, invalid execution twice |
+| runner/test/claude-provider.test.ts:368 | missing incorporation note on both execution attempts |
+| runner/test/claude-provider.test.ts:413 | protected original :403 actually expects saving/done after invalid execution, not failed |
+
+The protected original claude-provider:403 test remains unchanged as directed. Its current saving/done
+assertion is itself a contradiction; the other protected invalid-reply assertions require failed and
+remain implementation gaps. This distinction corrects the round-2 inventory and does not grant a
+production change or silently change any protected test.
+
+removed: no test or fixture removed; no golden replaced, bound loosened or production fallback added.
+
+### Final verification and complete remaining red inventory
+
+Before edits: 689 runner tests, 645 passed, 44 failed.
+Final suite: 691 runner tests, 657 passed, 34 failed (32 implementation gaps, 2 contradictions).
+Eleven previously failing tests now pass; two contracts were added (the ledger control passes and the
+invalid-reply exhaustion control fails on both selection and execution as intended). Two repaired
+first assertions reveal a later existing failure: c04-offer-and-flat's invisible parent in the C04
+loop, and the write-it state update beside a pile. All source/target/state assertions remain intact.
+
+Required full runner command, exit 1:
+`pnpm -C runner exec vitest run --maxWorkers=2 --reporter=json --outputFile=/tmp/b1d-sweep3-complete.json --cache=false > /tmp/b1d-sweep3-complete.log 2>&1`
+
+Additional checks: runner TypeScript pass (/tmp/b1d-sweep3-types.log), ESLint of all seven touched
+runner test files pass (/tmp/b1d-sweep3-eslint.log), git diff whitespace pass. pnpm check and fake e2e
+were not run: their normal paths write repository build/check-mark/result artifacts, which this
+session's explicit OS-temp-only instruction forbids. No UI or runtime code changed. No commit was made.
+
+Baseline and targeted assertion evidence: /tmp/b1d-sweep3-before.{json,log},
+/tmp/b1d-sweep3-targeted.{json,log}, /tmp/b1d-sweep3-revised.{json,log},
+/tmp/b1d-sweep3-context.{json,log}. Diagnostic script/output and scratch files stay in /tmp.
+The full final JSON retains all failure messages and soft assertions. Each row below is one remaining
+failed test with its actual current failure location and kind; same-line helper failures are separate rows.
+
+| File:line | Kind | Remaining red |
+| --- | --- | --- |
+| runner/test/ask-answer-loop.test.ts:591 | implementation gap | a yes to write it applies the shown text with no model call |
+| runner/test/ask-answer-loop.test.ts:624 | implementation gap | write it re-asks when the section changed since it was shown |
+| runner/test/ask-answer-loop.test.ts:644 | implementation gap | a write it yes whose note is gone writes one answered row |
+| runner/test/ask-answer-loop.test.ts:673 | implementation gap | write it re-asks when the note changed elsewhere since it was shown |
+| runner/test/ask-answer-loop.test.ts:698 | implementation gap | a clash at write time leads to the re-ask with the new sentence and no extra press |
+| runner/test/ask-answer-loop.test.ts:744 | implementation gap | only a clash keeps an answer for a re-ask |
+| runner/test/ask-answer-loop.test.ts:773 | implementation gap | the same non-clash refusal never starts more runs than the cap, then shows the not-written row |
+| runner/test/ask-answer-loop.test.ts:844 | implementation gap | a write it with nothing to write writes one answered row |
+| runner/test/ask-answer-loop.test.ts:96 | implementation gap | a lone no to write it closes the question with no model call |
+| runner/test/ask-answer-loop.test.ts:890 | implementation gap | a yes to write it beside a pile asks the model |
+| runner/test/ask-only-lines.test.ts:36 | implementation gap | keeps the Timeline lines the model added with no cites |
+| runner/test/b1-planning.test.ts:629 | implementation gap | b1-invalid-reply-exhaustion-fails-after-one-retry |
+| runner/test/c04-incorporation.test.ts:224 | contradiction | the C04 corpus cases score green with scripted proposals |
+| runner/test/c05-bounded-reads.test.ts:197 | implementation gap | C05 bounded reads: golden: 50 archived requests and 25 kept runs cost no historical media |
+| runner/test/c05-bounded-reads.test.ts:148 | implementation gap | C05 bounded reads: pending: a clash moves by run id and retries only its bound evidence |
+| runner/test/c05-bounded-reads.test.ts:498 | implementation gap | C05 bounded reads: fix 2 control: a waiting retry whose pending relocation lands completes once |
+| runner/test/c05-bounded-reads.test.ts:498 | implementation gap | C05 bounded reads: fix 2: a waiting retry whose pending relocation failed completes once |
+| runner/test/c05-bounded-reads.test.ts:498 | implementation gap | C05 bounded reads: fix 2: a waiting retry interrupted after its pointer and before its append appends once |
+| runner/test/c05-bounded-reads.test.ts:401 | implementation gap | C05 bounded reads: fix 1 control: a waiting retry whose archive lands completes once |
+| runner/test/c05-bounded-reads.test.ts:401 | implementation gap | C05 bounded reads: fix 1: a waiting retry whose archive move failed completes once |
+| runner/test/c05-bounded-reads.test.ts:148 | implementation gap | C05 bounded reads: horizon: past 20 runs uses listing age and TOO_OLD_WHY without a chain walk |
+| runner/test/c05-incorporation.test.ts:74 | implementation gap | the C05 corpus cases score green with scripted proposals |
+| runner/test/c05-person-notes.test.ts:434 | implementation gap | C05 person notes: fix 1 finding 2: a conflicted append retries its filed source within twenty retained runs |
+| runner/test/c05-person-notes.test.ts:448 | implementation gap | C05 person notes: fix 1 finding 3: article-equivalent titles stay ambiguous in context and writes |
+| runner/test/c05-person-notes.test.ts:921 | implementation gap | C05 person notes: round 4 2: pending retries keep target and source ids |
+| runner/test/c05-person-notes.test.ts:748 | implementation gap | C05 person notes: round 5 2: a retained completion never resolves a renamed target by title again |
+| runner/test/c05-person-notes.test.ts:1127 | implementation gap | C05 person notes: round 5 3: a request past retention is left as written and archived without an append |
+| runner/test/claude-provider.test.ts:413 | contradiction | a second refusal ends the run honestly |
+| runner/test/claude-provider.test.ts:471 | implementation gap | a malformed or out-of-schema Claude reply fails truthfully and writes nothing |
+| runner/test/claude-provider.test.ts:593 | implementation gap | a Claude reply that targets a thing not admitted is refused and writes nothing |
+| runner/test/claude-provider.test.ts:593 | implementation gap | the runner computes ids and digests, never the model |
+| runner/test/model-input-fingerprint.test.ts:176 | implementation gap | the same case with other ids has the same fingerprint |
+| runner/test/model-input-fingerprint.test.ts:269 | implementation gap | two fresh fake folders on the same case give the same input fingerprint through main |
+| runner/test/q1-continuation.test.ts:374 | implementation gap | Q1a q1-options-exact-action: two to four script candidates accepted and fabricated or fifth refused |
+
+Exhaustion rows: the new invalid-reply red, the protected malformed reply, closed-id/digest refusals,
+and the fabricated/fifth question-option refusal are invalid-reply exhaustion implementation gaps.
+The protected second-refusal row is a contradictory saving/done assertion, preserved by explicit scope.
+The new ledger-exhaustion contract (101 sources, at least 202 operations, two valid calls) is green.
+All other implementation-gap rows concern incorporation/state writes, pending/retention/source-id
+handling, ambiguous request evidence or fresh-id normalization, not an exhausted ledger.
+
+### Compatibility results from the same full runner suite
+
+| Suite | Passed / total | Status |
+| --- | ---: | --- |
+| test/b1-index.test.ts | 31 / 31 | pass |
+| test/b1-planning-support.test.ts | 3 / 3 | pass |
+| test/b1-planning.test.ts | 20 / 21 | fail; inventory above |
+| test/b23-hot-context.test.ts | 10 / 10 | pass |
+| test/b23-hot-recovery.test.ts | 2 / 2 | pass |
+| test/b23-hot.test.ts | 135 / 135 | pass |
+| test/c04-incorporation.test.ts | 5 / 6 | fail; inventory above |
+| test/claude-provider.test.ts | 19 / 23 | fail; inventory above |
+| test/corpus-driver.test.ts | 18 / 18 | pass |
+| test/main.test.ts | 7 / 7 | pass |
+| test/model-input-fingerprint.test.ts | 7 / 9 | fail; inventory above |
+| test/q1-continuation.test.ts | 42 / 43 | fail; inventory above |
+| test/timing-counts.test.ts | 2 / 2 | pass |
+
+The corpus-driver between-step contract is green with all four actual calls observed. The C04 bounded
+extraction contract is green with full note text in execution only. The C04 hardware receipt control
+passes its original scoring and preserves its newly seeded hub; the next corpus member remains a
+named contradiction. Raw and normalized C04 prompt golden checks both pass without changing a byte.
+
+Scope audit: only the seven named runner test files, c04-hardware-receipt fixture/expectation files,
+and this notes appendix changed. No corpus driver production file required an edit; no other fixture,
+shared harness record, production file or golden changed. Remaining implementation work belongs to
+round 3 and the coordinator, not this red-owning session.

@@ -292,8 +292,9 @@ describe('the Claude provider', () => {
 
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn })).toBe(0);
 
-    expect(there).toEqual([true, true]);
-    expect(home).toEqual([true, true]);
+    // Selection, execution and its validation retry all retain their working directories.
+    expect(there).toEqual([true, true, true]);
+    expect(home).toEqual([true, true, true]);
   });
 
   it('a rule basis is a whole rules line, never part of one or the cut marker', async () => {
@@ -314,7 +315,13 @@ describe('the Claude provider', () => {
   });
 
   it('a new subfolder of an existing Area is not reported as a new area', async () => {
-    const { wire } = await wired();
+    const { wire, admission } = await wired();
+    const money = (await wire.drive.listAll(wire.folderId)).find((f) => wire.drive.pathOf(f.id, wire.folderId) === 'Areas/Money');
+    expect(money).toBeDefined();
+    const hub = await wire.drive.createText(money?.id ?? '', 'Money.md', serializeNote({
+      summary: 'Payslip records and bank statements.', properties: [], tags: [], currentState: [],
+      body: '', timeline: [], byBower: true,
+    }), { by: 'bower' });
     const sub = edited((m) => { for (const t of (m.things as Array<Record<string, string>>).slice(0, 1)) Object.assign(t, { to: 'Areas/Money/Statements', responsibility: 'bank statements' }); });
     const claude = recordedClaude({ stdout: sub }, { drive: wire.drive, root: wire.folderId, admission: wire.manifest });
     vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -322,6 +329,9 @@ describe('the Claude provider', () => {
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: claude.spawn })).toBe(0);
 
     expect(claude.calls).toHaveLength(2);
+    const value = JSON.parse(claudeInput(claude.calls[0])) as Record<string, unknown>;
+    expect(candidates({ call: claude.calls[0] as ClaudeCall, value, events: [] }, admission.piles.flatMap((p) => p.items).find((t) => t.name === 'Payslip_Aug.pdf')?.fileId ?? '')).toContain(hub.id);
+    expect((await wire.drive.listAll(wire.folderId)).some((f) => wire.drive.pathOf(f.id, wire.folderId) === 'Areas/Money/Statements')).toBe(true);
     const last = (await wire.drive.listAll(wire.folderId)).find((f) => f.name === 'last-run.json');
     expect(JSON.stringify(JSON.parse(await wire.drive.readText(last?.id ?? '')))).not.toContain('New area');
   });

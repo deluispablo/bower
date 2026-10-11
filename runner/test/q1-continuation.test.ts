@@ -404,7 +404,8 @@ describe('Q1a stored answers through production entry points', () => {
     await addAnswer(w, second, { text: PERSON }, AT);
     await press(w, w.ids.unclear);
     expect(await run(w, 0)).toBe(0);
-    expect.soft(w.calls.flatMap((c) => shownOf(c).answers ?? []).map((a) => a.answer)).toEqual([PERSON]);
+    expect(w.calls).toHaveLength(2);
+    for (const call of w.calls.slice(-2)) expect.soft((shownOf(call).answers ?? []).map((a) => a.answer)).toEqual([PERSON]);
   });
 
   it('Q1a q1-text-person-provenance: addendum 1 trims accepts 1000 and newlines refuses overflow and controls', async () => {
@@ -455,7 +456,8 @@ describe('Q1a stored answers through production entry points', () => {
     expect(await run(w, 0)).toBe(0);
     const inputs = w.calls.map(shownOf);
     expect(inputs.every((s) => !(s.rules ?? '').includes(PERSON))).toBe(true);
-    expect.soft(inputs.flatMap((s) => s.answers ?? [])).toEqual([
+    expect(inputs).toHaveLength(2);
+    for (const input of inputs) expect.soft(input.answers).toEqual([
       expect.objectContaining({ answer: PERSON, fileId: w.ids.unclear }),
     ]);
     expect(await w.drive.readText((await fileAt(w, 'Projects/Job hunt/Job hunt.md'))?.id ?? '')).toBe(jobBefore);
@@ -537,7 +539,10 @@ describe('Q1a stored answers through production entry points', () => {
     }
     expect(await runs.start('all', { requestId: 'batch-quota-over' }).then(() => 'accepted', () => 'refused')).toBe('refused');
     expect(w.dispatched).toHaveLength(100);
-    expect.soft(w.calls.flatMap((c) => shownOf(c).answers ?? []).map((a) => a.answer).sort()).toEqual([PERSON, 'This is also for the room.'].sort());
+    expect(w.calls).toHaveLength(4);
+    for (const call of w.calls.slice(0, 2)) expect(shownOf(call).answers ?? []).toEqual([]);
+    for (const call of w.calls.slice(2)) expect.soft((shownOf(call).answers ?? []).map((a) => a.answer).sort())
+      .toEqual([PERSON, 'This is also for the room.'].sort());
   });
 
   it.each(['thing', 'pile'] as const)('Q1a q1-two-rounds-no-third: %s exhausts after two saved askings and words reset', async (kind) => {
@@ -625,7 +630,7 @@ describe('Q1a stored answers through production entry points', () => {
     const timings = vi.mocked(console.log).mock.calls.slice(loggedBefore).flatMap((args) => args.map(String)).filter((s) => s.startsWith('timing:'));
     expect(timings).toHaveLength(2);
     for (const timing of timings) expect(timing).toMatch(/turns=2 in=20 out=20.* drive=\S+/);
-    expect.soft(w.calls.flatMap((c) => shownOf(c).answers ?? []).map((a) => a.answer)).toEqual([PERSON]);
+    for (const call of w.calls.slice(-2)) expect.soft((shownOf(call).answers ?? []).map((a) => a.answer)).toEqual([PERSON]);
     expect.soft(answerValue((await allAnswerLines(w))[0])).toEqual({ text: PERSON });
   });
 
@@ -837,7 +842,7 @@ describe('Q1a stored answers through production entry points', () => {
     expect(w.calls).toHaveLength(calls);
     const firstTiming = vi.mocked(console.log).mock.calls.flatMap((args) => args.map(String))
       .filter((s) => s.startsWith('timing:')).at(-2) ?? '';
-    expect.soft(firstTiming, 'both validation calls count their model usage').toMatch(/in=20 out=20/);
+    expect.soft(firstTiming, 'selection and both execution validation calls count their model usage').toMatch(/in=30 out=30/);
     tick();
     await press(w);
     expect(await run(w, 1)).toBe(0);

@@ -613,3 +613,55 @@ it('b1-200-operations-exhaustion-leaves-items-for-next-run', async () => {
   expect.soft(manifest(r).operations.length, 'no oversized frozen execution plan').toBeLessThanOrEqual(200);
   expect.soft(Object.values(r.pathsById).filter((p) => p.startsWith('Inbox/') && /Offer \d{3}\.txt$/.test(p))).toHaveLength(201);
 });
+
+it('b1-invalid-reply-exhaustion-fails-after-one-retry', async () => {
+  const good = await setup(); await seedState(good);
+  const selection = select(good); const intent = fileIntent(good);
+  const control = await run(good, [{ ...selection, extra: true }, selection, { ...intent, extra: true }, intent]);
+  expect.soft(control.code, 'a valid reply on each retry completes').toBe(0);
+  expect.soft(control.wire?.statuses.at(-1)?.phase).toBe('done');
+  expect.soft(report(control).filed).toHaveLength(1);
+  expect.soft(control.frames, 'one retry per phase, four calls total').toHaveLength(4);
+  for (const phase of ['selection', 'execution'] as const) {
+    const b = await setup(); await seedState(b);
+    const invalid = phase === 'selection' ? { ...select(b), extra: true } : { ...fileIntent(b), extra: true };
+    const r = await run(b, phase === 'selection' ? [invalid, invalid] : [select(b), invalid, invalid]);
+    expect.soft(r.code, `${phase}: no valid reply after its retry fails the run`).toBe(1);
+    expect.soft(r.wire?.statuses.at(-1)?.phase, `${phase}: invalid reply exhaustion is failed`).toBe('failed');
+    expect.soft(r.frames, `${phase}: the model never gets a third attempt`).toHaveLength(phase === 'selection' ? 2 : 3);
+    expect.soft(manifest(r).operations, `${phase}: no frozen manifest`).toEqual([]);
+    expect.soft(Object.keys(r.after).filter((path) => /manifest-[^/]+\.json$/.test(path))).toEqual([]);
+    for (const [id, evidence] of Object.entries(r.before)) {
+      const path = b.drive.pathOf(id, b.root);
+      if (!path.startsWith('.bower/') || path.startsWith('.bower/changes/')) {
+        expect.soft(await b.drive.evidence(id), `${phase}: no source or declaration write`).toEqual(evidence);
+      }
+    }
+  }
+});
+
+it('b1-ledger-exhaustion-valid-replies-done-with-items-left-in-inbox', async () => {
+  const scenario = async (count: number) => {
+    const names = Array.from({ length: count }, (_, i) => `Offer ${String(i).padStart(3, '0')}.txt`);
+    const b = await setup({ inbox: [{ line: 'Alex has remote developer offers.', files: names }],
+      inboxFiles: Object.fromEntries(names.map((name, i) => [name, `Alex received a remote developer offer. Offer number ${i}.\n`])) });
+    await seedState(b);
+    return { b, r: await run(b, [select(b), fileIntent(b)]) };
+  };
+  const { r: control } = await scenario(1);
+  completed(control); twoSteps(control);
+  expect.soft(manifest(control).operations.length).toBeGreaterThan(0);
+  expect.soft(manifest(control).operations.length).toBeLessThanOrEqual(200);
+  const { b, r } = await scenario(101);
+  leavesForNextRun(r);
+  expect.soft(r.frames, 'valid selection and execution, no invalid-reply retry').toHaveLength(2);
+  expect.soft(r.errors, 'ledger exhaustion never classifies a valid reply as invalid').not.toMatch(/was refused|Selection shape or ids refused/);
+  expect.soft(manifest(r).operations.length).toBeLessThanOrEqual(200);
+  expect.soft(Object.values(r.pathsById).filter((p) => p.startsWith('Inbox/') && /Offer \d{3}\.txt$/.test(p))).toHaveLength(101);
+  for (const [id, evidence] of Object.entries(r.before)) {
+    const path = b.drive.pathOf(id, b.root);
+    if (!path.startsWith('.bower/') || path.startsWith('.bower/changes/')) {
+      expect.soft(await b.drive.evidence(id), 'ledger exhaustion keeps every item and declaration as read').toEqual(evidence);
+    }
+  }
+});
