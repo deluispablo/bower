@@ -262,11 +262,11 @@ function FolderTable({ items }: { items: TreeNode[] }) {
   const propKeys = useMemo(() => {
     const seen = new Map<string, string>();
     Object.values(notes).forEach((n) => n.properties.forEach((p) =>
-      !['kind', 'folder', ...TECHNICAL_PROPERTIES].includes(p.key) && !seen.has(p.key) && seen.set(p.key, p.label)));
-    if (!selected) return [...seen.entries()].slice(0, 4);
+      !['name', 'modified', 'kind', 'folder', ...TECHNICAL_PROPERTIES].includes(p.key) && !seen.has(p.key) && seen.set(p.key, p.label)));
+    if (!selected) return [...seen.entries()].slice(0, 4).map(([key, label]): [string, string] => [`property:${key}`, label]);
     return tableProperties({ properties: selected.table.map((key) => ({ key,
       label: seen.get(key) ?? parseNote('', `---\n${key}: \n---`).properties.find((p) => p.key === key)?.label ?? key,
-      value: '' })) }, selected).map((p) => [p.key, p.label] as [string, string]);
+      value: '' })) }, selected).map((p): [string, string] => [`property:${p.key}`, p.label]);
   }, [notes, selected]);
   const value = (i: TreeNode, key: string): string => {
     if (key === 'name') return i.type === 'folder' ? i.name : thingName(i.name);
@@ -274,9 +274,11 @@ function FolderTable({ items }: { items: TreeNode[] }) {
     if (key === 'status') return notes[i.path]?.status ?? '';
     const note = notes[i.path];
     if (selected && !note?.properties.some((p) => p.key === 'type' && p.value === selected.id)) return '';
-    return note?.properties.find((p) => p.key === key)?.value ?? '';
+    return note?.properties.find((p) => p.key === key.slice('property:'.length))?.value ?? '';
   };
   const typed = (raw: string, key: string): unknown => {
+    if (!key.startsWith('property:')) return raw;
+    key = key.slice('property:'.length);
     const kind = selected?.properties[key]?.type;
     if (!selected || !raw || !['number', 'money', 'list'].includes(kind ?? '')) return raw;
     try {
@@ -299,9 +301,9 @@ function FolderTable({ items }: { items: TreeNode[] }) {
         ? { style: 'currency', currency: v.currency } : {}),
       minimumFractionDigits: Number.isInteger(number) ? 0 : undefined, maximumFractionDigits: 4,
     }).format(number);
-    return selected?.properties[key]?.type === 'date' ? timelineDay(raw) : raw;
+    return selected?.properties[key.slice('property:'.length)]?.type === 'date' ? timelineDay(raw) : raw;
   };
-  const numeric = (key: string): boolean => ['money', 'number'].includes(selected?.properties[key]?.type ?? '');
+  const numeric = (key: string): boolean => ['money', 'number'].includes(selected?.properties[key.slice('property:'.length)]?.type ?? '');
   const rows = [...items].sort((a, b) => {
     const k = sortBy.key;
     const av = value(a, k), bv = value(b, k);

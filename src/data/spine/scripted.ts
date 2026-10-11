@@ -2473,15 +2473,6 @@ export async function build(decided: Decided): Promise<Ended> {
     reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), alreadySaved: [{ name: w.folder.name, ...as }] } });
     reportPlan.push({ requires: [op], when: 'rejected', value: { ...empty(), setAside: [{ name: w.folder.name, why: SAVED_STAYS }] } });
   }
-  const proposalOps: string[] = [];
-  if (newProposals.length && sys?.folder) {
-    const parent: Target = proposalFolder?.folder ? { fileId: proposalFolder.id }
-      : { createdBy: await add({ kind: 'create-folder', parent: { fileId: sys.id }, name: nameOf(SYSTEM.proposals), createKey: newKey('folder') }) };
-    for (const proposal of newProposals) {
-      const text = `${JSON.stringify({ v: 1, ...proposal }, null, 2)}\n`;
-      proposalOps.push(await add({ kind: 'create-text', parent, name: `${proposal.id}.json`, createKey: newKey('runner'), text, content: await utf8(text), purpose: 'runner-json' }));
-    }
-  }
   if (tableWrite) {
     const content = await utf8(tableWrite.text);
     const op = tableWrite.file && tableWrite.content
@@ -2526,7 +2517,6 @@ export async function build(decided: Decided): Promise<Ended> {
     // It waits for every operation derived from the answers it drops (R4-1), so a question stays until its work is done,
     // and for the moves of the piles its new question is about, so it is asked once they are filed.
     const derived = [
-      ...proposalOps,
       ...journal.flatMap((l) => (l.rec.kind === 'answer' ? need(l.rec.id).derived : [])),
       ...[...stateAsks.keys()].flatMap((id) => {
         const edit = editOf.get(id);
@@ -2546,6 +2536,15 @@ export async function build(decided: Decided): Promise<Ended> {
     }
     // The question's row is grounded by that one write, with the same fields (contract B).
     if (questionsOp && fresh.length) reportPlan.push({ requires: [questionsOp], when: 'applied', value: { ...empty(), questions: fresh.map(reportRowOf) } });
+  }
+  // Only a published question leaves a frozen artifact that suppresses a later offer.
+  if (questionsOp && newProposals.length && sys?.folder) {
+    const parent: Target = proposalFolder?.folder ? { fileId: proposalFolder.id }
+      : { createdBy: await add({ kind: 'create-folder', parent: { fileId: sys.id }, name: nameOf(SYSTEM.proposals), createKey: newKey('folder') }, [questionsOp]) };
+    for (const proposal of newProposals) {
+      const text = `${JSON.stringify({ v: 1, ...proposal }, null, 2)}\n`;
+      await add({ kind: 'create-text', parent, name: `${proposal.id}.json`, createKey: newKey('runner'), text, content: await utf8(text), purpose: 'runner-json' }, [questionsOp]);
+    }
   }
   // Rules.md made from the template's empty one when it is missing (R3-4); every rule line it words waits for it.
   // When it is there, its rules are worded by its one note edit above, which their archives wait for (rule 7).

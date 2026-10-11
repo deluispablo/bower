@@ -475,7 +475,7 @@ export function toggleTaskInText(raw: string, index: number): { text: string; la
 /** The declared projection never removes the note's other properties or grants schema authority. */
 export const TECHNICAL_PROPERTIES = ['type', 'status', 'summary', 'tags', 'created', 'updated', 'source', 'related'] as const;
 export function tableProperties(note: Pick<ParsedNote, 'properties'>, row: Pick<TypeRow, 'table'>): Property[] {
-  return [...new Set(row.table)].filter((key) => !['kind', 'folder', ...TECHNICAL_PROPERTIES].includes(key)).slice(0, 4)
+  return [...new Set(row.table)].filter((key) => !['name', 'modified', 'kind', 'folder', ...TECHNICAL_PROPERTIES].includes(key)).slice(0, 4)
     .flatMap((key) => note.properties.filter((property) => property.key === key));
 }
 /** `YYYY-MM-DD`, a real calendar date. */
