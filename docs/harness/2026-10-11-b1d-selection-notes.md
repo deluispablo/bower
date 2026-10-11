@@ -3425,3 +3425,133 @@ the runner owns committing.
 
 Left out: production fixes, full compatibility suites, pnpm check and e2e, as
 this session writes reds only. The two production defects intentionally remain.
+
+
+## Round 7 (addendum 24)
+
+Implementation of `2026-10-11-b1d-adversarial-final-4.md` and TL-P4-41
+addendum 24. The existing round 7 reds were run before editing: both failed,
+with seven finding-specific assertions. After the production fix both pass,
+including the explicitly selected request and personal `type: concept` controls.
+
+### Scope and implementation
+
+Only `runner/src/claude.ts` changes in production. Caller inventory:
+`selectionOf` is called by the provider's `selectionCheck` and the B1a contract
+through its existing export; `claudeProvider` is called by `providerFor` and
+runner tests. `captureMaps` has four local call sites. `plannedWith` has the
+stored-answer and model paths; the stored-answer path retains the full admitted
+journal. Existing provider/main, B1 planning, C05 and corpus tests cover callers.
+No fixtures, config, exports, dependencies, app code or shared contracts change.
+
+- Request pins still nominate candidates, but only stored answer pins enter
+  the implicit per-source pin set. `selectionOf` no longer seeds authority for
+  sources absent from the selection. Execution keeps its existing target check,
+  ownership checks, validation retry and write fences.
+- Before `planScripted`, requests with any named target outside the selected
+  target set are excluded from this plan's admitted journal. The existing
+  `taken`/`tookLines` mechanism therefore leaves their exact bytes and location
+  intact. There is no second pending store or consumer. Explicitly selected
+  requests still append and archive; clear sibling filing still completes.
+- `captureMaps` requires indexed Bower ownership as well as `type: moc` before
+  calling the shared snapshot function. A person's typed note remains evidence
+  and is never passed to `mocSnapshot` as a Bower map.
+
+removed: pre-selection authority seeded from pins for every admitted source.
+removed: request pins from implicit execution authority; they remain candidates.
+removed: type-only MOC capture of personal notes.
+tests changed: none
+
+No `src/data/contracts` changes, so no compatibility draft row is needed.
+No added Drive calls or new read home. Personal MOCs avoid the previous full
+snapshot reads. No golden or test bound was changed.
+
+Research reused offline from the packet: [plan then execute](https://arxiv.org/html/2506.08837v1)
+and [curated context and just-in-time retrieval](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents).
+The implementation reuses the existing closed selection and admitted-journal
+filtering rather than adding another planner. No network or independent source
+reverification was performed.
+
+### Full-suite contradictions (TL-P4-51)
+
+The complete runner suite ran: **695 passed, 18 failed, 713 total** across
+56 files (53 passed, 3 failed). Both round 7 tests pass in this full run.
+The following is the complete failing-test inventory, including failures in
+positive controls. These older fixtures expect an omitted request target to be
+read, appended, settled or archived. Addendum 24 instead requires selection
+and keeps the omitted request unconsumed. Tests are untouched; this delivery is
+**blocked on test-contract reconciliation**, not declared fully green.
+
+| Test / assertion location | Contradiction exposed |
+| --- | --- |
+| `runner/test/c05-bounded-reads.test.ts:279` — golden: 50 archived requests and 25 kept runs cost no historical media | Expects a nothing-found settlement row for the unselected request. |
+| `runner/test/c05-bounded-reads.test.ts:303` — pending: a clash moves by run id and retries only its bound evidence | Its `positiveAppend` control fails at :169: the conditional fixture never selects the target and still expects an edit. |
+| `runner/test/c05-bounded-reads.test.ts:610` — fix 2 control: a waiting retry whose pending relocation lands completes once | Shared setup at :501 expects request relocation after a target omitted from selection. |
+| `runner/test/c05-bounded-reads.test.ts:616` — fix 2: a waiting retry whose pending relocation failed completes once | Same shared setup failure at :501. |
+| `runner/test/c05-bounded-reads.test.ts:622` — fix 2: a waiting retry interrupted after its pointer and before its append appends once | Same shared setup failure at :501. |
+| `runner/test/c05-bounded-reads.test.ts:628` — fix 1 control: a waiting retry whose archive lands completes once | Shared setup at :404 expects request relocation after an unselected target. |
+| `runner/test/c05-bounded-reads.test.ts:634` — fix 1: a waiting retry whose archive move failed completes once | Same shared setup failure at :404. |
+| `runner/test/c05-bounded-reads.test.ts:640` — horizon: past 20 runs uses listing age and TOO_OLD_WHY without a chain walk | The `positiveAppend` control fails at :169 before the horizon case. |
+| `runner/test/c05-person-notes.test.ts:591` — round 3 1: missing Timeline settles and reports without a model line | :616, :628 and :629 expect settlement and consumption with a filing-only selection. |
+| `runner/test/c05-person-notes.test.ts:591` — round 3 1: unreadable Timeline settles and reports without a model line | Same three assertions expect settlement and consumption of an omitted target. |
+| `runner/test/c05-person-notes.test.ts:712` — round 3 6: retry cites the bound source id after its rename | Retry supplies an empty selection but expects the persisted append to run. |
+| `runner/test/c05-person-notes.test.ts:825` — round 4 1: settlement survives recovery and retention | :825–826 expect archive of the earlier request while selecting only a new source. |
+| `runner/test/c05-person-notes.test.ts:900` — round 4 2: pending retries keep target and source ids | Empty-selection retry expects the prior append. |
+| `runner/test/c05-person-notes.test.ts:1089` — round 5 2: a retained completion never resolves a renamed target by title again | Expects request archive although the current selection omits its target. |
+| `runner/test/c05-person-notes.test.ts:1127` — round 5 3: a request past retention is left as written and archived without an append | The retained-binding positive control expects an unselected renamed target to receive its append, before the expiry case. |
+| `runner/test/c05-person-notes.test.ts:1220` — round 5 4: one line and one nothing-found row settle two named targets | Only one note is selected; assertion expects both in execution context and later settlement of the omitted note. |
+| `runner/test/c05-person-notes.test.ts:1325` — round 5 5: only a clashed target retries on bound ids before archive | Empty-selection retry expects append, consent, completion and archive (:1330–1338). |
+| `runner/test/corpus-driver.test.ts:258` — reports a settled replay without writing another request | Expects the first filing-only run to consume and archive the unselected request. |
+
+The bounded-read reply at `runner/test/c05-bounded-reads.test.ts:88` offers a
+line only when its target is already in `context.notes`; the selection phase
+has no L3 notes, so its generated selection omits that target. Restoring implicit
+request authority to satisfy these tests would restore the reported defect.
+The complete log retains all 29 failed assertions across the 18 failing tests.
+No assertion, fixture, tolerance or retry was weakened to hide them.
+
+### Verification and artifacts
+
+Logs and CPU reports stay under OS temp. Vitest uses the existing temp preload
+`/tmp/b1d-r7-test-output.cjs` (CPU output under `/tmp/b1d-r6-cpu`), default-only
+reporting, disabled cache and native config loading. No test writes into the
+repository; no node_modules replacement or symlink was made.
+
+| Check | Result | Log |
+| --- | --- | --- |
+| Round 7 reds before fix | 2 failed; 7 finding-specific assertions | `/tmp/b1d-r7-impl-red.log` |
+| Round 7 after fix | 2 passed | `/tmp/b1d-r7-impl-green.log` |
+| Full runner suite, maxWorkers=2 | 695 passed; 18 failed, inventoried above | `/tmp/b1d-r7-impl-runner.log` |
+| Full src suite, maxWorkers=2 | 5741 passed; only expected e2e-port EPERM failure | `/tmp/b1d-r7-impl-src.log` |
+| TypeScript app, no emit | PASS | `/tmp/b1d-r7-impl-app-types.log` |
+| TypeScript node, no emit | PASS | `/tmp/b1d-r7-impl-node-types.log` |
+| TypeScript runner, no emit | PASS | `/tmp/b1d-r7-impl-runner-types.log` |
+| ESLint touched production file | PASS | `/tmp/b1d-r7-impl-eslint.log` |
+| `node scripts/check-unused-gate.mjs` | PASS, both passes | `/tmp/b1d-r7-impl-unused.log` |
+
+The src suite completed all 172 files: 171 passed and one failed.
+`src/e2e-port.test.ts:37` timed out after its server listen raised the expected
+`EPERM` for `127.0.0.1`; Vitest also records that one uncaught error. No other
+src failure occurred. `git diff --check` passes.
+
+Commands used for suites:
+
+```sh
+NODE_OPTIONS='--require=/tmp/b1d-r7-test-output.cjs' pnpm -C runner exec vitest run --maxWorkers=2 --reporter=default --cache=false --configLoader=native > /tmp/b1d-r7-impl-runner.log 2>&1
+NODE_OPTIONS='--require=/tmp/b1d-r7-test-output.cjs' pnpm exec vitest run src --maxWorkers=2 --reporter=default --cache=false --configLoader=native > /tmp/b1d-r7-impl-src.log 2>&1
+```
+
+The runner owns commits, `pnpm check`, and capabilities e2e on demo/fake, as
+instructed. No writing git command was run. `.codex-commits.json` assigns one
+production commit and one notes-only commit.
+
+### V1 limit and left out
+
+V1 limit (addendum 24 (3)): cut contexts can prune metadata rows while leaving
+some MOC member ids literal. Semantically identical runs with different
+physical ids can therefore have different fingerprints and miss the prompt
+cache. This affects cache reuse only; no fingerprint code was added or changed.
+
+Left out: test repairs pending reconciliation of the 18 conflicts; runner-owned
+check and capabilities e2e. Risk: full runner compatibility is not green, and
+cut-context fingerprint cache misses remain the accepted v1 limit.
