@@ -127,3 +127,84 @@ in the OS temp folder.
 the repository's gate writes repository reports/marks. Implementation, green,
 coordinator commits, the e2e run and designer verification remain outside this
 session's authorized scope.
+
+## Implementation
+
+Status: blocked before app edits. The owned UI files cannot reuse B6a's
+per-region task identity with the current data boundary. No alternative region
+parser, guessed ownership, synthetic framing or callback compatibility shim was
+added.
+
+The existing identity is `DisplayTask` and `templateProjection` in
+`src/data/contracts/note-format.ts:169-197`. Both are private. `parseNote` uses
+only the projected body in its returned model (`:290-293`), and `Note` has no
+region/task identities or fetched bytes (`src/data/contracts/types.ts:51-75`).
+`DriveVault.note` returns that model with links and a checksum, not the fetched
+text (`src/data/vault/drive-vault.ts:315`). Those data files are outside the
+packet's owned files. The read-only ownership parser needs original bytes,
+which neither owned UI file receives. Serializing the display model would not
+recover the fetched ownership framing. Headings and `byBower` alone cannot
+distinguish Bower-owned payloads from personal content.
+
+The data boundary must first expose B6a's existing projection to the note view.
+That needs a lead ruling and an expanded packet (or a prerequisite data entry).
+The UI can then consume the identities in the existing Markdown renderer, emit
+personal indexes, and translate them to the current mutation API's body indexes
+in the owned NoteScreen tick wiring. No mutation protection needs weakening.
+
+The two existing callback contradictions remain as listed above:
+`src/features/note/b6a-task-regions.test.tsx:87` and `:99` inject global body
+indexes; the NSPL contract requires personal indexes. Both B6a tests remain
+unchanged. Their injection contract needs a lead ruling before a compliant
+NoteScreen callback can replace it.
+
+removed: none; no app code changed because the required mechanism is private.
+tests changed: none
+
+Offline standard precedent: CommonMark list-item semantics, already cited by
+the existing note-template contract:
+https://spec.commonmark.org/0.31.2/#list-items
+The required done styling remains the existing `md-done`; no component or copy
+was added. No network, git write, dependency installation or node_modules
+replacement/symlink was performed.
+
+Verification uses the existing OS-temp Vitest config documented above. It keeps
+the app config and timer gate, redirects caches to temp, and omits only the
+repository-writing CPU reporter.
+
+- NSPL reds rerun: three assertion failures (`NSPL Bower plain list`,
+  `NSPL personal tasks`, `NSPL first personal tick`); `NSPL no Bower region`
+  passes. Logs: `/tmp/nspl-implementation-red.log`,
+  `/tmp/nspl-implementation-red.json`.
+- App and node TypeScript checks pass; build-info paths were redirected to the
+  OS-temp run directory. Logs: `/tmp/nspl-implementation-tsc-app.log`,
+  `/tmp/nspl-implementation-tsc-node.log`.
+- ESLint passes on the two candidate UI files (`markdown.tsx`, `NoteScreen.tsx`).
+  Log: `/tmp/nspl-implementation-eslint.log`.
+- `node scripts/check-unused-gate.mjs` passes both baseline comparisons.
+  Log: `/tmp/nspl-implementation-unused.log`.
+- Full requested src unit run: 5,694 tests; 5,689 pass and five fail, no skips.
+  The complete note suite has 22 tests: 19 pass and the three NSPL reds fail.
+  Both existing B6a tests pass unchanged. The other two failures are
+  `src/docs.test.ts:134` (`every change since the P2 freeze is listed`,
+  missing commit `9c8e61b0`) and `src/e2e-port.test.ts:37`
+  (`a server from another worktree is never reused`, timeout following the
+  expected `listen EPERM` on 127.0.0.1). The latter also produces one unhandled
+  EPERM. No app or test edits caused either failure. Logs:
+  `/tmp/nspl-implementation-src.log`, `/tmp/nspl-implementation-src.json`.
+- E2e not run; coordinator owns it. `pnpm check` not run because it writes
+  repository reports/marks; the user requested the separate checks above.
+
+Full src command (exit 1):
+
+```sh
+nspl_run_dir=$(cat /tmp/next-steps-plain-list-run-dir)
+pnpm exec vitest run src --maxWorkers=2 \
+  --config "$nspl_run_dir/vitest.config.mjs" --configLoader runner \
+  --fsModuleCachePath "$nspl_run_dir/module-cache" \
+  --reporter=default --reporter=json \
+  --outputFile /tmp/nspl-implementation-src.json \
+  > /tmp/nspl-implementation-src.log 2>&1
+```
+
+`git diff --check` passes. The notes file is the only changed file.
