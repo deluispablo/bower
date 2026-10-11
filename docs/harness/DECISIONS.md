@@ -661,3 +661,6 @@ One line per ruling, newest last. Read only the decision a task needs. Later rul
   - **B4a's final validator runs exactly once**, on the finalized manifest, before anything is applied.
   - A run with no memory effect is finalized the same way.
   Red: an accepted observation candidate passes end to end, and an origin left on the old captureId is refused by the final validator
+- TL-P4-48 addendum 12 (B4b, two boundaries; `observations.ts`, `report.ts` and `grounded.ts` are allocated to B4b):
+  - (1) `origin.recordId` accepts the existing journal-id grammar, through the existing journal-id validator (one home, no alias).
+  - (2) **A memory update settles like any update of an existing note (Q9).** A words item consumed by a memory write gets the existing "updated" row for About me. There is no new row kind and no special settlement case: the settlement treats a memory effect as an update whose target is About me. If the memory write fails, the item is not consumed and stays in the inbox, and the report shows the existing not-done outcome for that item; nothing stays "saving". A control that expects only the sibling row is repaired to expect the About me updated row. Red: a success case and a failure case, end to end through the report
