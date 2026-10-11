@@ -71,7 +71,17 @@ describe('b5-proposal-yes-no-ignore-replay', () => {
       expect(start).toHaveBeenCalledTimes(yes ? 1 : 0);
     }
   });
-  it.each(['yes', { option: 'accept' }, { text: 'Yes' }])('rejects nonboolean answer %j before recording or starting', async (answer) => {
+  it('person text starts the existing instructions continuation without granting consent', async () => {
+    const { vault, runs, start } = sources([proposal], null);
+    const answer = { text: 'Yes' };
+    await expect(answerQuestion(vault, runs, proposal.id, answer, { allowWeb: false }))
+      .resolves.toMatchObject({ outcome: { kind: 'now' } });
+    expect(vault.answer).toHaveBeenCalledExactlyOnceWith(proposal.id, answer);
+    expect(start).toHaveBeenCalledExactlyOnceWith('instructions', {
+      allowWeb: false, answer: true, requestId: expect.stringMatching(/^answer-[0-9a-f]{40}$/),
+    });
+  });
+  it.each(['yes', { option: 'accept' }, { option: 'yes' }])('rejects an invalid proposal answer %j before recording or starting', async (answer) => {
     const { vault, runs, start } = sources([proposal], null);
     await expect(answerQuestion(vault, runs, proposal.id, answer as QuestionAnswer, { allowWeb: false })).rejects.toThrow();
     expect(vault.answer).not.toHaveBeenCalled(); expect(start).not.toHaveBeenCalled();

@@ -12,13 +12,14 @@ describe('timing counts', () => {
     const sent = Object.values(phases);
     // TL-P4-42 addendum 5: questions.json media (+1 reads); hot name-check listing,
     // live .bower parent fence and multipart create (+3 apply).
-    expect(sent.reduce((n, p) => n + p.calls, 0)).toBe(96);
+    // TL-P4-47 addendum 8: first creation of the type table: listing, fence, create (+3).
+    expect(sent.reduce((n, p) => n + p.calls, 0)).toBe(99);
     expect(sent.every((p) => (p.calls === 0) === (p.bytes === 0))).toBe(true);
     // Addendum 4, round 3: the 10 bootstrap/check/fence/create calls are counted by timing itself.
     // Remove log name-check child listing, .bower parent fence and .bower/log.md create from apply.
     // Exact per-phase deltas over the control: reads +5, apply +5; other counts unchanged.
     expect(Object.fromEntries(Object.entries(phases).map(([k, v]) => [k, v.calls])))
-      .toEqual({ token: 0, reads: 25, model: 0, apply: 55, checkpoints: 4, report: 10, status: 0, runner: 2 });
+      .toEqual({ token: 0, reads: 25, model: 0, apply: 58, checkpoints: 4, report: 10, status: 0, runner: 2 });
     // Existing fields keep their names and order; the new ones come last.
     expect(run.timing).toMatch(/^timing: end=done total=\d+ start=\d+ token=\d+ reads=\d+ model=\d+ api=\d+ turns=\d+ in=\d+ out=\d+ apply=\d+ checkpoints=\d+\/\d+ report=\d+ status=\d+ drive=\S+ region=eastus$/);
   });

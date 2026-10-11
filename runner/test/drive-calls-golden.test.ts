@@ -2,6 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { DRIVE_MS, countsOf, drivecalls, modelled } from './modelled';
 import { finishedBefore, runFolders } from './earlier-runs';
 import type { FakeDrive } from '../../src/data/drive/fake-drive';
+import { readTypeTable } from '../src/type-table';
+
+// TL-P4-47 addendum 8: first creation of the type table: listing, fence, create.
+const TYPE_TABLE_FIRST_CREATE_CALLS = 3;
+
+async function existingTable(drive: FakeDrive, root: string): Promise<void> {
+  const sys = (await drive.listAll(root)).find((f) => drive.pathOf(f.id, root) === '.bower');
+  if (!sys) throw new Error('The system folder is missing');
+  await drive.createText(sys.id, 'type-table.json', JSON.stringify(readTypeTable(null).table));
+}
 
 describe('the C04 run makes the golden number of Drive calls per step', () => {
   it('the C04 run makes the golden number of Drive calls per step', async () => {
@@ -24,13 +34,22 @@ describe('the C04 run makes the golden number of Drive calls per step', () => {
     // Removed: log name-check child listing, .bower parent fence and .bower/log.md create.
     // TL-P4-42 addendum 5: questions.json media (+1 reads); hot name-check listing,
     // live .bower parent fence and multipart create (+3 apply).
-    expect(totalDriveCalls).toBe(96);
+    // First creation of the type table: listing, fence, create (+3).
+    expect(totalDriveCalls).toBe(99);
     // The counts are timing's own (`timing.ts`), read from the line the runner logs; the golden infers no phase.
-    expect(drivecalls(timing)).toBe(96);
+    expect(drivecalls(timing)).toBe(99);
     // By timing's phases (the Worker's token, model and status calls are not Drive calls; the two read outside any phase
     // are the run's first listings, before the plan reads).
     const calls_ = Object.fromEntries(Object.entries(countsOf(timing).phases).map(([k, v]) => [k, v.calls]));
-    expect(calls_).toEqual({ token: 0, reads: 25, model: 0, apply: 55, checkpoints: 4, report: 10, status: 0, runner: 2 });
+    expect(calls_).toEqual({ token: 0, reads: 25, model: 0, apply: 58, checkpoints: 4, report: 10, status: 0, runner: 2 });
+  });
+  it('an existing type table keeps the 96-call pin', async () => {
+    const run = await modelled(existingTable);
+    expect(run.code).toBe(0);
+    expect(run.calls.filter((c) => c.kind === 'read' || c.kind === 'write')).toHaveLength(96);
+    expect(drivecalls(run.timing)).toBe(96);
+    expect(Object.fromEntries(Object.entries(countsOf(run.timing).phases).map(([k, v]) => [k, v.calls])))
+      .toEqual({ token: 0, reads: 25, model: 0, apply: 55, checkpoints: 4, report: 10, status: 0, runner: 2 });
   });
 });
 
@@ -49,8 +68,8 @@ describe('drive-calls-cut', () => {
     const drive = calls.filter((c) => c.kind === 'read' || c.kind === 'write').length;
     // TL-P4-42 addendum 5: questions.json media (+1 reads); hot name-check listing,
     // live .bower parent fence and multipart create (+3 apply).
-    // Measured cold ceiling: 96 calls.
-    expect(drive).toBeLessThanOrEqual(Math.floor(DRIVE_CALLS_BEFORE * 0.6) + 2 + MAINTENANCE_CALLS + 1);
+    // Measured cold ceiling: 99 calls, including first creation of the type table: listing, fence, create.
+    expect(drive).toBeLessThanOrEqual(Math.floor(DRIVE_CALLS_BEFORE * 0.6) + 2 + MAINTENANCE_CALLS + 1 + TYPE_TABLE_FIRST_CREATE_CALLS);
   });
 
   it('offer-and-flat apply keeps its half-time budget plus the measured maintenance delta', async () => {
@@ -71,7 +90,7 @@ describe('drive-calls-cut', () => {
 const driveCalls = (run: { timing: string }): number => drivecalls(run.timing);
 
 describe('the C04 run past 20 earlier runs (retention-never-wired, round 2)', () => {
-  it('with 25 earlier runs a run makes 99 Drive calls', async () => {
+  it('with 25 earlier runs and first creation of the type table a run makes 110 Drive calls', async () => {
     const c04 = await modelled();
     const past = await modelled(async (drive, root) => {
       await finishedBefore(drive, root, 25);
@@ -83,13 +102,14 @@ describe('the C04 run past 20 earlier runs (retention-never-wired, round 2)', ()
     // Round 3 removes the log name-check listing, .bower parent fence and .bower/log.md create.
     // TL-P4-42 addendum 5: questions.json media (+1 reads); hot name-check listing,
     // live .bower parent fence and multipart create (+3 apply).
-    expect(driveCalls(c04)).toBe(96);
+    // First creation of the type table: listing, fence, create (+3 in each creating run).
+    expect(driveCalls(c04)).toBe(99);
     // TL-P4-42 addendum 5: questions.json media (+1 reads); hot name-check listing,
     // live .bower parent fence and multipart create (+3 apply).
     // Retained fixture: the same four calls; no hot history media.
-    expect(driveCalls(past)).toBe(107);
+    expect(driveCalls(past)).toBe(110);
     expect(Object.fromEntries(Object.entries(countsOf(past.timing).phases).map(([k, v]) => [k, v.calls])))
-      .toEqual({ token: 0, reads: 28, model: 0, apply: 54, checkpoints: 4, report: 10, status: 0, runner: 11 });
+      .toEqual({ token: 0, reads: 28, model: 0, apply: 57, checkpoints: 4, report: 10, status: 0, runner: 11 });
     // Addendum 4 bounds the whole run under 20%, even when individual phases exceed 20%.
     // TL-P4-42 addendum 5: +600 ms (4 x 150 ms) for questions media, hot name-check listing,
     // live .bower parent fence and multipart create, measured on this branch.

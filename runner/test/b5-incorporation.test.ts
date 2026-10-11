@@ -11,6 +11,7 @@ import { scriptedDecisions } from '../../src/data/demo/script';
 import { planScripted, runKeys, type Decisions } from '../../src/data/spine/scripted';
 import type { LastRunFile } from '../../src/data/vault/layout';
 import type { Proposal, Question, TypeRow, TypeTable } from '../../src/data/contracts/types';
+import type { QuestionAnswer } from '../../src/data/contracts/questions';
 import { AT, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive, paging } from './drive-v3';
 import { phaseAwareClaude } from './b1-planning-support';
@@ -207,7 +208,7 @@ it('b5-document-cannot-teach-schema / b5-explicit-column-replaces-fourth: truste
   decisions(); const result = await run(base);
   expect(result.code).toBe(0);
   expect.soft(tableOf(result)?.rows[0]?.table).toEqual(['company', 'salary', 'location', 'hours']);
-  expect.soft(JSON.stringify(result.lastRun)).toContain(JSON.stringify(`"${request}" done`).slice(1, -1));
+  expect.soft((result.lastRun as LastRunFile | null)?.run.report?.requests).toEqual([request]);
 });
 it('b5-document-cannot-teach-schema / b5-explicit-column-replaces-fourth: control source instructions cannot install rows or columns', async () => {
   const stored = JSON.stringify({ v: 1, rows: [row('offer')] });
@@ -325,7 +326,7 @@ it('b5-proposal-yes-no-ignore-replay: a declined frozen payload stays declined u
   expect(second.after['.bower/proposals/lease-copy.json']).toBeUndefined();
 });
 
-it.each([{ text: 'yes' }, { option: 'yes' }])('b5-proposal-yes-no-ignore-replay: the planner refuses nonboolean consent %j', async (answer) => {
+it('b5-proposal-yes-no-ignore-replay: text closes the question without consent and reaches the continuation as person words', async () => {
   const q = proposal('lease'); const base = await setup([], undefined, [q]);
   const files = await base.drive.listAll(base.root);
   const sys = files.find((f) => base.drive.pathOf(f.id, base.root) === '.bower');
@@ -333,14 +334,43 @@ it.each([{ text: 'yes' }, { option: 'yes' }])('b5-proposal-yes-no-ignore-replay:
   const folder = await base.drive.createFolder(sys?.id ?? '', 'proposals');
   const bytes = JSON.stringify({ v: 1, ...q.proposal });
   await base.drive.createText(folder.id, 'lease.json', bytes);
-  await base.drive.createText(changes?.id ?? '', 'not-consent.json', JSON.stringify({ v: 1, id: 'not-consent', device: 'device-1',
-    at: AT, kind: 'answer', what: 'Answered a question', questionId: q.id, answer }));
-  decisions(); const result = await run(base);
+  const loopPath = new URL('../../src/data/answer-loop.ts', import.meta.url).pathname;
+  type Start = NonNullable<Parameters<typeof runOnDrive>[3]['answerStart']>;
+  const { answerQuestion } = await import(/* @vite-ignore */ loopPath) as { answerQuestion: (
+    vault: { questions(): Promise<Question[]>; answer(id: string, answer: QuestionAnswer): Promise<void> },
+    runs: { start(scope: Start['scope'], opts: Omit<Start, 'scope'>): Promise<LastRunFile['run']> },
+    id: string, answer: QuestionAnswer, opts: { allowWeb: boolean },
+  ) => Promise<{ outcome: { kind: string } } | null> };
+  let scheduled: Start | undefined;
+  const text = 'yes';
+  let answerBytes = '';
+  const answered = await answerQuestion({ questions: async () => [q], answer: async (id, answer) => {
+    answerBytes = JSON.stringify({ v: 1, id: 'not-consent', device: 'device-1',
+      at: AT, kind: 'answer', what: 'Answered a question', questionId: id, askedAt: q.askedAt, answer });
+    await base.drive.createText(changes?.id ?? '', 'not-consent.json', answerBytes);
+  } }, { start: async (scope, opts) => {
+    scheduled = { scope, requestId: opts.requestId, ...(opts.subject ? { subject: opts.subject } : {}) };
+    return { id: opts.requestId, scope, phase: 'queued', requestedAt: AT, phaseAt: AT, seen: false };
+  } }, q.id, { text }, { allowWeb: false });
+  expect(answered?.outcome.kind).toBe('now');
+  expect(scheduled).toEqual({ scope: 'instructions', requestId: expect.stringMatching(/^answer-[0-9a-f]{40}$/) });
+  const inputs: Array<{ answers?: Array<{ question: string; answer: string }> }> = [];
+  const result = await runOnDrive(base.c, base.drive, base.root, { answerStart: scheduled,
+    claude: phaseAwareClaude(async (call) => {
+      inputs.push(JSON.parse(call.input.split('\n').at(-1) ?? '{}') as typeof inputs[number]);
+      return { code: 0, stderr: '', cut: null, stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: false,
+        result: JSON.stringify({ kind: 'tidy-intent', v: 1, things: [] }) }) };
+    }, () => ({ drive: base.drive, root: base.root })),
+  }, 1);
   expect(result.code).toBe(0);
   expect(tableOf(result)?.rows.some((r) => r.id === 'lease')).toBe(false);
-  expect(questionsOf(result)).toEqual([q]);
+  expect(result.after[TABLE]).toBe(base.c.folder[TABLE]);
+  expect.soft(questionsOf(result)).toEqual([]);
+  expect.soft(result.dispatch?.admission.journal).toHaveLength(1);
+  expect(inputs).toHaveLength(2);
+  for (const input of inputs) expect.soft(input.answers).toEqual([{ question: q.text, answer: text }]);
   expect(result.after['.bower/proposals/lease.json']).toBe(bytes);
-  expect(result.after['.bower/changes/not-consent.json']).toBeDefined();
+  expect.soft(result.after['.bower/changes/archive/not-consent.json']).toBe(answerBytes);
 });
 
 it('b5-read-to-act-fence: a changed table keeps its bytes and the column request pending', async () => {
