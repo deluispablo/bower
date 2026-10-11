@@ -7154,7 +7154,7 @@
     "id": "q1b-questions-ui",
     "task": "p4-q1",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "Questions show with options, Something else… and own words on Home and in the tidy sheet during a run; pile rows show waiting or couldn't-place (Q-UI-1, -2, -4).",
     "steps": [
