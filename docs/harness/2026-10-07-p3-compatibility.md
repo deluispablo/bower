@@ -235,3 +235,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `97831fb1` | b4a-contract | The observations reader passes `fatal: false` (the default) so the TextDecoder options type-check in the app lib; no behaviour change. |
 | `9054e66d` | b4a-contract | none: tests only (B4a fix round 5 reds). |
 | `9bbbcc0b` | b4a-contract | For any manifest that touches About me, the final learned block is validated against the final observation ledger, whatever the change kinds; link rewrites never edit the learned section (the rebuild refreshes it); creation writes exactly the folder template plus the empty regions. Older notes and ledgers parse as before. |
+| `19f9ae9b` | b4a-contract | none: tests only (B4a fix round 6 reds). |
+| `b85000fe` | b4a-contract | A maintenance target's identity is its resolved file id; one helper bans About me, the ledger and archives by id or declared path and refuses a path/id mismatch, in the manifest and in admission. Stored manifests and bytes are unchanged. |
