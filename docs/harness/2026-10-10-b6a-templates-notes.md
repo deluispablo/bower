@@ -566,3 +566,106 @@ its bundled test script removes checkout-local test output, and the overall
 command writes other repository outputs. No check mark or pnpm check pass is
 claimed. No agent-issued writing git command or commit; coordinator owns commits.
 Read-only test diff is empty, and git diff --check passes.
+
+## Fix round 3 reds
+
+Red-owning session, 2026-10-11, TL-P4-47 addendum 3. Read WORKER and
+`2026-10-11-codex-b6a-templates-adversarial-2.md`. Tests and these notes only;
+no existing assertion changed. No network, writing git command, commit, runtime
+edit, node_modules replacement or symlink. The coordinator owns commits.
+
+tests changed: src/data/spine/scripted.test.ts: added all-authored-field grounding reds and grounded-note/bound-source controls through planScripted; existing assertions unchanged.
+tests changed: src/features/note/b6a-task-regions.test.tsx: new Project task identity reds through NoteScreen's production callback and DriveVault.toggleTask; no display-shape assertions.
+
+### Grounding entry point and exact names
+
+`B6a fix 3: refuses a missing link in $template $field before effects with no manifest`
+runs for all five templates and each declared section, plus the separate summary
+field (25 cases). Each seeds a real Resources/Gardening/Gardening.md hub and
+authors exactly one missing link. Production planScripted must throw BowerError
+with B_FAILURE, return no plan/manifest, and retain the exact FakeDrive snapshot
+(content, identities and metadata), rather than merely an unchanged listing.
+The source Key points and Transcript are exercised separately, as are Project
+Goal/Next steps, Area Standard to maintain and every MOC field. The section names
+come from the existing NOTE_TEMPLATES declaration; no second declaration home.
+These behavioural reds cover every current authored prose field, without making
+an implementation claim about how many grounding functions the eventual fix has.
+
+Observed assertion reds (all at scripted.test.ts:55-57):
+
+- `B6a fix 3: refuses a missing link in source summary before effects with no manifest`
+- `B6a fix 3: refuses a missing link in concept summary before effects with no manifest`
+- `B6a fix 3: refuses a missing link in project summary before effects with no manifest`
+- `B6a fix 3: refuses a missing link in area summary before effects with no manifest`
+- `B6a fix 3: refuses a missing link in moc summary before effects with no manifest`
+
+Every summary case returns an executable manifest without refusal. All 20 missing
+section-link cases refuse correctly and pass. Snapshots remain unchanged for all
+planner cases, including the broken summary cases: the defect is admission to an
+executable plan, not an effect applied during planning.
+
+`B6a fix 3: a grounded summary link still plans a Source` passes, preserves the
+summary's [[Gardening]], creates a Source operation and leaves Drive unchanged.
+
+Bound-source identity controls use the admitted item's real filename and require
+the matching file-id move and generated Source operation:
+
+- `B6a fix 3: a link to the bound source in summary still plans` passes.
+- `B6a fix 3: a link to the bound source in Key points still plans` fails at scripted.test.ts:74,77.
+- `B6a fix 3: a link to the bound source in Transcript still plans` fails at scripted.test.ts:74,77.
+
+The last two are refused as ungrounded even though the non-note file is the bound
+original. This is explicitly within the owner's real-note-or-bound-source rule.
+
+### Task entry point and exact names
+
+The fixture uses serializeNote to create a valid ownership/2 Project, verifies its
+personal ownership table contains only Buy a pot, and opens it through real
+DriveVault.note and NoteScreen. A spy delegates to the real Markdown component
+and retains NoteScreen's onToggle callback. It invokes that callback using the
+task's position in the actual parsed input, which is Markdown's current public
+callback contract. No checkbox, plain-list, disabled-state, CSS or layout assertion
+is made. The callback still reaches real DriveVault.toggleTask, writeText, journal
+and the production report handler; the spies observe rather than replace effects.
+
+- `B6a fix 3: toggling the personal Project task changes only Buy a pot`
+  fails: the personal callback index is refused as not-found, no write happens,
+  and the screen logs one error. Requires success, the full stored file equal to
+  its original with only Buy a pot's checkbox byte changed, one note write and no error.
+- `B6a fix 3: a toggle aimed at the Project Bower task refuses unchanged and logs one BowerError`
+  fails: Plant mint's callback toggles Buy a pot, writes the note and task journal,
+  and logs no error. Requires BowerError refusal, byte-exact file and snapshot
+  preservation, no writes, and exactly one logged BowerError from the screen.
+
+Both failures are assertions after the production callback/mutation, not load
+errors. Exact whole-file comparisons ensure no toggle reaches another region's
+line or changes ownership framing. Each test uses a fresh in-memory Drive and
+disposes its vault; localStorage and component state are cleared between cases.
+
+### Offline research and verification
+
+Reused production NOTE_TEMPLATES, serializeNote/parseOwnership, planScripted,
+FakeDrive, NoteScreen/Markdown's documented positional callback and DriveVault.
+The installed Vitest README points to [official Vitest documentation](https://vitest.dev/).
+The existing template declaration cites [GFM task list items](https://github.github.com/gfm/#task-list-items-extension-)
+and [CommonMark list items](https://spec.commonmark.org/0.31.2/#list-items).
+These are offline citations; no documentation was fetched and no new mechanism
+or dependency was introduced.
+
+```sh
+NODE_OPTIONS='--require=/tmp/b6a-test-output.cjs' pnpm exec vitest run src/data/spine/scripted.test.ts src/features/note/b6a-task-regions.test.tsx --maxWorkers=2 --configLoader runner > /tmp/b6a-fix3-reds.log 2>&1
+```
+
+Final targeted result: 38 tests, 9 new expected assertion failures, 29 passes.
+All seven pre-existing scripted tests pass; there are no existing-test
+contradictions. Grounded summary control passes. No import/load/unhandled errors.
+The existing OS-temp preload redirects all reporter/cache output outside the
+repository; configLoader runner avoids a checkout-local configuration bundle.
+No test writes repository files.
+
+Touched-file ESLint passes: `/tmp/b6a-fix3-eslint.log`.
+App tsc (`--noEmit --incremental false -p tsconfig.app.json`) passes:
+`/tmp/b6a-fix3-tsc.log`. Read-only git diff --check passes. The tracked test diff
+is additions only, and the second test file is new. No pnpm check (writes repo
+outputs), e2e/server or broader gate under this explicitly test-only red scope.
+Red delivery is done; implementation and commits remain with their owners.
