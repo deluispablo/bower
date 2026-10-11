@@ -2207,3 +2207,51 @@ this notes file alone in the second. The runner performs both commits.
 
 left out: runner-owned commits/pnpm check/e2e, designer verification and coordinator ledger updates.
 Risk: gates remain blocked by the unchanged older truncation test, missing ledger row and expected sandbox EPERM.
+
+
+## Round 3 red repair (TL-P4-51)
+
+Implementer: codex; ponytail full. Test-only repair authorized by the owner.
+Read the implementer role, WORKER card, packet, Round 3 (designer finding)
+and its complete contradiction list. No production code changed.
+
+Scope: runner/test/b5b-r2.test.ts assertions and this notes file only;
+no caller, fixture, config, dependency or export changes are needed.
+Reused readTypeTable, parseNote and tableProperties, the existing shared
+reader and display projection. Research stays local: the packet's bounded
+tolerant-read reference https://www.rfc-editor.org/rfc/rfc9413.html was not
+fetched or independently reverified (no network authorized).
+
+tests changed: runner/test/b5b-r2.test.ts: b5b-r2 2 more than four columns now requires all five/six stored declared keys and projects the same read rows through tableProperties to assert their first four shown keys, resolving the designer ruling contradiction.
+
+The four-key full-row control, unrelated material filing, unrelated-run
+byte equality, row ids, splice bytes and fences remain unchanged. The
+existing b5b-r4 hidden-key control remains unchanged and passes, verifying
+that hidden keys are removed before the display cap is applied.
+
+Before repair, the complete b5b-r2 file reproduced both soft failures
+at :109-110; 2 tests passed / 1 failed. Log:
+/tmp/b5b-r3-repair-before.log.
+After repair, b5b-r2 passes 3/3; b5b-r4 passes 1/1. Logs:
+/tmp/b5b-r3-repair-target-runner.log and /tmp/b5b-r3-repair-target-app.log.
+Runner tsc and ESLint on runner/test/b5b-r2.test.ts pass. Logs:
+/tmp/b5b-r3-repair-tsc.log and /tmp/b5b-r3-repair-eslint.log.
+
+Tests use existing OS-temp Vitest config overlays: cache and JSON output
+stay in /tmp; the timer gate is retained without repository CPU reports.
+No git write command, network call or node_modules change was made.
+The runner owns commits, pnpm check and capabilities/folder-table e2e.
+removed: none.
+
+Full runner suite with --maxWorkers=2 passes: 62 files / 763 tests.
+Log: /tmp/b5b-r3-repair-full-runner.log; JSON:
+/tmp/b5b-r3-fix-runner-results.json. No runner contradiction remains.
+The prior full-src ledger and sandbox-listen failures are outside this
+repair; full src was not rerun. Read-only git diff --check passes.
+
+Commands: pnpm exec vitest run --config /tmp/b5b-r3-fix-runner.config.mts
+[test/b5b-r2.test.ts for targeted run] --maxWorkers=2;
+pnpm exec vitest run --config /tmp/b5b-r3-fix-app.config.mts
+src/data/contracts/b5b-r4.test.ts --maxWorkers=2;
+pnpm exec tsc --project runner/tsconfig.json --noEmit;
+pnpm exec eslint runner/test/b5b-r2.test.ts.
