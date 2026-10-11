@@ -54,14 +54,14 @@ export function validSummary(value: string): boolean {
 }
 
 // YAML 1.2.2 §§5.7, 7.3.1–7.3.3 and 10.3.2; also quote YAML 1.1 implicit types.
-const SUMMARY_ESCAPES: Readonly<Record<string, string>> = {
+const SCALAR_ESCAPES: Readonly<Record<string, string>> = {
   '0': '\0', a: '\x07', b: '\b', t: '\t', n: '\n', v: '\v', f: '\f', r: '\r', e: '\x1b',
   ' ': ' ', '"': '"', '/': '/', '\\': '\\', '\t': '\t',
   N: '\u0085', _: '\u00a0', L: '\u2028', P: '\u2029',
 };
 
-/** Decode only summary; other frontmatter retains its existing lenient reader. */
-function summaryOf(value: string): string {
+/** Decode the quoted scalars the one writer emits; preserve unknown legacy escapes. */
+function scalarOf(value: string): string {
   if (!/^(["']).*\1$/s.test(value)) return value;
   const inner = value.slice(1, -1);
   if (value[0] === "'") return inner.replace(/''/g, "'");
@@ -71,8 +71,32 @@ function summaryOf(value: string): string {
       return point <= 0x10ffff ? String.fromCodePoint(point) : escape;
     }
     // Keep unknown escapes verbatim, as the legacy reader did.
-    return SUMMARY_ESCAPES[code] ?? escape;
+    return SCALAR_ESCAPES[code] ?? escape;
   });
+}
+
+/** Flow and collected block lists split only at commas outside quoted items. */
+function scalarList(value: string): string[] {
+  const text = value.trim().replace(/^\[|\]$/g, '');
+  const items: string[] = [];
+  let quote = '';
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const character = text[i];
+    if (quote) {
+      if (quote === '"' && character === '\\') i++;
+      else if (character === quote) {
+        if (quote === "'" && text[i + 1] === "'") i++;
+        else quote = '';
+      }
+    } else if ((character === '"' || character === "'") && !text.slice(start, i).trim()) quote = character;
+    else if (character === ',') {
+      items.push(text.slice(start, i));
+      start = i + 1;
+    }
+  }
+  items.push(text.slice(start));
+  return items.map((item) => item.trim()).filter(Boolean).map(scalarOf);
 }
 
 const SUMMARY_TYPES = [
@@ -145,13 +169,14 @@ function payloadDisplay(bytes: Uint8Array, span: ByteSpan, heading?: string): st
 function frontOf(block: string): Map<string, string> {
   const front = new Map<string, string>();
   let listKey: string | null = null;
-  const unquote = (v: string): string => (/^(["']).*\1$/.test(v) ? v.slice(1, -1) : v);
   for (const line of block.split('\n')) {
     // A YAML block list, as Obsidian writes tags: "tags:" then "  - a" lines.
     const item = /^\s*-\s+(.*)$/.exec(line);
     if (item && listKey) {
       const prev = front.get(listKey) ?? '';
-      front.set(listKey, prev ? `${prev}, ${unquote((item[1] ?? '').trim())}` : unquote((item[1] ?? '').trim()));
+      const raw = (item[1] ?? '').trim();
+      const value = listKey === 'tags' ? raw : scalarOf(raw);
+      front.set(listKey, prev ? `${prev}, ${value}` : value);
       continue;
     }
     const i = line.indexOf(':');
@@ -159,7 +184,7 @@ function frontOf(block: string): Map<string, string> {
     const key = line.slice(0, i).trim();
     const value = line.slice(i + 1).trim();
     listKey = value ? null : key;
-    front.set(key, key === 'summary' ? summaryOf(value) : unquote(value));
+    front.set(key, key === 'tags' ? value : scalarOf(value));
   }
   return front;
 }
@@ -230,10 +255,22 @@ export function parseNote(path: string, raw: string, fetched?: FetchedOwnership)
   // A v2 note with nothing in Bower's note has none; a legacy heading with nothing under it keeps an empty one.
   const note = sectionOf(layout.bowerNote, BOWER_NOTE);
   let bowerNote = ownership.status === 'v2' ? note || null : note;
-  if (ownership.status === 'v2' && front?.get('by') === 'bower' && front.get('bower_template') === 'source') {
-    body = note ?? body;
-    current = [];
-    bowerNote = null;
+  const template = front?.get('bower_template');
+  if (ownership.status === 'v2' && front?.get('by') === 'bower' && template && Object.hasOwn(NOTE_TEMPLATES, template)) {
+    const kind = template as NoteTemplate;
+    // Display projection only: ownership spans remain the sole mutation authority.
+    const hidden = kind !== 'source' ? layout.bowerNote : null;
+    const content = hidden
+      ? decoder.decode(bytes.subarray(layout.frontEnd, hidden.start)) + decoder.decode(bytes.subarray(hidden.end))
+      : decoder.decode(bytes.subarray(layout.frontEnd));
+    const sections = templateSections(content.replace(/\r\n/g, '\n'), kind, true);
+    body = [trimLines(sections.get('') ?? ''), ...NOTE_TEMPLATES[kind].sections
+      .filter((heading) => heading !== 'Current state' && heading !== 'Timeline')
+      .map((heading) => `## ${heading}\n${trimLines(sections.get(heading) ?? '')}`)].filter(Boolean).join('\n\n');
+    if (kind === 'source') {
+      current = [];
+      bowerNote = null;
+    }
   }
   front?.delete('bower_format');
   if (!front) return retainPersonalSource({ path, title, summary: '', properties: [], tags: [], currentState: [], body, timeline: [], links: linksIn(text), byBower: false }, raw);
@@ -244,11 +281,7 @@ export function parseNote(path: string, raw: string, fetched?: FetchedOwnership)
     const link = /^\[\[([^\]|]+)\]\]$/.exec(value)?.[1];
     properties.push(link ? { key, label: labelOf(key), value: link, link } : { key, label: labelOf(key), value });
   }
-  const tags = (f.get('tags') ?? '')
-    .replace(/^\[|\]$/g, '')
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean);
+  const tags = scalarList(f.get('tags') ?? '');
   const source = f.get('bower_source');
   const src: SourceKind = source === 'web' || source === 'both' ? source : 'notes';
   const status = f.get('status');
@@ -321,19 +354,27 @@ export function serializeNote(n: NoteFile): string {
   return source?.serialized === serialized ? source.raw : serialized;
 }
 
-/** Section contents use the shared fence grammar; only this serializer writes headings/framing. */
-function templateBody(n: NoteFile, template: NoteTemplate): string[] {
+/** Writer and display reader use the declared sections and the shared fence grammar. */
+function templateSections(body: string, template: NoteTemplate, framed = false): Map<string, string> {
   const shape = NOTE_TEMPLATES[template];
   const contents = new Map<string, string>();
   let section = '';
   let fence: Fence | null = null;
-  for (const line of n.body.split('\n')) {
+  for (const line of body.split('\n')) {
     const previous = fence;
     fence = fenceAfter(line, fence);
+    if (framed && !previous && !fence && /^<!-- bower:ownership\/2 (?:begin|end) [a-z-]+ -->$/.test(line)) continue;
     const heading = !previous && !fence ? /^## (.+)$/.exec(line)?.[1] : undefined;
     if (heading && (shape.sections as readonly string[]).includes(heading)) section = heading;
     else contents.set(section, `${contents.get(section) ?? ''}${line}\n`);
   }
+  return contents;
+}
+
+/** Only this serializer writes headings/framing. */
+function templateBody(n: NoteFile, template: NoteTemplate): string[] {
+  const shape = NOTE_TEMPLATES[template];
+  const contents = templateSections(n.body, template);
   const loose = trimLines(contents.get('') ?? '');
   if (loose) contents.set(shape.body, [loose, contents.get(shape.body) ?? ''].filter(Boolean).join('\n'));
   const related = n.properties.find((p) => p.key === 'related');

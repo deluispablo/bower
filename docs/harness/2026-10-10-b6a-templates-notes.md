@@ -483,3 +483,86 @@ App TypeScript (`--noEmit --incremental false -p tsconfig.app.json`) passes:
 No pnpm check, e2e, implementation or broader suite was run under this test-only
 red scope. No screen code changed. Production fixes and commits remain with their
 owning sessions. Red delivery is done; acceptance remains blocked by these reds.
+
+## Fix round 1
+
+Implementation session, 2026-10-11. Read WORKER, the B6a packet, adversarial
+pass 1 and the preceding Fix round 1 reds. Reproduced exactly the three committed
+assertion reds before editing runtime code: 3 failed, 262 passed in the complete
+two-file suite (`/tmp/b6a-fix1-before.log`). No existing-test contradictions.
+
+### Changes
+
+- `scripted.ts`: the existing identity resolver now refuses every missing or
+  ambiguous authored link before returning a plan. A grounded destination hub
+  cannot let an ungrounded link remain in the generated body. Resolution,
+  deduplication, nearest-hub selection and captured identities keep their one home.
+- `note-format.ts`: writer and display reader share the existing template-section
+  scanner and fence grammar. The reader projects the declaration's ordered sections
+  into body/currentState/timeline, including Project Goal/Next steps, Area Standard
+  to maintain and MOC Overview/Notes/Sources. Validated ownership framing is hidden
+  from display; fenced marker-shaped text remains content. Ordinary Bower's note
+  stays in its existing display field. Display strings grant no write authority.
+- `note-format.ts`: the existing summary scalar decoder now decodes all quoted
+  metadata, including Original filenames and status/property values. Tags split
+  at commas outside quoted items and then use that same decoder, including YAML
+  single-quote doubling and double-quote escapes. Block-list tags keep their item
+  quoting until decoding; other block-list properties retain the legacy joined
+  display. Unknown escapes remain verbatim. No serializer or dependency was added.
+
+removed: silently skipped unresolved authored links in explicit template planning.
+removed: the personal-payload/Source-only limit on template display projection.
+removed: quote stripping without escape decoding and unconditional tag comma splitting.
+removed: no files, tests, declaration home, serializer or ownership authority.
+tests changed: none
+
+### Offline standards and compatibility
+
+Read the installed Zod README's declaration/parse example. Reused NOTE_TEMPLATES,
+the one note-format serializer/scalar decoder and ownership-format's fence grammar.
+Offline references: [Zod declaration and parsing](https://zod.dev/api),
+[YAML 1.2.2 scalar styles](https://yaml.org/spec/1.2.2/#73-flow-scalar-styles),
+[CommonMark fences](https://spec.commonmark.org/0.31.2/#fenced-code-blocks).
+These are existing/local references, not freshly fetched documentation. No network.
+
+| Uncommitted contracts fix | Stored format | Compatibility evidence |
+| --- | --- | --- |
+| Fix round 1 | Legacy serializer Source with quoted Original | Exact filename and screen resolution pass the committed red |
+| Fix round 1 | Legacy plain/owned notes and Source/MOC Timelines | All five existing targeted suites pass; no template backfill |
+| Fix round 1 | Ownership/2 templates, LF and CRLF | All declared sections display; untouched parse/serialize retains exact bytes |
+| Fix round 1 | Quoted flow/block tags and scalar metadata | Numeric-looking tags, escaped quotes/backslashes, commas and single-quote doubling retain meaning |
+
+An OS-temp production-API probe adds 104 checks across all five templates and both
+line endings, plus quoted block tags/indexed metadata; it passes. Probe source,
+bundle and log are `/tmp/b6a-fix1-probe.{ts,mjs,log}`. No repository test was added.
+
+### Verification
+
+All Vitest runs used the existing OS-temp preload
+`NODE_OPTIONS='--require=/tmp/b6a-test-output.cjs'` and `--configLoader runner`.
+It redirects test/cache/report writes to `/tmp/b6a-test-artifacts`; configuration
+bundling stays outside the checkout. No node_modules replacement or symlink.
+Runner JSON is explicitly `/tmp/b6a-fix1-runner-final.json`.
+
+| Requested check | Result | OS-temp log |
+| --- | --- | --- |
+| Complete five-file B6a reds/compatibility target, maxWorkers=2 | 391 pass, including all three fix-round reds | `/tmp/b6a-fix1-targeted-final.log` |
+| Full src suite, maxWorkers=2 | 168 files, 5,653 pass; only expected e2e-port EPERM/timeout fails, one unhandled EPERM | `/tmp/b6a-fix1-src-final.log` |
+| Runner tests, maxWorkers=2 | 50 files, 667 pass | `/tmp/b6a-fix1-runner-final.log` |
+| App tsc, noEmit/incremental false | Pass | `/tmp/b6a-fix1-tsc-app-final.log` |
+| Node tsc, noEmit/incremental false | Pass | `/tmp/b6a-fix1-tsc-node-final.log` |
+| Runner tsc, noEmit/incremental false | Pass | `/tmp/b6a-fix1-tsc-runner-final.log` |
+| ESLint, both touched runtime files | Pass | `/tmp/b6a-fix1-runtime-eslint-final.log` |
+| Supplemental production-API probe | 104 pass | `/tmp/b6a-fix1-probe.log` |
+
+Log index: `/tmp/b6a-fix1-gates.txt`. The final full src run confirms the same
+5,653 passes as the first run; only `src/e2e-port.test.ts:37` failed with its
+expected listen EPERM/timeout and one unhandled EPERM. This is the owner's
+expected environment exception. No test/packet contradictions were found.
+
+No screen code changed (`ui: false`), so no touched-screen e2e. The owner's
+explicit gates above replace the ordinary pnpm check invocation for this round:
+its bundled test script removes checkout-local test output, and the overall
+command writes other repository outputs. No check mark or pnpm check pass is
+claimed. No agent-issued writing git command or commit; coordinator owns commits.
+Read-only test diff is empty, and git diff --check passes.

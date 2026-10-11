@@ -1817,7 +1817,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
         : displayName(nameOf(path)).toLowerCase() === target);
       const local = candidates.filter(({ path }) => parentOf(path) === to);
       const resolved = local.length ? local : candidates;
-      if (resolved.length === 1 && resolved[0]) authored.set(resolved[0].file.id, resolved[0]);
+      if (resolved.length !== 1 || !resolved[0]) return refused('a template note with an ungrounded authored link');
+      authored.set(resolved[0].file.id, resolved[0]);
     }
     // Sources subfolders use their nearest destination hub. Never choose an unrelated fallback note.
     for (let folder = to; folder && generatedPlace(folder); folder = parentOf(folder)) {
