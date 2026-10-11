@@ -2,14 +2,52 @@
 
 Coordinator: the Claude Code session named "Orquestador". It integrates in `/Users/deluisp/Projects/bower-app` on branch `claude/p3`; P4 continues on it. Lead: the Planificador session ([DECISIONS.md](DECISIONS.md)). Output rule: [TL-P3-29](2026-10-07-tl-p3-29-output-rule-survives-compaction.md), in AGENTS.md. Minors: [P2_POLISH.md](P2_POLISH.md). Earlier handoffs: git history of this file.
 
-## Resume (2026-10-11 early, TL-P4-31 Codex throughput)
+## Resume (2026-10-11, written for a successor who never saw the chat; TL-P4-56)
 
-Read this first. Cap 1 Claude + 4 Codex. Wait only on tracked run_in_background jobs. Codex can't bind ports (no e2e), so the coordinator runs e2e. Never commit in the main checkout while integrate.sh or done.sh runs. Job scripts live in the session scratchpad (`jobs/`): red-then-impl.sh, codex-impl.sh, gates.sh, gates-and-pass.sh, integrate-done.sh, integrate-known-green.sh and disjoint.sh. Workers must never replace or symlink node_modules (B1c's did; fixed with `pnpm install --offline --frozen-lockfile` in the worktree).
-- **claude/p3 at 7195bb84, 514/528.** Closed since main 539fe3a3: E3 orphan-pile-count-data (a1566814), c2-pile-records re-closed, E2 upload-sign-out-forget (5d4262ca; TL-P4-53 addenda 8–11), delete-account-purge (47448edf; addendum 12), pile-binned-context-hold (7195bb84; addendum 7). main and backup are still at 539fe3a3, and the next batch needs suites, main, backup and a staging smoke.
-- **In flight (worktrees /private/tmp/bower-<branch>):**
-  - b1c-index (escalated), round 3 under TL-P4-41 addendum 10: ownership comes from the index's 4,096-byte prefix, with zero extra reads. Then gates, a Codex pass, a Claude review and integrate. Uncommitted fix-round-2 production diff, then the round-3 job.
-  - c02-upload-count-ui (E4, ui): fix round 1. On fake, Sign out from the sheet while sending never reaches "Continue with Google". Then gates, a Claude review and the designer's verified.
-- **Queued:** Q1c impl after B1c hands off; B3b; B5a and B6a impl after B1c hands off note-edit and run-manifest; rules-added-region, then rules-original-ui; rules-added-region-model after B1c/B3b; B7/B8/B9 reds per order.
+This block is the whole current state; ACTIVE.md is the history log. If Claude's quota ends, a Codex session takes this role ([CODEX_TAKEOVER.md](CODEX_TAKEOVER.md), TL-P4-56).
+
+**State.**
+- claude/p3 is at 8ce0213a, 520/532. main (lead) is at b716e2d3 and must be merged into claude/p3 (`git -C /Users/deluisp/Projects/bower-app merge -q --no-edit main`).
+- backup/main and staging are at 5bab1288 (staging bfa0c812, bundle index-DOzbpzq4.js).
+- Since 5bab1288, claude/p3 holds B1c, Q1c, B3b, B5a, B6a and the c02/E-entries. The next batch boundary needs the four suites (jobs/suites.sh), main moved (`git -C repo fetch -q . claude/p3:main`), backup after jobs/backup-scan.sh, the SHA to the lead, and a staging smoke.
+
+**Loop per entry (TL-P4-29, TL-P4-31, TL-P4-51, TL-P4-54).**
+1. Codex red, committed by the coordinator.
+2. Codex implementation, committed by the coordinator.
+3. Gates: check, e2e and e2e:fake. Codex can't bind ports or commit, so the coordinator runs these.
+4. For escalated entries, a read-only Codex adversarial pass.
+5. A fresh Claude `bower-reviewer` PASS. This step is Claude-only; under takeover, CODEX_TAKEOVER.md says what replaces it.
+6. For ui entries, the designer's "verified".
+7. `harness/integrate.sh`, then `harness/done.sh <id> "<msg>" --fixed-in <sha>`, or `--known-green` with a committed Close note.
+A third round needs the lead.
+
+**Job scripts.** The scripts live outside the repo, in the session scratchpad `/private/tmp/claude-501/-Users-deluisp-Projects-bower-app/19ca090d-5e3d-4a2f-899c-8f2af3d7d836/scratchpad/jobs/`: red-then-impl.sh, codex-impl.sh, codex-readonly.sh, gates.sh, gates-and-pass.sh, integrate-done.sh, integrate-known-green.sh, done-entry.sh, done-known-green.sh, new-worktrees.sh, disjoint.sh, suites.sh and backup-scan.sh. Prompts are in the same scratchpad (`codex-<tag>-*-prompt.md`).
+- **Codex results:** `/tmp/codex-<tag>-red.jsonl` and `/tmp/codex-<tag>-impl.jsonl`. The card is the last agent_message.
+- **Gate results:** `/tmp/gates-<tag>/`.
+- **Claude-only steps:** Claude subagents (bower-reviewer, bower-diagnoser, bower-impact, bower-design-checker), tracked `run_in_background` jobs, and the browser-pane smoke on staging.
+
+**In flight.** All run under worktrees `/private/tmp/bower-<branch>`, with branch = id.
+
+| Entry | Attempt | Waits on | Next |
+| --- | --- | --- | --- |
+| b1d-selection (escalated) | Round 3 (TL-P4-41 addendum 16): sweep 3, then impl round 3. Round 2 is at 891ec869 and claude/p3 is merged in. | `/tmp/codex-b1d-r3-red.jsonl`, then `-impl.jsonl` | Commit; gates; Codex pass; Claude review; integrate. Not green → back to the lead with the list. No 4th round. |
+| messages-wait-for-sheets (ui) | Red then impl, round 1 | `/tmp/codex-mws-red.jsonl`, then `-impl.jsonl` | Commit; gates incl. the new e2e; Claude review; designer verified; integrate before Q1b. |
+| q1b-questions-ui (ui) | Red then impl, round 1 | `/tmp/codex-q1b-red.jsonl`, then `-impl.jsonl` | Same as above; integrates after messages-wait-for-sheets. |
+| next-steps-plain-list (ui) | Worktree made, not started (Codex cap) | — | Run `jobs/red-then-impl.sh` with `codex-nspl-red-prompt.md` and `codex-nspl-impl-prompt.md`, tag nspl. |
+
+**Queue, in order.**
+1. B1d (in flight), then Q1b.
+2. B5b, which carries B5a's handoff list and three baseline lines: note-format propertyValuesOk, note-format tableProperties and runner type-table.ts.
+3. B5c.
+4. B6b. B6a closed at 9f478276.
+5. B4.
+6. rules-added-region-model (after B1d); rules-added-region, then rules-original-ui.
+7. B7, B8 and B9 per P4_PLAN. B8 reuses `src/data/contracts/op-key.ts`.
+8. The retest.
+
+**Open questions.** None open to the lead or the designer.
+
+**B6a integrate fix (2026-10-11).** integrate.sh's check refused verify `-t "b6-"`. The rule in scripts/harness-rules.mjs is that a pattern needs at least 4 non-meta characters. The pattern became `"B6a templates|B6a fix"` over six files (bcc1b867).
 
 ## Where things stand
 
