@@ -2098,3 +2098,112 @@ removed: none. No compatibility change to production in this red-only session.
 The runner commits the diff.
 left out: production fix, pnpm check, broader suites, e2e execution and designer verification.
 Risk: the intentional unit red remains failing until the stored-row projection is fixed; browser assertions are unverified.
+
+## Round 3 (designer finding)
+
+Implementer: codex; ponytail full. Removed only the stored-reader cut at
+src/data/contracts/note-format.ts:564. No test, fixture, dependency, shared
+record or other production file changed. No network or git write command;
+node_modules was never replaced or symlinked. The runner owns commits,
+pnpm check and capabilities/folder-table e2e on demo/fake.
+
+### Scope and reuse
+
+Read the implementer role (ignoring frontmatter), ponytail full skill, WORKER
+card, packet and the notes' Round 3 red. Checked every readTypeTable and
+tableProperties caller, the rewrite/insert path, FolderScreen projection,
+runner re-export, existing reds and test/TypeScript configs.
+
+Research uses the packet's local bounded tolerant-read citation:
+https://www.rfc-editor.org/rfc/rfc9413.html (not fetched or reverified offline).
+The existing tableProperties filters hidden keys and then caps visible keys
+at four. Removing the earlier map/slice makes that projection the only display
+cap. Stored rows keep every declared table key; rewriteTypeTable compares the
+complete arrays and preserves untouched bytes. Strict new-row write validation,
+skipped-row handling, seed fallback and all signatures remain unchanged.
+No caller, export, fixture or config needs a repository change. No second
+parser, projection or writer was added. This follows addendum 10 (2)/(3).
+
+removed: readTypeTable's map and table.slice(0, 4); the display cap stays in tableProperties.
+tests changed: none; all existing tests, assertions, fixtures, bounds and call pins are unchanged.
+
+### Compatibility draft
+
+The coordinator records the final row after the runner's production commit.
+
+| Changed home | Contract change | Existing callers/stored data | Evidence |
+| --- | --- | --- | --- |
+| src/data/contracts/note-format.ts: readTypeTable | Stored table arrays retain all declared keys; tableProperties alone caps the visible projection after hidden-key filtering | Same signature/envelope; runner context, planner and DriveVault receive complete arrays; unchanged and insertion rewrites retain all stored keys and extensions; strict new-row validation stays unchanged | b5b-r4 1 hidden keys spend no column place; four/six ordinary-key controls; OS-temp preservation self-check; full runner/src results below |
+
+### Red and verification
+
+Before editing, b5b-r4 1 hidden keys spend no column place failed at
+src/data/contracts/b5b-r4.test.ts:31: received company/salary instead of
+company/salary/location/hours. Both ordinary-key controls passed before that
+assertion. Log: /tmp/b5b-r3-fix-red.log.
+
+After editing, that red and b5b-r3 2 declared properties have their own ids
+pass (2/2). Log: /tmp/b5b-r3-fix-green.log. The new red also passes in full src.
+
+An OS-temp assert-based self-check verifies a six-key stored read, an unchanged
+byte-identical rewrite and an insertion rewrite preserving all six keys plus
+an envelope extension. It passes; script /tmp/b5b-r3-fix-preservation.ts,
+bundled output /tmp/b5b-r3-fix-preservation.mjs, log
+/tmp/b5b-r3-fix-preservation.log. No repository test was added or changed.
+
+| Requested check | Result | OS-temp log |
+| --- | --- | --- |
+| Prior b5b-r2 reds plus Round 2 b5b-r3 proposal red | 7 pass / 1 contradicting old test fails, two soft assertions | /tmp/b5b-r3-fix-runner-reds.log |
+| Full runner, --maxWorkers=2 | 61 files pass / 1 fails; 762 tests pass / 1 fails | /tmp/b5b-r3-fix-full-runner.log |
+| Full src, --maxWorkers=2 | 180 files pass / 2 fail; 5831 tests pass / 2 fail; expected EPERM error | /tmp/b5b-r3-fix-full-src.log |
+| tsc app | pass | /tmp/b5b-r3-fix-tsc-app.log |
+| tsc node | pass | /tmp/b5b-r3-fix-tsc-node.log |
+| tsc runner | pass | /tmp/b5b-r3-fix-tsc-runner.log |
+| ESLint on touched production file | pass | /tmp/b5b-r3-fix-eslint.log |
+| node scripts/check-unused-gate.mjs | pass: 2 ordinary / 29 production findings, no new findings | /tmp/b5b-r3-fix-unused.log |
+| Read-only git diff --check | pass | /tmp/b5b-r3-fix-diff-check.log |
+
+Complete failure list after both full suites:
+
+- runner/test/b5b-r2.test.ts:98, b5b-r2 2 more than four columns:
+  :109-110 expects the stored reader to return only four keys for both five-
+  and six-key rows. These two soft assertions contradict this round's explicit
+  ruling that stored reads retain every key. Four-key and unrelated-run
+  byte-preservation controls pass. Test left unchanged as instructed.
+- src/docs.test.ts:125, every change since the P2 freeze is listed:
+  assertion :134 reports existing commit 08e5433e missing from the coordinator's
+  compatibility ledger. Shared ledger/test left unchanged; draft row above.
+- src/e2e-port.test.ts:37, a server from another worktree is never reused:
+  sandbox listen EPERM on 127.0.0.1 causes one unhandled error and a 5000 ms
+  timeout, as expected by the task. Test left unchanged.
+
+No other failure remains. Round 2 proposal publication controls, row-splice
+and live-proposal reds pass. No call/timing pin or threshold was changed.
+
+Commands (all output redirected to the log paths above):
+
+```sh
+pnpm exec vitest run --config /tmp/b5b-r4-app.config.mts src/data/contracts/b5b-r4.test.ts --maxWorkers=2
+pnpm exec vitest run --config /tmp/b5b-r3-fix-app.config.mts src/data/contracts/b5b-r4.test.ts src/features/files/folder-table-r3.test.tsx --maxWorkers=2
+pnpm exec vitest run --config /tmp/b5b-r3-fix-runner.config.mts test/b5b-r2.test.ts test/b5b-r2-proposal.test.ts test/b5b-r3.test.ts --maxWorkers=2
+pnpm exec vitest run --config /tmp/b5b-r3-fix-runner.config.mts --maxWorkers=2
+pnpm exec vitest run src --maxWorkers=2 --config /tmp/b5b-r3-fix-app.config.mts
+pnpm exec tsc --project tsconfig.app.json --noEmit
+pnpm exec tsc --project tsconfig.node.json --noEmit
+pnpm exec tsc --project runner/tsconfig.json --noEmit
+pnpm exec eslint src/data/contracts/note-format.ts
+node scripts/check-unused-gate.mjs
+```
+
+OS-temp configs import the unchanged worktree configs, disable test caches,
+redirect Vite caches/JSON reports to /tmp and reuse the existing OS-temp timer
+setup with the original gate/allowlist. Only the optional repository-writing
+CPU report is omitted. Final full-suite JSON reports:
+/tmp/b5b-r3-fix-runner-results.json and /tmp/b5b-r3-fix-app-results.json.
+No test output or scratch artifact writes into the repository.
+
+.codex-commits.json is an array with the production file in one commit and
+this notes file alone in the second. The runner performs both commits.
+
+left out: runner-owned commits/pnpm check/e2e, designer verification and coordinator ledger updates.
+Risk: gates remain blocked by the unchanged older truncation test, missing ledger row and expected sandbox EPERM.
