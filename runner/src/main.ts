@@ -227,7 +227,7 @@ function plannedQuestions(manifest: RunManifest): PublicQuestion[] {
     if (!isRunnerFile(SYSTEM.questions, value)) throw new BowerError('unknown', 'Bower could not read its questions.');
     for (const q of value.questions) if (questions.has(askingKey(q))) questions.set(askingKey(q), publicQuestion(q));
   }
-  return [...questions.values()].sort((a, b) => a.askedAt - b.askedAt);
+  return [...questions.values()];
 }
 
 type Ended = Exclude<TidyEnd, { phase: 'saving' }> | { phase: 'stopped'; why: string; error: unknown };

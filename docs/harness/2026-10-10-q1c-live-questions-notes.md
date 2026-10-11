@@ -587,3 +587,88 @@ repository test artifact, or change to another assertion. Default reporter, disa
 loading and noEmit keep verification writes outside the repository. The coordinator owns commits.
 removed: none of the original runner assertions; only the stored-action row moved out of it.each.
 commits: none.
+
+## Fix round 1
+
+Status: blocked; the minimal uncommitted snapshot fix is retained for coordinator inspection.
+The full runner suite completed before the conflict inventory below. No test was changed.
+
+Research: no network used. Reuse the existing snapshot validator and status stream. The local
+TypeScript array declarations (node_modules/typescript/lib/lib.es2023.array.d.ts:46-55 and
+lib.es5.d.ts's sort/slice declarations) describe copying, numeric comparison and slicing.
+Offline standards, not fetched: [ECMAScript Array sort](https://tc39.es/ecma262/#sec-array.prototype.sort)
+and [Array slice](https://tc39.es/ecma262/#sec-array.prototype.slice). Stable numeric sorting preserves
+durable order for tied askedAt values; copying and slicing leave all stored askings intact.
+
+Changes:
+- runner/src/status.ts: RunnerStatus.publishQuestions copies and sorts the durable public cards by
+  askedAt, takes the first ten, then uses the existing snapshot validator and publication path.
+  Later reports retain that same selected snapshot. Per-question validation and the 64 KiB request
+  refusal are unchanged; count alone no longer rejects a valid plan before clear effects.
+- runner/src/main.ts: plannedQuestions returns all durable public cards; sorting and selection now
+  belong only to RunnerStatus. Both fresh-plan publication at onPlan and recovery use that one home.
+  No planner, durable questions effect, Drive merge, wire fence or bound mechanism was added or changed.
+
+removed: sorting from main's plannedQuestions; RunnerStatus now owns snapshot ordering and selection.
+removed: count-only run failure caused by validating every durable asking as the ten-card wire snapshot.
+tests changed: none
+commits: none; no direct writing git command was run, and the coordinator owns commits.
+
+Red: the unchanged committed Q1c fix 1 eleven-asking test first failed at
+runner/test/q1c-live.test.ts:130, expected done, received failed; the other three cases passed.
+Command: pnpm -C runner exec vitest run test/q1c-live.test.ts --maxWorkers=2 --reporter=default --no-cache --configLoader=native
+Log: /tmp/q1c-fix1-impl-red.log.
+
+Contradicting test / scope conflict (complete runner inventory: one):
+- runner/test/q1c-live.test.ts:136, `Q1c fix 1: eleven askings keep clear work and publish the first ten by askedAt`:
+  expects q-ask-f11 through q-ask-f21, but the durable plan and questions.json carry q-ask-WAITING,
+  q-ask-WAITING_1 through q-ask-WAITING_10. Its fixture assigns explicit pile identities. The existing
+  pile asking branch at src/data/spine/scripted.ts:981-986 uses askId(pile.id) when all members wait.
+  The rule requires retaining the durable askings; changing their identities in the snapshot path
+  cannot satisfy this stored-file assertion, and changing the planner is outside this fix's scope.
+  The test now passes done, filed clear sibling, eleven durable-plan askings and eleven stored askings.
+  Its final first-ten projection assertion at :137 is not reached. No snapshot pass is claimed for it.
+
+Verification:
+- Full runner: 46 files passed, one failed; 633 tests passed, one failed, exactly the identity conflict above.
+  Command: pnpm -C runner exec vitest run --maxWorkers=2 --reporter=default --no-cache --configLoader=native
+  Log: /tmp/q1c-fix1-impl-runner.log. Pre-effect crash recovery and both original Q1c tests passed.
+- App suite: 166 files passed, one failed; 5616 tests passed, one failed, with one unhandled listen EPERM.
+  Command: pnpm exec vitest run src --maxWorkers=2 --no-cache --configLoader=native.
+  Log: /tmp/q1c-fix1-impl-app.log. No additional snapshot/rule contradiction was found.
+  Environment failure: src/e2e-port.test.ts:37, `a server from another worktree is never reused`.
+  Its existing fixture calls server.listen at :21; this sandbox refuses 127.0.0.1 with EPERM, then the
+  test times out at 5000 ms. This requires coordinator execution with ports, not a production fix.
+- tsc app/node/runner/api: all passed with --noEmit; logs /tmp/q1c-fix1-impl-tsc-{app,node,runner,api}.log.
+  Commands: pnpm exec tsc --noEmit -p tsconfig.app.json; pnpm exec tsc --noEmit -p tsconfig.node.json;
+  pnpm -C runner exec tsc --noEmit -p .; pnpm -C api exec tsc --noEmit -p .
+- ESLint: passed; pnpm -C runner exec eslint src/status.ts src/main.ts.
+  Log: /tmp/q1c-fix1-impl-eslint.log.
+- API runtime tests, pnpm check and e2e remain coordinator work: API tests need ports; the full check
+  invokes them and writes repository artifacts. No screen changed. No port was successfully bound,
+  and no direct server start, network request,
+  node_modules replacement/symlink or direct writing git command was used. Native config loading,
+  disabled test caching, default reporters and noEmit avoid repository verification artifacts;
+  logs and existing test scratch fixtures use OS temp.
+
+Final inspection: git diff --check passed. Exactly runner/src/status.ts, runner/src/main.ts and this
+notes file are modified; no test, dependency link, shared harness record or repository test artifact changed.
+All requested runnable suites completed. Stop for the identity fixture conflict at :136; the retained
+snapshot fix does not change durable identity or widen its two-file production scope.
+
+## Fix round 1 red repair
+
+tests changed: runner/test/q1c-live.test.ts: expected ids follow the planner's existing asking ids
+
+Mechanical repair of the identity conflict above: stored identities match the persisted plan's askings,
+and the expected snapshot derives from questions.json sorted stably by askedAt. The test retains done,
+the filed clear sibling, all eleven planned and stored askings, and the exact first ten public cards.
+It explicitly checks that the eleventh asking remains stored and is absent from the ten-card snapshot.
+
+Verification: `pnpm -C runner exec vitest run test/q1c-live.test.ts --maxWorkers=2 --reporter=default --no-cache --configLoader=native`
+passed: one file, four tests. Log: /tmp/q1c-fix1-red-repair-runner.log.
+Offline reference: existing persisted-plan and questions.json fixture readers in this test; no network used.
+Production file hashes before and after match; the retained runner/src/main.ts and runner/src/status.ts
+diff is untouched. No git write, dependency replacement/symlink or repository test output.
+pnpm check and e2e remain coordinator work; this assignment requests the runner file only.
+commits: none; coordinator owns commits.

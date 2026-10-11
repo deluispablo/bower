@@ -68,8 +68,9 @@ export class RunnerStatus {
     return this.endedAs !== null;
   }
 
-  /** A full durable snapshot, carried by every later report of this attempt as well. */
+  /** The first ten durable askings by time, carried by every later report of this attempt as well. */
   async publishQuestions(questions: PublicQuestion[], extra: StatusExtra = {}): Promise<void> {
+    questions = [...questions].sort((a, b) => a.askedAt - b.askedAt).slice(0, 10);
     if (!isQuestionSnapshot(questions)) throw new BowerError('unknown', 'Bower could not share its questions.');
     const changed = JSON.stringify(this.questions) !== JSON.stringify(questions);
     const hadSnapshot = this.questions !== undefined;
