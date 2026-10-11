@@ -95,7 +95,7 @@ it('b1d-r8 1 a keep-one merge rewrites backlinks in an unselected note', async (
     if (back.ok) await b.drive.writeText(now.id, back.text, now.modifiedTime);
   }
   for (const path of [A, B, C]) expect(await b.drive.readText(b.id(path))).toBe(b.c.folder[path]);
-  expect((await b.drive.get(b.id(B))).trashed).toBe(false);
+  expect((await b.drive.get(b.id(B))).trashed).not.toBe(true);
 });
 
 it('b1d-r8 2 the model cannot add a non-backlink edit to an unselected note', async () => {

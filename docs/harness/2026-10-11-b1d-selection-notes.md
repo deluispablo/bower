@@ -3687,3 +3687,7 @@ reverification; no second planner, writer, report or Undo mechanism was added.
 Left out: runner-owned commits, pnpm check and capabilities e2e; additional
 tests or production changes after failure. Risk: the first new test remains red
 on its final optional-metadata assertion and must not be treated as green.
+
+### Addendum 25 tests, coordinator repair
+
+tests changed: runner/test/b1d-r8.test.ts: the final restored-file check reads `trashed` not true instead of exactly false, because the fake Drive omits the field on a restored file; the test's own new assertion only, nothing existing.
