@@ -29,7 +29,7 @@ The branch names keep their `claude/` prefix. They are names, not owners, and re
 | The coordinator's job scripts | `harness/jobs/` (one line each in `harness/README.md`). Worktrees go under `${BOWER_WORKTREES:-/private/tmp}`. Prompts for jobs in flight are listed in HANDOFF. |
 | Claude subagents (`.claude/agents/*.md`): implementer, reviewer, evaluator, mechanical, escalated, diagnoser, impact, design checker | A fresh `codex exec` through `harness/codex-run.sh` (`--role <name>`; `--sandbox read-only` for the reviewer, diagnoser, impact and design checker). The prompt starts with "Your role: follow `.claude/agents/<name>.md` (ignore its frontmatter)", then the packet. Each run is a new session, never a resumed one. |
 | "A fresh Claude review" closes each entry (TL-P4-29) | A fresh Codex reviewer at `--effort high` that took no part in the entry, plus the adversarial pass that escalated entries already have. There is no second provider, so independence comes from a fresh session, and the gates are never relaxed. |
-| The model ladder Haiku → Sonnet → Opus | TL-P4-57: `gpt-6.1-sol` at `medium` or `high`, and `gpt-6-astra` at `high` (escalated work, closing reviews) or `xhigh` (adversarial passes), all on the Fast tier. |
+| The model ladder Haiku → Sonnet → Opus | TL-P4-57 addendum 2: `gpt-6.1-sol` only, `low` for mechanical work, `medium` for normal work, `high` for escalated work, adversarial passes and closing reviews; `--tier standard`; at most 2 workers. |
 | Cap: 1 Claude + 4 Codex workers | 4 Codex workers, plus the three role sessions. |
 | `.claude/skills/` | `.agents/skills/` is canonical, and Codex reads it. If a skill is not offered, read its `SKILL.md` directly. |
 | Claude Code hooks (`.claude/settings.json`): quiet gates, guard-main-checkout, guard-push, after-compact | They do not run in Codex. Their rules bind by hand: no push except the backup of main (BACKUP.md), only the coordinator switches the main checkout's branch, and logs go to files. After a compaction or a restart, re-read the "Reads first" files. Codex hook support is a configuration change, and only the owner may make one. |
@@ -50,7 +50,7 @@ The mailbox is the directory `/Users/deluisp/Projects/bower-mail/`, outside ever
 - **Minimal text output (TL-P4-58):** reports to the owner are 1–3 lines.
 - **ponytail at full level (TL-P4-59):** always on for every session, and every worker prompt starts with "Use the ponytail skill (full)".
 - **Automatic compaction at about 50% (TL-P4-60):** state files are current after every decision.
-- **Codex models (TL-P4-57).**
+- **Codex models (TL-P4-57 addendum 2).** Every run uses `--tier standard`. At most **2** Codex workers at once. Normal implementation, fix rounds and reds use `gpt-6.1-sol` at `medium`, and mechanical work uses it at `low`. Escalated work, adversarial passes and closing reviews use `gpt-6.1-sol` at `high`. `gpt-6-astra` and `xhigh` are not used (TL-P4-57 addendum 2: the owner's Codex quota).
 - **Newer rules:** read the last 40 lines of DECISIONS.
 
 ## What does not change

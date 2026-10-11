@@ -71,10 +71,17 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
     // A set-aside row is its contribution's one move's (`grounded`): by op id, never by the name a row carries (two
     // things may share one) nor by position.
     const own = c.when === 'rejected' && c.requires.length === 1 ? byId.get(c.requires[0] ?? '') : undefined;
+    const operation = own ? ops.get(own.operationId) : undefined;
+    // A failed generated note already has its not-done row; its dependent Bin does not add the same pile again.
+    const alreadyTold = operation?.effect.kind === 'bin' && operation.dependsOn.some((id) =>
+      ops.get(id)?.effect.kind === 'create-text' && state.get(id) === 'rejected'
+      && manifest.reportPlan.some((row) => row.when === 'rejected' && row.requires[0] === id && row.value.setAside.length));
     // A keep's other note that stayed says what its Bin's refusal found (P4-19b): moved, binned by the person, or changed.
     const kept = own?.state === 'rejected' && keptOther(ops.get(own.operationId), manifest) && KEEP_REFUSED.includes(own.failure.message) ? own.failure.message : null;
     if (kept !== null) report.setAside.push(...c.value.setAside.map((row) => ({ ...row, why: kept })));
-    else if (own?.state !== 'rejected' || ops.get(own.operationId)?.effect.kind !== 'move') report.setAside.push(...c.value.setAside);
+    else if (own?.state !== 'rejected' || ops.get(own.operationId)?.effect.kind !== 'move') {
+      if (!alreadyTold) report.setAside.push(...c.value.setAside);
+    }
     else {
       const moved = own.failure.code === 'conflict' && own.failure.message === SOURCE_NOT_AS_SEEN;
       const why = own.failure.code === 'unknown' ? own.failure.message : null;
@@ -195,6 +202,10 @@ export function itemDispositions(admission: AdmissionManifest, manifest: RunMani
   const whole = (pileId: string): boolean => {
     const things = manifest.capture.members.filter((m) => m.pileId === pileId);
     const notes = wordsNotes(manifest, pileId);
+    const pile = manifest.capture.piles.find((p) => p.pileId === pileId);
+    const contextBins = manifest.operations.filter((o) => o.effect.kind === 'bin'
+      && pile?.context.kind === 'text' && o.effect.before.fileId === pile.context.file.fileId);
+    if (!contextBins.every((o) => applied.has(o.operationId))) return false;
     // A pile of words already saved (`duplicates.ts`) is filed once its Bin is done, as a copy is.
     if (!things.length && !notes.length) return manifest.operations.some((o) => applied.has(o.operationId) && savedWordsPile(manifest, o) === pileId);
     return things.every((m) => filed.has(m.file.fileId)) && notes.every((id) => applied.has(id));
@@ -226,13 +237,17 @@ export function itemDispositions(admission: AdmissionManifest, manifest: RunMani
  * The notes a pile's words are written into (a pile of words only): the made notes, or the notes whose Timeline lines
  * carry its news (c3-pair-ask), its folder or its pile note go to the Bin after. None for a pile of things.
  */
-function wordsNotes(manifest: RunManifest, pileId: string): string[] {
+export function wordsNotes(manifest: RunManifest, pileId: string): string[] {
   const pile = manifest.capture.piles.find((p) => p.pileId === pileId);
   if (!pile) return [];
   const binned = new Set([pile.anchor?.fileId, pile.context.kind === 'text' ? pile.context.file.fileId : undefined].filter((id): id is string => id !== undefined));
   const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
   const notes = manifest.operations.flatMap((o) => (o.effect.kind === 'bin' && binned.has(o.effect.before.fileId) ? o.dependsOn : []));
-  return [...new Set(notes)].filter((id) => ops.get(id)?.effect.kind === 'create-text' || ops.get(id)?.effect.kind === 'edit-text');
+  return [...new Set(notes)].filter((id) => {
+    const effect = ops.get(id)?.effect;
+    return effect?.kind === 'create-text' || effect?.kind === 'edit-text'
+      || effect?.kind === 'write-runner-json' && effect.path === '.bower/observations.jsonl';
+  });
 }
 
 /**
@@ -259,7 +274,14 @@ export function reportContradictions(admission: AdmissionManifest, manifest: Run
     const op = ops.get(id);
     const saved = op ? savedWordsPile(manifest, op) : null;
     if (saved !== null) return (pileItems.get(saved) ?? []).filter((f) => !members.has(f));
-    if (op?.effect.kind !== 'create-text' && op?.effect.kind !== 'edit-text') return thingOf(id);
+    if (op?.effect.kind === 'bin') {
+      const fileId = op.effect.before.fileId;
+      const piles = manifest.capture.piles.filter((p) => wordsNotes(manifest, p.pileId).length > 0
+        && (p.anchor?.fileId === fileId || p.context.kind === 'text' && p.context.file.fileId === fileId));
+      if (piles.length) return piles.flatMap((p) => (pileItems.get(p.pileId) ?? []).filter((f) => !members.has(f)));
+    }
+    if (op?.effect.kind !== 'create-text' && op?.effect.kind !== 'edit-text'
+      && !(op?.effect.kind === 'write-runner-json' && op.effect.path === '.bower/observations.jsonl')) return thingOf(id);
     const piles = [...notesOf].filter(([, notes]) => notes.includes(id)).map(([pileId]) => pileId);
     return [...piles.flatMap((p) => (pileItems.get(p) ?? []).filter((f) => !members.has(f))), ...op.dependsOn.flatMap(thingOf)];
   }));
@@ -283,6 +305,8 @@ export function reportContradictions(admission: AdmissionManifest, manifest: Run
   // Each row through the contribution that gave it, by its operations: never by the name or fields it carries.
   for (const c of given) {
     for (const row of c.value.filed) trace(`filed ${row.name}`, [c], ['filed'], named.filed);
+    // A settled update stands even when the consumed words' Bin was refused.
+    if (c.value.updated.length && subjects(c).size) trace('updated note', [c], ['filed', 'set-aside'], named.filed);
     for (const row of c.value.alreadySaved ?? []) trace(`already saved ${row.name}`, [c], ['filed'], named.filed);
     if (c.requires.every(keptBin)) continue;
     for (const row of c.value.setAside) trace(`set aside ${row.name}`, [c], ['filed', 'set-aside'], named.setAside);

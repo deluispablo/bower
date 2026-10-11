@@ -17,9 +17,8 @@ import type { Admitted, Deferred } from '../../../src/data/spine/provider';
 import type { RunManifest } from '../../../src/data/spine/records';
 import type { RunnerToken } from '../token';
 import { applyChanges } from '../../../src/data/contracts/note-edit';
-import { aboutArchivePath, parseObservations, validLearnedBlock, type ObservationOrigin } from '../../../src/data/contracts/observations';
+import { aboutArchivePath, parseObservations, validLearnedBlock } from '../../../src/data/contracts/observations';
 import { maintenanceTargetOk, targetPath } from '../../../src/data/contracts/run-manifest';
-import { PILE_NOTE } from '../../../src/data/piles';
 import { RUNNER_WRITES, SYSTEM } from '../../../src/data/vault/layout';
 
 export type { Admitted };
@@ -157,7 +156,8 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
         const targets = m.capture.places.filter((p) => p.path === 'About me.md');
         if (e.path === 'About me.md' || targets.some((p) => p.file.fileId === e.before.fileId)
           || kinds.has('about-append') || kinds.has('about-rewrite')) {
-          if (e.path !== 'About me.md' || targets.length !== 1 || targets[0]?.file.fileId !== e.before.fileId) return 'an About me edit outside its marked sections';
+          if (e.path !== 'About me.md' || (e.createdBy ? targets.length !== 0 || finalAbout !== e.beforeText
+            : targets.length !== 1 || targets[0]?.file.fileId !== e.before.fileId)) return 'an About me edit outside its marked sections';
           if (e.beforeText === undefined) return 'an About me edit without its read bytes';
           const authored = applyChanges(new TextEncoder().encode(e.beforeText), e.changes);
           if (!authored.ok || authored.text !== e.text) return 'an About me edit outside its marked sections';
@@ -215,26 +215,4 @@ export function admittedPlan(token: Pick<RunnerToken, 'grant'>, drive: AdmittedR
     ]);
     return plan(taken);
   };
-}
-
-/** Resolve only references into the taken admission. Captured bytes/hashes are script inputs, never model fields. */
-export function observationOrigin(reference: unknown, took: Admitted, evidence: {
-  captureId: string; runId: string; files: readonly { fileId: string; sha256: string; text: string; subject?: string }[];
-}): { ok: true; origin: ObservationOrigin; source: { fileId: string; sha256: string } } | { ok: false } {
-  if (!reference || typeof reference !== 'object' || Array.isArray(reference)
-    || Object.keys(reference).length !== 1) return { ok: false };
-  const ref = reference as Record<string, unknown>;
-  const pile = took.taken.piles.find((p) => p.pileId === ref.pileId);
-  const words = pile?.anchor ? pile.items.filter((i) => i.name === PILE_NOTE) : [];
-  const file = words.length === 1 ? words[0] : typeof ref.fileId === 'string'
-    ? took.taken.piles.flatMap((p) => p.items.filter((i) => !(p.anchor && i.name === PILE_NOTE)))
-      .find((i) => i.fileId === ref.fileId) : undefined;
-  const captured = evidence.files.filter((f) => f.fileId === file?.fileId);
-  const got = captured.length === 1 ? captured[0] : undefined;
-  if (!file || !got || !/^[a-f0-9]{64}$/.test(got.sha256) || !/^[a-f0-9]{64}$/.test(evidence.captureId)
-    || !/^[A-Za-z0-9_-]{1,128}$/.test(evidence.runId)) return { ok: false };
-  const origin: ObservationOrigin = pile ? { kind: 'words', pileId: pile.pileId, runId: evidence.runId, captureId: evidence.captureId }
-    : { kind: 'document', subject: got.subject ?? '', runId: evidence.runId, captureId: evidence.captureId };
-  // A document with no script-validated subject may be described, but cannot author an observation until one is bound.
-  return { ok: true, origin, source: { fileId: file.fileId, sha256: got.sha256 } };
 }

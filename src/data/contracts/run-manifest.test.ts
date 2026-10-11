@@ -973,3 +973,84 @@ it('b4a-artifact-scope-and-order', async () => {
   set(mismatchedVersion, ['operations', 2, 'effect', 'beforeContent', 'observedModifiedTime'], '2026-10-11T10:00:01.000Z');
   expect((await parse(b4Seal(mismatchedVersion))).ok, 'content version must match the read file').toBe(false);
 });
+
+
+/** Addendum 16: every consumed child has its own Bin before the parent can hide it. */
+function b4bFr4Bins(source: 'declared' | 'observed'): Manifest {
+  const value = rich();
+  const pile = value.capture.piles[1];
+  if (!pile || pile.context.kind !== 'text') throw new Error('Synthetic pile needs its words.');
+  if (source === 'observed') {
+    pile.source = { kind: 'observed' };
+    pile.memberKeys = [null];
+    pile.context.memberKey = null;
+    const member = value.capture.members.find((m) => m.pileId === pile.pileId);
+    if (!member) throw new Error('Synthetic pile needs its member.');
+    member.memberKey = null;
+  }
+  op(value, 4).effect = { kind: 'bin', before: seen('child-a', 'a.txt', 'pile-folder-id'), capturedChildIds: [] };
+  op(value, 4).dependsOn = [op(value, 2).operationId];
+  const contextBin: Operation = { ordinal: 5, operationId: digest('f'), dependsOn: [op(value, 2).operationId],
+    effect: { kind: 'bin', before: pile.context.file, capturedChildIds: [] } };
+  value.operations.splice(5, 0, contextBin);
+  op(value, 6).ordinal = 6;
+  op(value, 6).dependsOn = [op(value, 4).operationId, contextBin.operationId];
+  contribution(value, 1).requires.push(contextBin.operationId);
+  return seal(value);
+}
+
+for (const source of ['declared', 'observed'] as const) {
+  it(`control: b4b-fr4-parent-bin-validator-${source}`, async () => {
+    const value = b4bFr4Bins(source);
+    expect(op(value, 6).dependsOn).toEqual([op(value, 4).operationId, op(value, 5).operationId]);
+    expect(await parseRunManifestV2(bytes(value), 'fake-root', RUNNER_WRITES)).toMatchObject({ ok: true, value });
+  });
+
+  for (const missing of ['words', 'member', 'both', 'no-words-bin'] as const) {
+    it(`b4b-fr4-parent-bin-validator-${source}-${missing}`, async () => {
+      const { withMaintenance } = await import('../../../runner/src/index');
+      const { RunnerDrive } = await import('../../../runner/src/drive');
+      const { RunnerToken } = await import('../../../runner/src/token');
+      const { fixedDrive, driveV3, API, RUN_ID, TICKET } = await import('../../../runner/test/drive-v3');
+      const drive = fixedDrive();
+      const root = (await drive.createFolder('root', 'Bower')).id;
+      await drive.createFolder(root, '.bower');
+      const wire = driveV3(drive);
+      wire.folderId = root;
+      const token = new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: wire.fetch, now: () => wire.now });
+      const port = new RunnerDrive({ token, attempt: 1, fetch: wire.fetch });
+      const value = b4bFr4Bins(source);
+      value.scope.rootId = root;
+      // The finalizer also seals questions, so use their production shape in this synthetic graph.
+      const questions = op(value, 3).effect;
+      if (questions.kind !== 'write-runner-json') throw new Error('Synthetic graph needs its questions.');
+      questions.text = '{"v":1,"questions":[]}\n';
+      questions.content = raw(questions.text);
+      seal(value);
+      expect((await parseRunManifestV2(bytes(value), root, RUNNER_WRITES)).ok,
+        'the complete frozen graph parses').toBe(true);
+      await expect(withMaintenance(port, value), 'the complete new graph seals')
+        .resolves.toMatchObject({ v: 2, operations: expect.arrayContaining([expect.objectContaining({ effect: { kind: 'maintain', inputs: expect.any(Object) } })]) });
+      op(value, 6).dependsOn = missing === 'both' ? []
+        : [op(value, missing === 'member' ? 5 : 4).operationId];
+      if (missing === 'no-words-bin') {
+        const removed = op(value, 5).operationId;
+        value.operations.splice(5, 1);
+        // Keep the consumed words effect explicit when its item Bin is absent.
+        op(value, 5).dependsOn.push(op(value, 2).operationId);
+        for (const row of value.reportPlan) row.requires = row.requires.filter((id) => id !== removed);
+        value.operations.forEach((operation, ordinal) => { operation.ordinal = ordinal; });
+        seal(value);
+      }
+      // Frozen graphs retain their original dependencies, including older incomplete plans.
+      expect(await parseRunManifestV2(bytes(value), root, RUNNER_WRITES)).toMatchObject({ ok: true, value });
+      if (missing === 'member') {
+        await expect(withMaintenance(port, value), 'an attachment needs no item-Bin dependency')
+          .resolves.toMatchObject({ v: 2, operations: expect.arrayContaining([expect.objectContaining({ effect: { kind: 'maintain', inputs: expect.any(Object) } })]) });
+      } else {
+        await expect(withMaintenance(port, value), 'a parent cannot bypass a consumed words item Bin')
+          .rejects.toThrow('Bower could not update its notes.');
+      }
+    });
+  }
+}
