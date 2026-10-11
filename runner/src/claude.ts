@@ -63,6 +63,8 @@ import type { MaintenanceNote } from '../../src/data/contracts/run-manifest';
 import { indexedFront, noteRefusal, parseNote } from '../../src/data/contracts/note-format';
 import { checkCreationName } from '../../src/data/contracts/tree';
 import { readTypeTable } from './type-table';
+import { aboutContext, parseObservations } from '../../src/data/contracts/observations';
+import { ABOUT_REGIONS, parseOwnership } from '../../src/data/contracts/ownership-format';
 import { propertyValuesOk } from '../../src/data/contracts/note-format';
 import { mocMembership, mocSnapshot } from './moc';
 
@@ -196,7 +198,7 @@ interface Shown {
   presentLines?: ReadonlySet<string>;
   /** The person's `Rules.md`, bounded, when the folder has one. */
   rules?: string;
-  aboutMe?: string;
+  aboutMe?: ReturnType<typeof aboutContext>;
   index?: string;
   /** Your answers this run took, each with its question and what it is about (TL-P4-08 addendum 8). */
   answers?: Array<{ question: string; answer: string; fileId?: string; pileId?: string; note?: string; notes?: string[] }>;
@@ -414,7 +416,24 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
   const listing = await read.listAll(run.rootId);
   const ix = VaultIndex.build(run.rootId, listing);
   const aboutFile = ix.file('About me.md');
-  const aboutMe = aboutFile ? bounded(await read.readText(aboutFile.id), CONTEXT_BOUNDS.perNote).text : null;
+  let aboutMe: Shown['aboutMe'];
+  if (aboutFile) {
+    const text = await read.readText(aboutFile.id);
+    const bytes = new TextEncoder().encode(text);
+    const ownership = parseOwnership(bytes);
+    if (ownership.status === 'invalid') throw new BowerError('conflict', 'Bower could not read its learned facts.');
+    const decode = (span: { start: number; end: number }): string => new TextDecoder().decode(bytes.subarray(span.start, span.end));
+    const personal = bounded(decode(ownership.personal), CONTEXT_BOUNDS.perNote).text ?? '';
+    const learned = ABOUT_REGIONS.flatMap((region) => {
+      const span = ownership.payloads?.[region];
+      return span ? [decode(span)] : [];
+    }).join('\n');
+    const ledgerFile = ix.file('.bower/observations.jsonl');
+    const ledger = parseObservations(new TextEncoder().encode(ledgerFile ? await read.readText(ledgerFile.id) : ''));
+    aboutMe = aboutContext({ personal, learned, factIds: [] });
+    const shownFacts = new Set(aboutMe.learned.text.split(/\r?\n/).flatMap((line) => parseTimelineLine(line)?.text ?? []));
+    aboutMe.learned.factIds = ledger.live.filter((fact) => shownFacts.has(fact.text)).map((fact) => fact.factId);
+  }
   const indexFile = ix.file(SYSTEM.index);
   const index = run.index ?? (indexFile ? bounded(await read.readText(indexFile.id), 32_000).text ?? undefined : undefined);
   const inMain = (path: string | undefined): path is string => path !== undefined && MAIN_FOLDERS.includes(path.split('/')[0] ?? '');
