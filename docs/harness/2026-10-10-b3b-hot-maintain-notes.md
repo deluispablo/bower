@@ -1190,3 +1190,44 @@ removed: runner/src/index.ts: run-id/category/report-position identities; report
 removed: runner/src/hot.ts: positional displayed-change provenance; displayed keys determine provenance.
 removed: no test, assertion, fixture, golden, threshold, dependency, write fence or checkpoint mechanism.
 tests changed: none
+
+## Fix round 3 reds
+
+2026-10-11 — red-owning session; adversarial pass 3's blocking finding at
+`runner/src/index.ts:144–145`. No network or writing git command.
+
+tests changed: runner/test/b23-hot-context.test.ts: added `B3b hot: an ordinary rule Undo keeps its own wording`; no existing assertion changed.
+
+The added test uses the actual `DriveVault.removeRule` callback and its ordinary
+`undoRuleLine` path at `src/data/vault/drive-vault.ts:1500`, not a hand-authored
+inverse. A serialized settled rule is removed; run A consumes and archives the
+removal through production main. The callback then records the inverse; run B
+consumes it through production main. Both runs use instruction dispatch without
+a whole-run Undo request. Shared `opKey` uses each real manifest's root/run
+namespace and the corresponding primary record id.
+
+Passing controls: run A removes the rule and shows the keyed removal row; run B
+restores the rule, archives its inverse and removes run A's keyed hot row. Both
+runs observe zero archive-media GETs; inspection is outside wire observation.
+Run B writes hot once. The new test has exactly two assertion failures: the
+inverse's own primary wording is absent under its own key, and hot incorrectly
+contains `Undo the last tidy-up`. A report-authored row with the same wording
+under another key does not satisfy the primary-row assertion.
+
+All three hot files ran with `--maxWorkers=2`: **146 pass / 1 fail (147 tests)**,
+exit 1. The existing `B3b hot: an Undo run refreshes hot from restored evidence`
+stays green, including its whole-run wording and zero archive-media guards.
+No contradiction with the requested contract; the red reproduces the blocker.
+Log: `/tmp/b3b-fix3-red.log`; report: `/tmp/b3b-fix3-red.json`.
+
+Command:
+`NODE_OPTIONS='--import=/tmp/b3b-hot-maintain-output.mjs' pnpm -C runner exec vitest run test/b23-hot.test.ts test/b23-hot-context.test.ts test/b23-hot-recovery.test.ts --config /tmp/b3b-a6-runner.config.mjs --maxWorkers=2`.
+Existing OS-temp config/preload routes cache, reports and artifacts outside the
+repository. No test writes into the repository. No installs, node_modules
+replacement/symlinks, production changes, commits, pnpm check or screen e2e.
+Coordinator owns commits; production repair remains with its owning session.
+
+Offline references: existing ordinary Undo implementation
+`src/data/vault/drive-vault.ts:1462–1502`, the shared rule serializer and op-key
+contract. Reused the notes' derived-view reconciliation reference
+https://kubernetes.io/docs/concepts/architecture/controller/ (not fetched).
