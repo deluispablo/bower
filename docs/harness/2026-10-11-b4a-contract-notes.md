@@ -1064,3 +1064,142 @@ The runner owns committing. `.codex-commits.json` declares one test-only commit
 and one notes-only commit. No git-writing command, production fix, pnpm check,
 full suite, server, e2e or B4b/B4c runtime wiring was attempted. The four contract
 failures remain intentionally unresolved for the implementation session.
+
+## Round 3 (addendum 5)
+
+implementer: codex
+
+Implemented TL-P4-48 addendum 5 in the existing observation resolver, note author,
+manifest validator and runner admission. No test, fixture, dependency, configuration,
+shared harness record or ownership-parser grammar was changed. No network or git-writing
+command was run by this session; node_modules was neither replaced nor symlinked.
+Research reuses the packet's prior offline context-engineering and Zod references:
+https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+and https://zod.dev/api. These are prior research, not newly verified citations.
+
+Scope/callers checked before editing: parseObservations and rebuildObservations feed
+aboutEvidenceOk, canRebuildAboutSection and manifest validation; applyChanges supplies
+manifest authoring and now admission's About me byte check. Existing appendAbout and
+rewriteRegion consume parseOwnership's spans. Runtime memory wiring remains B4b/B4c.
+No public export or persisted event/effect shape changed. Existing sources, date validation,
+normalization, read-version fences, archive creation and dependency effects remain the homes.
+
+- Forget matches normalized text across all three sections. A new own-words observation
+  must reference a forgotten matching fact, use a fresh source, follow the tombstones in
+  event order and have a date strictly after every matching tombstone. Referencing the
+  latest forgotten fact no longer requires referencing every older fact in that chain.
+  Document/replay evidence stays blocked; retained tombstones, source Bin and Undo guards
+  are unchanged. This preserves the person's latest valid remember/Forget instruction.
+- The note author refuses any parsed non-About region introduced by initialization and
+  any non-About region following the learned regions on rewrite. Unknown/damaged marks
+  still refuse through the one parser. Stored reads remain lenient: no parser fork or
+  read-format change. Admission reuses applyChanges and compares its exact authored bytes
+  with the effect, so a declared change kind cannot hide an extra region.
+- If the shared consolidation predicate is false, an ordinary write must preserve the
+  entire previous payload as its byte prefix and have no archive. Its lines and fact ids
+  still require live evidence. An over-budget section with five new observations still
+  requires the exact archive and dependent successful frontier. Forget/Undo retain their
+  archive-backed gate exemption; Forget can rebuild affected sections other than the
+  original fact's section. A plain append cannot claim a successful frontier, because the
+  existing frontier validator requires the corresponding archived rewrite.
+
+removed: per-section isolation of normalized Forget matching and the every-old-fact remembers requirement.
+removed: initialization/rewrite permission for extra parsed regions in the learned section.
+removed: admission's reliance on declared About me kinds without checking the existing author's bytes.
+removed: unconditional archive/frontier consolidation shape for ordinary below-gate appends.
+removed: no parser, writer, region mechanism, dependency or persisted format was added.
+tests changed: none; every repository test and assertion remains unchanged.
+tests changed: runner/test/claude-provider.test.ts:600 pins RUNNER_WRITES, already including observations.jsonl; passes unchanged.
+
+### Compatibility draft rows
+
+| Contract home | Round-3 change | Compatibility evidence / remaining consumer |
+| --- | --- | --- |
+| src/data/contracts/observations.ts | Match Forget text across sections; require later dated own words; allow repeated remember/Forget chains | Stored v1 events and tombstones still parse; round-2/round-3 controls and ten-cycle OS-temp self-check pass. Older observations.test.ts assertions expect cross-section resurrection and same-day remembering; conflicts recorded below. B4b/B4c retain runtime ownership. |
+| src/data/contracts/note-edit.ts | Use existing parsed spans to enforce exactly the three learned regions on writes | No read grammar changes. Existing ordinary ownership/MOC/profile/template behavior remains; round-3 author controls pass. Extra known regions before/after the About block refuse in supplemental checks. |
+| src/data/contracts/run-manifest.ts | Accept evidence-bound byte appends below the consolidation gate; preserve archive/frontier checks above it; allow cross-section Forget rebuild | No effect/schema/export change. Round-2/round-3 manifest controls pass, including 201 words/five observations versus 200 words/four observations. Supplemental checks refuse truncation, below-gate archive and append frontier. |
+
+### Verification and remaining contradictions
+
+Before editing, b4a-r3.test.ts reproduced exactly the four named reds, with all four
+b4a-r2.test.ts controls passing. Log: /private/tmp/b4a-r3-before.log.
+After the changes, all eight tests pass: /private/tmp/b4a-r3-after.log.
+Exact reds/greens are `b4a-r3 1 tombstone holds across sections, last word wins`,
+`b4a-r3 2 exactly the three ruled regions`, `b4a-r3 3 below budget a write is a plain append`,
+and `b4a-r3 4 remember, Forget, remember, Forget, remember: the third remember is live`.
+
+Additional assertions use production imports bundled from an OS-temp script; no test file
+was edited. They cover ten successive remember/Forget cycles, retained tombstones, an extra
+known region before the About regions, malformed stored extra regions on rewrite/admission,
+ordinary append to a nonempty payload, truncation refusal, below-gate archive/frontier refusal,
+and cross-section Forget rebuilding. All pass. Script and logs:
+/private/tmp/b4a-r3-validation/self-check.ts, self-check-build.log and self-check.log.
+
+Required commands (all stdout/stderr redirected to /private/tmp/b4a-r3-validation):
+
+```sh
+# From runner/:
+pnpm exec vitest run --maxWorkers=2 --config /private/tmp/b4a-r3-validation/runner.mjs --configLoader runner --no-cache
+# From the worktree root:
+pnpm exec vitest run src --maxWorkers=2 --config /private/tmp/b4a-r3-validation/app.mjs --configLoader runner --no-cache
+pnpm exec tsc --noEmit --incremental false -p tsconfig.app.json
+pnpm exec tsc --noEmit --incremental false -p tsconfig.node.json
+pnpm exec tsc --noEmit --incremental false -p runner/tsconfig.json
+pnpm exec eslint src/data/contracts/observations.ts src/data/contracts/note-edit.ts src/data/contracts/run-manifest.ts
+# From runner/:
+pnpm exec eslint src/spine/admitted.ts
+# From the worktree root:
+node scripts/check-unused-gate.mjs
+```
+
+Temporary Vitest configurations import the unchanged production configs and retain their
+plugins, environments and test lists. Cache, attachment, JSON and timer CPU report paths
+point to OS temp; the temporary timer setup changes only import/output paths. The full
+src suite's existing src/harness.test.ts:600-620 nevertheless creates three nested Playwright
+fixtures under repository test-results. This was discovered after they ran: those three
+new fixture directories were moved to /private/tmp/b4a-r3-validation/harness-fixtures;
+pre-existing artifacts were left alone. Thus the blanket no-repository-test-writes condition
+was not met during that existing harness test. No app/capabilities browser gate was started.
+
+App/node/runner tsc all pass after explicitly narrowing the parser's invalid result.
+ESLint passes separately under the app and runner configs; a combined invocation failed
+configuration discovery (multiple tsconfigRootDir candidates), not a code rule.
+Unused-code and unused-production-code gates pass at unchanged baselines of 3 and 33.
+Logs: tsc-app.log, tsc-node.log, tsc-runner.log, eslint-app.log, eslint-runner.log, unused.log.
+
+Full runner suite: 669 passed, 1 failed, 51 files. Full src suite: 5,767 passed,
+3 failed, 176 files, with the expected EPERM unhandled error. Logs/reports:
+/private/tmp/b4a-r3-validation/runner.log, runner.json, app.log and app.json.
+All round-1/round-2/round-3 regression tests pass. Every remaining failure/conflict:
+
+1. src/data/contracts/observations.test.ts:46, `b4a-ledger-identity-and-corruption`:
+   its "independent" fact has exactly the forgotten fact's text in about-you and
+   expects resurrection. Addendum 5 requires an empty live set. The same test's
+   later assertion at :51 also expects remembering on the tombstone's own date
+   (all fixture dates are 2026-10-11); the new ruling requires a strictly later date.
+   The full suite reports :46 first; :51 is a second contradictory assertion in
+   that test, identified from its fixtures. Neither assertion was changed.
+2. runner/test/admitted.test.ts:111,
+   `b4a-artifact-scope-and-order: runner admission scopes artifacts and note edits`:
+   its partial edit fixture has no beforeText or final text and expects admission.
+   The reused author cannot prove its region scope without those bytes, so admission
+   now refuses it. Complete round-3 admission controls still pass. No test was changed
+   and no missing-bytes compatibility bypass was added.
+3. src/docs.test.ts:134, `every change since the P2 freeze is listed`: the existing
+   commit 940a9394 is absent from the shared compatibility ledger. The requested
+   per-contract draft rows are above; this worker does not edit the shared ledger.
+4. src/e2e-port.test.ts:37, `a server from another worktree is never reused`: the
+   expected sandbox listen EPERM at 127.0.0.1 produces a timeout and one unhandled
+   error. No timeout, assertion, threshold or environment restriction was changed.
+
+No RUNNER_WRITES failure remains: runner/test/claude-provider.test.ts:600 already has
+observations.jsonl. No other full-suite failure or contradictory test was found.
+The implementation is delivered for review, but acceptance remains blocked on the
+frozen contradictory tests and shared compatibility bookkeeping. The worker card's
+blocked status follows WORKER.md's instruction to list every contradiction after the
+whole targeted suite; no approval or question is requested here.
+
+The runner owns commits, pnpm check and app/capabilities e2e on demo/fake; those gates
+were not run by this session. No pnpm check green mark is claimed. Runtime B4b/B4c
+wiring and any test repairs remain outside this change. The commit plan is
+.codex-commits.json: one production commit for four files and one notes-only commit.
