@@ -223,3 +223,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `75e64e67` | b4a-contract | none: tests only (B4a fix round 1 reds). |
 | `8c65d143` | b4a-contract | Ledger writes are checked by target identity, not declared path; fence markers handled in the one ownership parser for every note; damaged marks refuse the write; Forget tombstones facts only; events dedupe by id; About me rewrites need live fact ids and a confirmed archive; createdBy parents accepted; init adds a missing final newline (TL-P4-48 addendum 3). Stored bytes of valid notes unchanged. |
 | `e42e5e7e` | b4a-contract | none: tests only (run-manifest variants target their declared file; red 9 builds bytes with the production encoder). |
+| `0aaaa69d` | b4a-contract | none: tests only (B4a fix round 2 reds). |
+| `5b74e710` | b4a-contract | A Forget tombstone also matches the normalised fact text; initialization passes the same evidence check as any write; Forget and Undo rebuilds skip the budget and frontier gate and may leave a bare heading; Bower regions no longer depend on front matter; tsc app lib fixes. Older notes and ledgers parse as before. |
