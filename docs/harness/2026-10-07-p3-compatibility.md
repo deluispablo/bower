@@ -231,3 +231,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `2a1514ec` | b4a-contract | none: tests only (the two older B4a tests repaired to the addendum 5 ruling: fixtures only). |
 | `98abf5a3` | b4a-contract | none: tests only (B4a fix round 4 reds). |
 | `f7e98ffa` | b4a-contract | One learned-block validator is called by every About me write path (create, init, write-through, consolidation, Forget, Undo, rebuild): the heading plus exactly the three ruled regions, every line citing a live observation, no tombstoned text anywhere. Observation identity is source, hash and normalised text, without the section, so a replay dedupes and falls with Undo or Forget. Older notes and ledgers parse as before. |
+| `1a1eb673` | b4a-contract | none: tests only (the two older B4a tests repaired to the addendum 6 ruling: fixtures only). |
