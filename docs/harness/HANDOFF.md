@@ -40,8 +40,8 @@ This block is the whole current state; ACTIVE.md is the history log. A Codex suc
 
 | Entry | Branch / worktree | Last SHA | Attempt | Next step | Ruling |
 | --- | --- | --- | --- | --- | --- |
-| b1d-selection (escalated) | b1d-selection, /private/tmp/bower-b1d-selection | c14616cd+ea9eed90 | round 7 fix and red repair done (attempts 19, 20; check and capabilities e2e green in codex-run); Astra xhigh adversarial pass running (attempt 21, scratchpad jobs/b1d-adv7.sh, result /tmp/codex-run/b1d-selection-21.result) | Next: PASS or only v1 limits → Astra high review (new prompt, read-only) → integrate B1d (check the branch first); data-safety or hard-rule findings go to the lead. No compatibility row needed (only runner/src/claude.ts and runner tests changed). | TL-P4-41 addenda 13–24 |
-| b4a-contract (escalated) | b4a-contract, /private/tmp/bower-b4a-contract | 28316d36 | fix round 2 done (attempts 10, 11); runner pin and compatibility rows committed by the coordinator; gates b4a-g2 running (scratchpad: harness/jobs/gates.sh, results /tmp/gates-b4a-g2/) | Next: gates green → Astra xhigh pass 3 (new prompt from codex-b4a-adv-prompt.md with addenda 1–4 and adversarial-2); then the Astra high review; the loop end applies. After B1d integrates: merge claude/p3, then integrate. | TL-P4-48 addenda 1–4 |
+| b1d-selection (escalated) | b1d-selection, /private/tmp/bower-b1d-selection | c14616cd+ea9eed90 | pass 5 BLOCK (attempt 21), report b1d-adversarial-final-5.md; waiting on the lead's ruling on its data-safety finding (a merge rewrites links in an unselected note, claude.ts:1551); the 31-request cap is a v1 limit | Next: the ruling, then a fix round (red first), gates, Astra xhigh, Astra high review, integrate. | TL-P4-41 addenda 13–24 |
+| b4a-contract (escalated) | b4a-contract, /private/tmp/bower-b4a-contract | 28316d36 | gates b4a-g3 green (check, capabilities e2e demo and fake) at the newest b4a-contract commit | Next: Astra xhigh pass 3 (prompt from codex-b4a-adv-prompt.md with addenda 1–4 and adversarial-2), then the Astra high review; the loop end applies. | TL-P4-48 addenda 1–4 |
 
 **Queue, in order.**
 1. B1d close, then B4a.
