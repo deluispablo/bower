@@ -13,11 +13,11 @@ import { fakeRead } from '../../src/data/spine/read';
 import { SYSTEM } from '../../src/data/vault/layout';
 import { checkCreationName, MAX_NAME } from '../../src/data/tree';
 import { countsOf } from './modelled';
-import { AT, redispatchCase, replySequence } from './corpus-run';
+import { AT, redispatchCase, replySequence, runOnDrive } from './corpus-run';
 import { paging } from './drive-v3';
 import { writes } from './b23-hot-observe';
 import { candidates, completed, empty, fileIntent, folder, HUB, manifest, media, note, PERSONAL,
-  report, run, seedState, select, setup, leavesForNextRun, type Base, type Item } from './b1-planning-support';
+  report, run, seedState, select, setup, leavesForNextRun, reply, type Frame, type Base, type Item } from './b1-planning-support';
 
 const oldPageSize = paging.size;
 beforeEach(() => {
@@ -38,6 +38,31 @@ const twoSteps = (r: Awaited<ReturnType<typeof run>>) => {
   expect.soft(r.errors, 'valid selection is not refused as a tidy intent')
     .not.toContain('was refused');
 };
+
+it('b1-scripted-two-step-reply-freezes-every-execution-target', async () => {
+  const schedule = 'Resources/Schedule/Schedule.md';
+  const b = await setup({ folder: { ...folder, [schedule]: note('Remote developer offer schedule.',
+    '# Schedule\n\n## Current state\n\n## Timeline\n', true) } });
+  const intent = { ...fileIntent(b, 'Projects/Remote search/Developer offers'), lines: [
+    { note: HUB, text: 'Alex received the remote offer.', cites: b.sources[0]?.itemId },
+    { note: schedule, text: 'Alex will review the offer on Saturday.' },
+  ] };
+  const calls: Frame[] = [];
+  const spawn = phaseAwareClaude(async (call) => {
+    calls.push({ call, value: JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Record<string, unknown>, events: [] });
+    return reply(intent);
+  }, () => ({ drive: b.drive, root: b.root, admission: b.admission }));
+  const result = await runOnDrive(b.c, b.drive, b.root, { claude: spawn,
+    admission: b.admission, pacing: { baseMs: 0, sleep: async () => {} } }, 1);
+  expect(result.code).toBe(0);
+  expect(calls).toHaveLength(2);
+  expect(candidates(calls[0], b.sources[0]?.itemId ?? '')).toContain(b.id('Projects/Remote search'));
+  expect(JSON.stringify(calls[1]?.value)).toContain(b.id(HUB));
+  expect(JSON.stringify(calls[1]?.value)).toContain(b.id(schedule));
+  expect(result.after[HUB]).toContain('Alex received the remote offer.');
+  expect(result.after[schedule]).toContain('Alex will review the offer on Saturday.');
+  expect(result.after['Projects/Remote search/Developer offers/Offer.txt']).toBe(b.c.inboxFiles['Offer.txt']);
+});
 
 it('b1-index-job-offer', async () => {
   const b = await setup({ fixture: 'b1-index-job-offer' });

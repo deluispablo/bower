@@ -63,6 +63,24 @@ async function gardenFolder(spare = 0): Promise<{ drive: FakeDrive; root: string
 }
 
 describe('model input fingerprint', () => {
+  it('two identical C04 runs produce one fingerprint', async () => {
+    const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-garden-newsletter');
+    if (!c) throw new Error('the C04 garden newsletter case is missing');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fingerprints: string[] = [];
+    for (let run = 0; run < 2; run++) {
+      const calls: ClaudeCall[] = [];
+      const result = await runWithClaude(c, async (call) => {
+        calls.push(call);
+        return { code: 0, stderr: '', cut: null, stdout: envelope({ kind: 'tidy-intent', v: 1, things: [] }) };
+      });
+      expect(result.code).toBe(0);
+      expect(calls).toHaveLength(2);
+      fingerprints.push(createHash('sha256').update(normalizeModelInput(calls[0]?.input ?? '')).digest('hex'));
+    }
+    expect(new Set(fingerprints).size).toBe(1);
+  });
+
   it('the model input on the C04 fixture equals its golden copy', async () => {
     // The corpus case runs through main() on the Drive v3 fake with a fake spawn: the runner's own reads decide what the model sees.
     const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-garden-newsletter');

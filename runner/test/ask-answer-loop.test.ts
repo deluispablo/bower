@@ -215,7 +215,7 @@ async function shownWorld(): Promise<RealWorld> {
   const c = await corpusCase('c05-hub-lines');
   const hub = (c.folder[HUB] ?? '').replace('by: bower\n', `by: bower\nbower_state: ${stateMark(BOWER_LAST)}\n`).replace('- One application open.', PERSON.map((l) => `- ${l}`).join('\n'));
   proposed = [];
-  return await realWorld({ seed: (drive) => seedCase(drive, { ...c, scope: 'all', folder: { ...c.folder, [HUB]: hub }, inbox: [{ line: 'The offer came in.', files: ['Offer_letter_final(2).pdf'] }], journal: [], questions: [] }), claude: proposeUpdate });
+  return await realWorld({ seed: (drive) => seedCase(drive, { ...c, scope: 'all', folder: { ...c.folder, [HUB]: hub }, inbox: [{ line: 'The Job hunt offer came in.', files: ['Offer_letter_final(2).pdf'] }], journal: [], questions: [] }), claude: proposeUpdate });
 }
 type StoredQuestion = { id: string; text: string; state?: string; shown?: { lines: string[]; md5: string; stamp?: string } };
 const questionsNow = (text: string | null): StoredQuestion[] => (JSON.parse(text ?? '{"questions":[]}') as { questions: StoredQuestion[] }).questions;

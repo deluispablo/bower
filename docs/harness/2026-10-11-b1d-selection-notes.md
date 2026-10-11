@@ -2299,3 +2299,146 @@ All rows have exactly selection then execution. No measured deployment-latency o
 acceptance is claimed. Source observations: /var/folders/zg/53gb21k95_534c957t93xksw0000gn/T/b1d-selection-observations.ndjson.
 
 Final boundary: blocked pending the lead's new ruling; no fourth round, test edit or commit performed.
+
+
+## Sweep 4
+
+implementer: codex
+status: blocked; fixtures and item 5 prepared for the runner, not accepted or merge-ready.
+
+Authority: the owner's sweep-4 instruction and TL-P4-41 addendum 17. No network, git-writing command,
+node_modules replacement or symlink. Test reports, caches and diagnostics stay in OS temporary files.
+Production is unchanged except the explicitly authorized type-table pruning. The runner owns commits;
+`.codex-commits.json` specifies the exact two requested messages and assigns every changed file once.
+
+### Fixtures, assertion boundary and requested handoff mocks
+
+tests changed: runner/test/b1-planning-support.ts: phaseAwareClaude now binds every uncited lines/states target to an admitted selected source and includes its note id in wants. When filing selects a later source, uncited targets bind to that selected source rather than silently disappearing. Existing cited targets, pair pins and exact source/destination ids remain in the same helper.
+tests changed: runner/test/ask-answer-loop.test.ts: shownWorld's source words explicitly say Job hunt, making the proposed Applications parent's hub a real whole-word neighbourhood match; every shown-text, archive, re-ask and no-model assertion stays.
+tests changed: runner/test/b1-planning.test.ts: add a real-main positive control using the repaired helper, a visible new-folder parent, one cited hub and a separate uncited hub; both targets are frozen and actually written in exactly two semantic calls. Existing tests and assertions stay.
+tests changed: runner/test/c04-incorporation.test.ts: the scripted payslip proposal creates Money directly under visible Areas, using its existing responsibility, instead of proposing the two absent folders Money/Payslips. Corpus scoring and all assertions stay. No extra seeded note or traffic/golden pin was retained.
+tests changed: runner/test/model-input-fingerprint.test.ts: add a control with two identical C04 runs through main, each successful with exactly two calls, and exactly one normalized selection fingerprint. Existing raw/normalized golden assertions stay.
+tests changed: runner/test/type-table.test.ts: resolve typeTableOk/propertyValuesOk at their existing canonical note-format home after deleting the unused runner re-exports. No assertion changes or replacement implementations. The contracts requiring the deleted insertion/column functions remain red for the lead/B5b.
+
+Fixture changed: harness/corpus/c05-line-not-repeated/case.json: source words explicitly identify Job hunt,
+so the new Applications parent's hub is visible without broadening production neighbourhood authority.
+The affected transports already enter phaseAwareClaude through realWorld/runWithClaude/replySequence:
+ask-answer-loop, claude-provider, ask-only-lines, C04/C05 and q1-continuation. No second reply adapter added.
+The helper repair turns the uncited ask-only-lines case green without editing that test.
+
+The ten remaining b1-planning reds intentionally send invented ids, excess wants, invalid parents,
+extra keys, nested second folders or repeated invalid replies. They are the subject of those tests;
+replacing them with valid replies would remove their negative coverage. Their common helper at the
+old :257/current :262 asserts ledger-exhaustion/done, while production correctly treats their replies
+as validation failure under addendum 16. No assertion or negative subject was changed to hide that conflict.
+Only b1-cut-index-no-new-destination seeds the cut index. Other negative replies remain deliberately
+invalid on their named subject, rather than accidentally cut. The character/operation bound controls stay.
+
+B1a :488/:573/:643 do not contain handoff-less Drive mocks in this checkout. Their mocks are
+withMaintenance observation spies (:476/:554/:602); the adapter is the real RunnerDrive. Its real
+planReads.handoff is already implemented (:279), and main calls it after refreshPlanning (:427).
+The spies still assert a pre-refresh version or absence of a newly discovered hidden child at maintenance
+(:479/:558/:604). That assertion throws before original maintenance, causing the recorded failed run.
+Adding a stale fake listing or suppressing the real handoff would make a test pass by hiding the contract.
+All three are listed below and left for the lead, as required; no production fix follows this sweep.
+
+B23 :47 is not an invalid-reply fixture: its transport intentionally throws a pre-plan provider error.
+The failed status is correct; its unchanged main-return assertion expects 0 instead of the current 1.
+Hot recovery's two other tests pass. No hot code or fixture was changed.
+
+Existing assertion changes: none. The AST audit checks the byte-identical existing expect statements in
+changed files; the assertion-line diff contains no removed assertion lines. Only the two newly requested
+positive controls add assertions. Evidence: /tmp/b1d-sweep4-assertions.log and
+/tmp/b1d-sweep4-assertion-diff.log. No .only/.skip, bound increase or production workaround.
+
+removed: runner/src/type-table.ts whole-file row from harness/unused-production-baseline.json.
+removed: runner/src/type-table.ts re-export typeTableOk.
+removed: runner/src/type-table.ts re-export propertyValuesOk.
+removed: runner/src/type-table.ts insertTypeRow.
+removed: runner/src/type-table.ts firstMatchingRow.
+removed: runner/src/type-table.ts requestTableColumn.
+removed: imports used only by the deleted type-table exports; the tolerant reader and seed are unchanged.
+
+### Golden diff (only ruled inputs)
+
+Both golden comparisons pass. Regenerated from the round-3 measured C04 selection captures, then
+verified by the unchanged real-main golden assertions. The prompt prefix is byte-identical in both files.
+
+| Golden | Old chars / UTF-8 bytes | New chars / UTF-8 bytes | Exact changed context keys |
+| --- | ---: | ---: | --- |
+| runner/test/fixtures/model-input-c04.raw.golden.txt | 10830 / 10832 | 11605 / 11607 | types only (+775 chars): ordered eight-row B5a type table |
+| runner/test/fixtures/model-input-c04.golden.txt | 10832 / 10834 | 11502 / 11504 | types; foldersById, indexed, sources: ruled id/dictionary/version normalization (+670 chars total) |
+
+Raw SHA256: 724f6170ed0e4cf1c8affb2d1ec8fb125c0ab8043460e9cf4cdd58d566576fdc.
+Normalized SHA256: 2b74fe14c6e58978e1cb0855be9155f8dd18a013ce19d14655dfe8f5034bbb9e.
+No source text, prompt instruction, character budget, latency bound, traffic golden or assertion changed.
+The added identical-run control is green; the existing fresh-id and text-looking-like-an-id controls stay green.
+
+### Gates and remaining reds
+
+Baseline runner before edits: 654 passed, 37 failed, 691 total (/tmp/b1d-sweep4-before.{json,log}).
+Final full runner: 669 passed, 24 failed, 693 total; exit 1.
+Full src: 5689 passed, 1 failed, 5690 total; the expected sandbox server.listen restriction surfaces
+as the existing 5000 ms timeout in src/e2e-port.test.ts:37 (listen is :21). No app file changed.
+Runner tsc, ESLint on every touched TypeScript file, and both unused gate passes succeed.
+Unused baseline: 1 ordinary and 27 production findings, no fresh or stale findings.
+The 73 shared traffic/latency/per-thing/C04/C05 bounded-read pin tests all pass with their original assertions.
+No pnpm check or screen e2e: ui:false and their usual outputs/check marks write into the repository,
+contrary to the owner's test-output instruction. The specifically requested runner/src suites and gates ran.
+
+Commands (each redirects output to its OS-temp log):
+- pnpm -C runner exec vitest run --maxWorkers=2 --reporter=json --outputFile=/tmp/b1d-sweep4-verified.json --cache=false
+  log: /tmp/b1d-sweep4-verified.log
+- pnpm exec vitest run src --maxWorkers=2 --reporter=json --outputFile=/tmp/b1d-sweep4-src.json --cache=false
+  log: /tmp/b1d-sweep4-src.log
+- pnpm -C runner exec tsc --noEmit -p .
+  log: /tmp/b1d-sweep4-tsc.log
+- pnpm exec eslint runner/test/b1-planning-support.ts runner/test/ask-answer-loop.test.ts runner/test/b1-planning.test.ts runner/test/type-table.test.ts runner/test/model-input-fingerprint.test.ts runner/src/type-table.ts
+  log: /tmp/b1d-sweep4-eslint.log; final helper: /tmp/b1d-sweep4-helper-eslint.log
+- pnpm exec eslint runner/test/c04-incorporation.test.ts
+  log: /tmp/b1d-sweep4-c04-eslint.log
+- node scripts/check-unused-gate.mjs
+  log: /tmp/b1d-sweep4-unused.log
+- Shared-pin regression log/report: /tmp/b1d-sweep4-shared-pins.{log,json}.
+
+Every remaining runner red is listed below. The JSON report contains every soft assertion, not just its first.
+
+| File:line | Test | Cause / lead boundary |
+| --- | --- | --- |
+| runner/test/b1-planning.test.ts:133 | b1-cut-index-no-new-destination | Deliberately invalid selection/execution after one retry fails; unchanged leavesForNextRun :262 requires done/code 0 and ledger-only output. |
+| runner/test/b1-planning.test.ts:164 | b1-five-per-source | Deliberately invalid selection/execution after one retry fails; unchanged leavesForNextRun :262 requires done/code 0 and ledger-only output. |
+| runner/test/b1-planning.test.ts:193 | b1-pinned-and-script-notes-count-within-five | Deliberately invalid selection/execution after one retry fails; unchanged leavesForNextRun :262 requires done/code 0 and ledger-only output. |
+| runner/test/b1-planning.test.ts:209 | b1-selection-closed-ids | Deliberately invalid selection/execution after one retry fails; unchanged leavesForNextRun :262 requires done/code 0 and ledger-only output. |
+| runner/test/b1-planning.test.ts:286 | b1-target-injection | Deliberately invalid selection/execution after one retry fails; unchanged leavesForNextRun :262 requires done/code 0 and ledger-only output. |
+| runner/test/b1-planning.test.ts:353 | b1-question-candidate-binding | Deliberately invalid selection/execution after one retry fails; unchanged leavesForNextRun :262 requires done/code 0 and ledger-only output. |
+| runner/test/b1-planning.test.ts:540 | b1-expansion-is-not-a-read-picked-members-count-within-five | Deliberately invalid selection/execution after one retry fails; unchanged leavesForNextRun :262 requires done/code 0 and ledger-only output. |
+| runner/test/b1-planning.test.ts:561 | b1-new-subfolder-visible-parent-name-and-near-duplicate | Deliberately invalid selection/execution after one retry fails; unchanged leavesForNextRun :262 requires done/code 0 and ledger-only output. |
+| runner/test/b1-planning.test.ts:575 | b1-one-new-subfolder-per-item | Deliberately invalid selection/execution after one retry fails; unchanged leavesForNextRun :262 requires done/code 0 and ledger-only output. |
+| runner/test/b1-planning.test.ts:590 | b1-one-retry-per-step-four-calls-exhaustion-leaves-items-for-next-run | Deliberately invalid selection/execution after one retry fails; unchanged leavesForNextRun :262 requires done/code 0 and ledger-only output. |
+| runner/test/b1a-contract.test.ts:488 | B1a contract: pass 1 1: the committed cursor never passes an unreflected concurrent edit | Maintenance observation spy asserts the old listing after real handoff; throws before maintenance. Requested mock repair does not apply to this real adapter; lead must rule. |
+| runner/test/b1a-contract.test.ts:573 | B1a contract: pass 1 5: newly discovered hidden descendants advance only the cursor | Maintenance observation spy asserts the old listing after real handoff; throws before maintenance. Requested mock repair does not apply to this real adapter; lead must rule. |
+| runner/test/b1a-contract.test.ts:643 | B1a contract: round 3 1: vanished indexed notes drop without failing and ordinary edits refresh | Maintenance observation spy asserts the old listing after real handoff; throws before maintenance. Requested mock repair does not apply to this real adapter; lead must rule. |
+| runner/test/b23-hot-recovery.test.ts:47 | B3b hot: pre-plan failure and done redispatch send no hot writes | Intentional pre-plan provider exception returns code 1; unchanged assertion requires code 0. Not a hot-recovery fixture failure. |
+| runner/test/claude-provider.test.ts:262 | a responsibility does not open a new Project | Intentional responsibility-only new Project is refused after one retry; unchanged assertion requires done, contrary to invalid-reply failure ruling. |
+| runner/test/claude-provider.test.ts:365 | a thing with text and no note or citing line is refused and retried once | Intentional invalid reply/process error fails with code 1; unchanged legacy assertion requires code 0/done. Cannot make this valid without removing its refusal subject. |
+| runner/test/claude-provider.test.ts:409 | a second refusal ends the run honestly | Intentional invalid reply/process error fails with code 1; unchanged legacy assertion requires code 0/done. Cannot make this valid without removing its refusal subject. |
+| runner/test/claude-provider.test.ts:468 | a malformed or out-of-schema Claude reply fails truthfully and writes nothing | Intentional invalid reply/process error fails with code 1; unchanged legacy assertion requires code 0/done. Cannot make this valid without removing its refusal subject. |
+| runner/test/claude-provider.test.ts:529 | the Claude provider runs under the original permission policy and never logs the token | Intentional invalid reply/process error fails with code 1; unchanged legacy assertion requires code 0/done. Cannot make this valid without removing its refusal subject. |
+| runner/test/claude-provider.test.ts:723 | a Claude reply that targets a thing not admitted is refused and writes nothing | Intentional invalid reply/process error fails with code 1; unchanged legacy assertion requires code 0/done. Cannot make this valid without removing its refusal subject. |
+| runner/test/claude-provider.test.ts:763 | the runner computes ids and digests, never the model | Intentional invalid reply/process error fails with code 1; unchanged legacy assertion requires code 0/done. Cannot make this valid without removing its refusal subject. |
+| runner/test/q1-continuation.test.ts:373 | Q1a q1-options-exact-action: two to four script candidates accepted and fabricated or fifth refused | Deliberately fabricated/fifth/payload/outside/not-folder option is refused; unchanged main-return assertion requires 0 instead of 1. |
+| runner/test/type-table.test.ts:52 | B5a contracts: b5-row-schema-and-order | Item 5 explicitly deletes the unused production export this B5a contract still requires; no test-side copy or assertion weakening added. |
+| runner/test/type-table.test.ts:152 | B5a contracts: b5-explicit-column-replaces-fourth | Item 5 explicitly deletes the unused production export this B5a contract still requires; no test-side copy or assertion weakening added. |
+
+Remaining src red: src/e2e-port.test.ts:37, expected sandbox socket-listen restriction/time-out;
+no production regression inferred from that environment-only failure.
+
+Offline research reused from the packet, without independent network verification:
+- https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+- https://arxiv.org/html/2506.08837v1
+- https://platform.claude.com/docs/en/build-with-claude/prompt-caching
+
+Stop boundary: fixture repairs are reviewable, assertions remain intact, all required gates ran.
+The remaining assertion contracts need the lead's ruling. No fourth production implementation round,
+mock that hides stale/fresh listing semantics, test implementation of deleted production functions,
+new performance pin or integration is performed. No merge-readiness or acceptance is claimed.

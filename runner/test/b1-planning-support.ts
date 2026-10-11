@@ -105,12 +105,17 @@ export function phaseAwareClaude(
       ...rows('keep').flatMap((r) => [r.kept, r.other])];
     // A journal or words source supplies uncited news/pair context; it grants no invented source id.
     if (pairPaths.length && available[0] && !available.some((id) => used.has(id))) used.add(available[0]);
+    const uncitedSource = available.find((id) => used.has(id)) ?? available[0];
+    if (unboundPaths.length && uncitedSource) used.add(uncitedSource);
     if (unboundPaths.length || pairPaths.length) {
       for (const id of available) if (journal.has(id) || context.piles.some((p) => p.pileId === id && !p.things.length)) used.add(id);
     }
     const items = available.filter((id) => used.has(id)).map((itemId): Item => {
       const row = placed.find((r) => r.fileId === itemId || r.pileId === itemId);
-      const targetPaths = [...rows('lines'), ...rows('states')].filter((r) => r.cites === itemId).map((r) => r.note);
+      const targetPaths = [...rows('lines'), ...rows('states')]
+        .filter((r) => r.cites === itemId || (typeof r.cites !== 'string' || !available.includes(r.cites))
+          && (journal.has(itemId) || itemId === uncitedSource))
+        .map((r) => r.note);
       const path = typeof row?.to === 'string' ? row.to
         : typeof targetPaths[0] === 'string' ? targetPaths[0].slice(0, targetPaths[0].lastIndexOf('/')) : 'Resources';
       const existing = paths.get(path);
