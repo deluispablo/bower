@@ -128,7 +128,7 @@ export interface NewPile {
 }
 
 export interface Question {
-  options?: QuestionOption[];
+  options?: Pick<QuestionOption, 'id' | 'label'>[];
   /** Pile words at asking, so an edit resets the asking. */
   words?: string;
   id: string;

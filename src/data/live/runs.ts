@@ -65,6 +65,7 @@ export class LiveRuns implements RunSource {
   private readonly onVisible = (): void => {
     if (document.visibilityState === 'visible') void this.returnToForeground();
   };
+  private readonly questionsChanged: () => void;
 
   constructor(
     private readonly worker: WorkerApi,
@@ -73,7 +74,10 @@ export class LiveRuns implements RunSource {
     private readonly fastMs = FAST_MS,
     /** A replaced session starts idle; its first accepted status tells stable subscribers. */
     private announceIdle = false,
+    /** The concrete vault of this lifetime; the I/O door above may wrap methods asynchronously. */
+    questionVault: DriveVault = vault,
   ) {
+    this.questionsChanged = questionVault.bindRunQuestions(() => this.disposed ? [] : this.last?.questions ?? []);
     if (typeof document !== 'undefined') document.addEventListener('visibilitychange', this.onVisible);
   }
 
@@ -83,6 +87,7 @@ export class LiveRuns implements RunSource {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     this.listeners.clear();
+    this.questionsChanged();
     if (reset) {
       this.last = null;
       this.revision = -1;
@@ -255,6 +260,7 @@ export class LiveRuns implements RunSource {
     // Eligible idle replies retain their API meaning; request tickets and admission generations reject stale ones.
     if (!wire) {
       this.last = null;
+      if (before) this.questionsChanged();
       this.took = new Set();
       if (before || this.announceIdle) {
         this.announceIdle = false;
@@ -278,6 +284,7 @@ export class LiveRuns implements RunSource {
     if (finished(wire)) this.took = new Set();
     else if (before?.id !== wire.id) this.took = new Set(piles ?? []);
     if (changed) {
+      this.questionsChanged();
       // A run that starts or ends changes how often the Worker is asked.
       if (finished(before) !== finished(wire) || !before !== !wire) this.schedule();
       if (!finished(wire) || this.reports.has(wire.id)) this.emit();
