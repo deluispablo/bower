@@ -1016,3 +1016,46 @@ Final src failures (complete list; no test edits):
 Final app/runner suites were followed only by explanatory comment changes and this
 notes append; no runtime or assertion changed after those suites. `.codex-commits.json`
 lists exactly three groups: production, tests and notes alone. No git commit was made.
+
+
+## Pin repair (TL-P4-47 addendum 9)
+
+Scope: test pins only, following addenda 8 and 9 and the last waiting-for-lead
+contradiction. No production code, creating-run pins (99), cold creation ceiling,
+retained 110-call control or time bounds changed. No remaining 96 pins in runner/test.
+
+The existing-table control is named "reading the type table: one media read".
+Its phases are reads 26, apply 55, checkpoints 4, report 10 and runner 2;
+token, model and status remain 0, totaling 97. timing-counts previously covered only
+creation, so its 99-call test is preserved and a separate existing-table control added.
+Both controls reuse the existing valid-table fixture pattern and measured main run.
+
+tests changed: runner/test/drive-calls-golden.test.ts: raw existing-table total 96 -> 97, named "reading the type table: one media read".
+tests changed: runner/test/drive-calls-golden.test.ts: timing existing-table total 96 -> 97, named "reading the type table: one media read".
+tests changed: runner/test/drive-calls-golden.test.ts: existing-table reads phase 25 -> 26, named "reading the type table: one media read"; other phases unchanged.
+tests changed: runner/test/timing-counts.test.ts: added existing-table total 97 and reads 26 control, named "reading the type table: one media read"; creating total 99 unchanged.
+
+Verification (all commands local; no network or git writes):
+
+- Red: both targeted files, --maxWorkers=2: 7 passed / 1 failed;
+  existing-table raw calls expected 96, received 97 at drive-calls-golden.test.ts:49.
+  Log: /tmp/b5b-pin-red.log.
+- Green: both targeted files, --maxWorkers=2: 9 passed, 2 files.
+  Log: /tmp/b5b-pin-targeted.log; JSON: /tmp/b5b-pin-targeted.json.
+- Full runner suite, --maxWorkers=2: 755 passed, 59 files, exit 0.
+  Log: /tmp/b5b-pin-runner.log; JSON: /tmp/b5b-pin-runner.json.
+- Runner tsc --noEmit -p .: exit 0; /tmp/b5b-pin-tsc.log.
+- ESLint on both touched test files: exit 0; /tmp/b5b-pin-eslint.log.
+
+Reporting mistake: the initial red command inherited Vitest's repository JSON output
+(runner/test-results/unit.json, ignored). Later commands explicitly override outputFile.json
+to OS temp. Console logs always went to OS temp. No test source or production change
+was made for reporting; the generated red report was removed after verification.
+
+Sources: local ruling docs/harness/DECISIONS.md, TL-P4-47 addenda 8 and 9;
+existing golden and timing-counts tests, and the last waiting-for-lead section above.
+No external citation independently checked under the no-network instruction.
+
+Left out: pnpm check and capabilities/folder-table e2e belong to the runner after commits.
+Risk: those deferred gates remain unverified here. The commit manifest separates tests
+from this notes-only commit; no commits were made by this session.
