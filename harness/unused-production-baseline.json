@@ -5,7 +5,6 @@
     "duplicates src/data/contracts/run-phases.ts RUN_STEPS=ACTIVE_PHASES",
     "exports api/src/env.ts OPTIONAL_SECRETS",
     "exports api/src/github.ts dispatchTidy",
-    "exports runner/src/claude.ts selectionOf",
     "exports src/data/contracts/hashes.ts EMPTY_SHA256",
     "exports src/data/contracts/note-edit.ts undoChanges",
     "exports src/data/contracts/note-edit.ts undoEdit",
@@ -31,7 +30,6 @@
     "types src/data/drive/fake-drive.ts FaultAction"
   ],
   "reasons": {
-    "exports src/data/contracts/note-format.ts validSummary": "B2b wires it (TL-P4-42 addendum 1); B2b removes this line",
-    "exports runner/src/claude.ts selectionOf": "B1d wires the selection reply (TL-P4-42 addendum 1 pattern); B1d removes this line"
+    "exports src/data/contracts/note-format.ts validSummary": "B2b wires it (TL-P4-42 addendum 1); B2b removes this line"
   }
 }
