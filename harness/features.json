@@ -7139,7 +7139,7 @@
     "id": "messages-wait-for-sheets",
     "task": "p4-consolidation",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "While a sheet is open, messages wait: the Dock shows nothing and timers pause, then the stack returns with its remaining time (spec 2026-10-11-messages-wait-for-sheets.md).",
     "steps": [
