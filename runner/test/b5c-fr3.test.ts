@@ -86,7 +86,7 @@ for (const missing of [false, true]) {
     const { result, filed, profileText } = await execute(b, 'Alex skills.txt');
     expect(result.frames).toHaveLength(2);
     expect(filed.name).toBe('Alex skills.txt');
-    expect(payload(profileText ?? '')).toBe(`${FACT} [[${CAREER}/Alex skills.txt]]\n`);
+    expect(payload(profileText ?? '')).toBe(`${FACT} [[Alex skills]]\n`);
   });
   it(`b5c-fr3-rename-${mode}`, async () => {
     const b = await fixture({ missing });
@@ -104,7 +104,7 @@ it('b5c-fr3-id-name control: an identifier-free passport name offers and cites i
   const { result } = await execute(b);
   expect(result.frames).toHaveLength(2);
   expect(offered(result, b.sources[0]?.itemId ?? '')).toEqual([{ sentence: 1, text: FACT }]);
-  expect(payload(result.after[PROFILE] ?? '')).toBe(`${FACT} [[${CAREER}/Alex passport.txt]]\n`);
+  expect(payload(result.after[PROFILE] ?? '')).toBe(`${FACT} [[Alex passport]]\n`);
 });
 it('b5c-fr3-id-name', async () => {
   const b = await fixture({ name: 'Alex passport ID-884422.txt' });
@@ -135,7 +135,7 @@ it('b5c-fr3-crlf control: an LF-wrapped sentence is offered and copied whole', a
   const { result } = await execute(b);
   expect(result.frames).toHaveLength(2);
   expect(offered(result, b.sources[0]?.itemId ?? '')).toEqual([{ sentence: 1, text: 'Alex does not\nuse TypeScript.' }]);
-  expect(payload(result.after[PROFILE] ?? '')).toBe(`Alex does not\nuse TypeScript. [[${CAREER}/${CV}]]\n`);
+  expect(payload(result.after[PROFILE] ?? '')).toBe(`Alex does not\nuse TypeScript. [[Alex CV]]\n`);
 });
 it('b5c-fr3-crlf', async () => {
   const b = await fixture({ text: 'Alex does not\r\nuse TypeScript.' });
@@ -145,5 +145,5 @@ it('b5c-fr3-crlf', async () => {
     profile: payload(result.after[PROFILE] ?? ''),
   }, 'normalize CRLF to LF before numbering the single wrapped sentence, preserving its whole denial')
     .toEqual({ offered: [{ sentence: 1, text: 'Alex does not\nuse TypeScript.' }],
-      profile: `Alex does not\nuse TypeScript. [[${CAREER}/${CV}]]\n` });
+      profile: `Alex does not\nuse TypeScript. [[Alex CV]]\n` });
 });

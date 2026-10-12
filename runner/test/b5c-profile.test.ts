@@ -234,9 +234,9 @@ it('b5-cv-profile-through-main', async () => {
   const corpus = await run(cv, [selection, JSON.parse(bound) as unknown]);
   expect.soft(corpus.code, 'CV corpus main admits the whole referenced source sentence').toBe(0);
   expect(corpus.frames).toHaveLength(2);
-  expect.soft(corpus.after[PROFILE]).toContain(framed('profile', `${span} [[Areas/Career/Originals/Alex CV.txt]]\n[[Career]]\n`));
+  expect.soft(corpus.after[PROFILE]).toContain(framed('profile', `${span} [[Alex CV]]\n[[Career]]\n`));
   const b = await profileBase(); const result = await mainProfile(b, [1]);
-  copied(result, `${FACT} [[Areas/Career/${SOURCE}]]\n[[Earlier CV]]\n`); expect(result.after[PROFILE]).toMatch(/\[\[[^\]]*Alex CV/);
+  copied(result, `${FACT} [[Alex CV]]\n[[Earlier CV]]\n`); expect(result.after[PROFILE]).toMatch(/\[\[[^\]]*Alex CV/);
   expect(result.after[PROFILE]).not.toContain(PREVIOUS); preserved(b, result);
 });
 
@@ -263,7 +263,7 @@ it('b5-profile-five-note-budget', async () => {
   const allowed = result.frames[1]?.value.allowedTargets as Record<string, string[]>;
   for (const s of b.sources) { expect(allowed[s.itemId]).toContain(b.id(PROFILE)); expect((allowed[s.itemId] ?? []).filter((id) => id !== b.id('Areas/Career')).length).toBeLessThanOrEqual(5); }
   expect(planningReads).toHaveLength(1); expect(edits(result, b.id(PROFILE))).toHaveLength(1);
-  copied(result, `${FACT} [[Areas/Career/${SOURCE}]]\n${FACT} [[Areas/Career/Second CV.txt]]\n[[Earlier CV]]\n`);
+  copied(result, `${FACT} [[Alex CV]]\n${FACT} [[Second CV]]\n[[Earlier CV]]\n`);
   const saturated = await profileBase({ names: [SOURCE, 'Second CV.txt'] });
   const over = await run(saturated, [select(saturated, [...wants, saturated.id('Areas/Career/Neighbour 3.md')], 'Areas/Career')]);
   expect(over.code, 'six requested notes refused before execution').toBe(1);
@@ -277,7 +277,7 @@ it('b5-two-cvs-one-edit control: two CVs file and the existing author can restor
 });
 it('b5-two-cvs-one-edit', async () => {
   const b = await profileBase({ names: [SOURCE, 'Second CV.txt'] }); const result = await mainProfile(b, [1]);
-  copied(result, `${FACT} [[Areas/Career/${SOURCE}]]\n${FACT} [[Areas/Career/Second CV.txt]]\n[[Earlier CV]]\n`);
+  copied(result, `${FACT} [[Alex CV]]\n${FACT} [[Second CV]]\n[[Earlier CV]]\n`);
   const planned = edits(result, b.id(PROFILE)); expect(planned).toHaveLength(1);
   expect(planned[0]?.changes?.filter((c) => c.kind === 'profile-rewrite')).toHaveLength(1);
   expect(result.after[PROFILE]).toMatch(/\[\[[^\]]*Alex CV/); expect(result.after[PROFILE]).toMatch(/\[\[[^\]]*Second CV/);
@@ -314,7 +314,7 @@ it('b5-first-document-creates-profile', async () => {
   for (const file of await b.drive.listAll(b.root)) if (!file.folder && file.name.endsWith('.md')
     && (await b.drive.readText(file.id)).includes('begin profile')) profiles.push(file);
   expect(profiles).toHaveLength(1);
-  copied(first, `${FACT} [[Areas/Career/${SOURCE}]]\n`, b.drive.pathOf(profiles[0]?.id ?? '', b.root));
+  copied(first, `${FACT} [[Alex CV]]\n`, b.drive.pathOf(profiles[0]?.id ?? '', b.root));
   const stored = JSON.parse(first.after[TABLE] ?? 'null') as { rows: Array<{ profile: { template: string } }> };
   expect(stored.rows[0]?.profile).toEqual({ template: 'profile' });
   expect(first.after[TABLE]).toBe(b.c.folder[TABLE]);
@@ -337,7 +337,7 @@ it('b5-first-document-creates-profile', async () => {
     const reused = await run(b, [selection, itemReply(b, [1])], { press: 2 });
     expect(reused.code).toBe(0);
     expect(edits(reused, id)).toHaveLength(1);
-    copied(reused, `Alex uses TypeScript and SQL. [[Areas/Career/Later CV.txt]]\n[[Areas/Career/${SOURCE}]]\n`,
+    copied(reused, `Alex uses TypeScript and SQL. [[Later CV]]\n[[Alex CV]]\n`,
       b.drive.pathOf(id, b.root));
     expect(reused.after[TABLE]).toBe(first.after[TABLE]);
   }
@@ -398,7 +398,7 @@ it('b5-profile-current-state-edit', async () => {
   const b = await profileBase(); const intent = { ...itemReply(b, [1]), states: [{ note: PROFILE, lines: [FACT], cites: b.sources[0]?.itemId }] };
   const first = await run(b, [select(b, [b.id(PROFILE)], 'Areas/Career'), intent]);
   expect(first.code, 'profile and C05 share ordinary note effects').toBe(0);
-  copied(first, `${FACT} [[Areas/Career/${SOURCE}]]\n[[Earlier CV]]\n`);
+  copied(first, `${FACT} [[Alex CV]]\n[[Earlier CV]]\n`);
   expect(currentStateOf(bytes(first.after[PROFILE] ?? ''))).toMatchObject({ owner: 'bower', lines: [FACT] });
   expect(first.after[PROFILE]).toMatch(/\[\[[^\]]*Alex CV/); expect(first.after[PROFILE]).toContain(HISTORY);
   const file = await b.drive.get(b.id(PROFILE)); const person = (first.after[PROFILE] ?? '').replace('- Alex uses TypeScript.', '- Alex keeps the search paused.');
@@ -417,7 +417,7 @@ it('b5-profile-document-authority', async () => {
   await rejectedProfile(identity, [3], /profile.*reference|offered/i);
   const qualified = await profileBase({ kind: 'certificate', names: ['Certificate.txt'], text: 'Alex uses TypeScript. Alex has a TypeScript certificate.\n' });
   const result = await mainProfile(qualified, [2]);
-  copied(result, 'Alex has a TypeScript certificate. [[Areas/Career/Certificate.txt]]\n[[Earlier CV]]\n');
+  copied(result, 'Alex has a TypeScript certificate. [[Certificate]]\n[[Earlier CV]]\n');
 });
 
 it('b5-profile-read-to-act-fence control: unchanged inputs file with settled outcomes', async () => {
@@ -425,7 +425,7 @@ it('b5-profile-read-to-act-fence control: unchanged inputs file with settled out
 });
 it('b5-profile-read-to-act-fence', async () => {
   const stable = await profileBase(); const control = await mainProfile(stable, [1]); expect(edits(control, stable.id(PROFILE))).toHaveLength(1);
-  copied(control, `${FACT} [[Areas/Career/${SOURCE}]]\n[[Earlier CV]]\n`);
+  copied(control, `${FACT} [[Alex CV]]\n[[Earlier CV]]\n`);
   for (const race of ['bytes', 'name', 'place'] as const) {
     const b = await profileBase(); const id = b.id(PROFILE); let raced = false;
     const result = await mainProfile(b, [1], { around: (fetch) => async (input, init) => {
@@ -457,7 +457,7 @@ it('b5-profile-template-compatibility control: real links and personal typed Sou
 it('b5-profile-template-compatibility', async () => {
   await rejectedProfile(await profileBase(), [999], /profile.*reference|offered/i);
   const b = await profileBase(); const result = await mainProfile(b, [1]); expect(result.after[PROFILE]).toContain('begin profile');
-  copied(result, `${FACT} [[Areas/Career/${SOURCE}]]\n[[Earlier CV]]\n`);
+  copied(result, `${FACT} [[Alex CV]]\n[[Earlier CV]]\n`);
   const sourcePath = 'Areas/Career/Alex CV.md'; expect(result.after[sourcePath]).toBeDefined();
   const replay = await redispatchCase(b.c, result, 2, { pacing: { sleep: async () => undefined } });
   expect(replay.after[sourcePath]).toBe(result.after[sourcePath]); preserved(b, result);
@@ -488,7 +488,7 @@ it('b5-profile-property-first-create', async () => {
   expect(profiles, 'first document creates exactly one profile carrying the row id').toHaveLength(1);
   const profile = profiles[0]; expect(profile).toBeDefined(); if (!profile) return;
   const text = await b.drive.readText(profile.id);
-  copied(result, `${FACT} [[Areas/Career/${SOURCE}]]\n`, b.drive.pathOf(profile.id, b.root));
+  copied(result, `${FACT} [[Alex CV]]\n`, b.drive.pathOf(profile.id, b.root));
   expect(text).toContain('begin profile'); expect(text).toContain(FACT); expect(text).toMatch(/\[\[[^\]]*Alex CV/);
   expect(parseOwnership(bytes(text)).status).toBe('v2');
   expect(result.errors).toBe(''); expect(result.frames).toHaveLength(2);
@@ -522,7 +522,7 @@ it('b5-profile-property-second-document', async () => {
   const result = await propertyRun(b, [1], 2);
   expect(edits(result, id), 'one listing match updates the existing profile by id').toHaveLength(1);
   const text = await b.drive.readText(id);
-  copied(result, 'Alex uses TypeScript and SQL. [[Areas/Career/Later CV.txt]]\n'
+  copied(result, 'Alex uses TypeScript and SQL. [[Later CV]]\n'
     + '[[Earlier CV]]\n', 'Projects/Job hunt/Earlier skills.md');
   expect(text).toContain('Alex uses TypeScript and SQL.'); expect(text).toMatch(/\[\[[^\]]*Later CV/);
   expect(text).not.toContain(PREVIOUS); expect(text).toContain(PERSONAL); expect(text).toContain(HISTORY);

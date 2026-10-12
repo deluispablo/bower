@@ -106,9 +106,9 @@ it('b5c-fr2-refs-bytes', async () => {
   await ordinaryControl('Alex uses TypeScript. Alex builds café tools!');
   const b = await fixture('Alex uses TypeScript. Alex builds café tools! Alex uses SQL.');
   const result = await selected(b, refs(b, 1, 2),
-    `${FACT} [[${CAREER}/${CV}]]\nAlex builds café tools! [[${CAREER}/${CV}]]\n`);
+    `${FACT} [[Alex CV]]\nAlex builds café tools! [[Alex CV]]\n`);
   expect(new TextEncoder().encode(payload(result.after[PROFILE] ?? ''))).toEqual(new TextEncoder().encode(
-    `${FACT} [[${CAREER}/${CV}]]\nAlex builds café tools! [[${CAREER}/${CV}]]\n`));
+    `${FACT} [[Alex CV]]\nAlex builds café tools! [[Alex CV]]\n`));
   expect(payload(result.after[PROFILE] ?? '')).not.toContain('Alex uses SQL.');
 });
 
@@ -128,7 +128,7 @@ it('b5c-fr2-made-up-index control: a source without profile refs files', async (
 it('b5c-fr2-made-up-index', async () => {
   await ordinaryControl();
   const b = await fixture();
-  await selected(b, refs(b, 1), `${FACT} [[${CAREER}/${CV}]]\n`);
+  await selected(b, refs(b, 1), `${FACT} [[Alex CV]]\n`);
   const invalid = await fixture();
   await refused(invalid, refs(invalid, 999));
 });
@@ -152,7 +152,7 @@ it('b5c-fr2-select-denial control: an omitted denial changes no profile', async 
 it('b5c-fr2-select-denial', async () => {
   await ordinaryControl(DENIAL);
   const b = await fixture(DENIAL);
-  await selected(b, refs(b, 1), `${DENIAL} [[${CAREER}/${CV}]]\n`);
+  await selected(b, refs(b, 1), `${DENIAL} [[Alex CV]]\n`);
 });
 
 for (const count of [1, 401]) {
@@ -180,7 +180,7 @@ it('b5c-fr2-400-words', async () => {
   // The existing writer counts the two-word citation: 398 source words plus it is exactly 400.
   const sentence = `${Array(398).fill('TypeScript').join(' ')}.`;
   const b = await fixture(sentence);
-  const result = await selected(b, refs(b, 1), `${sentence} [[${CAREER}/${CV}]]\n`);
+  const result = await selected(b, refs(b, 1), `${sentence} [[Alex CV]]\n`);
   expect(payload(result.after[PROFILE] ?? '').trim().split(/\s+/u)).toHaveLength(400);
   const over = await fixture(`${Array(401).fill('TypeScript').join(' ')}.`);
   await refused(over, refs(over, 1));
