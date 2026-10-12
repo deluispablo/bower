@@ -63,6 +63,13 @@ Read the adopted planning revision, PRODUCT, WORK_PLAN and current phase accepta
 
 Boundary assignments follow `docs/ARCHITECTURE.md`: preserve consumer compatibility, test versioned fixtures and recovery, and keep shared schema changes serialized. Read only the affected contract sections. The coordinator uses `docs/harness/ORCHESTRATOR_START.md` for dependency order; bounded P2 probes do not authorize P3 implementation.
 
+## Progress guards (TL-P4-62, owner 2026-10-12)
+
+- **Gate hygiene.** Every heavy run goes through `harness/with-lock.sh`, which gives it its own process group and a wall-clock limit, and kills the whole group on exit, on a timeout or on a kill, so no browser or worker outlives its run. Before a gate, check for orphaned Playwright or Chrome-for-testing processes and kill them. A gate that times out is a failure to diagnose, not to rerun.
+- **One rerun at most.** A gate that fails twice on the same spec is a defect: log it, diagnose it, and bring the lead the cause. Never a third run.
+- **Escalate early.** Message the lead at once when an entry has had no commit for 2 hours, or when a gate has run for more than 25 minutes.
+- **Round cap.** After the contract, an entry gets at most 2 adversarial fix rounds. Then the lead rules: remaining normal-use findings become v1 limits, and a data-safety finding narrows the entry's scope (the sub-feature moves to a later entry) instead of a third round.
+
 ## Codex models (TL-P4-57)
 
 Pass `--model`, `--effort` and `--tier` to every `harness/codex-run.sh` run. Every run uses `--tier standard`. At most **2** Codex workers at once. Normal implementation, fix rounds and reds use `gpt-6.1-sol` at `medium`, and mechanical work uses it at `low`. Escalated work, adversarial passes and closing reviews use `gpt-6.1-sol` at `high`. `gpt-6-astra` and `xhigh` are not used (TL-P4-57 addendum 2: the owner's Codex quota).

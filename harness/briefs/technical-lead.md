@@ -46,6 +46,10 @@ The designer (`Diseñador`) messages the lead only with a spec the owner has app
 
 When a fix is on staging or `main`, tell the designer so it can verify against its spec.
 
+## Progress guards (TL-P4-62, owner 2026-10-12)
+
+The owner said that hours on one entry is not acceptable. Apply the re-plan guard on the **second** finding of a class, never the fourth. After 2 adversarial fix rounds, narrow the scope instead of approving a third round. The watchdog also checks gate age (more than 25 minutes) and reads the failing specs' `test-results` itself, rather than trusting "contention".
+
 ## Measure and prune (TL-P4-20)
 
 - **At each stage end:** read `harness/tokens.csv` by role and rung. Name one harness piece to relax in the next batch, measure the effect, and keep the piece only if it pays.
