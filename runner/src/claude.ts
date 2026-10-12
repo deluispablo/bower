@@ -50,7 +50,7 @@ import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { answersAsking, checkedAnswer, journalAnswer, proposalOk, type QuestionAnswer, subjectKey, subjectOf } from '../../src/data/contracts/questions';
 import type { Proposal, Question, TypeRow } from '../../src/data/contracts/types';
 import { modelDecisions, namedNotes, personalAppendHistory, planScripted, requestTargets, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
-import { MAX_NAME, NAME_BREAKERS } from '../../src/data/contracts/tree';
+import { MAX_NAME, NAME_BREAKERS, thingName } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
 import { RUNNER_WRITES, SYSTEM } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
@@ -896,7 +896,13 @@ const WEB = /\b(?:https?:\/\/|www\.)[^\s<>()[\]]+/gi;
 function profileSources(text: string, ix: VaultIndex): ProfileSources {
   return [...text.matchAll(WIKI_LINK)].map((match) => {
     const path = (match[1] ?? '').trim();
-    const file = ix.file(path) ?? ix.file(`${path}.md`);
+    let file = ix.file(path) ?? ix.file(`${path}.md`);
+    if (!path.includes('/')) {
+      const matches = [...ix.entries().keys()].map((entry) => ix.file(entry)).filter((candidate) =>
+        candidate && !candidate.folder && candidate.appProperties?.bowerItem === undefined
+        && (candidate.name.toLowerCase() === path.toLowerCase() || thingName(candidate.name).toLowerCase() === path.toLowerCase()));
+      file = matches.length === 1 ? matches[0] : undefined;
+    }
     return { path: match[0], ...(file ? { fileId: file.id } : {}) };
   });
 }
