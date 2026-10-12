@@ -6,7 +6,7 @@ Coordinator: the Claude Code session named "Orquestador". It integrates in `/Use
 
 This block is the whole current state; ACTIVE.md is the history log. A Codex successor follows [CODEX_TAKEOVER.md](CODEX_TAKEOVER.md).
 
-**State (STOP 2026-10-12, TL-P4-61; READY).**
+**State (STOP 2026-10-12 at 99% Claude usage, TL-P4-61; READY).**
 - claude/p3 (main checkout) carries everything integrated: B4b (cd75a643, close ccd3fd19) and lock-process-group (dd1491bc, TL-P4-62), plus rulings up to TL-P4-47 addendum 21 (main ba7c65ff). 528/542 entries pass.
 - backup/main is at 9bca6989 (verified remote). claude/p3 and main are ahead by B4b, lock-process-group and the harness commits. The next batch boundary needs harness/jobs/suites.sh, `git -C repo fetch -q . claude/p3:main`, backup-scan.sh 9bca6989, the backup of main per BACKUP.md, the SHA to the lead and a staging deploy by the lead.
 - Jobs running: none (the B5c addendum 21 test-repair attempt 32 failed with codex-failed; its chained implementation attempt 33 was killed at the STOP and left no diff).
@@ -33,14 +33,14 @@ This block is the whole current state; ACTIVE.md is the history log. A Codex suc
 
 | Entry | Branch / worktree | Last SHA | Next step | Ruling |
 | --- | --- | --- | --- | --- |
-| b5c (escalated) | b5c, /private/tmp/bower-b5c | 0af0cf2f (claude/p3 merged, clean tree) | TL-P4-47 addendum 21: (1) test repair (Sol medium): rewrite b5c-fr1-D-profile-data and the five b5c-fr7 tests to assert the citation [[source name]] stays untrusted data with NO fileId (do not weaken the fence assertions); the repair attempt codex-failed once (b5c-32), rerun it; (2) implementation (Sol high): DELETE the shortest-name to fileId binding and the Source-note/bowerItem filter in runner/src/claude.ts (~:896-910); (3) compat rows, gates (gates.sh; g10 was green before this change), a fresh closing review (Sol high), NO more adversarial passes; (4) integrate (known-green with a Close note: the verify names runner/test/b5c-*.test.ts); no designer (not ui). | addendum 21 |
+| b5c (escalated) | b5c, /private/tmp/bower-b5c | 56a95016 (clean tree; claude/p3 merged) | TL-P4-47 addendum 21. DONE: the test repair (attempt 32: cfbfe182 tests, 56a95016 notes). Its notes say the rewritten no-id cases (b5c-fr1-D-profile-data, the b5c-fr7 tests) already PASS against current production, so they are not yet reds. NEXT: (2) implementation (Sol high, attempt 34): DELETE the shortest-name to fileId binding and the Source-note/bowerItem filter in runner/src/claude.ts (~:896-910) (dead code now; check that the unused/duplication gates stay at baseline); (3) compat rows, gates (gates.sh), a fresh closing review (Sol high), NO more adversarial passes; (4) integrate (known-green with a Close note: the verify names runner/test/b5c-*.test.ts); no designer (not ui). The STOP killed the first attempt-33 start (no diff). | addendum 21 |
 | b6b-fit-create-ask | b6b-fit-create-ask, /private/tmp/bower-b6b-fit-create-ask | 5d0313a3 | red done; merge claude/p3, implementation (packet 2026-10-11-b6b-fit-create-ask-packet.md), gates, adversarial (max 2 fix rounds), review, designer (ui), integrate. Starts right after B5c. | TL-P4-47 |
 | b7-tags | b7-tags, /private/tmp/bower-b7-tags | 01839270 | red done; implementation after B6b | TL-P4-49 |
 | b8-log | b8-log, /private/tmp/bower-b8-log | a397198f | red done; implementation after B7 | TL-P4-49/50 |
 | b9-markers | b9-markers, /private/tmp/bower-b9-markers | c81406ae | format/producer reds done; implementation after B8 (one entry, three serial stages) | TL-P4-50 |
 | B4c / rules-* | not started | | per P4_PLAN, after B6b | |
 
-- A job's result card is /tmp/codex-run/<entry>-<n>.result; a check-failed status on a red is expected; on a fix, read the notes' newest section and the check log. Last attempt numbers: b5c 33 (killed); b4b closed.
+- A job's result card is /tmp/codex-run/<entry>-<n>.result; a check-failed status on a red is expected; on a fix, read the notes' newest section and the check log. Last attempt numbers: b5c 33 (killed, no result); b4b closed.
 - Pending designer checks: B6b (ui). B5c, B7, B8, B9 are not ui.
 
 **Queue, in order.** B5c (addendum 21), then B6b, B7, B8, B9, then B4c and rules-added-region-model / rules-added-region / rules-original-ui per P4_PLAN, then the retest. A batch boundary (suites, main move, backup, staging) is due after B5c.
