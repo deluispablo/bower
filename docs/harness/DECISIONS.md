@@ -700,3 +700,9 @@ One line per ruling, newest last. Read only the decision a task needs. Later rul
   - **Sentences that carry identifiers are not offered.** The script never numbers a sentence with a run of 4 or more digits, or a token that mixes letters and digits. This is an offered-set rule, not a blocklist. It closes 2.
   - **One profile path.** The profile template is used only by the profile admission. Any other create or typeRow that names it is refused, and the 400-word cap is enforced by the script. This closes 3.
   One round (Sol high, red first), then only data-safety or hard-rule findings come back
+- TL-P4-47 addendum 17 (B5c adversarial pass 3: a model-chosen file name injects link syntax into a citation). The root is names, not profiles, so the fix goes in the shared homes:
+  - (1) **One name rule.** The existing name validation for every Bower create and rename refuses `[`, `]`, `|`, `#`, `^` and control characters, Obsidian's link-breaking set. It applies to all filing, not only to profile sources. A refused name falls back to the existing safe-name path, or the move is refused, whichever that home already does.
+  - (2) **One link renderer.** Citations go through the existing link renderer, from the destination the script resolved, never from model text.
+  - (3) A source whose name carries an identifier-like token (addendum 16's rule) is not offered as a profile contributor.
+  - CRLF is normalized to LF before sentence numbering if that is a one-line change in the splitter; otherwise it is a v1 limit.
+  One round (Sol high, red first): the pass-3 rename case, the ID-named source, and a plain filing rename carrying `]]`
