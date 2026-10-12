@@ -343,3 +343,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-11: spine-operations-checkpoints passes — spine-operations-checkpoints passes: re-proved after the B5b named pin rise (TL-P4-47 addenda 8 and 9)
 - 2026-10-11: b5b-tables passes — B5b: typed facts, the folder Table, proposals and the type table file (design verified, P4-123 answered)
 - 2026-10-11: b4b-observations passes — B4b: observations, Forget by quote, ledger settlement and the words-item Bin (P4-124 PASS)
+- 2026-10-12: lock-process-group passes — Heavy runs get their own process group and a time limit (TL-P4-62)

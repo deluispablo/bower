@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # The four batch suites on the main checkout (claude/p3); logs to /tmp/suites-*.
 set -uo pipefail
+# Clear browsers left by an interrupted gate before starting another.
+pkill -f ms-playwright || true
+pkill -f "headless.*[Cc]hrome|[Cc]hrome.*headless" || true
 repo="$(cd "$(dirname "$0")/../.." && pwd)" # the main checkout this script lives in
 echo "sha $(git -C "$repo" rev-parse --short HEAD)"
 pnpm -C "$repo" check > /tmp/suites-check.log 2>&1; echo "check=$?"
