@@ -2,6 +2,9 @@
 # Coordinator gates (check, e2e demo and fake on the named specs) beside a read-only Codex adversarial pass.
 # usage: gates-and-pass.sh <worktree> <adversarial prompt> <tag> <e2e spec>...
 set -uo pipefail
+# Clear browsers left by an interrupted gate before starting another.
+pkill -f ms-playwright || true
+pkill -f "headless.*[Cc]hrome|[Cc]hrome.*headless" || true
 wt="$1"; prompt="$2"; tag="$3"; shift 3
 specs=("$@")
 out="/tmp/gates-$tag"; mkdir -p "$out"

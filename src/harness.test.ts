@@ -377,6 +377,83 @@ describe('the harness', () => {
     });
   const fixtureDir = () => mkdtempSync(join(tmpdir(), 'lock-'));
 
+  const childGone = async (file: string): Promise<boolean> => {
+    const pid = Number(readFileSync(file, 'utf8').trim());
+    const deadline = Date.now() + 1000;
+    while (Date.now() < deadline) {
+      try { process.kill(pid, 0); } catch { return true; }
+      await new Promise<void>((resolve) => { setImmediate(resolve); });
+    }
+    process.kill(pid, 'SIGKILL');
+    return false;
+  };
+
+  it('with-lock process group kills a background child after command exit', async () => {
+    const dir = fixtureDir();
+    const pid = join(dir, 'child');
+    const run = await runLocked(join(dir, 'lock'), `sleep 60 >/dev/null 2>&1 & echo $! > ${pid}; echo original-output`);
+    expect(await childGone(pid)).toBe(true);
+    expect(run).toEqual({ status: 0, out: 'original-output\n' });
+  });
+
+  it('with-lock process group times out and kills its child', async () => {
+    const dir = fixtureDir();
+    const pid = join(dir, 'child');
+    const run = spawnSync('bash', [lockScript, 'bash', '-c', `sleep 60 >/dev/null 2>&1 & echo $! > ${pid}; wait`], {
+      env: lockTestEnv({ HARNESS_LOCK: join(dir, 'lock'), HARNESS_TIMEOUT: '1' }),
+      encoding: 'utf8', timeout: 3500,
+    });
+    expect(await childGone(pid)).toBe(true);
+    expect(run.status).toBe(124);
+    expect(run.stdout + run.stderr).toContain('timed out');
+    expect(spawnSync('/usr/bin/lockf', ['-k', '-t', '0', join(dir, 'lock'), 'true']).status).toBe(0);
+  });
+
+  it('with-lock process group kills children when the wrapper is signalled', async () => {
+    for (const signal of ['SIGTERM', 'SIGKILL'] as const) {
+      const dir = fixtureDir();
+      const pid = join(dir, 'child');
+      const wrapper = spawn('bash', [lockScript, 'bash', '-c', `sleep 60 >/dev/null 2>&1 & echo $! > ${pid}; echo ready; wait`], {
+        env: lockTestEnv({ HARNESS_LOCK: join(dir, 'lock') }),
+      });
+      const closed = new Promise<void>((resolve) => { wrapper.on('close', () => { resolve(); }); });
+      await new Promise<void>((resolve) => { wrapper.stdout.once('data', () => { resolve(); }); });
+      wrapper.kill(signal);
+      await closed;
+      expect(await childGone(pid), signal).toBe(true);
+      expect(spawnSync('/usr/bin/lockf', ['-k', '-t', '0', join(dir, 'lock'), 'true']).status).toBe(0);
+    }
+  });
+
+  it('with-lock process group passes a failure once and waits for a held lock', async () => {
+    const dir = fixtureDir();
+    const lock = join(dir, 'lock');
+    const release = join(dir, 'release');
+    const ran = join(dir, 'ran');
+    const first = spawn('bash', [lockScript, 'bash', '-c', `echo held; until [ -e ${release} ]; do sleep 0.05; done`], {
+      env: lockTestEnv({ HARNESS_LOCK: lock }),
+    });
+    const finished = new Promise<void>((resolve) => { first.on('close', () => { resolve(); }); });
+    await new Promise<void>((resolve) => { first.stdout.once('data', () => { resolve(); }); });
+    const second = spawn('bash', [lockScript, 'bash', '-c', `echo run >> ${ran}; echo failed-once; exit 75`], {
+      env: lockTestEnv({ HARNESS_LOCK: lock }),
+    });
+    let out = '';
+    const result = new Promise<number | null>((resolve) => { second.on('close', resolve); });
+    await new Promise<void>((resolve) => {
+      second.stdout.on('data', (data: Buffer) => { out += data.toString(); if (out.includes('Waiting:')) resolve(); });
+      second.on('close', () => { resolve(); });
+    });
+    const ranEarly = existsSync(ran);
+    writeFileSync(release, '');
+    await finished;
+    expect(await result).toBe(75);
+    expect(ranEarly).toBe(false);
+    expect(readFileSync(ran, 'utf8')).toBe('run\n');
+    expect(out).toMatch(/Waiting:.*pid \d+/);
+    expect(out).toContain('failed-once');
+  });
+
   it('two checks started together run one after the other', async () => {
     const dir = fixtureDir();
     const times = join(dir, 'times.txt');
@@ -595,13 +672,13 @@ describe('the harness', () => {
     for (const f of ['playwright.config.ts', 'e2e/pwa.config.ts']) expect(readFileSync(f, 'utf8')).toMatch(/forbidOnly:\s*true/);
   });
   // A flaky e2e (TL-P4-20): a batch run (E2E_BATCH=1) retries once and fails what passes only on retry, unless quarantined.
-  // The fixture is written here, under test-results/, so no normal suite ever runs it. It uses the real playwright.config.ts.
+  // The fixture stays in the OS temp folder and uses the real playwright.config.ts.
   const flakyRun = (quarantine: unknown, batch = true): { status: number | null; out: string } => {
-    mkdirSync(join(process.cwd(), 'test-results'), { recursive: true });
-    const dir = mkdtempSync(join(process.cwd(), 'test-results/fx-'));
+    const dir = mkdtempSync(join(tmpdir(), 'harness-flaky-'));
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ type: 'module' }));
     const counter = join(dir, 'attempts.txt');
     writeFileSync(join(dir, 'once.spec.ts'), [
-      "import { test, expect } from '@playwright/test';",
+      `import { test, expect } from ${JSON.stringify(join(process.cwd(), 'node_modules/@playwright/test/index.mjs'))};`,
       "import { appendFileSync, readFileSync, existsSync } from 'node:fs';",
       `const counter = ${JSON.stringify(counter)};`,
       "test('fixture fails once then passes', () => {",

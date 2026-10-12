@@ -2,6 +2,9 @@
 # Coordinator gates: check, then e2e demo and fake on the named specs.
 # usage: gates.sh <worktree> <tag> <e2e spec>...
 set -uo pipefail
+# Clear browsers left by an interrupted gate before starting another.
+pkill -f ms-playwright || true
+pkill -f "headless.*[Cc]hrome|[Cc]hrome.*headless" || true
 wt="$1"; tag="$2"; shift 2
 specs=("$@")
 out="/tmp/gates-$tag"; mkdir -p "$out"
