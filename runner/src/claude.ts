@@ -899,7 +899,7 @@ function profileSources(text: string, ix: VaultIndex): ProfileSources {
     let file = ix.file(path) ?? ix.file(`${path}.md`);
     if (!path.includes('/')) {
       const matches = [...ix.entries().keys()].map((entry) => ix.file(entry)).filter((candidate) =>
-        candidate && !candidate.folder && candidate.appProperties?.bowerItem === undefined
+        candidate && !candidate.folder && candidate.appProperties?.by !== 'bower'
         && (candidate.name.toLowerCase() === path.toLowerCase() || thingName(candidate.name).toLowerCase() === path.toLowerCase()));
       file = matches.length === 1 ? matches[0] : undefined;
     }
