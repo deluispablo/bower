@@ -6,46 +6,15 @@ Coordinator: the Claude Code session named "Orquestador". It integrates in `/Use
 
 This block is the whole current state; ACTIVE.md is the history log. A Codex successor follows [CODEX_TAKEOVER.md](CODEX_TAKEOVER.md).
 
-**State.**
-- claude/p3 holds main up to TL-P4-48 addendum 4 (1ac0b793, merged): 523/537.
-- After each lead ruling, merge main again (`git -C /Users/deluisp/Projects/bower-app merge -q --no-edit main`).
-- Check `git -C /Users/deluisp/Projects/bower-app branch --show-current` before each integrate. An owner Codex Desktop thread once switched the checkout to main (DEFECT_LOG main-checkout-switched).
-- backup/main and staging are at 5bab1288.
-- Since then, claude/p3 has gained B1c, Q1c, B3b, B5a, B6a, c02/E, messages-wait-for-sheets, next-steps-plain-list and q1b-questions-ui. The next batch boundary needs:
-  - the four suites (harness/jobs/suites.sh);
-  - main moved (`git -C repo fetch -q . claude/p3:main`);
-  - a backup after harness/jobs/backup-scan.sh 5bab1288;
-  - the SHA sent to the lead;
-  - a staging smoke.
-- **B4a is CLOSED and integrated (59c2c7ad); B5b is CLOSED and integrated (ef9545d5, 526/541). Batch boundary (lead go, main 5448b51f): four suites green at a9e3350f (check, e2e 633, fake 679, pwa 12); next main move, backup scan, push, then the lead deploys staging and I run the smoke (live Claude off). Then resume B5c, B4b, B6b, B7, B8, B9. Codex intensity (TL-P4-57 addendum 1, main d380d1a4; owner reset the usage on 2026-10-11).** Every run passes `--tier standard` (no Fast). Sol medium for normal work and repairs, Sol high for escalated work and closing reviews, Sol low for mechanical work; Astra high only for adversarial passes, never xhigh. Max 3 workers. A third failed attempt on the same red goes to the lead (no 4th run).
-- **STOP rule (TL-P4-61, main cafff851):** at 99% of Claude's weekly usage the lead sends STOP: start nothing new, commit partial diffs on their branches, make HANDOFF and ACTIVE exact for Codex, reply "READY <sha>". Keep both current at every step anyway.
-- Staging deployed from 9bca6989 (lead); unsigned smoke ok (health, bundle index-O4f-KhaV.js, app 200); the signed-in garden/offer/hub smoke needs the owner to sign in, live Claude off.
-- Lead: TL-P4-47 addendum 12 (main 23a4a64d): B5c builds the profile mechanisms; signed-in smoke skipped (owner checks at the retest deploy). Jobs running (2 of 3): B5c reds 3 (jobs/b5c-red3.sh, attempt 3) and B4b implementation (jobs/b4b-impl.sh, Sol high, attempt 2). B5c implementation follows B4b.
-- B5c reds 3 DONE (b5c 8fc4986d). B4b implementation BLOCKED on a lead ruling (maintenance sealer lifecycle; asked, b4b 621f6802); no jobs running. B5c implementation follows B4b.
-- TL-P4-48 addendum 11 (main 199215ca): index.ts, main.ts, run-manifest.ts allocated to B4b; withMaintenance is the one finalizer. Running (1 of 3): jobs/b4b-red3-impl.sh (red repair attempt 4, then implementation attempt 5, chained).
-- B4b: attempt 5 delivered (1fe76408; compat row added). TL-P4-48 addendum 12 (main 5b5f4b40) allocates observations.ts, report.ts, grounded.ts; running (1 of 3) jobs/b4b-red4-impl.sh (red repair attempt 6, impl attempt 7).
-- B4b: attempt 7+8 delivered, gates g1 green, adversarial 1 BLOCK (6 findings) -> TL-P4-48 addendum 13 (main 89f1416f): one fix round for all 6. Running (1 of 3): jobs/b4b-fr1.sh (red attempt 10, impl 11). Then gates, adversarial 2, fresh review, integrate.
-- Codex quota (TL-P4-57 addendum 2, main 31a749ec): max 2 workers; gpt-6.1-sol only, --tier standard (low mechanical, medium implementation/reds/fix rounds, high escalated/adversarial/closing reviews); no Astra, no xhigh.
-- B4b fix round 1 delivered (0643b023 + compat row), adversarial 2 BLOCK -> TL-P4-48 addendum 14 (main 2de8fe14) re-plan: ledger only authority, About me learns from words only with verbatim quote. Running (1 of 2): jobs/b4b-fr2.sh (red 13, impl 14, Sol high). After it only data-safety/hard-rule findings go to the lead.
-- B4b: fix round 2 + test repair + compat rows done (b4b 22a211bb); adversarial 3 BLOCK (2 data safety) -> TL-P4-48 addendum 15 (main 08119264). Running (1 of 2): jobs/b4b-fr3.sh (red 17, impl 18, Sol high). Then gates, adversarial 4 (only data-safety/hard-rule to lead), fresh review, integrate.
-- B4b: fix round 3 + test repair + dup fix delivered (b4b 52406f58..), adversarial 4 BLOCK (declared piles) -> TL-P4-48 addendum 16 (main aea759a6). Running (1 of 2): jobs/b4b-fr4.sh (red 22, impl 23, Sol high). Then gates, adversarial 5, fresh review, integrate.
-- B4b: fix round 4 delivered (3188747e) but 254 older tests fail; TL-P4-48 addendum 17 (main c58a5140): item Bin for consumed words items only, guard in the finalizer only (not on stored reads). Running (1 of 2): jobs/b4b-fr5.sh (impl 24, Sol high). Then a test-fixture repair for new-plan fixtures, gates, adversarial 5, fresh review, integrate.
-- B4b: rounds 5 + repair done (b4b 8a6ab10b..), gates g5 green, adversarial 5 BLOCK (Forget misbinding) -> TL-P4-48 addendum 18 (main e9d47e36). Running (1 of 2): jobs/b4b-fr6.sh (red 27, impl 28, Sol high). Then gates, adversarial 6, fresh review, integrate.
-- B4b: fix round 6 + test repair delivered (b4b 1eb9cb67); TL-P4-48 addendum 19 (main f2ecd785): Forget quote matches live+tombstoned facts, tombstoned = no-op success. Running (1 of 2): jobs/b4b-fr7.sh (impl 30, Sol high). Then gates, adversarial 6, fresh review, integrate.
-- **B4b CLOSED and integrated (cd75a643; close ccd3fd19; 527/541).** Not yet backed up (last backup 9bca6989). Running (1 of 2): jobs/b5c-impl.sh (B5c implementation attempt 4, Sol high). Queue after: B6b, B7, B8, B9.
-- B5c: implementation attempt 4 blocked (e830e56e); TL-P4-47 addendum 13 (main 99ea4a6f): reserveFor for the profile id, grounded.ts allocated, planning reads only. Running (1 of 2): jobs/b5c-r13.sh (test repair 5, implementation 6).
-- B5c: TL-P4-47 addendum 14 (main 732b5f4f): profile found by app property profile=<row id>, no engine/manifest change. Running (1 of 2): jobs/b5c-r14.sh (reds 7, implementation 8).
-- B5c: adversarial 1 BLOCK (5 findings) -> TL-P4-47 addendum 15 (main 2bb05d0b): spans verbatim and cited, full-text checks, dependency on every source move, untrusted-data fence. Running (1 of 2): jobs/b5c-fr1.sh (red 11, impl 12, Sol high). Then gates, adversarial 2, fresh review, designer not needed (not ui), integrate.
-- B5c: adversarial 2 BLOCK -> TL-P4-47 addendum 16 (main 4f848b3f) re-plan: sentence refs, the script copies, offered-set rule, profile template only via profile admission. Running (1 of 2): jobs/b5c-fr2.sh (red 15, impl 16). Then test repair, gates, adversarial 3, review, integrate.
-- B5c: adversarial 3 BLOCK (citation path) -> TL-P4-47 addendum 17 (main 3ad1e411): shared name validation, citations via the link renderer, ID-named sources not offered. Running (1 of 2): jobs/b5c-fr3.sh (red 19, impl 20). Then test repair, gates, adversarial 4, review, integrate.
-- B5c: adversarial 4 BLOCK (destination path) -> TL-P4-47 addendum 18 (main 47442ec0): citation is only [[source name]]. Running (1 of 2): jobs/b5c-fr4.sh (red 22, impl 23). Then test repair if any, gates, adversarial 5, review, integrate.
-- B5c: fix round 4 + test repair delivered (b5c 3d5b341b), one test left; TL-P4-47 addendum 19 (main 21b5964b): shortest-name link resolves by unique name lookup. Running (1 of 2): jobs/b5c-fr5.sh (impl 25, Sol high). Then gates, adversarial 5, review, integrate.
-- **TL-P4-62 progress guards (main 6e6528d5; coordinator.md):** gates via with-lock (own process group, 25 min limit), kill orphan Playwright/Chrome before each gate; a gate failing twice on the same spec is a defect (no third run); message the lead after 2 h without a commit or a gate older than 25 min; at most 2 adversarial fix rounds after the contract (B5c: adversarial 6 is the last). Running: lock-process-group (jobs/lock-pg.sh, Sol medium, attempt 1) in bower-lock-process-group; B5c gates g9 (/tmp/gates-b5c-g9.out). B5c adversarial 6 reruns after g9 (killed run looped).
-- (old) Jobs running (0 of 3): none. B5c reds 2 was refused (dirty tree at launch, nothing ran); relaunch jobs/b5c-red2.sh after the smoke. Every later implementation (B5c, B4b, B6b, B7, B8, B9) shares scripted.ts or claude.ts and waits for B5b, in the queue order. B5b attempt 4 is done and waits for B4a.
-- Finished and waiting for slots: B6b reds (done), B7 packet (b7-tags 06e89b5c) and B8 packet (b8-log 6ae4813c): review each, merge into claude/p3, add the features.json entry, then their reds.
-- When a job ends, read the result's card. A check-failed status on a red is expected; on a fix, read the notes' newest round and the check log.
-- Pending designer checks: none yet (B5b needs one when built).
-- Pending designer checks: none (B1d and B4a are ui: false).
+**State (STOP 2026-10-12, TL-P4-61; READY).**
+- claude/p3 (main checkout) carries everything integrated: B4b (cd75a643, close ccd3fd19) and lock-process-group (dd1491bc, TL-P4-62), plus rulings up to TL-P4-47 addendum 21 (main ba7c65ff). 528/542 entries pass.
+- backup/main is at 9bca6989 (verified remote). claude/p3 and main are ahead by B4b, lock-process-group and the harness commits. The next batch boundary needs harness/jobs/suites.sh, `git -C repo fetch -q . claude/p3:main`, backup-scan.sh 9bca6989, the backup of main per BACKUP.md, the SHA to the lead and a staging deploy by the lead.
+- Jobs running: none (the B5c addendum 21 test-repair attempt 32 failed with codex-failed; its chained implementation attempt 33 was killed at the STOP and left no diff).
+- After each lead ruling merge main (`git -C /Users/deluisp/Projects/bower-app merge -q --no-edit main`), then claude/p3 into the entry worktree. Check `git branch --show-current` before each integrate.
+- Progress guards (TL-P4-62): heavy runs only via harness/with-lock.sh (own process group, HARNESS_TIMEOUT 25 min default); kill orphan Playwright/Chrome before each gate; a gate failing twice on the same spec is a defect (never a third run); message the lead after 2 h without a commit or a gate older than 25 min; at most 2 adversarial fix rounds after the contract.
+- Codex quota (TL-P4-57 addendum 2): at most 2 workers; gpt-6.1-sol only, --tier standard (low mechanical, medium implementation/reds/fix rounds, high escalated work/adversarial/closing reviews); no Astra, no xhigh.
+- Prompts and job scripts of this session: /private/tmp/claude-501/-Users-deluisp-Projects-bower-app/19ca090d-5e3d-4a2f-899c-8f2af3d7d836/scratchpad/ (codex-b5c-r21-red-prompt.md, codex-b5c-r21-impl-prompt.md, jobs/b5c-r21.sh); copy them if the scratchpad is gone. Fold /tmp/codex-run/tokens-pending.csv into harness/tokens.csv at the next boundary.
+- **STOP rule (TL-P4-61):** at 99% Claude usage the lead sends STOP: start nothing new, commit partial diffs on their branches, make HANDOFF and ACTIVE exact, reply READY <sha>.
 
 **Loop per entry (TL-P4-29/31/51/54, TL-P4-56 addendum 1, TL-P4-57).** Workers are Codex only, through `harness/codex-run.sh <worktree> <prompt> --entry <id> --attempt <n> --model … --effort …`. The result is `/tmp/codex-run/<entry>-<n>.result`, and codex-run commits per `.codex-commits.json`: a JSON array of {message, files}, with notes in their own commit so done.sh can revert the fix.
 - **Models:** escalated reds, implementations and closing reviews use gpt-6-astra high. Adversarial passes use gpt-6-astra xhigh. Normal and fix rounds use gpt-6.1-sol high, and mechanical work uses Sol medium. Cap: 4.
@@ -62,23 +31,20 @@ This block is the whole current state; ACTIVE.md is the history log. A Codex suc
 
 **In flight.**
 
-| Entry | Branch / worktree | Last SHA | Attempt | Next step | Ruling |
-| --- | --- | --- | --- | --- | --- |
-| b4b-observations (escalated) | b4b-observations, /private/tmp/bower-b4b-observations | 967527b4 | red done (attempt 1: 8 named reds fail, 6 unimplemented memory controls red; commits ef9be63e, 967527b4) | The implementation owns src/data/spine/scripted.ts, which B5b is changing now, so it starts after B5b integrates (merge claude/p3 first; Sol high). Then compatibility rows, gates, adversarial, review; B4c after it. | TL-P4-48 |
-| b5c | b5c, /private/tmp/bower-b5c | claude/p3 merged | B5b is integrated; red attempt 2 (the nine remaining reds, Sol medium, standard tier) RUNNING (/private/tmp/claude-501/-Users-deluisp-Projects-bower-app/19ca090d-5e3d-4a2f-899c-8f2af3d7d836/scratchpad/jobs/b5c-red2.sh, result /tmp/codex-run/b5c-2.result) | Next: the implementation (attempt 3, Sol medium; the packet says normal), compatibility rows, gates, Astra high adversarial, Sol high review, integrate. B4b, B6b, B7, B8 and B9 follow on scripted.ts and claude.ts, in the queue order. | TL-P4-47 |
-| b6b-fit-create-ask | b6b-fit-create-ask, /private/tmp/bower-b6b-fit-create-ask | 5d0313a3 | red done (attempt 1, six reds fail on findings, controls pass; worktree commits 8da71c0f, 5d0313a3) | Next: the implementation after B5b/B5c release scripted.ts and claude.ts (B1d is integrated); compatibility rows; gates; review. | TL-P4-47; lead GO for red-first |
-| b7-tags | b7-tags, /private/tmp/bower-b7-tags | 01839270 | red done (attempt 2; 15 rows fail, one already passes; commits a47cf6e8, 01839270); open seams in the notes: the automatic-candidate declaration and the complete generation-route matrix | Waits for B4a, B5b and B5c where files overlap; then the implementation (Sol high). | TL-P4-49 |
-| b8-log | b8-log, /private/tmp/bower-b8-log | a397198f | red done (attempt 2; 19 of 20 named reds fail, b8-done-redispatch-noop already passes; commits 0966ba19, a397198f); the settled B7 decision coverage is incomplete | Waits for B4a/B5b where files overlap; then the implementation. | TL-P4-50 |
-| b9-markers | b9-markers, /private/tmp/bower-b9-markers | c81406ae | format and producer reds done (attempt 1: 8 reds fail, 4 already green, 12 controls pass; commits e4964ff7, c81406ae); the proof stage (corpus, H1/H2 files) comes after the implementation stages; C07 semantic acceptance pending | Waits for B4a, B5b and B5c to release the shared files; then the implementation stages serially (format, producers, proof), one review chain at the end. | TL-P4-50 (B9) |
+| Entry | Branch / worktree | Last SHA | Next step | Ruling |
+| --- | --- | --- | --- | --- |
+| b5c (escalated) | b5c, /private/tmp/bower-b5c | 0af0cf2f (claude/p3 merged, clean tree) | TL-P4-47 addendum 21: (1) test repair (Sol medium): rewrite b5c-fr1-D-profile-data and the five b5c-fr7 tests to assert the citation [[source name]] stays untrusted data with NO fileId (do not weaken the fence assertions); the repair attempt codex-failed once (b5c-32), rerun it; (2) implementation (Sol high): DELETE the shortest-name to fileId binding and the Source-note/bowerItem filter in runner/src/claude.ts (~:896-910); (3) compat rows, gates (gates.sh; g10 was green before this change), a fresh closing review (Sol high), NO more adversarial passes; (4) integrate (known-green with a Close note: the verify names runner/test/b5c-*.test.ts); no designer (not ui). | addendum 21 |
+| b6b-fit-create-ask | b6b-fit-create-ask, /private/tmp/bower-b6b-fit-create-ask | 5d0313a3 | red done; merge claude/p3, implementation (packet 2026-10-11-b6b-fit-create-ask-packet.md), gates, adversarial (max 2 fix rounds), review, designer (ui), integrate. Starts right after B5c. | TL-P4-47 |
+| b7-tags | b7-tags, /private/tmp/bower-b7-tags | 01839270 | red done; implementation after B6b | TL-P4-49 |
+| b8-log | b8-log, /private/tmp/bower-b8-log | a397198f | red done; implementation after B7 | TL-P4-49/50 |
+| b9-markers | b9-markers, /private/tmp/bower-b9-markers | c81406ae | format/producer reds done; implementation after B8 (one entry, three serial stages) | TL-P4-50 |
+| B4c / rules-* | not started | | per P4_PLAN, after B6b | |
 
-**Queue, in order.** (The lead's order for free slots: B6b red, then B7, B8 and B9 reds; B5c's red once B5b's red is committed; B4b and B4c after B4a settles.)
-1. B1d close, then B4a.
-2. B5b and B5c (packets ruled by TL-P4-47 addendum 5; they wait for B1d's claude.ts handoff; the designer confirmed B5b's table).
-3. B4b, then B4c (after B4a and B1d).
-4. B6b, after B1d (TL-P4-47).
-5. rules-added-region-model, after B1d. Then rules-added-region, then rules-original-ui.
-6. B7, B8 and B9 per P4_PLAN.
-7. The retest.
+- A job's result card is /tmp/codex-run/<entry>-<n>.result; a check-failed status on a red is expected; on a fix, read the notes' newest section and the check log. Last attempt numbers: b5c 33 (killed); b4b closed.
+- Pending designer checks: B6b (ui). B5c, B7, B8, B9 are not ui.
+
+**Queue, in order.** B5c (addendum 21), then B6b, B7, B8, B9, then B4c and rules-added-region-model / rules-added-region / rules-original-ui per P4_PLAN, then the retest. A batch boundary (suites, main move, backup, staging) is due after B5c.
+
 
 **Open questions to the lead.** None (B1d pass 4 ruled in addendum 24; B4a pass 2 ruled in TL-P4-48 addendum 4).
 
