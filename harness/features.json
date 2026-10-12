@@ -7301,5 +7301,20 @@
     ],
     "verify": "",
     "note": "TL-P4-50 (B9 markers, 6 questions). Packet 2026-10-11-b9-markers-packet.md. implementer: codex."
+  },
+  {
+    "id": "lock-process-group",
+    "task": "p4-62",
+    "category": "review",
+    "passes": false,
+    "ui": false,
+    "what": "A heavy run under with-lock.sh gets its own process group and a wall-clock limit, and the whole group is killed on exit, timeout or signal, so no browser or worker outlives its run.",
+    "steps": [
+      "with-lock.sh runs the command in its own process group with HARNESS_TIMEOUT (default 25 minutes).",
+      "The group is killed on exit, timeout or signal; a timeout exits non-zero and says 'timed out'.",
+      "Orphaned Playwright and Chrome-for-testing processes are killed before every gate (gates.sh)."
+    ],
+    "verify": "pnpm exec vitest run src/harness.test.ts -t \"with-lock process group\"",
+    "note": "TL-P4-62. Mechanical. implementer: codex."
   }
 ]
