@@ -7306,7 +7306,7 @@
     "id": "lock-process-group",
     "task": "p4-62",
     "category": "review",
-    "passes": false,
+    "passes": true,
     "ui": false,
     "what": "A heavy run under with-lock.sh gets its own process group and a wall-clock limit, and the whole group is killed on exit, timeout or signal, so no browser or worker outlives its run.",
     "steps": [
