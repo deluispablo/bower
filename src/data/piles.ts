@@ -1,4 +1,4 @@
-import { thingName } from './tree';
+import { NAME_BREAKERS, thingName } from './tree';
 import type { Pile, PileItem, TreeNode } from './types';
 
 /**
@@ -30,7 +30,7 @@ export function waitingIn(piles: readonly Pile[] | undefined): number {
 /** "2026-10-04 Receipts from the Saltmere weekend" (kept short and safe for Drive). */
 export function pileFolderName(p: Pile): string {
   const day = new Date(p.createdAt).toISOString().slice(0, 10);
-  const words = p.text.trim().replace(/[/\\:*?"<>|\n]+/g, ' ').replace(/\s+/g, ' ');
+  const words = p.text.trim().replace(NAME_BREAKERS, ' ').replace(/[/\\:*?"<>]+/g, ' ').replace(/\s+/g, ' ');
   const short = words.length > 40 ? `${words.slice(0, 40).replace(/\s+\S*$/, '')}…` : words;
   return `${day} ${short || 'Pile'}`;
 }
@@ -45,7 +45,7 @@ export function pileHasFolder(p: Pile): boolean {
  * pasted link becomes a `.url` file. Clashes are settled by the caller.
  */
 export function safeInboxName(item: Pick<PileItem, 'name' | 'kind'>): string {
-  const safe = item.name.replace(/[/\\]+/g, ' - ').replace(/^[\s.-]+|[\s-]+$/g, '') || 'Untitled';
+  const safe = item.name.replace(NAME_BREAKERS, ' ').replace(/[/\\]+/g, ' - ').replace(/^[\s.-]+|[\s-]+$/g, '') || 'Untitled';
   // A saved link is always a .url file, even when its address ends like one (example.com, page.html).
   return item.kind === 'link' && !/\.url$/i.test(safe) ? `${safe}.url` : safe;
 }

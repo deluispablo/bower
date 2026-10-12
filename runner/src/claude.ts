@@ -50,7 +50,7 @@ import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { answersAsking, checkedAnswer, journalAnswer, proposalOk, type QuestionAnswer, subjectKey, subjectOf } from '../../src/data/contracts/questions';
 import type { Proposal, Question, TypeRow } from '../../src/data/contracts/types';
 import { modelDecisions, namedNotes, personalAppendHistory, planScripted, requestTargets, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
-import { MAX_NAME } from '../../src/data/contracts/tree';
+import { MAX_NAME, NAME_BREAKERS } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
 import { RUNNER_WRITES, SYSTEM } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
@@ -750,7 +750,7 @@ const extensionOf = (name: string): string => /(\.[^./]+)$/.exec(name)?.[1]?.toL
 const HIDDEN_CHARS = /[\u061C\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/;
 /** One part of a name as the app allows it: recordable, at most MAX_NAME, not hidden, no edge spaces or hidden marks. */
 const partOk = (part: string): boolean =>
-  recordableName(part) && part.length <= MAX_NAME && !part.startsWith('.') && part.trim() === part && !HIDDEN_CHARS.test(part);
+  recordableName(part) && part.search(NAME_BREAKERS) < 0 && part.length <= MAX_NAME && !part.startsWith('.') && part.trim() === part && !HIDDEN_CHARS.test(part);
 /** A folder path a model may file into: such parts under a main folder, none named like a note. */
 const placeOk = (to: unknown): to is string =>
   typeof to === 'string' && MAIN_FOLDERS.includes(to.split('/')[0] ?? '') && to.split('/').length <= 8 && to.split('/').every((part) => partOk(part) && !/\.md$/i.test(part));
@@ -912,8 +912,12 @@ function bodyLinks(body: string, ownText: string, named: (target: string) => boo
   return null;
 }
 
-/** Number only complete, identifier-free source sentences; keep their original bytes. */
-function profileSentences(source: string): string[] {
+const PROFILE_IDENTIFIER = /\p{N}{4,}|(?=\S*\p{L})(?=\S*\p{N})\S+/u;
+
+/** Number only complete, identifier-free source sentences; normalize CRLF before copying. */
+function profileSentences(source: string, name: string): string[] {
+  if (PROFILE_IDENTIFIER.test(name)) return [];
+  source = source.replace(/\r\n/g, '\n');
   const cut = source.search(/\n\[(?:cut here:|\d+ pages? not read)/u);
   const text = cut < 0 ? source : source.slice(0, cut);
   // Line wrapping is not a sentence boundary; segment spaces, then copy the original slice.
@@ -921,7 +925,7 @@ function profileSentences(source: string): string[] {
   // A truncated last sentence is not evidence, even if its prefix looks complete.
   if (cut >= 0) segments.pop();
   return segments.map(({ index, segment }) => text.slice(index, index + segment.length).trim()).filter((sentence) => sentence.length > 0
-    && !/\p{N}{4,}|(?=\S*\p{L})(?=\S*\p{N})\S+/u.test(sentence)
+    && !PROFILE_IDENTIFIER.test(sentence)
     && !CONTROL.test(sentence) && !HIDDEN_CHARS.test(sentence) && !sentence.includes('<!-- bower:ownership'));
 }
 
@@ -1069,7 +1073,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   const placed = new Map<string, Placement>();
   const authored = new Map<string, AuthoredNote>();
   const profiles = new Map<string, readonly string[]>();
-  const sentences = new Map([...seen.texts ?? []].map(([id, text]) => [id, profileSentences(text)]));
+  const sentences = new Map([...seen.texts ?? []].map(([id, text]) => [id, profileSentences(text, admitted.get(id)?.name ?? '')]));
   const words = new Map<string, Placement>();
   const timeline: AuthoredLine[] = [];
   const current: AuthoredState[] = [];
@@ -1117,7 +1121,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     rule('noteBody', (t) => !t.note || seen.types?.find((row) => row.id === t.note?.typeRow)?.template !== 'profile'
       || 'the profile template outside profile admission'),
     rule('noteBody', (t) => t.profile === undefined || t.profile.every((ref) => ref.source === t.fileId
-      && sentences.get(ref.source)?.[ref.sentence - 1] !== undefined)
+      && !PROFILE_IDENTIFIER.test(t.name) && sentences.get(ref.source)?.[ref.sentence - 1] !== undefined)
       || 'a profile reference outside its offered source sentences'),
     rule('numbers', (t) => t.note === undefined || grounded(t.fileId, [t.note.summary, bodyOf(t.note), JSON.stringify(t.note.properties ?? {})], 'the note for')),
   ], (t) => {
@@ -1606,7 +1610,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       for (const thing of shown.piles.flatMap((pile) => pile.things)) {
         const selected = selection.value.items.find((item) => item.itemId === thing.fileId);
         if (selected && rowFor(selected)?.profile && thing.text !== null) {
-          thing.sentences = profileSentences(thing.text).map((text, i) => ({ sentence: i + 1, text }));
+          thing.sentences = profileSentences(thing.text, thing.name).map((text, i) => ({ sentence: i + 1, text }));
         }
       }
       const input = prepared(run, shownTook, shown);

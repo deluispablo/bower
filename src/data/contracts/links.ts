@@ -1,6 +1,9 @@
 import { displayName, nameOf } from './tree';
 import type { ChangeEntry } from './types';
 
+/** A resolved target written as a note link. */
+export const renderLink = (target: string): string => `[[${target}]]`;
+
 /**
  * Names notes had before a rename or move since the last tidy-up, lowercased,
  * each to where the note is now. A [[link]] to an old name keeps working until

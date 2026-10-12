@@ -17,7 +17,7 @@ import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent, type TimelineConsent, type AppendCompletion, type LeftAsWritten, type SatisfiedAppend } from '../contracts/run-manifest';
 import { PILE_NOTE, safeInboxName } from '../piles';
 import { recordablePile, sameText, type Digest } from '../pile-readiness';
-import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
+import { checkCreationName, displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
 import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type Request, type StateShown, type Proposal } from '../types';
 import { isJournalRecord, pairsOf, type JournalRecord } from '../contracts/journal-record';
 import { PROP, RUNNER_WRITES, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
@@ -27,7 +27,7 @@ import { md5Hex } from '../contracts/hashes';
 import { proposalOk, isQuestionOption, answeredAskings, answersAsking, journalAnswer, roundFor, relatedSubjects, sameSubjectContent, subjectMembers, subjectPile, type QuestionRound, ASK_GONE, STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
 import { sha256 } from '../vault/hashes';
 import { indexedFront, parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
-import { linkTarget } from '../contracts/links';
+import { linkTarget, renderLink } from '../contracts/links';
 import { parseTimelineLine, timelineLine } from '../contracts/timeline-line';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
@@ -1327,7 +1327,10 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       const place = ix.file(at);
       if (place) places.set(place.id, place);
     }
-    for (let p = to; p !== at; p = parentOf(p)) if (!missing.includes(p)) missing.push(p);
+    for (let p = to; p !== at; p = parentOf(p)) {
+      checkCreationName(nameOf(p), 'folder');
+      if (!missing.includes(p)) missing.push(p);
+    }
     for (let p = to; p !== at; p = parentOf(p)) planned.set(p, { path: p, type: 'folder', modified: 0, created: 0 });
   };
   const plannedFile = (path: string): void => {
@@ -2031,7 +2034,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (!first) continue;
     const to = target ? parentOf(ix.pathOf(target.id) ?? '') : first.to;
     if (!generatedPlace(to)) continue;
-    const citations = contributions.map(({ to, name }) => `[[${join(to, name)}]]`);
+    const citations = contributions.map(({ to, name }) => renderLink(join(to, name)));
     const body = contributions.flatMap(({ thing }, i) => (d.profiles?.get(thing.file.id) ?? [])
       .map((sentence) => `${sentence} ${citations[i]}\n`)).join('');
     if (!target) {

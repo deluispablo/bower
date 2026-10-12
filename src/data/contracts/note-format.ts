@@ -24,6 +24,7 @@ import { timelineLine, parseTimelineLine } from './timeline-line';
 import { ABOUT_REGIONS, fenceAfter, parseOwnership, togglePersonalTask, type ByteSpan, type Fence, type FetchedOwnership } from './ownership-format';
 import { NOTE_TEMPLATES, type NoteTemplate } from './note-templates';
 import { TASK_LINE } from './tasks';
+import { renderLink } from './links';
 
 /** Frontmatter keys that are not properties. */
 export const BOWER_KEYS = ['summary', 'status', 'tags', 'by', 'original', 'bower_source', 'bower_state', 'bower_template'] as const;
@@ -359,7 +360,7 @@ export function serializeNote(n: NoteFile): string {
   if (n.template) {
     const property = (key: string): Property | undefined => n.properties.find((p) => p.key === key);
     const related = property('related');
-    const relatedText = related?.link ? `[[${related.link}]]` : related?.value ?? '';
+    const relatedText = related?.link ? renderLink(related.link) : related?.value ?? '';
     const links = linksIn(relatedText);
     // Creation is strict for every caller; stored notes without template intent retain their legacy path.
     if (!n.byBower || !Object.hasOwn(NOTE_TEMPLATES, n.template) || !validSummary(n.summary)
@@ -385,7 +386,7 @@ export function serializeNote(n: NoteFile): string {
   if (n.byBower) front.push('by: bower');
   if (n.original) front.push(`original: ${summaryScalar(oneLine(n.original))}`);
   if (n.bowerNote) front.push(`bower_source: ${n.bowerNote.source}`);
-  for (const p of n.properties) front.push(`${p.key}: ${n.template && n.byBower ? summaryScalar(p.link ? `[[${p.link}]]` : oneLine(p.value)) : p.link ? `[[${p.link}]]` : oneLine(p.value)}`);
+  for (const p of n.properties) front.push(`${p.key}: ${n.template && n.byBower ? summaryScalar(p.link ? renderLink(p.link) : oneLine(p.value)) : p.link ? renderLink(p.link) : oneLine(p.value)}`);
   if (n.template && n.byBower) {
     const type = n.properties.find((p) => p.key === 'type');
     if (!type) front.push(`type: ${n.typeRow?.id ?? n.template}`);
@@ -435,7 +436,7 @@ function templateBody(n: NoteFile, template: NoteTemplate): string[] {
   if (loose) contents.set(shape.body, [loose, contents.get(shape.body) ?? ''].filter(Boolean).join('\n'));
   const related = n.properties.find((p) => p.key === 'related');
   const source = n.properties.find((p) => p.key === 'source');
-  const linkText = (p: Property | undefined): string => p ? p.link ? `[[${p.link}]]` : p.value : '';
+  const linkText = (p: Property | undefined): string => p ? p.link ? renderLink(p.link) : p.value : '';
   const fallback: Record<string, string> = {
     Summary: n.summary, Related: linkText(related), Sources: linkText(source),
     'Current state': n.currentState.map((line) => `- ${oneLine(line)}`).join('\n'),

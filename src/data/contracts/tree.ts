@@ -61,6 +61,13 @@ function within(path: string, folder: string): boolean {
 /** Longest name a person can give (Drive takes more, but a copy on a computer would not). */
 export const MAX_NAME = 120;
 
+/** Characters that break Obsidian links, including control characters. */
+export const NAME_BREAKERS = /[[\]|#^\p{Cc}]/gu;
+
+function checkNameCharacters(name: string): void {
+  if (name.search(NAME_BREAKERS) >= 0) throw new BowerError('conflict', 'That name has a character Bower cannot use.');
+}
+
 /** Refuses a name longer than MAX_NAME (a file's extension does not count; a folder has none, so its dots do). */
 export function checkLength(name: string, type: 'note' | 'folder'): void {
   const shown = displayName(name);
@@ -70,11 +77,13 @@ export function checkLength(name: string, type: 'note' | 'folder'): void {
 /** A new note or folder must stay visible, with the same length limit as before. */
 export function checkCreationName(name: string, type: 'note' | 'folder'): void {
   if (name.trim().startsWith('.')) throw new BowerError('conflict', 'A name cannot start with a dot.');
+  checkNameCharacters(name);
   checkLength(name, type);
 }
 
 /** A free name in `folder`: `Name`, then `Name (2)`, `Name (3)`. */
 export function freeName(entries: Entries, folder: string, name: string, except?: string): string {
+  checkNameCharacters(name);
   const ext = extOf(name);
   const base = ext ? name.slice(0, -ext.length) : name;
   const taken = new Set([...entries.keys()].filter((p) => p !== except).map((p) => p.toLowerCase()));
@@ -113,6 +122,7 @@ export function renameEntry(entries: Entries, path: string, newName: string, at:
   const e = entries.get(path);
   if (!e) throw new BowerError('not-found', 'That is no longer there.');
   if (isRoot(path)) throw new BowerError('conflict', 'That keeps its name: Bower needs it.');
+  checkNameCharacters(newName);
   let name = newName.trim().replace(/[/\\]/g, '-');
   if (name.startsWith('.')) throw new BowerError('conflict', 'A name cannot start with a dot.');
   if (!name || !displayName(name).replace(/\.[A-Za-z0-9]{1,5}$/, '').trim()) throw new BowerError('conflict', 'A name cannot be empty.');
