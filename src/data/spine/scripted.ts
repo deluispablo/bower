@@ -2034,7 +2034,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (!first) continue;
     const to = target ? parentOf(ix.pathOf(target.id) ?? '') : first.to;
     if (!generatedPlace(to)) continue;
-    const citations = contributions.map(({ to, name }) => renderLink(join(to, name)));
+    const citations = contributions.map(({ name }) => renderLink(thingName(name)));
     const body = contributions.flatMap(({ thing }, i) => (d.profiles?.get(thing.file.id) ?? [])
       .map((sentence) => `${sentence} ${citations[i]}\n`)).join('');
     if (!target) {
