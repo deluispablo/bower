@@ -58,7 +58,7 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe('rules-added-region', () => {
-  it('R15 red: Drive-property-only ownership words ordinary managed rules; an existing region wins', async () => {
+  it('R15 red: Drive-property-only ownership lists rules but refuses wording; an existing region keeps R9', async () => {
     for (const { prefix, eol, label } of variants) {
       for (const hasRegion of [false, true]) {
         const before = prefix + (hasRegion ? eol + region.replaceAll(text, 'Name scans by date.').replace(/\n/g, eol) : '');
@@ -66,24 +66,35 @@ describe('rules-added-region', () => {
         await drive.update(id, { appProperties: { by: 'bower' } });
         const expectedText = hasRegion ? 'Name scans by date.' : text;
         expect.soft(await vault.rules(), `${label}, region=${hasRegion}`).toEqual([expect.objectContaining({ text: expectedText })]);
-        await vault.addRule('Keep invoices by month.');
-        expect((await tidyUp(drive, root)).phase).toBe('done');
+        const pending = await vault.addRule('Keep invoices by month.');
+        const metadata = await drive.get(id);
+        const errors = vi.spyOn(console, 'error');
+        try {
+          expect((await tidyUp(drive, root)).phase).toBe('done');
+          if (!hasRegion) {
+            expect.soft(errors, `${label}: one diagnostic`).toHaveBeenCalledTimes(1);
+            expect.soft(errors, `${label}: diagnostic details`).toHaveBeenCalledWith(expect.any(BowerError), expect.stringMatching(/\S/));
+          }
+        } finally {
+          errors.mockRestore();
+        }
         const after = await drive.readText(id);
         if (hasRegion) {
           expect.soft(after.slice(0, prefix.length), label).toBe(prefix);
           expect.soft(regionRules(after).map((r) => r.text), label).toEqual(['Keep invoices by month.', expectedText]);
         } else {
-          expect.soft(after, label).not.toContain('## Rules added in Bower');
-          expect.soft(parseRules(after).map((r) => r.text), label).toEqual(['Keep invoices by month.', expectedText]);
-          expect.soft(after, label).toContain('summary: 2 rules Bower follows in every tidy-up.');
+          expect.soft(await drive.readBytes(id), `${label}: no write`).toEqual(encode(before));
+          expect.soft(await drive.get(id), `${label}: no metadata write`).toEqual(metadata);
         }
         expect.soft((await drive.get(id)).appProperties?.by, label).toBe('bower');
         await vault.refresh();
         expect.soft(await vault.rules(), label).toEqual([
-          expect.objectContaining({ text: 'Keep invoices by month.', yourWords: 'Keep invoices by month.' }),
+          expect.objectContaining(hasRegion
+            ? { text: 'Keep invoices by month.', yourWords: 'Keep invoices by month.' }
+            : { id: pending.id, text: 'Keep invoices by month.', pending: true }),
           expect.objectContaining({ text: expectedText }),
         ]);
-        expect.soft((await vault.rules()).some((r) => r.pending), label).toBe(false);
+        expect.soft((await vault.rules()).some((r) => r.pending), label).toBe(!hasRegion);
         vault.dispose();
       }
     }
