@@ -64,7 +64,7 @@ function PhoneBar({ folder, path }: { folder: string; path: string }) {
       </IconButton>
       <Link to={folderRoute(folder)} className={s.phoneCrumb}>
         <span className={s.dot} style={{ background: paraColor(folder) }} />
-        {crumbs(folder)}
+        {crumbs(folder) || 'Your Bower folder'}
       </Link>
       {node && <NodeMenuButton node={node} />}
     </div>
