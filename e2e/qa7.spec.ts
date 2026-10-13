@@ -69,7 +69,9 @@ test('New folder in an empty folder asks for a name, then opens the folder', asy
   const sheet = page.getByRole('dialog', { name: 'New folder', exact: true });
   const name = sheet.getByRole('textbox', { name: 'Name', exact: true });
   const make = sheet.getByRole('button', { name: 'Make the folder', exact: true });
-  await name.fill('Empty garden');
+  await expect(name).toBeFocused();
+  await page.keyboard.type('Empty garden');
+  await expect(name).toHaveValue('Empty garden');
   await make.click();
   await expect(page).toHaveURL(/\/files\/Resources\/Cooking\/Empty%20garden(?:\?|$)/);
   await expect(page.getByText('Nothing in here yet.', { exact: true })).toBeVisible();
@@ -79,7 +81,8 @@ test('New folder in an empty folder asks for a name, then opens the folder', asy
   await expect(name).toHaveValue('');
   await expect(make).toBeDisabled();
   await expect(page).toHaveURL(/\/files\/Resources\/Cooking\/Empty%20garden(?:\?|$)/);
-  await name.fill('Plans');
+  await page.keyboard.type('Plans');
+  await expect(name).toHaveValue('Plans');
   await make.click();
   await expect(sheet).toBeHidden();
   await expect(page).toHaveURL(/\/files\/Resources\/Cooking\/Empty%20garden\/Plans(?:\?|$)/);
