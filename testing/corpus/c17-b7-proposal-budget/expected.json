@@ -2,23 +2,22 @@
   "files": {
     "present": [
       "Resources/Gardening/Rain barrel guide.txt",
-      "Resources/Gardening/Rain barrel guide.md",
       "Resources/Gardening/Compost guide.txt",
-      "Resources/Gardening/Compost guide.md",
       "Resources/Gardening/Seed saving guide.txt",
-      "Resources/Gardening/Seed saving guide.md",
-      ".bower/proposals/*.json"
+      "Resources/Gardening/Rain barrel guide.md",
+      "Resources/Gardening/Compost guide.md",
+      "Resources/Gardening/Seed saving guide.md"
     ],
     "absent": [
       "Inbox/*",
+      ".bower/proposals/*.json",
       ".bower/taxonomy.json"
     ]
   },
   "unchanged": [
     "Rules.md",
     "Resources/Gardening/Gardening.md",
-    "Resources/Gardening/Seed packet.md",
-    ".bower/tags.json"
+    "Resources/Gardening/Seed packet.md"
   ],
   "notes": [
     {
@@ -49,6 +48,6 @@
       "Resources/Gardening/Seed saving guide.md"
     ],
     "updated": [],
-    "questionsExactly": 2
+    "questionsExactly": 0
   }
 }

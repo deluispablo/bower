@@ -17,20 +17,9 @@
         }
       }
     ],
-    "tagProposals": [
-      {
-        "pileId": "p-1",
-        "tag": "rainwater",
-        "text": "Add the tag rainwater for future notes?",
-        "yes": "Add tag",
-        "no": "Keep current tags"
-      }
+    "newTags": [
+      "rainwater"
     ]
-  },
-  {
-    "kind": "tidy-intent",
-    "v": 1,
-    "things": []
   },
   {
     "kind": "tidy-intent",

@@ -135,6 +135,99 @@ it('B5a contracts: versioned type table uses write-runner-json and rejects inval
     'fake-root', RUNNER_WRITES)).ok).toBe(false);
 });
 
+it.each([false, true])('b7-r26-valid-runner-json %s accepts thirty canonical tags', async (missing) => {
+  const value = b5RunnerWrite('.bower/tags.json', { v: 1, tags: Array.from({ length: 30 }, (_, i) => `topic-${i}`) });
+  if (missing) {
+    set(value, ['operations', 3, 'effect', 'before'], null);
+    set(value, ['operations', 3, 'effect', 'beforeContent'], null);
+    set(value, ['operations', 3, 'effect', 'parent'], { fileId: 'bower-system' });
+    set(value, ['operations', 3, 'effect', 'createKey'], 'tags-new');
+    seal(value);
+  }
+  expect(await parseRunManifestV2(bytes(value), 'fake-root', RUNNER_WRITES)).toMatchObject({ ok: true, value });
+});
+
+it.each([
+  { v: 2, tags: ['gardening'] }, { v: 1, tags: 'gardening' }, { v: 1, tags: ['Gardening'] },
+  { v: 1, tags: ['unsafe/tag'] }, { v: 1, tags: ['gardening', 'gardening'] },
+  { v: 1, tags: [7] }, { v: 1, tags: ['a'.repeat(41)] },
+  { v: 1, tags: Array.from({ length: 31 }, (_, i) => `topic-${i}`) },
+])('b7-r26-runner-json validates tags after-text %j as shape', async (payload) => {
+  const valid = b5RunnerWrite('.bower/tags.json', { v: 1, tags: ['gardening'] });
+  expect(await parseRunManifestV2(bytes(valid), 'fake-root', RUNNER_WRITES)).toMatchObject({ ok: true, value: valid });
+  for (const missing of [false, true]) {
+    const value = b5RunnerWrite('.bower/tags.json', payload);
+    if (missing) {
+      set(value, ['operations', 3, 'effect', 'before'], null);
+      set(value, ['operations', 3, 'effect', 'beforeContent'], null);
+      set(value, ['operations', 3, 'effect', 'parent'], { fileId: 'bower-system' });
+      set(value, ['operations', 3, 'effect', 'createKey'], 'tags-new');
+      seal(value);
+    }
+    expect.soft(await parseRunManifestV2(bytes(value), 'fake-root', RUNNER_WRITES),
+      `R26 invalid tags ${missing ? 'create' : 'rewrite'} after-text is shape`).toEqual({ ok: false, reason: 'shape' });
+  }
+});
+
+it('b7-r26-runner-json malformed JSON after-text is shape', async () => {
+  const value = b5RunnerWrite('.bower/tags.json', { v: 1, tags: [] });
+  set(value, ['operations', 3, 'effect', 'text'], '{not JSON}');
+  set(value, ['operations', 3, 'effect', 'content'], raw('{not JSON}'));
+  expect(await parseRunManifestV2(bytes(seal(value)), 'fake-root', RUNNER_WRITES),
+    'R26 malformed tags after-text is shape').toEqual({ ok: false, reason: 'shape' });
+});
+
+it.each(['generated', 'runner-json'] as const)('b7-r26-only-runner-json creates tags path instead of create-text %s', async (purpose) => {
+  const value = variant((manifest) => {
+    const text = '{"v":1,"tags":["gardening"]}\n';
+    op(manifest, 3).effect = { kind: 'create-text', parent: { fileId: 'bower-system' }, name: 'tags.json',
+      createKey: 'tags-new', text, content: raw(text), purpose };
+  });
+  expect(await parseRunManifestV2(bytes(value), 'fake-root', RUNNER_WRITES),
+    'R26 tags creation cannot bypass write-runner-json').toEqual({ ok: false, reason: 'shape' });
+});
+
+it.each(['move', 'create-folder'] as const)('b7-r26-only-runner-json refuses %s into tags path', async (kind) => {
+  const make = (name: string) => variant((manifest) => {
+    op(manifest, 3).effect = kind === 'move'
+      ? { kind, before: seen('child-a', 'a.txt', 'pile-folder-id'), parent: { fileId: 'bower-system' }, name, properties: {} }
+      : { kind, parent: { fileId: 'bower-system' }, name, createKey: 'new-folder' };
+  });
+  expect((await parseRunManifestV2(bytes(make('control.json')), 'fake-root', RUNNER_WRITES)).ok).toBe(true);
+  expect(await parseRunManifestV2(bytes(make('tags.json')), 'fake-root', RUNNER_WRITES),
+    'R26 other effects cannot create the tags path').toEqual({ ok: false, reason: 'shape' });
+});
+
+it('b7-r26-only-runner-json refuses maintenance writing tags', async () => {
+  const make = (path: string) => {
+    const value = rich();
+    const file = seen('maintenance-target', path.split('/').at(-1) ?? '', 'bower-system');
+    value.capture.places.push({ file, path });
+    return b4Seal({ ...value, v: 2, reportPlan: [], operations: [{ operationId: 'maintenance', ordinal: 0, dependsOn: [],
+      effect: { kind: 'maintain', inputs: { folderId: 'fake-root', account: 'ACCOUNT_ID', cursor: 'cursor', changes: [], operationIds: [],
+        targets: [{ path, fileId: file.fileId, parentId: 'bower-system' }] } } }] });
+  };
+  expect((await parseRunManifestV2(bytes(make('.bower/questions.json')), 'fake-root', RUNNER_WRITES)).ok).toBe(true);
+  expect(await parseRunManifestV2(bytes(make('.bower/tags.json')), 'fake-root', RUNNER_WRITES),
+    'R26 maintenance cannot write the tags path').toEqual({ ok: false, reason: 'shape' });
+});
+
+it('b7-r26-only-runner-json refuses edit-text writing tags as shape', async () => {
+  const make = (path: string) => {
+    const value = rich();
+    const file = seen('edit-target', path.split('/').at(-1) ?? '', path.startsWith('.bower/') ? 'bower-system' : 'resources');
+    const before = '---\nsummary: Alex keeps references.\n---\n\n[[Old seed]]\n';
+    const text = before.replace('[[Old seed]]', '[[Seed packet]]');
+    value.capture.places.push({ file, path });
+    return b4Seal({ ...value, v: 2, reportPlan: [], operations: [{ operationId: 'edit', ordinal: 0, dependsOn: [],
+      effect: { kind: 'edit-text', before: file, path, beforeText: before, beforeContent: verifiedText(before), text, content: raw(text),
+        changes: [{ kind: 'link-rewrite', recordIds: [], renames: [{ from: 'Old seed', to: 'Seed packet' }] }] } }] });
+  };
+  expect((await parseRunManifestV2(bytes(make('Resources/Control.md')), 'fake-root', RUNNER_WRITES)).ok).toBe(true);
+  expect(await parseRunManifestV2(bytes(make('.bower/tags.json')), 'fake-root', RUNNER_WRITES),
+    'R26 edit-text tags writes are shape rather than a note edit').toEqual({ ok: false, reason: 'shape' });
+});
+
 it('B5a contracts: immutable proposal and stored question share one exact payload identity', async () => {
   expect(await parseRunManifestV2(bytes(rich()), 'fake-root', RUNNER_WRITES)).toMatchObject({ ok: true });
   const payload = { kind: 'type-row', row: (b5Table() as { rows: unknown[] }).rows[0] };
