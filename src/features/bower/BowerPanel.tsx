@@ -29,7 +29,7 @@ export function BowerPanel() {
   return (
     <div className={s.panel}>
       <section>
-        <h3 className={s.ph}>Now</h3>
+        <h2 className={s.ph}>Now</h2>
         {runState.error ? <LoadError state={runState} /> : run && (isRunning(run) || (!run.seen && run.phase !== 'failed')) ? (
           <button type="button" className={s.panelCard} onClick={() => setTidy(true)}>
             <strong>{runTitle(run)}</strong>
@@ -55,7 +55,7 @@ export function BowerPanel() {
       <LoadError state={questionsState} />
       {!!qs?.length && (
         <section>
-          <h3 className={s.ph}>{plural(qs.length, 'question')} for you</h3>
+          <h2 className={s.ph}>{plural(qs.length, 'question')} for you</h2>
           {qs.map((q) => (
             <p key={q.id} className={s.panelQ}>
               {q.text}
@@ -65,7 +65,7 @@ export function BowerPanel() {
         </section>
       )}
       <section>
-        <h3 className={s.ph}>{countOr(rules?.length, 'rule', 'Rules')}</h3>
+        <h2 className={s.ph}>{countOr(rules?.length, 'rule', 'Rules')}</h2>
         <LoadError state={rulesState} />
         <ul className={s.panelRules}>
           {(rules ?? []).slice(0, 5).map((r) => (
@@ -79,7 +79,7 @@ export function BowerPanel() {
       <LoadError state={requestsState} />
       {asked.length > 0 && (
         <section>
-          <h3 className={s.ph}>You asked</h3>
+          <h2 className={s.ph}>You asked</h2>
           <ul className={s.panelRules}>
             {asked.slice(0, 5).map((r) => (
               <li key={r.id}>
