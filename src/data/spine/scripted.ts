@@ -43,7 +43,7 @@ import { NOTE_TEMPLATES, type NoteTemplate } from '../contracts/note-templates';
 import { typeRowOk, readTypeTable, propertyValuesOk, insertTypeRow, requestTableColumn, rewriteTypeTable } from '../contracts/note-format';
 
 import { aboutContext, hasVerbatimQuote, normalizedText, observationOf, parseObservations } from '../contracts/observations';
-import { normalizeTag, NOTE_TAGS_MAX, readTagList } from '../contracts/tag-format';
+import { normalizeTag, NOTE_TAGS_MAX, TAG_LIST_MAX, readTagList } from '../contracts/tag-format';
 
 export { SET_ASIDE, listedPiles };
 
@@ -413,13 +413,24 @@ export interface AuthoredNote {
   tags?: string[];
 }
 
-/** Generated assignments use only the installed list; an invalid list disables assignments for this run. */
-export function assignedTags(candidates: unknown, list: ReturnType<typeof readTagList>): string[] | null {
+/** Validate all declarations before first-fit growth; normalized duplicates consume no capacity. */
+export function growTags(candidates: unknown, list: ReturnType<typeof readTagList>) {
+  if (list.error || candidates === undefined) return { ...list, declared: [] as string[] };
+  if (!Array.isArray(candidates)) return null;
+  const declared = candidates.map((tag) => typeof tag === 'string' ? normalizeTag(tag) : null);
+  if (!declared.every((tag): tag is string => tag !== null)) return null;
+  if (!list.growth || list.tags.length >= TAG_LIST_MAX) return { ...list, declared };
+  const additions = [...new Set(declared)].filter((tag) => !list.tags.includes(tag)).slice(0, Math.min(2, TAG_LIST_MAX - list.tags.length));
+  return { ...list, tags: [...list.tags, ...additions], declared };
+}
+
+/** Generated assignments use installed or declared topics; dropped additions disappear from the note. */
+export function assignedTags(candidates: unknown, list: ReturnType<typeof readTagList>, declared: readonly string[] = []): string[] | null {
   if (list.error || candidates === undefined) return [];
   if (!Array.isArray(candidates) || candidates.length > NOTE_TAGS_MAX) return null;
   const tags = candidates.map((tag) => typeof tag === 'string' ? normalizeTag(tag) : null);
-  if (!tags.every((tag): tag is string => tag !== null && list.tags.includes(tag)) || new Set(tags).size !== tags.length) return null;
-  return tags;
+  if (!tags.every((tag): tag is string => tag !== null && (list.tags.includes(tag) || declared.includes(tag))) || new Set(tags).size !== tags.length) return null;
+  return tags.filter((tag) => list.tags.includes(tag));
 }
 
 /** A Timeline line a model wrote for a note it was shown (P4-3), citing a thing this run files, or none. */
@@ -446,6 +457,7 @@ export interface AuthoredState {
  * `applyChanges` alone adds a line, on Bower's notes only.
  */
 export interface Filing {
+  newTags?: readonly string[];
   observations?: readonly unknown[];
   forget?: readonly { factId: string; quote?: string }[];
   shownFactIds?: readonly string[];
@@ -545,7 +557,7 @@ export interface Disagreement {
  * (`modelDecisions`), or the scripted provider's, which also answers what no model reply does yet (the optional part).
  * A part a reply leaves out is not done: requests and answers it does not settle wait for a run that can act on them.
  */
-export interface Decisions extends Pick<Filing, 'observations' | 'forget' | 'shownFactIds' | 'profiles' | 'kinds'> {
+export interface Decisions extends Pick<Filing, 'newTags' | 'observations' | 'forget' | 'shownFactIds' | 'profiles' | 'kinds'> {
   thing(t: ThingSeen): Placement | null;
   words(pileId: string, words: string): Placement | null;
   pileAsk(pile: Pile): Ask | null;
@@ -578,7 +590,7 @@ export interface Decisions extends Pick<Filing, 'observations' | 'forget' | 'sho
 /** The model's intent as decisions: what it placed, wrote and asked, nothing more. */
 export function modelDecisions(filing: Filing): Decisions {
   return {
-    observations: filing.observations, forget: filing.forget, shownFactIds: filing.shownFactIds, profiles: filing.profiles, kinds: filing.kinds,
+    newTags: filing.newTags, observations: filing.observations, forget: filing.forget, shownFactIds: filing.shownFactIds, profiles: filing.profiles, kinds: filing.kinds,
     thing: (t) => filing.thing(t.fileId),
     words: (pileId) => filing.words(pileId),
     pileAsk: (pile) => filing.asks?.get(pile.id) ?? null,
@@ -731,7 +743,7 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   const unrecorded = lines.some((l) => l.rec.kind === 'request' && !appends.completed.some((h) => h.requestId === l.rec.id)
     && !appends.lines.some((h) => h.consent.requestId === l.rec.id));
   const since = unrecorded ? retainedSince(listing, ix) : null;
-  return { context, rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, types, typeFile, typeText, tagList, proposals, proposalIds, memoryFile, memoryText, memoryLedger };
+  return { context, rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, types, typeFile, typeText, tagFile, tagList, proposals, proposalIds, memoryFile, memoryText, memoryLedger };
 }
 type Captured = Awaited<ReturnType<typeof capture>>;
 
@@ -741,8 +753,10 @@ type Captured = Awaited<ReturnType<typeof capture>>;
  * edits, the generated notes, the questions. It ends decided, or with a try again that holds more back.
  */
 export async function decide(drive: ScriptedRead, snapshot: Captured, opts: PlanOptions, attempt: Attempt = { editCap: EDITS_PER_RUN, held: new Set() }) {
-  const { context, rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, types, typeFile, typeText, proposals, proposalIds, memoryFile, memoryText, memoryLedger } = snapshot;
+  const { context, rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, types, typeFile, typeText, tagFile, proposals, proposalIds, memoryFile, memoryText, memoryLedger } = snapshot;
   const { editCap, held } = attempt;
+  const grownTags = growTags(opts.decisions.newTags, snapshot.tagList);
+  if (!grownTags) return refused('invalid new tags');
   const newKey = opts.mintKey ?? mintKey;
 
   /**
@@ -2038,7 +2052,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       if (properties.some((property) => property.key === key)) return refused('a declared fact replacing a template property');
       properties.push({ key, label: key, value: typeof value === 'string' ? value : JSON.stringify(value) });
     }
-    const tags = assignedTags(authored.tags, snapshot.tagList);
+    const tags = assignedTags(authored.tags, grownTags, grownTags.declared);
     if (tags === null) return refused('invalid note tags');
     const text = serializeNote({ template, typeRow, summary: authored.summary, properties, tags, currentState: [], body: authored.body,
       ...(template === 'source' ? { original: name } : {}),
@@ -2331,6 +2345,10 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const tableWrite = tableChanged ? { file: typeFile ?? null, text: rewriteTypeTable(typeText, types.table, nextTable),
     content: typeFile ? await ownVerified(typeFile) : null } : null;
   if (tableWrite && !typeFile && sys) places.set(sys.id, sys);
+  const tagWrite = grownTags.tags.length > snapshot.tagList.tags.length && sys?.folder
+    ? { file: tagFile ?? null, text: `${JSON.stringify({ v: 1, tags: grownTags.tags }, null, 2)}\n`, content: tagFile ? await ownVerified(tagFile) : null } : null;
+  if (tagWrite && sys) places.set(sys.id, sys);
+  if (tagWrite && tagFile) places.set(tagFile.id, tagFile);
   const memoryRecords = new Set<string>();
   const forgetIds = new Set<string>();
   const selectedForget = [...forgetChoices.values()].map((c) => c.factId);
@@ -2448,7 +2466,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas: d.areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows,
+    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows,
   };
 }
 type Decided = Extract<Awaited<ReturnType<typeof decide>>, { kind: 'decided' }>;
@@ -2462,7 +2480,7 @@ export async function build(decided: Decided): Promise<Ended> {
   const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources } = decided;
+    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources } = decided;
 
   // The fixed operations, in order: clear last run's marks, make folders, file, the note edits, the merges, Bin the piles,
   // your changes, the hashes.
@@ -2487,6 +2505,13 @@ export async function build(decided: Decided): Promise<Ended> {
     made.set(path, await add({ kind: 'create-folder', parent: targetOf(parentOf(path)), name: nameOf(path), createKey: newKey('folder') }));
   }
   const chainOf = (path: string): string[] => (made.has(path) ? [made.get(path) ?? '', ...chainOf(parentOf(path))] : []);
+  const tagOp = tagWrite
+    ? tagWrite.file && tagWrite.content
+      ? await add({ kind: 'write-runner-json', before: seen(tagWrite.file), beforeContent: tagWrite.content,
+        path: SYSTEM.tags, text: tagWrite.text, content: await utf8(tagWrite.text) })
+      : await add({ kind: 'write-runner-json', before: null, beforeContent: null, parent: { fileId: sys?.id ?? '' },
+        createKey: (await runKeys(opts.runId))('tags'), path: SYSTEM.tags, text: tagWrite.text, content: await utf8(tagWrite.text) })
+    : null;
   const reportPlan: ReportContribution[] = [];
   // A new Area the model gave a responsibility for: the first thing filed there says why it was made (TL-P4-07 addendum 3).
   const said = new Set<string>();
@@ -2516,7 +2541,8 @@ export async function build(decided: Decided): Promise<Ended> {
       parent: targetOf(to),
       name,
       properties: { bowerNew: '1', ...(isNote ? { by: 'bower' as const } : {}), asAdded: null, origin: null, kind: null, pile: null },
-    }, created ? [created] : merge?.line === 'planned' ? [editOf.get(ix.idOf(merge.into) ?? '') ?? ''] : []);
+    }, [...(created ? [created] : merge?.line === 'planned' ? [editOf.get(ix.idOf(merge.into) ?? '') ?? ''] : []),
+      ...(tagOp && generated.some((note) => note.after.includes(thing.file.id) && parseNote(note.name, note.text).tags.length) ? [tagOp] : [])]);
     movesOf.set(thing.pile.id, [...(movesOf.get(thing.pile.id) ?? []), move]);
     moveOf.set(thing.file.id, move);
     const choice = chosen.get(thing.file.id);
@@ -2557,7 +2583,7 @@ export async function build(decided: Decided): Promise<Ended> {
   const wordsFiled = new Map<string, ReportContribution>();
   for (const note of generated) {
     const after = note.after.flatMap((id) => moveOf.get(id) ?? []);
-    const op = await add({ kind: 'create-text', parent: targetOf(note.to), name: note.name, createKey: newKey('note'), text: note.text, content: await utf8(note.text), purpose: 'generated' }, after);
+    const op = await add({ kind: 'create-text', parent: targetOf(note.to), name: note.name, createKey: newKey('note'), text: note.text, content: await utf8(note.text), purpose: 'generated' }, [...after, ...(tagOp && parseNote(note.name, note.text).tags.length ? [tagOp] : [])]);
     const path = join(note.to, note.name);
     const filed = note.pileId === null ? [] : [{ name: 'Your note', title: thingName(note.name), kind: 'note' as const, to: note.to, note: path }];
     if (note.pileId !== null) {

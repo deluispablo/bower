@@ -428,6 +428,25 @@ describe('B7 through production main', () => {
     expect(r.after[TAGS]).toBe(b.c.folder[TAGS]); expect(mutations(r)).toEqual([]);
   });
 
+  it.each([30, 31])('b7-r31-full-list %i normalizes declarations and drops their assignments without growth', async (count) => {
+    const before = ['gardening', ...Array.from({ length: count - 1 }, (_, i) => `topic-${i}`)];
+    const b = await fixture('reuse-known', { vocabulary: before });
+    const r = await run(b, [select(b, [], DEST), intent(b, ['Gardening', 'Rain water'], ['RAIN_WATER', 'compost'])]);
+    completed(r); expect(r.frames, 'R31 declared but dropped assignments file without a retry').toHaveLength(2);
+    expect(tagged(r, pathOfNote(b)), 'R31 installed tags survive and normalized dropped candidates disappear').toEqual(['gardening']);
+    expect(r.after[TAGS]).toBe(b.c.folder[TAGS]); expect(mutations(r)).toEqual([]);
+  });
+
+  it('b7-r31-full-list validates unsafe candidates before freezing growth', async () => {
+    const before = ['gardening', ...Array.from({ length: 29 }, (_, i) => `topic-${i}`)];
+    const b = await fixture('reuse-known', { vocabulary: before });
+    const r = await run(b, [select(b, [], DEST), intent(b, ['gardening'], ['unsafe/tag'])]);
+    failedReply(r); expect(r.frames).toHaveLength(3);
+    expect(r.frames[2]?.call.input).toContain('Your reply was refused:');
+    expect(r.after[pathOfNote(b)], 'R31 unsafe declarations leave no note effect').toBeUndefined();
+    expect(r.after[TAGS]).toBe(b.c.folder[TAGS]); expect(mutations(r)).toEqual([]);
+  });
+
   it('b7-r23-assignments keep installed and accepted tags and lose dropped additions', async () => {
     const b = await fixture();
     const r = await run(b, [select(b, [], DEST), intent(b, ['gardening', 'RainWater', 'seed-saving'], ['rainwater', 'compost', 'seed-saving'])]);

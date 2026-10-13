@@ -2,6 +2,7 @@
 import { ABOUT_REGIONS, type AboutRegion, MOC_REGIONS, createOwnershipContext, type MocRegion } from './ownership-format';
 import { sha256 } from './hashes';
 import { proposalOk, isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
+import { readTagList, TAG_LIST_MAX } from './tag-format';
 import { parseNote, readTypeTable, typeRowOk, typeTableOk } from './note-format';
 import { BowerError, type UpdatedRow } from './types';
 import { parseObservations, canRebuildAboutSection, aboutArchivePath, validLearnedBlock, hasVerbatimQuote } from './observations';
@@ -909,7 +910,13 @@ async function planningArtifactsOk(value: Manifest | ManifestV2): Promise<boolea
   const questions = value.reportPlan.flatMap((row) => row.value.questions).filter((q) => q.proposal !== undefined);
   const artifacts = new Map<string, unknown>();
   for (const { effect } of value.operations) {
-    if (effect.kind === 'maintain' && effect.inputs.targets?.some((t) => t.path === '.bower/type-table.json' || t.path.startsWith('.bower/proposals/'))) return false;
+    if (effect.kind === 'maintain' && effect.inputs.targets?.some((t) => t.path === '.bower/type-table.json' || t.path === '.bower/tags.json' || t.path.startsWith('.bower/proposals/'))) return false;
+    if (effect.kind === 'write-runner-json' && effect.path === '.bower/tags.json') {
+      const list = readTagList(effect.text);
+      if (list.error || list.tags.length > TAG_LIST_MAX) return false;
+    }
+    if (effect.kind !== 'write-runner-json' && ('path' in effect && effect.path === '.bower/tags.json'
+      || 'parent' in effect && 'name' in effect && targetPath(value, effect.parent) === '.bower' && effect.name === 'tags.json')) return false;
     if (effect.kind === 'write-runner-json' && effect.path === '.bower/type-table.json') {
       let table: unknown;
       try { table = JSON.parse(effect.text); }
