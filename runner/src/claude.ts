@@ -1652,13 +1652,11 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         (shown.requestNotes?.[line.fileId] ?? []).every((id) => targets.has(id)));
       // A question about a source whose own candidates fit 2 to 4 folders offers exactly those folders; Bower supplies the ids and labels.
       const offered = (asks: ReadonlyMap<string, Ask> | undefined): ReadonlyMap<string, Ask> | undefined => asks && new Map([...asks].map(([id, ask]) => {
+        // The thing's own words (not its pile's, which may name a sibling's topic) pick among the candidates already shown for it.
         const thing = shown.piles.flatMap((p) => p.things).find((t) => t.fileId === id);
-        const own = new Set(((thing ? `${thing.name} ${thing.text ?? ''}` : shown.piles.find((p) => p.pileId === id)?.words ?? '').toLowerCase().match(/\p{L}{5,}/gu)) ?? []);
-        // shortcut: a shared word of 5+ letters ties a candidate to this item's own words; upgrade when B1d ranks candidates per word.
-        const places = [...new Set((shown.sources?.find((source) => source.itemId === id)?.candidates ?? []).flatMap((c) => {
-          const words = `${c.summary ?? indexed[c.id]?.summary ?? ''} ${ix.pathOf(c.id) ?? ''}`.toLowerCase().match(/\p{L}{5,}/gu) ?? [];
-          return words.some((w) => own.has(w)) ? [ix.byId(c.id)?.folder ? c.id : ix.byId(c.id)?.parents[0] ?? ''] : [];
-        }))]
+        const own = thing ? new Set(ix.neighbourhood(`${thing.name} ${thing.text ?? ''}`, metadata)) : undefined;
+        const places = [...new Set((shown.sources?.find((source) => source.itemId === id)?.candidates ?? [])
+          .filter((c) => indexed[c.id] && (!own || own.has(c.id))).map((c) => ix.byId(c.id)?.parents[0] ?? ''))]
           .flatMap((folderId) => folders.some((f) => f.id === folderId) && (ix.pathOf(folderId) ?? '').includes('/') ? [folderId] : [])
           .map((folderId) => ({ folderId, path: ix.pathOf(folderId) ?? '' })).sort((x, y) => (x.path < y.path ? -1 : 1))
           .map(({ folderId, path }) => ({ folderId, label: path.split('/').at(-1) ?? path }));
@@ -1671,11 +1669,11 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         if (!isRecord(value)) return null;
         const rows = (key: string): Record<string, unknown>[] => Array.isArray(value[key]) ? value[key].filter(isRecord) : [];
         const chosen = (id: unknown) => selection.value.items.find((item) => item.itemId === id);
-        for (const row of [...rows('things'), ...rows('notes')]) {
+        for (const [key, row] of [...rows('things').map((r) => ['things', r] as const), ...rows('notes').map((r) => ['notes', r] as const)]) {
           const item = chosen(row.fileId ?? row.pileId);
           if (!item) return null;
-          // A cut index proves no fit, so with no selected note to fit it authorizes no new note, even under an existing folder (TL-P4-47 Q6).
-          if (indexCutAtSource && isRecord(row.note) && item.wants.length === 0) return null;
+          // A cut index proves no fit, so with no selected note to fit it authorizes no new note, even under an existing folder, and a pile-word note has none (TL-P4-47 Q6; B1: a selected visible note backs a new one).
+          if (indexCutAtSource && (key === 'notes' || isRecord(row.note) && item.wants.length === 0)) return null;
           const path = typeof item.destination === 'string' ? ix.pathOf(item.destination)
             : `${ix.pathOf(item.destination.parentId)}/${item.destination.name}`;
           if (row.to !== path || (isRecord(row.note) && row.note.typeRow !== undefined && row.note.typeRow !== item.kind)) return null;

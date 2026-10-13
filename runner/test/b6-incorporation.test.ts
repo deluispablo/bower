@@ -274,6 +274,18 @@ it('b6-ambiguous-q1-file-to', async () => {
   }
 });
 
+it('b6-ambiguous-q1-file-to: a short word keeps both of its folders', async () => {
+  const b = await setup({ 'Resources/Tax 2024/Tax 2024.md': note('Alex keeps Tax papers.'), 'Resources/Tax 2025/Tax 2025.md': note('Alex keeps Tax papers.') },
+    [{ line: 'Alex has a Tax file.', files: ['Tax.txt'] }], { 'Tax.txt': 'Alex has a Tax file.' });
+  const ask = { fileId: b.source('Tax.txt'), text: 'Where should Alex keep this Tax file?', yes: 'Choose a place', no: 'Leave here' };
+  const r = await run(b, { items: [], asks: [ask] }, { ...empty, asks: [ask] });
+  expect(r.code, r.errors).toBe(0);
+  const stored = JSON.parse(r.after[SYSTEM.questions] ?? '{}') as { questions: Array<{ options?: Array<{ action: unknown }> }> };
+  expect(stored.questions).toHaveLength(1);
+  expect(stored.questions[0]?.options?.map((o) => o.action)).toEqual(['Resources/Tax 2024', 'Resources/Tax 2025']
+    .map((path) => ({ kind: 'file-to', folderId: b.id(path) })));
+});
+
 it('b6-cut-index-no-create control: a complete index creates normally', async () => {
   const b = await setup({ 'Resources/Paper craft/Paper craft.md': note('Alex folds paper.') });
   const r = await run(b, select(b, 'Resources/Rainwater'), filing(b, 'Resources/Rainwater', 'Rainwater'));
@@ -282,34 +294,63 @@ it('b6-cut-index-no-create control: a complete index creates normally', async ()
   expect(r.after[WATER]).toContain(ARTICLE);
 });
 
+/** B1's 150-folder fixture shape: the production projection is cut by the index's own folder cut. */
+async function cutWorld(inbox?: Parameters<typeof setup>[1], inboxFiles?: Parameters<typeof setup>[2], extra: Record<string, string> = {}) {
+  const folder = Object.fromEntries(Array.from({ length: 140 }, (_, i) => [
+    `Resources/Group ${String(i).padStart(3, '0')}/Note ${String(i).padStart(3, '0')}.md`,
+    note(`Evidence ${i} ${'x'.repeat(199 - `Evidence ${i} `.length)}.`),
+  ]).concat(Object.entries(extra)));
+  const b = await setup(folder, inbox, inboxFiles);
+  // Reuse B1's warm id/version snapshot; seed reads are outside production call/byte budgets.
+  const files: RetrievalFile['files'] = {};
+  for (const f of await b.drive.listAll(b.root)) {
+    const path = b.drive.pathOf(f.id, b.root) ?? '';
+    if (!path.startsWith('Resources/') || !path.endsWith('.md')) continue;
+    files[f.id] = { path, version: f.modifiedTime, summary: parseNote(path, await b.drive.readText(f.id)).summary,
+      coverage: { kind: 'prefix', bytes: 4096 } };
+  }
+  await b.drive.createText(b.id(SYSTEM.dir), 'retrieval.json', JSON.stringify({ v: 1, folderId: b.root,
+    account: 'ACCOUNT_ID', cursor: String(Number(await b.drive.getStartPageToken()) + 1), files }));
+  b.drive.touch(b.id('Resources/Group 000/Note 000.md'));
+  return { b, folder };
+}
+
+function nothingCreated(r: Awaited<ReturnType<typeof run>>, folder: Record<string, string>, source: string) {
+  expect(r.frames[0]?.index, 'the production candidate projection is actually cut').toMatch(/index cut: (\d+ folders omitted|context omitted)/);
+  expect(r.code, r.errors).toBe(0);
+  expect.soft(visibleNotes(r), 'a cut index never authorizes new note creation').toEqual(Object.keys(folder).sort());
+  expect.soft(r.pathsById[source], 'the original stays in the inbox when creation cannot be justified').toMatch(/^Inbox\//);
+  expect.soft(report(r).filed, 'the source is not reported as filed').toEqual([]);
+  expect.soft(report(r).created, 'nothing is reported as created from incomplete fit evidence').toEqual([]);
+}
+
 it('b6-cut-index-no-create', async () => {
   // A new folder and a new note under an existing folder are both cut off.
   for (const destination of ['Resources/Rainwater', 'Resources/Group 000']) {
-    const folder = Object.fromEntries(Array.from({ length: 140 }, (_, i) => [
-      `Resources/Group ${String(i).padStart(3, '0')}/Note ${String(i).padStart(3, '0')}.md`,
-      note(`Evidence ${i} ${'x'.repeat(199 - `Evidence ${i} `.length)}.`),
-    ]));
-    const b = await setup(folder);
-    // Reuse B1's warm id/version snapshot; seed reads are outside production call/byte budgets.
-    const files: RetrievalFile['files'] = {};
-    for (const f of await b.drive.listAll(b.root)) {
-      const path = b.drive.pathOf(f.id, b.root) ?? '';
-      if (!path.startsWith('Resources/') || !path.endsWith('.md')) continue;
-      files[f.id] = { path, version: f.modifiedTime, summary: parseNote(path, await b.drive.readText(f.id)).summary,
-        coverage: { kind: 'prefix', bytes: 4096 } };
-    }
-    await b.drive.createText(b.id(SYSTEM.dir), 'retrieval.json', JSON.stringify({ v: 1, folderId: b.root,
-      account: 'ACCOUNT_ID', cursor: String(Number(await b.drive.getStartPageToken()) + 1), files }));
-    b.drive.touch(b.id('Resources/Group 000/Note 000.md'));
+    const { b, folder } = await cutWorld();
     const r = await run(b, select(b, destination), filing(b, destination, 'Rainwater'), empty);
-    expect(r.frames[0]?.index, 'the production candidate projection is actually cut').toMatch(/index cut: (\d+ folders omitted|context omitted)/);
-    expect(r.code, r.errors).toBe(0);
-    expect.soft(visibleNotes(r), 'a cut index never authorizes new note creation').toEqual(Object.keys(folder).sort());
-    expect.soft(r.pathsById[b.source()], 'the original stays in the inbox when creation cannot be justified').toMatch(/^Inbox\//);
-    expect.soft(report(r).filed, 'the source is not reported as filed').toEqual([]);
-    expect.soft(report(r).created, 'nothing is reported as created from incomplete fit evidence').toEqual([]);
+    nothingCreated(r, folder, b.source());
     expect(r.after[r.pathsById[b.source()] ?? '']).toBe(ARTICLE);
     const anchor = b.admission.piles[0]?.items.find((i) => i.name === PILE_NOTE)?.fileId ?? '';
     expect.soft(r.pathsById[anchor] ?? '', 'the source words also stay honest').toMatch(/^Inbox\//);
   }
+});
+
+it('b6-cut-index-no-create: a new note backed by a selected visible note files normally (B1)', async () => {
+  const fit = 'Resources/Group 000/Rain.md';
+  const { b } = await cutWorld(undefined, undefined, { [fit]: note('Alex records rainwater collection.') });
+  const r = await run(b, select(b, 'Resources/Group 000', [b.id(fit)]), filing(b, 'Resources/Group 000', 'Rainwater'), empty);
+  done(r, 1);
+  expect(r.after['Resources/Group 000/Rainwater.md']).toContain(ARTICLE);
+});
+
+it('b6-cut-index-no-create: a note for words alone is blocked', async () => {
+  const words = 'Alex plans rainwater collection.';
+  const { b, folder } = await cutWorld([{ line: words, files: [] }], {});
+  const pile = b.admission.piles[0]?.pileId ?? '';
+  const selected = { items: [{ itemId: pile, kind: 'unknown', destination: b.id('Resources/Group 000'), wants: [] }], asks: [] };
+  const execution = { ...empty, notes: [{ pileId: pile, to: 'Resources/Group 000', name: 'Rainwater.md',
+    basis: 'Resources/Group 000/Note 000.md', responsibility: 'Rainwater collection' }] };
+  const r = await run(b, selected, execution, empty);
+  nothingCreated(r, folder, b.admission.piles[0]?.items.find((i) => i.name === PILE_NOTE)?.fileId ?? '');
 });
