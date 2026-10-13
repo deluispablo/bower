@@ -183,7 +183,7 @@ const CUT = (left: number): string => `\n[cut here: ${left} more characters not 
 
 /** A thing as shown: its text (or null, and why), and how many characters of it were left out. */
 interface ShownThing { fileId: string; name: string; kind: string; text: string | null; cut: number; why?: string; pagesNotRead?: number; sentences?: Array<{ sentence: number; text: string }> }
-type ProfileSources = Array<{ path: string; fileId?: string }>;
+type ProfileSources = Array<{ path: string }>;
 
 /** What the model is shown of the folder: the piles it took, with their words and things, the notes it may update, and the folders there are. */
 interface Shown {
@@ -585,7 +585,7 @@ async function notesShown(read: ScriptedRead, listing: readonly DriveFile[], ix:
     const shown = bounded(text, Math.min(CONTEXT_BOUNDS.perNote, room));
     if (shown.text === null) break;
     room -= shown.text.length;
-    const sources = f.appProperties?.profile ? profileSources(text, ix) : undefined;
+    const sources = f.appProperties?.profile ? profileSources(text) : undefined;
     notes.push({ path, text: shown.text, cut: shown.cut, ...(sources ? { sources } : {}) });
   }
   return notes;
@@ -893,12 +893,8 @@ const WIKI_LINK = /\[\[([^\]|#]*)(?:[|#][^\]]*)?\]\]/g;
 const MD_LINK = /\[[^\]]*\]\(\s*<?([^)\s>]*)>?[^)]*\)/g;
 const WEB = /\b(?:https?:\/\/|www\.)[^\s<>()[\]]+/gi;
 
-function profileSources(text: string, ix: VaultIndex): ProfileSources {
-  return [...text.matchAll(WIKI_LINK)].map((match) => {
-    const path = (match[1] ?? '').trim();
-    const file = ix.file(path) ?? ix.file(`${path}.md`);
-    return { path: match[0], ...(file ? { fileId: file.id } : {}) };
-  });
+function profileSources(text: string): ProfileSources {
+  return [...text.matchAll(WIKI_LINK)].map((match) => ({ path: match[0] }));
 }
 
 /**
@@ -1440,7 +1436,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       const prefix = await setup.prefixes?.(file, !!file.appProperties?.profile);
       if (file.appProperties?.profile && prefix) {
         shown.profileSources ??= {};
-        shown.profileSources[file.id] = profileSources(prefix, ix);
+        shown.profileSources[file.id] = profileSources(prefix);
       }
       const front = await read.indexedFront?.(file);
       if (!indexed[file.id]) indexed[file.id] = { path, version: file.modifiedTime, summary: front?.summary ?? '(no summary)',
