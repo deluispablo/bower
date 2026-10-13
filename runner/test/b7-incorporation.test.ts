@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 /** B7 reds use the production main/provider/planner/adapter, with B1d selection by real candidate ids. */
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -10,6 +11,7 @@ import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
 import { sha256Sync } from '../../src/data/contracts/hashes';
 import { isRunnerFile, RUNNER_WRITES, SYSTEM } from '../../src/data/vault/layout';
+import { DriveVault } from '../../src/data/vault/drive-vault';
 import { outsideAdmitted } from '../src/spine/admitted';
 import { loadCase } from '../src/corpus';
 import { AT, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
@@ -52,7 +54,7 @@ function intent(b: Base, tags?: string[], newTags?: string[]) {
 const pathOfNote = (b: Base): string => DEST + '/' + (b.sources.find((s) => !s.name.endsWith('.md'))?.name ?? '').replace(/\.[^.]+$/, '.md');
 const vocabulary = (r: CaseRun): string[] => (JSON.parse(r.after[TAGS] ?? '{"tags":[]}') as { tags: string[] }).tags;
 const tagged = (r: CaseRun, path: string): string[] => parseNote(path, r.after[path] ?? '').tags;
-const mutations = (r: Awaited<ReturnType<typeof run>>) => writes(r.events, TAGS);
+const mutations = (r: { events: Observation[] }) => writes(r.events, TAGS);
 const frozen = (r: CaseRun): RunManifest => JSON.parse(manifests(r)[0]?.[1] ?? '{"operations":[]}') as RunManifest;
 
 async function control(b: Base) {
@@ -686,9 +688,16 @@ describe('B7 through production main', () => {
     }
   });
 
-  it('b7-undo-keeps-vocabulary', async () => {
+  it('b7-r29-undo-keeps-vocabulary (retention only)', async () => {
     await control(await fixture());
     const b = await fixture('proposal-yes', { words: 'File this. Tag it rainwater.' });
+    const app = new DriveVault({ drive: b.drive, rootId: async () => b.root, runningPiles: () => new Set(), device: 'b7-undo-device' });
+    const update = vi.spyOn(b.drive, 'update'); const untrash = vi.spyOn(b.drive, 'untrash');
+    const appUndo = await Promise.allSettled([app.move(TAGS, 'Inbox', { undo: true }), app.restore(TAGS)]);
+    expect({ outcomes: appUndo.map((result) => result.status), targets: [...update.mock.calls, ...untrash.mock.calls].map(([id]) => id) },
+      'R29 app Undo refuses the runner file before producing any effect targeting tags.json')
+      .toEqual({ outcomes: ['rejected', 'rejected'], targets: [] });
+    app.dispose(); update.mockRestore(); untrash.mockRestore();
     const first = await run(b, [select(b, [], DEST), intent(b, undefined, ['rainwater'])]);
     expect(vocabulary(first), 'Undo control first installs the run vocabulary').toEqual(['gardening', 'rainwater']);
     const sourceId = b.sources[0]?.itemId ?? '';
@@ -716,7 +725,7 @@ describe('B7 through production main', () => {
     expect(replay.after[TAGS]).toBe(first.after[TAGS]); expect(replay.after[pathOfNote(b)]).toBeUndefined();
   });
 
-  it.each(['reuse-known', 'proposal-yes', 'proposal-budget', 'authority-full-cap'])('%s corpus oracle through main', async (slug) => {
+  it.each(['reuse-known'])('%s corpus oracle through main', async (slug) => {
     const b = await fixture(slug);
     const replies = JSON.parse(await readFile(resolve(b.c.dir, 'replies.json'), 'utf8')) as Array<{ things: Array<{ fileId: string }> }>;
     const bind = (base: Base): { newTags?: string[]; things: Array<{ note?: { tags?: string[] } }> } =>
@@ -738,5 +747,51 @@ describe('B7 through production main', () => {
     expect(vocabulary(r)).toEqual(oracle.runs[0]?.vocabulary);
     for (const [path, tags] of Object.entries(oracle.runs[0]?.noteTags ?? {})) expect(tagged(r, path), path).toEqual(tags);
     expect(mutations(r)).toHaveLength(oracle.runs[0]?.vocabularyMutationSends ?? 0);
+  });
+
+  it.each(['proposal-yes', 'proposal-budget', 'authority-full-cap'].map((slug) => ({ slug })))('b7-r30-corpus-oracles $slug', async ({ slug }) => {
+    const b = await fixture(slug);
+    const replies = JSON.parse(await readFile(resolve(b.c.dir, 'replies.json'), 'utf8')) as unknown[];
+    const oracle = JSON.parse(await readFile(resolve(b.c.dir, 'expected-tag-results.json'), 'utf8')) as {
+      runs: Array<{ vocabulary: string[]; noteTags: Record<string, string[]>; vocabularyMutationSends: number;
+        additions: string[]; questionsExactly: number; newProposalPayloads: number; proposalBudgetCharge: number }>;
+      preserveFiledBytes?: string[]; sameGeneratedSourceBytesAfterFirstRun?: boolean;
+    };
+    const bound = JSON.parse(JSON.stringify(replies[0]).replace(/\$file:([^"\\]+)/g, (_, name: string) =>
+      b.sources.find((s) => s.name === name)?.itemId ?? 'missing-fixture-id')) as unknown;
+    const preserved = await Promise.all((oracle.preserveFiledBytes ?? []).map(async (name) => {
+      const id = b.sources.find((s) => s.name === name)?.itemId ?? '';
+      return { name, id, bytes: await b.drive.readBytes(id) };
+    }));
+    let before = b.c.folder;
+    let generated: Record<string, string | undefined> = {};
+    for (const [index, expected] of oracle.runs.entries()) {
+      const events: Observation[] = [];
+      const r = index === 0 ? await run(b, [select(b, [b.id(DEST + '/Gardening.md'), b.id(DEST + '/Seed packet.md')], DEST), bound])
+        : { ...await runOnDrive(b.c, b.drive, b.root, { claude: async () => reply(replies[index]),
+          around: observe(b.drive, b.root, events), pacing: { sleep: async () => {} } }, index + 1), events };
+      const label = `R30 ${slug} run ${index + 1}`;
+      expect.soft(r.code, `${label} corpus reply completes through main`).toBe(0);
+      const priorVocabulary = vocabulary({ ...r, after: before });
+      const priorQuestions = (JSON.parse(before[SYSTEM.questions] ?? '{"questions":[]}') as { questions: Question[] }).questions;
+      const questions = (JSON.parse(r.after[SYSTEM.questions] ?? '{"questions":[]}') as { questions: Question[] }).questions;
+      expect.soft({ vocabulary: vocabulary(r),
+        noteTags: Object.fromEntries(Object.keys(expected.noteTags).map((path) => [path, tagged(r, path)])),
+        vocabularyMutationSends: mutations(r).length,
+        additions: vocabulary(r).filter((tag) => !priorVocabulary.includes(tag)),
+        questionsExactly: report(r).questions.length,
+        newProposalPayloads: Object.keys(r.after).filter((path) => path.startsWith(SYSTEM.proposals + '/') && !Object.hasOwn(before, path)).length,
+        proposalBudgetCharge: questions.filter((q) => q.proposal && !priorQuestions.some((prior) => prior.proposal?.id === q.proposal?.id)).length,
+      }, `${label} every non-log run oracle`).toEqual(Object.fromEntries(Object.entries(expected).filter(([key]) => key !== 'log')));
+      for (const { name, id, bytes } of preserved) {
+        expect.soft(r.pathsById[id], `${label} preserved source is filed: ${name}`).toBe(DEST + '/' + name);
+        expect.soft(await b.drive.readBytes(id), `${label} preserveFiledBytes ${name}`).toEqual(bytes);
+      }
+      if (index === 0) generated = Object.fromEntries(Object.keys(expected.noteTags).map((path) => [path, r.after[path]]));
+      else if (oracle.sameGeneratedSourceBytesAfterFirstRun) for (const [path, bytes] of Object.entries(generated)) {
+        expect.soft(r.after[path], `${label} sameGeneratedSourceBytesAfterFirstRun ${path}`).toBe(bytes);
+      }
+      before = r.after;
+    }
   });
 });
