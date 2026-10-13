@@ -15,6 +15,10 @@ const SVG_ATTRS = /\s(d|fill|stroke|opacity|marker-end|points|transform|viewBox)
 const COPY = [['using PARA unless your rules say otherwise', 'in folders by how soon you need things (Projects, Areas, Resources, Archive), unless your rules say otherwise']];
 let fixed = html.replace(SVG_ATTRS, (_m, attr, value) => ` sc-camel-${attr}="${value}"`);
 for (const [from, to] of COPY) fixed = fixed.split(from).join(to);
+// The export has no main landmark: the content container is the one main (axe: region, landmark-one-main).
+const MAIN = /<div class="pg"(?![^>]*\brole="main")/;
+fixed = fixed.replace(MAIN, '<div class="pg" role="main"');
+const main = Number(MAIN.test(html));
 const n = (html.match(SVG_ATTRS) ?? []).length;
 const words = COPY.filter(([from]) => html.includes(from)).length;
 const supportFile = new URL('../public/landing/support.js', import.meta.url);
@@ -40,8 +44,8 @@ const fixedSupport = support.replace(old, () => compiled);
 new Script(fixedSupport, { filename: 'landing/support.js' });
 const logic = fixedSupport !== support;
 if (process.argv.includes('--check')) {
-  if (n || words || logic) {
-    console.error(`${n} placeholder attribute(s) the browser would parse, ${words} copy fix(es), ${Number(logic)} page script(s) needing precompilation: run node scripts/fix-landing.mjs`);
+  if (n || words || main || logic) {
+    console.error(`${n} placeholder attribute(s) the browser would parse, ${words} copy fix(es), ${main} missing main landmark(s),${Number(logic)} page script(s) needing precompilation: run node scripts/fix-landing.mjs`);
     process.exit(1);
   }
   console.log('landing ok');
