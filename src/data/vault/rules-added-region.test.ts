@@ -3,6 +3,7 @@ import { applyChanges, EDIT_FILE_LIMIT } from '../contracts/note-edit';
 import type { Change, RuleAdd } from '../contracts/run-manifest';
 import { FakeDrive } from '../drive/fake-drive';
 import { seedFakeDrive } from '../fake/seed';
+import { BowerError } from '../types';
 import { tidyUp } from '@/testing/tidy-up';
 import { DriveVault } from './drive-vault';
 import { parseOwnership } from './ownership-format';
@@ -57,6 +58,79 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe('rules-added-region', () => {
+  it('R15 red: Drive-property-only ownership words ordinary managed rules; an existing region wins', async () => {
+    for (const { prefix, eol, label } of variants) {
+      for (const hasRegion of [false, true]) {
+        const before = prefix + (hasRegion ? eol + region.replaceAll(text, 'Name scans by date.').replace(/\n/g, eol) : '');
+        const { drive, root, vault, id } = await fixture(before);
+        await drive.update(id, { appProperties: { by: 'bower' } });
+        const expectedText = hasRegion ? 'Name scans by date.' : text;
+        expect.soft(await vault.rules(), `${label}, region=${hasRegion}`).toEqual([expect.objectContaining({ text: expectedText })]);
+        await vault.addRule('Keep invoices by month.');
+        expect((await tidyUp(drive, root)).phase).toBe('done');
+        const after = await drive.readText(id);
+        if (hasRegion) {
+          expect.soft(after.slice(0, prefix.length), label).toBe(prefix);
+          expect.soft(regionRules(after).map((r) => r.text), label).toEqual(['Keep invoices by month.', expectedText]);
+        } else {
+          expect.soft(after, label).not.toContain('## Rules added in Bower');
+          expect.soft(parseRules(after).map((r) => r.text), label).toEqual(['Keep invoices by month.', expectedText]);
+          expect.soft(after, label).toContain('summary: 2 rules Bower follows in every tidy-up.');
+        }
+        expect.soft((await drive.get(id)).appProperties?.by, label).toBe('bower');
+        await vault.refresh();
+        expect.soft(await vault.rules(), label).toEqual([
+          expect.objectContaining({ text: 'Keep invoices by month.', yourWords: 'Keep invoices by month.' }),
+          expect.objectContaining({ text: expectedText }),
+        ]);
+        expect.soft((await vault.rules()).some((r) => r.pending), label).toBe(false);
+        vault.dispose();
+      }
+    }
+  });
+
+  it('R16 red: damaged regions list only pending rules with one diagnostic, preserve consent and never write until readable', async () => {
+    const consent = 'Keep invoices by month.';
+    for (const { prefix, eol, label } of variants) {
+      for (const damage of ['broken marks', 'unfinished trailing fence'] as const) {
+        const readable = prefix + eol + region.replace(/\n/g, eol);
+        const damaged = damage === 'broken marks' ? readable.replace(END, '<!-- bower:ownership/2 end rules-added')
+          : readable + `${eol}\`\`\`md${eol}Personal unfinished fence.`;
+        const { drive, root, vault, id } = await fixture(damaged);
+        const before = await drive.get(id);
+        const errors = vi.spyOn(console, 'error');
+        try {
+          expect.soft(await vault.rules(), `${label}, ${damage}: listing`).toEqual([]);
+          const pending = await vault.addRule(consent).catch((error: unknown) => error);
+          expect.soft(pending, `${label}, ${damage}: consent recorded`).toMatchObject({ text: consent, pending: true });
+          expect.soft(await vault.changes(), `${label}, ${damage}: journal record`).toContainEqual(expect.objectContaining({ kind: 'rule', what: `New rule: "${consent}"`, path: 'Rules.md' }));
+          expect.soft(await vault.rules(), `${label}, ${damage}: pending only`).toEqual([expect.objectContaining({ text: consent, pending: true })]);
+          expect.soft(errors, `${label}, ${damage}: one diagnostic`).toHaveBeenCalledTimes(1);
+          expect.soft(errors, `${label}, ${damage}: diagnostic details`).toHaveBeenCalledWith(expect.any(BowerError), expect.stringMatching(/\S/));
+        } finally {
+          errors.mockRestore();
+        }
+        expect((await tidyUp(drive, root)).phase).toBe('done');
+        expect.soft(await drive.readBytes(id), `${label}, ${damage}: no write`).toEqual(encode(damaged));
+        expect.soft(await drive.get(id), `${label}, ${damage}: no metadata write`).toEqual(before);
+        await vault.refresh();
+        expect.soft(await vault.rules(), `${label}, ${damage}: consent survives tidy-up`).toEqual([expect.objectContaining({ text: consent, pending: true })]);
+        await drive.writeText(id, readable, (await drive.get(id)).modifiedTime);
+        const inbox = (await drive.listAll(root)).find((f) => f.name === 'Inbox' && f.parents.includes(root));
+        if (!inbox) throw new Error('Missing seeded Inbox');
+        await drive.createText(inbox.id, 'Recovery receipt.txt', 'A made-up receipt for the recovery tidy-up.');
+        expect((await tidyUp(drive, root)).phase).toBe('done');
+        await vault.refresh();
+        expect.soft(await vault.rules(), `${label}, ${damage}: next readable file applies consent`).toEqual([
+          expect.objectContaining({ text: consent, yourWords: consent }),
+          expect.objectContaining({ text, yourWords: 'receipts together' }),
+        ]);
+        expect.soft((await vault.rules()).some((r) => r.pending), `${label}, ${damage}: no pending rule after recovery`).toBe(false);
+        vault.dispose();
+      }
+    }
+  });
+
   it('R8 red: any second root Rules.md file blocks wording, but a folder does not', async () => {
     for (const kind of ['personal', 'bower', 'managed-first', 'folder'] as const) {
       const first = kind === 'managed-first' ? RULES_TEMPLATE.text : original;
