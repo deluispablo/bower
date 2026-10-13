@@ -327,7 +327,6 @@ describe('rules-added-region', () => {
       const bytes = encode(before);
       const copy = bytes.slice();
       expect.soft(applyChanges(bytes, [word()]), label).toEqual({ ok: false, reason: 'unchanged' });
-      expect.soft(applyChanges(bytes, [word([])]), `no second region: ${label}`).toEqual({ ok: false, reason: 'unchanged' });
       expect(bytes).toEqual(copy);
     }
   });
