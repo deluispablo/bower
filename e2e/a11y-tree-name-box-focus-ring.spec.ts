@@ -63,3 +63,25 @@ for (const how of ['Enter', 'Escape'] as const) {
     await expectRing(page, tree);
   });
 }
+
+test('AC1 Rename from the tree: the renamed row shows a focus ring after Enter with a new name', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'The inline name box is the desktop tree.');
+  await page.goto('/files?scenario=default&time=instant');
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  const projects = tree.locator('[data-path="Projects"]');
+  await expect(projects).toBeVisible();
+  if ((await projects.getAttribute('aria-expanded')) !== 'true') await projects.click();
+  const row = tree.locator('[data-path="Projects/Flat hunt"]');
+  await expect(row).toBeVisible();
+  await row.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Rename', exact: true }).click();
+  const box = tree.getByRole('textbox', { name: 'New name for Flat hunt', exact: true });
+  await expect(box).toBeFocused();
+  await box.fill('Flat search');
+  await page.keyboard.press('Enter');
+  // The rename lands first; then, with no other key, the renamed row is active and ringed.
+  await expect(tree.locator('[data-path="Projects/Flat search"]')).toBeVisible();
+  await expectRing(page, tree);
+  expect(await tree.getAttribute('aria-activedescendant')).toBe(`row-${encodeURIComponent('Projects/Flat search')}`);
+});
