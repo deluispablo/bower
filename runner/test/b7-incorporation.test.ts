@@ -4,6 +4,10 @@ import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseNote, readTypeTable, serializeNote, type NoteFile } from '../../src/data/contracts/note-format';
 import type { RunManifest } from '../../src/data/spine/records';
+import type { Checkpoint } from '../../src/data/contracts/run-checkpoint';
+import type { Question } from '../../src/data/contracts/types';
+import { planAdmission } from '../../src/data/spine/plan';
+import { fakeRead } from '../../src/data/spine/read';
 import { sha256Sync } from '../../src/data/contracts/hashes';
 import { isRunnerFile, RUNNER_WRITES, SYSTEM } from '../../src/data/vault/layout';
 import { outsideAdmitted } from '../src/spine/admitted';
@@ -317,13 +321,253 @@ describe('B7 through production main', () => {
     expect(writes(laterEvents, TAGS)).toEqual([]);
   });
 
-  it('b7-three-thirty-two growth and duplicate-before-cap', async () => {
+  it('b7-r17-normalize-equality b7-three-thirty-two growth and duplicate-before-cap', async () => {
     await control(await fixture());
-    const b = await fixture('reuse-known', { words: 'File this. Tag it rainwater, Rain_water, compost and seed-saving.' });
-    const r = await run(b, [select(b, [], DEST), intent(b, undefined, ['rainwater', 'Rain_water', 'compost', 'seed-saving'])]);
+    const b = await fixture('reuse-known', { words: 'File this. Tag it rainwater, RainWater, compost and seed-saving.' });
+    const r = await run(b, [select(b, [], DEST), intent(b, undefined, ['rainwater', 'RainWater', 'compost', 'seed-saving'])]);
     completed(r);
     expect(vocabulary(r), 'equivalent candidates dedupe before the two-addition bound').toEqual([...KNOWN, 'rainwater', 'compost']);
     expect(mutations(r)).toHaveLength(1); noProposals(r);
+  });
+
+  it('b7-r17-semantic-neighbours stay distinct when normalization differs', async () => {
+    const b = await fixture();
+    const r = await run(b, [select(b, [], DEST), intent(b, undefined, ['RainWater', 'Rain water'])]);
+    expect(vocabulary(r), 'R17 only normalizeTag equality dedupes candidates, not semantic similarity')
+      .toEqual([...KNOWN, 'rainwater', 'rain-water']);
+    completed(r); expect(mutations(r)).toHaveLength(1);
+  });
+
+  it('b7-r18-newTags-order wins over reversed things and admission order', async () => {
+    const b = await fixture('proposal-budget');
+    const topics: Record<string, string> = { 'Rain barrel guide.txt': 'rainwater', 'Compost guide.txt': 'compost', 'Seed saving guide.txt': 'seed-saving' };
+    const candidates = [b.sources[0], b.sources[2], b.sources[1]].map((source) => topics[source?.name ?? ''] ?? 'missing-topic');
+    expect([...candidates].sort()).toEqual(['compost', 'rainwater', 'seed-saving']);
+    const authored = intent(b, undefined, candidates);
+    const admitted = b.sources.map((s) => s.itemId);
+    authored.things.reverse();
+    expect(authored.things.map((t) => t.fileId)).toEqual([...admitted].reverse());
+    const r = await run(b, [select(b, [], DEST), authored]);
+    expect(vocabulary(r), 'R18 first-fit follows newTags even when things reverse admission order')
+      .toEqual(['gardening', ...candidates.slice(0, 2)]);
+    completed(r, b.sources.length); expect(mutations(r)).toHaveLength(1); noProposals(r);
+  });
+
+  it.each([
+    'rainwater', null, { topic: 'rainwater' }, ['rainwater', 7], ['unsafe/tag'], ['a'.repeat(41)],
+    ['rainwater', 'compost', 'unsafe/tag'], ['rainwater', 'RainWater', 'unsafe/tag'],
+  ].map((newTags) => ({ newTags })))('b7-r19-invalid-candidates $newTags refuse before dedupe or capacity dropping', async ({ newTags }) => {
+    const b = await fixture('reuse-known', { vocabulary: [...KNOWN, ...Array.from({ length: 26 }, (_, i) => `topic-${i}`)] });
+    const invalid = { ...intent(b), newTags };
+    const exhausted = await run(b, [select(b, [], DEST), invalid]);
+    expect.soft(exhausted.code, 'R19 malformed newTags exhausts the existing validation retry').toBe(1);
+    expect.soft(exhausted.frames, 'R19 malformed newTags invokes the retry').toHaveLength(3);
+    expect.soft(exhausted.after[pathOfNote(b)], 'R19 invalid candidates leave no note effect').toBeUndefined();
+    expect(mutations(exhausted)).toEqual([]);
+    const retry = await fixture();
+    const r = await run(retry, [select(retry, [], DEST), { ...intent(retry), newTags }, intent(retry, ['gardening'])]);
+    expect.soft(r.frames[2]?.call.input, 'R19 refusal reaches the existing retry prompt').toContain('Your reply was refused:');
+    expect(tagged(r, pathOfNote(retry))).toEqual(['gardening']); expect(mutations(r)).toEqual([]);
+  });
+
+  it('b7-r20-provider declares growth field caps and installed-tag reuse', async () => {
+    const b = await fixture(); const r = await control(b);
+    expect(r.frames[1]?.value.tags).toEqual(KNOWN);
+    const input = r.frames[1]?.call.input ?? '';
+    // Inspect the field declaration and tag context without binding the provider to one prose sentence.
+    expect.soft(input, 'R20 execution reply schema declares the newTags array').toMatch(/"newTags"\s*:\s*\[/);
+    const context = input.split('\n').filter((line) => /tag|topic/i.test(line)).join('\n');
+    expect.soft(context, 'R20 execution context declares two additions per run')
+      .toMatch(/(?:2|two)[^\n]*(?:per run|per tidy|each run)|(?:per run|per tidy|each run)[^\n]*(?:2|two)/i);
+    expect.soft(context, 'R20 execution context declares thirty installed tags').toMatch(/\b(?:30|thirty)\b/i);
+    expect.soft(context, 'R20 execution context prefers reuse of installed tags')
+      .toMatch(/(?:reuse|prefer)[^\n]*(?:installed|existing)|(?:installed|existing)[^\n]*(?:reuse|first)/i);
+  });
+
+  it('b7-r21-installed-equivalents consume no slot and cause no vocabulary write', async () => {
+    const b = await fixture();
+    const r = await run(b, [select(b, [], DEST), intent(b, ['gardening'], ['Gardening', 'gardening', 'Remote_work'])]);
+    expect(r.code, 'R21 installed-equivalent candidates are accepted without growth').toBe(0);
+    completed(r); expect(vocabulary(r)).toEqual(KNOWN); expect(mutations(r)).toEqual([]);
+  });
+
+  it('b7-r21-candidate-equivalents leave two slots and a later run writes nothing', async () => {
+    const b = await fixture();
+    const candidates = ['Gardening', 'rainwater', 'RainWater', 'compost', 'seed-saving'];
+    const r = await run(b, [select(b, [], DEST), intent(b, undefined, candidates)]);
+    expect.soft(vocabulary(r), 'R21 installed and earlier equivalents consume no addition slots')
+      .toEqual([...KNOWN, 'rainwater', 'compost']);
+    expect.soft(mutations(r), 'R21 accepted candidates use one vocabulary write').toHaveLength(1);
+    const source = await b.drive.createText(b.id('Inbox'), 'Later guide.txt', 'Alex keeps a gardening reference.', { pile: 'r21-later' });
+    const admission = await planAdmission(fakeRead(b.drive), b.root, { scope: 'all', clock: () => AT + 1, newId: () => 'r21-later-admission' });
+    expect(admission.kind).toBe('manifest');
+    if (admission.kind !== 'manifest') throw new Error('R21 later source needs a real admission.');
+    const later = { ...b, admission: admission.manifest, sources: [{ itemId: source.id,
+      pileId: admission.manifest.piles[0]?.pileId ?? '', name: source.name }] };
+    const repeated = await run(later, [select(later, [], DEST), intent(later, undefined, ['RainWater', 'Compost'])], { press: 2 });
+    completed(repeated); expect(repeated.after[TAGS]).toBe(r.after[TAGS]); expect(mutations(repeated)).toEqual([]);
+  });
+
+  it('b7-r22-invalid-list ignores growth and assignments without a retry', async () => {
+    const raw = '{"v":1,"tags":["unsafe/tag"]}\n';
+    const b = await fixture('reuse-known', { raw });
+    const r = await run(b, [select(b, [], DEST), { ...intent(b, ['unsafe/tag', 'gardening', 'gardening', 'fourth']), newTags: ['unsafe/tag', 7] }]);
+    expect(r.frames, 'R22 disabled tags ignore newTags without a validation retry').toHaveLength(2);
+    completed(r); expect(tagged(r, pathOfNote(b))).toEqual([]); expect(r.after[TAGS]).toBe(raw);
+    expect(mutations(r)).toEqual([]); expect(r.errors.match(/BowerError/g) ?? []).toHaveLength(1);
+  });
+
+  it.each([30, 31])('b7-r22-full-list %i freezes growth while installed assignments apply', async (count) => {
+    const before = ['gardening', ...Array.from({ length: count - 1 }, (_, i) => `topic-${i}`)];
+    const b = await fixture('reuse-known', { vocabulary: before });
+    const r = await run(b, [select(b, [], DEST), intent(b, ['gardening'], ['rainwater', 'compost'])]);
+    expect(tagged(r, pathOfNote(b)), 'R22 frozen growth still permits installed assignments').toEqual(['gardening']);
+    completed(r); expect(tagged(r, pathOfNote(b))).toEqual(['gardening']);
+    expect(r.after[TAGS]).toBe(b.c.folder[TAGS]); expect(mutations(r)).toEqual([]);
+  });
+
+  it('b7-r23-assignments keep installed and accepted tags and lose dropped additions', async () => {
+    const b = await fixture();
+    const r = await run(b, [select(b, [], DEST), intent(b, ['gardening', 'RainWater', 'seed-saving'], ['rainwater', 'compost', 'seed-saving'])]);
+    expect(tagged(r, pathOfNote(b)), 'R23 installed and accepted tags survive; the dropped candidate is removed')
+      .toEqual(['gardening', 'rainwater']);
+    completed(r); expect(vocabulary(r)).toEqual([...KNOWN, 'rainwater', 'compost']);
+    const unknown = await fixture();
+    const refused = await run(unknown, [select(unknown, [], DEST), intent(unknown, ['undeclared'], ['rainwater'])]);
+    failedReply(refused); expect(refused.frames).toHaveLength(3); expect(mutations(refused)).toEqual([]);
+    const retry = await fixture();
+    const valid = await run(retry, [select(retry, [], DEST), intent(retry, ['undeclared'], ['rainwater']), intent(retry, ['gardening'])]);
+    expect(valid.frames).toHaveLength(3); expect(tagged(valid, pathOfNote(retry))).toEqual(['gardening']);
+    expect(mutations(valid)).toEqual([]);
+  });
+
+  it('b7-r24-refused-candidates leave no effect when retry declares different additions', async () => {
+    const b = await fixture();
+    const r = await run(b, [select(b, [], DEST), intent(b, ['gardening', 'Gardening'], ['refused-topic']),
+      intent(b, ['gardening'], ['accepted-topic'])]);
+    expect(r.frames).toHaveLength(3); expect(r.frames[2]?.call.input).toContain('Your reply was refused:');
+    expect(r.frames[2]?.events.filter((e) => ['POST', 'PATCH', 'DELETE'].includes(e.method)
+      && (e.path === TAGS || !e.path.startsWith('.bower/') || /manifest-|\/changes\//.test(e.path)))).toEqual([]);
+    expect(vocabulary(r), 'R24 only accepted retry candidates grow the vocabulary').toEqual([...KNOWN, 'accepted-topic']);
+    expect(mutations(r)).toHaveLength(1); expect(tagged(r, pathOfNote(b))).toEqual(['gardening']);
+    expect(frozen(r).operations.some((op) => 'text' in op.effect && op.effect.text.includes('refused-topic'))).toBe(false);
+  });
+
+  it('b7-r25-missing-list lost create reply recovers by reserved id and completes the dependent note once', async () => {
+    const b = await fixture('proposal-yes', { vocabulary: null });
+    let reserved: string | undefined; let lost = false;
+    const r = await run(b, [select(b, [], DEST), intent(b, ['rainwater'], ['rainwater'])], {
+      around: (fetch) => async (input, init = {}) => {
+        const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+        if (!lost && init.method === 'POST' && url.pathname === '/upload/drive/v3/files'
+          && url.searchParams.get('uploadType') === 'multipart') {
+          const body = await new Response(init.body).text();
+          const boundary = /^--([^\r\n]+)\r\n/.exec(body)?.[1] ?? '';
+          const part = body.split(`--${boundary}`)[1] ?? '';
+          const meta = JSON.parse(part.slice(part.indexOf('\r\n\r\n') + 4).trim()) as { name?: string; id?: string };
+          if (meta.name === 'tags.json') {
+            reserved = meta.id;
+            const response = await fetch(input, init);
+            expect(response.ok, 'R25 loss occurs after the reserved-id create lands').toBe(true);
+            lost = true; throw new TypeError('Made-up lost tags create reply');
+          }
+        }
+        return fetch(input, init);
+      },
+    });
+    expect(lost, 'R25 the missing vocabulary create must actually land before losing its reply').toBe(true);
+    expect(reserved).toBeTruthy();
+    const op = growthEffect(r);
+    expect(op.effect).toMatchObject({ kind: 'write-runner-json', path: TAGS, before: null, beforeContent: null });
+    expect(r.traffic.some((t) => t.method === 'GET' && t.url.pathname === `/drive/v3/files/${reserved}`)).toBe(true);
+    const checkpoints = Object.entries(r.after).filter(([path]) => /\/checkpoint-[^/]+\.json$/.test(path))
+      .map(([, text]) => JSON.parse(text) as Checkpoint).sort((a, b) => a.revision - b.revision);
+    expect(checkpoints.at(-1)?.outcomes.find((outcome) => outcome.operationId === op.operationId))
+      .toMatchObject({ state: 'applied', evidence: { file: { fileId: reserved } } });
+    const lists = (await b.drive.listAll(b.root)).filter((f) => f.name === 'tags.json');
+    expect(lists.map((f) => f.id)).toEqual([reserved]); expect(vocabulary(r)).toEqual(['rainwater']);
+    expect(tagged(r, pathOfNote(b))).toEqual(['rainwater']); completed(r);
+    expect(mutations(r)).toHaveLength(1); expect(writes(r.events, pathOfNote(b))).toHaveLength(1);
+    const dependent = frozen(r).operations.find((entry) => entry.effect.kind === 'create-text' && entry.effect.name === 'Rain barrel guide.md');
+    expect(dependent?.dependsOn).toContain(op.operationId);
+    const events: Observation[] = [];
+    const replay = await redispatchCase(b.c, r, 2, { claude: async () => { throw new Error('R25 replay must not model.'); },
+      around: observe(b.drive, b.root, events), pacing: { sleep: async () => {} } });
+    expect(replay.code).toBe(0); expect(writes(events, TAGS)).toEqual([]); expect(writes(events, pathOfNote(b))).toEqual([]);
+  });
+
+  it.each([0, 5])('b7-r27-growth and B5 proposal capacity remain independent with %i open cards', async (open) => {
+    const b = await fixture('proposal-budget');
+    const prior: Question[] = Array.from({ length: open }, (_, i) => ({ id: `q-proposal-old-${i}`,
+      text: 'Remember this kind?', yes: 'Yes', no: 'No', askedAt: AT, proposal: { id: `old-${i}`,
+        payload: { kind: 'type-row', row: { id: `old-${i}`, match: [`old-${i}`], template: 'source', properties: {}, table: [] } } } }));
+    const file = await b.drive.get(b.id(SYSTEM.questions));
+    await b.drive.writeText(file.id, JSON.stringify({ v: 1, questions: prior }), file.modifiedTime);
+    const askAfter = b.sources.slice(0, 2).map((source, i) => ({ pileId: source.pileId,
+      text: 'Remember this garden reference kind?', yes: 'Yes', no: 'No', proposal: { id: `garden-${i}`,
+        payload: { kind: 'type-row', row: { id: `garden-${i}`, match: [`garden-${i}`], template: 'source', properties: {}, table: [] } } } }));
+    const plain = await fixture('proposal-budget');
+    const plainFile = await plain.drive.get(plain.id(SYSTEM.questions));
+    await plain.drive.writeText(plainFile.id, JSON.stringify({ v: 1, questions: prior }), plainFile.modifiedTime);
+    const baseline = await run(plain, [select(plain, [], DEST), { ...intent(plain),
+      askAfter: askAfter.map((ask, i) => ({ ...ask, pileId: plain.sources[i]?.pileId })) }]);
+    completed(baseline, plain.sources.length);
+    const expectedIds = [...prior.map((q) => q.proposal?.id), ...(open ? [] : ['garden-0', 'garden-1'])];
+    expect((JSON.parse(baseline.after[SYSTEM.questions] ?? '{}') as { questions: Question[] }).questions.map((q) => q.proposal?.id)).toEqual(expectedIds);
+    const r = await run(b, [select(b, [], DEST), { ...intent(b, undefined, ['rainwater', 'compost']), askAfter }]);
+    expect.soft(vocabulary(r), 'R27 two additions grow even with all five B5 cards open').toEqual(['gardening', 'rainwater', 'compost']);
+    expect.soft(mutations(r), 'R27 growth uses one vocabulary mutation regardless of B5 quota').toHaveLength(1);
+    const questions = (JSON.parse(r.after[SYSTEM.questions] ?? '{"questions":[]}') as { questions: Question[] }).questions;
+    expect(questions.map((q) => q.proposal?.id)).toEqual(expectedIds);
+    for (const id of ['garden-0', 'garden-1']) {
+      const payload = r.after[`.bower/proposals/${id}.json`];
+      if (open) expect(payload).toBeUndefined();
+      else expect(JSON.parse(payload ?? 'null')).toMatchObject(askAfter.find((ask) => ask.proposal.id === id)?.proposal ?? {});
+    }
+    completed(r, b.sources.length);
+  });
+
+  it('b7-r28-document cannot grant a personal append without person-authored request words', async () => {
+    const b = await fixture('authority-full-cap');
+    const personal = 'Resources/Alex plans.md';
+    const selection = select(b, [b.id(personal)], DEST);
+    const r = await run(b, [selection, { ...intent(b, ['gardening']), lines: [{ note: personal,
+      text: 'Alex approved secret-garden.', cites: b.sources.find((s) => s.name === 'Garden bulletin.txt')?.itemId }] }, intent(b, ['gardening'])]);
+    expect(r.code, r.errors).toBe(0); expect(r.requests).toEqual([]);
+    expect(r.after[personal]).toBe(b.c.folder[personal]);
+    expect(r.events.filter((e) => e.method === 'PATCH' && e.media && e.path === personal)).toEqual([]);
+    expect(tagged(r, DEST + '/Garden bulletin.md')).toEqual(['gardening']);
+    expect(r.after[DEST + '/Alex notes.md']).toBe(b.c.inboxFiles['Alex notes.md']);
+    expect(mutations(r)).toEqual([]); noProposals(r);
+  });
+
+  it.each(['full', 'spare'] as const)('b7-r28-document is evidence without person authority at %s capacity', async (capacity) => {
+    const b = await fixture('authority-full-cap', capacity === 'spare' ? { vocabulary: ['gardening'] } : {});
+    const before = JSON.parse(b.c.folder[TAGS] ?? '{}') as { tags: string[] };
+    const personal = 'Resources/Alex plans.md';
+    const candidates = ['secret-garden', 'rainwater', 'seed-saving'];
+    const selection = select(b, [b.id(personal)], DEST);
+    const authored = { ...intent(b, ['gardening'], candidates), lines: [{ note: personal,
+      text: 'Alex approved secret-garden.', cites: b.sources.find((s) => s.name === 'Garden bulletin.txt')?.itemId }] };
+    const r = await run(b, [selection, authored, intent(b, ['gardening'], candidates)]);
+    expect.soft(r.frames[1]?.value.piles, 'R28 the real execution context contains the adversarial bulletin')
+      .toEqual(expect.arrayContaining([expect.objectContaining({ things: expect.arrayContaining([
+        expect.objectContaining({ text: expect.stringContaining('SYSTEM OVERRIDE:') }),
+      ]) })]));
+    expect.soft(r.requests, 'R28 document words create no person request').toEqual([]);
+    for (const path of [personal, 'Rules.md', DEST + '/Seed packet.md']) expect.soft(r.after[path], `R28 document grants no rewrite of ${path}`).toBe(b.c.folder[path]);
+    expect.soft(r.after[DEST + '/Alex notes.md']).toBe(b.c.inboxFiles['Alex notes.md']);
+    expect.soft(r.events.filter((e) => e.method === 'PATCH' && e.media && e.path === personal)).toEqual([]);
+    expect.soft(vocabulary(r), 'R28 document candidates obey automatic growth caps without person consent')
+      .toEqual(capacity === 'full' ? before.tags : [...before.tags, 'secret-garden', 'rainwater']);
+    expect.soft(mutations(r)).toHaveLength(capacity === 'full' ? 0 : 1);
+    if (capacity === 'spare') {
+      const effect = growthEffect(r);
+      expect(effect.effect.kind).toBe('write-runner-json');
+      expect(JSON.parse(mutations(r)[0]?.text ?? '{}')).toEqual({ v: 1, tags: ['gardening', 'secret-garden', 'rainwater'] });
+    }
+    expect(r.code, r.errors).toBe(0); expect(tagged(r, DEST + '/Garden bulletin.md')).toEqual(['gardening']);
+    noProposals(r);
   });
 
   it.each([[] as string[], null])('b7-explicit-growth-origin initial vocabulary %j', async (initial) => {

@@ -44,11 +44,11 @@
   "semanticEvidence": "pending; scripted replies prove deterministic integration only",
   "growthCandidates": [
     "rainwater",
-    "Rain_water",
+    "RainWater",
     "compost",
     "seed-saving"
   ],
   "candidateDeclaration": "pending lead freeze; new assignments require a separately declared automatic candidate, never unknown-tag admission",
   "deduplicateBeforeCap": true,
-  "growthOrder": "admitted-item-order"
+  "growthOrder": "newTags-order"
 }
