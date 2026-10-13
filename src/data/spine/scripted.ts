@@ -1990,6 +1990,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       for (const { file } of related) places.set(file.id, file);
       return related.map(({ path }) => path.slice(0, -3));
     }
+    // The first note of a new topic is its folder's own hub: it links to itself, never to unrelated notes.
+    const self = join(to, note.name);
+    if (VaultIndex.isHub(self, note.name, note.template === 'moc' ? 'moc' : undefined)) return [self.slice(0, -3), ...[...authored.values()].map(({ path }) => path.slice(0, -3))].slice(0, 5);
     return refused('a template note without a grounded destination hub');
   };
   // A note a model wrote for a thing (P4-3): beside it, its words as the body, Bower's summary and Timeline around them.

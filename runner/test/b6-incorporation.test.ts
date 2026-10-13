@@ -121,11 +121,15 @@ it('b6-existing-fit-before-create control: no fit creates', async () => {
 it('b6-existing-fit-before-create', async () => {
   for (const type of ['concept', 'moc']) {
     const b = await setup({ [WATER]: note(ARTICLE, type) });
-    const r = await run(b, select(b, 'Resources/Rainwater', [b.id(WATER)]), filing(b, 'Resources/Rainwater', 'Rainwater'), reuse(b));
+    const r = await run(b, select(b, 'Resources/Rainwater', [b.id(WATER)]), filing(b, 'Resources/Rainwater', 'Rainwater'),
+      type === 'moc' ? { ...empty, things: [{ fileId: b.source(), to: 'Resources/Rainwater', name: 'Article.txt' }] } : reuse(b));
     done(r, 1);
     expect(r.frames[0]?.input, 'the existing fit was actually visible').toContain('Rainwater');
     expect.soft(visibleNotes(r), 'a visible matching note or MOC wins before duplicate creation').toEqual([WATER]);
-    expect.soft(parseNote(WATER, r.after[WATER] ?? '').timeline, 'the existing fit receives the cited source')
+    expect(r.after['Resources/Rainwater/Article.txt']).toBe(ARTICLE);
+    // A legacy MOC never takes a Timeline line (TL-P4-47 Q5): its text stays byte-identical.
+    if (type === 'moc') expect(r.after[WATER]).toBe(b.c.folder[WATER]);
+    else expect.soft(parseNote(WATER, r.after[WATER] ?? '').timeline, 'the existing fit receives the cited source')
       .toEqual([expect.objectContaining({ text: ARTICLE, source: 'Article.txt' })]);
   }
 });
@@ -279,30 +283,33 @@ it('b6-cut-index-no-create control: a complete index creates normally', async ()
 });
 
 it('b6-cut-index-no-create', async () => {
-  const folder = Object.fromEntries(Array.from({ length: 150 }, (_, i) => [
-    `Resources/Group ${String(i).padStart(3, '0')}/Note ${String(i).padStart(3, '0')}.md`,
-    note(`Evidence ${i} ${'x'.repeat(199 - `Evidence ${i} `.length)}.`),
-  ]));
-  const b = await setup(folder);
-  // Reuse B1's warm id/version snapshot; seed reads are outside production call/byte budgets.
-  const files: RetrievalFile['files'] = {};
-  for (const f of await b.drive.listAll(b.root)) {
-    const path = b.drive.pathOf(f.id, b.root) ?? '';
-    if (!path.startsWith('Resources/') || !path.endsWith('.md')) continue;
-    files[f.id] = { path, version: f.modifiedTime, summary: parseNote(path, await b.drive.readText(f.id)).summary,
-      coverage: { kind: 'prefix', bytes: 4096 } };
+  // A new folder and a new note under an existing folder are both cut off.
+  for (const destination of ['Resources/Rainwater', 'Resources/Group 000']) {
+    const folder = Object.fromEntries(Array.from({ length: 140 }, (_, i) => [
+      `Resources/Group ${String(i).padStart(3, '0')}/Note ${String(i).padStart(3, '0')}.md`,
+      note(`Evidence ${i} ${'x'.repeat(199 - `Evidence ${i} `.length)}.`),
+    ]));
+    const b = await setup(folder);
+    // Reuse B1's warm id/version snapshot; seed reads are outside production call/byte budgets.
+    const files: RetrievalFile['files'] = {};
+    for (const f of await b.drive.listAll(b.root)) {
+      const path = b.drive.pathOf(f.id, b.root) ?? '';
+      if (!path.startsWith('Resources/') || !path.endsWith('.md')) continue;
+      files[f.id] = { path, version: f.modifiedTime, summary: parseNote(path, await b.drive.readText(f.id)).summary,
+        coverage: { kind: 'prefix', bytes: 4096 } };
+    }
+    await b.drive.createText(b.id(SYSTEM.dir), 'retrieval.json', JSON.stringify({ v: 1, folderId: b.root,
+      account: 'ACCOUNT_ID', cursor: String(Number(await b.drive.getStartPageToken()) + 1), files }));
+    b.drive.touch(b.id('Resources/Group 000/Note 000.md'));
+    const r = await run(b, select(b, destination), filing(b, destination, 'Rainwater'), empty);
+    expect(r.frames[0]?.index, 'the production candidate projection is actually cut').toMatch(/index cut: (\d+ folders omitted|context omitted)/);
+    expect(r.code, r.errors).toBe(0);
+    expect.soft(visibleNotes(r), 'a cut index never authorizes new note creation').toEqual(Object.keys(folder).sort());
+    expect.soft(r.pathsById[b.source()], 'the original stays in the inbox when creation cannot be justified').toMatch(/^Inbox\//);
+    expect.soft(report(r).filed, 'the source is not reported as filed').toEqual([]);
+    expect.soft(report(r).created, 'nothing is reported as created from incomplete fit evidence').toEqual([]);
+    expect(r.after[r.pathsById[b.source()] ?? '']).toBe(ARTICLE);
+    const anchor = b.admission.piles[0]?.items.find((i) => i.name === PILE_NOTE)?.fileId ?? '';
+    expect.soft(r.pathsById[anchor] ?? '', 'the source words also stay honest').toMatch(/^Inbox\//);
   }
-  await b.drive.createText(b.id(SYSTEM.dir), 'retrieval.json', JSON.stringify({ v: 1, folderId: b.root,
-    account: 'ACCOUNT_ID', cursor: String(Number(await b.drive.getStartPageToken()) + 1), files }));
-  b.drive.touch(b.id('Resources/Group 000/Note 000.md'));
-  const r = await run(b, select(b, 'Resources/Rainwater'), filing(b, 'Resources/Rainwater', 'Rainwater'), empty);
-  expect(r.frames[0]?.index, 'the production candidate projection is actually cut').toMatch(/index cut: \d+ folders omitted/);
-  expect(r.code, r.errors).toBe(0);
-  expect.soft(visibleNotes(r), 'a cut index never authorizes new note creation').toEqual(Object.keys(folder).sort());
-  expect.soft(r.pathsById[b.source()], 'the original stays in the inbox when creation cannot be justified').toMatch(/^Inbox\//);
-  expect.soft(report(r).filed, 'the source is not reported as filed').toEqual([]);
-  expect.soft(report(r).created, 'nothing is reported as created from incomplete fit evidence').toEqual([]);
-  expect(r.after[r.pathsById[b.source()] ?? '']).toBe(ARTICLE);
-  const anchor = b.admission.piles[0]?.items.find((i) => i.name === PILE_NOTE)?.fileId ?? '';
-  expect.soft(r.pathsById[anchor] ?? '', 'the source words also stay honest').toMatch(/^Inbox\//);
 });

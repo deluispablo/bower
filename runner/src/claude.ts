@@ -41,6 +41,7 @@ import { MANIFEST_V2_LIMIT, parseRunManifestV2, recordableName } from '../../src
 import { z } from 'zod';
 import { AUTHORED_LINE_MAX, STATE_WRITE, newsLineCited } from '../../src/data/contracts/note-edit';
 import { timelineBullets } from '../../src/data/contracts/note-format';
+import { NOTE_TEMPLATES, type NoteTemplate } from '../../src/data/contracts/note-templates';
 import { parseTimelineLine, timelineLine } from '../../src/data/contracts/timeline-line';
 import { PILE_NOTE } from '../../src/data/piles';
 import type { Admitted, RunProvider } from '../../src/data/spine/provider';
@@ -348,6 +349,10 @@ function inStableOrder(piles: Shown['piles']): Shown['piles'] {
   const by = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
   return piles.map((p) => ({ ...p, things: [...p.things].sort((a, b) => by(a.name, b.name) || by(a.kind, b.kind)) }));
 }
+
+/** Names that differ only by case, Unicode form, punctuation, a leading article or a copy number are one name (TL-P4-47 Q6). */
+const nearName = (name: string): string => name.normalize('NFC').toLowerCase().replace(/\.md$/u, '').replace(/\s*\(\d+\)$/u, '')
+  .replace(/^(?:the|a|an)\s+/u, '').replace(/[^\p{L}\p{N}]/gu, '');
 
 /** Count the serialized projection, metadata and repeated candidate rows together, including cut notices. */
 function boundIndexContext(shown: Shown): void {
@@ -836,6 +841,8 @@ export interface Seen {
   retrySources?: ReadonlySet<string>;
   presentLines?: ReadonlySet<string>;
   notes: ReadonlySet<string>;
+  /** Folders whose shown Bower MOC lists what is filed there: a thing filed into one needs no note of its own (TL-P4-47 Q5). */
+  mocFolders?: ReadonlySet<string>;
   names?: ReadonlySet<string>;
   texts?: ReadonlyMap<string, string>;
   /** The folders there are under the main folders; when given, a new folder under Areas or Projects needs a cited note. */
@@ -937,6 +944,13 @@ function ruleLine(basis: string, rules: string | undefined): boolean {
   return whole.some((line) => bare(line) === want);
 }
 
+/** A typed basis for a new Project: the goal quoted exactly from the source it names (TL-P4-47 Q6). */
+const SourceBasis = z.strictObject({ kind: z.literal('source'), fileId: z.string(), goal: z.string() });
+const sourceBasisOk = (basis: unknown, owner: string, text: string | undefined): boolean => {
+  const parsed = SourceBasis.safeParse(basis);
+  return parsed.success && parsed.data.fileId === owner && parsed.data.goal.length >= 12 && (text ?? '').includes(parsed.data.goal);
+};
+
 /**
  * Why a place makes a new folder under Areas or Projects with no note cited, or null. The standard fix for model output
  * that is well-formed but wrong is to validate it and ask again with the error (Instructor, retrying,
@@ -944,10 +958,11 @@ function ruleLine(basis: string, rules: string | undefined): boolean {
  * folder, or a new direct subfolder of" the PARA folders, `vault-template/CLAUDE.md:232`; Areas hold an ongoing
  * responsibility, `:34-37`) and never checked it, so this check is new here. `basis` is a note path or a rule line it was shown.
  */
-function newPlace(to: string, basis: unknown, responsibility: unknown, seen: Seen, areas: Map<string, string>): string | null {
+function newPlace(to: string, basis: unknown, responsibility: unknown, seen: Seen, areas: Map<string, string>, owner: string): string | null {
   const [root = ''] = to.split('/');
   if (!seen.folders || !['Areas', 'Projects'].includes(root) || to === root || seen.folders.has(to)) return null;
   if (typeof basis === 'string' && (seen.notes.has(basis) || ruleLine(basis, seen.rules))) return null;
+  if (root === 'Projects' && sourceBasisOk(basis, owner, seen.texts?.get(owner) ?? seen.words)) return null;
   // An Area is an ongoing responsibility (the original's definition): one short phrase naming it is enough, and the report
   // shows it. A Project has a goal the person stated, so it needs a rule line or a note.
   if (root === 'Areas' && lineOk(responsibility, RESPONSIBILITY_MAX) && !/[[\]]/.test(responsibility)) {
@@ -1004,7 +1019,7 @@ const Envelope = z.strictObject({
 }, intentIssue);
 const NoteShape = z.strictObject({
   name: z.string(named('noteName', 'noteKeys')), summary: z.string(named('noteSummary', 'noteKeys')), body: z.string(named('noteBody', 'noteKeys')),
-  typeRow: z.string().optional(), properties: z.record(z.string(), z.unknown()).optional(),
+  typeRow: z.string().optional(), template: z.string().optional(), properties: z.record(z.string(), z.unknown()).optional(),
 }, named('noteKeys'));
 const ProfileRef = z.strictObject({ source: z.string(), sentence: z.number().int().positive() }, named('noteBody'));
 const ThingShape = z.strictObject({
@@ -1097,7 +1112,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       return nameOk(t.name) && (extensionOf(t.name) === was || (was === '.url' && extensionOf(t.name) === '.md'));
     }),
     rule('rawName', (t) => !RAW_NAME.test(t.name.replace(/\.[A-Za-z0-9]{1,5}$/, '')) || `a name that says nothing: "${t.name}" has underscores, a copy number, "final" at the end or a camera or scanner id; give it a plain name from what the thing is or says, or ask about it`),
-    rule('newFolder', (t) => newPlace(t.to, t.basis, t.responsibility, seen, areas) ?? true),
+    rule('newFolder', (t) => newPlace(t.to, t.basis, t.responsibility, seen, areas, t.fileId) ?? true),
     // A saved link filed as a note is that note: it takes no second one.
     rule('noteForNote', (t) => t.note === undefined || extensionOf(t.name) !== '.md'),
     // Its own note: a plain note name, a one-line summary, a body within its bound with none of Bower's sections.
@@ -1108,6 +1123,8 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       const body = bodyOf(t.note);
       return body.length <= AUTHORED.body && !CONTROL.test(body) && !HIDDEN_CHARS.test(body);
     }),
+    // A note without a declared type row may name one of B6a's templates (never the profile one).
+    rule('noteKeys', (t) => t.note?.template === undefined || (t.note.typeRow === undefined && t.note.template !== 'profile' && Object.hasOwn(NOTE_TEMPLATES, t.note.template))),
     rule('noteKeys', (t) => {
       if (!t.note || (t.note.typeRow === undefined && t.note.properties === undefined)) return true;
       const row = seen.types?.find((row) => row.id === t.note?.typeRow);
@@ -1127,6 +1144,9 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     }
     if (t.note) authored.set(t.fileId, { name: t.note.name, summary: t.note.summary.trim(), body: bodyOf(t.note).trim(),
       ...(t.note.typeRow === undefined ? {} : { typeRow: t.note.typeRow }),
+      // A new Project proven by its source's own goal starts from the Project template.
+      ...(t.note.template === undefined && t.note.typeRow === undefined && t.to.startsWith('Projects/') && !seen.folders?.has(t.to) && sourceBasisOk(t.basis, t.fileId, seen.texts?.get(t.fileId))
+        ? { template: 'project' as const } : t.note.template === undefined ? {} : { template: t.note.template as NoteTemplate }),
       ...(t.note.properties === undefined ? {} : { properties: t.note.properties }) });
   }));
   const Words = WordsShape.superRefine(inOrder<z.output<typeof WordsShape>>([
@@ -1134,7 +1154,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     rule('pileTwice', (n) => !words.has(n.pileId)),
     rule('placeOutside', (n) => placeOk(n.to)),
     rule('noteName', (n) => nameOk(n.name) && extensionOf(n.name) === '.md'),
-    rule('newFolder', (n) => newPlace(n.to, n.basis, n.responsibility, seen, areas) ?? true),
+    rule('newFolder', (n) => newPlace(n.to, n.basis, n.responsibility, seen, areas, n.pileId) ?? true),
   ], (n) => words.set(n.pileId, { to: n.to, name: n.name })));
   const Line = LineShape.superRefine(inOrder<z.output<typeof LineShape>>([
     rule('lineNote', (l) => notes.has(l.note) || !!seen.suppressed?.has(l.note)),
@@ -1224,7 +1244,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     rule('noNote', () => {
       const cited = new Set(timeline.flatMap((l) => (l.cites === null ? [] : [l.cites])));
       for (const [id, place] of placed) {
-        if (!seen.texts?.has(id) || authored.has(id) || cited.has(id) || ['.md', '.url'].includes(extensionOf(place.name))) continue;
+        if (!seen.texts?.has(id) || authored.has(id) || cited.has(id) || seen.mocFolders?.has(place.to) || ['.md', '.url'].includes(extensionOf(place.name))) continue;
         return `a thing with text and no note: "${place.name}" needs a "note", or a Timeline line citing it on a note below that it only confirms`;
       }
       return true;
@@ -1464,7 +1484,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         if (note?.type !== 'moc' || note.owner !== 'bower' || shown.suppressed?.has(note.path)) continue;
         try {
           const text = note.moc?.text ?? await read.readText(id);
-          note.moc = mocSnapshot(text) ?? undefined;
+          const snapshot = mocSnapshot(text);
+          if (snapshot) note.moc = snapshot; else delete note.moc;
           metadata[id] = { ...metadata[id], summary: note.summary, links: parseNote(note.path, text).links };
         } catch (error) {
           if (!noteRefusal(error)) throw error;
@@ -1507,6 +1528,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     }) }));
     // Id/version coverage accompanies the cut projection; it is metadata, never complete L3 evidence.
     shown.indexed = Object.fromEntries(Object.entries(indexed).map(([id, note]) => { const { moc: _moc, ...metadata } = note; return [id, metadata]; }));
+    // The index itself was cut (not merely bounded here): no match in it proves nothing, so no new note is justified by it.
+    const indexCutAtSource = /index cut: \d+ folders omitted/.test(shown.index ?? '');
     boundIndexContext(shown);
     const folders = listing.filter((f) => f.folder && MAIN_FOLDERS.includes((ix.pathOf(f.id) ?? '').split('/')[0] ?? ''));
     shown.folderCandidates = folders.map((folder) => ({ folderId: folder.id, path: ix.pathOf(folder.id) ?? '' }));
@@ -1531,12 +1554,18 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       candidates: Object.keys(shown.indexed), folders: folders.map((f) => ({ id: f.id, hubId: hubId(f.id) })),
       pinned: Object.fromEntries(sources.map((s) => [s.itemId,
         answers.filter((a) => a.sourceId === s.itemId || subjectKey(a.question) === s.itemId).flatMap(answerPins)])) };
+    const indexCut = (): boolean => /index cut:/.test(shown.index ?? '');
     const selectionCheck = (value: unknown): ReturnType<typeof selectionOf> => {
       const result = selectionOf(value, context);
       if (!result.ok) { console.error('Selection shape or ids refused.'); return result; }
+      const cut = indexCut();
+      // A cut index cannot show that a new folder is needed: that item waits unplaced, nothing is created (TL-P4-47 Q6).
+      result.value.items = result.value.items.filter((item) => !cut || typeof item.destination === 'string');
+      result.allowedTargets = Object.fromEntries(Object.entries(result.allowedTargets).filter(([id]) => result.value.items.some((item) => item.itemId === id)));
       for (const item of result.value.items) {
         const candidates = shown.sources?.find((s) => s.itemId === item.itemId)?.candidates.map((c) => c.id) ?? [];
         if (item.wants.some((id) => !candidates.includes(id))) return { ok: false };
+        if (item.basis && !sourceBasisOk(item.basis, item.itemId, sources.find((s) => s.itemId === item.itemId)?.words)) return { ok: false };
         const destinationId = typeof item.destination === 'string' ? item.destination : item.destination.parentId;
         const hub = hubId(destinationId);
         const profile = profileFor(rowFor(item))?.id;
@@ -1547,9 +1576,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           const destination = item.destination;
           const path = ix.pathOf(destination.parentId) ?? '';
           const visible = candidates.includes(destination.parentId);
-          const nearName = (name: string): string => name.trim().toLowerCase().replace(/\s+/gu, ' ');
           try { checkCreationName(item.destination.name, 'folder'); } catch (error) { console.error(error); return { ok: false }; }
-          if (!visible || /index cut:/.test(shown.index ?? '') || ix.filesIn(path).some((f) => nearName(f.name) === nearName(destination.name))) return { ok: false };
+          if (!visible || ix.filesIn(path).some((f) => nearName(f.name) === nearName(destination.name))) return { ok: false };
         }
         result.allowedTargets[item.itemId] = [...new Set([...required, destinationId, ...(hub ? [hub] : [])])];
       }
@@ -1614,6 +1642,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       const seen: Seen = { types: shown.types, notes: new Set(shown.notes.map((n) => n.path)), personalNotes: shown.personalNotes,
         suppressed: shown.suppressed, retrySources: shown.retrySources, presentLines: shown.presentLines,
         names: shown.names ?? new Set(), texts, folders: new Set(shown.folders),
+        mocFolders: new Set(shown.notes.filter((n) => indexed[ix.idOf(n.path) ?? '']?.type === 'moc' && indexed[ix.idOf(n.path) ?? '']?.owner === 'bower').map((n) => n.path.slice(0, n.path.lastIndexOf('/')))),
         folderCandidates: new Set(folders.map((f) => f.id)), words: shown.piles.map((p) => p.words).join('\n'),
         shownNotes: shown.notes.map((n) => `${n.path}\n${n.text}`).join('\n'), rules: shown.rules,
         merges: mergesOf(answers, shown.notes.map((n) => n.path)) };
@@ -1621,18 +1650,40 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       const targets = new Set(Object.values(selection.allowedTargets).flat());
       const journal = took.taken.journal.filter((line) =>
         (shown.requestNotes?.[line.fileId] ?? []).every((id) => targets.has(id)));
+      // A question about a source whose own candidates fit 2 to 4 folders offers exactly those folders; Bower supplies the ids and labels.
+      const offered = (asks: ReadonlyMap<string, Ask> | undefined): ReadonlyMap<string, Ask> | undefined => asks && new Map([...asks].map(([id, ask]) => {
+        const thing = shown.piles.flatMap((p) => p.things).find((t) => t.fileId === id);
+        const own = new Set(((thing ? `${thing.name} ${thing.text ?? ''}` : shown.piles.find((p) => p.pileId === id)?.words ?? '').toLowerCase().match(/\p{L}{5,}/gu)) ?? []);
+        // shortcut: a shared word of 5+ letters ties a candidate to this item's own words; upgrade when B1d ranks candidates per word.
+        const places = [...new Set((shown.sources?.find((source) => source.itemId === id)?.candidates ?? []).flatMap((c) => {
+          const words = `${c.summary ?? indexed[c.id]?.summary ?? ''} ${ix.pathOf(c.id) ?? ''}`.toLowerCase().match(/\p{L}{5,}/gu) ?? [];
+          return words.some((w) => own.has(w)) ? [ix.byId(c.id)?.folder ? c.id : ix.byId(c.id)?.parents[0] ?? ''] : [];
+        }))]
+          .flatMap((folderId) => folders.some((f) => f.id === folderId) && (ix.pathOf(folderId) ?? '').includes('/') ? [folderId] : [])
+          .map((folderId) => ({ folderId, path: ix.pathOf(folderId) ?? '' })).sort((x, y) => (x.path < y.path ? -1 : 1))
+          .map(({ folderId, path }) => ({ folderId, label: path.split('/').at(-1) ?? path }));
+        return [id, ask.options || places.length < 2 || places.length > 4 ? ask : { ...ask, options: places }] as const;
+      }));
       const intent = await twice(input, async (value) => {
         const got = intentOf(value, shownTook, seen);
         if (!got.ok) return got;
+        Object.assign(got.filing, { ...(got.filing.asks ? { asks: offered(got.filing.asks) } : {}), ...(got.filing.thingAsks ? { thingAsks: offered(got.filing.thingAsks) } : {}) });
         if (!isRecord(value)) return null;
         const rows = (key: string): Record<string, unknown>[] => Array.isArray(value[key]) ? value[key].filter(isRecord) : [];
         const chosen = (id: unknown) => selection.value.items.find((item) => item.itemId === id);
         for (const row of [...rows('things'), ...rows('notes')]) {
           const item = chosen(row.fileId ?? row.pileId);
           if (!item) return null;
+          // A cut index proves no fit, so with no selected note to fit it authorizes no new note, even under an existing folder (TL-P4-47 Q6).
+          if (indexCutAtSource && isRecord(row.note) && item.wants.length === 0) return null;
           const path = typeof item.destination === 'string' ? ix.pathOf(item.destination)
             : `${ix.pathOf(item.destination.parentId)}/${item.destination.name}`;
           if (row.to !== path || (isRecord(row.note) && row.note.typeRow !== undefined && row.note.typeRow !== item.kind)) return null;
+          // A note named like one of Bower's in that folder or shown is the same note: file into it, never beside it.
+          const named = isRecord(row.note) && typeof row.note.name === 'string' ? row.note.name : undefined;
+          const same = named === undefined ? undefined : [...ix.filesIn(path ?? ''), ...shown.notes.flatMap((n) => ix.file(n.path) ?? [])]
+            .find((f) => indexed[f.id]?.owner === 'bower' && nearName(f.name) === nearName(named))?.name;
+          if (same !== undefined) return no('noteName', `a new note "${named}" for the note "${same}" that already exists: give a Timeline line on that note citing this thing instead of a new note`);
         }
         const canEdit = (row: Record<string, unknown>): boolean => {
           const id = typeof row.note === 'string' ? ix.idOf(row.note) : undefined;
@@ -1651,6 +1702,9 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           const frozen = selection.value.asks.find((row) => row.fileId === ask.fileId && row.pileId === ask.pileId);
           if (!frozen || JSON.stringify(ask.options ?? []) !== JSON.stringify(frozen.options ?? [])) return null;
         }
+        // A MOC lists its notes itself and never takes a Timeline line: refuse the line so the thing is filed bare.
+        if (rows('lines').some((row) => typeof row.note === 'string' && seen.mocFolders?.has(row.note.slice(0, row.note.lastIndexOf('/')))
+          && indexed[ix.idOf(row.note) ?? '']?.type === 'moc')) return no('lineNote', 'a line on a MOC, which takes none: file the thing into its folder without a note or line');
         if (Array.isArray(value.bin) && value.bin.some((id) => !chosen(id))) return null;
         if (rows('keep').some((row) => !selection.value.items.some((item) => {
           const targets = selection.allowedTargets[item.itemId] ?? [];
@@ -1698,7 +1752,7 @@ const SelectionShape = z.strictObject({
   items: z.array(z.strictObject({
     itemId: z.string(), kind: z.string(),
     destination: z.union([z.string(), z.strictObject({ parentId: z.string(), name: z.string().refine(recordableName).refine((n) => !n.startsWith('.') && n.trim() === n) })]),
-    wants: z.array(z.string()).max(5),
+    wants: z.array(z.string()).max(5), basis: SourceBasis.optional(),
   })),
   asks: z.array(AskShape),
 });
