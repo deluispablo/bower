@@ -71,7 +71,7 @@ describe('real adapters: the old template Rules.md in an existing folder', () =>
     expect(parseRules(await w.drive.readText(rulesId))[0]?.yourWords).toBe('receipts go to money');
   });
 
-  it('a person-edited Rules.md gets a region without repair; concurrent edits and twins stay untouched', async () => {
+  it('a person-edited Rules.md gets a region without repair, including concurrent edits; twins stay untouched', async () => {
     // Edited by the person: the old text with one more line.
     {
       const edited = `${OLD_RULES_TEMPLATE}\n- Receipts go to Money.\n`;
@@ -103,8 +103,16 @@ describe('real adapters: the old template Rules.md in an existing folder', () =>
       };
       expect(await runOnce(w, hop)).toBe(0);
       expect(changed).toBe(true);
-      expect(await w.drive.readText(rulesId)).toBe(theirs);
-      expect((await w.drive.get(rulesId)).appProperties).toBeUndefined();
+      const bytes = await w.drive.readBytes(rulesId);
+      const prefix = new TextEncoder().encode(theirs);
+      expect(bytes.subarray(0, prefix.length)).toEqual(prefix);
+      const appended = new TextDecoder().decode(bytes.subarray(prefix.length));
+      expect.soft(appended).toContain('## Rules added in Bower');
+      expect.soft(appended).toContain('<!-- bower:ownership/2 begin rules-added -->');
+      expect.soft(appended).toContain('<!-- bower:ownership/2 end rules-added -->');
+      expect.soft(appended).toContain('*You wrote: "receipts go to money"*');
+      const props = (await w.drive.get(rulesId)).appProperties ?? {};
+      expect(Object.fromEntries(Object.entries(props).filter(([key]) => key !== 'bowerOp'))).toEqual({});
     }
     // Two files of the name in the folder: neither is the one to repair.
     {
@@ -175,7 +183,8 @@ describe('real adapters: the old template Rules.md in an existing folder', () =>
       return await next();
     })).toBe(0);
     expect(sends, 'the landed append is reconciled, never resent').toBe(1);
-    expect(await (await w.api.browser(`${ORIGIN}/status`)).json()).toMatchObject({
+    const last = (await w.drive.listAll(w.rootId)).find((f) => f.name === 'last-run.json');
+    expect(JSON.parse(await w.drive.readText(last?.id ?? '')) as unknown).toMatchObject({
       run: { phase: 'done', report: { rulesWorded: 1 } },
     });
     expect(await w.drive.readText(rulesId)).toBe(edited);

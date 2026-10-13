@@ -181,7 +181,7 @@ describe('rules-added-region', () => {
       expect.soft(await vault.rules(), ownership).toEqual([expect.objectContaining({ text: 'Name scans by date.' })]);
       const pending = await vault.addRule(text).catch((error: unknown) => error);
       expect.soft(pending, ownership).toMatchObject({ text, pending: true });
-      const out = applyChanges(encode(before), [word()]);
+      const out = applyChanges(encode(before), [word([{ ...added, yourWords: text }])]);
       expect.soft(out.ok, ownership).toBe(true);
       if (out.ok) {
         expect(out.bytes.subarray(0, encode(prefix).length)).toEqual(encode(prefix));
