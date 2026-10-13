@@ -404,6 +404,7 @@ export function Explorer({ variant }: Props) {
                 }
               }
               treeRef.current?.focus();
+              setKb(true); // after focus(): the box's blur clears kb, and the ring comes back with the tree's focus
             }}
           />
         ) : (
@@ -505,13 +506,14 @@ export function Explorer({ variant }: Props) {
           onCancel={() => {
             ui.setNaming(null);
             returnFocusTo(nameOpener.current);
+            setKb(nameOpener.current === treeRef.current);
           }}
           onMade={(path) => {
             if (useUi.getState().naming !== pending) return;
             ui.setNaming(null);
             setFocus(path);
-            setKb(true);
             returnFocusTo(treeRef.current);
+            setKb(true);
           }}
         />}
       </Fragment>)}
