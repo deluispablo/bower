@@ -12,12 +12,12 @@
  */
 import { createOwnershipContext, type OwnershipContext } from '../contracts/ownership-format';
 import { UNCONFIRMED_WRITE_MESSAGE, type DriveFile } from '../drive/drive-api';
-import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate, personalTimelineRefusal } from '../contracts/note-edit';
+import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, profileTextOk, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate, personalTimelineRefusal } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent, type TimelineConsent, type AppendCompletion, type LeftAsWritten, type SatisfiedAppend } from '../contracts/run-manifest';
 import { PILE_NOTE, safeInboxName } from '../piles';
 import { recordablePile, sameText, type Digest } from '../pile-readiness';
-import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
+import { checkCreationName, displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
 import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type Request, type StateShown, type Proposal } from '../types';
 import { isJournalRecord, pairsOf, type JournalRecord } from '../contracts/journal-record';
 import { PROP, RUNNER_WRITES, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
@@ -27,7 +27,7 @@ import { md5Hex } from '../contracts/hashes';
 import { proposalOk, isQuestionOption, answeredAskings, answersAsking, journalAnswer, roundFor, relatedSubjects, sameSubjectContent, subjectMembers, subjectPile, type QuestionRound, ASK_GONE, STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
 import { sha256 } from '../vault/hashes';
 import { indexedFront, parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
-import { linkTarget } from '../contracts/links';
+import { linkTarget, renderLink } from '../contracts/links';
 import { parseTimelineLine, timelineLine } from '../contracts/timeline-line';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
@@ -437,6 +437,8 @@ export interface Filing {
   observations?: readonly unknown[];
   forget?: readonly { factId: string; quote?: string }[];
   shownFactIds?: readonly string[];
+  profiles?: ReadonlyMap<string, readonly string[]>;
+  kinds?: ReadonlyMap<string, string>;
   thing(fileId: string): Placement | null;
   words(pileId: string): Placement | null;
   note?(fileId: string): AuthoredNote | null;
@@ -531,10 +533,7 @@ export interface Disagreement {
  * (`modelDecisions`), or the scripted provider's, which also answers what no model reply does yet (the optional part).
  * A part a reply leaves out is not done: requests and answers it does not settle wait for a run that can act on them.
  */
-export interface Decisions {
-  observations?: readonly unknown[];
-  forget?: readonly { factId: string; quote?: string }[];
-  shownFactIds?: readonly string[];
+export interface Decisions extends Pick<Filing, 'observations' | 'forget' | 'shownFactIds' | 'profiles' | 'kinds'> {
   thing(t: ThingSeen): Placement | null;
   words(pileId: string, words: string): Placement | null;
   pileAsk(pile: Pile): Ask | null;
@@ -567,7 +566,7 @@ export interface Decisions {
 /** The model's intent as decisions: what it placed, wrote and asked, nothing more. */
 export function modelDecisions(filing: Filing): Decisions {
   return {
-    observations: filing.observations, forget: filing.forget, shownFactIds: filing.shownFactIds,
+    observations: filing.observations, forget: filing.forget, shownFactIds: filing.shownFactIds, profiles: filing.profiles, kinds: filing.kinds,
     thing: (t) => filing.thing(t.fileId),
     words: (pileId) => filing.words(pileId),
     pileAsk: (pile) => filing.asks?.get(pile.id) ?? null,
@@ -1328,7 +1327,10 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       const place = ix.file(at);
       if (place) places.set(place.id, place);
     }
-    for (let p = to; p !== at; p = parentOf(p)) if (!missing.includes(p)) missing.push(p);
+    for (let p = to; p !== at; p = parentOf(p)) {
+      checkCreationName(nameOf(p), 'folder');
+      if (!missing.includes(p)) missing.push(p);
+    }
     for (let p = to; p !== at; p = parentOf(p)) planned.set(p, { path: p, type: 'folder', modified: 0, created: 0 });
   };
   const plannedFile = (path: string): void => {
@@ -1936,7 +1938,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // Inbox, `.md`, unique against the folder as it will be. A filed thing's own note is written only where none is
   // yet, as the legacy runner did; it follows its thing's move. The words of a pile become its note.
   const noteDate = timelineDate(opts.requestedAt) ?? 'Today';
-  const generated: Array<{ to: string; name: string; text: string; what: string; after: string | null; pileId: string | null; aside: string }> = [];
+  const generated: Array<{ to: string; name: string; text: string; what: string; after: string[]; pileId: string | null; aside: string }> = [];
   for (const { thing, name } of filing) {
     const own = d.ownNote?.(thing.item.name) ?? undefined;
     if (!own || !generatedPlace(parentOf(own))) continue;
@@ -1945,7 +1947,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     plannedFile(own);
     const what = `A note for ${displayName(name)}.`;
     const text = serializeNote({ summary: what, properties: [], tags: [], currentState: [], body: '', timeline: [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
-    generated.push({ to: parentOf(own), name: nameOf(own), text, what, after: thing.file.id, pileId: null, aside: thing.file.name });
+    generated.push({ to: parentOf(own), name: nameOf(own), text, what, after: [thing.file.id], pileId: null, aside: thing.file.name });
   }
   /** The name each filed thing is cited by, as the run makes it: its note's, else its own. */
   const madeAs = new Map(filing.map(({ thing, name, note }) => [thing.file.id, note?.name ?? name]));
@@ -2001,6 +2003,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if ((authored.typeRow !== undefined && !typeRow) || (authored.properties !== undefined && !typeRow)
       || (typeRow && !propertyValuesOk(typeRow, authored.properties ?? {}))) return refused('invalid declared note properties');
     const template = authored.template ?? (typeRow && Object.hasOwn(NOTE_TEMPLATES, typeRow.template) ? typeRow.template as NoteTemplate : undefined);
+    if (template === 'profile' || typeRow?.template === 'profile') return refused('the profile template outside profile admission');
     if (typeRow && typeRow.template !== template) return refused('a note template outside its declared type');
     // Only declared, relevant links in the authored evidence; never pad with the folder's other notes.
     const related = await groundedAuthoredLinks(to, { ...authored, template }, { file: thing.file, name });
@@ -2018,7 +2021,66 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const text = serializeNote({ template, typeRow, summary: authored.summary, properties, tags: [], currentState: [], body: authored.body,
       ...(template === 'source' ? { original: name } : {}),
       timeline: template && !NOTE_TEMPLATES[template].timeline ? [] : [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
-    generated.push({ to, name: noteName, text, what: authored.summary, after: thing.file.id, pileId: null, aside: thing.file.name });
+    generated.push({ to, name: noteName, text, what: authored.summary, after: [thing.file.id], pileId: null, aside: thing.file.name });
+  }
+  // Group the row-bound contributions before authoring: one ordinary edit/create per profile.
+  for (const row of types.table.rows.filter((row) => row.profile)) {
+    const contributions = filing.filter(({ thing }) => d.kinds?.get(thing.file.id) === row.id && d.profiles?.has(thing.file.id));
+    if (!contributions.length || /offer/iu.test(row.id)) continue;
+    const matches = listing.filter((file) => !file.folder && file.appProperties?.profile === row.id && file.appProperties.by === 'bower');
+    if (matches.length > 1) continue;
+    const target = matches[0];
+    const first = contributions[0];
+    if (!first) continue;
+    const to = target ? parentOf(ix.pathOf(target.id) ?? '') : first.to;
+    if (!generatedPlace(to)) continue;
+    const citations = contributions.map(({ name }) => renderLink(thingName(name)));
+    const body = contributions.flatMap(({ thing }, i) => (d.profiles?.get(thing.file.id) ?? [])
+      .map((sentence) => `${sentence} ${citations[i]}\n`)).join('');
+    if (!target) {
+      const template = row.profile?.template;
+      const related = await groundedAuthoredLinks(to, { name: 'Profile.md', summary: 'Profile from documents.', body: '', template },
+        { file: first.thing.file, name: first.name });
+      if (!profileTextOk(body)) return refused('a profile beyond its 400 word bound');
+      const name = freeName(planned, to, 'Profile.md');
+      const scaffold = serializeNote({ template, typeRow: { ...row, template: 'profile' }, summary: 'Profile from documents.',
+        properties: [{ key: 'type', label: 'Type', value: row.id }, { key: 'created', label: 'Created', value: noteDate },
+          { key: 'updated', label: 'Updated', value: noteDate }, { key: 'source', label: 'Source', value: first.name },
+          { key: 'related', label: 'Related', value: related.map((path) => `[[${path}]]`).join(', ') }],
+        tags: [], currentState: [], body: '', timeline: [{ date: noteDate, text: 'Filed by Bower.', source: first.name }], byBower: true });
+      // The region writer copies source bytes without interpreting them as template sections.
+      const result = applyChanges(new TextEncoder().encode(scaffold), [{ kind: 'profile-rewrite', recordIds: [], previous: '\n', text: body }]);
+      if (!result.ok) return refused('a profile that could not be written');
+      plannedFile(join(to, name));
+      generated.push({ to, name, text: result.text, what: 'Profile from documents.', after: contributions.map(({ thing }) => thing.file.id), pileId: null, aside: first.thing.file.name });
+      continue;
+    }
+    const path = ix.pathOf(target.id);
+    const before = await verified(target, 'utf8');
+    if (!path || !before) continue;
+    const bytes = await drive.readBytes(target.id);
+    if (before.size !== bytes.byteLength || before.sha256 !== await sha256(new Blob([bytes.slice()]))) continue;
+    const ownership = context.read(target.id, bytes);
+    const span = ownership.status !== 'invalid' ? ownership.payloads?.profile : undefined;
+    if (!span || !parseNote(path, new TextDecoder().decode(bytes), fetched(target.id)).byBower) continue;
+    const previous = new TextDecoder().decode(bytes.subarray(span.start, span.end));
+    const history = [...previous.matchAll(/\[\[[^\]\r\n]+\]\]/gu)].map(([link]) => link);
+    const retained = [...new Set(history)].filter((link) => !citations.includes(link));
+    const text = body + (retained.length ? `${retained.join(' ')}\n` : '');
+    if (!profileTextOk(text)) return refused('a profile beyond its 400 word bound');
+    if (text === previous) continue;
+    const change: Change = { kind: 'profile-rewrite', recordIds: [], previous, text };
+    const existing = edits.find((edit) => edit.file.id === target.id);
+    const changes = [...existing?.changes ?? [], change];
+    const result = applyChanges(bytes, changes, fetched(target.id));
+    if (!result.ok) continue;
+    const after = contributions.map(({ thing }) => thing.file.id);
+    if (existing) {
+      existing.changes = changes; existing.text = result.text; existing.after = [...new Set([...existing.after, ...after])];
+      if (!existing.rows.length) existing.rows.push({ what: 'Profile updated.' });
+    }
+    else edits.push({ file: target, path, before, bytes, changes, text: result.text, after, keeps: [], rows: [{ what: 'Profile updated.' }] });
+    places.set(target.id, target); edited.add(target.id);
   }
   // A request's line already there is satisfied only under the name its source is filed as (TL-P4-32 addendum 2 (6)):
   // under another, it is appended now, after that move.
@@ -2047,7 +2109,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     plannedFile(join(to, name));
     const what = 'Written from a note you added.';
     const text = serializeNote({ summary: words, properties: [{ key: 'kind', label: 'Kind', value: 'Note' }], tags: [], currentState: [], body: words, timeline: [{ date: noteDate, text: what }], byBower: true });
-    generated.push({ to, name, text, what, after: null, pileId, aside: folder.name });
+    generated.push({ to, name, text, what, after: [], pileId, aside: folder.name });
   }
   // Words you added that disagree with a stored note (C07): the question linking both, asked once the note written
   // from those words is there. The stored note is read now; one that cannot be read asks nothing.
@@ -2472,8 +2534,8 @@ export async function build(decided: Decided): Promise<Ended> {
   const notesOf = new Map<string, string>();
   const wordsFiled = new Map<string, ReportContribution>();
   for (const note of generated) {
-    const after = note.after === null ? undefined : moveOf.get(note.after);
-    const op = await add({ kind: 'create-text', parent: targetOf(note.to), name: note.name, createKey: newKey('note'), text: note.text, content: await utf8(note.text), purpose: 'generated' }, after ? [after] : []);
+    const after = note.after.flatMap((id) => moveOf.get(id) ?? []);
+    const op = await add({ kind: 'create-text', parent: targetOf(note.to), name: note.name, createKey: newKey('note'), text: note.text, content: await utf8(note.text), purpose: 'generated' }, after);
     const path = join(note.to, note.name);
     const filed = note.pileId === null ? [] : [{ name: 'Your note', title: thingName(note.name), kind: 'note' as const, to: note.to, note: path }];
     if (note.pileId !== null) {
@@ -2527,7 +2589,7 @@ export async function build(decided: Decided): Promise<Ended> {
     // A line citing a thing filed by this run waits for that thing's move (C06).
     const cited = [...edit.after.flatMap((id) => moveOf.get(id) ?? []), ...edit.changes.flatMap((c) =>
       c.kind === 'timeline-append' && c.consent ? pointers.get(c.consent.requestId) ?? [] : [])];
-    const beforeText = edit.keeps.length ? { beforeText: new TextDecoder().decode(edit.bytes) } : {};
+    const beforeText = edit.keeps.length || edit.changes.some((change) => change.kind === 'profile-rewrite') ? { beforeText: new TextDecoder().decode(edit.bytes) } : {};
     const op = await add({ kind: 'edit-text', before: seen(edit.file), path: edit.path, beforeContent: edit.before, changes: edit.changes, text: edit.text, content: await utf8(edit.text), ...beforeText }, cited);
     editOf.set(edit.file.id, op);
     for (const answer of edit.keeps) derive(answer, op);

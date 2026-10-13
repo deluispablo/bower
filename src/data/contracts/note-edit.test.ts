@@ -194,7 +194,10 @@ const profileControl = (): void => {
 
 it('B5a contracts: b5-profile-region-bound', () => {
   profileControl();
-  const { before, previous } = profileNote();
+  const { before: personal, previous } = profileNote();
+  expect(applyChanges(enc(personal), [profileChange(previous, profileWords(400))]))
+    .toEqual({ ok: false, reason: 'not-bower' });
+  const before = personal.replace('summary:', 'by: bower\nsummary:');
   const bytes = enc(before); const copy = bytes.slice();
   const text = profileWords(400);
   expect(text.trim().split(/\s+/)).toHaveLength(400);
@@ -210,14 +213,20 @@ it('B5a contracts: b5-profile-region-bound', () => {
 
 it('B5a contracts: profile refuses 401 words while its 400-word positive control succeeds', () => {
   profileControl();
-  const { before, previous } = profileNote();
+  const { before: personal, previous } = profileNote();
+  expect(applyChanges(enc(personal), [profileChange(previous, profileWords(400))]))
+    .toEqual({ ok: false, reason: 'not-bower' });
+  const before = personal.replace('summary:', 'by: bower\nsummary:');
   expect(applyChanges(enc(before), [profileChange(previous, profileWords(400))]).ok).toBe(true);
   expect(applyChanges(enc(before), [profileChange(previous, profileWords(401))])).toEqual({ ok: false, reason: 'field' });
 });
 
 it('B5a contracts: profile never adopts person prose and never enlarges Current state', () => {
   profileControl();
-  const { before, previous } = profileNote();
+  const { before: personProfile, previous } = profileNote();
+  expect(applyChanges(enc(personProfile), [profileChange(previous, profileWords(4))]))
+    .toEqual({ ok: false, reason: 'not-bower' });
+  const before = personProfile.replace('summary:', 'by: bower\nsummary:');
   expect(applyChanges(enc(before), [profileChange(previous, profileWords(4))]).ok).toBe(true);
   const personal = '## Profile\nAlex keeps these personal words.\n';
   const unchanged = enc(personal);
@@ -1113,7 +1122,10 @@ it('b4a-existing-regions-compatible', async () => {
   expect(applyChanges(enc(moc), [{ kind: 'moc-rewrite', region: 'moc-overview', recordIds: [],
     previous: '## Overview\nAlex grows beans.\n\n', text: '## Overview\nAlex grows peas.\n\n' }]).ok).toBe(true);
   const profile = profileNote();
-  expect(applyChanges(enc(profile.before), [profileChange(profile.previous, profileWords(4))]).ok).toBe(true);
+  expect(applyChanges(enc(profile.before), [profileChange(profile.previous, profileWords(4))]))
+    .toEqual({ ok: false, reason: 'not-bower' });
+  const ownedProfile = profile.before.replace('summary:', 'by: bower\nsummary:');
+  expect(applyChanges(enc(ownedProfile), [profileChange(profile.previous, profileWords(4))]).ok).toBe(true);
   expect(applyChanges(enc(b6Project()), [b6Rewrite('goal', '## Goal\nRepair the greenhouse.\n',
     '## Goal\nReplace the stated cracked pane.\n')]).ok).toBe(true);
   const state = `---\nby: bower\nbower_state: ${stateMark(['Original'])}\n---\n## Current state\n- Alex changed this\n`;

@@ -957,6 +957,7 @@ function rewriteRegion(text: string, change: RegionChange, fetched?: FetchedOwne
   const bytes = encoder.encode(framed);
   const own = framed === text && fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
   const note = parseNote('note.md', framed);
+  if (change.kind === 'profile-rewrite' && !note.byBower) return { refused: 'not-bower' };
   if (own.status === 'invalid') return { refused: 'not-bower' };
   const span = own.payloads?.[regionOf(change)];
   if (change.kind === 'template-rewrite' && (!note.byBower || !note.properties.some((p) => p.key === 'type' && p.value === 'project'))) return { refused: 'not-bower' };
