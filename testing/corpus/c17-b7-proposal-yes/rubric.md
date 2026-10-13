@@ -1,9 +1,9 @@
-# Exact consent after filing
+# B7 deterministic and semantic evidence
 
-TL-P4-08 points 1–8: clear filing proceeds, primary content and links survive, and an optional schema question never holds the item in the inbox. The new topic is a proposal, not authority from the guide. Existing tag gardening is enough to file now.
-
-The immutable payload is exactly {"kind":"tag","tag":"rainwater"}; the question has B5's proposal subject, not inbox. After filing, the real app yes installs that tag once through the existing answer journal and instructions continuation. An idle third press adds no tag or question. Acceptance does not retroactively rewrite this immutable source or Alex's prose. Future new notes can use rainwater.
-
-The id selector $proposal:rainwater is a proposed exact-payload-to-generated-question binding in the existing driver, not supported today and not a literal live id. B7c must locate exactly one actual proposal and submit its question id through answerQuestion; missing/ambiguous matches fail. The yes may use B5's no-model install path; the empty second reply is a fallback only, not a requirement for a Claude call.
-
-All three presses remain model pending. Strings in expected.json cannot prove typed subject, payload hash, asking identity, once-only installation or source immutability across later presses. Assert expected-tag-results.json through main, add no/ignore/repeated yes/stale cap variants, and reuse redispatchCase for same-run recovery. Question wording needs designer/owner OK, TL-P4-40.
+TL-P4-49 replaces consent with automatic growth. TL-P4-50 requires monthly decision logs.
+Installed topics appear first for reuse; topics come from admitted subject matter, not folder names.
+No tag question, proposal payload, proposal slot charge, retag, backfill or schema authority.
+Preserve personal and Source bytes. Enforce 3 assignments, 30 installed topics and 2 additions per run.
+Check expected-tag-results.json alongside the ordinary scorer through production main.
+The automatic-candidate execution declaration is pending the lead freeze; no replacement field is invented.
+Deterministic scripted evidence is separate from pending semantic grounding and near-duplicate model review.

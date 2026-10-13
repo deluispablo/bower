@@ -1,24 +1,54 @@
 {
   "v": 1,
-  "vocabulary": [
-    "gardening"
+  "runs": [
+    {
+      "vocabulary": [
+        "gardening",
+        "rainwater",
+        "compost"
+      ],
+      "noteTags": {
+        "Resources/Gardening/Rain barrel guide.md": [
+          "gardening"
+        ],
+        "Resources/Gardening/Compost guide.md": [
+          "gardening"
+        ],
+        "Resources/Gardening/Seed saving guide.md": [
+          "gardening"
+        ]
+      },
+      "vocabularyMutationSends": 1,
+      "additions": [
+        "rainwater",
+        "compost"
+      ],
+      "questionsExactly": 0,
+      "newProposalPayloads": 0,
+      "proposalBudgetCharge": 0,
+      "log": {
+        "path": ".bower/log/2026-10.md",
+        "action": "decision",
+        "topics": [
+          "rainwater",
+          "compost"
+        ]
+      }
+    }
   ],
-  "newProposals": [
+  "preserveFiledBytes": [
+    "Rain barrel guide.txt",
+    "Compost guide.txt",
+    "Seed saving guide.txt"
+  ],
+  "semanticEvidence": "pending; scripted replies prove deterministic integration only",
+  "growthCandidates": [
     "rainwater",
-    "compost"
-  ],
-  "openProposals": [
-    "rainwater",
-    "compost"
-  ],
-  "deferredCandidates": [
+    "Rain_water",
+    "compost",
     "seed-saving"
   ],
-  "retainedRequest": "change-1",
-  "proposalOrder": "admitted-item-order",
-  "sharedBudget": {
-    "newPerRun": 2,
-    "open": 5
-  },
-  "deduplicateBeforeBudget": true
+  "candidateDeclaration": "pending lead freeze; new assignments require a separately declared automatic candidate, never unknown-tag admission",
+  "deduplicateBeforeCap": true,
+  "growthOrder": "admitted-item-order"
 }

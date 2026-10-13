@@ -14,13 +14,22 @@
           "learning"
         ]
       },
-      "newProposals": [],
-      "vocabularyMutationSends": 0
+      "vocabularyMutationSends": 0,
+      "additions": [],
+      "questionsExactly": 0,
+      "newProposalPayloads": 0,
+      "proposalBudgetCharge": 0,
+      "log": {
+        "path": ".bower/log/2026-10.md",
+        "action": "decision",
+        "topics": []
+      }
     }
   ],
   "preserveFiledBytes": [
     "Garden workshop.txt"
   ],
+  "semanticEvidence": "pending; scripted replies prove deterministic integration only",
   "negativeReplies": [
     "four-tags",
     "duplicate-tag",

@@ -1,48 +1,76 @@
 {
   "v": 1,
-  "vocabulary": [
-    "gardening",
-    "remote-work",
-    "learning",
-    "compost",
-    "soil",
-    "seeds",
-    "watering",
-    "tools",
-    "trees",
-    "flowers",
-    "vegetables",
-    "fruit",
-    "wildlife",
-    "pollination",
-    "paths",
-    "shelter",
-    "woodwork",
-    "paper-craft",
-    "cooking",
-    "recipes",
-    "career",
-    "travel",
-    "reading",
-    "music",
-    "exercise",
-    "home",
-    "money",
-    "repair",
-    "planning",
-    "reference"
+  "runs": [
+    {
+      "vocabulary": [
+        "gardening",
+        "remote-work",
+        "learning",
+        "compost",
+        "soil",
+        "seeds",
+        "watering",
+        "tools",
+        "trees",
+        "flowers",
+        "vegetables",
+        "fruit",
+        "wildlife",
+        "pollination",
+        "paths",
+        "shelter",
+        "woodwork",
+        "paper-craft",
+        "cooking",
+        "recipes",
+        "career",
+        "travel",
+        "reading",
+        "music",
+        "exercise",
+        "home",
+        "money",
+        "repair",
+        "planning",
+        "reference"
+      ],
+      "noteTags": {
+        "Resources/Gardening/Garden bulletin.md": [
+          "gardening"
+        ]
+      },
+      "vocabularyMutationSends": 0,
+      "additions": [],
+      "questionsExactly": 0,
+      "newProposalPayloads": 0,
+      "proposalBudgetCharge": 0,
+      "log": {
+        "path": ".bower/log/2026-10.md",
+        "action": "decision",
+        "topics": []
+      }
+    }
   ],
-  "vocabularyCount": 30,
-  "vocabularyMutationSends": 0,
-  "newProposals": [],
-  "noteTags": {
-    "Resources/Gardening/Garden bulletin.md": [
-      "gardening"
-    ]
-  },
   "preserveFiledBytes": [
     "Garden bulletin.txt",
     "Alex notes.md"
+  ],
+  "semanticEvidence": "pending; scripted replies prove deterministic integration only",
+  "growthCandidates": [
+    "rainwater",
+    "compost"
+  ],
+  "personalTags": [
+    "My Topic",
+    "rainwater",
+    "personal",
+    "reminders"
+  ],
+  "negativeReplies": [
+    "document-installs-tag",
+    "rewrite-person-tags",
+    "thirty-first-tag",
+    "unknown-runner-path"
   ],
   "forbiddenAuthorityOrigins": [
     "document",
@@ -50,10 +78,5 @@
     "hot",
     "archive"
   ],
-  "negativeReplies": [
-    "document-installs-tag",
-    "rewrite-person-tags",
-    "thirty-first-tag",
-    "unknown-runner-path"
-  ]
+  "vocabularyCount": 30
 }

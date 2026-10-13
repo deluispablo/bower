@@ -1,50 +1,57 @@
 {
   "v": 1,
-  "proposalPayload": {
-    "kind": "tag",
-    "tag": "rainwater"
-  },
   "runs": [
     {
       "vocabulary": [
-        "gardening"
-      ],
-      "newProposals": [
+        "gardening",
         "rainwater"
       ],
-      "openProposals": [
+      "noteTags": {
+        "Resources/Gardening/Rain barrel guide.md": [
+          "gardening"
+        ]
+      },
+      "vocabularyMutationSends": 1,
+      "additions": [
         "rainwater"
-      ]
+      ],
+      "questionsExactly": 0,
+      "newProposalPayloads": 0,
+      "proposalBudgetCharge": 0,
+      "log": {
+        "path": ".bower/log/2026-10.md",
+        "action": "decision",
+        "topics": [
+          "rainwater"
+        ]
+      }
     },
     {
       "vocabulary": [
         "gardening",
         "rainwater"
       ],
-      "newProposals": [],
-      "openProposals": [],
-      "installedPayloads": [
-        {
-          "kind": "tag",
-          "tag": "rainwater"
-        }
-      ]
-    },
-    {
-      "vocabulary": [
-        "gardening",
-        "rainwater"
-      ],
-      "newProposals": [],
-      "openProposals": [],
-      "vocabularyMutationSends": 0
+      "noteTags": {
+        "Resources/Gardening/Rain barrel guide.md": [
+          "gardening"
+        ]
+      },
+      "vocabularyMutationSends": 0,
+      "additions": [],
+      "questionsExactly": 0,
+      "newProposalPayloads": 0,
+      "proposalBudgetCharge": 0,
+      "log": {
+        "path": ".bower/log/2026-10.md",
+        "action": "decision",
+        "topics": []
+      }
     }
   ],
-  "noteTags": {
-    "Resources/Gardening/Rain barrel guide.md": [
-      "gardening"
-    ]
-  },
-  "sameProposalBytesAcrossRuns": true,
+  "preserveFiledBytes": [
+    "Rain barrel guide.txt"
+  ],
+  "semanticEvidence": "pending; scripted replies prove deterministic integration only",
+  "candidateDeclaration": "pending lead freeze; new assignments require a separately declared automatic candidate, never unknown-tag admission",
   "sameGeneratedSourceBytesAfterFirstRun": true
 }
