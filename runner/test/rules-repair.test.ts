@@ -84,7 +84,7 @@ describe('real adapters: the old template Rules.md in an existing folder', () =>
       expect.soft(text).toContain('<!-- bower:ownership/2 begin rules-added -->');
       expect.soft(text).toContain('<!-- bower:ownership/2 end rules-added -->');
       expect.soft(text.slice(edited.length)).toContain('*You wrote: "receipts go to money"*');
-      expect(after.appProperties).toBeUndefined();
+      expect(Object.fromEntries(Object.entries(after.appProperties ?? {}).filter(([key]) => key !== 'bowerOp'))).toEqual({});
     }
     // Changed by the person between the runner's read of the old text and its write.
     {
@@ -140,5 +140,46 @@ describe('real adapters: the old template Rules.md in an existing folder', () =>
     expect([...lost].sort()).toEqual(['mark', 'text']);
     expect((await w.drive.get(rulesId)).appProperties?.[PROP.by]).toBe('bower');
     expect(parseRules(await w.drive.readText(rulesId))[0]?.yourWords).toBe('receipts go to money');
+  });
+
+  it('R13 red: a lost first append followed by personal edits reconciles on redispatch without resending', async () => {
+    const original = 'Alex keeps receipts.\n## Rules\n- Personal bullet.\n';
+    const { w, rulesId } = await folderWith(original);
+    let sends = 0;
+    let landed = '';
+    let disconnected = false;
+    const hop: Hop = async (url, init, next) => {
+      if (disconnected) throw new TypeError('Made-up connection remains unavailable');
+      const write = (init.method ?? 'GET').toUpperCase() === 'PATCH'
+        && url.pathname.startsWith('/upload/') && url.pathname.endsWith(`/files/${rulesId}`);
+      if (write) sends++;
+      const res = await next();
+      if (write && res.ok) {
+        landed = await w.drive.readText(rulesId);
+        disconnected = true;
+        throw new TypeError('First append answer was lost');
+      }
+      return res;
+    };
+    await runOnce(w, hop);
+    expect(landed, 'fault reaches the first append').toContain('## Rules added in Bower');
+    expect(sends).toBe(1);
+    const edited = landed + '\nAlex typed café after the append.\n';
+    const now = await w.drive.get(rulesId);
+    await w.drive.writeText(rulesId, edited, now.modifiedTime);
+    for (let i = 0; i < 3 && w.dispatched.length < 2; i++) expect(await w.api.fireAlarm()).toBe(true);
+    expect(w.dispatched.map((d) => d.attempt)).toEqual([1, 2]);
+    expect(await w.runJob(1, async (url, init, next) => {
+      if ((init.method ?? 'GET').toUpperCase() === 'PATCH' && url.pathname.startsWith('/upload/')
+        && url.pathname.endsWith(`/files/${rulesId}`)) sends++;
+      return await next();
+    })).toBe(0);
+    expect(sends, 'the landed append is reconciled, never resent').toBe(1);
+    expect(await (await w.api.browser(`${ORIGIN}/status`)).json()).toMatchObject({
+      run: { phase: 'done', report: { rulesWorded: 1 } },
+    });
+    expect(await w.drive.readText(rulesId)).toBe(edited);
+    expect(edited.split('<!-- bower:ownership/2 begin rules-added -->')).toHaveLength(2);
+    expect((await w.drive.get(rulesId)).appProperties?.[PROP.by]).toBeUndefined();
   });
 });

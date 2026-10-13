@@ -57,6 +57,106 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe('rules-added-region', () => {
+  it('R8 red: any second root Rules.md file blocks wording, but a folder does not', async () => {
+    for (const kind of ['personal', 'bower', 'managed-first', 'folder'] as const) {
+      const first = kind === 'managed-first' ? RULES_TEMPLATE.text : original;
+      const { drive, root, vault, id } = await fixture(first, kind === 'managed-first');
+      const twin = kind === 'folder' ? await drive.createFolder(root, 'Rules.md')
+        : await drive.createText(root, 'Rules.md', kind === 'bower' ? RULES_TEMPLATE.text : original,
+          kind === 'bower' ? RULES_TEMPLATE.appProperties : undefined);
+      const before = await Promise.all([drive.get(id), drive.get(twin.id)]);
+      const pending = await vault.addRule('scans by date');
+      const errors = vi.spyOn(console, 'error');
+      try {
+        expect((await tidyUp(drive, root)).phase).toBe('done');
+        if (kind !== 'folder') expect.soft(errors, kind).toHaveBeenCalledWith(
+          expect.objectContaining({ message: 'Bower could not word some of your rules; they wait for the next tidy-up.' }), expect.any(String));
+      } finally {
+        errors.mockRestore();
+      }
+      if (kind === 'folder') {
+        expect.soft(await drive.readText(id), kind).toContain('## Rules added in Bower');
+        expect.soft((await vault.rules()).filter((r) => r.pending), kind).toEqual([]);
+      } else {
+        expect.soft(await drive.readText(id), kind).toBe(first);
+        expect.soft(await drive.readText(twin.id), kind).toBe(kind === 'bower' ? RULES_TEMPLATE.text : original);
+        expect.soft(await Promise.all([drive.get(id), drive.get(twin.id)]), kind).toEqual(before);
+        expect.soft(await vault.rules(), kind).toContainEqual(expect.objectContaining({ id: pending.id, pending: true }));
+      }
+      vault.dispose();
+    }
+  });
+
+  it('R9 red: region rules win over later prefix ownership and original bullets never dedupe', async () => {
+    for (const ownership of ['personal', 'frontmatter', 'property'] as const) {
+      const prefix = ownership === 'frontmatter' ? original.replace('contact:', 'by: bower\ncontact:') : original;
+      const before = prefix + '\n' + region.replaceAll(text, 'Name scans by date.');
+      const { drive, root, vault, id } = await fixture(before);
+      if (ownership === 'property') await drive.update(id, { appProperties: { by: 'bower' } });
+      expect.soft(await vault.rules(), ownership).toEqual([expect.objectContaining({ text: 'Name scans by date.' })]);
+      const pending = await vault.addRule(text).catch((error: unknown) => error);
+      expect.soft(pending, ownership).toMatchObject({ text, pending: true });
+      const out = applyChanges(encode(before), [word()]);
+      expect.soft(out.ok, ownership).toBe(true);
+      if (out.ok) {
+        expect(out.bytes.subarray(0, encode(prefix).length)).toEqual(encode(prefix));
+        expect(regionRules(out.text).map((r) => r.text)).toEqual([text, 'Name scans by date.']);
+      }
+      expect((await tidyUp(drive, root)).phase).toBe('done');
+      const after = await drive.readText(id);
+      expect.soft(after.slice(0, prefix.length), ownership).toBe(prefix);
+      expect.soft(regionRules(after).map((r) => r.text), ownership).toEqual([text, 'Name scans by date.']);
+      vault.dispose();
+    }
+  });
+
+  it('R10 red: unfinished fences and front matter keep all bytes and the rule pending without repair', async () => {
+    for (const hostile of ['```md\nPersonal text.', '~~~\nPersonal text.', '---\nsummary: Personal text.']) {
+      const { drive, root, vault, id } = await fixture(hostile);
+      const before = await drive.get(id);
+      const pending = await vault.addRule('scans by date');
+      expect((await tidyUp(drive, root)).phase).toBe('done');
+      expect(await drive.readBytes(id)).toEqual(encode(hostile));
+      expect(await drive.get(id)).toEqual(before);
+      expect(await vault.rules()).toContainEqual(expect.objectContaining({ id: pending.id, pending: true }));
+      vault.dispose();
+    }
+  });
+
+  it('R11 red: generic links rewrite prefix and suffix together with region-only wording', () => {
+    for (const { prefix, eol, label } of variants) {
+      const head = prefix + `${eol}Personal [[Old]].${eol}`;
+      const tail = `${eol}Trailing [[Old]].${eol}- Personal bullet.`;
+      const before = head + region.replace(/\n/g, eol) + tail;
+      const link: Change = { kind: 'link-rewrite', recordIds: [], renames: [{ from: 'Old', to: 'New' }] };
+      const linked = applyChanges(encode(before), [link]);
+      expect.soft(linked.ok, `links alone: ${label}`).toBe(true);
+      if (linked.ok) expect(linked.text).toBe(before.replaceAll('[[Old]]', '[[New]]'));
+      const out = applyChanges(encode(before), [link, word([{ ...added, text: 'Name scans by date.' }], [text])]);
+      expect.soft(out.ok, `combined: ${label}`).toBe(true);
+      if (out.ok) {
+        expect(out.bytes.subarray(0, encode(head).length)).toEqual(encode(head.replaceAll('[[Old]]', '[[New]]')));
+        expect(out.bytes.subarray(-encode(tail).length)).toEqual(encode(tail.replaceAll('[[Old]]', '[[New]]')));
+        expect(regionRules(out.text).map((r) => r.text)).toEqual(['Name scans by date.']);
+      }
+    }
+  });
+
+  it('R12 red: cancelling the first add and removal-only replay create no region', async () => {
+    const { drive, root, vault, id } = await fixture(original);
+    const pending = await vault.addRule('scans by date');
+    await vault.removeRule(pending.id);
+    const before = await drive.get(id);
+    expect((await tidyUp(drive, root)).phase).toBe('done');
+    expect(await drive.readBytes(id)).toEqual(encode(original));
+    expect(await drive.get(id)).toEqual(before);
+    expect.soft((await vault.rules()).filter((r) => r.pending)).toEqual([]);
+    const replay = encode(original);
+    expect(applyChanges(replay, [word([], [text])])).toMatchObject({ ok: false });
+    expect(replay).toEqual(encode(original));
+    vault.dispose();
+  });
+
   it('AC1 red: a consenting add byte-appends a region, keeping summary and app properties', async () => {
     for (const { label, prefix } of variants) {
       const { drive, root, vault, id } = await fixture(prefix);

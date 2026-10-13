@@ -4,6 +4,7 @@ import { isJournalRecord } from './contracts/journal-record';
 import { parsePileDeclaration } from './contracts/pile-declaration';
 import { parsePileDisposition } from './contracts/pile-disposition';
 import { parseRunReport } from './contracts/run-checkpoint';
+import { parseRules, serializeRules } from './contracts/rules-format';
 import { P2_SOURCE, SHAPES, fixture, folderOf, missingFixtures, only, recordBytes, type Shape } from './compat-p2-fixtures';
 import { FakeDrive } from './drive/fake-drive';
 import { RunRecords } from './spine/records';
@@ -15,6 +16,34 @@ const JOURNAL = SHAPES.filter((s) => s.startsWith('journal-'));
 const RUNNER_FILES = { 'last-run': SYSTEM.lastRun, questions: SYSTEM.questions, suggestions: SYSTEM.suggestions, requests: SYSTEM.requests, hashes: SYSTEM.hashes } as const;
 
 describe('the accepted app files, kept from the P2 freeze', () => {
+  it.each([
+    { label: 'legacy front-matter ownership', property: false, region: false },
+    { label: 'Drive ownership property', property: true, region: false },
+    { label: 'personal original bullets', property: false, region: false, personal: true },
+    { label: 'region overrides legacy ownership', property: false, region: true },
+    { label: 'region overrides Drive ownership', property: true, region: true },
+  ])('R14 compatibility: $label', async ({ property, region, personal }) => {
+    const drive = new FakeDrive();
+    const root = (await drive.createFolder('root', 'Bower')).id;
+    const rule = { id: 'rule-1', text: 'Keep receipts together.', yourWords: 'receipts together', since: Date.UTC(2026, 9, 13) };
+    const managed = serializeRules([rule]);
+    const prefix = property || personal ? managed.replace('by: bower\n', '') : managed;
+    const added = '## Rules added in Bower\n<!-- bower:ownership/2 begin rules-added -->\n## Rules\n\n- Name scans by date. <!-- since 2026-10-13 -->\n  *You wrote: "scans by date"*\n<!-- bower:ownership/2 end rules-added -->\n';
+    const contents = prefix + (region ? added : '');
+    const file = await drive.createText(root, 'Rules.md', contents, property ? { by: 'bower' } : undefined);
+    const before = await drive.get(file.id);
+    const vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    try {
+      expect(await vault.rules()).toEqual(region
+        ? [{ id: 'rule-1', text: 'Name scans by date.', yourWords: 'scans by date', since: rule.since }]
+        : personal ? [] : parseRules(managed));
+      expect(await drive.readText(file.id)).toBe(contents);
+      expect(await drive.get(file.id)).toEqual(before);
+    } finally {
+      vault.dispose();
+    }
+  });
+
   it('has one fixture for every shape, each saying where it came from', () => {
     expect(missingFixtures()).toEqual([]);
     for (const shape of SHAPES) expect(fixture(shape).source, shape).toBe(P2_SOURCE);
