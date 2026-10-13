@@ -7,7 +7,8 @@ import { fixedDrive } from './drive-v3';
 import { observe, writes, type Observation } from './b23-hot-observe';
 import { opKey } from '../../src/data/contracts/op-key';
 import type { ManifestV2 } from '../../src/data/contracts/run-manifest';
-import { parseRunManifestV2 } from '../../src/data/contracts/run-manifest';
+import { MANIFEST_V2_LIMIT, parseRunManifestV2 } from '../../src/data/contracts/run-manifest';
+import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { hashRecordJson } from '../../src/data/contracts/record-json';
 import { RUNNER_WRITES } from '../../src/data/vault/layout';
 
@@ -23,12 +24,25 @@ const manifest = (run: CaseRun): ManifestV2 => {
   expect(text, 'main persists its admitted manifest').toBeDefined();
   return JSON.parse(text ?? '{}') as ManifestV2;
 };
+/** The manifest of this press's own run (a drive with several runs keeps every run folder). */
+const manifestOf = (run: CaseRun): ManifestV2 => {
+  const text = Object.entries(run.after).find(([path]) => path.includes(`/runs/${run.dispatch?.runId ?? ''}/`) && /\/manifest-[^/]+\.json$/.test(path))?.[1];
+  expect(text, 'main persists this run manifest').toBeDefined();
+  return JSON.parse(text ?? '{}') as ManifestV2;
+};
+/** settled-recovery's applied primary operations through caseReplies: move, companion create, hub edit, in manifest order. */
+const forwardKeys = (base: { root: string }, m: ManifestV2) => m.operations.filter((op) => op.effect.kind === 'create-text'
+  && op.effect.purpose === 'generated' && op.effect.name === 'Mulch notice.md' || op.effect.kind === 'move' && op.effect.before.name === 'Mulch notice.txt'
+  || op.effect.kind === 'edit-text' && op.effect.path === HUB).map((op) => opKey(base.root, m.runId, op.operationId));
+/** An existing month: prose, CRLF, a line with another run's key, and no final newline (R11). */
+const SEEDED = '# Log\r\nAlex wrote this aside.\r\n2026-10-01 | create | Resources/Gardening/Old.md | Alex kept an old note. · op:0123456789ab';
 const filing = (extra: Record<string, unknown> = {}) => ({ ...empty, ...extra, things: [{ fileId: '$file:Mulch notice.txt',
   to: 'Resources/Gardening', name: 'Mulch notice.txt', note: { name: 'Mulch notice.md', summary: 'Mulch collection opens at the amber gate.',
     body: 'Alex can collect mulch from the amber gate at the Saltmere garden.\n\nRelated: [[Gardening]].',
     ...(extra.newTags ? { tags: extra.newTags } : {}) } }] });
-async function setup(name = 'settled-recovery') {
+async function setup(name = 'settled-recovery', extra: Record<string, string> = {}) {
   const c = await fixture(name);
+  Object.assign(c.folder, extra);
   const drive = fixedDrive();
   const root = await seedCase(drive, c);
   const traffic: Observation[] = [];
@@ -180,6 +194,61 @@ describe('B8a monthly log through main', () => {
     expect(run.after['.bower/retrieval.json']).toBeDefined();
   });
 
+  it('AC6 b8-eventless-month-rollover', async () => {
+    const base = await setup();
+    const first = await runOnDrive(base.c, base.drive, base.root, { claude: caseReplies(base.c.id), around: base.around, pacing }, 1);
+    expect(events(first), 'the October run logs its applied operations').toHaveLength(3);
+    base.traffic.length = 0;
+    // R12: a November run with nothing applied writes and declares no month file.
+    const november: AdmissionManifest = { v: 1, id: 'feed-only-november', rootId: base.root, scope: 'all', at: Date.UTC(2026, 10, 2, 9), piles: [], journal: [] };
+    vi.setSystemTime(november.at);
+    const second = await runOnDrive(base.c, base.drive, base.root, { admission: november, claude: replySequence([empty]), around: base.around, pacing }, 2);
+    expect(second.code).toBe(0);
+    expect(Object.keys(second.after).filter((path) => path.startsWith('.bower/log/'))).toEqual([MONTH]);
+    expect(second.after[MONTH]).toBe(first.after[MONTH]);
+    expect(base.traffic.filter((e) => e.path.startsWith('.bower/log') && ['POST', 'PATCH'].includes(e.method))).toEqual([]);
+  });
+  it('AC6 guard: an eventless first run creates no log folder or month file', async () => {
+    const base = await setup('report-only-grammar');
+    const run = await runOnDrive(base.c, base.drive, base.root, { claude: replySequence([empty]), around: base.around, pacing }, 1);
+    expect(run.code).toBe(0);
+    expect(Object.keys(run.after).filter((path) => path.startsWith('.bower/log/'))).toEqual([]);
+    expect(base.traffic.filter((e) => e.path.startsWith('.bower/log') && ['POST', 'PATCH'].includes(e.method))).toEqual([]);
+  });
+
+  it('AC2 b8-bounded-encoding-log-oracle', async () => {
+    const c = await fixture('bounded-encoding');
+    const run = await runScripted(c);
+    expect(run.code).toBe(0);
+    const text = run.after[MONTH] ?? '';
+    expect(text, 'the ingest line names the original inbox name, sanitized').toContain(' | ingest | ');
+    expect(text).toContain('Options / alternatives.txt');
+    expect(text).not.toContain('Options | alternatives.txt');
+    expect(text).not.toContain('\\u007c');
+    for (const line of text.split('\n')) expect(new TextEncoder().encode(`${line}\n`).length).toBeLessThanOrEqual(4096);
+    expect(events(run).map((line) => line.split(' | ')[1]).sort()).toEqual(['create', 'ingest']);
+    expect(run.after['.bower/log.md'], 'the legacy log keeps its bytes').toBe(c.folder['.bower/log.md']);
+  });
+
+  it('AC2 b8-month-text-never-frozen', async () => {
+    // R13: a month over the manifest's 8 MiB limit still appends; the manifest freezes the month's identity, not its text.
+    const big = `# Log\n${'2026-10-01 | update | Resources/Gardening/Old.md | Alex kept a long history. · op:0123456789ab\n'.repeat(Math.ceil((MANIFEST_V2_LIMIT + 1) / 92))}`;
+    const base = await setup('settled-recovery', { [MONTH]: big });
+    const run = await runOnDrive(base.c, base.drive, base.root, { claude: caseReplies(base.c.id), around: base.around, pacing }, 1);
+    expect(run.code, 'an oversized month never refuses an ordinary run').toBe(0);
+    const text = run.after[MONTH] ?? '';
+    expect(text.startsWith(big)).toBe(true);
+    expect(text.slice(big.length).split('\n').filter(Boolean).map((line) => line.slice(-12))).toEqual(forwardKeys(base, manifest(run)));
+    const manifestBytes = Object.entries(run.after).filter(([path]) => /\/manifest-[^/]+\.json$/.test(path)).map(([, t]) => new TextEncoder().encode(t).length);
+    expect(Math.max(...manifestBytes)).toBeLessThan(1024 * 1024);
+  });
+  it('AC2 control: an ordinary run manifest is far below the limit', async () => {
+    const base = await setup();
+    const run = await runOnDrive(base.c, base.drive, base.root, { claude: caseReplies(base.c.id), around: base.around, pacing }, 1);
+    expect(run.code).toBe(0);
+    expect(new TextEncoder().encode(JSON.stringify(manifest(run))).length).toBeLessThan(1024 * 1024);
+  });
+
   it('AC7 b8-same-run-lost-log-response', async () => {
     const base = await setup();
     const lost = loss(base);
@@ -189,9 +258,51 @@ describe('B8a monthly log through main', () => {
     lost.state.enabled = false;
     const recovered = await redispatchCase(base.c, first, 2, { around: base.around, pacing });
     expect(recovered.code).toBe(0);
-    expect(events(recovered)).toHaveLength(events(first).length);
-    expect(new Set(events(recovered).map((line) => line.slice(-12))).size).toBe(events(recovered).length);
+    const m = manifest(recovered);
+    expect(events(recovered).map((line) => line.slice(-12)), 'exactly the applied primary operations, in manifest order')
+      .toEqual(forwardKeys(base, m));
+    expect(events(recovered), 'the landed lines are kept, not replaced').toEqual(events(first));
     expect(writes(base.traffic, MONTH)).toHaveLength(1);
+  });
+  it('AC7 b8-month-prefix-preserved', async () => {
+    const base = await setup('settled-recovery', { [MONTH]: SEEDED });
+    const lost = loss(base);
+    const first = await runOnDrive(base.c, base.drive, base.root, { around: lost.around, claude: caseReplies(base.c.id), pacing }, 1);
+    expect(lost.state.reached, 'main must actually send the existing month').toBe(true);
+    lost.state.enabled = false;
+    const recovered = await redispatchCase(base.c, first, 2, { around: base.around, pacing });
+    expect(recovered.code).toBe(0);
+    const text = recovered.after[MONTH] ?? '';
+    expect(text.startsWith(`${SEEDED}\n`), 'every existing byte is kept, with one separating newline').toBe(true);
+    expect(text.slice(SEEDED.length + 1).split('\n').filter(Boolean).map((line) => line.slice(-12))).toEqual(forwardKeys(base, manifest(recovered)));
+    expect(writes(base.traffic, MONTH)).toHaveLength(1);
+  });
+  it('AC7 b8-log-folder-lost-create', async () => {
+    const base = await setup();
+    const state = { reached: false, enabled: true };
+    const around = (fetch: typeof globalThis.fetch) => {
+      let seen = base.traffic.length;
+      return observe(base.drive, base.root, base.traffic)(async (input, init = {}) => {
+        const last = base.traffic.length > seen ? base.traffic.at(-1) : undefined;
+        seen = base.traffic.length;
+        const response = await fetch(input, init);
+        if (state.enabled && last?.path === '.bower/log' && init.method === 'POST') {
+          state.reached = true;
+          throw new TypeError('Made-up lost folder response');
+        }
+        return response;
+      });
+    };
+    const first = await runOnDrive(base.c, base.drive, base.root, { around, claude: caseReplies(base.c.id), pacing }, 1);
+    expect(state.reached, 'main must actually create the log folder').toBe(true);
+    expect(first.wire?.statuses.some((status) => status.phase === 'done')).toBe(false);
+    state.enabled = false;
+    const recovered = await redispatchCase(base.c, first, 2, { around: base.around, pacing });
+    expect(recovered.code).toBe(0);
+    const folders = (await base.drive.listAll(base.root)).filter((f) => f.folder && base.drive.pathOf(f.id, base.root) === '.bower/log');
+    expect(folders, 'one log folder after recovery').toHaveLength(1);
+    const month = Object.entries(recovered.pathsById).find(([, path]) => path === MONTH)?.[0] ?? '';
+    expect((await base.drive.get(month)).parents).toEqual([folders[0]?.id]);
   });
   it('AC7 control: same-run recovery never refiles the companion', async () => {
     const base = await setup();
@@ -225,9 +336,16 @@ describe('B8a monthly log through main', () => {
       .map((op) => opKey(base.root, m.runId, op.operationId));
     expect(prior.map((line) => line.slice(-12)), 'all settled forward audit events survive Undo').toEqual(forward);
     expect(events(undone).slice(0, prior.length)).toEqual(prior);
+    // R10: the inverse is the client's journal line, settled by this run's archive move of that line.
+    const u = manifestOf(undone);
+    const archive = u.operations.find((op) => op.effect.kind === 'move' && op.effect.before.name === 'undo-file.json');
+    expect(archive, 'the Undo run archives the inverse journal line').toBeDefined();
     const inverses = events(undone).slice(prior.length);
-    expect(inverses, 'the settled inverse appends its own event').not.toEqual([]);
-    expect(inverses.some((line) => line.includes('Mulch notice'))).toBe(true);
+    expect(inverses, 'one event for the inverse line, none for the request line').toHaveLength(1);
+    const [date, action, note, rest] = (inverses[0] ?? '').split(' | ');
+    expect([date, action, note]).toEqual(['2026-10-07', 'move', 'Inbox/Mulch notice.txt']);
+    expect(rest).toContain('Put back Mulch notice.');
+    expect(rest?.slice(-12)).toBe(opKey(base.root, u.runId, archive?.operationId ?? ''));
     const again = await redispatchCase(base.c, undone, 2, { around: base.around, pacing });
     expect(events(again)).toEqual(events(undone));
   });
@@ -252,6 +370,20 @@ describe('B8a monthly log through main', () => {
     expect(later.after[MONTH]?.split('\n').filter((line) => /decision.*rainwater/.test(line))).toHaveLength(1);
     const replay = await redispatchCase(base.c, r, 2, { claude: async () => { throw new Error('Replay must not model.'); }, around: base.around, pacing });
     expect((replay.after[MONTH] ?? '').split('\n').filter((line) => /decision.*rainwater/.test(line))).toHaveLength(1);
+  });
+  it('AC9 b8-b7-additions-one-decision-per-write', async () => {
+    const base = await setup('settled-recovery', { '.bower/tags.json': '{"v":1,"tags":["gardening"]}\n' });
+    const r = await runOnDrive(base.c, base.drive, base.root, { claude: replySequence([filing({ newTags: ['gardening', 'rainwater', 'compost'] })]), around: base.around, pacing }, 1);
+    expect(r.code).toBe(0);
+    expect(JSON.parse(r.after['.bower/tags.json'] ?? '{"tags":[]}')).toMatchObject({ tags: ['gardening', 'rainwater', 'compost'] });
+    const decisions = events(r).filter((line) => line.split(' | ')[1] === 'decision');
+    expect(decisions, 'one decision event for the one vocabulary write').toHaveLength(1);
+    expect(decisions[0]).toMatch(/rainwater/);
+    expect(decisions[0]).toMatch(/compost/);
+    expect(decisions[0]?.split(' | ').slice(2).join(' | ')).not.toMatch(/gardening/);
+    const m = manifest(r);
+    const write = m.operations.find((op) => op.effect.kind === 'write-runner-json' && String(op.effect.path) === '.bower/tags.json');
+    expect(decisions[0]?.slice(-12)).toBe(opKey(base.root, m.runId, write?.operationId ?? ''));
   });
   it('AC9 control: the B7 addition settles through main as a vocabulary write', async () => {
     const base = await setup();

@@ -7,6 +7,8 @@ import { timelineDate } from './note-edit';
 import { parseRunManifestV2 } from './run-manifest';
 import { parseRunCheckpoint } from './run-checkpoint';
 import { RUNNER_WRITES } from '../vault/layout';
+import { FakeDrive } from '../drive/fake-drive';
+import { DriveVault } from '../vault/drive-vault';
 
 const utf8 = (text: string) => new TextEncoder().encode(text);
 type Event = { rootId: string; runId: string; operationId: string; requestedAt: number; action: string; note: string; detail: string };
@@ -87,5 +89,31 @@ describe('B8a readable log contracts', () => {
     expect((await parseRunCheckpoint(utf8(JSON.stringify(fixture.input.checkpoint0)), { rootId: m.scope.rootId,
       runId: m.runId, captureId: m.captureId, manifestHash: fixture.input.checkpoint0.manifestHash,
       operationIds: m.operations.map((op) => op.operationId) })).ok).toBe(true);
+  });
+});
+
+describe('B8a the app never writes a monthly log', () => {
+  it('AC5 b8-app-refuses-monthly-log', async () => {
+    const drive = new FakeDrive({ clock: () => 0 });
+    const root = (await drive.createFolder('root', 'Bower')).id;
+    const sys = (await drive.createFolder(root, '.bower')).id;
+    const logs = (await drive.createFolder(sys, 'log')).id;
+    const month = await drive.createText(logs, '2026-10.md', '# Log\n- [ ] Keep\n');
+    const vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    await vault.refresh();
+    const write = vi.spyOn(drive, 'writeText');
+    // The one runner-file refusal, by its own words, not a missing-file error (R14).
+    await expect(vault.toggleTask('.bower/log/2026-10.md', 0)).rejects.toMatchObject({ code: 'conflict', message: 'Bower keeps this file up to date.' });
+    expect(write.mock.calls.filter(([id]) => id === month.id)).toEqual([]);
+    expect(await drive.readText(month.id)).toBe('# Log\n- [ ] Keep\n');
+  });
+  it('AC5 control: the same refusal already guards the declared runner files', async () => {
+    const drive = new FakeDrive({ clock: () => 0 });
+    const root = (await drive.createFolder('root', 'Bower')).id;
+    const sys = (await drive.createFolder(root, '.bower')).id;
+    await drive.createText(sys, 'hot.md', '- [ ] Keep\n');
+    const vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    await vault.refresh();
+    await expect(vault.toggleTask('.bower/hot.md', 0)).rejects.toMatchObject({ code: 'conflict', message: 'Bower keeps this file up to date.' });
   });
 });
